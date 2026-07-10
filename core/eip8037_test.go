@@ -21,6 +21,7 @@
 package core
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -99,16 +100,13 @@ func applyMsg(t *testing.T, sdb *state.StateDB, tx *types.Transaction) (*Executi
 		t.Fatalf("to message: %v", err)
 	}
 	gp := NewGasPool(evm.Context.GasLimit)
-	// Drive the stateTransition directly (as ApplyMessage does) so the test can
-	// inspect the final tx-level GasBudget vector via st.gasRemaining.
+
 	evm.SetTxContext(NewEVMTxContext(msg))
 	st := newStateTransition(evm, msg, gp)
 	res, err := st.execute()
 	if err == nil && res != nil {
 		assertPoolSane(t, res, gp)
-		// The budget is seeded with the post-intrinsic remainder: the intrinsic
-		// cost counts towards the MaxTxGas regular cap and the execution gas
-		// exceeding the regular budget forms the reservoir.
+
 		intrinsic, ierr := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules8037)
 		if ierr != nil {
 			t.Fatalf("intrinsic gas: %v", ierr)
@@ -263,6 +261,66 @@ func TestCreateTxCollisionConsumesGasLeft(t *testing.T) {
 	}
 }
 
+// An account can exist yet be EIP-161-empty in the middle of a transaction,
+// e.g. after being touched as the zero-balance beneficiary of a SELFDESTRUCT.
+// Deploying onto such an account should charge account-creation cost.
+func TestCreate2TransientEmptyDestNoRefill(t *testing.T) {
+	var (
+		orchestrator = common.HexToAddress("0xc0de000000000000000000000000000000000002")
+		destructor   = common.HexToAddress("0xc0de000000000000000000000000000000000003")
+		target       = crypto.CreateAddress2(orchestrator, [32]byte{}, crypto.Keccak256(deploy3))
+	)
+	// destructor: SELFDESTRUCT with zero balance to the future CREATE2 target,
+	// leaving it existing but EIP-161-empty for the rest of the transaction.
+	destructorCode := append(append([]byte{0x73}, target.Bytes()...), 0xff) // PUSH20 target, SELFDESTRUCT
+
+	// orchestrator: CALL destructor (persist the success flag in slot 0),
+	// then CREATE2 deploy3 with salt 0, targeting the touched address.
+	code := []byte{
+		0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00, // ret/arg sizes and offsets, value = 0
+		0x73, // PUSH20 destructor
+	}
+	code = append(code, destructor.Bytes()...)
+	code = append(code,
+		0x62, 0x03, 0x0d, 0x40, // PUSH3 200,000 call gas
+		0xf1,             // CALL
+		0x60, 0x00, 0x55, // SSTORE the call result at slot 0
+		0x64, 0x60, 0x03, 0x60, 0x00, 0xf3, // PUSH5 deploy3 init code
+		0x60, 0x00, 0x52, // MSTORE at word 0 (right-aligned, code at offset 27)
+		0x60, 0x00, // salt  = 0
+		0x60, 0x05, // size  = 5
+		0x60, 0x1b, // offset = 27
+		0x60, 0x00, // endowment = 0
+		0xf5, 0x50, // CREATE2, POP
+		0x00, // STOP
+	)
+	sdb := mkState(senderAlloc(types.GenesisAlloc{
+		orchestrator: {Code: code},
+		destructor:   {Code: destructorCode},
+	}))
+	res, gp, err := applyMsg(t, sdb, callTx(0, orchestrator, 0, 2_000_000, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Failed() {
+		t.Fatalf("execution failed: %v", res.Err)
+	}
+	// The inner call must have succeeded, so the target was touched into an
+	// existing-but-empty account before the CREATE2 executed.
+	if flag := sdb.GetState(orchestrator, common.Hash{}); flag != common.BigToHash(big.NewInt(1)) {
+		t.Fatalf("destructor call flag = %v, want 1", flag)
+	}
+	if code := sdb.GetCode(target); len(code) != 3 {
+		t.Fatalf("deployed code length = %d, want 3", len(code))
+	}
+	// State gas: the orchestrator's flag slot, the created contract account
+	// (charged, not refilled) and the 3-byte code deposit.
+	want := newSlotState + newAccountState + uint64(3*params.CostPerStateByte)
+	if gp.cumulativeState != want {
+		t.Fatalf("state gas = %d, want %d (account creation must not be refilled)", gp.cumulativeState, want)
+	}
+}
+
 // ======================== Transaction validation =========================
 
 // The regular dimension must have room for min(tx.gas, MaxTxGas).
@@ -311,12 +369,47 @@ func TestValidationIntrinsicRegularCap(t *testing.T) {
 	for i := range al {
 		al[i].Address = common.BigToAddress(big.NewInt(int64(i + 1)))
 	}
-	tx := types.MustSignNewTx(senderKey, signer8037, &types.DynamicFeeTx{
-		ChainID: cfg8037.ChainID, Nonce: 0, To: &senderAddr, Value: big.NewInt(0),
-		Gas: 25_000_000, GasFeeCap: big.NewInt(0), GasTipCap: big.NewInt(0), AccessList: al,
-	})
+	tx := types.MustSignNewTx(senderKey, signer8037,
+		&types.DynamicFeeTx{
+			ChainID:    cfg8037.ChainID,
+			Nonce:      0,
+			To:         &senderAddr,
+			Value:      big.NewInt(0),
+			Gas:        25_000_000,
+			GasFeeCap:  big.NewInt(0),
+			GasTipCap:  big.NewInt(0),
+			AccessList: al,
+		})
 	if _, _, err := applyMsg(t, mkState(senderAlloc(nil)), tx); err == nil {
 		t.Fatal("expected rejection for intrinsic regular over MaxTxGas")
+	}
+}
+
+// The EIP-7623/7976 calldata floor is capped by MaxTxGas even when the gas
+// limit covers it: a transaction whose floor cost exceeds the cap is rejected
+// regardless of its (much smaller) intrinsic gas.
+func TestValidationFloorCostCap(t *testing.T) {
+	// All-zero calldata: the floor charges 64/byte while the intrinsic
+	// charges only 4/byte, so the floor crosses the cap long before the
+	// intrinsic does.
+	data := make([]byte, 300_000) // floor ~19.2M > 16.77M cap, intrinsic ~1.2M
+	floor, err := FloorDataGas(rules8037, senderAddr, &senderAddr, new(uint256.Int), data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	intrinsic, err := IntrinsicGas(data, nil, nil, senderAddr, &senderAddr, new(uint256.Int), rules8037)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if floor <= params.MaxTxGas || intrinsic > params.MaxTxGas {
+		t.Fatalf("setup: floor %d must exceed cap %d while intrinsic %d stays below",
+			floor, params.MaxTxGas, intrinsic)
+	}
+	// The gas limit covers the floor, so the rejection can only come from
+	// the MaxTxGas cap on the floor cost.
+	tx := callTx(0, senderAddr, 0, floor+1_000_000, data)
+	if _, _, err := applyMsg(t, mkState(senderAlloc(nil)), tx); !errors.Is(err, ErrFloorDataGas) {
+		t.Fatalf("expected ErrFloorDataGas, got %v", err)
 	}
 }
 

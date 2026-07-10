@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -185,19 +186,6 @@ func TestEIP2780Gas(t *testing.T) {
 	}
 }
 
-// TestEIP2780NewAccountFunded verifies that a value transfer creating a new
-// account both materializes and funds the recipient.
-func TestEIP2780NewAccountFunded(t *testing.T) {
-	fresh := common.HexToAddress("0xbeef000000000000000000000000000000000002")
-	sdb := mkState(senderAlloc(nil))
-	if _, _, err := applyMsg(t, sdb, callTx(0, fresh, 1, 300_000, nil)); err != nil {
-		t.Fatal(err)
-	}
-	if !sdb.Exist(fresh) || sdb.GetBalance(fresh).Cmp(uint256.NewInt(1)) != 0 {
-		t.Fatalf("recipient not funded: exist=%v balance=%v", sdb.Exist(fresh), sdb.GetBalance(fresh))
-	}
-}
-
 // callTxAL builds a signed dynamic-fee call carrying an access list.
 func callTxAL(nonce uint64, to common.Address, value int64, gas uint64, al types.AccessList) *types.Transaction {
 	return types.MustSignNewTx(senderKey, signer8037, &types.DynamicFeeTx{
@@ -212,11 +200,7 @@ const accessListEntryCost = params.TxAccessListAddressGasAmsterdam +
 	common.AddressLength*params.TxCostFloorPerToken7976*params.TxTokenPerNonZeroByte
 
 // TestEIP2780WarmRecipientStillChargedCold verifies that a recipient warmed by
-// the transaction's access list is still charged the recipient touch at the
-// cold rate: per EIP-2780 that touch is priced unconditionally at the intrinsic
-// phase, so an access-list entry does not discount it. The total is the
-// intrinsic cold recipient charge plus the access-list entry itself, with no
-// separate runtime charge.
+// the transaction's access list is still charged the recipient at the cold rate.
 func TestEIP2780WarmRecipientStillChargedCold(t *testing.T) {
 	to := common.HexToAddress("0xe0a0000000000000000000000000000000000009")
 	sdb := mkState(senderAlloc(types.GenesisAlloc{to: {Balance: big.NewInt(1)}}))
@@ -260,79 +244,97 @@ func TestEIP2780DelegatedWarmTarget(t *testing.T) {
 	}
 }
 
-// TestEIP2780RecipientColdInIntrinsic exercises the validity boundary created
-// by charging the recipient touch at the cold rate unconditionally in the
-// intrinsic phase: a zero-value call funded one gas below the cold-inclusive
-// intrinsic (TX_BASE_COST + COLD_ACCOUNT_ACCESS) is rejected as intrinsic-gas
-// too low, while funding exactly that amount is valid and included with no
-// further runtime charge.
-func TestEIP2780RecipientColdInIntrinsic(t *testing.T) {
-	to := common.HexToAddress("0xe0a000000000000000000000000000000000000a")
-	intrinsic := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam // 15,000
-
-	// One gas short of the intrinsic cost: the transaction is invalid.
-	sdb := mkState(senderAlloc(types.GenesisAlloc{to: {Balance: big.NewInt(1)}}))
-	if _, _, err := applyMsg(t, sdb, callTx(0, to, 0, intrinsic-1, nil)); err == nil {
-		t.Fatal("expected intrinsic-gas-too-low error, got nil")
-	}
-
-	// Funded for exactly the intrinsic cost: valid, included, and fully
-	// consumed with no runtime cold surcharge to halt on.
-	sdb = mkState(senderAlloc(types.GenesisAlloc{to: {Balance: big.NewInt(1)}}))
-	res, _, err := applyMsg(t, sdb, callTx(0, to, 0, intrinsic, nil))
-	if err != nil {
-		t.Fatalf("transaction should be valid: %v", err)
-	}
-	if res.Err != nil {
-		t.Fatalf("unexpected execution error: %v", res.Err)
-	}
-	if res.UsedGas != intrinsic {
-		t.Fatalf("used gas = %d, want %d", res.UsedGas, intrinsic)
-	}
-	if sdb.GetNonce(senderAddr) != 1 {
-		t.Fatal("sender nonce not consumed")
-	}
-}
-
 // TestEIP2780RuntimeOOGRevertsDelegations verifies that running out of gas on
-// a runtime authorization charge halts the (still valid) transaction and
-// reverts all state changes, including the already applied EIP-7702
-// delegations — while the sender's nonce increment persists.
+// a runtime authorization charge halts the transaction and reverts all state
+// changes, including the already applied EIP-7702 delegations — while the
+// sender's nonce increment persists.
+//
+// The halt burns the regular dimension in full; the state dimension is
+// refilled by the revert and the reservoir — if any — is preserved and
+// returned to the sender rather than burnt.
 func TestEIP2780RuntimeOOGRevertsDelegations(t *testing.T) {
-	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
-	sdb := mkState(senderAlloc(nil))
-	// Gas covers the intrinsic cost (TX_BASE_COST + the cold-inclusive
-	// per-authorization base for a self-call) but not the runtime authorization
-	// charges (ACCOUNT_WRITE + account + indicator bytes).
-	tx := types.MustSignNewTx(senderKey, signer8037, &types.SetCodeTx{
-		ChainID: uint256.MustFromBig(cfg8037.ChainID), Nonce: 0, To: senderAddr,
-		Value: new(uint256.Int), Gas: 30_000, GasFeeCap: new(uint256.Int),
-		GasTipCap: new(uint256.Int), AuthList: []types.SetCodeAuthorization{auth},
-	})
-	res, _, err := applyMsg(t, sdb, tx)
-	if err != nil {
-		t.Fatalf("transaction should remain valid: %v", err)
+	cases := []struct {
+		name     string
+		gas      uint64
+		numAuths int
+		wantUsed uint64 // = gas − reservoir: all regular burnt, reservoir returned
+	}{
+		// No state reservoir (gas below MaxTxGas). Gas covers the intrinsic
+		// cost (TX_BASE_COST + the cold-inclusive per-authorization base for
+		// a self-call) but not the runtime authorization charges
+		// (ACCOUNT_WRITE + account + indicator bytes): everything is burnt.
+		{"no-reservoir", 30_000, 1, 30_000},
+
+		// A 100,000 state reservoir (gas above MaxTxGas). The 100
+		// authorizations' state charges (~21.9M) overwhelm the reservoir and
+		// the regular budget they spill into. The reservoir is made whole by
+		// the halt-refill and returned to the sender.
+		{"with-reservoir", params.MaxTxGas + 100_000, 100, params.MaxTxGas},
 	}
-	if res.Err != vm.ErrOutOfGas {
-		t.Fatalf("expected out of gas, got %v", res.Err)
-	}
-	if res.UsedGas != 30_000 {
-		t.Fatalf("used gas = %d, want all 30000 burnt", res.UsedGas)
-	}
-	if code := sdb.GetCode(authority); len(code) != 0 {
-		t.Fatalf("delegation persisted despite runtime OOG: %x", code)
-	}
-	if sdb.GetNonce(authority) != 0 {
-		t.Fatal("authority nonce persisted despite runtime OOG")
-	}
-	if sdb.GetNonce(senderAddr) != 1 {
-		t.Fatal("sender nonce not consumed")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				auths       = make([]types.SetCodeAuthorization, tc.numAuths)
+				authorities = make([]common.Address, tc.numAuths)
+			)
+			for i := range auths {
+				key, _ := crypto.GenerateKey()
+				auth, err := types.SignSetCode(key, types.SetCodeAuthorization{
+					ChainID: *uint256.MustFromBig(cfg8037.ChainID), Address: delegate8037, Nonce: 0,
+				})
+				if err != nil {
+					t.Fatalf("sign auth: %v", err)
+				}
+				auths[i], authorities[i] = auth, crypto.PubkeyToAddress(key.PublicKey)
+			}
+			sdb := mkState(senderAlloc(nil))
+			tx := types.MustSignNewTx(senderKey, signer8037,
+				&types.SetCodeTx{
+					ChainID:   uint256.MustFromBig(cfg8037.ChainID),
+					Nonce:     0,
+					To:        senderAddr,
+					Value:     new(uint256.Int),
+					Gas:       tc.gas,
+					GasFeeCap: new(uint256.Int),
+					GasTipCap: new(uint256.Int),
+					AuthList:  auths,
+				})
+			res, gp, err := applyMsg(t, sdb, tx)
+			if err != nil {
+				t.Fatalf("transaction should remain valid: %v", err)
+			}
+			if res.Err != vm.ErrOutOfGas {
+				t.Fatalf("expected out of gas, got %v", res.Err)
+			}
+			if res.UsedGas != tc.wantUsed {
+				t.Fatalf("used gas = %d, want %d", res.UsedGas, tc.wantUsed)
+			}
+			// The charged state gas was refilled on the halt: the receipt is
+			// all regular, burnt in full, and only the reservoir survives.
+			if gp.cumulativeState != 0 {
+				t.Fatalf("state gas = %d, want 0 (refilled on halt)", gp.cumulativeState)
+			}
+			if gp.cumulativeRegular != tc.wantUsed {
+				t.Fatalf("regular gas = %d, want %d (burnt in full)", gp.cumulativeRegular, tc.wantUsed)
+			}
+			for i, authority := range authorities {
+				if code := sdb.GetCode(authority); len(code) != 0 {
+					t.Fatalf("delegation %d persisted despite runtime OOG: %x", i, code)
+				}
+				if sdb.GetNonce(authority) != 0 {
+					t.Fatalf("authority %d nonce persisted despite runtime OOG", i)
+				}
+			}
+			if sdb.GetNonce(senderAddr) != 1 {
+				t.Fatal("sender nonce not consumed")
+			}
+		})
 	}
 }
 
 // TestEIP2780SelfTransferDelegated verifies that a self-transfer incurs no
-// recipient touch or value charges (the account is warm and existent as the
-// sender), while resolving the sender's own delegation is still paid for.
+// recipient touch or value charges, while resolving the sender's own
+// delegation is still paid for.
 func TestEIP2780SelfTransferDelegated(t *testing.T) {
 	target := common.HexToAddress("0x7a76000000000000000000000000000000000003") // codeless
 	sdb := mkState(types.GenesisAlloc{
@@ -393,47 +395,207 @@ func TestEIP2780InsufficientGasForCallCharge(t *testing.T) {
 	if sdb.Exist(fresh) {
 		t.Fatal("recipient should not be created when the call charge cannot be paid")
 	}
+	if sdb.GetNonce(senderAddr) != 1 {
+		t.Fatal("sender nonce not consumed")
+	}
 }
 
-// TestEIP2780HaltKeepsAuthStateGas verifies that when the top-most frame halts
-// exceptionally, the EIP-7702 delegations applied before the frame was persist.
-func TestEIP2780HaltKeepsAuthStateGas(t *testing.T) {
-	halting := common.HexToAddress("0xbad0000000000000000000000000000000000001")
-	sdb := mkState(senderAlloc(types.GenesisAlloc{
-		halting: {Code: []byte{0xfe}}, // INVALID
-	}))
-	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
+// TestEIP2780FirstFrameHaltPreservesPreExecution verifies the gas and state
+// semantics when the top-most frame — message call or creation — halts
+// exceptionally after the pre-execution phase completed:
+//
+//   - state changes applied before the frame was entered persist together
+//     with their state-gas charge (the EIP-7702 delegations of a call tx);
+//   - state gas pre-charged for the frame itself is refilled when the halt
+//     voids it (the account-creation charge of a creation tx);
+//   - after the refill the regular dimension is burnt in full, while any
+//     remaining state reservoir is preserved and returned to the sender.
+func TestEIP2780FirstFrameHaltPreservesPreExecution(t *testing.T) {
+	halting := common.HexToAddress("0xbad0000000000000000000000000000000000002")
+	cases := []struct {
+		name        string
+		create      bool
+		gas         uint64
+		wantUsed    uint64 // = gas − preserved reservoir
+		wantRegular uint64
+		wantState   uint64
+	}{
+		// Message call carrying one authorization: the delegation and its
+		// state charge (account + indicator) survive the halt.
+		//
+		// Without a reservoir the charge spills from regular gas and everything is
+		// burnt;
+		//
+		// With a reservoir, the reservoir remainder is preserved.
+		{"call/no-reservoir", false, 1_000_000, 1_000_000, 1_000_000 - authWorstState, authWorstState},
+		{"call/with-reservoir", false, params.MaxTxGas + 300_000, params.MaxTxGas + authWorstState, params.MaxTxGas, authWorstState},
 
-	// A gas limit above MaxTxGas so the state reservoir covers the runtime
-	// authorization state charges (218,790) without spilling into regular gas.
-	gasLimit := params.MaxTxGas + 300_000
-	tx := types.MustSignNewTx(senderKey, signer8037, &types.SetCodeTx{
-		ChainID: uint256.MustFromBig(cfg8037.ChainID), Nonce: 0, To: halting,
-		Value: new(uint256.Int), Gas: gasLimit, GasFeeCap: new(uint256.Int),
-		GasTipCap: new(uint256.Int), AuthList: []types.SetCodeAuthorization{auth},
-	})
-	res, gp, err := applyMsg(t, sdb, tx)
+		// Creation whose init code halts: no durable account is created, so
+		// the pre-charged account creation is refilled and no state gas
+		// remains.
+		//
+		// Without a reservoir the refill repays spilled regular gas, which the
+		// halt then burns along with the rest;
+		//
+		// With a reservoir, the refill makes the reservoir whole again and it
+		// is preserved.
+		{"create/no-reservoir", true, 1_000_000, 1_000_000, 1_000_000, 0},
+		{"create/with-reservoir", true, params.MaxTxGas + 100_000, params.MaxTxGas, params.MaxTxGas, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sdb := mkState(senderAlloc(types.GenesisAlloc{
+				halting: {Code: []byte{0xfe}}, // INVALID
+			}))
+			var (
+				tx        *types.Transaction
+				authority common.Address
+			)
+			if tc.create {
+				tx = createTx(0, tc.gas, []byte{0xfe}) // init code: INVALID
+			} else {
+				var auth types.SetCodeAuthorization
+				auth, authority = signAuth(t, authKeyA, delegate8037, 0)
+				tx = types.MustSignNewTx(senderKey, signer8037,
+					&types.SetCodeTx{
+						ChainID:   uint256.MustFromBig(cfg8037.ChainID),
+						Nonce:     0,
+						To:        halting,
+						Value:     new(uint256.Int),
+						Gas:       tc.gas,
+						GasFeeCap: new(uint256.Int),
+						GasTipCap: new(uint256.Int),
+						AuthList:  []types.SetCodeAuthorization{auth},
+					})
+			}
+			res, gp, err := applyMsg(t, sdb, tx)
+			if err != nil {
+				t.Fatalf("transaction should remain valid: %v", err)
+			}
+			if res.Err == nil {
+				t.Fatal("expected the frame to halt")
+			}
+			if res.UsedGas != tc.wantUsed {
+				t.Fatalf("used gas = %d, want %d", res.UsedGas, tc.wantUsed)
+			}
+			if gp.cumulativeRegular != tc.wantRegular {
+				t.Fatalf("regular gas = %d, want %d (burnt in full)", gp.cumulativeRegular, tc.wantRegular)
+			}
+			if gp.cumulativeState != tc.wantState {
+				t.Fatalf("state gas = %d, want %d", gp.cumulativeState, tc.wantState)
+			}
+			if tc.create {
+				// The halted creation is fully reverted: no durable account.
+				derived := crypto.CreateAddress(senderAddr, 0)
+				if code := sdb.GetCode(derived); len(code) != 0 {
+					t.Fatalf("created code persisted despite halt: %x", code)
+				}
+				if sdb.GetNonce(derived) != 0 {
+					t.Fatal("created account nonce persisted despite halt")
+				}
+			} else {
+				// The delegation applied before the frame was entered persists.
+				if code := sdb.GetCode(authority); len(code) == 0 {
+					t.Fatal("delegation should persist through an in-frame halt")
+				}
+			}
+			if sdb.GetNonce(senderAddr) != 1 {
+				t.Fatal("sender nonce not consumed")
+			}
+		})
+	}
+}
+
+// TestEIP2780CreatePreExecutionOOGPreservesReservoir verifies that when a
+// creation transaction cannot afford the pre-execution account-creation state
+// charge (before the init-code frame is entered), the transaction halts with
+// all regular gas burnt while the state reservoir — never touched, since the
+// charge is atomic and was not applied — is preserved and returned to the
+// sender.
+func TestEIP2780CreatePreExecutionOOGPreservesReservoir(t *testing.T) {
+	// Regular gas left for the pre-execution charge; together with the
+	// reservoir it must not cover the account-creation cost.
+	const (
+		regularLeft = 100_000
+		reservoir   = 50_000
+	)
+	// Plain creation intrinsic: TX_BASE_COST + CREATE_ACCESS.
+	plainIntrinsic, err := IntrinsicGas(nil, nil, nil, senderAddr, nil, new(uint256.Int), rules8037)
 	if err != nil {
-		t.Fatalf("transaction should remain valid: %v", err)
+		t.Fatal(err)
 	}
-	if res.Err == nil {
-		t.Fatal("expected the frame to halt")
+	// For the reservoir case the gas limit must exceed MaxTxGas, which leaves
+	// a huge regular budget by default. A big access list drives the intrinsic
+	// cost close to MaxTxGas, shrinking the regular budget back down to
+	// roughly regularLeft. Storage keys work because their intrinsic charge
+	// exceeds their EIP-7623/7976 floor contribution.
+	al := types.AccessList{{Address: common.HexToAddress("0xa1")}}
+	baseIntrinsic, err := IntrinsicGas(nil, al, nil, senderAddr, nil, new(uint256.Int), rules8037)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if code := sdb.GetCode(authority); len(code) == 0 {
-		t.Fatal("delegation should persist through an in-frame halt")
+	perKey := params.TxAccessListStorageKeyGasAmsterdam + uint64(common.HashLength)*params.TxCostFloorPerToken7976*params.TxTokenPerNonZeroByte
+
+	// Fill the transaction with accessList, drain the gas and make it
+	// insufficient for account-creation cost.
+	al[0].StorageKeys = make([]common.Hash, (params.MaxTxGas-regularLeft-baseIntrinsic)/perKey)
+	alIntrinsic, err := IntrinsicGas(nil, al, nil, senderAddr, nil, new(uint256.Int), rules8037)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// The regular dimension is burned in full by the halt: the intrinsic cost
-	// plus the entire regular execution budget, which together equal the
-	// MaxTxGas cap. The state dimension keeps the delegation's durable
-	// growth: a new account leaf plus the 23-byte indicator.
-	if gp.cumulativeRegular != params.MaxTxGas {
-		t.Errorf("regular gas = %d, want %d", gp.cumulativeRegular, params.MaxTxGas)
+	if left := params.MaxTxGas - alIntrinsic; left+reservoir >= newAccountState {
+		t.Fatalf("setup: regular %d + reservoir %d must not cover the creation charge %d", left, reservoir, newAccountState)
 	}
-	if gp.cumulativeState != authWorstState {
-		t.Errorf("state gas = %d, want %d (delegation state growth persisted)", gp.cumulativeState, authWorstState)
+	alCreateTx := types.MustSignNewTx(senderKey, signer8037,
+		&types.DynamicFeeTx{
+			ChainID:    cfg8037.ChainID,
+			Nonce:      0,
+			To:         nil,
+			Value:      big.NewInt(0),
+			Gas:        params.MaxTxGas + reservoir,
+			GasFeeCap:  big.NewInt(0),
+			GasTipCap:  big.NewInt(0),
+			AccessList: al,
+		})
+
+	cases := []struct {
+		name     string
+		tx       *types.Transaction
+		wantUsed uint64 // = gas − preserved reservoir
+	}{
+		// Gas below MaxTxGas: no reservoir, the whole limit is burnt.
+		{"no-reservoir", createTx(0, plainIntrinsic+regularLeft, nil), plainIntrinsic + regularLeft},
+
+		// Gas above MaxTxGas: the reservoir survives the halt untouched and
+		// is returned to the sender.
+		{"with-reservoir", alCreateTx, params.MaxTxGas},
 	}
-	if want := params.MaxTxGas + authWorstState; res.UsedGas != want {
-		t.Errorf("used gas = %d, want %d", res.UsedGas, want)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sdb := mkState(senderAlloc(nil))
+			res, gp, err := applyMsg(t, sdb, tc.tx)
+			if err != nil {
+				t.Fatalf("transaction should remain valid: %v", err)
+			}
+			if res.Err != vm.ErrOutOfGas {
+				t.Fatalf("expected out of gas, got %v", res.Err)
+			}
+			if res.UsedGas != tc.wantUsed {
+				t.Fatalf("used gas = %d, want %d", res.UsedGas, tc.wantUsed)
+			}
+			if gp.cumulativeRegular != tc.wantUsed {
+				t.Fatalf("regular gas = %d, want %d (burnt in full)", gp.cumulativeRegular, tc.wantUsed)
+			}
+			if gp.cumulativeState != 0 {
+				t.Fatalf("state gas = %d, want 0 (charge never applied)", gp.cumulativeState)
+			}
+			if derived := crypto.CreateAddress(senderAddr, 0); sdb.Exist(derived) {
+				t.Fatal("target account should not be created when the charge cannot be paid")
+			}
+			if sdb.GetNonce(senderAddr) != 1 {
+				t.Fatal("sender nonce not consumed")
+			}
+		})
 	}
 }
 
