@@ -17,16 +17,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"net"
-	"net/http"
-	"net/netip"
 	"slices"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -55,13 +49,13 @@ func discoveryListen(ctx *cli.Context) error {
 	// v4 is the primary listener on the real socket and forwards packets it
 	// can't parse to v5 via the unhandled channel.
 	unhandled := make(chan discover.ReadPacket, 100)
-	config.Unhandled = unhandled
-	v4, err := discover.ListenV4(socket, ln, config)
+	v4cfg := config
+	v4cfg.Unhandled = unhandled
+	v4, err := discover.ListenV4(socket, ln, v4cfg)
 	if err != nil {
 		exit(err)
 	}
-	config.Unhandled = nil
-	v5, err := discover.ListenV5(&sharedUDPConn{socket, unhandled}, ln, config)
+	v5, err := discover.ListenV5(&discover.SharedUDPConn{UDPConn: socket, Unhandled: unhandled}, ln, config)
 	if err != nil {
 		exit(err)
 	}
@@ -75,38 +69,8 @@ func discoveryListen(ctx *cli.Context) error {
 	// v4 and v5 share the same local node, so this is the single record both announce.
 	fmt.Println(ln.Node())
 
-	httpAddr := ctx.String(httpAddrFlag.Name)
-	if httpAddr == "" {
-		select {}
-	}
-
-	srv := rpc.NewServer()
-	srv.RegisterName("discv4", &discv4API{v4})
-	srv.RegisterName("discv5", &discv5API{v5})
-	log.Info("Starting RPC API server", "addr", httpAddr)
-	http.DefaultServeMux.Handle("/", srv)
-	httpsrv := http.Server{Addr: httpAddr, Handler: http.DefaultServeMux}
-	return httpsrv.ListenAndServe()
-}
-
-// sharedUDPConn implements a shared connection, identical to the one used by
-// p2p.Server: reads return packets the primary v4 listener found unprocessable
-// and forwarded on the unhandled channel.
-type sharedUDPConn struct {
-	*net.UDPConn
-	unhandled chan discover.ReadPacket
-}
-
-func (s *sharedUDPConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
-	packet, ok := <-s.unhandled
-	if !ok {
-		return 0, netip.AddrPort{}, errors.New("connection was closed")
-	}
-	l := min(len(packet.Data), len(b))
-	copy(b[:l], packet.Data[:l])
-	return l, packet.Addr, nil
-}
-
-func (s *sharedUDPConn) Close() error {
-	return nil
+	return runRPCServer(ctx.String(httpAddrFlag.Name), map[string]any{
+		"discv4": &discv4API{v4},
+		"discv5": &discv5API{v5},
+	})
 }

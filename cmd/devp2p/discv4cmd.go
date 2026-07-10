@@ -17,10 +17,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,11 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -176,19 +174,7 @@ func discv4Listen(ctx *cli.Context) error {
 
 	fmt.Println(disc.Self())
 
-	httpAddr := ctx.String(httpAddrFlag.Name)
-	if httpAddr == "" {
-		// Non-HTTP mode.
-		select {}
-	}
-
-	api := &discv4API{disc}
-	log.Info("Starting RPC API server", "addr", httpAddr)
-	srv := rpc.NewServer()
-	srv.RegisterName("discv4", api)
-	http.DefaultServeMux.Handle("/", srv)
-	httpsrv := http.Server{Addr: httpAddr, Handler: http.DefaultServeMux}
-	return httpsrv.ListenAndServe()
+	return runRPCServer(ctx.String(httpAddrFlag.Name), map[string]any{"discv4": &discv4API{disc}})
 }
 
 func discv4RequestRecord(ctx *cli.Context) error {
@@ -428,13 +414,14 @@ type discv4API struct {
 	host *discover.UDPv4
 }
 
-func (api *discv4API) LookupRandom(n int) (ns []*enode.Node) {
+func (api *discv4API) LookupRandom(ctx context.Context, n int) []*enode.Node {
 	it := api.host.RandomNodes()
 	defer it.Close()
-	for len(ns) < n && it.Next() {
-		ns = append(ns, it.Node())
-	}
-	return ns
+	go func() {
+		<-ctx.Done()
+		it.Close()
+	}()
+	return enode.ReadNodes(it, n)
 }
 
 func (api *discv4API) Buckets() [][]discover.BucketNode {
