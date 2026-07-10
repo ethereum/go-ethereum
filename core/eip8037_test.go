@@ -106,8 +106,16 @@ func applyMsg(t *testing.T, sdb *state.StateDB, tx *types.Transaction) (*Executi
 	res, err := st.execute()
 	if err == nil && res != nil {
 		assertPoolSane(t, res, gp)
-		limit := min(msg.GasLimit, params.MaxTxGas)
-		assertBudgetSane(t, vm.NewGasBudget(limit, msg.GasLimit-limit), st.gasRemaining)
+		// The budget is seeded with the post-intrinsic remainder: the intrinsic
+		// cost counts towards the MaxTxGas regular cap and the execution gas
+		// exceeding the regular budget forms the reservoir.
+		intrinsic, ierr := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules8037)
+		if ierr != nil {
+			t.Fatalf("intrinsic gas: %v", ierr)
+		}
+		executionGas := msg.GasLimit - intrinsic
+		gasLeft := min(params.MaxTxGas-intrinsic, executionGas)
+		assertBudgetSane(t, vm.NewGasBudget(gasLeft, executionGas-gasLeft), st.gasRemaining)
 	}
 	return res, gp, err
 }
@@ -193,15 +201,12 @@ var (
 // charge depends on whether the deployment target exists and is charged at
 // runtime (EIP-2780), not intrinsically.
 func TestCreateTxIntrinsicNoStateGas(t *testing.T) {
-	cost, err := IntrinsicGas(nil, nil, nil, common.Address{}, nil, nil, rules8037, params.CostPerStateByte)
+	cost, err := IntrinsicGas(nil, nil, nil, common.Address{}, nil, nil, rules8037)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cost.StateGas != 0 {
-		t.Fatalf("intrinsic state gas = %d, want 0", cost.StateGas)
-	}
-	if want := params.TxBaseCost2780 + params.CreateAccessAmsterdam; cost.RegularGas != want {
-		t.Fatalf("intrinsic regular gas = %d, want %d", cost.RegularGas, want)
+	if want := params.TxBaseCost2780 + params.CreateAccessAmsterdam; cost != want {
+		t.Fatalf("intrinsic gas = %d, want %d", cost, want)
 	}
 }
 
@@ -481,19 +486,16 @@ var delegate8037 = common.HexToAddress("0xde1e8a7e")
 // Intrinsic gas charges only the state-independent per-authorization base;
 // the state-dependent charges are applied at runtime (EIP-2780).
 func TestAuthIntrinsicBaseOnly(t *testing.T) {
-	cost, err := IntrinsicGas(nil, nil, []types.SetCodeAuthorization{{}}, common.Address{}, &delegate8037, nil, rules8037, params.CostPerStateByte)
+	cost, err := IntrinsicGas(nil, nil, []types.SetCodeAuthorization{{}}, common.Address{}, &delegate8037, nil, rules8037)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if cost.StateGas != 0 {
-		t.Fatalf("intrinsic state gas = %d, want 0", cost.StateGas)
 	}
 	// The recipient touch and the per-authorization authority access (priced
 	// into RegularPerAuthBaseCost) are both charged at the cold rate
 	// unconditionally at the intrinsic phase (EIP-2780).
 	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + params.RegularPerAuthBaseCost
-	if cost.RegularGas != want {
-		t.Fatalf("intrinsic regular gas = %d, want %d", cost.RegularGas, want)
+	if cost != want {
+		t.Fatalf("intrinsic gas = %d, want %d", cost, want)
 	}
 }
 

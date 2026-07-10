@@ -38,19 +38,19 @@ func TestEIP2780Intrinsic(t *testing.T) {
 		to    *common.Address
 		value *uint256.Int
 		auths []types.SetCodeAuthorization
-		want  vm.GasCosts
+		want  uint64
 	}{
 		{
 			name:  "self-transfer",
 			to:    &from,
 			value: uint256.NewInt(1),
-			want:  vm.GasCosts{RegularGas: params.TxBaseCost2780}, // 12,000
+			want:  params.TxBaseCost2780, // 12,000
 		},
 		{
 			name:  "self-transfer/zero-value",
 			to:    &from,
 			value: uint256.NewInt(0),
-			want:  vm.GasCosts{RegularGas: params.TxBaseCost2780}, // 12,000
+			want:  params.TxBaseCost2780, // 12,000
 		},
 		{
 			name:  "zero-value call",
@@ -58,15 +58,15 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			value: uint256.NewInt(0),
 			// TxBaseCost + ColdAccountAccess = 15,000; the recipient touch is
 			// charged at the cold rate unconditionally at the intrinsic phase.
-			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam},
+			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam,
 		},
 		{
 			name:  "value transfer to existing EOA",
 			to:    &to,
 			value: uint256.NewInt(1),
 			// TxBaseCost + ColdAccountAccess + TxValueCost + TransferLogCost = 21,000
-			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
-				params.TxValueCost2780 + params.TransferLogCost2780},
+			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
+				params.TxValueCost2780 + params.TransferLogCost2780,
 		},
 		{
 			name:  "contract creation, value = 0",
@@ -75,18 +75,14 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			// TxBaseCost + CreateAccess = 23,000 regular. The new-account state
 			// charge depends on whether the deployment target exists and is
 			// charged at runtime, not intrinsically.
-			want: vm.GasCosts{
-				RegularGas: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
-			},
+			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 		},
 		{
 			name:  "contract creation, value > 0",
 			to:    nil,
 			value: uint256.NewInt(1),
 			// TxBaseCost + CreateAccess + TransferLogCost = 24,756 regular.
-			want: vm.GasCosts{
-				RegularGas: params.TxBaseCost2780 + params.CreateAccessAmsterdam + params.TransferLogCost2780,
-			},
+			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam + params.TransferLogCost2780,
 		},
 		{
 			name:  "value transfer with authorizations",
@@ -95,13 +91,13 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			auths: make([]types.SetCodeAuthorization, 3),
 			// Each authorization adds the state-independent per-auth base
 			// (cold authority access included).
-			want: vm.GasCosts{RegularGas: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
-				params.TxValueCost2780 + params.TransferLogCost2780 + 3*params.RegularPerAuthBaseCost},
+			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
+				params.TxValueCost2780 + params.TransferLogCost2780 + 3*params.RegularPerAuthBaseCost,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := IntrinsicGas(nil, nil, tc.auths, from, tc.to, tc.value, rules8037, params.CostPerStateByte)
+			got, err := IntrinsicGas(nil, nil, tc.auths, from, tc.to, tc.value, rules8037)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -426,9 +422,10 @@ func TestEIP2780HaltKeepsAuthStateGas(t *testing.T) {
 	if code := sdb.GetCode(authority); len(code) == 0 {
 		t.Fatal("delegation should persist through an in-frame halt")
 	}
-	// The regular dimension is burned in full by the halt; the state dimension
-	// keeps the delegation's durable growth: a new account leaf plus the
-	// 23-byte indicator.
+	// The regular dimension is burned in full by the halt: the intrinsic cost
+	// plus the entire regular execution budget, which together equal the
+	// MaxTxGas cap. The state dimension keeps the delegation's durable
+	// growth: a new account leaf plus the 23-byte indicator.
 	if gp.cumulativeRegular != params.MaxTxGas {
 		t.Errorf("regular gas = %d, want %d", gp.cumulativeRegular, params.MaxTxGas)
 	}

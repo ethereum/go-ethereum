@@ -48,18 +48,6 @@ func (g GasCosts) String() string {
 //   - UsedRegularGas / UsedStateGas: per-frame accumulators tracking gross
 //     consumption. UsedStateGas is signed so it can be decremented by inline
 //     state-gas refunds (e.g., SSTORE 0->A->0).
-//
-// The same struct serves three roles:
-//
-//   - During execution: Charge / ChargeRegular / ChargeState / RefundState
-//     and RefundRegular mutate the running balance and the usage accumulators
-//     in lockstep.
-//
-//   - At frame exit: ExitSuccess / ExitRevert / ExitHalt produce a new
-//     GasBudget in "leftover" form that packages the result for the caller.
-//
-//   - At absorption: the caller's Absorb method merges the child's leftover
-//     budget into its own running budget.
 type GasBudget struct {
 	RegularGas     uint64 // remaining regular-gas balance (or leftover for caller to absorb)
 	StateGas       uint64 // remaining state-gas reservoir (or leftover for caller to absorb)
@@ -78,9 +66,7 @@ func NewGasBudget(regular, state uint64) GasBudget {
 	return GasBudget{RegularGas: regular, StateGas: state}
 }
 
-// Used returns the total scalar gas consumed relative to an initial budget
-// (= (initial.regular + initial.state) − (current.regular + current.state)).
-// This is the payment scalar (EIP-8037's tx_gas_used_before_refund).
+// Used returns the total scalar gas consumed relative to an initial budget.
 func (g GasBudget) Used(initial GasBudget) uint64 {
 	return (initial.RegularGas + initial.StateGas) - (g.RegularGas + g.StateGas)
 }
@@ -91,16 +77,16 @@ func (g GasBudget) String() string {
 }
 
 // Charge deducts a combined regular+state cost from the running balance and
-// updates the usage accumulators. State-gas in excess of the reservoir spills
-// into regular_gas.
+// updates the usage accumulators.
 func (g *GasBudget) Charge(cost GasCosts) (GasBudget, bool) {
 	prior := *g
 	ok := g.charge(cost)
 	return prior, ok
 }
 
-// chargeRegularOnly deducts a regular-only cost.
-func (g *GasBudget) chargeRegularOnly(r uint64) bool {
+// ChargeRegularOnly deducts a regular-only cost. It's always preferred for
+// performance consideration if the opcode doesn't have any state cost.
+func (g *GasBudget) ChargeRegularOnly(r uint64) bool {
 	if g.RegularGas < r {
 		return false
 	}
@@ -110,9 +96,7 @@ func (g *GasBudget) chargeRegularOnly(r uint64) bool {
 }
 
 // CanAfford reports whether the running budget can cover the given cost vector
-// without going out of gas. The regular cost must fit in the regular balance,
-// and any state gas in excess of the reservoir must be coverable by the
-// remaining regular gas (the spillover), mirroring charge without mutating.
+// without going out of gas.
 func (g GasBudget) CanAfford(cost GasCosts) bool {
 	if g.RegularGas < cost.RegularGas {
 		return false
@@ -162,8 +146,7 @@ func (g *GasBudget) ChargeRegular(r uint64) (GasBudget, bool) {
 	return g.Charge(GasCosts{RegularGas: r})
 }
 
-// ChargeState is a convenience that deducts a state-only cost (spills to
-// regular when the reservoir is exhausted). Returns false on OOG.
+// ChargeState is a convenience that deducts a state-only cost.
 func (g *GasBudget) ChargeState(s uint64) (GasBudget, bool) {
 	return g.Charge(GasCosts{StateGas: s})
 }
@@ -174,24 +157,10 @@ func (g *GasBudget) IsZero() bool {
 }
 
 // RefundState applies an inline state-gas refund (e.g., SSTORE 0->A->0).
-//
-// Per EIP-8037, the refund repays the regular gas previously borrowed for
-// state-gas spillover (tracked by Spilled) before crediting the
-// reservoir: it is returned to RegularGas up to the outstanding borrowed
-// amount, and only the remainder tops up StateGas.
-//
-// The signed usage counter is decremented by the full refund regardless of the
-// split, preserving the per-frame invariant:
-//
-//	StateGas + UsedStateGas == initialStateGas + Spilled
-//
-// which the revert and halt paths rely on for the correct gross refund.
 func (g *GasBudget) RefundState(s uint64) {
 	repay := min(s, g.Spilled)
 	g.RegularGas += repay
 	g.Spilled -= repay
-
-	// Whatever is left tops up the reservoir.
 	g.StateGas += s - repay
 	g.UsedStateGas -= int64(s)
 }
@@ -206,14 +175,6 @@ func (g *GasBudget) DrainRegular() {
 // the parent's running budget and returns the initial GasBudget for a child
 // frame. The parent's UsedRegularGas is bumped by the forwarded amount so
 // that the absorb-on-return path correctly reclaims the unused portion.
-//
-// Used by frame boundaries where the regular forward has NOT been pre-
-// deducted: tx-level dispatch (state_transition) and CREATE / CREATE2. The
-// CALL family pre-deducts the forward via the dynamic gas table for tracer-
-// reporting reasons and therefore constructs its child budget directly.
-//
-// Caller must ensure `regular` does not exceed the running balance and
-// apply any EIP-150 1/64 retention before calling Forward.
 func (g *GasBudget) Forward(regular uint64) GasBudget {
 	g.RegularGas -= regular
 	g.UsedRegularGas += regular
@@ -239,19 +200,15 @@ func (g *GasBudget) ForwardAll() GasBudget {
 // absorb to update its own state.
 // ============================================================================
 
-// ExitSuccess produces the leftover form for a successful frame. Inline
-// state-gas refunds have already been folded into StateGas / UsedStateGas
-// during execution; the running budget IS the exit budget on success.
+// ExitSuccess produces the leftover form for a successful frame.
 func (g GasBudget) ExitSuccess() GasBudget {
 	return g
 }
 
 // ExitRevert produces the leftover for a REVERT exit. The frame's state
-// changes are discarded, so all state gas it charged is refilled to its origin
-// (EIP-8037): up to Spilled is returned to RegularGas (the regular
-// gas it borrowed), and the remainder restores the reservoir. Because the
-// borrowed regular gas is repaid first, the reservoir is made whole back to its
-// start-of-frame value.
+// changes are discarded, so all state gas it charged is refilled with LIFO
+// mechanism: up to Spilled is returned to RegularGas (the regular gas it
+// borrowed), and the remainder restores the reservoir.
 func (g GasBudget) ExitRevert() GasBudget {
 	reservoir := int64(g.StateGas) + g.UsedStateGas - int64(g.Spilled)
 	if reservoir < 0 {
@@ -270,10 +227,10 @@ func (g GasBudget) ExitRevert() GasBudget {
 }
 
 // ExitHalt produces the leftover for an exceptional halt. As with a revert, the
-// frame's state changes are rolled back and its state gas is refilled to origin
-// (EIP-8037); the difference is that the frame's gas_left is consumed rather
+// frame's state changes are rolled back and its state gas is refilled with LIFO
+// mechanism. The difference is that the frame's regular gas is consumed rather
 // than returned. The portion refilled to RegularGas is therefore burned along
-// with the rest of gas_left, leaving only the reservoir portion to survive,
+// with the rest of regular gas, leaving only the reservoir portion to survive,
 // which equals the reservoir's value at the start of the frame.
 func (g GasBudget) ExitHalt() GasBudget {
 	reservoir := int64(g.StateGas) + g.UsedStateGas - int64(g.Spilled)

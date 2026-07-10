@@ -480,6 +480,11 @@ const (
 	// costs of the transaction per EIP-2780.
 	GasChangeTxRuntimeGas GasChangeReason = 21
 
+	// GasChangeAccountCreation represents the conditional account-creation
+	// state cost charged in the creating frame when a CREATE/CREATE2 is about
+	// to create a new account (EIP-8037).
+	GasChangeAccountCreation GasChangeReason = 22
+
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.
 	GasChangeIgnored GasChangeReason = 0xFF

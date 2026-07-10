@@ -101,14 +101,12 @@ const (
 	// defined in EIP-8037 as the sum of:
 	//
 	// - Calldata cost for the authorization tuple
-	// - ECDSA recovery of the authority address (per EIP-7904)
+	// - ECDSA recovery of the authority address
 	// - Cold authority access (COLD_ACCOUNT_ACCESS)
 	// - Warm writes to the authority account
 	RegularPerAuthBaseCost uint64 = 7816
 
-	// EIP-2780: resource-based intrinsic transaction gas. The access primitives
-	// it references (COLD_ACCOUNT_ACCESS, WARM_ACCESS, CREATE_ACCESS) are the
-	// EIP-8038 parameters defined below.
+	// EIP-2780: resource-based intrinsic transaction gas.
 	TxBaseCost2780      uint64 = 12000
 	TxValueCost2780     uint64 = 4244
 	TransferLogCost2780 uint64 = 1756
