@@ -187,7 +187,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		limit = min(cfg.GasLimit, params.MaxTxGas)
 	}
 	// Call the code with the given configuration.
-	code, address, result, _, err := vmenv.Create(
+	code, address, result, err := vmenv.Create(
 		cfg.Origin,
 		input,
 		vm.NewGasBudget(limit, cfg.GasLimit-limit),
