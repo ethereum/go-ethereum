@@ -257,7 +257,10 @@ func loadSigningKey(keyfile string) *ecdsa.PrivateKey {
 	if err != nil {
 		exit(fmt.Errorf("failed to read the keyfile at '%s': %v", keyfile, err))
 	}
-	password, _ := prompt.Stdin.PromptPassword("Please enter the password for '" + keyfile + "': ")
+	password, err := prompt.Stdin.PromptPassword("Please enter the password for '" + keyfile + "': ")
+	if err != nil {
+		exit(fmt.Errorf("error reading password: %v", err))
+	}
 	key, err := keystore.DecryptKey(keyjson, password)
 	if err != nil {
 		exit(fmt.Errorf("error decrypting key: %v", err))
