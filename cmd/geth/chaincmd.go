@@ -782,6 +782,9 @@ func pruneHistory(ctx *cli.Context) error {
 	if _, err := chaindb.TruncateTail(rawdb.ChainFreezerBlockDataGroup, targetBlock); err != nil {
 		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
+	if _, err := chaindb.TruncateTail(rawdb.ChainFreezerBALTable, targetBlock); err != nil {
+		return fmt.Errorf("failed to truncate ancient BAL data: %v", err)
+	}
 	log.Info("History pruning completed", "tail", targetBlock, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// TODO(s1na): what if there is a crash between the two prune operations?
