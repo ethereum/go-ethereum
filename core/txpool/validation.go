@@ -210,6 +210,9 @@ func ValidateCells(sidecar *types.BlobTxCellSidecar) error {
 	if blobCount != len(sidecar.Commitments) {
 		return fmt.Errorf("invalid number of %d blobs compared to %d commitments", blobCount, len(sidecar.Commitments))
 	}
+	if len(sidecar.Proofs) != len(sidecar.Commitments)*kzg4844.CellProofsPerBlob {
+		return fmt.Errorf("invalid number of %d proofs compared to %d commitments", len(sidecar.Proofs), len(sidecar.Commitments))
+	}
 	if sidecar.Version != types.BlobSidecarVersion1 {
 		return fmt.Errorf("unexpected sidecar version, want: %d, got: %d", types.BlobSidecarVersion1, sidecar.Version)
 	}
