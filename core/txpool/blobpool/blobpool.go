@@ -1965,6 +1965,10 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 			errs[i] = err
 			continue
 		}
+		if err := txpool.ValidateCells(ptx.CellSidecar); err != nil {
+			errs[i] = err
+			continue
+		}
 		errs[i] = p.AddPooledTx(ptx)
 	}
 	return errs
@@ -2032,10 +2036,6 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 		default:
 			addInvalidMeter.Mark(1)
 		}
-		return err
-	}
-	//todo: validation happens twice for eth72
-	if err := txpool.ValidateCells(ptx.CellSidecar); err != nil {
 		return err
 	}
 	// If the address is not yet known, request exclusivity to track the account
