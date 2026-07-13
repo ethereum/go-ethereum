@@ -4,7 +4,9 @@ package slave
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
@@ -12,11 +14,121 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/qkc/cluster/wire"
 )
+
+// startPythonMaster starts the Python master.py subprocess and returns the
+// TCP port it listens on, a function to retrieve captured stdout lines, and a
+// cleanup function. The peer listens on a random port (port=0) and prints
+// "PORT:<port>" to stdout when ready.
+func startPythonMaster(t *testing.T, extraArgs ...string) (int, func() []string, func()) {
+	t.Helper()
+
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot get caller path")
+	}
+	pyScript := filepath.Join(filepath.Dir(filename), "testdata", "pyproto", "master.py")
+
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not found in PATH")
+	}
+	if _, err := os.Stat(pyScript); err != nil {
+		t.Skipf("master.py not found at %s", pyScript)
+	}
+
+	args := []string{pyScript, "--port", "0", "--id", "py-master", "--shards", "1,2"}
+	args = append(args, extraArgs...)
+
+	cmd := exec.Command("python3", args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("stdout pipe: %v", err)
+	}
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start python master: %v", err)
+	}
+
+	portCh := make(chan int, 1)
+	var outputLines []string
+	var outputMu sync.Mutex
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			outputMu.Lock()
+			outputLines = append(outputLines, line)
+			outputMu.Unlock()
+			if strings.HasPrefix(line, "PORT:") {
+				var port int
+				if _, err := fmt.Sscanf(line, "PORT:%d", &port); err == nil {
+					portCh <- port
+				}
+			}
+		}
+	}()
+
+	var port int
+	select {
+	case port = <-portCh:
+	case <-time.After(5 * time.Second):
+		cmd.Process.Kill()
+		cmd.Wait()
+		t.Fatal("timeout waiting for python master port")
+	}
+
+	getOutput := func() []string {
+		outputMu.Lock()
+		defer outputMu.Unlock()
+		out := make([]string, len(outputLines))
+		copy(out, outputLines)
+		return out
+	}
+
+	cleanup := func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}
+
+	return port, getOutput, cleanup
+}
+
+// dialPythonMaster starts python master.py and dials the port it listens on,
+// wrapping the connection in a MasterConn. Returns the MasterConn, a function
+// to retrieve captured stdout lines, and a cleanup function.
+func dialPythonMaster(t *testing.T) (*MasterConn, func() []string, func()) {
+	t.Helper()
+
+	port, getOutput, cleanupPy := startPythonMaster(t)
+
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	mc, err := NewMasterConn(
+		addr,
+		0,
+		[]byte("go-slave"),
+		[]uint32{0x00010001, 0x00020001},
+		log.New(),
+	)
+	if err != nil {
+		cleanupPy()
+		t.Fatalf("create MasterConn: %v", err)
+	}
+	mc.Start()
+
+	cleanup := func() {
+		mc.Close()
+		cleanupPy()
+	}
+
+	return mc, getOutput, cleanup
+}
 
 // startPythonPeer starts a Python protocol peer subprocess and returns the
 // TCP port and a cleanup function. The peer listens on a random port (port=0)
@@ -315,5 +427,86 @@ func TestPythonCompat_PoolReconnect(t *testing.T) {
 	}
 	if pool.OutboundSize() != 1 {
 		t.Fatalf("pool size after reconnect: got %d, want 1", pool.OutboundSize())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test: Python Master -> Go Slave full handshake + RPC flow
+//
+// Validates: Python MasterConnection behavior against Go MasterConn.
+// Python sends PING, GetEcoInfoListRequest, AddRootBlockRequest, and
+// DestroyClusterPeerConnectionCommand. Go must decode the 12-byte
+// ClusterMetadata frames, dispatch to the correct handlers, and return
+// protocol-compatible responses.
+// ---------------------------------------------------------------------------
+func TestPythonCompat_MasterFullFlow(t *testing.T) {
+	mc, getOutput, cleanup := dialPythonMaster(t)
+	defer cleanup()
+
+	// Wait for the Python master to finish its scripted exchange.
+	select {
+	case <-mc.WaitUntilClosed():
+	case <-time.After(15 * time.Second):
+		output := getOutput()
+		t.Fatalf("MasterConn did not close after Python master finished; output=%v", output)
+	}
+
+	// Allow a moment for the scanner goroutine to drain the Python stdout pipe.
+	time.Sleep(100 * time.Millisecond)
+
+	output := getOutput()
+	expected := []string{
+		"PONG_OK id=676f2d736c617665", // hex of "go-slave"
+		"ECO_OK error_code=0",
+		"ROOT_OK error_code=0",
+		"DESTROY_OK",
+		"PONG_OK id=676f2d736c617665",
+		"DISCONNECTED",
+	}
+	for _, exp := range expected {
+		found := false
+		for _, line := range output {
+			if line == exp {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected output line %q not found in %v", exp, output)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test: Python-generated ClusterMetadata frame layout
+//
+// Validates: the 12-byte ClusterMetadata encoding (4-byte branch + 8-byte
+// cluster_peer_id) is the same on both sides of the wire.
+// ---------------------------------------------------------------------------
+func TestPythonCompat_MasterFrameLayout(t *testing.T) {
+	// This is a static golden-vector test: we compare Go's wire format against
+	// the documented Python frame layout without requiring a Python subprocess.
+	meta := wire.ClusterMetadata{Branch: 0x01020304, ClusterPeerID: 0x1122334455667788}
+	frame := &wire.Frame{
+		Meta:    meta,
+		Opcode:  byte(wire.ClusterOpPing),
+		RPCID:   1,
+		Payload: []byte{0xAA, 0xBB},
+	}
+
+	var buf bytes.Buffer
+	if err := wire.WriteFrame(&buf, frame); err != nil {
+		t.Fatalf("WriteFrame: %v", err)
+	}
+
+	wireBytes := buf.Bytes()
+	if len(wireBytes) != 4+12+1+8+2 {
+		t.Fatalf("frame length: got %d, want %d", len(wireBytes), 4+12+1+8+2)
+	}
+	if binary.BigEndian.Uint32(wireBytes[4:8]) != meta.Branch {
+		t.Fatalf("branch mismatch")
+	}
+	if binary.BigEndian.Uint64(wireBytes[8:16]) != meta.ClusterPeerID {
+		t.Fatalf("cluster_peer_id mismatch")
 	}
 }
