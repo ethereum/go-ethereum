@@ -252,7 +252,8 @@ type ReceiptsPacket70 struct {
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
 type ReceiptsRLPResponse []rlp.RawValue
 
-// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on eth/72.
+// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on protocol version
+// less than or equal to 71.
 type NewPooledTransactionHashesPacket71 struct {
 	Types  []byte
 	Sizes  []uint32
@@ -319,7 +320,7 @@ type GetCellsRequestPacket struct {
 // CellsResponse represents a response containing cells for blob transactions.
 type CellsResponse struct {
 	Hashes []common.Hash
-	Cells  [][]kzg4844.Cell
+	Cells  rlp.RawList[rlp.RawList[kzg4844.Cell]]
 	Mask   types.CustodyBitmap
 }
 

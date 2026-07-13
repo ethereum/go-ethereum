@@ -23,8 +23,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // ethHandler implements the eth.Backend interface to handle the various network
@@ -94,7 +96,20 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.txFetcher.Enqueue(peer.ID(), peer.Version(), txs, true)
 
 	case *eth.CellsResponse:
-		return h.blobFetcher.Enqueue(peer.ID(), packet.Hashes, packet.Cells, packet.Mask)
+		outer, err := packet.Cells.Items()
+		if err != nil {
+			return fmt.Errorf("Cells: %v", err)
+		}
+		cells := make([][]kzg4844.Cell, len(outer))
+		for i := range outer {
+			if outer[i].Len() > params.BlobTxMaxBlobs*kzg4844.CellsPerBlob {
+				return fmt.Errorf("Cells: cells per tx exceeded the possible maximum")
+			}
+			if cells[i], err = outer[i].Items(); err != nil {
+				return fmt.Errorf("Cells: %v", err)
+			}
+		}
+		return h.blobFetcher.Enqueue(peer.ID(), packet.Hashes, cells, packet.Mask)
 
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)

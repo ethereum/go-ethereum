@@ -754,7 +754,7 @@ func handleCells(backend Backend, msg Decoder, peer *Peer) error {
 	tresp := tracker.Response{
 		ID:      cellsResponse.RequestId,
 		MsgCode: CellsMsg,
-		Size:    len(cellsResponse.CellsResponse.Hashes),
+		Size:    cellsResponse.CellsResponse.Cells.Len(),
 	}
 	if err := peer.tracker.Fulfil(tresp); err != nil {
 		return fmt.Errorf("Cells: %w", err)

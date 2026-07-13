@@ -253,11 +253,23 @@ func (p *Peer) ReplyReceiptsRLP69(id uint64, receipts rlp.RawList[*ReceiptList])
 
 // ReplyCells is the response to GetCells.
 func (p *Peer) ReplyCells(id uint64, hashes []common.Hash, cells [][]kzg4844.Cell, mask types.CustodyBitmap) error {
+	inner := make([]rlp.RawList[kzg4844.Cell], len(cells))
+	for i, c := range cells {
+		raw, err := rlp.EncodeToRawList(c)
+		if err != nil {
+			return err
+		}
+		inner[i] = raw
+	}
+	rawCells, err := rlp.EncodeToRawList(inner)
+	if err != nil {
+		return err
+	}
 	return p2p.Send(p.rw, CellsMsg, &CellsPacket{
 		RequestId: id,
 		CellsResponse: CellsResponse{
 			Hashes: hashes,
-			Cells:  cells,
+			Cells:  rawCells,
 			Mask:   mask,
 		},
 	})
