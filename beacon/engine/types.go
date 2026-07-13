@@ -104,22 +104,23 @@ type ExecutableData struct {
 	BlobGasUsed     *uint64             `json:"blobGasUsed"`
 	ExcessBlobGas   *uint64             `json:"excessBlobGas"`
 	SlotNumber      *uint64             `json:"slotNumber,omitempty"`
-	BlockAccessList hexutil.Bytes       `json:"blockAccessList,omitempty"`
+	BlockAccessList []byte              `json:"blockAccessList,omitempty"`
 }
 
 // JSON type overrides for executableData.
 type executableDataMarshaling struct {
-	Number        hexutil.Uint64
-	GasLimit      hexutil.Uint64
-	GasUsed       hexutil.Uint64
-	Timestamp     hexutil.Uint64
-	BaseFeePerGas *hexutil.Big
-	ExtraData     hexutil.Bytes
-	LogsBloom     hexutil.Bytes
-	Transactions  []hexutil.Bytes
-	BlobGasUsed   *hexutil.Uint64
-	ExcessBlobGas *hexutil.Uint64
-	SlotNumber    *hexutil.Uint64
+	Number          hexutil.Uint64
+	GasLimit        hexutil.Uint64
+	GasUsed         hexutil.Uint64
+	Timestamp       hexutil.Uint64
+	BaseFeePerGas   *hexutil.Big
+	ExtraData       hexutil.Bytes
+	LogsBloom       hexutil.Bytes
+	Transactions    []hexutil.Bytes
+	BlobGasUsed     *hexutil.Uint64
+	ExcessBlobGas   *hexutil.Uint64
+	SlotNumber      *hexutil.Uint64
+	BlockAccessList hexutil.Bytes
 }
 
 // StatelessPayloadStatusV1 is the result of a stateless payload execution.
@@ -356,7 +357,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		if err := rlp.DecodeBytes(data.BlockAccessList, &accessList); err != nil {
 			return nil, fmt.Errorf("failed to decode BAL: %w", err)
 		}
-		return types.NewBlockWithHeader(header).WithBody(body).WithAccessList(&accessList), nil
+		return types.NewBlockWithHeader(header).WithBody(body).WithAccessListUnsafe(&accessList), nil
 	}
 	return types.NewBlockWithHeader(header).WithBody(body), nil
 }
