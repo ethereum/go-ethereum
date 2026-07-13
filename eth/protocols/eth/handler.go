@@ -234,7 +234,7 @@ var eth71 = map[uint64]msgHandler{
 
 var eth72 = map[uint64]msgHandler{
 	TransactionsMsg:               handleTransactions,
-	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes71,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes72,
 	GetBlockHeadersMsg:            handleGetBlockHeaders,
 	BlockHeadersMsg:               handleBlockHeaders,
 	GetBlockBodiesMsg:             handleGetBlockBodies,
