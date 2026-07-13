@@ -882,14 +882,14 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	// EIP-8037:
 	// tx_gas_used_before_refund = tx.gas - tx_output.gas_left - tx_output.state_gas_reservoir
 	// tx_state_gas = intrinsic_state_gas + tx_output.execution_state_gas_used
-	// tx_regular_gas = tx_gas_used_before_refund - tx_state_gas
+	// tx_regular_gas = max(tx_gas_used_before_refund - tx_state_gas, calldata_floor_gas_cost)
 	gasLeft := st.gasRemaining.RegularGas + st.gasRemaining.StateGas
 	gasUsedBeforeRefund := st.msg.GasLimit - gasLeft
 
 	if gasUsedBeforeRefund < txStateGas {
 		return 0, 0, fmt.Errorf("negative topmost frame regular gas usage, total: %d, state: %d", gasUsedBeforeRefund, txStateGas)
 	}
-	txRegularGas := gasUsedBeforeRefund - txStateGas
+	txRegularGas := max(gasUsedBeforeRefund-txStateGas, floorDataGas)
 
 	// EIP-3529: tx_gas_refund = min(tx_gas_used_before_refund/5, refund_counter).
 	refund := st.calcRefund(gasUsedBeforeRefund)
