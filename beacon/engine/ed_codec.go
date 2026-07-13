@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 )
 
 var _ = (*executableDataMarshaling)(nil)
@@ -36,7 +35,7 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 		BlobGasUsed     *hexutil.Uint64      `json:"blobGasUsed"`
 		ExcessBlobGas   *hexutil.Uint64      `json:"excessBlobGas"`
 		SlotNumber      *hexutil.Uint64      `json:"slotNumber,omitempty"`
-		BlockAccessList *bal.BlockAccessList `json:"blockAccessList,omitempty"`
+		BlockAccessList hexutil.Bytes        `json:"blockAccessList,omitempty"`
 	}
 	var enc ExecutableData
 	enc.ParentHash = e.ParentHash
@@ -87,7 +86,7 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 		BlobGasUsed     *hexutil.Uint64      `json:"blobGasUsed"`
 		ExcessBlobGas   *hexutil.Uint64      `json:"excessBlobGas"`
 		SlotNumber      *hexutil.Uint64      `json:"slotNumber,omitempty"`
-		BlockAccessList *bal.BlockAccessList `json:"blockAccessList,omitempty"`
+		BlockAccessList *hexutil.Bytes       `json:"blockAccessList,omitempty"`
 	}
 	var dec ExecutableData
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -165,7 +164,7 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 		e.SlotNumber = (*uint64)(dec.SlotNumber)
 	}
 	if dec.BlockAccessList != nil {
-		e.BlockAccessList = dec.BlockAccessList
+		e.BlockAccessList = *dec.BlockAccessList
 	}
 	return nil
 }
