@@ -639,6 +639,68 @@ func TestBlobFetcherPeerDrop(t *testing.T) {
 	})
 }
 
+// TestBlobFetcherPartialUnrecoverable checks that a partial fetch is discarded
+// once the remaining announcing peers can no longer cover the required custody
+func TestBlobFetcherPartialUnrecoverable(t *testing.T) {
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload:    func(common.Hash) bool { return false },
+					AddCells:      func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error { return nil },
+					DropPeer:      func(string) {},
+				},
+				custody,
+				&mockRand{value: 60}, // Force partial requests
+				15,
+			)
+		},
+		steps: []interface{}{
+			// Two full announces pass the availability check and start a partial fetch (A requested).
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			doBlobNotify{peer: "C", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			isFetching{hashes: map[common.Hash]fetchInfo{
+				testBlobTxHashes[0]: {fetching: &custody, fetched: []uint64{}},
+			}},
+
+			// Drop A: C (full) takes over the whole in-flight custody.
+			doDrop("A"),
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"C": {{hash: testBlobTxHashes[0], custody: custody}},
+				},
+				fetching: map[string][]blobAnnounce{
+					"C": {{hash: testBlobTxHashes[0], custody: custody}},
+				},
+			},
+
+			// A partial peer announces part of the custody. C already has all of it in
+			// flight, so B is only recorded as an alternate (no request of its own).
+			doBlobNotify{peer: "B", hashes: []common.Hash{testBlobTxHashes[0]}, custody: frontCustody},
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"C": {{hash: testBlobTxHashes[0], custody: custody}},
+					"B": {{hash: testBlobTxHashes[0], custody: frontCustody.Intersection(custody)}},
+				},
+				fetching: map[string][]blobAnnounce{
+					"C": {{hash: testBlobTxHashes[0], custody: custody}},
+				},
+			},
+
+			// Drop C: only B's partial custody remains, which cannot cover the
+			// required custody. The tx is unrecoverable, so every trace of it is
+			// discarded, including B's lingering announce.
+			doDrop("C"),
+			isFetching{hashes: nil},
+			isBlobScheduled{
+				announces: nil,
+				fetching:  nil,
+			},
+		},
+	})
+}
+
 // TestBlobFetcherFetchTimeout tests fetch timeout and rescheduling, full request case
 func TestBlobFetcherFetchTimeout(t *testing.T) {
 	testBlobFetcher(t, blobFetcherTest{

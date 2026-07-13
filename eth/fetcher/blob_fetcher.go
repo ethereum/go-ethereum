@@ -327,6 +327,7 @@ func (f *BlobFetcher) loop() {
 				}
 				if _, ok := f.full[hash]; ok {
 					// 1) Decided to send full request of the tx
+					// if the cells are not set to all bitmap, ignore.
 					if ann.cells != types.CustodyBitmapAll {
 						continue
 					}
@@ -343,6 +344,7 @@ func (f *BlobFetcher) loop() {
 				if _, ok := f.partial[hash]; ok {
 					// 2) Decided to send partial request of the tx
 					if f.waitlist[hash] != nil {
+						// it is already waiting for availability check
 						if ann.cells != types.CustodyBitmapAll {
 							// Availability check is only meaningful with full availability announcements
 							continue
@@ -384,7 +386,6 @@ func (f *BlobFetcher) loop() {
 						continue
 					}
 					// Add this peer as a possible fetch source
-					// todo: Did we remove fetch from partial
 					if f.announces[ann.origin] == nil {
 						f.announces[ann.origin] = make(map[common.Hash]*cellWithSeq)
 					}
@@ -460,15 +461,16 @@ func (f *BlobFetcher) loop() {
 							// Do not request the same tx from this peer
 							delete(f.announces[peer], hash)
 							delete(f.alternates[hash], peer)
+							if f.fetches[hash] == nil {
+								// already completed or discarded via another peer
+								continue
+							}
 							// Allow other candidates to be requested these cells
 							f.fetches[hash].fetching = f.fetches[hash].fetching.Difference(req.cells)
 
-							// Drop cells if the remaining sources can no longer complete the fetch
+							// Drop the tx entirely if the remaining sources can no longer complete it
 							if !f.recoverable(hash) {
-								delete(f.alternates, hash)
-								delete(f.fetches, hash)
-								delete(f.full, hash)
-								delete(f.partial, hash)
+								f.discard(hash)
 							}
 						}
 						if len(f.announces[peer]) == 0 {
@@ -512,8 +514,8 @@ func (f *BlobFetcher) loop() {
 			}
 
 			for i, hash := range delivery.txs {
-				if !slices.Contains(request.txs, hash) {
-					// Unexpected hash, ignore
+				if !slices.Contains(request.txs, hash) || f.fetches[hash] == nil {
+					// Unexpected or canceled hash, ignore
 					continue
 				}
 				indices := delivery.cellBitmap.Indices()
@@ -556,16 +558,7 @@ func (f *BlobFetcher) loop() {
 					collectedCustody := types.NewCustodyBitmap(status.fetched)
 					f.fn.AddCells(hash, status.deliveries, collectedCustody)
 
-					for peer, txset := range f.announces {
-						delete(txset, hash)
-						if len(txset) == 0 {
-							delete(f.announces, peer)
-						}
-					}
-					delete(f.alternates, hash)
-					delete(f.fetches, hash)
-					delete(f.full, hash)
-					delete(f.partial, hash)
+					f.discard(hash)
 				}
 			}
 			blobRequestDoneMeter.Mark(int64(len(delivery.txs)))
@@ -643,14 +636,15 @@ func (f *BlobFetcher) loop() {
 			if request, ok := f.requests[drop.peer]; ok && len(request) != 0 {
 				for _, req := range request {
 					for _, hash := range req.txs {
+						if f.fetches[hash] == nil {
+							// already canceled
+							continue
+						}
 						// Undelivered hash, reschedule if there's an alternative origin available
 						f.fetches[hash].fetching = f.fetches[hash].fetching.Difference(req.cells)
 						delete(f.alternates[hash], drop.peer)
 						if !f.recoverable(hash) {
-							delete(f.alternates, hash)
-							delete(f.fetches, hash)
-							delete(f.full, hash)
-							delete(f.partial, hash)
+							f.discard(hash)
 						}
 					}
 				}
@@ -758,22 +752,38 @@ func (f *BlobFetcher) consumeToken(peer string, n int) bool {
 // recoverable checks whether the missing cells of a tx can be fully
 // received from the alternative peers.
 func (f *BlobFetcher) recoverable(hash common.Hash) bool {
-	status := f.fetches[hash]
-	if status == nil {
-		// this should not happen
-		return false
+	// union of already fetched cells and the cells still announced by peers
+	var covered types.CustodyBitmap
+	if status := f.fetches[hash]; status != nil {
+		covered = types.NewCustodyBitmap(status.fetched)
 	}
-	// get union of already fetched cells and the cells
-	// that can be fetched from alternative peers
-	covered := types.NewCustodyBitmap(status.fetched)
-	for _, cells := range f.alternates[hash] {
-		covered = covered.Union(cells)
+	for _, anns := range f.announces {
+		if cs, ok := anns[hash]; ok {
+			covered = covered.Union(cs.cells)
+		}
 	}
 	if _, ok := f.full[hash]; ok {
 		return covered.OneCount() >= kzg4844.DataPerBlob
 	}
 	// return false if our custody cannot be covered
 	return f.custody.Difference(covered).OneCount() == 0
+}
+
+// discard removes every trace of a transaction from the fetcher: its fetch
+// state and all pending announcements/alternates across peers.
+func (f *BlobFetcher) discard(hash common.Hash) {
+	for peer, anns := range f.announces {
+		if _, ok := anns[hash]; ok {
+			delete(anns, hash)
+			if len(anns) == 0 {
+				delete(f.announces, peer)
+			}
+		}
+	}
+	delete(f.alternates, hash)
+	delete(f.fetches, hash)
+	delete(f.full, hash)
+	delete(f.partial, hash)
 }
 
 func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, whitelist map[string]struct{}) {
@@ -801,6 +811,9 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 			custodies []types.CustodyBitmap
 		)
 		for hash, cells := range f.announcesByArrival(f.announces[peer]) {
+			if !f.recoverable(hash) {
+				continue
+			}
 			var unfetched types.CustodyBitmap
 			if f.fetches[hash] == nil {
 				// tx is not being fetched
