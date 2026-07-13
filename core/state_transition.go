@@ -787,7 +787,7 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 	var chargedCreation bool
 	if rules.IsAmsterdam {
 		addr := crypto.CreateAddress(msg.From, st.state.GetNonce(msg.From))
-		if !st.state.Exist(addr) {
+		if st.state.Empty(addr) {
 			if !st.chargeRuntimeGas(vm.GasCosts{StateGas: params.AccountCreationSize * st.evm.Context.CostPerStateByte}) {
 				// The nonce increment normally performed inside evm.Create
 				// must still happen for the included transaction.

@@ -671,6 +671,8 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// Refill the account-creation charge if the create frame failed (reverted,
 	// halted exceptionally, or collided); a successful creation consumes it.
+	// This rule is only applied since the Amsterdam, therefore all non-nil vm
+	// error can be interpreted as deployment failure.
 	if creationCharged && suberr != nil {
 		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeRefundAccountCreation)
 	}
@@ -716,6 +718,8 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// Refill the account-creation charge if the create frame failed (reverted,
 	// halted exceptionally, or collided); a successful creation consumes it.
+	// This rule is only applied since the Amsterdam, therefore all non-nil vm
+	// error can be interpreted as deployment failure.
 	if creationCharged && suberr != nil {
 		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeRefundAccountCreation)
 	}

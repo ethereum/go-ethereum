@@ -476,14 +476,13 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 // createFramePreCheck the precondition before executing the contract deployment,
 // halts the create frame if fails with any check below.
 func (evm *EVM) createFramePreCheck(caller common.Address, value *uint256.Int) error {
-	var nonce uint64
 	if evm.depth > int(params.CallCreateDepth) {
 		return ErrDepth
 	}
 	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return ErrInsufficientBalance
 	}
-	nonce = evm.StateDB.GetNonce(caller)
+	nonce := evm.StateDB.GetNonce(caller)
 	if nonce+1 < nonce {
 		return ErrNonceUintOverflow
 	}

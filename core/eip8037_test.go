@@ -73,6 +73,40 @@ func mkState(alloc types.GenesisAlloc) *state.StateDB {
 	return sdb
 }
 
+// mkCommittedState is mkState with the allocation committed to disk and
+// reloaded. EIP-161-empty accounts carrying only storage do not survive an
+// in-memory Finalise; committing without empty-account deletion reproduces
+// the synthesized prestate an EIP-7610 fixture would load from disk.
+func mkCommittedState(t *testing.T, alloc types.GenesisAlloc) *state.StateDB {
+	t.Helper()
+	db := state.NewDatabaseForTesting()
+	sdb, _ := state.New(types.EmptyRootHash, db)
+	for addr, acc := range alloc {
+		sdb.CreateAccount(addr)
+		if acc.Balance != nil {
+			sdb.AddBalance(addr, uint256.MustFromBig(acc.Balance), tracing.BalanceChangeUnspecified)
+		}
+		if acc.Nonce != 0 {
+			sdb.SetNonce(addr, acc.Nonce, tracing.NonceChangeGenesis)
+		}
+		if len(acc.Code) != 0 {
+			sdb.SetCode(addr, acc.Code, tracing.CodeChangeUnspecified)
+		}
+		for k, v := range acc.Storage {
+			sdb.SetState(addr, k, v)
+		}
+	}
+	root, err := sdb.Commit(0, false, false)
+	if err != nil {
+		t.Fatalf("commit prestate: %v", err)
+	}
+	sdb, err = state.New(root, db)
+	if err != nil {
+		t.Fatalf("reopen prestate: %v", err)
+	}
+	return sdb
+}
+
 // amsterdamCoreEVM builds an Amsterdam EVM over statedb with fees disabled.
 func amsterdamCoreEVM(sdb *state.StateDB) *vm.EVM {
 	ctx := vm.BlockContext{
@@ -105,7 +139,11 @@ func applyMsg(t *testing.T, sdb *state.StateDB, tx *types.Transaction) (*Executi
 	st := newStateTransition(evm, msg, gp)
 	res, err := st.execute()
 	if err == nil && res != nil {
-		assertPoolSane(t, res, gp)
+		floor, ferr := FloorDataGas(rules8037, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
+		if ferr != nil {
+			t.Fatalf("floor data gas: %v", ferr)
+		}
+		assertPoolSane(t, res, gp, floor)
 
 		intrinsic, ierr := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules8037)
 		if ierr != nil {
@@ -142,9 +180,11 @@ func assertBudgetSane(t *testing.T, initial, got vm.GasBudget) {
 // assertPoolSane validates the whole 2D block-gas-pool vector after a single tx.
 //
 //	receipt:    cumulativeUsed == res.UsedGas <= res.MaxUsedGas
-//	pre-refund: cumulativeRegular + cumulativeState <= res.MaxUsedGas (peak)
+//	regular:    cumulativeRegular <= max(res.MaxUsedGas - cumulativeState, floor)
+//	            (the calldata floor pads the regular dimension alone, so the
+//	            dimension sum may exceed the pre-refund peak when it binds)
 //	bottleneck: Used() == max(cumulativeRegular, cumulativeState) <= initial
-func assertPoolSane(t *testing.T, res *ExecutionResult, gp *GasPool) {
+func assertPoolSane(t *testing.T, res *ExecutionResult, gp *GasPool, floor uint64) {
 	t.Helper()
 	if gp.cumulativeUsed != res.UsedGas {
 		t.Fatalf("receipt scalar = %d, want UsedGas %d", gp.cumulativeUsed, res.UsedGas)
@@ -152,8 +192,12 @@ func assertPoolSane(t *testing.T, res *ExecutionResult, gp *GasPool) {
 	if res.UsedGas > res.MaxUsedGas {
 		t.Fatalf("post-refund gas %d exceeds peak %d", res.UsedGas, res.MaxUsedGas)
 	}
-	if sum := gp.cumulativeRegular + gp.cumulativeState; sum > res.MaxUsedGas {
-		t.Fatalf("regular+state %d exceeds peak %d", sum, res.MaxUsedGas)
+	if gp.cumulativeState > res.MaxUsedGas {
+		t.Fatalf("state %d exceeds peak %d", gp.cumulativeState, res.MaxUsedGas)
+	}
+	if cap := max(res.MaxUsedGas-gp.cumulativeState, floor); gp.cumulativeRegular > cap {
+		t.Fatalf("regular %d exceeds pre-refund cap %d (peak %d, state %d, floor %d)",
+			gp.cumulativeRegular, cap, res.MaxUsedGas, gp.cumulativeState, floor)
 	}
 	if gp.Used() != max(gp.cumulativeRegular, gp.cumulativeState) {
 		t.Fatalf("block used %d != max(%d,%d)", gp.Used(), gp.cumulativeRegular, gp.cumulativeState)
@@ -191,6 +235,7 @@ func createTx(nonce, gas uint64, initCode []byte) *types.Transaction {
 var (
 	deploy3 = []byte{0x60, 0x03, 0x60, 0x00, 0xf3} // init: return 3 bytes of code
 	revertI = []byte{0x60, 0x00, 0x60, 0x00, 0xfd} // init: REVERT
+	haltI   = []byte{0xfe, 0x00, 0x00, 0x00, 0x00} // init: INVALID, exceptional halt
 )
 
 // ===================== Top-level create transaction ======================
@@ -318,6 +363,118 @@ func TestCreate2TransientEmptyDestNoRefill(t *testing.T) {
 	want := newSlotState + newAccountState + uint64(3*params.CostPerStateByte)
 	if gp.cumulativeState != want {
 		t.Fatalf("state gas = %d, want %d (account creation must not be refilled)", gp.cumulativeState, want)
+	}
+}
+
+// ========== Storage-only (EIP-7610-shaped) deployment destination ===========
+//
+// A destination carrying storage while having zero nonce, zero balance and
+// empty code is EIP-161-empty, so the account-creation state gas is
+// pre-charged in the parent frame.
+
+// create2Orchestrator returns runtime code that CREATE2-deploys the given
+// 5-byte init code with salt 0 and stores the result address at slot 0.
+func create2Orchestrator(initCode []byte) []byte {
+	code := append([]byte{0x64}, initCode...) // PUSH5 init code
+	return append(code,
+		0x60, 0x00, 0x52, // MSTORE at word 0 (right-aligned, code at offset 27)
+		0x60, 0x00, // salt = 0
+		0x60, 0x05, // size = 5
+		0x60, 0x1b, // offset = 27
+		0x60, 0x00, // endowment = 0
+		0xf5,             // CREATE2
+		0x60, 0x00, 0x55, // SSTORE the result address at slot 0
+		0x00, // STOP
+	)
+}
+
+// storageOnlyAlloc allocates the orchestrator and its CREATE2 target, the
+// latter carrying a single storage slot while remaining EIP-161-empty.
+func storageOnlyAlloc(orchestrator common.Address, initCode []byte) (types.GenesisAlloc, common.Address) {
+	target := crypto.CreateAddress2(orchestrator, [32]byte{}, crypto.Keccak256(initCode))
+	return types.GenesisAlloc{
+		orchestrator: {Code: create2Orchestrator(initCode)},
+		target:       {Storage: map[common.Hash]common.Hash{{}: common.BigToHash(big.NewInt(1))}},
+	}, target
+}
+
+// Deploying onto a storage-only destination pre-charges the account creation.
+// Under the registry-based EIP-7610 check the creation proceeds, so the
+// charge is consumed like any other creation.
+func TestCreate2StorageOnlyDestCharged(t *testing.T) {
+	orchestrator := common.HexToAddress("0xc0de000000000000000000000000000000000004")
+	alloc, target := storageOnlyAlloc(orchestrator, deploy3)
+	sdb := mkCommittedState(t, senderAlloc(alloc))
+	res, gp, err := applyMsg(t, sdb, callTx(0, orchestrator, 0, 1_000_000, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Failed() {
+		t.Fatalf("execution failed: %v", res.Err)
+	}
+	if code := sdb.GetCode(target); len(code) != 3 {
+		t.Fatalf("deployed code length = %d, want 3", len(code))
+	}
+	// The created account (charged, consumed), the orchestrator's result slot
+	// and the 3-byte code deposit.
+	want := newAccountState + newSlotState + uint64(3*params.CostPerStateByte)
+	if gp.cumulativeState != want {
+		t.Fatalf("state gas = %d, want %d", gp.cumulativeState, want)
+	}
+}
+
+// If the pre-charge succeeds and the create frame then fails, only the create
+// frame halts: the forwarded regular gas is burnt, the account-creation
+// charge is refilled, and the parent frame continues.
+func TestCreate2StorageOnlyDestRefillOnFrameHalt(t *testing.T) {
+	const gas = 1_000_000
+	orchestrator := common.HexToAddress("0xc0de000000000000000000000000000000000005")
+	alloc, target := storageOnlyAlloc(orchestrator, haltI)
+	sdb := mkCommittedState(t, senderAlloc(alloc))
+	res, gp, err := applyMsg(t, sdb, callTx(0, orchestrator, 0, gas, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Failed() {
+		t.Fatalf("parent frame must survive the create-frame halt: %v", res.Err)
+	}
+	// The CREATE2 pushed zero and nothing was deployed.
+	if flag := sdb.GetState(orchestrator, common.Hash{}); flag != (common.Hash{}) {
+		t.Fatalf("create result = %v, want 0", flag)
+	}
+	if code := sdb.GetCode(target); len(code) != 0 {
+		t.Fatalf("deployed code length = %d, want 0", len(code))
+	}
+	// The account-creation charge was refilled in full.
+	if gp.cumulativeState != 0 {
+		t.Fatalf("state gas = %d, want 0 (refilled)", gp.cumulativeState)
+	}
+	if res.UsedGas > gas-newAccountState {
+		t.Fatalf("used gas = %d, want at most %d (charge not refilled?)", res.UsedGas, gas-newAccountState)
+	}
+}
+
+// If the remaining gas cannot cover the account-creation pre-charge, the
+// parent frame itself halts with out-of-gas instead of the create frame.
+func TestCreate2StorageOnlyDestPrechargeOOG(t *testing.T) {
+	// Enough for the CREATE2 constant cost, short of the 183,600 pre-charge.
+	const gas = 150_000
+	orchestrator := common.HexToAddress("0xc0de000000000000000000000000000000000006")
+	alloc, _ := storageOnlyAlloc(orchestrator, deploy3)
+	sdb := mkCommittedState(t, senderAlloc(alloc))
+	res, gp, err := applyMsg(t, sdb, callTx(0, orchestrator, 0, gas, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Failed() || !errors.Is(res.Err, vm.ErrOutOfGas) {
+		t.Fatalf("err = %v, want out of gas in the parent frame", res.Err)
+	}
+	if gp.cumulativeState != 0 {
+		t.Fatalf("state gas = %d, want 0 (charge never applied)", gp.cumulativeState)
+	}
+	// The parent is the topmost frame, so its halt burns the whole gas limit.
+	if gp.cumulativeRegular != gas {
+		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, gas)
 	}
 }
 
