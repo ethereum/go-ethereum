@@ -448,17 +448,8 @@ func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
 	if raw := rawdb.ReadSnapshotSyncStatus(db); len(raw) > 0 && raw[0] == syncProgressVersion {
 		var progress syncProgressV2
 		if err := json.Unmarshal(raw[1:], &progress); err == nil {
-			// A completed journal whose pivot block was already committed is
-			// a dead leftover. Drop it before FrozenPivot hands the stale
-			// pivot back to the downloader. The flat state stays, on a
-			// full-sync node it is the live snapshot.
-			if progress.Phase == phaseComplete && progress.Pivot != nil && isPivotCommitted(db, progress.Pivot) {
-				log.Info("Dropping journal of a completed snap sync", "pivot", progress.Pivot.Number)
-				rawdb.DeleteSnapshotSyncStatus(db)
-			} else {
-				s.pivot = progress.Pivot
-				s.setPhase(progress.Phase)
-			}
+			s.pivot = progress.Pivot
+			s.setPhase(progress.Phase)
 		}
 	}
 	return s
@@ -564,11 +555,10 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	// If the pivot of a completed sync was already committed, full sync has
 	// been mutating the flat state since. Nothing here can be resumed or
 	// rolled forward, snap sync was re-enabled, so wipe and start fresh.
-	// newSyncerV2 already drops such a journal on load, so this branch only
-	// fires for an in-process re-enable, where the syncer was built before
-	// the sync completed so the load-time check never saw a committed journal.
-	// Same-pivot retries return through the skip above on purpose, a cycle
-	// that dies right after the commit just needs to recommit.
+	// FrozenPivot refuses to freeze such a pivot, so the downloader resumes
+	// against a fresh target and lands here to do the cleanup. Same-pivot
+	// retries return through the skip above on purpose, a cycle that dies
+	// right after the commit just needs to recommit.
 	if prevPivot != nil && s.getPhase() == phaseComplete && isPivotCommitted(s.db, prevPivot) {
 		log.Warn("Reenabled snap sync over a completed one, restarting from scratch", "oldpivot", prevPivot.Number, "target", target.Number)
 		s.resetSyncState()
@@ -701,6 +691,12 @@ func (s *syncerV2) FrozenPivot() *types.Header {
 	}
 	s.lock.RLock()
 	defer s.lock.RUnlock()
+	// A committed pivot from a completed sync is a dead leftover, not a
+	// freeze. Handing it back would pin a re-enabled sync to the old pivot,
+	// so report it as unfrozen and let the next Sync wipe the journal.
+	if s.getPhase() == phaseComplete && s.pivot != nil && isPivotCommitted(s.db, s.pivot) {
+		return nil
+	}
 	return s.pivot
 }
 

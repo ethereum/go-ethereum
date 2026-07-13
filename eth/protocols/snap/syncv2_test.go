@@ -2432,40 +2432,42 @@ func testCommittedPivotRetrySkips(t *testing.T, scheme string) {
 	}
 }
 
-// TestReenableDropsCompletedJournal covers the constructor. A restart with
-// a committed completed journal must drop it before FrozenPivot hands the
-// stale pivot to the downloader. A journal from a crash before the commit
-// stays.
-func TestReenableDropsCompletedJournal(t *testing.T) {
+// TestCommittedPivotNotFrozen covers FrozenPivot. A pivot from a crash
+// before the commit must stay frozen so the downloader resumes against it.
+// Once the pivot block is committed and the head has moved on, FrozenPivot
+// must report it as unfrozen so a re-enabled sync is not pinned to it. The
+// journal stays on disk either way, the next Sync cleans it.
+func TestCommittedPivotNotFrozen(t *testing.T) {
 	t.Parallel()
-	testReenableDropsCompletedJournal(t, rawdb.HashScheme)
-	testReenableDropsCompletedJournal(t, rawdb.PathScheme)
+	testCommittedPivotNotFrozen(t, rawdb.HashScheme)
+	testCommittedPivotNotFrozen(t, rawdb.PathScheme)
 }
 
-func testReenableDropsCompletedJournal(t *testing.T, scheme string) {
+func testCommittedPivotNotFrozen(t *testing.T, scheme string) {
 	fix := seedCompletedSync(t, scheme)
 
-	// Crash before the commit, the journal survives and the pivot stays
-	// frozen.
+	// Crash before the commit, the head never reached the pivot, so it
+	// stays frozen for the resume.
 	head50 := fix.mkHeader(50, common.HexToHash("0x50"), nil)
 	rawdb.WriteHeadBlockHash(fix.db, head50.Hash())
 	syncer := newSyncerV2(fix.db, fix.nodeScheme)
 	if frozen := syncer.FrozenPivot(); frozen == nil || frozen.Hash() != fix.pivotA.Hash() {
-		t.Fatal("expected journal to survive a restart before the pivot commit")
+		t.Fatal("expected the pivot to stay frozen before the commit")
 	}
 
-	// Commit the pivot and advance the head, a restart now drops the
-	// journal.
+	// Commit the pivot and advance the head, the pivot is now a dead
+	// leftover and must not be reported as frozen.
 	header103 := fix.mkHeader(103, common.HexToHash("0x67"), nil)
 	rawdb.WriteHeadBlockHash(fix.db, header103.Hash())
 	syncer = newSyncerV2(fix.db, fix.nodeScheme)
 	if frozen := syncer.FrozenPivot(); frozen != nil {
-		t.Fatalf("expected journal drop to release the pivot freeze, got %v", frozen.Number)
+		t.Fatalf("expected the committed pivot to be unfrozen, got %v", frozen.Number)
 	}
-	if raw := rawdb.ReadSnapshotSyncStatus(fix.db); len(raw) != 0 {
-		t.Fatal("expected completed journal to be dropped from disk")
+	// The journal stays on disk until a re-enabled Sync wipes it, and the
+	// flat state is untouched, on a full-sync node it is the live snapshot.
+	if raw := rawdb.ReadSnapshotSyncStatus(fix.db); len(raw) == 0 {
+		t.Fatal("expected the journal to stay on disk")
 	}
-	// The flat state stays, on a full-sync node it is the live snapshot.
 	assertAccountBalance(t, fix.db, fix.hashY, 50)
 }
 
