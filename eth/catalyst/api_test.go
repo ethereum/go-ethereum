@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
@@ -1367,7 +1368,7 @@ func TestGetBlockBodiesByHash(t *testing.T) {
 	for k, test := range tests {
 		result := api.GetPayloadBodiesByHashV2(test.hashes)
 		for i, r := range result {
-			if err := checkEqualBody(test.results[i], r); err != nil {
+			if err := checkEqualBodyV2(test.results[i], r); err != nil {
 				t.Fatalf("test %v: invalid response: %v\nexpected %+v\ngot %+v", k, err, test.results[i], r)
 			}
 		}
@@ -1445,7 +1446,7 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		}
 		if len(result) == len(test.results) {
 			for i, r := range result {
-				if err := checkEqualBody(test.results[i], r); err != nil {
+				if err := checkEqualBodyV2(test.results[i], r); err != nil {
 					t.Fatalf("test %d: invalid response: %v\nexpected %+v\ngot %+v", k, err, test.results[i], r)
 				}
 			}
@@ -1519,6 +1520,75 @@ func checkEqualBody(a *types.Body, b *engine.ExecutionPayloadBody) error {
 		return errors.New("withdrawals mismatch")
 	}
 	return nil
+}
+
+func checkEqualBodyV2(a *types.Body, b *engine.ExecutionPayloadBodyV2) error {
+	if b == nil {
+		return checkEqualBody(a, nil)
+	}
+	return checkEqualBody(a, &b.ExecutionPayloadBody)
+}
+
+func TestGetPayloadBodyV2BlockAccessList(t *testing.T) {
+	empty := bal.BlockAccessList{}
+	emptyHash := empty.Hash()
+	tests := []struct {
+		name       string
+		header     *types.Header
+		accessList *bal.BlockAccessList
+		want       string
+	}{
+		{
+			name:       "retained empty BAL",
+			header:     &types.Header{BlockAccessListHash: &emptyHash},
+			accessList: &empty,
+			want:       `"0xc0"`,
+		},
+		{
+			name:   "pruned BAL",
+			header: &types.Header{BlockAccessListHash: &emptyHash},
+			want:   "null",
+		},
+		{
+			name:   "pre-Amsterdam block",
+			header: new(types.Header),
+			want:   "null",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			block := types.NewBlockWithHeader(test.header).WithAccessListUnsafe(test.accessList)
+			body := getBodyV2(block)
+			encoded, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(encoded, &fields); err != nil {
+				t.Fatal(err)
+			}
+			if got := string(fields["blockAccessList"]); got != test.want {
+				t.Fatalf("unexpected blockAccessList: got %s, want %s", got, test.want)
+			}
+		})
+	}
+}
+
+func TestGetPayloadBodyV1OmitsBlockAccessList(t *testing.T) {
+	empty := bal.BlockAccessList{}
+	emptyHash := empty.Hash()
+	block := types.NewBlockWithHeader(&types.Header{BlockAccessListHash: &emptyHash}).WithAccessListUnsafe(&empty)
+	encoded, err := json.Marshal(getBody(block))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields["blockAccessList"]; ok {
+		t.Fatal("V1 payload body contains blockAccessList")
+	}
 }
 
 func TestBlockToPayloadWithBlobs(t *testing.T) {

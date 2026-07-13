@@ -1249,13 +1249,13 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engin
 	return bodies
 }
 
-// GetPayloadBodiesByHashV2 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
+// GetPayloadBodiesByHashV2 implements engine_getPayloadBodiesByHashV2 which allows for retrieval of a list
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByHashV2(hashes []common.Hash) []*engine.ExecutionPayloadBody {
-	bodies := make([]*engine.ExecutionPayloadBody, len(hashes))
+func (api *ConsensusAPI) GetPayloadBodiesByHashV2(hashes []common.Hash) []*engine.ExecutionPayloadBodyV2 {
+	bodies := make([]*engine.ExecutionPayloadBodyV2, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
-		bodies[i] = getBody(block)
+		bodies[i] = getBodyV2(block)
 	}
 	return bodies
 }
@@ -1263,16 +1263,16 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV2(hashes []common.Hash) []*engin
 // GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
-	return api.getBodiesByRange(start, count)
+	return getBodiesByRange(api, start, count, getBody)
 }
 
-// GetPayloadBodiesByRangeV2 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
+// GetPayloadBodiesByRangeV2 implements engine_getPayloadBodiesByRangeV2 which allows for retrieval of a range
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByRangeV2(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
-	return api.getBodiesByRange(start, count)
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV2(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBodyV2, error) {
+	return getBodiesByRange(api, start, count, getBodyV2)
 }
 
-func (api *ConsensusAPI) getBodiesByRange(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
+func getBodiesByRange[T any](api *ConsensusAPI, start, count hexutil.Uint64, getBody func(*types.Block) *T) ([]*T, error) {
 	if start == 0 || count == 0 {
 		return nil, engine.InvalidParams.With(fmt.Errorf("invalid start or count, start: %v count: %v", start, count))
 	}
@@ -1285,7 +1285,7 @@ func (api *ConsensusAPI) getBodiesByRange(start, count hexutil.Uint64) ([]*engin
 	if last > current {
 		last = current
 	}
-	bodies := make([]*engine.ExecutionPayloadBody, 0, uint64(count))
+	bodies := make([]*T, 0, uint64(count))
 	for i := uint64(start); i <= last; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(i)
 		bodies = append(bodies, getBody(block))
@@ -1312,6 +1312,17 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBody {
 	}
 
 	return &result
+}
+
+func getBodyV2(block *types.Block) *engine.ExecutionPayloadBodyV2 {
+	body := getBody(block)
+	if body == nil {
+		return nil
+	}
+	return &engine.ExecutionPayloadBodyV2{
+		ExecutionPayloadBody: *body,
+		BlockAccessList:      block.AccessList(),
+	}
 }
 
 // convertRequests converts a hex requests slice to plain [][]byte.
