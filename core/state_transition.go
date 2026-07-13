@@ -1079,7 +1079,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 			track.written = true
 		}
 		// Durable state growth of the new account
-		if !st.state.Exist(authority) {
+		if st.state.Empty(authority) {
 			cost.StateGas += params.AccountCreationSize * st.evm.Context.CostPerStateByte
 		}
 		// Charge the net-new indicator bytes at most once per authority;
