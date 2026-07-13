@@ -665,9 +665,10 @@ func TestAuthClearRefillBase(t *testing.T) {
 	}
 }
 
-// 0->a->0 in one tx: the indicator created by an earlier auth and cleared by a
-// later one writes zero net bytes; the earlier indicator charge is refilled.
-func TestAuthClearSameTxDoubleRefill(t *testing.T) {
+// 0->a->0 in one tx: the indicator charge applies when the delegation is set
+// and is never credited back when a later auth clears it in the same
+// transaction.
+func TestAuthClearSameTxNoRefill(t *testing.T) {
 	set, authority := signAuth(t, authKeyA, delegate8037, 0)
 	clr, _ := signAuth(t, authKeyA, common.Address{}, 1)
 	sdb := mkState(senderAlloc(nil))
@@ -676,8 +677,28 @@ func TestAuthClearSameTxDoubleRefill(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = authority
-	if want := newAccountState; gp.cumulativeState != want {
-		t.Fatalf("state gas = %d, want %d (net-zero delegation)", gp.cumulativeState, want)
+	if want := authWorstState; gp.cumulativeState != want {
+		t.Fatalf("state gas = %d, want %d (indicator charge kept on clear)", gp.cumulativeState, want)
+	}
+}
+
+// 0->a->0->b in one tx: the indicator charge applies at most once per
+// authority — re-installing a delegation after an intra-tx clear is free.
+func TestAuthSetClearSetChargedOnce(t *testing.T) {
+	set, _ := signAuth(t, authKeyA, delegate8037, 0)
+	clr, _ := signAuth(t, authKeyA, common.Address{}, 1)
+	set2, authority := signAuth(t, authKeyA, common.HexToAddress("0xde1e8a7f"), 2)
+	sdb := mkState(senderAlloc(nil))
+	_, gp, err := applyMsg(t, sdb, setCodeTx(0, senderAddr, []types.SetCodeAuthorization{set, clr, set2}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The final delegation is installed and the indicator was paid exactly once.
+	if _, delegated := types.ParseDelegation(sdb.GetCode(authority)); !delegated {
+		t.Fatal("final delegation not installed")
+	}
+	if want := authWorstState; gp.cumulativeState != want {
+		t.Fatalf("state gas = %d, want %d (leaf + indicator exactly once)", gp.cumulativeState, want)
 	}
 }
 

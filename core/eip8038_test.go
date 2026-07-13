@@ -44,7 +44,7 @@ func newAuthTestTransition(sdb *state.StateDB) *stateTransition {
 func TestAuthRuntimeChargeNetNew(t *testing.T) {
 	auth, _ := signAuth(t, authKeyA, delegate8037, 0)
 	st := newAuthTestTransition(mkState(senderAlloc(nil)))
-	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]bool{}); err != nil {
+	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != nil {
 		t.Fatal(err)
 	}
 	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
@@ -62,7 +62,7 @@ func TestAuthRuntimeChargeNetNew(t *testing.T) {
 func TestAuthRuntimeChargeExistingAccount(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	st := newAuthTestTransition(mkState(senderAlloc(types.GenesisAlloc{authority: {Balance: big.NewInt(1)}})))
-	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]bool{}); err != nil {
+	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != nil {
 		t.Fatal(err)
 	}
 	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
@@ -81,7 +81,7 @@ func TestAuthRuntimeChargeWarmAuthority(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	st := newAuthTestTransition(mkState(senderAlloc(types.GenesisAlloc{authority: {Balance: big.NewInt(1)}})))
 	st.state.AddAddressToAccessList(authority)
-	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]bool{}); err != nil {
+	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != nil {
 		t.Fatal(err)
 	}
 	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
@@ -99,7 +99,7 @@ func TestAuthRuntimeInvalidNoCharge(t *testing.T) {
 		ChainID: *uint256.NewInt(999), Address: delegate8037, Nonce: 0, // wrong chain id
 	})
 	st := newAuthTestTransition(mkState(senderAlloc(nil)))
-	if err := st.applyAuthorization(rules8037, &bad, map[common.Address]bool{}); err == nil {
+	if err := st.applyAuthorization(rules8037, &bad, map[common.Address]*authTracking{}); err == nil {
 		t.Fatal("expected invalid-authorization error")
 	}
 	if st.gasRemaining.UsedRegularGas != 0 || st.gasRemaining.UsedStateGas != 0 {
@@ -115,11 +115,11 @@ func TestAuthRuntimeDuplicateAuthorityOnce(t *testing.T) {
 	a0, _ := signAuth(t, authKeyA, delegate8037, 0)
 	a1, _ := signAuth(t, authKeyA, delegate8037, 1)
 	st := newAuthTestTransition(mkState(senderAlloc(nil)))
-	delegates := map[common.Address]bool{}
-	if err := st.applyAuthorization(rules8037, &a0, delegates); err != nil {
+	authorities := map[common.Address]*authTracking{}
+	if err := st.applyAuthorization(rules8037, &a0, authorities); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.applyAuthorization(rules8037, &a1, delegates); err != nil {
+	if err := st.applyAuthorization(rules8037, &a1, authorities); err != nil {
 		t.Fatal(err)
 	}
 	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
@@ -136,7 +136,7 @@ func TestAuthRuntimeOutOfGas(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	st := newAuthTestTransition(mkState(senderAlloc(nil)))
 	st.gasRemaining = vm.NewGasBudget(10_000, 0) // covers neither leaf nor indicator
-	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]bool{}); err != ErrOutOfGasRuntime {
+	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != ErrOutOfGasRuntime {
 		t.Fatalf("err = %v, want ErrOutOfGasRuntime", err)
 	}
 	if st.state.GetNonce(authority) != 0 || len(st.state.GetCode(authority)) != 0 {

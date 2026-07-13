@@ -930,27 +930,11 @@ func (st *stateTransition) chargeCallRecipientEIP2780(value *uint256.Int) bool {
 // settleGas finalizes the per-tx gas accounting after EVM execution:
 //
 //   - Snapshots the EIP-8037 block-level 2D figures (tx_regular_gas,
-//     tx_state_gas) before any refund or floor:
-//
-//     tx_gas_used_before_refund = tx.gas - gas_left - state_gas_reservoir
-//     tx_state_gas              = state_gas_used
-//     tx_regular_gas            = tx_gas_used_before_refund - tx_state_gas
-//
+//     tx_state_gas) before any refund.
 //   - Computes the receipt scalar tx_gas_used by applying the EIP-3529
-//     refund (capped at tx_gas_used_before_refund/5) and the EIP-7623
-//     calldata floor:
-//
-//     tx_gas_used = max(tx_gas_used_before_refund - tx_gas_refund, calldata_floor)
-//
+//     refund and the EIP-7623 calldata floor.
 //   - Charges the block gas pool (2D under Amsterdam, scalar pre-Amsterdam).
-//
 //   - Refunds the leftover gas to the sender as ETH.
-//
-// Returns the receipt-level tx_gas_used and the pre-refund peak (consumed
-// by gas-estimation callers via ExecutionResult.MaxUsedGas). UsedStateGas
-// should never become negative in the top-most frame, since state-gas
-// refunds occur only when state creation is reverted within the same
-// transaction and clearing pre-existing state is never refunded.
 func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (gasUsed, peakUsed uint64, err error) {
 	if st.gasRemaining.UsedStateGas < 0 {
 		return 0, 0, fmt.Errorf("negative topmost frame state gas usage, %d", st.gasRemaining.UsedStateGas)
@@ -1043,8 +1027,15 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 	return authority, nil
 }
 
+// authTracking tracks the charges already paid for an authority by earlier
+// authorizations in the same transaction.
+type authTracking struct {
+	written         bool // first-write ACCOUNT_WRITE surcharge paid
+	authBaseCovered bool // indicator exists at tx start, or paid earlier
+}
+
 // applyAuthorization applies an EIP-7702 code delegation to the state.
-func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, delegates map[common.Address]bool) error {
+func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, authorities map[common.Address]*authTracking) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		return err
@@ -1060,12 +1051,11 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		// The authority's cold access was already charged unconditionally at the
 		// intrinsic phase, so only state-dependent costs remain here.
 		var cost vm.GasCosts
-		authBase := params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte
 
-		preDelegated, seen := delegates[authority]
-		if !seen {
-			preDelegated = curDelegated
-			delegates[authority] = preDelegated
+		track := authorities[authority]
+		if track == nil {
+			track = &authTracking{authBaseCovered: curDelegated}
+			authorities[authority] = track
 		}
 		// Every valid authorization writes the authority account: the
 		// nonce bump, and possibly the delegation indicator. The first
@@ -1084,28 +1074,19 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		//     phase. A zero-value transaction pays no TX_VALUE_COST, so a
 		//     write to tx.to here is still the first paid write.
 		hasValue := st.msg.Value != nil && !st.msg.Value.IsZero()
-		if !seen && authority != st.msg.From && (authority != st.to() || !hasValue) {
+		if !track.written && authority != st.msg.From && (authority != st.to() || !hasValue) {
 			cost.RegularGas += params.AccountWriteAmsterdam
+			track.written = true
 		}
 		// Durable state growth of the new account
 		if st.state.Empty(authority) {
 			cost.StateGas += params.AccountCreationSize * st.evm.Context.CostPerStateByte
 		}
-		// Writing the 23-byte delegation indicator into a previously empty
-		// slot adds net-new state bytes. Overwriting an occupied slot, or one
-		// occupied at transaction start, writes no new bytes.
-		if auth.Address != (common.Address{}) && !curDelegated && !preDelegated {
-			cost.StateGas += authBase
-		}
-		// Clearing an indicator that was created by an earlier authorization
-		// within the same transaction writes zero net bytes; refill the
-		// earlier state charge as it is no longer justified.
-		//
-		// Note that the refund and the charges above can never apply to the
-		// same authorization. The ordering of the refund and the charge is
-		// therefore irrelevant.
-		if auth.Address == (common.Address{}) && curDelegated && !preDelegated {
-			st.gasRemaining.RefundState(authBase)
+		// Charge the net-new indicator bytes at most once per authority;
+		// clearing within the same transaction refunds nothing.
+		if auth.Address != (common.Address{}) && !track.authBaseCovered {
+			cost.StateGas += params.AuthorizationCreationSize * st.evm.Context.CostPerStateByte
+			track.authBaseCovered = true
 		}
 		if !st.chargeRuntimeGas(cost) {
 			return ErrOutOfGasRuntime
@@ -1132,9 +1113,9 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 // It reports whether the transaction budget covered all runtime authorization
 // charges.
 func (st *stateTransition) applyAuthorizations(rules params.Rules, auths []types.SetCodeAuthorization) bool {
-	preDelegated := make(map[common.Address]bool)
+	authorities := make(map[common.Address]*authTracking)
 	for _, auth := range auths {
-		if err := st.applyAuthorization(rules, &auth, preDelegated); err == ErrOutOfGasRuntime {
+		if err := st.applyAuthorization(rules, &auth, authorities); err == ErrOutOfGasRuntime {
 			return false
 		}
 	}
