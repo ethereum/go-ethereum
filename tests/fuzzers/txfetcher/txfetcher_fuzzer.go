@@ -91,7 +91,7 @@ func fuzz(input []byte) int {
 		},
 		func(string, []common.Hash) error { return nil },
 		nil,
-
+		nil,
 		blobpool.NewBlobBuffer(blobpool.BlobBufferFunctions{
 			ValidateTx: func(*types.Transaction) error { return nil },
 			AddToPool:  func(*blobpool.BlobTxForPool) error { return nil },

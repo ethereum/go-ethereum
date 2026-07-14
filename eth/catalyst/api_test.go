@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
@@ -427,8 +428,9 @@ func TestEth2DeepReorg(t *testing.T) {
 	*/
 }
 
-// startEthService creates a full node instance for testing.
-func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
+// startEthService creates a full node instance for testing. The default test
+// configuration can be adjusted through optional modifier functions.
+func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{
@@ -449,6 +451,9 @@ func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block)
 		TrieCleanCache: 256,
 		Miner:          miner.DefaultConfig,
 	}
+	for _, mod := range mods {
+		mod(ethcfg)
+	}
 	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
@@ -466,6 +471,54 @@ func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block)
 
 	ethservice.SetSynced()
 	return n, ethservice
+}
+
+// TestForkchoiceUpdatedReorgDepthLimit tests that forkchoiceUpdated refuses to
+// rewind the chain head to a canonical ancestor deeper than the configured
+// EngineMaxReorgDepth, and that the limit can be lifted via the configuration.
+func TestForkchoiceUpdatedReorgDepthLimit(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+
+	t.Run("limited", func(t *testing.T) {
+		n, ethservice := startEthService(t, genesis, blocks, func(cfg *ethconfig.Config) {
+			cfg.EngineMaxReorgDepth = 5
+		})
+		defer n.Close()
+
+		api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+		// Rewinding the head a few blocks within the limit is accepted.
+		shallow := engine.ForkchoiceStateV1{HeadBlockHash: blocks[6].Hash()}
+		if _, err := api.ForkchoiceUpdatedV1(context.Background(), shallow, nil); err != nil {
+			t.Fatalf("rewind within reorg depth limit failed: %v", err)
+		}
+		if head := ethservice.BlockChain().CurrentBlock().Number.Uint64(); head != blocks[6].NumberU64() {
+			t.Fatalf("chain head not rewound: have %d, want %d", head, blocks[6].NumberU64())
+		}
+		// Rewinding beyond the limit is refused.
+		deep := engine.ForkchoiceStateV1{HeadBlockHash: genesis.ToBlock().Hash()}
+		_, err := api.ForkchoiceUpdatedV1(context.Background(), deep, nil)
+		var apiErr *engine.EngineAPIError
+		if !errors.As(err, &apiErr) || apiErr.ErrorCode() != engine.TooDeepReorg.ErrorCode() {
+			t.Fatalf("rewind beyond reorg depth limit: have error %v, want %v", err, engine.TooDeepReorg)
+		}
+	})
+	t.Run("unlimited", func(t *testing.T) {
+		n, ethservice := startEthService(t, genesis, blocks, func(cfg *ethconfig.Config) {
+			cfg.EngineMaxReorgDepth = 0 // no limit
+		})
+		defer n.Close()
+
+		api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+		update := engine.ForkchoiceStateV1{HeadBlockHash: genesis.ToBlock().Hash()}
+		if _, err := api.ForkchoiceUpdatedV1(context.Background(), update, nil); err != nil {
+			t.Fatalf("rewind with disabled reorg depth limit failed: %v", err)
+		}
+		if head := ethservice.BlockChain().CurrentBlock().Number.Uint64(); head != 0 {
+			t.Fatalf("chain head not rewound to genesis: have %d, want 0", head)
+		}
+	})
 }
 
 func TestFullAPI(t *testing.T) {
@@ -1367,7 +1420,7 @@ func TestGetBlockBodiesByHash(t *testing.T) {
 	for k, test := range tests {
 		result := api.GetPayloadBodiesByHashV2(test.hashes)
 		for i, r := range result {
-			if err := checkEqualBody(test.results[i], r); err != nil {
+			if err := checkEqualBodyV2(test.results[i], r); err != nil {
 				t.Fatalf("test %v: invalid response: %v\nexpected %+v\ngot %+v", k, err, test.results[i], r)
 			}
 		}
@@ -1445,7 +1498,7 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		}
 		if len(result) == len(test.results) {
 			for i, r := range result {
-				if err := checkEqualBody(test.results[i], r); err != nil {
+				if err := checkEqualBodyV2(test.results[i], r); err != nil {
 					t.Fatalf("test %d: invalid response: %v\nexpected %+v\ngot %+v", k, err, test.results[i], r)
 				}
 			}
@@ -1519,6 +1572,75 @@ func checkEqualBody(a *types.Body, b *engine.ExecutionPayloadBody) error {
 		return errors.New("withdrawals mismatch")
 	}
 	return nil
+}
+
+func checkEqualBodyV2(a *types.Body, b *engine.ExecutionPayloadBodyV2) error {
+	if b == nil {
+		return checkEqualBody(a, nil)
+	}
+	return checkEqualBody(a, &b.ExecutionPayloadBody)
+}
+
+func TestGetPayloadBodyV2BlockAccessList(t *testing.T) {
+	empty := bal.BlockAccessList{}
+	emptyHash := empty.Hash()
+	tests := []struct {
+		name       string
+		header     *types.Header
+		accessList *bal.BlockAccessList
+		want       string
+	}{
+		{
+			name:       "retained empty BAL",
+			header:     &types.Header{BlockAccessListHash: &emptyHash},
+			accessList: &empty,
+			want:       "[]",
+		},
+		{
+			name:   "pruned BAL",
+			header: &types.Header{BlockAccessListHash: &emptyHash},
+			want:   "null",
+		},
+		{
+			name:   "pre-Amsterdam block",
+			header: new(types.Header),
+			want:   "null",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			block := types.NewBlockWithHeader(test.header).WithAccessListUnsafe(test.accessList)
+			body := getBodyV2(block)
+			encoded, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(encoded, &fields); err != nil {
+				t.Fatal(err)
+			}
+			if got := string(fields["blockAccessList"]); got != test.want {
+				t.Fatalf("unexpected blockAccessList: got %s, want %s", got, test.want)
+			}
+		})
+	}
+}
+
+func TestGetPayloadBodyV1OmitsBlockAccessList(t *testing.T) {
+	empty := bal.BlockAccessList{}
+	emptyHash := empty.Hash()
+	block := types.NewBlockWithHeader(&types.Header{BlockAccessListHash: &emptyHash}).WithAccessListUnsafe(&empty)
+	encoded, err := json.Marshal(getBody(block))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields["blockAccessList"]; ok {
+		t.Fatal("V1 payload body contains blockAccessList")
+	}
 }
 
 func TestBlockToPayloadWithBlobs(t *testing.T) {

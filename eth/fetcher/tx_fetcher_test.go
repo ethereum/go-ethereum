@@ -111,6 +111,7 @@ func newTestTxFetcher() *TxFetcher {
 		},
 		func(string, []common.Hash) error { return nil },
 		nil,
+		nil,
 		newTestBlobBuffer(),
 	)
 }
@@ -2217,6 +2218,7 @@ func TestTransactionForgotten(t *testing.T) {
 		},
 		func(string, []common.Hash) error { return nil },
 		func(string) {},
+		nil,
 		newTestBlobBuffer(),
 		mockClock,
 		mockTime,

@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"slices"
@@ -25,7 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -83,40 +86,41 @@ type payloadAttributesMarshaling struct {
 
 // ExecutableData is the data necessary to execute an EL payload.
 type ExecutableData struct {
-	ParentHash      common.Hash          `json:"parentHash"    gencodec:"required"`
-	FeeRecipient    common.Address       `json:"feeRecipient"  gencodec:"required"`
-	StateRoot       common.Hash          `json:"stateRoot"     gencodec:"required"`
-	ReceiptsRoot    common.Hash          `json:"receiptsRoot"  gencodec:"required"`
-	LogsBloom       []byte               `json:"logsBloom"     gencodec:"required"`
-	Random          common.Hash          `json:"prevRandao"    gencodec:"required"`
-	Number          uint64               `json:"blockNumber"   gencodec:"required"`
-	GasLimit        uint64               `json:"gasLimit"      gencodec:"required"`
-	GasUsed         uint64               `json:"gasUsed"       gencodec:"required"`
-	Timestamp       uint64               `json:"timestamp"     gencodec:"required"`
-	ExtraData       []byte               `json:"extraData"     gencodec:"required"`
-	BaseFeePerGas   *big.Int             `json:"baseFeePerGas" gencodec:"required"`
-	BlockHash       common.Hash          `json:"blockHash"     gencodec:"required"`
-	Transactions    [][]byte             `json:"transactions"  gencodec:"required"`
-	Withdrawals     []*types.Withdrawal  `json:"withdrawals"`
-	BlobGasUsed     *uint64              `json:"blobGasUsed"`
-	ExcessBlobGas   *uint64              `json:"excessBlobGas"`
-	SlotNumber      *uint64              `json:"slotNumber,omitempty"`
-	BlockAccessList *bal.BlockAccessList `json:"blockAccessList,omitempty"`
+	ParentHash      common.Hash         `json:"parentHash"    gencodec:"required"`
+	FeeRecipient    common.Address      `json:"feeRecipient"  gencodec:"required"`
+	StateRoot       common.Hash         `json:"stateRoot"     gencodec:"required"`
+	ReceiptsRoot    common.Hash         `json:"receiptsRoot"  gencodec:"required"`
+	LogsBloom       []byte              `json:"logsBloom"     gencodec:"required"`
+	Random          common.Hash         `json:"prevRandao"    gencodec:"required"`
+	Number          uint64              `json:"blockNumber"   gencodec:"required"`
+	GasLimit        uint64              `json:"gasLimit"      gencodec:"required"`
+	GasUsed         uint64              `json:"gasUsed"       gencodec:"required"`
+	Timestamp       uint64              `json:"timestamp"     gencodec:"required"`
+	ExtraData       []byte              `json:"extraData"     gencodec:"required"`
+	BaseFeePerGas   *big.Int            `json:"baseFeePerGas" gencodec:"required"`
+	BlockHash       common.Hash         `json:"blockHash"     gencodec:"required"`
+	Transactions    [][]byte            `json:"transactions"  gencodec:"required"`
+	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+	BlobGasUsed     *uint64             `json:"blobGasUsed"`
+	ExcessBlobGas   *uint64             `json:"excessBlobGas"`
+	SlotNumber      *uint64             `json:"slotNumber,omitempty"`
+	BlockAccessList []byte              `json:"blockAccessList,omitempty"`
 }
 
 // JSON type overrides for executableData.
 type executableDataMarshaling struct {
-	Number        hexutil.Uint64
-	GasLimit      hexutil.Uint64
-	GasUsed       hexutil.Uint64
-	Timestamp     hexutil.Uint64
-	BaseFeePerGas *hexutil.Big
-	ExtraData     hexutil.Bytes
-	LogsBloom     hexutil.Bytes
-	Transactions  []hexutil.Bytes
-	BlobGasUsed   *hexutil.Uint64
-	ExcessBlobGas *hexutil.Uint64
-	SlotNumber    *hexutil.Uint64
+	Number          hexutil.Uint64
+	GasLimit        hexutil.Uint64
+	GasUsed         hexutil.Uint64
+	Timestamp       hexutil.Uint64
+	BaseFeePerGas   *hexutil.Big
+	ExtraData       hexutil.Bytes
+	LogsBloom       hexutil.Bytes
+	Transactions    []hexutil.Bytes
+	BlobGasUsed     *hexutil.Uint64
+	ExcessBlobGas   *hexutil.Uint64
+	SlotNumber      *hexutil.Uint64
+	BlockAccessList hexutil.Bytes
 }
 
 // StatelessPayloadStatusV1 is the result of a stateless payload execution.
@@ -325,7 +329,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	// to be nil.
 	var blockAccessListHash *common.Hash
 	if data.BlockAccessList != nil {
-		hash := data.BlockAccessList.Hash()
+		hash := crypto.Keccak256Hash(data.BlockAccessList)
 		blockAccessListHash = &hash
 	}
 	header := &types.Header{
@@ -352,32 +356,45 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		SlotNumber:          data.SlotNumber,
 		BlockAccessListHash: blockAccessListHash,
 	}
-	return types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}), nil
+	body := types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}
+	if data.BlockAccessList != nil {
+		var accessList bal.BlockAccessList
+		if err := rlp.DecodeBytes(data.BlockAccessList, &accessList); err != nil {
+			return nil, fmt.Errorf("failed to decode BAL: %w", err)
+		}
+		return types.NewBlockWithHeader(header).WithBody(body).WithAccessListUnsafe(&accessList), nil
+	}
+	return types.NewBlockWithHeader(header).WithBody(body), nil
 }
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
 func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar, requests [][]byte) *ExecutionPayloadEnvelope {
 	data := &ExecutableData{
-		BlockHash:       block.Hash(),
-		ParentHash:      block.ParentHash(),
-		FeeRecipient:    block.Coinbase(),
-		StateRoot:       block.Root(),
-		Number:          block.NumberU64(),
-		GasLimit:        block.GasLimit(),
-		GasUsed:         block.GasUsed(),
-		BaseFeePerGas:   block.BaseFee(),
-		Timestamp:       block.Time(),
-		ReceiptsRoot:    block.ReceiptHash(),
-		LogsBloom:       block.Bloom().Bytes(),
-		Transactions:    encodeTransactions(block.Transactions()),
-		Random:          block.MixDigest(),
-		ExtraData:       block.Extra(),
-		Withdrawals:     block.Withdrawals(),
-		BlobGasUsed:     block.BlobGasUsed(),
-		ExcessBlobGas:   block.ExcessBlobGas(),
-		SlotNumber:      block.SlotNumber(),
-		BlockAccessList: block.AccessList(),
+		BlockHash:     block.Hash(),
+		ParentHash:    block.ParentHash(),
+		FeeRecipient:  block.Coinbase(),
+		StateRoot:     block.Root(),
+		Number:        block.NumberU64(),
+		GasLimit:      block.GasLimit(),
+		GasUsed:       block.GasUsed(),
+		BaseFeePerGas: block.BaseFee(),
+		Timestamp:     block.Time(),
+		ReceiptsRoot:  block.ReceiptHash(),
+		LogsBloom:     block.Bloom().Bytes(),
+		Transactions:  encodeTransactions(block.Transactions()),
+		Random:        block.MixDigest(),
+		ExtraData:     block.Extra(),
+		Withdrawals:   block.Withdrawals(),
+		BlobGasUsed:   block.BlobGasUsed(),
+		ExcessBlobGas: block.ExcessBlobGas(),
+		SlotNumber:    block.SlotNumber(),
+	}
+	if al := block.AccessList(); al != nil {
+		var buf bytes.Buffer
+		if err := rlp.Encode(&buf, al); err == nil {
+			data.BlockAccessList = buf.Bytes()
+		}
 	}
 
 	// Add blobs.
@@ -418,6 +435,12 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 type ExecutionPayloadBody struct {
 	TransactionData []hexutil.Bytes     `json:"transactions"`
 	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+}
+
+// ExecutionPayloadBodyV2 extends ExecutionPayloadBody with the block access list.
+type ExecutionPayloadBodyV2 struct {
+	ExecutionPayloadBody
+	BlockAccessList *bal.BlockAccessList `json:"blockAccessList"`
 }
 
 // Client identifiers to support ClientVersionV1.

@@ -493,7 +493,7 @@ func makeCallVariantGasCallEIP8037(regularFunc regularGasFunc, stateGasFunc stat
 		// EIP-7702 delegation check.
 		if target, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
 			if evm.StateDB.AddressInAccessList(target) {
-				eip7702Cost = params.WarmStorageReadCostEIP2929
+				eip7702Cost = params.WarmAccountAccessAmsterdam
 			} else {
 				evm.StateDB.AddAddressToAccessList(target)
 				eip7702Cost = coldCost

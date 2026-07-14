@@ -453,6 +453,7 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downlo
 func (s *Ethereum) Synced() bool                       { return s.handler.synced.Load() }
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
+func (s *Ethereum) EngineMaxReorgDepth() uint64        { return s.config.EngineMaxReorgDepth }
 
 // Protocols returns all the currently configured
 // network protocols to start.
@@ -477,8 +478,8 @@ func (s *Ethereum) Start() error {
 	// Start the networking layer
 	s.handler.Start(s.p2pServer.MaxPeers)
 
-	// Start the connection manager
-	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() })
+	// Start the connection manager with inclusion-based peer protection.
+	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, s.handler.txTracker.GetAllPeerStats)
 
 	// Subscribe to chain events for the filterMaps head updater.
 	s.fmHeadSub = s.blockchain.SubscribeChainEvent(s.fmHeadEventCh)
@@ -604,6 +605,7 @@ func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.discmix.Close()
 	s.dropper.Stop()
+	s.handler.txTracker.Stop()
 	s.handler.Stop()
 
 	// Then stop everything else.

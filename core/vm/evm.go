@@ -150,6 +150,8 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 
 	switch {
+	case evm.chainRules.IsBogota:
+		evm.table = &bogotaInstructionSet
 	case evm.chainRules.IsAmsterdam:
 		evm.table = &amsterdamInstructionSet
 	case evm.chainRules.IsOsaka:
@@ -473,20 +475,57 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	return ret, exitGas, err
 }
 
-// create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, result GasBudget, creation bool, err error) {
-	// Depth check execution. Fail if we're trying to execute above the
-	// limit.
-	var nonce uint64
+// createFramePreCheck the precondition before executing the contract deployment,
+// halts the create frame if fails with any check below.
+func (evm *EVM) createFramePreCheck(caller common.Address, value *uint256.Int) error {
 	if evm.depth > int(params.CallCreateDepth) {
-		err = ErrDepth
-	} else if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
-		err = ErrInsufficientBalance
-	} else {
-		nonce = evm.StateDB.GetNonce(caller)
-		if nonce+1 < nonce {
-			err = ErrNonceUintOverflow
-		}
+		return ErrDepth
+	}
+	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
+		return ErrInsufficientBalance
+	}
+	nonce := evm.StateDB.GetNonce(caller)
+	if nonce+1 < nonce {
+		return ErrNonceUintOverflow
+	}
+	return nil
+}
+
+// chargeAccountCreation runs the create-frame precheck and charges the
+// account-creation state gas since Amsterdam, before the 63/64ths split.
+//
+// The charge only applies if the destination is empty, skipping pre-funded
+// deployment destinations. Note, a destination colliding on storage alone
+// (zero nonce, zero balance, empty code) is still empty and is charged.
+//
+// If halt is true, the caller must terminate with the returned error:
+//   - a failed precheck halts the create frame only and parent frame continues,
+//   - an insufficient charge halts the parent frame with ErrOutOfGas.
+func (evm *EVM) chargeAccountCreation(scope *ScopeContext, contractAddr common.Address, value *uint256.Int) (charged, halt bool, err error) {
+	if !evm.chainRules.IsAmsterdam {
+		return false, false, nil
+	}
+	if err := evm.createFramePreCheck(scope.Contract.Address(), value); err != nil {
+		scope.Stack.get().Clear()
+		evm.returnData = nil
+		return false, true, nil
+	}
+	if !evm.StateDB.Empty(contractAddr) {
+		return false, false, nil
+	}
+	cost := params.AccountCreationSize * evm.Context.CostPerStateByte
+	if !scope.Contract.chargeState(cost, evm.Config.Tracer, tracing.GasChangeAccountCreation) {
+		return false, true, ErrOutOfGas
+	}
+	return true, false, nil
+}
+
+// create creates a new contract using code as deployment code.
+func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, result GasBudget, err error) {
+	// Since Amsterdam, the precheck has been folded into the parent frame
+	// due to account-creation determination, so skip the duplicate check here.
+	if !evm.chainRules.IsAmsterdam {
+		err = evm.createFramePreCheck(caller, value)
 	}
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller, address, code, gas, value.ToBig())
@@ -495,17 +534,17 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		}(gas)
 	}
 	if err != nil {
-		return nil, common.Address{}, gas, false, err
+		return nil, common.Address{}, gas, err
 	}
 	// Increment the caller's nonce after passing all validations
-	evm.StateDB.SetNonce(caller, nonce+1, tracing.NonceChangeContractCreator)
+	evm.StateDB.SetNonce(caller, evm.StateDB.GetNonce(caller)+1, tracing.NonceChangeContractCreator)
 
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
 		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas.RegularGas)
 		prior, ok := gas.Charge(GasCosts{RegularGas: statelessGas})
 		if !ok {
-			return nil, common.Address{}, gas.ExitHalt(), false, ErrOutOfGas
+			return nil, common.Address{}, gas.ExitHalt(), ErrOutOfGas
 		}
 		if evm.Config.Tracer.HasGasHook() {
 			evm.Config.Tracer.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractCollisionCheck)
@@ -532,7 +571,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		}
 		// EIP-8037 collision rule: the state reservoir is fully preserved on
 		// address collision while regular gas is burnt.
-		return nil, common.Address{}, halt, false, ErrContractAddressCollision
+		return nil, common.Address{}, halt, ErrContractAddressCollision
 	}
 	// Create a new account on the state only if the object was not present.
 	// It might be possible the contract code is deployed to a pre-existent
@@ -540,7 +579,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	snapshot := evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
-		creation = true
 	}
 	// CreateContract means that regardless of whether the account previously existed
 	// in the state trie or not, it _now_ becomes created as a _contract_ account.
@@ -555,7 +593,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	if evm.chainRules.IsEIP4762 {
 		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas.RegularGas)
 		if consumed < wanted {
-			return nil, common.Address{}, gas.ExitHalt(), false, ErrOutOfGas
+			return nil, common.Address{}, gas.ExitHalt(), ErrOutOfGas
 		}
 		prior, _ := gas.Charge(GasCosts{RegularGas: consumed})
 		if evm.Config.Tracer.HasGasHook() {
@@ -586,11 +624,11 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 				evm.Config.Tracer.EmitGasChange(contract.Gas.AsTracing(), exit.AsTracing(), tracing.GasChangeCallFailedExecution)
 			}
 		}
-		return ret, address, exit, false, err
+		return ret, address, exit, err
 	}
 	// Either success, or pre-Homestead ErrCodeStoreOutOfGas (gas preserved).
 	// Both packaged as a success-form GasBudget.
-	return ret, address, contract.Gas.ExitSuccess(), creation, err
+	return ret, address, contract.Gas.ExitSuccess(), err
 }
 
 // initNewContract runs a new contract's creation code, performs checks on the
@@ -646,7 +684,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int) (ret []byte, contractAddr common.Address, result GasBudget, creation bool, err error) {
+func (evm *EVM) Create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int) (ret []byte, contractAddr common.Address, result GasBudget, err error) {
 	contractAddr = crypto.CreateAddress(caller, evm.StateDB.GetNonce(caller))
 	return evm.create(caller, code, gas, value, contractAddr, CREATE)
 }
@@ -655,7 +693,7 @@ func (evm *EVM) Create(caller common.Address, code []byte, gas GasBudget, value 
 //
 // The different between Create2 with Create is Create2 uses keccak256(0xff ++ msg.sender ++ salt ++ keccak256(init_code))[12:]
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
-func (evm *EVM) Create2(caller common.Address, code []byte, gas GasBudget, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, result GasBudget, creation bool, err error) {
+func (evm *EVM) Create2(caller common.Address, code []byte, gas GasBudget, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, result GasBudget, err error) {
 	inithash := crypto.Keccak256Hash(code)
 	contractAddr = crypto.CreateAddress2(caller, salt.Bytes32(), inithash[:])
 	return evm.create(caller, code, gas, endowment, contractAddr, CREATE2)

@@ -612,30 +612,3 @@ func writeStateHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 
 	return nil
 }
-
-// checkStateHistories retrieves a batch of metadata objects with the specified
-// range and performs the callback on each item.
-func checkStateHistories(reader ethdb.AncientReader, start, count uint64, check func(*meta) error) error {
-	for count > 0 {
-		number := count
-		if number > 10000 {
-			number = 10000 // split the big read into small chunks
-		}
-		blobs, err := rawdb.ReadStateHistoryMetaList(reader, start, number)
-		if err != nil {
-			return err
-		}
-		for _, blob := range blobs {
-			var dec meta
-			if err := dec.decode(blob); err != nil {
-				return err
-			}
-			if err := check(&dec); err != nil {
-				return err
-			}
-		}
-		count -= uint64(len(blobs))
-		start += uint64(len(blobs))
-	}
-	return nil
-}

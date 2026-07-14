@@ -452,7 +452,7 @@ func doTest(cmdline []string) {
 // downloadSpecTestFixtures downloads and extracts the execution-spec-tests fixtures.
 func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
 	ext := ".tar.gz"
-	base := "fixtures_develop"
+	base := "fixtures"
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
 		log.Fatal(err)

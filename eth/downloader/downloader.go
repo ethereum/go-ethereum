@@ -542,8 +542,8 @@ func (d *Downloader) syncToHead() (err error) {
 			if pivotNumber <= origin {
 				origin = pivotNumber - 1
 			}
-			// Write out the pivot into the database so a rollback beyond it will
-			// reenable snap sync
+			// Write out the pivot into the database so a rollback beyond it
+			// can be detected
 			rawdb.WriteLastPivotNumber(d.stateDB, pivotNumber)
 		}
 	}

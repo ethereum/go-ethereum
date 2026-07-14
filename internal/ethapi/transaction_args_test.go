@@ -58,6 +58,7 @@ func TestSetFeeDefaults(t *testing.T) {
 		fortytwo = (*hexutil.Big)(big.NewInt(42))
 		maxFee   = (*hexutil.Big)(new(big.Int).Add(new(big.Int).Mul(b.current.BaseFee, big.NewInt(2)), fortytwo.ToInt()))
 		al       = &types.AccessList{types.AccessTuple{Address: common.Address{0xaa}, StorageKeys: []common.Hash{{0x01}}}}
+		authList = []types.SetCodeAuthorization{{Address: common.Address{0xbb}}}
 	)
 
 	tests := []test{
@@ -207,6 +208,13 @@ func TestSetFeeDefaults(t *testing.T) {
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee},
 			nil,
 			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+		},
+		{
+			"set gas price and authorization list",
+			"london",
+			&TransactionArgs{GasPrice: fortytwo, AuthorizationList: authList},
+			nil,
+			errors.New("both gasPrice and authorizationList specified"),
 		},
 		// EIP-4844
 		{

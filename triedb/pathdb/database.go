@@ -543,15 +543,15 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if db.stateFreezer == nil {
 		return false
 	}
-	// Ensure the requested state is a canonical state and all state
-	// histories in range [id+1, dl.ID] are present and complete.
-	return checkStateHistories(db.stateFreezer, *id+1, dl.stateID()-*id, func(m *meta) error {
-		if m.parent != root {
-			return errors.New("unexpected state history")
-		}
-		root = m.root
-		return nil
-	}) == nil
+	blob := rawdb.ReadStateHistoryMeta(db.stateFreezer, *id+1)
+	if len(blob) == 0 {
+		return false // pruned from the tail or otherwise unavailable
+	}
+	var m meta
+	if err := m.decode(blob); err != nil {
+		return false
+	}
+	return m.parent == root
 }
 
 // Close closes the trie database and the held freezer.

@@ -333,8 +333,8 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 					return errNoPivotHeader
 				}
 				// Write out the pivot into the database so a rollback beyond
-				// it will reenable snap sync and update the state root that
-				// the state syncer will be downloading
+				// it can be detected, and update the state root that the
+				// state syncer will be downloading
 				rawdb.WriteLastPivotNumber(d.stateDB, d.pivotHeader.Number.Uint64())
 			}
 		}

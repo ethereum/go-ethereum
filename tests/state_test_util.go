@@ -95,6 +95,7 @@ type stEnv struct {
 	Timestamp     uint64         `json:"currentTimestamp"     gencodec:"required"`
 	BaseFee       *big.Int       `json:"currentBaseFee"       gencodec:"optional"`
 	ExcessBlobGas *uint64        `json:"currentExcessBlobGas" gencodec:"optional"`
+	SlotNumber    *uint64        `json:"slotNumber"           gencodec:"optional"`
 }
 
 type stEnvMarshaling struct {
@@ -106,6 +107,7 @@ type stEnvMarshaling struct {
 	Timestamp     math.HexOrDecimal64
 	BaseFee       *math.HexOrDecimal256
 	ExcessBlobGas *math.HexOrDecimal64
+	SlotNumber    *math.HexOrDecimal64
 }
 
 //go:generate go run github.com/fjl/gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
@@ -114,7 +116,7 @@ type stTransaction struct {
 	GasPrice             *big.Int            `json:"gasPrice"`
 	MaxFeePerGas         *big.Int            `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *big.Int            `json:"maxPriorityFeePerGas"`
-	Nonce                uint64              `json:"nonce"`
+	Nonce                *big.Int            `json:"nonce"`
 	To                   string              `json:"to"`
 	Data                 []string            `json:"data"`
 	AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
@@ -131,7 +133,7 @@ type stTransactionMarshaling struct {
 	GasPrice             *math.HexOrDecimal256
 	MaxFeePerGas         *math.HexOrDecimal256
 	MaxPriorityFeePerGas *math.HexOrDecimal256
-	Nonce                math.HexOrDecimal64
+	Nonce                *math.HexOrDecimal256
 	GasLimit             []math.HexOrDecimal64
 	PrivateKey           hexutil.Bytes
 	BlobGasFeeCap        *math.HexOrDecimal256
@@ -378,6 +380,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 		GasLimit:   t.json.Env.GasLimit,
 		Number:     t.json.Env.Number,
 		Timestamp:  t.json.Env.Timestamp,
+		SlotNumber: t.json.Env.SlotNumber,
 		Alloc:      t.json.Pre,
 	}
 	if t.json.Env.Random != nil {
@@ -389,6 +392,16 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 }
 
 func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Message, error) {
+	// The nonce is parsed as an arbitrary-precision integer so that fixtures
+	// probing the EIP-2681 limit can be loaded; such a transaction can never
+	// be RLP-decoded and must be rejected here.
+	var nonce uint64
+	if tx.Nonce != nil {
+		if !tx.Nonce.IsUint64() {
+			return nil, fmt.Errorf("nonce %v exceeds 2^64-1 (EIP-2681)", tx.Nonce)
+		}
+		nonce = tx.Nonce.Uint64()
+	}
 	var from common.Address
 	// If 'sender' field is present, use that
 	if tx.Sender != nil {
@@ -478,7 +491,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 	msg := &core.Message{
 		From:                  from,
 		To:                    to,
-		Nonce:                 tx.Nonce,
+		Nonce:                 nonce,
 		Value:                 uint256.MustFromBig(value),
 		GasLimit:              gasLimit,
 		GasPrice:              uint256.MustFromBig(gasPrice),

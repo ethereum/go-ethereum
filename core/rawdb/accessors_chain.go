@@ -176,8 +176,8 @@ func WriteFinalizedBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 
 // ReadLastPivotNumber retrieves the number of the last pivot block. If the node
 // has never attempted snap sync, the last pivot will always be nil. The marker
-// is written during snap sync and never cleared, so that a rollback past the
-// pivot can re-enable snap sync.
+// is written during snap sync and never cleared, so that a rewind below the
+// pivot can be detected.
 func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {
 	data, _ := db.Get(lastPivotKey)
 	if len(data) == 0 {

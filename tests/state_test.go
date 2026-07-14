@@ -97,10 +97,8 @@ func TestExecutionSpecState(t *testing.T) {
 	st := new(testMatcher)
 
 	// Broken tests
-	st.skipLoad(`RevertInCreateInInit`)
-	st.skipLoad(`InitCollisionParis`)
-	st.skipLoad(`dynamicAccountOverwriteEmpty_Paris`)
-	st.skipLoad(`create2collisionStorageParis`)
+	st.skipLoad(`.*eip7610_create_collision/initcollision/.*`)
+	st.skipLoad(`.*eip7610_create_collision/revert_in_create/.*`)
 
 	st.walk(t, executionSpecStateTestDir, func(t *testing.T, name string, test *StateTest) {
 		execStateTest(t, st, test)

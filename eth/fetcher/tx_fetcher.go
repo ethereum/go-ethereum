@@ -183,10 +183,11 @@ type TxFetcher struct {
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
 	// Callbacks
-	validateMeta func(common.Hash, byte) error      // Validate a tx metadata based on the local txpool
-	addTxs       func([]*types.Transaction) []error // Insert a batch of transactions into local txpool
-	fetchTxs     func(string, []common.Hash) error  // Retrieves a set of txs from a remote peer
-	dropPeer     func(string)                       // Drops a peer in case of announcement violation
+	validateMeta func(common.Hash, byte) error           // Validate a tx metadata based on the local txpool
+	addTxs       func([]*types.Transaction) []error      // Insert a batch of transactions into local txpool
+	fetchTxs     func(string, []common.Hash) error       // Retrieves a set of txs from a remote peer
+	dropPeer     func(string)                            // Drops a peer in case of announcement violation
+	onAccepted   func(peer string, hashes []common.Hash) // Optional: notified with accepted tx hashes per peer
 
 	buffer *blobpool.BlobBuffer
 
@@ -200,15 +201,15 @@ type TxFetcher struct {
 // based on hash announcements.
 // Chain can be nil to disable on-chain checks.
 func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error,
-	dropPeer func(string), buffer *blobpool.BlobBuffer) *TxFetcher {
-	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, buffer, mclock.System{}, time.Now, nil)
+	dropPeer func(string), onAccepted func(string, []common.Hash), buffer *blobpool.BlobBuffer) *TxFetcher {
+	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, onAccepted, buffer, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 // Chain can be nil to disable on-chain checks.
 func NewTxFetcherForTests(
-	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
+	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash),
 	buffer *blobpool.BlobBuffer, clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
 		notify:         make(chan *txAnnounce),
@@ -231,6 +232,7 @@ func NewTxFetcherForTests(
 		fetchTxs:       fetchTxs,
 		dropPeer:       dropPeer,
 		buffer:         buffer,
+		onAccepted:     onAccepted,
 		clock:          clock,
 		realTime:       realTime,
 		rand:           rand,
@@ -387,7 +389,11 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 		for j := range batch {
 			hashes[j] = batch[j].Hash()
 		}
+		var accepted []common.Hash
 		for j, err := range errs {
+			if err == nil {
+				accepted = append(accepted, batch[j].Hash())
+			}
 			if errors.Is(err, txpool.ErrKZGVerificationError) || errors.Is(err, txpool.ErrSidecarFormatError) {
 				// KZG verification failed, terminate transaction processing immediately.
 				// Since KZG verification is computationally expensive, this acts as a
@@ -406,6 +412,11 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 			}
 		}
 		otherreject := f.handleAddErrors(hashes, errs, metrics)
+
+		// Notify the tracker which txs from this peer were accepted.
+		if f.onAccepted != nil && len(accepted) > 0 {
+			f.onAccepted(peer, accepted)
+		}
 		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit
 		// to throttle the misbehaving peer.
 		if otherreject > int64((len(hashes)+3)/4) {

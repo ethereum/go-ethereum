@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
+	"github.com/ethereum/go-ethereum/eth/txtracker"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -140,6 +141,7 @@ type handler struct {
 	downloader     *downloader.Downloader
 	txFetcher      *fetcher.TxFetcher
 	blobFetcher    *fetcher.BlobFetcher
+	txTracker      *txtracker.Tracker
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
@@ -208,7 +210,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return nil
 	}
-	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer, blobBuffer)
+	h.txTracker = txtracker.New()
+	h.txFetcher = fetcher.NewTxFetcher(h.chain, validateMeta, addTxs, fetchTx, h.removePeer, h.txTracker.NotifyAccepted, blobBuffer)
 
 	// Construct the blob fetcher for cell-based blob data availability
 	blobCallbacks := fetcher.BlobFetcherFunctions{
@@ -453,6 +456,7 @@ func (h *handler) unregisterPeer(id string) {
 	h.downloader.UnregisterPeer(id)
 	h.txFetcher.Drop(id)
 	h.blobFetcher.Drop(id)
+	h.txTracker.NotifyPeerDrop(id)
 
 	if err := h.peers.unregisterPeer(id); err != nil {
 		logger.Error("Ethereum peer removal failed", "err", err)
@@ -476,6 +480,9 @@ func (h *handler) Start(maxPeers int) {
 	// start sync handlers
 	h.txFetcher.Start()
 	h.blobFetcher.Start()
+
+	// Start the transaction tracker (records tx deliveries, credits peer inclusions).
+	h.txTracker.Start(h.chain)
 
 	// start peer handler tracker
 	h.wg.Add(1)
