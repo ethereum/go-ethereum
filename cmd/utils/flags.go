@@ -1923,11 +1923,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(EngineMaxReorgDepthFlag.Name) {
 		cfg.EngineMaxReorgDepth = ctx.Uint64(EngineMaxReorgDepthFlag.Name)
-		if cfg.EngineMaxReorgDepth != 0 {
-			log.Info("Set engine API maximum reorg depth", "depth", cfg.EngineMaxReorgDepth)
-		} else {
-			log.Info("Engine API reorg depth limit disabled")
-		}
+	}
+	if cfg.EngineMaxReorgDepth != 0 {
+		log.Info("Engine API maximum reorg depth", "depth", cfg.EngineMaxReorgDepth)
+	} else {
+		log.Info("Engine API reorg depth limit disabled")
 	}
 	if ctx.Bool(NoDiscoverFlag.Name) {
 		cfg.EthDiscoveryURLs, cfg.SnapDiscoveryURLs = []string{}, []string{}

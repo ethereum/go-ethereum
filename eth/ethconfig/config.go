@@ -207,7 +207,7 @@ type Config struct {
 	// EngineMaxReorgDepth is the maximum depth the chain head can be rewound
 	// to an already-canonical ancestor by engine API forkchoiceUpdated calls
 	// (0 = no limit).
-	EngineMaxReorgDepth uint64
+	EngineMaxReorgDepth uint64 `toml:",omitempty"`
 
 	// OverrideOsaka (TODO: remove after the fork)
 	OverrideOsaka *uint64 `toml:",omitempty"`

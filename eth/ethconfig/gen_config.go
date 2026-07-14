@@ -63,7 +63,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		RPCGasCap               uint64
 		RPCEVMTimeout           time.Duration
 		RPCTxFeeCap             float64
-		EngineMaxReorgDepth     uint64
+		EngineMaxReorgDepth     uint64        `toml:",omitempty"`
 		OverrideOsaka           *uint64       `toml:",omitempty"`
 		OverrideAmsterdam       *uint64       `toml:",omitempty"`
 		OverrideBPO1            *uint64       `toml:",omitempty"`
@@ -181,7 +181,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		RPCGasCap               *uint64
 		RPCEVMTimeout           *time.Duration
 		RPCTxFeeCap             *float64
-		EngineMaxReorgDepth     *uint64
+		EngineMaxReorgDepth     *uint64        `toml:",omitempty"`
 		OverrideOsaka           *uint64        `toml:",omitempty"`
 		OverrideAmsterdam       *uint64        `toml:",omitempty"`
 		OverrideBPO1            *uint64        `toml:",omitempty"`
