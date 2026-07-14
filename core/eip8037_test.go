@@ -21,6 +21,7 @@
 package core
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -72,6 +73,40 @@ func mkState(alloc types.GenesisAlloc) *state.StateDB {
 	return sdb
 }
 
+// mkCommittedState is mkState with the allocation committed to disk and
+// reloaded. EIP-161-empty accounts carrying only storage do not survive an
+// in-memory Finalise; committing without empty-account deletion reproduces
+// the synthesized prestate an EIP-7610 fixture would load from disk.
+func mkCommittedState(t *testing.T, alloc types.GenesisAlloc) *state.StateDB {
+	t.Helper()
+	db := state.NewDatabaseForTesting()
+	sdb, _ := state.New(types.EmptyRootHash, db)
+	for addr, acc := range alloc {
+		sdb.CreateAccount(addr)
+		if acc.Balance != nil {
+			sdb.AddBalance(addr, uint256.MustFromBig(acc.Balance), tracing.BalanceChangeUnspecified)
+		}
+		if acc.Nonce != 0 {
+			sdb.SetNonce(addr, acc.Nonce, tracing.NonceChangeGenesis)
+		}
+		if len(acc.Code) != 0 {
+			sdb.SetCode(addr, acc.Code, tracing.CodeChangeUnspecified)
+		}
+		for k, v := range acc.Storage {
+			sdb.SetState(addr, k, v)
+		}
+	}
+	root, err := sdb.Commit(0, false, false)
+	if err != nil {
+		t.Fatalf("commit prestate: %v", err)
+	}
+	sdb, err = state.New(root, db)
+	if err != nil {
+		t.Fatalf("reopen prestate: %v", err)
+	}
+	return sdb
+}
+
 // amsterdamCoreEVM builds an Amsterdam EVM over statedb with fees disabled.
 func amsterdamCoreEVM(sdb *state.StateDB) *vm.EVM {
 	ctx := vm.BlockContext{
@@ -99,15 +134,24 @@ func applyMsg(t *testing.T, sdb *state.StateDB, tx *types.Transaction) (*Executi
 		t.Fatalf("to message: %v", err)
 	}
 	gp := NewGasPool(evm.Context.GasLimit)
-	// Drive the stateTransition directly (as ApplyMessage does) so the test can
-	// inspect the final tx-level GasBudget vector via st.gasRemaining.
+
 	evm.SetTxContext(NewEVMTxContext(msg))
 	st := newStateTransition(evm, msg, gp)
 	res, err := st.execute()
 	if err == nil && res != nil {
-		assertPoolSane(t, res, gp)
-		limit := min(msg.GasLimit, params.MaxTxGas)
-		assertBudgetSane(t, vm.NewGasBudget(limit, msg.GasLimit-limit), st.gasRemaining)
+		floor, ferr := FloorDataGas(rules8037, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
+		if ferr != nil {
+			t.Fatalf("floor data gas: %v", ferr)
+		}
+		assertPoolSane(t, res, gp, floor)
+
+		intrinsic, ierr := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules8037)
+		if ierr != nil {
+			t.Fatalf("intrinsic gas: %v", ierr)
+		}
+		executionGas := msg.GasLimit - intrinsic
+		gasLeft := min(params.MaxTxGas-intrinsic, executionGas)
+		assertBudgetSane(t, vm.NewGasBudget(gasLeft, executionGas-gasLeft), st.gasRemaining)
 	}
 	return res, gp, err
 }
@@ -136,9 +180,11 @@ func assertBudgetSane(t *testing.T, initial, got vm.GasBudget) {
 // assertPoolSane validates the whole 2D block-gas-pool vector after a single tx.
 //
 //	receipt:    cumulativeUsed == res.UsedGas <= res.MaxUsedGas
-//	pre-refund: cumulativeRegular + cumulativeState <= res.MaxUsedGas (peak)
+//	regular:    cumulativeRegular <= max(res.MaxUsedGas - cumulativeState, floor)
+//	            (the calldata floor pads the regular dimension alone, so the
+//	            dimension sum may exceed the pre-refund peak when it binds)
 //	bottleneck: Used() == max(cumulativeRegular, cumulativeState) <= initial
-func assertPoolSane(t *testing.T, res *ExecutionResult, gp *GasPool) {
+func assertPoolSane(t *testing.T, res *ExecutionResult, gp *GasPool, floor uint64) {
 	t.Helper()
 	if gp.cumulativeUsed != res.UsedGas {
 		t.Fatalf("receipt scalar = %d, want UsedGas %d", gp.cumulativeUsed, res.UsedGas)
@@ -146,8 +192,12 @@ func assertPoolSane(t *testing.T, res *ExecutionResult, gp *GasPool) {
 	if res.UsedGas > res.MaxUsedGas {
 		t.Fatalf("post-refund gas %d exceeds peak %d", res.UsedGas, res.MaxUsedGas)
 	}
-	if sum := gp.cumulativeRegular + gp.cumulativeState; sum > res.MaxUsedGas {
-		t.Fatalf("regular+state %d exceeds peak %d", sum, res.MaxUsedGas)
+	if gp.cumulativeState > res.MaxUsedGas {
+		t.Fatalf("state %d exceeds peak %d", gp.cumulativeState, res.MaxUsedGas)
+	}
+	if cap := max(res.MaxUsedGas-gp.cumulativeState, floor); gp.cumulativeRegular > cap {
+		t.Fatalf("regular %d exceeds pre-refund cap %d (peak %d, state %d, floor %d)",
+			gp.cumulativeRegular, cap, res.MaxUsedGas, gp.cumulativeState, floor)
 	}
 	if gp.Used() != max(gp.cumulativeRegular, gp.cumulativeState) {
 		t.Fatalf("block used %d != max(%d,%d)", gp.Used(), gp.cumulativeRegular, gp.cumulativeState)
@@ -185,23 +235,26 @@ func createTx(nonce, gas uint64, initCode []byte) *types.Transaction {
 var (
 	deploy3 = []byte{0x60, 0x03, 0x60, 0x00, 0xf3} // init: return 3 bytes of code
 	revertI = []byte{0x60, 0x00, 0x60, 0x00, 0xfd} // init: REVERT
+	haltI   = []byte{0xfe, 0x00, 0x00, 0x00, 0x00} // init: INVALID, exceptional halt
 )
 
 // ===================== Top-level create transaction ======================
 
-// A creation tx's intrinsic gas pre-charges one account creation as state gas.
-func TestCreateTxIntrinsicChargesAccountUnconditionally(t *testing.T) {
-	cost, err := IntrinsicGas(nil, nil, nil, common.Address{}, nil, nil, rules8037, params.CostPerStateByte)
+// A creation tx's intrinsic gas is state-independent: the new-account state
+// charge depends on whether the deployment target exists and is charged at
+// runtime (EIP-2780), not intrinsically.
+func TestCreateTxIntrinsicNoStateGas(t *testing.T) {
+	cost, err := IntrinsicGas(nil, nil, nil, common.Address{}, nil, nil, rules8037)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cost.StateGas != newAccountState {
-		t.Fatalf("intrinsic state gas = %d, want %d", cost.StateGas, newAccountState)
+	if want := params.TxBaseCost2780 + params.CreateAccessAmsterdam; cost != want {
+		t.Fatalf("intrinsic gas = %d, want %d", cost, want)
 	}
 }
 
-// Creating onto a pre-existing (balance-only) address refills the account
-// portion; only the code deposit is charged as state gas.
+// Creating onto a pre-existing (balance-only) address incurs no new-account
+// runtime charge; only the code deposit is charged as state gas.
 func TestCreateTxPreexistingDestRefill(t *testing.T) {
 	derived := crypto.CreateAddress(senderAddr, 0)
 	sdb := mkState(senderAlloc(types.GenesisAlloc{derived: {Balance: big.NewInt(1)}}))
@@ -214,7 +267,8 @@ func TestCreateTxPreexistingDestRefill(t *testing.T) {
 	}
 }
 
-// A creation tx that reverts refills the account-creation charge.
+// A creation tx that reverts refills the account-creation charge applied at
+// runtime.
 func TestCreateTxRevertRefill(t *testing.T) {
 	sdb := mkState(senderAlloc(nil))
 	res, gp, err := applyMsg(t, sdb, createTx(0, 1_000_000, revertI))
@@ -229,7 +283,8 @@ func TestCreateTxRevertRefill(t *testing.T) {
 	}
 }
 
-// An address collision burns gas_left while refilling the account charge.
+// An address collision burns gas_left. The colliding target exists, so no
+// new-account state gas is charged at runtime in the first place.
 func TestCreateTxCollisionConsumesGasLeft(t *testing.T) {
 	const gas = 1_000_000
 	derived := crypto.CreateAddress(senderAddr, 0)
@@ -242,13 +297,184 @@ func TestCreateTxCollisionConsumesGasLeft(t *testing.T) {
 		t.Fatal("expected collision failure")
 	}
 	if gp.cumulativeState != 0 {
+		t.Fatalf("state gas = %d, want 0 (never charged)", gp.cumulativeState)
+	}
+	// All forwarded gas_left is burned: the whole gas limit is consumed as
+	// regular gas.
+	if want := uint64(gas); gp.cumulativeRegular != want {
+		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, want)
+	}
+}
+
+// An account can exist yet be EIP-161-empty in the middle of a transaction,
+// e.g. after being touched as the zero-balance beneficiary of a SELFDESTRUCT.
+// Deploying onto such an account should charge account-creation cost.
+func TestCreate2TransientEmptyDestNoRefill(t *testing.T) {
+	var (
+		orchestrator = common.HexToAddress("0xc0de000000000000000000000000000000000002")
+		destructor   = common.HexToAddress("0xc0de000000000000000000000000000000000003")
+		target       = crypto.CreateAddress2(orchestrator, [32]byte{}, crypto.Keccak256(deploy3))
+	)
+	// destructor: SELFDESTRUCT with zero balance to the future CREATE2 target,
+	// leaving it existing but EIP-161-empty for the rest of the transaction.
+	destructorCode := append(append([]byte{0x73}, target.Bytes()...), 0xff) // PUSH20 target, SELFDESTRUCT
+
+	// orchestrator: CALL destructor (persist the success flag in slot 0),
+	// then CREATE2 deploy3 with salt 0, targeting the touched address.
+	code := []byte{
+		0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00, // ret/arg sizes and offsets, value = 0
+		0x73, // PUSH20 destructor
+	}
+	code = append(code, destructor.Bytes()...)
+	code = append(code,
+		0x62, 0x03, 0x0d, 0x40, // PUSH3 200,000 call gas
+		0xf1,             // CALL
+		0x60, 0x00, 0x55, // SSTORE the call result at slot 0
+		0x64, 0x60, 0x03, 0x60, 0x00, 0xf3, // PUSH5 deploy3 init code
+		0x60, 0x00, 0x52, // MSTORE at word 0 (right-aligned, code at offset 27)
+		0x60, 0x00, // salt  = 0
+		0x60, 0x05, // size  = 5
+		0x60, 0x1b, // offset = 27
+		0x60, 0x00, // endowment = 0
+		0xf5, 0x50, // CREATE2, POP
+		0x00, // STOP
+	)
+	sdb := mkState(senderAlloc(types.GenesisAlloc{
+		orchestrator: {Code: code},
+		destructor:   {Code: destructorCode},
+	}))
+	res, gp, err := applyMsg(t, sdb, callTx(0, orchestrator, 0, 2_000_000, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Failed() {
+		t.Fatalf("execution failed: %v", res.Err)
+	}
+	// The inner call must have succeeded, so the target was touched into an
+	// existing-but-empty account before the CREATE2 executed.
+	if flag := sdb.GetState(orchestrator, common.Hash{}); flag != common.BigToHash(big.NewInt(1)) {
+		t.Fatalf("destructor call flag = %v, want 1", flag)
+	}
+	if code := sdb.GetCode(target); len(code) != 3 {
+		t.Fatalf("deployed code length = %d, want 3", len(code))
+	}
+	// State gas: the orchestrator's flag slot, the created contract account
+	// (charged, not refilled) and the 3-byte code deposit.
+	want := newSlotState + newAccountState + uint64(3*params.CostPerStateByte)
+	if gp.cumulativeState != want {
+		t.Fatalf("state gas = %d, want %d (account creation must not be refilled)", gp.cumulativeState, want)
+	}
+}
+
+// ========== Storage-only (EIP-7610-shaped) deployment destination ===========
+//
+// A destination carrying storage while having zero nonce, zero balance and
+// empty code is EIP-161-empty, so the account-creation state gas is
+// pre-charged in the parent frame.
+
+// create2Orchestrator returns runtime code that CREATE2-deploys the given
+// 5-byte init code with salt 0 and stores the result address at slot 0.
+func create2Orchestrator(initCode []byte) []byte {
+	code := append([]byte{0x64}, initCode...) // PUSH5 init code
+	return append(code,
+		0x60, 0x00, 0x52, // MSTORE at word 0 (right-aligned, code at offset 27)
+		0x60, 0x00, // salt = 0
+		0x60, 0x05, // size = 5
+		0x60, 0x1b, // offset = 27
+		0x60, 0x00, // endowment = 0
+		0xf5,             // CREATE2
+		0x60, 0x00, 0x55, // SSTORE the result address at slot 0
+		0x00, // STOP
+	)
+}
+
+// storageOnlyAlloc allocates the orchestrator and its CREATE2 target, the
+// latter carrying a single storage slot while remaining EIP-161-empty.
+func storageOnlyAlloc(orchestrator common.Address, initCode []byte) (types.GenesisAlloc, common.Address) {
+	target := crypto.CreateAddress2(orchestrator, [32]byte{}, crypto.Keccak256(initCode))
+	return types.GenesisAlloc{
+		orchestrator: {Code: create2Orchestrator(initCode)},
+		target:       {Storage: map[common.Hash]common.Hash{{}: common.BigToHash(big.NewInt(1))}},
+	}, target
+}
+
+// Deploying onto a storage-only destination pre-charges the account creation.
+// Under the registry-based EIP-7610 check the creation proceeds, so the
+// charge is consumed like any other creation.
+func TestCreate2StorageOnlyDestCharged(t *testing.T) {
+	orchestrator := common.HexToAddress("0xc0de000000000000000000000000000000000004")
+	alloc, target := storageOnlyAlloc(orchestrator, deploy3)
+	sdb := mkCommittedState(t, senderAlloc(alloc))
+	res, gp, err := applyMsg(t, sdb, callTx(0, orchestrator, 0, 1_000_000, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Failed() {
+		t.Fatalf("execution failed: %v", res.Err)
+	}
+	if code := sdb.GetCode(target); len(code) != 3 {
+		t.Fatalf("deployed code length = %d, want 3", len(code))
+	}
+	// The created account (charged, consumed), the orchestrator's result slot
+	// and the 3-byte code deposit.
+	want := newAccountState + newSlotState + uint64(3*params.CostPerStateByte)
+	if gp.cumulativeState != want {
+		t.Fatalf("state gas = %d, want %d", gp.cumulativeState, want)
+	}
+}
+
+// If the pre-charge succeeds and the create frame then fails, only the create
+// frame halts: the forwarded regular gas is burnt, the account-creation
+// charge is refilled, and the parent frame continues.
+func TestCreate2StorageOnlyDestRefillOnFrameHalt(t *testing.T) {
+	const gas = 1_000_000
+	orchestrator := common.HexToAddress("0xc0de000000000000000000000000000000000005")
+	alloc, target := storageOnlyAlloc(orchestrator, haltI)
+	sdb := mkCommittedState(t, senderAlloc(alloc))
+	res, gp, err := applyMsg(t, sdb, callTx(0, orchestrator, 0, gas, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Failed() {
+		t.Fatalf("parent frame must survive the create-frame halt: %v", res.Err)
+	}
+	// The CREATE2 pushed zero and nothing was deployed.
+	if flag := sdb.GetState(orchestrator, common.Hash{}); flag != (common.Hash{}) {
+		t.Fatalf("create result = %v, want 0", flag)
+	}
+	if code := sdb.GetCode(target); len(code) != 0 {
+		t.Fatalf("deployed code length = %d, want 0", len(code))
+	}
+	// The account-creation charge was refilled in full.
+	if gp.cumulativeState != 0 {
 		t.Fatalf("state gas = %d, want 0 (refilled)", gp.cumulativeState)
 	}
-	// All forwarded gas_left is burned; only the refilled account charge (which
-	// had spilled into regular) returns to gas_left. So regular gas consumed is
-	// exactly tx.gas - newAccountState, with no other refund.
-	if want := uint64(gas) - newAccountState; gp.cumulativeRegular != want {
-		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, want)
+	if res.UsedGas > gas-newAccountState {
+		t.Fatalf("used gas = %d, want at most %d (charge not refilled?)", res.UsedGas, gas-newAccountState)
+	}
+}
+
+// If the remaining gas cannot cover the account-creation pre-charge, the
+// parent frame itself halts with out-of-gas instead of the create frame.
+func TestCreate2StorageOnlyDestPrechargeOOG(t *testing.T) {
+	// Enough for the CREATE2 constant cost, short of the 183,600 pre-charge.
+	const gas = 150_000
+	orchestrator := common.HexToAddress("0xc0de000000000000000000000000000000000006")
+	alloc, _ := storageOnlyAlloc(orchestrator, deploy3)
+	sdb := mkCommittedState(t, senderAlloc(alloc))
+	res, gp, err := applyMsg(t, sdb, callTx(0, orchestrator, 0, gas, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Failed() || !errors.Is(res.Err, vm.ErrOutOfGas) {
+		t.Fatalf("err = %v, want out of gas in the parent frame", res.Err)
+	}
+	if gp.cumulativeState != 0 {
+		t.Fatalf("state gas = %d, want 0 (charge never applied)", gp.cumulativeState)
+	}
+	// The parent is the topmost frame, so its halt burns the whole gas limit.
+	if gp.cumulativeRegular != gas {
+		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, gas)
 	}
 }
 
@@ -300,12 +526,47 @@ func TestValidationIntrinsicRegularCap(t *testing.T) {
 	for i := range al {
 		al[i].Address = common.BigToAddress(big.NewInt(int64(i + 1)))
 	}
-	tx := types.MustSignNewTx(senderKey, signer8037, &types.DynamicFeeTx{
-		ChainID: cfg8037.ChainID, Nonce: 0, To: &senderAddr, Value: big.NewInt(0),
-		Gas: 25_000_000, GasFeeCap: big.NewInt(0), GasTipCap: big.NewInt(0), AccessList: al,
-	})
+	tx := types.MustSignNewTx(senderKey, signer8037,
+		&types.DynamicFeeTx{
+			ChainID:    cfg8037.ChainID,
+			Nonce:      0,
+			To:         &senderAddr,
+			Value:      big.NewInt(0),
+			Gas:        25_000_000,
+			GasFeeCap:  big.NewInt(0),
+			GasTipCap:  big.NewInt(0),
+			AccessList: al,
+		})
 	if _, _, err := applyMsg(t, mkState(senderAlloc(nil)), tx); err == nil {
 		t.Fatal("expected rejection for intrinsic regular over MaxTxGas")
+	}
+}
+
+// The EIP-7623/7976 calldata floor is capped by MaxTxGas even when the gas
+// limit covers it: a transaction whose floor cost exceeds the cap is rejected
+// regardless of its (much smaller) intrinsic gas.
+func TestValidationFloorCostCap(t *testing.T) {
+	// All-zero calldata: the floor charges 64/byte while the intrinsic
+	// charges only 4/byte, so the floor crosses the cap long before the
+	// intrinsic does.
+	data := make([]byte, 300_000) // floor ~19.2M > 16.77M cap, intrinsic ~1.2M
+	floor, err := FloorDataGas(rules8037, senderAddr, &senderAddr, new(uint256.Int), data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	intrinsic, err := IntrinsicGas(data, nil, nil, senderAddr, &senderAddr, new(uint256.Int), rules8037)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if floor <= params.MaxTxGas || intrinsic > params.MaxTxGas {
+		t.Fatalf("setup: floor %d must exceed cap %d while intrinsic %d stays below",
+			floor, params.MaxTxGas, intrinsic)
+	}
+	// The gas limit covers the floor, so the rejection can only come from
+	// the MaxTxGas cap on the floor cost.
+	tx := callTx(0, senderAddr, 0, floor+1_000_000, data)
+	if _, _, err := applyMsg(t, mkState(senderAlloc(nil)), tx); !errors.Is(err, ErrFloorDataGas) {
+		t.Fatalf("expected ErrFloorDataGas, got %v", err)
 	}
 }
 
@@ -472,18 +733,23 @@ const authKeyA = "02020202020202020202020202020202020202020202020202020020202020
 
 var delegate8037 = common.HexToAddress("0xde1e8a7e")
 
-// Intrinsic gas pre-charges the worst-case (account + indicator) per auth.
-func TestAuthIntrinsicWorstCase(t *testing.T) {
-	cost, err := IntrinsicGas(nil, nil, []types.SetCodeAuthorization{{}}, common.Address{}, &delegate8037, nil, rules8037, params.CostPerStateByte)
+// Intrinsic gas charges only the state-independent per-authorization base;
+// the state-dependent charges are applied at runtime (EIP-2780).
+func TestAuthIntrinsicBaseOnly(t *testing.T) {
+	cost, err := IntrinsicGas(nil, nil, []types.SetCodeAuthorization{{}}, common.Address{}, &delegate8037, nil, rules8037)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cost.StateGas != authWorstState {
-		t.Fatalf("intrinsic state gas = %d, want %d", cost.StateGas, authWorstState)
+	// The recipient touch and the per-authorization authority access (priced
+	// into RegularPerAuthBaseCost) are both charged at the cold rate
+	// unconditionally at the intrinsic phase (EIP-2780).
+	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + params.RegularPerAuthBaseCost
+	if cost != want {
+		t.Fatalf("intrinsic gas = %d, want %d", cost, want)
 	}
 }
 
-// An invalid authorization refills its entire intrinsic state-gas charge.
+// An invalid authorization incurs no runtime state-gas charge.
 func TestAuthInvalidRefillFull(t *testing.T) {
 	k, _ := crypto.HexToECDSA(authKeyA)
 	bad, _ := types.SignSetCode(k, types.SetCodeAuthorization{
@@ -499,7 +765,8 @@ func TestAuthInvalidRefillFull(t *testing.T) {
 	}
 }
 
-// A pre-existing authority refills the account portion (indicator stands).
+// A pre-existing authority is not charged for an account leaf; only the
+// net-new indicator bytes are charged at runtime.
 func TestAuthAccountExistsRefill(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	sdb := mkState(senderAlloc(types.GenesisAlloc{authority: {Balance: big.NewInt(1)}}))
@@ -508,12 +775,12 @@ func TestAuthAccountExistsRefill(t *testing.T) {
 		t.Fatal(err)
 	}
 	if gp.cumulativeState != authBaseState {
-		t.Fatalf("state gas = %d, want %d (account refilled)", gp.cumulativeState, authBaseState)
+		t.Fatalf("state gas = %d, want %d (indicator only)", gp.cumulativeState, authBaseState)
 	}
 }
 
-// Setting a delegation on an already-delegated authority refills the indicator
-// portion (and the account portion, since the authority already exists).
+// Setting a delegation on an already-delegated authority writes no net-new
+// bytes (and no account leaf, since the authority exists): no state charge.
 func TestAuthSetOnDelegatedRefillBase(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	pre := types.AddressToDelegation(common.HexToAddress("0xabcd"))
@@ -523,11 +790,12 @@ func TestAuthSetOnDelegatedRefillBase(t *testing.T) {
 		t.Fatal(err)
 	}
 	if gp.cumulativeState != 0 {
-		t.Fatalf("state gas = %d, want 0 (account+indicator refilled)", gp.cumulativeState)
+		t.Fatalf("state gas = %d, want 0 (nothing net-new)", gp.cumulativeState)
 	}
 }
 
-// A net-new delegation on a fresh authority keeps the full worst-case charge.
+// A net-new delegation on a fresh authority is charged the account leaf plus
+// the indicator bytes at runtime.
 func TestAuthSetNetNewNoRefill(t *testing.T) {
 	auth, _ := signAuth(t, authKeyA, delegate8037, 0)
 	sdb := mkState(senderAlloc(nil))
@@ -536,11 +804,12 @@ func TestAuthSetNetNewNoRefill(t *testing.T) {
 		t.Fatal(err)
 	}
 	if gp.cumulativeState != authWorstState {
-		t.Fatalf("state gas = %d, want %d (no refill)", gp.cumulativeState, authWorstState)
+		t.Fatalf("state gas = %d, want %d (leaf + indicator)", gp.cumulativeState, authWorstState)
 	}
 }
 
-// Clearing a delegation writes no indicator, so the indicator portion refills.
+// Clearing a delegation writes no indicator, so only the (new) account leaf is
+// charged at runtime.
 func TestAuthClearRefillBase(t *testing.T) {
 	auth, _ := signAuth(t, authKeyA, common.Address{}, 0) // clear (address ZERO)
 	sdb := mkState(senderAlloc(nil))
@@ -549,13 +818,14 @@ func TestAuthClearRefillBase(t *testing.T) {
 		t.Fatal(err)
 	}
 	if want := newAccountState; gp.cumulativeState != want {
-		t.Fatalf("state gas = %d, want %d (indicator refilled)", gp.cumulativeState, want)
+		t.Fatalf("state gas = %d, want %d (account leaf only)", gp.cumulativeState, want)
 	}
 }
 
-// 0->a->0 in one tx: the indicator created by an earlier auth and cleared by a
-// later one writes zero net bytes, so both indicator charges refill.
-func TestAuthClearSameTxDoubleRefill(t *testing.T) {
+// 0->a->0 in one tx: the indicator charge applies when the delegation is set
+// and is never credited back when a later auth clears it in the same
+// transaction.
+func TestAuthClearSameTxNoRefill(t *testing.T) {
 	set, authority := signAuth(t, authKeyA, delegate8037, 0)
 	clr, _ := signAuth(t, authKeyA, common.Address{}, 1)
 	sdb := mkState(senderAlloc(nil))
@@ -564,8 +834,28 @@ func TestAuthClearSameTxDoubleRefill(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = authority
-	if want := newAccountState; gp.cumulativeState != want {
-		t.Fatalf("state gas = %d, want %d (net-zero delegation)", gp.cumulativeState, want)
+	if want := authWorstState; gp.cumulativeState != want {
+		t.Fatalf("state gas = %d, want %d (indicator charge kept on clear)", gp.cumulativeState, want)
+	}
+}
+
+// 0->a->0->b in one tx: the indicator charge applies at most once per
+// authority — re-installing a delegation after an intra-tx clear is free.
+func TestAuthSetClearSetChargedOnce(t *testing.T) {
+	set, _ := signAuth(t, authKeyA, delegate8037, 0)
+	clr, _ := signAuth(t, authKeyA, common.Address{}, 1)
+	set2, authority := signAuth(t, authKeyA, common.HexToAddress("0xde1e8a7f"), 2)
+	sdb := mkState(senderAlloc(nil))
+	_, gp, err := applyMsg(t, sdb, setCodeTx(0, senderAddr, []types.SetCodeAuthorization{set, clr, set2}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The final delegation is installed and the indicator was paid exactly once.
+	if _, delegated := types.ParseDelegation(sdb.GetCode(authority)); !delegated {
+		t.Fatal("final delegation not installed")
+	}
+	if want := authWorstState; gp.cumulativeState != want {
+		t.Fatalf("state gas = %d, want %d (leaf + indicator exactly once)", gp.cumulativeState, want)
 	}
 }
 

@@ -94,7 +94,6 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	// Broken tests
 	bt.skipLoad(`.*eip7610_create_collision/initcollision/.*`)
 	bt.skipLoad(`.*eip7610_create_collision/revert_in_create/.*`)
-	bt.skipLoad(`.*stRandom2/random_statetest642/.*`)
 
 	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)

@@ -14,14 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// EIP-8038 authorization accounting tests. The per-authorization intrinsic gas
-// pre-charges ACCOUNT_WRITE (regular) on top of REGULAR_PER_AUTH_BASE_COST.
-// applyAuthorization refunds that ACCOUNT_WRITE to the refund counter in exactly
-// the cases where no new account leaf is written: an invalid authorization, or
-// an authority whose account already exists. These white-box tests invoke
-// applyAuthorization directly and read the raw refund counter, so they observe
-// the refund before the EIP-3529 cap is applied.
-
 package core
 
 import (
@@ -37,74 +29,117 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// newAuthTestTransition builds a minimal stateTransition with a state reservoir,
-// suitable for calling applyAuthorization directly.
+// newAuthTestTransition builds a minimal stateTransition with a runtime gas
+// budget, suitable for calling applyAuthorization directly.
 func newAuthTestTransition(sdb *state.StateDB) *stateTransition {
 	st := newStateTransition(amsterdamCoreEVM(sdb), &Message{}, NewGasPool(30_000_000))
-	st.gasRemaining = vm.NewGasBudget(0, 1_000_000) // reservoir for state-gas refills
+	st.gasRemaining = vm.NewGasBudget(1_000_000, 1_000_000)
 	return st
 }
 
-// A net-new delegation on a fresh authority writes a new account leaf, so the
-// intrinsic ACCOUNT_WRITE stands (no refund).
-func TestAuthAccountWriteNetNewNoRefund(t *testing.T) {
+// A net-new delegation on a fresh, cold authority is charged ACCOUNT_WRITE in
+// regular gas (the authority's cold access is paid unconditionally at the
+// intrinsic phase, not here), plus the account leaf and the indicator bytes in
+// state gas.
+func TestAuthRuntimeChargeNetNew(t *testing.T) {
 	auth, _ := signAuth(t, authKeyA, delegate8037, 0)
 	st := newAuthTestTransition(mkState(senderAlloc(nil)))
-	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]bool{}); err != nil {
+	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := st.state.GetRefund(); got != 0 {
-		t.Fatalf("refund = %d, want 0 (net-new account write)", got)
+	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
+		t.Fatalf("regular charged = %d, want %d", st.gasRemaining.UsedRegularGas, want)
+	}
+	if want := int64(authWorstState); st.gasRemaining.UsedStateGas != want {
+		t.Fatalf("state charged = %d, want %d", st.gasRemaining.UsedStateGas, want)
 	}
 }
 
-// A pre-existing authority writes no new account leaf, so the intrinsic
-// ACCOUNT_WRITE is refunded.
-func TestAuthAccountWriteExistsRefund(t *testing.T) {
+// A pre-existing authority writes no new account leaf, but its first write in
+// the transaction still carries ACCOUNT_WRITE; the authority's cold access is
+// paid at the intrinsic phase, so only the net-new indicator bytes are charged
+// as state gas here.
+func TestAuthRuntimeChargeExistingAccount(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	st := newAuthTestTransition(mkState(senderAlloc(types.GenesisAlloc{authority: {Balance: big.NewInt(1)}})))
-	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]bool{}); err != nil {
+	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := st.state.GetRefund(); got != params.AccountWriteAmsterdam {
-		t.Fatalf("refund = %d, want %d (account already exists)", got, params.AccountWriteAmsterdam)
+	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
+		t.Fatalf("regular charged = %d, want %d", st.gasRemaining.UsedRegularGas, want)
+	}
+	if want := int64(authBaseState); st.gasRemaining.UsedStateGas != want {
+		t.Fatalf("state charged = %d, want %d", st.gasRemaining.UsedStateGas, want)
 	}
 }
 
-// An invalid authorization is skipped without writing any account leaf, so its
-// intrinsic ACCOUNT_WRITE is refunded.
-func TestAuthAccountWriteInvalidRefund(t *testing.T) {
+// No cold surcharge is ever charged at runtime — the authority access is priced
+// at the intrinsic phase — so an authority already warmed by the access list or
+// an earlier authorization pays only the first-write surcharge, as it would
+// whether warm or cold.
+func TestAuthRuntimeChargeWarmAuthority(t *testing.T) {
+	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
+	st := newAuthTestTransition(mkState(senderAlloc(types.GenesisAlloc{authority: {Balance: big.NewInt(1)}})))
+	st.state.AddAddressToAccessList(authority)
+	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != nil {
+		t.Fatal(err)
+	}
+	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
+		t.Fatalf("regular charged = %d, want %d (warm authority)", st.gasRemaining.UsedRegularGas, want)
+	}
+	if want := int64(authBaseState); st.gasRemaining.UsedStateGas != want {
+		t.Fatalf("state charged = %d, want %d", st.gasRemaining.UsedStateGas, want)
+	}
+}
+
+// An invalid authorization is skipped without any runtime charge.
+func TestAuthRuntimeInvalidNoCharge(t *testing.T) {
 	k, _ := crypto.HexToECDSA(authKeyA)
 	bad, _ := types.SignSetCode(k, types.SetCodeAuthorization{
 		ChainID: *uint256.NewInt(999), Address: delegate8037, Nonce: 0, // wrong chain id
 	})
 	st := newAuthTestTransition(mkState(senderAlloc(nil)))
-	if err := st.applyAuthorization(rules8037, &bad, map[common.Address]bool{}); err == nil {
+	if err := st.applyAuthorization(rules8037, &bad, map[common.Address]*authTracking{}); err == nil {
 		t.Fatal("expected invalid-authorization error")
 	}
-	if got := st.state.GetRefund(); got != params.AccountWriteAmsterdam {
-		t.Fatalf("refund = %d, want %d (invalid authorization)", got, params.AccountWriteAmsterdam)
+	if st.gasRemaining.UsedRegularGas != 0 || st.gasRemaining.UsedStateGas != 0 {
+		t.Fatalf("charged = <%d,%d>, want <0,0> (invalid authorization)",
+			st.gasRemaining.UsedRegularGas, st.gasRemaining.UsedStateGas)
 	}
 }
 
-// The same authority across two authorizations writes its account leaf only
-// once: the first auth pays ACCOUNT_WRITE, the second (which now sees the
-// account as existing) is refunded.
-func TestAuthAccountWriteDuplicateOnce(t *testing.T) {
+// The same authority across two authorizations is charged once: the first auth
+// warms the authority, materializes the account and installs the indicator, so
+// the second incurs no further charge.
+func TestAuthRuntimeDuplicateAuthorityOnce(t *testing.T) {
 	a0, _ := signAuth(t, authKeyA, delegate8037, 0)
 	a1, _ := signAuth(t, authKeyA, delegate8037, 1)
 	st := newAuthTestTransition(mkState(senderAlloc(nil)))
-	delegates := map[common.Address]bool{}
-	if err := st.applyAuthorization(rules8037, &a0, delegates); err != nil {
+	authorities := map[common.Address]*authTracking{}
+	if err := st.applyAuthorization(rules8037, &a0, authorities); err != nil {
 		t.Fatal(err)
 	}
-	if got := st.state.GetRefund(); got != 0 {
-		t.Fatalf("refund after first auth = %d, want 0", got)
-	}
-	if err := st.applyAuthorization(rules8037, &a1, delegates); err != nil {
+	if err := st.applyAuthorization(rules8037, &a1, authorities); err != nil {
 		t.Fatal(err)
 	}
-	if got := st.state.GetRefund(); got != params.AccountWriteAmsterdam {
-		t.Fatalf("refund after duplicate auth = %d, want %d", got, params.AccountWriteAmsterdam)
+	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
+		t.Fatalf("regular charged = %d, want %d (once)", st.gasRemaining.UsedRegularGas, want)
+	}
+	if want := int64(authWorstState); st.gasRemaining.UsedStateGas != want {
+		t.Fatalf("state charged = %d, want %d (once)", st.gasRemaining.UsedStateGas, want)
+	}
+}
+
+// A budget that cannot cover the runtime charge aborts authorization
+// processing with ErrOutOfGasRuntime, without mutating the authority.
+func TestAuthRuntimeOutOfGas(t *testing.T) {
+	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
+	st := newAuthTestTransition(mkState(senderAlloc(nil)))
+	st.gasRemaining = vm.NewGasBudget(10_000, 0) // covers neither leaf nor indicator
+	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != ErrOutOfGasRuntime {
+		t.Fatalf("err = %v, want ErrOutOfGasRuntime", err)
+	}
+	if st.state.GetNonce(authority) != 0 || len(st.state.GetCode(authority)) != 0 {
+		t.Fatal("authority mutated despite out-of-gas runtime charge")
 	}
 }
