@@ -230,6 +230,20 @@ func TestNodeEndpoints(t *testing.T) {
 			wantUDP: 30304,
 		},
 		{
+			name: "ipv4-selected-falls-back-to-ipv6-family-ports",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")))
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("fd00::abcd:1")))
+				r.Set(enr.UDP6(30306))
+				r.Set(enr.TCP6(30307))
+				return SignNull(&r, id)
+			}(),
+			wantIP:  netip.MustParseAddr("99.22.33.1"),
+			wantUDP: 30306,
+			wantTCP: 30307,
+		},
+		{
 			name: "ipv4-quic",
 			node: func() *Node {
 				var r enr.Record

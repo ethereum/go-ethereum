@@ -114,8 +114,12 @@ func (n *Node) setIP4(ip netip.Addr) {
 }
 
 func (n *Node) setIPv4Ports() {
-	n.Load((*enr.UDP)(&n.udp))
-	n.Load((*enr.TCP)(&n.tcp))
+	if err := n.Load((*enr.UDP)(&n.udp)); err != nil {
+		n.Load((*enr.UDP6)(&n.udp))
+	}
+	if err := n.Load((*enr.TCP)(&n.tcp)); err != nil {
+		n.Load((*enr.TCP6)(&n.tcp))
+	}
 }
 
 func (n *Node) setIP6(ip netip.Addr) {
