@@ -249,8 +249,72 @@ func TestBuildPayloadAmsterdamTransition(t *testing.T) {
 	}
 }
 
+// TestBuildPayloadTargetGasLimit verifies that the CL-provided target gas
+// limit (engine API PayloadAttributesV4 targetGasLimit) steers the gas limit
+// of locally built payloads, and that the locally configured gas ceiling
+// still applies when no target is provided.
+func TestBuildPayloadTargetGasLimit(t *testing.T) {
+	config := new(params.ChainConfig)
+	*config = *params.MergedTestChainConfig
+	config.AmsterdamTime = new(uint64)
+	*config.AmsterdamTime = 1
+
+	newUint64 := func(v uint64) *uint64 { return &v }
+	for _, tt := range []struct {
+		name   string
+		target *uint64
+		want   func(parentGasLimit uint64) uint64
+	}{
+		{
+			// Target above the parent gas limit: move up towards it.
+			name:   "target-above-parent",
+			target: newUint64(2 * params.GenesisGasLimit),
+			want:   func(parent uint64) uint64 { return core.CalcGasLimit(parent, 2*params.GenesisGasLimit) },
+		},
+		{
+			// Target below the parent gas limit: move down towards it.
+			name:   "target-below-parent",
+			target: newUint64(params.MinGasLimit),
+			want:   func(parent uint64) uint64 { return core.CalcGasLimit(parent, params.MinGasLimit) },
+		},
+		{
+			// No target provided: fall back to the configured gas ceiling.
+			name:   "no-target-falls-back-to-gas-ceil",
+			target: nil,
+			want:   func(parent uint64) uint64 { return core.CalcGasLimit(parent, testConfig.GasCeil) },
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var (
+				db         = rawdb.NewMemoryDatabase()
+				beaconRoot = common.Hash{0x01}
+				slotNum    = uint64(1)
+			)
+			w, b := newTestWorker(t, config, beacon.New(ethash.NewFaker()), db, 0)
+			parent := b.chain.CurrentBlock()
+
+			payload, err := w.buildPayload(context.Background(), &BuildPayloadArgs{
+				Parent:         parent.Hash(),
+				Timestamp:      1,
+				FeeRecipient:   common.HexToAddress("0xdeadbeef"),
+				Withdrawals:    types.Withdrawals{},
+				BeaconRoot:     &beaconRoot,
+				SlotNum:        &slotNum,
+				TargetGasLimit: tt.target,
+			}, false)
+			if err != nil {
+				t.Fatalf("failed to build payload: %v", err)
+			}
+			if got, want := payload.empty.GasLimit(), tt.want(parent.GasLimit); got != want {
+				t.Fatalf("gas limit mismatch: got %d, want %d (parent %d)", got, want, parent.GasLimit)
+			}
+		})
+	}
+}
+
 func TestPayloadId(t *testing.T) {
 	t.Parallel()
+	newUint64 := func(v uint64) *uint64 { return &v }
 	ids := make(map[string]int)
 	for i, tt := range []*BuildPayloadArgs{
 		{
@@ -316,6 +380,41 @@ func TestPayloadId(t *testing.T) {
 					Amount:    0,
 				},
 			},
+		},
+		// With slot number
+		{
+			Parent:       common.Hash{2},
+			Timestamp:    2,
+			Random:       common.Hash{0x2},
+			FeeRecipient: common.Address{0x2},
+			SlotNum:      newUint64(5),
+		},
+		// With target gas limit only, numerically equal to the slot number of
+		// the previous case; the id must still be distinct.
+		{
+			Parent:         common.Hash{2},
+			Timestamp:      2,
+			Random:         common.Hash{0x2},
+			FeeRecipient:   common.Address{0x2},
+			TargetGasLimit: newUint64(5),
+		},
+		// With both slot number and target gas limit
+		{
+			Parent:         common.Hash{2},
+			Timestamp:      2,
+			Random:         common.Hash{0x2},
+			FeeRecipient:   common.Address{0x2},
+			SlotNum:        newUint64(5),
+			TargetGasLimit: newUint64(300000000),
+		},
+		// Different target gas limit
+		{
+			Parent:         common.Hash{2},
+			Timestamp:      2,
+			Random:         common.Hash{0x2},
+			FeeRecipient:   common.Address{0x2},
+			SlotNum:        newUint64(5),
+			TargetGasLimit: newUint64(150000000),
 		},
 	} {
 		id := tt.Id().String()

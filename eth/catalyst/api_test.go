@@ -2014,3 +2014,45 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 		t.Fatalf("Unexpected result for case %s", name)
 	}
 }
+
+// TestForkchoiceUpdatedV4TargetGasLimit checks that forkchoiceUpdatedV4
+// rejects payload attributes without the targetGasLimit field, which is
+// required as of PayloadAttributesV4 (execution-apis#796).
+func TestForkchoiceUpdatedV4TargetGasLimit(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	var (
+		api        = newConsensusAPIWithoutHeartbeat(ethservice)
+		parent     = ethservice.BlockChain().CurrentHeader()
+		fcState    = engine.ForkchoiceStateV1{HeadBlockHash: parent.Hash()}
+		beaconRoot = common.Hash{}
+		slotNum    = uint64(1)
+		target     = uint64(300_000_000)
+	)
+	// Missing targetGasLimit must be rejected as invalid payload attributes.
+	attrs := &engine.PayloadAttributes{
+		Timestamp:   parent.Time + 1,
+		Withdrawals: []*types.Withdrawal{},
+		BeaconRoot:  &beaconRoot,
+		SlotNumber:  &slotNum,
+	}
+	_, err := api.ForkchoiceUpdatedV4(context.Background(), fcState, attrs)
+	if err == nil {
+		t.Fatal("expected error for missing targetGasLimit, got none")
+	}
+	if apiErr, ok := err.(*engine.EngineAPIError); !ok || apiErr.ErrorCode() != engine.InvalidPayloadAttributes.ErrorCode() {
+		t.Fatalf("expected invalid payload attributes error for missing targetGasLimit, got %v", err)
+	}
+	// With targetGasLimit present, validation must get past the attribute
+	// checks; on this pre-amsterdam chain it then fails the fork check.
+	attrs.TargetGasLimit = &target
+	_, err = api.ForkchoiceUpdatedV4(context.Background(), fcState, attrs)
+	if err == nil {
+		t.Fatal("expected unsupported fork error, got none")
+	}
+	if apiErr, ok := err.(*engine.EngineAPIError); !ok || apiErr.ErrorCode() != engine.UnsupportedFork.ErrorCode() {
+		t.Fatalf("expected unsupported fork error, got %v", err)
+	}
+}

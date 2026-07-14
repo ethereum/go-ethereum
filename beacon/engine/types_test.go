@@ -17,6 +17,8 @@
 package engine
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -44,5 +46,44 @@ func TestBlobs(t *testing.T) {
 	env = BlockToExecutableData(block, common.Big0, []*types.BlobTxSidecar{sidecarWithCellProofs}, nil)
 	if len(env.BlobsBundle.Proofs) != 128 {
 		t.Fatalf("Expect 128 proofs in blobs bundle, got %v", len(env.BlobsBundle.Proofs))
+	}
+}
+
+// TestPayloadAttributesJSON verifies the JSON encoding of PayloadAttributes,
+// in particular that the amsterdam targetGasLimit field survives a round trip
+// and that attributes as sent by a consensus client on forkchoiceUpdatedV4
+// decode correctly.
+func TestPayloadAttributesJSON(t *testing.T) {
+	// PayloadAttributesV4 as sent by a Gloas consensus client.
+	input := `{
+		"timestamp": "0x64",
+		"prevRandao": "0x0202020202020202020202020202020202020202020202020202020202020202",
+		"suggestedFeeRecipient": "0x0101010101010101010101010101010101010101",
+		"withdrawals": [],
+		"parentBeaconBlockRoot": "0x0303030303030303030303030303030303030303030303030303030303030303",
+		"slotNumber": "0x10",
+		"targetGasLimit": "0x11e1a300"
+	}`
+	var attr PayloadAttributes
+	if err := json.Unmarshal([]byte(input), &attr); err != nil {
+		t.Fatalf("failed to unmarshal payload attributes: %v", err)
+	}
+	if attr.SlotNumber == nil || *attr.SlotNumber != 16 {
+		t.Fatalf("wrong slotNumber: %v", attr.SlotNumber)
+	}
+	if attr.TargetGasLimit == nil || *attr.TargetGasLimit != 300_000_000 {
+		t.Fatalf("wrong targetGasLimit: %v", attr.TargetGasLimit)
+	}
+	// Round trip.
+	encoded, err := json.Marshal(&attr)
+	if err != nil {
+		t.Fatalf("failed to marshal payload attributes: %v", err)
+	}
+	var decoded PayloadAttributes
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal re-encoded payload attributes: %v", err)
+	}
+	if !reflect.DeepEqual(attr, decoded) {
+		t.Fatalf("payload attributes changed in round trip:\nbefore: %+v\nafter: %+v", attr, decoded)
 	}
 }

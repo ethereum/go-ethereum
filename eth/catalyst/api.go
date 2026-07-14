@@ -216,7 +216,8 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(ctx context.Context, update engine.
 }
 
 // ForkchoiceUpdatedV4 is equivalent to V3 with the addition of slot number
-// in the payload attributes. It supports only PayloadAttributesV4.
+// and target gas limit in the payload attributes. It supports only
+// PayloadAttributesV4.
 func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	if params != nil {
 		switch {
@@ -226,6 +227,8 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
 		case params.SlotNumber == nil:
 			return engine.STATUS_INVALID, attributesErr("missing slot number")
+		case params.TargetGasLimit == nil:
+			return engine.STATUS_INVALID, attributesErr("missing target gas limit")
 		case !api.checkFork(params.Timestamp, forks.Amsterdam):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
 		}
@@ -379,14 +382,15 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		args := &miner.BuildPayloadArgs{
-			Parent:       update.HeadBlockHash,
-			Timestamp:    payloadAttributes.Timestamp,
-			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
-			Random:       payloadAttributes.Random,
-			Withdrawals:  payloadAttributes.Withdrawals,
-			BeaconRoot:   payloadAttributes.BeaconRoot,
-			SlotNum:      payloadAttributes.SlotNumber,
-			Version:      payloadVersion,
+			Parent:         update.HeadBlockHash,
+			Timestamp:      payloadAttributes.Timestamp,
+			FeeRecipient:   payloadAttributes.SuggestedFeeRecipient,
+			Random:         payloadAttributes.Random,
+			Withdrawals:    payloadAttributes.Withdrawals,
+			BeaconRoot:     payloadAttributes.BeaconRoot,
+			SlotNum:        payloadAttributes.SlotNumber,
+			TargetGasLimit: payloadAttributes.TargetGasLimit,
+			Version:        payloadVersion,
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
