@@ -556,7 +556,7 @@ var (
 	}
 	MemoryLimitFlag = &cli.IntFlag{
 		Name:     "memorylimit",
-		Usage:    "Soft memory limit for the Go runtime in megabytes (default = derived from --cache and available memory)",
+		Usage:    "Soft memory limit for the Go runtime in megabytes (default = no limit)",
 		Category: flags.PerfCategory,
 	}
 	CryptoKZGFlag = &cli.StringFlag{
@@ -1767,36 +1767,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
 		}
 	}
-	// Tune Go's GC to balance throughput against the database cache.
-	//
-	// The historical formula here was:
-	//   gogc = max(20, min(100, 100/(cache_GB)))
-	// which drove GOGC down to 20 at --cache >= 8 GiB. With GOGC=20, the GC
-	// fires every ~20% heap growth — and during block processing that
-	// burned ~20% of CPU on `runtime.scanobject`/`gcDrain`/`findObject`
-	// (confirmed by CPU profile of newPayload).
-	//
-	// Modern Go (1.19+) supports SetMemoryLimit, which lets the runtime keep
-	// GOGC at the default 100 (fewer/larger collections) while still keeping
-	// memory below a soft cap. We size the cap from the same cgroup-aware
-	// limit used for the cache sanitizer above (total), so it's large enough
-	// that GOGC=100 governs steady state but the limit engages under real
-	// memory pressure. An explicit --memorylimit overrides this and when neither
-	// is available, Go's defaults are left untouched.
+
+	godebug.SetGCPercent(100)
 	if ctx.IsSet(MemoryLimitFlag.Name) {
 		memLimit := int64(ctx.Int(MemoryLimitFlag.Name)) * 1024 * 1024
-		log.Debug("Setting Go memory limit", "MB", memLimit/1024/1024, "source", "flag")
+		log.Debug("Setting Go memory limit", "MB", memLimit/1024/1024)
 		godebug.SetMemoryLimit(memLimit)
-		godebug.SetGCPercent(100)
-	} else if total > 0 {
-		cache := int64(ctx.Int(CacheFlag.Name)) * 1024 * 1024
-		// Target ~4x the cache so GOGC=100 governs steady state, but cap at
-		// half of memory. The rest is for the OS, page cache, and off-heap
-		// caches like Pebble that SetMemoryLimit doesn't count.
-		memLimit := min(int64(total)/2, cache*4)
-		log.Debug("Setting Go memory limit", "MB", memLimit/1024/1024, "source", source)
-		godebug.SetMemoryLimit(memLimit)
-		godebug.SetGCPercent(100)
 	}
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
