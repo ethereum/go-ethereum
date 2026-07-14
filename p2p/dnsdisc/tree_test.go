@@ -23,6 +23,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 func TestParseRoot(t *testing.T) {
@@ -147,5 +148,22 @@ func TestMakeTree(t *testing.T) {
 	txt := tree.ToTXT("")
 	if len(txt) < len(nodes)+1 {
 		t.Fatal("too few TXT records in output")
+	}
+}
+
+func TestMakeTreeRejectsUndecodablePort(t *testing.T) {
+	keys := testKeys(1)
+
+	oversized := new(enr.Record)
+	oversized.Set(enr.WithEntry("udp", uint32(70000)))
+	if err := enode.SignV4(oversized, keys[0]); err != nil {
+		t.Fatal(err)
+	}
+	n, err := enode.New(enode.ValidSchemes, oversized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := MakeTree(1, []*enode.Node{n}, nil); err == nil {
+		t.Errorf("MakeTree accepted record with out-of-range port: %s", n.String())
 	}
 }
