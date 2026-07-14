@@ -46,6 +46,7 @@ const (
 	BPO4
 	BPO5
 	Amsterdam
+	Bogota
 )
 
 // String implements fmt.Stringer.
@@ -84,4 +85,5 @@ var forkToString = map[Fork]string{
 	BPO4:             "BPO4",
 	BPO5:             "BPO5",
 	Amsterdam:        "Amsterdam",
+	Bogota:           "Bogota",
 }
