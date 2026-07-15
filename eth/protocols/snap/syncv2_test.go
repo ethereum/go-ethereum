@@ -1387,23 +1387,31 @@ func TestIsPivotCommitted(t *testing.T) {
 	tests := []struct {
 		head      int64 // head block number, -1 for no head block at all
 		pivot     uint64
+		canonical bool // pivot still canonical at its height
 		committed bool
 	}{
-		{-1, 100, false}, // no head block, nothing committed
-		{50, 100, false}, // head behind the pivot, crash before the commit
-		{100, 100, true}, // head at the pivot, the commit just happened
-		{103, 100, true}, // head past the pivot, full sync ran after
-		{0, 0, false},    // genesis head is just an empty chain
+		{-1, 100, true, false},   // no head block, nothing committed
+		{50, 100, true, false},   // head behind the pivot, crash before the commit
+		{100, 100, true, true},   // head at the pivot, the commit just happened
+		{103, 100, true, true},   // head past the pivot, full sync ran after
+		{0, 0, true, false},      // genesis head is just an empty chain
+		{103, 100, false, false}, // pivot reorged out, head past it on a fork
 	}
 	for _, tt := range tests {
 		db := rawdb.NewMemoryDatabase()
+		pivot := mkPivot(tt.pivot, common.HexToHash("0xaaaa"))
+		if tt.canonical {
+			rawdb.WriteCanonicalHash(db, pivot.Hash(), tt.pivot)
+		} else {
+			rawdb.WriteCanonicalHash(db, common.HexToHash("0xdead"), tt.pivot)
+		}
 		if tt.head >= 0 {
 			head := mkPivot(uint64(tt.head), common.HexToHash("0xbbbb"))
 			rawdb.WriteHeader(db, head)
 			rawdb.WriteHeadBlockHash(db, head.Hash())
 		}
-		if have := isPivotCommitted(db, mkPivot(tt.pivot, common.HexToHash("0xaaaa"))); have != tt.committed {
-			t.Errorf("head %d pivot %d: isPivotCommitted = %v, want %v", tt.head, tt.pivot, have, tt.committed)
+		if have := isPivotCommitted(db, pivot); have != tt.committed {
+			t.Errorf("head %d pivot %d canonical %v: isPivotCommitted = %v, want %v", tt.head, tt.pivot, tt.canonical, have, tt.committed)
 		}
 	}
 }

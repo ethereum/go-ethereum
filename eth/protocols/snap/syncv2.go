@@ -817,6 +817,11 @@ func catchUpExceedsRetention(prev, curr *types.Header) bool {
 // pivot. That only happens when a completed sync committed the pivot block
 // as the new chain head.
 func isPivotCommitted(db ethdb.Database, pivot *types.Header) bool {
+	// A reorg across the pivot means the committed sync was undone, not
+	// advanced past, so the pivot must still be canonical.
+	if rawdb.ReadCanonicalHash(db, pivot.Number.Uint64()) != pivot.Hash() {
+		return false
+	}
 	head := rawdb.ReadHeadBlockHash(db)
 	if head == (common.Hash{}) {
 		return false
