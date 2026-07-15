@@ -100,3 +100,199 @@ func TestEIP8246SelfdestructNoBurn(t *testing.T) {
 		t.Errorf("created account code size = %d, want 0 (code must be cleared)", got)
 	}
 }
+
+// TestEIP8246SelfdestructClearsStorage verifies the other half of the
+// balance-only-account rule: a same-transaction selfdestruct preserves balance
+// but clears storage during transaction finalization.
+func TestEIP8246SelfdestructClearsStorage(t *testing.T) {
+	var (
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		sender  = crypto.PubkeyToAddress(key.PublicKey)
+		config  = *params.MergedTestChainConfig
+		signer  = types.LatestSigner(&config)
+		engine  = beacon.New(ethash.NewFaker())
+		value   = big.NewInt(1_000_000)
+		slot    = common.BigToHash(big.NewInt(0x05))
+		stored  = common.BigToHash(big.NewInt(0x2a))
+		created = crypto.CreateAddress(sender, 0)
+	)
+	config.AmsterdamTime = new(uint64)
+	gspec := &Genesis{
+		Config: &config,
+		Alloc:  types.GenesisAlloc{sender: {Balance: newGwei(1_000_000_000)}},
+	}
+	// SSTORE(5, 0x2a); ADDRESS; SELFDESTRUCT.
+	initcode := []byte{0x60, 0x2a, 0x60, 0x05, 0x55, 0x30, 0xff}
+	db, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(_ int, b *BlockGen) {
+		b.AddTx(types.MustSignNewTx(key, signer, &types.DynamicFeeTx{
+			ChainID:   gspec.Config.ChainID,
+			Nonce:     0,
+			Gas:       1_000_000,
+			GasFeeCap: newGwei(5),
+			GasTipCap: newGwei(5),
+			Value:     value,
+			Data:      initcode,
+		}))
+	})
+	chain, err := NewBlockChain(db, gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	defer chain.Stop()
+	state, err := chain.StateAt(blocks[0].Header())
+	if err != nil {
+		t.Fatalf("failed to obtain block state: %v", err)
+	}
+	if got := state.GetBalance(created).ToBig(); got.Cmp(value) != 0 {
+		t.Errorf("created balance = %v, want %v", got, value)
+	}
+	if got := state.GetNonce(created); got != 0 {
+		t.Errorf("created nonce = %d, want 0", got)
+	}
+	if got := state.GetCodeSize(created); got != 0 {
+		t.Errorf("created code size = %d, want 0", got)
+	}
+	if got := state.GetState(created, slot); got != (common.Hash{}) {
+		t.Errorf("created storage slot %x = %x, want 0 (stored %x before selfdestruct)", slot, got, stored)
+	}
+}
+
+// TestEIP8246SelfdestructRefunded verifies that ETH sent back to a
+// same-transaction selfdestructed account is retained at finalization instead
+// of being burned. The factory funds the account twice after SELFDESTRUCT.
+func TestEIP8246SelfdestructRefunded(t *testing.T) {
+	var (
+		key, _      = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		sender      = crypto.PubkeyToAddress(key.PublicKey)
+		factory     = common.HexToAddress("0xfac8246")
+		beneficiary = common.HexToAddress("0xbeef")
+		config      = *params.MergedTestChainConfig
+		signer      = types.LatestSigner(&config)
+		engine      = beacon.New(ethash.NewFaker())
+	)
+	config.AmsterdamTime = new(uint64)
+	// The child initcode selfdestructs to another account. The factory then
+	// sends it 7 and 8 wei after it is marked for selfdestruction.
+	childInit := append([]byte{0x73}, beneficiary.Bytes()...)
+	childInit = append(childInit, 0xff)
+	var word [32]byte
+	copy(word[32-len(childInit):], childInit)
+	factoryCode := append([]byte{0x7f}, word[:]...)
+	factoryCode = append(factoryCode, 0x5f, 0x52) // PUSH0; MSTORE
+	// CREATE(value=0, offset=10, length=22), then store the returned address.
+	factoryCode = append(factoryCode, 0x60, byte(len(childInit)), 0x60, byte(32-len(childInit)), 0x5f, 0xf0, 0x5f, 0x52)
+	for _, amount := range []byte{7, 8} {
+		// CALL(child, value=amount) with empty input/output.
+		factoryCode = append(factoryCode, 0x5f, 0x5f, 0x5f, 0x5f, 0x60, amount, 0x5f, 0x51, 0x5a, 0xf1, 0x50)
+	}
+	factoryCode = append(factoryCode, 0x00)
+	gspec := &Genesis{
+		Config: &config,
+		Alloc: types.GenesisAlloc{
+			sender:  {Balance: newGwei(1_000_000_000)},
+			factory: {Nonce: 1, Code: factoryCode, Balance: big.NewInt(15)},
+		},
+	}
+	child := crypto.CreateAddress(factory, 1)
+	db, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(_ int, b *BlockGen) {
+		b.AddTx(types.MustSignNewTx(key, signer, &types.DynamicFeeTx{
+			ChainID:   gspec.Config.ChainID,
+			Nonce:     0,
+			To:        &factory,
+			Gas:       1_000_000,
+			GasFeeCap: newGwei(5),
+			GasTipCap: newGwei(5),
+		}))
+	})
+	chain, err := NewBlockChain(db, gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	defer chain.Stop()
+	state, err := chain.StateAt(blocks[0].Header())
+	if err != nil {
+		t.Fatalf("failed to obtain block state: %v", err)
+	}
+	if got := state.GetBalance(child).Uint64(); got != 15 {
+		t.Errorf("refunded child balance = %d, want 15", got)
+	}
+	if got := state.GetNonce(child); got != 0 {
+		t.Errorf("refunded child nonce = %d, want 0", got)
+	}
+	if got := state.GetCodeSize(child); got != 0 {
+		t.Errorf("refunded child code size = %d, want 0", got)
+	}
+}
+
+// TestEIP8246Create2RecreatesBalanceOnly verifies that an EIP-8246
+// balance-only account does not block recreating the same CREATE2 address in a
+// later transaction. The second creation contributes another wei to the
+// preserved balance, proving that it executed rather than collided.
+func TestEIP8246Create2RecreatesBalanceOnly(t *testing.T) {
+	var (
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		sender  = crypto.PubkeyToAddress(key.PublicKey)
+		factory = common.HexToAddress("0xfac8246")
+		config  = *params.MergedTestChainConfig
+		signer  = types.LatestSigner(&config)
+		engine  = beacon.New(ethash.NewFaker())
+		init    = []byte{0x30, 0xff} // ADDRESS; SELFDESTRUCT
+	)
+	config.AmsterdamTime = new(uint64)
+	var word [32]byte
+	copy(word[32-len(init):], init)
+	factoryCode := append([]byte{0x7f}, word[:]...)
+	factoryCode = append(factoryCode,
+		0x5f, 0x52, // PUSH0; MSTORE
+		0x60, 0x01, // salt
+		0x60, byte(len(init)),
+		0x60, byte(32-len(init)),
+		0x34, // CALLVALUE
+		0xf5, // CREATE2
+		0x50, // POP
+		0x00,
+	)
+	gspec := &Genesis{
+		Config: &config,
+		Alloc: types.GenesisAlloc{
+			sender:  {Balance: newGwei(1_000_000_000)},
+			factory: {Nonce: 1, Code: factoryCode, Balance: common.Big0},
+		},
+	}
+	var salt [32]byte
+	salt[31] = 1
+	child := crypto.CreateAddress2(factory, salt, crypto.Keccak256(init))
+	db, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *BlockGen) {
+		value := big.NewInt(5)
+		if i == 1 {
+			value.SetInt64(1)
+		}
+		b.AddTx(types.MustSignNewTx(key, signer, &types.DynamicFeeTx{
+			ChainID:   gspec.Config.ChainID,
+			Nonce:     uint64(i),
+			To:        &factory,
+			Gas:       1_000_000,
+			GasFeeCap: newGwei(5),
+			GasTipCap: newGwei(5),
+			Value:     value,
+		}))
+	})
+	chain, err := NewBlockChain(db, gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	defer chain.Stop()
+	state, err := chain.StateAt(blocks[1].Header())
+	if err != nil {
+		t.Fatalf("failed to obtain block state: %v", err)
+	}
+	if got := state.GetBalance(child).Uint64(); got != 6 {
+		t.Errorf("CREATE2 child balance = %d, want 6", got)
+	}
+	if got := state.GetNonce(child); got != 0 {
+		t.Errorf("CREATE2 child nonce = %d, want 0", got)
+	}
+	if got := state.GetCodeSize(child); got != 0 {
+		t.Errorf("CREATE2 child code size = %d, want 0", got)
+	}
+}
