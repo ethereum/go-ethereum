@@ -498,6 +498,7 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 			forks.BPO3,
 			forks.BPO4,
 			forks.BPO5,
+			forks.Bogota,
 		})
 }
 
