@@ -566,6 +566,12 @@ var (
 		Usage:    "Soft memory limit for the Go runtime in megabytes (default = no limit)",
 		Category: flags.PerfCategory,
 	}
+	GOGCFlag = &cli.IntFlag{
+		Name:     "gogc",
+		Usage:    "Go garbage collection target percentage (default = 100, negative disables)",
+		Value:    100,
+		Category: flags.PerfCategory,
+	}
 	CryptoKZGFlag = &cli.StringFlag{
 		Name:     "crypto.kzg",
 		Usage:    "KZG library implementation to use; gokzg (recommended) or ckzg",
@@ -1778,10 +1784,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	}
 
-	godebug.SetGCPercent(100)
+	// Setting go runtime settings
+	if ctx.IsSet(GOGCFlag.Name) {
+		gcPercent := ctx.Int(GOGCFlag.Name)
+		log.Info("Sanitizing Go's GC trigger", "percent", gcPercent)
+		godebug.SetGCPercent(gcPercent)
+	}
 	if ctx.IsSet(MemoryLimitFlag.Name) {
 		memLimit := int64(ctx.Int(MemoryLimitFlag.Name)) * 1024 * 1024
-		log.Debug("Setting Go memory limit", "MB", memLimit/1024/1024)
+		if memLimit > int64(total) {
+			log.Info("Sanitizing memory limit", "provided(MB)", memLimit/1024/1024, "updated(MB)", total/1024/1024)
+			memLimit = int64(total)
+		}
+		log.Info("Setting Go memory limit", "MB", memLimit/1024/1024)
 		godebug.SetMemoryLimit(memLimit)
 	}
 
