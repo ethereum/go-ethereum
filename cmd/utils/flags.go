@@ -561,6 +561,11 @@ var (
 		Usage:    "Raise the open file descriptor resource limit (default = system fd limit)",
 		Category: flags.PerfCategory,
 	}
+	MemoryLimitFlag = &cli.IntFlag{
+		Name:     "memorylimit",
+		Usage:    "Soft memory limit for the Go runtime in megabytes (default = no limit)",
+		Category: flags.PerfCategory,
+	}
 	CryptoKZGFlag = &cli.StringFlag{
 		Name:     "crypto.kzg",
 		Usage:    "KZG library implementation to use; gokzg (recommended) or ckzg",
@@ -1772,12 +1777,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
 		}
 	}
-	// Ensure Go's GC ignores the database cache for trigger percentage
-	cache := ctx.Int(CacheFlag.Name)
-	gogc := max(20, min(100, 100/(float64(cache)/1024)))
 
-	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
-	godebug.SetGCPercent(int(gogc))
+	godebug.SetGCPercent(100)
+	if ctx.IsSet(MemoryLimitFlag.Name) {
+		memLimit := int64(ctx.Int(MemoryLimitFlag.Name)) * 1024 * 1024
+		log.Debug("Setting Go memory limit", "MB", memLimit/1024/1024)
+		godebug.SetMemoryLimit(memLimit)
+	}
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
 		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync
