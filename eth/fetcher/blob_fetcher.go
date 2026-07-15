@@ -491,6 +491,7 @@ func (f *BlobFetcher) loop() {
 
 			// Trigger timeout for new schedule
 			f.rescheduleTimeout(timeoutTimer, timeoutTrigger)
+
 		case delivery := <-f.cleanup:
 			// Remove from announce
 			var requestId int
@@ -604,6 +605,7 @@ func (f *BlobFetcher) loop() {
 			}
 			// Something was delivered, try to reschedule requests
 			f.scheduleFetches(timeoutTimer, timeoutTrigger, nil) // Partial delivery may enable others to deliver too
+
 		case drop := <-f.drop:
 			// A peer was dropped, remove all traces of it
 			delete(f.peerTokens, drop.peer)
@@ -763,9 +765,11 @@ func (f *BlobFetcher) recoverable(hash common.Hash) bool {
 		}
 	}
 	if _, ok := f.full[hash]; ok {
+		// Full case: peer coverage is enough to recover the blob
 		return covered.OneCount() >= kzg4844.DataPerBlob
 	}
-	// return false if our custody cannot be covered
+	// Partial case:
+	// return true if our custody can be covered
 	return f.custody.Difference(covered).OneCount() == 0
 }
 
@@ -879,8 +883,7 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 			f.requests[peer] = request
 			// Iterate over a copy: the loop may swap-truncate f.requests[peer]
 			// concurrently when a delivery for this peer arrives.
-			reqs := make([]*cellRequest, len(request))
-			copy(reqs, request)
+			reqs := slices.Clone(request)
 			go func() {
 				for _, req := range reqs {
 					blobRequestOutMeter.Mark(int64(len(req.txs)))
