@@ -28,8 +28,9 @@
 //     (computed under txtracker's own lock, then passed in after release)
 //   - NotifyRequestResult(peer, latency, timeout) — per-request outcomes
 //     from the fetcher; timeouts are reported with the timeout value so
-//     slow peers contribute to the EMA, and the timeout flag increments
-//     the per-peer timeout counter
+//     slow peers contribute to the EMA. Non-timeout results are only
+//     reported for deliveries with pool-accepted txs, and only those feed
+//     the activity rate gating latency protection
 //   - NotifyPeerDrop(peer) — called from the handler on disconnect
 package peerstats
 
@@ -50,17 +51,26 @@ const (
 	// short bursts shouldn't shift the score, sustained behavior should.
 	// Half-life ≈ ln(0.5)/ln(0.99) ≈ 69 samples.
 	latencyEMAAlpha = 0.01
-	// MinLatencySamples is the number of latency samples a peer must accumulate
-	// before its RequestLatencyEMA is considered meaningful for protection.
-	// Prevents a single lucky-fast reply from displacing established peers.
-	MinLatencySamples = 100
-	// MaxLatencyStaleness is the oldest allowed age of a peer's last
-	// latency sample before their RequestLatencyEMA is disregarded for
-	// protection. Prevents a peer from earning a fast score during a
-	// burst of activity and then holding protection indefinitely by
-	// going silent on tx announcements (no further requests → no fresh
-	// samples → EMA frozen at its last value).
-	MaxLatencyStaleness = 10 * time.Minute
+	// EMA smoothing factor for the per-block latency-sample activity rate.
+	// Half-life ≈ 50 chain heads (~10 minutes on 12s blocks): eligibility
+	// for latency protection must be continuously maintained at roughly
+	// this cadence, it cannot be front-loaded in a burst and then held.
+	latencyActivityAlpha = 0.014
+	// MinLatencyActivity is the minimum sustained rate of accepted-delivery
+	// latency samples (per block, EMA-smoothed) a peer must maintain for its
+	// RequestLatencyEMA to be considered for protection. 0.2 ≈ one accepted
+	// fetch per five blocks (~1/minute). Replaces both an absolute sample
+	// count (front-loadable) and a last-sample staleness check (maintainable
+	// with one sample per window): a decaying rate expires on its own and
+	// demands sustained useful work.
+	MinLatencyActivity = 0.2
+	// latencyResetThreshold is the activity level below which a peer's
+	// latency state is forgotten entirely. Without this, a peer could
+	// earn a fast EMA, go silent (activity decays, eligibility lost) and
+	// later re-arm the frozen EMA by rebuilding activity alone. Once
+	// activity has decayed this far (~75 minutes of silence from the
+	// eligibility threshold), the peer starts over as a stranger.
+	latencyResetThreshold = 0.001
 )
 
 // PeerStats is the exported per-peer snapshot returned by GetAllPeerStats.
@@ -68,9 +78,9 @@ type PeerStats struct {
 	RecentFinalized   float64       // EMA of per-block finalization credits (slow)
 	RecentIncluded    float64       // EMA of per-block inclusions (fast)
 	RequestLatencyEMA time.Duration // Slow EMA of tx-request response latency (timeouts count as the timeout value)
-	RequestSuccesses  int64         // Requests answered before timeout
+	RequestSuccesses  int64         // Accepted deliveries (requests answered in time with ≥1 pool-accepted tx)
 	RequestTimeouts   int64         // Requests that timed out
-	LastLatencySample time.Time     // Wall-clock time of the most recent request result (for staleness gate)
+	LatencyActivity   float64       // EMA of accepted-delivery samples per block (eligibility gate for latency protection)
 }
 
 // peerStats is the internal mutable state per peer.
@@ -80,7 +90,8 @@ type peerStats struct {
 	requestLatencyEMA time.Duration
 	requestSuccesses  int64
 	requestTimeouts   int64
-	lastLatencySample time.Time
+	latencyActivity   float64
+	pendingSamples    int // accepted-delivery samples since the last NotifyBlock
 }
 
 // Stats is the per-peer quality aggregator.
@@ -126,15 +137,37 @@ func (s *Stats) NotifyBlock(inclusions, finalized map[string]int) {
 	for peer, ps := range s.peers {
 		ps.recentIncluded = (1-emaAlpha)*ps.recentIncluded + emaAlpha*float64(inclusions[peer])
 		ps.recentFinalized = (1-finalizedEMAAlpha)*ps.recentFinalized + finalizedEMAAlpha*float64(finalized[peer])
+
+		// Fold the accepted-delivery samples gathered since the previous
+		// head into the activity rate, then let it decay like the other
+		// per-block EMAs.
+		ps.latencyActivity = (1-latencyActivityAlpha)*ps.latencyActivity + latencyActivityAlpha*float64(ps.pendingSamples)
+		ps.pendingSamples = 0
+
+		// A peer silent long enough for its activity to fully decay
+		// forgets its latency history: a frozen fast EMA from a past
+		// active period must not be re-armable by rebuilding activity
+		// alone (see latencyResetThreshold). Gated on success history —
+		// only successes create a fast EMA worth forgetting; a
+		// timeout-only peer (activity permanently zero) keeps its
+		// penalty record.
+		if ps.latencyActivity < latencyResetThreshold && ps.requestSuccesses != 0 {
+			ps.latencyActivity = 0
+			ps.requestLatencyEMA = 0
+			ps.requestSuccesses = 0
+			ps.requestTimeouts = 0
+		}
 	}
 }
 
 // NotifyRequestResult records a tx-request outcome for the given peer.
 // latency is the round-trip time (for timeouts, pass the timeout value).
-// timeout indicates whether the request timed out rather than receiving a
-// normal delivery. Both cases update the latency EMA; the timeout flag
-// additionally increments the per-peer timeout counter.
-// Creates a peer entry if one doesn't exist.
+// timeout indicates whether the request timed out rather than receiving an
+// accepted delivery (the fetcher only reports non-timeout results for
+// deliveries with ≥1 pool-accepted tx). Both cases update the latency EMA;
+// only accepted deliveries feed the activity rate that gates protection —
+// a peer cannot become protection-eligible by timing out, and penalties
+// remain ungated. Creates a peer entry if one doesn't exist.
 func (s *Stats) NotifyRequestResult(peer string, latency time.Duration, timeout bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -158,8 +191,8 @@ func (s *Stats) NotifyRequestResult(peer string, latency time.Duration, timeout 
 		ps.requestTimeouts++
 	} else {
 		ps.requestSuccesses++
+		ps.pendingSamples++
 	}
-	ps.lastLatencySample = time.Now()
 }
 
 // NotifyPeerDrop removes a peer's stats on disconnect.
@@ -205,7 +238,7 @@ func (s *Stats) GetAllPeerStats() map[string]PeerStats {
 			RequestLatencyEMA: ps.requestLatencyEMA,
 			RequestSuccesses:  ps.requestSuccesses,
 			RequestTimeouts:   ps.requestTimeouts,
-			LastLatencySample: ps.lastLatencySample,
+			LatencyActivity:   ps.latencyActivity,
 		}
 	}
 	return result

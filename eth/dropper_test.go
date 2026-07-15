@@ -243,18 +243,15 @@ func TestProtectedByPoolRequestLatencyBasic(t *testing.T) {
 	// Three peers have enough samples; the two fastest should win.
 	stats[dialed[0].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 50 * time.Millisecond,
-		RequestSuccesses:  peerstats.MinLatencySamples,
-		LastLatencySample: time.Now(),
+		LatencyActivity:   peerstats.MinLatencyActivity,
 	}
 	stats[dialed[1].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 100 * time.Millisecond,
-		RequestSuccesses:  peerstats.MinLatencySamples,
-		LastLatencySample: time.Now(),
+		LatencyActivity:   peerstats.MinLatencyActivity,
 	}
 	stats[dialed[2].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 2 * time.Second,
-		RequestSuccesses:  peerstats.MinLatencySamples,
-		LastLatencySample: time.Now(),
+		LatencyActivity:   peerstats.MinLatencyActivity,
 	}
 
 	protected := protectedPeersByPool(nil, dialed, stats)
@@ -273,22 +270,23 @@ func TestProtectedByPoolRequestLatencyBasic(t *testing.T) {
 	}
 }
 
-// TestProtectedByPoolRequestLatencyBootstrapGuard verifies that peers with
-// fewer than MinLatencySamples do not earn latency-based protection, even
-// if their few samples indicate very low latency.
+// TestProtectedByPoolRequestLatencyBootstrapGuard verifies that peers whose
+// accepted-delivery activity rate is below MinLatencyActivity do not earn
+// latency-based protection, even if their few samples indicate very low
+// latency.
 func TestProtectedByPoolRequestLatencyBootstrapGuard(t *testing.T) {
 	dialed := makePeers(20)
 	stats := make(map[string]peerstats.PeerStats)
-	// A lucky-fast peer with only 1 sample — must NOT be protected.
+	// A lucky-fast peer without sustained activity — must NOT be protected.
 	stats[dialed[0].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 1 * time.Millisecond,
 		RequestSuccesses:  1,
+		LatencyActivity:   peerstats.MinLatencyActivity / 2,
 	}
 	// A warmed-up but slower peer — should be protected on latency.
 	stats[dialed[1].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 500 * time.Millisecond,
-		RequestSuccesses:  peerstats.MinLatencySamples,
-		LastLatencySample: time.Now(),
+		LatencyActivity:   peerstats.MinLatencyActivity,
 	}
 
 	protected := protectedPeersByPool(nil, dialed, stats)
@@ -317,8 +315,7 @@ func TestProtectedByPoolRequestLatencyPerPool(t *testing.T) {
 	for _, p := range inbound {
 		stats[p.ID().String()] = peerstats.PeerStats{
 			RequestLatencyEMA: 50 * time.Millisecond,
-			RequestSuccesses:  peerstats.MinLatencySamples,
-			LastLatencySample: time.Now(),
+			LatencyActivity:   peerstats.MinLatencyActivity,
 		}
 	}
 	// Dialed peers are slower (1s) — globally they would all lose, but
@@ -326,8 +323,7 @@ func TestProtectedByPoolRequestLatencyPerPool(t *testing.T) {
 	for _, p := range dialed {
 		stats[p.ID().String()] = peerstats.PeerStats{
 			RequestLatencyEMA: 1 * time.Second,
-			RequestSuccesses:  peerstats.MinLatencySamples,
-			LastLatencySample: time.Now(),
+			LatencyActivity:   peerstats.MinLatencyActivity,
 		}
 	}
 
@@ -345,34 +341,33 @@ func TestProtectedByPoolRequestLatencyPerPool(t *testing.T) {
 	}
 }
 
-// TestProtectedByPoolRequestLatencyStale verifies that the freshness gate
-// excludes peers whose latency EMA is valid (meeting the sample count and
-// fast value) but whose last sample is older than MaxLatencyStaleness.
-// A peer cannot serve a burst of fast replies, go silent on announcements,
-// and keep latency-based protection indefinitely.
+// TestProtectedByPoolRequestLatencyStale verifies that decayed activity
+// excludes peers whose latency EMA is fast but whose accepted-delivery
+// rate has since fallen below MinLatencyActivity. A peer cannot serve a
+// burst of fast replies, go silent on announcements, and keep
+// latency-based protection indefinitely.
 func TestProtectedByPoolRequestLatencyStale(t *testing.T) {
 	dialed := makePeers(20)
 	stats := make(map[string]peerstats.PeerStats)
-	// Fresh, fast peer — should be protected.
+	// Active, fast peer — should be protected.
 	stats[dialed[0].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 50 * time.Millisecond,
-		RequestSuccesses:  peerstats.MinLatencySamples,
-		LastLatencySample: time.Now(),
+		LatencyActivity:   peerstats.MinLatencyActivity,
 	}
-	// Stale, fast peer — was fast, but hasn't answered in too long.
-	// Same EMA and sample count as the fresh peer; only staleness differs.
+	// Formerly active, fast peer — same EMA, but its activity has decayed
+	// below the eligibility threshold.
 	stats[dialed[1].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 50 * time.Millisecond,
-		RequestSuccesses:  peerstats.MinLatencySamples,
-		LastLatencySample: time.Now().Add(-2 * peerstats.MaxLatencyStaleness),
+		RequestSuccesses:  100,
+		LatencyActivity:   peerstats.MinLatencyActivity * 0.9,
 	}
 
 	protected := protectedPeersByPool(nil, dialed, stats)
 
 	if !protected[dialed[0]] {
-		t.Error("fresh fast peer must be protected")
+		t.Error("active fast peer must be protected")
 	}
 	if protected[dialed[1]] {
-		t.Error("stale peer must NOT keep latency protection despite fast EMA")
+		t.Error("decayed-activity peer must NOT keep latency protection despite fast EMA")
 	}
 }

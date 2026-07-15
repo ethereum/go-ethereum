@@ -217,7 +217,8 @@ func TestPruneEmptyKeepClearsAll(t *testing.T) {
 
 // TestStaleRequestLatencyAfterDrop documents the accepted behavior: a
 // late sample after NotifyPeerDrop recreates a 1-sample entry. The
-// dropper's MinLatencySamples=100 guard ensures this is harmless.
+// dropper's MinLatencyActivity guard ensures this is harmless, and the
+// dropper's periodic Prune reclaims the orphan.
 func TestStaleRequestLatencyAfterDrop(t *testing.T) {
 	s := New()
 	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
@@ -232,7 +233,7 @@ func TestStaleRequestLatencyAfterDrop(t *testing.T) {
 	if ps.RequestLatencyEMA != 50*time.Millisecond {
 		t.Fatalf("expected fresh bootstrap at 50ms, got %v", ps.RequestLatencyEMA)
 	}
-	// The dropper's MinLatencySamples guard (in eth/dropper.go) prevents
+	// The dropper's MinLatencyActivity guard (in eth/dropper.go) prevents
 	// this 1-sample entry from earning latency-based protection.
 }
 
@@ -258,34 +259,92 @@ func TestMultiplePeersIsolated(t *testing.T) {
 	}
 }
 
-// TestLatencyTimestampSet verifies that NotifyRequestResult stamps the
-// peer's LastLatencySample with approximately time.Now().
-func TestLatencyTimestampSet(t *testing.T) {
+// TestLatencyActivityAccumulatesAndDecays verifies that accepted-delivery
+// samples fold into the activity EMA at the next NotifyBlock, that the
+// pending counter resets after folding, and that subsequent sample-free
+// blocks decay the activity.
+func TestLatencyActivityAccumulatesAndDecays(t *testing.T) {
 	s := New()
-	before := time.Now()
-	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
-	after := time.Now()
+	for i := 0; i < 10; i++ {
+		s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
+	}
+	s.NotifyBlock(nil, nil)
 
-	got := s.GetAllPeerStats()["peerA"].LastLatencySample
-	if got.Before(before) || got.After(after) {
-		t.Fatalf("LastLatencySample = %v not in [%v, %v]", got, before, after)
+	folded := s.GetAllPeerStats()["peerA"].LatencyActivity
+	if folded <= 0 {
+		t.Fatalf("expected positive activity after folding samples, got %f", folded)
+	}
+
+	// An empty block: nothing pending (counter was reset), pure decay.
+	s.NotifyBlock(nil, nil)
+	decayed := s.GetAllPeerStats()["peerA"].LatencyActivity
+	if decayed >= folded {
+		t.Fatalf("expected activity to decay on empty block, got %f >= %f", decayed, folded)
+	}
+	if decayed <= 0 {
+		t.Fatalf("expected gradual decay, not reset, got %f", decayed)
 	}
 }
 
-// TestLatencyTimestampUpdatesOnEachSample verifies that a later
-// NotifyRequestResult call advances LastLatencySample.
-func TestLatencyTimestampUpdatesOnEachSample(t *testing.T) {
+// TestLatencyActivityGateReachable verifies that a peer sustaining one
+// accepted delivery per block crosses MinLatencyActivity within a
+// reasonable number of blocks (steady state for 1/block is 1.0).
+func TestLatencyActivityGateReachable(t *testing.T) {
 	s := New()
-	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
-	first := s.GetAllPeerStats()["peerA"].LastLatencySample
+	for i := 0; i < 20; i++ {
+		s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
+		s.NotifyBlock(nil, nil)
+	}
+	if got := s.GetAllPeerStats()["peerA"].LatencyActivity; got < MinLatencyActivity {
+		t.Fatalf("sustained 1 sample/block should reach eligibility, got %f < %f", got, MinLatencyActivity)
+	}
+}
 
-	// Small sleep so the second timestamp is detectably later.
-	time.Sleep(2 * time.Millisecond)
-	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
-	second := s.GetAllPeerStats()["peerA"].LastLatencySample
+// TestTimeoutDoesNotFeedActivity verifies that timeouts update the EMA and
+// counters but never contribute to the activity rate — a peer cannot become
+// protection-eligible by timing out.
+func TestTimeoutDoesNotFeedActivity(t *testing.T) {
+	s := New()
+	for i := 0; i < 50; i++ {
+		s.NotifyRequestResult("peerA", 5*time.Second, true)
+		s.NotifyBlock(nil, nil)
+	}
+	ps := s.GetAllPeerStats()["peerA"]
+	if ps.LatencyActivity != 0 {
+		t.Fatalf("timeouts must not feed activity, got %f", ps.LatencyActivity)
+	}
+	if ps.RequestTimeouts == 0 {
+		t.Fatal("expected timeout counter to advance")
+	}
+}
 
-	if !second.After(first) {
-		t.Fatalf("expected second sample timestamp > first, got first=%v second=%v", first, second)
+// TestLatencyStateForgottenAfterSilence verifies that once a silent peer's
+// activity fully decays, its latency state (EMA and counters) is reset —
+// a frozen fast EMA from a past active period cannot be re-armed later by
+// rebuilding activity alone.
+func TestLatencyStateForgottenAfterSilence(t *testing.T) {
+	s := New()
+	s.NotifyRequestResult("peerA", 50*time.Millisecond, false)
+	s.NotifyBlock(nil, nil)
+	if s.GetAllPeerStats()["peerA"].RequestLatencyEMA != 50*time.Millisecond {
+		t.Fatal("expected EMA seeded before silence")
+	}
+
+	// Enough empty blocks for the activity to decay below the reset
+	// threshold (~200 blocks from a single sample at alpha=0.014).
+	for i := 0; i < 400; i++ {
+		s.NotifyBlock(nil, nil)
+	}
+
+	ps := s.GetAllPeerStats()["peerA"]
+	if ps.RequestLatencyEMA != 0 || ps.RequestSuccesses != 0 || ps.RequestTimeouts != 0 || ps.LatencyActivity != 0 {
+		t.Fatalf("expected latency state forgotten after long silence, got %+v", ps)
+	}
+
+	// A returning peer starts over: the next sample re-seeds the EMA.
+	s.NotifyRequestResult("peerA", 300*time.Millisecond, false)
+	if got := s.GetAllPeerStats()["peerA"].RequestLatencyEMA; got != 300*time.Millisecond {
+		t.Fatalf("expected fresh bootstrap after reset, got %v", got)
 	}
 }
 

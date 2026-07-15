@@ -75,19 +75,14 @@ var protectionCategories = []protectionCategory{
 	{func(s peerstats.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac}, // Recent finalized
 	{func(s peerstats.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},  // Recent included
 	{func(s peerstats.PeerStats) float64 { // Request latency
-		// Low-latency peers should rank higher. Peers with too few samples
-		// score 0 so the existing `score > 0` filter excludes them — this
-		// prevents a single lucky-fast reply from winning protection. Peers
-		// whose EMA reaches the timeout also score low by this path because
-		// the reciprocal of a very large duration is tiny but positive; the
-		// per-pool top-N will still push faster peers ahead of them.
-		if s.RequestSuccesses+s.RequestTimeouts < peerstats.MinLatencySamples {
-			return 0
-		}
-		// Freshness gate: a peer that earned a fast EMA but then went
-		// silent on announcements (no requests → no fresh samples) must
-		// not keep that score indefinitely. Ignore stale data.
-		if time.Since(s.LastLatencySample) > peerstats.MaxLatencyStaleness {
+		// Low-latency peers rank higher. Eligibility requires a sustained
+		// rate of accepted-delivery samples (block-decayed EMA): scoring 0
+		// here lets the `score > 0` filter exclude peers whose EMA rests on
+		// too little, too old, or front-loaded evidence — eligibility
+		// expires on its own when the useful work stops. Peers whose EMA
+		// approaches the fetch timeout score tiny-but-positive via the
+		// reciprocal; per-pool top-N pushes faster peers ahead of them.
+		if s.LatencyActivity < peerstats.MinLatencyActivity {
 			return 0
 		}
 		if s.RequestLatencyEMA <= 0 {
