@@ -162,14 +162,33 @@ func (s *Stats) NotifyRequestResult(peer string, latency time.Duration, timeout 
 	ps.lastLatencySample = time.Now()
 }
 
-// NotifyPeerDrop removes a peer's stats on disconnect. A rare stale
-// latency sample racing with the drop may recreate the peer entry with
-// one sample; that entry can never earn protection (MinLatencySamples
-// guard) and is harmless.
+// NotifyPeerDrop removes a peer's stats on disconnect.
+//
+// A signal (NotifyRequestResult or NotifyBlock) for the same peer can race
+// with the drop and land just after this deletion, recreating an orphan
+// entry that no future NotifyPeerDrop will ever clean. Such orphans are
+// never read — the dropper only looks up currently-connected peers — but
+// left alone they accumulate for the node's lifetime. Prune reclaims them.
 func (s *Stats) NotifyPeerDrop(peer string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.peers, peer)
+}
+
+// Prune removes stats for every peer not present in keep. The dropper calls
+// this periodically with the set of currently-connected peer IDs to reclaim
+// orphan entries left by a signal that raced with NotifyPeerDrop (see there).
+// Pruning a still-connected peer that only just gained an entry is harmless:
+// it resets a handful of early samples that self-heal on the peer's next
+// activity, and such a peer cannot yet meet the protection thresholds.
+func (s *Stats) Prune(keep map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id := range s.peers {
+		if !keep[id] {
+			delete(s.peers, id)
+		}
+	}
 }
 
 // GetAllPeerStats returns a snapshot of per-peer stats. Called by the

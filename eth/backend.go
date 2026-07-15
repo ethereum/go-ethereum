@@ -479,7 +479,7 @@ func (s *Ethereum) Start() error {
 	s.handler.Start(s.p2pServer.MaxPeers)
 
 	// Start the connection manager with inclusion-based peer protection.
-	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, s.handler.peerStats.GetAllPeerStats)
+	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, s.handler.peerStats.GetAllPeerStats, s.handler.peerStats.Prune)
 
 	// Subscribe to chain events for the filterMaps head updater.
 	s.fmHeadSub = s.blockchain.SubscribeChainEvent(s.fmHeadEventCh)

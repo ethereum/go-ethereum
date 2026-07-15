@@ -183,6 +183,38 @@ func TestNotifyPeerDropClearsStats(t *testing.T) {
 	}
 }
 
+// TestPruneRemovesDisconnectedPeers verifies Prune drops entries for peers
+// absent from the keep set (e.g. an orphan recreated by a signal that raced
+// with NotifyPeerDrop) while retaining still-connected peers.
+func TestPruneRemovesDisconnectedPeers(t *testing.T) {
+	s := New()
+	s.NotifyRequestResult("connected", 100*time.Millisecond, false)
+	s.NotifyRequestResult("orphan", 100*time.Millisecond, false)
+
+	s.Prune(map[string]bool{"connected": true})
+
+	stats := s.GetAllPeerStats()
+	if _, ok := stats["orphan"]; ok {
+		t.Fatal("orphan stats should be pruned when not in keep set")
+	}
+	if _, ok := stats["connected"]; !ok {
+		t.Fatal("connected peer stats should survive pruning")
+	}
+}
+
+// TestPruneEmptyKeepClearsAll verifies an empty keep set removes every entry.
+func TestPruneEmptyKeepClearsAll(t *testing.T) {
+	s := New()
+	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
+	s.NotifyRequestResult("peerB", 100*time.Millisecond, false)
+
+	s.Prune(map[string]bool{})
+
+	if n := len(s.GetAllPeerStats()); n != 0 {
+		t.Fatalf("expected all entries pruned, got %d", n)
+	}
+}
+
 // TestStaleRequestLatencyAfterDrop documents the accepted behavior: a
 // late sample after NotifyPeerDrop recreates a 1-sample entry. The
 // dropper's MinLatencySamples=100 guard ensures this is harmless.
