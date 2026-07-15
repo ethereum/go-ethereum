@@ -2403,3 +2403,41 @@ func TestTransactionFetcherRequestResultOnTimeout(t *testing.T) {
 		},
 	})
 }
+
+// TestTransactionFetcherRequestResultRequiresAcceptance asserts that an
+// in-time delivery containing no pool-accepted transactions (e.g. all
+// duplicates) does NOT record a latency sample — a peer cannot farm
+// latency protection by answering fetches with worthless content.
+func TestTransactionFetcherRequestResultRequiresAcceptance(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			f := NewTxFetcher(
+				nil,
+				func(common.Hash, byte) error { return nil },
+				func(txs []*types.Transaction) []error {
+					errs := make([]error, len(txs))
+					for i := range errs {
+						errs[i] = txpool.ErrAlreadyKnown
+					}
+					return errs
+				},
+				func(string, []common.Hash) error { return nil },
+				nil, nil, rec.record,
+				newTestBlobBuffer(),
+			)
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: 200 * time.Millisecond, step: false},
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			doFunc(func() {
+				if samples := rec.snapshot(); len(samples) != 0 {
+					t.Fatalf("expected no sample for unaccepted delivery, got %d (%v)", len(samples), samples)
+				}
+			}),
+		},
+	})
+}

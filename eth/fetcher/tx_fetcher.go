@@ -127,6 +127,7 @@ type txDelivery struct {
 	hashes    []common.Hash // Batch of transaction hashes having been delivered
 	metas     []txMetadata  // Batch of metadata associated with the delivered hashes
 	direct    bool          // Whether this is a direct reply or a broadcast
+	accepted  bool          // Whether any delivered tx was newly accepted by the pool
 	violation error         // Whether we encountered a protocol violation
 }
 
@@ -188,7 +189,7 @@ type TxFetcher struct {
 	fetchTxs        func(string, []common.Hash) error                      // Retrieves a set of txs from a remote peer
 	dropPeer        func(string)                                           // Drops a peer in case of announcement violation
 	onAccepted      func(peer string, hashes []common.Hash)                // Optional: notified with accepted tx hashes per peer
-	onRequestResult func(peer string, latency time.Duration, timeout bool) // Optional: notified once per completed/timed-out tx request
+	onRequestResult func(peer string, latency time.Duration, timeout bool) // Optional: notified per timed-out request and per delivery with pool-accepted txs
 
 	buffer *blobpool.BlobBuffer
 
@@ -357,8 +358,9 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
 	// re-requesting them and dropping the peer in case of malicious transfers.
 	var (
-		added = make([]common.Hash, 0, len(txs))
-		metas = make([]txMetadata, 0, len(txs))
+		added       = make([]common.Hash, 0, len(txs))
+		metas       = make([]txMetadata, 0, len(txs))
+		anyAccepted bool
 	)
 	// proceed in batches
 	for i := 0; i < len(txs); i += addTxsBatchSize {
@@ -416,8 +418,11 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 		otherreject := f.handleAddErrors(hashes, errs, metrics)
 
 		// Notify the tracker which txs from this peer were accepted.
-		if f.onAccepted != nil && len(accepted) > 0 {
-			f.onAccepted(peer, accepted)
+		if len(accepted) > 0 {
+			anyAccepted = true
+			if f.onAccepted != nil {
+				f.onAccepted(peer, accepted)
+			}
 		}
 		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit
 		// to throttle the misbehaving peer.
@@ -431,7 +436,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 		}
 	}
 	select {
-	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct, violation: violation}:
+	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct, accepted: anyAccepted, violation: violation}:
 		return nil
 	case <-f.quit:
 		return errTerminated
@@ -843,8 +848,11 @@ func (f *TxFetcher) loop() {
 					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - req.time).Nanoseconds())
 					// Already counted as a timeout sample at the timeout site;
 					// don't double-record on eventual delivery.
-				} else if f.onRequestResult != nil {
-					// Normal in-time delivery. Record the actual round-trip.
+				} else if f.onRequestResult != nil && delivery.accepted {
+					// In-time delivery that yielded at least one pool-accepted
+					// tx. Record the actual round-trip. Deliveries without any
+					// accepted tx (duplicates, rejects) record nothing — latency
+					// samples must not be farmable from worthless responses.
 					f.onRequestResult(delivery.origin, time.Duration(f.clock.Now()-req.time), false)
 				}
 				delete(f.requests, delivery.origin)
