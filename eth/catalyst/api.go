@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -219,7 +220,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(ctx context.Context, update engine.
 
 // ForkchoiceUpdatedV4 is equivalent to V3 with the addition of slot number
 // in the payload attributes. It supports only PayloadAttributesV4.
-func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes, custodyColumns *types.CustodyBitmap) (engine.ForkChoiceResponse, error) {
 	if params != nil {
 		switch {
 		case params.Withdrawals == nil:
@@ -231,6 +232,9 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 		case !api.checkFork(params.Timestamp, forks.Amsterdam):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
 		}
+	}
+	if custodyColumns != nil {
+		api.eth.BlobFetcher().UpdateCustody(*custodyColumns)
 	}
 	// TODO(matt): the spec requires that fcu is applied when called on a valid
 	// hash, even if params are wrong. To do this we need to split up
@@ -710,6 +714,63 @@ func (api *ConsensusAPI) getBlobs(ctx context.Context, hashes []common.Hash, v2 
 	return res, nil
 }
 
+// GetBlobsV4 returns cell-level blob data from the transaction pool.
+// V4 returns only the requested cells as specified by the indices_bitarray.
+func (api *ConsensusAPI) GetBlobsV4(hashes []common.Hash, indicesBitarray types.CustodyBitmap) ([]*engine.BlobCellsAndProofsV1, error) {
+	head := api.eth.BlockChain().CurrentHeader()
+	// Sparse blobpool is not necessarily coupled with the Amsterdam fork and
+	// can technically be supported after the Osaka fork
+	// (where cell proofs are introduced).
+	if api.config().LatestFork(head.Time) < forks.Osaka {
+		return nil, nil
+	}
+	if len(hashes) > 128 {
+		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
+	}
+	cells, proofs, err := api.eth.BlobCache().GetCells(hashes, indicesBitarray)
+	if err != nil {
+		return nil, engine.InvalidParams.With(err)
+	}
+	var (
+		res      = make([]*engine.BlobCellsAndProofsV1, len(hashes))
+		hitCount int
+	)
+	getBlobsRequestedCounter.Inc(int64(len(hashes)))
+	for i := range hashes {
+		if cells[i] == nil || proofs[i] == nil {
+			continue
+		}
+		hitCount++
+		blobCells := make([]*hexutil.Bytes, len(cells[i]))
+		for j, cell := range cells[i] {
+			if cell != nil {
+				b := hexutil.Bytes(cell[:])
+				blobCells[j] = &b
+			}
+		}
+		blobProofs := make([]*hexutil.Bytes, len(proofs[i]))
+		for j, proof := range proofs[i] {
+			if proof != nil {
+				b := hexutil.Bytes(proof[:])
+				blobProofs[j] = &b
+			}
+		}
+		res[i] = &engine.BlobCellsAndProofsV1{
+			BlobCells: blobCells,
+			Proofs:    blobProofs,
+		}
+	}
+	getBlobsAvailableCounter.Inc(int64(hitCount))
+	if hitCount == len(hashes) {
+		getBlobsRequestCompleteHit.Inc(1)
+	} else if hitCount > 0 {
+		getBlobsRequestPartialHit.Inc(1)
+	} else {
+		getBlobsRequestMiss.Inc(1)
+	}
+	return res, nil
+}
+
 // HasBlobs reports availability for the requested blob-versioned-hashes.
 func (api *ConsensusAPI) HasBlobs(hashes []common.Hash) []bool {
 	return api.eth.BlobCache().HasBlobs(context.Background(), hashes)
@@ -1139,17 +1200,26 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 }
 
 // ExchangeCapabilities returns the current methods provided by this node.
-func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
+func (api *ConsensusAPI) ExchangeCapabilities(caps []string) []string {
 	valueT := reflect.TypeOf(api)
-	caps := make([]string, 0, valueT.NumMethod())
+
+	// If the CL supports getBlobsV4, we call EnableCell() on the
+	// blob cache to skip the blob recovery process. This is a
+	// one-directional toggle, which assumes that once the CL
+	// supports getBlobsV4, it will not fall back to getBlobsV3
+	// again.
+	cellmode := slices.Contains(caps, "engine_getBlobsV4")
+	api.eth.BlobCache().SetCellMode(cellmode)
+
+	ourCaps := make([]string, 0, valueT.NumMethod())
 	for i := 0; i < valueT.NumMethod(); i++ {
 		name := []rune(valueT.Method(i).Name)
 		if string(name) == "ExchangeCapabilities" {
 			continue
 		}
-		caps = append(caps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
+		ourCaps = append(ourCaps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
 	}
-	return caps
+	return ourCaps
 }
 
 // GetClientVersionV1 exchanges client version data of this node.

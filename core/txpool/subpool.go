@@ -80,14 +80,16 @@ type PendingFilter struct {
 
 	// When BlobTxs true, return only blob transactions (block blob-space filling)
 	// when false, return only non-blob txs (peer-join announces, block space filling)
-	BlobTxs     bool
-	BlobVersion byte // Blob tx version to include. 0 means pre-Osaka, 1 means Osaka and later
+	BlobTxs      bool
+	PartialCells bool
+	BlobVersion  byte // Blob tx version to include. 0 means pre-Osaka, 1 means Osaka and later
 }
 
 // TxMetadata denotes the metadata of a transaction.
 type TxMetadata struct {
-	Type uint8  // The type of the transaction
-	Size uint64 // The length of the 'rlp encoding' of a transaction
+	Type            uint8  // The type of the transaction
+	Size            uint64 // The length of the 'rlp encoding' of a transaction (including blobs)
+	SizeWithoutBlob uint64 // The length without blob data (for ETH/72 announcements)
 }
 
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
@@ -132,7 +134,7 @@ type SubPool interface {
 	Get(hash common.Hash) *types.Transaction
 
 	// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
-	GetRLP(hash common.Hash) []byte
+	GetRLP(hash common.Hash, version uint) []byte
 
 	// GetMetadata returns the transaction type and transaction size with the
 	// given transaction hash.

@@ -1,4 +1,4 @@
-// Copyright 2026 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,8 +27,9 @@ import (
 	"github.com/holiman/billy"
 )
 
-// TestLimboLegacyMigration checks whether limbo entries in the legacy limboBlob type
-// are migrated to the blobTxForPool layout on startup instead of being dropped.
+// TestLimboLegacyMigration checks that a limbo entry in the legacy limboBlob
+// layout is flagged for conversion by newLimbo instead of being dropped, so the
+// conversion queue can migrate it to the blobTxForPool layout.
 func TestLimboLegacyMigration(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	tx := makeMultiBlobTx(0, 10, 100, 100, 2, 0, key)
@@ -49,24 +50,20 @@ func TestLimboLegacyMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to encode legacy entry: %v", err)
 	}
-	if _, err := store.Put(data); err != nil {
+	id, err := store.Put(data)
+	if err != nil {
 		t.Fatalf("failed to store legacy entry: %v", err)
 	}
 	store.Close()
 
-	// Open the limbo, which should migrate the legacy entry.
-	l, err := newLimbo(new(params.ChainConfig), dir)
+	// Open the limbo, which should flag the legacy entry for conversion.
+	l, convert, err := newLimbo(new(params.ChainConfig), dir)
 	if err != nil {
 		t.Fatalf("failed to open limbo: %v", err)
 	}
 	defer l.Close()
 
-	// The migrated transaction must be tracked and reconstruct the original.
-	ptx, err := l.pull(tx.Hash())
-	if err != nil {
-		t.Fatalf("failed to pull migrated tx: %v", err)
-	}
-	if got := ptx.ToTx().Hash(); got != tx.Hash() {
-		t.Fatalf("migrated tx hash mismatch: got %x, want %x", got, tx.Hash())
+	if len(convert) != 1 || convert[0] != id {
+		t.Fatalf("legacy entry not flagged for conversion: got %v, want [%d]", convert, id)
 	}
 }

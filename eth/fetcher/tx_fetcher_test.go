@@ -28,9 +28,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -60,9 +62,10 @@ type doTxNotify struct {
 	sizes  []uint32
 }
 type doTxEnqueue struct {
-	peer   string
-	txs    []*types.Transaction
-	direct bool
+	peer    string
+	version uint
+	txs     []*types.Transaction
+	direct  bool
 }
 type doWait struct {
 	time time.Duration
@@ -87,6 +90,16 @@ type txFetcherTest struct {
 	steps []interface{}
 }
 
+// newTestBlobBuffer returns a BlobBuffer with no-op callbacks for tests that
+// don't exercise blob handling but still need a non-nil buffer.
+func newTestBlobBuffer() *blobpool.BlobBuffer {
+	return blobpool.NewBlobBuffer(blobpool.BlobBufferFunctions{
+		ValidateTx: func(*types.Transaction) error { return nil },
+		AddToPool:  func(*blobpool.BlobTxForPool) error { return nil },
+		DropPeer:   func(string) {},
+	})
+}
+
 // newTestTxFetcher creates a tx fetcher with noop callbacks, simulated clock,
 // and deterministic randomness.
 func newTestTxFetcher() *TxFetcher {
@@ -97,7 +110,9 @@ func newTestTxFetcher() *TxFetcher {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
-		nil, nil,
+		nil,
+		nil,
+		newTestBlobBuffer(),
 	)
 }
 
@@ -1888,7 +1903,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 		// Process the original or expanded steps
 		switch step := step.(type) {
 		case doTxNotify:
-			if err := fetcher.Notify(step.peer, step.types, step.sizes, step.hashes); err != nil {
+			if _, err := fetcher.Notify(step.peer, step.types, step.sizes, step.hashes); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
 			<-wait // Fetcher needs to process this, wait until it's done
@@ -1899,7 +1914,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			}
 
 		case doTxEnqueue:
-			if err := fetcher.Enqueue(step.peer, step.txs, step.direct); err != nil {
+			if err := fetcher.Enqueue(step.peer, step.version, step.txs, step.direct); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
 			<-wait // Fetcher needs to process this, wait until it's done
@@ -2204,6 +2219,7 @@ func TestTransactionForgotten(t *testing.T) {
 		func(string, []common.Hash) error { return nil },
 		func(string) {},
 		nil,
+		newTestBlobBuffer(),
 		mockClock,
 		mockTime,
 		rand.New(rand.NewSource(0)), // Use fixed seed for deterministic behavior
@@ -2220,7 +2236,7 @@ func TestTransactionForgotten(t *testing.T) {
 	tx2.SetTime(now)
 
 	// Initial state: both transactions should be marked as underpriced
-	if err := fetcher.Enqueue("peer", []*types.Transaction{tx1, tx2}, false); err != nil {
+	if err := fetcher.Enqueue("peer", eth.ETH70, []*types.Transaction{tx1, tx2}, false); err != nil {
 		t.Fatal(err)
 	}
 	if !fetcher.isKnownUnderpriced(tx1.Hash()) {
@@ -2269,7 +2285,7 @@ func TestTransactionForgotten(t *testing.T) {
 
 	// Re-enqueue tx1 with updated timestamp
 	tx1.SetTime(mockTime())
-	if err := fetcher.Enqueue("peer", []*types.Transaction{tx1}, false); err != nil {
+	if err := fetcher.Enqueue("peer", eth.ETH70, []*types.Transaction{tx1}, false); err != nil {
 		t.Fatal(err)
 	}
 	if !fetcher.isKnownUnderpriced(tx1.Hash()) {

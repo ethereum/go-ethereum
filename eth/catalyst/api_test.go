@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -1969,23 +1970,27 @@ func init() {
 
 // makeMultiBlobTx is a utility method to construct a random blob tx with
 // certain number of blobs in its sidecar.
-func makeMultiBlobTx(chainConfig *params.ChainConfig, nonce uint64, blobCount int, blobOffset int, key *ecdsa.PrivateKey, version byte) *types.Transaction {
+func makeMultiBlobTx(chainConfig *params.ChainConfig, nonce uint64, blobCount int, blobOffset int, key *ecdsa.PrivateKey, version byte, custody types.CustodyBitmap) *blobpool.BlobTxForPool {
+	indices := custody.Indices()
 	var (
-		blobs       []kzg4844.Blob
 		blobHashes  []common.Hash
 		commitments []kzg4844.Commitment
 		proofs      []kzg4844.Proof
+		cells       []kzg4844.Cell
 	)
 	for i := 0; i < blobCount; i++ {
-		blobs = append(blobs, *testBlobs[blobOffset+i])
-		commitments = append(commitments, testBlobCommits[blobOffset+i])
+		j := blobOffset + i
+		blobHashes = append(blobHashes, testBlobVHashes[j])
+		commitments = append(commitments, testBlobCommits[j])
 		if version == types.BlobSidecarVersion0 {
-			proofs = append(proofs, testBlobProofs[blobOffset+i])
+			proofs = append(proofs, testBlobProofs[j])
 		} else {
-			cellProofs, _ := kzg4844.ComputeCellProofs(testBlobs[blobOffset+i])
-			proofs = append(proofs, cellProofs...)
+			proofs = append(proofs, testBlobCellProofs[j]...)
 		}
-		blobHashes = append(blobHashes, testBlobVHashes[blobOffset+i])
+		full, _ := kzg4844.ComputeCells([]kzg4844.Blob{*testBlobs[j]})
+		for _, idx := range indices {
+			cells = append(cells, full[idx])
+		}
 	}
 	blobtx := &types.BlobTx{
 		ChainID:    uint256.MustFromBig(chainConfig.ChainID),
@@ -1996,12 +2001,20 @@ func makeMultiBlobTx(chainConfig *params.ChainConfig, nonce uint64, blobCount in
 		BlobFeeCap: uint256.NewInt(1000),
 		BlobHashes: blobHashes,
 		Value:      uint256.NewInt(100),
-		Sidecar:    types.NewBlobTxSidecar(version, blobs, commitments, proofs),
 	}
-	return types.MustSignNewTx(key, types.LatestSigner(chainConfig), blobtx)
+	return &blobpool.BlobTxForPool{
+		Tx: types.MustSignNewTx(key, types.LatestSigner(chainConfig), blobtx),
+		CellSidecar: &types.BlobTxCellSidecar{
+			Version:     version,
+			Cells:       cells,
+			Commitments: commitments,
+			Proofs:      proofs,
+			Custody:     custody,
+		},
+	}
 }
 
-func newGetBlobEnv(t testing.TB, version byte) (*node.Node, *ConsensusAPI) {
+func newGetBlobEnv(t testing.TB, version byte, custody types.CustodyBitmap) (*node.Node, *ConsensusAPI) {
 	var (
 		// Create a database pre-initialize with a genesis block
 		config = *params.MergedTestChainConfig
@@ -2030,17 +2043,23 @@ func newGetBlobEnv(t testing.TB, version byte) (*node.Node, *ConsensusAPI) {
 	}
 	n, ethServ := startEthService(t, gspec, nil)
 
-	// fill blob txs into the pool
-	tx1 := makeMultiBlobTx(&config, 0, 2, 0, key1, version) // blob[0, 2)
-	tx2 := makeMultiBlobTx(&config, 0, 2, 2, key2, version) // blob[2, 4)
-	tx3 := makeMultiBlobTx(&config, 0, 2, 4, key3, version) // blob[4, 6)
-	ethServ.TxPool().Add([]*types.Transaction{tx1, tx2, tx3}, true)
+	// fill blob txs into the pool, each holding only the given custody cells
+	txs := []*blobpool.BlobTxForPool{
+		makeMultiBlobTx(&config, 0, 2, 0, key1, version, custody), // blob[0, 2)
+		makeMultiBlobTx(&config, 0, 2, 2, key2, version, custody), // blob[2, 4)
+		makeMultiBlobTx(&config, 0, 2, 4, key3, version, custody), // blob[4, 6)
+	}
+	for _, ptx := range txs {
+		if err := ethServ.BlobTxPool().AddPooledTx(ptx); err != nil {
+			t.Fatalf("failed to add blob tx: %v", err)
+		}
+	}
 
 	api := newConsensusAPIWithoutHeartbeat(ethServ)
 	return n, api
 }
 func TestGetBlobsV2And3(t *testing.T) {
-	n, api := newGetBlobEnv(t, 1)
+	n, api := newGetBlobEnv(t, 1, types.CustodyBitmapAll)
 	defer n.Close()
 
 	suites := []struct {
@@ -2076,7 +2095,7 @@ func TestGetBlobsV2And3(t *testing.T) {
 // Benchmark GetBlobsV2 internals
 // Note that this is not an RPC-level benchmark, so JSON-RPC overhead is not included.
 func BenchmarkGetBlobsV2(b *testing.B) {
-	n, api := newGetBlobEnv(b, 1)
+	n, api := newGetBlobEnv(b, 1, types.CustodyBitmapAll)
 	defer n.Close()
 
 	// for blobs in [1, 2, 4, 6], print string and run benchmark
@@ -2134,5 +2153,114 @@ func runGetBlobs(t testing.TB, getBlobs getBlobsFn, start, limit int, fillRandom
 	}
 	if !reflect.DeepEqual(result, expect) {
 		t.Fatalf("Unexpected result for case %s", name)
+	}
+}
+
+func TestGetBlobsV4(t *testing.T) {
+	// The pool holds only this set of custody cells.
+	custody := types.NewCustodyBitmap([]uint64{0, 1, 2, 3, 4})
+	n, api := newGetBlobEnv(t, 1, custody)
+	defer n.Close()
+
+	masks := []struct {
+		name string
+		mask types.CustodyBitmap
+	}{
+		{"missing", types.NewCustodyBitmap([]uint64{5})},
+		{"overlap", types.NewCustodyBitmap([]uint64{0, 2, 5, 127})},
+		{"aligned", custody},
+	}
+	suites := []struct {
+		start       int
+		limit       int
+		missingBlob bool
+	}{
+		{start: 0, limit: 1},
+		{start: 0, limit: 2},
+		{start: 1, limit: 3},
+		{start: 0, limit: 6},
+		{start: 1, limit: 5},
+		{start: 0, limit: 6, missingBlob: true},
+	}
+	for _, m := range masks {
+		for i, suite := range suites {
+			runGetBlobsV4(t, api, custody, m.mask, suite.start, suite.limit, suite.missingBlob, fmt.Sprintf("GetBlobsV4 mask=%s suite=%d", m.name, i))
+		}
+	}
+}
+
+func runGetBlobsV4(t testing.TB, api *ConsensusAPI, custody, mask types.CustodyBitmap, start, limit int, missingBlob bool, name string) {
+	// Fill the request for retrieving cells and build the expected response.
+	var (
+		vhashes []common.Hash
+		expect  []*engine.BlobCellsAndProofsV1
+		indices = mask.Indices()
+	)
+	for j := start; j < limit; j++ {
+		vhashes = append(vhashes, testBlobVHashes[j])
+
+		cells, err := kzg4844.ComputeCells([]kzg4844.Blob{*testBlobs[j]})
+		if err != nil {
+			t.Fatalf("Failed to compute cells for case %s: %v", name, err)
+		}
+		blobCells := make([]*hexutil.Bytes, len(indices))
+		blobProofs := make([]*hexutil.Bytes, len(indices))
+		for i, idx := range indices {
+			if !custody.IsSet(idx) {
+				continue
+			}
+			cell := hexutil.Bytes(cells[idx][:])
+			blobCells[i] = &cell
+			proof := hexutil.Bytes(testBlobCellProofs[j][idx][:])
+			blobProofs[i] = &proof
+		}
+		expect = append(expect, &engine.BlobCellsAndProofsV1{
+			BlobCells: blobCells,
+			Proofs:    blobProofs,
+		})
+	}
+	// put random missing blob
+	if missingBlob {
+		vhashes = append(vhashes, testrand.Hash())
+		expect = append(expect, nil)
+	}
+	result, err := api.GetBlobsV4(vhashes, mask)
+	if err != nil {
+		t.Errorf("Unexpected error for case %s, %v", name, err)
+	}
+	if !reflect.DeepEqual(result, expect) {
+		t.Fatalf("Unexpected result for case %s", name)
+	}
+}
+
+// TestForkchoiceUpdatedV4 tests the custody bitmap argument added in V4.
+func TestForkchoiceUpdatedV4(t *testing.T) {
+	n, api := newGetBlobEnv(t, 1, types.CustodyBitmapAll)
+	defer n.Close()
+
+	head := api.eth.BlockChain().CurrentHeader().Hash()
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash:      head,
+		SafeBlockHash:      head,
+		FinalizedBlockHash: head,
+	}
+
+	// Non nil custody bitmap case.
+	custody := types.NewCustodyBitmap([]uint64{0, 1, 2, 127})
+	resp, err := api.ForkchoiceUpdatedV4(context.Background(), fcState, nil, &custody)
+	if err != nil {
+		t.Fatalf("Unexpected error with custody bitmap: %v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("Unexpected status with custody bitmap: got %s, want %s", resp.PayloadStatus.Status, engine.VALID)
+	}
+
+	// Nil custody bitmap case.
+	resp, err = api.ForkchoiceUpdatedV4(context.Background(), fcState, nil, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error with nil custody bitmap: %v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("Unexpected status with nil custody bitmap: got %s, want %s", resp.PayloadStatus.Status, engine.VALID)
 	}
 }

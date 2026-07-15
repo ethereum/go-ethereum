@@ -27,6 +27,7 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/tracker"
 	"github.com/ethereum/go-ethereum/params"
@@ -66,7 +67,8 @@ type Peer struct {
 	version   uint              // Protocol version negotiated
 	lastRange atomic.Pointer[BlockRangeUpdatePacket]
 
-	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
+	txpool      TxPool // Transaction pool used by the broadcasters for liveness checks
+	blobpool    BlobPool
 	knownTxs    *knownCache        // Set of transaction hashes known to be known by this peer
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
 	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
@@ -86,11 +88,11 @@ type Peer struct {
 
 // NewPeer creates a wrapper for a network connection and negotiated  protocol
 // version.
-func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool, chainConfig *params.ChainConfig) *Peer {
+func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool, blobpool BlobPool, chainConfig *params.ChainConfig) *Peer {
 	cap := p2p.Cap{Name: ProtocolName, Version: version}
 	id := p.ID().String()
 	peer := &Peer{
-		id:            p.ID().String(),
+		id:            id,
 		Peer:          p,
 		rw:            rw,
 		version:       version,
@@ -102,6 +104,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool, cha
 		reqCancel:     make(chan *cancel),
 		resDispatch:   make(chan *response),
 		txpool:        txpool,
+		blobpool:      blobpool,
 		chainConfig:   chainConfig,
 		receiptBuffer: make(map[uint64]*receiptRequest),
 		term:          make(chan struct{}),
@@ -188,13 +191,13 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 // This method is a helper used by the async transaction announcer. Don't call it
 // directly as the queueing (memory) and transmission (bandwidth) costs should
 // not be managed directly.
-func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash, types []byte, sizes []uint32) error {
-	if err := p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket{Types: types, Sizes: sizes, Hashes: hashes}); err != nil {
-		return err
-	}
+func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash, types []byte, sizes []uint32, cells types.CustodyBitmap) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	p.knownTxs.Add(hashes...)
-	return nil
+	if p.version >= ETH72 {
+		return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket72{Types: types, Sizes: sizes, Hashes: hashes, Mask: cells})
+	}
+	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket71{Types: types, Sizes: sizes, Hashes: hashes})
 }
 
 // AsyncSendPooledTransactionHashes queues a list of transactions hashes to eventually
@@ -245,6 +248,53 @@ func (p *Peer) ReplyReceiptsRLP69(id uint64, receipts rlp.RawList[*ReceiptList])
 	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsPacket69{
 		RequestId: id,
 		List:      receipts,
+	})
+}
+
+// ReplyCells is the response to GetCells.
+func (p *Peer) ReplyCells(id uint64, hashes []common.Hash, cells [][]kzg4844.Cell, mask types.CustodyBitmap) error {
+	inner := make([]rlp.RawList[kzg4844.Cell], len(cells))
+	for i, c := range cells {
+		raw, err := rlp.EncodeToRawList(c)
+		if err != nil {
+			return err
+		}
+		inner[i] = raw
+	}
+	rawCells, err := rlp.EncodeToRawList(inner)
+	if err != nil {
+		return err
+	}
+	return p2p.Send(p.rw, CellsMsg, &CellsPacket{
+		RequestId: id,
+		CellsResponse: CellsResponse{
+			Hashes: hashes,
+			Cells:  rawCells,
+			Mask:   mask,
+		},
+	})
+}
+
+// RequestPayload fetches a batch of cells from a remote node.
+func (p *Peer) RequestPayload(hashes []common.Hash, cell types.CustodyBitmap) error {
+	p.Log().Debug("Fetching batch of cells", "txcount", len(hashes), "cellcount", cell.OneCount())
+	id := rand.Uint64()
+
+	err := p.tracker.Track(tracker.Request{
+		ID:       id,
+		ReqCode:  GetCellsMsg,
+		RespCode: CellsMsg,
+		Size:     len(hashes),
+	})
+	if err != nil {
+		return err
+	}
+	return p2p.Send(p.rw, GetCellsMsg, &GetCellsRequestPacket{
+		RequestId: id,
+		GetCellsRequest: GetCellsRequest{
+			Hashes: hashes,
+			Mask:   cell,
+		},
 	})
 }
 

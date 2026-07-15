@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/syncer"
@@ -500,6 +501,12 @@ var (
 		Name:     "blobpool.pricebump",
 		Usage:    "Price bump percentage to replace an already existing blob transaction",
 		Value:    ethconfig.Defaults.BlobPool.PriceBump,
+		Category: flags.BlobPoolCategory,
+	}
+	BlobPoolFetchProbabilityFlag = &cli.Uint64Flag{
+		Name:     "blobpool.fetchprobability",
+		Usage:    "Probability of fetching the full blob payload for sparse blobpool (min=15, max=100)",
+		Value:    fetcher.DefaultFetchProbability,
 		Category: flags.BlobPoolCategory,
 	}
 	// Performance tuning settings
@@ -1694,6 +1701,9 @@ func setBlobPool(ctx *cli.Context, cfg *blobpool.Config) {
 	}
 	if ctx.IsSet(BlobPoolPriceBumpFlag.Name) {
 		cfg.PriceBump = ctx.Uint64(BlobPoolPriceBumpFlag.Name)
+	}
+	if ctx.IsSet(BlobPoolFetchProbabilityFlag.Name) {
+		cfg.FetchProbability = ctx.Uint64(BlobPoolFetchProbabilityFlag.Name)
 	}
 }
 

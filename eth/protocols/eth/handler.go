@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -71,6 +72,9 @@ type Backend interface {
 	// TxPool retrieves the transaction pool object to serve data.
 	TxPool() TxPool
 
+	// BlobPool retrieves the blob pool object to serve cell requests.
+	BlobPool() BlobPool
+
 	// AcceptTxs retrieves whether transaction processing is enabled on the node
 	// or if inbound transactions should simply be dropped.
 	AcceptTxs() bool
@@ -90,6 +94,18 @@ type Backend interface {
 	Handle(peer *Peer, packet Packet) error
 }
 
+// BlobPool defines the methods needed by the protocol handler to serve cell requests.
+type BlobPool interface {
+	// GetBlobHashes returns the blob versioned hashes for a given transaction hash.
+	GetBlobHashes(hash common.Hash) []common.Hash
+	// GetBlobCells retrieves cells and proofs for given versioned blob hashes filtered by the custody bitmap.
+	GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error)
+	// GetCustody returns the custody bitmap for a given transaction hash.
+	GetCustody(hash common.Hash) *types.CustodyBitmap
+	// Has returns whether the blob pool contains a transaction with the given hash.
+	Has(hash common.Hash) bool
+}
+
 // TxPool defines the methods needed by the protocol handler to serve transactions.
 type TxPool interface {
 	// Get retrieves the transaction from the local txpool with the given hash.
@@ -97,7 +113,7 @@ type TxPool interface {
 
 	// GetRLP retrieves the RLP-encoded transaction from the local txpool with
 	// the given hash.
-	GetRLP(hash common.Hash) []byte
+	GetRLP(hash common.Hash, version uint) []byte
 
 	// GetMetadata returns the transaction type and transaction size with the
 	// given transaction hash.
@@ -113,7 +129,7 @@ func MakeProtocols(backend Backend, network uint64, disc enode.Iterator) []p2p.P
 			Version: version,
 			Length:  protocolLengths[version],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-				peer := NewPeer(version, p, rw, backend.TxPool(), backend.Chain().Config())
+				peer := NewPeer(version, p, rw, backend.TxPool(), backend.BlobPool(), backend.Chain().Config())
 				defer peer.Close()
 
 				return backend.RunPeer(peer, func(peer *Peer) error {
@@ -216,6 +232,24 @@ var eth71 = map[uint64]msgHandler{
 	BlockAccessListsMsg:           handleBlockAccessLists,
 }
 
+var eth72 = map[uint64]msgHandler{
+	TransactionsMsg:               handleTransactions,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes72,
+	GetBlockHeadersMsg:            handleGetBlockHeaders,
+	BlockHeadersMsg:               handleBlockHeaders,
+	GetBlockBodiesMsg:             handleGetBlockBodies,
+	BlockBodiesMsg:                handleBlockBodies,
+	GetReceiptsMsg:                handleGetReceipts70,
+	ReceiptsMsg:                   handleReceipts70,
+	GetPooledTransactionsMsg:      handleGetPooledTransactions,
+	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+	GetBlockAccessListsMsg:        handleGetBlockAccessLists,
+	BlockAccessListsMsg:           handleBlockAccessLists,
+	GetCellsMsg:                   handleGetCells,
+	CellsMsg:                      handleCells,
+}
+
 // handleMessage is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
 func handleMessage(backend Backend, peer *Peer) error {
@@ -237,6 +271,8 @@ func handleMessage(backend Backend, peer *Peer) error {
 		handlers = eth70
 	case ETH71:
 		handlers = eth71
+	case ETH72:
+		handlers = eth72
 	default:
 		return fmt.Errorf("unknown eth protocol version: %v", peer.version)
 	}

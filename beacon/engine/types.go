@@ -173,6 +173,11 @@ type BlobAndProofV2 struct {
 	CellProofs []hexutil.Bytes `json:"proofs"` // proofs MUST contain exactly CELLS_PER_EXT_BLOB cell proofs.
 }
 
+type BlobCellsAndProofsV1 struct {
+	BlobCells []*hexutil.Bytes `json:"blob_cells"`
+	Proofs    []*hexutil.Bytes `json:"proofs"`
+}
+
 // BlobAndProofListV2 is a list of BlobAndProofV2 with a hand-rolled JSON marshaler
 // that avoids the overhead of encoding/json for large blob payloads.
 type BlobAndProofListV2 []*BlobAndProofV2
