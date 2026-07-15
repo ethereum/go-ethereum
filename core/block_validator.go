@@ -128,8 +128,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		return errors.New("nil ProcessResult value")
 	}
 	header := block.Header()
-	// When ParallelTxGroupingByStorageOverlap is enabled, Process may still differ
-	// from the block builder in edge cases; skip strict gas equality in that mode.
+
 	if block.GasUsed() != res.GasUsed {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), res.GasUsed)
 	}
