@@ -285,6 +285,15 @@ var (
 		Value:    ethconfig.Defaults.SyncMode.String(),
 		Category: flags.StateCategory,
 	}
+	SnapSkipReceiptsFlag = &cli.BoolFlag{
+		Name: "snap.skipreceipts",
+		Usage: "Skip the historical receipt backfill during snap sync, reconstructing state only. " +
+			"Lets a node snap-sync from a peer that does not retain historical receipts (e.g. a state-only / " +
+			"snapshot-restored source). The resulting node has no receipts for the pre-sync range, so " +
+			"eth_getLogs / eth_getTransactionReceipt / eth_getBlockReceipts return a pruned-history error there. " +
+			"Intended for state-growth benchmarking and trusted-peer setups, not general mainnet operation.",
+		Category: flags.StateCategory,
+	}
 	GCModeFlag = &cli.StringFlag{
 		Name:     "gcmode",
 		Usage:    `Blockchain garbage collection mode ("full", "archive")`,
@@ -1788,6 +1797,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		value := ctx.String(ChainHistoryFlag.Name)
 		if err := cfg.HistoryMode.UnmarshalText([]byte(value)); err != nil {
 			Fatalf("--%s: %v", ChainHistoryFlag.Name, err)
+		}
+	}
+
+	if ctx.IsSet(SnapSkipReceiptsFlag.Name) {
+		cfg.SnapSkipReceipts = ctx.Bool(SnapSkipReceiptsFlag.Name)
+		if cfg.SnapSkipReceipts {
+			log.Warn("Snap sync receipt backfill disabled via --snap.skipreceipts: state is reconstructed in full, " +
+				"but the node will have no receipts for the pre-sync range. eth_getLogs, eth_getTransactionReceipt and " +
+				"eth_getBlockReceipts will report pruned history there. Use only for benchmarking / trusted-peer setups.")
 		}
 	}
 

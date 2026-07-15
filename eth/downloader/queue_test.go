@@ -195,6 +195,28 @@ func TestBasics(t *testing.T) {
 	}
 }
 
+// TestSkipReceipts verifies that skipReceipts schedules bodies in full but no
+// receipt tasks.
+func TestSkipReceipts(t *testing.T) {
+	q := newQueue(10, 10)
+	q.skipReceipts = true
+	q.Prepare(1, SnapSync)
+
+	headers := chain.headers()
+	hashes := make([]common.Hash, len(headers))
+	for i, header := range headers {
+		hashes[i] = header.Hash()
+	}
+	q.Schedule(headers, hashes, 1)
+
+	if got, exp := q.PendingBodies(), chain.Len(); got != exp {
+		t.Errorf("wrong pending block count, got %d, exp %d", got, exp)
+	}
+	if got, exp := q.PendingReceipts(), 0; got != exp {
+		t.Errorf("wrong pending receipt count, got %d, exp %d", got, exp)
+	}
+}
+
 func TestEmptyBlocks(t *testing.T) {
 	numOfBlocks := len(emptyChain.blocks)
 

@@ -150,6 +150,10 @@ type queue struct {
 	active *sync.Cond
 	closed bool
 
+	// skipReceipts skips scheduling and fetching receipts during snap sync;
+	// state is still reconstructed in full.
+	skipReceipts bool
+
 	logTime time.Time // Time instance when status was last reported
 }
 
@@ -272,7 +276,7 @@ func (q *queue) Schedule(headers []*types.Header, hashes []common.Hash, from uin
 			q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
 		}
 		// Queue for receipt retrieval
-		if q.mode == ethconfig.SnapSync && !header.EmptyReceipts() {
+		if q.mode == ethconfig.SnapSync && !q.skipReceipts && !header.EmptyReceipts() {
 			if _, ok := q.receiptTaskPool[hash]; ok {
 				log.Warn("Header already scheduled for receipt fetch", "number", header.Number, "hash", hash)
 			} else {
@@ -425,7 +429,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		// we can ask the resultcache if this header is within the
 		// "prioritized" segment of blocks. If it is not, we need to throttle
 
-		stale, throttle, item, err := q.resultCache.AddFetch(header, q.mode == ethconfig.SnapSync)
+		stale, throttle, item, err := q.resultCache.AddFetch(header, q.mode == ethconfig.SnapSync && !q.skipReceipts)
 		if stale {
 			// Don't put back in the task queue, this item has already been
 			// delivered upstream

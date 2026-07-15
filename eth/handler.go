@@ -101,15 +101,16 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
-	NodeID         enode.ID               // P2P node ID used for tx propagation topology
-	Database       ethdb.Database         // Database for direct sync insertions
-	Chain          *core.BlockChain       // Blockchain to serve data from
-	TxPool         txPool                 // Transaction pool to propagate from
-	Network        uint64                 // Network identifier to advertise
-	Sync           ethconfig.SyncMode     // Whether to snap or full sync
-	BloomCache     uint64                 // Megabytes to alloc for snap sync bloom
-	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
-	SnapV2         bool                   // Whether to advertise and sync via the snap/2 protocol
+	NodeID           enode.ID               // P2P node ID used for tx propagation topology
+	Database         ethdb.Database         // Database for direct sync insertions
+	Chain            *core.BlockChain       // Blockchain to serve data from
+	TxPool           txPool                 // Transaction pool to propagate from
+	Network          uint64                 // Network identifier to advertise
+	Sync             ethconfig.SyncMode     // Whether to snap or full sync
+	SnapSkipReceipts bool                   // Skip historical receipt backfill during snap sync (state-only)
+	BloomCache       uint64                 // Megabytes to alloc for snap sync bloom
+	RequiredBlocks   map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
+	SnapV2           bool                   // Whether to advertise and sync via the snap/2 protocol
 }
 
 type handler struct {
@@ -160,6 +161,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// Construct the downloader (long sync)
 	h.downloader = downloader.New(config.Database, config.Sync, h.chain, h.removePeer, h.enableSyncedFeatures, config.SnapV2)
+	h.downloader.SetSkipReceipts(config.SnapSkipReceipts)
 
 	// If snap sync is requested but snapshots are disabled, fail loudly
 	if h.downloader.ConfigSyncMode() == ethconfig.SnapSync && (config.Chain.Snapshots() == nil && config.Chain.TrieDB().Scheme() == rawdb.HashScheme) {
