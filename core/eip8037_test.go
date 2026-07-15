@@ -192,6 +192,9 @@ func assertPoolSane(t *testing.T, res *ExecutionResult, gp *GasPool, floor uint6
 	if res.UsedGas > res.MaxUsedGas {
 		t.Fatalf("post-refund gas %d exceeds peak %d", res.UsedGas, res.MaxUsedGas)
 	}
+	if gp.cumulativeRegular > res.MaxUsedGas {
+		t.Fatalf("regular %d exceeds peak %d", gp.cumulativeRegular, res.MaxUsedGas)
+	}
 	if gp.cumulativeState > res.MaxUsedGas {
 		t.Fatalf("state %d exceeds peak %d", gp.cumulativeState, res.MaxUsedGas)
 	}
