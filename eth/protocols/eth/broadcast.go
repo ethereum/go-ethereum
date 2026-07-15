@@ -143,12 +143,8 @@ func (p *Peer) announceTransactions() {
 						pendingSizes = append(pendingSizes, uint32(meta.Size))
 					}
 					size += common.HashLength
-
-					processed[count] = true
-				} else {
-					// Transaction is no longer in the pool; drop it from the queue.
-					processed[count] = true
 				}
+				processed[count] = true
 			}
 			// Shift and trim queue using processed map
 			var remaining []common.Hash
