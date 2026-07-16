@@ -1,7 +1,7 @@
 # This file contains sha256 checksums of optional build dependencies.
 
 # version:spec-tests tests@v20.0.0
-# https://github.com/ethereum/execution-spec-tests/releases
+# https://github.com/ethereum/execution-specs/releases
 # https://github.com/ethereum/execution-specs/releases/download/tests%40v20.0.0
 b183702a5b447b465873865357ced9eb342315922e52e31b714e2de115dd0bb4  fixtures.tar.gz
 
