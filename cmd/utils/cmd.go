@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -56,6 +57,38 @@ import (
 const (
 	importBatchSize = 2500
 )
+
+// exportBlock is the on-disk representation used by geth export and import.
+//
+// It intentionally differs from types.Block's network encoding: a block access
+// list is stored as an optional trailing field so that an exported chain retains
+// EIP-7928 data. Older export files, which end at Withdrawals, remain valid.
+type exportBlock struct {
+	Header      *types.Header
+	Txs         []*types.Transaction
+	Uncles      []*types.Header
+	Withdrawals []*types.Withdrawal  `rlp:"optional"`
+	AccessList  *bal.BlockAccessList `rlp:"optional"`
+}
+
+func makeExportBlock(block *types.Block) exportBlock {
+	return exportBlock{
+		Header:      block.Header(),
+		Txs:         block.Transactions(),
+		Uncles:      block.Uncles(),
+		Withdrawals: block.Withdrawals(),
+		AccessList:  block.AccessList(),
+	}
+}
+
+func (b exportBlock) block() *types.Block {
+	block := types.NewBlockWithHeader(b.Header).WithBody(types.Body{
+		Transactions: b.Txs,
+		Uncles:       b.Uncles,
+		Withdrawals:  b.Withdrawals,
+	})
+	return block.WithAccessListUnsafe(b.AccessList)
+}
 
 type EraFileFormat int
 
@@ -202,18 +235,19 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		}
 		i := 0
 		for ; i < importBatchSize; i++ {
-			var b types.Block
-			if err := stream.Decode(&b); err == io.EOF {
+			var record exportBlock
+			if err := stream.Decode(&record); err == io.EOF {
 				break
 			} else if err != nil {
 				return fmt.Errorf("at block %d: %v", n, err)
 			}
+			b := record.block()
 			// don't import first block
 			if b.NumberU64() == 0 {
 				i--
 				continue
 			}
-			blocks[i] = &b
+			blocks[i] = b
 			n++
 		}
 		if i == 0 {
@@ -411,8 +445,7 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 		writer = gzip.NewWriter(writer)
 		defer writer.(*gzip.Writer).Close()
 	}
-	// Iterate over the blocks and export them
-	if err := blockchain.Export(writer); err != nil {
+	if err := exportChain(blockchain, writer, 0, blockchain.CurrentBlock().Number.Uint64()); err != nil {
 		return err
 	}
 	log.Info("Exported blockchain", "file", fn)
@@ -436,11 +469,31 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		writer = gzip.NewWriter(writer)
 		defer writer.(*gzip.Writer).Close()
 	}
-	// Iterate over the blocks and export them
-	if err := blockchain.ExportN(writer, first, last); err != nil {
+	if err := exportChain(blockchain, writer, first, last); err != nil {
 		return err
 	}
 	log.Info("Exported blockchain to", "file", fn)
+	return nil
+}
+
+func exportChain(chain *core.BlockChain, writer io.Writer, first, last uint64) error {
+	if first > last {
+		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
+	}
+	var parentHash common.Hash
+	for number := first; number <= last; number++ {
+		block := chain.GetBlockByNumber(number)
+		if block == nil {
+			return fmt.Errorf("export failed on #%d: not found", number)
+		}
+		if number > first && block.ParentHash() != parentHash {
+			return errors.New("export failed: chain reorg during export")
+		}
+		parentHash = block.Hash()
+		if err := rlp.Encode(writer, makeExportBlock(block)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
