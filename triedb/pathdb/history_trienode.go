@@ -397,19 +397,24 @@ func decodeRestartTrailer(keySection []byte) ([]uint32, []uint32, int, error) {
 	}
 	nRestarts := binary.BigEndian.Uint32(keySection[len(keySection)-4:])
 
-	// Decode the trailer
+	// Decode the trailer. The multiplication is performed in 64-bit to prevent
+	// the result from wrapping around for large restart counts.
+	if uint64(len(keySection)) < uint64(nRestarts)*8+4 {
+		return nil, nil, 0, fmt.Errorf("key section too short, restarts: %d, size: %d", nRestarts, len(keySection))
+	}
 	var (
 		keyOffsets = make([]uint32, 0, int(nRestarts))
 		valOffsets = make([]uint32, 0, int(nRestarts))
+		keyLimit   = len(keySection) - 4 - int(nRestarts)*8 // End of key data
 	)
-	if len(keySection) < int(8*nRestarts)+4 {
-		return nil, nil, 0, fmt.Errorf("key section too short, restarts: %d, size: %d", nRestarts, len(keySection))
-	}
 	for i := range int(nRestarts) {
 		o := len(keySection) - 4 - (int(nRestarts)-i)*8
 		keyOffset := binary.BigEndian.Uint32(keySection[o : o+4])
 		if i != 0 && keyOffset <= keyOffsets[i-1] {
 			return nil, nil, 0, fmt.Errorf("key offset is out of order, prev: %v, cur: %v", keyOffsets[i-1], keyOffset)
+		}
+		if int(keyOffset) > keyLimit {
+			return nil, nil, 0, fmt.Errorf("key offset is out of range, offset: %d, limit: %d", keyOffset, keyLimit)
 		}
 		keyOffsets = append(keyOffsets, keyOffset)
 
@@ -421,7 +426,6 @@ func decodeRestartTrailer(keySection []byte) ([]uint32, []uint32, int, error) {
 		}
 		valOffsets = append(valOffsets, valOffset)
 	}
-	keyLimit := len(keySection) - 4 - int(nRestarts)*8 // End of key data
 	return keyOffsets, valOffsets, keyLimit, nil
 }
 
