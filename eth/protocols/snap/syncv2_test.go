@@ -2222,6 +2222,9 @@ func seedCompletedSync(t *testing.T, scheme string) *reenableFixture {
 	hashX := crypto.Keccak256Hash(addrX[:])
 
 	bals := make(map[common.Hash]rlp.RawValue)
+	// Link the parent hashes down from the pivot, the catch-up walks the
+	// chain backward from the target header.
+	parent := pivotA.Hash()
 	mkBALHeader := func(num uint64, root common.Hash, balance uint64) *types.Header {
 		cb := bal.NewConstructionBlockAccessList()
 		cb.BalanceChange(0, addrY, uint256.NewInt(balance))
@@ -2234,7 +2237,16 @@ func seedCompletedSync(t *testing.T, scheme string) *reenableFixture {
 			t.Fatal(err)
 		}
 		balHash := b.Hash()
-		header := mkHeader(num, root, &balHash)
+		header := &types.Header{
+			Number: new(big.Int).SetUint64(num), ParentHash: parent, Root: root,
+			Difficulty: common.Big0, BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
+			BlobGasUsed: &zero, ExcessBlobGas: &zero,
+			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
+			BlockAccessListHash: &balHash,
+		}
+		rawdb.WriteHeader(db, header)
+		rawdb.WriteCanonicalHash(db, header.Hash(), num)
+		parent = header.Hash()
 		bals[header.Hash()] = buf.Bytes()
 		return header
 	}
