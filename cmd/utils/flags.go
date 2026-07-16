@@ -1785,19 +1785,24 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 
 	// Setting go runtime settings
+	gcPercent := ctx.Int(GOGCFlag.Name)
 	if ctx.IsSet(GOGCFlag.Name) {
-		gcPercent := ctx.Int(GOGCFlag.Name)
 		log.Info("Sanitizing Go's GC trigger", "percent", gcPercent)
-		godebug.SetGCPercent(gcPercent)
 	}
+	godebug.SetGCPercent(gcPercent)
+
 	if ctx.IsSet(MemoryLimitFlag.Name) {
 		memLimit := int64(ctx.Int(MemoryLimitFlag.Name)) * 1024 * 1024
 		if memLimit > int64(total) {
 			log.Info("Sanitizing memory limit", "provided(MB)", memLimit/1024/1024, "updated(MB)", total/1024/1024)
 			memLimit = int64(total)
 		}
-		log.Info("Setting Go memory limit", "MB", memLimit/1024/1024)
-		godebug.SetMemoryLimit(memLimit)
+		if memLimit < 0 {
+			log.Warn("Ignoring negative Go memory limit")
+		} else {
+			log.Info("Setting Go memory limit", "MB", memLimit/1024/1024)
+			godebug.SetMemoryLimit(memLimit)
+		}
 	}
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
