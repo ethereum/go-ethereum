@@ -763,6 +763,9 @@ func (s *StateDB) MergeParallelChildInto(child *StateDB, txHash common.Hash) {
 	if s.accessEvents != nil && child.accessEvents != nil {
 		s.accessEvents.Merge(child.accessEvents)
 	}
+	if s.witness != nil {
+		s.witness.Merge(child.witness)
+	}
 	for _, addr := range child.parallelMergeAddrs {
 		if op, ok := child.mutations[addr]; ok && op.isDelete() {
 			delete(s.stateObjects, addr)

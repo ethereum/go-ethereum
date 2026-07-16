@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -114,6 +115,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	txWaveExecStart := time.Now()
+
 	for groupIdx, group := range groups {
 		sortedIdx := append([]int(nil), group...)
 		sort.Ints(sortedIdx)
@@ -137,6 +139,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			continue
 		}
 
+		coinbaseBase := new(uint256.Int).Set(statedb.GetBalance(header.Coinbase))
+		coinbaseFinal := new(uint256.Int).Set(coinbaseBase)
 		txForks := make([]*state.StateDB, n)
 		var wg sync.WaitGroup
 		var errMu sync.Mutex
@@ -182,8 +186,17 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, firstErr
 		}
 		for _, i := range sortedIdx {
+			childCoinbase := txForks[i].GetBalance(header.Coinbase)
+			if childCoinbase.Cmp(coinbaseBase) >= 0 {
+				coinbaseFinal.Add(coinbaseFinal, new(uint256.Int).Sub(childCoinbase, coinbaseBase))
+			} else {
+				coinbaseFinal.Sub(coinbaseFinal, new(uint256.Int).Sub(coinbaseBase, childCoinbase))
+			}
 			statedb.MergeParallelChildInto(txForks[i], txs[i].Hash())
 		}
+		// ponytail: Coinbase balance deltas are additive; dynamic reads
+		// conflicts still require observed read/write sets and speculative re-execution and are not handled.
+		statedb.SetBalance(header.Coinbase, coinbaseFinal, tracing.BalanceIncreaseRewardTransactionFee)
 		if err := statedb.Error(); err != nil {
 			return nil, err
 		}

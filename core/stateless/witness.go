@@ -113,6 +113,22 @@ func (w *Witness) Copy() *Witness {
 	return cpy
 }
 
+// Merge adds everything collected by another witness.
+// This operates under the assumption that the transactions are truly independent
+func (w *Witness) Merge(other *Witness) {
+	if other == nil {
+		return
+	}
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	if len(other.Headers) > len(w.Headers) {
+		w.Headers = slices.Clone(other.Headers)
+	}
+	maps.Copy(w.Codes, other.Codes)
+	maps.Copy(w.State, other.State)
+}
+
 // Root returns the pre-state root from the first header.
 //
 // Note, this method will panic in case of a bad witness (but RLP decoding will
