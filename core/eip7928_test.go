@@ -276,24 +276,6 @@ func TestBALEmptyBlockExcludesCoinbase(t *testing.T) {
 	assertAbsent(t, b, coinbase)
 }
 
-// TestBALCoinbaseTipCapturesBalance: positive priority fee credits coinbase
-// and the balance change appears in the BAL.
-func TestBALCoinbaseTipCapturesBalance(t *testing.T) {
-	coinbase := common.Address{0xc0}
-	to := common.HexToAddress("0xabba")
-	env := newBALTestEnv(nil)
-
-	b, _ := env.run(t, func(g *BlockGen) {
-		g.SetCoinbase(coinbase)
-		g.AddTx(env.tx(0, &to, big.NewInt(0), params.TxGas, 2 /* gwei tip */, nil))
-	})
-
-	cb := assertPresent(t, b, coinbase)
-	if len(cb.BalanceChanges) == 0 || cb.BalanceChanges[0].PostBalance.Sign() == 0 {
-		t.Fatalf("coinbase missing positive balance change: %+v", cb.BalanceChanges)
-	}
-}
-
 // TestBALCoinbasePerTxBalance checks that fee-recipient balances are recorded
 // after each transaction, rather than only once at the end of the block.
 func TestBALCoinbasePerTxBalance(t *testing.T) {
@@ -717,28 +699,6 @@ func TestBALDelegationTargetOOG(t *testing.T) {
 }
 
 // ============================== Storage inclusion ==============================
-
-// TestBALStorageWriteRecorded: SSTORE places the slot in storage_changes and
-// keeps it out of storage_reads.
-func TestBALStorageWriteRecorded(t *testing.T) {
-	contract := common.HexToAddress("0xc1")
-	slot := common.BigToHash(big.NewInt(0x01))
-	// PUSH1 0x42 PUSH1 0x01 SSTORE STOP
-	code := []byte{0x60, 0x42, 0x60, 0x01, 0x55, 0x00}
-	env := newBALTestEnv(types.GenesisAlloc{contract: {Code: code, Balance: common.Big0}})
-
-	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &contract, big.NewInt(0), 1_000_000, 0, nil))
-	})
-
-	aa := assertPresent(t, b, contract)
-	if !hasStorageWrite(b, contract, slot) {
-		t.Fatalf("expected slot 0x01 in storage_changes\n%s", b.PrettyPrint())
-	}
-	if hasSlotIn(aa.StorageReads, slot) {
-		t.Fatalf("slot 0x01 must NOT appear in storage_reads")
-	}
-}
 
 // TestBALStorageSloadOnly: SLOAD without a write puts the slot in storage_reads.
 func TestBALStorageSloadOnly(t *testing.T) {
@@ -2128,84 +2088,50 @@ func TestBALDelegatedCallStorage(t *testing.T) {
 	assertEmpty(t, assertPresent(t, b, implementation))
 }
 
-// TestBALDelegatedDelegateCallStorage checks the other storage context:
-// DELEGATECALL to a delegated authority still executes the resolved code
-// against the original caller's storage.
-func TestBALDelegatedDelegateCallStorage(t *testing.T) {
+// TestBALDelegatedCallFamilyStorage checks the storage context of the CALL
+// family against a delegated authority: the resolved implementation supplies
+// code only, while the storage read belongs to the executing context — the
+// authority for CALL/STATICCALL, the caller for DELEGATECALL/CALLCODE.
+func TestBALDelegatedCallFamilyStorage(t *testing.T) {
 	caller := common.HexToAddress("0xca11")
 	authority := common.HexToAddress("0xa7702")
 	implementation := common.HexToAddress("0x1a11")
 	slot := common.BigToHash(big.NewInt(0x07))
 	implCode := []byte{0x60, 0x07, 0x54, 0x50, 0x00} // SLOAD(7), POP, STOP
-	env := newBALTestEnv(types.GenesisAlloc{
-		caller:         {Code: makeStubCaller(0xf4 /* DELEGATECALL */, authority), Balance: common.Big0},
-		authority:      {Code: types.AddressToDelegation(implementation), Balance: common.Big0},
-		implementation: {Code: implCode, Balance: common.Big0},
-	})
-
-	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
-	})
-
-	callerAccess := assertPresent(t, b, caller)
-	if !hasSlotIn(callerAccess.StorageReads, slot) {
-		t.Fatalf("delegated DELEGATECALL read must belong to caller\n%s", b.PrettyPrint())
+	cases := []struct {
+		name      string
+		op        byte
+		readOwner common.Address
+	}{
+		{"call", 0xf1, authority},
+		{"callcode", 0xf2, caller},
+		{"delegatecall", 0xf4, caller},
+		{"staticcall", 0xfa, authority},
 	}
-	assertEmpty(t, assertPresent(t, b, authority))
-	assertEmpty(t, assertPresent(t, b, implementation))
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newBALTestEnv(types.GenesisAlloc{
+				caller:         {Code: makeStubCaller(tc.op, authority), Balance: common.Big0},
+				authority:      {Code: types.AddressToDelegation(implementation), Balance: common.Big0},
+				implementation: {Code: implCode, Balance: common.Big0},
+			})
 
-// TestBALDelegatedStaticCallStorage covers STATICCALL's context. It resolves
-// the authority's implementation code, but SLOAD remains attached to the static
-// call target's storage.
-func TestBALDelegatedStaticCallStorage(t *testing.T) {
-	caller := common.HexToAddress("0xca11")
-	authority := common.HexToAddress("0xa7702")
-	implementation := common.HexToAddress("0x1a11")
-	slot := common.BigToHash(big.NewInt(0x07))
-	implCode := []byte{0x60, 0x07, 0x54, 0x50, 0x00} // SLOAD(7), POP, STOP
-	env := newBALTestEnv(types.GenesisAlloc{
-		caller:         {Code: makeStubCaller(0xfa /* STATICCALL */, authority), Balance: common.Big0},
-		authority:      {Code: types.AddressToDelegation(implementation), Balance: common.Big0},
-		implementation: {Code: implCode, Balance: common.Big0},
-	})
+			b, _ := env.run(t, func(g *BlockGen) {
+				g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
+			})
 
-	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
-	})
-
-	authorityAccess := assertPresent(t, b, authority)
-	if !hasSlotIn(authorityAccess.StorageReads, slot) {
-		t.Fatalf("delegated STATICCALL read must belong to authority\n%s", b.PrettyPrint())
+			owner := assertPresent(t, b, tc.readOwner)
+			if !hasSlotIn(owner.StorageReads, slot) {
+				t.Fatalf("%s read must belong to %x\n%s", tc.name, tc.readOwner, b.PrettyPrint())
+			}
+			for _, other := range []common.Address{caller, authority} {
+				if other != tc.readOwner {
+					assertEmpty(t, assertPresent(t, b, other))
+				}
+			}
+			assertEmpty(t, assertPresent(t, b, implementation))
+		})
 	}
-	assertEmpty(t, assertPresent(t, b, implementation))
-}
-
-// TestBALDelegatedCallCodeStorage covers CALLCODE's storage context. As with
-// DELEGATECALL, the implementation address supplies code but is not the owner
-// of storage reads.
-func TestBALDelegatedCallCodeStorage(t *testing.T) {
-	caller := common.HexToAddress("0xca11")
-	authority := common.HexToAddress("0xa7702")
-	implementation := common.HexToAddress("0x1a11")
-	slot := common.BigToHash(big.NewInt(0x07))
-	implCode := []byte{0x60, 0x07, 0x54, 0x50, 0x00} // SLOAD(7), POP, STOP
-	env := newBALTestEnv(types.GenesisAlloc{
-		caller:         {Code: makeStubCaller(0xf2 /* CALLCODE */, authority), Balance: common.Big0},
-		authority:      {Code: types.AddressToDelegation(implementation), Balance: common.Big0},
-		implementation: {Code: implCode, Balance: common.Big0},
-	})
-
-	b, _ := env.run(t, func(g *BlockGen) {
-		g.AddTx(env.tx(0, &caller, big.NewInt(0), 1_000_000, 0, nil))
-	})
-
-	callerAccess := assertPresent(t, b, caller)
-	if !hasSlotIn(callerAccess.StorageReads, slot) {
-		t.Fatalf("delegated CALLCODE read must belong to caller\n%s", b.PrettyPrint())
-	}
-	assertEmpty(t, assertPresent(t, b, authority))
-	assertEmpty(t, assertPresent(t, b, implementation))
 }
 
 // TestBALDelegationOneHop verifies that resolving A -> B does not

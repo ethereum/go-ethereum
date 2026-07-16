@@ -31,7 +31,8 @@ import (
 // TestEIP8246SelfdestructNoBurn verifies that, once EIP-8246 is active
 // (Amsterdam), a contract that is created and self-destructs to itself within
 // the same transaction keeps its balance instead of burning it: the account
-// survives as a balance-only account (no code, zero nonce, balance preserved).
+// survives as a balance-only account (no code, zero nonce, balance preserved)
+// whose storage is cleared at transaction finalization.
 //
 // https://eips.ethereum.org/EIPS/eip-8246
 func TestEIP8246SelfdestructNoBurn(t *testing.T) {
@@ -42,9 +43,11 @@ func TestEIP8246SelfdestructNoBurn(t *testing.T) {
 		signer  = types.LatestSigner(&config)
 		engine  = beacon.New(ethash.NewFaker())
 		value   = big.NewInt(1_000_000)
-		// Init code: ADDRESS (0x30) ; SELFDESTRUCT (0xff). The created contract
-		// self-destructs to itself during its own creation transaction.
-		initcode = common.FromHex("30ff")
+		slot    = common.BigToHash(big.NewInt(0x05))
+		// Init code: SSTORE(5, 0x2a); ADDRESS (0x30); SELFDESTRUCT (0xff). The
+		// created contract stores a value and self-destructs to itself during
+		// its own creation transaction.
+		initcode = []byte{0x60, 0x2a, 0x60, 0x05, 0x55, 0x30, 0xff}
 	)
 	// TODO: drop this hacky Amsterdam config initialization once the final
 	// Amsterdam config is available (mirrors TestEthTransferLogs).
@@ -99,61 +102,8 @@ func TestEIP8246SelfdestructNoBurn(t *testing.T) {
 	if got := state.GetCodeSize(created); got != 0 {
 		t.Errorf("created account code size = %d, want 0 (code must be cleared)", got)
 	}
-}
-
-// TestEIP8246SelfdestructClearsStorage verifies the other half of the
-// balance-only-account rule: a same-transaction selfdestruct preserves balance
-// but clears storage during transaction finalization.
-func TestEIP8246SelfdestructClearsStorage(t *testing.T) {
-	var (
-		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		sender  = crypto.PubkeyToAddress(key.PublicKey)
-		config  = *params.MergedTestChainConfig
-		signer  = types.LatestSigner(&config)
-		engine  = beacon.New(ethash.NewFaker())
-		value   = big.NewInt(1_000_000)
-		slot    = common.BigToHash(big.NewInt(0x05))
-		stored  = common.BigToHash(big.NewInt(0x2a))
-		created = crypto.CreateAddress(sender, 0)
-	)
-	config.AmsterdamTime = new(uint64)
-	gspec := &Genesis{
-		Config: &config,
-		Alloc:  types.GenesisAlloc{sender: {Balance: newGwei(1_000_000_000)}},
-	}
-	// SSTORE(5, 0x2a); ADDRESS; SELFDESTRUCT.
-	initcode := []byte{0x60, 0x2a, 0x60, 0x05, 0x55, 0x30, 0xff}
-	db, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(_ int, b *BlockGen) {
-		b.AddTx(types.MustSignNewTx(key, signer, &types.DynamicFeeTx{
-			ChainID:   gspec.Config.ChainID,
-			Nonce:     0,
-			Gas:       1_000_000,
-			GasFeeCap: newGwei(5),
-			GasTipCap: newGwei(5),
-			Value:     value,
-			Data:      initcode,
-		}))
-	})
-	chain, err := NewBlockChain(db, gspec, engine, nil)
-	if err != nil {
-		t.Fatalf("failed to create chain: %v", err)
-	}
-	defer chain.Stop()
-	state, err := chain.StateAt(blocks[0].Header())
-	if err != nil {
-		t.Fatalf("failed to obtain block state: %v", err)
-	}
-	if got := state.GetBalance(created).ToBig(); got.Cmp(value) != 0 {
-		t.Errorf("created balance = %v, want %v", got, value)
-	}
-	if got := state.GetNonce(created); got != 0 {
-		t.Errorf("created nonce = %d, want 0", got)
-	}
-	if got := state.GetCodeSize(created); got != 0 {
-		t.Errorf("created code size = %d, want 0", got)
-	}
 	if got := state.GetState(created, slot); got != (common.Hash{}) {
-		t.Errorf("created storage slot %x = %x, want 0 (stored %x before selfdestruct)", slot, got, stored)
+		t.Errorf("created storage slot %x = %x, want 0 (storage must be cleared)", slot, got)
 	}
 }
 

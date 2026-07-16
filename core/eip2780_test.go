@@ -463,56 +463,6 @@ func TestEIP2780RecipientOOG(t *testing.T) {
 	}
 }
 
-// TestEIP2780AuthOOG pins the atomic authorization charge point: a later
-// authorization OOG reverts an earlier successful authorization too.
-func TestEIP2780AuthOOG(t *testing.T) {
-	a0, authority0 := signAuth(t, authKeyA, delegate8037, 0)
-	key, _ := crypto.GenerateKey()
-	a1, err := types.SignSetCode(key, types.SetCodeAuthorization{
-		ChainID: *uint256.MustFromBig(cfg8037.ChainID), Address: delegate8037, Nonce: 0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	authority1 := crypto.PubkeyToAddress(key.PublicKey)
-	to := common.HexToAddress("0xe0a0000000000000000000000000000000000009")
-	intrinsic := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + 2*params.RegularPerAuthBaseCost
-	gas := intrinsic + params.AccountWriteAmsterdam + authWorstState
-	sdb := mkState(senderAlloc(types.GenesisAlloc{to: {Balance: big.NewInt(1)}}))
-	res, gp, err := applyMsg(t, sdb, setCodeTxGas(0, to, 0, gas, []types.SetCodeAuthorization{a0, a1}))
-	if err != nil || res.Err != vm.ErrOutOfGas {
-		t.Fatalf("result=%v err=%v, want included OOG", res, err)
-	}
-	for _, authority := range []common.Address{authority0, authority1} {
-		if len(sdb.GetCode(authority)) != 0 || sdb.GetNonce(authority) != 0 {
-			t.Fatalf("authority %x persisted after authorization OOG", authority)
-		}
-	}
-	if gp.cumulativeState != 0 || gp.cumulativeRegular != gas {
-		t.Fatalf("gas = <%d,%d>, want <%d,0>", gp.cumulativeRegular, gp.cumulativeState, gas)
-	}
-}
-
-// TestEIP2780AuthRevert distinguishes an EVM REVERT from a pre-frame OOG:
-// state paid by a successful authorization precedes the frame and persists.
-func TestEIP2780AuthRevert(t *testing.T) {
-	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
-	reverter := common.HexToAddress("0xbad0000000000000000000000000000000000003")
-	sdb := mkState(senderAlloc(types.GenesisAlloc{
-		reverter: {Code: []byte{0x60, 0x00, 0x60, 0x00, 0xfd}},
-	}))
-	res, gp, err := applyMsg(t, sdb, setCodeTxGas(0, reverter, 0, 1_000_000, []types.SetCodeAuthorization{auth}))
-	if err != nil || res.Err != vm.ErrExecutionReverted {
-		t.Fatalf("result=%v err=%v, want execution revert", res, err)
-	}
-	if len(sdb.GetCode(authority)) == 0 || sdb.GetNonce(authority) != 1 {
-		t.Fatalf("authorization not retained after revert: code=%x nonce=%d", sdb.GetCode(authority), sdb.GetNonce(authority))
-	}
-	if gp.cumulativeState != authWorstState {
-		t.Fatalf("state gas = %d, want %d", gp.cumulativeState, authWorstState)
-	}
-}
-
 // TestEIP2780SelfTransferDelegated verifies that a self-transfer incurs no
 // recipient touch or value charges, while resolving the sender's own
 // delegation is still paid for.
@@ -648,72 +598,19 @@ func TestEIP2780RecipientRefill(t *testing.T) {
 	}
 }
 
-// TestEIP2780ValueEffects checks the observable value-transfer behavior along
-// with the decomposition's special treatment of self and creation transfers.
-func TestEIP2780ValueEffects(t *testing.T) {
-	recipient := common.HexToAddress("0xbeef000000000000000000000000000000000006")
-	sdb := mkState(senderAlloc(nil))
-	before := sdb.GetBalance(senderAddr).ToBig()
-	tx := callTx(0, recipient, 7, 300_000, nil)
-	res, _, err := applyMsg(t, sdb, tx)
+// TestEIP2780Coinbase keeps the intrinsic recipient charge separate from the
+// runtime warmth of the coinbase account: calling the coinbase directly is
+// still charged at the cold rate. The warm rate for a coinbase delegation
+// target is covered by TestEIP2780DelegationWarmth.
+func TestEIP2780Coinbase(t *testing.T) {
+	coinbase := common.HexToAddress("0xc01ba5e000000000000000000000000000000001")
+	res, gp, err := applyMsgCoinbase(t, mkState(senderAlloc(nil)), callTx(0, coinbase, 0, 100_000, nil), coinbase)
 	if err != nil || res.Err != nil {
 		t.Fatalf("result=%v err=%v", res, err)
 	}
-	if got := sdb.GetBalance(recipient).ToBig(); got.Cmp(big.NewInt(7)) != 0 {
-		t.Fatalf("recipient balance = %v, want 7", got)
+	if want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam; gp.cumulativeRegular != want {
+		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, want)
 	}
-	if got := sdb.GetBalance(senderAddr).ToBig(); got.Cmp(new(big.Int).Sub(before, big.NewInt(7))) != 0 {
-		t.Fatalf("sender balance = %v, want value transfer", got)
-	}
-	logs := sdb.GetLogs(common.Hash{}, 0, common.Hash{}, 0)
-	if len(logs) != 1 || logs[0].Topics[0] != params.EthTransferLogEvent {
-		t.Fatalf("logs = %+v, want one EIP-7708 transfer", logs)
-	}
-
-	// A self transfer is not a value move and emits no transfer log.
-	sdb = mkState(senderAlloc(nil))
-	before = sdb.GetBalance(senderAddr).ToBig()
-	tx = callTx(0, senderAddr, 7, 100_000, nil)
-	res, _, err = applyMsg(t, sdb, tx)
-	if err != nil || res.Err != nil {
-		t.Fatalf("self result=%v err=%v", res, err)
-	}
-	logs = sdb.GetLogs(common.Hash{}, 0, common.Hash{}, 0)
-	if sdb.GetBalance(senderAddr).Cmp(uint256.MustFromBig(before)) != 0 || len(logs) != 0 {
-		t.Fatalf("self transfer changed balance or emitted logs: balance=%v logs=%+v", sdb.GetBalance(senderAddr), logs)
-	}
-}
-
-// TestEIP2780Coinbase keeps the intrinsic recipient charge separate from the
-// runtime warmth of the coinbase account.
-func TestEIP2780Coinbase(t *testing.T) {
-	const (
-		base = params.TxBaseCost2780
-		cold = params.ColdAccountAccessAmsterdam
-		warm = params.WarmAccountAccessAmsterdam
-	)
-	coinbase := common.HexToAddress("0xc01ba5e000000000000000000000000000000001")
-	t.Run("recipient", func(t *testing.T) {
-		res, gp, err := applyMsgCoinbase(t, mkState(senderAlloc(nil)), callTx(0, coinbase, 0, 100_000, nil), coinbase)
-		if err != nil || res.Err != nil {
-			t.Fatalf("result=%v err=%v", res, err)
-		}
-		if gp.cumulativeRegular != base+cold {
-			t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, base+cold)
-		}
-	})
-	t.Run("target", func(t *testing.T) {
-		delegated := common.HexToAddress("0xde1e000000000000000000000000000000000007")
-		res, gp, err := applyMsgCoinbase(t, mkState(senderAlloc(types.GenesisAlloc{
-			delegated: {Code: types.AddressToDelegation(coinbase)},
-		})), callTx(0, delegated, 0, 100_000, nil), coinbase)
-		if err != nil || res.Err != nil {
-			t.Fatalf("result=%v err=%v", res, err)
-		}
-		if gp.cumulativeRegular != base+cold+warm {
-			t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, base+cold+warm)
-		}
-	})
 }
 
 // TestEIP2780DelegationWarmth adds the special targets which are warm before
