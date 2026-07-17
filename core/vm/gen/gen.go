@@ -113,7 +113,7 @@ func (g *generator) p(format string, args ...any) {
 // parseHandlers parses instructions.go, eips.go, stack.go, gascosts.go and
 // interpreter.go. It returns the top-level opXxx handlers by name, the
 // //gen:inline *Stack helper methods, and the gas/memory helper functions
-// (chargeRegularOnly, computeMemorySize, chargeDynamicGas) whose bodies are
+// (ChargeRegularOnly, computeMemorySize, chargeDynamicGas) whose bodies are
 // spliced into the generated dispatch (all by name).
 func parseHandlers(vmDir string) (fset *token.FileSet, opcodeHandlers, stackHelpers, gasHelpers map[string]*ast.FuncDecl) {
 	fset = token.NewFileSet()
@@ -132,7 +132,7 @@ func parseHandlers(vmDir string) (fset *token.FileSet, opcodeHandlers, stackHelp
 				continue
 			}
 			switch {
-			case fn.Name.Name == "chargeRegularOnly" || fn.Name.Name == "computeMemorySize" || fn.Name.Name == "chargeDynamicGas" || fn.Name.Name == "chargeVerkleCodeChunkGas": // spliced gas/memory helpers
+			case fn.Name.Name == "ChargeRegularOnly" || fn.Name.Name == "computeMemorySize" || fn.Name.Name == "chargeDynamicGas" || fn.Name.Name == "chargeVerkleCodeChunkGas": // spliced gas/memory helpers
 				gasHelpers[fn.Name.Name] = fn
 			case fn.Recv == nil: // top-level opXxx handler
 				opcodeHandlers[fn.Name.Name] = fn
@@ -627,7 +627,7 @@ func (g *generator) generateStackChecks(minExpr, maxExpr any, under, over bool) 
 }
 
 // generateStaticGas returns the static-gas charge, spliced call-free from the
-// chargeRegularOnly body for amount: a constant on the inlined and
+// ChargeRegularOnly body for amount: a constant on the inlined and
 // direct-call paths, operation.constantGas in the table path. The receiver maps
 // to contract.Gas and the method's single uint64 parameter to amount, substituted
 // textually on word boundaries (which cannot touch fields like RegularGas). Its
@@ -635,13 +635,13 @@ func (g *generator) generateStackChecks(minExpr, maxExpr any, under, over bool) 
 // is dropped so the opcode falls through to its remaining steps (see
 // rewriteGasReturns).
 func (g *generator) generateStaticGas(amount any) string {
-	fn := g.gasHelpers["chargeRegularOnly"]
+	fn := g.gasHelpers["ChargeRegularOnly"]
 	if fn == nil {
-		fatalf("no chargeRegularOnly gas helper to inline")
+		fatalf("no ChargeRegularOnly gas helper to inline")
 	}
 	names := paramNames(fn)
 	if len(names) != 1 {
-		fatalf("chargeRegularOnly takes %d params, want 1", len(names))
+		fatalf("ChargeRegularOnly takes %d params, want 1", len(names))
 	}
 	src := g.renderAst(fn.Body.List)
 	src = regexp.MustCompile(`\b`+recvName(fn)+`\b`).ReplaceAllString(src, "contract.Gas")
