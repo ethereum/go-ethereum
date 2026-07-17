@@ -601,7 +601,7 @@ mainLoop:
 				break mainLoop
 			}
 			if dynamicCost.StateGas == 0 {
-				if cerr := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+				if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
 					res, err = nil, cerr
 					break mainLoop
 				}
@@ -664,7 +664,7 @@ mainLoop:
 				break mainLoop
 			}
 			if dynamicCost.StateGas == 0 {
-				if cerr := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+				if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
 					res, err = nil, cerr
 					break mainLoop
 				}
@@ -712,7 +712,7 @@ mainLoop:
 				break mainLoop
 			}
 			if dynamicCost.StateGas == 0 {
-				if cerr := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+				if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
 					res, err = nil, cerr
 					break mainLoop
 				}
@@ -760,7 +760,7 @@ mainLoop:
 				break mainLoop
 			}
 			if dynamicCost.StateGas == 0 {
-				if cerr := contract.Gas.chargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+				if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
 					res, err = nil, cerr
 					break mainLoop
 				}
