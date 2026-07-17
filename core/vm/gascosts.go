@@ -84,8 +84,8 @@ func (g *GasBudget) Charge(cost GasCosts) (GasBudget, bool) {
 	return prior, ok
 }
 
-// chargeRegularOnly deducts a regular-only cost.
-func (g *GasBudget) chargeRegularOnly(r uint64) error {
+// ChargeRegularOnly deducts a regular-only cost.
+func (g *GasBudget) ChargeRegularOnly(r uint64) error {
 	if g.RegularGas < r {
 		return ErrOutOfGas
 	}
