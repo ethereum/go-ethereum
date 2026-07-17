@@ -28,9 +28,11 @@ import (
 )
 
 var (
-	precompileCacheHitMeter   = metrics.NewRegisteredMeter("chain/cache/precompile/hit", nil)
-	precompileCacheMissMeter  = metrics.NewRegisteredMeter("chain/cache/precompile/miss", nil)
-	precompileCacheEntryGauge = metrics.NewRegisteredGauge("chain/cache/precompile/entries", nil)
+	precompileCacheHitMeter          = metrics.NewRegisteredMeter("chain/cache/precompile/hit", nil)
+	precompileCacheMissMeter         = metrics.NewRegisteredMeter("chain/cache/precompile/miss", nil)
+	precompileCachePrefetchHitMeter  = metrics.NewRegisteredMeter("chain/cache/precompile/prefetch/hit", nil)
+	precompileCachePrefetchMissMeter = metrics.NewRegisteredMeter("chain/cache/precompile/prefetch/miss", nil)
+	precompileCacheEntryGauge        = metrics.NewRegisteredGauge("chain/cache/precompile/entries", nil)
 )
 
 const (
@@ -54,9 +56,22 @@ const (
 // results the prefetcher already computed. Entries are namespaced by
 // precompile set, so forks never share results across a behaviour change.
 type PrecompileCache struct {
-	mu     sync.RWMutex
-	sets   map[*PrecompiledContracts]*lru.Cache[common.Hash, []byte]
-	meters map[common.Address]*precompileCacheMeters
+	data *precompileCacheData
+
+	// Meters are per handle, split between the main pass and the prefetcher
+	// so the hit rate of the main pass stays readable on its own.
+	prefix   string
+	hit      *metrics.Meter
+	miss     *metrics.Meter
+	mu       sync.RWMutex
+	meters   map[common.Address]*precompileCacheMeters
+	prefetch *PrecompileCache
+}
+
+// precompileCacheData is the storage shared by the two cache handles.
+type precompileCacheData struct {
+	mu   sync.RWMutex
+	sets map[*PrecompiledContracts]*lru.Cache[common.Hash, []byte]
 }
 
 // precompileCacheMeters holds the per-address hit and miss meters.
@@ -67,28 +82,50 @@ type precompileCacheMeters struct {
 
 // NewPrecompileCache constructs a precompile result cache.
 func NewPrecompileCache() *PrecompileCache {
-	return &PrecompileCache{
-		sets:   make(map[*PrecompiledContracts]*lru.Cache[common.Hash, []byte]),
-		meters: make(map[common.Address]*precompileCacheMeters),
+	data := &precompileCacheData{
+		sets: make(map[*PrecompiledContracts]*lru.Cache[common.Hash, []byte]),
 	}
+	return &PrecompileCache{
+		data:   data,
+		prefix: "chain/cache/precompile",
+		hit:    precompileCacheHitMeter,
+		miss:   precompileCacheMissMeter,
+		meters: make(map[common.Address]*precompileCacheMeters),
+		prefetch: &PrecompileCache{
+			data:   data,
+			prefix: "chain/cache/precompile/prefetch",
+			hit:    precompileCachePrefetchHitMeter,
+			miss:   precompileCachePrefetchMissMeter,
+			meters: make(map[common.Address]*precompileCacheMeters),
+		},
+	}
+}
+
+// PrefetchView returns a handle of the same cache that marks the prefetcher
+// meters instead of the main pass ones.
+func (c *PrecompileCache) PrefetchView() *PrecompileCache {
+	if c == nil {
+		return nil
+	}
+	return c.prefetch
 }
 
 // load retrieves the cached output for the given key. The returned slice is
 // a private copy owned by the caller, entries cross goroutine boundaries.
 func (c *PrecompileCache) load(set *PrecompiledContracts, addr common.Address, key common.Hash) ([]byte, bool) {
-	c.mu.RLock()
-	results := c.sets[set]
-	c.mu.RUnlock()
+	c.data.mu.RLock()
+	results := c.data.sets[set]
+	c.data.mu.RUnlock()
 
 	meters := c.metersFor(addr)
 	if results != nil {
 		if output, ok := results.Get(key); ok {
-			precompileCacheHitMeter.Mark(1)
+			c.hit.Mark(1)
 			meters.hit.Mark(1)
 			return common.CopyBytes(output), true
 		}
 	}
-	precompileCacheMissMeter.Mark(1)
+	c.miss.Mark(1)
 	meters.miss.Mark(1)
 	return nil, false
 }
@@ -96,17 +133,17 @@ func (c *PrecompileCache) load(set *PrecompiledContracts, addr common.Address, k
 // store saves the output of a precompile run under the given key. The value
 // is copied, the cache never aliases caller memory.
 func (c *PrecompileCache) store(set *PrecompiledContracts, addr common.Address, key common.Hash, output []byte) {
-	c.mu.RLock()
-	results := c.sets[set]
-	c.mu.RUnlock()
+	c.data.mu.RLock()
+	results := c.data.sets[set]
+	c.data.mu.RUnlock()
 
 	if results == nil {
-		c.mu.Lock()
-		if results = c.sets[set]; results == nil {
+		c.data.mu.Lock()
+		if results = c.data.sets[set]; results == nil {
 			results = lru.NewCache[common.Hash, []byte](precompileCacheEntries)
-			c.sets[set] = results
+			c.data.sets[set] = results
 		}
-		c.mu.Unlock()
+		c.data.mu.Unlock()
 	}
 	results.Add(key, common.CopyBytes(output))
 	precompileCacheEntryGauge.Update(int64(results.Len()))
@@ -126,7 +163,7 @@ func (c *PrecompileCache) metersFor(addr common.Address) *precompileCacheMeters 
 	if meters, ok = c.meters[addr]; ok {
 		return meters
 	}
-	prefix := fmt.Sprintf("chain/cache/precompile/%#x", addr.Big())
+	prefix := fmt.Sprintf("%s/%#x", c.prefix, addr.Big())
 	meters = &precompileCacheMeters{
 		hit:  metrics.GetOrRegisterMeter(prefix+"/hit", nil),
 		miss: metrics.GetOrRegisterMeter(prefix+"/miss", nil),
