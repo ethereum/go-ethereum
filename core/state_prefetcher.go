@@ -50,7 +50,7 @@ func newStatePrefetcher(config *params.ChainConfig, chain *HeaderChain) *statePr
 // Prefetch processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb, but any changes are discarded. The
 // only goal is to warm the state caches.
-func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, cfg vm.Config, interrupt *atomic.Bool, execIndex *atomic.Int64) {
+func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config, interrupt *atomic.Bool, execIndex *atomic.Int64) {
 	var (
 		fails   atomic.Int64
 		skips   atomic.Int64
@@ -106,6 +106,9 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, j
 			defer evm.Release()
 			if jumpDestCache != nil {
 				evm.SetJumpDestCache(jumpDestCache)
+			}
+			if precompileCache != nil {
+				evm.SetPrecompileCache(precompileCache)
 			}
 
 			// Convert the transaction into an executable message and pre-cache its sender
