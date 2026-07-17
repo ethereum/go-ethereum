@@ -409,6 +409,7 @@ func checkStateContent(ctx *cli.Context) error {
 		startTime = time.Now()
 		lastLog   = time.Now()
 	)
+	defer it.Release()
 	for it.Next() {
 		count++
 		k := it.Key()
