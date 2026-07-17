@@ -440,7 +440,7 @@ type ExecutionPayloadBody struct {
 // ExecutionPayloadBodyV2 extends ExecutionPayloadBody with the block access list.
 type ExecutionPayloadBodyV2 struct {
 	ExecutionPayloadBody
-	BlockAccessList *bal.BlockAccessList `json:"blockAccessList"`
+	BlockAccessList *hexutil.Bytes `json:"blockAccessList"`
 }
 
 // Client identifiers to support ClientVersionV1.

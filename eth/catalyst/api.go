@@ -1320,9 +1320,15 @@ func getBodyV2(block *types.Block) *engine.ExecutionPayloadBodyV2 {
 	if body == nil {
 		return nil
 	}
+	var blockAccessList *hexutil.Bytes
+	if accessList := block.AccessList(); accessList != nil {
+		encoded, _ := rlp.EncodeToBytes(accessList)
+		data := hexutil.Bytes(encoded)
+		blockAccessList = &data
+	}
 	return &engine.ExecutionPayloadBodyV2{
 		ExecutionPayloadBody: *body,
-		BlockAccessList:      block.AccessList(),
+		BlockAccessList:      blockAccessList,
 	}
 }
 
