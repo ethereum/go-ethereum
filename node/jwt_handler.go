@@ -47,8 +47,10 @@ func (handler *jwtHandler) ServeHTTP(out http.ResponseWriter, r *http.Request) {
 		strToken string
 		claims   jwt.RegisteredClaims
 	)
+	// RFC 7235: authentication schemes are case-insensitive. Match with EqualFold
+	// and slice off the scheme prefix (do not use TrimPrefix, which is case-sensitive).
 	if auth := r.Header.Get("Authorization"); len(auth) >= 7 && strings.EqualFold(auth[:7], "bearer ") {
-		strToken = strings.TrimPrefix(auth, "Bearer ")
+		strToken = auth[7:]
 	}
 	if len(strToken) == 0 {
 		http.Error(out, "missing token", http.StatusUnauthorized)
