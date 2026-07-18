@@ -56,6 +56,7 @@ type Server struct {
 	batchResponseLimit int
 	httpBodyLimit      int
 	wsReadLimit        int64
+	maxConns           int
 	tracerProvider     trace.TracerProvider
 }
 
@@ -99,6 +100,14 @@ func (s *Server) SetHTTPBodyLimit(limit int) {
 // This method should be called before processing any requests via Websocket server.
 func (s *Server) SetWebsocketReadLimit(limit int64) {
 	s.wsReadLimit = limit
+}
+
+// SetMaxConns sets the maximum number of concurrent connections allowed by
+// ServeListener. A value of 0 means no limit.
+//
+// This method should be called before ServeListener.
+func (s *Server) SetMaxConns(maxConns int) {
+	s.maxConns = maxConns
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no
