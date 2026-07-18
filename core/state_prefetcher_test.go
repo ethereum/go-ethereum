@@ -31,15 +31,26 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// TestPrefetchOrder checks that prefetch jobs are submitted heaviest first,
-// with equally priced transactions kept in block order.
+// TestPrefetchOrder checks that heavy transactions are promoted to the front
+// of the prefetch queue, heaviest first, while the rest keeps block order
+// regardless of gas.
 func TestPrefetchOrder(t *testing.T) {
-	gas := []uint64{21000, 500000, 21000, 100000, 21000}
+	gas := []uint64{21000, 5000000, 300000, 1200000, 21000}
 	txs := make(types.Transactions, len(gas))
 	for i, g := range gas {
 		txs[i] = types.NewTx(&types.LegacyTx{Gas: g})
 	}
 	want := []int{1, 3, 0, 2, 4}
+	if have := prefetchOrder(txs); !slices.Equal(have, want) {
+		t.Fatalf("wrong prefetch order, have %v want %v", have, want)
+	}
+	// Equally heavy transactions keep block order.
+	gas = []uint64{21000, 2000000, 2000000, 21000}
+	txs = make(types.Transactions, len(gas))
+	for i, g := range gas {
+		txs[i] = types.NewTx(&types.LegacyTx{Gas: g})
+	}
+	want = []int{1, 2, 0, 3}
 	if have := prefetchOrder(txs); !slices.Equal(have, want) {
 		t.Fatalf("wrong prefetch order, have %v want %v", have, want)
 	}
