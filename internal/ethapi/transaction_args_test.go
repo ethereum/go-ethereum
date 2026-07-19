@@ -264,6 +264,63 @@ func TestSetFeeDefaults(t *testing.T) {
 	}
 }
 
+// TestCallDefaultsSetCode checks that CallDefaults rejects argument combinations
+// that cannot be converted into a valid transaction, instead of letting
+// ToTransaction panic on them (e.g. via eth_simulateV1 or debug_traceCall).
+func TestCallDefaultsSetCode(t *testing.T) {
+	t.Parallel()
+
+	var (
+		to       = common.Address{0xaa}
+		authList = []types.SetCodeAuthorization{{Address: common.Address{0xbb}}}
+	)
+	tests := []struct {
+		name    string
+		args    *TransactionArgs
+		wantErr error
+	}{
+		{
+			name:    "authorization list without to",
+			args:    &TransactionArgs{AuthorizationList: authList},
+			wantErr: core.ErrSetCodeTxCreate,
+		},
+		{
+			name:    "empty authorization list without to",
+			args:    &TransactionArgs{AuthorizationList: []types.SetCodeAuthorization{}},
+			wantErr: core.ErrSetCodeTxCreate,
+		},
+		{
+			name:    "blob hashes without to",
+			args:    &TransactionArgs{BlobHashes: []common.Hash{{0x01}}},
+			wantErr: core.ErrBlobTxCreate,
+		},
+		{
+			name: "authorization list with to",
+			args: &TransactionArgs{To: &to, AuthorizationList: authList},
+		},
+		{
+			name: "contract creation",
+			args: &TransactionArgs{Data: &hexutil.Bytes{0x60}},
+		},
+	}
+	for _, test := range tests {
+		err := test.args.CallDefaults(50_000_000, big.NewInt(1), big.NewInt(1))
+		if test.wantErr != nil {
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("test %s: expected error %q, got %v", test.name, test.wantErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("test %s: unexpected error: %v", test.name, err)
+		}
+		// The conversion to a transaction must not panic on sanitized arguments
+		if tx := test.args.ToTransaction(types.DynamicFeeTxType); tx == nil {
+			t.Fatalf("test %s: failed to convert to transaction", test.name)
+		}
+	}
+}
+
 type backendMock struct {
 	current *types.Header
 	config  *params.ChainConfig

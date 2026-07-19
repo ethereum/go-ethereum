@@ -138,7 +138,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 		if len(args.data()) == 0 {
 			return errors.New(`contract creation without any data provided`)
 		}
-		if len(args.AuthorizationList) > 0 {
+		if args.AuthorizationList != nil {
 			return errors.New(`authorizationList provided for contract creation, but "to" field is missing`)
 		}
 	}
@@ -444,6 +444,18 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 	}
 	if args.BlobFeeCap == nil && args.BlobHashes != nil {
 		args.BlobFeeCap = new(hexutil.Big)
+	}
+	// create check: neither blob transactions nor setcode transactions can
+	// be contract creations, reject them here instead of panicking when the
+	// arguments are converted into a transaction (e.g. by eth_simulateV1 or
+	// debug_traceCall). The errors mirror the state transition checks.
+	if args.To == nil {
+		if args.BlobHashes != nil {
+			return core.ErrBlobTxCreate
+		}
+		if args.AuthorizationList != nil {
+			return core.ErrSetCodeTxCreate
+		}
 	}
 
 	return nil
