@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	types2 "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -86,5 +87,63 @@ func TestPeerSet(t *testing.T) {
 	s.Add(vals...)
 	if s.Cardinality() < size {
 		t.Fatalf("bad size")
+	}
+}
+
+// TestSendPooledTransactionHashes verifies that announced transaction hashes
+// are only tracked as known by the peer if the announcement was successfully
+// sent. Marking them known upfront would suppress re-announcement of hashes
+// the peer never received.
+func TestSendPooledTransactionHashes(t *testing.T) {
+	var (
+		id     enode.ID
+		hashes = []common.Hash{{0x1}, {0x2}}
+		types  = []byte{0x2, 0x2}
+		sizes  = []uint32{100, 100}
+	)
+	rand.Read(id[:])
+
+	// Announces to all supported protocol versions must mark the hashes as
+	// known only after a successful send.
+	for _, version := range []uint{ETH71, ETH72} {
+		app, net := p2p.MsgPipe()
+		peer := NewPeer(version, p2p.NewPeer(id, "test", nil), net, nil, nil, nil)
+
+		// Drain the remote side so the send can go through
+		go func() {
+			for {
+				msg, err := app.ReadMsg()
+				if err != nil {
+					return
+				}
+				msg.Discard()
+			}
+		}()
+		defer peer.Close()
+		if err := peer.sendPooledTransactionHashes(hashes, types, sizes, types2.CustodyBitmap{}); err != nil {
+			t.Fatalf("version %d: failed to send hashes: %v", version, err)
+		}
+		for _, hash := range hashes {
+			if !peer.KnownTransaction(hash) {
+				t.Fatalf("version %d: hash %v not marked known after successful send", version, hash)
+			}
+		}
+		app.Close()
+		net.Close()
+
+		// A failed send must not mark the hashes as known
+		app, net = p2p.MsgPipe()
+		peer = NewPeer(version, p2p.NewPeer(id, "test", nil), net, nil, nil, nil)
+		defer peer.Close()
+		app.Close()
+		if err := peer.sendPooledTransactionHashes(hashes, types, sizes, types2.CustodyBitmap{}); err == nil {
+			t.Fatalf("version %d: expected send to fail on closed pipe", version)
+		}
+		for _, hash := range hashes {
+			if peer.KnownTransaction(hash) {
+				t.Fatalf("version %d: hash %v marked known after failed send", version, hash)
+			}
+		}
+		net.Close()
 	}
 }
