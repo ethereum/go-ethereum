@@ -164,7 +164,9 @@ func (q *conversionQueue) loop() {
 
 		case fn := <-q.startConversion:
 			q.queue = append(q.queue, fn)
-			q.runNextTask()
+			if q.taskDone == nil {
+				q.runNextTask()
+			}
 
 		case <-q.taskDone:
 			q.runNextTask()
