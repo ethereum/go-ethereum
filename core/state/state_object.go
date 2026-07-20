@@ -344,9 +344,14 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	// If the deletion is handled first, then `P` would be left with only one child, thus collapsed
 	// into a shortnode. This requires `B` to be resolved from disk.
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
+	// The updates are applied as one batch, which shards them across the storage
+	// trie's root children and applies each group concurrently. Deletions follow
+	// per key, preserving the updates-before-deletions order above.
 	var (
-		deletions []common.Hash
-		used      = make([]common.Hash, 0, len(s.uncommittedStorage))
+		updateKeys [][]byte // slot keys with a new non-zero value
+		updateVals [][]byte // the trimmed values, aligned to updateKeys
+		deletions  []common.Hash
+		used       = make([]common.Hash, 0, len(s.uncommittedStorage))
 	)
 	for key, origin := range s.uncommittedStorage {
 		// Skip noop changes, persist actual changes
@@ -360,16 +365,18 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			continue
 		}
 		if (value != common.Hash{}) {
-			if err := tr.UpdateStorage(s.address, key[:], common.TrimLeftZeroes(value[:])); err != nil {
-				s.db.setError(err)
-				return nil, err
-			}
+			updateKeys = append(updateKeys, key.Bytes())
+			updateVals = append(updateVals, common.TrimLeftZeroes(value[:]))
 			s.db.StorageUpdated.Add(1)
 		} else {
 			deletions = append(deletions, key)
 		}
 		// Cache the items for preloading
 		used = append(used, key) // Copy needed for closure
+	}
+	if err := tr.UpdateStorageBatch(s.address, updateKeys, updateVals); err != nil {
+		s.db.setError(err)
+		return nil, err
 	}
 	for _, key := range deletions {
 		if err := tr.DeleteStorage(s.address, key[:]); err != nil {

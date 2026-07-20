@@ -571,17 +571,6 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 // Setting, updating & deleting state object methods.
 //
 
-// updateStateObject writes the given object to the trie.
-func (s *StateDB) updateStateObject(obj *stateObject) {
-	// Encode the account and update the account trie
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, len(obj.code)); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
-	}
-	if obj.dirtyCode {
-		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
-	}
-}
-
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(addr common.Address) {
 	if err := s.trie.DeleteAccount(addr); err != nil {
@@ -1074,6 +1063,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	var (
 		usedAddrs    []common.Address
 		deletedAddrs []common.Address
+		updateAddrs  []common.Address
+		updateAccts  []*types.StateAccount
+		updateCodes  []int
 	)
 	for addr, op := range s.mutations {
 		if op.applied {
@@ -1085,16 +1077,26 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
 			obj := s.stateObjects[addr]
-			s.updateStateObject(obj)
+			updateAddrs = append(updateAddrs, obj.Address())
+			updateAccts = append(updateAccts, &obj.data)
+			updateCodes = append(updateCodes, len(obj.code))
 			s.AccountUpdated += 1
 
 			// Count code writes post-Finalise so reverted CREATEs are excluded.
 			if obj.dirtyCode {
+				s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
 				s.CodeUpdated += 1
 				s.CodeUpdateBytes += len(obj.code)
 			}
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
+	}
+	// Apply the gathered updates as one batch. UpdateAccountBatch shards them across
+	// the root children and applies each group concurrently.
+	if len(updateAddrs) > 0 {
+		if err := s.trie.UpdateAccountBatch(updateAddrs, updateAccts, updateCodes); err != nil {
+			s.setError(fmt.Errorf("updateStateObjects error: %v", err))
+		}
 	}
 	for _, deletedAddr := range deletedAddrs {
 		s.deleteStateObject(deletedAddr)
