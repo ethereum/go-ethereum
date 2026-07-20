@@ -524,6 +524,12 @@ func (bc *BlockChain) CodeDB() *state.CodeDB {
 	return bc.codedb
 }
 
+// JumpDestCache retrieves the shared JUMPDEST analysis cache, so callers such
+// as the miner can reuse bitmaps already computed during block import.
+func (bc *BlockChain) JumpDestCache() vm.JumpDestCache {
+	return bc.jumpDestCache
+}
+
 // HeaderChain returns the underlying header chain.
 func (bc *BlockChain) HeaderChain() *HeaderChain {
 	return bc.hc

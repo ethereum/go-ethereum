@@ -1594,7 +1594,7 @@ func TestGetPayloadBodyV2BlockAccessList(t *testing.T) {
 			name:       "retained empty BAL",
 			header:     &types.Header{BlockAccessListHash: &emptyHash},
 			accessList: &empty,
-			want:       `"0xc0"`,
+			want:       `"0xc0"`, // JSON-encoded hex string, quotes included
 		},
 		{
 			name:   "pruned BAL",
