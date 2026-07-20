@@ -524,6 +524,12 @@ func (bc *BlockChain) CodeDB() *state.CodeDB {
 	return bc.codedb
 }
 
+// PrecompileCache retrieves the shared precompile result cache, so callers
+// such as the miner can reuse results already computed during block import.
+func (bc *BlockChain) PrecompileCache() *vm.PrecompileCache {
+	return bc.precompileCache
+}
+
 // JumpDestCache retrieves the shared JUMPDEST analysis cache, so callers such
 // as the miner can reuse bitmaps already computed during block import.
 func (bc *BlockChain) JumpDestCache() vm.JumpDestCache {

@@ -354,6 +354,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	state.StartPrefetcher("miner", bundle)
 	evm := vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{})
 	evm.SetJumpDestCache(miner.chain.JumpDestCache())
+	evm.SetPrecompileCache(miner.chain.PrecompileCache())
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
