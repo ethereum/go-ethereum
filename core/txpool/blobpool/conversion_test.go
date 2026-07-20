@@ -65,6 +65,71 @@ func TestConversionQueueDoubleClose(t *testing.T) {
 	queue.close() // Should not panic
 }
 
+func TestConversionQueueSerialBackgroundTasks(t *testing.T) {
+	queue := newConversionQueue()
+
+	firstStarted := make(chan struct{})
+	firstRelease := make(chan struct{})
+	if err := queue.launchConversion(func() {
+		close(firstStarted)
+		<-firstRelease
+	}); err != nil {
+		t.Fatalf("Failed to launch first conversion: %v", err)
+	}
+	<-firstStarted
+
+	secondStarted := make(chan struct{})
+	if err := queue.launchConversion(func() { close(secondStarted) }); err != nil {
+		t.Fatalf("Failed to launch second conversion: %v", err)
+	}
+	select {
+	case <-secondStarted:
+		close(firstRelease)
+		queue.close()
+		t.Fatal("Second conversion started before first conversion finished")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(firstRelease)
+	select {
+	case <-secondStarted:
+	case <-time.After(time.Second):
+		queue.close()
+		t.Fatal("Second conversion did not start after first conversion finished")
+	}
+	queue.close()
+}
+
+func TestConversionQueueCloseWaitsForBackgroundTask(t *testing.T) {
+	queue := newConversionQueue()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	if err := queue.launchConversion(func() {
+		close(started)
+		<-release
+	}); err != nil {
+		t.Fatalf("Failed to launch conversion: %v", err)
+	}
+	<-started
+
+	closed := make(chan struct{})
+	go func() {
+		queue.close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+		t.Fatal("Queue closed before the running conversion finished")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("Queue did not close after the running conversion finished")
+	}
+}
+
 func TestConversionQueueAutoRestartBatch(t *testing.T) {
 	queue := newConversionQueue()
 	defer queue.close()
