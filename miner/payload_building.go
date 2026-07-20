@@ -46,7 +46,7 @@ type BuildPayloadArgs struct {
 	Random         common.Hash           // The provided randomness value
 	Withdrawals    types.Withdrawals     // The provided withdrawals
 	BeaconRoot     *common.Hash          // The provided beaconRoot (Cancun)
-	SlotNum        *uint64               // The provided slotNumber
+	SlotNum        *uint64               // The provided slotNumber (Amsterdam)
 	TargetGasLimit *uint64               // The provided target gas limit (Amsterdam)
 	Version        engine.PayloadVersion // Versioning byte for payload id calculation.
 }
@@ -63,7 +63,10 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 		hasher.Write(args.BeaconRoot[:])
 	}
 	if args.SlotNum != nil {
-		binary.Write(hasher, binary.BigEndian, args.SlotNum)
+		binary.Write(hasher, binary.BigEndian, *args.SlotNum)
+	}
+	if args.TargetGasLimit != nil {
+		binary.Write(hasher, binary.BigEndian, *args.TargetGasLimit)
 	}
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])

@@ -1323,9 +1323,17 @@ func getBodyV2(block *types.Block) *engine.ExecutionPayloadBodyV2 {
 	if body == nil {
 		return nil
 	}
+	var balData *hexutil.Bytes
+	if bal := block.AccessList(); bal != nil {
+		// Ignore the RLP encoding error just in case, interpreting
+		// the BAL as unavailable.
+		if enc, err := rlp.EncodeToBytes(bal); err == nil {
+			balData = (*hexutil.Bytes)(&enc)
+		}
+	}
 	return &engine.ExecutionPayloadBodyV2{
 		ExecutionPayloadBody: *body,
-		BlockAccessList:      block.AccessList(),
+		BlockAccessList:      balData,
 	}
 }
 

@@ -59,7 +59,7 @@ var (
 	//
 	// https://github.com/ethereum/execution-apis/blob/main/src/engine/amsterdam.md#executionpayloadv4
 	// ExecutionPayloadV4 has the syntax of ExecutionPayloadV3 and appends the new
-	// field slotNumber.
+	// fields slotNumber and blockAccessList.
 	PayloadV4 PayloadVersion = 0x4
 )
 
@@ -105,8 +105,8 @@ type ExecutableData struct {
 	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
 	BlobGasUsed     *uint64             `json:"blobGasUsed"`
 	ExcessBlobGas   *uint64             `json:"excessBlobGas"`
-	SlotNumber      *uint64             `json:"slotNumber,omitempty"`
 	BlockAccessList []byte              `json:"blockAccessList,omitempty"`
+	SlotNumber      *uint64             `json:"slotNumber,omitempty"`
 }
 
 // JSON type overrides for executableData.
@@ -442,7 +442,7 @@ type ExecutionPayloadBody struct {
 // ExecutionPayloadBodyV2 extends ExecutionPayloadBody with the block access list.
 type ExecutionPayloadBodyV2 struct {
 	ExecutionPayloadBody
-	BlockAccessList *bal.BlockAccessList `json:"blockAccessList"`
+	BlockAccessList *hexutil.Bytes `json:"blockAccessList"`
 }
 
 // Client identifiers to support ClientVersionV1.
