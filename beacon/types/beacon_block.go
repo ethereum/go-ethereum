@@ -17,32 +17,53 @@
 package types
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
-	"github.com/protolambda/zrnt/eth2/configs"
-	"github.com/protolambda/ztyp/codec"
-	"github.com/protolambda/ztyp/tree"
 
 	// beacon forks
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	"github.com/protolambda/zrnt/eth2/beacon/deneb"
-	"github.com/protolambda/zrnt/eth2/beacon/electra"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 )
 
+// blockObject is implemented by the fork-specific beacon block types. Note
+// that forks which did not change the block structure reuse the type of the
+// previous fork (e.g. fulu blocks are represented by electra.BeaconBlock).
 type blockObject interface {
-	HashTreeRoot(spec *zrntcommon.Spec, hFn tree.HashFn) zrntcommon.Root
-	Header(spec *zrntcommon.Spec) *zrntcommon.BeaconBlockHeader
+	HashTreeRoot() ([32]byte, error)
+}
+
+// beaconBlockData is the fork-specific representation of a beacon block's contents.
+type beaconBlockData interface {
+	Slot() uint64
+	Header() Header
+	Root() common.Hash
+	ExecutionPayload() (*types.Block, error)
+	ExecutionRequestsList() [][]byte
 }
 
 // BeaconBlock represents a full block in the beacon chain.
 type BeaconBlock struct {
-	blockObj blockObject
+	data beaconBlockData
 }
+
+// Slot returns the slot number of the block.
+func (b *BeaconBlock) Slot() uint64 { return b.data.Slot() }
+
+// Header returns the block's header data.
+func (b *BeaconBlock) Header() Header { return b.data.Header() }
+
+// Root returns the SSZ root hash of the block.
+func (b *BeaconBlock) Root() common.Hash { return b.data.Root() }
+
+// ExecutionPayload returns the execution payload of the block.
+func (b *BeaconBlock) ExecutionPayload() (*types.Block, error) { return b.data.ExecutionPayload() }
+
+// ExecutionRequestsList returns the execution layer requests of the block.
+func (b *BeaconBlock) ExecutionRequestsList() [][]byte { return b.data.ExecutionRequestsList() }
 
 // BlockFromJSON decodes a beacon block from JSON.
 func BlockFromJSON(forkName string, data []byte) (*BeaconBlock, error) {
@@ -54,37 +75,52 @@ func BlockFromJSON(forkName string, data []byte) (*BeaconBlock, error) {
 		obj = new(deneb.BeaconBlock)
 	case "electra", "fulu":
 		obj = new(electra.BeaconBlock)
+	case "gloas":
+		return decodeGloasBeaconBlock(data)
 	default:
 		return nil, fmt.Errorf("unsupported fork: %s", forkName)
 	}
 	if err := json.Unmarshal(data, obj); err != nil {
 		return nil, err
 	}
-	return &BeaconBlock{obj}, nil
+	root, err := obj.HashTreeRoot()
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute block root: %v", err)
+	}
+	return &BeaconBlock{data: &legacyBeaconBlock{blockObj: obj, root: root}}, nil
 }
 
-// NewBeaconBlock wraps a ZRNT block.
+// NewBeaconBlock wraps a consensus layer block.
 func NewBeaconBlock(obj blockObject) *BeaconBlock {
-	switch obj := obj.(type) {
+	switch obj.(type) {
 	case *capella.BeaconBlock:
-		return &BeaconBlock{obj}
 	case *deneb.BeaconBlock:
-		return &BeaconBlock{obj}
-	case *electra.BeaconBlock:
-		return &BeaconBlock{obj}
+	case *electra.BeaconBlock: // includes fulu blocks
 	default:
 		panic(fmt.Errorf("unsupported block type %T", obj))
 	}
+	root, err := obj.HashTreeRoot()
+	if err != nil {
+		panic(fmt.Errorf("failed to compute block root: %v", err))
+	}
+	return &BeaconBlock{data: &legacyBeaconBlock{blockObj: obj, root: root}}
+}
+
+// legacyBeaconBlock implements beaconBlockData for the forks whose full block
+// format is available (capella up to fulu).
+type legacyBeaconBlock struct {
+	blockObj blockObject
+	root     common.Hash
 }
 
 // Slot returns the slot number of the block.
-func (b *BeaconBlock) Slot() uint64 {
+func (b *legacyBeaconBlock) Slot() uint64 {
 	switch obj := b.blockObj.(type) {
 	case *capella.BeaconBlock:
 		return uint64(obj.Slot)
 	case *deneb.BeaconBlock:
 		return uint64(obj.Slot)
-	case *electra.BeaconBlock:
+	case *electra.BeaconBlock: // includes fulu blocks
 		return uint64(obj.Slot)
 	default:
 		panic(fmt.Errorf("unsupported block type %T", b.blockObj))
@@ -92,70 +128,95 @@ func (b *BeaconBlock) Slot() uint64 {
 }
 
 // ExecutionPayload parses and returns the execution payload of the block.
-func (b *BeaconBlock) ExecutionPayload() (*types.Block, error) {
+func (b *legacyBeaconBlock) ExecutionPayload() (*types.Block, error) {
 	switch obj := b.blockObj.(type) {
 	case *capella.BeaconBlock:
-		return convertPayload(&obj.Body.ExecutionPayload, &obj.ParentRoot, nil)
+		return convertPayload(obj.Body.ExecutionPayload, obj.ParentRoot, nil)
 	case *deneb.BeaconBlock:
-		return convertPayload(&obj.Body.ExecutionPayload, &obj.ParentRoot, nil)
-	case *electra.BeaconBlock:
+		return convertPayload(obj.Body.ExecutionPayload, obj.ParentRoot, nil)
+	case *electra.BeaconBlock: // includes fulu blocks
 		requests := b.ExecutionRequestsList()
-		return convertPayload(&obj.Body.ExecutionPayload, &obj.ParentRoot, requests)
+		return convertPayload(obj.Body.ExecutionPayload, obj.ParentRoot, requests)
 	default:
 		panic(fmt.Errorf("unsupported block type %T", b.blockObj))
 	}
 }
 
 // Header returns the block's header data.
-func (b *BeaconBlock) Header() Header {
+func (b *legacyBeaconBlock) Header() Header {
 	switch obj := b.blockObj.(type) {
 	case *capella.BeaconBlock:
-		return headerFromZRNT(obj.Header(configs.Mainnet))
+		return makeHeader(uint64(obj.Slot), uint64(obj.ProposerIndex), obj.ParentRoot, obj.StateRoot, obj.Body)
 	case *deneb.BeaconBlock:
-		return headerFromZRNT(obj.Header(configs.Mainnet))
-	case *electra.BeaconBlock:
-		return headerFromZRNT(obj.Header(configs.Mainnet))
+		return makeHeader(uint64(obj.Slot), uint64(obj.ProposerIndex), obj.ParentRoot, obj.StateRoot, obj.Body)
+	case *electra.BeaconBlock: // includes fulu blocks
+		return makeHeader(uint64(obj.Slot), uint64(obj.ProposerIndex), obj.ParentRoot, obj.StateRoot, obj.Body)
 	default:
 		panic(fmt.Errorf("unsupported block type %T", b.blockObj))
 	}
 }
 
-// Root computes the SSZ root hash of the block.
-func (b *BeaconBlock) Root() common.Hash {
-	return common.Hash(b.blockObj.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
+func makeHeader(slot, proposerIndex uint64, parentRoot, stateRoot [32]byte, body blockObject) Header {
+	bodyRoot, err := body.HashTreeRoot()
+	if err != nil {
+		panic(fmt.Errorf("failed to compute body root: %v", err))
+	}
+	return Header{
+		Slot:          slot,
+		ProposerIndex: proposerIndex,
+		ParentRoot:    parentRoot,
+		StateRoot:     stateRoot,
+		BodyRoot:      bodyRoot,
+	}
+}
+
+// Root returns the SSZ root hash of the block.
+func (b *legacyBeaconBlock) Root() common.Hash {
+	return b.root
 }
 
 // ExecutionRequestsList returns the execution layer requests of the block.
-func (b *BeaconBlock) ExecutionRequestsList() [][]byte {
+func (b *legacyBeaconBlock) ExecutionRequestsList() [][]byte {
 	switch obj := b.blockObj.(type) {
 	case *capella.BeaconBlock, *deneb.BeaconBlock:
 		return nil
-	case *electra.BeaconBlock:
-		r := obj.Body.ExecutionRequests
-		return marshalRequests(configs.Mainnet,
-			&r.Deposits,
-			&r.Withdrawals,
-			&r.Consolidations,
-		)
+	case *electra.BeaconBlock: // includes fulu blocks
+		return marshalRequests(obj.Body.ExecutionRequests)
 	default:
 		panic(fmt.Errorf("unsupported block type %T", b.blockObj))
 	}
 }
 
-func marshalRequests(spec *zrntcommon.Spec, items ...zrntcommon.SpecObj) (list [][]byte) {
-	var buf bytes.Buffer
-	list = [][]byte{}
-	for typ, data := range items {
-		buf.Reset()
-		buf.WriteByte(byte(typ))
-		w := codec.NewEncodingWriter(&buf)
-		if err := data.Serialize(spec, w); err != nil {
-			panic(err)
-		}
-		if buf.Len() == 1 {
+// marshalRequests encodes the execution layer requests into the flat
+// type-prefixed representation of EIP-7685, with empty requests omitted.
+func marshalRequests(r *electra.ExecutionRequests) [][]byte {
+	list := [][]byte{}
+	if r == nil {
+		return list
+	}
+	for typ, data := range [][]byte{
+		marshalItems(r.Deposits),
+		marshalItems(r.Withdrawals),
+		marshalItems(r.Consolidations),
+	} {
+		if len(data) == 0 {
 			continue // skip empty requests
 		}
-		list = append(list, bytes.Clone(buf.Bytes()))
+		list = append(list, append([]byte{byte(typ)}, data...))
 	}
 	return list
+}
+
+// marshalItems SSZ-encodes a list of fixed-size request objects by simple
+// concatenation of the encoded items.
+func marshalItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) []byte {
+	var buf []byte
+	for _, item := range items {
+		enc, err := item.MarshalSSZ()
+		if err != nil {
+			panic(err)
+		}
+		buf = append(buf, enc...)
+	}
+	return buf
 }

@@ -34,6 +34,15 @@ func TestBlockFromJSON(t *testing.T) {
 	}
 	tests := []blocktest{
 		{
+			// fulu reuses the electra block format, so an electra block
+			// must decode successfully with the fulu fork name as well
+			file:            "block_electra_withdrawals.json",
+			version:         "fulu",
+			wantSlot:        151850,
+			wantBlockNumber: 141654,
+			wantBlockHash:   common.HexToHash("0xf6730485a38be5ada3e110990a2c7adaabd2e8d4a49782134f1a8bfbc246a5d7"),
+		},
+		{
 			file:            "block_electra_withdrawals.json",
 			version:         "electra",
 			wantSlot:        151850,
@@ -71,7 +80,7 @@ func TestBlockFromJSON(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.file, func(t *testing.T) {
+		t.Run(test.file+"/"+test.version, func(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join("testdata", test.file))
 			if err != nil {
 				t.Fatal(err)
@@ -94,5 +103,46 @@ func TestBlockFromJSON(t *testing.T) {
 				t.Errorf("wrong block hash: %v", execBlock.Hash())
 			}
 		})
+	}
+}
+
+func TestGloasBlockFromJSON(t *testing.T) {
+	data := []byte(`{
+		"slot":"144512",
+		"proposer_index":"780",
+		"parent_root":"0x0000000000000000000000000000000000000000000000000000000000000001",
+		"state_root":"0x0000000000000000000000000000000000000000000000000000000000000002",
+		"body":{"signed_execution_payload_bid":{"message":{"block_hash":"0x0000000000000000000000000000000000000000000000000000000000000002"}}}
+	}`)
+	block, err := BlockFromJSON("gloas", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if block.Slot() != 144512 {
+		t.Fatalf("slot = %d, want 144512", block.Slot())
+	}
+	if _, err := block.ExecutionPayload(); err == nil {
+		t.Fatal("missing Gloas envelope accepted")
+	}
+	header := Header{
+		Slot:          144512,
+		ProposerIndex: 780,
+		ParentRoot:    common.HexToHash("0x1"),
+		StateRoot:     common.HexToHash("0x2"),
+		BodyRoot:      common.HexToHash("0x3"),
+	}
+	blockRoot := header.Hash()
+	if err := block.SetGloasHeader(blockRoot, header); err != nil {
+		t.Fatalf("set Gloas header: %v\nblock header: %+v\nwant: %+v", err, block.Header(), header)
+	}
+	if block.Root() != blockRoot {
+		t.Fatalf("root = %x, want %x", block.Root(), blockRoot)
+	}
+	wrongEnvelope := []byte(`{
+		"beacon_block_root":"0x0000000000000000000000000000000000000000000000000000000000000002",
+		"parent_beacon_block_root":"0x0000000000000000000000000000000000000000000000000000000000000001"
+	}`)
+	if err := block.SetGloasPayloadEnvelope(blockRoot, wrongEnvelope); err == nil {
+		t.Fatal("envelope with wrong beacon root accepted")
 	}
 }
