@@ -568,8 +568,8 @@ var (
 	}
 	GOGCFlag = &cli.IntFlag{
 		Name:     "gogc",
-		Usage:    "Go garbage collection target percentage (default = 100, negative disables)",
-		Value:    100,
+		Usage:    "Go garbage collection target percentage (default = 50, negative disables)",
+		Value:    50,
 		Category: flags.PerfCategory,
 	}
 	CryptoKZGFlag = &cli.StringFlag{
