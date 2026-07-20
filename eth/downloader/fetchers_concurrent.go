@@ -140,8 +140,10 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			for _, peer := range d.peers.AllPeers() {
 				pending, stale := pending[peer.id], stales[peer.id]
 				if pending == nil && stale == nil {
-					idles = append(idles, peer)
-					caps = append(caps, queue.capacity(peer, time.Second))
+					if capacity := queue.capacity(peer, time.Second); capacity > 0 {
+						idles = append(idles, peer)
+						caps = append(caps, capacity)
+					}
 				} else if stale != nil {
 					if waited := time.Since(stale.Sent); waited > timeoutGracePeriod {
 						// Request has been in flight longer than the grace period
@@ -362,7 +364,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 
 // validityErrorOfRequest returns err if it is related to block validity, and nil otherwise.
 func validityErrorOfRequest(err error) error {
-	if errors.Is(err, errInvalidBody) || errors.Is(err, errInvalidReceipt) {
+	if errors.Is(err, errInvalidBody) || errors.Is(err, errInvalidReceipt) || errors.Is(err, errInvalidBAL) {
 		return err
 	}
 	return nil
