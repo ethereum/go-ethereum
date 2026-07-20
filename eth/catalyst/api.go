@@ -336,7 +336,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 			return valid(nil), nil
 		}
 		depth := api.eth.BlockChain().CurrentBlock().Number.Uint64() - block.NumberU64()
-		if api.maxReorgDepth > 0 && depth >= api.maxReorgDepth {
+		if api.maxReorgDepth > 0 && depth > api.maxReorgDepth {
 			log.Warn("Refusing too deep reorg", "depth", depth, "head", update.HeadBlockHash)
 			return engine.STATUS_INVALID, engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds limit %d", depth, api.maxReorgDepth))
 		}
