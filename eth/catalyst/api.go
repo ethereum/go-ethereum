@@ -229,6 +229,8 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
 		case params.SlotNumber == nil:
 			return engine.STATUS_INVALID, attributesErr("missing slot number")
+		case params.TargetGasLimit == nil:
+			return engine.STATUS_INVALID, attributesErr("missing target gas limit")
 		case !api.checkFork(params.Timestamp, forks.Amsterdam):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
 		}
@@ -385,14 +387,15 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		args := &miner.BuildPayloadArgs{
-			Parent:       update.HeadBlockHash,
-			Timestamp:    payloadAttributes.Timestamp,
-			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
-			Random:       payloadAttributes.Random,
-			Withdrawals:  payloadAttributes.Withdrawals,
-			BeaconRoot:   payloadAttributes.BeaconRoot,
-			SlotNum:      payloadAttributes.SlotNumber,
-			Version:      payloadVersion,
+			Parent:         update.HeadBlockHash,
+			Timestamp:      payloadAttributes.Timestamp,
+			FeeRecipient:   payloadAttributes.SuggestedFeeRecipient,
+			Random:         payloadAttributes.Random,
+			Withdrawals:    payloadAttributes.Withdrawals,
+			BeaconRoot:     payloadAttributes.BeaconRoot,
+			SlotNum:        payloadAttributes.SlotNumber,
+			TargetGasLimit: payloadAttributes.TargetGasLimit,
+			Version:        payloadVersion,
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
@@ -1320,9 +1323,17 @@ func getBodyV2(block *types.Block) *engine.ExecutionPayloadBodyV2 {
 	if body == nil {
 		return nil
 	}
+	var balData *hexutil.Bytes
+	if bal := block.AccessList(); bal != nil {
+		// Ignore the RLP encoding error just in case, interpreting
+		// the BAL as unavailable.
+		if enc, err := rlp.EncodeToBytes(bal); err == nil {
+			balData = (*hexutil.Bytes)(&enc)
+		}
+	}
 	return &engine.ExecutionPayloadBodyV2{
 		ExecutionPayloadBody: *body,
-		BlockAccessList:      block.AccessList(),
+		BlockAccessList:      balData,
 	}
 }
 
