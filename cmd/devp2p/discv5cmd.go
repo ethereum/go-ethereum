@@ -161,6 +161,7 @@ type discv5API struct {
 }
 
 func (api *discv5API) LookupRandom(ctx context.Context, n int) []*enode.Node {
+	n = min(n, maxLookupResults)
 	it := api.host.RandomNodes()
 	defer it.Close()
 	go func() {

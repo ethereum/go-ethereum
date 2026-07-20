@@ -96,6 +96,9 @@ func getNodeArg(ctx *cli.Context) *enode.Node {
 	return n
 }
 
+// maxLookupResults bounds the result-set allocation for a caller-controlled lookupRandom count.
+const maxLookupResults = 256
+
 // runRPCServer serves the given RPC APIs on httpAddr; if httpAddr is empty, it blocks forever without serving.
 func runRPCServer(httpAddr string, apis map[string]any) error {
 	if httpAddr == "" {
