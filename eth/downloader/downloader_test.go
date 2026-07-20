@@ -17,6 +17,7 @@
 package downloader
 
 import (
+	"bytes"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -25,10 +26,13 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
@@ -62,6 +66,17 @@ func newTesterWithNotification(t *testing.T, mode ethconfig.SyncMode, success fu
 // newTesterWithSnap is like newTesterWithNotification but selects the snap/2
 // state syncer when snapV2 is set.
 func newTesterWithSnap(t *testing.T, mode ethconfig.SyncMode, success func(), snapV2 bool) *downloadTester {
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
+		Alloc:   types.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	return newTesterWithGenesis(t, mode, success, snapV2, gspec, ethash.NewFaker())
+}
+
+// newTesterWithGenesis is like newTesterWithSnap, but the local chain is built
+// from an arbitrary genesis specification and consensus engine.
+func newTesterWithGenesis(t *testing.T, mode ethconfig.SyncMode, success func(), snapV2 bool, gspec *core.Genesis, engine consensus.Engine) *downloadTester {
 	db, err := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{})
 	if err != nil {
 		panic(err)
@@ -69,12 +84,7 @@ func newTesterWithSnap(t *testing.T, mode ethconfig.SyncMode, success func(), sn
 	t.Cleanup(func() {
 		db.Close()
 	})
-	gspec := &core.Genesis{
-		Config:  params.TestChainConfig,
-		Alloc:   types.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
-		BaseFee: big.NewInt(params.InitialBaseFee),
-	}
-	chain, err := core.NewBlockChain(db, gspec, ethash.NewFaker(), nil)
+	chain, err := core.NewBlockChain(db, gspec, engine, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -96,14 +106,22 @@ func (dl *downloadTester) terminate() {
 
 // newPeer registers a new block download source into the downloader.
 func (dl *downloadTester) newPeer(id string, version uint, blocks []*types.Block) *downloadTesterPeer {
+	return dl.newPeerWithChain(id, version, newTestBlockchain(blocks), nil)
+}
+
+// newPeerWithChain registers a new block download source into the downloader,
+// serving content from the given pre-assembled chain. An optional gate can be
+// specified to delay body deliveries until the respective access lists arrive.
+func (dl *downloadTester) newPeerWithChain(id string, version uint, chain *core.BlockChain, gate *balGate) *downloadTesterPeer {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
 	peer := &downloadTesterPeer{
 		dl:             dl,
 		id:             id,
-		chain:          newTestBlockchain(blocks),
+		chain:          chain,
 		withholdBodies: make(map[common.Hash]struct{}),
+		balGate:        gate,
 		dropped:        make(chan error, 1),
 	}
 	dl.peers[id] = peer
@@ -130,11 +148,64 @@ func (dl *downloadTester) dropPeer(id string) {
 type downloadTesterPeer struct {
 	dl             *downloadTester
 	withholdBodies map[common.Hash]struct{}
-	corruptBodies  bool // if set, the peer serves incorrect blocks
+	corruptBodies  bool     // if set, the peer serves incorrect blocks
+	balGate        *balGate // if set, body deliveries wait for the access lists
 	id             string
 	chain          *core.BlockChain
 
 	dropped chan error // signaled when res.Done receives an error
+}
+
+// balGate delays the body delivery of a set of blocks until their access lists
+// were delivered into the downloader's queue. Access lists are a best-effort
+// component that the queue never waits on, so without external serialization a
+// test cannot assert their attachment deterministically.
+type balGate struct {
+	lock    sync.Mutex
+	cond    *sync.Cond
+	pending map[common.Hash]struct{} // blocks whose access list was not yet delivered
+}
+
+func newBALGate(hashes []common.Hash) *balGate {
+	g := &balGate{
+		pending: make(map[common.Hash]struct{}),
+	}
+	g.cond = sync.NewCond(&g.lock)
+	for _, hash := range hashes {
+		g.pending[hash] = struct{}{}
+	}
+	return g
+}
+
+// served flags the access lists of the given blocks as delivered.
+func (g *balGate) served(hashes []common.Hash) {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	for _, hash := range hashes {
+		delete(g.pending, hash)
+	}
+	g.cond.Broadcast()
+}
+
+// wait blocks until the access lists of all the given blocks were delivered.
+func (g *balGate) wait(hashes []common.Hash) {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	for {
+		blocked := false
+		for _, hash := range hashes {
+			if _, ok := g.pending[hash]; ok {
+				blocked = true
+				break
+			}
+		}
+		if !blocked {
+			return
+		}
+		g.cond.Wait()
+	}
 }
 
 func unmarshalRlpHeaders(rlpdata []rlp.RawValue) []*types.Header {
@@ -247,6 +318,9 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 		}
 		txsHashes[i] = hash
 		uncleHashes[i] = types.CalcUncleHash(body.Uncles)
+		if body.Withdrawals != nil {
+			withdrawalHashes[i] = types.DeriveSha(types.Withdrawals(body.Withdrawals), hasher)
+		}
 	}
 	if dlp.corruptBodies {
 		for i := range txsHashes {
@@ -268,6 +342,11 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 		Done: make(chan error),
 	}
 	go func() {
+		// If gated, hold back the bodies until the access lists of the
+		// requested blocks were delivered
+		if dlp.balGate != nil {
+			dlp.balGate.wait(hashes)
+		}
 		sink <- res
 		if err := <-res.Done; err != nil {
 			select {
@@ -308,6 +387,54 @@ func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, gasUsed []u
 	}
 	go func() {
 		sink <- res
+	}()
+	return res.Req, nil
+}
+
+// RequestBALs constructs a getBlockAccessLists method associated with a
+// particular peer in the download tester. The returned function can be used to
+// retrieve batches of block access lists from the particularly requested peer.
+func (dlp *downloadTesterPeer) RequestBALs(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
+	var (
+		bals   = make([]rlp.RawValue, 0, len(hashes))
+		served = make([]common.Hash, 0, len(hashes))
+	)
+	for _, hash := range hashes {
+		data := dlp.chain.GetAccessListRLP(hash)
+		if len(data) == 0 {
+			// The signal for a missing access list is the empty string
+			bals = append(bals, rlp.EmptyString)
+			continue
+		}
+		bals = append(bals, data)
+		served = append(served, hash)
+	}
+	// compute the content hashes, zero hash for unavailable entries
+	meta := make([]common.Hash, len(bals))
+	for i, data := range bals {
+		if bytes.Equal(data, rlp.EmptyString) {
+			continue
+		}
+		meta[i] = crypto.Keccak256Hash(data)
+	}
+	// deliver the response right away
+	resp := eth.BlockAccessListResponse(bals)
+	res := &eth.Response{
+		Req:  &eth.Request{Peer: dlp.id},
+		Res:  &resp,
+		Meta: meta,
+		Time: 1,
+		Done: make(chan error, 1),
+	}
+	go func() {
+		sink <- res
+
+		// If gated, unblock the body deliveries of the served blocks, but only
+		// after the access lists were fully processed by the queue
+		if dlp.balGate != nil {
+			<-res.Done
+			dlp.balGate.served(served)
+		}
 	}()
 	return res.Req, nil
 }
@@ -458,6 +585,143 @@ func testCanonSync(t *testing.T, protocol uint, mode SyncMode, snapV2 bool) {
 		assertOwnChain(t, tester, len(chain.blocks))
 	case <-time.NewTimer(time.Second * 3).C:
 		t.Fatalf("Failed to sync chain in three seconds")
+	}
+}
+
+// makeBALChain constructs a post-merge, Amsterdam-enabled chain whose blocks
+// all carry a block access list commitment, along with the genesis needed to
+// sync it. Every block contains a transaction so that no block has an empty
+// body (empty-body blocks complete without a network retrieval, voiding any
+// delivery ordering imposed by the tests).
+func makeBALChain(n int) (*core.Genesis, []*types.Block) {
+	config := *params.MergedTestChainConfig
+	config.AmsterdamTime = new(uint64)
+
+	gspec := &core.Genesis{
+		Config: &config,
+		Alloc: types.GenesisAlloc{
+			testAddress:                      {Balance: new(big.Int).Mul(big.NewInt(1000), big.NewInt(params.Ether))},
+			params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
+			params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
+			params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
+			params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
+			params.BuilderDepositAddress:     {Nonce: 1, Code: params.BuilderDepositCode, Balance: common.Big0},
+			params.BuilderExitAddress:        {Nonce: 1, Code: params.BuilderExitCode, Balance: common.Big0},
+		},
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+		Difficulty: common.Big0,
+	}
+	signer := types.LatestSigner(&config)
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), n, func(i int, block *core.BlockGen) {
+		// The chain maker only executes the EIP-4788 system call when the
+		// beacon root is set explicitly; without it, the generated access
+		// lists would not match the ones computed at import.
+		block.SetParentBeaconRoot(common.Hash{})
+
+		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{0x01}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
+		if err != nil {
+			panic(err)
+		}
+		block.AddTx(tx)
+	})
+	return gspec, blocks
+}
+
+// Tests that block access lists are retrieved from eth/71+ peers during sync
+// and end up attached to the imported blocks; and that syncing against peers
+// which cannot (or do not) serve access lists still completes, importing the
+// blocks without them.
+func TestBALSynchronisationFull(t *testing.T)       { testBALSync(t, FullSync, eth.ETH71) }
+func TestBALSynchronisationSnap(t *testing.T)       { testBALSync(t, SnapSync, eth.ETH71) }
+func TestBALSynchronisationLegacyPeer(t *testing.T) { testBALSync(t, FullSync, eth.ETH69) }
+
+func testBALSync(t *testing.T, mode SyncMode, protocol uint) {
+	gspec, blocks := makeBALChain(96) // long enough for a snap sync pivot below the head
+
+	success := make(chan struct{})
+	tester := newTesterWithGenesis(t, mode, func() { close(success) }, false, gspec, beacon.New(ethash.NewFaker()))
+	defer tester.terminate()
+
+	// Assemble the serving chain, executing the blocks to persist their access
+	// lists.
+	peerChain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), gspec, beacon.New(ethash.NewFaker()), nil)
+	if err != nil {
+		t.Fatalf("failed to create peer chain: %v", err)
+	}
+	defer peerChain.Stop()
+
+	if _, err := peerChain.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to assemble peer chain: %v", err)
+	}
+	// Collect the blocks whose access lists the downloader should retrieve
+	var eligible []common.Hash
+	for _, block := range blocks {
+		if hash := block.Header().BlockAccessListHash; hash != nil && *hash != types.EmptyBlockAccessListHash {
+			eligible = append(eligible, block.Hash())
+		}
+	}
+	if len(eligible) != len(blocks) {
+		t.Fatalf("expected all %d blocks to commit to an access list, got %d", len(blocks), len(eligible))
+	}
+	// Access lists are best effort and never block the delivery of an otherwise
+	// completed block. To assert their attachment deterministically, gate the
+	// body deliveries of modern peers on the access lists arriving first.
+	var gate *balGate
+	if protocol >= eth.ETH71 {
+		gate = newBALGate(eligible)
+	}
+	tester.newPeerWithChain("peer", protocol, peerChain, gate)
+
+	// Track which imported blocks had an access list attached
+	var (
+		attachLock sync.Mutex
+		attached   = make(map[uint64]bool)
+	)
+	tester.downloader.chainInsertHook = func(results []*fetchResult) {
+		attachLock.Lock()
+		defer attachLock.Unlock()
+		for _, result := range results {
+			if result.AccessList.Load() != nil {
+				attached[result.Header.Number.Uint64()] = true
+			}
+		}
+	}
+	// Synchronise with the peer and make sure all relevant data was retrieved.
+	// In snap mode, announce a finalized block too, directing the chain segment
+	// below it straight into the ancient store: downloaded access lists must
+	// end up retrievable through that path as well.
+	var final *types.Header
+	if mode == SnapSync {
+		final = blocks[len(blocks)/3].Header()
+	}
+	if err := tester.downloader.BeaconSync(blocks[len(blocks)-1].Header(), final); err != nil {
+		t.Fatalf("failed to beacon-sync chain: %v", err)
+	}
+	select {
+	case <-success:
+		assertOwnChain(t, tester, len(blocks)+1)
+	case <-time.NewTimer(15 * time.Second).C:
+		t.Fatalf("failed to sync chain in fifteen seconds")
+	}
+	attachLock.Lock()
+	defer attachLock.Unlock()
+
+	for _, block := range blocks {
+		if protocol >= eth.ETH71 {
+			// Modern peer: the access list must have been downloaded, attached
+			// to the imported block and persisted locally
+			if !attached[block.NumberU64()] {
+				t.Errorf("block %d: no access list attached at import", block.NumberU64())
+			}
+			if have, want := tester.chain.GetAccessListRLP(block.Hash()), peerChain.GetAccessListRLP(block.Hash()); !bytes.Equal(have, want) {
+				t.Errorf("block %d: persisted access list mismatch: have %x, want %x", block.NumberU64(), have, want)
+			}
+		} else {
+			// Legacy peer: blocks must have been imported without access lists
+			if attached[block.NumberU64()] {
+				t.Errorf("block %d: unexpected access list attached at import", block.NumberU64())
+			}
+		}
 	}
 }
 
