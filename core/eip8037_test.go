@@ -109,6 +109,11 @@ func mkCommittedState(t *testing.T, alloc types.GenesisAlloc) *state.StateDB {
 
 // amsterdamCoreEVM builds an Amsterdam EVM over statedb with fees disabled.
 func amsterdamCoreEVM(sdb *state.StateDB) *vm.EVM {
+	return amsterdamTracedEVM(sdb, nil)
+}
+
+// amsterdamTracedEVM is amsterdamCoreEVM with tracing hooks attached.
+func amsterdamTracedEVM(sdb *state.StateDB, hooks *tracing.Hooks) *vm.EVM {
 	ctx := vm.BlockContext{
 		CanTransfer:      CanTransfer,
 		Transfer:         Transfer,
@@ -121,7 +126,7 @@ func amsterdamCoreEVM(sdb *state.StateDB) *vm.EVM {
 		GasLimit:         60_000_000,
 		CostPerStateByte: params.CostPerStateByte,
 	}
-	return vm.NewEVM(ctx, sdb, cfg8037, vm.Config{NoBaseFee: true})
+	return vm.NewEVM(ctx, sdb, cfg8037, vm.Config{NoBaseFee: true, Tracer: hooks})
 }
 
 // applyMsg applies one transaction with a fresh block gas pool and returns the
@@ -478,6 +483,64 @@ func TestCreate2StorageOnlyDestPrechargeOOG(t *testing.T) {
 	// The parent is the topmost frame, so its halt burns the whole gas limit.
 	if gp.cumulativeRegular != gas {
 		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, gas)
+	}
+}
+
+// A transaction halting on the pre-frame runtime charges never enters the
+// EVM, but tracers assume every receipt-producing transaction emits a
+// depth-zero frame (e.g. callTracer indexes callstack[0] in OnTxEnd). The
+// state transition must synthesize the top-frame enter/exit pair.
+func TestPrechargeOOGEmitsTopFrame(t *testing.T) {
+	// Both gas limits pass intrinsic validation but cannot cover the 183,600
+	// account-creation state charge applied before the top frame is entered.
+	cases := []struct {
+		name string
+		tx   *types.Transaction
+		typ  vm.OpCode
+	}{
+		{"transfer-to-empty", callTx(0, common.HexToAddress("0xc0ffee"), 1, 60_000, nil), vm.CALL},
+		{"create", createTx(0, 100_000, deploy3), vm.CREATE},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			type frame struct {
+				depth int
+				typ   byte
+				err   error
+			}
+			var enters, exits []frame
+			hooks := &tracing.Hooks{
+				OnEnter: func(depth int, typ byte, from, to common.Address, input []byte, gas uint64, value *big.Int) {
+					enters = append(enters, frame{depth: depth, typ: typ})
+				},
+				OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+					exits = append(exits, frame{depth: depth, err: err})
+				},
+			}
+			sdb := mkState(senderAlloc(nil))
+			evm := amsterdamTracedEVM(sdb, hooks)
+			msg, err := TransactionToMessage(tc.tx, signer8037, evm.Context.BaseFee)
+			if err != nil {
+				t.Fatalf("to message: %v", err)
+			}
+			evm.SetTxContext(NewEVMTxContext(msg))
+			res, err := newStateTransition(evm, msg, NewGasPool(evm.Context.GasLimit)).execute()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !res.Failed() || !errors.Is(res.Err, vm.ErrOutOfGas) {
+				t.Fatalf("err = %v, want out of gas before the top frame", res.Err)
+			}
+			if len(enters) != 1 || len(exits) != 1 {
+				t.Fatalf("got %d enter / %d exit events, want exactly one of each", len(enters), len(exits))
+			}
+			if enters[0].depth != 0 || enters[0].typ != byte(tc.typ) {
+				t.Fatalf("enter = depth %d type %#x, want depth 0 type %#x", enters[0].depth, enters[0].typ, byte(tc.typ))
+			}
+			if exits[0].depth != 0 || !errors.Is(exits[0].err, vm.ErrOutOfGas) {
+				t.Fatalf("exit = depth %d err %v, want depth 0 out of gas", exits[0].depth, exits[0].err)
+			}
+		})
 	}
 }
 
