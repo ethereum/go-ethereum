@@ -259,10 +259,9 @@ func TestMultiplePeersIsolated(t *testing.T) {
 	}
 }
 
-// TestLatencyActivityAccumulatesAndDecays verifies that accepted-delivery
-// samples fold into the activity EMA at the next NotifyBlock, that the
-// pending counter resets after folding, and that subsequent sample-free
-// blocks decay the activity.
+// TestLatencyActivityAccumulatesAndDecays verifies that a block with an
+// accepted delivery folds a positive presence bit into the activity EMA, and
+// that a subsequent delivery-free block decays it (not resets it).
 func TestLatencyActivityAccumulatesAndDecays(t *testing.T) {
 	s := New()
 	for i := 0; i < 10; i++ {
@@ -275,7 +274,7 @@ func TestLatencyActivityAccumulatesAndDecays(t *testing.T) {
 		t.Fatalf("expected positive activity after folding samples, got %f", folded)
 	}
 
-	// An empty block: nothing pending (counter was reset), pure decay.
+	// An empty block: nothing delivered, pure decay.
 	s.NotifyBlock(nil, nil)
 	decayed := s.GetAllPeerStats()["peerA"].LatencyActivity
 	if decayed >= folded {
@@ -283,6 +282,32 @@ func TestLatencyActivityAccumulatesAndDecays(t *testing.T) {
 	}
 	if decayed <= 0 {
 		t.Fatalf("expected gradual decay, not reset, got %f", decayed)
+	}
+}
+
+// TestLatencyActivityCapsBurst verifies the per-block contribution is capped:
+// a block with a burst of many accepted deliveries produces the same activity
+// as a block with a single delivery, so eligibility cannot be front-loaded.
+func TestLatencyActivityCapsBurst(t *testing.T) {
+	single := New()
+	single.NotifyRequestResult("peerA", 50*time.Millisecond, false)
+	single.NotifyBlock(nil, nil)
+
+	burst := New()
+	for i := 0; i < 100; i++ {
+		burst.NotifyRequestResult("peerA", 50*time.Millisecond, false)
+	}
+	burst.NotifyBlock(nil, nil)
+
+	got := burst.GetAllPeerStats()["peerA"].LatencyActivity
+	want := single.GetAllPeerStats()["peerA"].LatencyActivity
+	if got != want {
+		t.Fatalf("burst of 100 deliveries in one block should equal a single delivery: got %f, want %f", got, want)
+	}
+	// And one block's contribution must be well under the eligibility gate,
+	// so a single burst block cannot by itself confer protection.
+	if got >= MinLatencyActivity {
+		t.Fatalf("one block should not reach the eligibility gate, got %f >= %f", got, MinLatencyActivity)
 	}
 }
 

@@ -51,18 +51,23 @@ const (
 	// short bursts shouldn't shift the score, sustained behavior should.
 	// Half-life ≈ ln(0.5)/ln(0.99) ≈ 69 samples.
 	latencyEMAAlpha = 0.01
-	// EMA smoothing factor for the per-block latency-sample activity rate.
+	// EMA smoothing factor for the per-block delivery-presence rate.
 	// Half-life ≈ 50 chain heads (~10 minutes on 12s blocks): eligibility
 	// for latency protection must be continuously maintained at roughly
 	// this cadence, it cannot be front-loaded in a burst and then held.
 	latencyActivityAlpha = 0.014
-	// MinLatencyActivity is the minimum sustained rate of accepted-delivery
-	// latency samples (per block, EMA-smoothed) a peer must maintain for its
-	// RequestLatencyEMA to be considered for protection. 0.2 ≈ one accepted
-	// fetch per five blocks (~1/minute). Replaces both an absolute sample
-	// count (front-loadable) and a last-sample staleness check (maintainable
-	// with one sample per window): a decaying rate expires on its own and
-	// demands sustained useful work.
+	// MinLatencyActivity is the minimum sustained delivery-presence rate a
+	// peer must maintain for its RequestLatencyEMA to be considered for
+	// protection. LatencyActivity is an EMA of a per-block 0/1 signal
+	// (did the peer make ≥1 accepted delivery this block), so it is a
+	// fraction of recent blocks in which the peer was useful; 0.2 ≈ active
+	// in one block in five. Capping the per-block contribution at 1 is what
+	// makes eligibility unforgeable by a burst: a single block of activity
+	// contributes at most latencyActivityAlpha, so clearing the gate takes
+	// ~15 active blocks regardless of how many deliveries land in any one.
+	// This replaces both an absolute sample count (front-loadable) and a
+	// last-sample staleness check (maintainable with one sample per window):
+	// a decaying rate expires on its own and demands sustained useful work.
 	MinLatencyActivity = 0.2
 	// latencyResetThreshold is the activity level below which a peer's
 	// latency state is forgotten entirely. Without this, a peer could
@@ -85,13 +90,13 @@ type PeerStats struct {
 
 // peerStats is the internal mutable state per peer.
 type peerStats struct {
-	recentFinalized   float64
-	recentIncluded    float64
-	requestLatencyEMA time.Duration
-	requestSuccesses  int64
-	requestTimeouts   int64
-	latencyActivity   float64
-	pendingSamples    int // accepted-delivery samples since the last NotifyBlock
+	recentFinalized    float64
+	recentIncluded     float64
+	requestLatencyEMA  time.Duration
+	requestSuccesses   int64
+	requestTimeouts    int64
+	latencyActivity    float64
+	deliveredThisBlock bool // saw ≥1 accepted delivery since the last NotifyBlock
 }
 
 // Stats is the per-peer quality aggregator.
@@ -138,11 +143,17 @@ func (s *Stats) NotifyBlock(inclusions, finalized map[string]int) {
 		ps.recentIncluded = (1-emaAlpha)*ps.recentIncluded + emaAlpha*float64(inclusions[peer])
 		ps.recentFinalized = (1-finalizedEMAAlpha)*ps.recentFinalized + finalizedEMAAlpha*float64(finalized[peer])
 
-		// Fold the accepted-delivery samples gathered since the previous
-		// head into the activity rate, then let it decay like the other
-		// per-block EMAs.
-		ps.latencyActivity = (1-latencyActivityAlpha)*ps.latencyActivity + latencyActivityAlpha*float64(ps.pendingSamples)
-		ps.pendingSamples = 0
+		// Fold this block's delivery-presence bit (0 or 1) into the activity
+		// rate, then let it decay like the other per-block EMAs. Capping at a
+		// single bit per block — rather than the raw delivery count — is what
+		// prevents a burst (or a backlog accumulated across a chain-head
+		// stall) from buying eligibility that then coasts on decay.
+		sample := 0.0
+		if ps.deliveredThisBlock {
+			sample = 1.0
+		}
+		ps.latencyActivity = (1-latencyActivityAlpha)*ps.latencyActivity + latencyActivityAlpha*sample
+		ps.deliveredThisBlock = false
 
 		// A peer silent long enough for its activity to fully decay forgets
 		// its fast-latency history: a frozen fast EMA from a past active
@@ -196,7 +207,7 @@ func (s *Stats) NotifyRequestResult(peer string, latency time.Duration, timeout 
 		ps.requestTimeouts++
 	} else {
 		ps.requestSuccesses++
-		ps.pendingSamples++
+		ps.deliveredThisBlock = true
 	}
 }
 
