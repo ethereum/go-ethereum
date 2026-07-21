@@ -144,18 +144,20 @@ func (s *Stats) NotifyBlock(inclusions, finalized map[string]int) {
 		ps.latencyActivity = (1-latencyActivityAlpha)*ps.latencyActivity + latencyActivityAlpha*float64(ps.pendingSamples)
 		ps.pendingSamples = 0
 
-		// A peer silent long enough for its activity to fully decay
-		// forgets its latency history: a frozen fast EMA from a past
-		// active period must not be re-armable by rebuilding activity
-		// alone (see latencyResetThreshold). Gated on success history —
-		// only successes create a fast EMA worth forgetting; a
-		// timeout-only peer (activity permanently zero) keeps its
-		// penalty record.
+		// A peer silent long enough for its activity to fully decay forgets
+		// its fast-latency history: a frozen fast EMA from a past active
+		// period must not be re-armable by rebuilding activity alone (see
+		// latencyResetThreshold). Only peers that recorded successes have a
+		// fast EMA worth forgetting; the requestSuccesses != 0 gate also
+		// avoids resetting timeout-only peers, whose activity is legitimately
+		// zero rather than decayed-from-high. The timeout counter is NOT
+		// cleared: a returning peer re-bootstraps a fresh EMA (via the
+		// requestLatencyEMA == 0 sentinel in NotifyRequestResult) but keeps
+		// its accumulated timeout penalty record.
 		if ps.latencyActivity < latencyResetThreshold && ps.requestSuccesses != 0 {
 			ps.latencyActivity = 0
 			ps.requestLatencyEMA = 0
 			ps.requestSuccesses = 0
-			ps.requestTimeouts = 0
 		}
 	}
 }
@@ -177,9 +179,12 @@ func (s *Stats) NotifyRequestResult(peer string, latency time.Duration, timeout 
 		ps = &peerStats{}
 		s.peers[peer] = ps
 	}
-	if ps.requestSuccesses+ps.requestTimeouts == 0 {
+	if ps.requestLatencyEMA == 0 {
 		// Bootstrap the EMA with the first sample so it doesn't drift up
 		// from zero over many samples before reaching realistic values.
+		// A zero EMA marks an uninitialized (or silence-reset) peer; a live
+		// EMA never blends back to exactly zero since every sample is a
+		// positive duration.
 		ps.requestLatencyEMA = latency
 	} else {
 		ps.requestLatencyEMA = time.Duration(

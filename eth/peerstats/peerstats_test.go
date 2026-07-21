@@ -348,6 +348,53 @@ func TestLatencyStateForgottenAfterSilence(t *testing.T) {
 	}
 }
 
+// TestSilenceResetKeepsTimeoutRecord verifies that the silence reset forgets
+// the fast EMA and success count but PRESERVES the accumulated timeout penalty
+// counter — a peer with a success history cannot launder away its timeout
+// record merely by going silent long enough to decay.
+func TestSilenceResetKeepsTimeoutRecord(t *testing.T) {
+	s := New()
+	// Build up activity through sustained successes, then record timeouts.
+	for i := 0; i < 20; i++ {
+		s.NotifyRequestResult("peerA", 50*time.Millisecond, false)
+		s.NotifyBlock(nil, nil)
+	}
+	s.NotifyRequestResult("peerA", 5*time.Second, true)
+	s.NotifyRequestResult("peerA", 5*time.Second, true)
+	if got := s.GetAllPeerStats()["peerA"].RequestTimeouts; got != 2 {
+		t.Fatalf("setup: expected 2 timeouts, got %d", got)
+	}
+
+	// Go silent long enough for activity to decay below the reset threshold.
+	for i := 0; i < 600; i++ {
+		s.NotifyBlock(nil, nil)
+	}
+
+	ps := s.GetAllPeerStats()["peerA"]
+	if ps.RequestLatencyEMA != 0 {
+		t.Fatalf("fast EMA should be forgotten on reset, got %v", ps.RequestLatencyEMA)
+	}
+	if ps.RequestSuccesses != 0 {
+		t.Fatalf("success count should reset, got %d", ps.RequestSuccesses)
+	}
+	if ps.LatencyActivity != 0 {
+		t.Fatalf("activity should reset, got %f", ps.LatencyActivity)
+	}
+	if ps.RequestTimeouts != 2 {
+		t.Fatalf("timeout penalty must survive the silence reset, got %d", ps.RequestTimeouts)
+	}
+
+	// The returning peer re-bootstraps a fresh EMA while keeping its timeouts.
+	s.NotifyRequestResult("peerA", 300*time.Millisecond, false)
+	ps = s.GetAllPeerStats()["peerA"]
+	if ps.RequestLatencyEMA != 300*time.Millisecond {
+		t.Fatalf("expected fresh bootstrap after reset, got %v", ps.RequestLatencyEMA)
+	}
+	if ps.RequestTimeouts != 2 {
+		t.Fatalf("timeout count lost after return, got %d", ps.RequestTimeouts)
+	}
+}
+
 // TestRequestResultTimeoutCounting verifies that timeout=true increments
 // RequestTimeouts (not RequestSuccesses) and still updates the EMA.
 func TestRequestResultTimeoutCounting(t *testing.T) {
