@@ -3942,6 +3942,62 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	require.Equal(t, expected, result.Accesslist)
 }
 
+func TestCreateAccessListFeeDefaults(t *testing.T) {
+	t.Parallel()
+	funded := newAccounts(1)[0]
+	genesis := &core.Genesis{
+		Config: params.MergedTestChainConfig,
+		Alloc: types.GenesisAlloc{
+			funded.addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+
+	to := common.Address{0xbb}
+	tests := []struct {
+		name    string
+		args    TransactionArgs
+		wantErr bool
+	}{
+		{
+			name: "unfunded sender, all fee fields omitted",
+			args: TransactionArgs{From: &common.Address{0xaa}, To: &to},
+		},
+		{
+			name: "priority fee only",
+			args: TransactionArgs{From: &funded.addr, To: &to, MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(1))},
+		},
+		{
+			name:    "explicit zero blob fee cap rejected",
+			args:    TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big)},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := api.CreateAccessList(context.Background(), tt.args, nil, nil)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got result %+v", result)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("CreateAccessList failed: %v", err)
+			}
+			if result.Error != "" {
+				t.Fatalf("unexpected vm error: %v", result.Error)
+			}
+			if uint64(result.GasUsed) != params.TxGas {
+				t.Fatalf("unexpected gasUsed (got %d want %d)", uint64(result.GasUsed), params.TxGas)
+			}
+		})
+	}
+}
+
 func TestEstimateGasWithMovePrecompile(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
