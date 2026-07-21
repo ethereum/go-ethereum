@@ -117,8 +117,7 @@ type dropper struct {
 	maxInboundPeers int // maximum number of inbound peers
 	peersFunc       getPeersFunc
 	syncingFunc     getSyncingFunc
-	peerStatsFunc   getPeerStatsFunc      // optional: inclusion stats for protection
-	pruneStatsFunc  func(map[string]bool) // optional: reclaim stats for disconnected peers
+	peerStatsFunc   getPeerStatsFunc // optional: inclusion stats for protection
 
 	// peerDropTimer introduces churn if we are close to limit capacity.
 	// We handle Dialed and Inbound connections separately
@@ -148,13 +147,12 @@ func newDropper(maxDialPeers, maxInboundPeers int) *dropper {
 	return cm
 }
 
-// Start the dropper. peerStatsFunc and pruneStatsFunc are optional (nil
-// disables inclusion protection and stats pruning respectively).
-func (cm *dropper) Start(srv *p2p.Server, syncingFunc getSyncingFunc, peerStatsFunc getPeerStatsFunc, pruneStatsFunc func(map[string]bool)) {
+// Start the dropper. peerStatsFunc is optional (nil disables inclusion
+// protection).
+func (cm *dropper) Start(srv *p2p.Server, syncingFunc getSyncingFunc, peerStatsFunc getPeerStatsFunc) {
 	cm.peersFunc = srv.Peers
 	cm.syncingFunc = syncingFunc
 	cm.peerStatsFunc = peerStatsFunc
-	cm.pruneStatsFunc = pruneStatsFunc
 	cm.wg.Add(1)
 	go cm.loop()
 }
@@ -212,21 +210,6 @@ func (cm *dropper) dropRandomPeer() bool {
 		droppedOutbound.Mark(1)
 	}
 	return true
-}
-
-// pruneStats reclaims stats for peers that are no longer connected. It builds
-// the currently-connected id set and hands it to the stats pruner. No-op when
-// pruning is disabled (nil pruneStatsFunc).
-func (cm *dropper) pruneStats() {
-	if cm.pruneStatsFunc == nil {
-		return
-	}
-	peers := cm.peersFunc()
-	keep := make(map[string]bool, len(peers))
-	for _, p := range peers {
-		keep[p.ID().String()] = true
-	}
-	cm.pruneStatsFunc(keep)
 }
 
 // protectedPeers computes the set of peers that should not be dropped based
@@ -307,11 +290,6 @@ func (cm *dropper) loop() {
 	for {
 		select {
 		case <-cm.peerDropTimer.C:
-			// Reclaim stats entries for peers that are no longer connected,
-			// covering the rare orphan left when a peer signal races with its
-			// NotifyPeerDrop. Done every tick (independent of syncing) since
-			// disconnects happen during sync too.
-			cm.pruneStats()
 			// Drop a random peer if we are not syncing and the peer count is close to the limit.
 			if !cm.syncingFunc() {
 				cm.dropRandomPeer()

@@ -280,7 +280,6 @@ func TestProtectedByPoolRequestLatencyBootstrapGuard(t *testing.T) {
 	// A lucky-fast peer without sustained activity — must NOT be protected.
 	stats[dialed[0].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 1 * time.Millisecond,
-		RequestSuccesses:  1,
 		LatencyActivity:   peerstats.MinLatencyActivity / 2,
 	}
 	// A warmed-up but slower peer — should be protected on latency.
@@ -358,7 +357,6 @@ func TestProtectedByPoolRequestLatencyStale(t *testing.T) {
 	// below the eligibility threshold.
 	stats[dialed[1].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 50 * time.Millisecond,
-		RequestSuccesses:  100,
 		LatencyActivity:   peerstats.MinLatencyActivity * 0.9,
 	}
 

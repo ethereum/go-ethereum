@@ -21,31 +21,61 @@ import (
 	"time"
 )
 
-// TestNotifyBlockBootstrapsFromInclusions verifies that a peer with a positive
-// inclusion count in the first NotifyBlock gets a stats entry created.
-func TestNotifyBlockBootstrapsFromInclusions(t *testing.T) {
+// newStats returns a Stats with the given peer ids pre-registered, matching
+// the production lifecycle where a peer is registered on connect before any
+// of its signals arrive.
+func newStats(ids ...string) *Stats {
 	s := New()
+	for _, id := range ids {
+		s.NotifyPeerConnect(id)
+	}
+	return s
+}
+
+// TestNotifyPeerConnectCreatesEntry verifies registration creates a zeroed
+// entry and is idempotent (re-registering keeps accumulated stats).
+func TestNotifyPeerConnectCreatesEntry(t *testing.T) {
+	s := New()
+	s.NotifyPeerConnect("peerA")
+	if _, ok := s.GetAllPeerStats()["peerA"]; !ok {
+		t.Fatal("expected peerA entry after connect")
+	}
+	// Accumulate some state, then re-connect: stats must be preserved.
+	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
+	s.NotifyPeerConnect("peerA")
+	if got := s.GetAllPeerStats()["peerA"].RequestLatencyEMA; got != 200*time.Millisecond {
+		t.Fatalf("re-connect wiped stats: got EMA %v, want 200ms", got)
+	}
+}
+
+// TestNotifyBlockUpdatesRegisteredPeer verifies that inclusions update the
+// EMA of a registered peer.
+func TestNotifyBlockUpdatesRegisteredPeer(t *testing.T) {
+	s := newStats("peerA")
 	s.NotifyBlock(map[string]int{"peerA": 3}, nil)
 
-	stats := s.GetAllPeerStats()
-	if len(stats) != 1 {
-		t.Fatalf("expected 1 peer entry, got %d", len(stats))
-	}
-	ps, ok := stats["peerA"]
-	if !ok {
-		t.Fatal("expected peerA entry")
-	}
+	ps := s.GetAllPeerStats()["peerA"]
 	// EMA after first block: (1-0.05)*0 + 0.05*3 = 0.15
 	if ps.RecentIncluded <= 0 {
 		t.Fatalf("expected RecentIncluded > 0 after inclusion, got %f", ps.RecentIncluded)
 	}
 }
 
-// TestNotifyBlockDecaysKnownPeers verifies that peers already tracked get their
+// TestNotifyBlockIgnoresUnregisteredPeer verifies that inclusions (and
+// finalization credits) for a peer with no entry never create one — a tx
+// delivered by a peer that has since disconnected cannot resurrect its stats.
+func TestNotifyBlockIgnoresUnregisteredPeer(t *testing.T) {
+	s := New()
+	s.NotifyBlock(map[string]int{"ghost": 3}, map[string]int{"ghost": 5})
+	if n := len(s.GetAllPeerStats()); n != 0 {
+		t.Fatalf("signals for unregistered peer must not create entries, got %d", n)
+	}
+}
+
+// TestNotifyBlockDecaysKnownPeers verifies that registered peers get their
 // RecentIncluded EMA decayed when they have no inclusions in a block.
 func TestNotifyBlockDecaysKnownPeers(t *testing.T) {
-	s := New()
-	// Seed peerA with an inclusion.
+	s := newStats("peerA")
 	s.NotifyBlock(map[string]int{"peerA": 3}, nil)
 	initial := s.GetAllPeerStats()["peerA"].RecentIncluded
 
@@ -58,21 +88,10 @@ func TestNotifyBlockDecaysKnownPeers(t *testing.T) {
 	}
 }
 
-// TestNotifyBlockDoesNotResurrectDroppedPeers verifies that finalization
-// credits to a peer with no entry don't create one.
-func TestNotifyBlockDoesNotResurrectFromFinalization(t *testing.T) {
-	s := New()
-	s.NotifyBlock(nil, map[string]int{"peerA": 5})
-
-	if stats := s.GetAllPeerStats(); len(stats) != 0 {
-		t.Fatalf("finalization credits must not create entries, got %d peers", len(stats))
-	}
-}
-
 // TestNotifyBlockDropThenFinalizeNoResurrect verifies the full drop→finalize
 // sequence: a dropped peer doesn't come back via finalization credits.
 func TestNotifyBlockDropThenFinalizeNoResurrect(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	s.NotifyBlock(map[string]int{"peerA": 1}, nil)
 	s.NotifyPeerDrop("peerA")
 	s.NotifyBlock(nil, map[string]int{"peerA": 10})
@@ -84,7 +103,7 @@ func TestNotifyBlockDropThenFinalizeNoResurrect(t *testing.T) {
 
 // TestNotifyBlockFinalizationCredits an existing peer.
 func TestNotifyBlockFinalizationCredits(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	s.NotifyBlock(map[string]int{"peerA": 1}, nil)
 	s.NotifyBlock(nil, map[string]int{"peerA": 3})
 
@@ -97,7 +116,7 @@ func TestNotifyBlockFinalizationCredits(t *testing.T) {
 
 // TestNotifyBlockInclusionEMAUpdate verifies the EMA formula (1-α)·old + α·count.
 func TestNotifyBlockInclusionEMAUpdate(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	// Three inclusions: EMA = 0.05 * 3 = 0.15
 	s.NotifyBlock(map[string]int{"peerA": 3}, nil)
 	got := s.GetAllPeerStats()["peerA"].RecentIncluded
@@ -117,24 +136,18 @@ func TestNotifyBlockInclusionEMAUpdate(t *testing.T) {
 // TestNotifyRequestResultFirstSampleBootstrap asserts that the first
 // latency sample seeds the EMA directly.
 func TestNotifyRequestResultFirstSampleBootstrap(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
 
 	ps := s.GetAllPeerStats()["peerA"]
 	if ps.RequestLatencyEMA != 200*time.Millisecond {
 		t.Fatalf("expected first sample to seed EMA at 200ms, got %v", ps.RequestLatencyEMA)
 	}
-	if ps.RequestSuccesses != 1 {
-		t.Fatalf("expected RequestSuccesses=1, got %d", ps.RequestSuccesses)
-	}
-	if ps.RequestTimeouts != 0 {
-		t.Fatalf("expected RequestTimeouts=0, got %d", ps.RequestTimeouts)
-	}
 }
 
 // TestNotifyRequestResultEMAUpdate verifies the EMA formula for latency.
 func TestNotifyRequestResultEMAUpdate(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
 	s.NotifyRequestResult("peerA", 1000*time.Millisecond, false)
 
@@ -148,16 +161,12 @@ func TestNotifyRequestResultEMAUpdate(t *testing.T) {
 	if delta > 1*time.Microsecond {
 		t.Fatalf("EMA mismatch: got %v, want %v", got, want)
 	}
-	ps := s.GetAllPeerStats()["peerA"]
-	if ps.RequestSuccesses != 2 {
-		t.Fatalf("expected RequestSuccesses=2, got %d", ps.RequestSuccesses)
-	}
 }
 
 // TestNotifyRequestResultSlowConvergence verifies the slow alpha
 // damps convergence under sustained timeouts.
 func TestNotifyRequestResultSlowConvergence(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
 	for i := 0; i < 50; i++ {
 		s.NotifyRequestResult("peerA", 5*time.Second, false)
@@ -171,10 +180,21 @@ func TestNotifyRequestResultSlowConvergence(t *testing.T) {
 	}
 }
 
+// TestNotifyRequestResultIgnoresUnregisteredPeer verifies that a result for a
+// peer with no entry (e.g. one that raced in after disconnect) is dropped
+// rather than creating an orphan.
+func TestNotifyRequestResultIgnoresUnregisteredPeer(t *testing.T) {
+	s := New()
+	s.NotifyRequestResult("ghost", 50*time.Millisecond, false)
+	if n := len(s.GetAllPeerStats()); n != 0 {
+		t.Fatalf("result for unregistered peer must not create an entry, got %d", n)
+	}
+}
+
 // TestNotifyPeerDropClearsStats verifies that a dropped peer disappears
 // from GetAllPeerStats.
 func TestNotifyPeerDropClearsStats(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
 	s.NotifyPeerDrop("peerA")
 
@@ -183,63 +203,23 @@ func TestNotifyPeerDropClearsStats(t *testing.T) {
 	}
 }
 
-// TestPruneRemovesDisconnectedPeers verifies Prune drops entries for peers
-// absent from the keep set (e.g. an orphan recreated by a signal that raced
-// with NotifyPeerDrop) while retaining still-connected peers.
-func TestPruneRemovesDisconnectedPeers(t *testing.T) {
-	s := New()
-	s.NotifyRequestResult("connected", 100*time.Millisecond, false)
-	s.NotifyRequestResult("orphan", 100*time.Millisecond, false)
-
-	s.Prune(map[string]bool{"connected": true})
-
-	stats := s.GetAllPeerStats()
-	if _, ok := stats["orphan"]; ok {
-		t.Fatal("orphan stats should be pruned when not in keep set")
-	}
-	if _, ok := stats["connected"]; !ok {
-		t.Fatal("connected peer stats should survive pruning")
-	}
-}
-
-// TestPruneEmptyKeepClearsAll verifies an empty keep set removes every entry.
-func TestPruneEmptyKeepClearsAll(t *testing.T) {
-	s := New()
-	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
-	s.NotifyRequestResult("peerB", 100*time.Millisecond, false)
-
-	s.Prune(map[string]bool{})
-
-	if n := len(s.GetAllPeerStats()); n != 0 {
-		t.Fatalf("expected all entries pruned, got %d", n)
-	}
-}
-
-// TestStaleRequestLatencyAfterDrop documents the accepted behavior: a
-// late sample after NotifyPeerDrop recreates a 1-sample entry. The
-// dropper's MinLatencyActivity guard ensures this is harmless, and the
-// dropper's periodic Prune reclaims the orphan.
-func TestStaleRequestLatencyAfterDrop(t *testing.T) {
-	s := New()
+// TestRequestResultIgnoredAfterDrop verifies that a late latency sample racing
+// in after NotifyPeerDrop is ignored rather than recreating an orphan entry.
+func TestRequestResultIgnoredAfterDrop(t *testing.T) {
+	s := newStats("peerA")
 	s.NotifyRequestResult("peerA", 200*time.Millisecond, false)
 	s.NotifyPeerDrop("peerA")
 	// Late sample racing with the drop.
 	s.NotifyRequestResult("peerA", 50*time.Millisecond, false)
 
-	ps := s.GetAllPeerStats()["peerA"]
-	if ps.RequestSuccesses != 1 {
-		t.Fatalf("expected fresh RequestSuccesses=1, got %d", ps.RequestSuccesses)
+	if _, ok := s.GetAllPeerStats()["peerA"]; ok {
+		t.Fatal("late sample after drop must not recreate the entry")
 	}
-	if ps.RequestLatencyEMA != 50*time.Millisecond {
-		t.Fatalf("expected fresh bootstrap at 50ms, got %v", ps.RequestLatencyEMA)
-	}
-	// The dropper's MinLatencyActivity guard (in eth/dropper.go) prevents
-	// this 1-sample entry from earning latency-based protection.
 }
 
 // TestMultiplePeersIsolated verifies per-peer isolation across signal types.
 func TestMultiplePeersIsolated(t *testing.T) {
-	s := New()
+	s := newStats("peerA", "peerB")
 	s.NotifyBlock(map[string]int{"peerA": 5, "peerB": 0}, nil)
 	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
 	s.NotifyRequestResult("peerB", 5*time.Second, false)
@@ -263,7 +243,7 @@ func TestMultiplePeersIsolated(t *testing.T) {
 // accepted delivery folds a positive presence bit into the activity EMA, and
 // that a subsequent delivery-free block decays it (not resets it).
 func TestLatencyActivityAccumulatesAndDecays(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	for i := 0; i < 10; i++ {
 		s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
 	}
@@ -289,11 +269,11 @@ func TestLatencyActivityAccumulatesAndDecays(t *testing.T) {
 // a block with a burst of many accepted deliveries produces the same activity
 // as a block with a single delivery, so eligibility cannot be front-loaded.
 func TestLatencyActivityCapsBurst(t *testing.T) {
-	single := New()
+	single := newStats("peerA")
 	single.NotifyRequestResult("peerA", 50*time.Millisecond, false)
 	single.NotifyBlock(nil, nil)
 
-	burst := New()
+	burst := newStats("peerA")
 	for i := 0; i < 100; i++ {
 		burst.NotifyRequestResult("peerA", 50*time.Millisecond, false)
 	}
@@ -315,7 +295,7 @@ func TestLatencyActivityCapsBurst(t *testing.T) {
 // accepted delivery per block crosses MinLatencyActivity within a
 // reasonable number of blocks (steady state for 1/block is 1.0).
 func TestLatencyActivityGateReachable(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	for i := 0; i < 20; i++ {
 		s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
 		s.NotifyBlock(nil, nil)
@@ -329,7 +309,7 @@ func TestLatencyActivityGateReachable(t *testing.T) {
 // counters but never contribute to the activity rate — a peer cannot become
 // protection-eligible by timing out.
 func TestTimeoutDoesNotFeedActivity(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	for i := 0; i < 50; i++ {
 		s.NotifyRequestResult("peerA", 5*time.Second, true)
 		s.NotifyBlock(nil, nil)
@@ -338,17 +318,18 @@ func TestTimeoutDoesNotFeedActivity(t *testing.T) {
 	if ps.LatencyActivity != 0 {
 		t.Fatalf("timeouts must not feed activity, got %f", ps.LatencyActivity)
 	}
-	if ps.RequestTimeouts == 0 {
-		t.Fatal("expected timeout counter to advance")
+	// Timeouts still shape the latency EMA (their penalty), just not activity.
+	if ps.RequestLatencyEMA != 5*time.Second {
+		t.Fatalf("expected timeout EMA at 5s, got %v", ps.RequestLatencyEMA)
 	}
 }
 
 // TestLatencyStateForgottenAfterSilence verifies that once a silent peer's
-// activity fully decays, its latency state (EMA and counters) is reset —
-// a frozen fast EMA from a past active period cannot be re-armed later by
-// rebuilding activity alone.
+// activity fully decays, its fast-latency state is reset — a frozen fast EMA
+// from a past active period cannot be re-armed later by rebuilding activity
+// alone.
 func TestLatencyStateForgottenAfterSilence(t *testing.T) {
-	s := New()
+	s := newStats("peerA")
 	s.NotifyRequestResult("peerA", 50*time.Millisecond, false)
 	s.NotifyBlock(nil, nil)
 	if s.GetAllPeerStats()["peerA"].RequestLatencyEMA != 50*time.Millisecond {
@@ -362,8 +343,8 @@ func TestLatencyStateForgottenAfterSilence(t *testing.T) {
 	}
 
 	ps := s.GetAllPeerStats()["peerA"]
-	if ps.RequestLatencyEMA != 0 || ps.RequestSuccesses != 0 || ps.RequestTimeouts != 0 || ps.LatencyActivity != 0 {
-		t.Fatalf("expected latency state forgotten after long silence, got %+v", ps)
+	if ps.RequestLatencyEMA != 0 || ps.LatencyActivity != 0 {
+		t.Fatalf("expected fast-latency state forgotten after long silence, got %+v", ps)
 	}
 
 	// A returning peer starts over: the next sample re-seeds the EMA.
@@ -373,84 +354,18 @@ func TestLatencyStateForgottenAfterSilence(t *testing.T) {
 	}
 }
 
-// TestSilenceResetKeepsTimeoutRecord verifies that the silence reset forgets
-// the fast EMA and success count but PRESERVES the accumulated timeout penalty
-// counter — a peer with a success history cannot launder away its timeout
-// record merely by going silent long enough to decay.
-func TestSilenceResetKeepsTimeoutRecord(t *testing.T) {
-	s := New()
-	// Build up activity through sustained successes, then record timeouts.
-	for i := 0; i < 20; i++ {
-		s.NotifyRequestResult("peerA", 50*time.Millisecond, false)
-		s.NotifyBlock(nil, nil)
-	}
-	s.NotifyRequestResult("peerA", 5*time.Second, true)
-	s.NotifyRequestResult("peerA", 5*time.Second, true)
-	if got := s.GetAllPeerStats()["peerA"].RequestTimeouts; got != 2 {
-		t.Fatalf("setup: expected 2 timeouts, got %d", got)
-	}
-
-	// Go silent long enough for activity to decay below the reset threshold.
-	for i := 0; i < 600; i++ {
-		s.NotifyBlock(nil, nil)
-	}
-
-	ps := s.GetAllPeerStats()["peerA"]
-	if ps.RequestLatencyEMA != 0 {
-		t.Fatalf("fast EMA should be forgotten on reset, got %v", ps.RequestLatencyEMA)
-	}
-	if ps.RequestSuccesses != 0 {
-		t.Fatalf("success count should reset, got %d", ps.RequestSuccesses)
-	}
-	if ps.LatencyActivity != 0 {
-		t.Fatalf("activity should reset, got %f", ps.LatencyActivity)
-	}
-	if ps.RequestTimeouts != 2 {
-		t.Fatalf("timeout penalty must survive the silence reset, got %d", ps.RequestTimeouts)
-	}
-
-	// The returning peer re-bootstraps a fresh EMA while keeping its timeouts.
-	s.NotifyRequestResult("peerA", 300*time.Millisecond, false)
-	ps = s.GetAllPeerStats()["peerA"]
-	if ps.RequestLatencyEMA != 300*time.Millisecond {
-		t.Fatalf("expected fresh bootstrap after reset, got %v", ps.RequestLatencyEMA)
-	}
-	if ps.RequestTimeouts != 2 {
-		t.Fatalf("timeout count lost after return, got %d", ps.RequestTimeouts)
-	}
-}
-
-// TestRequestResultTimeoutCounting verifies that timeout=true increments
-// RequestTimeouts (not RequestSuccesses) and still updates the EMA.
-func TestRequestResultTimeoutCounting(t *testing.T) {
-	s := New()
+// TestTimeoutBootstrapsEMA verifies that a timeout still updates the latency
+// EMA (bootstrapping it to the timeout value) even though it does not feed the
+// activity gate.
+func TestTimeoutBootstrapsEMA(t *testing.T) {
+	s := newStats("peerA")
 	s.NotifyRequestResult("peerA", 5*time.Second, true)
 
 	ps := s.GetAllPeerStats()["peerA"]
-	if ps.RequestTimeouts != 1 {
-		t.Fatalf("expected RequestTimeouts=1, got %d", ps.RequestTimeouts)
-	}
-	if ps.RequestSuccesses != 0 {
-		t.Fatalf("expected RequestSuccesses=0, got %d", ps.RequestSuccesses)
-	}
 	if ps.RequestLatencyEMA != 5*time.Second {
 		t.Fatalf("EMA should bootstrap to timeout value, got %v", ps.RequestLatencyEMA)
 	}
-}
-
-// TestRequestResultMixedCounting verifies that a mix of successes and
-// timeouts increments the correct counters independently.
-func TestRequestResultMixedCounting(t *testing.T) {
-	s := New()
-	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
-	s.NotifyRequestResult("peerA", 100*time.Millisecond, false)
-	s.NotifyRequestResult("peerA", 5*time.Second, true)
-
-	ps := s.GetAllPeerStats()["peerA"]
-	if ps.RequestSuccesses != 2 {
-		t.Fatalf("expected RequestSuccesses=2, got %d", ps.RequestSuccesses)
-	}
-	if ps.RequestTimeouts != 1 {
-		t.Fatalf("expected RequestTimeouts=1, got %d", ps.RequestTimeouts)
+	if ps.LatencyActivity != 0 {
+		t.Fatalf("a timeout must not raise activity, got %f", ps.LatencyActivity)
 	}
 }
