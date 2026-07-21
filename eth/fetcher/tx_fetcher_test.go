@@ -2468,6 +2468,49 @@ func TestTransactionFetcherRequestResultRequiresRequestedHash(t *testing.T) {
 	})
 }
 
+// TestTransactionFetcherRequestResultRequiresAcceptedRequest asserts that a
+// reply which delivers the requested hash only as a reject/duplicate while
+// getting an unrelated tx accepted records no latency sample — the accepted
+// tx must itself be one we requested.
+func TestTransactionFetcherRequestResultRequiresAcceptedRequest(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			return NewTxFetcher(
+				nil,
+				func(common.Hash, byte) error { return nil },
+				func(txs []*types.Transaction) []error {
+					// Reject the requested hash as a duplicate; accept the rest.
+					errs := make([]error, len(txs))
+					for i, tx := range txs {
+						if tx.Hash() == testTxsHashes[0] {
+							errs[i] = txpool.ErrAlreadyKnown
+						}
+					}
+					return errs
+				},
+				func(string, []common.Hash) error { return nil },
+				nil, nil, rec.record,
+				newTestBlobBuffer(),
+			)
+		},
+		steps: []interface{}{
+			// Request goes out for tx[0]...
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: 200 * time.Millisecond, step: false},
+			// ...peer replies with requested tx[0] (rejected as duplicate) plus
+			// an unrequested tx[1] (accepted). No requested hash was accepted.
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0], testTxs[1]}, direct: true},
+			doFunc(func() {
+				if samples := rec.snapshot(); len(samples) != 0 {
+					t.Fatalf("expected no sample when only an unrequested tx was accepted, got %d (%v)", len(samples), samples)
+				}
+			}),
+		},
+	})
+}
+
 // TestTransactionFetcherRequestResultTimeoutNotRepeated asserts that a single
 // timed-out request records exactly one timeout sample even as later timeout
 // ticks fire while the request stays dangling (peer connected, never delivers).

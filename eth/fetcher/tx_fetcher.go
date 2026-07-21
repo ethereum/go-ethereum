@@ -127,7 +127,7 @@ type txDelivery struct {
 	hashes    []common.Hash // Batch of transaction hashes having been delivered
 	metas     []txMetadata  // Batch of metadata associated with the delivered hashes
 	direct    bool          // Whether this is a direct reply or a broadcast
-	accepted  bool          // Whether any delivered tx was newly accepted by the pool
+	accepted  []common.Hash // Delivered tx hashes newly accepted by the pool
 	violation error         // Whether we encountered a protocol violation
 }
 
@@ -360,7 +360,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 	var (
 		added       = make([]common.Hash, 0, len(txs))
 		metas       = make([]txMetadata, 0, len(txs))
-		anyAccepted bool
+		acceptedAll []common.Hash
 	)
 	// proceed in batches
 	for i := 0; i < len(txs); i += addTxsBatchSize {
@@ -419,7 +419,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 
 		// Notify the tracker which txs from this peer were accepted.
 		if len(accepted) > 0 {
-			anyAccepted = true
+			acceptedAll = append(acceptedAll, accepted...)
 			if f.onAccepted != nil {
 				f.onAccepted(peer, accepted)
 			}
@@ -436,7 +436,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 		}
 	}
 	select {
-	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct, accepted: anyAccepted, violation: violation}:
+	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct, accepted: acceptedAll, violation: violation}:
 		return nil
 	case <-f.quit:
 		return errTerminated
@@ -851,23 +851,30 @@ func (f *TxFetcher) loop() {
 					log.Warn("Unexpected transaction delivery", "peer", delivery.origin)
 					break
 				}
-				// Index the delivered hashes up front; used both to decide
-				// whether this reply answered our request and to reschedule
+				// Index the delivered hashes up front; used to reschedule
 				// anything still missing below.
 				delivered := make(map[common.Hash]struct{}, len(delivery.hashes))
 				for _, hash := range delivery.hashes {
 					delivered[hash] = struct{}{}
 				}
-				// A reply "answers" our request only if it delivered at least
-				// one of the hashes we actually asked for. A peer that replies
-				// with unrelated (even pool-accepted) txs while omitting the
-				// requested hashes must not earn a latency sample, or it could
-				// farm drop-protection by answering fetches with junk.
-				answeredRequest := false
-				for _, hash := range req.hashes {
-					if _, ok := delivered[hash]; ok {
-						answeredRequest = true
-						break
+				// A reply earns a latency sample only if the pool accepted at
+				// least one of the hashes we actually requested. Checking the
+				// accepted set against req.hashes (not merely "delivered a
+				// requested hash" or "accepted some tx") closes the farming
+				// vector: a peer cannot earn protection by answering fetches
+				// with unrelated accepted txs, nor with requested-but-rejected
+				// (duplicate/underpriced) ones.
+				acceptedRequested := false
+				if len(delivery.accepted) > 0 {
+					accepted := make(map[common.Hash]struct{}, len(delivery.accepted))
+					for _, hash := range delivery.accepted {
+						accepted[hash] = struct{}{}
+					}
+					for _, hash := range req.hashes {
+						if _, ok := accepted[hash]; ok {
+							acceptedRequested = true
+							break
+						}
 					}
 				}
 				if req.hashes == nil {
@@ -875,13 +882,10 @@ func (f *TxFetcher) loop() {
 					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - req.time).Nanoseconds())
 					// Already counted as a timeout sample at the timeout site;
 					// don't double-record on eventual delivery.
-				} else if f.onRequestResult != nil && delivery.accepted && answeredRequest {
+				} else if f.onRequestResult != nil && acceptedRequested {
 					// In-time delivery that answered our request with at least
-					// one pool-accepted tx. Record the actual round-trip.
-					// Deliveries without any accepted tx (duplicates, rejects)
-					// or that ignore the requested hashes record nothing —
-					// latency samples must not be farmable from worthless or
-					// off-request responses.
+					// one pool-accepted requested tx. Record the actual
+					// round-trip.
 					f.onRequestResult(delivery.origin, time.Duration(f.clock.Now()-req.time), false)
 				}
 				delete(f.requests, delivery.origin)
