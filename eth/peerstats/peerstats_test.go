@@ -114,6 +114,28 @@ func TestNotifyBlockFinalizationCredits(t *testing.T) {
 	}
 }
 
+// TestNotifyBlockDecaysFinalized verifies that the finalization EMA decays
+// for a peer that earned credits in the past but has no new finalization
+// activity. The decay is slow (α=0.0001), so assert monotonic decrease,
+// not convergence to zero.
+func TestNotifyBlockDecaysFinalized(t *testing.T) {
+	s := newStats("peerA")
+	s.NotifyBlock(nil, map[string]int{"peerA": 5})
+	peak := s.GetAllPeerStats()["peerA"].RecentFinalized
+	if peak <= 0 {
+		t.Fatalf("expected RecentFinalized>0 after credits, got %f", peak)
+	}
+
+	// Credit-free blocks — the EMA must decay monotonically.
+	for i := 0; i < 50; i++ {
+		s.NotifyBlock(nil, nil)
+	}
+	after := s.GetAllPeerStats()["peerA"].RecentFinalized
+	if after >= peak {
+		t.Fatalf("expected RecentFinalized to decay, got %f >= peak %f", after, peak)
+	}
+}
+
 // TestNotifyBlockInclusionEMAUpdate verifies the EMA formula (1-α)·old + α·count.
 func TestNotifyBlockInclusionEMAUpdate(t *testing.T) {
 	s := newStats("peerA")

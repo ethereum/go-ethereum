@@ -42,9 +42,10 @@ const (
 	// dropping when no more peers can be added. Larger numbers result in more
 	// aggressive drop behavior.
 	peerDropThreshold = 0
-	// Fraction of inbound/dialed peers to protect based on inclusion stats.
-	// The top inclusionProtectionFrac of each category (by score) are
-	// shielded from random dropping. 0.1 = top 10%.
+	// Fraction of inbound/dialed peers to protect per scoring category
+	// (inclusion and latency based). The top inclusionProtectionFrac of
+	// each category (by score) are shielded from random dropping.
+	// 0.1 = top 10%.
 	inclusionProtectionFrac = 0.1
 )
 
@@ -55,11 +56,11 @@ var (
 	droppedOutbound = metrics.NewRegisteredMeter("eth/dropper/outbound", nil)
 	// dropSkipped counts times a drop was attempted but no peer was dropped,
 	// for any reason (pool has headroom, all candidates trusted/static/young,
-	// or protected by inclusion stats).
+	// or protected by peer quality stats).
 	dropSkipped = metrics.NewRegisteredMeter("eth/dropper/skipped", nil)
 )
 
-// Callback type to get per-peer inclusion statistics.
+// Callback type to get per-peer quality statistics (inclusion and latency).
 type getPeerStatsFunc func() map[string]peerstats.PeerStats
 
 // protectionCategory defines a peer scoring function and the fraction of peers
@@ -104,20 +105,21 @@ var protectionCategories = []protectionCategory{
 //   - Trusted and static peers are never dropped.
 //   - Recently connected peers are also protected from dropping to give them time
 //     to prove their value before being at risk of disconnection.
-//   - Some peers are protected from dropping based on their contribution
-//     to the tx pool. Each pool (inbound/dialed) independently selects its
-//     top fraction of peers by a per-peer EMA score — a slow EMA of
-//     finalized inclusions (~1-day half-life, rewards sustained long-term
-//     contribution) and a fast EMA of recent block inclusions (rewards
-//     current activity). The union of all protected sets is shielded from
-//     random dropping, and the drop target is chosen randomly from the
-//     remainder.
+//   - Some peers are protected from dropping based on their usefulness as
+//     tx-pool sources. Each pool (inbound/dialed) independently selects its
+//     top fraction of peers per scoring category — a slow EMA of finalized
+//     inclusions (~1-day half-life, rewards sustained long-term
+//     contribution), a fast EMA of recent block inclusions (rewards
+//     current activity), and tx-request response latency (rewards fast
+//     useful responders, gated on a sustained accepted-delivery rate).
+//     The union of all protected sets is shielded from random dropping,
+//     and the drop target is chosen randomly from the remainder.
 type dropper struct {
 	maxDialPeers    int // maximum number of dialed peers
 	maxInboundPeers int // maximum number of inbound peers
 	peersFunc       getPeersFunc
 	syncingFunc     getSyncingFunc
-	peerStatsFunc   getPeerStatsFunc // optional: inclusion stats for protection
+	peerStatsFunc   getPeerStatsFunc // optional: peer quality stats for protection
 
 	// peerDropTimer introduces churn if we are close to limit capacity.
 	// We handle Dialed and Inbound connections separately
@@ -213,7 +215,7 @@ func (cm *dropper) dropRandomPeer() bool {
 }
 
 // protectedPeers computes the set of peers that should not be dropped based
-// on inclusion stats. Each protection category independently selects its
+// on peer quality stats. Each protection category independently selects its
 // top-N peers per inbound/dialed pool; the union is returned.
 func (cm *dropper) protectedPeers(peers []*p2p.Peer) map[*p2p.Peer]bool {
 	if cm.peerStatsFunc == nil {

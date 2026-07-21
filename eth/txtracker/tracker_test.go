@@ -76,7 +76,8 @@ func (c *mockChain) CurrentFinalBlock() *types.Header {
 	return &types.Header{Number: new(big.Int).SetUint64(c.finalNum)}
 }
 
-// addBlock adds a canonical block at the given height.
+// addBlock adds a canonical block at the given height. Overwrites any
+// prior canonical block at that height.
 func (c *mockChain) addBlock(num uint64, txs []*types.Transaction) *types.Block {
 	return c.addBlockAtHeight(num, num, txs, true)
 }
@@ -114,7 +115,9 @@ func (c *mockChain) setFinalBlock(num uint64) {
 	c.finalNum = num
 }
 
-// sendHead emits a chain head event for the canonical block at the given height.
+// sendHead emits a chain head event for the canonical block at the given
+// height. The emitted header carries the real block's hash so the
+// tracker's GetBlock(hash, number) lookup resolves correctly.
 func (c *mockChain) sendHead(num uint64) {
 	c.mu.Lock()
 	hash := c.canonicalByNum[num]
