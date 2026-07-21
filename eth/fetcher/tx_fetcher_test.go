@@ -2441,3 +2441,64 @@ func TestTransactionFetcherRequestResultRequiresAcceptance(t *testing.T) {
 		},
 	})
 }
+
+// TestTransactionFetcherRequestResultRequiresRequestedHash asserts that a
+// direct delivery answering with an accepted but unrequested tx (none of the
+// requested hashes delivered) records no latency sample — a peer cannot farm
+// latency protection by replying to a fetch with unrelated valid txs.
+func TestTransactionFetcherRequestResultRequiresRequestedHash(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			f := newTestTxFetcher() // addTxs accepts everything
+			f.onRequestResult = rec.record
+			return f
+		},
+		steps: []interface{}{
+			// Request goes out for tx[0]...
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: 200 * time.Millisecond, step: false},
+			// ...but the peer answers with an accepted, unrequested tx[1].
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[1]}, direct: true},
+			doFunc(func() {
+				if samples := rec.snapshot(); len(samples) != 0 {
+					t.Fatalf("expected no sample for off-request delivery, got %d (%v)", len(samples), samples)
+				}
+			}),
+		},
+	})
+}
+
+// TestTransactionFetcherRequestResultTimeoutNotRepeated asserts that a single
+// timed-out request records exactly one timeout sample even as later timeout
+// ticks fire while the request stays dangling (peer connected, never delivers).
+func TestTransactionFetcherRequestResultTimeoutNotRepeated(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			f := newTestTxFetcher()
+			f.onRequestResult = rec.record
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			// First timeout fires: one sample, request kept dangling.
+			doWait{time: txFetchTimeout, step: true},
+			doFunc(func() {
+				if n := len(rec.snapshot()); n != 1 {
+					t.Fatalf("expected 1 timeout sample after first timeout, got %d", n)
+				}
+			}),
+			// The dangling request re-arms the timer; another timeout window
+			// elapses. The sample count must NOT grow.
+			doWait{time: txFetchTimeout, step: true},
+			doFunc(func() {
+				if n := len(rec.snapshot()); n != 1 {
+					t.Fatalf("dangling request re-fired timeout sample: got %d, want 1", n)
+				}
+			}),
+		},
+	})
+}

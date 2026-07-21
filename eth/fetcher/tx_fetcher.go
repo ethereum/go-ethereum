@@ -710,6 +710,14 @@ func (f *TxFetcher) loop() {
 			// could also penalize (Drop), but there's nothing to gain, and if could
 			// possibly further increase the load on it.
 			for peer, req := range f.requests {
+				// Skip requests that already timed out and are kept dangling
+				// (hashes == nil). Their timeout was accounted for once when
+				// they first expired; re-processing them on every later tick
+				// would re-fire the timeout sample and re-increment the
+				// slow-peer gauge for a single unanswered request.
+				if req.hashes == nil {
+					continue
+				}
 				if time.Duration(f.clock.Now()-req.time)+txGatherSlack > txFetchTimeout {
 					txRequestTimeoutMeter.Mark(int64(len(req.hashes)))
 
@@ -843,26 +851,43 @@ func (f *TxFetcher) loop() {
 					log.Warn("Unexpected transaction delivery", "peer", delivery.origin)
 					break
 				}
+				// Index the delivered hashes up front; used both to decide
+				// whether this reply answered our request and to reschedule
+				// anything still missing below.
+				delivered := make(map[common.Hash]struct{}, len(delivery.hashes))
+				for _, hash := range delivery.hashes {
+					delivered[hash] = struct{}{}
+				}
+				// A reply "answers" our request only if it delivered at least
+				// one of the hashes we actually asked for. A peer that replies
+				// with unrelated (even pool-accepted) txs while omitting the
+				// requested hashes must not earn a latency sample, or it could
+				// farm drop-protection by answering fetches with junk.
+				answeredRequest := false
+				for _, hash := range req.hashes {
+					if _, ok := delivered[hash]; ok {
+						answeredRequest = true
+						break
+					}
+				}
 				if req.hashes == nil {
 					txFetcherSlowPeers.Dec(1)
 					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - req.time).Nanoseconds())
 					// Already counted as a timeout sample at the timeout site;
 					// don't double-record on eventual delivery.
-				} else if f.onRequestResult != nil && delivery.accepted {
-					// In-time delivery that yielded at least one pool-accepted
-					// tx. Record the actual round-trip. Deliveries without any
-					// accepted tx (duplicates, rejects) record nothing — latency
-					// samples must not be farmable from worthless responses.
+				} else if f.onRequestResult != nil && delivery.accepted && answeredRequest {
+					// In-time delivery that answered our request with at least
+					// one pool-accepted tx. Record the actual round-trip.
+					// Deliveries without any accepted tx (duplicates, rejects)
+					// or that ignore the requested hashes record nothing —
+					// latency samples must not be farmable from worthless or
+					// off-request responses.
 					f.onRequestResult(delivery.origin, time.Duration(f.clock.Now()-req.time), false)
 				}
 				delete(f.requests, delivery.origin)
 
 				// Anything not delivered should be re-scheduled (with or without
 				// this peer, depending on the response cutoff)
-				delivered := make(map[common.Hash]struct{})
-				for _, hash := range delivery.hashes {
-					delivered[hash] = struct{}{}
-				}
 				cutoff := len(req.hashes) // If nothing is delivered, assume everything is missing, don't retry!!!
 				for i, hash := range req.hashes {
 					if _, ok := delivered[hash]; ok {
