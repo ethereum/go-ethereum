@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"sync"
 	"time"
 
@@ -178,9 +179,10 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	c.feeRecipientLock.Lock()
 	feeRecipient := c.feeRecipient
 	c.feeRecipientLock.Unlock()
+	header := c.eth.BlockChain().CurrentBlock()
 
 	// Reset to CurrentBlock in case of the chain was rewound
-	if header := c.eth.BlockChain().CurrentBlock(); c.curForkchoiceState.HeadBlockHash != header.Hash() {
+	if c.curForkchoiceState.HeadBlockHash != header.Hash() {
 		finalizedHash := c.finalizedBlockHash(header.Number.Uint64())
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
@@ -208,7 +210,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
 	}
-	if c.eth.BlockChain().Config().LatestFork(timestamp) == forks.Amsterdam {
+	if c.eth.BlockChain().Config().IsAmsterdam(new(big.Int).Add(header.Number, big.NewInt(1)), timestamp) {
 		slotNumber := uint64(0)
 		attribute.SlotNumber = &slotNumber
 	}
