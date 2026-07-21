@@ -210,6 +210,145 @@ func TestEIP8038AccountAccess(t *testing.T) {
 	})
 }
 
+// callFamily8038 builds a zero-input/output call-family operation that forwards
+// all remaining regular gas and discards its success flag. CALL and CALLCODE
+// take a value argument; DELEGATECALL and STATICCALL do not.
+func callFamily8038(to common.Address, op OpCode, value byte) []byte {
+	code := []byte{0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00}
+	if op == CALL || op == CALLCODE {
+		code = append(code, 0x60, value)
+	}
+	code = append(code, 0x73)
+	code = append(code, to.Bytes()...)
+	return append(code, 0x5a, byte(op), 0x50, 0x00) // GAS; <op>; POP; STOP
+}
+
+// TestEIP8038Calls pins the re-priced account access and value-transfer costs
+// for every member of the CALL family. The opcode's constant cost is the warm
+// access component, so a cold target adds only COLD_ACCOUNT_ACCESS-WARM.
+func TestEIP8038Calls(t *testing.T) {
+	const (
+		push1  = uint64(3)
+		push20 = uint64(3)
+		gasOp  = uint64(2)
+		pop    = uint64(2)
+	)
+	cold := params.ColdAccountAccessAmsterdam - params.WarmAccountAccessAmsterdam
+	callBase := 5*push1 + push20 + gasOp + pop + params.WarmAccountAccessAmsterdam
+	plainBase := 4*push1 + push20 + gasOp + pop + params.WarmAccountAccessAmsterdam
+	target := common.BytesToAddress([]byte("call-target"))
+
+	cases := []struct {
+		name      string
+		op        OpCode
+		value     byte
+		fundSelf  bool
+		wantReg   uint64
+		wantState int64
+	}{
+		{"call/cold", CALL, 0, false, callBase + cold, 0},
+		// A callee that immediately returns gives the 2,300 stipend back, so
+		// the net regular cost is ACCOUNT_WRITE.
+		{"call/value", CALL, 1, true, callBase + cold + params.AccountWriteAmsterdam, stateGasNewAccount},
+		{"callcode/value", CALLCODE, 1, true, callBase + cold + params.AccountWriteAmsterdam, 0},
+		{"delegatecall/cold", DELEGATECALL, 0, false, plainBase + cold, 0},
+		{"staticcall/cold", STATICCALL, 0, false, plainBase + cold, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var setup func(*state.StateDB, common.Address)
+			if tc.fundSelf {
+				setup = fund(common.BytesToAddress([]byte("self")), 1)
+			}
+			res, _, err := run8038(t, callFamily8038(target, tc.op, tc.value), hugeBudget(), new(uint256.Int), setup)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.UsedRegularGas != tc.wantReg {
+				t.Fatalf("regular gas = %d, want %d", res.UsedRegularGas, tc.wantReg)
+			}
+			if res.UsedStateGas != tc.wantState {
+				t.Fatalf("state gas = %d, want %d", res.UsedStateGas, tc.wantState)
+			}
+		})
+	}
+
+	// The first CALL makes its target warm. A second CALL pays no dynamic
+	// access surcharge, leaving only the CALL base cost (which includes warm).
+	first := callFamily8038(target, CALL, 0)
+	code := append(first[:len(first)-1], callFamily8038(target, CALL, 0)...)
+	res, _, err := run8038(t, code, hugeBudget(), new(uint256.Int), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := 2*callBase + cold; res.UsedRegularGas != want {
+		t.Fatalf("cold+warm CALL = %d, want %d", res.UsedRegularGas, want)
+	}
+
+	// Calling an EIP-7702 authority accesses both the authority and its
+	// delegation target. The authority uses CALL's warm-included pricing; the
+	// separately resolved cold target pays a full COLD_ACCOUNT_ACCESS charge.
+	authority := common.BytesToAddress([]byte("delegated-authority"))
+	implementation := common.BytesToAddress([]byte("delegated-target"))
+	setup := func(db *state.StateDB, _ common.Address) {
+		db.CreateAccount(authority)
+		db.SetCode(authority, types.AddressToDelegation(implementation), tracing.CodeChangeUnspecified)
+		db.CreateAccount(implementation)
+		db.SetCode(implementation, []byte{0x00}, tracing.CodeChangeUnspecified)
+	}
+	res, _, err = run8038(t, callFamily8038(authority, CALL, 0), hugeBudget(), new(uint256.Int), setup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := callBase + cold + params.ColdAccountAccessAmsterdam; res.UsedRegularGas != want {
+		t.Fatalf("delegated CALL = %d, want %d (authority + target)", res.UsedRegularGas, want)
+	}
+
+	// A value CALL receives the 2,300 stipend even when it asks to forward no
+	// regular gas. If the child burns that stipend, the full CALL_VALUE
+	// (ACCOUNT_WRITE + stipend) remains charged to the caller.
+	stipendTarget := common.BytesToAddress([]byte("stipend-target"))
+	base := callFamily8038(stipendTarget, CALL, 1)
+	code = append(base[:len(base)-4], 0x60, 0x00, byte(CALL), 0x50, 0x00) // PUSH1 0; CALL; POP; STOP
+	setup = func(db *state.StateDB, self common.Address) {
+		db.AddBalance(self, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+		db.CreateAccount(stipendTarget)
+		db.SetCode(stipendTarget, []byte{0xfe}, tracing.CodeChangeUnspecified)
+	}
+	res, _, err = run8038(t, code, hugeBudget(), new(uint256.Int), setup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := 5*push1 + push20 + push1 + pop + params.WarmAccountAccessAmsterdam + cold + params.CallValueTransferAmsterdam; res.UsedRegularGas != want {
+		t.Fatalf("value CALL with burnt stipend = %d, want %d", res.UsedRegularGas, want)
+	}
+}
+
+// TestEIP8038Create checks that CREATE and CREATE2 always pay CREATE_ACCESS
+// in regular gas. With otherwise identical initcode, CREATE2 additionally has
+// one salt push and the address-hash word charge.
+func TestEIP8038Create(t *testing.T) {
+	create, _, err := run8038(t, deployCode(deploy0Init, false, 0), hugeBudget(), new(uint256.Int), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create2, _, err := run8038(t, deployCode(deploy0Init, true, 0), hugeBudget(), new(uint256.Int), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Outer setup is PUSH32 + PUSH1 + MSTORE (including one-word expansion),
+	// then three CREATE operands. The child initcode is two PUSH1s and RETURN.
+	const outer = uint64(3 + 3 + 3 + 3 + 3*3)
+	const init = uint64(2 * 3)
+	want := outer + params.CreateAccessAmsterdam + params.InitCodeWordGas + init
+	if create.UsedRegularGas != want {
+		t.Fatalf("CREATE regular gas = %d, want %d", create.UsedRegularGas, want)
+	}
+	if want := create.UsedRegularGas + 3 + params.Keccak256WordGas; create2.UsedRegularGas != want {
+		t.Fatalf("CREATE2 regular gas = %d, want %d", create2.UsedRegularGas, want)
+	}
+}
+
 // TestEIP8038SelfdestructAccountWrite checks that SELFDESTRUCT sending a positive
 // balance to an empty account is charged the cold access, an additional
 // ACCOUNT_WRITE (regular) and GAS_NEW_ACCOUNT (state).
