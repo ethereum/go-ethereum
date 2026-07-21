@@ -666,13 +666,7 @@ func (f *BlobFetcher) loop() {
 		blobFetcherWaitingPeers.Update(int64(len(f.waitslots)))
 		blobFetcherWaitingHashes.Update(int64(len(f.waitlist)))
 		blobFetcherQueueingPeers.Update(int64(len(f.announces) - len(f.requests)))
-		queued := make(map[common.Hash]struct{})
-		for _, anns := range f.announces {
-			for hash := range anns {
-				queued[hash] = struct{}{}
-			}
-		}
-		blobFetcherQueueingHashes.Update(int64(len(queued)))
+		blobFetcherQueueingHashes.Update(int64(len(f.full) + len(f.partial) - len(f.fetches) - len(f.waitlist)))
 		blobFetcherFetchingPeers.Update(int64(len(f.requests)))
 		blobFetcherFetchingHashes.Update(int64(len(f.fetches)))
 
