@@ -2325,9 +2325,7 @@ func (r *resultRecorder) record(peer string, latency time.Duration, timeout bool
 func (r *resultRecorder) snapshot() []resultSample {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]resultSample, len(r.samples))
-	copy(out, r.samples)
-	return out
+	return slices.Clone(r.samples)
 }
 
 // TestTransactionFetcherRequestResultOnDelivery asserts that an in-time

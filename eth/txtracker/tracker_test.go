@@ -17,6 +17,7 @@
 package txtracker
 
 import (
+	"maps"
 	"math/big"
 	"sync"
 	"testing"
@@ -157,18 +158,10 @@ type signal struct {
 func (c *mockConsumer) NotifyBlock(inclusions, finalized map[string]int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	// Deep-copy so tests inspecting older signals aren't tripped up by
-	// later iterations mutating the same map (they don't today, but
-	// this keeps the assertion model simple).
-	in := make(map[string]int, len(inclusions))
-	for k, v := range inclusions {
-		in[k] = v
-	}
-	fn := make(map[string]int, len(finalized))
-	for k, v := range finalized {
-		fn[k] = v
-	}
-	c.signals = append(c.signals, signal{in, fn})
+	// Clone so tests inspecting older signals aren't tripped up by later
+	// iterations mutating the same map (they don't today, but this keeps
+	// the assertion model simple).
+	c.signals = append(c.signals, signal{maps.Clone(inclusions), maps.Clone(finalized)})
 }
 
 func (c *mockConsumer) last() signal {

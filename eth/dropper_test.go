@@ -27,10 +27,17 @@ import (
 )
 
 func makePeers(n int) []*p2p.Peer {
+	return makePeersOffset(n, 0)
+}
+
+// makePeersOffset is like makePeers but shifts the node-ID byte and name index
+// by offset, so a second pool of peers in the same test gets distinct IDs that
+// don't collide with a makePeers(0-based) set.
+func makePeersOffset(n, offset int) []*p2p.Peer {
 	peers := make([]*p2p.Peer, n)
 	for i := range peers {
-		id := enode.ID{byte(i)}
-		peers[i] = p2p.NewPeer(id, fmt.Sprintf("peer%d", i), nil)
+		id := enode.ID{byte(offset + i)}
+		peers[i] = p2p.NewPeer(id, fmt.Sprintf("peer%d", offset+i), nil)
 	}
 	return peers
 }
@@ -132,12 +139,8 @@ func TestProtectedPeersNilFunc(t *testing.T) {
 // for the RecentFinalized category since we don't set RecentIncluded.
 func TestProtectedByPoolPerPoolTopN(t *testing.T) {
 	inbound := makePeers(10)
-	dialed := makePeers(10)
-	// Distinguish dialed peer IDs from inbound so stats maps don't collide.
-	for i := range dialed {
-		id := enode.ID{byte(100 + i)}
-		dialed[i] = p2p.NewPeer(id, fmt.Sprintf("dialed%d", i), nil)
-	}
+	// Offset dialed peer IDs from inbound so stats maps don't collide.
+	dialed := makePeersOffset(10, 100)
 	// Strictly increasing scores: highest wins in each pool.
 	stats := make(map[string]peerstats.PeerStats)
 	for i, p := range inbound {
@@ -199,11 +202,7 @@ func TestProtectedByPoolPerPoolIndependence(t *testing.T) {
 	// 20 inbound, 20 dialed — frac=0.1 → 2 protected per pool per category.
 	// Global top-4 of RecentFinalized would be inbound[16..19] — zero dialed.
 	inbound := makePeers(20)
-	dialed := make([]*p2p.Peer, 20)
-	for i := range dialed {
-		id := enode.ID{byte(100 + i)}
-		dialed[i] = p2p.NewPeer(id, fmt.Sprintf("dialed%d", i), nil)
-	}
+	dialed := makePeersOffset(20, 100)
 	stats := make(map[string]peerstats.PeerStats)
 	// Every inbound peer outscores every dialed peer.
 	for i, p := range inbound {
@@ -304,11 +303,7 @@ func TestProtectedByPoolRequestLatencyBootstrapGuard(t *testing.T) {
 // a dialed peer from being protected as top of the dialed pool.
 func TestProtectedByPoolRequestLatencyPerPool(t *testing.T) {
 	inbound := makePeers(20)
-	dialed := make([]*p2p.Peer, 20)
-	for i := range dialed {
-		id := enode.ID{byte(100 + i)}
-		dialed[i] = p2p.NewPeer(id, fmt.Sprintf("dialed%d", i), nil)
-	}
+	dialed := makePeersOffset(20, 100)
 	stats := make(map[string]peerstats.PeerStats)
 	// All inbound peers are very fast (50ms).
 	for _, p := range inbound {
