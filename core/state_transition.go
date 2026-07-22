@@ -1380,11 +1380,12 @@ const (
 // atomic batch rollbacks, which truncate the log journal, keep the recorded
 // ranges consistent.
 type frameOutcome struct {
-	status   uint64
-	gasUsed  uint64
-	stateGas uint64
-	logStart int
-	logEnd   int
+	status      uint64
+	gasUsed     uint64
+	stateGas    uint64
+	stateCredit uint64
+	logStart    int
+	logEnd      int
 }
 
 // applyFrames executes the frame sequence of an EIP-8141 frame transaction
@@ -1544,12 +1545,18 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		}
 
 		// Consume the frame's gas from the transaction budget, keeping the
-		// state-gas dimension for block accounting.
-		frameGasUsed := frame.GasLimit - leftover.RegularGas - leftover.StateGas
-		var frameStateGas uint64
+		// state-gas dimension for block accounting. A net-negative state
+		// dimension means the frame cleared state created by an earlier
+		// frame: the credit belongs to the transaction, not the frame, and
+		// is settled after the frame loop so a batch rollback can discard
+		// it.
+		var frameStateGas, frameStateCredit uint64
 		if leftover.UsedStateGas > 0 {
 			frameStateGas = uint64(leftover.UsedStateGas)
+		} else {
+			frameStateCredit = uint64(-leftover.UsedStateGas)
 		}
+		frameGasUsed := frame.GasLimit + frameStateCredit - leftover.RegularGas - leftover.StateGas
 		if _, ok := st.gasRemaining.Charge(vm.GasCosts{RegularGas: frameGasUsed - frameStateGas, StateGas: frameStateGas}); !ok {
 			return nil, nil, fmt.Errorf("%w: frame gas accounting underflow", ErrIntrinsicGas)
 		}
@@ -1560,11 +1567,12 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		}
 		frameCtx.FrameStatuses = append(frameCtx.FrameStatuses, status)
 		outcomes = append(outcomes, frameOutcome{
-			status:   status,
-			gasUsed:  frameGasUsed,
-			stateGas: frameStateGas,
-			logStart: logStart,
-			logEnd:   countLogs(),
+			status:      status,
+			gasUsed:     frameGasUsed,
+			stateGas:    frameStateGas,
+			stateCredit: frameStateCredit,
+			logStart:    logStart,
+			logEnd:      countLogs(),
 		})
 
 		if status == frameStatusFailed && inBatch {
@@ -1581,6 +1589,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 				st.gasRemaining.UsedStateGas -= int64(outcomes[j].stateGas)
 				outcomes[j].status = frameStatusFailed
 				outcomes[j].stateGas = 0
+				outcomes[j].stateCredit = 0
 				outcomes[j].logStart = batchLogCount
 				outcomes[j].logEnd = batchLogCount
 			}
@@ -1598,6 +1607,13 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		return nil, nil, fmt.Errorf("%w: no frame approved gas payment", ErrFrameTxInvalidExecution)
 	}
 
+	// Settle the deferred cross-frame state-gas credits of the frames that
+	// survived batch rollbacks.
+	for _, outcome := range outcomes {
+		if outcome.stateCredit > 0 {
+			st.gasRemaining.RefundState(outcome.stateCredit)
+		}
+	}
 
 	// Materialize the per-frame receipts from the final log journal.
 	var logs []*types.Log
