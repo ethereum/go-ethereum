@@ -438,7 +438,7 @@ func FrameTxSignatureGas(sig *FrameTxSignature) uint64 {
 	case FrameTxSchemeP256:
 		return params.FrameTxP256SigGas
 	default:
-		return 0
+		return params.FrameTxArbitrarySigGas
 	}
 }
 

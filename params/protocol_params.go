@@ -35,6 +35,7 @@ const (
 	FrameTxMaxFrames              = 64    // Maximum number of frames in an EIP-8141 frame transaction.
 	FrameTxSecp256k1SigGas uint64 = 2800  // Gas charged for validating a secp256k1 signature entry (EIP-8141).
 	FrameTxP256SigGas      uint64 = 6700  // Gas charged for validating a P-256 signature entry (EIP-8141).
+	FrameTxArbitrarySigGas uint64 = 100   // Gas charged per ARBITRARY signature entry (EIP-8141).
 	FrameTxExpiryDataLen          = 8     // Required calldata length of an expiry verifier frame (EIP-8141).
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
