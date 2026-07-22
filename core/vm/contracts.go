@@ -216,6 +216,8 @@ func init() {
 // precompile result cache, forks reusing a set share its cache entries.
 func activePrecompiledContracts(rules params.Rules) *PrecompiledContracts {
 	switch {
+	case rules.IsBogota:
+		return PrecompiledContractsOsaka
 	case rules.IsUBT:
 		return &PrecompiledContractsVerkle
 	case rules.IsBogota:

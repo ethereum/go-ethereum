@@ -4189,6 +4189,122 @@ func TestEIP7702(t *testing.T) {
 	}
 }
 
+// TestEIP8141 inserts a block with an EIP-8141 frame transaction: a VERIFY
+// frame authorizes execution and payment through the default code using the
+// sender's signature entry, and a SENDER frame calls a storage-writing
+// contract.
+func TestEIP8141(t *testing.T) {
+	var (
+		config  = *params.MergedTestChainConfig
+		engine  = beacon.New(ethash.NewFaker())
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		aa      = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		zero    = uint64(0)
+	)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	gspec := &Genesis{
+		Config: &config,
+		Alloc: types.GenesisAlloc{
+			addr1: {Balance: funds},
+			aa: { // The address 0xAAAA sstores 42 into slot 42.
+				Code:    program.New().Sstore(0x42, 0x42).Bytes(),
+				Nonce:   0,
+				Balance: big.NewInt(0),
+			},
+		},
+	}
+	signer := types.LatestSigner(&config)
+
+	frametx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Nonce:   0,
+		Sender:  addr1,
+		Frames: []types.FrameTxFrame{
+			{
+				Mode:     types.FrameTxModeVerify,
+				Flags:    types.FrameTxApproveExecutionAndPayment,
+				GasLimit: 100_000,
+				Value:    uint256.NewInt(0),
+			},
+			{
+				Mode:     types.FrameTxModeSender,
+				Target:   &aa,
+				GasLimit: 300_000,
+				Value:    uint256.NewInt(0),
+			},
+		},
+		Signatures: []types.FrameTxSignature{{
+			Scheme: types.FrameTxSchemeSecp256k1,
+			Signer: addr1.Bytes(),
+		}},
+		MaxPriorityFeePerGas: uint256.NewInt(2),
+		MaxFeePerGas:         uint256.MustFromBig(newGwei(5)),
+		MaxFeePerBlobGas:     uint256.NewInt(0),
+	}
+	// Sign the canonical signature hash with the sender key and fill in the
+	// signature entry as v || r || s.
+	sigHash := signer.Hash(types.NewTx(frametx))
+	sig, err := crypto.Sign(sigHash[:], key1)
+	if err != nil {
+		t.Fatalf("failed to sign frame transaction: %v", err)
+	}
+	frametx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
+	tx := types.NewTx(frametx)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		// Run the EIP-4788 system call with the zero root set by the chain
+		// maker, so the generated access list matches block processing.
+		b.SetParentBeaconRoot(common.Hash{})
+		b.AddTx(tx)
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	// Verify the SENDER frame executed the storage write.
+	state, _ := chain.State()
+	var (
+		fortyTwo = common.BytesToHash([]byte{0x42})
+		actual   = state.GetState(aa, fortyTwo)
+	)
+	if actual.Cmp(fortyTwo) != 0 {
+		t.Fatalf("aa storage wrong: expected %d, got %d", fortyTwo, actual)
+	}
+	// Verify the sender's nonce was incremented by the payment approval and
+	// the sender paid for the transaction.
+	if nonce := state.GetNonce(addr1); nonce != 1 {
+		t.Fatalf("sender nonce wrong: expected 1, got %d", nonce)
+	}
+	if balance := state.GetBalance(addr1); balance.CmpBig(funds) >= 0 {
+		t.Fatalf("sender balance not charged: %v", balance)
+	}
+	// Verify the frame transaction receipt.
+	receipts := chain.GetReceiptsByHash(blocks[0].Hash())
+	if len(receipts) != 1 {
+		t.Fatalf("expected 1 receipt, got %d", len(receipts))
+	}
+	receipt := receipts[0]
+	if receipt.Payer == nil || *receipt.Payer != addr1 {
+		t.Fatalf("receipt payer wrong: expected %v, got %v", addr1, receipt.Payer)
+	}
+	if len(receipt.FrameReceipts) != 2 {
+		t.Fatalf("expected 2 frame receipts, got %d", len(receipt.FrameReceipts))
+	}
+	for i, frameReceipt := range receipt.FrameReceipts {
+		if frameReceipt.Status != 1 {
+			t.Fatalf("frame %d status wrong: expected 1, got %d", i, frameReceipt.Status)
+		}
+	}
+}
+
 // Tests the scenario that the synchronization target in snap sync has been changed
 // with a chain reorg at the tip. In this case the reorg'd segment should be unmarked
 // with canonical flags.

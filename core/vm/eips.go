@@ -44,6 +44,7 @@ var activators = map[int]func(*JumpTable){
 	8024: enable8024,
 	7843: enable7843,
 	8037: enable8037And8038,
+	8141: enable8141,
 	8038: enable8037And8038,
 }
 
@@ -611,4 +612,50 @@ func enable8037And8038(jt *JumpTable) {
 
 	// SELFDESTRUCT
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037And8038
+}
+
+// enable8141 enables the EIP-8141 frame transaction instructions.
+func enable8141(jt *JumpTable) {
+	jt[APPROVE] = &operation{
+		execute:     opApprove,
+		constantGas: 0,
+		dynamicGas:  gasReturn,
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+		memorySize:  memoryApprove,
+	}
+	jt[TXPARAM] = &operation{
+		execute:     opTxParam,
+		constantGas: GasQuickStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	jt[FRAMEDATALOAD] = &operation{
+		execute:     opFrameDataLoad,
+		constantGas: GasFastestStep,
+		minStack:    minStack(2, 1),
+		maxStack:    maxStack(2, 1),
+	}
+	jt[FRAMEDATACOPY] = &operation{
+		execute:     opFrameDataCopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  gasFrameDataCopy,
+		minStack:    minStack(4, 0),
+		maxStack:    maxStack(4, 0),
+		memorySize:  memoryFrameDataCopy,
+	}
+	jt[FRAMEPARAM] = &operation{
+		execute:     opFrameParam,
+		constantGas: GasQuickStep,
+		minStack:    minStack(2, 1),
+		maxStack:    maxStack(2, 1),
+	}
+	jt[SIGPARAM] = &operation{
+		execute:     opSigParam,
+		constantGas: 0,
+		dynamicGas:  gasSigParam,
+		minStack:    minStack(2, 1),
+		maxStack:    maxStack(2, 1),
+		memorySize:  memorySigParam,
+	}
 }

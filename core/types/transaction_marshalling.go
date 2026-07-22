@@ -33,6 +33,9 @@ type txJSON struct {
 
 	ChainID              *hexutil.Big           `json:"chainId,omitempty"`
 	Nonce                *hexutil.Uint64        `json:"nonce"`
+	Sender               *common.Address        `json:"sender,omitempty"`
+	Frames               []FrameTxFrame         `json:"frames,omitempty"`
+	Signatures           []FrameTxSignature     `json:"signatures,omitempty"`
 	To                   *common.Address        `json:"to"`
 	Gas                  *hexutil.Uint64        `json:"gas"`
 	GasPrice             *hexutil.Big           `json:"gasPrice"`
@@ -170,6 +173,17 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(itx.S.ToBig())
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
+	case *FrameTx:
+		enc.ChainID = (*hexutil.Big)(itx.ChainID.ToBig())
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		sender := itx.Sender
+		enc.Sender = &sender
+		enc.Frames = itx.Frames
+		enc.Signatures = itx.Signatures
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.MaxFeePerGas.ToBig())
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.MaxPriorityFeePerGas.ToBig())
+		enc.MaxFeePerBlobGas = (*hexutil.Big)(itx.MaxFeePerBlobGas.ToBig())
+		enc.BlobVersionedHashes = itx.BlobVersionedHashes
 	}
 	return json.Marshal(&enc)
 }
@@ -508,6 +522,53 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			if err := sanityCheckSignature(vbig, itx.R.ToBig(), itx.S.ToBig(), false); err != nil {
 				return err
 			}
+		}
+
+	case FrameTxType:
+		var itx FrameTx
+		inner = &itx
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		var overflow bool
+		itx.ChainID, overflow = uint256.FromBig(dec.ChainID.ToInt())
+		if overflow {
+			return errors.New("'chainId' value overflows uint256")
+		}
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		itx.Nonce = uint64(*dec.Nonce)
+		if dec.Sender == nil {
+			return errors.New("missing required field 'sender' in transaction")
+		}
+		itx.Sender = *dec.Sender
+		if dec.Frames == nil {
+			return errors.New("missing required field 'frames' in transaction")
+		}
+		itx.Frames = dec.Frames
+		itx.Signatures = dec.Signatures
+		if itx.Signatures == nil {
+			itx.Signatures = []FrameTxSignature{}
+		}
+		if dec.MaxPriorityFeePerGas == nil {
+			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
+		}
+		itx.MaxPriorityFeePerGas = uint256.MustFromBig((*big.Int)(dec.MaxPriorityFeePerGas))
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		}
+		itx.MaxFeePerGas = uint256.MustFromBig((*big.Int)(dec.MaxFeePerGas))
+		itx.MaxFeePerBlobGas = new(uint256.Int)
+		if dec.MaxFeePerBlobGas != nil {
+			itx.MaxFeePerBlobGas = uint256.MustFromBig((*big.Int)(dec.MaxFeePerBlobGas))
+		}
+		itx.BlobVersionedHashes = dec.BlobVersionedHashes
+		if itx.BlobVersionedHashes == nil {
+			itx.BlobVersionedHashes = []common.Hash{}
+		}
+		if err := itx.validate(); err != nil {
+			return err
 		}
 
 	default:

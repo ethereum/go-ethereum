@@ -92,14 +92,15 @@ func validate(jt JumpTable) JumpTable {
 	return jt
 }
 
-func newBogotaInstructionSet() JumpTable {
-	instructionSet := newAmsterdamInstructionSet()
-	return validate(instructionSet)
-}
-
 func newVerkleInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4762(&instructionSet)
+	return validate(instructionSet)
+}
+
+func newBogotaInstructionSet() JumpTable {
+	instructionSet := newAmsterdamInstructionSet()
+	enable8141(&instructionSet) // EIP-8141 frame transaction opcodes
 	return validate(instructionSet)
 }
 

@@ -259,6 +259,12 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 	}
 	receipt.TxHash = tx.Hash()
 
+	// EIP-8141 frame transaction fields.
+	if tx.Type() == types.FrameTxType {
+		receipt.Payer = result.FramePayer
+		receipt.FrameReceipts = result.FrameReceipts
+	}
+
 	// GasUsed = max(tx_gas_used - gas_refund, calldata_floor_gas_cost), unchanged
 	// in the Amsterdam fork.
 	receipt.GasUsed = result.UsedGas

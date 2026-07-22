@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -50,6 +51,7 @@ const (
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
 	SetCodeTxType    = 0x04
+	FrameTxType      = 0x06
 )
 
 // Transaction is an Ethereum transaction.
@@ -212,6 +214,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		inner = new(BlobTx)
 	case SetCodeTxType:
 		inner = new(SetCodeTx)
+	case FrameTxType:
+		inner = new(FrameTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -449,6 +453,9 @@ func (tx *Transaction) BlobGas() uint64 {
 	if blobtx, ok := tx.inner.(*BlobTx); ok {
 		return blobtx.blobGas()
 	}
+	if frametx, ok := tx.inner.(*FrameTx); ok {
+		return uint64(len(frametx.BlobVersionedHashes)) * params.BlobTxBlobGasPerBlob
+	}
 	return 0
 }
 
@@ -457,6 +464,9 @@ func (tx *Transaction) BlobGasFeeCap() *big.Int {
 	if blobtx, ok := tx.inner.(*BlobTx); ok {
 		return blobtx.BlobFeeCap.ToBig()
 	}
+	if frametx, ok := tx.inner.(*FrameTx); ok {
+		return frametx.MaxFeePerBlobGas.ToBig()
+	}
 	return nil
 }
 
@@ -464,6 +474,9 @@ func (tx *Transaction) BlobGasFeeCap() *big.Int {
 func (tx *Transaction) BlobHashes() []common.Hash {
 	if blobtx, ok := tx.inner.(*BlobTx); ok {
 		return blobtx.BlobHashes
+	}
+	if frametx, ok := tx.inner.(*FrameTx); ok {
+		return frametx.BlobVersionedHashes
 	}
 	return nil
 }
@@ -537,6 +550,36 @@ func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
 		return nil
 	}
 	return setcodetx.AuthList
+}
+
+// Frames returns the frames of a frame transaction, nil otherwise.
+func (tx *Transaction) Frames() []FrameTxFrame {
+	frametx, ok := tx.inner.(*FrameTx)
+	if !ok {
+		return nil
+	}
+	return frametx.Frames
+}
+
+// FrameSignatures returns the signature entries of a frame transaction,
+// nil otherwise.
+func (tx *Transaction) FrameSignatures() []FrameTxSignature {
+	frametx, ok := tx.inner.(*FrameTx)
+	if !ok {
+		return nil
+	}
+	return frametx.Signatures
+}
+
+// FrameSender returns the explicit sender of a frame transaction, nil
+// otherwise.
+func (tx *Transaction) FrameSender() *common.Address {
+	frametx, ok := tx.inner.(*FrameTx)
+	if !ok {
+		return nil
+	}
+	sender := frametx.Sender
+	return &sender
 }
 
 // SetCodeAuthorities returns a list of unique authorities from the

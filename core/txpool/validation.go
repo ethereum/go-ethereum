@@ -129,7 +129,12 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
 	// the transaction metadata
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), value, rules)
+	var intrGas uint64
+	if tx.Type() == types.FrameTxType {
+		intrGas, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures())
+	} else {
+		intrGas, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), value, rules)
+	}
 	if err != nil {
 		return err
 	}

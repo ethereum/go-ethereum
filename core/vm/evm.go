@@ -79,6 +79,10 @@ type TxContext struct {
 	GasPrice     *uint256.Int        // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
 	BlobHashes   []common.Hash       // Provides information for BLOBHASH
 	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
+
+	// FrameContext is the transaction-scoped context of an executing
+	// EIP-8141 frame transaction. Nil for all other transactions.
+	FrameContext *FrameContext
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -309,8 +313,13 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	// Perform the value transfer only in non-syscall mode.
 	// Calling this is required even for zero-value transfers,
 	// to ensure the state clearing mechanism is applied.
+	//
+	// Zero-value top-level frame calls (EIP-8141) skip the transfer so
+	// that the entry point is not touched into the block access list.
 	if !syscall {
-		evm.Context.Transfer(evm.StateDB, caller, addr, value, &evm.chainRules)
+		if evm.TxContext.FrameContext == nil || evm.depth > 0 || !value.IsZero() {
+			evm.Context.Transfer(evm.StateDB, caller, addr, value, &evm.chainRules)
+		}
 	}
 
 	if isPrecompile {

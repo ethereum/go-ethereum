@@ -86,7 +86,12 @@ func (tt *TransactionTest) Run() error {
 		if overflow {
 			return sender, hash, 0, errors.New("value exceeds 256 bits")
 		}
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), sender, tx.To(), value, rules)
+		var cost uint64
+		if tx.Type() == types.FrameTxType {
+			cost, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures())
+		} else {
+			cost, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), sender, tx.To(), value, rules)
+		}
 		if err != nil {
 			return
 		}

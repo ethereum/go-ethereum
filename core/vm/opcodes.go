@@ -213,6 +213,16 @@ const (
 	LOG4
 )
 
+// 0xaa and 0xb0 range - frame transaction operations (EIP-8141).
+const (
+	APPROVE       OpCode = 0xaa
+	TXPARAM       OpCode = 0xb0
+	FRAMEDATALOAD OpCode = 0xb1
+	FRAMEDATACOPY OpCode = 0xb2
+	FRAMEPARAM    OpCode = 0xb3
+	SIGPARAM      OpCode = 0xb4
+)
+
 // 0xd0 range - eof operations.
 const (
 	DATALOAD  OpCode = 0xd0
@@ -418,6 +428,14 @@ var opCodeToString = [256]string{
 	LOG3: "LOG3",
 	LOG4: "LOG4",
 
+	// 0xaa and 0xb0 range - frame transaction operations.
+	APPROVE:       "APPROVE",
+	TXPARAM:       "TXPARAM",
+	FRAMEDATALOAD: "FRAMEDATALOAD",
+	FRAMEDATACOPY: "FRAMEDATACOPY",
+	FRAMEPARAM:    "FRAMEPARAM",
+	SIGPARAM:      "SIGPARAM",
+
 	// 0xd range - eof ops.
 	DATALOAD:  "DATALOAD",
 	DATALOADN: "DATALOADN",
@@ -607,6 +625,12 @@ var stringToOp = map[string]OpCode{
 	"LOG2":            LOG2,
 	"LOG3":            LOG3,
 	"LOG4":            LOG4,
+	"APPROVE":         APPROVE,
+	"TXPARAM":         TXPARAM,
+	"FRAMEDATALOAD":   FRAMEDATALOAD,
+	"FRAMEDATACOPY":   FRAMEDATACOPY,
+	"FRAMEPARAM":      FRAMEPARAM,
+	"SIGPARAM":        SIGPARAM,
 	"DATALOAD":        DATALOAD,
 	"DATALOADN":       DATALOADN,
 	"DATASIZE":        DATASIZE,

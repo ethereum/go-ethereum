@@ -30,6 +30,13 @@ const (
 
 	MaxTxGas uint64 = 1 << 24 // Maximum transaction gas limit after eip-7825 (16,777,216).
 
+	FrameTxIntrinsicGas    uint64 = 15000 // Base intrinsic cost of an EIP-8141 frame transaction.
+	FrameTxPerFrameGas     uint64 = 475   // Fixed cost per frame in an EIP-8141 frame transaction.
+	FrameTxMaxFrames              = 64    // Maximum number of frames in an EIP-8141 frame transaction.
+	FrameTxSecp256k1SigGas uint64 = 2800  // Gas charged for validating a secp256k1 signature entry (EIP-8141).
+	FrameTxP256SigGas      uint64 = 6700  // Gas charged for validating a P-256 signature entry (EIP-8141).
+	FrameTxExpiryDataLen          = 8     // Required calldata length of an expiry verifier frame (EIP-8141).
+
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
 	CallValueTransferGas  uint64 = 9000  // Paid for CALL when the value transfer is non-zero.
 	CallNewAccountGas     uint64 = 25000 // Paid for CALL when the destination address didn't exist prior.
@@ -244,6 +251,12 @@ var (
 var (
 	// SystemAddress is where the system-transaction is sent from as per EIP-4788
 	SystemAddress = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
+
+	// FrameTxEntryPoint is the caller of DEFAULT and VERIFY mode frames (EIP-8141).
+	FrameTxEntryPoint = common.HexToAddress("0x00000000000000000000000000000000000000aa")
+
+	// FrameTxExpiryVerifier is the expiry verifier contract address (EIP-8141).
+	FrameTxExpiryVerifier = common.HexToAddress("0x0000000000000000000000000000000000008141")
 
 	// EIP-4788 - Beacon block root in the EVM
 	BeaconRootsAddress = common.HexToAddress("0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02")
