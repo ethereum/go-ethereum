@@ -1372,7 +1372,7 @@ func (st *stateTransition) chargeCallRecipient(budget *vm.GasBudget, to common.A
 const (
 	frameStatusFailed  uint64 = 0
 	frameStatusSuccess uint64 = 1
-	frameStatusSkipped uint64 = 3
+	frameStatusSkipped uint64 = 2
 )
 
 // frameOutcome tracks the per-frame execution result while the frame loop
