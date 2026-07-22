@@ -314,8 +314,8 @@ func (tx *FrameTx) validate() error {
 	for _, sig := range tx.Signatures {
 		switch sig.Scheme {
 		case FrameTxSchemeSecp256k1, FrameTxSchemeP256:
-			if len(sig.Signer) != common.AddressLength {
-				return fmt.Errorf("%w: signer must be a 20-byte address", ErrFrameTxInvalidFormat)
+			if len(sig.Signer) != 0 && len(sig.Signer) != common.AddressLength {
+				return fmt.Errorf("%w: signer must be empty or a 20-byte address", ErrFrameTxInvalidFormat)
 			}
 		case FrameTxSchemeArbitrary:
 			if len(sig.Signer) != 0 {
@@ -355,6 +355,12 @@ func (tx *FrameTx) validate() error {
 			return fmt.Errorf("%w: total frame gas too high", ErrFrameTxInvalidFormat)
 		}
 		totalFrameGas += frame.GasLimit
+
+		// Execution approval is only allowed for frames that resolve to
+		// the transaction sender.
+		if frame.Flags&FrameTxApproveExecution != 0 && frame.ResolvedTarget(tx.Sender) != tx.Sender {
+			return fmt.Errorf("%w: execution approval flag outside sender target", ErrFrameTxInvalidFormat)
+		}
 
 		// An atomic batch must be terminated by a subsequent frame.
 		if frame.Flags&FrameTxAtomicBatchFlag != 0 && i+1 >= len(tx.Frames) {
@@ -513,16 +519,25 @@ func (tx *FrameTx) FrameTxMaxCost() *uint256.Int {
 
 // ValidateFrameTxSignatures validates all signature entries of a frame
 // transaction against the canonical signature hash, per EIP-8141.
-func ValidateFrameTxSignatures(sigs []FrameTxSignature, sigHash common.Hash) error {
+// ResolvedSigner returns the signer address of a protocol-validated
+// signature entry, resolving an empty signer to the transaction sender.
+func (s *FrameTxSignature) ResolvedSigner(sender common.Address) common.Address {
+	if len(s.Signer) == 0 {
+		return sender
+	}
+	return common.BytesToAddress(s.Signer)
+}
+
+func ValidateFrameTxSignatures(sigs []FrameTxSignature, sender common.Address, sigHash common.Hash) error {
 	for i := range sigs {
-		if !validateFrameTxSignature(&sigs[i], sigHash) {
+		if !validateFrameTxSignature(&sigs[i], sender, sigHash) {
 			return fmt.Errorf("%w: entry %d", ErrFrameTxInvalidSignature, i)
 		}
 	}
 	return nil
 }
 
-func validateFrameTxSignature(sig *FrameTxSignature, sigHash common.Hash) bool {
+func validateFrameTxSignature(sig *FrameTxSignature, sender common.Address, sigHash common.Hash) bool {
 	var msg common.Hash
 	switch len(sig.Msg) {
 	case 0:
@@ -557,13 +572,14 @@ func validateFrameTxSignature(sig *FrameTxSignature, sigHash common.Hash) bool {
 		}
 		var signer common.Address
 		copy(signer[:], crypto.Keccak256(pub[1:])[12:])
-		return bytes.Equal(sig.Signer, signer[:])
+		return sig.ResolvedSigner(sender) == signer
 
 	case FrameTxSchemeP256:
 		if len(sig.Signature) != 128 {
 			return false
 		}
-		if !bytes.Equal(sig.Signer, crypto.Keccak256(sig.Signature[64:128])[12:]) {
+		resolved := sig.ResolvedSigner(sender)
+		if !bytes.Equal(resolved[:], crypto.Keccak256(sig.Signature[64:128])[12:]) {
 			return false
 		}
 		r := new(big.Int).SetBytes(sig.Signature[0:32])

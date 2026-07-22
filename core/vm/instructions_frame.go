@@ -314,7 +314,8 @@ func opSigParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		if sig.Scheme == types.FrameTxSchemeArbitrary {
 			return nil, errInvalidTxParam
 		}
-		pushWord(scope, sig.Signer)
+		signer := sig.ResolvedSigner(fc.Sender)
+		pushWord(scope, signer[:])
 	case 0x01:
 		pushUint(scope, sig.Scheme)
 	case 0x02:

@@ -763,7 +763,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if isFrameTx {
 		// The protocol signature entries are validated against the
 		// canonical signature hash before any frame executes.
-		if err := types.ValidateFrameTxSignatures(msg.FrameSignatures, msg.FrameSigHash); err != nil {
+		if err := types.ValidateFrameTxSignatures(msg.FrameSignatures, msg.From, msg.FrameSigHash); err != nil {
 			return nil, err
 		}
 	}
@@ -1598,6 +1598,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		return nil, nil, fmt.Errorf("%w: no frame approved gas payment", ErrFrameTxInvalidExecution)
 	}
 
+
 	// Materialize the per-frame receipts from the final log journal.
 	var logs []*types.Log
 	if logProvider != nil {
@@ -1620,9 +1621,11 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 
 // runDefaultVerifyFrame executes the EIP-8141 default code for a VERIFY
 // frame whose resolved target has no code: the frame approves the scope
-// allowed by its flags, provided the transaction carries a secp256k1
-// signature entry from the resolved target over the canonical signature
-// hash. The default code consumes no gas.
+// allowed by its flags, provided the scope's signature entry is a
+// secp256k1 signature whose resolved signer is the resolved target, over
+// the canonical signature hash. Frames approving execution authorize with
+// the entry at index 0; payment-only frames authorize with the entry at
+// index 1. The default code consumes no gas.
 func (st *stateTransition) runDefaultVerifyFrame(frameCtx *vm.FrameContext, frame *types.FrameTxFrame, target common.Address) error {
 	allowedScope := frame.Flags & types.FrameTxApproveScopeMask
 	if allowedScope == types.FrameTxApproveNone {
@@ -1631,13 +1634,16 @@ func (st *stateTransition) runDefaultVerifyFrame(frameCtx *vm.FrameContext, fram
 	if allowedScope&types.FrameTxApproveExecution != 0 && target != frameCtx.Sender {
 		return vm.ErrExecutionReverted
 	}
+	sigIndex := 1
+	if allowedScope&types.FrameTxApproveExecution != 0 {
+		sigIndex = 0
+	}
 	hasSignature := false
-	for i := range frameCtx.Signatures {
-		sig := &frameCtx.Signatures[i]
-		if sig.Scheme == types.FrameTxSchemeSecp256k1 && len(sig.Msg) == 0 && bytes.Equal(sig.Signer, target[:]) {
-			hasSignature = true
-			break
-		}
+	if len(frameCtx.Signatures) > sigIndex {
+		sig := &frameCtx.Signatures[sigIndex]
+		hasSignature = sig.Scheme == types.FrameTxSchemeSecp256k1 &&
+			len(sig.Msg) == 0 &&
+			sig.ResolvedSigner(frameCtx.Sender) == target
 	}
 	if !hasSignature {
 		return vm.ErrExecutionReverted
