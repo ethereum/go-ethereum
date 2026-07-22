@@ -389,6 +389,11 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		TxHash:                tx.Hash(),
 	}
 	if tx.Type() == types.FrameTxType {
+		// EIP-8141 static constraints are enforced at validation time, not
+		// decode time, mirroring the reference implementation.
+		if err := tx.FrameTxValidateStatic(); err != nil {
+			return nil, err
+		}
 		msg.Frames = tx.Frames()
 		msg.FrameSignatures = tx.FrameSignatures()
 		msg.FrameSigHash = s.Hash(tx)

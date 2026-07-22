@@ -567,9 +567,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if itx.BlobVersionedHashes == nil {
 			itx.BlobVersionedHashes = []common.Hash{}
 		}
-		if err := itx.validate(); err != nil {
-			return err
-		}
 
 	default:
 		return ErrTxTypeNotSupported

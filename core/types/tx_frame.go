@@ -305,12 +305,26 @@ func (tx *FrameTx) decode(input []byte) error {
 	if err := rlp.DecodeBytes(input, tx); err != nil {
 		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
 	}
-	return tx.validate()
+	if tx.ChainID == nil || tx.MaxPriorityFeePerGas == nil || tx.MaxFeePerGas == nil || tx.MaxFeePerBlobGas == nil {
+		return ErrFrameTxInvalidFormat
+	}
+	return nil
 }
 
-// validate checks the static constraints of the frame transaction defined
-// in EIP-8141.
-func (tx *FrameTx) validate() error {
+// FrameTxValidateStatic runs the EIP-8141 static-constraint checks if tx is
+// a frame transaction, and reports nil for every other transaction type.
+func (tx *Transaction) FrameTxValidateStatic() error {
+	if ftx, ok := tx.inner.(*FrameTx); ok {
+		return ftx.ValidateStatic()
+	}
+	return nil
+}
+
+// ValidateStatic checks the static constraints of the frame transaction
+// defined in EIP-8141. The checks run at transaction validation time, not
+// at decode time, so a structurally well-formed but statically invalid
+// frame transaction decodes successfully and is rejected when applied.
+func (tx *FrameTx) ValidateStatic() error {
 	if tx.ChainID == nil || tx.MaxPriorityFeePerGas == nil || tx.MaxFeePerGas == nil || tx.MaxFeePerBlobGas == nil {
 		return ErrFrameTxInvalidFormat
 	}
