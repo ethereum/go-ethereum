@@ -485,7 +485,9 @@ func FrameTxGas(frames []FrameTxFrame, sigs []FrameTxSignature) (uint64, error) 
 // FrameTxFloorGas computes the minimum gas cost of a frame transaction based
 // on the size of the frame and signature byte fields, per EIP-7623 and
 // EIP-7976: every charged byte counts as a standard token priced at the
-// floor token cost.
+// floor token cost. Mirroring EIP-7623, the mandatory costs — intrinsic,
+// per-frame, and signature verification — are always charged on top of the
+// floored calldata cost.
 func FrameTxFloorGas(frames []FrameTxFrame, sigs []FrameTxSignature) (uint64, error) {
 	chargedData := FrameTxChargedData(frames, sigs)
 	var dataLen uint64
@@ -495,7 +497,11 @@ func FrameTxFloorGas(frames []FrameTxFrame, sigs []FrameTxSignature) (uint64, er
 	if math.MaxUint64/(params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976) < dataLen {
 		return 0, errors.New("gas uint64 overflow")
 	}
-	return params.FrameTxIntrinsicGas + dataLen*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976, nil
+	floorGas := params.FrameTxIntrinsicGas + uint64(len(frames))*params.FrameTxPerFrameGas
+	for i := range sigs {
+		floorGas += FrameTxSignatureGas(&sigs[i])
+	}
+	return floorGas + dataLen*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976, nil
 }
 
 // FrameTxMaxCost returns the maximum cost of the frame transaction that is
