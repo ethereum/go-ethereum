@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"crypto/elliptic"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +37,11 @@ import (
 var (
 	ErrFrameTxInvalidFormat    = errors.New("invalid frame tx format")
 	ErrFrameTxInvalidSignature = errors.New("invalid frame tx signature")
+
+	// secp256r1N and secp256r1HalfN bound canonical P-256 signature values
+	// (EIP-8141): 0 < r < N and 0 < s <= N/2.
+	secp256r1N     = elliptic.P256().Params().N
+	secp256r1HalfN = new(big.Int).Rsh(elliptic.P256().Params().N, 1)
 )
 
 // Frame execution modes (EIP-8141).
@@ -592,6 +598,11 @@ func validateFrameTxSignature(sig *FrameTxSignature, sender common.Address, sigH
 		s := new(big.Int).SetBytes(sig.Signature[32:64])
 		x := new(big.Int).SetBytes(sig.Signature[64:96])
 		y := new(big.Int).SetBytes(sig.Signature[96:128])
+		// r and s must be canonical, with low-s, so each signature has one
+		// encoding. P256 verification itself accepts high-s values.
+		if r.Sign() <= 0 || s.Sign() <= 0 || r.Cmp(secp256r1N) >= 0 || s.Cmp(secp256r1HalfN) > 0 {
+			return false
+		}
 		return secp256r1.Verify(msg[:], r, s, x, y)
 
 	case FrameTxSchemeArbitrary:
