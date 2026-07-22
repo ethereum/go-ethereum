@@ -230,7 +230,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 		case params.SlotNumber == nil:
 			return engine.STATUS_INVALID, attributesErr("missing slot number")
 		case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
-			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
+			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam or bogota payloads")
 		}
 	}
 	if custodyColumns != nil {
@@ -882,7 +882,7 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 		// not a params error, the payload is rejected as INVALID further down.
 		return invalidStatus, paramsErr("missing block access list post-amsterdam")
 	case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
-		return invalidStatus, unsupportedForkErr("newPayloadV5 must only be called for amsterdam payloads")
+		return invalidStatus, unsupportedForkErr("newPayloadV5 must only be called for amsterdam or bogota payloads")
 	}
 	requests := convertRequests(executionRequests)
 	if err := validateRequests(requests); err != nil {
