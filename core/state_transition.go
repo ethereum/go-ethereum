@@ -510,6 +510,7 @@ func (st *stateTransition) initRuntimeGasBudget(rules params.Rules, intrinsicGas
 	st.gasRemaining = vm.NewGasBudget(gasLeft, executionGas-gasLeft)
 
 	if st.evm.Config.Tracer.HasGasHook() {
+		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{}, tracing.Gas{Regular: st.msg.GasLimit}, tracing.GasChangeTxInitialBalance)
 		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: st.msg.GasLimit}, st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
 	}
 }
@@ -788,13 +789,14 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 	if rules.IsAmsterdam {
 		addr := crypto.CreateAddress(msg.From, st.state.GetNonce(msg.From))
 		if st.state.Empty(addr) {
-			entryGas := st.gasRemaining
 			if !st.chargeRuntimeGas(vm.GasCosts{StateGas: params.AccountCreationSize * st.evm.Context.CostPerStateByte}) {
 				// The nonce increment normally performed inside evm.Create
 				// must still happen for the included transaction.
 				st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeContractCreator)
+
+				entryGas := st.gasRemaining
 				st.gasRemaining = st.gasRemaining.ExitHalt()
-				st.traceHaltedTopFrame(vm.CREATE, addr, msg.Data, entryGas, value)
+				st.traceHaltedTopFrame(vm.CREATE, addr, msg.Data, entryGas, st.gasRemaining, value)
 				return nil, vm.ErrOutOfGas
 			}
 			chargedCreation = true
@@ -835,13 +837,13 @@ func (st *stateTransition) executeCall(rules params.Rules, value *uint256.Int) (
 		if !st.applyAuthorizations(rules, st.msg.SetCodeAuthorizations) {
 			st.state.RevertToSnapshot(snapshot)
 			st.gasRemaining = st.gasRemaining.ExitHalt()
-			st.traceHaltedTopFrame(vm.CALL, st.to(), msg.Data, entryGas, value)
+			st.traceHaltedTopFrame(vm.CALL, st.to(), msg.Data, entryGas, st.gasRemaining, value)
 			return nil, vm.ErrOutOfGas
 		}
 		if !st.chargeCallRecipientEIP2780(value) {
 			st.state.RevertToSnapshot(snapshot)
 			st.gasRemaining = st.gasRemaining.ExitHalt()
-			st.traceHaltedTopFrame(vm.CALL, st.to(), msg.Data, entryGas, value)
+			st.traceHaltedTopFrame(vm.CALL, st.to(), msg.Data, entryGas, st.gasRemaining, value)
 			return nil, vm.ErrOutOfGas
 		}
 	} else {
@@ -879,7 +881,7 @@ func (st *stateTransition) executeCall(rules params.Rules, value *uint256.Int) (
 // traceHaltedTopFrame calls the Enter and Exit functions on the tracer,
 // in order to produce correct tracing results if the EVM exits early (after Amsterdam).
 // Tracers assume every transaction producing a receipt also produces a depth-zero frame.
-func (st *stateTransition) traceHaltedTopFrame(typ vm.OpCode, to common.Address, input []byte, entryGas vm.GasBudget, value *uint256.Int) {
+func (st *stateTransition) traceHaltedTopFrame(typ vm.OpCode, to common.Address, input []byte, entryGas vm.GasBudget, endGas vm.GasBudget, value *uint256.Int) {
 	tracer := st.evm.Config.Tracer
 	if tracer == nil {
 		return
@@ -889,7 +891,7 @@ func (st *stateTransition) traceHaltedTopFrame(typ vm.OpCode, to common.Address,
 	}
 	if tracer.HasGasHook() {
 		tracer.EmitGasChange(tracing.Gas{}, entryGas.AsTracing(), tracing.GasChangeCallInitialBalance)
-		tracer.EmitGasChange(entryGas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallFailedExecution)
+		tracer.EmitGasChange(entryGas.AsTracing(), endGas.AsTracing(), tracing.GasChangeCallFailedExecution)
 	}
 	if tracer.OnExit != nil {
 		tracer.OnExit(0, nil, entryGas.RegularGas, vm.VMErrorFromErr(vm.ErrOutOfGas), true)
