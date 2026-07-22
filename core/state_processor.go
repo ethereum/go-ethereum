@@ -169,7 +169,21 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 	if config.IsPrague(number, time) || config.IsUBT(number, time) {
 		ProcessParentBlockHash(parent.Hash(), evm, blockAccessList)
 	}
+	// EIP-8141: install the expiry verifier at the Bogota transition block.
+	if config.BogotaTime != nil && time >= *config.BogotaTime && parent.Time < *config.BogotaTime {
+		ProcessExpiryVerifierDeploy(evm, blockAccessList)
+	}
 	return blockAccessList
+}
+
+// ProcessExpiryVerifierDeploy installs the canonical EIP-8141 expiry verifier
+// runtime code at EXPIRY_VERIFIER with nonce 1 on the Bogota transition
+// block. Networks that activate Bogota at genesis must carry the code in the
+// genesis allocation instead.
+func ProcessExpiryVerifierDeploy(evm *vm.EVM, blockAccessList *bal.ConstructionBlockAccessList) {
+	evm.StateDB.SetNonce(params.FrameTxExpiryVerifier, 1, tracing.NonceChangeUnspecified)
+	evm.StateDB.SetCode(params.FrameTxExpiryVerifier, params.FrameTxExpiryVerifierCode, tracing.CodeChangeUnspecified)
+	blockAccessList.Merge(evm.StateDB.Finalise(true))
 }
 
 // PostExecution processes post-execution system calls when Prague is enabled.
