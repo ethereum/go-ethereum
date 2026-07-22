@@ -63,6 +63,33 @@ func (fc *FrameContext) CurrentTarget() common.Address {
 // nonce is incremented and the transaction's maximum cost is collected from
 // the frame's resolved target. ErrExecutionReverted is returned when the
 // request is not allowed.
+// frameApprovalSnapshot captures the transaction-scoped approval context so
+// it can be restored when the call that granted an approval reverts. The
+// approval context follows the same journaling scope as state: an approval
+// granted in a child call is discarded together with that call's state
+// changes.
+type frameApprovalSnapshot struct {
+	senderApproved bool
+	payer          *common.Address
+}
+
+// ApprovalSnapshot captures the current approval context.
+func (fc *FrameContext) ApprovalSnapshot() frameApprovalSnapshot {
+	if fc == nil {
+		return frameApprovalSnapshot{}
+	}
+	return frameApprovalSnapshot{senderApproved: fc.SenderApproved, payer: fc.Payer}
+}
+
+// RestoreApprovals restores a previously captured approval context.
+func (fc *FrameContext) RestoreApprovals(s frameApprovalSnapshot) {
+	if fc == nil {
+		return
+	}
+	fc.SenderApproved = s.senderApproved
+	fc.Payer = s.payer
+}
+
 func FrameApprove(statedb StateDB, fc *FrameContext, scope uint64) error {
 	frame := &fc.Frames[fc.CurrentFrame]
 	target := frame.ResolvedTarget(fc.Sender)
