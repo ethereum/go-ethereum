@@ -283,9 +283,11 @@ func (ac *accountCache) scanAccounts() error {
 	start := time.Now()
 
 	for _, path := range creates.ToSlice() {
+		ac.fileC.mu.Lock()
 		if a := readAccount(path); a != nil {
 			ac.add(*a)
 		}
+		ac.fileC.mu.Unlock()
 	}
 	for _, path := range deletes.ToSlice() {
 		ac.deleteByFile(path)
