@@ -1355,7 +1355,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 		t.Fatalf("peering failed: %v", err)
 	}
 
-	// Announce all 4 txs from a single peer.
+	// Announce all transactions from a single peer.
 	hashes := make([]common.Hash, len(txs))
 	txTypes := make([]byte, len(txs))
 	sizes := make([]uint32, len(txs))
@@ -1473,7 +1473,9 @@ and that providing valid cells causes the tx to enter the pool.`)
 	tx := txs[0]
 	blob := blobs[0]
 
-	// Two peers ensure GetCells arrives regardless of full/partial fetch path.
+	// Create two peers to ensure GetCells arrives regardless of full/partial fetch path.
+	// As per the specification, the tested node must fetch cells when the transaction has
+	// two providers.
 	conn1, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -1539,7 +1541,7 @@ and that providing valid cells causes the tx to enter the pool.`)
 		t.Fatalf("writing cells response failed: %v", err)
 	}
 
-	// Either peer should not be disconnected after providing valid data.
+	// Peers should not be disconnected after providing valid data.
 	if readUntilDisconnect(cc) {
 		t.Fatalf("unexpected disconnect on cells-providing peer")
 	}
@@ -1557,6 +1559,7 @@ while the other peer is not.`)
 	tx := txs[0]
 	blob := blobs[0]
 
+	// Create two peers to make the tested node send GetCells (tx has two providers).
 	conn1, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -1575,6 +1578,7 @@ while the other peer is not.`)
 		t.Fatalf("peering failed: %v", err)
 	}
 
+	// The announcement is sent by both peers.
 	ann := eth.NewPooledTransactionHashesPacket72{
 		Types:  []byte{types.BlobTxType},
 		Sizes:  []uint32{uint32(tx.Size())},
@@ -1588,6 +1592,7 @@ while the other peer is not.`)
 		t.Fatalf("conn2 announce failed: %v", err)
 	}
 
+	// The tested node should request the transaction and cells from any of the peers.
 	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](conn1, conn2)
 	if err != nil {
 		t.Fatalf("failed to read GetPooledTransactions: %v", err)
@@ -1597,7 +1602,6 @@ while the other peer is not.`)
 		eth.PooledTransactionsPacket{RequestId: pooledReq.RequestId, List: encTxs}); err != nil {
 		t.Fatalf("writing pooled tx response failed: %v", err)
 	}
-
 	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](conn1, conn2)
 	if err != nil {
 		t.Fatalf("failed to read GetCells: %v", err)
