@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -126,9 +127,10 @@ type Downloader struct {
 	committed     atomic.Bool
 	ancientLimit  uint64 // The maximum block number which can be regarded as ancient data.
 
-	// The cutoff block number and hash before which chain segments (bodies
-	// and receipts) are skipped during synchronization. 0 means the entire
-	// chain segment is aimed for synchronization.
+	// History pruning policy and derived cutoff. The policy is the configured
+	// intent; cutoff number/hash are computed from it (possibly deferred for
+	// KeepRecent until the sync pivot is known).
+	histPolicy        history.HistoryPolicy
 	chainCutoffNumber uint64
 	chainCutoffHash   common.Hash
 
@@ -230,20 +232,26 @@ type BlockChain interface {
 	// with trie nodes.
 	TrieDB() *triedb.Database
 
-	// HistoryPruningCutoff returns the configured history pruning point.
-	// Block bodies along with the receipts will be skipped for synchronization.
-	HistoryPruningCutoff() (uint64, common.Hash)
+	// HistoryPolicy returns the configured history pruning policy (intent).
+	HistoryPolicy() history.HistoryPolicy
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
 func New(stateDb ethdb.Database, mode ethconfig.SyncMode, chain BlockChain, dropPeer peerDropFn, success func(), snapV2 bool) *Downloader {
-	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
+	policy := chain.HistoryPolicy()
+	var cutoffNumber uint64
+	var cutoffHash common.Hash
+	if policy.Target != nil {
+		cutoffNumber = policy.Target.BlockNumber
+		cutoffHash = policy.Target.BlockHash
+	}
 	dl := &Downloader{
 		stateDB:           stateDb,
 		moder:             newSyncModer(mode, chain, stateDb),
 		queue:             newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:             newPeerSet(),
 		blockchain:        chain,
+		histPolicy:        policy,
 		chainCutoffNumber: cutoffNumber,
 		chainCutoffHash:   cutoffHash,
 		dropPeer:          dropPeer,
@@ -609,6 +617,16 @@ func (d *Downloader) syncToHead() (err error) {
 				return err
 			}
 			log.Info("Truncated excess ancient chain segment", "oldhead", frozen-1, "newhead", origin)
+		}
+	}
+	// For KeepRecent mode, compute the cutoff now that we know the sync target.
+	if mode == ethconfig.SnapSync && d.histPolicy.Mode == history.KeepRecent && d.histPolicy.Window != 0 {
+		if height > d.histPolicy.Window {
+			d.chainCutoffNumber = height - d.histPolicy.Window
+			if h := d.skeleton.Header(d.chainCutoffNumber); h != nil {
+				d.chainCutoffHash = h.Hash()
+			}
+			log.Info("Computed rolling history cutoff for sync", "cutoff", d.chainCutoffNumber, "window", d.histPolicy.Window, "head", height)
 		}
 	}
 	// Skip ancient chain segments if Geth is running with a configured chain cutoff.
