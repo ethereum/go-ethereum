@@ -104,13 +104,14 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, j
 			// Execute the message to preload the implicit touched states
 			evm := vm.NewEVM(NewEVMBlockContext(header, p.chain, nil), stateCpy, p.config, cfg)
 			defer evm.Release()
+
+			// Set the caches for EVM interpreter
 			if jumpDestCache != nil {
 				evm.SetJumpDestCache(jumpDestCache)
 			}
 			if precompileCache != nil {
 				evm.SetPrecompileCache(precompileCache)
 			}
-
 			// Convert the transaction into an executable message and pre-cache its sender
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 			if err != nil {

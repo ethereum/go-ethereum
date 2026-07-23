@@ -17,13 +17,12 @@
 package vm
 
 import (
-	"crypto/sha256"
 	"fmt"
-	"hash"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
@@ -191,23 +190,9 @@ func cacheablePrecompile(p PrecompiledContract, input []byte) bool {
 	return true
 }
 
-// cacheKeyHasherPool holds hashers for deriving cache keys. This is not a
-// consensus hash, sha256 is picked for hardware acceleration.
-var cacheKeyHasherPool = sync.Pool{
-	New: func() any { return sha256.New() },
-}
-
 // precompileCacheKey derives the cache key for a precompile invocation. Fork
 // discrimination is handled by the set namespacing, so the key only covers
 // the address and input.
 func precompileCacheKey(addr common.Address, input []byte) common.Hash {
-	h := cacheKeyHasherPool.Get().(hash.Hash)
-	h.Reset()
-	h.Write(addr[:])
-	h.Write(input)
-
-	var key common.Hash
-	h.Sum(key[:0])
-	cacheKeyHasherPool.Put(h)
-	return key
+	return crypto.Keccak256Hash(addr[:], input)
 }
