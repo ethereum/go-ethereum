@@ -569,7 +569,7 @@ type BlobPool struct {
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
 	// A partial blob transaction (custody count below DataPerBlob) cannot be included
-	// by our block. Since an account's transactions are included in nonce order, the first
+	// in a block. Since an account's transactions are included in nonce order, the first
 	// partial transaction blocks all following transactions in one account from
 	// inclusion. That transaction and all transactions after it are called the
 	// account's "blocked" transactions. To prevent DoS, the total size of blocked transactions
