@@ -615,6 +615,7 @@ func (f *BlobFetcher) loop() {
 					if len(f.waitlist[hash]) == 0 {
 						delete(f.waitlist, hash)
 						delete(f.waittime, hash)
+						delete(f.partial, hash)
 					}
 				}
 				delete(f.waitslots, drop.peer)
