@@ -168,6 +168,26 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if stateless {
 		return nil
 	}
+	resultCh := make(chan error, 1)
+	go func() {
+		resultCh <- v.validateResult(block, header, res)
+	}()
+	// Validate the state root against the received state root and throw
+	// an error if they don't match.
+	var rootErr error
+	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+		rootErr = fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
+	}
+	if err := <-resultCh; err != nil {
+		return err
+	}
+	return rootErr
+}
+
+// validateResult validates the derivable fields of the block header (receipt
+// root, requests hash and the block access list hash) against the provided
+// process result.
+func (v *BlockValidator) validateResult(block *types.Block, header *types.Header, res *ProcessResult) error {
 	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
 	receiptSha := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
 	if receiptSha != header.ReceiptHash {
@@ -198,11 +218,6 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
 			return fmt.Errorf("invalid block access list: %v", err)
 		}
-	}
-	// Validate the state root against the received state root and throw
-	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
-		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
 	return nil
 }
