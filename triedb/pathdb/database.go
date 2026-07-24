@@ -528,6 +528,14 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if db.waitSync {
 		return false
 	}
+
+	// Short circuit if the database is opened in read only mode.
+	// The recoverable state is only available when the database is writable, otherwise the
+	// state histories cannot be written to disk and the recoverable state will be lost.
+	if db.readOnly {
+		return false
+	}
+
 	// Ensure the requested state is a known state.
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
