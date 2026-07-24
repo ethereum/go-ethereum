@@ -2745,6 +2745,47 @@ func TestSimulateV1WithdrawalsByFork(t *testing.T) {
 	})
 }
 
+func TestSimulateV1DifficultyOverridePostMerge(t *testing.T) {
+	t.Parallel()
+
+	gspec := &core.Genesis{Config: params.MergedTestChainConfig, Alloc: types.GenesisAlloc{}}
+	backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) { b.SetPoS() })
+
+	ctx := context.Background()
+	stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("failed to get state and header: %v", err)
+	}
+	sim := &simulator{
+		b:           backend,
+		state:       stateDB,
+		base:        baseHeader,
+		chainConfig: backend.ChainConfig(),
+		budget:      newGasBudget(0),
+	}
+
+	diff := (*hexutil.Big)(big.NewInt(0xCAFE0000))
+	results, err := sim.execute(ctx, []simBlock{{
+		BlockOverrides: &override.BlockOverrides{Difficulty: diff},
+	}})
+	if err != nil {
+		t.Fatalf("simulation execution failed: %v", err)
+	}
+	require.Len(t, results, 1)
+
+	enc, err := json.Marshal(results[0])
+	if err != nil {
+		t.Fatalf("failed to marshal result: %v", err)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(enc, &raw); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if got := string(raw["difficulty"]); got != `"0x0"` {
+		t.Fatalf("difficulty override was not a no-op post-merge: got %s, want \"0x0\"\n%s", got, enc)
+	}
+}
+
 func TestSignTransaction(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
