@@ -1378,6 +1378,68 @@ func TestIsPivotReorged(t *testing.T) {
 	})
 }
 
+// TestGapStartsPreAmsterdam verifies the four conditions gapStartsPreAmsterdam
+// covers: a post-Amsterdam header found via the skeleton store, a
+// pre-Amsterdam header found via the skeleton store, a pre-Amsterdam header
+// found only via the canonical chain (skeleton already pruned), and a header
+// that isn't available locally yet (conservatively not flagged).
+func TestGapStartsPreAmsterdam(t *testing.T) {
+	t.Parallel()
+
+	// PostAmsterdam: the first gap block carries a BlockAccessListHash, so
+	// catch-up can proceed normally.
+	t.Run("PostAmsterdam", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		prev := mkPivot(100, common.HexToHash("0xaaaa"))
+		balHash := common.HexToHash("0xbeef")
+		next := &types.Header{Number: big.NewInt(101), Difficulty: common.Big0, BlockAccessListHash: &balHash}
+		rawdb.WriteSkeletonHeader(db, next)
+
+		if gapStartsPreAmsterdam(db, prev) {
+			t.Fatal("should not flag a gap whose first block already has a BAL")
+		}
+	})
+
+	// PreAmsterdam_Skeleton: the first gap block predates Amsterdam and is
+	// still available from the skeleton store.
+	t.Run("PreAmsterdam_Skeleton", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		prev := mkPivot(100, common.HexToHash("0xaaaa"))
+		next := &types.Header{Number: big.NewInt(101), Difficulty: common.Big0}
+		rawdb.WriteSkeletonHeader(db, next)
+
+		if !gapStartsPreAmsterdam(db, prev) {
+			t.Fatal("expected a pre-Amsterdam gap to be detected via the skeleton header")
+		}
+	})
+
+	// PreAmsterdam_Canonical: the skeleton entry is gone (e.g. pruned after
+	// the block was fully imported), but the header is still reachable via
+	// the canonical chain.
+	t.Run("PreAmsterdam_Canonical", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		prev := mkPivot(100, common.HexToHash("0xaaaa"))
+		next := &types.Header{Number: big.NewInt(101), Difficulty: common.Big0}
+		rawdb.WriteHeader(db, next)
+		rawdb.WriteCanonicalHash(db, next.Hash(), next.Number.Uint64())
+
+		if !gapStartsPreAmsterdam(db, prev) {
+			t.Fatal("expected a pre-Amsterdam gap to be detected via the canonical header")
+		}
+	})
+
+	// MissingHeader: nothing is known locally about the first gap block yet.
+	// Don't guess; let the regular catch-up path surface the lookup failure.
+	t.Run("MissingHeader", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		prev := mkPivot(100, common.HexToHash("0xaaaa"))
+
+		if gapStartsPreAmsterdam(db, prev) {
+			t.Fatal("should not flag a gap whose first block header is unknown locally")
+		}
+	})
+}
+
 // TestSyncDetectsPivotReorged exercises the reorg-handling branch in Sync
 // end-to-end.
 //
@@ -1462,6 +1524,73 @@ func TestSyncDetectsPivotReorged(t *testing.T) {
 	}
 	if val := rawdb.ReadStorageSnapshot(db, orphanStorageAccount, orphanStorageSlot); len(val) != 0 {
 		t.Errorf("orphan storage snapshot should be wiped, got %x", val)
+	}
+}
+
+// TestSyncCatchUpGapPreAmsterdam reproduces
+// https://github.com/ethereum/go-ethereum/issues/35325: the pivot moves from
+// a low block (as happens right after a fresh node's first, early handshake
+// pivot) to a much later one whose gap starts before Amsterdam activated.
+//
+// Setup: persisted progress points at block 1. The chain's block 2 predates
+// Amsterdam (no BlockAccessListHash) and, matching real peer behavior for
+// pre-Amsterdam blocks, the test peer holds no BAL data at all — so any BAL
+// request for that range is guaranteed to be refused by every peer, exactly
+// as the source correctly does for pre-Amsterdam blocks in the wild.
+//
+// If gapStartsPreAmsterdam works, Sync detects this upfront, discards the
+// stale progress, and completes via a normal state download without ever
+// invoking catchUp. If it doesn't fire, catchUp tries to fetch BALs for the
+// unreachable range and Sync fails with errAccessListUnavailable.
+func TestSyncCatchUpGapPreAmsterdam(t *testing.T) {
+	t.Parallel()
+
+	nodeScheme, sourceAccountTrie, elems := makeAccountTrieNoStorage(100, rawdb.HashScheme)
+	root := sourceAccountTrie.Hash()
+
+	db := rawdb.NewMemoryDatabase()
+
+	// Persist progress against a pivot at block 1, as if this were the
+	// syncer's very first (early-handshake) pivot.
+	prevPivot := mkPivot(1, common.HexToHash("0x01"))
+	seed := newSyncerV2(db, nodeScheme)
+	seed.pivot = prevPivot
+	seed.saveSyncStatus()
+	rawdb.WriteHeader(db, prevPivot)
+	rawdb.WriteCanonicalHash(db, prevPivot.Hash(), prevPivot.Number.Uint64())
+
+	// Block 2 — the first block of the catch-up gap — predates Amsterdam:
+	// no BlockAccessListHash, matching a pre-fork header.
+	preAmsterdam := &types.Header{Number: big.NewInt(2), Difficulty: common.Big0}
+	rawdb.WriteSkeletonHeader(db, preAmsterdam)
+
+	// The new pivot is far ahead, well past Amsterdam activation.
+	target := mkPivot(100, root)
+
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	syncer := newSyncerV2(db, nodeScheme)
+	// The peer has no BAL data whatsoever, so it correctly refuses every BAL
+	// request — mirroring how peers respond for pre-Amsterdam blocks.
+	src := newTestPeerV2("source", t, term)
+	src.accountTrie = sourceAccountTrie.Copy()
+	src.accountValues = elems
+	syncer.Register(src)
+	src.remote = syncer
+
+	if err := syncer.Sync(target, cancel); err != nil {
+		t.Fatalf("sync failed (pre-Amsterdam gap detection likely broken): %v", err)
+	}
+	loader := newSyncerV2(db, nodeScheme)
+	loader.loadSyncStatus()
+	if loader.getPhase() != phaseComplete {
+		t.Fatal("sync status should reach the complete phase after successful completion")
+	}
+	if loader.pivot == nil || loader.pivot.Hash() != target.Hash() {
+		t.Fatalf("expected persisted pivot to match new pivot")
 	}
 }
 
