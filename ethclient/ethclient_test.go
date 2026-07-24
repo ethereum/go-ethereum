@@ -798,6 +798,99 @@ func ExampleRevertErrorData() {
 	// message: user error
 }
 
+// ExampleRevertErrorData_estimateGas shows how to get the revert reason from a
+// failed EstimateGas call. The same function works for both CallContract and
+// EstimateGas.
+func ExampleRevertErrorData_estimateGas() {
+	ctx := context.Background()
+	ec, _ := ethclient.DialContext(ctx, exampleNode.HTTPEndpoint())
+
+	contract := common.HexToAddress("290f1b36649a61e369c6276f6d29463335b4400c")
+	call := ethereum.CallMsg{To: &contract, Gas: 30000}
+	_, err := ec.EstimateGas(ctx, call)
+	if err == nil {
+		panic("EstimateGas did not return error")
+	}
+
+	revertData, ok := ethclient.RevertErrorData(err)
+	if !ok {
+		panic("unpacking revert failed")
+	}
+	fmt.Printf("revert: %x\n", revertData)
+
+	message, err := abi.UnpackRevert(revertData)
+	if err != nil {
+		panic("parsing ABI error failed: " + err.Error())
+	}
+	fmt.Println("message:", message)
+
+	// Output:
+	// revert: 08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a75736572206572726f72
+	// message: user error
+}
+
+// TestRevertErrorData verifies that RevertErrorData correctly extracts revert
+// reason bytes from both CallContract and EstimateGas errors, and returns false
+// for errors that are not EVM reverts.
+func TestRevertErrorData(t *testing.T) {
+	backend, _, err := newTestBackend(nil)
+	if err != nil {
+		t.Fatalf("failed to create test backend: %v", err)
+	}
+	defer backend.Close()
+
+	client := ethclient.NewClient(backend.Attach())
+	defer client.Close()
+
+	ctx := context.Background()
+	msg := ethereum.CallMsg{To: &revertContractAddr, Gas: 30000}
+
+	// CallContract must return a revert error with extractable reason.
+	_, callErr := client.CallContract(ctx, msg, nil)
+	if callErr == nil {
+		t.Fatal("expected CallContract to fail on reverting contract")
+	}
+	callData, ok := ethclient.RevertErrorData(callErr)
+	if !ok {
+		t.Fatalf("RevertErrorData returned false for CallContract error: %v", callErr)
+	}
+	callReason, err := abi.UnpackRevert(callData)
+	if err != nil {
+		t.Fatalf("failed to unpack CallContract revert reason: %v", err)
+	}
+	if callReason != "user error" {
+		t.Fatalf("unexpected CallContract revert reason: %q", callReason)
+	}
+
+	// EstimateGas must return a revert error with the same extractable reason.
+	_, gasErr := client.EstimateGas(ctx, msg)
+	if gasErr == nil {
+		t.Fatal("expected EstimateGas to fail on reverting contract")
+	}
+	gasData, ok := ethclient.RevertErrorData(gasErr)
+	if !ok {
+		t.Fatalf("RevertErrorData returned false for EstimateGas error: %v", gasErr)
+	}
+	gasReason, err := abi.UnpackRevert(gasData)
+	if err != nil {
+		t.Fatalf("failed to unpack EstimateGas revert reason: %v", err)
+	}
+	if gasReason != "user error" {
+		t.Fatalf("unexpected EstimateGas revert reason: %q", gasReason)
+	}
+
+	// Revert data from CallContract and EstimateGas must be identical.
+	if !bytes.Equal(callData, gasData) {
+		t.Errorf("revert data mismatch: CallContract=%x, EstimateGas=%x", callData, gasData)
+	}
+
+	// A plain error (non-revert) must not be decoded as revert data.
+	_, ok = ethclient.RevertErrorData(errors.New("not a revert"))
+	if ok {
+		t.Fatal("RevertErrorData returned true for a plain non-revert error")
+	}
+}
+
 func TestSimulateV1(t *testing.T) {
 	backend, _, err := newTestBackend(nil)
 	if err != nil {
