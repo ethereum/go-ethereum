@@ -22,8 +22,41 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
+
+// TestPercentileRewardsReceiptGasEIP8037 checks that reward percentiles are
+// weighted by the sum of per-tx receipt gas, not the block header gas used.
+// Under EIP-8037 the header reflects max(cumulative regular, cumulative state)
+// and can exceed receipt totals; using it as the threshold skews percentiles.
+func TestPercentileRewardsReceiptGasEIP8037(t *testing.T) {
+	lowTip := big.NewInt(1)
+	highTip := big.NewInt(100 * params.GWei)
+
+	const (
+		lowGas        = 100_000
+		highGas       = 21_000
+		receiptTotal  = lowGas + highGas
+		headerGasUsed = 500_000 // state bottleneck, well above receiptTotal
+	)
+	sorter := []txGasAndReward{
+		{gasUsed: lowGas, reward: lowTip},
+		{gasUsed: highGas, reward: highTip},
+	}
+
+	got := percentileRewards(sorter, receiptTotal, []float64{50})
+	if got[0].Cmp(lowTip) != 0 {
+		t.Fatalf("50th percentile reward = %s, want low-tip %s (receipt gas %d)",
+			got[0], lowTip, receiptTotal)
+	}
+
+	// Using block header gas used as the weight base selects the wrong tx.
+	gotBroken := percentileRewards(sorter, headerGasUsed, []float64{50})
+	if gotBroken[0].Cmp(highTip) != 0 {
+		t.Fatalf("sanity check: header-based weighting = %s, want high-tip %s", gotBroken[0], highTip)
+	}
+}
 
 func TestFeeHistory(t *testing.T) {
 	var cases = []struct {
