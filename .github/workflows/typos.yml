@@ -1,0 +1,22 @@
+name: Typos
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  typos:
+    name: Spell Check
+    runs-on: [self-hosted-ghr, size-s-x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Check for typos
+        uses: crates-ci/typos@v1.29.4
