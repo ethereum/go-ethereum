@@ -25,6 +25,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -169,29 +170,42 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 //
 // Note the returned account is not a copy, please don't modify it.
 func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
+	account, err := dl.accountObject(hash, depth)
+	if err != nil {
+		return nil, err
+	}
+	return encodeSlimAccount(account), nil
+}
+
+// accountObject directly retrieves the decoded account associated with a
+// particular hash, in the consensus (full) format. A nil account is returned
+// if the account does not exist or was deleted.
+func (dl *diskLayer) accountObject(hash common.Hash, depth int) (*types.StateAccount, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	if dl.stale {
 		return nil, errSnapshotStale
 	}
-	// Try to retrieve the trie node from the not-yet-written node buffer first
-	// (both the live one and the frozen one). Note the buffer is lock free since
-	// it's impossible to mutate the buffer before tagging the layer as stale.
+	// Try to retrieve the account from the not-yet-written state buffer first
+	// (both the live one and the frozen one). The buffer holds accounts in
+	// decoded form, so no decoding is required here. Note the buffer is lock
+	// free since it's impossible to mutate the buffer before tagging the layer
+	// as stale.
 	for _, buffer := range []*buffer{dl.buffer, dl.frozen} {
 		if buffer != nil {
-			blob, found := buffer.account(hash)
+			account, found := buffer.account(hash)
 			if found {
 				dirtyStateHitMeter.Mark(1)
-				dirtyStateReadMeter.Mark(int64(len(blob)))
+				dirtyStateReadMeter.Mark(int64(slimAccountSize(account)))
 				dirtyStateHitDepthHist.Update(int64(depth))
 
-				if len(blob) == 0 {
+				if account == nil {
 					stateAccountInexMeter.Mark(1)
 				} else {
 					stateAccountExistMeter.Mark(1)
 				}
-				return blob, nil
+				return account, nil
 			}
 		}
 	}
@@ -214,7 +228,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 			} else {
 				stateAccountExistMeter.Mark(1)
 			}
-			return blob, nil
+			return decodeAccountBlob(hash, blob), nil
 		}
 		cleanStateMissMeter.Mark(1)
 	}
@@ -237,7 +251,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 		stateAccountExistMeter.Mark(1)
 		stateAccountExistDiskMeter.Mark(1)
 	}
-	return blob, nil
+	return decodeAccountBlob(hash, blob), nil
 }
 
 // storage directly retrieves the storage data associated with a particular hash,
@@ -598,8 +612,12 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	batch := dl.db.diskdb.NewBatch()
 	writeNodes(batch, nodes, dl.nodes)
 
-	// Provide the original values of modified accounts and storages for revert
-	writeStates(batch, progress, accounts, storages, dl.states)
+	// Provide the original values of modified accounts and storages for revert.
+	// The history-derived accounts are in slim-RLP form; decode them so they
+	// share the single encode point in writeStates. This path is only hit on a
+	// deep reorg that rolls back the persistent layer, so the round-trip cost
+	// is irrelevant.
+	writeStates(batch, progress, decodeAccounts(accounts), storages, dl.states)
 	rawdb.WritePersistentStateID(batch, dl.id-1)
 	rawdb.WriteSnapshotRoot(batch, h.meta.parent)
 	if err := batch.Write(); err != nil {

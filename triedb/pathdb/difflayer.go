@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -102,25 +103,41 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 //
 // Note the returned account is not a copy, please don't modify it.
 func (dl *diffLayer) account(hash common.Hash, depth int) ([]byte, error) {
+	account, err := dl.accountObject(hash, depth)
+	if err != nil {
+		return nil, err
+	}
+	// Re-encode into slim-RLP form for the byte-oriented callers (e.g. the
+	// binary iterator and the public AccountRLP). The hot read path uses
+	// accountObject directly and avoids this encode.
+	return encodeSlimAccount(account), nil
+}
+
+// accountObject directly retrieves the decoded account associated with a
+// particular hash, in the consensus (full) format. A nil account is returned
+// if the account does not exist or was deleted in this hierarchy.
+//
+// Note the returned account is not a copy, please don't modify it.
+func (dl *diffLayer) accountObject(hash common.Hash, depth int) (*types.StateAccount, error) {
 	// Hold the lock, ensure the parent won't be changed during the
 	// state accessing.
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
-	if blob, found := dl.states.account(hash); found {
+	if account, found := dl.states.account(hash); found {
 		dirtyStateHitMeter.Mark(1)
 		dirtyStateHitDepthHist.Update(int64(depth))
-		dirtyStateReadMeter.Mark(int64(len(blob)))
+		dirtyStateReadMeter.Mark(int64(slimAccountSize(account)))
 
-		if len(blob) == 0 {
+		if account == nil {
 			stateAccountInexMeter.Mark(1)
 		} else {
 			stateAccountExistMeter.Mark(1)
 		}
-		return blob, nil
+		return account, nil
 	}
 	// Account is unknown to this layer, resolve from parent
-	return dl.parent.account(hash, depth+1)
+	return dl.parent.accountObject(hash, depth+1)
 }
 
 // storage directly retrieves the storage data associated with a particular hash,

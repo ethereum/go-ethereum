@@ -69,7 +69,7 @@ func (t *genTester) addTrieAccount(acckey string, acc *types.StateAccount) {
 	)
 	t.acctTrie.MustUpdate(key.Bytes(), val)
 
-	t.states.accountData[key] = val
+	t.states.accountData[key] = decodeAccountBlob(key, types.SlimAccountRLP(*acc))
 	t.states.accountOrigin[addr] = nil
 }
 
