@@ -48,7 +48,8 @@ import (
 
 // A BlockTest checks handling of entire blocks.
 type BlockTest struct {
-	json btJSON
+	json           btJSON
+	LastBlockError string // actual error from rejected blocks, for result reporting
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface.
@@ -250,6 +251,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		cb, err := b.decode()
 		if err != nil {
 			if b.BlockHeader == nil {
+				t.LastBlockError = err.Error()
 				log.Info("Block decoding failed", "index", bi, "err", err)
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
@@ -261,6 +263,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		i, err := blockchain.InsertChain(blocks)
 		if err != nil {
 			if b.BlockHeader == nil {
+				t.LastBlockError = err.Error()
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
 				return nil, fmt.Errorf("block #%v insertion into chain failed: %v", blocks[i].Number(), err)
@@ -268,7 +271,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		}
 		if b.BlockHeader == nil {
 			if data, err := json.MarshalIndent(cb.Header(), "", "  "); err == nil {
-				fmt.Fprintf(os.Stdout, "block (index %d) insertion should have failed due to: %v:\n%v\n",
+				fmt.Fprintf(os.Stderr, "block (index %d) insertion should have failed due to: %v:\n%v\n",
 					bi, b.ExpectException, string(data))
 			}
 			return nil, fmt.Errorf("block (index %d) insertion should have failed due to: %v",
