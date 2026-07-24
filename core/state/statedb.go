@@ -571,17 +571,6 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 // Setting, updating & deleting state object methods.
 //
 
-// updateStateObject writes the given object to the trie.
-func (s *StateDB) updateStateObject(obj *stateObject) {
-	// Encode the account and update the account trie
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, len(obj.code)); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
-	}
-	if obj.dirtyCode {
-		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
-	}
-}
-
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(addr common.Address) {
 	if err := s.trie.DeleteAccount(addr); err != nil {
@@ -1072,8 +1061,12 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// into a shortnode. This requires `B` to be resolved from disk.
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
 	var (
-		usedAddrs    []common.Address
-		deletedAddrs []common.Address
+		usedAddrs     = make([]common.Address, 0, len(s.mutations))
+		updatedAddrs  = make([]common.Address, 0, len(s.mutations))
+		accounts      = make([]*types.StateAccount, 0, len(s.mutations))
+		codeLens      = make([]int, 0, len(s.mutations))
+		dirtyCodeObjs []*stateObject
+		deletedAddrs  []common.Address
 	)
 	for addr, op := range s.mutations {
 		if op.applied {
@@ -1085,16 +1078,31 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
 			obj := s.stateObjects[addr]
-			s.updateStateObject(obj)
-			s.AccountUpdated += 1
+			updatedAddrs = append(updatedAddrs, addr)
+			accounts = append(accounts, &obj.data)
+			codeLens = append(codeLens, len(obj.code))
 
-			// Count code writes post-Finalise so reverted CREATEs are excluded.
 			if obj.dirtyCode {
-				s.CodeUpdated += 1
-				s.CodeUpdateBytes += len(obj.code)
+				dirtyCodeObjs = append(dirtyCodeObjs, obj)
 			}
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
+	}
+	// Apply the account updates in batch mode, allowing the trie nodes on the
+	// paths to be resolved concurrently.
+	if len(updatedAddrs) > 0 {
+		if err := s.trie.UpdateAccountBatch(updatedAddrs, accounts, codeLens); err != nil {
+			s.setError(fmt.Errorf("account update error: %v", err))
+		}
+		s.AccountUpdated += len(updatedAddrs)
+	}
+	// Apply the code updates after the account updates.
+	for _, obj := range dirtyCodeObjs {
+		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+
+		// Count code writes post-Finalise so reverted CREATEs are excluded.
+		s.CodeUpdated += 1
+		s.CodeUpdateBytes += len(obj.code)
 	}
 	for _, deletedAddr := range deletedAddrs {
 		s.deleteStateObject(deletedAddr)

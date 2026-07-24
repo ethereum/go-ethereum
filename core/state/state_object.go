@@ -345,6 +345,8 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	// into a shortnode. This requires `B` to be resolved from disk.
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
 	var (
+		keys      = make([][]byte, 0, len(s.uncommittedStorage))
+		values    = make([][]byte, 0, len(s.uncommittedStorage))
 		deletions []common.Hash
 		used      = make([]common.Hash, 0, len(s.uncommittedStorage))
 	)
@@ -360,16 +362,22 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			continue
 		}
 		if (value != common.Hash{}) {
-			if err := tr.UpdateStorage(s.address, key[:], common.TrimLeftZeroes(value[:])); err != nil {
-				s.db.setError(err)
-				return nil, err
-			}
-			s.db.StorageUpdated.Add(1)
+			keys = append(keys, key.Bytes())
+			values = append(values, common.TrimLeftZeroes(value.Bytes()))
 		} else {
 			deletions = append(deletions, key)
 		}
 		// Cache the items for preloading
 		used = append(used, key) // Copy needed for closure
+	}
+	// Apply the updates in batch mode, allowing the trie nodes on the paths
+	// to be resolved concurrently.
+	if len(keys) > 0 {
+		if err := tr.UpdateStorageBatch(s.address, keys, values); err != nil {
+			s.db.setError(err)
+			return nil, err
+		}
+		s.db.StorageUpdated.Add(int64(len(keys)))
 	}
 	for _, key := range deletions {
 		if err := tr.DeleteStorage(s.address, key[:]); err != nil {
