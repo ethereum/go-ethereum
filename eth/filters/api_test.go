@@ -369,3 +369,127 @@ func TestGetFilterChangesDrainPendingTxHashOnly(t *testing.T) {
 		t.Fatalf("expected empty second poll, got %d hashes", len(h))
 	}
 }
+
+func BenchmarkGetFilterChanges(b *testing.B) {
+	var (
+		db     = rawdb.NewMemoryDatabase()
+		_, sys = newTestFilterSystem(db, Config{})
+		api    = NewFilterAPI(sys)
+		fullTx = true
+		id     = api.NewPendingTransactionFilter(&fullTx)
+		txs    []*types.Transaction
+	)
+	for i := 0; i < 100; i++ {
+		txs = append(txs, types.NewTransaction(uint64(i), common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		api.filtersMu.Lock()
+		if f, found := api.filters[id]; found {
+			f.txs = append(f.txs, txs...)
+		}
+		api.filtersMu.Unlock()
+
+		_, err := api.GetFilterChanges(id)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkGetFilterChangesContention(b *testing.B) {
+	var (
+		db            = rawdb.NewMemoryDatabase()
+		_, sys        = newTestFilterSystem(db, Config{})
+		api           = NewFilterAPI(sys)
+		fullTx        = true
+		txFilterId    = api.NewPendingTransactionFilter(&fullTx)
+		blockFilterId = api.NewBlockFilter()
+		txs           []*types.Transaction
+	)
+	for i := 0; i < 100; i++ {
+		txs = append(txs, types.NewTransaction(uint64(i), common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil))
+	}
+
+	// background goroutine simulating clients querying another filter
+	stop := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_, _ = api.GetFilterChanges(blockFilterId)
+			}
+		}
+	}()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		api.filtersMu.Lock()
+		if f, found := api.filters[txFilterId]; found {
+			f.txs = append(f.txs, txs...)
+		}
+		api.filtersMu.Unlock()
+
+		_, err := api.GetFilterChanges(txFilterId)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	close(stop)
+}
+
+func BenchmarkBlockFilterThroughputUnderContention(b *testing.B) {
+	var (
+		db            = rawdb.NewMemoryDatabase()
+		_, sys        = newTestFilterSystem(db, Config{})
+		api           = NewFilterAPI(sys)
+		fullTx        = true
+		txFilterId    = api.NewPendingTransactionFilter(&fullTx)
+		blockFilterId = api.NewBlockFilter()
+		txs           []*types.Transaction
+		headers       []common.Hash
+	)
+	for i := 0; i < 500; i++ {
+		txs = append(txs, types.NewTransaction(uint64(i), common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil))
+	}
+	for i := 0; i < 10; i++ {
+		headers = append(headers, common.HexToHash(fmt.Sprintf("0x%x", i)))
+	}
+
+	// background goroutine simulating clients querying/updating the slow tx filter
+	stop := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				api.filtersMu.Lock()
+				if f, found := api.filters[txFilterId]; found {
+					f.txs = append(f.txs, txs...)
+				}
+				api.filtersMu.Unlock()
+				_, _ = api.GetFilterChanges(txFilterId)
+			}
+		}
+	}()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Simulate adding a block and retrieving block changes
+		api.filtersMu.Lock()
+		if f, found := api.filters[blockFilterId]; found {
+			f.hashes = append(f.hashes, headers...)
+		}
+		api.filtersMu.Unlock()
+
+		_, err := api.GetFilterChanges(blockFilterId)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	close(stop)
+}
