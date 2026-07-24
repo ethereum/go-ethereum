@@ -110,14 +110,29 @@ func discoverPMP() Interface {
 	return nil
 }
 
-// TODO: improve this. We currently assume that (on most networks)
-// the router is X.X.X.1 in a local LAN range.
+// TODO: improve this further. We prefer discovered default gateways when
+// available and otherwise fall back to assuming the router is X.X.X.1 in a
+// local LAN range.
 func potentialGateways() (gws []net.IP) {
+	seen := make(map[string]struct{})
+	for _, ip := range defaultGatewayIPs() {
+		if ip = ip.To4(); ip != nil {
+			key := ip.String()
+			if _, ok := seen[key]; !ok {
+				seen[key] = struct{}{}
+				gws = append(gws, ip)
+			}
+		}
+	}
+
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return nil
+		return gws
 	}
 	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
 		ifaddrs, err := iface.Addrs()
 		if err != nil {
 			return gws
@@ -128,7 +143,11 @@ func potentialGateways() (gws []net.IP) {
 					ip := x.IP.Mask(x.Mask).To4()
 					if ip != nil {
 						ip[3] = ip[3] | 0x01
-						gws = append(gws, ip)
+						key := ip.String()
+						if _, ok := seen[key]; !ok {
+							seen[key] = struct{}{}
+							gws = append(gws, ip)
+						}
 					}
 				}
 			}
