@@ -922,7 +922,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			endpeers = append(tt.peers, tt.newPeer)
 		}
 		if tt.newHead != nil {
-			skeleton.Sync(tt.newHead, nil, true)
+			// The head announcement is rejected if it arrives while the previous
+			// sync cycle is still tearing down (head events are dropped on the
+			// floor during teardown, see #27397). Retry until the syncer accepts
+			// the new head, otherwise the update is lost and the end state below
+			// is never reached.
+			for skeleton.Sync(tt.newHead, nil, true) != nil {
+				time.Sleep(10 * time.Millisecond)
+			}
 		}
 
 		// Wait a bit (bleah) for the second sync loop to go to idle. This might
