@@ -144,7 +144,11 @@ func (sc *BlobTxSidecar) encodedSize() uint64 {
 	for i := range sc.Proofs {
 		proofs += rlp.BytesSize(sc.Proofs[i][:])
 	}
-	return rlp.ListSize(blobs) + rlp.ListSize(commitments) + rlp.ListSize(proofs)
+	size := rlp.ListSize(blobs) + rlp.ListSize(commitments) + rlp.ListSize(proofs)
+	if sc.Version != BlobSidecarVersion0 {
+		size += uint64(rlp.IntSize(uint64(sc.Version)))
+	}
+	return size
 }
 
 // ValidateBlobCommitmentHashes checks whether the given hashes correspond to the

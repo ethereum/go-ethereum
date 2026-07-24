@@ -171,8 +171,11 @@ func (ptx *BlobTxForPool) sidecar() (*types.BlobTxSidecar, error) {
 	return types.NewBlobTxSidecar(sidecar.Version, blobs, sidecar.Commitments, sidecar.Proofs), nil
 }
 
-// TxSize returns the transaction size on the network without
-// reconstructing the transaction.
+// txSize returns the network size of the transaction without reconstructing it.
+//
+// The blobpool only holds v1 (cell-proof) sidecars: legacy v0 sidecars are no longer
+// accepted into the pool, nor served over the wire protocol. The size therefore assumes
+// the v1 wire form [tx, version, blobs, commitments, proofs].
 func (ptx *BlobTxForPool) txSize() uint64 {
 	sidecar := ptx.CellSidecar
 
@@ -185,9 +188,17 @@ func (ptx *BlobTxForPool) txSize() uint64 {
 	}
 	var blob kzg4844.Blob
 	blobs := uint64(len(sidecar.Commitments)) * rlp.BytesSize(blob[:])
-	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(blobs)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
+
+	version := uint64(rlp.IntSize(uint64(sidecar.Version)))
+	return ptx.Tx.Size() + rlp.ListSize(version+rlp.ListSize(blobs)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
 }
 
+// txSizeWithoutBlob returns the eth/72 network size, where the blob payload is dropped
+// to an empty list and fetched separately via GetCells.
+//
+// Like txSize, this assumes the v1 wire form: only v1 sidecars live in the pool (v0 is
+// no longer accepted or served), so the version byte is always present, only the blob
+// payload becomes an empty list [tx, version, [], commitments, proofs].
 func (ptx *BlobTxForPool) txSizeWithoutBlob() uint64 {
 	sidecar := ptx.CellSidecar
 
@@ -198,7 +209,8 @@ func (ptx *BlobTxForPool) txSizeWithoutBlob() uint64 {
 	for i := range sidecar.Proofs {
 		proofs += rlp.BytesSize(sidecar.Proofs[i][:])
 	}
-	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(0)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
+	version := uint64(rlp.IntSize(uint64(sidecar.Version)))
+	return ptx.Tx.Size() + rlp.ListSize(version+rlp.ListSize(0)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
 }
 
 // ToTx reconstructs a full Transaction with the sidecar attached.
