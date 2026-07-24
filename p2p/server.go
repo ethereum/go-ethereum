@@ -330,32 +330,6 @@ func (srv *Server) Stop() {
 	srv.loopWG.Wait()
 }
 
-// sharedUDPConn implements a shared connection. Write sends messages to the underlying connection while read returns
-// messages that were found unprocessable and sent to the unhandled channel by the primary listener.
-type sharedUDPConn struct {
-	*net.UDPConn
-	unhandled chan discover.ReadPacket
-}
-
-// ReadFromUDPAddrPort implements discover.UDPConn
-func (s *sharedUDPConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
-	packet, ok := <-s.unhandled
-	if !ok {
-		return 0, netip.AddrPort{}, errors.New("connection was closed")
-	}
-	l := len(packet.Data)
-	if l > len(b) {
-		l = len(b)
-	}
-	copy(b[:l], packet.Data[:l])
-	return l, packet.Addr, nil
-}
-
-// Close implements discover.UDPConn
-func (s *sharedUDPConn) Close() error {
-	return nil
-}
-
 // Start starts running the server.
 // Servers can not be re-used after stopping.
 func (srv *Server) Start() (err error) {
@@ -463,7 +437,7 @@ func (srv *Server) setupDiscovery() error {
 	// connection, so v5 can read unhandled messages from v4.
 	if srv.Config.DiscoveryV4 && srv.Config.DiscoveryV5 {
 		unhandled = make(chan discover.ReadPacket, 100)
-		sconn = &sharedUDPConn{conn, unhandled}
+		sconn = &discover.SharedUDPConn{UDPConn: conn, Unhandled: unhandled}
 	}
 
 	// Start discovery services.
