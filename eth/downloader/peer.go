@@ -44,8 +44,9 @@ var (
 type peerConnection struct {
 	id string // Unique identifier of the peer
 
-	rates   *msgrate.Tracker         // Tracker to hone in on the number of items retrievable per second
-	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
+	rates      *msgrate.Tracker         // Tracker to hone in on the number of items retrievable per second
+	lacking    map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
+	lackingBAL map[common.Hash]struct{} // Set of hashes not to request the access lists for (didn't have previously)
 
 	peer Peer
 
@@ -61,16 +62,18 @@ type Peer interface {
 
 	RequestBodies([]common.Hash, chan *eth.Response) (*eth.Request, error)
 	RequestReceipts([]common.Hash, []uint64, []uint64, chan *eth.Response) (*eth.Request, error)
+	RequestBALs([]common.Hash, chan *eth.Response) (*eth.Request, error)
 }
 
 // newPeerConnection creates a new downloader peer.
 func newPeerConnection(id string, version uint, peer Peer, logger log.Logger) *peerConnection {
 	return &peerConnection{
-		id:      id,
-		lacking: make(map[common.Hash]struct{}),
-		peer:    peer,
-		version: version,
-		log:     logger,
+		id:         id,
+		lacking:    make(map[common.Hash]struct{}),
+		lackingBAL: make(map[common.Hash]struct{}),
+		peer:       peer,
+		version:    version,
+		log:        logger,
 	}
 }
 
@@ -80,6 +83,7 @@ func (p *peerConnection) Reset() {
 	defer p.lock.Unlock()
 
 	p.lacking = make(map[common.Hash]struct{})
+	p.lackingBAL = make(map[common.Hash]struct{})
 }
 
 // UpdateHeaderRate updates the peer's estimated header retrieval throughput with
@@ -98,6 +102,12 @@ func (p *peerConnection) UpdateBodyRate(delivered int, elapsed time.Duration) {
 // with the current measurement.
 func (p *peerConnection) UpdateReceiptRate(delivered int, elapsed time.Duration) {
 	p.rates.Update(eth.ReceiptsMsg, elapsed, delivered)
+}
+
+// UpdateBALRate updates the peer's estimated block access list retrieval
+// throughput with the current measurement.
+func (p *peerConnection) UpdateBALRate(delivered int, elapsed time.Duration) {
+	p.rates.Update(eth.BlockAccessListsMsg, elapsed, delivered)
 }
 
 // HeaderCapacity retrieves the peer's header download allowance based on its
@@ -130,6 +140,16 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 	return cap
 }
 
+// BALCapacity retrieves the peer's block access list download allowance based
+// on its previously discovered throughput.
+func (p *peerConnection) BALCapacity(targetRTT time.Duration) int {
+	cap := p.rates.Capacity(eth.BlockAccessListsMsg, targetRTT)
+	if cap > MaxBALFetch {
+		cap = MaxBALFetch
+	}
+	return cap
+}
+
 // MarkLacking appends a new entity to the set of items (blocks, receipts, states)
 // that a peer is known not to have (i.e. have been requested before). If the
 // set reaches its maximum allowed capacity, items are randomly dropped off.
@@ -153,6 +173,34 @@ func (p *peerConnection) Lacks(hash common.Hash) bool {
 	defer p.lock.RUnlock()
 
 	_, ok := p.lacking[hash]
+	return ok
+}
+
+// MarkLackingBAL appends a new block hash to the set of blocks whose access
+// list the peer is known not to have. Access lists are tracked separately from
+// the other block components, since a peer missing a block's access list may
+// well possess its body and receipts. If the set reaches its maximum allowed
+// capacity, items are randomly dropped off.
+func (p *peerConnection) MarkLackingBAL(hash common.Hash) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	for len(p.lackingBAL) >= maxLackingHashes {
+		for drop := range p.lackingBAL {
+			delete(p.lackingBAL, drop)
+			break
+		}
+	}
+	p.lackingBAL[hash] = struct{}{}
+}
+
+// LacksBAL retrieves whether the access list of a block is on the peer's
+// lacking list (i.e. whether we know that the peer does not have it).
+func (p *peerConnection) LacksBAL(hash common.Hash) bool {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	_, ok := p.lackingBAL[hash]
 	return ok
 }
 

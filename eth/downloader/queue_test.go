@@ -17,6 +17,7 @@
 package downloader
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -30,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -89,8 +92,9 @@ func (chain *chainData) Len() int {
 
 func dummyPeer(id string) *peerConnection {
 	p := &peerConnection{
-		id:      id,
-		lacking: make(map[common.Hash]struct{}),
+		id:         id,
+		lacking:    make(map[common.Hash]struct{}),
+		lackingBAL: make(map[common.Hash]struct{}),
 	}
 	return p
 }
@@ -260,6 +264,107 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 	if got, exp := q.resultCache.countCompleted(), 10; got != exp {
 		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
+	}
+}
+
+// TestBlockAccessLists tests the scheduling and delivery of the best-effort
+// block access list component: only blocks above the configured cutoff are
+// scheduled, block delivery is never held back by outstanding access lists,
+// and delivered lists are validated against the header commitment.
+func TestBlockAccessLists(t *testing.T) {
+	// Create an access list along with its header commitment
+	list := bal.BlockAccessList{{Address: common.Address{0x01}}}
+	enc, err := rlp.EncodeToBytes(&list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	balHash := crypto.Keccak256Hash(enc)
+
+	// Assemble a chain of empty-body headers committing to the access list
+	var (
+		headers = make([]*types.Header, 10)
+		hashes  = make([]common.Hash, 10)
+		parent  common.Hash
+	)
+	for i := range headers {
+		headers[i] = &types.Header{
+			ParentHash:          parent,
+			Number:              big.NewInt(int64(i + 1)),
+			Difficulty:          big.NewInt(1),
+			TxHash:              types.EmptyTxsHash,
+			UncleHash:           types.EmptyUncleHash,
+			ReceiptHash:         types.EmptyReceiptsHash,
+			BlockAccessListHash: &balHash,
+		}
+		hashes[i] = headers[i].Hash()
+		parent = hashes[i]
+	}
+	q := newQueue(16, 16)
+	q.Prepare(1, FullSync)
+
+	// Only blocks 6..10 are within the retrieval window
+	q.SetBALCutoff(6)
+	q.Schedule(headers, hashes, 1)
+	if got, exp := q.PendingBALs(), 5; got != exp {
+		t.Errorf("wrong pending access list count, got %d, exp %d", got, exp)
+	}
+	// All the bodies are empty, so reserving them creates the fetch results,
+	// which must complete without waiting for any access lists
+	peer := dummyPeer("peer-1")
+	if req, _, _ := q.ReserveBodies(peer, 10); req != nil {
+		t.Fatal("there should be no body fetch tasks remaining")
+	}
+	if got, exp := q.resultCache.countCompleted(), 10; got != exp {
+		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
+	}
+	// Reserve the first two access lists and deliver one of them, with the
+	// remote peer signalling that it does not possess the other
+	req, _, _ := q.ReserveBALs(peer, 2)
+	if got, exp := len(req.Headers), 2; got != exp {
+		t.Fatalf("expected %d requests, got %d", exp, got)
+	}
+	if got, exp := req.Headers[0].Number.Uint64(), uint64(6); got != exp {
+		t.Fatalf("expected header %d, got %d", exp, got)
+	}
+	accepted, err := q.DeliverBALs(peer.id, []rlp.RawValue{enc, rlp.EmptyString}, []common.Hash{balHash, {}})
+	if accepted != 1 || err != nil {
+		t.Fatalf("unexpected delivery result, accepted %d, err %v", accepted, err)
+	}
+	// The unavailable entry should be returned to the task queue and the peer
+	// marked as not possessing it
+	if got, exp := q.PendingBALs(), 4; got != exp {
+		t.Errorf("wrong pending access list count, got %d, exp %d", got, exp)
+	}
+	if !peer.LacksBAL(hashes[6]) {
+		t.Errorf("undelivered access list not marked as lacking")
+	}
+	// An access list not matching the header commitment must be rejected and
+	// the task handed back for retrieval from a different peer
+	peer2 := dummyPeer("peer-2")
+	if req, _, _ = q.ReserveBALs(peer2, 1); req == nil {
+		t.Fatal("expected access list fetch task")
+	}
+	badEnc, _ := rlp.EncodeToBytes(&bal.BlockAccessList{{Address: common.Address{0x02}}})
+	accepted, err = q.DeliverBALs(peer2.id, []rlp.RawValue{badEnc}, []common.Hash{crypto.Keccak256Hash(badEnc)})
+	if accepted != 0 || !errors.Is(err, errInvalidBAL) {
+		t.Fatalf("unexpected delivery result, accepted %d, err %v", accepted, err)
+	}
+	if got, exp := q.PendingBALs(), 4; got != exp {
+		t.Errorf("wrong pending access list count, got %d, exp %d", got, exp)
+	}
+	// Retrieve the completed blocks: the delivered access list must be attached
+	// and all remaining tasks pruned as obsolete
+	results := q.Results(false)
+	if got, exp := len(results), 10; got != exp {
+		t.Fatalf("wrong result count, got %d, exp %d", got, exp)
+	}
+	for i, result := range results {
+		if list := result.AccessList.Load(); (list != nil) != (i == 5) {
+			t.Errorf("block %d: unexpected access list attachment: %v", i+1, list)
+		}
+	}
+	if got, exp := q.PendingBALs(), 0; got != exp {
+		t.Errorf("wrong pending access list count after delivery, got %d, exp %d", got, exp)
 	}
 }
 

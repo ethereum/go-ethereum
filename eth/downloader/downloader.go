@@ -44,6 +44,7 @@ var (
 	MaxBlockFetch   = 128 // Number of blocks to be fetched per retrieval request
 	MaxHeaderFetch  = 192 // Number of block headers to be fetched per retrieval request
 	MaxReceiptFetch = 256 // Number of transaction receipts to allow fetching per request
+	MaxBALFetch     = 128 // Number of block access lists to allow fetching per request
 
 	maxQueuedHeaders           = 32 * 1024                        // [eth/62] Maximum number of headers to queue for import (DOS protection)
 	maxHeadersProcess          = 2048                             // Number of header download results to import at once into the chain
@@ -65,6 +66,7 @@ var (
 	errInvalidChain            = errors.New("retrieved hash chain is invalid")
 	errInvalidBody             = errors.New("retrieved block body is invalid")
 	errInvalidReceipt          = errors.New("retrieved receipt is invalid")
+	errInvalidBAL              = errors.New("retrieved block access list is invalid")
 	errCancelStateFetch        = errors.New("state data download canceled (requested)")
 	errCancelContentProcessing = errors.New("content processing canceled (requested)")
 	errCanceled                = errors.New("syncing canceled (requested)")
@@ -156,6 +158,7 @@ type Downloader struct {
 	// Testing hooks
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
 	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
+	balFetchHook     func([]*types.Header) // Method to call upon starting a block access list fetch
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
 
 	// Progress reporting metrics
@@ -408,7 +411,7 @@ func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
 	d.peers.Reset()
 
-	for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
+	for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh, d.queue.balWakeCh} {
 		select {
 		case <-ch:
 		default:
@@ -628,6 +631,7 @@ func (d *Downloader) syncToHead() (err error) {
 		func() error { return d.fetchHeaders(origin + 1) },   // Headers are always retrieved
 		func() error { return d.fetchBodies(chainOffset) },   // Bodies are retrieved during normal and snap sync
 		func() error { return d.fetchReceipts(chainOffset) }, // Receipts are retrieved during snap sync
+		func() error { return d.fetchBALs(chainOffset) },     // Access lists are retrieved best effort for the chain tail
 		func() error { return d.processHeaders(origin + 1) },
 	}
 	if mode == ethconfig.SnapSync {
@@ -742,13 +746,27 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 	return err
 }
 
+// fetchBALs iteratively downloads the scheduled block access lists, taking any
+// available peers, reserving a chunk of access lists for each, waiting for
+// delivery and also periodically checking for timeouts. Access lists are a
+// best-effort component: blocks are imported without one if it does not arrive
+// by the time all their mandatory components are downloaded.
+func (d *Downloader) fetchBALs(from uint64) error {
+	log.Debug("Downloading block access lists", "origin", from)
+	err := d.concurrentFetch((*balQueue)(d))
+
+	log.Debug("Block access list download terminated", "err", err)
+	return err
+}
+
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
 func (d *Downloader) processHeaders(origin uint64) error {
 	var (
-		mode  = d.getMode()
-		timer = time.NewTimer(time.Second)
+		mode                = d.getMode()
+		timer               = time.NewTimer(time.Second)
+		lastBALCutoffUpdate time.Time // Timestamp of the last access list cutoff refresh
 	)
 	defer timer.Stop()
 
@@ -761,13 +779,27 @@ func (d *Downloader) processHeaders(origin uint64) error {
 			// Terminate header processing if we synced up
 			if task == nil || len(task.headers) == 0 {
 				// Notify everyone that headers are fully processed
-				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
+				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh, d.queue.balWakeCh} {
 					select {
 					case ch <- false:
 					case <-d.cancelCh:
 					}
 				}
 				return nil
+			}
+			// Restrict block access list retrieval to the immutability window
+			// below the head of the network chain. Access lists further back
+			// are not guaranteed to be retained by the network, so fetching
+			// them is not even attempted.
+			if time.Since(lastBALCutoffUpdate) > time.Minute {
+				if latest, _, _, err := d.skeleton.Bounds(); err == nil {
+					if head := latest.Number.Uint64(); head > fullMaxForkAncestry {
+						d.queue.SetBALCutoff(head - fullMaxForkAncestry)
+					} else {
+						d.queue.SetBALCutoff(0)
+					}
+				}
+				lastBALCutoffUpdate = time.Now()
 			}
 			// Otherwise split the chunk of headers into batches and process them
 			headers, hashes, scheduled := task.headers, task.hashes, false
@@ -840,7 +872,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 
 			// Signal the downloader of the availability of new tasks
 			if scheduled {
-				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
+				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh, d.queue.balWakeCh} {
 					select {
 					case ch <- true:
 					default:
@@ -886,6 +918,13 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.body())
+
+		// Attach the access list if it was retrieved from the network. The
+		// content hash was already verified against the header on delivery;
+		// blocks lacking one have theirs computed locally during execution.
+		if list := result.AccessList.Load(); list != nil {
+			blocks[i] = blocks[i].WithAccessListUnsafe(list)
+		}
 	}
 	// Downloaded blocks are always regarded as trusted after the
 	// transition. Because the downloaded chain is guided by the
@@ -1090,6 +1129,12 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.body())
 		receipts[i] = result.Receipts
+
+		// Attach the access list if it was retrieved from the network, so it
+		// gets persisted alongside the block data.
+		if list := result.AccessList.Load(); list != nil {
+			blocks[i] = blocks[i].WithAccessListUnsafe(list)
+		}
 	}
 	if index, err := d.blockchain.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
@@ -1100,6 +1145,9 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	block := types.NewBlockWithHeader(result.Header).WithBody(result.body())
+	if list := result.AccessList.Load(); list != nil {
+		block = block.WithAccessListUnsafe(list)
+	}
 	log.Debug("Committing snap sync pivot as new head", "number", block.Number(), "hash", block.Hash())
 
 	// Commit the pivot block as the new head, will require full sync from here on
