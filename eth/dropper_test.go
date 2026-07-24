@@ -19,24 +19,32 @@ package eth
 import (
 	"fmt"
 	"testing"
+	"time"
 
-	"github.com/ethereum/go-ethereum/eth/txtracker"
+	"github.com/ethereum/go-ethereum/eth/peerstats"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 func makePeers(n int) []*p2p.Peer {
+	return makePeersOffset(n, 0)
+}
+
+// makePeersOffset is like makePeers but shifts the node-ID byte and name index
+// by offset, so a second pool of peers in the same test gets distinct IDs that
+// don't collide with a makePeers(0-based) set.
+func makePeersOffset(n, offset int) []*p2p.Peer {
 	peers := make([]*p2p.Peer, n)
 	for i := range peers {
-		id := enode.ID{byte(i)}
-		peers[i] = p2p.NewPeer(id, fmt.Sprintf("peer%d", i), nil)
+		id := enode.ID{byte(offset + i)}
+		peers[i] = p2p.NewPeer(id, fmt.Sprintf("peer%d", offset+i), nil)
 	}
 	return peers
 }
 
 func TestProtectedPeersNoStats(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
-	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return nil }
+	cm.peerStatsFunc = func() map[string]peerstats.PeerStats { return nil }
 
 	peers := makePeers(10)
 	protected := cm.protectedPeers(peers)
@@ -47,8 +55,8 @@ func TestProtectedPeersNoStats(t *testing.T) {
 
 func TestProtectedPeersEmptyStats(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
-	cm.peerStatsFunc = func() map[string]txtracker.PeerStats {
-		return map[string]txtracker.PeerStats{}
+	cm.peerStatsFunc = func() map[string]peerstats.PeerStats {
+		return map[string]peerstats.PeerStats{}
 	}
 
 	peers := makePeers(10)
@@ -63,11 +71,11 @@ func TestProtectedPeersTopPeer(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
 	peers := makePeers(20)
-	stats := make(map[string]txtracker.PeerStats)
-	stats[peers[0].ID().String()] = txtracker.PeerStats{RecentFinalized: 100}
-	stats[peers[1].ID().String()] = txtracker.PeerStats{RecentIncluded: 5.0}
+	stats := make(map[string]peerstats.PeerStats)
+	stats[peers[0].ID().String()] = peerstats.PeerStats{RecentFinalized: 100}
+	stats[peers[1].ID().String()] = peerstats.PeerStats{RecentIncluded: 5.0}
 
-	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return stats }
+	cm.peerStatsFunc = func() map[string]peerstats.PeerStats { return stats }
 
 	protected := cm.protectedPeers(peers)
 	if len(protected) != 2 {
@@ -85,11 +93,11 @@ func TestProtectedPeersZeroScore(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
 	peers := makePeers(10)
-	stats := make(map[string]txtracker.PeerStats)
+	stats := make(map[string]peerstats.PeerStats)
 	for _, p := range peers {
-		stats[p.ID().String()] = txtracker.PeerStats{}
+		stats[p.ID().String()] = peerstats.PeerStats{}
 	}
-	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return stats }
+	cm.peerStatsFunc = func() map[string]peerstats.PeerStats { return stats }
 
 	protected := cm.protectedPeers(peers)
 	if len(protected) != 0 {
@@ -102,10 +110,10 @@ func TestProtectedPeersOverlap(t *testing.T) {
 	cm := &dropper{maxDialPeers: 20, maxInboundPeers: 30}
 
 	peers := makePeers(20)
-	stats := make(map[string]txtracker.PeerStats)
-	stats[peers[0].ID().String()] = txtracker.PeerStats{RecentFinalized: 100, RecentIncluded: 5.0}
+	stats := make(map[string]peerstats.PeerStats)
+	stats[peers[0].ID().String()] = peerstats.PeerStats{RecentFinalized: 100, RecentIncluded: 5.0}
 
-	cm.peerStatsFunc = func() map[string]txtracker.PeerStats { return stats }
+	cm.peerStatsFunc = func() map[string]peerstats.PeerStats { return stats }
 
 	protected := cm.protectedPeers(peers)
 	if len(protected) != 1 {
@@ -131,19 +139,15 @@ func TestProtectedPeersNilFunc(t *testing.T) {
 // for the RecentFinalized category since we don't set RecentIncluded.
 func TestProtectedByPoolPerPoolTopN(t *testing.T) {
 	inbound := makePeers(10)
-	dialed := makePeers(10)
-	// Distinguish dialed peer IDs from inbound so stats maps don't collide.
-	for i := range dialed {
-		id := enode.ID{byte(100 + i)}
-		dialed[i] = p2p.NewPeer(id, fmt.Sprintf("dialed%d", i), nil)
-	}
+	// Offset dialed peer IDs from inbound so stats maps don't collide.
+	dialed := makePeersOffset(10, 100)
 	// Strictly increasing scores: highest wins in each pool.
-	stats := make(map[string]txtracker.PeerStats)
+	stats := make(map[string]peerstats.PeerStats)
 	for i, p := range inbound {
-		stats[p.ID().String()] = txtracker.PeerStats{RecentFinalized: float64(1 + i)}
+		stats[p.ID().String()] = peerstats.PeerStats{RecentFinalized: float64(1 + i)}
 	}
 	for i, p := range dialed {
-		stats[p.ID().String()] = txtracker.PeerStats{RecentFinalized: float64(1 + i)}
+		stats[p.ID().String()] = peerstats.PeerStats{RecentFinalized: float64(1 + i)}
 	}
 
 	protected := protectedPeersByPool(inbound, dialed, stats)
@@ -173,10 +177,10 @@ func TestProtectedByPoolCrossCategoryOverlap(t *testing.T) {
 	//   RecentFinalized winners: P2 (tie-broken-ok), P0
 	//   RecentIncluded winners: P2, P1
 	// Union: {P0, P1, P2}.
-	stats := make(map[string]txtracker.PeerStats)
-	stats[dialed[0].ID().String()] = txtracker.PeerStats{RecentFinalized: 100, RecentIncluded: 0}
-	stats[dialed[1].ID().String()] = txtracker.PeerStats{RecentFinalized: 0, RecentIncluded: 5.0}
-	stats[dialed[2].ID().String()] = txtracker.PeerStats{RecentFinalized: 200, RecentIncluded: 10.0}
+	stats := make(map[string]peerstats.PeerStats)
+	stats[dialed[0].ID().String()] = peerstats.PeerStats{RecentFinalized: 100, RecentIncluded: 0}
+	stats[dialed[1].ID().String()] = peerstats.PeerStats{RecentFinalized: 0, RecentIncluded: 5.0}
+	stats[dialed[2].ID().String()] = peerstats.PeerStats{RecentFinalized: 200, RecentIncluded: 10.0}
 
 	protected := protectedPeersByPool(nil, dialed, stats)
 
@@ -198,18 +202,14 @@ func TestProtectedByPoolPerPoolIndependence(t *testing.T) {
 	// 20 inbound, 20 dialed — frac=0.1 → 2 protected per pool per category.
 	// Global top-4 of RecentFinalized would be inbound[16..19] — zero dialed.
 	inbound := makePeers(20)
-	dialed := make([]*p2p.Peer, 20)
-	for i := range dialed {
-		id := enode.ID{byte(100 + i)}
-		dialed[i] = p2p.NewPeer(id, fmt.Sprintf("dialed%d", i), nil)
-	}
-	stats := make(map[string]txtracker.PeerStats)
+	dialed := makePeersOffset(20, 100)
+	stats := make(map[string]peerstats.PeerStats)
 	// Every inbound peer outscores every dialed peer.
 	for i, p := range inbound {
-		stats[p.ID().String()] = txtracker.PeerStats{RecentFinalized: float64(1000 + i)}
+		stats[p.ID().String()] = peerstats.PeerStats{RecentFinalized: float64(1000 + i)}
 	}
 	for i, p := range dialed {
-		stats[p.ID().String()] = txtracker.PeerStats{RecentFinalized: float64(1 + i)}
+		stats[p.ID().String()] = peerstats.PeerStats{RecentFinalized: float64(1 + i)}
 	}
 
 	protected := protectedPeersByPool(inbound, dialed, stats)
@@ -230,5 +230,137 @@ func TestProtectedByPoolPerPoolIndependence(t *testing.T) {
 	}
 	if len(protected) != 4 {
 		t.Fatalf("expected 4 protected peers (top-2 of each pool), got %d", len(protected))
+	}
+}
+
+// TestProtectedByPoolRequestLatencyBasic verifies the latency protection
+// category: with no competing inclusion stats, the lowest-latency peers
+// (among those with enough samples) win top-N protection.
+func TestProtectedByPoolRequestLatencyBasic(t *testing.T) {
+	dialed := makePeers(20) // frac=0.1 → n=2 per category
+	stats := make(map[string]peerstats.PeerStats)
+	// Three peers have enough samples; the two fastest should win.
+	stats[dialed[0].ID().String()] = peerstats.PeerStats{
+		RequestLatencyEMA: 50 * time.Millisecond,
+		LatencyActivity:   peerstats.MinLatencyActivity,
+	}
+	stats[dialed[1].ID().String()] = peerstats.PeerStats{
+		RequestLatencyEMA: 100 * time.Millisecond,
+		LatencyActivity:   peerstats.MinLatencyActivity,
+	}
+	stats[dialed[2].ID().String()] = peerstats.PeerStats{
+		RequestLatencyEMA: 2 * time.Second,
+		LatencyActivity:   peerstats.MinLatencyActivity,
+	}
+
+	protected := protectedPeersByPool(nil, dialed, stats)
+
+	if !protected[dialed[0]] {
+		t.Error("fastest peer should be protected")
+	}
+	if !protected[dialed[1]] {
+		t.Error("second-fastest peer should be protected")
+	}
+	if protected[dialed[2]] {
+		t.Error("slowest peer should not be in top-2")
+	}
+	if len(protected) != 2 {
+		t.Fatalf("expected top-2 latency protection, got %d", len(protected))
+	}
+}
+
+// TestProtectedByPoolRequestLatencyBootstrapGuard verifies that peers whose
+// accepted-delivery activity rate is below MinLatencyActivity do not earn
+// latency-based protection, even if their few samples indicate very low
+// latency.
+func TestProtectedByPoolRequestLatencyBootstrapGuard(t *testing.T) {
+	dialed := makePeers(20)
+	stats := make(map[string]peerstats.PeerStats)
+	// A lucky-fast peer without sustained activity — must NOT be protected.
+	stats[dialed[0].ID().String()] = peerstats.PeerStats{
+		RequestLatencyEMA: 1 * time.Millisecond,
+		LatencyActivity:   peerstats.MinLatencyActivity / 2,
+	}
+	// A warmed-up but slower peer — should be protected on latency.
+	stats[dialed[1].ID().String()] = peerstats.PeerStats{
+		RequestLatencyEMA: 500 * time.Millisecond,
+		LatencyActivity:   peerstats.MinLatencyActivity,
+	}
+
+	protected := protectedPeersByPool(nil, dialed, stats)
+
+	if protected[dialed[0]] {
+		t.Error("under-sampled peer should not be protected (bootstrap guard)")
+	}
+	if !protected[dialed[1]] {
+		t.Error("warmed-up peer should be protected")
+	}
+}
+
+// TestProtectedByPoolRequestLatencyPerPool verifies that the latency
+// category selects top-N per pool independently, consistent with the
+// other categories. An inbound peer with lower latency does not prevent
+// a dialed peer from being protected as top of the dialed pool.
+func TestProtectedByPoolRequestLatencyPerPool(t *testing.T) {
+	inbound := makePeers(20)
+	dialed := makePeersOffset(20, 100)
+	stats := make(map[string]peerstats.PeerStats)
+	// All inbound peers are very fast (50ms).
+	for _, p := range inbound {
+		stats[p.ID().String()] = peerstats.PeerStats{
+			RequestLatencyEMA: 50 * time.Millisecond,
+			LatencyActivity:   peerstats.MinLatencyActivity,
+		}
+	}
+	// Dialed peers are slower (1s) — globally they would all lose, but
+	// per-pool top-N should still protect two of them.
+	for _, p := range dialed {
+		stats[p.ID().String()] = peerstats.PeerStats{
+			RequestLatencyEMA: 1 * time.Second,
+			LatencyActivity:   peerstats.MinLatencyActivity,
+		}
+	}
+
+	protected := protectedPeersByPool(inbound, dialed, stats)
+
+	// 2 from inbound + 2 from dialed = 4.
+	var dialedProtected int
+	for _, p := range dialed {
+		if protected[p] {
+			dialedProtected++
+		}
+	}
+	if dialedProtected != 2 {
+		t.Fatalf("expected 2 dialed peers protected by per-pool top-N, got %d", dialedProtected)
+	}
+}
+
+// TestProtectedByPoolRequestLatencyStale verifies that decayed activity
+// excludes peers whose latency EMA is fast but whose accepted-delivery
+// rate has since fallen below MinLatencyActivity. A peer cannot serve a
+// burst of fast replies, go silent on announcements, and keep
+// latency-based protection indefinitely.
+func TestProtectedByPoolRequestLatencyStale(t *testing.T) {
+	dialed := makePeers(20)
+	stats := make(map[string]peerstats.PeerStats)
+	// Active, fast peer — should be protected.
+	stats[dialed[0].ID().String()] = peerstats.PeerStats{
+		RequestLatencyEMA: 50 * time.Millisecond,
+		LatencyActivity:   peerstats.MinLatencyActivity,
+	}
+	// Formerly active, fast peer — same EMA, but its activity has decayed
+	// below the eligibility threshold.
+	stats[dialed[1].ID().String()] = peerstats.PeerStats{
+		RequestLatencyEMA: 50 * time.Millisecond,
+		LatencyActivity:   peerstats.MinLatencyActivity * 0.9,
+	}
+
+	protected := protectedPeersByPool(nil, dialed, stats)
+
+	if !protected[dialed[0]] {
+		t.Error("active fast peer must be protected")
+	}
+	if protected[dialed[1]] {
+		t.Error("decayed-activity peer must NOT keep latency protection despite fast EMA")
 	}
 }
