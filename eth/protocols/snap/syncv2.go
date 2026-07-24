@@ -552,6 +552,20 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 		return nil
 	}
 
+	// If the pivot of a completed sync was already committed, full sync has
+	// been mutating the flat state since. Nothing here can be resumed or
+	// rolled forward, snap sync was re-enabled, so wipe and start fresh.
+	// FrozenPivot refuses to freeze such a pivot, so the downloader resumes
+	// against a fresh target and lands here to do the cleanup. Same-pivot
+	// retries return through the skip above on purpose, a cycle that dies
+	// right after the commit just needs to recommit.
+	if prevPivot != nil && s.getPhase() == phaseComplete && isPivotCommitted(s.db, prevPivot) {
+		log.Warn("Reenabled snap sync over a completed one, restarting from scratch", "oldpivot", prevPivot.Number, "target", target.Number)
+		s.resetSyncState()
+		prevPivot = nil
+		isPivotChanged = false
+	}
+
 	// We're committing to running this sync. Demote a completed phase so a
 	// mid-run save (on cancel or error) doesn't persist a stale complete
 	// status from a prior pivot. The download remains done, only the trie
@@ -677,6 +691,12 @@ func (s *syncerV2) FrozenPivot() *types.Header {
 	}
 	s.lock.RLock()
 	defer s.lock.RUnlock()
+	// A committed pivot from a completed sync is a dead leftover, not a
+	// freeze. Handing it back would pin a re-enabled sync to the old pivot,
+	// so report it as unfrozen and let the next Sync wipe the journal.
+	if s.getPhase() == phaseComplete && s.pivot != nil && isPivotCommitted(s.db, s.pivot) {
+		return nil
+	}
 	return s.pivot
 }
 
@@ -791,6 +811,27 @@ func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
 func catchUpExceedsRetention(prev, curr *types.Header) bool {
 	gap := new(big.Int).Sub(curr.Number, prev.Number)
 	return gap.Cmp(big.NewInt(maxCatchUpBlocks)) > 0
+}
+
+// isPivotCommitted reports whether the head block has caught up to the
+// pivot. That only happens when a completed sync committed the pivot block
+// as the new chain head.
+func isPivotCommitted(db ethdb.Database, pivot *types.Header) bool {
+	// A reorg across the pivot means the committed sync was undone, not
+	// advanced past, so the pivot must still be canonical.
+	if rawdb.ReadCanonicalHash(db, pivot.Number.Uint64()) != pivot.Hash() {
+		return false
+	}
+	head := rawdb.ReadHeadBlockHash(db)
+	if head == (common.Hash{}) {
+		return false
+	}
+	number, ok := rawdb.ReadHeaderNumber(db, head)
+	if !ok {
+		return false
+	}
+	// A genesis head is just an empty chain.
+	return number > 0 && number >= pivot.Number.Uint64()
 }
 
 // catchUp runs the BAL catch-up. When the pivot has moved, it fetches BALs
