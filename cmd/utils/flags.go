@@ -1793,7 +1793,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	if ctx.IsSet(MemoryLimitFlag.Name) {
 		memLimit := int64(ctx.Int(MemoryLimitFlag.Name)) * 1024 * 1024
-		if memLimit > int64(total) {
+		if total > 0 && memLimit > int64(total) {
 			log.Info("Sanitizing memory limit", "provided(MB)", memLimit/1024/1024, "updated(MB)", total/1024/1024)
 			memLimit = int64(total)
 		}
