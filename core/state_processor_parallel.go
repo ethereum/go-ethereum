@@ -19,7 +19,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -49,15 +48,10 @@ var (
 
 // supportsParallelExecution reports whether the block can be executed using the
 // BAL-driven parallel processor.
-func supportsParallelExecution(accessList *bal.BlockAccessList, config *params.ChainConfig, number *big.Int, time uint64, wantWitness bool, wantTrace bool, disableParallel bool) bool {
+func supportsParallelExecution(block *types.Block, config *params.ChainConfig, wantWitness bool, wantTrace bool, disableParallel bool) bool {
 	// Parallel execution explicitly disabled via config (e.g. by tests that
 	// want to force the sequential path).
 	if disableParallel {
-		return false
-	}
-	// Disable the parallel execution if either the Amsterdam hasn't been
-	// activated, or the accessList is not accessible.
-	if accessList == nil || !config.IsAmsterdam(number, time) {
 		return false
 	}
 	// No tracer is attached (tracing requires the strict sequential
@@ -71,7 +65,9 @@ func supportsParallelExecution(accessList *bal.BlockAccessList, config *params.C
 	if wantWitness {
 		return false
 	}
-	return true
+	// Disable the parallel execution if either the Amsterdam hasn't been
+	// activated, or the accessList is not accessible.
+	return block.AccessList() != nil && config.IsAmsterdam(block.Number(), block.Time())
 }
 
 // txExecResult holds the per-transaction outcome of parallel execution.

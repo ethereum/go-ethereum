@@ -2128,7 +2128,7 @@ type ExecuteConfig struct {
 // useBALExecution reports whether the block will be executed through the
 // BAL-driven parallel processor.
 func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool {
-	return supportsParallelExecution(block.AccessList(), bc.chainConfig, block.Number(), block.Time(), wantWitness, bc.cfg.VmConfig.Tracer != nil, bc.cfg.VmConfig.DisableParallelExecution)
+	return supportsParallelExecution(block, bc.chainConfig, wantWitness, bc.cfg.VmConfig.Tracer != nil, bc.cfg.VmConfig.DisableParallelExecution)
 }
 
 // setupExecutionState builds the state instance that block execution reads from
