@@ -141,24 +141,20 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, j
 // the main pass in block order anyway.
 const prefetchPromoteGas = 1_000_000
 
-// prefetchOrder returns the submission order of the block transactions,
-// promoted heavy transactions first, the rest in block order. Heavy work
-// needs the lead time over the main pass, while the light stream warms
-// state just ahead of it.
+// prefetchOrder returns the submission order of the block transactions.
+// Heavy transactions go first, giving them a head start over the main
+// pass, while the rest stays in block order.
 func prefetchOrder(txs types.Transactions) []int {
-	order := make([]int, 0, len(txs))
-	for i, tx := range txs {
-		if tx.Gas() >= prefetchPromoteGas {
-			order = append(order, i)
-		}
+	order := make([]int, len(txs))
+	for i := range order {
+		order[i] = i
 	}
 	sort.SliceStable(order, func(a, b int) bool {
-		return txs[order[a]].Gas() > txs[order[b]].Gas()
-	})
-	for i, tx := range txs {
-		if tx.Gas() < prefetchPromoteGas {
-			order = append(order, i)
+		gasA, gasB := txs[order[a]].Gas(), txs[order[b]].Gas()
+		if gasA < prefetchPromoteGas && gasB < prefetchPromoteGas {
+			return false // regular transactions keep block order
 		}
-	}
+		return gasA > gasB // heavier transactions go first
+	})
 	return order
 }
