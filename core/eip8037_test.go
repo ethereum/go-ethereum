@@ -21,6 +21,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"math/big"
 	"testing"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -966,5 +968,51 @@ func TestSystemCallNotCountedInBlock(t *testing.T) {
 	_, blocks, _ := GenerateChainWithGenesis(env.gspec, engine, 1, func(_ int, b *BlockGen) {})
 	if blocks[0].GasUsed() != 0 {
 		t.Fatalf("block gas used = %d, want 0 (system calls excluded)", blocks[0].GasUsed())
+	}
+}
+
+func TestParallelReservationOverflowRejected(t *testing.T) {
+	env := newBALTestEnv(nil)
+	env.gspec.GasLimit = 30_000_000
+	engine := beacon.New(ethash.NewFaker())
+
+	// A single self-transfer with a 5,000,000 gas limit but only ~21,000 of
+	// actual usage (recipient exists, no new state).
+	to := env.from
+	_, blocks, _ := GenerateChainWithGenesis(env.gspec, engine, 1, func(_ int, b *BlockGen) {
+		b.AddTx(env.tx(0, &to, big.NewInt(1), 5_000_000, 0, nil))
+	})
+	valid := blocks[0]
+
+	bc, err := NewBlockChain(rawdb.NewMemoryDatabase(), env.gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("new blockchain: %v", err)
+	}
+	defer bc.Stop()
+
+	// The block as built (30M limit, well above the 5M reservation) is accepted:
+	// the reservation check must not over-reject valid blocks.
+	statedb, err := bc.State()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	if _, err := NewStateProcessor(bc).Process(context.Background(), valid, statedb, nil, vm.Config{}); err != nil {
+		t.Fatalf("valid block rejected by parallel processor: %v", err)
+	}
+
+	// Lower the block gas limit below the transaction's worst-case reservation
+	// (5,000,000) while keeping it above the actual usage (~21,000). The
+	// transaction can no longer be admitted, so the block is invalid.
+	hdr := valid.Header()
+	hdr.GasLimit = 100_000
+	invalid := valid.WithSeal(hdr)
+
+	statedb, err = bc.State()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	_, err = NewStateProcessor(bc).Process(context.Background(), invalid, statedb, nil, vm.Config{})
+	if !errors.Is(err, ErrGasLimitReached) {
+		t.Fatalf("parallel processor accepted a reservation-overflow block (err = %v), want ErrGasLimitReached", err)
 	}
 }
