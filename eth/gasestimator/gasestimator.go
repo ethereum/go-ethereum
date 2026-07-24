@@ -44,6 +44,8 @@ type Options struct {
 
 	BlobBaseFee *big.Int // BlobBaseFee optionally overrides the blob base fee in the execution context.
 
+	Precompiles vm.PrecompiledContracts // Precompiles optionally overrides the default set of precompiles (e.g. for state overrides that move precompiles).
+
 	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
 
@@ -245,6 +247,9 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 	evm := vm.NewEVM(evmContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true})
 	defer evm.Release()
+	if opts.Precompiles != nil {
+		evm.SetPrecompiles(opts.Precompiles)
+	}
 
 	// Monitor the outer context and interrupt the EVM upon cancellation. To avoid
 	// a dangling goroutine until the outer estimation finishes, create an internal
