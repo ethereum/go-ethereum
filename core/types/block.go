@@ -128,6 +128,210 @@ func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
 }
 
+// DecodeHeader decodes one RLP-encoded header from b into dst. It avoids the
+// generic reflection path used by rlp.DecodeBytes and rejects trailing input in
+// the same way.
+func DecodeHeader(b []byte, dst *Header) error {
+	stream := rlp.NewBytesStream(b)
+	defer rlp.PutStream(stream)
+	if err := dst.DecodeRLP(stream); err != nil {
+		return err
+	}
+	if stream.Remaining() != 0 {
+		return rlp.ErrMoreThanOneValue
+	}
+	return nil
+}
+
+// DecodeRLP decodes a block header.
+func (h *Header) DecodeRLP(s *rlp.Stream) error {
+	if _, err := s.List(); err != nil {
+		return err
+	}
+	if err := s.ReadBytes(h.ParentHash[:]); err != nil {
+		return fmt.Errorf("read ParentHash: %w", err)
+	}
+	if err := s.ReadBytes(h.UncleHash[:]); err != nil {
+		return fmt.Errorf("read UncleHash: %w", err)
+	}
+	if err := s.ReadBytes(h.Coinbase[:]); err != nil {
+		return fmt.Errorf("read Coinbase: %w", err)
+	}
+	if err := s.ReadBytes(h.Root[:]); err != nil {
+		return fmt.Errorf("read Root: %w", err)
+	}
+	if err := s.ReadBytes(h.TxHash[:]); err != nil {
+		return fmt.Errorf("read TxHash: %w", err)
+	}
+	if err := s.ReadBytes(h.ReceiptHash[:]); err != nil {
+		return fmt.Errorf("read ReceiptHash: %w", err)
+	}
+	if err := s.ReadBytes(h.Bloom[:]); err != nil {
+		return fmt.Errorf("read Bloom: %w", err)
+	}
+	if h.Difficulty == nil {
+		h.Difficulty = new(big.Int)
+	}
+	if err := s.ReadBigInt(h.Difficulty); err != nil {
+		return fmt.Errorf("read Difficulty: %w", err)
+	}
+	if h.Number == nil {
+		h.Number = new(big.Int)
+	}
+	if err := s.ReadBigInt(h.Number); err != nil {
+		return fmt.Errorf("read Number: %w", err)
+	}
+	var err error
+	if h.GasLimit, err = s.Uint64(); err != nil {
+		return fmt.Errorf("read GasLimit: %w", err)
+	}
+	if h.GasUsed, err = s.Uint64(); err != nil {
+		return fmt.Errorf("read GasUsed: %w", err)
+	}
+	if h.Time, err = s.Uint64(); err != nil {
+		return fmt.Errorf("read Time: %w", err)
+	}
+	if h.Extra, err = s.AppendBytes(h.Extra[:0]); err != nil {
+		return fmt.Errorf("read Extra: %w", err)
+	}
+	if err := s.ReadBytes(h.MixDigest[:]); err != nil {
+		return fmt.Errorf("read MixDigest: %w", err)
+	}
+	if err := s.ReadBytes(h.Nonce[:]); err != nil {
+		return fmt.Errorf("read Nonce: %w", err)
+	}
+
+	if !s.MoreDataInList() {
+		h.clearOptionalFieldsFrom(headerBaseFeeField)
+		return s.ListEnd()
+	}
+	if h.BaseFee == nil {
+		h.BaseFee = new(big.Int)
+	}
+	if err := s.ReadBigInt(h.BaseFee); err != nil {
+		return fmt.Errorf("read BaseFee: %w", err)
+	}
+
+	if !s.MoreDataInList() {
+		h.clearOptionalFieldsFrom(headerWithdrawalsHashField)
+		return s.ListEnd()
+	}
+	if h.WithdrawalsHash == nil {
+		h.WithdrawalsHash = new(common.Hash)
+	}
+	if err := s.ReadBytes(h.WithdrawalsHash[:]); err != nil {
+		return fmt.Errorf("read WithdrawalsHash: %w", err)
+	}
+
+	if !s.MoreDataInList() {
+		h.clearOptionalFieldsFrom(headerBlobGasUsedField)
+		return s.ListEnd()
+	}
+	if h.BlobGasUsed == nil {
+		h.BlobGasUsed = new(uint64)
+	}
+	if *h.BlobGasUsed, err = s.Uint64(); err != nil {
+		return fmt.Errorf("read BlobGasUsed: %w", err)
+	}
+
+	if !s.MoreDataInList() {
+		h.clearOptionalFieldsFrom(headerExcessBlobGasField)
+		return s.ListEnd()
+	}
+	if h.ExcessBlobGas == nil {
+		h.ExcessBlobGas = new(uint64)
+	}
+	if *h.ExcessBlobGas, err = s.Uint64(); err != nil {
+		return fmt.Errorf("read ExcessBlobGas: %w", err)
+	}
+
+	if !s.MoreDataInList() {
+		h.clearOptionalFieldsFrom(headerParentBeaconRootField)
+		return s.ListEnd()
+	}
+	if h.ParentBeaconRoot == nil {
+		h.ParentBeaconRoot = new(common.Hash)
+	}
+	if err := s.ReadBytes(h.ParentBeaconRoot[:]); err != nil {
+		return fmt.Errorf("read ParentBeaconRoot: %w", err)
+	}
+
+	if !s.MoreDataInList() {
+		h.clearOptionalFieldsFrom(headerRequestsHashField)
+		return s.ListEnd()
+	}
+	if h.RequestsHash == nil {
+		h.RequestsHash = new(common.Hash)
+	}
+	if err := s.ReadBytes(h.RequestsHash[:]); err != nil {
+		return fmt.Errorf("read RequestsHash: %w", err)
+	}
+
+	if !s.MoreDataInList() {
+		h.clearOptionalFieldsFrom(headerBlockAccessListHashField)
+		return s.ListEnd()
+	}
+	if h.BlockAccessListHash == nil {
+		h.BlockAccessListHash = new(common.Hash)
+	}
+	if err := s.ReadBytes(h.BlockAccessListHash[:]); err != nil {
+		return fmt.Errorf("read BlockAccessListHash: %w", err)
+	}
+
+	if !s.MoreDataInList() {
+		h.clearOptionalFieldsFrom(headerSlotNumberField)
+		return s.ListEnd()
+	}
+	if h.SlotNumber == nil {
+		h.SlotNumber = new(uint64)
+	}
+	if *h.SlotNumber, err = s.Uint64(); err != nil {
+		return fmt.Errorf("read SlotNumber: %w", err)
+	}
+	if err := s.ListEnd(); err != nil {
+		return fmt.Errorf("close header: %w", err)
+	}
+	return nil
+}
+
+const (
+	headerBaseFeeField = iota
+	headerWithdrawalsHashField
+	headerBlobGasUsedField
+	headerExcessBlobGasField
+	headerParentBeaconRootField
+	headerRequestsHashField
+	headerBlockAccessListHashField
+	headerSlotNumberField
+)
+
+func (h *Header) clearOptionalFieldsFrom(field int) {
+	if field <= headerBaseFeeField {
+		h.BaseFee = nil
+	}
+	if field <= headerWithdrawalsHashField {
+		h.WithdrawalsHash = nil
+	}
+	if field <= headerBlobGasUsedField {
+		h.BlobGasUsed = nil
+	}
+	if field <= headerExcessBlobGasField {
+		h.ExcessBlobGas = nil
+	}
+	if field <= headerParentBeaconRootField {
+		h.ParentBeaconRoot = nil
+	}
+	if field <= headerRequestsHashField {
+		h.RequestsHash = nil
+	}
+	if field <= headerBlockAccessListHashField {
+		h.BlockAccessListHash = nil
+	}
+	if field <= headerSlotNumberField {
+		h.SlotNumber = nil
+	}
+}
+
 var headerSize = common.StorageSize(reflect.TypeFor[Header]().Size())
 
 // Size returns the approximate memory used by all internal contents. It is used
