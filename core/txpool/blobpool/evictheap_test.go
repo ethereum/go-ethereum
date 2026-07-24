@@ -159,7 +159,7 @@ func TestPriceHeapSorting(t *testing.T) {
 			}}
 		}
 		// Create a price heap and check the pop order
-		priceheap := newPriceHeap(uint256.NewInt(tt.basefee), uint256.NewInt(tt.blobfee), index)
+		priceheap := newPriceHeap(uint256.NewInt(tt.basefee), uint256.NewInt(tt.blobfee), index, nil)
 		verifyHeapInternals(t, priceheap)
 
 		for j := 0; j < len(tt.order); j++ {
@@ -218,7 +218,7 @@ func benchmarkPriceHeapReinit(b *testing.B, datacap uint64) {
 		}}
 	}
 	// Create a price heap and reinit it over and over
-	heap := newPriceHeap(uint256.NewInt(rnd.Uint64()), uint256.NewInt(rnd.Uint64()), index)
+	heap := newPriceHeap(uint256.NewInt(rnd.Uint64()), uint256.NewInt(rnd.Uint64()), index, nil)
 
 	basefees := make([]*uint256.Int, b.N)
 	blobfees := make([]*uint256.Int, b.N)
@@ -294,7 +294,7 @@ func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 		}}
 	}
 	// Create a price heap and overflow it over and over
-	evict := newPriceHeap(uint256.NewInt(rnd.Uint64()), uint256.NewInt(rnd.Uint64()), index)
+	evict := newPriceHeap(uint256.NewInt(rnd.Uint64()), uint256.NewInt(rnd.Uint64()), index, nil)
 	var (
 		addrs = make([]common.Address, b.N)
 		metas = make([]*blobTxMeta, b.N)
