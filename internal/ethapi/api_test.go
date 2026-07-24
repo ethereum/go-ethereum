@@ -3942,6 +3942,46 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	require.Equal(t, expected, result.Accesslist)
 }
 
+func TestCreateAccessListWithMovePrecompile(t *testing.T) {
+	t.Parallel()
+	// Initialize test accounts
+	var (
+		accounts = newAccounts(2)
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+
+	var (
+		sha256Addr    = common.BytesToAddress([]byte{0x2})
+		newSha256Addr = common.BytesToAddress([]byte{0x10, 0})
+		sha256Input   = hexutil.Bytes([]byte("hello"))
+		gas           = hexutil.Uint64(100000)
+		args          = TransactionArgs{
+			From: &accounts[0].addr,
+			To:   &newSha256Addr,
+			Data: &sha256Input,
+			Gas:  &gas,
+		}
+		overrides = &override.StateOverride{
+			sha256Addr: override.OverrideAccount{
+				MovePrecompileTo: &newSha256Addr,
+			},
+		}
+	)
+	result, err := api.CreateAccessList(context.Background(), args, nil, overrides)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Accesslist)
+}
+
 func TestEstimateGasWithMovePrecompile(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
