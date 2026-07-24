@@ -493,6 +493,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 func (b testBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
 	return ethereum.SyncProgress{}
 }
+func (b testBackend) ConsensusReady() bool { return true }
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil
 }

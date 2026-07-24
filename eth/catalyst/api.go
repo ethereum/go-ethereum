@@ -259,6 +259,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
 	api.lastForkchoiceUpdate.Store(time.Now().Unix())
+	api.eth.MarkCLContacted()
 
 	// Check whether we have the block yet in our database or not. If not, we'll
 	// need to either trigger a sync, or to reject this forkchoice update for a
@@ -948,6 +949,7 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
 	api.lastNewPayloadUpdate.Store(time.Now().Unix())
+	api.eth.MarkCLContacted()
 
 	// If we already have the block locally, ignore the entire execution and just
 	// return a fake success.
