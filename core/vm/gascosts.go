@@ -84,15 +84,14 @@ func (g *GasBudget) Charge(cost GasCosts) (GasBudget, bool) {
 	return prior, ok
 }
 
-// ChargeRegularOnly deducts a regular-only cost. It's always preferred for
-// performance consideration if the opcode doesn't have any state cost.
-func (g *GasBudget) ChargeRegularOnly(r uint64) bool {
+// ChargeRegularOnly deducts a regular-only cost.
+func (g *GasBudget) ChargeRegularOnly(r uint64) error {
 	if g.RegularGas < r {
-		return false
+		return ErrOutOfGas
 	}
 	g.RegularGas -= r
 	g.UsedRegularGas += r
-	return true
+	return nil
 }
 
 // CanAfford reports whether the running budget can cover the given cost vector

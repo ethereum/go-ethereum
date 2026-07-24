@@ -92,6 +92,9 @@ func (ctx *ScopeContext) ContractCode() []byte {
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
+//
+// Run sets up the per-call scope and picks the interpreter loop. Without a
+// tracer it runs the generated execUntraced, otherwise execTraced.
 func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	evm.depth++
@@ -112,17 +115,48 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	if len(contract.Code) == 0 {
 		return nil, nil
 	}
+	contract.Input = input
 
+	mem := NewMemory()         // bound memory
+	stack := evm.arena.stack() // local stack
+	scope := &ScopeContext{
+		Memory:   mem,
+		Stack:    stack,
+		Contract: contract,
+	}
+
+	// The exit hooks in execTraced still need the stack and memory, so this
+	// teardown must run after them. Defers in execTraced fire before this one,
+	// so the ordering holds.
+	defer func() {
+		stack.release()
+		mem.Free()
+	}()
+
+	// The generated fast path resolves its fork gates at generate time, so it
+	// cannot see table changes made by ExtraEips. Those configs run the table
+	// loop, as do tracing and the differential test via forceTableLoop.
+	if evm.forceTableLoop || len(evm.Config.ExtraEips) > 0 || evm.Config.Tracer != nil {
+		return evm.execTraced(scope)
+	}
+	return evm.execUntraced(scope)
+}
+
+// execTraced is the old table-walking interpreter loop. It dispatches every
+// opcode through the per-fork operation table and emits the tracing hooks
+// exactly as before. It stays hand-written so trace output does not change.
+//
+// The differential test also runs this loop without a tracer and compares it
+// against the generated execUntraced, which keeps the two from drifting
+// apart.
+func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 	var (
 		op          OpCode     // current opcode
 		jumpTable   *JumpTable = evm.table
-		mem                    = NewMemory()       // bound memory
-		stack                  = evm.arena.stack() // local stack
-		callContext            = &ScopeContext{
-			Memory:   mem,
-			Stack:    stack,
-			Contract: contract,
-		}
+		mem                    = scope.Memory
+		stack                  = scope.Stack
+		contract               = scope.Contract
+		callContext            = scope
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
@@ -136,15 +170,6 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		debug     = evm.Config.Tracer != nil
 		isEIP4762 = evm.chainRules.IsEIP4762
 	)
-	// Don't move this deferred function, it's placed before the OnOpcode-deferred method,
-	// so that it gets executed _after_: the OnOpcode needs the stacks before
-	// they are returned to the pools
-	defer func() {
-		stack.release()
-		mem.Free()
-	}()
-	contract.Input = input
-
 	if debug {
 		defer func() { // this deferred method handles exit-with-error
 			if err == nil {
@@ -168,16 +193,8 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas.RegularGas
 		}
-
-		if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
-			// if the PC ends up in a new "chunk" of verkleized code, charge the
-			// associated costs.
-			contractAddr := contract.Address()
-			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
-			contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
-			if consumed < wanted {
-				return nil, ErrOutOfGas
-			}
+		if err = contract.chargeVerkleCodeChunkGas(evm, pc, isEIP4762); err != nil {
+			return nil, err
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are
@@ -192,43 +209,19 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if !contract.Gas.ChargeRegularOnly(cost) {
-			return nil, ErrOutOfGas
+		if err := contract.Gas.ChargeRegularOnly(cost); err != nil {
+			return nil, err
 		}
 
-		// All ops with a dynamic memory usage also has a dynamic gas cost.
+		// All ops with a dynamic memory usage also has a dynamic gas cost. Size the
+		// memory and charge dynamic gas here.
 		var memorySize uint64
-		if operation.dynamicGas != nil {
-			// calculate the new memory size and expand the memory to fit
-			// the operation
-			// Memory check needs to be done prior to evaluating the dynamic gas portion,
-			// to detect calculation overflows
-			if operation.memorySize != nil {
-				memSize, overflow := operation.memorySize(stack)
-				if overflow {
-					return nil, ErrGasUintOverflow
-				}
-				// memory is expanded in words of 32 bytes. Gas
-				// is also calculated in words.
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-					return nil, ErrGasUintOverflow
-				}
-			}
-			// Consume the gas and return an error if not enough gas is available.
-			// cost is explicitly set so that the capture state defer method can get the proper cost
-			var dynamicCost GasCosts
-			dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
-			cost += dynamicCost.RegularGas // for tracing
-			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
-			}
-			if dynamicCost.StateGas == 0 {
-				if !contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas) {
-					return nil, ErrOutOfGas
-				}
-			} else if !contract.Gas.charge(dynamicCost) {
-				return nil, ErrOutOfGas
-			}
+		var dynamicCost GasCosts
+		memorySize, dynamicCost, err = contract.meterDynamicGas(operation, evm, stack, mem)
+		// cost is explicitly set so that the capture state defer method can get the proper cost
+		cost += dynamicCost.RegularGas // for tracing
+		if err != nil {
+			return nil, err
 		}
 
 		// Do tracing before potential memory expansion
@@ -262,4 +255,80 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	}
 
 	return res, err
+}
+
+// computeMemorySize runs an operation's memorySize function and word-aligns the
+// result, guarding overflow. The traced loop and the default case call it, and the
+// direct-call ops splice it, substituting the opcode's memory-size function for
+// operation.memorySize.
+func computeMemorySize(operation *operation, stack *Stack) (uint64, error) {
+	memSize, overflow := operation.memorySize(stack)
+	if overflow {
+		return 0, ErrGasUintOverflow
+	}
+	// memory is expanded in words of 32 bytes. Gas is also calculated in words.
+	size, overflow := math.SafeMul(toWordSize(memSize), 32)
+	if overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return size, nil
+}
+
+// chargeDynamicGas runs an operation's dynamicGas function, treats a computation
+// failure as out of gas, and charges the cost. It returns the cost so the traced
+// loop can report it. The traced loop and the default case call it, and the
+// direct-call ops splice it, substituting the opcode's gas function for
+// operation.dynamicGas.
+func (contract *Contract) chargeDynamicGas(operation *operation, evm *EVM, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	dynamicCost, gerr := operation.dynamicGas(evm, contract, stack, mem, memorySize)
+	if gerr != nil {
+		return dynamicCost, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
+	}
+	// A regular-only deduction when there is no state gas, otherwise the full
+	// multidimensional charge through the reservoir.
+	if dynamicCost.StateGas == 0 {
+		if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+			return dynamicCost, cerr
+		}
+	} else if !contract.Gas.charge(dynamicCost) {
+		return dynamicCost, ErrOutOfGas
+	}
+	return dynamicCost, nil
+}
+
+// meterDynamicGas sizes the memory an operation needs and charges its dynamic
+// gas, returning the size to expand to and the charged cost (which the traced
+// loop reports). The caller expands the memory afterward. computeMemorySize and
+// chargeDynamicGas do the work, guarded here for the generic table paths. The
+// direct-call ops splice those two by name and skip the guards.
+func (contract *Contract) meterDynamicGas(operation *operation, evm *EVM, stack *Stack, mem *Memory) (memorySize uint64, dynamicCost GasCosts, err error) {
+	if operation.dynamicGas != nil {
+		if operation.memorySize != nil {
+			if memorySize, err = computeMemorySize(operation, stack); err != nil {
+				return memorySize, dynamicCost, err
+			}
+		}
+		if dynamicCost, err = contract.chargeDynamicGas(operation, evm, stack, mem, memorySize); err != nil {
+			return memorySize, dynamicCost, err
+		}
+	}
+	return memorySize, dynamicCost, nil
+}
+
+// chargeVerkleCodeChunkGas charges EIP-4762 (verkle) witness gas for the code chunk the
+// pc sits in. It is a no-op outside verkle and for deployment or system calls.
+// isEIP4762 is passed in so the caller can hoist evm.chainRules.IsEIP4762 out of
+// the loop. The traced loop calls it, the generated loop splices its body.
+func (contract *Contract) chargeVerkleCodeChunkGas(evm *EVM, pc uint64, isEIP4762 bool) error {
+	// if the PC ends up in a new "chunk" of verkleized code, charge the
+	// associated costs.
+	if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
+		contractAddr := contract.Address()
+		consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
+		contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+		if consumed < wanted {
+			return ErrOutOfGas
+		}
+	}
+	return nil
 }
