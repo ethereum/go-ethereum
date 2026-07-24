@@ -24,7 +24,6 @@ import (
 	"maps"
 	"slices"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -1267,7 +1266,6 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 		storageTrieNodesUpdated int
 		storageTrieNodesDeleted int
 
-		lock    sync.Mutex                                               // protect two maps below
 		nodes   = trienode.NewMergedNodeSet()                            // aggregated trie nodes
 		updates = make(map[common.Hash]*AccountUpdate, len(s.mutations)) // aggregated account updates
 
@@ -1278,15 +1276,10 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 		// may already exist. In such cases, these two sets are combined, with
 		// the later one overwriting the previous one if any nodes are modified
 		// or deleted in both sets.
-		//
-		// merge run concurrently across  all the state objects and account trie.
 		merge = func(set *trienode.NodeSet) error {
 			if set == nil {
 				return nil
 			}
-			lock.Lock()
-			defer lock.Unlock()
-
 			updates, deletes := set.Size()
 			if set.Owner == (common.Hash{}) {
 				accountTrieNodesUpdated += updates
@@ -1320,58 +1313,60 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	)
 	// Schedule the account trie first since that will be the biggest, so give
 	// it the most time to crunch.
-	//
-	// TODO(karalabe): This account trie commit is *very* heavy. 5-6ms at chain
-	// heads, which seems excessive given that it doesn't do hashing, it just
-	// shuffles some data. For comparison, the *hashing* at chain head is 2-3ms.
-	// We need to investigate what's happening as it seems something's wonky.
-	// Obviously it's not an end of the world issue, just something the original
-	// code didn't anticipate for.
+	var accountSet *trienode.NodeSet
 	workers.Go(func() error {
 		// Write the account trie changes, measuring the amount of wasted time
-		_, set := s.trie.Commit(true)
-		if err := merge(set); err != nil {
-			return err
-		}
+		_, accountSet = s.trie.Commit(true)
 		s.AccountCommits = time.Since(start)
 		return nil
 	})
 	// Schedule each of the storage tries that need to be updated, so they can
-	// run concurrently to one another.
-	//
-	// TODO(karalabe): Experimentally, the account commit takes approximately the
-	// same time as all the storage commits combined, so we could maybe only have
-	// 2 threads in total. But that kind of depends on the account commit being
-	// more expensive than it should be, so let's fix that and revisit this todo.
+	// run concurrently to one another. Each worker writes its result into its
+	// own slot of a shared slice, so no synchronization is needed; the results
+	// are aggregated serially after all the workers are done.
+	type storageResult struct {
+		update  *AccountUpdate
+		set     *trienode.NodeSet
+		elapsed time.Duration
+	}
+	var objs []*stateObject
 	for addr, op := range s.mutations {
 		if op.isDelete() {
 			continue
 		}
-		// Write any contract code associated with the state object
 		obj := s.stateObjects[addr]
 		if obj == nil {
 			return nil, errors.New("missing state object")
 		}
-		// Run the storage updates concurrently to one another
+		objs = append(objs, obj)
+	}
+	results := make([]storageResult, len(objs))
+	for i, obj := range objs {
 		workers.Go(func() error {
 			// Write any storage changes in the state object to its storage trie
 			update, set, err := obj.commit()
 			if err != nil {
 				return err
 			}
-			if err := merge(set); err != nil {
-				return err
-			}
-			lock.Lock()
-			updates[obj.addrHash()] = update
-			s.StorageCommits = time.Since(start) // overwrite with the longest storage commit runtime
-			lock.Unlock()
+			results[i] = storageResult{update: update, set: set, elapsed: time.Since(start)}
 			return nil
 		})
 	}
-	// Wait for everything to finish and update the metrics
+	// Wait for everything to finish, aggregate the results and update the metrics
 	if err := workers.Wait(); err != nil {
 		return nil, err
+	}
+	if err := merge(accountSet); err != nil {
+		return nil, err
+	}
+	for i, obj := range objs {
+		if err := merge(results[i].set); err != nil {
+			return nil, err
+		}
+		updates[obj.addrHash()] = results[i].update
+		if results[i].elapsed > s.StorageCommits {
+			s.StorageCommits = results[i].elapsed // track the longest storage commit runtime
+		}
 	}
 	accountReadMeters.Mark(int64(s.AccountLoaded))
 	storageReadMeters.Mark(int64(s.StorageLoaded))
