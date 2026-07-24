@@ -121,7 +121,7 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 	}
 	existing := make(map[string]cloudflare.DNSRecord)
 	for _, entry := range entries {
-		if !strings.HasSuffix(entry.Name, name) {
+		if !isSubdomain(entry.Name, name) {
 			continue
 		}
 		existing[strings.ToLower(entry.Name)] = entry
