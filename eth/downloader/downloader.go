@@ -1109,7 +1109,9 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	if err := d.blockchain.SnapSyncComplete(block.Hash(), d.snapSyncer.Version() == snap.SNAP2); err != nil {
 		return err
 	}
+	d.pivotLock.Lock()
 	d.committed.Store(true)
+	d.pivotLock.Unlock()
 
 	// The chain has obtained a stateful head by committing the pivot block,
 	// the mission of the snap sync is regarded as accomplished and the mode
