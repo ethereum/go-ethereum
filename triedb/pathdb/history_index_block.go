@@ -446,7 +446,7 @@ func (b *blockWriter) pop(id uint64) error {
 		return fmt.Errorf("pop element is not found, last: %d, this: %d", b.desc.max, id)
 	}
 	b.desc.max = prev
-	b.data = b.data[:pos]
+	b.data = b.data[:pos:pos]
 	b.desc.entries -= 1
 	return b.rebuildBitmap()
 }
