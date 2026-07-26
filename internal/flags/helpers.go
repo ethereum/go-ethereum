@@ -192,7 +192,7 @@ func wordWrap(s string, width int) string {
 			word = s[:sp]
 		}
 		wlen := len(word)
-		over := lineLength+wlen >= width
+		over := lineLength+wlen > width
 		if over {
 			output.WriteByte('\n')
 			lineLength = 0
