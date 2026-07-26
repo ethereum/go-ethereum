@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"encoding/json"
+	"maps"
 	"sync"
 )
 
@@ -53,12 +54,12 @@ type GaugeInfo struct {
 
 // Snapshot returns a read-only copy of the gauge.
 func (g *GaugeInfo) Snapshot() GaugeInfoSnapshot {
-	return GaugeInfoSnapshot(g.value)
+	return GaugeInfoSnapshot(maps.Clone(g.value))
 }
 
 // Update updates the gauge's value.
 func (g *GaugeInfo) Update(v GaugeInfoValue) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	g.value = v
+	g.value = maps.Clone(v)
 }
