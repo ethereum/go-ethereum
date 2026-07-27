@@ -447,6 +447,10 @@ func (f *MemoryFreezer) Reset() error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	if f.readonly {
+		return errReadOnly
+	}
+
 	tables := make(map[string]*memoryTable)
 	tails := make(map[string]uint64)
 	for name, table := range f.tables {
