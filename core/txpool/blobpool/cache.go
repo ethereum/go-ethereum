@@ -265,7 +265,10 @@ func (c *Cache) GetCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*
 	c.mu.Lock()
 	for vhash, idxs := range indices {
 		cached, ok := c.entries[vhash]
-		if !ok {
+		if !ok || cached.cell == nil {
+			// Entries loaded in blob mode carry no cells; fall back to
+			// the blobpool instead of serving null cells for a blob
+			// that is actually available.
 			misses = append(misses, vhash)
 			continue
 		}
