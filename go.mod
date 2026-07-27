@@ -32,7 +32,7 @@ require (
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
 	github.com/gofrs/flock v0.12.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
-	github.com/golang/snappy v1.0.0
+	github.com/golang/snappy v1.0.1-0.20260716114414-9ae09f520e93
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.4.2
