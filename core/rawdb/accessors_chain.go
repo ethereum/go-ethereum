@@ -839,6 +839,12 @@ const badBlockToKeep = 10
 type badBlock struct {
 	Header *types.Header
 	Body   *types.Body
+
+	// AccessList is the EIP-7928 block-level access list attached to the block
+	// (when present). It is stored so that bad blocks can later be inspected
+	// with details. Optional for backwards compatibility with previously stored
+	// bad blocks.
+	AccessList *bal.BlockAccessList `rlp:"optional"`
 }
 
 // ReadBadBlock retrieves the bad block with the corresponding block hash.
@@ -856,6 +862,9 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 			block := types.NewBlockWithHeader(bad.Header)
 			if bad.Body != nil {
 				block = block.WithBody(*bad.Body)
+			}
+			if bad.AccessList != nil {
+				block = block.WithAccessListUnsafe(bad.AccessList)
 			}
 			return block
 		}
@@ -879,6 +888,9 @@ func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 		block := types.NewBlockWithHeader(bad.Header)
 		if bad.Body != nil {
 			block = block.WithBody(*bad.Body)
+		}
+		if bad.AccessList != nil {
+			block = block.WithAccessListUnsafe(bad.AccessList)
 		}
 		blocks = append(blocks, block)
 	}
@@ -905,8 +917,9 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 		}
 	}
 	badBlocks = append(badBlocks, &badBlock{
-		Header: block.Header(),
-		Body:   block.Body(),
+		Header:     block.Header(),
+		Body:       block.Body(),
+		AccessList: block.AccessList(),
 	})
 	slices.SortFunc(badBlocks, func(a, b *badBlock) int {
 		// Note: sorting in descending number order.
