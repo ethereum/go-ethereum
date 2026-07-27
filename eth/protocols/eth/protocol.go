@@ -314,7 +314,8 @@ type GetCellsRequest struct {
 // GetCellsRequestPacket represents a cell request with request ID wrapping.
 type GetCellsRequestPacket struct {
 	RequestId uint64
-	GetCellsRequest
+	Hashes    []common.Hash
+	Mask      types.CustodyBitmap
 }
 
 // CellsResponse represents a response containing cells for blob transactions.
@@ -327,7 +328,9 @@ type CellsResponse struct {
 // CellsPacket represents a cells response with request ID wrapping.
 type CellsPacket struct {
 	RequestId uint64
-	CellsResponse
+	Hashes    []common.Hash
+	Cells     rlp.RawList[rlp.RawList[kzg4844.Cell]]
+	Mask      types.CustodyBitmap
 }
 
 type GetBlockAccessListsRequest []common.Hash

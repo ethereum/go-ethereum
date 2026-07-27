@@ -267,11 +267,9 @@ func (p *Peer) ReplyCells(id uint64, hashes []common.Hash, cells [][]kzg4844.Cel
 	}
 	return p2p.Send(p.rw, CellsMsg, &CellsPacket{
 		RequestId: id,
-		CellsResponse: CellsResponse{
-			Hashes: hashes,
-			Cells:  rawCells,
-			Mask:   mask,
-		},
+		Hashes:    hashes,
+		Cells:     rawCells,
+		Mask:      mask,
 	})
 }
 
@@ -291,10 +289,8 @@ func (p *Peer) RequestPayload(hashes []common.Hash, cell types.CustodyBitmap) er
 	}
 	return p2p.Send(p.rw, GetCellsMsg, &GetCellsRequestPacket{
 		RequestId: id,
-		GetCellsRequest: GetCellsRequest{
-			Hashes: hashes,
-			Mask:   cell,
-		},
+		Hashes:    hashes,
+		Mask:      cell,
 	})
 }
 
