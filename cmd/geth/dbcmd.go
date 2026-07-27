@@ -217,7 +217,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		ArgsUsage: "<file>",
 		Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `The import-badblocks command loads bad blocks into the database's bad-block
-store so they can be inspected offline with debug.traceBadBlock / debug.getBadBlocks.`,
+store so they can be inspected locally.`,
 	}
 	dbExportCmd = &cli.Command{
 		Action:      exportChaindata,
