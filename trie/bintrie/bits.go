@@ -79,6 +79,27 @@ func (p *bitstr) maskTail() {
 	}
 }
 
+// head returns the first m bits of p.
+func (p bitstr) head(m int) bitstr {
+	return slice(p.b, 0, m)
+}
+
+// tail returns p without its first m bits.
+func (p bitstr) tail(m int) bitstr {
+	return slice(p.b, m, p.n-m)
+}
+
+// append returns p ‖ q.
+func (p bitstr) append(q bitstr) bitstr {
+	n := p.n + q.n
+	out := bitstr{b: make([]byte, (n+7)/8), n: n}
+	copy(out.b, p.b)
+	for i := 0; i < q.n; i++ {
+		out.setBit(p.n+i, q.bit(i))
+	}
+	return out
+}
+
 // concat returns p ‖ bit ‖ q, the prefix re-concatenation used when a branch
 // collapses into its parent position after a deletion.
 func (p bitstr) concat(bit byte, q bitstr) bitstr {

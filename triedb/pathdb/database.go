@@ -97,12 +97,11 @@ func merkleNodeHasher(blob []byte) (common.Hash, error) {
 	return crypto.Keccak256Hash(blob), nil
 }
 
-// binaryNodeHasher computes the hash of the given verkle node.
+// binaryNodeHasher computes the hash of the given binary trie node blob.
+// Leaf and branch records are their own hash preimages; group records fold
+// at their stored depth.
 func binaryNodeHasher(blob []byte) (common.Hash, error) {
-	if len(blob) == 0 {
-		return types.EmptyBinaryHash, nil
-	}
-	return bintrie.DeserializeAndHash(blob, 0)
+	return bintrie.DeserializeAndHash(blob)
 }
 
 // Database is a multiple-layered structure for maintaining in-memory states
