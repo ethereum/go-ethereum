@@ -347,3 +347,96 @@ func TestPBTPrefetcherWarmsOwners(t *testing.T) {
 		t.Fatalf("prefetched root %x differs from cold root %x", warm, cold)
 	}
 }
+
+// TestPBTProofsVerify pins that proofs taken from a committed binary tree
+// verify against its root: inclusion for present account and storage leaves
+// in both storage homes, absence for a missing account and an unwritten
+// slot, and rejection once a proof node is tampered with. This is the
+// machinery behind eth_getProof in binary tree mode.
+func TestPBTProofsVerify(t *testing.T) {
+	addr := common.Address{1}
+	headerSlot := common.Hash{31: 5} // below 64: in the header stem
+	bucketSlot := common.Hash{30: 4} // slot 1024: in the storage bucket
+	unwritten := common.Hash{31: 63} // never written
+
+	sdb, db := newPBTState(t)
+	for i := byte(1); i <= 5; i++ {
+		other := common.Address{i}
+		sdb.CreateAccount(other)
+		sdb.SetNonce(other, uint64(i), tracing.NonceChangeUnspecified)
+	}
+	sdb.SetState(addr, headerSlot, common.Hash{31: 7})
+	sdb.SetState(addr, bucketSlot, common.Hash{31: 8})
+	root, err := sdb.Commit(1, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Commit(root, false); err != nil {
+		t.Fatal(err)
+	}
+	sdb, err = New(root, NewDatabase(db, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, err := sdb.db.OpenTrie(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bt := tr.(*bintrie.BinaryTrie)
+
+	present := [][]byte{
+		bintrie.BasicDataKey(addr),
+		bintrie.CodeHashKey(addr),
+		bintrie.StorageSlotKey(addr, headerSlot.Bytes()),
+		bintrie.StorageSlotKey(addr, bucketSlot.Bytes()),
+	}
+	for _, key := range present {
+		proof := rawdb.NewMemoryDatabase()
+		if err := bt.Prove(key, proof); err != nil {
+			t.Fatal(err)
+		}
+		val, err := bintrie.VerifyProof(root, key, proof)
+		if err != nil {
+			t.Fatalf("proof for %x failed: %v", key, err)
+		}
+		if val == nil {
+			t.Fatalf("proof for %x proved absence of a present leaf", key)
+		}
+	}
+	absent := [][]byte{
+		bintrie.BasicDataKey(common.Address{0xEE}),
+		bintrie.StorageSlotKey(addr, unwritten.Bytes()),
+	}
+	for _, key := range absent {
+		proof := rawdb.NewMemoryDatabase()
+		if err := bt.Prove(key, proof); err != nil {
+			t.Fatal(err)
+		}
+		val, err := bintrie.VerifyProof(root, key, proof)
+		if err != nil {
+			t.Fatalf("absence proof for %x errored: %v", key, err)
+		}
+		if val != nil {
+			t.Fatalf("absence proof for %x returned a value: %x", key, val)
+		}
+	}
+	// A tampered proof must not verify.
+	key := bintrie.BasicDataKey(addr)
+	proof := rawdb.NewMemoryDatabase()
+	if err := bt.Prove(key, proof); err != nil {
+		t.Fatal(err)
+	}
+	it := proof.NewIterator(nil, nil)
+	defer it.Release()
+	if !it.Next() {
+		t.Fatal("empty proof")
+	}
+	corrupted := append([]byte{}, it.Value()...)
+	corrupted[len(corrupted)-1] ^= 0xff
+	if err := proof.Put(it.Key(), corrupted); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bintrie.VerifyProof(root, key, proof); err == nil {
+		t.Fatal("tampered proof verified")
+	}
+}

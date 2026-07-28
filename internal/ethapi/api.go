@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas is
@@ -361,6 +362,7 @@ type AccountResult struct {
 	CodeHash     common.Hash     `json:"codeHash"`
 	Nonce        hexutil.Uint64  `json:"nonce"`
 	StorageHash  common.Hash     `json:"storageHash"`
+	ProofFormat  string          `json:"proofFormat,omitempty"`
 	StorageProof []StorageResult `json:"storageProof"`
 }
 
@@ -380,6 +382,31 @@ func (n *proofList) Put(key []byte, value []byte) error {
 }
 
 func (n *proofList) Delete(key []byte) error {
+	panic("not supported")
+}
+
+// dedupProofList collects proof nodes keyed by hash, skipping repeats. The
+// binary tree proves several keys of one account through a shared path, so
+// the node sets overlap heavily.
+type dedupProofList struct {
+	list proofList
+	seen map[string]struct{}
+}
+
+func newDedupProofList() *dedupProofList {
+	return &dedupProofList{seen: make(map[string]struct{})}
+}
+
+func (n *dedupProofList) Put(key []byte, value []byte) error {
+	if _, ok := n.seen[string(key)]; ok {
+		return nil
+	}
+	n.seen[string(key)] = struct{}{}
+	n.list = append(n.list, hexutil.Encode(value))
+	return nil
+}
+
+func (n *dedupProofList) Delete(key []byte) error {
 	panic("not supported")
 }
 
@@ -408,6 +435,10 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 	}
 	codeHash := statedb.GetCodeHash(address)
 	storageRoot := statedb.GetStorageRoot(address)
+
+	if statedb.Database().TrieDB().IsPBT() {
+		return pbtProof(statedb, header.Root, address, keys, keyLengths, codeHash)
+	}
 
 	if len(keys) > 0 {
 		var storageTrie state.Trie
@@ -462,6 +493,61 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		CodeHash:     codeHash,
 		Nonce:        hexutil.Uint64(statedb.GetNonce(address)),
 		StorageHash:  storageRoot,
+		StorageProof: storageProof,
+	}, statedb.Error()
+}
+
+// pbtProof answers eth_getProof against the EIP-8297 binary tree. The tree
+// holds all state in one structure, so proofs are node sets of that tree
+// rather than of an account trie plus a storage trie:
+//
+//   - accountProof covers the paths to the account's basic-data and
+//     code-hash leaves, which share a stem and therefore most of their
+//     nodes; the set is deduplicated.
+//   - storageHash is zero. There is no per-account storage root to report,
+//     and zero is unambiguous because a keccak root never is.
+//   - each storage proof covers the path to that slot's leaf. Slots below
+//     64 live in the account's header stem, so their proofs overlap the
+//     account proof.
+//
+// The proof format is flagged in the response so consumers can dispatch on
+// it rather than guess from the tree in use.
+func pbtProof(statedb *state.StateDB, root common.Hash, address common.Address, keys []common.Hash, keyLengths []int, codeHash common.Hash) (*AccountResult, error) {
+	tr, err := statedb.Database().OpenTrie(root)
+	if err != nil {
+		return nil, err
+	}
+	bt, ok := tr.(*bintrie.BinaryTrie)
+	if !ok {
+		return nil, fmt.Errorf("expected a binary trie, got %T", tr)
+	}
+	accountProof := newDedupProofList()
+	for _, key := range [][]byte{bintrie.BasicDataKey(address), bintrie.CodeHashKey(address)} {
+		if err := bt.Prove(key, accountProof); err != nil {
+			return nil, err
+		}
+	}
+	storageProof := make([]StorageResult, len(keys))
+	for i, key := range keys {
+		outputKey := hexutil.Encode(key[:])
+		if keyLengths[i] != 32 {
+			outputKey = hexutil.EncodeBig(key.Big())
+		}
+		proof := newDedupProofList()
+		if err := bt.Prove(bintrie.StorageSlotKey(address, key.Bytes()), proof); err != nil {
+			return nil, err
+		}
+		value := (*hexutil.Big)(statedb.GetState(address, key).Big())
+		storageProof[i] = StorageResult{outputKey, value, proof.list}
+	}
+	return &AccountResult{
+		Address:      address,
+		AccountProof: accountProof.list,
+		Balance:      (*hexutil.Big)(statedb.GetBalance(address).ToBig()),
+		CodeHash:     codeHash,
+		Nonce:        hexutil.Uint64(statedb.GetNonce(address)),
+		StorageHash:  common.Hash{},
+		ProofFormat:  "eip8297",
 		StorageProof: storageProof,
 	}, statedb.Error()
 }
