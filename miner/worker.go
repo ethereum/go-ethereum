@@ -45,6 +45,7 @@ var (
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 	errBlockInterruptedByTimeout  = errors.New("timeout while building block")
+	errStateReadFailure           = errors.New("state read failed while building block")
 )
 
 // maxBlobsPerBlock returns the maximum number of blobs per block.
@@ -230,6 +231,11 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	block := core.AssembleBlock(miner.chain, work.header, work.state, &body, work.receipts, work.bal)
 	assembleSpanEnd(nil)
 
+	// Check for db errors. If anything happened during the mining or IntermediateRoot, such as a
+	// weird flush or a trie node missing, we need to bail out and not create a block.
+	if dbErr := work.state.Error(); dbErr != nil {
+		return &newPayloadResult{err: fmt.Errorf("%w: %v", errStateReadFailure, dbErr)}
+	}
 	return &newPayloadResult{
 		block:    block,
 		fees:     totalFees(block, work.receipts),
