@@ -459,8 +459,12 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
+	// The binary tree is path-scheme only, and has to be decided by the same
+	// predicate NewBlockChain uses - a chain generated here is imported by one
+	// built there, so the two disagreeing means generating blocks for a state
+	// layout the chain cannot hold.
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if config.IsPBT(config.ChainID, 0) {
+	if config.IsPBTGenesis() {
 		triedbConfig = triedb.PBTDefaults
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
@@ -509,7 +513,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if genesis.Config != nil && genesis.Config.IsPBT(genesis.Config.ChainID, 0) {
+	if genesis.Config != nil && genesis.Config.IsPBTGenesis() {
 		triedbConfig = triedb.PBTDefaults
 	}
 	genesisTriedb := triedb.NewDatabase(db, triedbConfig)

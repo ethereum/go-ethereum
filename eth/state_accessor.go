@@ -43,15 +43,6 @@ var noopReleaser = tracers.StateReleaseFunc(func() {})
 const reexecLimit = uint64(128)
 
 func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
-	// Re-execution rebuilds historical state over an ephemeral hash-scheme
-	// database, which the binary tree has no counterpart for: it is
-	// path-scheme only, so there is nowhere to isolate the reconstructed
-	// nodes. Historical state there has to come from the path database's
-	// own history instead; until that lands, fail loudly rather than
-	// silently building a merkle trie of the wrong shape.
-	if eth.blockchain.TrieDB().IsPBT() {
-		return nil, nil, errors.New("historical state reconstruction is not supported for the binary tree")
-	}
 	var (
 		current  *types.Block
 		database state.Database
@@ -195,6 +186,15 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 	statedb, err := eth.blockchain.StateAt(header)
 	if err == nil {
 		return statedb, noopReleaser, nil
+	}
+	// The historic database opens merkle-patricia tries keyed by the hash of
+	// the address, which the binary tree is not. Only reconstruction is out
+	// of reach: the live state above still serves the recent blocks tracing
+	// usually asks about, so the check belongs here rather than above the
+	// scheme dispatch. The hash-scheme branch needs no equivalent - a binary
+	// tree cannot be opened on one at all.
+	if eth.blockchain.TrieDB().IsPBT() {
+		return nil, nil, errors.New("historical state is not supported for the binary tree")
 	}
 	statedb, err = eth.blockchain.HistoricState(header)
 	if err == nil {

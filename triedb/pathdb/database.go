@@ -122,7 +122,7 @@ type Database struct {
 	// the shutdown to reject all following unexpected mutations.
 	readOnly bool       // Flag if database is opened in read only mode
 	waitSync bool       // Flag if database is deactivated due to initial state sync
-	isPBT    bool       // Flag if database is used for verkle tree
+	isPBT    bool       // Flag if database is used for binary tree
 	hasher   nodeHasher // Trie node hasher
 
 	config *Config        // Configuration for database
@@ -154,8 +154,8 @@ func New(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
 	}
-	// Establish a dedicated database namespace tailored for verkle-specific
-	// data, ensuring the isolation of both verkle and merkle tree data. It's
+	// Establish a dedicated database namespace tailored for binary-tree
+	// data, ensuring the isolation of both binary and merkle tree data. It's
 	// important to note that the introduction of a prefix won't lead to
 	// substantial storage overhead, as the underlying database will efficiently
 	// compress the shared key prefix.
@@ -192,7 +192,7 @@ func New(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 
 	fields := config.fields()
 	if db.isPBT {
-		fields = append(fields, "verkle", true)
+		fields = append(fields, "binarytree", true)
 	}
 	log.Info("Initialized path database", fields...)
 	return db
@@ -259,7 +259,7 @@ func (db *Database) setStateGenerator() error {
 	// Disable the background snapshot building in these circumstances:
 	// - the database is opened in read only mode
 	// - the snapshot build is explicitly disabled
-	// - the database is opened in verkle tree mode
+	// - the database is opened in binary tree mode
 	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isPBT
 
 	// Construct the generator and link it to the disk layer, ensuring that the

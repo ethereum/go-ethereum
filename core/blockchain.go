@@ -264,11 +264,23 @@ func (cfg BlockChainConfig) WithNoAsyncFlush(on bool) *BlockChainConfig {
 }
 
 // triedbConfig derives the configures for trie database.
-func (cfg *BlockChainConfig) triedbConfig(isPBT bool) *triedb.Config {
+func (cfg *BlockChainConfig) triedbConfig(isPBT bool) (*triedb.Config, error) {
 	config := &triedb.Config{
 		Preimages:         cfg.Preimages,
 		IsPBT:             isPBT,
 		BinTrieGroupDepth: cfg.BinTrieGroupDepth,
+	}
+	// The binary tree is path-scheme only: hashdb keys nodes by their keccak
+	// hash and decodes account leaves as RLP, neither of which a binary node
+	// set produces. Any other scheme here, including the empty one that would
+	// otherwise fall through to hashdb, has to fail rather than build a
+	// database of the wrong shape.
+	if isPBT && cfg.StateScheme != rawdb.PathScheme {
+		scheme := cfg.StateScheme
+		if scheme == "" {
+			scheme = "unset"
+		}
+		return nil, fmt.Errorf("binary tree requires the %q state scheme, got %s", rawdb.PathScheme, scheme)
 	}
 	if cfg.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
@@ -295,7 +307,7 @@ func (cfg *BlockChainConfig) triedbConfig(isPBT bool) *triedb.Config {
 			NoAsyncFlush: cfg.TrieNoAsyncFlush,
 		}
 	}
-	return config
+	return config, nil
 }
 
 // txLookup is wrapper over transaction lookup along with the corresponding
@@ -391,7 +403,11 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if err != nil {
 		return nil, err
 	}
-	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle))
+	tdbConfig, err := cfg.triedbConfig(enableVerkle)
+	if err != nil {
+		return nil, err
+	}
+	triedb := triedb.NewDatabase(db, tdbConfig)
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the

@@ -275,7 +275,15 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	vmconfig.ExtraEips = eips
 
 	block := t.genesis(config).ToBlock()
-	st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
+	// A binary-tree fork needs its own pre-state: the requested scheme cannot
+	// apply, since the tree is path-scheme only, and the layout is not a
+	// merkle-patricia trie at all. Building the default one here would run the
+	// test against the wrong state and report a root that means nothing.
+	if config.IsPBT(new(big.Int).SetUint64(t.json.Env.Number), t.json.Env.Timestamp) {
+		st = MakePBTPreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
+	} else {
+		st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
+	}
 
 	var baseFee *big.Int
 	if config.IsLondon(new(big.Int)) {

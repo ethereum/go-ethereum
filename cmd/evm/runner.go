@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -224,10 +225,17 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{
-		Preimages: preimages,
-		HashDB:    hashdb.Defaults,
-	})
+	// The binary tree is path-scheme only; pairing it with hashdb would run
+	// the code against a merkle-patricia state while the chain rules still
+	// switch to EIP-4762 pricing, which is wrong in a way nothing reports.
+	tconf := &triedb.Config{Preimages: preimages}
+	if genesisConfig.Config != nil && genesisConfig.Config.IsPBTGenesis() {
+		tconf.IsPBT = true
+		tconf.PathDB = pathdb.Defaults
+	} else {
+		tconf.HashDB = hashdb.Defaults
+	}
+	triedb := triedb.NewDatabase(db, tconf)
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)
 	sdb := state.NewDatabase(triedb, nil)

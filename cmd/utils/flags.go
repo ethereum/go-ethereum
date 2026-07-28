@@ -2578,6 +2578,11 @@ func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, p
 		Fatalf("%v", err)
 	}
 	if scheme == rawdb.HashScheme {
+		// The binary tree has no hash-scheme representation, so there is
+		// nothing to fall back to here.
+		if isPBT {
+			Fatalf("binary tree requires the %q state scheme, got %q", rawdb.PathScheme, scheme)
+		}
 		// Read-only mode is not implemented in hash mode,
 		// ignore the parameter silently. TODO(rjl493456442)
 		// please config it if read mode is implemented.

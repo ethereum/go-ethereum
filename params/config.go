@@ -899,14 +899,15 @@ func (c *ChainConfig) IsPBT(num *big.Int, time uint64) bool {
 
 // IsPBTGenesis checks whether the binary tree is activated at the genesis block.
 //
-// Verkle mode is considered enabled if the verkle fork time is configured,
-// regardless of whether the local time has surpassed the fork activation time.
-// This is a temporary workaround for verkle devnet testing, where verkle is
-// activated at genesis, and the configured activation date has already passed.
+// This is the predicate that decides whether a chain's state is a binary tree,
+// and every place that opens or generates state has to use it rather than a
+// time-based check: the two disagree whenever PBTTime is unset or non-zero, and
+// a disagreement means state written in one layout and read in another.
 //
-// In production networks (mainnet and public testnets), verkle activation
-// always occurs after the genesis block, making this function irrelevant in
-// those cases.
+// It is deliberately not time-based. The flag is a temporary workaround for
+// devnet testing, where the tree is activated at genesis and the configured
+// activation date has already passed. In production networks activation always
+// occurs after the genesis block, making this function irrelevant there.
 func (c *ChainConfig) IsPBTGenesis() bool {
 	return c.EnablePBTAtGenesis
 }

@@ -126,7 +126,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 		db    = rawdb.NewMemoryDatabase()
 		tconf = &triedb.Config{
 			Preimages: true,
-			IsPBT:     gspec.Config.PBTTime != nil && *gspec.Config.PBTTime <= gspec.Timestamp,
+			IsPBT:     gspec.Config.IsPBTGenesis(),
 		}
 	)
 	if scheme == rawdb.PathScheme || tconf.IsPBT {
