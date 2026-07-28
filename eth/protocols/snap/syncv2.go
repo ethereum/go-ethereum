@@ -607,6 +607,14 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 			// instead of starting a catch-up doomed to stall.
 			log.Warn("Catch-up gap exceeds BAL retention, restarting snap sync from scratch", "oldnumber", prevPivot.Number, "newnumber", target.Number, "gap", new(big.Int).Sub(target.Number, prevPivot.Number), "limit", maxCatchUpBlocks)
 			s.resetSyncState()
+		case gapStartsPreAmsterdam(s.db, prevPivot):
+			// No peer will ever serve a non-empty access list for a
+			// pre-Amsterdam block, so BAL catch-up can never bridge this gap.
+			// Discard the stale progress and resync from scratch via the
+			// state trie instead of starting a catch-up doomed to fail with
+			// errAccessListUnavailable.
+			log.Warn("Catch-up gap predates Amsterdam, restarting snap sync from scratch", "oldnumber", prevPivot.Number, "newnumber", target.Number)
+			s.resetSyncState()
 		default:
 			// An unclean shutdown may have left flushed snapshot data the journal
 			// doesn't cover.
@@ -791,6 +799,31 @@ func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
 func catchUpExceedsRetention(prev, curr *types.Header) bool {
 	gap := new(big.Int).Sub(curr.Number, prev.Number)
 	return gap.Cmp(big.NewInt(maxCatchUpBlocks)) > 0
+}
+
+// gapStartsPreAmsterdam reports whether the first block of the catch-up gap
+// (prev, curr] predates the Amsterdam fork. Block access lists only exist
+// for Amsterdam and later blocks (EIP-7928); peers correctly respond to BAL
+// requests for earlier blocks with an empty entry (see
+// ServiceGetAccessListsQuery), which the fetcher cannot distinguish from a
+// genuinely unavailable access list. Left alone, this makes the fetcher
+// eventually treat every peer as having "refused" the block and fail with
+// errAccessListUnavailable. If the gap dips into pre-Amsterdam territory,
+// catch-up can never complete it, so the caller should wipe the stale
+// progress and resync via the state trie instead.
+func gapStartsPreAmsterdam(db ethdb.Database, prev *types.Header) bool {
+	num := prev.Number.Uint64() + 1
+
+	header := rawdb.ReadSkeletonHeader(db, num)
+	if header == nil {
+		if hash := rawdb.ReadCanonicalHash(db, num); hash != (common.Hash{}) {
+			header = rawdb.ReadHeader(db, hash, num)
+		}
+	}
+	// If the header isn't available locally yet, let the regular catch-up
+	// path surface that as a lookup failure; only short-circuit here when
+	// we can positively confirm the gap starts before Amsterdam.
+	return header != nil && header.BlockAccessListHash == nil
 }
 
 // catchUp runs the BAL catch-up. When the pivot has moved, it fetches BALs
