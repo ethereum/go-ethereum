@@ -196,7 +196,7 @@ func TestGenesisHashes(t *testing.T) {
 		}
 		// Test via ToBlock
 		if have := c.genesis.ToBlock().Hash(); have != c.want {
-			t.Errorf("case: %d b), want: %s, got: %s", i, c.want.Hex(), have.Hex())
+			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 	}
 }
@@ -261,9 +261,9 @@ func newDbConfig(scheme string) *triedb.Config {
 	return &triedb.Config{PathDB: &config}
 }
 
-func TestBinaryGenesisCommit(t *testing.T) {
-	var ubtTime uint64 = 0
-	ubtConfig := &params.ChainConfig{
+func TestPBTGenesisCommit(t *testing.T) {
+	var pbtTime uint64 = 0
+	verkleConfig := &params.ChainConfig{
 		ChainID:                 big.NewInt(1),
 		HomesteadBlock:          big.NewInt(0),
 		DAOForkBlock:            nil,
@@ -281,11 +281,11 @@ func TestBinaryGenesisCommit(t *testing.T) {
 		ArrowGlacierBlock:       big.NewInt(0),
 		GrayGlacierBlock:        big.NewInt(0),
 		MergeNetsplitBlock:      nil,
-		ShanghaiTime:            &ubtTime,
-		CancunTime:              &ubtTime,
-		PragueTime:              &ubtTime,
-		OsakaTime:               &ubtTime,
-		PBTTime:                 &ubtTime,
+		ShanghaiTime:            &pbtTime,
+		CancunTime:              &pbtTime,
+		PragueTime:              &pbtTime,
+		OsakaTime:               &pbtTime,
+		PBTTime:                 &pbtTime,
 		TerminalTotalDifficulty: big.NewInt(0),
 		EnablePBTAtGenesis:      true,
 		Ethash:                  nil,
@@ -293,20 +293,26 @@ func TestBinaryGenesisCommit(t *testing.T) {
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
+			Osaka:  params.DefaultOsakaBlobConfig,
+			Verkle: params.DefaultPragueBlobConfig,
 		},
 	}
 
 	genesis := &Genesis{
 		BaseFee:    big.NewInt(params.InitialBaseFee),
-		Config:     ubtConfig,
-		Timestamp:  ubtTime,
+		Config:     verkleConfig,
+		Timestamp:  pbtTime,
 		Difficulty: big.NewInt(0),
 		Alloc: types.GenesisAlloc{
 			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 		},
 	}
 
-	expected := common.FromHex("0870fd587c41dc778019de8c5cb3193fe4ef1f417976461952d3712ba39163f5")
+	// Blessed against the EELS reference (execution-specs branch
+	// eip-8297-tests @ec412acfd): embed_flat_state of this exact alloc under
+	// the EIP-8297 embedding. Regenerate with any EELS checkout if the
+	// embedding or the tree hash changes.
+	expected := common.FromHex("4aa2bd4c47ed50e89186aa308cceb67d985fd69e55d87580111ef355cb0e3814")
 	got := genesis.ToBlock().Root().Bytes()
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
@@ -318,18 +324,17 @@ func TestBinaryGenesisCommit(t *testing.T) {
 	config.NoAsyncFlush = true
 
 	triedb := triedb.NewDatabase(db, &triedb.Config{
-		IsPBT:             true,
-		PathDB:            &config,
-		BinTrieGroupDepth: triedb.DefaultBinTrieGroupDepth,
+		IsPBT:  true,
+		PathDB: &config,
 	})
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, block.Root())
 	}
 
-	// Test that the trie is a unified binary trie
+	// Test that the trie is verkle
 	if !triedb.IsPBT() {
-		t.Fatalf("expected trie to be a unified binary trie")
+		t.Fatalf("expected trie to be verkle")
 	}
 	vdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
 	if !rawdb.HasAccountTrieNode(vdb, nil) {

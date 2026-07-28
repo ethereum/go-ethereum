@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
-	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
@@ -526,12 +525,8 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 
 	switch s.trie.(type) {
 	case *bintrie.BinaryTrie:
-		// PBT uses only one tree, and the copy has already been
-		// made in mustCopyTrie.
-		obj.trie = db.trie
-	case *transitiontrie.TransitionTrie:
-		// Same thing for the transition tree, since the MPT is
-		// read-only.
+		// The binary trie is unified: every object shares the statedb's
+		// single trie, whose copy was already made in mustCopyTrie.
 		obj.trie = db.trie
 	case *trie.StateTrie:
 		obj.trie = mustCopyTrie(s.trie)

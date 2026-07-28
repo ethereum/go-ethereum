@@ -66,18 +66,20 @@ func (ae *AccessEvents) Merge(other *AccessEvents) {
 	}
 }
 
-// Keys returns, predictably, the list of keys that were touched during the
-// buildup of the access witness.
+// Keys returns, predictably, the list of tree keys that were touched during
+// the buildup of the access witness.
 func (ae *AccessEvents) Keys() [][]byte {
-	// TODO: consider if parallelizing this is worth it, probably depending on len(ae.chunks).
 	keys := make([][]byte, 0, len(ae.chunks))
 	for chunk := range ae.chunks {
-		var offset [32]byte
-		treeIndexBytes := chunk.treeIndex.Bytes32()
-		copy(offset[:31], treeIndexBytes[1:])
-		offset[31] = chunk.leafKey
-		key := bintrie.GetBinaryTreeKey(chunk.addr, offset[:])
-		keys = append(keys, key)
+		switch chunk.zone {
+		case bintrie.AccountZone:
+			keys = append(keys, bintrie.HeaderKey(chunk.addr, chunk.leafKey))
+		case bintrie.StorageZone:
+			treeIndex := chunk.treeIndex
+			keys = append(keys, append(bintrie.StorageStem(chunk.addr, &treeIndex), chunk.leafKey))
+		case bintrie.CodeZone:
+			keys = append(keys, append(bintrie.CodeChunkStem(chunk.codeHash, chunk.treeIndex.Uint64()), chunk.leafKey))
+		}
 	}
 	return keys
 }
@@ -94,12 +96,12 @@ func (ae *AccessEvents) Copy() *AccessEvents {
 // member fields of an account.
 func (ae *AccessEvents) AddAccount(addr common.Address, isWrite bool, availableGas uint64) uint64 {
 	var gas uint64 // accumulate the consumed gas
-	consumed, expected := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.BasicDataLeafKey, isWrite, availableGas)
+	consumed, expected := ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.BasicDataLeafKey, isWrite, availableGas)
 	if consumed < expected {
 		return expected
 	}
 	gas += consumed
-	consumed, expected = ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.CodeHashLeafKey, isWrite, availableGas-consumed)
+	consumed, expected = ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.CodeHashLeafKey, isWrite, availableGas-consumed)
 	if consumed < expected {
 		return expected + gas
 	}
@@ -111,7 +113,7 @@ func (ae *AccessEvents) AddAccount(addr common.Address, isWrite bool, availableG
 // cold member fields of an account, that need to be touched when making a message
 // call to that account.
 func (ae *AccessEvents) MessageCallGas(destination common.Address, availableGas uint64) uint64 {
-	_, expected := ae.touchAddressAndChargeGas(destination, zeroTreeIndex, bintrie.BasicDataLeafKey, false, availableGas)
+	_, expected := ae.touchAddressAndChargeGas(headerAccessKey(destination), bintrie.BasicDataLeafKey, false, availableGas)
 	if expected == 0 {
 		expected = params.WarmStorageReadCostEIP2929
 	}
@@ -121,11 +123,11 @@ func (ae *AccessEvents) MessageCallGas(destination common.Address, availableGas 
 // ValueTransferGas returns the gas to be charged for each of the currently
 // cold balance member fields of the caller and the callee accounts.
 func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address, availableGas uint64) uint64 {
-	_, expected1 := ae.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, bintrie.BasicDataLeafKey, true, availableGas)
+	_, expected1 := ae.touchAddressAndChargeGas(headerAccessKey(callerAddr), bintrie.BasicDataLeafKey, true, availableGas)
 	if expected1 > availableGas {
 		return expected1
 	}
-	_, expected2 := ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, bintrie.BasicDataLeafKey, true, availableGas-expected1)
+	_, expected2 := ae.touchAddressAndChargeGas(headerAccessKey(targetAddr), bintrie.BasicDataLeafKey, true, availableGas-expected1)
 	if expected1+expected2 == 0 {
 		return params.WarmStorageReadCostEIP2929
 	}
@@ -137,8 +139,8 @@ func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address, 
 // address collision is done before the transfer, and so no write
 // are guaranteed to happen at this point.
 func (ae *AccessEvents) ContractCreatePreCheckGas(addr common.Address, availableGas uint64) uint64 {
-	consumed, expected1 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.BasicDataLeafKey, false, availableGas)
-	_, expected2 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.CodeHashLeafKey, false, availableGas-consumed)
+	consumed, expected1 := ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.BasicDataLeafKey, false, availableGas)
+	_, expected2 := ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.CodeHashLeafKey, false, availableGas-consumed)
 	return expected1 + expected2
 }
 
@@ -146,9 +148,9 @@ func (ae *AccessEvents) ContractCreatePreCheckGas(addr common.Address, available
 // a contract creation.
 func (ae *AccessEvents) ContractCreateInitGas(addr common.Address, availableGas uint64) (uint64, uint64) {
 	var gas uint64
-	consumed, expected1 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.BasicDataLeafKey, true, availableGas)
+	consumed, expected1 := ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.BasicDataLeafKey, true, availableGas)
 	gas += consumed
-	consumed, expected2 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.CodeHashLeafKey, true, availableGas-consumed)
+	consumed, expected2 := ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.CodeHashLeafKey, true, availableGas-consumed)
 	gas += consumed
 	return gas, expected1 + expected2
 }
@@ -156,21 +158,25 @@ func (ae *AccessEvents) ContractCreateInitGas(addr common.Address, availableGas 
 // AddTxOrigin adds the member fields of the sender account to the access event list,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
 func (ae *AccessEvents) AddTxOrigin(originAddr common.Address) {
-	ae.touchAddressAndChargeGas(originAddr, zeroTreeIndex, bintrie.BasicDataLeafKey, true, gomath.MaxUint64)
-	ae.touchAddressAndChargeGas(originAddr, zeroTreeIndex, bintrie.CodeHashLeafKey, false, gomath.MaxUint64)
+	ae.touchAddressAndChargeGas(headerAccessKey(originAddr), bintrie.BasicDataLeafKey, true, gomath.MaxUint64)
+	ae.touchAddressAndChargeGas(headerAccessKey(originAddr), bintrie.CodeHashLeafKey, false, gomath.MaxUint64)
 }
 
 // AddTxDestination adds the member fields of the sender account to the access event list,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
 func (ae *AccessEvents) AddTxDestination(addr common.Address, sendsValue, doesntExist bool) {
-	ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.BasicDataLeafKey, sendsValue, gomath.MaxUint64)
-	ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.CodeHashLeafKey, doesntExist, gomath.MaxUint64)
+	ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.BasicDataLeafKey, sendsValue, gomath.MaxUint64)
+	ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.CodeHashLeafKey, doesntExist, gomath.MaxUint64)
 }
 
 // SlotGas returns the amount of gas to be charged for a cold storage access.
 func (ae *AccessEvents) SlotGas(addr common.Address, slot common.Hash, isWrite bool, availableGas uint64, chargeWarmCosts bool) uint64 {
-	treeIndex, subIndex := bintrie.StorageIndex(slot.Bytes())
-	_, expected := ae.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite, availableGas)
+	inHeader, treeIndex, subIndex := bintrie.StorageIndex(slot.Bytes())
+	branchKey := headerAccessKey(addr)
+	if !inHeader {
+		branchKey = storageAccessKey(addr, treeIndex)
+	}
+	_, expected := ae.touchAddressAndChargeGas(branchKey, subIndex, isWrite, availableGas)
 	if expected == 0 && chargeWarmCosts {
 		expected = params.WarmStorageReadCostEIP2929
 	}
@@ -179,8 +185,7 @@ func (ae *AccessEvents) SlotGas(addr common.Address, slot common.Hash, isWrite b
 
 // touchAddressAndChargeGas adds any missing access event to the access event list, and returns the
 // consumed and required gas.
-func (ae *AccessEvents) touchAddressAndChargeGas(addr common.Address, treeIndex uint256.Int, subIndex byte, isWrite bool, availableGas uint64) (uint64, uint64) {
-	branchKey := newBranchAccessKey(addr, treeIndex)
+func (ae *AccessEvents) touchAddressAndChargeGas(branchKey branchAccessKey, subIndex byte, isWrite bool, availableGas uint64) (uint64, uint64) {
 	chunkKey := newChunkAccessKey(branchKey, subIndex)
 
 	// Read access.
@@ -244,16 +249,28 @@ func (ae *AccessEvents) touchAddressAndChargeGas(addr common.Address, treeIndex 
 	return gas, gas
 }
 
+// branchAccessKey identifies a stem (witness branch) across the EIP-8297
+// zones. Under EIP-8297 the storage tree index starts at zero, so the zone
+// byte is part of the identity (the account header stem and storage group
+// zero would otherwise collide); overflow code chunks are content-addressed
+// by code hash, shared across contracts, and charged once per block.
 type branchAccessKey struct {
-	addr      common.Address
-	treeIndex uint256.Int
+	zone      byte           // bintrie.AccountZone, StorageZone or CodeZone
+	addr      common.Address // zero for the content-addressed code zone
+	codeHash  common.Hash    // zero outside the code zone
+	treeIndex uint256.Int    // zero for account header stems
 }
 
-func newBranchAccessKey(addr common.Address, treeIndex uint256.Int) branchAccessKey {
-	var sk branchAccessKey
-	sk.addr = addr
-	sk.treeIndex = treeIndex
-	return sk
+func headerAccessKey(addr common.Address) branchAccessKey {
+	return branchAccessKey{zone: bintrie.AccountZone, addr: addr}
+}
+
+func storageAccessKey(addr common.Address, treeIndex uint256.Int) branchAccessKey {
+	return branchAccessKey{zone: bintrie.StorageZone, addr: addr, treeIndex: treeIndex}
+}
+
+func codeAccessKey(codeHash common.Hash, treeIndex uint64) branchAccessKey {
+	return branchAccessKey{zone: bintrie.CodeZone, codeHash: codeHash, treeIndex: *uint256.NewInt(treeIndex)}
 }
 
 type chunkAccessKey struct {
@@ -268,8 +285,13 @@ func newChunkAccessKey(branchKey branchAccessKey, leafKey byte) chunkAccessKey {
 	return lk
 }
 
-// CodeChunksRangeGas is a helper function to touch every chunk in a code range and charge witness gas costs
-func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC, size uint64, codeLen uint64, isWrite bool, availableGas uint64) (uint64, uint64) {
+// CodeChunksRangeGas is a helper function to touch every chunk in a code
+// range and charge witness gas costs. Chunks below 128 live in the account
+// header stem (per-account); higher chunks live in the content-addressed
+// code zone, keyed by the code hash, so a chunk shared between contracts
+// with identical bytecode is charged at most once per block (EIP-8297
+// access events).
+func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, codeHash common.Hash, startPC, size uint64, codeLen uint64, isWrite bool, availableGas uint64) (uint64, uint64) {
 	// note that in the case where the copied code is outside the range of the
 	// contract code but touches the last leaf with contract code in it,
 	// we don't include the last leaf of code in the AccessWitness.  The
@@ -290,9 +312,12 @@ func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC,
 
 	var statelessGasCharged uint64
 	for chunkNumber := startPC / 31; chunkNumber <= endPC/31; chunkNumber++ {
-		treeIndex := *uint256.NewInt((chunkNumber + 128) / 256)
-		subIndex := byte((chunkNumber + 128) % 256)
-		consumed, expected := ae.touchAddressAndChargeGas(contractAddr, treeIndex, subIndex, isWrite, availableGas)
+		inHeader, treeIndex, subIndex := bintrie.CodeChunkIndex(chunkNumber)
+		branchKey := headerAccessKey(contractAddr)
+		if !inHeader {
+			branchKey = codeAccessKey(codeHash, treeIndex)
+		}
+		consumed, expected := ae.touchAddressAndChargeGas(branchKey, subIndex, isWrite, availableGas)
 		// did we OOG ?
 		if expected > consumed {
 			return statelessGasCharged + consumed, statelessGasCharged + expected
@@ -312,7 +337,7 @@ func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC,
 // Note that an access in write mode implies an access in read mode, whereas an
 // access in read mode does not imply an access in write mode.
 func (ae *AccessEvents) BasicDataGas(addr common.Address, isWrite bool, availableGas uint64, chargeWarmCosts bool) uint64 {
-	_, expected := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.BasicDataLeafKey, isWrite, availableGas)
+	_, expected := ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.BasicDataLeafKey, isWrite, availableGas)
 	if expected == 0 && chargeWarmCosts {
 		if availableGas < params.WarmStorageReadCostEIP2929 {
 			return availableGas
@@ -328,7 +353,7 @@ func (ae *AccessEvents) BasicDataGas(addr common.Address, isWrite bool, availabl
 // Note that an access in write mode implies an access in read mode, whereas an access in
 // read mode does not imply an access in write mode.
 func (ae *AccessEvents) CodeHashGas(addr common.Address, isWrite bool, availableGas uint64, chargeWarmCosts bool) uint64 {
-	_, expected := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, bintrie.CodeHashLeafKey, isWrite, availableGas)
+	_, expected := ae.touchAddressAndChargeGas(headerAccessKey(addr), bintrie.CodeHashLeafKey, isWrite, availableGas)
 	if expected == 0 && chargeWarmCosts {
 		if availableGas < params.WarmStorageReadCostEIP2929 {
 			return availableGas

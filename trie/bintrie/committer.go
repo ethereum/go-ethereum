@@ -138,15 +138,17 @@ func (t *BinaryTrie) collect(n binaryNode, walk bitstr, pos int, set *trienode.N
 	case empty, hashedNode:
 		return
 	case *groupNode:
-		if !nn.dirty && nn.cachedAt == pos && nn.cachedHash != (common.Hash{}) {
+		if !nn.modified {
 			return
 		}
+		nn.modified = false
 		path := pathOf(walk)
 		set.AddNode(path, trienode.NewNodeWithPrev(nn.hashAt(pos), serializeNode(nn, pos), t.tracer.Get(path)))
 	case *branchNode:
-		if !nn.dirty && nn.cachedHash != (common.Hash{}) {
+		if !nn.modified {
 			return
 		}
+		nn.modified = false
 		child := pos + nn.prefix.n + 1
 		t.collect(nn.left, walk.append(nn.prefix).concat(0, bitstr{}), child, set)
 		t.collect(nn.right, walk.append(nn.prefix).concat(1, bitstr{}), child, set)

@@ -50,7 +50,7 @@ import (
 type Prestate struct {
 	Env        stEnv                         `json:"env"`
 	Pre        types.GenesisAlloc            `json:"pre"`
-	TreeLeaves map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
+	TreeLeaves map[string]hexutil.Bytes `json:"vkt,omitempty"`
 	// AllocPath, when non-empty, causes Apply to stream the alloc from disk
 	// instead of reading Pre, so the full map never materializes in memory.
 	AllocPath string `json:"-"`

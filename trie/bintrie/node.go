@@ -65,7 +65,8 @@ type branchNode struct {
 	right  binaryNode
 
 	cachedHash common.Hash
-	dirty      bool
+	dirty      bool // hash cache invalid
+	modified   bool // record changed since load; cleared by commit
 }
 
 // groupNode holds the present values of one stem, sparse and sorted by
@@ -76,8 +77,9 @@ type groupNode struct {
 	vals [][]byte // matching values, each 32 bytes
 
 	cachedHash common.Hash
-	dirty      bool
-	cachedAt   int // position the cache was computed at; group hashes are position-dependent
+	dirty      bool // hash cache invalid
+	modified   bool // record changed since load; cleared by commit
+	cachedAt   int  // position the cache was computed at; group hashes are position-dependent
 }
 
 // hashedNode is an unresolved node reference.
@@ -137,6 +139,7 @@ func (n *branchNode) copy() binaryNode {
 		right:      n.right.copy(),
 		cachedHash: n.cachedHash,
 		dirty:      n.dirty,
+		modified:   n.modified,
 	}
 	return cp
 }
@@ -241,6 +244,7 @@ func (g *groupNode) set(sub byte, value []byte) bool {
 		g.vals[lo] = value
 	}
 	g.dirty = true
+	g.modified = true
 	return len(g.subs) > 0
 }
 
@@ -251,6 +255,7 @@ func (g *groupNode) copy() binaryNode {
 		vals:       make([][]byte, len(g.vals)),
 		cachedHash: g.cachedHash,
 		dirty:      g.dirty,
+		modified:   g.modified,
 		cachedAt:   g.cachedAt,
 	}
 	copy(cp.vals, g.vals) // values are immutable, share them

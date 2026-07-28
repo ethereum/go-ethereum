@@ -178,7 +178,7 @@ func (t *BinaryTrie) getValue(key []byte) ([]byte, error) {
 // newGroup builds a group from parallel sub/value slices, skipping nil
 // (deleted) values. Returns nil if no value remains.
 func newGroup(stem []byte, subs []byte, vals [][]byte) *groupNode {
-	g := &groupNode{stem: append([]byte{}, stem...), dirty: true}
+	g := &groupNode{stem: append([]byte{}, stem...), dirty: true, modified: true}
 	for i, v := range vals {
 		if v != nil {
 			g.set(subs[i], v)
@@ -255,9 +255,9 @@ func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]by
 		// The existing group's record moves below the new branch.
 		t.ops.onDelete(pathOf(keyWalk(nn.stem, pos)))
 		t.ops.onInsert(pathOf(keyWalk(nn.stem, split+1)))
-		nn.dirty = true // position (and, for multi-value groups, hash) changes
+		nn.dirty, nn.modified = true, true // position (and, for multi-value groups, hash) changes
 		t.ops.onInsert(pathOf(keyWalk(stem, split+1)))
-		branch := &branchNode{prefix: slice(stem, pos, run), dirty: true}
+		branch := &branchNode{prefix: slice(stem, pos, run), dirty: true, modified: true}
 		if bitAt(stem, split) == 0 {
 			branch.left, branch.right = g, nn
 		} else {
@@ -291,7 +291,7 @@ func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]by
 			} else {
 				nn.right = child
 			}
-			nn.dirty = true
+			nn.dirty, nn.modified = true, true
 			return nn, nil
 		}
 		// Diverges inside the prefix: split the branch. The survivor keeps
@@ -306,13 +306,14 @@ func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]by
 		survivorPath := keyWalk(stem, split).concat(survivorBit, bitstr{})
 		t.ops.onInsert(pathOf(survivorPath))
 		survivor := &branchNode{
-			prefix: nn.prefix.tail(m + 1),
-			left:   nn.left,
-			right:  nn.right,
-			dirty:  true,
+			prefix:   nn.prefix.tail(m + 1),
+			left:     nn.left,
+			right:    nn.right,
+			dirty:    true,
+			modified: true,
 		}
 		t.ops.onInsert(pathOf(keyWalk(stem, split+1)))
-		top := &branchNode{prefix: nn.prefix.head(m), dirty: true}
+		top := &branchNode{prefix: nn.prefix.head(m), dirty: true, modified: true}
 		if bitAt(stem, split) == 0 {
 			top.left, top.right = g, survivor
 		} else {
@@ -347,10 +348,10 @@ func (t *BinaryTrie) collapse(n *branchNode, walk bitstr, bit byte) (binaryNode,
 	switch s := sibling.(type) {
 	case *branchNode:
 		s.prefix = n.prefix.concat(siblingBit, s.prefix)
-		s.dirty = true
+		s.dirty, s.modified = true, true
 		return s, nil
 	case *groupNode:
-		s.dirty = true // stored depth changes; single-value groups just move
+		s.dirty, s.modified = true, true // stored depth changes; single-value groups just move
 		return s, nil
 	default:
 		return n, fmt.Errorf("bintrie: invalid collapse survivor %T", sibling)
@@ -420,7 +421,7 @@ func (t *BinaryTrie) delStem(n binaryNode, stem []byte, pos int) (binaryNode, bo
 			nn.right = child
 		}
 		if removed {
-			nn.dirty = true
+			nn.dirty, nn.modified = true, true
 		}
 		return nn, removed, nil
 	default:
@@ -527,7 +528,7 @@ func (t *BinaryTrie) delPrefix(n binaryNode, P []byte, walk bitstr, pos int) (bi
 			nn.right = child
 		}
 		if removed {
-			nn.dirty = true
+			nn.dirty, nn.modified = true, true
 		}
 		return nn, removed, nil
 	default:

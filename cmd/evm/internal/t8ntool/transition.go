@@ -85,11 +85,11 @@ var (
 )
 
 type input struct {
-	Alloc types.GenesisAlloc            `json:"alloc,omitempty"`
-	Env   *stEnv                        `json:"env,omitempty"`
-	BT    map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
-	Txs   []*txWithKey                  `json:"txs,omitempty"`
-	TxRlp string                        `json:"txsRlp,omitempty"`
+	Alloc types.GenesisAlloc       `json:"alloc,omitempty"`
+	Env   *stEnv                   `json:"env,omitempty"`
+	BT    map[string]hexutil.Bytes `json:"vkt,omitempty"`
+	Txs   []*txWithKey             `json:"txs,omitempty"`
+	TxRlp string                   `json:"txsRlp,omitempty"`
 }
 
 func Transition(ctx *cli.Context) error {
@@ -227,7 +227,7 @@ func Transition(ctx *cli.Context) error {
 	// Dump the execution result.
 	var (
 		collector Alloc
-		btleaves  map[common.Hash]hexutil.Bytes
+		btleaves  map[string]hexutil.Bytes
 	)
 	isBinary := chainConfig.IsPBT(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
 	allocOutput := ctx.String(OutputAllocFlag.Name)
@@ -244,17 +244,12 @@ func Transition(ctx *cli.Context) error {
 		collector = make(Alloc)
 		s.DumpToCollector(collector, nil)
 	default:
-		udb, ok := s.Database().(*state.PBTDatabase)
-		if !ok {
-			return NewError(ErrorEVM, errors.New("expected PBTDatabase in binary trie mode"))
-		}
-		rec := udb.AllocRecorder()
-		if rec == nil {
-			return NewError(ErrorEVM, errors.New("PBT alloc recorder was not enabled"))
-		}
-		collector = Alloc(rec.Alloc())
-		if err := mergeUnmigratedBaseAlloc(udb, s.IntermediateRoot(false), collector); err != nil {
-			return NewError(ErrorEVM, fmt.Errorf("failed to merge base MPT alloc: %v", err))
+		// The binary post-state is dumped straight from the state, keyed by
+		// the full tree key. Upstream's recorder-based path went with the
+		// EIP-7864 engine it was written against.
+		btleaves = make(map[string]hexutil.Bytes)
+		if err := s.DumpPBTLeaves(btleaves); err != nil {
+			return err
 		}
 	}
 	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body, btleaves)
@@ -493,7 +488,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 // dispatchOutput writes the output data to either stderr or stdout, or to the specified
 // files. An empty allocOutput skips the alloc dispatch, which is used when the
 // alloc has already been streamed to disk by the caller.
-func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, allocOutput string, body hexutil.Bytes, bt map[common.Hash]hexutil.Bytes) error {
+func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, allocOutput string, body hexutil.Bytes, bt map[string]hexutil.Bytes) error {
 	stdOutObject := make(map[string]interface{})
 	stdErrObject := make(map[string]interface{})
 	dispatch := func(baseDir, fName, name string, obj interface{}) error {
@@ -562,9 +557,9 @@ func BinKey(ctx *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("error decoding slot: %w", err)
 		}
-		fmt.Printf("%#x\n", bintrie.GetBinaryTreeKeyStorageSlot(common.BytesToAddress(addr), slot))
+		fmt.Printf("%#x\n", bintrie.StorageSlotKey(common.BytesToAddress(addr), slot))
 	} else {
-		fmt.Printf("%#x\n", bintrie.GetBinaryTreeKeyBasicData(common.BytesToAddress(addr)))
+		fmt.Printf("%#x\n", bintrie.BasicDataKey(common.BytesToAddress(addr)))
 	}
 	return nil
 }
@@ -593,14 +588,14 @@ func BinKeys(ctx *cli.Context) error {
 		return fmt.Errorf("error generating bt: %w", err)
 	}
 
-	collector := make(map[common.Hash]hexutil.Bytes)
+	collector := make(map[string]hexutil.Bytes)
 	it, err := bt.NodeIterator(nil)
 	if err != nil {
 		panic(err)
 	}
 	for it.Next(true) {
 		if it.Leaf() {
-			collector[common.BytesToHash(it.LeafKey())] = it.LeafBlob()
+			collector[hexutil.Encode(it.LeafKey())] = it.LeafBlob()
 		}
 	}
 
@@ -689,7 +684,19 @@ func BinaryCodeChunkKey(ctx *cli.Context) error {
 	var chunkNumber uint256.Int
 	chunkNumber.SetBytes(chunkNumberBytes)
 
-	fmt.Printf("%#x\n", bintrie.GetBinaryTreeKeyCodeChunk(common.BytesToAddress(addr), &chunkNumber))
+	// Overflow chunks (128 and above) are content-addressed: the code hash
+	// is required to derive their keys.
+	var codeHash common.Hash
+	if ctx.Args().Len() >= 3 {
+		codeHashBytes, err := hexutil.Decode(ctx.Args().Get(2))
+		if err != nil {
+			return fmt.Errorf("error decoding code hash: %w", err)
+		}
+		codeHash = common.BytesToHash(codeHashBytes)
+	} else if !chunkNumber.IsUint64() || chunkNumber.Uint64() >= 128 {
+		return errors.New("chunk numbers of 128 and above are content-addressed: pass the code hash as a third argument")
+	}
+	fmt.Printf("%#x\n", bintrie.CodeChunkKey(common.BytesToAddress(addr), codeHash, chunkNumber.Uint64()))
 
 	return nil
 }
