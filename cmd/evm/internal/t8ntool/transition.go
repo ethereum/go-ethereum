@@ -85,11 +85,10 @@ var (
 )
 
 type input struct {
-	Alloc types.GenesisAlloc       `json:"alloc,omitempty"`
-	Env   *stEnv                   `json:"env,omitempty"`
-	BT    map[string]hexutil.Bytes `json:"vkt,omitempty"`
-	Txs   []*txWithKey             `json:"txs,omitempty"`
-	TxRlp string                   `json:"txsRlp,omitempty"`
+	Alloc types.GenesisAlloc `json:"alloc,omitempty"`
+	Env   *stEnv             `json:"env,omitempty"`
+	Txs   []*txWithKey       `json:"txs,omitempty"`
+	TxRlp string             `json:"txsRlp,omitempty"`
 }
 
 func Transition(ctx *cli.Context) error {
@@ -104,13 +103,12 @@ func Transition(ctx *cli.Context) error {
 		prestate  Prestate
 		txIt      txIterator // txs to apply
 		allocStr  = ctx.String(InputAllocFlag.Name)
-		btStr     = ctx.String(InputBTFlag.Name)
 		envStr    = ctx.String(InputEnvFlag.Name)
 		txStr     = ctx.String(InputTxsFlag.Name)
 		inputData = &input{}
 	)
 	// Figure out the prestate alloc
-	if allocStr == stdinSelector || btStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
+	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
@@ -121,13 +119,6 @@ func Transition(ctx *cli.Context) error {
 	} else {
 		prestate.Pre = inputData.Alloc
 	}
-
-	if btStr != stdinSelector && btStr != "" {
-		if err := readFile(btStr, "BT", &inputData.BT); err != nil {
-			return err
-		}
-	}
-	prestate.TreeLeaves = inputData.BT
 
 	// Set the block environment
 	if envStr != stdinSelector {
@@ -209,7 +200,7 @@ func Transition(ctx *cli.Context) error {
 		vmConfig.Tracer = tracer.Hooks
 	}
 	// Run the test and aggregate the result
-	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
+	s, result, body, touched, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
 	if err != nil {
 		return err
 	}
@@ -244,12 +235,19 @@ func Transition(ctx *cli.Context) error {
 		collector = make(Alloc)
 		s.DumpToCollector(collector, nil)
 	default:
-		// The binary post-state is dumped straight from the state, keyed by
-		// the full tree key. Upstream's recorder-based path went with the
-		// EIP-7864 engine it was written against.
-		btleaves = make(map[string]hexutil.Bytes)
-		if err := s.DumpPBTLeaves(btleaves); err != nil {
-			return err
+		// The binary post-state is rebuilt from what execution touched, which
+		// is what the reference tooling compares against. Upstream's
+		// recorder-based path went with the EIP-7864 engine it was written for.
+		collector = make(Alloc)
+		collectBinaryAlloc(collector, s, prestate.Pre, touched)
+		// The leaf dump is a debug view of the tree itself, with no
+		// counterpart in the reference tooling, so it is only produced when
+		// asked for.
+		if ctx.String(OutputBTFlag.Name) != "" {
+			btleaves = make(map[string]hexutil.Bytes)
+			if err := s.DumpPBTLeaves(btleaves); err != nil {
+				return err
+			}
 		}
 	}
 	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body, btleaves)
@@ -471,6 +469,64 @@ func (s *streamingAlloc) Close() error {
 	return s.err
 }
 
+// collectBinaryAlloc fills an address-keyed post-state for the binary tree,
+// which cannot be iterated back into one: its leaves are keyed by a hash of
+// the address and it keeps no preimages. So the dump is rebuilt from keys
+// that are already known - the accounts and slots the input allocation named,
+// plus the ones the transition touched - and every value is read back from
+// the committed state. That makes a stale candidate harmless: an account
+// destroyed along the way is skipped, and a slot that never really changed
+// simply reports what it already held.
+//
+// This mirrors what the reference tool does, which keeps the allocation as a
+// fork-independent object and applies the transition's diff to it.
+func collectBinaryAlloc(collector Alloc, s *state.StateDB, pre types.GenesisAlloc, touched map[common.Address][]common.Hash) {
+	candidates := make(map[common.Address]map[common.Hash]struct{})
+	note := func(addr common.Address, keys ...common.Hash) {
+		slots, ok := candidates[addr]
+		if !ok {
+			slots = make(map[common.Hash]struct{})
+			candidates[addr] = slots
+		}
+		for _, key := range keys {
+			slots[key] = struct{}{}
+		}
+	}
+	for addr, account := range pre {
+		note(addr)
+		for key := range account.Storage {
+			note(addr, key)
+		}
+	}
+	for addr, keys := range touched {
+		note(addr, keys...)
+	}
+	for addr, slots := range candidates {
+		if !s.Exist(addr) {
+			continue
+		}
+		var storage map[common.Hash]common.Hash
+		for key := range slots {
+			// Zero is absence in the tree, so a slot cleared during the
+			// transition drops out instead of being reported as zero.
+			value := s.GetState(addr, key)
+			if value == (common.Hash{}) {
+				continue
+			}
+			if storage == nil {
+				storage = make(map[common.Hash]common.Hash)
+			}
+			storage[key] = value
+		}
+		collector[addr] = types.Account{
+			Code:    s.GetCode(addr),
+			Storage: storage,
+			Balance: s.GetBalance(addr).ToBig(),
+			Nonce:   s.GetNonce(addr),
+		}
+	}
+}
+
 // saveFile marshals the object to the given file
 func saveFile(baseDir, filename string, data interface{}) error {
 	b, err := json.MarshalIndent(data, "", " ")
@@ -517,7 +573,7 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 	}
 	// Only write bt output if we actually have binary trie leaves
 	if bt != nil {
-		if err := dispatch(baseDir, ctx.String(OutputBTFlag.Name), "vkt", bt); err != nil {
+		if err := dispatch(baseDir, ctx.String(OutputBTFlag.Name), "treeLeaves", bt); err != nil {
 			return err
 		}
 	}
@@ -591,7 +647,7 @@ func BinKeys(ctx *cli.Context) error {
 	collector := make(map[string]hexutil.Bytes)
 	it, err := bt.NodeIterator(nil)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("error iterating tree: %w", err)
 	}
 	for it.Next(true) {
 		if it.Leaf() {
@@ -683,6 +739,10 @@ func BinaryCodeChunkKey(ctx *cli.Context) error {
 	}
 	var chunkNumber uint256.Int
 	chunkNumber.SetBytes(chunkNumberBytes)
+	// Checked before anything reads it: Uint64 keeps only the low 64 bits.
+	if !chunkNumber.IsUint64() {
+		return errors.New("chunk number does not fit in 64 bits")
+	}
 
 	// Overflow chunks (128 and above) are content-addressed: the code hash
 	// is required to derive their keys.
@@ -693,7 +753,7 @@ func BinaryCodeChunkKey(ctx *cli.Context) error {
 			return fmt.Errorf("error decoding code hash: %w", err)
 		}
 		codeHash = common.BytesToHash(codeHashBytes)
-	} else if !chunkNumber.IsUint64() || chunkNumber.Uint64() >= 128 {
+	} else if chunkNumber.Uint64() >= 128 {
 		return errors.New("chunk numbers of 128 and above are content-addressed: pass the code hash as a third argument")
 	}
 	fmt.Printf("%#x\n", bintrie.CodeChunkKey(common.BytesToAddress(addr), codeHash, chunkNumber.Uint64()))

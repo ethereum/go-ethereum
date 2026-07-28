@@ -14,3 +14,8 @@ it: both produce
 
 so this fixture pins the key derivation, the code chunking and the tree
 hashing against the spec rather than against geth's own output.
+
+The expected allocation is spec-blessed too: the reference emits the same
+account, code and both storage slots. Carrying no transactions is what makes
+that possible - see `../36`, which does run transactions and therefore can
+only match the reference on everything except gas.

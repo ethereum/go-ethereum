@@ -415,6 +415,50 @@ func (s *StateDB) HasStorage(addr common.Address) bool {
 	return has
 }
 
+// TouchedState reports every account this state loaded or changed, along with
+// the storage slots touched on each. Addresses and slot keys are both raw,
+// never hashed.
+//
+// This is a set of candidates, not a description of the outcome: an account
+// may appear that no longer exists by the end of the transition, and a slot
+// may appear whose value never changed. Callers are expected to read the
+// resulting values back from the committed state and discard what is absent.
+// Erring wide is deliberate - a spurious candidate costs a redundant read,
+// while a missing one silently drops an account from the caller's view.
+//
+// It exists for state layouts that cannot be walked back to addresses. The
+// binary tree keys its leaves by a hash of the address and keeps no preimages,
+// so a post-state dump there has to be rebuilt from keys already known rather
+// than recovered by iterating the tree.
+//
+// Only meaningful before Commit, which clears the bookkeeping this reads.
+func (s *StateDB) TouchedState() map[common.Address][]common.Hash {
+	touched := make(map[common.Address][]common.Hash, len(s.stateObjects))
+	for addr, obj := range s.stateObjects {
+		// A slot can sit in any of the three maps depending on how far
+		// through the block it is; a key present in several must only be
+		// reported once.
+		var (
+			seen  map[common.Hash]struct{}
+			slots []common.Hash
+		)
+		for _, storage := range []Storage{obj.originStorage, obj.dirtyStorage, obj.pendingStorage} {
+			for key := range storage {
+				if seen == nil {
+					seen = make(map[common.Hash]struct{})
+				}
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+				slots = append(slots, key)
+			}
+		}
+		touched[addr] = slots
+	}
+	return touched
+}
+
 // TxIndex returns the current transaction index set by SetTxContext.
 func (s *StateDB) TxIndex() int {
 	return s.txIndex
