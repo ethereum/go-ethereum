@@ -290,3 +290,60 @@ func TestPBTCodeSizePreserved(t *testing.T) {
 		t.Fatalf("code size %d after a balance-only touch, want %d", codeSize, len(code))
 	}
 }
+
+// TestPBTPrefetcherWarmsOwners exercises the prefetcher in binary tree mode,
+// where a single sub-fetcher serves every account: slot tasks must be
+// prefetched under their own owner, and the warm trie must be adopted
+// before any writes reach it. Getting either wrong is invisible to the
+// state root - the reads simply go to disk - so this asserts the resulting
+// root instead, with the prefetcher on and off.
+func TestPBTPrefetcherWarmsOwners(t *testing.T) {
+	build := func(prefetch bool) common.Hash {
+		disk := rawdb.NewMemoryDatabase()
+		db := triedb.NewDatabase(disk, triedb.PBTDefaults)
+		sdb, err := New(types.EmptyBinaryHash, NewDatabase(db, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Seed several accounts, each with storage in both homes.
+		var addrs []common.Address
+		for i := byte(1); i <= 6; i++ {
+			addr := common.Address{i}
+			addrs = append(addrs, addr)
+			sdb.CreateAccount(addr)
+			sdb.SetNonce(addr, uint64(i), tracing.NonceChangeUnspecified)
+			sdb.SetState(addr, common.Hash{31: 5}, common.Hash{31: i})
+			sdb.SetState(addr, common.Hash{30: 4}, common.Hash{31: i})
+		}
+		root, err := sdb.Commit(1, true, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Commit(root, false); err != nil {
+			t.Fatal(err)
+		}
+
+		// Second block: touch every account's storage, optionally warming
+		// the trie through the prefetcher first.
+		sdb, err = New(root, NewDatabase(db, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if prefetch {
+			sdb.StartPrefetcher("test", nil)
+			defer sdb.StopPrefetcher()
+		}
+		for i, addr := range addrs {
+			sdb.SetState(addr, common.Hash{31: 5}, common.Hash{31: byte(i + 100)})
+			sdb.SetState(addr, common.Hash{30: 4}, common.Hash{31: byte(i + 100)})
+		}
+		next, err := sdb.Commit(2, true, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next
+	}
+	if warm, cold := build(true), build(false); warm != cold {
+		t.Fatalf("prefetched root %x differs from cold root %x", warm, cold)
+	}
+}

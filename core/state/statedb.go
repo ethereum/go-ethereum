@@ -974,6 +974,18 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
+	// If there was a trie prefetcher operating, terminate it async so that the
+	// individual storage tries can be updated as soon as the disk load
+	// finishes. This has to happen before the main trie is materialised
+	// below: adopting a prefetched trie blocks until its sub-fetcher has
+	// been terminated.
+	if s.prefetcher != nil {
+		s.prefetcher.terminate(true)
+		defer func() {
+			s.prefetcher.report()
+			s.prefetcher = nil // Pre-byzantium, unset any used up prefetcher
+		}()
+	}
 	// Initialize the trie if it's not constructed yet. If the prefetch
 	// is enabled, the trie constructed below will be replaced by the
 	// prefetched one.
@@ -981,21 +993,21 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// This operation must be done before state object storage hashing,
 	// as it assumes the main trie is already loaded.
 	if s.trie == nil {
-		tr, err := s.db.OpenTrie(s.originalRoot)
-		if err != nil {
-			s.setError(err)
-			return common.Hash{}
+		// In binary tree mode a single trie carries the whole state, so the
+		// warm trie can only be adopted here, before anything is written to
+		// it. Later on it would discard uncommitted changes; that is what
+		// the check further below guards against.
+		if s.prefetcher != nil && s.db.TrieDB().IsPBT() {
+			s.trie = s.prefetcher.trie(common.Hash{}, s.originalRoot)
 		}
-		s.trie = tr
-	}
-	// If there was a trie prefetcher operating, terminate it async so that the
-	// individual storage tries can be updated as soon as the disk load finishes.
-	if s.prefetcher != nil {
-		s.prefetcher.terminate(true)
-		defer func() {
-			s.prefetcher.report()
-			s.prefetcher = nil // Pre-byzantium, unset any used up prefetcher
-		}()
+		if s.trie == nil {
+			tr, err := s.db.OpenTrie(s.originalRoot)
+			if err != nil {
+				s.setError(err)
+				return common.Hash{}
+			}
+			s.trie = tr
+		}
 	}
 	// Process all storage updates concurrently. The state object update root
 	// method will internally call a blocking trie fetch from the prefetcher,
@@ -1107,9 +1119,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
 	//
-	// Don't check prefetcher if verkle trie has been used. In the context of verkle,
-	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
-	// here could result in losing uncommitted changes from storage.
+	// Don't check the prefetcher in binary tree mode: a single trie is used
+	// for state hashing there and it was already adopted above, before any
+	// writes. Replacing it here would discard uncommitted storage changes.
 	start = time.Now()
 	if s.prefetcher != nil && s.db.Type().Is(TypeMPT) {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
