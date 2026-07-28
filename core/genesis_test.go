@@ -285,16 +285,18 @@ func TestPBTGenesisCommit(t *testing.T) {
 		CancunTime:              &pbtTime,
 		PragueTime:              &pbtTime,
 		OsakaTime:               &pbtTime,
+		AmsterdamTime:           &pbtTime,
 		PBTTime:                 &pbtTime,
 		TerminalTotalDifficulty: big.NewInt(0),
 		EnablePBTAtGenesis:      true,
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Cancun: params.DefaultCancunBlobConfig,
-			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			Verkle: params.DefaultPragueBlobConfig,
+			Cancun:    params.DefaultCancunBlobConfig,
+			Prague:    params.DefaultPragueBlobConfig,
+			Osaka:     params.DefaultOsakaBlobConfig,
+			Amsterdam: params.DefaultAmsterdamBlobConfig,
+			Verkle:    params.DefaultPragueBlobConfig,
 		},
 	}
 

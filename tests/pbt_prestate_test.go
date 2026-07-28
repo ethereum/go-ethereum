@@ -45,6 +45,7 @@ func TestBinaryTreeForkRegistered(t *testing.T) {
 		{"cancun", config.IsCancun(big.NewInt(0), 0)},
 		{"prague", config.IsPrague(big.NewInt(0), 0)},
 		{"osaka", config.IsOsaka(big.NewInt(0), 0)},
+		{"amsterdam", config.IsAmsterdam(big.NewInt(0), 0)},
 	} {
 		if !tc.on {
 			t.Fatalf("BinaryTree fork does not carry %s rules", tc.name)

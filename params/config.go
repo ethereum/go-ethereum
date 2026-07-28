@@ -407,6 +407,22 @@ var (
 		Max:            21,
 		UpdateFraction: 13739630,
 	}
+	// DefaultBPO5BlobConfig is the default blob configuration for the BPO5 fork.
+	// BPO forks carry blob parameters only; until BPO5's own parameters are
+	// scheduled it inherits BPO4's.
+	DefaultBPO5BlobConfig = &BlobConfig{
+		Target:         14,
+		Max:            21,
+		UpdateFraction: 13739630,
+	}
+	// DefaultAmsterdamBlobConfig is the default blob configuration for the
+	// Amsterdam fork. Amsterdam does not schedule blob parameters of its own,
+	// so it inherits the last BPO's.
+	DefaultAmsterdamBlobConfig = &BlobConfig{
+		Target:         14,
+		Max:            21,
+		UpdateFraction: 13739630,
+	}
 	// DefaultBlobSchedule is the latest configured blob schedule for Ethereum mainnet.
 	DefaultBlobSchedule = &BlobScheduleConfig{
 		Cancun: DefaultCancunBlobConfig,

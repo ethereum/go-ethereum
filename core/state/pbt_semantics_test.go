@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
@@ -438,5 +439,76 @@ func TestPBTProofsVerify(t *testing.T) {
 	}
 	if _, err := bintrie.VerifyProof(root, key, proof); err == nil {
 		t.Fatal("tampered proof verified")
+	}
+}
+
+// TestPBTSharedOverflowChunks pins the content-addressed code zone: two
+// contracts deployed with identical bytecode longer than the 128 header
+// chunks share their overflow chunk leaves, so the second deployment adds
+// only its own header stem. This is the dedup EIP-8297 exists to provide,
+// and it is invisible to the account-level API.
+func TestPBTSharedOverflowChunks(t *testing.T) {
+	// 130 chunks of code: 128 land in the header stem, 2 overflow into the
+	// content-addressed code zone.
+	code := bytes.Repeat([]byte{0x5b}, 130*31) // JUMPDEST repeated: no PUSH spans
+	var (
+		first  = common.Address{1}
+		second = common.Address{2}
+	)
+	countLeaves := func(sdb *StateDB, db *triedb.Database, root common.Hash) int {
+		tr, err := sdb.db.OpenTrie(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		it, err := tr.(*bintrie.BinaryTrie).NodeIterator(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n := 0
+		for it.Next(true) {
+			if it.Leaf() {
+				n++
+			}
+		}
+		if err := it.Error(); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	// One contract.
+	one, onedb := newPBTState(t)
+	one.CreateAccount(first)
+	one.SetNonce(first, 1, tracing.NonceChangeUnspecified)
+	one.SetCode(first, code, tracing.CodeChangeUnspecified)
+	one = reopenPBT(t, one, onedb, 1)
+	leavesOne := countLeaves(one, onedb, one.originalRoot)
+
+	// The same code deployed twice.
+	two, twodb := newPBTState(t)
+	for _, addr := range []common.Address{first, second} {
+		two.CreateAccount(addr)
+		two.SetNonce(addr, 1, tracing.NonceChangeUnspecified)
+		two.SetCode(addr, code, tracing.CodeChangeUnspecified)
+	}
+	two = reopenPBT(t, two, twodb, 1)
+	leavesTwo := countLeaves(two, twodb, two.originalRoot)
+
+	// The second contract contributes its own header stem - basic data, code
+	// hash and its 128 header chunks - and nothing else: the 2 overflow
+	// chunks are shared.
+	perAccount := 2 + 128
+	if got, want := leavesTwo-leavesOne, perAccount; got != want {
+		t.Fatalf("second identical contract added %d leaves, want %d (overflow chunks not shared)", got, want)
+	}
+	// Sanity: the overflow chunks really exist, and both accounts derive the
+	// same key for them.
+	codeHash := crypto.Keccak256Hash(code)
+	shared := bintrie.CodeChunkKey(first, codeHash, 128)
+	if other := bintrie.CodeChunkKey(second, codeHash, 128); !bytes.Equal(shared, other) {
+		t.Fatal("overflow chunk keys differ between contracts with identical code")
+	}
+	if shared[0] != bintrie.CodeZone {
+		t.Fatalf("overflow chunk is not in the code zone: zone byte %#x", shared[0])
 	}
 }
