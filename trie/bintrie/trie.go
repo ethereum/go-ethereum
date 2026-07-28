@@ -656,12 +656,19 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 		[][]byte{basic[:], codeHash})
 }
 
-// DeleteAccount removes the account's entire header stem: basic data, code
-// hash, header storage slots and header code chunks. The account's overflow
-// storage bucket is dropped separately via DeleteStorageBucket; the
-// content-addressed code zone is never touched.
+// DeleteAccount removes everything the account owns in the tree: its whole
+// header stem (basic data, code hash, header storage slots and header code
+// chunks) and its overflow storage bucket. Dropping the bucket is required,
+// not optional: in the merkle-patricia world a destroyed account's storage
+// trie merely becomes unreachable from the state root, so a conversion of
+// that state contains none of it, and leaving those leaves behind here
+// would diverge. The content-addressed code zone is never touched, since
+// its chunks may be shared with living contracts.
 func (t *BinaryTrie) DeleteAccount(addr common.Address) error {
-	return t.removeStem(HeaderStem(addr))
+	if err := t.removeStem(HeaderStem(addr)); err != nil {
+		return err
+	}
+	return t.DeletePrefix(StorageBucketPrefix(addr))
 }
 
 // DeleteStorageBucket drops the account's whole overflow storage bucket (all

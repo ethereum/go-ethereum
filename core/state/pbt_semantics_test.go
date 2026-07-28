@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
@@ -159,5 +160,96 @@ func TestPBTZeroIsAbsence(t *testing.T) {
 	}
 	if got2 != refRoot {
 		t.Fatalf("cross-block zeroing left a trace: %x want %x", got2, refRoot)
+	}
+}
+
+// TestPBTAccountDeletion pins that deleting an account removes everything it
+// owns in the unified tree - header stem and overflow storage bucket alike -
+// so the resulting root equals a state where the account never existed. A
+// merkle-patricia state root never contains a destroyed account's storage
+// (its trie simply becomes unreachable), so leaving those leaves behind
+// would diverge from any conversion of the same state.
+func TestPBTAccountDeletion(t *testing.T) {
+	var (
+		doomed   = common.Address{1}
+		survivor = common.Address{2}
+	)
+	// Reference: only the survivor ever exists.
+	ref, _ := newPBTState(t)
+	ref.CreateAccount(survivor)
+	ref.SetNonce(survivor, 3, tracing.NonceChangeUnspecified)
+	ref.SetState(survivor, common.Hash{31: 5}, common.Hash{31: 1})
+	ref.SetState(survivor, common.Hash{30: 4}, common.Hash{31: 2})
+	refRoot, err := ref.Commit(1, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The doomed account holds storage in both homes, then is deleted.
+	sdb, db := newPBTState(t)
+	for _, addr := range []common.Address{doomed, survivor} {
+		sdb.CreateAccount(addr)
+		sdb.SetNonce(addr, 3, tracing.NonceChangeUnspecified)
+		sdb.SetState(addr, common.Hash{31: 5}, common.Hash{31: 1})
+		sdb.SetState(addr, common.Hash{30: 4}, common.Hash{31: 2})
+	}
+	sdb = reopenPBT(t, sdb, db, 1)
+	if !sdb.HasStorage(doomed) {
+		t.Fatal("setup: doomed account has no storage")
+	}
+
+	// Delete through the trie directly: post-EIP-6780 statedb only destroys
+	// same-transaction creations, but the tree operation must be correct.
+	tr, err := sdb.db.OpenTrie(sdb.originalRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bt := tr.(*bintrie.BinaryTrie)
+	for _, addr := range []common.Address{doomed, survivor} {
+		if err := bt.UpdateAccount(addr, &types.StateAccount{
+			Nonce: 3, Balance: uint256.NewInt(0), CodeHash: types.EmptyCodeHash[:],
+		}, 0); err != nil {
+			t.Fatal(err)
+		}
+		bt.UpdateStorage(addr, common.Hash{31: 5}.Bytes(), common.Hash{31: 1}.Bytes())
+		bt.UpdateStorage(addr, common.Hash{30: 4}.Bytes(), common.Hash{31: 2}.Bytes())
+	}
+	if err := bt.DeleteAccount(doomed); err != nil {
+		t.Fatal(err)
+	}
+	if got := bt.Hash(); got != refRoot {
+		t.Fatalf("deletion left a trace: %x want %x", got, refRoot)
+	}
+}
+
+// TestPBTCodeShrink pins EIP-7702 delegation clearing: code can shrink on a
+// live account, and the stale header chunk leaves of the longer code must
+// disappear, otherwise a replayed tree diverges from a converted one.
+func TestPBTCodeShrink(t *testing.T) {
+	addr := common.Address{1}
+	delegation := append([]byte{0xef, 0x01, 0x00}, common.Address{9}.Bytes()...)
+
+	// Reference: the account never carried code.
+	ref, _ := newPBTState(t)
+	ref.CreateAccount(addr)
+	ref.SetNonce(addr, 2, tracing.NonceChangeUnspecified)
+	refRoot, err := ref.Commit(1, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Same account: set a delegation designator, then clear it.
+	sdb, db := newPBTState(t)
+	sdb.CreateAccount(addr)
+	sdb.SetNonce(addr, 2, tracing.NonceChangeUnspecified)
+	sdb.SetCode(addr, delegation, tracing.CodeChangeUnspecified)
+	sdb = reopenPBT(t, sdb, db, 1)
+	sdb.SetCode(addr, nil, tracing.CodeChangeAuthorizationClear)
+	got, err := sdb.Commit(2, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != refRoot {
+		t.Fatalf("cleared delegation left chunk leaves: %x want %x", got, refRoot)
 	}
 }
