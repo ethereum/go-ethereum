@@ -235,9 +235,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	// weird flush or a trie node missing, we need to bail out and not create a block.
 	if dbErr := work.state.Error(); dbErr != nil {
 		return &newPayloadResult{err: fmt.Errorf("%w: %v", errStateReadFailure, dbErr)}
-
 	}
-
 	return &newPayloadResult{
 		block:    block,
 		fees:     totalFees(block, work.receipts),
