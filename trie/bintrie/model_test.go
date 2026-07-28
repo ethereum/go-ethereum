@@ -281,3 +281,94 @@ func TestSerializationRoundTrip(t *testing.T) {
 }
 
 func uint256Zero() *uint256.Int { return new(uint256.Int) }
+
+// TestStackBuilderVsIncremental checks the sorted-stream bulk builder
+// against incremental insertion: same root, same record set.
+func TestStackBuilderVsIncremental(t *testing.T) {
+	for _, seed := range []int64{1, 5, 8297, 20260728} {
+		rng := rand.New(rand.NewSource(seed))
+		model := make(map[string][]byte)
+		for op := 0; op < 250; op++ {
+			key := randomConformantKey(rng)
+			var value [32]byte
+			rng.Read(value[:])
+			model[string(key)] = append([]byte{}, value[:]...)
+		}
+		keys := make([]string, 0, len(model))
+		for k := range model {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		// Incremental reference.
+		inc := newTestTrie()
+		for _, k := range keys {
+			setKey(t, inc, []byte(k), model[k])
+		}
+		want := inc.Hash()
+
+		// Bulk build, collecting emitted records.
+		built := make(map[string][]byte)
+		b := NewStackBuilder(func(path []byte, hash common.Hash, blob []byte) {
+			built[string(path)] = append([]byte{}, blob...)
+		})
+		for _, k := range keys {
+			if err := b.Add([]byte(k), model[k]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := b.Finish(); got != want {
+			t.Fatalf("seed %d: builder root %x, incremental %x", seed, got, want)
+		}
+
+		// The emitted record set must equal what a commit of the
+		// incremental trie produces.
+		_, set := inc.Commit(true)
+		if set == nil {
+			t.Fatal("incremental commit produced no records")
+		}
+		if len(set.Nodes) != len(built) {
+			t.Fatalf("seed %d: record count %d, builder %d", seed, len(set.Nodes), len(built))
+		}
+		for path, node := range set.Nodes {
+			blob, ok := built[path]
+			if !ok {
+				t.Fatalf("seed %d: builder missing record at path %x", seed, path)
+			}
+			if !bytes.Equal(blob, node.Blob) {
+				t.Fatalf("seed %d: record blob mismatch at path %x", seed, path)
+			}
+		}
+	}
+}
+
+// TestStackBuilderEdges covers the degenerate inputs.
+func TestStackBuilderEdges(t *testing.T) {
+	// Empty stream.
+	if got := NewStackBuilder(nil).Finish(); got != (common.Hash{}) {
+		t.Fatalf("empty builder root %x", got)
+	}
+	// Single leaf.
+	key := BasicDataKey(common.Address{1})
+	value := bytes.Repeat([]byte{7}, 32)
+	b := NewStackBuilder(nil)
+	if err := b.Add(key, value); err != nil {
+		t.Fatal(err)
+	}
+	inc := newTestTrie()
+	setKey(t, inc, key, value)
+	if got, want := b.Finish(), inc.Hash(); got != want {
+		t.Fatalf("single leaf: %x want %x", got, want)
+	}
+	// Ordering and conformance are enforced.
+	b2 := NewStackBuilder(nil)
+	if err := b2.Add(BasicDataKey(common.Address{2}), value); err != nil {
+		t.Fatal(err)
+	}
+	if err := b2.Add(BasicDataKey(common.Address{2}), value); err == nil {
+		t.Fatal("expected rejection of a repeated key")
+	}
+	if err := NewStackBuilder(nil).Add([]byte{0x00, 0x01}, value); err == nil {
+		t.Fatal("expected rejection of a non-conformant key")
+	}
+}
