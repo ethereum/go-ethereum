@@ -44,12 +44,13 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
 
 type Prestate struct {
-	Env        stEnv                         `json:"env"`
-	Pre        types.GenesisAlloc            `json:"pre"`
+	Env        stEnv                    `json:"env"`
+	Pre        types.GenesisAlloc       `json:"pre"`
 	TreeLeaves map[string]hexutil.Bytes `json:"vkt,omitempty"`
 	// AllocPath, when non-empty, causes Apply to stream the alloc from disk
 	// instead of reading Pre, so the full map never materializes in memory.
@@ -466,11 +467,8 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 	if err != nil {
 		panic(fmt.Errorf("failed to commit initial state: %v", err))
 	}
-	// If bintrie mode started, check if conversion happened
-	if isBintrie {
-		return statedb
-	}
-	// For MPT mode, reopen the state with the committed root
+	// Reopen at the committed root: a committed trie is spent, whichever
+	// tree backs it.
 	statedb, err = state.New(root, sdb)
 	if err != nil {
 		panic(fmt.Errorf("failed to reopen state after commit: %v", err))

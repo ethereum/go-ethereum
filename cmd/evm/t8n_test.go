@@ -106,6 +106,9 @@ func (args *t8nOutput) get() (out []string) {
 	} else {
 		out = append(out, "--output.alloc", "")
 	}
+	// The binary tree leaf dump defaults to a file; keep tests from writing
+	// one into the package directory.
+	out = append(out, "--output.vkt", "")
 	return out
 }
 
@@ -300,6 +303,15 @@ func TestT8n(t *testing.T) {
 			base: "./testdata/34",
 			input: t8nInput{
 				"alloc.json", "txs.json", "env.json", "Osaka", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
+		{ // EIP-8297 binary tree, storage in both homes, root verified against
+			// the execution specs reference (see the fixture's README).
+			base: "./testdata/35",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "BinaryTree", "",
 			},
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
