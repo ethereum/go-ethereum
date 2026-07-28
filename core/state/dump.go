@@ -127,6 +127,14 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	log.Info("Trie dumping started", "root", s.originalRoot)
 	c.OnRoot(s.originalRoot)
 
+	if s.db.TrieDB().IsPBT() {
+		// The binary tree holds no RLP account leaves to decode: its state
+		// is spread over per-zone leaves. DumpPBTLeaves dumps those; an
+		// account-shaped dump has to be rebuilt from flat state, which is
+		// not wired up yet.
+		log.Error("Account dumping is not supported for the binary tree; use the leaf dump instead")
+		return nil, nil
+	}
 	iteratee, err := s.db.Iteratee(s.originalRoot)
 	if err != nil {
 		return nil, err

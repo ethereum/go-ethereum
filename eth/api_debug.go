@@ -232,6 +232,13 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 }
 
 func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
+	if statedb.Database().TrieDB().IsPBT() {
+		// Under the binary tree there is no per-account storage trie to
+		// range over, and the account carries no storage root: the empty
+		// value below would report every contract as having no storage.
+		// Serving this needs the flat state, which is not wired up yet.
+		return StorageRangeResult{}, errors.New("debug_storageRangeAt is not supported for the binary tree")
+	}
 	storageRoot := statedb.GetStorageRoot(address)
 	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
 		return StorageRangeResult{}, nil // empty storage

@@ -214,7 +214,9 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	s.db.StorageReads += time.Since(start)
 
 	// Schedule the resolved storage slots for prefetching if it's enabled.
-	if s.db.prefetcher != nil && (s.data.Root != types.EmptyRootHash || s.db.db.TrieDB().IsPBT()) {
+	// s.origin is nil for accounts created in this block: they have no
+	// committed storage to warm, and no origin root to schedule against.
+	if s.db.prefetcher != nil && s.origin != nil && (s.data.Root != types.EmptyRootHash || s.db.db.TrieDB().IsPBT()) {
 		if err = s.db.prefetcher.prefetch(s.addrHash(), s.origin.Root, s.address, nil, []common.Hash{key}, true); err != nil {
 			log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
 		}
@@ -282,7 +284,7 @@ func (s *stateObject) finalise() {
 			s.db.stateAccessList.StorageWrite(s.db.blockAccessIndex, s.address, key, value)
 		}
 	}
-	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
+	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && (s.data.Root != types.EmptyRootHash || s.db.db.TrieDB().IsPBT()) {
 		if err := s.db.prefetcher.prefetch(s.addrHash(), s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
 			log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
 		}
