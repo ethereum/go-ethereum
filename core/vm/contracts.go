@@ -211,32 +211,35 @@ func init() {
 	}
 }
 
-func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
+// activePrecompiledContracts returns a pointer to the precompile set variable
+// of the given rules. The pointer doubles as the identity of the set in the
+// precompile result cache, forks reusing a set share its cache entries.
+func activePrecompiledContracts(rules params.Rules) *PrecompiledContracts {
 	switch {
 	case rules.IsUBT:
-		return PrecompiledContractsVerkle
+		return &PrecompiledContractsVerkle
 	case rules.IsBogota:
-		return PrecompiledContractsOsaka
+		return &PrecompiledContractsOsaka
 	case rules.IsOsaka:
-		return PrecompiledContractsOsaka
+		return &PrecompiledContractsOsaka
 	case rules.IsPrague:
-		return PrecompiledContractsPrague
+		return &PrecompiledContractsPrague
 	case rules.IsCancun:
-		return PrecompiledContractsCancun
+		return &PrecompiledContractsCancun
 	case rules.IsBerlin:
-		return PrecompiledContractsBerlin
+		return &PrecompiledContractsBerlin
 	case rules.IsIstanbul:
-		return PrecompiledContractsIstanbul
+		return &PrecompiledContractsIstanbul
 	case rules.IsByzantium:
-		return PrecompiledContractsByzantium
+		return &PrecompiledContractsByzantium
 	default:
-		return PrecompiledContractsHomestead
+		return &PrecompiledContractsHomestead
 	}
 }
 
 // ActivePrecompiledContracts returns a copy of precompiled contracts enabled with the current configuration.
 func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
-	return maps.Clone(activePrecompiledContracts(rules))
+	return maps.Clone(*activePrecompiledContracts(rules))
 }
 
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
@@ -266,7 +269,7 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // - the returned bytes,
 // - the remaining gas budget,
 // - any error that occurred
-func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address common.Address, input []byte, gas GasBudget, logger *tracing.Hooks, rules params.Rules) (ret []byte, remaining GasBudget, err error) {
+func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address common.Address, input []byte, gas GasBudget, logger *tracing.Hooks, rules params.Rules, cache *PrecompileCache) (ret []byte, remaining GasBudget, err error) {
 	gasCost := p.RequiredGas(input)
 	prior, ok := gas.ChargeRegular(gasCost)
 	if !ok {
@@ -279,6 +282,23 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 	// fork is activated.
 	if rules.IsAmsterdam {
 		stateDB.Touch(address)
+	}
+	// Serve pure precompiles from the shared result cache if one is attached.
+	// Gas accounting and state touching above are identical on hit and miss,
+	// only the recomputation is skipped.
+	if cache != nil && cacheablePrecompile(p, input) {
+		var (
+			set = activePrecompiledContracts(rules)
+			key = precompileCacheKey(address, input)
+		)
+		if output, ok := cache.load(set, address, key); ok {
+			return output, gas, nil
+		}
+		output, err := p.Run(input)
+		if err == nil && len(output) <= maxCacheablePrecompileOutput {
+			cache.store(set, address, key, output)
+		}
+		return output, gas, err
 	}
 	output, err := p.Run(input)
 	return output, gas, err
@@ -345,6 +365,10 @@ func (c *sha256hash) Name() string {
 	return "SHA256"
 }
 
+// Cacheable opts out of result caching, deriving the cache key costs about
+// as much as running the hash itself.
+func (c *sha256hash) Cacheable() bool { return false }
+
 // RIPEMD160 implemented as a native contract.
 type ripemd160hash struct{}
 
@@ -365,6 +389,10 @@ func (c *ripemd160hash) Name() string {
 	return "RIPEMD160"
 }
 
+// Cacheable opts out of result caching, hashing the input for the cache key
+// costs about as much as running it.
+func (c *ripemd160hash) Cacheable() bool { return false }
+
 // data copy implemented as a native contract.
 type dataCopy struct{}
 
@@ -382,6 +410,10 @@ func (c *dataCopy) Run(in []byte) ([]byte, error) {
 func (c *dataCopy) Name() string {
 	return "ID"
 }
+
+// Cacheable opts out of result caching, identity is cheaper to rerun than
+// to cache.
+func (c *dataCopy) Cacheable() bool { return false }
 
 // bigModExp implements a native big integer exponential modular operation.
 type bigModExp struct {
