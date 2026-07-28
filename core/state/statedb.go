@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 	"golang.org/x/sync/errgroup"
@@ -360,6 +361,58 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 		return stateObject.Root()
 	}
 	return common.Hash{}
+}
+
+// HasStorage reports whether the account holds any storage, committed or
+// pending. It is the EIP-7610 contract-collision predicate: the binary tree
+// keeps no per-account storage root, so emptiness is probed rather than
+// compared against the empty-trie sentinel.
+func (s *StateDB) HasStorage(addr common.Address) bool {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return false
+	}
+	// Uncommitted writes count: a slot written earlier in this transaction
+	// makes the account non-empty even though nothing has been committed.
+	for _, value := range stateObject.dirtyStorage {
+		if value != (common.Hash{}) {
+			return true
+		}
+	}
+	for _, value := range stateObject.pendingStorage {
+		if value != (common.Hash{}) {
+			return true
+		}
+	}
+	if !s.db.TrieDB().IsPBT() {
+		return stateObject.Root() != types.EmptyRootHash
+	}
+	// Binary tree: the account's storage lives in two places, the header
+	// stem's slot range (slots below 64) and the overflow bucket.
+	tr, err := s.db.OpenTrie(s.originalRoot)
+	if err != nil {
+		s.setError(err)
+		return false
+	}
+	bt, ok := tr.(*bintrie.BinaryTrie)
+	if !ok {
+		s.setError(fmt.Errorf("expected a binary trie, got %T", tr))
+		return false
+	}
+	has, err := bt.HasHeaderStorage(addr)
+	if err != nil {
+		s.setError(err)
+		return false
+	}
+	if has {
+		return true
+	}
+	has, err = bt.HasPrefix(bintrie.StorageBucketPrefix(addr))
+	if err != nil {
+		s.setError(err)
+		return false
+	}
+	return has
 }
 
 // TxIndex returns the current transaction index set by SetTxContext.

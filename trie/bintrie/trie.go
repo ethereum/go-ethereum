@@ -670,6 +670,22 @@ func (t *BinaryTrie) DeleteStorageBucket(addr common.Address) error {
 	return t.DeletePrefix(StorageBucketPrefix(addr))
 }
 
+// HasHeaderStorage reports whether the account's header stem holds any of
+// the storage slots that live there (slots 0..63, at sub-indices
+// HeaderStorageOffset..CodeOffset-1).
+func (t *BinaryTrie) HasHeaderStorage(addr common.Address) (bool, error) {
+	g, err := t.getStemGroup(HeaderStem(addr))
+	if err != nil || g == nil {
+		return false, err
+	}
+	for _, sub := range g.subs {
+		if sub >= HeaderStorageOffset && sub < CodeOffset {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // GetStorage returns the value of the given raw storage slot, or nil if
 // absent.
 func (t *BinaryTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
