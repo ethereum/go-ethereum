@@ -2,9 +2,11 @@ on:
   push:
     branches:
       - master
+      - pbt
   pull_request:
     branches:
       - master
+      - pbt
   workflow_dispatch:
 
 # Free runner capacity by cancelling superseded PR runs.
