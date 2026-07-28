@@ -97,11 +97,10 @@ func (b *BlockGen) Difficulty() *big.Int {
 }
 
 // SetParentBeaconRoot sets the parent beacon root field of the generated
-// block.
+// block. The corresponding EIP-4788 system call is applied later, during block
+// finalization, so that generation mirrors the real block processor.
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
-	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}), b.bal)
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
@@ -402,6 +401,22 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
+		}
+
+		// EIP-4788: process the parent beacon block root as a pre-execution
+		// system call.
+		//
+		// It is applied after the gen callback so an explicit SetParentBeaconRoot
+		// is honored; ProcessBeaconBlockRoot pins the write to block-access index 0,
+		// so it is recorded as pre-execution regardless of this ordering.
+		//
+		// TODO(rjl493456442) rework the chain maker, replacing the individual calls
+		// with PreExecution.
+		if b.header.ParentBeaconRoot != nil {
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			blockContext.Random = &common.Hash{} // enable post-merge instruction set
+			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+			ProcessBeaconBlockRoot(*b.header.ParentBeaconRoot, evm, b.bal)
 		}
 
 		requests, bal := b.collectRequests(false)
