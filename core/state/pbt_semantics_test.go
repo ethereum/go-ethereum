@@ -20,6 +20,7 @@ package state
 // emptiness (the EIP-7610 predicate) and account destruction.
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -251,5 +252,41 @@ func TestPBTCodeShrink(t *testing.T) {
 	}
 	if got != refRoot {
 		t.Fatalf("cleared delegation left chunk leaves: %x want %x", got, refRoot)
+	}
+}
+
+// TestPBTCodeSizePreserved pins that touching a contract without executing
+// it preserves the code size the binary tree packs into basic data. The
+// code is loaded lazily, so the naive len(obj.code) reads zero here and the
+// account's basic-data leaf would silently lose its code size.
+func TestPBTCodeSizePreserved(t *testing.T) {
+	addr := common.Address{1}
+	code := bytes.Repeat([]byte{0x60, 0x01}, 40) // 80 bytes, spanning chunks
+
+	sdb, db := newPBTState(t)
+	sdb.CreateAccount(addr)
+	sdb.SetNonce(addr, 1, tracing.NonceChangeUnspecified)
+	sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+	sdb = reopenPBT(t, sdb, db, 1)
+
+	// Touch the account with a plain balance change: the code is never read.
+	sdb.AddBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+	sdb = reopenPBT(t, sdb, db, 2)
+
+	tr, err := sdb.db.OpenTrie(sdb.originalRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bt := tr.(*bintrie.BinaryTrie)
+	basic, err := bt.GetStemValue(bintrie.BasicDataKey(addr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if basic == nil {
+		t.Fatal("basic data leaf missing")
+	}
+	_, codeSize, _, _ := bintrie.DecodeBasicData(basic)
+	if codeSize != uint32(len(code)) {
+		t.Fatalf("code size %d after a balance-only touch, want %d", codeSize, len(code))
 	}
 }

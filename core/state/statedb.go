@@ -626,8 +626,12 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
-	// Encode the account and update the account trie
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, len(obj.code)); err != nil {
+	// Encode the account and update the account trie. The code size must
+	// come from CodeSize() rather than len(obj.code): the code is loaded
+	// lazily, so a contract touched without executing it carries a nil code
+	// slice, and passing its length would zero the size the binary tree
+	// packs into the account's basic data.
+	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, obj.CodeSize()); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
 	}
 	if obj.dirtyCode {

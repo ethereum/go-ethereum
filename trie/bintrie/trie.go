@@ -677,6 +677,13 @@ func (t *BinaryTrie) DeleteStorageBucket(addr common.Address) error {
 	return t.DeletePrefix(StorageBucketPrefix(addr))
 }
 
+// GetStemValue returns the raw 32-byte value stored at a tree key, or nil
+// if absent. It is the low-level accessor behind the typed readers, useful
+// for tooling and tests that inspect leaves directly.
+func (t *BinaryTrie) GetStemValue(key []byte) ([]byte, error) {
+	return t.getValue(key)
+}
+
 // HasHeaderStorage reports whether the account's header stem holds any of
 // the storage slots that live there (slots 0..63, at sub-indices
 // HeaderStorageOffset..CodeOffset-1).
