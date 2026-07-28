@@ -526,15 +526,30 @@ type StateTestState struct {
 
 // MakePreState creates a state containing the given allocation.
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
-	tconf := &triedb.Config{Preimages: true}
-	if scheme == rawdb.HashScheme {
+	return makePreState(db, accounts, snapshotter, scheme, false)
+}
+
+// MakePBTPreState creates a binary-tree state containing the given
+// allocation. The binary tree is path-scheme only and starts from its own
+// empty-root sentinel.
+func MakePBTPreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool) StateTestState {
+	return makePreState(db, accounts, snapshotter, rawdb.PathScheme, true)
+}
+
+func makePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string, pbt bool) StateTestState {
+	tconf := &triedb.Config{Preimages: true, IsPBT: pbt}
+	if scheme == rawdb.HashScheme && !pbt {
 		tconf.HashDB = hashdb.Defaults
 	} else {
 		tconf.PathDB = pathdb.Defaults
 	}
 	triedb := triedb.NewDatabase(db, tconf)
 	sdb := state.NewDatabase(triedb, nil)
-	statedb, _ := state.New(types.EmptyRootHash, sdb)
+	root := types.EmptyRootHash
+	if pbt {
+		root = types.EmptyBinaryHash
+	}
+	statedb, _ := state.New(root, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeUnspecified)
@@ -544,7 +559,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false, false)
+	root, _ = statedb.Commit(0, false, false)
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
