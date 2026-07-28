@@ -265,7 +265,7 @@ func (c *Cache) GetCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*
 	c.mu.Lock()
 	for vhash, idxs := range indices {
 		cached, ok := c.entries[vhash]
-		if !ok {
+		if !ok || cached.cell == nil {
 			misses = append(misses, vhash)
 			continue
 		}
