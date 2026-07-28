@@ -999,9 +999,9 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 
 		// If this block was also built locally, its local build succeeded while
 		// re-import now fails.
-		localBlock, localReceipts, revertedTxs, revertedIdx := api.localBlocks.getByBlockHash(block.Hash())
+		localBlock, localReceipts, revertedTxs, revertedIdx := api.localBlocks.getByStateRoot(block.Root())
 		if localBlock != nil {
-			log.Warn("NewPayload: locally-built block failed to import", "number", localBlock.NumberU64(), "hash", localBlock.Hash())
+			log.Warn("NewPayload: locally-built block failed to import", "number", localBlock.NumberU64(), "hash", localBlock.Hash(), "root", localBlock.Root())
 
 			reverted := make([]*rawdb.RevertedTx, len(revertedTxs))
 			for i, tx := range revertedTxs {
