@@ -165,7 +165,7 @@ func (db *Database) loadLayers() layer {
 		root common.Hash
 		err  error
 	)
-	if db.isUBT {
+	if db.isPBT {
 		root = rawdb.ReadSnapshotRoot(db.diskdb)
 		if root == (common.Hash{}) {
 			root = types.EmptyBinaryHash

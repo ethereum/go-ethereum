@@ -275,7 +275,7 @@ func removeDB(ctx *cli.Context) error {
 	statePaths := []string{
 		rootDir,
 		filepath.Join(ancientDir, rawdb.MerkleStateFreezerName),
-		filepath.Join(ancientDir, rawdb.VerkleStateFreezerName),
+		filepath.Join(ancientDir, rawdb.PBTStateFreezerName),
 	}
 	confirmAndRemoveDB(statePaths, "state data", ctx, removeStateDataFlag.Name)
 

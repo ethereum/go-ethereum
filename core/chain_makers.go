@@ -127,7 +127,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 
 	// Merge the tx-local access event into the "block-local" one, in order to collect
 	// all values, so that the witness can be built.
-	if b.statedb.Database().Type().Is(state.TypeUBT) {
+	if b.statedb.Database().Type().Is(state.TypePBT) {
 		b.statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
 	b.txs = append(b.txs, tx)
@@ -390,7 +390,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			misc.ApplyEIP7997(statedb)
 		}
 
-		if config.IsPrague(b.header.Number, b.header.Time) || config.IsUBT(b.header.Number, b.header.Time) {
+		if config.IsPrague(b.header.Number, b.header.Time) || config.IsPBT(b.header.Number, b.header.Time) {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
@@ -459,8 +459,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if config.IsUBT(config.ChainID, 0) {
-		triedbConfig = triedb.UBTDefaults
+	if config.IsPBT(config.ChainID, 0) {
+		triedbConfig = triedb.PBTDefaults
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
@@ -508,8 +508,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if genesis.Config != nil && genesis.Config.IsUBT(genesis.Config.ChainID, 0) {
-		triedbConfig = triedb.UBTDefaults
+	if genesis.Config != nil && genesis.Config.IsPBT(genesis.Config.ChainID, 0) {
+		triedbConfig = triedb.PBTDefaults
 	}
 	genesisTriedb := triedb.NewDatabase(db, triedbConfig)
 	block, err := genesis.Commit(db, genesisTriedb, nil)

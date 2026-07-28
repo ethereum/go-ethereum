@@ -252,9 +252,9 @@ type ubtTrieReader struct {
 	lock sync.Mutex       // Lock for protecting concurrent read
 }
 
-// newUBTTrieReader constructs a Unified-binary-trie reader of the specific state.
+// newPBTTrieReader constructs a Unified-binary-trie reader of the specific state.
 // An error will be returned if the associated trie specified by root is not existent.
-func newUBTTrieReader(root common.Hash, db *triedb.Database) (*ubtTrieReader, error) {
+func newPBTTrieReader(root common.Hash, db *triedb.Database) (*ubtTrieReader, error) {
 	binTrie, binErr := bintrie.NewBinaryTrie(root, db, db.BinTrieGroupDepth())
 	if binErr != nil {
 		return nil, binErr

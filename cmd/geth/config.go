@@ -240,9 +240,9 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		v := ctx.Uint64(utils.OverrideBPO2.Name)
 		cfg.Eth.OverrideBPO2 = &v
 	}
-	if ctx.IsSet(utils.OverrideUBT.Name) {
-		v := ctx.Uint64(utils.OverrideUBT.Name)
-		cfg.Eth.OverrideUBT = &v
+	if ctx.IsSet(utils.OverridePBT.Name) {
+		v := ctx.Uint64(utils.OverridePBT.Name)
+		cfg.Eth.OverridePBT = &v
 	}
 
 	// Start metrics export if enabled.

@@ -123,7 +123,7 @@ type Database struct {
 	// the shutdown to reject all following unexpected mutations.
 	readOnly bool       // Flag if database is opened in read only mode
 	waitSync bool       // Flag if database is deactivated due to initial state sync
-	isUBT    bool       // Flag if database is used for verkle tree
+	isPBT    bool       // Flag if database is used for verkle tree
 	hasher   nodeHasher // Trie node hasher
 
 	config *Config        // Configuration for database
@@ -142,7 +142,7 @@ type Database struct {
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
-func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
+func New(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -150,7 +150,7 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 
 	db := &Database{
 		readOnly: config.ReadOnly,
-		isUBT:    isUBT,
+		isPBT:    isPBT,
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
@@ -160,8 +160,8 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 	// important to note that the introduction of a prefix won't lead to
 	// substantial storage overhead, as the underlying database will efficiently
 	// compress the shared key prefix.
-	if isUBT {
-		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
+	if isPBT {
+		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.PBTPrefix))
 		db.hasher = binaryNodeHasher
 	}
 	// Construct the layer tree by resolving the in-disk singleton state
@@ -170,7 +170,7 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 
 	// Repair the history, which might not be aligned with the persistent
 	// state in the key-value store due to an unclean shutdown.
-	states, trienodes, err := repairHistory(db.diskdb, isUBT, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
+	states, trienodes, err := repairHistory(db.diskdb, isPBT, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
 	if err != nil {
 		log.Crit("Failed to repair history", "err", err)
 	}
@@ -192,7 +192,7 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 	db.setHistoryIndexer()
 
 	fields := config.fields()
-	if db.isUBT {
+	if db.isPBT {
 		fields = append(fields, "verkle", true)
 	}
 	log.Info("Initialized path database", fields...)
@@ -261,7 +261,7 @@ func (db *Database) setStateGenerator() error {
 	// - the database is opened in read only mode
 	// - the snapshot build is explicitly disabled
 	// - the database is opened in verkle tree mode
-	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isUBT
+	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isPBT
 
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
@@ -410,7 +410,7 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Re-construct a new disk layer backed by persistent state and schedule
 	// the state snapshot generation if it's permitted.
-	db.tree.init(generateSnapshot(db, root, db.isUBT || db.config.SnapshotNoBuild))
+	db.tree.init(generateSnapshot(db, root, db.isPBT || db.config.SnapshotNoBuild))
 
 	// After snap sync, the state of the database may have changed completely.
 	// To ensure the history indexer always matches the current state, we must:
@@ -629,7 +629,7 @@ func (db *Database) journalPath() string {
 		return ""
 	}
 	var fname string
-	if db.isUBT {
+	if db.isPBT {
 		fname = fmt.Sprintf("verkle.journal")
 	} else {
 		fname = fmt.Sprintf("merkle.journal")

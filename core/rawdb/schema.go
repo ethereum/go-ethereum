@@ -135,12 +135,12 @@ var (
 	StateHistoryStorageBlockPrefix    = []byte("mbs") // StateHistoryStorageBlockPrefix + account address hash + storage slot hash + blockID => slot block
 	TrienodeHistoryBlockPrefix        = []byte("mbt") // TrienodeHistoryBlockPrefix + account address hash + trienode path + blockID => trienode block
 
-	// VerklePrefix is the database prefix for Verkle trie data, which includes:
+	// PBTPrefix is the database prefix for binary (PBT) trie data, which includes:
 	// (a) Trie nodes
 	// (b) In-memory trie node journal
 	// (c) Persistent state ID
 	// (d) State ID lookups, etc.
-	VerklePrefix = []byte("v")
+	PBTPrefix = []byte("b")
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db

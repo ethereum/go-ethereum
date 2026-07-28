@@ -231,8 +231,8 @@ func (t *TransitionTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	panic("not implemented") // TODO: Implement
 }
 
-// IsUBT returns true if the trie is verkle-tree based
-func (t *TransitionTrie) IsUBT() bool {
+// IsPBT returns true if the trie is verkle-tree based
+func (t *TransitionTrie) IsPBT() bool {
 	// For all intents and purposes, the calling code should treat this as a verkle trie
 	return true
 }

@@ -177,7 +177,7 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	return &reader{
 		db:          db,
 		state:       root,
-		noHashCheck: db.isUBT,
+		noHashCheck: db.isPBT,
 		layer:       layer,
 	}, nil
 }

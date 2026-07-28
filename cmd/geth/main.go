@@ -60,7 +60,7 @@ var (
 		utils.OverrideAmsterdam,
 		utils.OverrideBPO1,
 		utils.OverrideBPO2,
-		utils.OverrideUBT,
+		utils.OverridePBT,
 		utils.OverrideGenesisFlag,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,

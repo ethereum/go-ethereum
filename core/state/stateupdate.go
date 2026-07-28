@@ -244,12 +244,12 @@ func (sc *StateUpdate) EncodeMPTState() (map[common.Hash][]byte, map[common.Addr
 	return accounts, accountOrigin, storages, storageOrigin
 }
 
-// EncodeUBTState encodes all state mutations alongside their original value
+// EncodePBTState encodes all state mutations alongside their original value
 // into the Unified-Binary-Trie representation.
 //
-// It transforms account and storage updates into their corresponding UBT-encoded
+// It transforms account and storage updates into their corresponding PBT-encoded
 // key-value mappings, using the same encoding rules as the Ethereum state trie.
-func (sc *StateUpdate) EncodeUBTState() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte) {
+func (sc *StateUpdate) EncodePBTState() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte) {
 	var (
 		accounts      = make(map[common.Hash][]byte, len(sc.Accounts))
 		storages      = make(map[common.Hash]map[common.Hash][]byte, len(sc.Storages))

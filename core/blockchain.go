@@ -264,10 +264,10 @@ func (cfg BlockChainConfig) WithNoAsyncFlush(on bool) *BlockChainConfig {
 }
 
 // triedbConfig derives the configures for trie database.
-func (cfg *BlockChainConfig) triedbConfig(isUBT bool) *triedb.Config {
+func (cfg *BlockChainConfig) triedbConfig(isPBT bool) *triedb.Config {
 	config := &triedb.Config{
 		Preimages:         cfg.Preimages,
-		IsUBT:             isUBT,
+		IsPBT:             isPBT,
 		BinTrieGroupDepth: cfg.BinTrieGroupDepth,
 	}
 	if cfg.StateScheme == rawdb.HashScheme {
@@ -387,7 +387,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Open trie database with provided config
-	enableVerkle, err := EnableUBTAtGenesis(db, genesis)
+	enableVerkle, err := EnablePBTAtGenesis(db, genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -2150,8 +2150,8 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 	noop := func(*blockProcessingResult) {}
 
 	var sdb state.Database
-	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
-		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
+	if bc.chainConfig.IsPBT(block.Number(), block.Time()) {
+		sdb = state.NewPBTDatabase(bc.triedb, bc.codedb)
 	} else {
 		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
 	}

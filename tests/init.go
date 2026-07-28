@@ -789,7 +789,7 @@ var Forks = map[string]*params.ChainConfig{
 		MergeNetsplitBlock:      big.NewInt(0),
 		TerminalTotalDifficulty: big.NewInt(0),
 		ShanghaiTime:            u64(0),
-		UBTTime:                 u64(0),
+		PBTTime:                 u64(0),
 	},
 	"Binary": {
 		ChainID:                 big.NewInt(1),
@@ -811,7 +811,7 @@ var Forks = map[string]*params.ChainConfig{
 		CancunTime:              u64(0),
 		PragueTime:              u64(0),
 		OsakaTime:               u64(0),
-		UBTTime:                 u64(0),
+		PBTTime:                 u64(0),
 		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,

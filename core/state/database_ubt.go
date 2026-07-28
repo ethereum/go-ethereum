@@ -23,10 +23,10 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// UBTDatabase is an implementation of Database interface for Unified Binary Trie.
+// PBTDatabase is an implementation of Database interface for Unified Binary Trie.
 // It provides the same functionality as MPTDatabase but uses unified binary
 // trie for state hashing instead of Merkle Patricia Tries.
-type UBTDatabase struct {
+type PBTDatabase struct {
 	triedb   *triedb.Database
 	codedb   *CodeDB
 	recorder *bintrie.Recorder
@@ -36,7 +36,7 @@ type UBTDatabase struct {
 // trie opened from this database. The recorder captures account, storage, and
 // code writes keyed by their original (unhashed) addresses, which is required
 // for tooling like evm t8n to render the post-state as a types.GenesisAlloc.
-func (db *UBTDatabase) EnableAllocRecording() *bintrie.Recorder {
+func (db *PBTDatabase) EnableAllocRecording() *bintrie.Recorder {
 	if db.recorder == nil {
 		db.recorder = bintrie.NewRecorder()
 	}
@@ -45,24 +45,24 @@ func (db *UBTDatabase) EnableAllocRecording() *bintrie.Recorder {
 
 // AllocRecorder returns the attached recorder, or nil if recording was never
 // enabled on this database.
-func (db *UBTDatabase) AllocRecorder() *bintrie.Recorder { return db.recorder }
+func (db *PBTDatabase) AllocRecorder() *bintrie.Recorder { return db.recorder }
 
 // Type returns Binary, indicating this database is backed by a Universal Binary Trie.
-func (db *UBTDatabase) Type() DatabaseType { return TypeUBT }
+func (db *PBTDatabase) Type() DatabaseType { return TypePBT }
 
-// NewUBTDatabase creates a state database with the Unified binary trie manner.
-func NewUBTDatabase(triedb *triedb.Database, codedb *CodeDB) *UBTDatabase {
+// NewPBTDatabase creates a state database with the Unified binary trie manner.
+func NewPBTDatabase(triedb *triedb.Database, codedb *CodeDB) *PBTDatabase {
 	if codedb == nil {
 		codedb = NewCodeDB(triedb.Disk())
 	}
-	return &UBTDatabase{
+	return &PBTDatabase{
 		triedb: triedb,
 		codedb: codedb,
 	}
 }
 
 // StateReader returns a state reader associated with the specified state root.
-func (db *UBTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
+func (db *PBTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
 	var readers []StateReader
 
 	// Configure the state reader using the path database in path mode.
@@ -77,7 +77,7 @@ func (db *UBTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
 	}
 	// Configure the trie reader, which is expected to be available as the
 	// gatekeeper unless the state is corrupted.
-	tr, err := newUBTTrieReader(stateRoot, db.triedb)
+	tr, err := newPBTTrieReader(stateRoot, db.triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (db *UBTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
 
 // Reader implements Database, returning a reader associated with the specified
 // state root.
-func (db *UBTDatabase) Reader(stateRoot common.Hash) (Reader, error) {
+func (db *PBTDatabase) Reader(stateRoot common.Hash) (Reader, error) {
 	sr, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func (db *UBTDatabase) Reader(stateRoot common.Hash) (Reader, error) {
 // ReadersWithCacheStats creates a pair of state readers that share the same
 // underlying state reader and internal state cache, while maintaining separate
 // statistics respectively.
-func (db *UBTDatabase) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
+func (db *PBTDatabase) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Reader, error) {
 	r, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, nil, err
@@ -111,7 +111,7 @@ func (db *UBTDatabase) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Rea
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
-func (db *UBTDatabase) OpenTrie(root common.Hash) (Trie, error) {
+func (db *PBTDatabase) OpenTrie(root common.Hash) (Trie, error) {
 	tr, err := bintrie.NewBinaryTrie(root, db.triedb, db.triedb.BinTrieGroupDepth())
 	if err != nil {
 		return nil, err
@@ -124,19 +124,19 @@ func (db *UBTDatabase) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account. In binary trie mode,
 // all state objects share one unified trie, so the main trie is returned.
-func (db *UBTDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
+func (db *PBTDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
 	return self, nil
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.
-func (db *UBTDatabase) TrieDB() *triedb.Database {
+func (db *PBTDatabase) TrieDB() *triedb.Database {
 	return db.triedb
 }
 
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
-func (db *UBTDatabase) Commit(update *StateUpdate) error {
+func (db *PBTDatabase) Commit(update *StateUpdate) error {
 	// Short circuit if nothing to commit
 	if update.Empty() {
 		return nil
@@ -151,8 +151,8 @@ func (db *UBTDatabase) Commit(update *StateUpdate) error {
 			return err
 		}
 	}
-	// Encode the state mutations in the UBT format
-	accounts, accountOrigin, storages, storageOrigin := update.EncodeUBTState()
+	// Encode the state mutations in the PBT format
+	accounts, accountOrigin, storages, storageOrigin := update.EncodePBTState()
 
 	return db.triedb.Update(update.Root, update.OriginRoot, update.BlockNumber, update.Nodes, &triedb.StateSet{
 		Accounts:       accounts,
@@ -165,6 +165,6 @@ func (db *UBTDatabase) Commit(update *StateUpdate) error {
 
 // Iteratee returns a state iteratee associated with the specified state root,
 // through which the account iterator and storage iterator can be created.
-func (db *UBTDatabase) Iteratee(root common.Hash) (Iteratee, error) {
+func (db *PBTDatabase) Iteratee(root common.Hash) (Iteratee, error) {
 	return newStateIteratee(false, root, db.triedb, nil)
 }

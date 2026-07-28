@@ -198,7 +198,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 	}
-	if db.Type().Is(TypeUBT) {
+	if db.Type().Is(TypePBT) {
 		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
@@ -947,7 +947,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
-	if s.db.Type().Is(TypeUBT) {
+	if s.db.Type().Is(TypePBT) {
 		// Bypass per-account updateTrie() for binary trie. In binary trie mode
 		// there is only one unified trie (OpenStorageTrie returns self), so the
 		// per-account trie setup in updateTrie() (getPrefetchedTrie, getTrie,
@@ -1221,7 +1221,7 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*Acco
 		deletes[addrHash] = op
 
 		// Short circuit if the origin storage was empty.
-		if prev.Root == types.EmptyRootHash || s.db.Type().Is(TypeUBT) {
+		if prev.Root == types.EmptyRootHash || s.db.Type().Is(TypePBT) {
 			continue
 		}
 		if noStorageWiping {

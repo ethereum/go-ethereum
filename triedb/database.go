@@ -32,7 +32,7 @@ import (
 // Config defines all necessary options for database.
 type Config struct {
 	Preimages         bool           // Flag whether the preimage of node key is recorded
-	IsUBT             bool           // Flag whether the db is holding a unified binary tree
+	IsPBT             bool           // Flag whether the db is holding a unified binary tree
 	BinTrieGroupDepth int            // Number of levels per serialized group in binary trie (1-8, default 8)
 	HashDB            *hashdb.Config // Configs for hash-based scheme
 	PathDB            *pathdb.Config // Configs for experimental path-based scheme
@@ -44,15 +44,15 @@ const DefaultBinTrieGroupDepth = 5
 // default settings.
 var HashDefaults = &Config{
 	Preimages: false,
-	IsUBT:     false,
+	IsPBT:     false,
 	HashDB:    hashdb.Defaults,
 }
 
-// UBTDefaults represents a config for holding unified binary trie data
+// PBTDefaults represents a config for holding unified binary trie data
 // using path-based scheme with default settings.
-var UBTDefaults = &Config{
+var PBTDefaults = &Config{
 	Preimages:         false,
-	IsUBT:             true,
+	IsPBT:             true,
 	BinTrieGroupDepth: DefaultBinTrieGroupDepth,
 	PathDB:            pathdb.Defaults,
 }
@@ -113,7 +113,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		log.Crit("Both 'hash' and 'path' mode are configured")
 	}
 	if config.PathDB != nil {
-		db.backend = pathdb.New(diskdb, config.PathDB, config.IsUBT)
+		db.backend = pathdb.New(diskdb, config.PathDB, config.IsPBT)
 	} else {
 		db.backend = hashdb.New(diskdb, config.HashDB)
 	}
@@ -389,9 +389,9 @@ func (db *Database) IndexProgress() (uint64, uint64, error) {
 	return pdb.IndexProgress()
 }
 
-// IsUBT returns the indicator if the database is holding a verkle tree.
-func (db *Database) IsUBT() bool {
-	return db.config.IsUBT
+// IsPBT returns the indicator if the database is holding a verkle tree.
+func (db *Database) IsPBT() bool {
+	return db.config.IsPBT
 }
 
 // Disk returns the underlying disk database.

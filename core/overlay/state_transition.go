@@ -71,7 +71,7 @@ func (ts *TransitionState) Copy() *TransitionState {
 
 // LoadTransitionState retrieves the Verkle transition state associated with
 // the given state root hash from the database.
-func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isUBT bool) *TransitionState {
+func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isPBT bool) *TransitionState {
 	var ts *TransitionState
 
 	data, _ := rawdb.ReadVerkleTransitionState(db, root)
@@ -97,10 +97,10 @@ func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isUBT bool) 
 		// Initialize the first transition state, with the "ended"
 		// field set to true if the database was created
 		// as a verkle database.
-		log.Debug("no transition state found, starting fresh", "verkle", isUBT)
+		log.Debug("no transition state found, starting fresh", "verkle", isPBT)
 
 		// Start with a fresh state
-		ts = &TransitionState{Ended: isUBT}
+		ts = &TransitionState{Ended: isPBT}
 	}
 	return ts
 }

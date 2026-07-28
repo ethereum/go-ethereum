@@ -65,7 +65,7 @@ var (
 			utils.OverrideAmsterdam,
 			utils.OverrideBPO1,
 			utils.OverrideBPO2,
-			utils.OverrideUBT,
+			utils.OverridePBT,
 		}, utils.DatabaseFlags),
 		Description: `
 The init command initializes a new genesis block and definition for the network.
@@ -300,15 +300,15 @@ func initGenesis(ctx *cli.Context) error {
 		v := ctx.Uint64(utils.OverrideBPO2.Name)
 		overrides.OverrideBPO2 = &v
 	}
-	if ctx.IsSet(utils.OverrideUBT.Name) {
-		v := ctx.Uint64(utils.OverrideUBT.Name)
-		overrides.OverrideUBT = &v
+	if ctx.IsSet(utils.OverridePBT.Name) {
+		v := ctx.Uint64(utils.OverridePBT.Name)
+		overrides.OverridePBT = &v
 	}
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsUBT())
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsPBT())
 	defer triedb.Close()
 
 	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides, nil)

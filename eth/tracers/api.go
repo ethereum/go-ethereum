@@ -1081,8 +1081,8 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		copy.OsakaTime = timestamp
 		canon = false
 	}
-	if timestamp := override.UBTTime; timestamp != nil {
-		copy.UBTTime = timestamp
+	if timestamp := override.PBTTime; timestamp != nil {
+		copy.PBTTime = timestamp
 		canon = false
 	}
 

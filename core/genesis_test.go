@@ -285,9 +285,9 @@ func TestBinaryGenesisCommit(t *testing.T) {
 		CancunTime:              &ubtTime,
 		PragueTime:              &ubtTime,
 		OsakaTime:               &ubtTime,
-		UBTTime:                 &ubtTime,
+		PBTTime:                 &ubtTime,
 		TerminalTotalDifficulty: big.NewInt(0),
-		EnableUBTAtGenesis:      true,
+		EnablePBTAtGenesis:      true,
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
@@ -318,7 +318,7 @@ func TestBinaryGenesisCommit(t *testing.T) {
 	config.NoAsyncFlush = true
 
 	triedb := triedb.NewDatabase(db, &triedb.Config{
-		IsUBT:             true,
+		IsPBT:             true,
 		PathDB:            &config,
 		BinTrieGroupDepth: triedb.DefaultBinTrieGroupDepth,
 	})
@@ -328,10 +328,10 @@ func TestBinaryGenesisCommit(t *testing.T) {
 	}
 
 	// Test that the trie is a unified binary trie
-	if !triedb.IsUBT() {
+	if !triedb.IsPBT() {
 		t.Fatalf("expected trie to be a unified binary trie")
 	}
-	vdb := rawdb.NewTable(db, string(rawdb.VerklePrefix))
+	vdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
 	if !rawdb.HasAccountTrieNode(vdb, nil) {
 		t.Fatal("could not find node")
 	}

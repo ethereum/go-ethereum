@@ -158,7 +158,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	var (
 		statedb *state.StateDB
 
-		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		isEIP4762   = chainConfig.IsPBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 	)
 	if pre.AllocPath != "" {
@@ -427,11 +427,11 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 }
 
 // newPrestateTrieDBConfig returns the triedb config used to construct the
-// prestate. UBT mode requires the path-based backend; the legacy hash-based
-// backend cannot decode UBT-encoded nodes.
+// prestate. PBT mode requires the path-based backend; the legacy hash-based
+// backend cannot decode PBT-encoded nodes.
 func newPrestateTrieDBConfig(isBintrie bool) *triedb.Config {
 	if isBintrie {
-		cfg := *triedb.UBTDefaults
+		cfg := *triedb.PBTDefaults
 		cfg.Preimages = true
 		return &cfg
 	}
@@ -442,7 +442,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
 	sdb := state.NewDatabase(tdb, nil)
 	if isBintrie {
-		sdb.(*state.UBTDatabase).EnableAllocRecording()
+		sdb.(*state.PBTDatabase).EnableAllocRecording()
 	}
 
 	root := types.EmptyRootHash
@@ -484,7 +484,7 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) 
 	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
 	sdb := state.NewDatabase(tdb, nil)
 	if isBintrie {
-		sdb.(*state.UBTDatabase).EnableAllocRecording()
+		sdb.(*state.PBTDatabase).EnableAllocRecording()
 	}
 
 	root := types.EmptyRootHash

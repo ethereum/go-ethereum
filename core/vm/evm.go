@@ -159,7 +159,7 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		evm.table = &amsterdamInstructionSet
 	case evm.chainRules.IsOsaka:
 		evm.table = &osakaInstructionSet
-	case evm.chainRules.IsUBT:
+	case evm.chainRules.IsPBT:
 		// TODO replace with proper instruction set when fork is specified
 		evm.table = &verkleInstructionSet
 	case evm.chainRules.IsPrague:

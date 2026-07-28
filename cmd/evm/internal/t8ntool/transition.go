@@ -229,7 +229,7 @@ func Transition(ctx *cli.Context) error {
 		collector Alloc
 		btleaves  map[common.Hash]hexutil.Bytes
 	)
-	isBinary := chainConfig.IsUBT(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
+	isBinary := chainConfig.IsPBT(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
 	allocOutput := ctx.String(OutputAllocFlag.Name)
 	switch {
 	case !isBinary && allocOutput != "" && allocOutput != "stdout" && allocOutput != "stderr":
@@ -244,13 +244,13 @@ func Transition(ctx *cli.Context) error {
 		collector = make(Alloc)
 		s.DumpToCollector(collector, nil)
 	default:
-		udb, ok := s.Database().(*state.UBTDatabase)
+		udb, ok := s.Database().(*state.PBTDatabase)
 		if !ok {
-			return NewError(ErrorEVM, errors.New("expected UBTDatabase in binary trie mode"))
+			return NewError(ErrorEVM, errors.New("expected PBTDatabase in binary trie mode"))
 		}
 		rec := udb.AllocRecorder()
 		if rec == nil {
-			return NewError(ErrorEVM, errors.New("UBT alloc recorder was not enabled"))
+			return NewError(ErrorEVM, errors.New("PBT alloc recorder was not enabled"))
 		}
 		collector = Alloc(rec.Alloc())
 		if err := mergeUnmigratedBaseAlloc(udb, s.IntermediateRoot(false), collector); err != nil {
@@ -260,7 +260,7 @@ func Transition(ctx *cli.Context) error {
 	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body, btleaves)
 }
 
-func mergeUnmigratedBaseAlloc(udb *state.UBTDatabase, currentRoot common.Hash, dst Alloc) error {
+func mergeUnmigratedBaseAlloc(udb *state.PBTDatabase, currentRoot common.Hash, dst Alloc) error {
 	ts := overlay.LoadTransitionState(udb.TrieDB().Disk(), currentRoot, true)
 	if !ts.InTransition() {
 		return nil
@@ -585,10 +585,10 @@ func BinKeys(ctx *cli.Context) error {
 			return err
 		}
 	}
-	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.UBTDefaults)
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.PBTDefaults)
 	defer db.Close()
 
-	bt, err := genBinTrieFromAlloc(alloc, db, triedb.UBTDefaults.BinTrieGroupDepth)
+	bt, err := genBinTrieFromAlloc(alloc, db, triedb.PBTDefaults.BinTrieGroupDepth)
 	if err != nil {
 		return fmt.Errorf("error generating bt: %w", err)
 	}
@@ -629,10 +629,10 @@ func BinTrieRoot(ctx *cli.Context) error {
 			return err
 		}
 	}
-	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.UBTDefaults)
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.PBTDefaults)
 	defer db.Close()
 
-	bt, err := genBinTrieFromAlloc(alloc, db, triedb.UBTDefaults.BinTrieGroupDepth)
+	bt, err := genBinTrieFromAlloc(alloc, db, triedb.PBTDefaults.BinTrieGroupDepth)
 	if err != nil {
 		return fmt.Errorf("error generating bt: %w", err)
 	}

@@ -290,8 +290,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.OverrideBPO2 != nil {
 		overrides.OverrideBPO2 = config.OverrideBPO2
 	}
-	if config.OverrideUBT != nil {
-		overrides.OverrideUBT = config.OverrideUBT
+	if config.OverridePBT != nil {
+		overrides.OverridePBT = config.OverridePBT
 	}
 	options.Overrides = &overrides
 

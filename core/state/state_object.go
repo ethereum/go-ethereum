@@ -469,7 +469,7 @@ func (s *stateObject) commit() (*AccountUpdate, *trienode.NodeSet, error) {
 	// The main account trie commit in stateDB.commit() already calls
 	// CollectNodes on this trie, so calling Commit here again would
 	// redundantly traverse and serialize the entire tree per dirty account.
-	if s.db.GetTrie().IsUBT() {
+	if s.db.GetTrie().IsPBT() {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
@@ -526,7 +526,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 
 	switch s.trie.(type) {
 	case *bintrie.BinaryTrie:
-		// UBT uses only one tree, and the copy has already been
+		// PBT uses only one tree, and the copy has already been
 		// made in mustCopyTrie.
 		obj.trie = db.trie
 	case *transitiontrie.TransitionTrie:

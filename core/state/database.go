@@ -37,8 +37,8 @@ const (
 	// TypeMPT indicates a Merkle Patricia Trie (MPT) backed database.
 	TypeMPT DatabaseType = iota
 
-	// TypeUBT indicates a Unified Binary Trie (UBT) backed database.
-	TypeUBT
+	// TypePBT indicates a Unified Binary Trie (PBT) backed database.
+	TypePBT
 )
 
 // Is returns the flag indicating the database type equals to the given one.
@@ -48,7 +48,7 @@ func (typ DatabaseType) Is(t DatabaseType) bool {
 
 // Database wraps access to tries and contract code.
 type Database interface {
-	// Type returns the trie type backing this database (MPT or UBT).
+	// Type returns the trie type backing this database (MPT or PBT).
 	Type() DatabaseType
 
 	// Reader returns a state reader associated with the specified state root.
@@ -160,16 +160,16 @@ type Trie interface {
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 
-	// IsUBT returns true if the trie is unified binary trie based.
-	IsUBT() bool
+	// IsPBT returns true if the trie is unified binary trie based.
+	IsPBT() bool
 }
 
 // NewDatabase creates a state database with the provided data sources.
 //
-// Deprecated, please use NewMPTDatabase or NewUBTDatabase directly.
+// Deprecated, please use NewMPTDatabase or NewPBTDatabase directly.
 func NewDatabase(tdb *triedb.Database, codedb *CodeDB) Database {
-	if tdb.IsUBT() {
-		return NewUBTDatabase(tdb, codedb)
+	if tdb.IsPBT() {
+		return NewPBTDatabase(tdb, codedb)
 	}
 	return NewMPTDatabase(tdb, codedb)
 }
