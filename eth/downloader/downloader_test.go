@@ -681,7 +681,7 @@ func testBALSync(t *testing.T, mode SyncMode, protocol uint) {
 		attachLock.Lock()
 		defer attachLock.Unlock()
 		for _, result := range results {
-			if result.AccessList.Load() != nil {
+			if result.BAL() != nil {
 				attached[result.Header.Number.Uint64()] = true
 			}
 		}

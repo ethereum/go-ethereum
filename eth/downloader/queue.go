@@ -49,6 +49,16 @@ var (
 	blockCacheInitialItems = 2048              // Initial number of blocks to start fetching, before we know the sizes of the blocks
 	blockCacheMemory       = 256 * 1024 * 1024 // Maximum amount of memory to use for block caching
 	blockCacheSizeWeight   = 0.1               // Multiplier to approximate the average block size based on past ones
+
+	// balCacheMemory is the memory allowance for block access lists attached
+	// to cached results, budgeted separately from blockCacheMemory: access
+	// lists are attached best effort (present for some blocks, absent for
+	// others), so folding them into the per-block size expectation would
+	// make it swing wildly and shrink the block fetch batches whenever lists
+	// happen to arrive. Instead their exact attached-but-undelivered bytes
+	// are tracked, and once over the allowance the *access list* retrieval
+	// throttles itself while block throughput stays untouched.
+	balCacheMemory = 256 * 1024 * 1024
 )
 
 var (
@@ -75,11 +85,37 @@ type fetchResult struct {
 	Receipts     rlp.RawValue
 	Withdrawals  types.Withdrawals
 
-	// AccessList is the optional EIP-7928 block access list, retrieved on a
+	// accessList is the optional EIP-7928 block access list, retrieved on a
 	// best effort basis for blocks close to the head of the network chain.
-	// It is atomic because it may still arrive while the otherwise completed
-	// result is being handed over for import.
-	AccessList atomic.Pointer[bal.BlockAccessList]
+	accessList atomic.Pointer[balAttachment]
+}
+
+// balAttachment couples a delivered block access list with its encoded size.
+type balAttachment struct {
+	list *bal.BlockAccessList
+	size common.StorageSize
+}
+
+// SetBAL attaches a downloaded block access list along with its encoded size.
+func (f *fetchResult) SetBAL(list *bal.BlockAccessList, size common.StorageSize) {
+	f.accessList.Store(&balAttachment{list: list, size: size})
+}
+
+// BAL returns the attached block access list, or nil if none arrived in time.
+func (f *fetchResult) BAL() *bal.BlockAccessList {
+	if attach := f.accessList.Load(); attach != nil {
+		return attach.list
+	}
+	return nil
+}
+
+// BALSize returns the encoded size of the attached block access list, or zero
+// if none arrived in time.
+func (f *fetchResult) BALSize() common.StorageSize {
+	if attach := f.accessList.Load(); attach != nil {
+		return attach.size
+	}
+	return 0
 }
 
 func newFetchResult(header *types.Header, snapSync bool, fetchBAL bool) *fetchResult {
@@ -172,6 +208,7 @@ type queue struct {
 
 	resultCache *resultStore       // Downloaded but not yet delivered fetch results
 	resultSize  common.StorageSize // Approximate size of a block (exponential moving average)
+	balBytes    atomic.Int64       // Exact encoded bytes of access lists attached to cached results
 
 	lock   *sync.RWMutex
 	active *sync.Cond
@@ -218,6 +255,7 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.balTaskQueue.Reset()
 	q.balPendPool = make(map[string]*fetchRequest)
 	q.balCutoff = 0
+	q.balBytes.Store(0)
 
 	q.resultCache = newResultStore(blockCacheLimit)
 	q.resultCache.SetThrottleThreshold(uint64(thresholdInitialSize))
@@ -411,6 +449,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 			size += common.StorageSize(tx.Size())
 		}
 		size += common.StorageSize(result.Withdrawals.Size())
+		q.balBytes.Add(-int64(result.BALSize()))
 		q.resultSize = common.StorageSize(blockCacheSizeWeight)*size +
 			(1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
 	}
@@ -493,6 +532,11 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 // ReserveBALs reserves a set of block access list fetches for the given peer,
 // skipping any previously failed downloads.
 func (q *queue) ReserveBALs(p *peerConnection, count int) (*fetchRequest, bool, bool) {
+	// Throttle the access list retrieval itself once the attached-but-not-yet
+	// delivered lists exhaust their own memory allowance.
+	if q.balBytes.Load() > int64(balCacheMemory) {
+		return nil, false, true
+	}
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -842,8 +886,9 @@ func (q *queue) DeliverBALs(id string, bals []rlp.RawValue, hashes []common.Hash
 		// Attach the access list to the fetch result if the block was not yet
 		// delivered upstream; late arrivals are simply dropped.
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale && res != nil {
-			res.AccessList.Store(list)
+			res.SetBAL(list, common.StorageSize(len(bals[i])))
 			res.SetBALDone()
+			q.balBytes.Add(int64(len(bals[i])))
 			accepted++
 		}
 		delete(q.balTaskPool, hash)

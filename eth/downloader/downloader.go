@@ -929,7 +929,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		// Attach the access list if it was retrieved from the network. The
 		// content hash was already verified against the header on delivery;
 		// blocks lacking one have theirs computed locally during execution.
-		if list := result.AccessList.Load(); list != nil {
+		if list := result.BAL(); list != nil {
 			blocks[i] = blocks[i].WithAccessListUnsafe(list)
 		}
 	}
@@ -1139,7 +1139,7 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 
 		// Attach the access list if it was retrieved from the network, so it
 		// gets persisted alongside the block data.
-		if list := result.AccessList.Load(); list != nil {
+		if list := result.BAL(); list != nil {
 			blocks[i] = blocks[i].WithAccessListUnsafe(list)
 		}
 	}
@@ -1152,7 +1152,7 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	block := types.NewBlockWithHeader(result.Header).WithBody(result.body())
-	if list := result.AccessList.Load(); list != nil {
+	if list := result.BAL(); list != nil {
 		block = block.WithAccessListUnsafe(list)
 	}
 	log.Debug("Committing snap sync pivot as new head", "number", block.Number(), "hash", block.Hash())
