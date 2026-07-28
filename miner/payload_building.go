@@ -137,8 +137,11 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) (resu
 		payload.requests = r.requests
 		payload.fullWitness = r.witness
 
-		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(r.fees), big.NewFloat(params.Ether))
-		log.Info("Updated payload",
+		var (
+			attrs       []any
+			feesInEther = new(big.Float).Quo(new(big.Float).SetInt(r.fees), big.NewFloat(params.Ether))
+		)
+		attrs = append(attrs,
 			"id", payload.id,
 			"number", r.block.NumberU64(),
 			"hash", r.block.Hash(),
@@ -149,6 +152,10 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) (resu
 			"root", r.block.Root(),
 			"elapsed", common.PrettyDuration(elapsed),
 		)
+		if r.block.BlockAccessListHash() != nil {
+			attrs = append(attrs, "balhash", r.block.BlockAccessListHash().Hex())
+		}
+		log.Info("Updated payload", attrs...)
 		result = true
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
