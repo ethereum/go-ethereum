@@ -91,7 +91,7 @@ func TestProcessPBT(t *testing.T) {
 			},
 		}
 	)
-	// PBTs use the snapshot, which must be enabled before the
+	// The binary tree uses the snapshot, which must be enabled before the
 	// data is saved into the tree+database.
 	// genesis := gspec.MustCommit(bcdb, triedb)
 	options := DefaultConfig().WithStateScheme(rawdb.PathScheme)
@@ -212,7 +212,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		for i := 0; i < num; i++ {
 			have, want := getContractStoredBlockHash(statedb, uint64(i), isPBT), common.Hash{byte(i + 1)}
 			if have != want {
-				t.Errorf("block %d, verkle=%v, have parent hash %v, want %v", i, isPBT, have, want)
+				t.Errorf("block %d, pbt=%v, have parent hash %v, want %v", i, isPBT, have, want)
 			}
 		}
 	}

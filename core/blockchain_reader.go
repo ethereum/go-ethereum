@@ -411,7 +411,7 @@ func (bc *BlockChain) StateRecoverable(root common.Hash) bool {
 // hash either from ephemeral in-memory cache, or from persistent storage.
 func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) []byte {
 	// TODO(rjl493456442) The associated account address is also required
-	// in Verkle scheme. Fix it once snap-sync is supported for Verkle.
+	// in binary tree mode. Fix it once snap-sync supports the binary tree.
 	return bc.codedb.Reader().CodeWithPrefix(common.Address{}, hash)
 }
 

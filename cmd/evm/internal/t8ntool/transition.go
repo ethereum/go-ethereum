@@ -669,8 +669,8 @@ func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase, grou
 
 // BinaryCodeChunkKey computes the tree key of a code-chunk for a given address.
 func BinaryCodeChunkKey(ctx *cli.Context) error {
-	if ctx.Args().Len() == 0 || ctx.Args().Len() > 2 {
-		return errors.New("invalid number of arguments: expecting an address and an code-chunk number")
+	if ctx.Args().Len() < 2 || ctx.Args().Len() > 3 {
+		return errors.New("invalid number of arguments: expecting an address, a code-chunk number and, for chunks 128 and above, the code hash")
 	}
 
 	addr, err := hexutil.Decode(ctx.Args().Get(0))

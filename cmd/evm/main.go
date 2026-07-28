@@ -165,10 +165,10 @@ var (
 		},
 	}
 
-	verkleCommand = &cli.Command{
-		Name:    "verkle",
-		Aliases: []string{"vkt"},
-		Usage:   "Binary Trie helpers",
+	pbtCommand = &cli.Command{
+		Name:    "pbt",
+		Aliases: []string{"vkt", "verkle"},
+		Usage:   "Partitioned binary tree helpers",
 		Subcommands: []*cli.Command{
 			{
 				Name:    "tree-keys",
@@ -188,7 +188,7 @@ var (
 			{
 				Name:    "code-chunk-key",
 				Aliases: []string{"vck"},
-				Usage:   "compute the binary trie key given an address and chunk number",
+				Usage:   "compute the binary trie key given an address, a chunk number and, for chunks 128 and above, the code hash",
 				Action:  t8ntool.BinaryCodeChunkKey,
 			},
 			{
@@ -263,7 +263,7 @@ func init() {
 		stateTransitionCommand,
 		transactionCommand,
 		blockBuilderCommand,
-		verkleCommand,
+		pbtCommand,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)

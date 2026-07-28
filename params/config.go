@@ -464,7 +464,7 @@ type ChainConfig struct {
 	BPO5Time      *uint64 `json:"bpo5Time,omitempty"`      // BPO5 switch time (nil = no fork, 0 = already on bpo5)
 	AmsterdamTime *uint64 `json:"amsterdamTime,omitempty"` // Amsterdam switch time (nil = no fork, 0 = already on amsterdam)
 	BogotaTime    *uint64 `json:"bogotaTime,omitempty"`    // Bogota switch time (nil = no fork, 0 = already on bogota)
-	PBTTime       *uint64 `json:"ubtTime,omitempty"`       // PBT switch time (nil = no fork, 0 = already on PBT)
+	PBTTime       *uint64 `json:"pbtTime,omitempty"`       // PBT (binary tree) switch time (nil = no fork, 0 = already on the binary tree)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -473,14 +473,14 @@ type ChainConfig struct {
 	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
 
 	// EnablePBTAtGenesis is a flag that specifies whether the network uses
-	// the Verkle tree starting from the genesis block. If set to true, the
-	// genesis state will be committed using the Binary tree, eliminating the
-	// need for any Binary transition later.
+	// the binary tree starting from the genesis block. If set to true, the
+	// genesis state will be committed using the binary tree, eliminating the
+	// need for any transition later.
 	//
-	// This is a temporary flag only for binary devnet testing, where binary is
+	// This is a temporary flag only for devnet testing, where the binary tree is
 	// activated at genesis, and the configured activation date has already passed.
 	//
-	// In production networks (mainnet and public testnets), binary activation
+	// In production networks (mainnet and public testnets), activation
 	// always occurs after the genesis block, making this flag irrelevant in
 	// those cases.
 	EnablePBTAtGenesis bool `json:"enablePBTAtGenesis,omitempty"`
@@ -876,12 +876,12 @@ func (c *ChainConfig) IsBogota(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.BogotaTime, time)
 }
 
-// IsPBT returns whether time is either equal to the Verkle fork time or greater.
+// IsPBT returns whether time is either equal to the PBT fork time or greater.
 func (c *ChainConfig) IsPBT(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.PBTTime, time)
 }
 
-// IsPBTGenesis checks whether the verkle fork is activated at the genesis block.
+// IsPBTGenesis checks whether the binary tree is activated at the genesis block.
 //
 // Verkle mode is considered enabled if the verkle fork time is configured,
 // regardless of whether the local time has surpassed the fork activation time.

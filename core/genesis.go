@@ -130,8 +130,8 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 
 // hashAlloc computes the state root according to the genesis specification.
 func hashAlloc(ga *types.GenesisAlloc, isPBT bool) (common.Hash, error) {
-	// If a genesis-time verkle trie is requested, create a trie config
-	// with the verkle trie enabled so that the tree can be initialized
+	// If a genesis-time binary tree is requested, create a trie config
+	// with the binary tree enabled so that the tree can be initialized
 	// as such.
 	var config *triedb.Config
 	if isPBT {
@@ -474,7 +474,7 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 	}
 }
 
-// IsPBT indicates whether the state is already stored in a verkle
+// IsPBT indicates whether the state is already stored in a binary
 // tree at genesis time.
 func (g *Genesis) IsPBT() bool {
 	return g.Config.IsPBTGenesis()
