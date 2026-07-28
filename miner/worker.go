@@ -329,6 +329,12 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 			return nil, errors.New("no slot number set post-amsterdam")
 		}
 		header.SlotNumber = genParams.slotNum
+		// EIP-7928: header verification requires the block access list hash
+		// to be present, and it precedes the slot number among the optional
+		// header fields, so the header cannot even encode without it. Block
+		// access lists are not built yet, so this is the zero hash until
+		// they are.
+		header.BlockAccessListHash = new(common.Hash)
 	}
 	// Could potentially happen if starting to mine in an odd state.
 	// Note genParams.coinbase can be different with header.Coinbase
