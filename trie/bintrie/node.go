@@ -122,14 +122,62 @@ func branchHash(prefix bitstr, left, right common.Hash) common.Hash {
 	return common.Hash(h)
 }
 
+// parallelHashDepth bounds the node depth at which hashing forks: the top
+// levels cover the whole tree, so a handful of goroutines saturates the
+// available cores without spawning one per node.
+const parallelHashDepth = 4
+
 func (n *branchNode) hashAt(pos int) common.Hash {
+	return n.hashAtDepth(pos, 0)
+}
+
+func (n *branchNode) hashAtDepth(pos, depth int) common.Hash {
 	if !n.dirty && n.cachedHash != (common.Hash{}) {
 		return n.cachedHash
 	}
-	child := pos + n.prefix.n + 1
-	n.cachedHash = branchHash(n.prefix, n.left.hashAt(child), n.right.hashAt(child))
+	childPos := pos + n.prefix.n + 1
+
+	// Fork only near the root, and only when both sides actually need
+	// hashing: a clean side returns its cached hash immediately, so a
+	// goroutine would cost more than it saves.
+	var left, right common.Hash
+	if depth < parallelHashDepth && isDirty(n.left) && isDirty(n.right) {
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			left = hashChild(n.left, childPos, depth+1)
+		}()
+		right = hashChild(n.right, childPos, depth+1)
+		wg.Wait()
+	} else {
+		left = hashChild(n.left, childPos, depth+1)
+		right = hashChild(n.right, childPos, depth+1)
+	}
+	n.cachedHash = branchHash(n.prefix, left, right)
 	n.dirty = false
 	return n.cachedHash
+}
+
+// hashChild hashes a child, threading the node depth through branches so
+// the fork budget is spent near the root.
+func hashChild(n binaryNode, pos, depth int) common.Hash {
+	if b, ok := n.(*branchNode); ok {
+		return b.hashAtDepth(pos, depth)
+	}
+	return n.hashAt(pos)
+}
+
+// isDirty reports whether a node's hash still has to be computed.
+func isDirty(n binaryNode) bool {
+	switch nn := n.(type) {
+	case *branchNode:
+		return nn.dirty || nn.cachedHash == (common.Hash{})
+	case *groupNode:
+		return nn.dirty || nn.cachedHash == (common.Hash{})
+	default:
+		return false
+	}
 }
 
 func (n *branchNode) copy() binaryNode {

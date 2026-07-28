@@ -148,11 +148,15 @@ func (t *BinaryTrie) getStem(n binaryNode, stem []byte, pos int) (binaryNode, *g
 		}
 		if bitAt(stem, split) == 0 {
 			child, g, err := t.getStem(nn.left, stem, split+1)
-			nn.left = child
+			if child != nn.left {
+				nn.left = child // only on resolution: a write barrier per level otherwise
+			}
 			return n, g, err
 		}
 		child, g, err := t.getStem(nn.right, stem, split+1)
-		nn.right = child
+		if child != nn.right {
+			nn.right = child
+		}
 		return n, g, err
 	default:
 		return n, nil, fmt.Errorf("bintrie: unknown node type %T", n)
@@ -198,7 +202,7 @@ func (t *BinaryTrie) UpdateStem(stem []byte, subs []byte, values [][]byte) error
 	if t.committed {
 		return trie.ErrCommitted
 	}
-	if err := validateKey(append(append([]byte{}, stem...), 0)); err != nil {
+	if err := validateStem(stem); err != nil {
 		return err
 	}
 	if len(subs) != len(values) || len(subs) == 0 {

@@ -210,6 +210,31 @@ func CodeChunkKey(addr common.Address, codeHash common.Hash, chunk uint64) []byt
 	return append(CodeChunkStem(codeHash, treeIndex), sub)
 }
 
+// validateStem checks a stem (a key without its sub-index byte) against the
+// engine's key-conformance restriction, without materializing the key.
+func validateStem(stem []byte) error {
+	if len(stem) == 0 {
+		return ErrNonConformantKey
+	}
+	switch stem[0] {
+	case AccountZone:
+		if len(stem) != AccountKeyLength-1 {
+			return ErrNonConformantKey
+		}
+	case CodeZone:
+		if len(stem) != CodeKeyLength-1 {
+			return ErrNonConformantKey
+		}
+	case StorageZone:
+		if len(stem) != StorageKeyLength-1 {
+			return ErrNonConformantKey
+		}
+	default:
+		return ErrNonConformantKey
+	}
+	return nil
+}
+
 // validateKey checks the engine's key-conformance restriction: known zone
 // byte and the zone's exact length. This is what keeps stems non-nested
 // (equal-length stems cannot prefix each other; zones differ in byte 0).
