@@ -91,11 +91,11 @@ func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayl
 	return nil
 }
 
-// getByBlockHash returns the tracked local payload whose full block has the
-// given hash, along with that block, its build-time receipts, and the
+// getByStateRoot returns the tracked local payload whose full block has the
+// given state root, along with that block, its build-time receipts, and the
 // transactions tried-and-reverted during building (with their block-access
 // indices).
-func (q *payloadQueue) getByBlockHash(hash common.Hash) (*types.Block, []*types.Receipt, []*types.Transaction, []uint32) {
+func (q *payloadQueue) getByStateRoot(root common.Hash) (*types.Block, []*types.Receipt, []*types.Transaction, []uint32) {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
@@ -104,7 +104,7 @@ func (q *payloadQueue) getByBlockHash(hash common.Hash) (*types.Block, []*types.
 			return nil, nil, nil, nil // no more items
 		}
 		block, receipts, revertedTxs, revertedIdx := item.payload.FullBlockAndReceipts()
-		if block != nil && block.Hash() == hash {
+		if block != nil && block.Root() == root {
 			return block, receipts, revertedTxs, revertedIdx
 		}
 	}
