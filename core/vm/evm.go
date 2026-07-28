@@ -153,15 +153,18 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	evm.precompiles = *activePrecompiledContracts(evm.chainRules)
 
 	switch {
+	case evm.chainRules.IsPBT:
+		// The binary tree composes with the active fork: pbtInstructionSet
+		// picks that fork's set and layers EIP-4762 pricing on top. Checking
+		// it after the fork cases would drop EIP-4762 entirely whenever the
+		// tree is activated on Osaka or later.
+		evm.table = pbtInstructionSet(evm.chainRules)
 	case evm.chainRules.IsBogota:
 		evm.table = &bogotaInstructionSet
 	case evm.chainRules.IsAmsterdam:
 		evm.table = &amsterdamInstructionSet
 	case evm.chainRules.IsOsaka:
 		evm.table = &osakaInstructionSet
-	case evm.chainRules.IsPBT:
-		// TODO replace with proper instruction set when fork is specified
-		evm.table = &verkleInstructionSet
 	case evm.chainRules.IsPrague:
 		evm.table = &pragueInstructionSet
 	case evm.chainRules.IsCancun:

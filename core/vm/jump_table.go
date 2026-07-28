@@ -64,12 +64,38 @@ var (
 	mergeInstructionSet            = newMergeInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
-	verkleInstructionSet           = newVerkleInstructionSet()
 	pragueInstructionSet           = newPragueInstructionSet()
 	osakaInstructionSet            = newOsakaInstructionSet()
 	amsterdamInstructionSet        = newAmsterdamInstructionSet()
 	bogotaInstructionSet           = newBogotaInstructionSet()
+
+	// Binary tree (EIP-8297) variants: the fork's own set plus EIP-4762.
+	pbtShanghaiInstructionSet  = newPBTInstructionSet(newShanghaiInstructionSet())
+	pbtCancunInstructionSet    = newPBTInstructionSet(newCancunInstructionSet())
+	pbtPragueInstructionSet    = newPBTInstructionSet(newPragueInstructionSet())
+	pbtOsakaInstructionSet     = newPBTInstructionSet(newOsakaInstructionSet())
+	pbtAmsterdamInstructionSet = newPBTInstructionSet(newAmsterdamInstructionSet())
+	pbtBogotaInstructionSet    = newPBTInstructionSet(newBogotaInstructionSet())
 )
+
+// pbtInstructionSet returns the binary-tree instruction set matching the
+// active fork.
+func pbtInstructionSet(rules params.Rules) *JumpTable {
+	switch {
+	case rules.IsBogota:
+		return &pbtBogotaInstructionSet
+	case rules.IsAmsterdam:
+		return &pbtAmsterdamInstructionSet
+	case rules.IsOsaka:
+		return &pbtOsakaInstructionSet
+	case rules.IsPrague:
+		return &pbtPragueInstructionSet
+	case rules.IsCancun:
+		return &pbtCancunInstructionSet
+	default:
+		return &pbtShanghaiInstructionSet
+	}
+}
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
@@ -97,10 +123,14 @@ func newBogotaInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
-func newVerkleInstructionSet() JumpTable {
-	instructionSet := newShanghaiInstructionSet()
-	enable4762(&instructionSet)
-	return validate(instructionSet)
+// newPBTInstructionSet layers EIP-4762's state-access gas schedule onto the
+// instruction set of the fork the binary tree is activated on. EIP-8297
+// swaps the state commitment and, with EIP-4762, how state access is priced;
+// it does not replace the fork's own opcode set, so the two compose rather
+// than one superseding the other.
+func newPBTInstructionSet(base JumpTable) JumpTable {
+	enable4762(&base)
+	return validate(base)
 }
 
 func newAmsterdamInstructionSet() JumpTable {
