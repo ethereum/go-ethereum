@@ -18,8 +18,13 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -37,6 +42,103 @@ func TestGeneratedDispatchUpToDate(t *testing.T) {
 		t.Fatalf("reading committed interpreter_gen.go: %v", err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Fatal("interpreter_gen.go is out of date; run `go generate ./core/vm/...` and commit the result")
+		t.Fatalf("interpreter_gen.go is out of date; run `go generate ./core/vm/...` and commit the result.\n"+
+			"First difference (- committed, + generated):\n%s", firstDiff(want, got))
+	}
+}
+
+// firstDiff shows where two versions of the generated file start to differ, with a
+// few lines of context, so a generator change reads as a hunk rather than as "out
+// of date".
+func firstDiff(want, got []byte) string {
+	wantLines := strings.Split(string(want), "\n")
+	gotLines := strings.Split(string(got), "\n")
+	for i := range max(len(wantLines), len(gotLines)) {
+		w, g := lineAt(wantLines, i), lineAt(gotLines, i)
+		if w == g {
+			continue
+		}
+		var b strings.Builder
+		for j := max(0, i-3); j < i; j++ {
+			fmt.Fprintf(&b, "  %d\t%s\n", j+1, wantLines[j])
+		}
+		fmt.Fprintf(&b, "- %d\t%s\n", i+1, w)
+		fmt.Fprintf(&b, "+ %d\t%s\n", i+1, g)
+		return b.String()
+	}
+	return "(no differing line, so the files differ only in trailing content)"
+}
+
+// lineAt returns a line, or a marker once that side has run out of them.
+func lineAt(lines []string, i int) string {
+	if i < len(lines) {
+		return lines[i]
+	}
+	return "<end of file>"
+}
+
+// stackExpansions pins what each *Stack method the dispatch uses becomes in sp/sd
+// form, with x, y and z standing in for the call's assignment targets. The
+// generator derives these from stack.go rather than storing them (see
+// expandStackMethod), so this table is the independent statement of intent: change
+// a stack helper's body and the failure names the method, instead of surfacing
+// later as an interpreter divergence.
+func stackExpansions() map[string]string {
+	ops := map[string]string{
+		"get":       "x := &sd[sp]\nsp++\n",
+		"drop":      "sp--\n",
+		"peek":      "x := &sd[sp-1]\n",
+		"pop1":      "sp--\nx := &sd[sp]\n",
+		"pop2":      "sp -= 2\nx := &sd[sp+1]\ny := &sd[sp]\n",
+		"pop1Peek1": "sp--\nx := &sd[sp]\ny := &sd[sp-1]\n",
+		"pop2Peek1": "sp -= 2\nx := &sd[sp+1]\ny := &sd[sp]\nz := &sd[sp-1]\n",
+		"dup":       "sd[sp] = sd[sp-n]\nsp++\n",
+	}
+	// stack.go spells the swaps out one method per depth, so build the expectation
+	// the same way instead of listing sixteen near-identical lines.
+	for n := 1; n <= 16; n++ {
+		depth := strconv.Itoa(n + 1)
+		ops["swap"+strconv.Itoa(n)] = "sd[sp-" + depth + "], sd[sp-1] = sd[sp-1], sd[sp-" + depth + "]\n"
+	}
+	return ops
+}
+
+func TestStackExpansions(t *testing.T) {
+	g := &generator{source: parseSource(vmDir())}
+	for method, want := range stackExpansions() {
+		if got := expandForTest(g, method); got != want {
+			t.Errorf("(*Stack).%s expands to:\n%s\nwant:\n%s", method, got, want)
+		}
+	}
+}
+
+// expandForTest expands one stack method with placeholder targets, standing in for
+// the handler call site the generator would have matched.
+func expandForTest(g *generator, method string) string {
+	fn := g.stackMethod(method)
+	call := stackCall{method: method, tok: token.DEFINE}
+	for i := range fn.Type.Results.NumFields() {
+		call.lhs = append(call.lhs, ast.NewIdent([]string{"x", "y", "z"}[i]))
+	}
+	// Pass each parameter through by name, so dup's depth stays symbolic.
+	for _, name := range paramNames(fn) {
+		call.args = append(call.args, ast.NewIdent(name))
+	}
+	return g.expandStackMethod(call, nil)
+}
+
+// TestFactoryName covers the closure-name parsing that decides whether an inlined
+// opcode's handler came from a make* factory, since the anonymous trailing
+// segments vary with nesting depth.
+func TestFactoryName(t *testing.T) {
+	for _, tc := range []struct{ fn, want string }{
+		{"opAdd", ""},
+		{"newFrontierInstructionSet.makeDup.func37", "makeDup"},
+		{"newShanghaiInstructionSet.makePush.func2.1", "makePush"},
+		{"makeLog.func1", "makeLog"},
+	} {
+		if got := factoryName(tc.fn); got != tc.want {
+			t.Errorf("factoryName(%q) = %q, want %q", tc.fn, got, tc.want)
+		}
 	}
 }
