@@ -33,10 +33,11 @@ import (
 // the existing per-fork instruction sets, rather than restating that metadata.
 //
 // The function names supply the generator's opcode-to-handler mapping and its
-// fork-invariance checks. The fork-varying gas/execute functions themselves are
-// still reached through the active per-fork JumpTable at runtime (see
-// interpreter_gen.go), not emitted by name: several are closures (gasCall, the
-// memoryCopierGas family, makeGasLog) that have no callable name.
+// fork-invariance checks. An opcode whose functions are the same in every fork can
+// then be emitted as a call by name. The fork-varying ones cannot, and are still
+// reached through the active per-fork JumpTable at runtime (see interpreter_gen.go):
+// several are closures (gasCall, the memoryCopierGas family, makeGasLog) with no
+// callable name.
 
 // GenOp is the generator-facing scalar metadata for one opcode slot in one fork.
 type GenOp struct {
@@ -57,14 +58,6 @@ type GenFork struct {
 	RuleField string
 	Ops       [256]GenOp
 }
-
-// codegenSkippedForks are forks in geth's fork schedule that the generator does
-// not give a lane. Verkle/UBT is the only one: over its Shanghai base it adds no
-// opcodes, it only swaps gas and execute functions on existing ones (enable4762),
-// which the generated switch picks up from the active table at runtime. Emitting
-// a lane for it would trip the generator's fork-stability check (an inlined op's
-// execute function is not allowed to vary by fork).
-var codegenSkippedForks = map[string]bool{"IsUBT": true}
 
 // genFnName returns the FuncForPC name of a jump-table function value with the
 // package path stripped (e.g. "gasKeccak256"), or "" if nil. An aliased var
@@ -91,7 +84,8 @@ func genFnName(fn any) string {
 // (core/vm/gen), one entry per fork that changes the opcode table, oldest to
 // newest. It derives the progression from params.Rules and LookupInstructionSet
 // (in params.Rules declaration order, which is chronological) so new forks are
-// picked up without restating a list here.
+// picked up without restating a list here. Which of these forks the generated
+// switch gives a lane is the generator's call, not this file's.
 func GenForks() []GenFork {
 	// Frontier is always active and carries no rule gate.
 	frontier, _ := LookupInstructionSet(params.Rules{})
@@ -100,7 +94,7 @@ func GenForks() []GenFork {
 	rt := reflect.TypeOf(params.Rules{})
 	for i := range rt.NumField() {
 		field := rt.Field(i)
-		if field.Type.Kind() != reflect.Bool || codegenSkippedForks[field.Name] {
+		if field.Type.Kind() != reflect.Bool {
 			continue
 		}
 		// Activate only this field so the fork resolves to the table it gates.
