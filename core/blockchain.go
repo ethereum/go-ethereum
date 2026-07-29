@@ -2556,6 +2556,14 @@ func (bc *BlockChain) recoverAncestors(ctx context.Context, block *types.Block, 
 		}
 	}
 	if parent == nil {
+		// The binary tree cannot roll its persisted state back, so the states
+		// reachable here are only the ones still held in memory. Running out
+		// of ancestors means the fork point predates the persisted layer,
+		// which re-execution cannot reach either - report that rather than
+		// blaming a missing block.
+		if bc.triedb.IsPBT() {
+			return common.Hash{}, errors.New("no ancestor with live state: the binary tree cannot rewind past the persisted state")
+		}
 		return common.Hash{}, errors.New("missing parent")
 	}
 	// Import all the pruned blocks to make the state available

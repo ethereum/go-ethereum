@@ -120,6 +120,7 @@ func (ctx *genctx) storageOriginSet(rawStorageKey bool, t *tester) map[common.Ad
 
 type tester struct {
 	db        *Database
+	baseRoot  common.Hash // root of the empty base layer; scheme dependent
 	roots     []common.Hash
 	nodes     []*trienode.MergedNodeSet
 	states    []*StateSetWithOrigin
@@ -185,7 +186,12 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			NoHistoryIndexDelay: true,
 		}, config.isPBT)
 
-		obj = &tester{
+		// The base layer of a fresh database is rooted at whatever the
+		// configured hasher makes of an empty node: EmptyRootHash for merkle,
+		// the zero hash for the binary tree. Layer generation has to start
+		// from that, or the very first update finds no parent layer.
+		baseRoot = types.EmptyRootHash
+		obj      = &tester{
 			db:           db,
 			preimages:    make(map[common.Hash][]byte),
 			accounts:     make(map[common.Hash][]byte),
@@ -195,8 +201,13 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			snapNodes:    make(map[common.Hash]*trienode.MergedNodeSet),
 		}
 	)
+	if config.isPBT {
+		baseRoot = types.EmptyBinaryHash
+	}
+	obj.baseRoot = baseRoot
+
 	for i := 0; i < config.layers; i++ {
-		var parent = types.EmptyRootHash
+		var parent = baseRoot
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
 		}
@@ -222,7 +233,7 @@ func (t *tester) hashPreimage(hash common.Hash) common.Hash {
 
 func (t *tester) extend(layers int) {
 	for i := 0; i < layers; i++ {
-		var parent = types.EmptyRootHash
+		var parent = t.baseRoot
 		if len(t.roots) != 0 {
 			parent = t.roots[len(t.roots)-1]
 		}

@@ -471,6 +471,12 @@ func (db *Database) Recover(root common.Hash) error {
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
+	// Rolling back the binary tree is not possible, see Recoverable. Reaching
+	// here means a caller ignored that answer, so say so rather than running
+	// the merkle machinery over binary data.
+	if db.isPBT {
+		return errors.New("state rollback is not supported for the binary tree")
+	}
 	if db.stateFreezer == nil {
 		return errors.New("state rollback is non-supported")
 	}
@@ -525,6 +531,24 @@ func (db *Database) Recover(root common.Hash) error {
 func (db *Database) Recoverable(root common.Hash) bool {
 	// Nothing is recoverable while a state sync is in progress.
 	if db.waitSync {
+		return false
+	}
+	// The binary tree cannot be rolled back at all.
+	//
+	// Reverting works by replaying the pre-transition account and storage
+	// values through the trie and checking the result matches the parent
+	// root. That is only valid while the trie is a pure function of those
+	// values, which holds for the merkle-patricia trie but not here: the
+	// binary tree also stores contract code, and code chunks past the first
+	// 128 are content-addressed, so identical bytecode shares leaves between
+	// accounts. Whether such a leaf belongs at the parent root depends on
+	// whether any other account held that bytecode, which no per-account
+	// history record describes and nothing reference-counts.
+	//
+	// Reporting false here is not a degradation: every caller already treats
+	// rollback as the fast path and falls back to re-executing blocks forward
+	// from the closest ancestor whose state is still live.
+	if db.isPBT {
 		return false
 	}
 	// Ensure the requested state is a known state.
