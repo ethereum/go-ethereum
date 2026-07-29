@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -97,7 +98,6 @@ type opSpec struct {
 type generator struct {
 	fset           *token.FileSet
 	opcodeHandlers map[string]*ast.FuncDecl
-	stackHelpers   map[string]*ast.FuncDecl
 	gasHelpers     map[string]*ast.FuncDecl
 	specs          [256]opSpec
 	buf            *bytes.Buffer
@@ -110,17 +110,16 @@ func (g *generator) p(format string, args ...any) {
 	fmt.Fprintf(g.buf, format, args...)
 }
 
-// parseHandlers parses instructions.go, eips.go, stack.go, gascosts.go and
-// interpreter.go. It returns the top-level opXxx handlers by name, the
-// //gen:inline *Stack helper methods, and the gas/memory helper functions
-// (ChargeRegularOnly, computeMemorySize, chargeDynamicGas) whose bodies are
-// spliced into the generated dispatch (all by name).
-func parseHandlers(vmDir string) (fset *token.FileSet, opcodeHandlers, stackHelpers, gasHelpers map[string]*ast.FuncDecl) {
+// parseHandlers parses instructions.go, eips.go, gascosts.go and
+// interpreter.go. It returns the top-level opXxx handlers by name and the
+// gas/memory helper functions (ChargeRegularOnly, computeMemorySize,
+// chargeDynamicGas) whose bodies are spliced into the generated dispatch.
+// Stack ops need no parsing: the generator emits them itself (see emitStackOp).
+func parseHandlers(vmDir string) (fset *token.FileSet, opcodeHandlers, gasHelpers map[string]*ast.FuncDecl) {
 	fset = token.NewFileSet()
 	opcodeHandlers = map[string]*ast.FuncDecl{}
-	stackHelpers = map[string]*ast.FuncDecl{}
 	gasHelpers = map[string]*ast.FuncDecl{}
-	for _, name := range []string{"instructions.go", "eips.go", "stack.go", "gascosts.go", "interpreter.go"} {
+	for _, name := range []string{"instructions.go", "eips.go", "gascosts.go", "interpreter.go"} {
 		path := filepath.Join(vmDir, name)
 		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
@@ -136,43 +135,10 @@ func parseHandlers(vmDir string) (fset *token.FileSet, opcodeHandlers, stackHelp
 				gasHelpers[fn.Name.Name] = fn
 			case fn.Recv == nil: // top-level opXxx handler
 				opcodeHandlers[fn.Name.Name] = fn
-			case methodReceiver(fn) == "Stack" && hasInlineMarker(fn): // (s *Stack) helper tagged //gen:inline
-				stackHelpers[fn.Name.Name] = fn
 			}
 		}
 	}
-	return fset, opcodeHandlers, stackHelpers, gasHelpers
-}
-
-// methodReceiver returns the receiver type name of a pointer-receiver method
-// (e.g. "Stack" for (s *Stack)), or "" if fn is not such a method.
-func methodReceiver(fn *ast.FuncDecl) string {
-	if fn.Recv == nil || len(fn.Recv.List) != 1 {
-		return ""
-	}
-	star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
-	if !ok {
-		return ""
-	}
-	id, ok := star.X.(*ast.Ident)
-	if !ok {
-		return ""
-	}
-	return id.Name
-}
-
-// hasInlineMarker reports whether fn is tagged //gen:inline, which marks a stack
-// helper for splicing into the generated dispatch.
-func hasInlineMarker(fn *ast.FuncDecl) bool {
-	if fn.Doc == nil {
-		return false
-	}
-	for _, c := range fn.Doc.List {
-		if c.Text == "//gen:inline" {
-			return true
-		}
-	}
-	return false
+	return fset, opcodeHandlers, gasHelpers
 }
 
 var opcodeReturnRe = regexp.MustCompile(`^(\s*)return\s+([^,]+),\s*(.+)$`)
@@ -184,7 +150,7 @@ func (g *generator) spliceOpcodeBody(handler string) string {
 	if fn == nil {
 		fatalf("no handler %q to inline", handler)
 	}
-	return g.rewriteOpcodeReturns(g.inlineStackHelpers(fn.Body.List, nil))
+	return g.rewriteOpcodeReturns(g.renderBody(fn.Body.List, nil))
 }
 
 // spliceOpcodeFactoryBody splices the body of the executionFunc closure that a make*
@@ -208,7 +174,7 @@ func (g *generator) spliceOpcodeFactoryBody(factory string, args ...int) string 
 	for i, nm := range names {
 		params[nm] = args[i]
 	}
-	return g.rewriteOpcodeReturns(g.inlineStackHelpers(lit.Body.List, params))
+	return g.rewriteOpcodeReturns(g.renderBody(lit.Body.List, params))
 }
 
 // factoryClosure returns the executionFunc literal that a make* factory's body
@@ -247,7 +213,7 @@ func (g *generator) renderAst(stmts []ast.Stmt) string {
 // dispatch loop: the `*pc` dereference becomes the loop's `pc` local, and each
 // `return r0, r1` becomes loop control flow. Success (r1 == nil) advances pc
 // and continues, an error sets err and breaks. (Stack helpers were already
-// inlined by inlineStackHelpers before the body was printed.)
+// expanded by renderBody before the body was printed.)
 func (g *generator) rewriteOpcodeReturns(src string) string {
 	src = strings.ReplaceAll(src, "*pc", "pc")
 
@@ -315,7 +281,7 @@ func (g *generator) rewriteStepReturns(src, target string) string {
 	return out.String()
 }
 
-// stackCall is a matched call to a tagged helper.
+// stackCall is a matched call to a stack op.
 type stackCall struct {
 	helper string      // helper method name
 	lhs    []ast.Expr  // assignment targets, nil for a void call like dup
@@ -323,7 +289,7 @@ type stackCall struct {
 	args   []ast.Expr  // call arguments (only dup has one)
 }
 
-// matchStackHelper matches a statement that is a single must-expand helper call,
+// matchStackHelper matches a statement that is a single stack op call,
 // in one of the two normalized forms: an assignment `lhs... := scope.Stack.H(args)`
 // or a bare `scope.Stack.H(args)`.
 func (g *generator) matchStackHelper(stmt ast.Stmt) (stackCall, bool) {
@@ -342,14 +308,15 @@ func (g *generator) matchStackHelper(stmt ast.Stmt) (stackCall, bool) {
 	return stackCall{}, false
 }
 
-// stackHelperCall unwraps scope.Stack.H(args) where H is a must-expand helper.
+// stackHelperCall unwraps scope.Stack.H(args) where H is a stack op the
+// generator knows how to emit.
 func (g *generator) stackHelperCall(e ast.Expr) (helper string, args []ast.Expr, ok bool) {
 	call, isCall := e.(*ast.CallExpr)
 	if !isCall {
 		return "", nil, false
 	}
 	sel, isSel := call.Fun.(*ast.SelectorExpr) // <recv>.H
-	if !isSel || g.stackHelpers[sel.Sel.Name] == nil || !isStackExpr(sel.X) {
+	if !isSel || !isStackOp(sel.Sel.Name) || !isStackExpr(sel.X) {
 		return "", nil, false
 	}
 	return sel.Sel.Name, call.Args, true
@@ -367,22 +334,24 @@ func isStackExpr(e ast.Expr) bool {
 	return false
 }
 
-// inlineStackHelpers renders a handler body to source, inlining every must-expand
-// helper call and printing other statements unchanged. params maps the factory
-// parameters (makePush/makeDup) to their per-opcode constants.
-func (g *generator) inlineStackHelpers(stmts []ast.Stmt, params map[string]int) string {
+// renderBody renders a handler body to source. A statement that is a stack
+// op call becomes its sp/sd lines, every other statement is printed as
+// written, with any makePush or makeDup factory param filled in with this
+// opcode's constant.
+func (g *generator) renderBody(stmts []ast.Stmt, params map[string]int) string {
 	var out strings.Builder
-	// Walk the handler body one statement at a time. A statement that is a
-	// tagged stack-helper call gets the helper's body spliced in: the generated
-	// dispatch is past Go's big-function inline budget, so the call would not be
-	// inlined otherwise. Every other statement is printed as written.
 	for _, stmt := range stmts {
 		if call, ok := g.matchStackHelper(stmt); ok {
-			// e.g. `x, y := scope.Stack.pop1Peek1()` becomes the body of pop1Peek1.
-			out.WriteString(g.inlineStackHelper(call, params))
+			out.WriteString(emitStackOp(call, params))
 		} else {
-			// A plain statement: print it verbatim, then fill in any makePush or
-			// makeDup factory params with this opcode's constants.
+			// A printed-through stack access like scope.Stack.len() would read
+			// the stale view, since the loop tracks the stack in sp and sd.
+			ast.Inspect(stmt, func(n ast.Node) bool {
+				if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == "Stack" {
+					fatalf("handler statement accesses the stack outside the known ops: %s", g.renderAst([]ast.Stmt{stmt}))
+				}
+				return true
+			})
 			out.WriteString(substParams(g.renderAst([]ast.Stmt{stmt}), params))
 		}
 	}
@@ -400,50 +369,80 @@ func substParams(src string, params map[string]int) string {
 	return src
 }
 
-// inlineStackHelper expands one helper call to its stack.go body. The single
-// rule: the helper is straight-line statements then an optional final return
-// whose result count matches the call's targets. Anything else is not in
-// inlinable form and is a hard error (the shape post-condition). The receiver
-// maps to the loop's `stack` local and each parameter to its call argument.
-func (g *generator) inlineStackHelper(call stackCall, params map[string]int) string {
-	fn := g.stackHelpers[call.helper]
-	if fn == nil {
-		fatalf("no stack helper %q to inline", call.helper)
+// stackOps maps each stack helper to the lines it becomes in the dispatch.
+// $1, $2, $3 take the call's assignment targets, and n takes the depth that
+// dup carries as an argument. The set is small and frozen, and the
+// differential test against the table loop keeps it matching the real
+// stack.go helpers.
+var stackOps = map[string]string{
+	"get":       "sp++\n$1 := &sd[sp-1]",
+	"drop":      "sp--",
+	"peek":      "$1 := &sd[sp-1]",
+	"pop1":      "sp--\n$1 := &sd[sp]",
+	"pop2":      "sp -= 2\n$1 := &sd[sp+1]\n$2 := &sd[sp]",
+	"pop1Peek1": "sp--\n$1 := &sd[sp]\n$2 := &sd[sp-1]",
+	"pop2Peek1": "sp -= 2\n$1 := &sd[sp+1]\n$2 := &sd[sp]\n$3 := &sd[sp-1]",
+	"dup":       "sd[sp] = sd[sp-n]\nsp++",
+	"swap1":     "sd[sp-2], sd[sp-1] = sd[sp-1], sd[sp-2]",
+	"swap2":     "sd[sp-3], sd[sp-1] = sd[sp-1], sd[sp-3]",
+	"swap3":     "sd[sp-4], sd[sp-1] = sd[sp-1], sd[sp-4]",
+	"swap4":     "sd[sp-5], sd[sp-1] = sd[sp-1], sd[sp-5]",
+	"swap5":     "sd[sp-6], sd[sp-1] = sd[sp-1], sd[sp-6]",
+	"swap6":     "sd[sp-7], sd[sp-1] = sd[sp-1], sd[sp-7]",
+	"swap7":     "sd[sp-8], sd[sp-1] = sd[sp-1], sd[sp-8]",
+	"swap8":     "sd[sp-9], sd[sp-1] = sd[sp-1], sd[sp-9]",
+	"swap9":     "sd[sp-10], sd[sp-1] = sd[sp-1], sd[sp-10]",
+	"swap10":    "sd[sp-11], sd[sp-1] = sd[sp-1], sd[sp-11]",
+	"swap11":    "sd[sp-12], sd[sp-1] = sd[sp-1], sd[sp-12]",
+	"swap12":    "sd[sp-13], sd[sp-1] = sd[sp-1], sd[sp-13]",
+	"swap13":    "sd[sp-14], sd[sp-1] = sd[sp-1], sd[sp-14]",
+	"swap14":    "sd[sp-15], sd[sp-1] = sd[sp-1], sd[sp-15]",
+	"swap15":    "sd[sp-16], sd[sp-1] = sd[sp-1], sd[sp-16]",
+	"swap16":    "sd[sp-17], sd[sp-1] = sd[sp-1], sd[sp-17]",
+}
+
+// isStackOp reports whether the dispatch expands calls to this helper.
+func isStackOp(name string) bool {
+	_, ok := stackOps[name]
+	return ok
+}
+
+// emitStackOp expands one stack op call: look up the op's lines, fill in
+// dup's depth, then the assignment targets.
+func emitStackOp(call stackCall, params map[string]int) string {
+	lines, ok := stackOps[call.helper]
+	if !ok {
+		fatalf("no stack op %q to emit", call.helper)
 	}
-	// Peel an optional trailing return off the body.
-	body := fn.Body.List
-	var ret *ast.ReturnStmt
-	if n := len(body); n > 0 {
-		if r, isRet := body[n-1].(*ast.ReturnStmt); isRet {
-			ret, body = r, body[:n-1]
+	if call.helper == "dup" {
+		if len(call.args) != 1 {
+			fatalf("dup takes 1 argument, call passes %d", len(call.args))
 		}
+		lines = strings.ReplaceAll(lines, "n", substParams(exprString(call.args[0]), params))
+	} else if len(call.args) != 0 {
+		fatalf("stack op %q takes no arguments, call passes %d", call.helper, len(call.args))
 	}
-	results := 0
-	if ret != nil {
-		results = len(ret.Results)
-	}
-	if len(call.lhs) != results {
-		fatalf("stack helper %q returns %d values, call assigns %d", call.helper, results, len(call.lhs))
-	}
-	// Map the receiver to the loop local and each parameter to its argument.
-	names := paramNames(fn)
-	if len(names) != len(call.args) {
-		fatalf("stack helper %q takes %d params, call passes %d", call.helper, len(names), len(call.args))
-	}
-	subst := map[string]string{recvName(fn): "stack"}
-	for i, name := range names {
-		subst[name] = substParams(renderInlineExpr(call.args[i], nil), params)
-	}
-	// The leading bookkeeping statements, then bind each return expression to
-	// its assignment target.
-	var out strings.Builder
-	for _, stmt := range body {
-		out.WriteString(renderInlineStmt(stmt, subst) + "\n")
+	if n := strings.Count(lines, "$"); n != len(call.lhs) {
+		fatalf("stack op %q binds %d values, call assigns %d", call.helper, n, len(call.lhs))
 	}
 	for i, lhs := range call.lhs {
-		out.WriteString(renderInlineExpr(lhs, nil) + " " + call.tok.String() + " " + renderInlineExpr(ret.Results[i], subst) + "\n")
+		lines = strings.Replace(lines, "$"+strconv.Itoa(i+1), exprString(lhs), 1)
 	}
-	return out.String()
+	return lines + "\n"
+}
+
+// exprString prints the little expressions around a stack op call, the
+// assignment targets and the dup count. Anything more elaborate at a call
+// site is a bug.
+func exprString(e ast.Expr) string {
+	switch x := e.(type) {
+	case *ast.Ident:
+		return x.Name
+	case *ast.BasicLit:
+		return x.Value
+	}
+	fatalf("unexpected expression %T at a stack op call site", e)
+	return ""
 }
 
 // recvName returns a method's receiver name (e.g. "s").
@@ -463,51 +462,6 @@ func paramNames(fn *ast.FuncDecl) []string {
 		}
 	}
 	return names
-}
-
-// renderInlineStmt prints one helper-body statement with subst applied. Only the
-// statement shapes the helpers use are handled; any other is not inlinable.
-func renderInlineStmt(stmt ast.Stmt, subst map[string]string) string {
-	switch s := stmt.(type) {
-	case *ast.IncDecStmt: // s.inner.top++
-		return renderInlineExpr(s.X, subst) + s.Tok.String()
-	case *ast.AssignStmt: // s.size -= 2, data[x] = data[y], or the swap tuple a, b = b, a
-		if len(s.Lhs) == len(s.Rhs) && len(s.Lhs) >= 1 {
-			lhs := make([]string, len(s.Lhs))
-			rhs := make([]string, len(s.Rhs))
-			for i := range s.Lhs {
-				lhs[i] = renderInlineExpr(s.Lhs[i], subst)
-				rhs[i] = renderInlineExpr(s.Rhs[i], subst)
-			}
-			return strings.Join(lhs, ", ") + " " + s.Tok.String() + " " + strings.Join(rhs, ", ")
-		}
-	}
-	fatalf("inline: unsupported statement %T in stack helper", stmt)
-	return ""
-}
-
-// renderInlineExpr prints one helper-body expression, substituting any
-// identifier found in subst. Only the shapes the helpers use are handled.
-func renderInlineExpr(expr ast.Expr, subst map[string]string) string {
-	switch e := expr.(type) {
-	case *ast.Ident:
-		if r, ok := subst[e.Name]; ok {
-			return r
-		}
-		return e.Name
-	case *ast.BasicLit:
-		return e.Value
-	case *ast.SelectorExpr: // x.field
-		return renderInlineExpr(e.X, subst) + "." + e.Sel.Name
-	case *ast.IndexExpr: // x[i]
-		return renderInlineExpr(e.X, subst) + "[" + renderInlineExpr(e.Index, subst) + "]"
-	case *ast.BinaryExpr: // x op y
-		return renderInlineExpr(e.X, subst) + " " + e.Op.String() + " " + renderInlineExpr(e.Y, subst)
-	case *ast.UnaryExpr: // &x
-		return e.Op.String() + renderInlineExpr(e.X, subst)
-	}
-	fatalf("inline: unsupported expression %T in stack helper", expr)
-	return ""
 }
 
 // deriveSpecs records each opcode's constant values (name, intro fork, static
@@ -606,20 +560,24 @@ func (g *generator) checkDirectCallStable(code byte, forks []vm.GenFork) {
 func (g *generator) generateStackChecks(minExpr, maxExpr any, under, over bool) string {
 	switch {
 	case under && over:
-		return fmt.Sprintf(`if sLen := stack.len(); sLen < %v {
-	return nil, &ErrStackUnderflow{stackLen: sLen, required: %v}
-} else if sLen > %v {
-	return nil, &ErrStackOverflow{stackLen: sLen, limit: %v}
+		return fmt.Sprintf(`if sp < %v {
+	res, err = nil, &ErrStackUnderflow{stackLen: sp, required: %v}
+	break mainLoop
+} else if sp > %v {
+	res, err = nil, &ErrStackOverflow{stackLen: sp, limit: %v}
+	break mainLoop
 }
 `, minExpr, minExpr, maxExpr, maxExpr)
 	case under:
-		return fmt.Sprintf(`if sLen := stack.len(); sLen < %v {
-	return nil, &ErrStackUnderflow{stackLen: sLen, required: %v}
+		return fmt.Sprintf(`if sp < %v {
+	res, err = nil, &ErrStackUnderflow{stackLen: sp, required: %v}
+	break mainLoop
 }
 `, minExpr, minExpr)
 	case over:
-		return fmt.Sprintf(`if sLen := stack.len(); sLen > %v {
-	return nil, &ErrStackOverflow{stackLen: sLen, limit: %v}
+		return fmt.Sprintf(`if sp > %v {
+	res, err = nil, &ErrStackOverflow{stackLen: sp, limit: %v}
+	break mainLoop
 }
 `, maxExpr, maxExpr)
 	}
@@ -693,7 +651,11 @@ func (g *generator) emitInlineOp(code byte) {
 	if code >= 0x60 && code <= 0x7f {
 		g.p(`
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -743,6 +705,13 @@ func (g *generator) emitDirectCallOp(code byte) {
 		g.p("%s", g.generateStaticGas(spec.constGas))
 	}
 
+	// the memory-size and dynamic-gas functions read the stack view, so
+	// write the loop counters back first
+	g.p(`
+		stack.size = sp
+		stack.inner.top = stack.bottom + sp
+	`)
+
 	// dynamic gas
 	g.p("\nvar memorySize uint64\n")
 
@@ -773,9 +742,11 @@ func (g *generator) emitDirectCallOp(code byte) {
 		}
 	`)
 
-	// call the opcode handler
+	// call the opcode handler, then reload the counters it may have moved
 	g.p(`
 		res, err = %s(&pc, evm, scope)
+		sp = stack.size
+		sd = stack.inner.data[stack.bottom:]
 		if err != nil {
 			break mainLoop
 		}
@@ -804,8 +775,10 @@ func (g *generator) emitDefault() {
 	// static gas
 	g.p("%s", g.generateStaticGas("operation.constantGas"))
 
-	// dynamic gas
+	// dynamic gas, computed on the stack view, so sync the loop counters first
 	g.p(`
+			stack.size = sp
+			stack.inner.top = stack.bottom + sp
 			var memorySize uint64
 			if memorySize, _, err = contract.meterDynamicGas(operation, evm, stack, mem); err != nil {
 				return nil, err
@@ -819,9 +792,11 @@ func (g *generator) emitDefault() {
 			}
 	`)
 
-	// call the opcode handler
+	// call the opcode handler, then reload the counters it may have moved
 	g.p(`
 			res, err = operation.execute(&pc, evm, scope)
+			sp = stack.size
+			sd = stack.inner.data[stack.bottom:]
 			if err != nil {
 				break mainLoop
 			}
@@ -894,6 +869,12 @@ func (g *generator) createFile() {
 			_ = rules
 			_ = isEIP4762
 			_ = table
+			// sp and sd shadow stack.size and the stack's window of the arena
+			// as loop locals, so hot opcodes work on registers instead of the
+			// view. They are written back before any call that can see the
+			// stack and reloaded after any call that can move it.
+			sp := stack.size
+			sd := stack.inner.data[stack.bottom:]
 		mainLoop:
 			for {
 	`)
@@ -928,6 +909,8 @@ func (g *generator) createFile() {
 	g.p(`
 				}
 			}
+			stack.size = sp
+			stack.inner.top = stack.bottom + sp
 			if err == errStopToken {
 				err = nil
 			}
@@ -957,8 +940,8 @@ func vmDir() string {
 // generator: main writes the result to disk, and the up-to-date test in
 // gen_test.go compares it against the committed file.
 func generate() ([]byte, error) {
-	fset, opcodeHandlers, stackHelpers, gasHelpers := parseHandlers(vmDir())
-	g := &generator{fset: fset, opcodeHandlers: opcodeHandlers, stackHelpers: stackHelpers, gasHelpers: gasHelpers, buf: new(bytes.Buffer)}
+	fset, opcodeHandlers, gasHelpers := parseHandlers(vmDir())
+	g := &generator{fset: fset, opcodeHandlers: opcodeHandlers, gasHelpers: gasHelpers, buf: new(bytes.Buffer)}
 	g.deriveSpecs(vm.GenForks())
 	g.createFile()
 
