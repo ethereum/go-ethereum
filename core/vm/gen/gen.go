@@ -106,7 +106,7 @@ func (g *generator) emitStaticGas(amount any) {
 	// mean this is rewriting the wrong thing.
 	names := paramNames(fn)
 	if len(names) != 1 {
-		fatalf("ChargeRegularOnly takes %d params, want 1", len(names))
+		abortf("ChargeRegularOnly takes %d params, want 1", len(names))
 	}
 	src := g.renderAst(fn.Body.List)
 
@@ -201,7 +201,7 @@ func (g *generator) emitInlineOp(code byte) {
 	case "": // the rest: splice the opXxx handler body
 		g.p("%s", g.spliceOpcodeBody(spec.execFn))
 	default:
-		fatalf("opcode %#x (%s) is built by factory %q, which the generator cannot inline", code, spec.name, factory)
+		abortf("opcode %#x (%s) is built by factory %q, which the generator cannot inline", code, spec.name, factory)
 	}
 
 	// If opcode is inactive for this fork, then close the gate
@@ -391,6 +391,24 @@ func (g *generator) createFile() {
 	`)
 }
 
+// genError is what abortf panics with. The generator's guards sit deep inside the
+// splicer, so they unwind to generate rather than each call site threading an error
+// back. Panicking rather than exiting is what makes them testable.
+type genError string
+
+func (e genError) Error() string { return string(e) }
+
+// abortf stops generation. Every check the generator makes about the code it splices
+// ends here, so a change it cannot express fails the build instead of producing wrong
+// dispatch. It panics rather than exits so generate can report it and tests can
+// assert on it.
+func abortf(format string, args ...any) {
+	panic(genError(fmt.Sprintf(format, args...)))
+}
+
+// fatalf reports a failure and exits. It is for the callers outside generate's
+// recover, namely main and vmDir, where a panic would surface as a stack trace
+// instead of a message.
 func fatalf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "gen: "+format+"\n", args...)
 	os.Exit(1)
@@ -411,7 +429,19 @@ func vmDir() string {
 // the formatted contents of interpreter_gen.go. It is the shared core of the
 // generator: main writes the result to disk, and the up-to-date test in
 // gen_test.go compares it against the committed file.
-func generate() ([]byte, error) {
+func generate() (out []byte, err error) {
+	// Turn a tripped guard into an error. Anything else is a bug in the generator
+	// itself, so let it crash with its stack.
+	defer func() {
+		switch r := recover().(type) {
+		case nil:
+		case genError:
+			err = r
+		default:
+			panic(r)
+		}
+	}()
+
 	g := &generator{source: parseSource(vmDir()), buf: new(bytes.Buffer)}
 	g.deriveSpecs(genForks())
 	g.createFile()

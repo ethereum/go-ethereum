@@ -156,7 +156,7 @@ func (g *generator) checkInlineStable(code byte, forks []vm.GenFork) {
 	// The spec is what gets emitted, so there has to be one.
 	spec := g.specs[code]
 	if !spec.defined {
-		fatalf("opcode %#x selected for inlining but never defined", code)
+		abortf("opcode %#x selected for inlining but never defined", code)
 	}
 	for _, fork := range forks {
 		// Nothing to compare in a fork where the opcode does not exist.
@@ -168,7 +168,7 @@ func (g *generator) checkInlineStable(code byte, forks []vm.GenFork) {
 		// fork, so a later fork changing any of them would be silently ignored.
 		// Dynamic gas is barred outright: an inlined op charges only its constant.
 		if o.ExecuteFn != spec.execFn || o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack || o.DynamicGasFn != "" {
-			fatalf("opcode %#x (%s) is not fork-stable (fork %s): cannot inline", code, spec.name, fork.Name)
+			abortf("opcode %#x (%s) is not fork-stable (fork %s): cannot inline", code, spec.name, fork.Name)
 		}
 	}
 }
@@ -178,7 +178,7 @@ func (g *generator) checkInlineStable(code byte, forks []vm.GenFork) {
 func (g *generator) checkDirectStable(code byte, forks []vm.GenFork) {
 	spec := g.specs[code]
 	if !spec.defined {
-		fatalf("opcode %#x (tierDirect) is never defined", code)
+		abortf("opcode %#x (tierDirect) is never defined", code)
 	}
 	for _, fork := range forks {
 		o := fork.Ops[code]
@@ -187,12 +187,12 @@ func (g *generator) checkDirectStable(code byte, forks []vm.GenFork) {
 		}
 		// Emitted as constants, so they cannot vary.
 		if o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack {
-			fatalf("opcode %#x (%s) is tierDirect but not fork-stable (fork %s): static gas or stack bounds vary, cannot emit as constants", code, spec.name, fork.Name)
+			abortf("opcode %#x (%s) is tierDirect but not fork-stable (fork %s): static gas or stack bounds vary, cannot emit as constants", code, spec.name, fork.Name)
 		}
 		// Called by the first defining fork's names, so a fork that swapped one
 		// would be run with the wrong function.
 		if o.ExecuteFn != spec.execFn || o.DynamicGasFn != spec.dynFn || o.MemorySizeFn != spec.memFn {
-			fatalf("opcode %#x (%s) is tierDirect but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
+			abortf("opcode %#x (%s) is tierDirect but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
 				code, spec.name, fork.Name, o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, spec.execFn, spec.dynFn, spec.memFn)
 		}
 	}
