@@ -461,7 +461,8 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Re-construct a new disk layer backed by persistent state and schedule
 	// the state snapshot generation if it's permitted.
-	db.tree.init(generateSnapshot(db, root, db.isPBT || db.config.SnapshotNoBuild))
+	// No binary-tree term here: resetForReactivation refuses that scheme above.
+	db.tree.init(generateSnapshot(db, root, db.config.SnapshotNoBuild))
 
 	// After snap sync, the state of the database may have changed completely.
 	// To ensure the history indexer always matches the current state, we must:

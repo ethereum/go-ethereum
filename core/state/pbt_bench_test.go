@@ -18,13 +18,13 @@ package state
 
 import (
 	"encoding/binary"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
@@ -33,27 +33,48 @@ import (
 // State-level benchmarks comparing the merkle-patricia trie against the
 // EIP-8297 binary tree through the same StateDB API.
 //
-// What these measure: the shape and count of lookups on the read path. Both
-// arms run over an in-memory key-value store, so the numbers are CPU and
-// lookup-count, not device I/O - a real disk would widen any gap rather than
-// narrow it. The clean caches are deliberately tiny so reads reach the trie
-// instead of being served from RAM, which is the whole point of the
-// comparison.
+// # This is not a CI check
 //
-// The arms to record, in order:
+// It builds a state large enough to be measured honestly, which takes minutes.
+// Benchmarks do not run under plain `go test` — only `Test*` does, unless
+// `-bench` is passed — so nothing here executes on a normal run, and no `Test*`
+// belongs in this file. Run it by hand, occasionally:
 //
-//	MPT          merkle-patricia trie, flat state as usual
-//	PBT-flat-off binary tree today: flat state built, then discarded
-//	PBT-flat-on  binary tree once the generation marker no longer blocks it
+//	go test ./core/state/ -run XXX -bench BenchmarkStateAccountRead -benchtime 2000x
+//	go test ./core/state/ -run XXX -bench BenchmarkStateStorageRead -benchtime 2000x
+//	go test ./core/state/ -run XXX -bench BenchmarkStateCommit      -benchtime 20x
 //
-// The middle arm stops existing the moment flat state is unlocked, so it has
-// to be captured first. Run with:
+// Correctness is not this file's job and must not lean on it. That is
+// TestPBTFlatStateMatchesTrie, the attestation tests, and the reorg checks —
+// all fast, all on every push.
 //
-//	go test ./core/state/ -run XXX -bench 'BenchmarkState' -benchtime 2000x
-
+// # Why a real database
+//
+// An earlier version of this ran against rawdb.NewMemoryDatabase(), a Go map.
+// That hides everything that makes a key-value store behave like one: key-size
+// effects on block layout, compression, bloom filters, block-cache behaviour,
+// and on the write side the write-ahead log, memtable flush and compaction. The
+// two tries use different key shapes — 34/66-byte tree keys against hex paths —
+// so precisely the differences that should show up were the ones a map could not
+// show. The commit benchmark was worst affected, omitting the entire write path
+// that dominates a real commit.
+//
+// Two things follow from using pebble, and both are load-bearing:
+//
+//   - The working set must dwarf the block cache. minCache floors it at 16 MB
+//     and there is no way to ask for less, so a small state would sit entirely
+//     inside it and report cache hits dressed as disk reads. benchAccounts is
+//     sized to put the state an order of magnitude past that.
+//   - The data must be out of the memtable. Compact runs after building, or the
+//     read benchmarks measure an in-memory skiplist with extra steps — the same
+//     problem in a different costume.
 const (
-	benchAccounts = 20000 // number of accounts populated
-	benchSlots    = 2     // storage slots per account: one header, one overflow
+	// benchAccounts sizes the state. At roughly 110 bytes per account and 100
+	// per slot in the flat tables, plus trie nodes, 1M accounts with two slots
+	// each lands in the hundreds of MB — far clear of the 16 MB cache floor.
+	// Lower it for a quick sanity run, but then say so alongside any number.
+	benchAccounts = 1_000_000
+	benchSlots    = 2 // one in the header stem, one in the overflow bucket
 )
 
 // benchStateAddr derives the address of the i'th benchmark account.
@@ -76,58 +97,70 @@ func benchStateSlot(j int) common.Hash {
 	return slot
 }
 
-// newBenchDatabase opens a state database over a fresh in-memory store, on the
-// path scheme, with caches small enough that reads are not absorbed by them.
-func newBenchDatabase(pbt bool) *CachingDB {
-	disk := rawdb.NewMemoryDatabase()
-	config := &triedb.Config{
-		IsPBT: pbt,
-		PathDB: &pathdb.Config{
-			TrieCleanSize:  1024,
-			StateCleanSize: 1024,
-			NoAsyncFlush:   true,
-		},
-	}
-	return NewDatabase(triedb.NewDatabase(disk, config), NewCodeDB(disk))
-}
-
-// buildBenchState populates a state with benchAccounts accounts, each holding
-// benchSlots storage slots, and returns the database and the committed root.
-// The state is written through the ordinary StateDB commit path so that any
-// flat-state accumulation happens exactly as it would during block processing.
+// buildBenchState populates a state on a real pebble database and returns it
+// with the committed root, ready for measurement.
 func buildBenchState(b *testing.B, pbt bool) (*CachingDB, common.Hash) {
 	b.Helper()
 
-	db := newBenchDatabase(pbt)
+	dir := b.TempDir()
+	pdb, err := pebble.New(dir, 0, 0, "", false)
+	if err != nil {
+		b.Fatalf("failed to open the key-value store: %v", err)
+	}
+	disk, err := rawdb.Open(pdb, rawdb.OpenOptions{Ancient: dir + "/ancient"})
+	if err != nil {
+		b.Fatalf("failed to open the database: %v", err)
+	}
+	b.Cleanup(func() { disk.Close() })
+
+	tdb := triedb.NewDatabase(disk, &triedb.Config{
+		IsPBT:  pbt,
+		PathDB: &pathdb.Config{NoAsyncFlush: true},
+	})
+	b.Cleanup(func() { tdb.Close() })
+	db := NewDatabase(tdb, NewCodeDB(disk))
+
 	root := types.EmptyRootHash
 	if pbt {
 		root = types.EmptyBinaryHash
 	}
-	statedb, err := New(root, db)
-	if err != nil {
-		b.Fatal(err)
-	}
-	for i := 0; i < benchAccounts; i++ {
-		addr := benchStateAddr(i)
-		statedb.SetBalance(addr, uint256.NewInt(uint64(i)+1), tracing.BalanceChangeUnspecified)
-		statedb.SetNonce(addr, uint64(i), tracing.NonceChangeUnspecified)
-		for j := 0; j < benchSlots; j++ {
-			slot := benchStateSlot(j)
-			statedb.SetState(addr, slot, slot)
+	// Build in batches so the write buffer flushes as it would during block
+	// processing, rather than accumulating the whole state in memory.
+	const perBatch = 50_000
+	for start := 0; start < benchAccounts; start += perBatch {
+		statedb, err := New(root, db)
+		if err != nil {
+			b.Fatal(err)
+		}
+		end := min(start+perBatch, benchAccounts)
+		for i := start; i < end; i++ {
+			addr := benchStateAddr(i)
+			statedb.SetBalance(addr, uint256.NewInt(uint64(i)+1), tracing.BalanceChangeUnspecified)
+			statedb.SetNonce(addr, uint64(i), tracing.NonceChangeUnspecified)
+			for j := 0; j < benchSlots; j++ {
+				slot := benchStateSlot(j)
+				statedb.SetState(addr, slot, slot)
+			}
+		}
+		// Cancun semantics: no storage wiping, matching how a live chain commits.
+		root, err = statedb.Commit(uint64(start/perBatch), true, true)
+		if err != nil {
+			b.Fatal(err)
 		}
 	}
-	// Cancun semantics: no storage wiping, matching how a live chain commits.
-	root, err = statedb.Commit(0, true, true)
-	if err != nil {
+	if err := tdb.Commit(root, false); err != nil {
 		b.Fatal(err)
 	}
-	if err := db.TrieDB().Commit(root, false); err != nil {
-		b.Fatal(err)
+	// Drive the data out of the memtable, so reads below hit SSTables.
+	if err := pdb.Compact(nil, nil); err != nil {
+		b.Fatalf("failed to compact: %v", err)
 	}
 	return db, root
 }
 
-// benchBackends is the set of arms every benchmark below runs.
+// benchBackends is the set of arms every benchmark below runs. Only two, and
+// both with flat state on: that is the comparison that matters, and both come
+// from this harness on this backend so the ratio means something.
 var benchBackends = []struct {
 	name string
 	pbt  bool
@@ -137,9 +170,10 @@ var benchBackends = []struct {
 }
 
 // BenchmarkStateAccountRead measures reading an account that is not already
-// cached. This is the read the whole flat-state effort is about: the binary
-// tree currently resolves it by walking the trie, where the merkle-patricia
-// trie resolves it from flat state.
+// cached — the read the whole flat-state effort is about.
+//
+// The zero-balance check is not decoration: a flat store that answered "absent"
+// for everything would be extremely fast, and would otherwise look like a win.
 func BenchmarkStateAccountRead(b *testing.B) {
 	for _, backend := range benchBackends {
 		b.Run(backend.name, func(b *testing.B) {
@@ -207,10 +241,10 @@ func BenchmarkStateStorageRead(b *testing.B) {
 	}
 }
 
-// BenchmarkStateCommit measures committing a block-sized batch of mutations,
-// which is the side of the ledger flat state is expected to cost rather than
-// save. The gate is that the binary tree stays within 1.5x of the merkle
-// trie here while winning on reads.
+// BenchmarkStateCommit measures committing a block-sized batch of mutations.
+// Note it carries the read cost too, since mutating an account loads it first —
+// which is realistic, block processing reads before it writes, but it means the
+// number is not purely commit-side.
 func BenchmarkStateCommit(b *testing.B) {
 	const mutations = 1000
 
@@ -238,40 +272,4 @@ func BenchmarkStateCommit(b *testing.B) {
 			}
 		})
 	}
-}
-
-// TestBenchStateBuilds guards the harness itself: a benchmark that silently
-// built an empty state would report a very fast lookup of nothing.
-func TestBenchStateBuilds(t *testing.T) {
-	for _, backend := range benchBackends {
-		t.Run(backend.name, func(t *testing.T) {
-			db, root := buildBenchState(&testing.B{}, backend.pbt)
-
-			statedb, err := New(root, db)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, i := range []int{0, benchAccounts / 2, benchAccounts - 1} {
-				addr := benchStateAddr(i)
-				if got := statedb.GetBalance(addr).Uint64(); got != uint64(i)+1 {
-					t.Fatalf("account %d balance is %d, want %d", i, got, i+1)
-				}
-				for j := 0; j < benchSlots; j++ {
-					slot := benchStateSlot(j)
-					if got := statedb.GetState(addr, slot); got != slot {
-						t.Fatalf("account %d slot %x is %x, want %x", i, slot, got, slot)
-					}
-				}
-			}
-			fmt.Fprintf(testWriter{t}, "%s state root %x\n", backend.name, root)
-		})
-	}
-}
-
-// testWriter adapts *testing.T to io.Writer for diagnostic output.
-type testWriter struct{ t *testing.T }
-
-func (w testWriter) Write(p []byte) (int, error) {
-	w.t.Logf("%s", p)
-	return len(p), nil
 }

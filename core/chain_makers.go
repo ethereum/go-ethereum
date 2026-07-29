@@ -479,14 +479,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
 
-	// Root generation started from. On the path scheme the per-block commit is
-	// skipped, so the tip is persisted once at the end instead - callers pass
-	// this database back into GenerateChain to continue the chain, and that
-	// needs the last block's state to still be readable. Nothing to persist if
-	// no block changed the state, and asking to commit an already-persisted
-	// root is an error.
-	startRoot := parent.Root()
-
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
 		if err != nil {
@@ -521,9 +513,20 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		cm.add(block, receipts)
 		parent = block
 	}
-	if triedb.Scheme() == rawdb.PathScheme && parent.Root() != startRoot {
-		if err := triedb.Commit(parent.Root(), false); err != nil {
-			panic(fmt.Sprintf("trie write error: %v", err))
+	// Persist once at the end, the way a real node does at shutdown: callers
+	// hand this database back to GenerateChain to extend or fork the chain, so
+	// the generated states have to survive the deferred Close.
+	//
+	// Journal rather than Commit. Committing flattens every layer into the disk
+	// layer, which advances the persisted state past the shared parent and
+	// leaves a second branch from that parent with nothing to build on - a
+	// reorg fixture is exactly that shape. Journalling keeps the layer stack,
+	// so any of the retained states can be reopened, and unlike Commit it
+	// accepts a root that is already the disk layer, which is what a chain of
+	// state-preserving blocks produces.
+	if triedb.Scheme() == rawdb.PathScheme && n > 0 {
+		if err := triedb.Journal(parent.Root()); err != nil {
+			panic(fmt.Sprintf("trie journal error: %v", err))
 		}
 	}
 	return cm.chain, cm.receipts

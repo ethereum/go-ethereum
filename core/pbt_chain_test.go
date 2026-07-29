@@ -127,3 +127,112 @@ func TestPBTGeneratedChainImportsWithFlatState(t *testing.T) {
 		t.Fatalf("sender nonce is %d, want %d", got, blockCount)
 	}
 }
+
+// TestPBTGenerateChainStatePreservingBlocks pins the case that actually broke:
+// blocks that leave the state root untouched.
+//
+// This is the trigger, and it is narrower than "no transactions". A block with
+// no state delta never reaches the trie database at all — the commit
+// short-circuits on an unchanged root — so no layer exists for it, while the
+// root itself is already the persisted one. Asking the path database to commit
+// that root is the error. Whether the block carried transactions is incidental;
+// what matters is whether it moved the state.
+//
+// Worth pinning separately because the test above uses transactions in every
+// block and therefore never exercises this path. Note also that a bare
+// binary-tree genesis makes it the *default*: post-merge there is no block
+// reward, and the EIP-4788 and EIP-2935 system calls no-op against accounts
+// with no code, so an empty block on such a genesis changes nothing at all.
+func TestPBTGenerateChainStatePreservingBlocks(t *testing.T) {
+	genesis, key, sender, recipient := pbtChainGenesis(t)
+	engine := beacon.New(ethash.NewFaker())
+	signer := types.LatestSigner(genesis.Config)
+
+	for _, tc := range []struct {
+		name  string
+		count int
+		gen   func(i int, gen *BlockGen)
+	}{
+		{"all state-preserving", 5, func(i int, gen *BlockGen) {}},
+		{"nil generator", 3, nil},
+		{"transaction then state-preserving", 2, func(i int, gen *BlockGen) {
+			if i != 0 {
+				return
+			}
+			tx, err := types.SignTx(types.NewTransaction(
+				gen.TxNonce(sender), recipient, big.NewInt(1), params.TxGas,
+				new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
+			), signer, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gen.AddTx(tx)
+		}},
+		{"state-preserving then transaction", 2, func(i int, gen *BlockGen) {
+			if i != 1 {
+				return
+			}
+			tx, err := types.SignTx(types.NewTransaction(
+				gen.TxNonce(sender), recipient, big.NewInt(1), params.TxGas,
+				new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
+			), signer, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gen.AddTx(tx)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, blocks, _ := GenerateChainWithGenesis(genesis, engine, tc.count, tc.gen)
+			if len(blocks) != tc.count {
+				t.Fatalf("generated %d blocks, want %d", len(blocks), tc.count)
+			}
+			// The generated states must survive back into a chain built on the
+			// same database, which is what callers do with it.
+			chain, err := NewBlockChain(db, genesis, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer chain.Stop()
+
+			if _, err := chain.InsertChain(blocks); err != nil {
+				t.Fatalf("failed to import: %v", err)
+			}
+		})
+	}
+}
+
+// TestPBTGenerateChainContinues pins the reason the tip is persisted at all:
+// callers pass the generator's database back in to extend the chain, which needs
+// the last block's state still readable after the first call returned and closed
+// its trie database.
+func TestPBTGenerateChainContinues(t *testing.T) {
+	genesis, key, sender, recipient := pbtChainGenesis(t)
+	engine := beacon.New(ethash.NewFaker())
+	signer := types.LatestSigner(genesis.Config)
+
+	send := func(gen *BlockGen) {
+		tx, err := types.SignTx(types.NewTransaction(
+			gen.TxNonce(sender), recipient, big.NewInt(1), params.TxGas,
+			new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
+		), signer, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gen.AddTx(tx)
+	}
+	db, first, _ := GenerateChainWithGenesis(genesis, engine, 3, func(i int, gen *BlockGen) { send(gen) })
+
+	// Extend from the tip over the same database. Before the tip was persisted
+	// this failed to open the parent's state at all.
+	second, _ := GenerateChain(genesis.Config, first[len(first)-1], engine, db, 3, func(i int, gen *BlockGen) { send(gen) })
+	if len(second) != 3 {
+		t.Fatalf("continued with %d blocks, want 3", len(second))
+	}
+	if second[0].ParentHash() != first[len(first)-1].Hash() {
+		t.Fatal("the continuation does not build on the first chain's tip")
+	}
+	if second[len(second)-1].Root() == first[len(first)-1].Root() {
+		t.Fatal("the continuation left the state root unchanged")
+	}
+}
