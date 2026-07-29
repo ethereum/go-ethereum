@@ -223,6 +223,36 @@ func (db *Database) setHistoryIndexer() {
 }
 
 // setStateGenerator loads the state generation progress marker and potentially
+// attestFlatState establishes that the binary tree's flat state is complete,
+// or refuses to open the database.
+//
+// Completeness cannot be verified after the fact and cannot be repaired: the
+// tree is not walkable back into flat state, so a store that missed writes has
+// no way to catch up. It can only be established by construction, by having
+// accumulated flat state from the very first block. A fresh database is
+// therefore attested on the spot; a database carrying state but no attestation
+// predates this and has to be resynced.
+//
+// Getting this wrong is not a degraded read path but silent corruption. Once
+// flat state is treated as complete, a miss is reported as "this account does
+// not exist" with no error and no fallback to the trie, and the answer is
+// cached.
+func attestFlatState(diskdb ethdb.Database, readOnly bool) error {
+	if rawdb.ReadPBTFlatState(diskdb) {
+		return nil
+	}
+	// No attestation. Anything already persisted was written while flat state
+	// was being discarded, so the store is incomplete by construction.
+	if rawdb.ReadPersistentStateID(diskdb) != 0 || len(rawdb.ReadAccountTrieNode(diskdb, nil)) != 0 {
+		return errors.New("binary tree database predates flat state and cannot be upgraded in place: resync required")
+	}
+	if readOnly {
+		return errors.New("binary tree database has no flat state attestation and cannot be written in read-only mode")
+	}
+	rawdb.WritePBTFlatState(diskdb)
+	return nil
+}
+
 // resume the state generation if it's permitted.
 func (db *Database) setStateGenerator() error {
 	// Load the state snapshot generation progress marker to prevent access
@@ -230,6 +260,17 @@ func (db *Database) setStateGenerator() error {
 	generator, root, err := loadGenerator(db.diskdb, db.hasher)
 	if err != nil {
 		return err
+	}
+	// The binary tree has no generator, and cannot have one: generation works
+	// by walking the trie and recovering which account each leaf belongs to,
+	// which is impossible here because leaves are keyed by a hash of the
+	// address and no preimages are kept. Its flat state is only ever
+	// accumulated forward from block commits, so it is complete exactly when
+	// it was accumulated from genesis - which is what the attestation checked
+	// here records. Leaving the generator nil marks the flat state as wholly
+	// available, the same state a finished generator leaves behind.
+	if db.isPBT {
+		return attestFlatState(db.diskdb, db.readOnly)
 	}
 	if generator == nil {
 		// Initialize an empty generator to rebuild the state snapshot from scratch
@@ -260,7 +301,9 @@ func (db *Database) setStateGenerator() error {
 	// - the database is opened in read only mode
 	// - the snapshot build is explicitly disabled
 	// - the database is opened in binary tree mode
-	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isPBT
+	// Note the binary tree never reaches here: setStateGenerator returns above
+	// for it, since generation by trie walk is impossible there.
+	noBuild := db.readOnly || db.config.SnapshotNoBuild
 
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
@@ -367,6 +410,15 @@ func (db *Database) Disable() error {
 // resetForReactivation performs the pathdb-side bookkeeping shared by both
 // Enable and AdoptSyncedState.
 func (db *Database) resetForReactivation(root common.Hash) error {
+	// Reactivation resets the database to a state some other writer has healed
+	// into place, which for the binary tree would leave flat state describing
+	// the state before the sync. It cannot be regenerated from the tree, so
+	// there would be no way back. A binary-tree sync has to deliver flat state
+	// alongside the nodes; until one exists, refuse. Guarding here rather than
+	// in Enable covers the snap/2 completion path as well.
+	if db.isPBT {
+		return errors.New("state sync is not supported for the binary tree: flat state cannot be regenerated from it")
+	}
 	// Ensure the provided state root matches the stored one.
 	stored, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
 	if err != nil {

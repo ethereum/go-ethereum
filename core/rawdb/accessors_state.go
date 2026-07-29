@@ -128,6 +128,23 @@ func ReadPersistentStateID(db ethdb.KeyValueReader) uint64 {
 	return binary.BigEndian.Uint64(data)
 }
 
+// ReadPBTFlatState reports whether the binary tree's flat state is attested as
+// having been accumulated from genesis, and is therefore complete.
+func ReadPBTFlatState(db ethdb.KeyValueReader) bool {
+	has, _ := db.Has(pbtFlatStateKey)
+	return has
+}
+
+// WritePBTFlatState records that the binary tree's flat state is accumulated
+// from genesis. Only ever written to a database that is still empty: there is
+// no way to establish this after the fact, because the binary tree cannot be
+// walked back into flat state.
+func WritePBTFlatState(db ethdb.KeyValueWriter) {
+	if err := db.Put(pbtFlatStateKey, []byte{1}); err != nil {
+		log.Crit("Failed to store binary tree flat state marker", "err", err)
+	}
+}
+
 // WritePersistentStateID stores the id of the persistent state into database.
 func WritePersistentStateID(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(persistentStateIDKey, encodeBlockNumber(number)); err != nil {

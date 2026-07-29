@@ -58,6 +58,13 @@ var (
 	// SnapshotRootKey tracks the hash of the last snapshot.
 	SnapshotRootKey = []byte("SnapshotRoot")
 
+	// pbtFlatStateKey attests that the binary tree's flat state has been
+	// accumulated from genesis and is therefore complete. The binary tree
+	// cannot regenerate flat state by walking the trie, so completeness can
+	// only be established by having accumulated it all along; its absence on
+	// a non-empty database means the flat state cannot be trusted.
+	pbtFlatStateKey = []byte("PBTFlatState")
+
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
 
