@@ -159,10 +159,14 @@ func (s *Syncer) run() {
 			}
 
 			head := s.backend.BlockChain().CurrentHeader()
-			if head != nil {
+			if target != nil && head != nil {
 				// Set the finalized and safe markers relative to the current head.
 				// The finalized marker is set two epochs behind the target,
 				// and the safe marker is set one epoch behind the target.
+				//
+				// Note, the markers are only synthesized if a sync target has
+				// been explicitly specified, in which case no consensus client
+				// is attached to supply the real ones.
 				if header := s.backend.BlockChain().GetHeaderByNumber(head.Number.Uint64() - params.EpochLength*2); header != nil {
 					if final := s.backend.BlockChain().CurrentFinalBlock(); final == nil || final.Number.Cmp(header.Number) < 0 {
 						s.backend.BlockChain().SetFinalized(header)
