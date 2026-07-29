@@ -18,6 +18,7 @@ package snap
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1378,6 +1379,43 @@ func TestIsPivotReorged(t *testing.T) {
 	})
 }
 
+// TestIsPivotCommitted checks the commit detection against the head block
+// positions that matter.
+func TestIsPivotCommitted(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		head      int64 // head block number, -1 for no head block at all
+		pivot     uint64
+		canonical bool // pivot still canonical at its height
+		committed bool
+	}{
+		{-1, 100, true, false},   // no head block, nothing committed
+		{50, 100, true, false},   // head behind the pivot, crash before the commit
+		{100, 100, true, true},   // head at the pivot, the commit just happened
+		{103, 100, true, true},   // head past the pivot, full sync ran after
+		{0, 0, true, false},      // genesis head is just an empty chain
+		{103, 100, false, false}, // pivot reorged out, head past it on a fork
+	}
+	for _, tt := range tests {
+		db := rawdb.NewMemoryDatabase()
+		pivot := mkPivot(tt.pivot, common.HexToHash("0xaaaa"))
+		if tt.canonical {
+			rawdb.WriteCanonicalHash(db, pivot.Hash(), tt.pivot)
+		} else {
+			rawdb.WriteCanonicalHash(db, common.HexToHash("0xdead"), tt.pivot)
+		}
+		if tt.head >= 0 {
+			head := mkPivot(uint64(tt.head), common.HexToHash("0xbbbb"))
+			rawdb.WriteHeader(db, head)
+			rawdb.WriteHeadBlockHash(db, head.Hash())
+		}
+		if have := isPivotCommitted(db, pivot); have != tt.committed {
+			t.Errorf("head %d pivot %d canonical %v: isPivotCommitted = %v, want %v", tt.head, tt.pivot, tt.canonical, have, tt.committed)
+		}
+	}
+}
+
 // TestSyncDetectsPivotReorged exercises the reorg-handling branch in Sync
 // end-to-end.
 //
@@ -2118,6 +2156,393 @@ func TestSyncSkipsIfAlreadyComplete(t *testing.T) {
 	cancel2 := make(chan struct{})
 	if err := syncer.Sync(pivot, cancel2); err != nil {
 		t.Fatalf("second sync should have skipped, got error: %v", err)
+	}
+}
+
+// reenableFixture is a completed snap sync at pivot 100 with its journal
+// still on disk, plus the pieces for a follow-up sync at block 102.
+type reenableFixture struct {
+	db         ethdb.Database
+	nodeScheme string
+	pivotA     *types.Header
+	trieA      *trie.Trie
+	elemsA     []*kv
+	header102  *types.Header
+	trie102    *trie.Trie
+	elems102   []*kv
+	bals       map[common.Hash]rlp.RawValue
+	hashX      common.Hash // account untouched by the BALs of blocks 101 and 102
+	hashY      common.Hash // account moved by the BALs of blocks 101 and 102
+	mkHeader   func(num uint64, root common.Hash, balHash *common.Hash) *types.Header
+}
+
+func seedCompletedSync(t *testing.T, scheme string) *reenableFixture {
+	t.Helper()
+	nodeScheme, sourceAccountTrie, elems, addrs := makeAccountTrieWithAddresses(100, scheme)
+	rootA := sourceAccountTrie.Hash()
+
+	db := rawdb.NewMemoryDatabase()
+	emptyHash := common.Hash{}
+	zero := uint64(0)
+	mkHeader := func(num uint64, root common.Hash, balHash *common.Hash) *types.Header {
+		header := &types.Header{
+			Number: new(big.Int).SetUint64(num), Root: root, Difficulty: common.Big0,
+			BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
+			BlobGasUsed: &zero, ExcessBlobGas: &zero,
+			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
+			BlockAccessListHash: balHash,
+		}
+		rawdb.WriteHeader(db, header)
+		rawdb.WriteCanonicalHash(db, header.Hash(), num)
+		return header
+	}
+	pivotA := mkHeader(100, rootA, nil)
+
+	// Run a sync to completion at pivot A, leaving its journal on disk.
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	syncer := newSyncerV2(db, nodeScheme)
+	src := newTestPeerV2("seed", t, term)
+	src.accountTrie = sourceAccountTrie.Copy()
+	src.accountValues = elems
+	syncer.Register(src)
+	src.remote = syncer
+	if err := syncer.Sync(pivotA, cancel); err != nil {
+		t.Fatalf("seed sync failed: %v", err)
+	}
+
+	// Blocks 101 and 102 move account Y to balance 1000 and then 2000,
+	// account X is left alone.
+	addrY := addrs[49]
+	hashY := crypto.Keccak256Hash(addrY[:])
+	addrX := addrs[9]
+	hashX := crypto.Keccak256Hash(addrX[:])
+
+	bals := make(map[common.Hash]rlp.RawValue)
+	// Link the parent hashes down from the pivot, the catch-up walks the
+	// chain backward from the target header.
+	parent := pivotA.Hash()
+	mkBALHeader := func(num uint64, root common.Hash, balance uint64) *types.Header {
+		cb := bal.NewConstructionBlockAccessList()
+		cb.BalanceChange(0, addrY, uint256.NewInt(balance))
+		var buf bytes.Buffer
+		if err := cb.EncodeRLP(&buf); err != nil {
+			t.Fatal(err)
+		}
+		var b bal.BlockAccessList
+		if err := rlp.DecodeBytes(buf.Bytes(), &b); err != nil {
+			t.Fatal(err)
+		}
+		balHash := b.Hash()
+		header := &types.Header{
+			Number: new(big.Int).SetUint64(num), ParentHash: parent, Root: root,
+			Difficulty: common.Big0, BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
+			BlobGasUsed: &zero, ExcessBlobGas: &zero,
+			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
+			BlockAccessListHash: &balHash,
+		}
+		rawdb.WriteHeader(db, header)
+		rawdb.WriteCanonicalHash(db, header.Hash(), num)
+		parent = header.Hash()
+		bals[header.Hash()] = buf.Bytes()
+		return header
+	}
+
+	// The account trie as of block 102, only Y differs from pivot A.
+	trieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
+	newTrie := trie.NewEmpty(trieDB)
+	elems102 := make([]*kv, len(elems))
+	for i, entry := range elems {
+		if bytes.Equal(entry.k, hashY[:]) {
+			val, _ := rlp.EncodeToBytes(&types.StateAccount{
+				Nonce: 50, Balance: uint256.NewInt(2000),
+				Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
+			})
+			elems102[i] = &kv{entry.k, val}
+		} else {
+			elems102[i] = entry
+		}
+		newTrie.MustUpdate(elems102[i].k, elems102[i].v)
+	}
+	root102, nodes := newTrie.Commit(false)
+	trieDB.Update(root102, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), triedb.NewStateSet())
+	trie102, err := trie.New(trie.StateTrieID(root102), trieDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mkBALHeader(101, common.HexToHash("0x65"), 1000)
+	header102 := mkBALHeader(102, root102, 2000)
+
+	return &reenableFixture{
+		db:         db,
+		nodeScheme: nodeScheme,
+		pivotA:     pivotA,
+		trieA:      sourceAccountTrie,
+		elemsA:     elems,
+		header102:  header102,
+		trie102:    trie102,
+		elems102:   elems102,
+		bals:       bals,
+		hashX:      hashX,
+		hashY:      hashY,
+		mkHeader:   mkHeader,
+	}
+}
+
+// decodeJournal reads the journal straight from disk. Loading it through a
+// fresh syncer no longer works, the constructor may drop it first.
+func decodeJournal(t *testing.T, db ethdb.Database) *syncProgressV2 {
+	t.Helper()
+	raw := rawdb.ReadSnapshotSyncStatus(db)
+	if len(raw) == 0 {
+		t.Fatal("expected sync journal on disk")
+	}
+	if raw[0] != syncProgressVersion {
+		t.Fatalf("unexpected journal version %d", raw[0])
+	}
+	progress := new(syncProgressV2)
+	if err := json.Unmarshal(raw[1:], progress); err != nil {
+		t.Fatalf("failed to decode journal: %v", err)
+	}
+	return progress
+}
+
+func assertAccountBalance(t *testing.T, db ethdb.Database, hash common.Hash, want uint64) {
+	t.Helper()
+	data := rawdb.ReadAccountSnapshot(db, hash)
+	if len(data) == 0 {
+		t.Fatalf("account %x missing from flat state", hash)
+	}
+	account, err := types.FullAccount(data)
+	if err != nil {
+		t.Fatalf("failed to decode account %x: %v", hash, err)
+	}
+	if account.Balance.Uint64() != want {
+		t.Fatalf("account %x balance mismatch: got %v, want %d", hash, account.Balance, want)
+	}
+}
+
+// TestReenableAfterCompletedSyncPurges reproduces the poisoned re-enable.
+// A sync completed, its pivot block was committed and full sync moved the
+// flat state past it, but the journal is still on disk. A new sync must
+// wipe everything and download fresh. Without the purge it would roll
+// forward with BALs instead, miss the rows full sync changed outside the
+// BAL range and fail trie generation. Runs with the head both between the
+// old pivot and the target and past it.
+func TestReenableAfterCompletedSyncPurges(t *testing.T) {
+	t.Parallel()
+	testReenableAfterCompletedSyncPurges(t, rawdb.HashScheme, 101)
+	testReenableAfterCompletedSyncPurges(t, rawdb.HashScheme, 103)
+	testReenableAfterCompletedSyncPurges(t, rawdb.PathScheme, 101)
+	testReenableAfterCompletedSyncPurges(t, rawdb.PathScheme, 103)
+}
+
+func testReenableAfterCompletedSyncPurges(t *testing.T, scheme string, headNum uint64) {
+	fix := seedCompletedSync(t, scheme)
+
+	// Construct the syncer before the head moves so the re-enable is
+	// handled by the purge in Sync, not the constructor drop.
+	syncer := newSyncerV2(fix.db, fix.nodeScheme)
+
+	// Commit the pivot and let full sync move the head and the flat state.
+	headHash := rawdb.ReadCanonicalHash(fix.db, headNum)
+	if headHash == (common.Hash{}) {
+		headHash = fix.mkHeader(headNum, common.HexToHash("0x67"), nil).Hash()
+	}
+	rawdb.WriteHeadBlockHash(fix.db, headHash)
+	rawdb.WriteAccountSnapshot(fix.db, fix.hashY, types.SlimAccountRLP(types.StateAccount{
+		Nonce: 50, Balance: uint256.NewInt(2000),
+		Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
+	}))
+	rawdb.WriteAccountSnapshot(fix.db, fix.hashX, types.SlimAccountRLP(types.StateAccount{
+		Nonce: 10, Balance: uint256.NewInt(9999),
+		Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
+	}))
+	orphan := common.HexToHash("0xdeadbeef")
+	rawdb.WriteAccountSnapshot(fix.db, orphan, types.SlimAccountRLP(types.StateAccount{
+		Nonce: 1, Balance: uint256.NewInt(1),
+		Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
+	}))
+
+	// Re-enable snap sync with a target near the old pivot.
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	src := newTestPeerV2("source2", t, term)
+	src.accountTrie = fix.trie102.Copy()
+	src.accountValues = fix.elems102
+	src.accessLists = fix.bals
+	syncer.Register(src)
+	src.remote = syncer
+	if err := syncer.Sync(fix.header102, cancel); err != nil {
+		t.Fatalf("re-enabled sync failed: %v", err)
+	}
+
+	// The stale journal is gone, a fresh sync completed at the new target.
+	progress := decodeJournal(t, fix.db)
+	if progress.Phase != phaseComplete {
+		t.Fatal("expected re-enabled sync to reach the complete phase")
+	}
+	if progress.Pivot == nil || progress.Pivot.Hash() != fix.header102.Hash() {
+		t.Fatal("expected persisted pivot to match the new target")
+	}
+	// Fresh download, not catch-up. X is back to its real value and the
+	// orphan row is gone.
+	assertAccountBalance(t, fix.db, fix.hashX, 10)
+	assertAccountBalance(t, fix.db, fix.hashY, 2000)
+	if data := rawdb.ReadAccountSnapshot(fix.db, orphan); len(data) != 0 {
+		t.Errorf("orphan account row should be wiped, got %x", data)
+	}
+}
+
+// TestCommittedPivotRetrySkips guards the retry after a commit. If the
+// cycle dies before snap mode flips to full sync, the downloader retries
+// against the frozen pivot. The skip must fire before the purge so the
+// pivot is recommitted instead of a good sync being wiped.
+func TestCommittedPivotRetrySkips(t *testing.T) {
+	t.Parallel()
+	testCommittedPivotRetrySkips(t, rawdb.HashScheme)
+	testCommittedPivotRetrySkips(t, rawdb.PathScheme)
+}
+
+func testCommittedPivotRetrySkips(t *testing.T, scheme string) {
+	fix := seedCompletedSync(t, scheme)
+
+	// Same process, the constructor never saw a committed journal.
+	syncer := newSyncerV2(fix.db, fix.nodeScheme)
+
+	header103 := fix.mkHeader(103, common.HexToHash("0x67"), nil)
+	rawdb.WriteHeadBlockHash(fix.db, header103.Hash())
+
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	src := newTestPeerV2("source2", t, term)
+	src.accountTrie = fix.trieA.Copy()
+	src.accountValues = fix.elemsA
+	var accountReqs atomic.Int32
+	src.accountRequestV2Handler = func(tp *testPeerV2, id uint64, root common.Hash, origin common.Hash, limit common.Hash, cap int) error {
+		accountReqs.Add(1)
+		return defaultAccountRequestHandlerV2(tp, id, root, origin, limit, cap)
+	}
+	syncer.Register(src)
+	src.remote = syncer
+	if err := syncer.Sync(fix.pivotA, cancel); err != nil {
+		t.Fatalf("retried sync failed: %v", err)
+	}
+
+	// The skip must fire, no purge and no re-download.
+	if n := accountReqs.Load(); n != 0 {
+		t.Fatalf("expected already-complete skip, got %d account requests", n)
+	}
+	assertAccountBalance(t, fix.db, fix.hashY, 50)
+	progress := decodeJournal(t, fix.db)
+	if progress.Phase != phaseComplete {
+		t.Fatal("expected journal to stay in the complete phase")
+	}
+	if progress.Pivot == nil || progress.Pivot.Hash() != fix.pivotA.Hash() {
+		t.Fatal("expected journal to keep the committed pivot")
+	}
+}
+
+// TestCommittedPivotNotFrozen covers FrozenPivot. A pivot from a crash
+// before the commit must stay frozen so the downloader resumes against it.
+// Once the pivot block is committed and the head has moved on, FrozenPivot
+// must report it as unfrozen so a re-enabled sync is not pinned to it. The
+// journal stays on disk either way, the next Sync cleans it.
+func TestCommittedPivotNotFrozen(t *testing.T) {
+	t.Parallel()
+	testCommittedPivotNotFrozen(t, rawdb.HashScheme)
+	testCommittedPivotNotFrozen(t, rawdb.PathScheme)
+}
+
+func testCommittedPivotNotFrozen(t *testing.T, scheme string) {
+	fix := seedCompletedSync(t, scheme)
+
+	// Crash before the commit, the head never reached the pivot, so it
+	// stays frozen for the resume.
+	head50 := fix.mkHeader(50, common.HexToHash("0x50"), nil)
+	rawdb.WriteHeadBlockHash(fix.db, head50.Hash())
+	syncer := newSyncerV2(fix.db, fix.nodeScheme)
+	if frozen := syncer.FrozenPivot(); frozen == nil || frozen.Hash() != fix.pivotA.Hash() {
+		t.Fatal("expected the pivot to stay frozen before the commit")
+	}
+
+	// Commit the pivot and advance the head, the pivot is now a dead
+	// leftover and must not be reported as frozen.
+	header103 := fix.mkHeader(103, common.HexToHash("0x67"), nil)
+	rawdb.WriteHeadBlockHash(fix.db, header103.Hash())
+	syncer = newSyncerV2(fix.db, fix.nodeScheme)
+	if frozen := syncer.FrozenPivot(); frozen != nil {
+		t.Fatalf("expected the committed pivot to be unfrozen, got %v", frozen.Number)
+	}
+	// The journal stays on disk until a re-enabled Sync wipes it, and the
+	// flat state is untouched, on a full-sync node it is the live snapshot.
+	if raw := rawdb.ReadSnapshotSyncStatus(fix.db); len(raw) == 0 {
+		t.Fatal("expected the journal to stay on disk")
+	}
+	assertAccountBalance(t, fix.db, fix.hashY, 50)
+}
+
+// TestCompletedSyncResumesBeforeCommit guards the healthy resume. The sync
+// completed but died before the pivot commit, so the head never caught up
+// and the flat state still matches the journal. A restart with a moved
+// target must catch up cheaply, not purge and re-download.
+func TestCompletedSyncResumesBeforeCommit(t *testing.T) {
+	t.Parallel()
+	testCompletedSyncResumesBeforeCommit(t, rawdb.HashScheme)
+	testCompletedSyncResumesBeforeCommit(t, rawdb.PathScheme)
+}
+
+func testCompletedSyncResumesBeforeCommit(t *testing.T, scheme string) {
+	fix := seedCompletedSync(t, scheme)
+
+	// The head block is an old block well below the never committed pivot.
+	// The head header is already past the target, as usual during a sync,
+	// and must not count as a commit.
+	head50 := fix.mkHeader(50, common.HexToHash("0x50"), nil)
+	rawdb.WriteHeadBlockHash(fix.db, head50.Hash())
+	rawdb.WriteHeadHeaderHash(fix.db, fix.header102.Hash())
+
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() { once.Do(func() { close(cancel) }) }
+	)
+	syncer := newSyncerV2(fix.db, fix.nodeScheme)
+	src := newTestPeerV2("source2", t, term)
+	src.accountTrie = fix.trie102.Copy()
+	src.accountValues = fix.elems102
+	src.accessLists = fix.bals
+	var accountReqs atomic.Int32
+	src.accountRequestV2Handler = func(tp *testPeerV2, id uint64, root common.Hash, origin common.Hash, limit common.Hash, cap int) error {
+		accountReqs.Add(1)
+		return defaultAccountRequestHandlerV2(tp, id, root, origin, limit, cap)
+	}
+	syncer.Register(src)
+	src.remote = syncer
+	if err := syncer.Sync(fix.header102, cancel); err != nil {
+		t.Fatalf("resumed sync failed: %v", err)
+	}
+
+	// Pure catch-up. A purge would have re-downloaded the account ranges.
+	if n := accountReqs.Load(); n != 0 {
+		t.Fatalf("expected pure catch-up without re-download, got %d account requests", n)
+	}
+	assertAccountBalance(t, fix.db, fix.hashY, 2000)
+	progress := decodeJournal(t, fix.db)
+	if progress.Phase != phaseComplete {
+		t.Fatal("expected resumed sync to reach the complete phase")
+	}
+	if progress.Pivot == nil || progress.Pivot.Hash() != fix.header102.Hash() {
+		t.Fatal("expected persisted pivot to match the new target")
 	}
 }
 
