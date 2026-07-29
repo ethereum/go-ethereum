@@ -62,7 +62,7 @@ func parseSource(vmDir string) *source {
 		path := filepath.Join(vmDir, name)
 		f, err := parser.ParseFile(s.fset, path, nil, parser.ParseComments)
 		if err != nil {
-			fatalf("parse %s: %v", path, err)
+			abortf("parse %s: %v", path, err)
 		}
 		for _, decl := range f.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
@@ -92,7 +92,7 @@ func parseSource(vmDir string) *source {
 func (s *source) opHandler(name string) *ast.FuncDecl {
 	fn := s.opHandlers[name]
 	if fn == nil {
-		fatalf("no handler %q in the parsed vm sources", name)
+		abortf("no handler %q in the parsed vm sources", name)
 	}
 	return fn
 }
@@ -101,7 +101,7 @@ func (s *source) opHandler(name string) *ast.FuncDecl {
 func (s *source) gasHelper(name string) *ast.FuncDecl {
 	fn := s.gasHelpers[name]
 	if fn == nil {
-		fatalf("no gas helper %q in the parsed vm sources", name)
+		abortf("no gas helper %q in the parsed vm sources", name)
 	}
 	return fn
 }
@@ -110,7 +110,7 @@ func (s *source) gasHelper(name string) *ast.FuncDecl {
 func (s *source) stackMethod(name string) *ast.FuncDecl {
 	fn := s.stackMethods[name]
 	if fn == nil {
-		fatalf("no (*Stack).%s in the parsed vm sources", name)
+		abortf("no (*Stack).%s in the parsed vm sources", name)
 	}
 	return fn
 }
@@ -182,7 +182,7 @@ func (g *generator) spliceOpcodeFactoryBody(factory string, args ...int) string 
 	// Bind the factory parameters to the per-opcode constants, then inline.
 	names := paramNames(fn)
 	if len(names) != len(args) {
-		fatalf("factory %q takes %d params, got %d args", factory, len(names), len(args))
+		abortf("factory %q takes %d params, got %d args", factory, len(names), len(args))
 	}
 	params := map[string]int{}
 	for i, nm := range names {
@@ -195,15 +195,15 @@ func (g *generator) spliceOpcodeFactoryBody(factory string, args ...int) string 
 // is a single `return func(...) {...}` of.
 func factoryClosure(name string, fn *ast.FuncDecl) *ast.FuncLit {
 	if len(fn.Body.List) != 1 {
-		fatalf("factory %q body is not a single return", name)
+		abortf("factory %q body is not a single return", name)
 	}
 	ret, ok := fn.Body.List[0].(*ast.ReturnStmt)
 	if !ok || len(ret.Results) != 1 {
-		fatalf("factory %q does not return a single value", name)
+		abortf("factory %q does not return a single value", name)
 	}
 	lit, ok := ret.Results[0].(*ast.FuncLit)
 	if !ok {
-		fatalf("factory %q does not return a func literal", name)
+		abortf("factory %q does not return a func literal", name)
 	}
 	return lit
 }
@@ -216,7 +216,7 @@ func (g *generator) renderAst(stmts []ast.Stmt) string {
 	cfg := printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 8}
 	for _, stmt := range stmts {
 		if err := cfg.Fprint(&raw, g.fset, stmt); err != nil {
-			fatalf("print stmt: %v", err)
+			abortf("print stmt: %v", err)
 		}
 		raw.WriteByte('\n')
 	}
@@ -335,7 +335,7 @@ func (g *generator) renderBody(stmts []ast.Stmt, params map[string]int) string {
 		// loop tracks the stack in sp and sd.
 		ast.Inspect(stmt, func(n ast.Node) bool {
 			if e, ok := n.(ast.Expr); ok && isStackExpr(e) {
-				fatalf("handler statement reaches the stack outside a plain method call: %s", g.renderAst([]ast.Stmt{stmt}))
+				abortf("handler statement reaches the stack outside a plain method call: %s", g.renderAst([]ast.Stmt{stmt}))
 			}
 			return true
 		})
