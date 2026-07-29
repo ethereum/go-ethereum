@@ -16,20 +16,18 @@
 
 package vm
 
-// Tests for the generated interpreter dispatch (interpreter_gen.go): that it
-// behaves identically to the table loop, and that the fast path keeps its cheap
-// stack helpers inlined. The check that the committed file matches the generator
-// output lives with the generator, in core/vm/gen.
+// Tests for the generated interpreter dispatch (interpreter_gen.go): that it behaves
+// identically to the table loop, that no stack call survives in the fast path, and
+// that Run routes a traced execution away from it. The check that the committed file
+// matches the generator output lives with the generator, in core/vm/gen.
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"math/big"
-	"os/exec"
-	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -45,8 +43,8 @@ import (
 // These tests prove that the generated dispatch (execUntraced) is bit-identical
 // to the table-walking loop (execTraced, run here without a tracer via
 // EVM.forceTableLoop) for the observable surface of an EVM execution: return
-// data, gas left, error/halt, refund counter, emitted logs, and the resulting
-// state root. It runs the same program through both interpreters over freshly
+// data, every gas dimension, error/halt, refund counter, emitted logs, and the
+// resulting state root. It runs the same program through both interpreters over freshly
 // built, identical state across several forks, plus a fuzz target over
 // arbitrary bytecode.
 //
@@ -202,20 +200,42 @@ var diffPrograms = []struct {
 
 // diffResult captures the observable outcome of running a program.
 type diffResult struct {
-	ret     []byte
-	gasLeft uint64
-	errStr  string // "" if no error
-	refund  uint64
-	root    common.Hash
-	logs    []*types.Log
+	ret []byte
+	// The whole budget, not just gasLeft. State gas is a separate dimension since
+	// EIP-8037, so a divergence that shifts cost between the two would otherwise
+	// leave the regular figure untouched and go unseen.
+	gas    GasBudget
+	errStr string // "" if no error
+	refund uint64
+	root   common.Hash
+	logs   []*types.Log
+}
+
+// gasSummary renders a budget for a divergence message, so the failure names which
+// dimension moved rather than just showing one number.
+func gasSummary(g GasBudget) string {
+	return fmt.Sprintf("gas(regular=%d state=%d usedRegular=%d usedState=%d spilled=%d)",
+		g.RegularGas, g.StateGas, g.UsedRegularGas, g.UsedStateGas, g.Spilled)
 }
 
 func (r diffResult) equal(o diffResult) (string, bool) {
 	if !bytes.Equal(r.ret, o.ret) {
 		return "return data", false
 	}
-	if r.gasLeft != o.gasLeft {
-		return "gas left", false
+	if r.gas.RegularGas != o.gas.RegularGas {
+		return "regular gas left", false
+	}
+	if r.gas.StateGas != o.gas.StateGas {
+		return "state gas left", false
+	}
+	if r.gas.UsedRegularGas != o.gas.UsedRegularGas {
+		return "regular gas used", false
+	}
+	if r.gas.UsedStateGas != o.gas.UsedStateGas {
+		return "state gas used", false
+	}
+	if r.gas.Spilled != o.gas.Spilled {
+		return "gas spilled", false
 	}
 	if r.errStr != o.errStr {
 		return "error", false
@@ -330,12 +350,12 @@ func runOne(t testing.TB, cfg *params.ChainConfig, merged, useTableLoop bool, co
 		errStr = err.Error()
 	}
 	return diffResult{
-		ret:     ret,
-		gasLeft: leftOver.RegularGas,
-		errStr:  errStr,
-		refund:  statedb.GetRefund(),
-		root:    statedb.IntermediateRoot(true),
-		logs:    statedb.Logs(),
+		ret:    ret,
+		gas:    leftOver,
+		errStr: errStr,
+		refund: statedb.GetRefund(),
+		root:   statedb.IntermediateRoot(true),
+		logs:   statedb.Logs(),
 	}
 }
 
@@ -347,10 +367,10 @@ func TestInterpreterDiff(t *testing.T) {
 				table := runOne(t, fk.cfg, fk.merged, true, prog.code, input, prog.gas)
 				gen := runOne(t, fk.cfg, fk.merged, false, prog.code, input, prog.gas)
 				if where, ok := gen.equal(table); !ok {
-					t.Fatalf("divergence in %s:\n  table: ret=%x gas=%d err=%q refund=%d root=%x logs=%d\n  gen:   ret=%x gas=%d err=%q refund=%d root=%x logs=%d",
+					t.Fatalf("divergence in %s:\n  table: ret=%x %s err=%q refund=%d root=%x logs=%d\n  gen:   ret=%x %s err=%q refund=%d root=%x logs=%d",
 						where,
-						table.ret, table.gasLeft, table.errStr, table.refund, table.root, len(table.logs),
-						gen.ret, gen.gasLeft, gen.errStr, gen.refund, gen.root, len(gen.logs))
+						table.ret, gasSummary(table.gas), table.errStr, table.refund, table.root, len(table.logs),
+						gen.ret, gasSummary(gen.gas), gen.errStr, gen.refund, gen.root, len(gen.logs))
 				}
 			})
 		}
@@ -378,10 +398,10 @@ func FuzzInterpreterDiff(f *testing.F) {
 			table := runOne(t, fk.cfg, fk.merged, true, code, input, gas)
 			gen := runOne(t, fk.cfg, fk.merged, false, code, input, gas)
 			if where, ok := gen.equal(table); !ok {
-				t.Fatalf("divergence in %s (fork %s): code=%x input=%x gas=%d\n  table: ret=%x gas=%d err=%q refund=%d root=%x logs=%d\n  gen:   ret=%x gas=%d err=%q refund=%d root=%x logs=%d",
+				t.Fatalf("divergence in %s (fork %s): code=%x input=%x gas=%d\n  table: ret=%x %s err=%q refund=%d root=%x logs=%d\n  gen:   ret=%x %s err=%q refund=%d root=%x logs=%d",
 					where, fk.name, code, input, gas,
-					table.ret, table.gasLeft, table.errStr, table.refund, table.root, len(table.logs),
-					gen.ret, gen.gasLeft, gen.errStr, gen.refund, gen.root, len(gen.logs))
+					table.ret, gasSummary(table.gas), table.errStr, table.refund, table.root, len(table.logs),
+					gen.ret, gasSummary(gen.gas), gen.errStr, gen.refund, gen.root, len(gen.logs))
 			}
 		}
 	})
@@ -398,43 +418,6 @@ func TestGeneratedFastPathHelpersExpanded(t *testing.T) {
 	for h, n := range countStackCalls(t, "interpreter_gen.go") {
 		t.Errorf("(*Stack).%s has %d residual call(s) in interpreter_gen.go, expected 0.\n"+
 			"The generator did not expand it. Check expandStackMethod (core/vm/gen).", h, n)
-	}
-}
-
-// TestGeneratedFastPathHelpersInlined recompiles this package with the
-// compiler's inlining diagnostics on and fails if any *Stack call that survives
-// into interpreter_gen.go was not inlined. Today nothing survives at all, which
-// the Expanded test owns. This is the backstop for the day one does: if the
-// compiler declines to inline it, the fast path quietly pays a real call, so
-// this turns that into a red build.
-func TestGeneratedFastPathHelpersInlined(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping inlining check (recompiles the package) in -short mode")
-	}
-
-	// go build -gcflags=-m prints every inlining decision. The build cache
-	// replays the diagnostics on a hit, so repeated runs are deterministic. The
-	// flag applies only to this package, cached dependencies stay quiet.
-	out, err := exec.Command("go", "build", "-gcflags=-m", ".").CombinedOutput()
-	if err != nil {
-		t.Fatalf("compiling with inlining diagnostics: %v\n%s", err, out)
-	}
-	diag := string(out)
-	if !strings.Contains(diag, "interpreter_gen.go") {
-		t.Fatalf("captured no interpreter_gen.go diagnostics, the -m build produced nothing to check:\n%s", diag)
-	}
-
-	// Every surviving stack call must be inlined by the compiler.
-	for h, n := range countStackCalls(t, "interpreter_gen.go") {
-		inlinedRe := regexp.MustCompile(`interpreter_gen\.go.*inlining call to \(\*Stack\)\.` + regexp.QuoteMeta(h) + `\b`)
-		inlined := len(inlinedRe.FindAllString(diag, -1))
-		if inlined != n {
-			t.Errorf("(*Stack).%s: %d call site(s) in interpreter_gen.go, %d inlined into execUntraced.\n"+
-				"The compiler stopped inlining it, so the fast path now pays a real call. Shrink the\n"+
-				"body to fit the inline budget, or teach the generator to expand it instead.", h, n, inlined)
-			continue
-		}
-		t.Logf("(*Stack).%s: %d/%d call sites inlined", h, inlined, n)
 	}
 }
 
@@ -472,4 +455,36 @@ func isStackReceiver(x ast.Expr) bool {
 		return r.Sel.Name == "Stack"
 	}
 	return false
+}
+
+// TestTracerUsesTableLoop pins Run's selector: a configured tracer has to route to
+// execTraced, the only loop that emits hooks. If that broke, tracing would silently
+// produce nothing while the generated fast path ran. The tracer suites in other
+// packages would eventually notice, but this fails where the selector lives.
+func TestTracerUsesTableLoop(t *testing.T) {
+	statedb := newDiffState(t)
+	statedb.SetCode(diffContractAddr, asm(PUSH1, 0x01, PUSH1, 0x02, ADD, STOP), tracing.CodeChangeUnspecified)
+	statedb.Finalise(true)
+
+	var seen []OpCode
+	cfg := Config{Tracer: &tracing.Hooks{
+		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+			seen = append(seen, OpCode(op))
+		},
+	}}
+	evm := NewEVM(diffBlockCtx(true), statedb, params.MergedTestChainConfig, cfg)
+	evm.SetTxContext(TxContext{Origin: diffCaller, GasPrice: uint256.NewInt(1)})
+	if _, _, err := evm.Call(diffCaller, diffContractAddr, nil, NewGasBudget(100000, 0), new(uint256.Int)); err != nil {
+		t.Fatalf("traced call failed: %v", err)
+	}
+
+	want := []OpCode{PUSH1, PUSH1, ADD, STOP}
+	if len(seen) != len(want) {
+		t.Fatalf("tracer saw %v, want %v. execUntraced emits no hooks, so Run has to pick execTraced when a tracer is set", seen, want)
+	}
+	for i := range want {
+		if seen[i] != want[i] {
+			t.Errorf("hook %d saw %s, want %s", i, seen[i], want[i])
+		}
+	}
 }

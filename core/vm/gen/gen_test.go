@@ -129,13 +129,15 @@ func expandForTest(g *generator, method string) string {
 
 // TestFactoryName covers the closure-name parsing that decides whether an inlined
 // opcode's handler came from a make* factory, since the anonymous trailing
-// segments vary with nesting depth.
+// segments vary with nesting depth. The first three are the shapes FuncForPC
+// actually reports for a handler, a makeDup closure and a makePush one. The last is
+// the nested form closureSegRe allows but nothing in the tables produces yet.
 func TestFactoryName(t *testing.T) {
 	for _, tc := range []struct{ fn, want string }{
 		{"opAdd", ""},
 		{"newFrontierInstructionSet.makeDup.func37", "makeDup"},
-		{"newShanghaiInstructionSet.makePush.func2.1", "makePush"},
-		{"makeLog.func1", "makeLog"},
+		{"newFrontierInstructionSet.makePush.func3", "makePush"},
+		{"newFrontierInstructionSet.makeLog.func49.1", "makeLog"},
 	} {
 		if got := factoryName(tc.fn); got != tc.want {
 			t.Errorf("factoryName(%q) = %q, want %q", tc.fn, got, tc.want)
@@ -199,6 +201,15 @@ func TestGuards(t *testing.T) {
 			want: "(*Stack).release reads s.bottom",
 			fn: func() {
 				g.expandStackMethod(stackCall{method: "release"}, nil)
+			},
+		},
+		{
+			// pairReturnRe splits the value at the first comma, so one nested in
+			// brackets would be cut in half rather than emitted whole.
+			name: "return whose value holds a comma",
+			want: "its value holds a comma",
+			fn: func() {
+				g.rewriteReturns("return f(a, b), nil\n", returnRewrite{results: 2})
 			},
 		},
 		{
