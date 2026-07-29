@@ -452,8 +452,17 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
-		if err = triedb.Commit(root, false); err != nil {
-			panic(fmt.Sprintf("trie write error: %v", err))
+		// Flushing every block is a hash-scheme requirement: hashdb holds nodes
+		// in a dirty cache until they are committed by hash, so skipping it
+		// loses them. The path database has already taken the nodes through
+		// Update and will flatten on its own schedule, and asking it to commit
+		// a root it has already persisted is an error. Real block processing
+		// draws the same line - see the path-scheme early return in
+		// BlockChain.writeBlockWithState.
+		if triedb.Scheme() == rawdb.HashScheme {
+			if err = triedb.Commit(root, false); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
 		}
 		return block, b.receipts
 	}
@@ -469,6 +478,14 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
+
+	// Root generation started from. On the path scheme the per-block commit is
+	// skipped, so the tip is persisted once at the end instead - callers pass
+	// this database back into GenerateChain to continue the chain, and that
+	// needs the last block's state to still be readable. Nothing to persist if
+	// no block changed the state, and asking to commit an already-persisted
+	// root is an error.
+	startRoot := parent.Root()
 
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
@@ -503,6 +520,11 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		// Advance the chain.
 		cm.add(block, receipts)
 		parent = block
+	}
+	if triedb.Scheme() == rawdb.PathScheme && parent.Root() != startRoot {
+		if err := triedb.Commit(parent.Root(), false); err != nil {
+			panic(fmt.Sprintf("trie write error: %v", err))
+		}
 	}
 	return cm.chain, cm.receipts
 }
