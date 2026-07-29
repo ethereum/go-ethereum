@@ -160,10 +160,10 @@ func (g *generator) expandStackMethod(call stackCall, params map[string]int) str
 
 		case *ast.ReturnStmt:
 			if i != len(fn.Body.List)-1 {
-				fatalf("(*Stack).%s returns before its last statement", call.method)
+				abortf("(*Stack).%s returns before its last statement", call.method)
 			}
 			if len(s.Results) != len(call.lhs) {
-				fatalf("(*Stack).%s returns %d values, call assigns %d", call.method, len(s.Results), len(call.lhs))
+				abortf("(*Stack).%s returns %d values, call assigns %d", call.method, len(s.Results), len(call.lhs))
 			}
 			for j, res := range s.Results {
 				// A local the method declared takes the caller's name instead of
@@ -181,7 +181,7 @@ func (g *generator) expandStackMethod(call stackCall, params map[string]int) str
 			}
 
 		default:
-			fatalf("(*Stack).%s has a %T statement, which the dispatch cannot rewrite", call.method, stmt)
+			abortf("(*Stack).%s has a %T statement, which the dispatch cannot rewrite", call.method, stmt)
 		}
 	}
 	return g.renderAst(out)
@@ -237,10 +237,10 @@ func (f *stackFrame) expr(e ast.Expr) ast.Expr {
 		default:
 			// A read the loop locals do not cover, such as release's bare
 			// s.bottom. Rewriting it would silently mean something else.
-			fatalf("(*Stack).%s reads %s.%s, which has no sp/sd form", f.method, f.recv, field)
+			abortf("(*Stack).%s reads %s.%s, which has no sp/sd form", f.method, f.recv, field)
 		}
 	}
-	fatalf("(*Stack).%s uses a %T, which has no sp/sd form", f.method, e)
+	abortf("(*Stack).%s uses a %T, which has no sp/sd form", f.method, e)
 	return nil
 }
 
@@ -269,7 +269,7 @@ func (f *stackFrame) field(e ast.Expr) string {
 func bindStackParams(fn *ast.FuncDecl, args []ast.Expr, params map[string]int) map[string]ast.Expr {
 	names := paramNames(fn)
 	if len(names) != len(args) {
-		fatalf("(*Stack).%s takes %d params, call passes %d", fn.Name.Name, len(names), len(args))
+		abortf("(*Stack).%s takes %d params, call passes %d", fn.Name.Name, len(names), len(args))
 	}
 	bound := map[string]ast.Expr{}
 	for i, name := range names {
@@ -286,7 +286,7 @@ func bindStackParams(fn *ast.FuncDecl, args []ast.Expr, params map[string]int) m
 		default:
 			// Anything else, say dup(size+1), would embed a name the generated
 			// function does not have. Stop here rather than emit broken Go.
-			fatalf("(*Stack).%s is passed a %T for %s; the dispatch can bind only a literal or a factory constant",
+			abortf("(*Stack).%s is passed a %T for %s; the dispatch can bind only a literal or a factory constant",
 				fn.Name.Name, arg, name)
 		}
 		bound[name] = arg
@@ -310,7 +310,7 @@ func bindStackParams(fn *ast.FuncDecl, args []ast.Expr, params map[string]int) m
 func renameLocal(stmts []ast.Stmt, from string, to ast.Expr) {
 	id, ok := to.(*ast.Ident)
 	if !ok {
-		fatalf("stack call assigns to a %T, want a plain name", to)
+		abortf("stack call assigns to a %T, want a plain name", to)
 	}
 	for _, stmt := range stmts {
 		ast.Inspect(stmt, func(n ast.Node) bool {
