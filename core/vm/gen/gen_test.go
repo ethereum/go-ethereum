@@ -142,3 +142,90 @@ func TestFactoryName(t *testing.T) {
 		}
 	}
 }
+
+// tripped runs fn and returns the message of the guard it trips, or "" if fn
+// completed. It is the test-side counterpart of generate's recover: a genError means
+// a guard fired, anything else is a real bug and keeps its stack.
+func tripped(t *testing.T, fn func()) string {
+	t.Helper()
+	var msg string
+	func() {
+		defer func() {
+			switch r := recover().(type) {
+			case nil:
+			case genError:
+				msg = r.Error()
+			default:
+				panic(r)
+			}
+		}()
+		fn()
+	}()
+	return msg
+}
+
+// TestGuards covers the checks that stop the generator when core/vm changes in a way
+// it cannot express. They are the reason the generated dispatch is safe to trust, so
+// each one needs to fire rather than fall through and emit wrong code.
+func TestGuards(t *testing.T) {
+	g := &generator{source: parseSource(vmDir())}
+	g.deriveSpecs(genForks())
+
+	for _, tc := range []struct {
+		name string
+		want string
+		fn   func()
+	}{
+		{
+			// A stack call whose argument is not a constant the dispatch can embed.
+			name: "stack argument that is not a literal or factory constant",
+			want: "can bind only a literal or a factory constant",
+			fn: func() {
+				plusOne := &ast.BinaryExpr{X: ast.NewIdent("size"), Op: token.ADD, Y: &ast.BasicLit{Kind: token.INT, Value: "1"}}
+				bindStackParams(g.stackMethod("dup"), []ast.Expr{plusOne}, nil)
+			},
+		},
+		{
+			// push calls another method, which has no sp/sd form.
+			name: "stack method whose body calls out",
+			want: "(*Stack).push uses a *ast.CallExpr",
+			fn: func() {
+				g.expandStackMethod(stackCall{method: "push", args: []ast.Expr{ast.NewIdent("d")}}, nil)
+			},
+		},
+		{
+			// release reads a bare s.bottom, which would silently become sp = 0.
+			name: "stack method reading a field with no sp/sd form",
+			want: "(*Stack).release reads s.bottom",
+			fn: func() {
+				g.expandStackMethod(stackCall{method: "release"}, nil)
+			},
+		},
+		{
+			name: "handler that is not in the parsed sources",
+			want: `no handler "opNotAThing"`,
+			fn:   func() { g.opHandler("opNotAThing") },
+		},
+		{
+			name: "gas helper that is not in the parsed sources",
+			want: `no gas helper "chargeNothing"`,
+			fn:   func() { g.gasHelper("chargeNothing") },
+		},
+		{
+			// 0x0c is not an opcode in any fork, so there is no spec to emit from.
+			name: "inlining an opcode no fork defines",
+			want: "never defined",
+			fn:   func() { g.checkInlineStable(0x0c, genForks()) },
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tripped(t, tc.fn)
+			if got == "" {
+				t.Fatalf("no guard fired, wanted one mentioning %q", tc.want)
+			}
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("guard said %q, want it to mention %q", got, tc.want)
+			}
+		})
+	}
+}
