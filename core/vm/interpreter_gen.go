@@ -30,6 +30,12 @@ func (evm *EVM) execUntraced(scope *ScopeContext) (ret []byte, err error) {
 	_ = rules
 	_ = isEIP4762
 	_ = table
+	// sp and sd shadow stack.size and the stack's window of the arena
+	// as loop locals, so hot opcodes work on registers instead of the
+	// view. They are written back before any call that can see the
+	// stack and reloaded after any call that can move it.
+	sp := stack.size
+	sd := stack.inner.data[stack.bottom:]
 mainLoop:
 	for {
 		if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
@@ -45,8 +51,9 @@ mainLoop:
 		op := contract.GetOp(pc)
 		switch op {
 		case ADD:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -55,17 +62,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.Add(x, y)
 			pc++
 			continue mainLoop
 
 		case MUL:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 5 {
 				res, err = nil, ErrOutOfGas
@@ -74,17 +81,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 5
 			contract.Gas.UsedRegularGas += 5
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.Mul(x, y)
 			pc++
 			continue mainLoop
 
 		case SUB:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -93,17 +100,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.Sub(x, y)
 			pc++
 			continue mainLoop
 
 		case DIV:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 5 {
 				res, err = nil, ErrOutOfGas
@@ -112,17 +119,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 5
 			contract.Gas.UsedRegularGas += 5
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.Div(x, y)
 			pc++
 			continue mainLoop
 
 		case SDIV:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 5 {
 				res, err = nil, ErrOutOfGas
@@ -131,17 +138,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 5
 			contract.Gas.UsedRegularGas += 5
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.SDiv(x, y)
 			pc++
 			continue mainLoop
 
 		case MOD:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 5 {
 				res, err = nil, ErrOutOfGas
@@ -150,17 +157,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 5
 			contract.Gas.UsedRegularGas += 5
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.Mod(x, y)
 			pc++
 			continue mainLoop
 
 		case SMOD:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 5 {
 				res, err = nil, ErrOutOfGas
@@ -169,17 +176,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 5
 			contract.Gas.UsedRegularGas += 5
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.SMod(x, y)
 			pc++
 			continue mainLoop
 
 		case ADDMOD:
-			if sLen := stack.len(); sLen < 3 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
+			if sp < 3 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 8 {
 				res, err = nil, ErrOutOfGas
@@ -188,18 +195,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 8
 			contract.Gas.UsedRegularGas += 8
 
-			stack.inner.top -= 2
-			stack.size -= 2
-			x := &stack.inner.data[stack.inner.top+1]
-			y := &stack.inner.data[stack.inner.top]
-			z := &stack.inner.data[stack.inner.top-1]
+			sp -= 2
+			x := &sd[sp+1]
+			y := &sd[sp]
+			z := &sd[sp-1]
 			z.AddMod(x, y, z)
 			pc++
 			continue mainLoop
 
 		case MULMOD:
-			if sLen := stack.len(); sLen < 3 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
+			if sp < 3 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 8 {
 				res, err = nil, ErrOutOfGas
@@ -208,18 +215,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 8
 			contract.Gas.UsedRegularGas += 8
 
-			stack.inner.top -= 2
-			stack.size -= 2
-			x := &stack.inner.data[stack.inner.top+1]
-			y := &stack.inner.data[stack.inner.top]
-			z := &stack.inner.data[stack.inner.top-1]
+			sp -= 2
+			x := &sd[sp+1]
+			y := &sd[sp]
+			z := &sd[sp-1]
 			z.MulMod(x, y, z)
 			pc++
 			continue mainLoop
 
 		case SIGNEXTEND:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 5 {
 				res, err = nil, ErrOutOfGas
@@ -228,17 +235,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 5
 			contract.Gas.UsedRegularGas += 5
 
-			stack.inner.top--
-			stack.size--
-			back := &stack.inner.data[stack.inner.top]
-			num := &stack.inner.data[stack.inner.top-1]
+			sp--
+			back := &sd[sp]
+			num := &sd[sp-1]
 			num.ExtendSign(num, back)
 			pc++
 			continue mainLoop
 
 		case LT:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -247,10 +254,9 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			if x.Lt(y) {
 				y.SetOne()
 			} else {
@@ -260,8 +266,9 @@ mainLoop:
 			continue mainLoop
 
 		case GT:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -270,10 +277,9 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			if x.Gt(y) {
 				y.SetOne()
 			} else {
@@ -283,8 +289,9 @@ mainLoop:
 			continue mainLoop
 
 		case SLT:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -293,10 +300,9 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			if x.Slt(y) {
 				y.SetOne()
 			} else {
@@ -306,8 +312,9 @@ mainLoop:
 			continue mainLoop
 
 		case SGT:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -316,10 +323,9 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			if x.Sgt(y) {
 				y.SetOne()
 			} else {
@@ -329,8 +335,9 @@ mainLoop:
 			continue mainLoop
 
 		case EQ:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -339,10 +346,9 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			if x.Eq(y) {
 				y.SetOne()
 			} else {
@@ -352,8 +358,9 @@ mainLoop:
 			continue mainLoop
 
 		case ISZERO:
-			if sLen := stack.len(); sLen < 1 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -362,7 +369,7 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			x := scope.Stack.peek()
+			x := &sd[sp-1]
 			if x.IsZero() {
 				x.SetOne()
 			} else {
@@ -372,8 +379,9 @@ mainLoop:
 			continue mainLoop
 
 		case AND:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -382,17 +390,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.And(x, y)
 			pc++
 			continue mainLoop
 
 		case OR:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -401,17 +409,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.Or(x, y)
 			pc++
 			continue mainLoop
 
 		case XOR:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -420,17 +428,17 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			x := &stack.inner.data[stack.inner.top]
-			y := &stack.inner.data[stack.inner.top-1]
+			sp--
+			x := &sd[sp]
+			y := &sd[sp-1]
 			y.Xor(x, y)
 			pc++
 			continue mainLoop
 
 		case NOT:
-			if sLen := stack.len(); sLen < 1 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -439,14 +447,15 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			x := scope.Stack.peek()
+			x := &sd[sp-1]
 			x.Not(x)
 			pc++
 			continue mainLoop
 
 		case BYTE:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -455,18 +464,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.top--
-			stack.size--
-			th := &stack.inner.data[stack.inner.top]
-			val := &stack.inner.data[stack.inner.top-1]
+			sp--
+			th := &sd[sp]
+			val := &sd[sp-1]
 			val.Byte(th)
 			pc++
 			continue mainLoop
 
 		case SHL:
 			if rules.IsConstantinople {
-				if sLen := stack.len(); sLen < 2 {
-					return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+				if sp < 2 {
+					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+					break mainLoop
 				}
 				if contract.Gas.RegularGas < 3 {
 					res, err = nil, ErrOutOfGas
@@ -475,10 +484,9 @@ mainLoop:
 				contract.Gas.RegularGas -= 3
 				contract.Gas.UsedRegularGas += 3
 
-				stack.inner.top--
-				stack.size--
-				shift := &stack.inner.data[stack.inner.top]
-				value := &stack.inner.data[stack.inner.top-1]
+				sp--
+				shift := &sd[sp]
+				value := &sd[sp-1]
 				if shift.LtUint64(256) {
 					value.Lsh(value, uint(shift.Uint64()))
 				} else {
@@ -492,8 +500,9 @@ mainLoop:
 			break mainLoop
 		case SHR:
 			if rules.IsConstantinople {
-				if sLen := stack.len(); sLen < 2 {
-					return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+				if sp < 2 {
+					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+					break mainLoop
 				}
 				if contract.Gas.RegularGas < 3 {
 					res, err = nil, ErrOutOfGas
@@ -502,10 +511,9 @@ mainLoop:
 				contract.Gas.RegularGas -= 3
 				contract.Gas.UsedRegularGas += 3
 
-				stack.inner.top--
-				stack.size--
-				shift := &stack.inner.data[stack.inner.top]
-				value := &stack.inner.data[stack.inner.top-1]
+				sp--
+				shift := &sd[sp]
+				value := &sd[sp-1]
 				if shift.LtUint64(256) {
 					value.Rsh(value, uint(shift.Uint64()))
 				} else {
@@ -519,8 +527,9 @@ mainLoop:
 			break mainLoop
 		case SAR:
 			if rules.IsConstantinople {
-				if sLen := stack.len(); sLen < 2 {
-					return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+				if sp < 2 {
+					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+					break mainLoop
 				}
 				if contract.Gas.RegularGas < 3 {
 					res, err = nil, ErrOutOfGas
@@ -529,10 +538,9 @@ mainLoop:
 				contract.Gas.RegularGas -= 3
 				contract.Gas.UsedRegularGas += 3
 
-				stack.inner.top--
-				stack.size--
-				shift := &stack.inner.data[stack.inner.top]
-				value := &stack.inner.data[stack.inner.top-1]
+				sp--
+				shift := &sd[sp]
+				value := &sd[sp-1]
 				if shift.GtUint64(256) {
 					if value.Sign() >= 0 {
 						value.Clear()
@@ -553,8 +561,9 @@ mainLoop:
 			break mainLoop
 		case CLZ:
 			if rules.IsOsaka {
-				if sLen := stack.len(); sLen < 1 {
-					return nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+				if sp < 1 {
+					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
+					break mainLoop
 				}
 				if contract.Gas.RegularGas < 5 {
 					res, err = nil, ErrOutOfGas
@@ -563,7 +572,7 @@ mainLoop:
 				contract.Gas.RegularGas -= 5
 				contract.Gas.UsedRegularGas += 5
 
-				x := scope.Stack.peek()
+				x := &sd[sp-1]
 				x.SetUint64(256 - uint64(x.BitLen()))
 				pc++
 				continue mainLoop
@@ -572,8 +581,9 @@ mainLoop:
 			res, err = opUndefined(&pc, evm, scope)
 			break mainLoop
 		case KECCAK256:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 30 {
 				res, err = nil, ErrOutOfGas
@@ -582,6 +592,8 @@ mainLoop:
 			contract.Gas.RegularGas -= 30
 			contract.Gas.UsedRegularGas += 30
 
+			stack.size = sp
+			stack.inner.top = stack.bottom + sp
 			var memorySize uint64
 			memSize, overflow := memoryKeccak256(stack)
 			if overflow {
@@ -614,14 +626,17 @@ mainLoop:
 				mem.Resize(memorySize)
 			}
 			res, err = opKeccak256(&pc, evm, scope)
+			sp = stack.size
+			sd = stack.inner.data[stack.bottom:]
 			if err != nil {
 				break mainLoop
 			}
 			pc++
 			continue mainLoop
 		case POP:
-			if sLen := stack.len(); sLen < 1 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 2 {
 				res, err = nil, ErrOutOfGas
@@ -630,13 +645,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 2
 			contract.Gas.UsedRegularGas += 2
 
-			scope.Stack.drop()
+			sp--
 			pc++
 			continue mainLoop
 
 		case MLOAD:
-			if sLen := stack.len(); sLen < 1 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -645,6 +661,8 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
+			stack.size = sp
+			stack.inner.top = stack.bottom + sp
 			var memorySize uint64
 			memSize, overflow := memoryMLoad(stack)
 			if overflow {
@@ -677,14 +695,17 @@ mainLoop:
 				mem.Resize(memorySize)
 			}
 			res, err = opMload(&pc, evm, scope)
+			sp = stack.size
+			sd = stack.inner.data[stack.bottom:]
 			if err != nil {
 				break mainLoop
 			}
 			pc++
 			continue mainLoop
 		case MSTORE:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -693,6 +714,8 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
+			stack.size = sp
+			stack.inner.top = stack.bottom + sp
 			var memorySize uint64
 			memSize, overflow := memoryMStore(stack)
 			if overflow {
@@ -725,14 +748,17 @@ mainLoop:
 				mem.Resize(memorySize)
 			}
 			res, err = opMstore(&pc, evm, scope)
+			sp = stack.size
+			sd = stack.inner.data[stack.bottom:]
 			if err != nil {
 				break mainLoop
 			}
 			pc++
 			continue mainLoop
 		case MSTORE8:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -741,6 +767,8 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
+			stack.size = sp
+			stack.inner.top = stack.bottom + sp
 			var memorySize uint64
 			memSize, overflow := memoryMStore8(stack)
 			if overflow {
@@ -773,14 +801,17 @@ mainLoop:
 				mem.Resize(memorySize)
 			}
 			res, err = opMstore8(&pc, evm, scope)
+			sp = stack.size
+			sd = stack.inner.data[stack.bottom:]
 			if err != nil {
 				break mainLoop
 			}
 			pc++
 			continue mainLoop
 		case JUMP:
-			if sLen := stack.len(); sLen < 1 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 8 {
 				res, err = nil, ErrOutOfGas
@@ -793,7 +824,8 @@ mainLoop:
 				res, err = nil, errStopToken
 				break mainLoop
 			}
-			pos := scope.Stack.pop1()
+			sp--
+			pos := &sd[sp]
 			if !scope.Contract.validJumpdest(pos) {
 				res, err = nil, ErrInvalidJump
 				break mainLoop
@@ -803,8 +835,9 @@ mainLoop:
 			continue mainLoop
 
 		case JUMPI:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 10 {
 				res, err = nil, ErrOutOfGas
@@ -817,10 +850,9 @@ mainLoop:
 				res, err = nil, errStopToken
 				break mainLoop
 			}
-			stack.inner.top -= 2
-			stack.size -= 2
-			pos := &stack.inner.data[stack.inner.top+1]
-			cond := &stack.inner.data[stack.inner.top]
+			sp -= 2
+			pos := &sd[sp+1]
+			cond := &sd[sp]
 			if !cond.IsZero() {
 				if !scope.Contract.validJumpdest(pos) {
 					res, err = nil, ErrInvalidJump
@@ -832,8 +864,9 @@ mainLoop:
 			continue mainLoop
 
 		case PC:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 2 {
 				res, err = nil, ErrOutOfGas
@@ -842,16 +875,16 @@ mainLoop:
 			contract.Gas.RegularGas -= 2
 			contract.Gas.UsedRegularGas += 2
 
-			stack.inner.top++
-			stack.size++
-			elem := &stack.inner.data[stack.inner.top-1]
+			sp++
+			elem := &sd[sp-1]
 			elem.SetUint64(pc)
 			pc++
 			continue mainLoop
 
 		case MSIZE:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 2 {
 				res, err = nil, ErrOutOfGas
@@ -860,9 +893,8 @@ mainLoop:
 			contract.Gas.RegularGas -= 2
 			contract.Gas.UsedRegularGas += 2
 
-			stack.inner.top++
-			stack.size++
-			elem := &stack.inner.data[stack.inner.top-1]
+			sp++
+			elem := &sd[sp-1]
 			elem.SetUint64(uint64(scope.Memory.Len()))
 			pc++
 			continue mainLoop
@@ -880,8 +912,9 @@ mainLoop:
 
 		case PUSH0:
 			if rules.IsShanghai {
-				if sLen := stack.len(); sLen > 1023 {
-					return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+				if sp > 1023 {
+					res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+					break mainLoop
 				}
 				if contract.Gas.RegularGas < 2 {
 					res, err = nil, ErrOutOfGas
@@ -890,9 +923,8 @@ mainLoop:
 				contract.Gas.RegularGas -= 2
 				contract.Gas.UsedRegularGas += 2
 
-				stack.inner.top++
-				stack.size++
-				elem := &stack.inner.data[stack.inner.top-1]
+				sp++
+				elem := &sd[sp-1]
 				elem.Clear()
 				pc++
 				continue mainLoop
@@ -901,8 +933,9 @@ mainLoop:
 			res, err = opUndefined(&pc, evm, scope)
 			break mainLoop
 		case PUSH1:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -912,7 +945,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -920,9 +957,8 @@ mainLoop:
 				continue mainLoop
 			}
 			codeLen := uint64(len(scope.Contract.Code))
-			stack.inner.top++
-			stack.size++
-			elem := &stack.inner.data[stack.inner.top-1]
+			sp++
+			elem := &sd[sp-1]
 			pc += 1
 			if pc < codeLen {
 				elem.SetUint64(uint64(scope.Contract.Code[pc]))
@@ -933,8 +969,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH2:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -944,7 +981,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -952,9 +993,8 @@ mainLoop:
 				continue mainLoop
 			}
 			codeLen := uint64(len(scope.Contract.Code))
-			stack.inner.top++
-			stack.size++
-			elem := &stack.inner.data[stack.inner.top-1]
+			sp++
+			elem := &sd[sp-1]
 			if pc+2 < codeLen {
 				elem.SetBytes2(scope.Contract.Code[pc+1 : pc+3])
 			} else if pc+1 < codeLen {
@@ -967,8 +1007,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH3:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -978,7 +1019,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -990,9 +1035,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+3)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 3 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1002,8 +1046,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH4:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1013,7 +1058,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1025,9 +1074,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+4)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 4 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1037,8 +1085,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH5:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1048,7 +1097,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1060,9 +1113,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+5)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 5 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1072,8 +1124,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH6:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1083,7 +1136,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1095,9 +1152,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+6)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 6 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1107,8 +1163,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH7:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1118,7 +1175,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1130,9 +1191,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+7)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 7 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1142,8 +1202,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH8:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1153,7 +1214,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1165,9 +1230,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+8)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 8 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1177,8 +1241,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH9:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1188,7 +1253,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1200,9 +1269,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+9)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 9 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1212,8 +1280,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH10:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1223,7 +1292,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1235,9 +1308,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+10)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 10 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1247,8 +1319,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH11:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1258,7 +1331,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1270,9 +1347,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+11)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 11 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1282,8 +1358,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH12:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1293,7 +1370,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1305,9 +1386,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+12)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 12 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1317,8 +1397,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH13:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1328,7 +1409,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1340,9 +1425,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+13)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 13 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1352,8 +1436,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH14:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1363,7 +1448,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1375,9 +1464,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+14)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 14 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1387,8 +1475,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH15:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1398,7 +1487,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1410,9 +1503,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+15)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 15 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1422,8 +1514,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH16:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1433,7 +1526,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1445,9 +1542,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+16)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 16 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1457,8 +1553,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH17:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1468,7 +1565,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1480,9 +1581,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+17)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 17 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1492,8 +1592,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH18:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1503,7 +1604,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1515,9 +1620,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+18)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 18 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1527,8 +1631,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH19:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1538,7 +1643,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1550,9 +1659,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+19)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 19 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1562,8 +1670,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH20:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1573,7 +1682,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1585,9 +1698,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+20)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 20 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1597,8 +1709,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH21:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1608,7 +1721,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1620,9 +1737,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+21)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 21 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1632,8 +1748,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH22:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1643,7 +1760,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1655,9 +1776,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+22)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 22 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1667,8 +1787,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH23:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1678,7 +1799,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1690,9 +1815,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+23)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 23 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1702,8 +1826,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH24:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1713,7 +1838,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1725,9 +1854,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+24)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 24 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1737,8 +1865,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH25:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1748,7 +1877,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1760,9 +1893,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+25)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 25 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1772,8 +1904,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH26:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1783,7 +1916,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1795,9 +1932,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+26)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 26 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1807,8 +1943,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH27:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1818,7 +1955,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1830,9 +1971,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+27)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 27 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1842,8 +1982,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH28:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1853,7 +1994,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1865,9 +2010,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+28)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 28 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1877,8 +2021,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH29:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1888,7 +2033,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1900,9 +2049,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+29)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 29 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1912,8 +2060,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH30:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1923,7 +2072,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1935,9 +2088,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+30)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 30 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1947,8 +2099,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH31:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1958,7 +2111,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -1970,9 +2127,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+31)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 31 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -1982,8 +2138,9 @@ mainLoop:
 			continue mainLoop
 
 		case PUSH32:
-			if sLen := stack.len(); sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -1993,7 +2150,11 @@ mainLoop:
 			contract.Gas.UsedRegularGas += 3
 
 			if isEIP4762 {
+				stack.size = sp
+				stack.inner.top = stack.bottom + sp
 				res, err = table[op].execute(&pc, evm, scope)
+				sp = stack.size
+				sd = stack.inner.data[stack.bottom:]
 				if err != nil {
 					break mainLoop
 				}
@@ -2005,9 +2166,8 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+32)
 			)
-			stack.inner.top++
-			stack.size++
-			a := &stack.inner.data[stack.inner.top-1]
+			sp++
+			a := &sd[sp-1]
 			a.SetBytes(scope.Contract.Code[start:end])
 			if missing := 32 - (end - start); missing > 0 {
 				a.Lsh(a, uint(8*missing))
@@ -2017,10 +2177,12 @@ mainLoop:
 			continue mainLoop
 
 		case DUP1:
-			if sLen := stack.len(); sLen < 1 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2029,17 +2191,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-1]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-1]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP2:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2048,17 +2211,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-2]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-2]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP3:
-			if sLen := stack.len(); sLen < 3 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 3 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2067,17 +2231,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-3]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-3]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP4:
-			if sLen := stack.len(); sLen < 4 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 4}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 4 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 4}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2086,17 +2251,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-4]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-4]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP5:
-			if sLen := stack.len(); sLen < 5 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 5}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 5 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 5}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2105,17 +2271,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-5]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-5]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP6:
-			if sLen := stack.len(); sLen < 6 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 6}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 6 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 6}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2124,17 +2291,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-6]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-6]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP7:
-			if sLen := stack.len(); sLen < 7 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 7}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 7 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 7}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2143,17 +2311,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-7]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-7]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP8:
-			if sLen := stack.len(); sLen < 8 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 8}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 8 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 8}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2162,17 +2331,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-8]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-8]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP9:
-			if sLen := stack.len(); sLen < 9 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 9}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 9 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 9}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2181,17 +2351,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-9]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-9]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP10:
-			if sLen := stack.len(); sLen < 10 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 10}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 10 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 10}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2200,17 +2371,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-10]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-10]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP11:
-			if sLen := stack.len(); sLen < 11 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 11}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 11 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 11}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2219,17 +2391,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-11]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-11]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP12:
-			if sLen := stack.len(); sLen < 12 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 12}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 12 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 12}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2238,17 +2411,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-12]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-12]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP13:
-			if sLen := stack.len(); sLen < 13 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 13}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 13 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 13}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2257,17 +2431,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-13]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-13]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP14:
-			if sLen := stack.len(); sLen < 14 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 14}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 14 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 14}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2276,17 +2451,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-14]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-14]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP15:
-			if sLen := stack.len(); sLen < 15 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 15}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 15 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 15}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2295,17 +2471,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-15]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-15]
+			sp++
 			pc++
 			continue mainLoop
 
 		case DUP16:
-			if sLen := stack.len(); sLen < 16 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 16}
-			} else if sLen > 1023 {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp < 16 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 16}
+				break mainLoop
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2314,15 +2491,15 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size] = stack.inner.data[stack.bottom+stack.size-16]
-			stack.size++
-			stack.inner.top++
+			sd[sp] = sd[sp-16]
+			sp++
 			pc++
 			continue mainLoop
 
 		case SWAP1:
-			if sLen := stack.len(); sLen < 2 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2331,13 +2508,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-2], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-2]
+			sd[sp-2], sd[sp-1] = sd[sp-1], sd[sp-2]
 			pc++
 			continue mainLoop
 
 		case SWAP2:
-			if sLen := stack.len(); sLen < 3 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
+			if sp < 3 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2346,13 +2524,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-3], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-3]
+			sd[sp-3], sd[sp-1] = sd[sp-1], sd[sp-3]
 			pc++
 			continue mainLoop
 
 		case SWAP3:
-			if sLen := stack.len(); sLen < 4 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 4}
+			if sp < 4 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 4}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2361,13 +2540,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-4], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-4]
+			sd[sp-4], sd[sp-1] = sd[sp-1], sd[sp-4]
 			pc++
 			continue mainLoop
 
 		case SWAP4:
-			if sLen := stack.len(); sLen < 5 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 5}
+			if sp < 5 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 5}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2376,13 +2556,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-5], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-5]
+			sd[sp-5], sd[sp-1] = sd[sp-1], sd[sp-5]
 			pc++
 			continue mainLoop
 
 		case SWAP5:
-			if sLen := stack.len(); sLen < 6 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 6}
+			if sp < 6 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 6}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2391,13 +2572,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-6], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-6]
+			sd[sp-6], sd[sp-1] = sd[sp-1], sd[sp-6]
 			pc++
 			continue mainLoop
 
 		case SWAP6:
-			if sLen := stack.len(); sLen < 7 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 7}
+			if sp < 7 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 7}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2406,13 +2588,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-7], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-7]
+			sd[sp-7], sd[sp-1] = sd[sp-1], sd[sp-7]
 			pc++
 			continue mainLoop
 
 		case SWAP7:
-			if sLen := stack.len(); sLen < 8 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 8}
+			if sp < 8 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 8}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2421,13 +2604,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-8], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-8]
+			sd[sp-8], sd[sp-1] = sd[sp-1], sd[sp-8]
 			pc++
 			continue mainLoop
 
 		case SWAP8:
-			if sLen := stack.len(); sLen < 9 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 9}
+			if sp < 9 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 9}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2436,13 +2620,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-9], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-9]
+			sd[sp-9], sd[sp-1] = sd[sp-1], sd[sp-9]
 			pc++
 			continue mainLoop
 
 		case SWAP9:
-			if sLen := stack.len(); sLen < 10 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 10}
+			if sp < 10 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 10}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2451,13 +2636,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-10], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-10]
+			sd[sp-10], sd[sp-1] = sd[sp-1], sd[sp-10]
 			pc++
 			continue mainLoop
 
 		case SWAP10:
-			if sLen := stack.len(); sLen < 11 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 11}
+			if sp < 11 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 11}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2466,13 +2652,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-11], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-11]
+			sd[sp-11], sd[sp-1] = sd[sp-1], sd[sp-11]
 			pc++
 			continue mainLoop
 
 		case SWAP11:
-			if sLen := stack.len(); sLen < 12 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 12}
+			if sp < 12 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 12}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2481,13 +2668,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-12], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-12]
+			sd[sp-12], sd[sp-1] = sd[sp-1], sd[sp-12]
 			pc++
 			continue mainLoop
 
 		case SWAP12:
-			if sLen := stack.len(); sLen < 13 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 13}
+			if sp < 13 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 13}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2496,13 +2684,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-13], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-13]
+			sd[sp-13], sd[sp-1] = sd[sp-1], sd[sp-13]
 			pc++
 			continue mainLoop
 
 		case SWAP13:
-			if sLen := stack.len(); sLen < 14 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 14}
+			if sp < 14 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 14}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2511,13 +2700,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-14], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-14]
+			sd[sp-14], sd[sp-1] = sd[sp-1], sd[sp-14]
 			pc++
 			continue mainLoop
 
 		case SWAP14:
-			if sLen := stack.len(); sLen < 15 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 15}
+			if sp < 15 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 15}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2526,13 +2716,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-15], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-15]
+			sd[sp-15], sd[sp-1] = sd[sp-1], sd[sp-15]
 			pc++
 			continue mainLoop
 
 		case SWAP15:
-			if sLen := stack.len(); sLen < 16 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 16}
+			if sp < 16 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 16}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2541,13 +2732,14 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-16], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-16]
+			sd[sp-16], sd[sp-1] = sd[sp-1], sd[sp-16]
 			pc++
 			continue mainLoop
 
 		case SWAP16:
-			if sLen := stack.len(); sLen < 17 {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: 17}
+			if sp < 17 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 17}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < 3 {
 				res, err = nil, ErrOutOfGas
@@ -2556,16 +2748,18 @@ mainLoop:
 			contract.Gas.RegularGas -= 3
 			contract.Gas.UsedRegularGas += 3
 
-			stack.inner.data[stack.bottom+stack.size-17], stack.inner.data[stack.bottom+stack.size-1] = stack.inner.data[stack.bottom+stack.size-1], stack.inner.data[stack.bottom+stack.size-17]
+			sd[sp-17], sd[sp-1] = sd[sp-1], sd[sp-17]
 			pc++
 			continue mainLoop
 
 		default:
 			operation := table[op]
-			if sLen := stack.len(); sLen < operation.minStack {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
-			} else if sLen > operation.maxStack {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
+			if sp < operation.minStack {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: operation.minStack}
+				break mainLoop
+			} else if sp > operation.maxStack {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: operation.maxStack}
+				break mainLoop
 			}
 			if contract.Gas.RegularGas < operation.constantGas {
 				res, err = nil, ErrOutOfGas
@@ -2574,6 +2768,8 @@ mainLoop:
 			contract.Gas.RegularGas -= operation.constantGas
 			contract.Gas.UsedRegularGas += operation.constantGas
 
+			stack.size = sp
+			stack.inner.top = stack.bottom + sp
 			var memorySize uint64
 			if memorySize, _, err = contract.meterDynamicGas(operation, evm, stack, mem); err != nil {
 				return nil, err
@@ -2582,6 +2778,8 @@ mainLoop:
 				mem.Resize(memorySize)
 			}
 			res, err = operation.execute(&pc, evm, scope)
+			sp = stack.size
+			sd = stack.inner.data[stack.bottom:]
 			if err != nil {
 				break mainLoop
 			}
@@ -2589,6 +2787,8 @@ mainLoop:
 			continue mainLoop
 		}
 	}
+	stack.size = sp
+	stack.inner.top = stack.bottom + sp
 	if err == errStopToken {
 		err = nil
 	}
