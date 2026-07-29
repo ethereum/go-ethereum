@@ -54,6 +54,16 @@ func ReadSnapshotRoot(db ethdb.KeyValueReader) common.Hash {
 	return common.BytesToHash(data)
 }
 
+// HasSnapshotRoot reports whether a snapshot root has been recorded at all.
+//
+// Distinct from ReadSnapshotRoot returning the zero hash, which is ambiguous:
+// the zero hash is a legal state root for the binary tree, so "absent" and
+// "empty state" are otherwise indistinguishable.
+func HasSnapshotRoot(db ethdb.KeyValueReader) bool {
+	has, _ := db.Has(SnapshotRootKey)
+	return has
+}
+
 // WriteSnapshotRoot stores the root of the block whose state is contained in
 // the persisted snapshot.
 func WriteSnapshotRoot(db ethdb.KeyValueWriter, root common.Hash) {
