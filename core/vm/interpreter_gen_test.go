@@ -29,6 +29,7 @@ import (
 	"math/big"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -387,61 +388,47 @@ func FuzzInterpreterDiff(f *testing.F) {
 	})
 }
 
-// markedHelpers parses stack.go and returns the *Stack helpers tagged
-// //gen:inline. That tag is the single source of truth, shared with the
-// generator (core/vm/gen), for which helpers are spliced into the dispatch.
-func markedHelpers(t *testing.T) map[string]bool {
-	t.Helper()
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "stack.go", nil, parser.ParseComments)
-	if err != nil {
-		t.Fatalf("parsing stack.go: %v", err)
+// expandedStackOps lists the *Stack helpers the generator expands into sp and
+// sd lines in the dispatch (see emitStackOp in core/vm/gen). If the generator
+// drops one while a handler still calls it, the call survives into
+// interpreter_gen.go and TestGeneratedFastPathHelpersExpanded turns red.
+func expandedStackOps() map[string]bool {
+	ops := map[string]bool{
+		"get": true, "drop": true, "peek": true, "pop1": true, "pop2": true,
+		"pop1Peek1": true, "pop2Peek1": true, "dup": true,
 	}
-	marked := map[string]bool{}
-	for _, decl := range f.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Doc == nil {
-			continue
-		}
-		for _, c := range fn.Doc.List {
-			if c.Text == "//gen:inline" {
-				marked[fn.Name.Name] = true
-			}
-		}
+	for i := 1; i <= 16; i++ {
+		ops["swap"+strconv.Itoa(i)] = true
 	}
-	if len(marked) == 0 {
-		t.Fatal("found no //gen:inline helpers in stack.go")
-	}
-	return marked
+	return ops
 }
 
-// TestGeneratedFastPathHelpersExpanded asserts the generator spliced every
-// //gen:inline helper inline, so none survives as a real call in interpreter_gen.go.
+// TestGeneratedFastPathHelpersExpanded asserts the generator expanded every
+// stack op it owns, so none survives as a real call in interpreter_gen.go.
 // Those helpers exceed the compiler's inline budget for a function as large as
-// execUntraced, so a missed splice would silently drop the inlining the fast
+// execUntraced, so a missed expansion would silently drop the inlining the fast
 // path exists for. It is the expand-side counterpart to
 // TestGeneratedFastPathHelpersInlined: together they hold the one invariant that
-// the fast path makes no real stack-helper call, the costly ones by splicing,
+// the fast path makes no real stack-helper call, the costly ones by expansion,
 // the cheap ones by compiler inlining.
 func TestGeneratedFastPathHelpersExpanded(t *testing.T) {
 	calls := countStackCalls(t, "interpreter_gen.go")
-	for h := range markedHelpers(t) {
+	for h := range expandedStackOps() {
 		if n := calls[h]; n != 0 {
-			t.Errorf("(*Stack).%s is //gen:inline but has %d residual call(s) in interpreter_gen.go, expected 0.\n"+
-				"The generator did not splice it. Check it is still in inlinable shape (core/vm/gen).", h, n)
+			t.Errorf("(*Stack).%s is a generator stack op but has %d residual call(s) in interpreter_gen.go, expected 0.\n"+
+				"The generator did not expand it. Check emitStackOp (core/vm/gen).", h, n)
 		}
 	}
 }
 
 // TestGeneratedFastPathHelpersInlined recompiles this package with the
 // compiler's inlining diagnostics on and fails if any *Stack helper call that
-// survives into interpreter_gen.go was not inlined. Every survivor must be a cheap
-// helper (len, pop1, peek, drop) the compiler inlines into execUntraced; the
-// //gen:inline helpers are spliced away and owned by the Expanded test. The
-// cheap ones inline today with margin except pop1, at cost 18 against Go's
-// big-function budget of 20. A toolchain that re-scores inline cost, or an extra
-// branch in one of these bodies, could silently stop the inlining and slow the
-// interpreter, so this turns that into a red build.
+// survives into interpreter_gen.go was not inlined. The generator's stack ops
+// are expanded away and owned by the Expanded test, so a survivor here must be
+// a cheap helper the compiler inlines into execUntraced. Today nothing
+// survives at all. If a new call site appears and the compiler declines to
+// inline it, the fast path quietly pays a real call, so this turns that into
+// a red build.
 func TestGeneratedFastPathHelpersInlined(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping inlining check (recompiles the package) in -short mode")
@@ -459,19 +446,19 @@ func TestGeneratedFastPathHelpersInlined(t *testing.T) {
 		t.Fatalf("captured no interpreter_gen.go diagnostics, the -m build produced nothing to check:\n%s", diag)
 	}
 
-	// Every surviving stack-helper call (i.e. not a //gen:inline target) must be
+	// Every surviving stack-helper call (i.e. not a generator stack op) must be
 	// inlined by the compiler.
-	marked := markedHelpers(t)
+	expanded := expandedStackOps()
 	for h, n := range countStackCalls(t, "interpreter_gen.go") {
-		if marked[h] {
-			continue // spliced away, owned by TestGeneratedFastPathHelpersExpanded
+		if expanded[h] {
+			continue // expanded away, owned by TestGeneratedFastPathHelpersExpanded
 		}
 		inlinedRe := regexp.MustCompile(`interpreter_gen\.go.*inlining call to \(\*Stack\)\.` + regexp.QuoteMeta(h) + `\b`)
 		inlined := len(inlinedRe.FindAllString(diag, -1))
 		if inlined != n {
 			t.Errorf("(*Stack).%s: %d call site(s) in interpreter_gen.go, %d inlined into execUntraced.\n"+
 				"The compiler stopped inlining it, so the fast path now pays a real call. Shrink the\n"+
-				"body to fit the inline budget, or tag it //gen:inline in stack.go to splice it instead.", h, n, inlined)
+				"body to fit the inline budget, or add it to the generator's stack ops (emitStackOp) instead.", h, n, inlined)
 			continue
 		}
 		t.Logf("(*Stack).%s: %d/%d call sites inlined", h, inlined, n)
