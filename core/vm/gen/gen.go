@@ -25,8 +25,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // This file holds the shape of the generated dispatch: the emitters for one
@@ -148,6 +146,16 @@ func (g *generator) emitResizeMemory() {
 	`)
 }
 
+// emitUndefinedFallback emits what a fork-gated opcode does before its fork activates.
+// The opcode does not exist yet, so the case matches the legacy loop's handling of an
+// undefined one.
+func (g *generator) emitUndefinedFallback() {
+	g.p(`
+		res, err = opUndefined(&pc, evm, scope)
+		break mainLoop
+	`)
+}
+
 // emitCallHandler calls an opcode handler and does the bookkeeping around it. The
 // handler can move the stack and can fail, so reload, bail on error, then step the pc.
 func (g *generator) emitCallHandler(call string) {
@@ -174,7 +182,7 @@ func (g *generator) emitInlineOp(code byte) {
 	}
 
 	// stack bounds check
-	g.emitStackChecks(spec.minStack, spec.maxStack, spec.minStack > 0, spec.maxStack < int(params.StackLimit))
+	g.emitStackChecks(spec.stackGuards())
 
 	// static gas
 	if spec.constGas != 0 {
@@ -204,14 +212,11 @@ func (g *generator) emitInlineOp(code byte) {
 		abortf("opcode %#x (%s) is built by factory %q, which the generator cannot inline", code, spec.name, factory)
 	}
 
-	// If opcode is inactive for this fork, then close the gate
-	// and fall back to the legacy loop's undefined-opcode handling.
+	// Close the fork gate opened above, then the branch taken while the fork is
+	// still inactive.
 	if spec.fork != "" {
-		g.p(`
-	    }
-		  res, err = opUndefined(&pc, evm, scope)
-			break mainLoop
-		`)
+		g.p("}\n")
+		g.emitUndefinedFallback()
 	}
 }
 
@@ -224,7 +229,7 @@ func (g *generator) emitDirectOp(code byte) {
 	g.p("case %s:\n", spec.name)
 
 	// stack bounds check
-	g.emitStackChecks(spec.minStack, spec.maxStack, spec.minStack > 0, spec.maxStack < int(params.StackLimit))
+	g.emitStackChecks(spec.stackGuards())
 
 	// static gas
 	if spec.constGas != 0 {

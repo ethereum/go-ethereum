@@ -18,6 +18,7 @@ package main
 
 import (
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // This file holds the generator's opcode model: which tier each opcode is
@@ -112,6 +113,15 @@ type opSpec struct {
 	execFn   string
 	dynFn    string
 	memFn    string
+}
+
+// stackGuards returns the bounds emitStackChecks needs, plus which of the two
+// guards are worth emitting. A minStack of 0 cannot underflow, and a maxStack
+// at the stack limit cannot overflow, so those are left out. Emitting both
+// unconditionally would grow execUntraced by 14%, because the compiler cannot
+// track sp's range across a switch this size and emits every compare.
+func (s opSpec) stackGuards() (minStack, maxStack int, under, over bool) {
+	return s.minStack, s.maxStack, s.minStack > 0, s.maxStack < int(params.StackLimit)
 }
 
 // deriveSpecs records each opcode's constants and function names from the first fork

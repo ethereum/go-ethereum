@@ -270,6 +270,12 @@ func (g *generator) rewriteReturns(src string, r returnRewrite) string {
 		indent, value, errVal := m[1], "nil", strings.TrimSpace(m[2])
 		if r.results == 2 {
 			value, errVal = strings.TrimSpace(m[2]), strings.TrimSpace(m[3])
+			// pairReturnRe stops the value at the first comma, so one nested in
+			// brackets, `return f(a, b), nil`, would cut the value in half. The error
+			// half runs to the end of the line and is always whole.
+			if !bracketsBalanced(value) {
+				abortf("cannot split the return %q: its value holds a comma", strings.TrimSpace(line))
+			}
 		}
 		if errVal != "nil" { // failure: leave the loop with the error
 			data := "nil"
@@ -291,6 +297,26 @@ func (g *generator) rewriteReturns(src string, r returnRewrite) string {
 		}
 	}
 	return out.String()
+}
+
+// bracketsBalanced reports whether every bracket in src is closed. It is how
+// rewriteReturns tells a whole return value from one the comma split cut in half. It
+// does not check that the kinds match, since a truncated expression is all it is
+// looking for.
+func bracketsBalanced(src string) bool {
+	depth := 0
+	for _, r := range src {
+		switch r {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			depth--
+			if depth < 0 {
+				return false
+			}
+		}
+	}
+	return depth == 0
 }
 
 // rewriteOpcodeReturns rewrites a printed handler body to run inside the loop: `*pc`
