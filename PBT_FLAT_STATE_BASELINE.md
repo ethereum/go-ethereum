@@ -29,9 +29,9 @@ this is **not a CI check** and there is deliberately no `Test*` in the file.
 
 | Benchmark | MPT | PBT | PBT / MPT |
 |---|---|---|---|
-| account read | 6166 ns/op, 1038 B, 16 allocs | 6599 ns/op, 1029 B, 17 allocs | **1.07×** |
-| storage read | 12544 ns/op, 1891 B, 24 allocs | 12723 ns/op, 1979 B, 27 allocs | **1.01×** |
-| commit (1000 mutations) | 94.6 ms/op, 14.8 MB, 137k allocs | 159.9 ms/op, 17.7 MB, 258k allocs | **1.69×** |
+| account read | 5183 ns/op, 1028 B, 16 allocs | 4910 ns/op, 1074 B, 17 allocs | **0.95×** |
+| storage read | 13108 ns/op, 1864 B, 23 allocs | 11965 ns/op, 2168 B, 26 allocs | **0.91×** |
+| commit (1000 mutations) | 41.1 ms/op, 12.1 MB, 126k allocs | 91.7 ms/op, 14.1 MB, 230k allocs | **2.23×** |
 
 Reproduce:
 
@@ -41,30 +41,32 @@ go test ./core/state/ -run XXX -bench BenchmarkStateStorageRead -benchtime 2000x
 go test ./core/state/ -run XXX -bench BenchmarkStateCommit      -benchtime 200x  -timeout 90m
 ```
 
-**Reads are at parity; commit is not.** 1.07× and 1.01× are near enough to call
-level. Commit at 1.69× is outside the ≤1.5× gate — and it is the one number
-where the tree's shape shows up clearly: nearly twice the allocations for the
-same thousand mutations, which is the wider node records being built and
-written.
+**Reads beat merkle; commit does not.** 0.95× and 0.91× on reads. Commit at
+2.23× is well outside the ≤1.5× gate, with 1.8× the allocations for the same
+thousand mutations — the tree's wider node records being built and written.
+That is the one number left to explain, and the only one blocking the gate.
 
-**What changed against the in-memory run.** Absolute read times are roughly six
-times higher, because real I/O dominates what was previously a CPU measurement,
-and the read ratio moved *against* the tree: from 0.97× (marginally ahead) to
-1.07× (marginally behind). So the earlier "reaches MPT cold-read parity" claim
-does not survive as stated — it is close to parity, not past it.
-
-**The commit benchmark was also wrong, independently of the backend.** It opened
-state from the same root every iteration, stacking `b.N` sibling layers on one
-parent — a shape block processing never produces, and one where the layer tree
-grows without ever flattening. Chaining each iteration onto the previous root
-lets the database cap and flush on its normal schedule, which is why the
-absolute cost tripled (28.8 ms → 94.6 ms for merkle) while the ratio fell
-(1.84× → 1.69×). The earlier figure was measuring an artefact.
-
-One caveat on that row: the harness sets `NoAsyncFlush` for determinism, so
+Caveat on the commit row: the harness sets `NoAsyncFlush` for determinism, so
 flushes are synchronous where a real node overlaps them with execution. Both
-arms pay it equally, so the ratio holds, but the absolute milliseconds are
+arms pay it equally so the ratio holds, but the absolute milliseconds are
 pessimistic against production.
+
+### Two harness errors found and fixed before these numbers
+
+Recorded because both changed the result, and both looked fine until checked.
+
+1. **Sibling layers.** The commit benchmark opened state from the same root every
+   iteration, stacking `b.N` layers onto one parent — a shape block processing
+   never produces, where the layer tree grows and the flush the benchmark exists
+   to measure never happens. Chaining each iteration onto the previous root
+   fixed it.
+2. **`&pathdb.Config{...}` is not "defaults".** Zero means *keep the entire
+   chain* for both history settings rather than *off*, and the sanitiser turns a
+   zero checkpoint rate into full-value records — so the harness was writing
+   archive-class trienode history on every commit. Basing the config on
+   `pathdb.Defaults` and overriding only `NoAsyncFlush` fixed it. This moved
+   reads from 1.07×/1.01× to 0.95×/0.91×, and commit from 1.69× to 2.23× —
+   removing that work helped merkle proportionally more than the tree.
 
 ---
 

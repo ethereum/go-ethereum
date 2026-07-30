@@ -113,9 +113,19 @@ func buildBenchState(b *testing.B, pbt bool) (*CachingDB, common.Hash) {
 	}
 	b.Cleanup(func() { disk.Close() })
 
+	// Start from the production defaults and change only what the benchmark
+	// needs. A bare &pathdb.Config{} is not "no options": zero means "keep the
+	// entire chain" for both history settings, not "off", and the sanitiser
+	// turns a zero checkpoint rate into full-value node records. Configured
+	// that way this measures a node writing archive-class trienode history
+	// every block - which is precisely the work the binary tree's larger node
+	// records make expensive, and which no ordinary node does.
+	pcfg := *pathdb.Defaults
+	pcfg.NoAsyncFlush = true // determinism: flush inline rather than in the background
+
 	tdb := triedb.NewDatabase(disk, &triedb.Config{
 		IsPBT:  pbt,
-		PathDB: &pathdb.Config{NoAsyncFlush: true},
+		PathDB: &pcfg,
 	})
 	b.Cleanup(func() { tdb.Close() })
 	db := NewDatabase(tdb, NewCodeDB(disk))
