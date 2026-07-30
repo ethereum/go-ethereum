@@ -40,11 +40,17 @@ import (
 // an earlier flat-state design. That reasoning does not carry to the layer tree,
 // but the claim is load-bearing enough to check rather than argue.
 //
-// Scope: this covers the window where the competing branches are still diff
-// layers, which is the window reorgs are served from. Once a branch has been
-// flushed into the disk layer its writes are no longer separable, and a fork
-// below that point is exactly the case Recoverable reports as unreachable and
-// the chain refuses by name - so there is no third behaviour to test here.
+// Scope, stated plainly because the name could be read as more than this is:
+//
+//   - There is no trie here. The node sets are empty, so this pins the flat
+//     store and the layer tree resolving per branch, not flat-versus-trie
+//     agreement. That comparison after real block processing is
+//     core.TestPBTGeneratedChainImportsWithFlatState.
+//   - It covers the window where the competing branches are still diff layers,
+//     which is the window reorgs are served from. Once a branch has been
+//     flushed into the disk layer its writes are no longer separable, and a
+//     fork below that point is exactly the case Recoverable reports as
+//     unreachable and the chain refuses by name.
 func TestPBTFlatStateFollowsTheBranch(t *testing.T) {
 	var (
 		disk    = rawdb.NewMemoryDatabase()

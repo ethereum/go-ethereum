@@ -242,9 +242,17 @@ func BenchmarkStateStorageRead(b *testing.B) {
 }
 
 // BenchmarkStateCommit measures committing a block-sized batch of mutations.
-// Note it carries the read cost too, since mutating an account loads it first —
-// which is realistic, block processing reads before it writes, but it means the
-// number is not purely commit-side.
+//
+// Each iteration builds on the previous one's root, the way blocks do. Opening
+// every iteration from the same root instead would stack b.N sibling layers on
+// one parent — a shape block processing never produces, and one that inflates
+// later iterations as the layer tree grows. Chaining also lets the database cap
+// and flatten on its normal schedule, so the flush cost lands in the
+// measurement where it belongs.
+//
+// Note it carries the read cost too, since mutating an account loads it first.
+// That is realistic — block processing reads before it writes — but it means
+// the number is not purely commit-side.
 func BenchmarkStateCommit(b *testing.B) {
 	const mutations = 1000
 
@@ -254,9 +262,10 @@ func BenchmarkStateCommit(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
+			cur := root
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				statedb, err := New(root, db)
+				statedb, err := New(cur, db)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -266,7 +275,8 @@ func BenchmarkStateCommit(b *testing.B) {
 					addr := benchStateAddr((i*mutations + j) % benchAccounts)
 					statedb.SetBalance(addr, uint256.NewInt(uint64(i*mutations+j)+2), tracing.BalanceChangeUnspecified)
 				}
-				if _, err := statedb.Commit(uint64(i+1), true, true); err != nil {
+				cur, err = statedb.Commit(uint64(i+1), true, true)
+				if err != nil {
 					b.Fatal(err)
 				}
 			}

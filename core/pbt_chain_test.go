@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
 // pbtChainGenesis is a binary-tree genesis with a funded account whose key is
@@ -126,6 +127,41 @@ func TestPBTGeneratedChainImportsWithFlatState(t *testing.T) {
 	if got := statedb.GetNonce(sender); got != uint64(blockCount) {
 		t.Fatalf("sender nonce is %d, want %d", got, blockCount)
 	}
+
+	// The values above would also be produced by a state read that never
+	// touched flat state, so compare the two stores directly. This is the
+	// differential after *real block processing*, as opposed to over a state
+	// built by writing to a StateDB - the flat entries here were laid down by
+	// the import path, one block at a time.
+	head := chain.CurrentBlock().Root
+	flat, err := chain.TrieDB().StateReader(head)
+	if err != nil {
+		t.Fatalf("flat state is not available after import: %v", err)
+	}
+	tree, err := bintrie.NewBinaryTrie(head, chain.TrieDB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, addr := range []common.Address{sender, recipient, {0xde, 0xad}} {
+		flatAcct, err := flat.Account(crypto.Keccak256Hash(addr[:]))
+		if err != nil {
+			t.Fatalf("flat read of %x failed: %v", addr, err)
+		}
+		treeAcct, err := tree.GetAccount(addr)
+		if err != nil {
+			t.Fatalf("trie read of %x failed: %v", addr, err)
+		}
+		if (flatAcct == nil) != (treeAcct == nil) {
+			t.Fatalf("account %x: flat has=%t, trie has=%t", addr, flatAcct != nil, treeAcct != nil)
+		}
+		if flatAcct == nil {
+			continue // absent in both, which is the answer for 0xdead
+		}
+		if flatAcct.Nonce != treeAcct.Nonce || flatAcct.Balance.Cmp(treeAcct.Balance) != 0 {
+			t.Fatalf("account %x: flat nonce=%d balance=%v, trie nonce=%d balance=%v",
+				addr, flatAcct.Nonce, flatAcct.Balance, treeAcct.Nonce, treeAcct.Balance)
+		}
+	}
 }
 
 // TestPBTGenerateChainStatePreservingBlocks pins the case that actually broke:
@@ -186,6 +222,20 @@ func TestPBTGenerateChainStatePreservingBlocks(t *testing.T) {
 			db, blocks, _ := GenerateChainWithGenesis(genesis, engine, tc.count, tc.gen)
 			if len(blocks) != tc.count {
 				t.Fatalf("generated %d blocks, want %d", len(blocks), tc.count)
+			}
+			// The premise: at least one block must genuinely leave the root
+			// where it found it, or this exercises nothing the previous test
+			// did not already cover.
+			preserving := 0
+			prev := genesis.ToBlock().Root()
+			for _, block := range blocks {
+				if block.Root() == prev {
+					preserving++
+				}
+				prev = block.Root()
+			}
+			if preserving == 0 {
+				t.Fatal("no block preserved the state root; this case does not exercise the path it is named for")
 			}
 			// The generated states must survive back into a chain built on the
 			// same database, which is what callers do with it.
