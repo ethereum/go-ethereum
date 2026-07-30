@@ -283,6 +283,36 @@ func TestCacheGetBlobs(t *testing.T) {
 	tc.expectEntries(t, tc.vhashes[1]...)
 }
 
+// TestCacheGetCellsBlobModeFallback checks that GetCells falls back to the
+// blobpool for entries that were cached in blob mode (without cells) instead
+// of serving null cells for a blob that is available in the pool.
+func TestCacheGetCellsBlobModeFallback(t *testing.T) {
+	tc := newTestCache(t, []txSpec{
+		{blobs: 1, tip: 300},
+	})
+	tc.expectEntries(t, tc.vhashes[0]...) // blob-mode entries, no cells
+
+	cells, proofs, err := tc.GetCells(tc.vhashes[0], types.CustodyBitmapAll)
+	if err != nil {
+		t.Fatalf("GetCells: %v", err)
+	}
+	for i := range cells {
+		if len(cells[i]) == 0 {
+			t.Errorf("no cells returned for blob %d", i)
+		}
+		for j, cell := range cells[i] {
+			if cell == nil {
+				t.Errorf("cell %d of blob %d missing in GetCells response", j, i)
+			}
+		}
+		for j, proof := range proofs[i] {
+			if proof == nil {
+				t.Errorf("proof %d of blob %d missing in GetCells response", j, i)
+			}
+		}
+	}
+}
+
 // TestCacheTopKRefresh verifies that when a more profitable tx appears in the
 // pool, the next topK tick replaces the cached entry with the better one.
 func TestCacheTopKRefresh(t *testing.T) {
