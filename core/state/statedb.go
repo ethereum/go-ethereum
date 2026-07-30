@@ -1497,17 +1497,15 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 		panic("eip2929 and eip4762 are both activated")
 	}
 	if rules.IsEIP2929 {
-		// Clear out any leftover from previous executions
-		al := newAccessList()
-		s.accessList = al
+		// Clear out any leftover from previous executions, reusing the maps.
+		// Precompiles come from the list itself now.
+		al := s.accessList
+		al.reset(precompiles)
 
 		al.AddAddress(sender)
 		if dst != nil {
 			al.AddAddress(*dst)
 			// If it's a create-tx, the destination will be added inside evm.create
-		}
-		for _, addr := range precompiles {
-			al.AddAddress(addr)
 		}
 		for _, el := range list {
 			al.AddAddress(el.Address)
