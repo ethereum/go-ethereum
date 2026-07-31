@@ -736,6 +736,13 @@ func (t *BinaryTrie) DeleteStorage(addr common.Address, key []byte) error {
 // which shrinks under EIP-7702 delegation clears), chunks 128 and above into
 // the content-addressed code zone shared across contracts with identical
 // bytecode. The code zone is append-only.
+//
+// Nothing reference-counts the shared chunks and nothing needs to. Reorgs drop
+// layers rather than reverse them, so chunks written by a reverted block go
+// away with the layer, and chunks already persisted sit at or below the disk
+// layer, which the tree refuses to fork beneath. Whether some other account
+// still holds this bytecode is answered by the ancestor state, not by a count.
+// core.TestPBTReorgKeepsSharedCodeChunks pins it.
 func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
 	chunks := ChunkifyCode(code)
 	numChunks := len(chunks) / 32

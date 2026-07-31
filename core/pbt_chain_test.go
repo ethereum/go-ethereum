@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
 // pbtChainGenesis is a binary-tree genesis with a funded account whose key is
@@ -133,35 +132,9 @@ func TestPBTGeneratedChainImportsWithFlatState(t *testing.T) {
 	// differential after *real block processing*, as opposed to over a state
 	// built by writing to a StateDB - the flat entries here were laid down by
 	// the import path, one block at a time.
-	head := chain.CurrentBlock().Root
-	flat, err := chain.TrieDB().StateReader(head)
-	if err != nil {
-		t.Fatalf("flat state is not available after import: %v", err)
-	}
-	tree, err := bintrie.NewBinaryTrie(head, chain.TrieDB())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, addr := range []common.Address{sender, recipient, {0xde, 0xad}} {
-		flatAcct, err := flat.Account(crypto.Keccak256Hash(addr[:]))
-		if err != nil {
-			t.Fatalf("flat read of %x failed: %v", addr, err)
-		}
-		treeAcct, err := tree.GetAccount(addr)
-		if err != nil {
-			t.Fatalf("trie read of %x failed: %v", addr, err)
-		}
-		if (flatAcct == nil) != (treeAcct == nil) {
-			t.Fatalf("account %x: flat has=%t, trie has=%t", addr, flatAcct != nil, treeAcct != nil)
-		}
-		if flatAcct == nil {
-			continue // absent in both, which is the answer for 0xdead
-		}
-		if flatAcct.Nonce != treeAcct.Nonce || flatAcct.Balance.Cmp(treeAcct.Balance) != 0 {
-			t.Fatalf("account %x: flat nonce=%d balance=%v, trie nonce=%d balance=%v",
-				addr, flatAcct.Nonce, flatAcct.Balance, treeAcct.Nonce, treeAcct.Balance)
-		}
-	}
+	// 0xdead is in the list so the comparison covers absence too, not only
+	// accounts both stores happen to hold.
+	assertFlatMatchesTrie(t, chain, chain.CurrentBlock().Root, sender, recipient, common.Address{0xde, 0xad})
 }
 
 // TestPBTGenerateChainStatePreservingBlocks pins the case that actually broke:
