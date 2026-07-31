@@ -268,7 +268,16 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 	)
 	for w := 0; w < workers; w++ {
 		group.Go(func() error {
-			evm := vm.NewEVM(context, nil, config, cfg)
+			// GetHashFn returns a stateful closure that lazily caches ancestor
+			// block hashes in an unsynchronized slice, so it is not safe for
+			// concurrent use (see #29114). A single BlockContext is shared by
+			// value across all workers, so they would otherwise share that one
+			// closure and race on its cache whenever two transactions resolve
+			// BLOCKHASH concurrently. Give each worker its own context copy
+			// with an independent GetHash closure.
+			workerCtx := context
+			workerCtx.GetHash = GetHashFn(header, p.chain)
+			evm := vm.NewEVM(workerCtx, nil, config, cfg)
 			if jumpDestCache != nil {
 				evm.SetJumpDestCache(jumpDestCache)
 			}
