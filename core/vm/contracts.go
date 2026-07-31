@@ -346,6 +346,13 @@ func (c *ecrecover) Name() string {
 	return "ECREC"
 }
 
+// Cacheable opts out of result caching. The gas cost is flat while the input
+// is unbounded (only the first 128 bytes are read), so an attacker can pad the
+// input up to maxCacheablePrecompileInput to force a large, always-missing
+// cache-key hash for a fixed, cheap gas price. Deriving the key also costs more
+// than the recovery it would save on the common short-input case.
+func (c *ecrecover) Cacheable() bool { return false }
+
 // SHA256 implemented as a native contract.
 type sha256hash struct{}
 
@@ -747,6 +754,13 @@ func (c *bn256AddIstanbul) Name() string {
 	return "BN254_ADD"
 }
 
+// Cacheable opts out of result caching. RequiredGas is flat while the input is
+// unbounded (only the first 128 bytes are read), so padding trailing bytes
+// forces a distinct, always-missing cache key whose derivation hashes the whole
+// padded input. That key hash dwarfs the addition itself, so caching is a net
+// loss even on hits; see [cacheablePrecompile].
+func (c *bn256AddIstanbul) Cacheable() bool { return false }
+
 // bn256AddByzantium implements a native elliptic curve point addition
 // conforming to Byzantium consensus rules.
 type bn256AddByzantium struct{}
@@ -755,6 +769,9 @@ type bn256AddByzantium struct{}
 func (c *bn256AddByzantium) RequiredGas(input []byte) uint64 {
 	return params.Bn256AddGasByzantium
 }
+
+// Cacheable opts out of result caching, see [bn256AddIstanbul.Cacheable].
+func (c *bn256AddByzantium) Cacheable() bool { return false }
 
 func (c *bn256AddByzantium) Run(input []byte) ([]byte, error) {
 	return runBn256Add(input)
@@ -793,6 +810,11 @@ func (c *bn256ScalarMulIstanbul) Name() string {
 	return "BN254_MUL"
 }
 
+// Cacheable opts out of result caching, see [bn256AddIstanbul.Cacheable]. The
+// scalar multiplication reads only the first 96 bytes, so trailing padding is
+// free key entropy for an attacker.
+func (c *bn256ScalarMulIstanbul) Cacheable() bool { return false }
+
 // bn256ScalarMulByzantium implements a native elliptic curve scalar
 // multiplication conforming to Byzantium consensus rules.
 type bn256ScalarMulByzantium struct{}
@@ -801,6 +823,9 @@ type bn256ScalarMulByzantium struct{}
 func (c *bn256ScalarMulByzantium) RequiredGas(input []byte) uint64 {
 	return params.Bn256ScalarMulGasByzantium
 }
+
+// Cacheable opts out of result caching, see [bn256ScalarMulIstanbul.Cacheable].
+func (c *bn256ScalarMulByzantium) Cacheable() bool { return false }
 
 func (c *bn256ScalarMulByzantium) Run(input []byte) ([]byte, error) {
 	return runBn256ScalarMul(input)
