@@ -163,7 +163,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	// own ephemeral state instance, whose reads are served from the block-level
 	// access list overlaid on the parent state.
 	txStart := time.Now()
-	results, err := p.executeTransactionsParallel(block, parentRoot, db, base, lookup, context, signer, jumpDestCache, cfg)
+	results, err := p.executeTransactionsParallel(block, parentRoot, db, base, lookup, signer, jumpDestCache, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +249,7 @@ func newAccessListState(db state.Database, parentRoot common.Hash, base state.Re
 // executeTransactionsParallel applies all transactions to independent,
 // access-list-backed state instances using a pool of workers, and returns
 // the per-transaction results in block order.
-func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, context vm.BlockContext, signer types.Signer, jumpDestCache vm.JumpDestCache, cfg vm.Config) ([]txExecResult, error) {
+func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, signer types.Signer, jumpDestCache vm.JumpDestCache, cfg vm.Config) ([]txExecResult, error) {
 	var (
 		config      = p.chainConfig()
 		header      = block.Header()
@@ -268,16 +268,8 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 	)
 	for w := 0; w < workers; w++ {
 		group.Go(func() error {
-			// GetHashFn returns a stateful closure that lazily caches ancestor
-			// block hashes in an unsynchronized slice, so it is not safe for
-			// concurrent use (see #29114). A single BlockContext is shared by
-			// value across all workers, so they would otherwise share that one
-			// closure and race on its cache whenever two transactions resolve
-			// BLOCKHASH concurrently. Give each worker its own context copy
-			// with an independent GetHash closure.
-			workerCtx := context
-			workerCtx.GetHash = GetHashFn(header, p.chain)
-			evm := vm.NewEVM(workerCtx, nil, config, cfg)
+			context := NewEVMBlockContext(header, p.chain, nil)
+			evm := vm.NewEVM(context, nil, config, cfg)
 			if jumpDestCache != nil {
 				evm.SetJumpDestCache(jumpDestCache)
 			}
