@@ -180,9 +180,10 @@ func (s *Syncer) run() {
 				var synced bool
 				var block *types.Header
 				if target != nil {
-					tb := s.backend.BlockChain().GetBlockByHash(target.Hash())
-					synced = tb != nil
-					block = tb.Header()
+					if tb := s.backend.BlockChain().GetBlockByHash(target.Hash()); tb != nil {
+						synced = true
+						block = tb.Header()
+					}
 				} else {
 					timestamp := time.Unix(int64(ev.Latest.Time), 0)
 					synced = time.Since(timestamp) < 10*time.Minute
