@@ -30,6 +30,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// pbtTestTxGas is the gas limit the transactions in these tests carry.
+//
+// It is not params.TxGas. These chains run on Amsterdam, which prices a plain
+// transfer well above the 21000 intrinsic figure, so a transaction carrying
+// TxGas is rejected during block generation. Generation does not fail on a
+// rejected transaction, it just produces an empty block, which is why the
+// symptom was an assertion about an untouched recipient rather than an error.
+const pbtTestTxGas = 1_000_000
+
 // pbtChainGenesis is a binary-tree genesis with a funded account whose key is
 // known, so generated blocks can carry transactions and therefore change state.
 // A chain of empty blocks would prove nothing here: every root would equal the
@@ -78,7 +87,7 @@ func TestPBTGeneratedChainImportsWithFlatState(t *testing.T) {
 	)
 	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, blockCount, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(
-			gen.TxNonce(sender), recipient, perBlock, params.TxGas,
+			gen.TxNonce(sender), recipient, perBlock, pbtTestTxGas,
 			new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
 		), signer, key)
 		if err != nil {
@@ -169,7 +178,7 @@ func TestPBTGenerateChainStatePreservingBlocks(t *testing.T) {
 				return
 			}
 			tx, err := types.SignTx(types.NewTransaction(
-				gen.TxNonce(sender), recipient, big.NewInt(1), params.TxGas,
+				gen.TxNonce(sender), recipient, big.NewInt(1), pbtTestTxGas,
 				new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
 			), signer, key)
 			if err != nil {
@@ -182,7 +191,7 @@ func TestPBTGenerateChainStatePreservingBlocks(t *testing.T) {
 				return
 			}
 			tx, err := types.SignTx(types.NewTransaction(
-				gen.TxNonce(sender), recipient, big.NewInt(1), params.TxGas,
+				gen.TxNonce(sender), recipient, big.NewInt(1), pbtTestTxGas,
 				new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
 			), signer, key)
 			if err != nil {
@@ -236,7 +245,7 @@ func TestPBTGenerateChainContinues(t *testing.T) {
 
 	send := func(gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(
-			gen.TxNonce(sender), recipient, big.NewInt(1), params.TxGas,
+			gen.TxNonce(sender), recipient, big.NewInt(1), pbtTestTxGas,
 			new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
 		), signer, key)
 		if err != nil {

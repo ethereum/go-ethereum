@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
@@ -94,7 +93,7 @@ func payTo(t *testing.T, key *ecdsa.PrivateKey, sender, recipient common.Address
 
 	return func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(
-			gen.TxNonce(sender), recipient, big.NewInt(amount), params.TxGas,
+			gen.TxNonce(sender), recipient, big.NewInt(amount), pbtTestTxGas,
 			new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
 		), signer, key)
 		if err != nil {

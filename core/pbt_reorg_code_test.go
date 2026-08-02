@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm/program"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
@@ -69,13 +68,24 @@ var pbtBigCode = bytes.Repeat([]byte{0x5b}, 130*31)
 // header stem, and therefore the first one that is shared.
 const pbtOverflowChunk = 128
 
+// pbtCodeDeployGas is the gas limit the deployment transactions carry, and
+// pbtCodeBlockGas the block limit that has to hold one.
+//
+// Deploying pbtBigCode costs ~200 gas per deployed byte on its own, and
+// Amsterdam charges state gas on top of that, so both figures are far above
+// what the same deployment needed pre-Amsterdam.
+const (
+	pbtCodeDeployGas = 8_000_000
+	pbtCodeBlockGas  = 30_000_000
+)
+
 // pbtCodeReorgFixture is a binary-tree genesis with a funded sender and enough
-// block gas to deploy pbtBigCode, which costs ~200 gas per deployed byte.
+// block gas to deploy pbtBigCode.
 func pbtCodeReorgFixture(t *testing.T) (*Genesis, *ecdsa.PrivateKey, common.Address) {
 	t.Helper()
 
 	genesis, key, sender, _ := pbtChainGenesis(t)
-	genesis.GasLimit = 10_000_000
+	genesis.GasLimit = pbtCodeBlockGas
 	return genesis, key, sender
 }
 
@@ -90,7 +100,7 @@ func deployBigCode(t *testing.T, key *ecdsa.PrivateKey, sender common.Address, s
 
 	return func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewContractCreation(
-			gen.TxNonce(sender), big.NewInt(0), 1_500_000,
+			gen.TxNonce(sender), big.NewInt(0), pbtCodeDeployGas,
 			new(big.Int).Add(gen.BaseFee(), common.Big1), initCode,
 		), signer, key)
 		if err != nil {
@@ -107,7 +117,7 @@ func sendValue(t *testing.T, key *ecdsa.PrivateKey, sender common.Address, signe
 
 	return func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(
-			gen.TxNonce(sender), common.Address{0x0f, 0xf1}, big.NewInt(1000), params.TxGas,
+			gen.TxNonce(sender), common.Address{0x0f, 0xf1}, big.NewInt(1000), pbtTestTxGas,
 			new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
 		), signer, key)
 		if err != nil {
