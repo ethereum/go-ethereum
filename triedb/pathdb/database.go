@@ -706,7 +706,7 @@ func (db *Database) journalPath() string {
 	}
 	var fname string
 	if db.isPBT {
-		fname = fmt.Sprintf("verkle.journal")
+		fname = fmt.Sprintf("pbt.journal")
 	} else {
 		fname = fmt.Sprintf("merkle.journal")
 	}

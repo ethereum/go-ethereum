@@ -387,7 +387,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 		// Mirror the system calls block processing makes, in the same order,
 		// so a generated chain and an imported one agree on the state root.
-		if b.header.ParentBeaconRoot != nil || config.IsPrague(b.header.Number, b.header.Time) || config.IsPBT(b.header.Number, b.header.Time) {
+		if config.IsPrague(b.header.Number, b.header.Time) {
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
