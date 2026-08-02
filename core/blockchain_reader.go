@@ -422,27 +422,10 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	if bc.chainConfig.IsPBT(header.Number, header.Time) {
+	if bc.chainConfig.IsPBT() {
 		return state.New(header.Root, state.NewPBTDatabase(bc.triedb, bc.codedb))
 	}
 	return state.New(header.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
-}
-
-// StateAtForkBoundary returns a new mutable state based on the parent state
-// and the given header, handling the transition across the PBT fork.
-func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.Header) (*state.StateDB, error) {
-	// The parent is already in the PBT fork.
-	if bc.chainConfig.IsPBT(parent.Number, parent.Time) {
-		return state.New(parent.Root, state.NewPBTDatabase(bc.triedb, bc.codedb))
-	}
-	// The current block is the first block in the PBT fork
-	// (i.e., the parent is the last MPT block).
-	if bc.chainConfig.IsPBT(header.Number, header.Time) {
-		// TODO(gballet): register chain context if needed
-		return state.New(parent.Root, state.NewPBTDatabase(bc.triedb, bc.codedb))
-	}
-	// Both the parent and current block are in the MPT fork.
-	return state.New(parent.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
 // HistoricState returns a historic state specified by the given header.
@@ -452,7 +435,7 @@ func (bc *BlockChain) HistoricState(header *types.Header) (*state.StateDB, error
 	// The historic database opens merkle-patricia tries keyed by the hash of
 	// the address, which the binary tree is not. Only reconstruction is out of
 	// reach; live state is still served by State and StateAt.
-	if bc.chainConfig.IsPBT(header.Number, header.Time) {
+	if bc.chainConfig.IsPBT() {
 		return nil, errors.New("historical state is not supported for the binary tree")
 	}
 	return state.New(header.Root, state.NewHistoricDatabase(bc.triedb, bc.codedb))

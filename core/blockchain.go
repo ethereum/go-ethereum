@@ -397,11 +397,11 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Open trie database with provided config
-	enableVerkle, err := EnablePBTAtGenesis(db, genesis)
+	isPBT, err := pbtEnabled(db, genesis)
 	if err != nil {
 		return nil, err
 	}
-	tdbConfig, err := cfg.triedbConfig(enableVerkle)
+	tdbConfig, err := cfg.triedbConfig(isPBT)
 	if err != nil {
 		return nil, err
 	}
@@ -2164,7 +2164,7 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 	noop := func(*blockProcessingResult) {}
 
 	var sdb state.Database
-	if bc.chainConfig.IsPBT(block.Number(), block.Time()) {
+	if bc.chainConfig.IsPBT() {
 		sdb = state.NewPBTDatabase(bc.triedb, bc.codedb)
 	} else {
 		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)

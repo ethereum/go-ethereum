@@ -156,7 +156,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	var (
 		statedb *state.StateDB
 
-		isPBT       = chainConfig.IsPBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		isPBT       = chainConfig.IsPBT()
 		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 	)
 	if pre.AllocPath != "" {

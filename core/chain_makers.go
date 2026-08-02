@@ -468,7 +468,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	// built there, so the two disagreeing means generating blocks for a state
 	// layout the chain cannot hold.
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if config.IsPBTGenesis() {
+	if config.IsPBT() {
 		triedbConfig = triedb.PBTDefaults
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
@@ -533,7 +533,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if genesis.Config != nil && genesis.Config.IsPBTGenesis() {
+	if genesis.Config != nil && genesis.Config.IsPBT() {
 		triedbConfig = triedb.PBTDefaults
 	}
 	genesisTriedb := triedb.NewDatabase(db, triedbConfig)

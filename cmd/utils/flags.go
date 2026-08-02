@@ -270,11 +270,6 @@ var (
 		Usage:    "Manually specify the bpo2 fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
-	OverridePBT = &cli.Uint64Flag{
-		Name:     "override.ubt",
-		Usage:    "Manually specify the PBT fork timestamp, overriding the bundled setting",
-		Category: flags.EthCategory,
-	}
 	OverrideGenesisFlag = &cli.StringFlag{
 		Name:     "override.genesis",
 		Usage:    "Load genesis block and configuration from file at this path",

@@ -286,9 +286,8 @@ func TestPBTGenesisCommit(t *testing.T) {
 		PragueTime:              &pbtTime,
 		OsakaTime:               &pbtTime,
 		AmsterdamTime:           &pbtTime,
-		PBTTime:                 &pbtTime,
 		TerminalTotalDifficulty: big.NewInt(0),
-		EnablePBTAtGenesis:      true,
+		PBT:                     true,
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{

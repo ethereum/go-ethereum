@@ -280,7 +280,6 @@ type ChainOverrides struct {
 	OverrideAmsterdam *uint64
 	OverrideBPO1      *uint64
 	OverrideBPO2      *uint64
-	OverridePBT       *uint64
 }
 
 // apply applies the chain overrides on the supplied chain config.
@@ -299,9 +298,6 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	}
 	if o.OverrideBPO2 != nil {
 		cfg.BPO2Time = o.OverrideBPO2
-	}
-	if o.OverridePBT != nil {
-		cfg.PBTTime = o.OverridePBT
 	}
 	return cfg.CheckConfigForkOrder()
 }
@@ -473,10 +469,9 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 	}
 }
 
-// IsPBT indicates whether the state is already stored in a binary
-// tree at genesis time.
+// IsPBT indicates whether the state is committed with a binary tree.
 func (g *Genesis) IsPBT() bool {
-	return g.Config.IsPBTGenesis()
+	return g.Config.IsPBT()
 }
 
 // ToBlock returns the genesis block according to genesis specification.
@@ -614,24 +609,22 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 	return block
 }
 
-// EnablePBTAtGenesis indicates whether the verkle fork should be activated
-// at genesis. This is a temporary solution only for verkle devnet testing, where
-// verkle fork is activated at genesis, and the configured activation date has
-// already passed.
+// pbtEnabled reports whether the chain commits its state with the binary tree,
+// taking the answer from the supplied genesis or, failing that, from the config
+// already stored on disk.
 //
-// In production networks (mainnet and public testnets), verkle activation always
-// occurs after the genesis block, making this function irrelevant in those cases.
-func EnablePBTAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
+// It runs before the trie database exists, so it cannot ask one; that is also
+// why the commitment has to be answerable without a block.
+func pbtEnabled(db ethdb.Database, genesis *Genesis) (bool, error) {
 	if genesis != nil {
 		if genesis.Config == nil {
 			return false, errGenesisNoConfig
 		}
-		return genesis.Config.EnablePBTAtGenesis, nil
+		return genesis.Config.IsPBT(), nil
 	}
 	if ghash := rawdb.ReadCanonicalHash(db, 0); ghash != (common.Hash{}) {
-		chainCfg := rawdb.ReadChainConfig(db, ghash)
-		if chainCfg != nil {
-			return chainCfg.EnablePBTAtGenesis, nil
+		if chainCfg := rawdb.ReadChainConfig(db, ghash); chainCfg != nil {
+			return chainCfg.IsPBT(), nil
 		}
 	}
 	return false, nil

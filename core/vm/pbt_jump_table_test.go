@@ -34,20 +34,65 @@ import (
 // layered EIP-4762's gas schedule onto each fork. That composition was geth's
 // own invention, inherited from the verkle era, and is what made PBT work only
 // on the forks somebody remembered to enumerate.
+//
+// The tree is toggled on the chain configuration rather than on params.Rules,
+// because Rules has no field for it - that is the property being relied on. It
+// also means these tests run the production path: config, then derived rules,
+// then table selection.
 
-// pbtForkLadder is every fork the binary tree can be activated on. A new fork
-// belongs here; if one is added and PBT starts diverging on it, these tests are
-// what notice.
+// pbtVMBase is a chain with every block-numbered fork at genesis, so the ladder
+// below only has to add the timestamp forks it cares about.
+func pbtVMBase() *params.ChainConfig {
+	return &params.ChainConfig{
+		ChainID:                 big.NewInt(1),
+		HomesteadBlock:          big.NewInt(0),
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		MergeNetsplitBlock:      big.NewInt(0),
+		TerminalTotalDifficulty: common.Big0,
+		ShanghaiTime:            new(uint64),
+		CancunTime:              new(uint64),
+		PragueTime:              new(uint64),
+		OsakaTime:               new(uint64),
+		AmsterdamTime:           new(uint64),
+	}
+}
+
+// pbtForkLadder is every fork the binary tree can be activated on. The tree
+// requires Amsterdam, so the ladder starts there; a later fork belongs here, and
+// if one is added and PBT starts diverging on it, these tests are what notice.
 var pbtForkLadder = []struct {
 	name  string
-	rules params.Rules
+	apply func(*params.ChainConfig)
 }{
-	{"shanghai", params.Rules{IsShanghai: true}},
-	{"cancun", params.Rules{IsCancun: true}},
-	{"prague", params.Rules{IsPrague: true}},
-	{"osaka", params.Rules{IsOsaka: true}},
-	{"amsterdam", params.Rules{IsAmsterdam: true}},
-	{"bogota", params.Rules{IsBogota: true}},
+	{"amsterdam", func(c *params.ChainConfig) {}},
+	{"bogota", func(c *params.ChainConfig) { c.BogotaTime = new(uint64) }},
+}
+
+// pbtRulePair returns the rules for a fork with the binary tree off and on.
+func pbtRulePair(t *testing.T, apply func(*params.ChainConfig)) (params.Rules, params.Rules) {
+	t.Helper()
+
+	plainCfg := pbtVMBase()
+	apply(plainCfg)
+	treeCfg := *plainCfg
+	treeCfg.PBT = true
+
+	if !treeCfg.IsPBT() {
+		t.Fatal("the binary tree is not active; this case proves nothing")
+	}
+	if plainCfg.IsPBT() {
+		t.Fatal("the binary tree is active without being enabled; the control is wrong")
+	}
+	num, time := big.NewInt(1), uint64(1)
+	return plainCfg.Rules(num, true, time), treeCfg.Rules(num, true, time)
 }
 
 // sameOperation compares two jump-table entries semantically.
@@ -76,12 +121,12 @@ func sameOperation(a, b *operation) bool {
 func TestPBTLeavesInstructionSetAlone(t *testing.T) {
 	for _, tc := range pbtForkLadder {
 		t.Run(tc.name, func(t *testing.T) {
-			plain, err := LookupInstructionSet(tc.rules)
+			plainRules, pbtRules := pbtRulePair(t, tc.apply)
+
+			plain, err := LookupInstructionSet(plainRules)
 			if err != nil {
 				t.Fatalf("lookup without the binary tree: %v", err)
 			}
-			pbtRules := tc.rules
-			pbtRules.IsPBT = true
 			withPBT, err := LookupInstructionSet(pbtRules)
 			if err != nil {
 				t.Fatalf("lookup with the binary tree: %v", err)
@@ -117,35 +162,15 @@ func TestSameOperationDetectsAGasSwap(t *testing.T) {
 // separate switches and could drift apart.
 func TestPBTTableSelectedByEVM(t *testing.T) {
 	// Amsterdam-with-binary-tree is the combination the BinaryTree fork means.
-	cfg := &params.ChainConfig{
-		ChainID:                 big.NewInt(1),
-		HomesteadBlock:          big.NewInt(0),
-		EIP150Block:             big.NewInt(0),
-		EIP155Block:             big.NewInt(0),
-		EIP158Block:             big.NewInt(0),
-		ByzantiumBlock:          big.NewInt(0),
-		ConstantinopleBlock:     big.NewInt(0),
-		PetersburgBlock:         big.NewInt(0),
-		IstanbulBlock:           big.NewInt(0),
-		BerlinBlock:             big.NewInt(0),
-		LondonBlock:             big.NewInt(0),
-		MergeNetsplitBlock:      big.NewInt(0),
-		TerminalTotalDifficulty: common.Big0,
-		ShanghaiTime:            new(uint64),
-		CancunTime:              new(uint64),
-		PragueTime:              new(uint64),
-		OsakaTime:               new(uint64),
-		AmsterdamTime:           new(uint64),
-	}
-	pbtTime := uint64(0)
+	cfg := pbtVMBase()
 	withTree := *cfg
-	withTree.PBTTime = &pbtTime
+	withTree.PBT = true
 
 	blockCtx := BlockContext{BlockNumber: big.NewInt(1), Random: &common.Hash{}, Time: 1}
 	plain := NewEVM(blockCtx, nil, cfg, Config{})
 	tree := NewEVM(blockCtx, nil, &withTree, Config{})
 
-	if !tree.chainRules.IsPBT {
+	if !withTree.IsPBT() {
 		t.Fatal("the binary tree is not active; this proves nothing")
 	}
 	if plain.table != tree.table {
@@ -163,10 +188,9 @@ func TestPBTTableSelectedByEVM(t *testing.T) {
 func TestPBTKeepsForkPrecompiles(t *testing.T) {
 	for _, tc := range pbtForkLadder {
 		t.Run(tc.name, func(t *testing.T) {
-			pbtRules := tc.rules
-			pbtRules.IsPBT = true
+			plainRules, pbtRules := pbtRulePair(t, tc.apply)
 
-			plain := activePrecompiledContracts(tc.rules)
+			plain := activePrecompiledContracts(plainRules)
 			withPBT := activePrecompiledContracts(pbtRules)
 			if plain != withPBT {
 				t.Fatal("the binary tree selected a different precompile set")

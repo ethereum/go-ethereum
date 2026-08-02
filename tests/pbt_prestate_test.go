@@ -33,7 +33,7 @@ func TestBinaryTreeForkRegistered(t *testing.T) {
 	if !ok {
 		t.Fatal("BinaryTree fork is not registered")
 	}
-	if !config.IsPBT(big.NewInt(0), 0) {
+	if !config.IsPBT() {
 		t.Fatal("BinaryTree fork does not activate the binary tree")
 	}
 	// The tree replaces the state commitment only: execution rules are

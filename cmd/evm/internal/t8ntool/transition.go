@@ -219,7 +219,7 @@ func Transition(ctx *cli.Context) error {
 		collector Alloc
 		btleaves  map[string]hexutil.Bytes
 	)
-	isBinary := chainConfig.IsPBT(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
+	isBinary := chainConfig.IsPBT()
 	allocOutput := ctx.String(OutputAllocFlag.Name)
 	switch {
 	case !isBinary && allocOutput != "" && allocOutput != "stdout" && allocOutput != "stderr":

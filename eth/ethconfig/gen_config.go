@@ -67,7 +67,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		OverrideAmsterdam       *uint64       `toml:",omitempty"`
 		OverrideBPO1            *uint64       `toml:",omitempty"`
 		OverrideBPO2            *uint64       `toml:",omitempty"`
-		OverridePBT             *uint64       `toml:",omitempty"`
 		TxSyncDefaultTimeout    time.Duration `toml:",omitempty"`
 		TxSyncMaxTimeout        time.Duration `toml:",omitempty"`
 		RangeLimit              uint64        `toml:",omitempty"`
@@ -123,7 +122,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.OverrideAmsterdam = c.OverrideAmsterdam
 	enc.OverrideBPO1 = c.OverrideBPO1
 	enc.OverrideBPO2 = c.OverrideBPO2
-	enc.OverridePBT = c.OverridePBT
 	enc.TxSyncDefaultTimeout = c.TxSyncDefaultTimeout
 	enc.TxSyncMaxTimeout = c.TxSyncMaxTimeout
 	enc.RangeLimit = c.RangeLimit
@@ -183,7 +181,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		OverrideAmsterdam       *uint64        `toml:",omitempty"`
 		OverrideBPO1            *uint64        `toml:",omitempty"`
 		OverrideBPO2            *uint64        `toml:",omitempty"`
-		OverridePBT             *uint64        `toml:",omitempty"`
 		TxSyncDefaultTimeout    *time.Duration `toml:",omitempty"`
 		TxSyncMaxTimeout        *time.Duration `toml:",omitempty"`
 		RangeLimit              *uint64        `toml:",omitempty"`
@@ -341,9 +338,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.OverrideBPO2 != nil {
 		c.OverrideBPO2 = dec.OverrideBPO2
-	}
-	if dec.OverridePBT != nil {
-		c.OverridePBT = dec.OverridePBT
 	}
 	if dec.TxSyncDefaultTimeout != nil {
 		c.TxSyncDefaultTimeout = *dec.TxSyncDefaultTimeout

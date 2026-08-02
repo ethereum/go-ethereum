@@ -57,9 +57,8 @@ var (
 		PragueTime:              u64(0),
 		OsakaTime:               u64(0),
 		AmsterdamTime:           u64(0),
-		PBTTime:                 u64(0),
 		TerminalTotalDifficulty: common.Big0,
-		EnablePBTAtGenesis:      true,
+		PBT:                     true,
 		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
 		// Mirrors the Amsterdam entry in tests/init.go: upstream's blob
 		// schedule is BPO-based now, so the per-fork Osaka/Amsterdam fields

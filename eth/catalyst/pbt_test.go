@@ -30,17 +30,14 @@ import (
 )
 
 // pbtGenesis builds the genesis a binary-tree devnet runs on: the tree
-// active from block zero on top of the given fork rules, with the system
-// contracts pre-deployed as block processing expects from Cancun onwards.
+// committing the state from block zero, with the system contracts pre-deployed
+// as block processing expects from Cancun onwards.
 //
-// The tree composes with whatever fork is active, so a devnet can sit on
-// any of them. This one stops at Osaka: producing blocks through the engine
-// API on Amsterdam is not possible in this tree yet, because the header
-// carries an EIP-7928 block access list hash that the executable payload
-// has no field for, so the hash cannot survive the payload round trip. That
-// gap is Amsterdam's, not the binary tree's - it blocks any Amsterdam
-// devnet - and it is why the state-level configurations sit on Amsterdam
-// while this one does not.
+// It sits on Amsterdam because the tree requires it. An earlier version stopped
+// at Osaka, on the grounds that the EIP-7928 block access list hash in the
+// header had no field in the executable payload and so could not survive the
+// round trip. That gap is closed: ExecutableData carries the access list, and
+// the header hash is rebuilt from it.
 func pbtGenesis() *core.Genesis {
 	u64 := func(v uint64) *uint64 { return &v }
 	config := &params.ChainConfig{
@@ -61,8 +58,8 @@ func pbtGenesis() *core.Genesis {
 		CancunTime:              u64(0),
 		PragueTime:              u64(0),
 		OsakaTime:               u64(0),
-		PBTTime:                 u64(0),
-		EnablePBTAtGenesis:      true,
+		AmsterdamTime:           u64(0),
+		PBT:                     true,
 		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
@@ -111,15 +108,21 @@ func TestPBTNodeProducesAndImportsBlocks(t *testing.T) {
 
 	parent := ethservice.BlockChain().CurrentBlock()
 	for i := 0; i < 3; i++ {
+		// Amsterdam takes the V4 attributes and the V5 payload: the slot number
+		// and target gas limit are required, and newPayloadV5 rejects a payload
+		// whose block access list is missing.
+		slot, targetGasLimit := uint64(i+1), parent.GasLimit
 		attrs := &engine.PayloadAttributes{
 			Timestamp:             parent.Time + 12,
 			Random:                common.Hash{},
 			SuggestedFeeRecipient: common.Address{},
 			Withdrawals:           []*types.Withdrawal{},
 			BeaconRoot:            &common.Hash{},
+			SlotNumber:            &slot,
+			TargetGasLimit:        &targetGasLimit,
 		}
 		fcState := engine.ForkchoiceStateV1{HeadBlockHash: parent.Hash()}
-		resp, err := api.ForkchoiceUpdatedV3(context.Background(), fcState, attrs)
+		resp, err := api.ForkchoiceUpdatedV4(context.Background(), fcState, attrs, nil)
 		if err != nil {
 			t.Fatalf("block %d: forkchoice update failed: %v", i, err)
 		}
@@ -132,7 +135,7 @@ func TestPBTNodeProducesAndImportsBlocks(t *testing.T) {
 		}
 		execData := payload.ExecutionPayload
 		// The payload commits to the binary tree's root.
-		status, err := api.NewPayloadV4(context.Background(), *execData, []common.Hash{}, &common.Hash{}, []hexutil.Bytes{})
+		status, err := api.NewPayloadV5(context.Background(), *execData, []common.Hash{}, &common.Hash{}, []hexutil.Bytes{})
 		if err != nil {
 			t.Fatalf("block %d: payload import failed: %v", i, err)
 		}
@@ -140,7 +143,7 @@ func TestPBTNodeProducesAndImportsBlocks(t *testing.T) {
 			t.Fatalf("block %d: imported payload not valid: %v (%s)", i, status.Status, derefErr(status.ValidationError))
 		}
 		fcState = engine.ForkchoiceStateV1{HeadBlockHash: execData.BlockHash}
-		if _, err := api.ForkchoiceUpdatedV3(context.Background(), fcState, nil); err != nil {
+		if _, err := api.ForkchoiceUpdatedV4(context.Background(), fcState, nil, nil); err != nil {
 			t.Fatalf("block %d: setting head failed: %v", i, err)
 		}
 		parent = ethservice.BlockChain().CurrentBlock()
