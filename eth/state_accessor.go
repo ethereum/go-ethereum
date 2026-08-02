@@ -187,15 +187,9 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
-	// The historic database opens merkle-patricia tries keyed by the hash of
-	// the address, which the binary tree is not. Only reconstruction is out
-	// of reach: the live state above still serves the recent blocks tracing
-	// usually asks about, so the check belongs here rather than above the
-	// scheme dispatch. The hash-scheme branch needs no equivalent - a binary
-	// tree cannot be opened on one at all.
-	if eth.blockchain.TrieDB().IsPBT() {
-		return nil, nil, errors.New("historical state is not supported for the binary tree")
-	}
+	// HistoricState refuses the binary tree itself, so there is no separate
+	// check here. Only reconstruction is out of reach: the live state above
+	// still serves the recent blocks tracing usually asks about.
 	statedb, err = eth.blockchain.HistoricState(header)
 	if err == nil {
 		return statedb, noopReleaser, nil

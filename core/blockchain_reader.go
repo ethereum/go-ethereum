@@ -449,8 +449,11 @@ func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.He
 // Live states are not available and won't be served, please use `State`
 // or `StateAt` instead.
 func (bc *BlockChain) HistoricState(header *types.Header) (*state.StateDB, error) {
+	// The historic database opens merkle-patricia tries keyed by the hash of
+	// the address, which the binary tree is not. Only reconstruction is out of
+	// reach; live state is still served by State and StateAt.
 	if bc.chainConfig.IsPBT(header.Number, header.Time) {
-		return nil, errors.New("historical state over ubt is not yet supported")
+		return nil, errors.New("historical state is not supported for the binary tree")
 	}
 	return state.New(header.Root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
 }
