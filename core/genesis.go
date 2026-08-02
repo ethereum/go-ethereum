@@ -136,9 +136,8 @@ func hashAlloc(ga *types.GenesisAlloc, isPBT bool) (common.Hash, error) {
 	var config *triedb.Config
 	if isPBT {
 		config = &triedb.Config{
-			PathDB:            pathdb.Defaults,
-			IsPBT:             true,
-			BinTrieGroupDepth: triedb.PBTDefaults.BinTrieGroupDepth,
+			PathDB: pathdb.Defaults,
+			IsPBT:  true,
 		}
 	}
 	// Create an ephemeral in-memory database for computing hash,

@@ -27,25 +27,9 @@ import (
 // It provides the same functionality as MPTDatabase but uses unified binary
 // trie for state hashing instead of Merkle Patricia Tries.
 type PBTDatabase struct {
-	triedb   *triedb.Database
-	codedb   *CodeDB
-	recorder *bintrie.Recorder
+	triedb *triedb.Database
+	codedb *CodeDB
 }
-
-// EnableAllocRecording installs an alloc recorder shared across every binary
-// trie opened from this database. The recorder captures account, storage, and
-// code writes keyed by their original (unhashed) addresses, which is required
-// for tooling like evm t8n to render the post-state as a types.GenesisAlloc.
-func (db *PBTDatabase) EnableAllocRecording() *bintrie.Recorder {
-	if db.recorder == nil {
-		db.recorder = bintrie.NewRecorder()
-	}
-	return db.recorder
-}
-
-// AllocRecorder returns the attached recorder, or nil if recording was never
-// enabled on this database.
-func (db *PBTDatabase) AllocRecorder() *bintrie.Recorder { return db.recorder }
 
 // Type returns Binary, indicating this database is backed by a Universal Binary Trie.
 func (db *PBTDatabase) Type() DatabaseType { return TypePBT }
@@ -112,14 +96,7 @@ func (db *PBTDatabase) ReadersWithCacheStats(stateRoot common.Hash) (Reader, Rea
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *PBTDatabase) OpenTrie(root common.Hash) (Trie, error) {
-	tr, err := bintrie.NewBinaryTrie(root, db.triedb, db.triedb.BinTrieGroupDepth())
-	if err != nil {
-		return nil, err
-	}
-	if db.recorder != nil {
-		tr.SetRecorder(db.recorder)
-	}
-	return tr, nil
+	return bintrie.NewBinaryTrie(root, db.triedb)
 }
 
 // OpenStorageTrie opens the storage trie of an account. In binary trie mode,

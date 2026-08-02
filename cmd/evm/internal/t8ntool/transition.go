@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -251,25 +250,6 @@ func Transition(ctx *cli.Context) error {
 		}
 	}
 	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body, btleaves)
-}
-
-func mergeUnmigratedBaseAlloc(udb *state.PBTDatabase, currentRoot common.Hash, dst Alloc) error {
-	ts := overlay.LoadTransitionState(udb.TrieDB().Disk(), currentRoot, true)
-	if !ts.InTransition() {
-		return nil
-	}
-	if ts.BaseRoot == (common.Hash{}) || ts.BaseRoot == types.EmptyRootHash {
-		return nil
-	}
-	mptDB := state.NewMPTDatabase(udb.TrieDB(), nil)
-	sdb, err := state.New(ts.BaseRoot, mptDB)
-	if err != nil {
-		return fmt.Errorf("open base MPT at %x: %w", ts.BaseRoot, err)
-	}
-	if _, err := sdb.DumpToCollector(mergeAlloc(dst), nil); err != nil {
-		return fmt.Errorf("walk base MPT at %x: %w", ts.BaseRoot, err)
-	}
-	return nil
 }
 
 type mergeAlloc Alloc
@@ -639,7 +619,7 @@ func BinKeys(ctx *cli.Context) error {
 	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.PBTDefaults)
 	defer db.Close()
 
-	bt, err := genBinTrieFromAlloc(alloc, db, triedb.PBTDefaults.BinTrieGroupDepth)
+	bt, err := genBinTrieFromAlloc(alloc, db)
 	if err != nil {
 		return fmt.Errorf("error generating bt: %w", err)
 	}
@@ -683,7 +663,7 @@ func BinTrieRoot(ctx *cli.Context) error {
 	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.PBTDefaults)
 	defer db.Close()
 
-	bt, err := genBinTrieFromAlloc(alloc, db, triedb.PBTDefaults.BinTrieGroupDepth)
+	bt, err := genBinTrieFromAlloc(alloc, db)
 	if err != nil {
 		return fmt.Errorf("error generating bt: %w", err)
 	}
@@ -693,8 +673,8 @@ func BinTrieRoot(ctx *cli.Context) error {
 }
 
 // TODO(@CPerezz): Should this go to `bintrie` module?
-func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase, groupDepth int) (*bintrie.BinaryTrie, error) {
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, db, groupDepth)
+func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase) (*bintrie.BinaryTrie, error) {
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, db)
 	if err != nil {
 		return nil, err
 	}

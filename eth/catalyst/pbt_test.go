@@ -67,8 +67,8 @@ func pbtGenesis() *core.Genesis {
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			Verkle: params.DefaultPragueBlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
 		},
 	}
 	return &core.Genesis{

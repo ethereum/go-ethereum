@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
@@ -60,7 +59,6 @@ var Defaults = Config{
 	StateHistory:            pathdb.Defaults.StateHistory,
 	TrienodeHistory:         pathdb.Defaults.TrienodeHistory,
 	NodeFullValueCheckpoint: pathdb.Defaults.FullValueCheckpoint,
-	BinTrieGroupDepth:       triedb.DefaultBinTrieGroupDepth,
 	DatabaseCache:           2048,
 	TrieCleanCache:          614,
 	TrieDirtyCache:          1024,
@@ -128,10 +126,8 @@ type Config struct {
 	// consistent with persistent state.
 	StateScheme string `toml:",omitempty"`
 
-	// BinTrieGroupDepth is the number of levels per serialized group in binary trie.
 	// Valid values are 1-8, with 8 being the default (byte-aligned groups).
 	// Lower values create smaller groups with more nodes.
-	BinTrieGroupDepth int `toml:",omitempty"`
 
 	// RequiredBlocks is a set of block number -> hash mappings which must be in the
 	// canonical chain of all remote peers. Setting the option makes geth verify the

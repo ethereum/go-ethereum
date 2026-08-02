@@ -37,7 +37,7 @@ const flatDiffAccounts = 512
 // buildFlatDiffState populates a binary-tree state and returns the database and
 // the committed root. Accounts are given two storage slots, one in the header
 // stem and one in the overflow bucket, plus contract code.
-func buildFlatDiffState(t *testing.T) (*CachingDB, common.Hash) {
+func buildFlatDiffState(t *testing.T) (Database, common.Hash) {
 	t.Helper()
 
 	disk := rawdb.NewMemoryDatabase()
@@ -100,12 +100,12 @@ func flatDiffSlot(j int) common.Hash {
 func TestPBTFlatStateMatchesTrie(t *testing.T) {
 	db, root := buildFlatDiffState(t)
 
-	stateReader, err := db.triedb.StateReader(root)
+	stateReader, err := db.TrieDB().StateReader(root)
 	if err != nil {
 		t.Fatalf("flat state is not available: %v", err)
 	}
 	flat := newFlatReader(stateReader)
-	trie, err := newTrieReader(root, db.triedb)
+	trie, err := newPBTTrieReader(root, db.TrieDB())
 	if err != nil {
 		t.Fatal(err)
 	}

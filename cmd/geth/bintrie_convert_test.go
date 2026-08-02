@@ -87,7 +87,7 @@ func TestBintrieConvert(t *testing.T) {
 	})
 	defer destTriedb.Close()
 
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb, 8)
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
 	if err != nil {
 		t.Fatalf("failed to create binary trie: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestBintrieConvert(t *testing.T) {
 	}
 	t.Logf("Binary trie root: %x", currentRoot)
 
-	bt2, err := bintrie.NewBinaryTrie(currentRoot, destTriedb, 8)
+	bt2, err := bintrie.NewBinaryTrie(currentRoot, destTriedb)
 	if err != nil {
 		t.Fatalf("failed to reload binary trie: %v", err)
 	}
@@ -133,8 +133,8 @@ func TestBintrieConvert(t *testing.T) {
 		t.Errorf("account2 balance: got %s, want %s", acc2.Balance, wantBal2)
 	}
 
-	treeKey1 := bintrie.GetBinaryTreeKeyStorageSlot(addr2, slotKey1[:])
-	val1, err := bt2.GetWithHashedKey(treeKey1)
+	treeKey1 := bintrie.StorageSlotKey(addr2, slotKey1[:])
+	val1, err := bt2.GetStemValue(treeKey1)
 	if err != nil {
 		t.Fatalf("failed to get storage slot1: %v", err)
 	}
@@ -146,8 +146,8 @@ func TestBintrieConvert(t *testing.T) {
 		t.Errorf("storage slot1: got %x, want %x", got1, slotVal1)
 	}
 
-	treeKey2 := bintrie.GetBinaryTreeKeyStorageSlot(addr2, slotKey2[:])
-	val2, err := bt2.GetWithHashedKey(treeKey2)
+	treeKey2 := bintrie.StorageSlotKey(addr2, slotKey2[:])
+	val2, err := bt2.GetStemValue(treeKey2)
 	if err != nil {
 		t.Fatalf("failed to get storage slot2: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 		PathDB: pathdb.Defaults,
 	})
 
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb, 8)
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
 	if err != nil {
 		t.Fatalf("failed to create binary trie: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 	}
 	srcTriedb2.Close()
 
-	bt2, err := bintrie.NewBinaryTrie(newRoot, destTriedb, 8)
+	bt2, err := bintrie.NewBinaryTrie(newRoot, destTriedb)
 	if err != nil {
 		t.Fatalf("failed to reload binary trie after deletion: %v", err)
 	}

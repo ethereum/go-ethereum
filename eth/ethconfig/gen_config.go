@@ -34,7 +34,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrienodeHistory         int64                  `toml:",omitempty"`
 		NodeFullValueCheckpoint uint32                 `toml:",omitempty"`
 		StateScheme             string                 `toml:",omitempty"`
-		BinTrieGroupDepth       int                    `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
 		SlowBlockThreshold      time.Duration          `toml:",omitempty"`
 		SkipBcVersionCheck      bool                   `toml:"-"`
@@ -91,7 +90,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TrienodeHistory = c.TrienodeHistory
 	enc.NodeFullValueCheckpoint = c.NodeFullValueCheckpoint
 	enc.StateScheme = c.StateScheme
-	enc.BinTrieGroupDepth = c.BinTrieGroupDepth
 	enc.RequiredBlocks = c.RequiredBlocks
 	enc.SlowBlockThreshold = c.SlowBlockThreshold
 	enc.SkipBcVersionCheck = c.SkipBcVersionCheck
@@ -152,7 +150,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TrienodeHistory         *int64                 `toml:",omitempty"`
 		NodeFullValueCheckpoint *uint32                `toml:",omitempty"`
 		StateScheme             *string                `toml:",omitempty"`
-		BinTrieGroupDepth       *int                   `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
 		SlowBlockThreshold      *time.Duration         `toml:",omitempty"`
 		SkipBcVersionCheck      *bool                  `toml:"-"`
@@ -245,9 +242,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.StateScheme != nil {
 		c.StateScheme = *dec.StateScheme
-	}
-	if dec.BinTrieGroupDepth != nil {
-		c.BinTrieGroupDepth = *dec.BinTrieGroupDepth
 	}
 	if dec.RequiredBlocks != nil {
 		c.RequiredBlocks = dec.RequiredBlocks

@@ -292,11 +292,10 @@ func TestPBTGenesisCommit(t *testing.T) {
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Cancun:    params.DefaultCancunBlobConfig,
-			Prague:    params.DefaultPragueBlobConfig,
-			Osaka:     params.DefaultOsakaBlobConfig,
-			Amsterdam: params.DefaultAmsterdamBlobConfig,
-			Verkle:    params.DefaultPragueBlobConfig,
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
 		},
 	}
 

@@ -236,7 +236,6 @@ func TestProcessParentBlockHash(t *testing.T) {
 	t.Run("PBT", func(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
 		cacheConfig := DefaultConfig().WithStateScheme(rawdb.PathScheme)
-		cacheConfig.BinTrieGroupDepth = triedb.DefaultBinTrieGroupDepth
 		cacheConfig.SnapshotLimit = 0
 		tdbConfig, err := cacheConfig.triedbConfig(true)
 		if err != nil {

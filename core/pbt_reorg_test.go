@@ -68,13 +68,14 @@ func TestPBTReportsRollbackUnsupported(t *testing.T) {
 	if !chain.TrieDB().IsPBT() {
 		t.Fatal("chain is not running on the binary tree")
 	}
-	root := chain.CurrentBlock().Root
+	head := chain.CurrentBlock()
+	root := head.Root
 
 	// Live state is still served; only rolling back is out of reach.
-	if _, err := chain.StateAt(root); err != nil {
+	if _, err := chain.StateAt(head); err != nil {
 		t.Fatalf("live state is unavailable on the binary tree: %v", err)
 	}
-	if chain.stateRecoverable(root) {
+	if chain.StateRecoverable(root) {
 		t.Fatal("chain reports its state as recoverable; the binary tree cannot revert")
 	}
 	err = chain.triedb.Recover(root)

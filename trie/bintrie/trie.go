@@ -642,6 +642,23 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	return acc, nil
 }
 
+// UpdateAccountBatch writes a list of accounts one at a time. See
+// UpdateStorageBatch for why this is a loop rather than a batch.
+func (t *BinaryTrie) UpdateAccountBatch(addrs []common.Address, accounts []*types.StateAccount, codeLens []int) error {
+	if len(addrs) != len(accounts) {
+		return fmt.Errorf("addresses and accounts length mismatch: %d != %d", len(addrs), len(accounts))
+	}
+	if len(addrs) != len(codeLens) {
+		return fmt.Errorf("addresses and code lengths mismatch: %d != %d", len(addrs), len(codeLens))
+	}
+	for i, addr := range addrs {
+		if err := t.UpdateAccount(addr, accounts[i], codeLens[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // UpdateAccount writes the BASIC_DATA and CODE_HASH leaves of the account
 // header stem in one walk.
 func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int) error {
@@ -707,6 +724,24 @@ func (t *BinaryTrie) GetStorage(addr common.Address, key []byte) ([]byte, error)
 		return nil, trie.ErrCommitted
 	}
 	return t.getValue(StorageSlotKey(addr, key))
+}
+
+// UpdateStorageBatch writes a list of storage slots one at a time.
+//
+// The interface asks for a batch but documents no atomicity or ordering
+// contract, and nothing calls it yet. UpdateStem is where genuine batching
+// belongs when a caller appears: slots sharing a stem could be written in one
+// walk rather than one walk each.
+func (t *BinaryTrie) UpdateStorageBatch(addr common.Address, keys [][]byte, values [][]byte) error {
+	if len(keys) != len(values) {
+		return fmt.Errorf("keys and values length mismatch: %d != %d", len(keys), len(values))
+	}
+	for i, key := range keys {
+		if err := t.UpdateStorage(addr, key, values[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UpdateStorage writes a storage slot. The value is left-padded to 32

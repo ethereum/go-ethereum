@@ -580,8 +580,18 @@ func makePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	sdb = state.NewMPTDatabase(triedb, nil).WithSnapshot(snaps)
-	statedb, _ = state.New(root, sdb)
+	// Re-open against the same kind of database the state was committed with.
+	// Reopening a binary-tree root as a merkle-patricia trie fails, and the
+	// error used to be discarded below - surfacing much later as a nil StateDB.
+	if pbt {
+		sdb = state.NewPBTDatabase(triedb, nil)
+	} else {
+		sdb = state.NewMPTDatabase(triedb, nil).WithSnapshot(snaps)
+	}
+	statedb, err := state.New(root, sdb)
+	if err != nil {
+		panic(fmt.Sprintf("failed to reopen the pre-state at %x: %v", root, err))
+	}
 	return StateTestState{statedb, triedb, snaps}
 }
 

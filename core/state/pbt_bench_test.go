@@ -99,7 +99,7 @@ func benchStateSlot(j int) common.Hash {
 
 // buildBenchState populates a state on a real pebble database and returns it
 // with the committed root, ready for measurement.
-func buildBenchState(b *testing.B, pbt bool) (*CachingDB, common.Hash) {
+func buildBenchState(b *testing.B, pbt bool) (Database, common.Hash) {
 	b.Helper()
 
 	dir := b.TempDir()

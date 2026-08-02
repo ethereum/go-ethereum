@@ -37,8 +37,6 @@ type Config struct {
 	PathDB    *pathdb.Config // Configs for experimental path-based scheme
 }
 
-const DefaultBinTrieGroupDepth = 5
-
 // HashDefaults represents a config for using hash-based scheme with
 // default settings.
 var HashDefaults = &Config{
@@ -50,10 +48,9 @@ var HashDefaults = &Config{
 // PBTDefaults represents a config for holding binary trie data
 // using path-based scheme with default settings.
 var PBTDefaults = &Config{
-	Preimages:         false,
-	IsPBT:             true,
-	BinTrieGroupDepth: DefaultBinTrieGroupDepth,
-	PathDB:            pathdb.Defaults,
+	Preimages: false,
+	IsPBT:     true,
+	PathDB:    pathdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -405,8 +402,4 @@ func (db *Database) SnapshotCompleted() bool {
 		return false
 	}
 	return pdb.SnapshotCompleted()
-}
-
-func (db *Database) BinTrieGroupDepth() int {
-	return db.config.BinTrieGroupDepth
 }

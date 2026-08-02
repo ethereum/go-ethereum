@@ -250,41 +250,17 @@ type ubtTrieReader struct {
 	lock sync.Mutex       // Lock for protecting concurrent read
 }
 
-// newPBTTrieReader constructs a Unified-binary-trie reader of the specific state.
-// An error will be returned if the associated trie specified by root is not existent.
+// newPBTTrieReader constructs a binary-tree reader of the specific state. An
+// error will be returned if the associated trie specified by root is not
+// existent.
+//
+// There is no overlay tree to assemble here: this scheme migrates offline, so
+// no state is ever half-converted while consensus is running, and the binary
+// trie satisfies Trie directly rather than needing a wrapper around it.
 func newPBTTrieReader(root common.Hash, db *triedb.Database) (*ubtTrieReader, error) {
-	binTrie, binErr := bintrie.NewBinaryTrie(root, db, db.BinTrieGroupDepth())
-	if binErr != nil {
-		return nil, binErr
-	}
-	// Based on the transition status, determine if the overlay
-	// tree needs to be created, or if a single, target tree is
-	// to be picked.
-	var (
-		tr Trie
-		ts = overlay.LoadTransitionState(db.Disk(), root, true)
-	)
-	if ts.InTransition() {
-		mpt, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db)
-		if err != nil {
-			return nil, err
-		}
-		tr = transitiontrie.NewTransitionTrie(mpt, binTrie, false)
-	} else {
-		// HACK: Use TransitionTrie with nil base as a wrapper to make BinaryTrie
-		// satisfy the Trie interface. This works around the import cycle between
-		// trie and trie/bintrie packages.
-		//
-		// TODO: In future PRs, refactor the package structure to avoid this hack:
-		// - Option 1: Move common interfaces (Trie, NodeIterator) to a separate
-		//   package that both trie and trie/bintrie can import
-		// - Option 2: Create a factory function in the trie package that returns
-		//   BinaryTrie as a Trie interface without direct import
-		// - Option 3: Move BinaryTrie to the main trie package
-		//
-		// The current approach works but adds unnecessary overhead and complexity
-		// by using TransitionTrie when there's no actual transition happening.
-		tr = transitiontrie.NewTransitionTrie(nil, binTrie, false)
+	tr, err := bintrie.NewBinaryTrie(root, db)
+	if err != nil {
+		return nil, err
 	}
 	return &ubtTrieReader{
 		root: root,

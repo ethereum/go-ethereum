@@ -90,7 +90,6 @@ var (
 		utils.StateHistoryFlag,
 		utils.TrienodeHistoryFlag,
 		utils.TrienodeHistoryFullValueCheckpointFlag,
-		utils.BinTrieGroupDepthFlag,
 		utils.LightKDFFlag,
 		utils.EthRequiredBlocksFlag,
 		utils.CacheFlag,

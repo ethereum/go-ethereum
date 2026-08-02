@@ -131,11 +131,11 @@ func TestPBTHistoricStateRefused(t *testing.T) {
 	}
 	defer chain.Stop()
 
-	root := chain.CurrentBlock().Root
-	if _, err := chain.StateAt(root); err != nil {
+	head := chain.CurrentBlock()
+	if _, err := chain.StateAt(head); err != nil {
 		t.Fatalf("live state is unavailable on the binary tree: %v", err)
 	}
-	_, err = chain.HistoricState(root)
+	_, err = chain.HistoricState(head)
 	if err == nil {
 		t.Fatal("historic database opened a merkle-patricia trie over binary nodes")
 	}

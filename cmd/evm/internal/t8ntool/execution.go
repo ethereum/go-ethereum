@@ -164,7 +164,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		var err error
 		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isEIP4762)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 	} else {
 		statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
@@ -363,30 +363,15 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 	}
 
-	// Gather the execution-layer triggered requests.
-	var requests [][]byte
-	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
-		requests = [][]byte{}
-		// EIP-6110
-		var allLogs []*types.Log
-		for _, receipt := range receipts {
-			allLogs = append(allLogs, receipt.Logs...)
-		}
-		if err := core.ParseDepositLogs(&requests, allLogs, chainConfig); err != nil {
-			return nil, nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
-		}
-		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process withdrawal requests: %v", err))
-		}
-		// EIP-7251
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process consolidation requests: %v", err))
-		}
+	// Gather the execution-layer triggered requests. PostExecution covers
+	// EIP-6110, EIP-7002 and EIP-7251 together, including the fork gating.
+	var allLogs []*types.Log
+	for _, receipt := range receipts {
+		allLogs = append(allLogs, receipt.Logs...)
 	}
 	requests, bal, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm, uint32(len(receipts)+1))
 	if err != nil {
-		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
+		return nil, nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
 	}
 	blockAccessList.Merge(bal)
 
@@ -430,7 +415,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		encoded := blockAccessList.ToEncodingObj()
 		balRLP, err := rlp.EncodeToBytes(encoded)
 		if err != nil {
-			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not encode BAL: %v", err))
+			return nil, nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not encode BAL: %v", err))
 		}
 		balHash := encoded.Hash()
 		execRs.BlockAccessListHash = &balHash
@@ -462,7 +447,6 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
 	sdb := state.NewDatabase(tdb, nil)
 	if isBintrie {
-		sdb.(*state.PBTDatabase).EnableAllocRecording()
 	}
 
 	root := types.EmptyRootHash
@@ -501,7 +485,6 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) 
 	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
 	sdb := state.NewDatabase(tdb, nil)
 	if isBintrie {
-		sdb.(*state.PBTDatabase).EnableAllocRecording()
 	}
 
 	root := types.EmptyRootHash

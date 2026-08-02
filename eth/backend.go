@@ -246,7 +246,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateHistory:            config.StateHistory,
 			TrienodeHistory:         config.TrienodeHistory,
 			NodeFullValueCheckpoint: config.NodeFullValueCheckpoint,
-			BinTrieGroupDepth:       config.BinTrieGroupDepth,
 			StateScheme:             scheme,
 			HistoryPolicy:           histPolicy,
 			TxLookupLimit:           int64(min(config.TransactionHistory, math.MaxInt64)),
