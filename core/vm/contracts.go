@@ -145,8 +145,6 @@ var PrecompiledContractsPrague = PrecompiledContracts{
 
 var PrecompiledContractsBLS = PrecompiledContractsPrague
 
-var PrecompiledContractsVerkle = PrecompiledContractsBerlin
-
 // PrecompiledContractsOsaka contains the set of pre-compiled Ethereum
 // contracts used in the Osaka release.
 var PrecompiledContractsOsaka = PrecompiledContracts{
@@ -216,8 +214,6 @@ func init() {
 // precompile result cache, forks reusing a set share its cache entries.
 func activePrecompiledContracts(rules params.Rules) *PrecompiledContracts {
 	switch {
-	case rules.IsPBT:
-		return &PrecompiledContractsVerkle
 	case rules.IsBogota:
 		return &PrecompiledContractsOsaka
 	case rules.IsOsaka:

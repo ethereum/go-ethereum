@@ -24,8 +24,6 @@ import (
 // the rules.
 func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	switch {
-	case rules.IsPBT:
-		return *pbtInstructionSet(rules), nil
 	case rules.IsBogota:
 		return newBogotaInstructionSet(), nil
 	case rules.IsAmsterdam:
