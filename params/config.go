@@ -410,14 +410,6 @@ var (
 		Max:            21,
 		UpdateFraction: 13739630,
 	}
-	// DefaultAmsterdamBlobConfig is the default blob configuration for the
-	// Amsterdam fork. Amsterdam does not schedule blob parameters of its own,
-	// so it inherits the last BPO's.
-	DefaultAmsterdamBlobConfig = &BlobConfig{
-		Target:         14,
-		Max:            21,
-		UpdateFraction: 13739630,
-	}
 	// DefaultBlobSchedule is the latest configured blob schedule for Ethereum mainnet.
 	DefaultBlobSchedule = &BlobScheduleConfig{
 		Cancun: DefaultCancunBlobConfig,

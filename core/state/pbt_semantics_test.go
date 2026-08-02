@@ -62,11 +62,15 @@ func reopenPBT(t *testing.T, sdb *StateDB, db *triedb.Database, block uint64) *S
 	return next
 }
 
-// TestPBTHasStorage covers the EIP-7610 storage-emptiness predicate across
-// both homes of an account's storage (header slots below 64 and the
-// overflow bucket) and across the committed/uncommitted boundary. Under the
-// binary tree there is no per-account storage root, so a regression here is
-// invisible to GetStorageRoot and would silently permit CREATE2 collisions.
+// TestPBTHasStorage covers the storage-emptiness predicate across both homes of
+// an account's storage (header slots below 64 and the overflow bucket) and
+// across the committed/uncommitted boundary. Under the binary tree there is no
+// per-account storage root, so a regression here is invisible to
+// GetStorageRoot.
+//
+// This pins the predicate, not a consensus rule. EIP-7610 rejects deployments
+// from a hardcoded address list, so nothing in block processing consults
+// HasStorage today.
 func TestPBTHasStorage(t *testing.T) {
 	var (
 		empty    = common.Address{1}

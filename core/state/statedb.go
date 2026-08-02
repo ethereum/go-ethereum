@@ -360,9 +360,13 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 }
 
 // HasStorage reports whether the account holds any storage, committed or
-// pending. It is the EIP-7610 contract-collision predicate: the binary tree
-// keeps no per-account storage root, so emptiness is probed rather than
-// compared against the empty-trie sentinel.
+// pending. The binary tree keeps no per-account storage root, so emptiness is
+// probed rather than compared against the empty-trie sentinel.
+//
+// Nothing in block processing calls this: EIP-7610 rejects deployments from a
+// hardcoded per-chain address list (see core/vm/eip7610.go) rather than by
+// asking whether an account currently holds storage. It is kept as the only
+// correct way to answer the question under the tree.
 func (s *StateDB) HasStorage(addr common.Address) bool {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
