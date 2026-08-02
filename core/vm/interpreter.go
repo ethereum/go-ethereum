@@ -130,12 +130,11 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		pcCopy    uint64 // needed for the deferred EVMLogger
-		gasCopy   uint64 // for EVMLogger to log gas remaining before execution
-		logged    bool   // deferred EVMLogger should ignore already logged steps
-		res       []byte // result of the opcode execution function
-		debug     = evm.Config.Tracer != nil
-		isEIP4762 = evm.chainRules.IsEIP4762
+		pcCopy  uint64 // needed for the deferred EVMLogger
+		gasCopy uint64 // for EVMLogger to log gas remaining before execution
+		logged  bool   // deferred EVMLogger should ignore already logged steps
+		res     []byte // result of the opcode execution function
+		debug   = evm.Config.Tracer != nil
 	)
 	// Don't move this deferred function, it's placed before the OnOpcode-deferred method,
 	// so that it gets executed _after_: the OnOpcode needs the stacks before
@@ -168,17 +167,6 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		if debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas.RegularGas
-		}
-
-		if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
-			// if the PC ends up in a new "chunk" of verkleized code, charge the
-			// associated costs.
-			contractAddr := contract.Address()
-			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, contract.CodeHash, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
-			contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
-			if consumed < wanted {
-				return nil, ErrOutOfGas
-			}
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are

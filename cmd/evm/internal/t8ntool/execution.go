@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	stdmath "math"
 	"math/big"
 	"os"
 
@@ -157,17 +156,17 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	var (
 		statedb *state.StateDB
 
-		isEIP4762   = chainConfig.IsPBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		isPBT       = chainConfig.IsPBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 	)
 	if pre.AllocPath != "" {
 		var err error
-		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isEIP4762)
+		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isPBT)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
 	} else {
-		statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
+		statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isPBT)
 	}
 	var (
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
@@ -347,9 +346,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
 		prev := statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 
-		if isEIP4762 {
-			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
-		}
 		if isAmsterdam {
 			if w.Amount == 0 {
 				// Zero amount withdrawal, account is accessed potential

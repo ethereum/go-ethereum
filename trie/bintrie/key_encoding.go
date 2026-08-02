@@ -141,8 +141,7 @@ func StorageStem(addr common.Address, treeIndex *uint256.Int) []byte {
 
 // StorageIndex resolves a raw storage slot key (at most 32 bytes, big
 // endian) to its tree coordinates: header placement for slots below 64,
-// otherwise the overflow group index and sub-index. Used by both key
-// derivation and the EIP-4762 access-event accounting.
+// otherwise the overflow group index and sub-index.
 func StorageIndex(slot []byte) (inHeader bool, treeIndex uint256.Int, sub byte) {
 	var padded [32]byte
 	copy(padded[32-len(slot):], slot)

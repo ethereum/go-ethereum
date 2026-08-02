@@ -912,11 +912,6 @@ func (c *ChainConfig) IsPBTGenesis() bool {
 	return c.EnablePBTAtGenesis
 }
 
-// IsEIP4762 returns whether eip 4762 has been activated at given block.
-func (c *ChainConfig) IsEIP4762(num *big.Int, time uint64) bool {
-	return c.IsPBT(num, time)
-}
-
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time uint64) *ConfigCompatError {
@@ -1421,7 +1416,7 @@ func (err *ConfigCompatError) Error() string {
 // phases.
 type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
-	IsEIP2929, IsEIP4762                                    bool
+	IsEIP2929                                               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool

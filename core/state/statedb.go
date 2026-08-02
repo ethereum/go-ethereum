@@ -126,8 +126,7 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList   *accessList
-	accessEvents *AccessEvents
+	accessList *accessList
 
 	// Per-transaction state access footprint for EIP-7928
 	stateAccessList *bal.ConstructionBlockAccessList
@@ -198,9 +197,6 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
-	}
-	if db.Type().Is(TypePBT) {
-		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
 }
@@ -820,9 +816,6 @@ func (s *StateDB) Copy() *StateDB {
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
-	}
-	if s.accessEvents != nil {
-		state.accessEvents = s.accessEvents.Copy()
 	}
 	// Deep copy cached state objects.
 	for addr, obj := range s.stateObjects {
@@ -1587,9 +1580,6 @@ func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStor
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	if rules.IsEIP2929 && rules.IsEIP4762 {
-		panic("eip2929 and eip4762 are both activated")
-	}
 	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
@@ -1675,8 +1665,4 @@ func (s *StateDB) markUpdate(addr common.Address) {
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
 	return s.witness
-}
-
-func (s *StateDB) AccessEvents() *AccessEvents {
-	return s.accessEvents
 }

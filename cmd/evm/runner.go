@@ -225,9 +225,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	// The binary tree is path-scheme only; pairing it with hashdb would run
-	// the code against a merkle-patricia state while the chain rules still
-	// switch to EIP-4762 pricing, which is wrong in a way nothing reports.
+	// The binary tree is path-scheme only; hashdb cannot store its node set.
 	tconf := &triedb.Config{Preimages: preimages}
 	if genesisConfig.Config != nil && genesisConfig.Config.IsPBTGenesis() {
 		tconf.IsPBT = true
