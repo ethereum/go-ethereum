@@ -22,8 +22,12 @@ import (
 	"testing"
 )
 
-// TestEncodeBitPrefixVectors pins the EIP-8297 encode_bit_prefix layout,
-// mirroring the EELS reference vectors.
+// TestEncodeBitPrefixVectors pins the EIP-8297 encode_bit_prefix layout.
+//
+// The expected bytes are hand-written from the spec, not exported from the
+// reference implementation: eip8297_vectors.json carries no bit-prefix section,
+// so nothing here is machine-checked against EELS. Read them as a guard against
+// this package changing the layout, not as evidence that the layout is right.
 func TestEncodeBitPrefixVectors(t *testing.T) {
 	cases := []struct {
 		bits []byte

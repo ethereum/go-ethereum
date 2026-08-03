@@ -206,6 +206,11 @@ func TestEmbeddingVectors(t *testing.T) {
 			t.Fatalf("slot %s key mismatch: got %x want %s", sv.Slot, got, sv.Key)
 		}
 	}
+	// The code hash the chunk keys were derived from. It is not carried in the
+	// vector file, so this literal has to match testdata/export_vectors.py,
+	// which uses the same all-0xbb hash. Nothing checks that for us: if the
+	// exporter's hash ever changes, every chunk key below fails and the reason
+	// will not be obvious from the failure.
 	ch := common.BytesToHash(unhexConst("bb", 32))
 	for _, cv := range ev.Chunks {
 		if got := CodeChunkKey(addr, ch, cv.Chunk); !equalBytes(got, unhex(t, cv.Key)) {

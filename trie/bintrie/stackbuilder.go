@@ -34,6 +34,13 @@ type OnNode func(path []byte, hash common.Hash, blob []byte)
 // loads (state conversion, flat-state verification), where incremental
 // insertion would mean billions of random walks.
 //
+// Nothing calls it yet. The obvious consumer is the offline conversion in
+// cmd/geth, which currently inserts one stem at a time, but wiring it in is a
+// behavioural change to that command and has not been made. It is kept rather
+// than deleted because it is exercised against the engine's own incremental
+// path by TestStackBuilderVsIncremental, so it is unused rather than unproven.
+// If conversion is benchmarked and still does not use it, delete it.
+//
 // Invariant: the right spine holds one frame per pending branch, each
 // carrying the split bit it branches on and the hash of its completed left
 // child. A node's own position is not known when it is built - it depends
