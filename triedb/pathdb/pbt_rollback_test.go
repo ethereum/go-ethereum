@@ -65,3 +65,48 @@ func TestPBTRollbackUnsupported(t *testing.T) {
 		t.Fatalf("rollback refusal does not name its cause: %v", err)
 	}
 }
+
+// TestPBTSyncUnsupported pins that a binary tree database refuses to be handed
+// a synced state.
+//
+// Snap sync delivers trie nodes and rebuilds flat state from them afterwards by
+// walking the trie and recovering which account each leaf belongs to. That walk
+// is impossible here: leaves are keyed by a hash of the address and no
+// preimages are kept, so flat state cannot be regenerated. Accepting a sync
+// would leave a database whose flat state is empty while attested complete -
+// which reads back as a chain with no accounts in it.
+//
+// The refusal sits in resetForReactivation so it covers Enable and
+// AdoptSyncedState alike, which is what this checks: both entry points, not
+// just the one a caller happens to use.
+func TestPBTSyncUnsupported(t *testing.T) {
+	binary := newTester(t, &testerConfig{layers: 4, isPBT: true})
+	defer binary.release()
+
+	root := binary.roots[len(binary.roots)-1]
+
+	if err := binary.db.AdoptSyncedState(root); err == nil {
+		t.Fatal("binary tree accepted a synced state")
+	} else if !strings.Contains(err.Error(), "binary tree") {
+		t.Fatalf("sync refusal does not name its cause: %v", err)
+	}
+	if err := binary.db.Enable(root); err == nil {
+		t.Fatal("binary tree accepted a state reset through Enable")
+	} else if !strings.Contains(err.Error(), "binary tree") {
+		t.Fatalf("enable refusal does not name its cause: %v", err)
+	}
+
+	// The merkle half, so the refusals above are known to be about the tree.
+	// Enable validates the root against the stored one, so merkle rejects this
+	// call too - but for a different reason, and that is the distinction being
+	// drawn: the binary tree refuses the operation itself, merkle only refuses
+	// this particular argument.
+	merkle := newTester(t, &testerConfig{layers: 4})
+	defer merkle.release()
+
+	if err := merkle.db.Enable(merkle.roots[len(merkle.roots)-1]); err != nil {
+		if strings.Contains(err.Error(), "binary tree") {
+			t.Fatalf("merkle refused with the binary tree's reason: %v", err)
+		}
+	}
+}

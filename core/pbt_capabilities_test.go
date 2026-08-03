@@ -32,14 +32,29 @@ import (
 
 // The binary tree does not support everything the merkle-patricia trie does.
 // Each unsupported operation is guarded in its own package, which makes the set
-// of them hard to see and easy to regress one at a time. These tests state the
-// contract in one place for the operations that live in this package; the
-// others are pinned next to their own guards.
+// of them hard to see and easy to regress one at a time. These tests cover the
+// ones that live in this package; the index below is the whole contract, so it
+// can be read without hunting for the guards.
 //
-// What is being pinned is not "this is unimplemented" but "this refuses".
-// Silently returning a wrong answer is the failure mode that matters: a
-// stateless run that rebuilds the wrong kind of database still produces a root,
-// and a dump that gives up still returns bytes.
+// What is being pinned is not "this is unimplemented" but "this refuses, and
+// says why". Silently returning a wrong answer is the failure mode that
+// matters: a stateless run that rebuilds the wrong kind of database still
+// produces a root, and a dump that gives up still returns bytes.
+//
+//	Operation                     Refused at                       Pinned by
+//	---------------------------------------------------------------------------
+//	stateless execution           core/stateless.go                this file
+//	historic state                core/blockchain_reader.go        core/pbt_scheme_test.go
+//	hash-scheme trie database     core/blockchain.go triedbConfig  core/pbt_scheme_test.go
+//	account dumping               core/state/dump.go               core/state/pbt_capabilities_test.go
+//	pathdb rollback (Recover)     triedb/pathdb/database.go        triedb/pathdb/pbt_rollback_test.go
+//	state sync / AdoptSyncedState triedb/pathdb/database.go        triedb/pathdb/pbt_rollback_test.go
+//	opening a tree datadir as MPT cmd/utils MakeTrieDatabase       cmd/geth/bintrie_convert_test.go
+//	debug_storageRangeAt          eth/api_debug.go                 not pinned - guard read, no test
+//
+// Anything on this list failing a spec fixture is a known gap rather than a
+// conformance defect, which is the distinction that makes the reference
+// integration readable.
 
 // TestPBTRefusesStatelessExecution pins that stateless execution is refused
 // rather than attempted.
