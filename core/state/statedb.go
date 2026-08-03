@@ -1294,6 +1294,53 @@ func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[com
 	return storages, storageOrigins, nodes, nil
 }
 
+// deleteStoragePBT collects the storage deletions for a destroyed account under
+// the binary tree.
+//
+// It is deleteStorage without the merkle-patricia half. The tree drops the
+// account's storage bucket structurally, so there are no per-slot trie nodes to
+// delete and no storage root to check the enumeration against.
+//
+// The slot list is still needed, because the flat store is keyed per slot and
+// has no notion of a bucket. It cannot be recovered from the tree either: a
+// storage key there is a hash of the derived position, so walking the bucket
+// yields tree keys that do not invert back to the slot hashes the flat store
+// uses. The flat store has to be asked about its own keys.
+func (s *StateDB) deleteStoragePBT(addrHash common.Hash) (map[common.Hash]common.Hash, map[common.Hash]common.Hash, error) {
+	var (
+		storages       = make(map[common.Hash]common.Hash)
+		storageOrigins = make(map[common.Hash]common.Hash)
+	)
+	iteratee, err := s.db.Iteratee(s.originalRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+	it, err := iteratee.NewStorageIterator(addrHash, common.Hash{})
+	if err != nil {
+		return nil, nil, err
+	}
+	defer it.Release()
+
+	for it.Next() {
+		slot := it.Slot()
+		// Error might occur after Slot function
+		if err := it.Error(); err != nil {
+			return nil, nil, err
+		}
+		if slot == (common.Hash{}) {
+			return nil, nil, fmt.Errorf("unexpected empty storage slot, addr: %x, slot: %x", addrHash, it.Hash())
+		}
+		key := it.Hash()
+		storages[key] = common.Hash{}
+		storageOrigins[key] = slot
+	}
+	// Error might occur during iteration
+	if err := it.Error(); err != nil {
+		return nil, nil, err
+	}
+	return storages, storageOrigins, nil
+}
+
 // handleDestruction processes all destruction markers and deletes the account
 // and associated storage slots if necessary. There are four potential scenarios
 // as following:
@@ -1336,8 +1383,25 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*Acco
 		}
 		deletes[addrHash] = op
 
+		// The binary tree has no per-account storage root, so prev.Root is
+		// always the empty one and says nothing about whether the account held
+		// storage. Ask the flat store instead.
+		if s.db.Type().Is(TypePBT) {
+			storages, storagesOrigin, err := s.deleteStoragePBT(addrHash)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
+			}
+			if len(storages) != 0 && noStorageWiping {
+				return nil, nil, fmt.Errorf("unexpected storage wiping, %x", addr)
+			}
+			op.Storages = storages
+			op.StoragesOrigin = storagesOrigin
+			// No trie nodes are aggregated: the tree removes the account's
+			// whole storage bucket structurally, through DeletePrefix.
+			continue
+		}
 		// Short circuit if the origin storage was empty.
-		if prev.Root == types.EmptyRootHash || s.db.Type().Is(TypePBT) {
+		if prev.Root == types.EmptyRootHash {
 			continue
 		}
 		if noStorageWiping {
