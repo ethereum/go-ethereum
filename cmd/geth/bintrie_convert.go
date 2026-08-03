@@ -173,6 +173,69 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	return nil
 }
 
+// flatState accumulates the flat-state mutations a conversion produces.
+//
+// Writing only trie nodes is not enough. Opening a binary-tree database records
+// an attestation that its flat state is complete, and the state reader puts the
+// flat reader ahead of the trie one, returning its answer even when that answer
+// is "no such account". A conversion that commits trie nodes alone therefore
+// produces a database that hashes to the right root and reads as empty.
+//
+// Keys are the hashes the flat reader looks up - keccak of the address and of
+// the slot key - which the source iterators already carry, so nothing is
+// rehashed here.
+type flatState struct {
+	accounts       map[common.Hash][]byte
+	accountsOrigin map[common.Address][]byte
+	storages       map[common.Hash]map[common.Hash][]byte
+	storagesOrigin map[common.Address]map[common.Hash][]byte
+}
+
+func newFlatState() *flatState {
+	return &flatState{
+		accounts:       make(map[common.Hash][]byte),
+		accountsOrigin: make(map[common.Address][]byte),
+		storages:       make(map[common.Hash]map[common.Hash][]byte),
+		storagesOrigin: make(map[common.Address]map[common.Hash][]byte),
+	}
+}
+
+// addAccount records a converted account. The origin is nil because the binary
+// tree namespace held nothing before the conversion.
+func (f *flatState) addAccount(addr common.Address, addrHash common.Hash, acc *types.StateAccount) {
+	f.accounts[addrHash] = types.SlimAccountRLP(*acc)
+	f.accountsOrigin[addr] = nil
+}
+
+// addSlot records a converted storage slot. The value is the source trie's leaf
+// blob, which is already the zero-trimmed RLP the flat store keeps.
+func (f *flatState) addSlot(addr common.Address, addrHash, slotHash common.Hash, value []byte) {
+	if f.storages[addrHash] == nil {
+		f.storages[addrHash] = make(map[common.Hash][]byte)
+	}
+	f.storages[addrHash][slotHash] = value
+	if f.storagesOrigin[addr] == nil {
+		f.storagesOrigin[addr] = make(map[common.Hash][]byte)
+	}
+	f.storagesOrigin[addr][slotHash] = nil
+}
+
+// take returns the accumulated mutations and resets the accumulator, so what is
+// handed to one commit is not handed to the next as well.
+func (f *flatState) take() *triedb.StateSet {
+	set := &triedb.StateSet{
+		Accounts:       f.accounts,
+		AccountsOrigin: f.accountsOrigin,
+		Storages:       f.storages,
+		StoragesOrigin: f.storagesOrigin,
+	}
+	f.accounts = make(map[common.Hash][]byte)
+	f.accountsOrigin = make(map[common.Address][]byte)
+	f.storages = make(map[common.Hash]map[common.Hash][]byte)
+	f.storagesOrigin = make(map[common.Address]map[common.Hash][]byte)
+	return set
+}
+
 func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destTriedb *triedb.Database, binTrie *bintrie.BinaryTrie, root common.Hash, memLimit uint64) (common.Hash, error) {
 	currentRoot := types.EmptyBinaryHash
 	stats := &conversionStats{
@@ -180,6 +243,7 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 		lastReport: time.Now(),
 		lastMemChk: time.Now(),
 	}
+	flat := newFlatState()
 
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
@@ -212,9 +276,11 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 			stats.codes++
 		}
 
+		accountHash := common.BytesToHash(accIter.Key)
 		if err := binTrie.UpdateAccount(addr, &acc, len(code)); err != nil {
 			return common.Hash{}, fmt.Errorf("failed to update account %x: %w", addr, err)
 		}
+		flat.addAccount(addr, accountHash, &acc)
 		if len(code) > 0 {
 			if err := binTrie.UpdateContractCode(addr, codeHash, code); err != nil {
 				return common.Hash{}, fmt.Errorf("failed to update code for %x: %w", addr, err)
@@ -222,7 +288,7 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 		}
 
 		if acc.Root != types.EmptyRootHash {
-			addrHash := common.BytesToHash(accIter.Key)
+			addrHash := accountHash
 			storageTrie, err := trie.NewStateTrie(trie.StorageTrieID(root, addrHash, acc.Root), srcTriedb)
 			if err != nil {
 				return common.Hash{}, fmt.Errorf("failed to open storage trie for %x: %w", addr, err)
@@ -246,11 +312,12 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 				if err := binTrie.UpdateStorage(addr, slotKey, content); err != nil {
 					return common.Hash{}, fmt.Errorf("failed to update storage %x/%x: %w", addr, slotKey, err)
 				}
+				flat.addSlot(addr, addrHash, common.BytesToHash(storageIter.Key), common.CopyBytes(storageIter.Value))
 				stats.slots++
 				slotCount++
 
 				if slotCount%10000 == 0 {
-					binTrie, currentRoot, err = maybeCommit(binTrie, currentRoot, destTriedb, memLimit, stats)
+					binTrie, currentRoot, err = maybeCommit(binTrie, currentRoot, destTriedb, memLimit, stats, flat)
 					if err != nil {
 						return common.Hash{}, err
 					}
@@ -264,7 +331,7 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 		stats.report(false)
 
 		if stats.accounts%1000 == 0 {
-			binTrie, currentRoot, err = maybeCommit(binTrie, currentRoot, destTriedb, memLimit, stats)
+			binTrie, currentRoot, err = maybeCommit(binTrie, currentRoot, destTriedb, memLimit, stats, flat)
 			if err != nil {
 				return common.Hash{}, err
 			}
@@ -274,7 +341,7 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 		return common.Hash{}, fmt.Errorf("account iteration error: %w", accIter.Err)
 	}
 
-	_, currentRoot, err = commitBinaryTrie(binTrie, currentRoot, destTriedb)
+	_, currentRoot, err = commitBinaryTrie(binTrie, currentRoot, destTriedb, flat)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("final commit failed: %w", err)
 	}
@@ -283,7 +350,7 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 	return currentRoot, nil
 }
 
-func maybeCommit(bt *bintrie.BinaryTrie, currentRoot common.Hash, destDB *triedb.Database, memLimit uint64, stats *conversionStats) (*bintrie.BinaryTrie, common.Hash, error) {
+func maybeCommit(bt *bintrie.BinaryTrie, currentRoot common.Hash, destDB *triedb.Database, memLimit uint64, stats *conversionStats, flat *flatState) (*bintrie.BinaryTrie, common.Hash, error) {
 	if time.Since(stats.lastMemChk) < 5*time.Second {
 		return bt, currentRoot, nil
 	}
@@ -296,7 +363,7 @@ func maybeCommit(bt *bintrie.BinaryTrie, currentRoot common.Hash, destDB *triedb
 	}
 	log.Info("Memory limit reached, committing", "alloc", common.StorageSize(m.Alloc), "limit", common.StorageSize(memLimit))
 
-	bt, currentRoot, err := commitBinaryTrie(bt, currentRoot, destDB)
+	bt, currentRoot, err := commitBinaryTrie(bt, currentRoot, destDB, flat)
 	if err != nil {
 		return nil, common.Hash{}, err
 	}
@@ -305,11 +372,11 @@ func maybeCommit(bt *bintrie.BinaryTrie, currentRoot common.Hash, destDB *triedb
 	return bt, currentRoot, nil
 }
 
-func commitBinaryTrie(bt *bintrie.BinaryTrie, currentRoot common.Hash, destDB *triedb.Database) (*bintrie.BinaryTrie, common.Hash, error) {
+func commitBinaryTrie(bt *bintrie.BinaryTrie, currentRoot common.Hash, destDB *triedb.Database, flat *flatState) (*bintrie.BinaryTrie, common.Hash, error) {
 	newRoot, nodeSet := bt.Commit(false)
 	if nodeSet != nil {
 		merged := trienode.NewWithNodeSet(nodeSet)
-		if err := destDB.Update(newRoot, currentRoot, 0, merged, triedb.NewStateSet()); err != nil {
+		if err := destDB.Update(newRoot, currentRoot, 0, merged, flat.take()); err != nil {
 			return nil, common.Hash{}, fmt.Errorf("triedb update failed: %w", err)
 		}
 		if err := destDB.Commit(newRoot, false); err != nil {

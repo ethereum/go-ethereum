@@ -24,7 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -157,6 +159,39 @@ func TestBintrieConvert(t *testing.T) {
 	got2 := common.BytesToHash(val2)
 	if got2 != slotVal2 {
 		t.Errorf("storage slot2: got %x, want %x", got2, slotVal2)
+	}
+
+	// Everything above reads the trie directly, which is not how a node reads
+	// state. Read the same accounts back the way block processing does.
+	assertConvertedStateReadable(t, chaindb, destTriedb, currentRoot, addr1, addr2, slotKey1, slotVal1)
+}
+
+// assertConvertedStateReadable reads a converted database through the state
+// reader a node actually uses, rather than through the binary trie directly.
+//
+// The distinction is the whole point. PBTDatabase.StateReader puts the flat
+// reader ahead of the trie reader, and multiStateReader returns the first
+// answer that comes back without an error - including "this account does not
+// exist". So a converted database whose flat state is empty reads as empty
+// here while every direct trie assertion above still passes.
+func assertConvertedStateReadable(t *testing.T, chaindb ethdb.Database, destTriedb *triedb.Database, root common.Hash, addr1, addr2 common.Address, slotKey, slotVal common.Hash) {
+	t.Helper()
+
+	statedb, err := state.New(root, state.NewPBTDatabase(destTriedb, state.NewCodeDB(chaindb)))
+	if err != nil {
+		t.Fatalf("failed to open the converted state: %v", err)
+	}
+	if got := statedb.GetNonce(addr1); got != 5 {
+		t.Errorf("account1 nonce through the state reader: got %d, want 5", got)
+	}
+	if got := statedb.GetBalance(addr1).ToBig(); got.Cmp(big.NewInt(1000000)) != 0 {
+		t.Errorf("account1 balance through the state reader: got %s, want 1000000", got)
+	}
+	if got := statedb.GetNonce(addr2); got != 10 {
+		t.Errorf("account2 nonce through the state reader: got %d, want 10", got)
+	}
+	if got := statedb.GetState(addr2, slotKey); got != slotVal {
+		t.Errorf("account2 slot through the state reader: got %x, want %x", got, slotVal)
 	}
 }
 
