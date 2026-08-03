@@ -18,6 +18,7 @@ package bintrie
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"testing"
 
@@ -129,6 +130,35 @@ func TestInsertRejectsPrefixingStem(t *testing.T) {
 		t.Fatal("a stem that prefixes a resident stem was accepted")
 	} else if !errors.Is(err, ErrNonConformantKey) {
 		t.Fatalf("want ErrNonConformantKey, got %v", err)
+	}
+}
+
+// TestDecodeRejectsOverlongPrefix pins that a branch cannot declare a prefix
+// deeper than any legal path.
+//
+// The bit count is a two-byte field, so a record can claim up to 65535 bits.
+// Only the allocation was bounded, against the blob length; the count itself
+// then flowed into the position arithmetic the insert and delete walks do.
+func TestDecodeRejectsOverlongPrefix(t *testing.T) {
+	// A prefix one bit deeper than the longest zone key can reach.
+	overlong := make([]byte, 2+((maxPathBits+8)+7)/8)
+	binary.BigEndian.PutUint16(overlong, uint16(maxPathBits+1))
+	blob := append([]byte{tagBranch}, overlong...)
+	blob = append(blob, bytes.Repeat([]byte{1}, 64)...)
+
+	if _, err := decodeNode(blob); err == nil {
+		t.Fatal("a branch declaring a prefix deeper than any legal path was accepted")
+	}
+
+	// The control: a prefix at exactly the deepest legal path must still decode,
+	// or the bound is off by one and rejects valid records.
+	atLimit := make([]byte, 2+(maxPathBits+7)/8)
+	binary.BigEndian.PutUint16(atLimit, uint16(maxPathBits))
+	ok := append([]byte{tagBranch}, atLimit...)
+	ok = append(ok, bytes.Repeat([]byte{1}, 64)...)
+
+	if _, err := decodeNode(ok); err != nil {
+		t.Fatalf("a prefix at the deepest legal path was rejected: %v", err)
 	}
 }
 

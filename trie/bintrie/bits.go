@@ -183,6 +183,12 @@ func decodeBitPrefix(blob []byte) (bitstr, int, error) {
 		return bitstr{}, 0, errInvalidSerializedLength
 	}
 	n := int(binary.BigEndian.Uint16(blob))
+	if n > maxPathBits {
+		// Bounding the allocation against the blob length is not enough: the
+		// count flows on into the position arithmetic the walks do, so a
+		// prefix deeper than any legal path has to be refused outright.
+		return bitstr{}, 0, errInvalidSerializedLength
+	}
 	nbytes := (n + 7) / 8
 	if len(blob) < 2+nbytes {
 		return bitstr{}, 0, errInvalidSerializedLength

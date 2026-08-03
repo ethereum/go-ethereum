@@ -56,9 +56,15 @@ const (
 	CodeKeyLength    = 34
 	StorageKeyLength = 66
 
-	// MaxKeyLength bounds every tree key; derived from the two-byte branch
-	// prefix bit count (EIP-8297 "Maximum key length").
-	MaxKeyLength = 8192
+	// maxPathBits is the deepest a key can be walked: the longest zone key,
+	// in bits. Every branch prefix is a fragment of one such path, so no
+	// prefix can be longer than this.
+	//
+	// EIP-8297's "Maximum key length" permits far more - the two-byte prefix
+	// count admits 65535 bits - but this engine only ever stores keys of the
+	// three zone lengths, so a record claiming more than this cannot have been
+	// produced by it and is refused on the way in.
+	maxPathBits = 8 * StorageKeyLength
 )
 
 func init() {
