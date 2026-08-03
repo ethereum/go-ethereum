@@ -679,7 +679,13 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
 	}
 	if obj.dirtyCode {
-		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+		// The error matters under the binary tree even though it cannot happen
+		// under the merkle-patricia trie, where this is a no-op: the tree writes
+		// the code out as leaves, so this resolves nodes and can fail on a disk
+		// read. Dropping it would commit a root over a half-written code zone.
+		if err := s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code); err != nil {
+			s.setError(fmt.Errorf("updateContractCode (%x) error: %v", obj.Address(), err))
+		}
 	}
 }
 
