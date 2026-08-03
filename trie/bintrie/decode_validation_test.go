@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"errors"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
 // The engine keeps stems prefix-free by binding each zone to one stem length:
@@ -127,5 +129,39 @@ func TestInsertRejectsPrefixingStem(t *testing.T) {
 		t.Fatal("a stem that prefixes a resident stem was accepted")
 	} else if !errors.Is(err, ErrNonConformantKey) {
 		t.Fatalf("want ErrNonConformantKey, got %v", err)
+	}
+}
+
+// TestVerifyProofRejectsMalformedLeaf pins that a proof node which hashes
+// correctly but is not shaped like a leaf is refused rather than sliced.
+//
+// VerifyProof took the leaf key as preimage[1:len-32]. The hash check before it
+// proves only that the bytes are the ones committed to, not that they are long
+// enough to hold a key and a value, so a short node produced a negative bound
+// and panicked. The caller supplies the root here, which is exactly the position
+// an untrusted proof puts them in.
+func TestVerifyProofRejectsMalformedLeaf(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		preimage []byte
+	}{
+		{"leaf tag alone", []byte{tagLeaf}},
+		{"shorter than a value", append([]byte{tagLeaf}, bytes.Repeat([]byte{0}, 8)...)},
+		{"key length not a legal one", append([]byte{tagLeaf}, bytes.Repeat([]byte{0}, 40+32)...)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := memorydb.New()
+			root := hashOf(tc.preimage)
+			if err := db.Put(root.Bytes(), tc.preimage); err != nil {
+				t.Fatal(err)
+			}
+			key := make([]byte, AccountKeyLength)
+			key[0] = AccountZone
+
+			// The contract is an error; a panic here fails the test by crashing.
+			if _, err := VerifyProof(root, key, db); err == nil {
+				t.Fatal("a malformed proof leaf was accepted")
+			}
+		})
 	}
 }

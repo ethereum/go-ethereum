@@ -193,8 +193,20 @@ func VerifyProof(root common.Hash, key []byte, proofDb ethdb.KeyValueReader) ([]
 		}
 		switch preimage[0] {
 		case tagLeaf:
-			leafKey := preimage[1 : len(preimage)-32]
-			value := preimage[len(preimage)-32:]
+			// Derive the key length before slicing by it. A short preimage
+			// gives a negative bound, and the hash check above does not
+			// constrain the shape of what it hashed.
+			keyLen := len(preimage) - 1 - 32
+			switch keyLen {
+			case AccountKeyLength, StorageKeyLength:
+			default:
+				return nil, errInvalidSerializedLength
+			}
+			leafKey := preimage[1 : 1+keyLen]
+			value := preimage[1+keyLen:]
+			if err := validateKey(leafKey); err != nil {
+				return nil, err
+			}
 			if bytes.Equal(leafKey, key) {
 				return append([]byte{}, value...), nil
 			}
