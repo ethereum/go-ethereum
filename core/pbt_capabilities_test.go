@@ -22,6 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -74,4 +78,47 @@ func TestPBTRefusesStatelessExecution(t *testing.T) {
 			}
 		}
 	}()
+}
+
+// TestPBTStatelessSelfValidationRefusedOnImport drives the same guard through
+// block import, which is the way a node reaches it.
+//
+// StatelessSelfValidation is an ordinary flag, and witness building is gated
+// only on IsByzantium, so nothing stopped a binary tree node from turning this
+// on. Without the guard the import still fails - the rebuilt merkle database
+// cannot resolve binary tree records, so it reports a missing trie node - but
+// it fails opaquely, as though the state were corrupt, on a block that is
+// perfectly valid. The refusal has to name the reason.
+func TestPBTStatelessSelfValidationRefusedOnImport(t *testing.T) {
+	genesis, key, sender, recipient := pbtChainGenesis(t)
+	engine := beacon.New(ethash.NewFaker())
+	signer := types.LatestSigner(genesis.Config)
+
+	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, 1, func(i int, gen *BlockGen) {
+		tx, err := types.SignTx(types.NewTransaction(
+			gen.TxNonce(sender), recipient, big.NewInt(1000), pbtTestTxGas,
+			new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
+		), signer, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gen.AddTx(tx)
+	})
+
+	options := DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	options.StatelessSelfValidation = true
+
+	chain, err := NewBlockChain(db, genesis, engine, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+
+	_, err = chain.InsertChain(blocks)
+	if err == nil {
+		t.Fatal("a binary tree block was imported with stateless self-validation on; the cross-check cannot have run")
+	}
+	if !strings.Contains(err.Error(), "binary tree") {
+		t.Fatalf("the import failed for some other reason than the refusal: %v", err)
+	}
 }

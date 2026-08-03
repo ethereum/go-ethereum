@@ -36,6 +36,12 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
+// Despite the filename this covers block processing on the binary tree and the
+// EIP-2935 history contract, not execution witnesses. Nothing here enables
+// StatelessSelfValidation or MakeWitness, so no witness is ever built; the
+// binary tree refuses stateless execution outright, which is pinned in
+// pbt_capabilities_test.go.
+
 var (
 	testPBTChainConfig = &params.ChainConfig{
 		ChainID:                 big.NewInt(1),
