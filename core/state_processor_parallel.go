@@ -83,7 +83,7 @@ type txExecResult struct {
 
 // processParallel executes the block's transactions concurrently using the
 // block-level access list.
-func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, cfg vm.Config) (*ProcessResult, error) {
+func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) (*ProcessResult, error) {
 	var (
 		config = p.chainConfig()
 		header = block.Header()
@@ -154,6 +154,9 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	preEVM := vm.NewEVM(context, preState, config, cfg)
 	if jumpDestCache != nil {
 		preEVM.SetJumpDestCache(jumpDestCache)
+	}
+	if precompileCache != nil {
+		preEVM.SetPrecompileCache(precompileCache)
 	}
 	blockAccessList.Merge(PreExecution(ctx, block.BeaconRoot(), parent, config, preEVM, header.Number, header.Time))
 	preEVM.Release()
