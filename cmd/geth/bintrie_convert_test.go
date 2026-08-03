@@ -166,6 +166,31 @@ func TestBintrieConvert(t *testing.T) {
 	assertConvertedStateReadable(t, chaindb, destTriedb, currentRoot, addr1, addr2, slotKey1, slotVal1)
 }
 
+// TestPBTDiskIsDetectable pins the fact MakeTrieDatabase's guard rests on: a
+// binary tree database can be recognised from disk alone, and a merkle-patricia
+// one is never mistaken for it.
+//
+// The guard refuses to open tree state as merkle, which is what stops the
+// snapshot and db commands - all of which pass isPBT=false for want of knowing
+// about the tree - from reading a database whose records they cannot decode and
+// reporting the absence as emptiness. Both directions matter: a false positive
+// would lock those commands out of ordinary merkle databases.
+func TestPBTDiskIsDetectable(t *testing.T) {
+	merkle := rawdb.NewMemoryDatabase()
+	mtdb := triedb.NewDatabase(merkle, &triedb.Config{PathDB: pathdb.Defaults})
+	mtdb.Close()
+	if rawdb.HasPBTState(merkle) {
+		t.Fatal("a merkle-patricia database is marked as holding a binary tree")
+	}
+
+	binary := rawdb.NewMemoryDatabase()
+	btdb := triedb.NewDatabase(binary, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
+	btdb.Close()
+	if !rawdb.HasPBTState(binary) {
+		t.Fatal("a binary tree database is not detectable from disk; the guard can never fire")
+	}
+}
+
 // assertConvertedStateReadable reads a converted database through the state
 // reader a node actually uses, rather than through the binary trie directly.
 //

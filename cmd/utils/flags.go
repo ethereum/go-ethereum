@@ -2554,6 +2554,17 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
 func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, preimage bool, readOnly bool, isPBT bool) *triedb.Database {
+	// Refuse to open binary tree state as a merkle-patricia trie. The records
+	// are shaped differently and are not keccak-addressed, so a merkle reader
+	// finds nothing and reports it as absent rather than as an error, and the
+	// history freezers are separate directories entirely.
+	//
+	// This is a guard rather than a caller's responsibility because most
+	// callers pass false for want of knowing about the tree, not because they
+	// established the database is a merkle one.
+	if !isPBT && rawdb.HasPBTState(disk) {
+		Fatalf("this database holds binary tree state, which this command does not support")
+	}
 	config := &triedb.Config{
 		Preimages: preimage,
 		IsPBT:     isPBT,

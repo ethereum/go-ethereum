@@ -1026,7 +1026,10 @@ func inspectHistory(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, false, false)
+	// History inspection works under either commitment, but the two keep their
+	// histories in separate freezer directories, so the database has to be
+	// opened as what it actually is.
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, false, rawdb.HasPBTState(db))
 	defer triedb.Close()
 
 	var (
