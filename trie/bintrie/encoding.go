@@ -18,6 +18,7 @@ package bintrie
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/bits"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,6 +47,17 @@ func serializeNode(n binaryNode, pos int) []byte {
 			blob = append(blob, n.stem...)
 			blob = append(blob, n.subs[0])
 			return append(blob, n.vals[0]...)
+		}
+		// Both fields below are written narrower than the values they carry, so
+		// an out-of-range one would wrap rather than fail. The record would
+		// then describe a different node, and the mismatch would only surface
+		// on read-back - as a database that cannot reload its own state. Both
+		// hold by construction, so a violation is a bug here, not bad input.
+		if pos > maxPathBits {
+			panic(fmt.Sprintf("bintrie: node position %d exceeds the deepest legal path", pos))
+		}
+		if len(n.stem) > 0xff {
+			panic(fmt.Sprintf("bintrie: stem length %d does not fit the record", len(n.stem)))
 		}
 		blob := make([]byte, 0, 1+2+1+len(n.stem)+bitmapSize+32*len(n.subs))
 		blob = append(blob, tagGroup, byte(pos>>8), byte(pos))
