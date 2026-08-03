@@ -308,6 +308,10 @@ func (it *nodeIterator) LeafProof() [][]byte {
 	key := append(append([]byte{}, g.stem...), g.subs[st.valIdx])
 	collector := &proofList{}
 	if err := it.trie.prove(key, collector); err != nil {
+		// The signature has no room for an error and a nil proof is a legal
+		// answer, so record it on the iterator: without this a failed resolve
+		// is indistinguishable from a leaf that simply has no proof.
+		it.err = err
 		return nil
 	}
 	return collector.list
