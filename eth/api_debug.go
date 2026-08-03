@@ -62,7 +62,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		if stateDb == nil {
 			return state.Dump{}, errors.New("pending state is not available")
 		}
-		return stateDb.RawDump(opts), nil
+		return stateDb.RawDump(opts)
 	}
 	var header *types.Header
 	switch blockNr {
@@ -86,7 +86,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if err != nil {
 		return state.Dump{}, err
 	}
-	return stateDb.RawDump(opts), nil
+	return stateDb.RawDump(opts)
 }
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
@@ -195,7 +195,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 	if maxResults > AccountRangeMaxResults || maxResults <= 0 {
 		opts.Max = AccountRangeMaxResults
 	}
-	return stateDb.RawDump(opts), nil
+	return stateDb.RawDump(opts)
 }
 
 // StorageRangeResult is the result of a debug_storageRangeAt API call.

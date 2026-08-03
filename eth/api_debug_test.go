@@ -90,14 +90,16 @@ func newTestBlockChain(t *testing.T, n int, gspec *core.Genesis, generator func(
 }
 
 func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.Dump {
-	result := statedb.RawDump(&state.DumpConfig{
+	result, err := statedb.RawDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
 		OnlyWithAddresses: false,
 		Start:             start.Bytes(),
 		Max:               uint64(requestedNum),
 	})
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(result.Accounts) != expectedNum {
 		t.Fatalf("expected %d results, got %d", expectedNum, len(result.Accounts))
 	}
@@ -195,12 +197,15 @@ func TestEmptyAccountRange(t *testing.T) {
 	st.Commit(0, true, false)
 	st, _ = state.New(types.EmptyRootHash, statedb)
 
-	results := st.RawDump(&state.DumpConfig{
+	results, err := st.RawDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
 		OnlyWithAddresses: true,
 		Max:               uint64(AccountRangeMaxResults),
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if bytes.Equal(results.Next, (common.Hash{}).Bytes()) {
 		t.Fatalf("Empty results should not return a second page")
 	}

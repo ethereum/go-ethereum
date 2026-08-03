@@ -355,7 +355,11 @@ func runCmd(ctx *cli.Context) error {
 			fmt.Printf("Failed to open statedb %v\n", err)
 			return err
 		}
-		fmt.Println(string(dumpdb.Dump(nil)))
+		blob, err := dumpdb.Dump(nil)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(blob))
 	}
 
 	if ctx.Bool(DebugFlag.Name) {

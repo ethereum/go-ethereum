@@ -693,9 +693,15 @@ func dump(ctx *cli.Context) error {
 		return err
 	}
 	if ctx.Bool(utils.IterativeOutputFlag.Name) {
-		state.IterativeDump(conf, json.NewEncoder(os.Stdout))
+		if err := state.IterativeDump(conf, json.NewEncoder(os.Stdout)); err != nil {
+			return err
+		}
 	} else {
-		fmt.Println(string(state.Dump(conf)))
+		blob, err := state.Dump(conf)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(blob))
 	}
 	return nil
 }

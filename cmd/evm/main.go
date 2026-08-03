@@ -341,6 +341,9 @@ func collectFiles(path string) []string {
 func dump(s *state.StateDB) *state.Dump {
 	root := s.IntermediateRoot(false)
 	cpy, _ := state.New(root, s.Database())
-	dump := cpy.RawDump(nil)
+	dump, err := cpy.RawDump(nil)
+	if err != nil {
+		return nil
+	}
 	return &dump
 }

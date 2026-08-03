@@ -132,8 +132,11 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		// is spread over per-zone leaves. DumpPBTLeaves dumps those; an
 		// account-shaped dump has to be rebuilt from flat state, which is
 		// not wired up yet.
-		log.Error("Account dumping is not supported for the binary tree; use the leaf dump instead")
-		return nil, nil
+		//
+		// Returned as an error rather than logged: a nil error here reads as a
+		// completed dump, so the caller is handed an empty result and told
+		// nothing went wrong.
+		return nil, errors.New("account dumping is not supported for the binary tree; use the leaf dump instead")
 	}
 	iteratee, err := s.db.Iteratee(s.originalRoot)
 	if err != nil {
@@ -248,26 +251,36 @@ func (s *StateDB) DumpPBTLeaves(collector map[string]hexutil.Bytes) error {
 
 // RawDump returns the state. If the processing is aborted e.g. due to options
 // reaching Max, the `Next` key is set on the returned Dump.
-func (s *StateDB) RawDump(opts *DumpConfig) Dump {
+//
+// The error is returned rather than discarded because a dump that could not run
+// is otherwise indistinguishable from a state with no accounts in it.
+func (s *StateDB) RawDump(opts *DumpConfig) (Dump, error) {
 	dump := &Dump{
 		Accounts: make(map[string]DumpAccount),
 	}
-	next, _ := s.DumpToCollector(dump, opts)
+	next, err := s.DumpToCollector(dump, opts)
+	if err != nil {
+		return Dump{}, err
+	}
 	dump.Next = next
-	return *dump
+	return *dump, nil
 }
 
 // Dump returns a JSON string representing the entire state as a single json-object
-func (s *StateDB) Dump(opts *DumpConfig) []byte {
-	dump := s.RawDump(opts)
+func (s *StateDB) Dump(opts *DumpConfig) ([]byte, error) {
+	dump, err := s.RawDump(opts)
+	if err != nil {
+		return nil, err
+	}
 	json, err := json.MarshalIndent(dump, "", "    ")
 	if err != nil {
-		log.Error("Error dumping state", "err", err)
+		return nil, err
 	}
-	return json
+	return json, nil
 }
 
 // IterativeDump dumps out accounts as json-objects, delimited by linebreaks on stdout
-func (s *StateDB) IterativeDump(opts *DumpConfig, output *json.Encoder) {
-	s.DumpToCollector(iterativeDump{output}, opts)
+func (s *StateDB) IterativeDump(opts *DumpConfig, output *json.Encoder) error {
+	_, err := s.DumpToCollector(iterativeDump{output}, opts)
+	return err
 }
