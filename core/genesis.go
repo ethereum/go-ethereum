@@ -697,6 +697,9 @@ func SystemContractAllocs() types.GenesisAlloc {
 		// EIP-4788 - Beacon block root in the EVM
 		params.BeaconRootsAddress: {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
 
+		// EIP-8304 - Trustless log and transaction index
+		params.IndexContractAddress: {Nonce: 1, Code: params.IndexContractCode, Balance: common.Big0},
+
 		// EIP-2935 - Historical block hashes from state
 		params.HistoryStorageAddress: {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
 
