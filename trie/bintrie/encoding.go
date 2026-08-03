@@ -88,6 +88,13 @@ func decodeNode(blob []byte) (binaryNode, error) {
 		default:
 			return nil, errInvalidSerializedLength
 		}
+		// The length on its own is not enough. Account and code keys share a
+		// length, so it is the zone byte that binds a stem to its own, and that
+		// binding is what keeps stems prefix-free - the property the insert and
+		// delete walks assume when they index into a stem.
+		if err := validateStem(blob[1:keyLen]); err != nil {
+			return nil, err
+		}
 		g := &groupNode{
 			stem: append([]byte{}, blob[1:keyLen]...),
 			subs: []byte{blob[keyLen]},
@@ -127,6 +134,11 @@ func decodeNode(blob []byte) (binaryNode, error) {
 		}
 		if len(blob) < 4+stemLen+bitmapSize {
 			return nil, errInvalidSerializedLength
+		}
+		// As above: bind the stem's length to its zone, not just to the set of
+		// legal lengths.
+		if err := validateStem(blob[4 : 4+stemLen]); err != nil {
+			return nil, err
 		}
 		bitmap := blob[4+stemLen : 4+stemLen+bitmapSize]
 		k := 0

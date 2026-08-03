@@ -256,6 +256,12 @@ func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]by
 		}
 		run := commonPrefixLen(stem, nn.stem, pos)
 		split := pos + run
+		// Running out of stem bits here means the incoming stem is a prefix of
+		// the resident one, which conformant keys cannot be. getStem guards the
+		// same indexing; without it bitAt below reads past the stem.
+		if split >= 8*len(stem) {
+			return nil, ErrNonConformantKey
+		}
 		// The existing group's record moves below the new branch.
 		t.ops.onDelete(pathOf(keyWalk(nn.stem, pos)))
 		t.ops.onInsert(pathOf(keyWalk(nn.stem, split+1)))
@@ -274,6 +280,9 @@ func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]by
 		m := nn.prefix.matchKey(stem, pos)
 		if m == nn.prefix.n {
 			split := pos + nn.prefix.n
+			if split >= 8*len(stem) {
+				return nil, ErrNonConformantKey
+			}
 			bit := bitAt(stem, split)
 			var (
 				child binaryNode
