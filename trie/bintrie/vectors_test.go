@@ -100,8 +100,17 @@ func unhex(t testing.TB, s string) []byte {
 // newTestTrie builds a database-less in-memory trie; resolution never
 // triggers for tries built purely in memory.
 func newTestTrie() *BinaryTrie {
+	// A reader over no database, which reports every node as missing. Tests
+	// that only insert never resolve anything, but one holding a hashed child
+	// does - and with a nil reader that dereferences instead of reporting a
+	// missing node, which is a property of this helper rather than the engine.
+	reader, err := trie.NewReader(common.Hash{}, common.Hash{}, nil)
+	if err != nil {
+		panic(err)
+	}
 	return &BinaryTrie{
 		root:   empty{},
+		reader: reader,
 		tracer: trie.NewPrevalueTracer(),
 		ops:    newOpTracer(),
 	}
