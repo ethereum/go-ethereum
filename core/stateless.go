@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -43,6 +44,15 @@ import (
 //
 // TODO(karalabe): Would be nice to resolve both issues above somehow and move it.
 func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig vm.Config, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
+	// The witness format and the database rebuilt from it below are both
+	// merkle-patricia shaped: MakeHashDB keys nodes by their keccak hash and
+	// the accounts are RLP leaves. A binary tree state cannot be reconstructed
+	// from that, so running anyway would not fail - it would return a root that
+	// cannot match, and the caller would reject its own valid block. Refuse
+	// instead, the same way historic state does.
+	if config.IsPBT() {
+		return common.Hash{}, common.Hash{}, errors.New("stateless execution is not supported for the binary tree")
+	}
 	// Sanity check if the supplied block accidentally contains a set root or
 	// receipt hash. If so, be very loud, but still continue.
 	if block.Root() != (common.Hash{}) {

@@ -1,0 +1,77 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package core
+
+import (
+	"context"
+	"math/big"
+	"strings"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+)
+
+// The binary tree does not support everything the merkle-patricia trie does.
+// Each unsupported operation is guarded in its own package, which makes the set
+// of them hard to see and easy to regress one at a time. These tests state the
+// contract in one place for the operations that live in this package; the
+// others are pinned next to their own guards.
+//
+// What is being pinned is not "this is unimplemented" but "this refuses".
+// Silently returning a wrong answer is the failure mode that matters: a
+// stateless run that rebuilds the wrong kind of database still produces a root,
+// and a dump that gives up still returns bytes.
+
+// TestPBTRefusesStatelessExecution pins that stateless execution is refused
+// rather than attempted.
+//
+// The witness format is merkle-patricia shaped - MakeHashDB keys nodes by their
+// keccak hash and accounts are RLP leaves - so a binary tree state cannot be
+// rebuilt from it. Attempting it does not fail loudly: it yields a root that
+// cannot match, which a node reports as its own valid block being invalid.
+// Witness building is gated only on IsByzantium, and --stateless-self-validation
+// is an ordinary flag, so this is reachable on a real node.
+func TestPBTRefusesStatelessExecution(t *testing.T) {
+	cfg := *testPBTChainConfig
+	if !cfg.IsPBT() {
+		t.Fatal("the fixture is not a binary tree configuration; this proves nothing")
+	}
+	block := types.NewBlockWithHeader(&types.Header{Number: big.NewInt(1)})
+
+	_, _, err := ExecuteStateless(context.Background(), &cfg, vm.Config{}, block, nil)
+	if err == nil {
+		t.Fatal("stateless execution was attempted against a binary tree state")
+	}
+	if !strings.Contains(err.Error(), "binary tree") {
+		t.Fatalf("the refusal does not say why: %v", err)
+	}
+
+	// The control: the same call on a merkle-patricia configuration must not be
+	// refused by this guard. It fails later, on the nil witness, which is what
+	// tells us the guard did not fire.
+	plain := *testPBTChainConfig
+	plain.PBT = false
+	func() {
+		defer func() { _ = recover() }() // a nil witness panics; only the guard matters here
+		if _, _, err := ExecuteStateless(context.Background(), &plain, vm.Config{}, block, nil); err != nil {
+			if strings.Contains(err.Error(), "binary tree") {
+				t.Errorf("the binary tree guard fired on a merkle-patricia configuration: %v", err)
+			}
+		}
+	}()
+}
