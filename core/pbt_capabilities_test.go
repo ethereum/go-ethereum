@@ -21,6 +21,7 @@ import (
 	"maps"
 	"math/big"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -45,6 +46,7 @@ import (
 //
 //	Operation                     Refused at                       Pinned by
 //	---------------------------------------------------------------------------
+//	witness statistics            core/blockchain.go triedbConfig  this file
 //	historic state                core/blockchain_reader.go        core/pbt_scheme_test.go
 //	hash-scheme trie database     core/blockchain.go triedbConfig  core/pbt_scheme_test.go
 //	account dumping               core/state/dump.go               core/state/pbt_capabilities_test.go
@@ -161,6 +163,46 @@ func TestPBTStatelessRejectsIncompleteWitness(t *testing.T) {
 			t.Fatalf("a rejected witness still produced a root: %x", root)
 		}
 	}
+}
+
+// TestPBTRefusesWitnessStats pins that witness statistics are refused rather
+// than collected wrongly.
+//
+// WitnessStats reads a node's path as a nibble string and its depth as that
+// string's length, then buckets into a fixed sixteen levels. A binary path is
+// a two-byte bit count followed by packed bits: the depth is wrong from the
+// very first node, and once a walk passes 113 bits the length exceeds sixteen
+// and indexes off the end of the histogram. The flag also force-enables
+// stateless self-validation, so it is reachable without asking for it.
+func TestPBTRefusesWitnessStats(t *testing.T) {
+	genesis, _, _, _ := pbtChainGenesis(t)
+	engine := beacon.New(ethash.NewFaker())
+	db, _, _ := GenerateChainWithGenesis(genesis, engine, 1, func(i int, gen *BlockGen) {})
+
+	options := DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	options.EnableWitnessStats = true
+
+	chain, err := NewBlockChain(db, genesis, engine, options)
+	if err == nil {
+		chain.Stop()
+		t.Fatal("a binary tree chain opened with witness statistics enabled")
+	}
+	if !strings.Contains(err.Error(), "binary tree") {
+		t.Fatalf("the refusal does not name its cause: %v", err)
+	}
+
+	// The control: the same flag on a merkle chain is accepted, so the refusal
+	// is known to be about the tree rather than about the flag.
+	plain := *genesis
+	cfg := *genesis.Config
+	cfg.PBT = false
+	plain.Config = &cfg
+	mdb, _, _ := GenerateChainWithGenesis(&plain, engine, 1, func(i int, gen *BlockGen) {})
+	mchain, err := NewBlockChain(mdb, &plain, engine, options)
+	if err != nil {
+		t.Fatalf("witness statistics were refused on a merkle chain: %v", err)
+	}
+	mchain.Stop()
 }
 
 // TestPBTStatelessSelfValidationOnImport drives the whole thing through
