@@ -107,9 +107,8 @@ const (
 	RegularPerAuthBaseCost uint64 = 7816
 
 	// EIP-2780: resource-based intrinsic transaction gas.
-	TxBaseCost2780      uint64 = 12000
-	TxValueCost2780     uint64 = 4244
-	TransferLogCost2780 uint64 = 1756
+	TxBaseCost2780  uint64 = 12000
+	TxValueCost2780 uint64 = 6000
 
 	// EIP-8038: state-access gas cost update (Amsterdam).
 	ColdAccountAccessAmsterdam         uint64 = 3000  // COLD_ACCOUNT_ACCESS: cold touch of an account
@@ -121,8 +120,8 @@ const (
 	StorageWriteAmsterdam              uint64 = 10000 // STORAGE_WRITE: surcharge for first-time write to a storage slot
 	StorageClearRefundAmsterdam        uint64 = 12480 // STORAGE_CLEAR_REFUND: refund for clearing a storage slot
 	CreateAccessAmsterdam              uint64 = 11000 // CREATE_ACCESS = ACCOUNT_WRITE + COLD_STORAGE_ACCESS
-	TxAccessListAddressGasAmsterdam    uint64 = 3000  // ACCESS_LIST_ADDRESS_COST
-	TxAccessListStorageKeyGasAmsterdam uint64 = 3000  // ACCESS_LIST_STORAGE_KEY_COST
+	TxAccessListAddressGasAmsterdam    uint64 = 2900  // ACCESS_LIST_ADDRESS_COST
+	TxAccessListStorageKeyGasAmsterdam uint64 = 2900  // ACCESS_LIST_STORAGE_KEY_COST
 
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
