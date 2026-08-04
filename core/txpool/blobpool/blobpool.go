@@ -573,7 +573,9 @@ type BlobPool struct {
 	// partial transaction blocks all following transactions in one account from
 	// inclusion. That transaction and all transactions after it are called the
 	// account's "blocked" transactions. To prevent DoS, the total size of blocked transactions
-	// is capped by blockedCap separately from the overall data cap.
+	// is capped by blockedCap separately from the overall data cap. While that cap is
+	// exceeded, eviction prefers blocked accounts regardless of the fees they pay; when
+	// only the overall data cap is exceeded, eviction remains a pure fee market.
 
 	blocked        uint64                    // Data size of blocked transactions across all accounts
 	blockedAccount map[common.Address]uint64 // Per-account blocked transaction bytes
@@ -757,6 +759,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Since the user might have modified their pool's capacity, evict anything
 	// above the current allowance
 	for p.stored > p.config.Datacap || p.blocked > p.blockedCap {
+		p.evict.setBlockedFirst(p.blocked > p.blockedCap)
 		p.drop()
 	}
 	// Update the metrics and return the constructed pool
@@ -2203,6 +2206,7 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 	// If the pool went over the allowed data limit, evict transactions until
 	// we're again below the threshold
 	for p.stored > p.config.Datacap || p.blocked > p.blockedCap {
+		p.evict.setBlockedFirst(p.blocked > p.blockedCap)
 		p.drop()
 	}
 	p.updateStorageMetrics()
