@@ -195,6 +195,87 @@ func TestPBTStatelessExecutionWithWrites(t *testing.T) {
 	}
 }
 
+// TestPBTStatelessContractCoinbase covers the account every block touches and
+// no block executes: a fee recipient that happens to be a contract.
+//
+// It is credited, so it is dirty and gets written back; it is never called, so
+// its code is never loaded and never witnessed. That combination used to make
+// the account-write path ask for a code size, which loaded the whole contract
+// through the reader to measure it. Nothing on that path records what it read,
+// so the witness went out short of a contract the replay then needed, and the
+// run finished on state that was never there. Mainnet fee recipients are
+// routinely contracts, so this is the ordinary case rather than a corner.
+func TestPBTStatelessContractCoinbase(t *testing.T) {
+	genesis, key, sender, recipient := pbtChainGenesis(t)
+	engine := beacon.New(ethash.NewFaker())
+	signer := types.LatestSigner(genesis.Config)
+
+	// A contract at the fee recipient, big enough to span several code chunks
+	// so that shipping it would be conspicuous in the witness.
+	coinbase := common.Address{0xc0, 0x1b}
+	genesis.Alloc[coinbase] = types.Account{
+		Balance: big.NewInt(1),
+		Code:    bytes.Repeat([]byte{0x60, 0x01, 0x50}, 300), // 900 bytes
+	}
+	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, 1, func(i int, gen *BlockGen) {
+		gen.SetCoinbase(coinbase)
+		tx, err := types.SignTx(types.NewTransaction(
+			gen.TxNonce(sender), recipient, big.NewInt(1000), pbtTestTxGas,
+			new(big.Int).Add(gen.BaseFee(), common.Big1), nil,
+		), signer, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gen.AddTx(tx)
+	})
+	chain, err := NewBlockChain(db, genesis, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+
+	parent := chain.GetHeaderByNumber(0)
+	res, err := chain.ProcessBlock(context.Background(), parent.Root, blocks[0], ExecuteConfig{MakeWitness: true})
+	if err != nil {
+		t.Fatalf("processing the block: %v", err)
+	}
+	witness := res.Witness()
+	if witness == nil || len(witness.Nodes) == 0 {
+		t.Fatal("the witness holds no nodes")
+	}
+	header := types.CopyHeader(blocks[0].Header())
+	header.Root, header.ReceiptHash = common.Hash{}, common.Hash{}
+	task := types.NewBlockWithHeader(header).WithBody(*blocks[0].Body())
+
+	stateRoot, _, err := ExecuteStateless(context.Background(), chain.Config(), vm.Config{}, task, witness)
+	if err != nil {
+		t.Fatalf("stateless execution with a contract fee recipient failed: %v", err)
+	}
+	if stateRoot != blocks[0].Root() {
+		t.Fatalf("stateless state root mismatch: got %x, want %x", stateRoot, blocks[0].Root())
+	}
+	// AddCode was never called for it. That is what regressed before: sizing
+	// the code through the reader recorded nothing, so the replay needed a
+	// blob the witness did not carry. This says nothing about the total
+	// witness size - under the current layout the first 128 code chunks are
+	// leaves of the header stem, which ships anyway to serve BASIC_DATA.
+	if _, ok := witness.Codes[string(genesis.Alloc[coinbase].Code)]; ok {
+		t.Fatal("the fee recipient's bytecode reached witness.Codes despite never being executed")
+	}
+	// The fee recipient has to have actually been paid, or it was never dirty
+	// and none of the above exercised the account-write path at all.
+	if _, err := chain.InsertChain([]*types.Block{blocks[0]}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := chain.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := state.GetBalance(coinbase).Uint64(); got <= 1 {
+		t.Fatalf("the fee recipient's balance is %d, so it was never credited and never dirty", got)
+	}
+}
+
 // TestPBTStatelessRejectsIncompleteWitness pins that a witness missing a node
 // the block touches is refused, rather than answered around.
 //

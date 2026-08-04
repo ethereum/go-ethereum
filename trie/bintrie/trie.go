@@ -753,14 +753,69 @@ func (t *BinaryTrie) UpdateAccountBatch(addrs []common.Address, accounts []*type
 
 // UpdateAccount writes the BASIC_DATA and CODE_HASH leaves of the account
 // header stem in one walk.
+//
+// A negative codeLen means the caller declines to state the size, not that it
+// necessarily lacks one: the account-write path passes it for every account
+// whose code was not set this block, whether or not the code happens to be
+// resident, because asking can fault a whole contract in off the reader
+// unwitnessed while the tree already holds the answer. The size is then taken
+// from the stem about to be written. The group read here is the one insStem
+// walks to below, so it is resolved either way.
+//
+// The size is preserved only for an account that still carries code. Both
+// leaves are written here, so the size must agree with the code hash going
+// out, and an empty hash means zero however the stem got that way. Without
+// that the resident value outlives what it measured: a destroy and a recreate
+// of one address coalesce into a single update mutation, so nothing deletes
+// the old stem and the dead contract's size would be inherited by the account
+// that replaced it.
 func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int) error {
-	basic, err := EncodeBasicData(uint32(codeLen), acc.Nonce, acc.Balance)
+	if len(acc.CodeHash) != 32 {
+		return fmt.Errorf("bintrie: UpdateAccount (%x): code hash is %d bytes, want 32", addr, len(acc.CodeHash))
+	}
+	stem := HeaderStem(addr)
+	codeSize := uint32(codeLen)
+	if codeLen < 0 {
+		codeSize = 0
+		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
+			// Nothing to preserve from is a broken invariant rather than a
+			// small contract: the account says it has code, so its basic data
+			// has to be there to say how much. Writing zero would put a size
+			// of zero beside a non-empty code hash and commit it as a root.
+			g, err := t.getStemGroup(stem)
+			if err != nil {
+				return fmt.Errorf("bintrie: UpdateAccount (%x): %w", addr, err)
+			}
+			if g == nil {
+				return fmt.Errorf("bintrie: UpdateAccount (%x): code hash %x with no header stem to preserve a size from", addr, acc.CodeHash)
+			}
+			basic := g.lookup(BasicDataLeafKey)
+			if basic == nil {
+				return fmt.Errorf("bintrie: UpdateAccount (%x): code hash %x with no basic data to preserve a size from", addr, acc.CodeHash)
+			}
+			// The resident size measures the resident code, so it may only be
+			// carried forward under the same hash. A caller changing the hash
+			// while declining to state a length is asking for a size that
+			// measures a different contract.
+			if resident := g.lookup(CodeHashLeafKey); !bytes.Equal(resident, acc.CodeHash) {
+				return fmt.Errorf("bintrie: UpdateAccount (%x): no code length given and the code hash is changing, %x to %x", addr, resident, acc.CodeHash)
+			}
+			_, codeSize, _, _ = DecodeBasicData(basic)
+		}
+	}
+	// No bytecode of non-zero length hashes to the empty hash, so this pair is
+	// contradictory whichever way it was reached - including a caller that
+	// reported a length it did not actually have.
+	if codeSize == 0 && !bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
+		return fmt.Errorf("bintrie: UpdateAccount (%x): zero code size for code hash %x", addr, acc.CodeHash)
+	}
+	basic, err := EncodeBasicData(codeSize, acc.Nonce, acc.Balance)
 	if err != nil {
 		return fmt.Errorf("bintrie: UpdateAccount (%x): %w", addr, err)
 	}
 	codeHash := make([]byte, 32)
 	copy(codeHash, acc.CodeHash)
-	return t.UpdateStem(HeaderStem(addr),
+	return t.UpdateStem(stem,
 		[]byte{BasicDataLeafKey, CodeHashLeafKey},
 		[][]byte{basic[:], codeHash})
 }

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/blake3"
 	"github.com/holiman/uint256"
 )
@@ -370,5 +371,128 @@ func TestStackBuilderEdges(t *testing.T) {
 	}
 	if err := NewStackBuilder(nil).Add([]byte{0x00, 0x01}, value); err == nil {
 		t.Fatal("expected rejection of a non-conformant key")
+	}
+}
+
+// TestUpdateAccountCodeSizeVsModel pins the history dependence a negative
+// codeLen introduces. UpdateAccount used to be a pure function of its
+// arguments; taking the code size from the resident stem makes what it writes
+// depend on what was already there, which no root comparison catches -- the
+// engine and any model built from the same writes would agree on a wrong size.
+//
+// The oracle is deliberately not the preservation rule. Restating "keep the
+// size when the code hash is non-empty" would only check that the rule was
+// implemented as written, not that it is right. What the model tracks instead
+// is the invariant the rule exists to maintain: an account's code_size equals
+// the length of the code its code hash refers to. That holds however
+// preservation is implemented, so it stays a real check if the rule changes.
+//
+// This runs wholly in memory, so the preserve lookup never resolves a node off
+// disk here. That arm is covered in core/state, where reopenPBT commits and
+// reopens between blocks -- see TestPBTCodeSizePreserved.
+func TestUpdateAccountCodeSizeVsModel(t *testing.T) {
+	type acct struct {
+		nonce    uint64
+		balance  uint64
+		codeHash common.Hash
+		alive    bool
+	}
+	for _, seed := range []int64{1, 42, 8297, 20260804} {
+		rng := rand.New(rand.NewSource(seed))
+		tr := newTestTrie()
+		model := make(map[common.Address]*acct)
+		// The authority: what each code hash actually measures. Nothing in the
+		// engine consults this, which is what makes it an oracle.
+		codeLenOf := map[common.Hash]uint32{types.EmptyCodeHash: 0}
+
+		addrs := make([]common.Address, 6)
+		for i := range addrs {
+			addrs[i] = common.Address{byte(i + 1)}
+			// EmptyCodeHash, not the zero hash: an account with no code
+			// carries the hash of no code, and the zero hash is malformed.
+			model[addrs[i]] = &acct{codeHash: types.EmptyCodeHash}
+		}
+		for op := 0; op < 400; op++ {
+			addr := addrs[rng.Intn(len(addrs))]
+			m := model[addr]
+
+			if m.alive && rng.Intn(8) == 0 {
+				if err := tr.DeleteAccount(addr); err != nil {
+					t.Fatalf("seed %d op %d: DeleteAccount: %v", seed, op, err)
+				}
+				// Keep the hash it had. The account is gone from the tree, so
+				// re-offering that hash below is the "code hash with nothing
+				// to preserve from" shape, which has to be generated rather
+				// than assumed unreachable.
+				*m = acct{codeHash: m.codeHash}
+				continue
+			}
+			acc := &types.StateAccount{
+				Nonce:    uint64(rng.Intn(1 << 20)),
+				Balance:  uint256.NewInt(uint64(rng.Intn(1 << 30))),
+				Root:     types.EmptyRootHash,
+				CodeHash: types.EmptyCodeHash[:],
+			}
+			// Four shapes of write: code set this block (exact length), a
+			// codeless account, a touch that knows nothing and must not
+			// disturb what is there, and the same touch under a hash the
+			// account does not carry.
+			codeLen := -1
+			switch rng.Intn(4) {
+			case 0: // deploy or redeploy: exact length under a fresh hash
+				var h common.Hash
+				rng.Read(h[:])
+				n := uint32(rng.Intn(30000) + 1) // non-empty code is never zero-length
+				codeLenOf[h] = n
+				acc.CodeHash, codeLen = h[:], int(n)
+			case 1: // codeless: empty hash, so the size must go to zero
+			case 2: // blind touch under a hash the account does not have
+				var h common.Hash
+				rng.Read(h[:])
+				acc.CodeHash = h[:]
+			default: // blind touch: keep whatever hash the account had, alive or not
+				if m.codeHash != types.EmptyCodeHash {
+					acc.CodeHash = m.codeHash[:]
+				}
+			}
+			// Two broken invariants UpdateAccount is expected to refuse rather
+			// than paper over, both reachable only by declining to state a
+			// length: carrying code the tree has no stem for, and changing the
+			// code hash, which would leave the resident size measuring a
+			// different contract.
+			wantErr := codeLen < 0 && !bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) &&
+				(!m.alive || common.BytesToHash(acc.CodeHash) != m.codeHash)
+			err := tr.UpdateAccount(addr, acc, codeLen)
+			if wantErr {
+				if err == nil {
+					t.Fatalf("seed %d op %d addr %x: a negative length under an unbacked code hash was accepted", seed, op, addr[0])
+				}
+				continue
+			}
+			if err != nil {
+				t.Fatalf("seed %d op %d: UpdateAccount: %v", seed, op, err)
+			}
+			*m = acct{
+				nonce:    acc.Nonce,
+				balance:  acc.Balance.Uint64(),
+				codeHash: common.BytesToHash(acc.CodeHash),
+				alive:    true,
+			}
+			// Read back off the tree rather than trusting the write, and check
+			// the size against what the account's code hash measures.
+			basic, err := tr.GetStemValue(BasicDataKey(addr))
+			if err != nil {
+				t.Fatalf("seed %d op %d: GetStemValue: %v", seed, op, err)
+			}
+			_, gotSize, gotNonce, gotBalance := DecodeBasicData(basic)
+			if want := codeLenOf[m.codeHash]; gotSize != want {
+				t.Fatalf("seed %d op %d addr %x: code size %d, but code hash %x measures %d (codeLen %d)",
+					seed, op, addr[0], gotSize, m.codeHash[:4], want, codeLen)
+			}
+			if gotNonce != m.nonce || gotBalance.Uint64() != m.balance {
+				t.Fatalf("seed %d op %d: basic data drifted: nonce %d/%d balance %d/%d",
+					seed, op, gotNonce, m.nonce, gotBalance.Uint64(), m.balance)
+			}
+		}
 	}
 }

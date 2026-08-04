@@ -104,9 +104,16 @@ type Trie interface {
 	// UpdateAccount abstracts an account write to the trie. It encodes the
 	// provided account object with associated algorithm and then updates it
 	// in the trie with provided address.
+	//
+	// A negative codeLen means the caller does not know the size, and asks the
+	// trie to keep whatever it already holds. Callers must use it rather than
+	// substituting zero: the binary tree stores the code size in the account,
+	// so a zero would erase it. The merkle-patricia trie ignores the argument
+	// entirely.
 	UpdateAccount(address common.Address, account *types.StateAccount, codeLen int) error
 
 	// UpdateAccountBatch attempts to update a list of accounts in the batch manner.
+	// Negative code lengths carry the same meaning as in UpdateAccount.
 	UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLengths []int) error
 
 	// UpdateStorage associates key with value in the trie. If value has length zero,

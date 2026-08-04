@@ -278,12 +278,34 @@ func TestPBTCodeSizePreserved(t *testing.T) {
 	sdb.AddBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
 	sdb = reopenPBT(t, sdb, db, 2)
 
+	if got := codeSizeAt(t, sdb, addr); got != uint32(len(code)) {
+		t.Fatalf("code size %d after a balance-only touch, want %d", got, len(code))
+	}
+}
+
+// chunkAt reads a code chunk leaf straight out of the tree, so a test can tell
+// "the code is still there" from "the code hash still says it is".
+func chunkAt(t *testing.T, sdb *StateDB, addr common.Address, codeHash common.Hash, chunk uint64) []byte {
+	t.Helper()
 	tr, err := sdb.db.OpenTrie(sdb.originalRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bt := tr.(*bintrie.BinaryTrie)
-	basic, err := bt.GetStemValue(bintrie.BasicDataKey(addr))
+	val, err := tr.(*bintrie.BinaryTrie).GetStemValue(bintrie.CodeChunkKey(addr, codeHash, chunk))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return val
+}
+
+// codeSizeAt reads the code size the tree packs into an account's basic data.
+func codeSizeAt(t *testing.T, sdb *StateDB, addr common.Address) uint32 {
+	t.Helper()
+	tr, err := sdb.db.OpenTrie(sdb.originalRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	basic, err := tr.(*bintrie.BinaryTrie).GetStemValue(bintrie.BasicDataKey(addr))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,9 +313,135 @@ func TestPBTCodeSizePreserved(t *testing.T) {
 		t.Fatal("basic data leaf missing")
 	}
 	_, codeSize, _, _ := bintrie.DecodeBasicData(basic)
-	if codeSize != uint32(len(code)) {
-		t.Fatalf("code size %d after a balance-only touch, want %d", codeSize, len(code))
-	}
+	return codeSize
+}
+
+// TestPBTCodeSizeWrites covers the code size across the paths that set it,
+// where TestPBTCodeSizePreserved covers the path that must not touch it.
+//
+// Which branch of UpdateAccount each case reaches is worth stating, because it
+// is not what the names suggest. Only setCode sets dirtyCode, so "deploy",
+// "delegation set" and "delegation cleared" all report an exact length -
+// SetCode(nil) hashes to the empty hash and still sets the flag, so clearing
+// takes the exact path too, not preservation. "codeless account" and
+// "recreated after destruct" do pass the negative sentinel, but stop at the
+// empty-code-hash guard without ever looking at the resident stem. The lookup
+// itself is exercised by TestPBTCodeSizePreserved and by the executed-contract
+// case below.
+func TestPBTCodeSizeWrites(t *testing.T) {
+	var (
+		addr       = common.Address{1}
+		code       = bytes.Repeat([]byte{0x60, 0x01}, 40) // 80 bytes, spanning chunks
+		delegation = append([]byte{0xef, 0x01, 0x00}, common.Address{9}.Bytes()...)
+	)
+	t.Run("codeless account", func(t *testing.T) {
+		// Nothing to preserve: the stem is being created by this very write,
+		// so the lookup finds no group and the size must come out zero rather
+		// than as the sentinel.
+		sdb, db := newPBTState(t)
+		sdb.CreateAccount(addr)
+		sdb.SetNonce(addr, 1, tracing.NonceChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 1)
+		if got := codeSizeAt(t, sdb, addr); got != 0 {
+			t.Fatalf("code size %d on an account that never had code, want 0", got)
+		}
+	})
+	t.Run("deploy", func(t *testing.T) {
+		sdb, db := newPBTState(t)
+		sdb.CreateAccount(addr)
+		sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 1)
+		if got := codeSizeAt(t, sdb, addr); got != uint32(len(code)) {
+			t.Fatalf("code size %d after deploy, want %d", got, len(code))
+		}
+	})
+	t.Run("delegation set", func(t *testing.T) {
+		sdb, db := newPBTState(t)
+		sdb.CreateAccount(addr)
+		sdb.SetCode(addr, delegation, tracing.CodeChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 1)
+		if got := codeSizeAt(t, sdb, addr); got != uint32(len(delegation)) {
+			t.Fatalf("code size %d after EIP-7702 delegation, want %d", got, len(delegation))
+		}
+	})
+	t.Run("delegation cleared", func(t *testing.T) {
+		// Shrinking to nothing: the tree still holds the old size when the
+		// write lands, so this pins that the new value wins.
+		sdb, db := newPBTState(t)
+		sdb.CreateAccount(addr)
+		sdb.SetNonce(addr, 2, tracing.NonceChangeUnspecified) // keep it from being swept as empty
+		sdb.SetCode(addr, delegation, tracing.CodeChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 1)
+		sdb.SetCode(addr, nil, tracing.CodeChangeAuthorizationClear)
+		sdb = reopenPBT(t, sdb, db, 2)
+		if got := codeSizeAt(t, sdb, addr); got != 0 {
+			t.Fatalf("code size %d after clearing the delegation, want 0", got)
+		}
+	})
+	t.Run("recreated after destruct", func(t *testing.T) {
+		// A destroy and a recreate of one address coalesce into a single
+		// update mutation, so nothing ever deletes the old stem and the write
+		// lands while the dead contract's leaves are still resident. The
+		// empty-code-hash guard is what stops its size being inherited;
+		// without it this reads the old contract's length.
+		sdb, db := newPBTState(t)
+		sdb.CreateAccount(addr)
+		sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 1)
+
+		sdb.SelfDestruct(addr)
+		sdb.CreateAccount(addr)
+		sdb.SetNonce(addr, 7, tracing.NonceChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 2)
+		if got := codeSizeAt(t, sdb, addr); got != 0 {
+			t.Fatalf("code size %d after destruct and recreate, want 0", got)
+		}
+	})
+	t.Run("storage override on an unread contract", func(t *testing.T) {
+		// The case the codeKnown guard exists for. SetStorage rebuilds the
+		// object and re-sets its code from the lazily-loaded field, which is
+		// nil when nothing read the bytecode first, so dirtyCode goes true
+		// under a real code hash with no blob behind it. Both writes have to
+		// decline it: reporting len(obj.code) would zero the size, and handing
+		// that blob to UpdateContractCode would clear every code leaf, because
+		// it clears whatever sub-indices the new code does not fill.
+		sdb, db := newPBTState(t)
+		sdb.CreateAccount(addr)
+		sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 1)
+		codeHash := crypto.Keccak256Hash(code)
+		chunk0 := chunkAt(t, sdb, addr, codeHash, 0)
+
+		// Deliberately no read of the code before the override.
+		sdb.SetStorage(addr, map[common.Hash]common.Hash{{31: 5}: {31: 7}})
+		sdb = reopenPBT(t, sdb, db, 2)
+		if got := codeSizeAt(t, sdb, addr); got != uint32(len(code)) {
+			t.Fatalf("code size %d after a storage override, want %d", got, len(code))
+		}
+		if got := chunkAt(t, sdb, addr, codeHash, 0); !bytes.Equal(got, chunk0) {
+			t.Fatalf("code chunk 0 is %x after a storage override, want %x", got, chunk0)
+		}
+	})
+	t.Run("executed contract", func(t *testing.T) {
+		// The dominant preserve path in production: any ordinary contract
+		// call loads the code and writes storage without going near setCode,
+		// so dirtyCode stays false and the size is taken from the stem. Every
+		// other subtest here reports a length or stops at the guard.
+		sdb, db := newPBTState(t)
+		sdb.CreateAccount(addr)
+		sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 1)
+
+		if got := sdb.GetCodeSize(addr); got != len(code) { // loads the blob, as a call would
+			t.Fatalf("setup: code size %d, want %d", got, len(code))
+		}
+		sdb.SetState(addr, common.Hash{31: 5}, common.Hash{31: 7})
+		sdb.AddBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 2)
+		if got := codeSizeAt(t, sdb, addr); got != uint32(len(code)) {
+			t.Fatalf("code size %d after an executed contract wrote storage, want %d", got, len(code))
+		}
+	})
 }
 
 // TestPBTPrefetcherWarmsOwners exercises the prefetcher in binary tree mode,

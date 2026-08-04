@@ -105,16 +105,23 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	// the mismatch to be discovered by whoever compares roots - or not at all,
 	// where the caller trusts what it gets back.
 	//
-	// Only the binary tree is held to this. Merkle witnesses do not currently
-	// capture every bytecode they read - AddCode is reached from StateDB's
-	// accessors, so a stateObject.Code() arriving by another route is never
-	// recorded - and turning that into a hard failure here would reject blocks
-	// that verify today. That gap is real and worth closing, but it belongs to
-	// the merkle witness rather than to this check; see TODO.md.
-	if config.IsPBT() {
-		if err := db.Error(); err != nil {
-			return common.Hash{}, common.Hash{}, fmt.Errorf("incomplete witness: %w", err)
-		}
+	// This used to be scoped to the binary tree, because merkle witnesses did
+	// not capture every bytecode they read: updateStateObject asked for a code
+	// size on the account-write path, which loaded the whole contract through
+	// the reader without any AddCode recording it. That read is gone - the
+	// binary tree takes the size from the stem it is writing, and the merkle
+	// trie never needed it - so both are held to the same standard here.
+	//
+	// The check is load-bearing rather than advisory now: a latched error fails
+	// the block instead of surfacing later as a root comparison. Be precise
+	// about what it observes, though. It sees the reads this statedb makes -
+	// the sequential processor's execution, the block access list apply, and
+	// the hashing. On the parallel path each transaction runs against its own
+	// statedb whose error is never consulted, so a read inside a transaction is
+	// not covered here at all. TODO.md carries that gap, along with the two
+	// unwitnessed code reads that remain and why neither fires today.
+	if err := db.Error(); err != nil {
+		return common.Hash{}, common.Hash{}, fmt.Errorf("incomplete witness: %w", err)
 	}
 	return stateRoot, receiptRoot, nil
 }
