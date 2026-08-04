@@ -1247,7 +1247,9 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 	latest, _, _, err := d.skeleton.Bounds()
 	if err != nil {
 		// We're going to cheat for non-merged networks, but that's fine
+		d.pivotLock.RLock()
 		latest = d.pivotHeader
+		d.pivotLock.RUnlock()
 	}
 	if latest == nil {
 		// This should really never happen, but add some defensive code for now.
