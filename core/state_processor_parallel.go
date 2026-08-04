@@ -81,10 +81,7 @@ type txExecResult struct {
 	state   uint64
 
 	// preimages are the SHA3 preimages the transaction's EVM recorded into its
-	// ephemeral state, retained because that state is discarded before the
-	// canonical one is updated. The map is referenced rather than copied, which
-	// is sound only because the ephemeral state is built fresh per transaction
-	// and is never written again once the transaction completes.
+	// ephemeral state.
 	preimages map[common.Hash][]byte
 }
 
