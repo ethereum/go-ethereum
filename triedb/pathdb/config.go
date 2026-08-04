@@ -81,6 +81,24 @@ var Defaults = &Config{
 	WriteBufferSize:     defaultBufferSize,
 }
 
+// WitnessDefaults is the config for a database rebuilt from an execution
+// witness. It disables everything that assumes a durable, complete store:
+// there is no flat state to attest, no history to keep, and nothing to flush
+// in the background of a database that lives for one block.
+var WitnessDefaults = &Config{
+	WitnessOnly:         true,
+	StateHistory:        0,
+	TrienodeHistory:     -1,
+	FullValueCheckpoint: defaultFullValueCheckpoint,
+	EnableStateIndexing: false,
+	TrieCleanSize:       defaultTrieCleanSize,
+	StateCleanSize:      defaultStateCleanSize,
+	WriteBufferSize:     defaultBufferSize,
+	SnapshotNoBuild:     true,
+	NoAsyncFlush:        true,
+	NoAsyncGeneration:   true,
+}
+
 // ReadOnly is the config in order to open database in read only mode.
 var ReadOnly = &Config{
 	ReadOnly:            true,
@@ -103,6 +121,19 @@ type Config struct {
 	TrienodeHistory     int64  // Number of recent blocks to maintain trienode history for, 0: full chain, negative: disable
 	EnableStateIndexing bool   // Whether to enable state history indexing for external state access
 	FullValueCheckpoint uint32 // The rate at which trie nodes are encoded in full-value format
+
+	// WitnessOnly marks a database rebuilt from an execution witness: a set of
+	// trie nodes and nothing else, held only long enough to re-execute one
+	// block.
+	//
+	// Such a database has no flat state and must never claim to. The binary
+	// tree's flat-state attestation exists to certify completeness, and the
+	// reader stack treats a flat miss as authoritative - multiStateReader
+	// returns the first reader that answers without an error, and a flat
+	// reader with no data answers "not found" without one. Attesting here
+	// would make every account read report the account absent and never
+	// consult the trie at all.
+	WitnessOnly bool
 
 	// Testing configurations
 	SnapshotNoBuild     bool // Flag Whether the state generation is disabled

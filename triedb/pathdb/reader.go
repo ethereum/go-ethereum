@@ -189,6 +189,17 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 // StateReader returns a reader that allows access to the state data associated
 // with the specified state.
 func (db *Database) StateReader(root common.Hash) (database.StateReader, error) {
+	// A witness-backed database holds trie nodes and nothing else, so refuse
+	// to hand out a flat reader over state that was never written.
+	//
+	// This has to refuse rather than return an empty reader. Callers stack
+	// readers and take the first answer that comes back without an error, and
+	// a flat reader with no data reports "not found" without one - so an empty
+	// reader here would answer every query as absent and the trie behind it
+	// would never be asked.
+	if db.config.WitnessOnly {
+		return nil, errors.New("witness-backed database has no flat state")
+	}
 	layer := db.tree.get(root)
 	if layer == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)

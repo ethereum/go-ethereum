@@ -53,6 +53,20 @@ var PBTDefaults = &Config{
 	PathDB:    pathdb.Defaults,
 }
 
+// PBTWitnessDefaults represents a config for a binary trie database rebuilt
+// from an execution witness: trie nodes and nothing else, alive only long
+// enough to re-execute one block.
+//
+// It differs from PBTDefaults in refusing to pretend there is flat state.
+// Reads therefore go to the trie, which is the only thing a witness actually
+// contains, and a node the witness omitted surfaces as a missing node instead
+// of an absent account.
+var PBTWitnessDefaults = &Config{
+	Preimages: false,
+	IsPBT:     true,
+	PathDB:    pathdb.WitnessDefaults,
+}
+
 // backend defines the methods needed to access/update trie nodes in different
 // state scheme.
 type backend interface {
