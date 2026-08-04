@@ -107,9 +107,8 @@ const (
 	RegularPerAuthBaseCost uint64 = 7816
 
 	// EIP-2780: resource-based intrinsic transaction gas.
-	TxBaseCost2780      uint64 = 12000
-	TxValueCost2780     uint64 = 4244
-	TransferLogCost2780 uint64 = 1756
+	TxBaseCost2780  uint64 = 12000
+	TxValueCost2780 uint64 = 6000 // Recipient balance write and EIP-7708 transfer log
 
 	// EIP-8038: state-access gas cost update (Amsterdam).
 	ColdAccountAccessAmsterdam         uint64 = 3000  // COLD_ACCOUNT_ACCESS: cold touch of an account

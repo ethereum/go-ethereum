@@ -183,14 +183,11 @@ func intrinsicBaseGasEIP2780(from common.Address, to *common.Address, value *uin
 		gas += params.ColdAccountAccessAmsterdam
 	}
 
-	// tx.value charge.
-	switch {
-	case !hasValue || isSelfTransfer:
-		// No transfer log and no recipient balance write.
-	case isContractCreation:
-		gas += params.TransferLogCost2780
-	default:
-		gas += params.TransferLogCost2780 + params.TxValueCost2780
+	// tx.value charge. TX_VALUE_COST covers the recipient balance write and
+	// the EIP-7708 transfer log. A contract-creation transaction pays nothing
+	// here: the recipient balance write is already covered by CREATE_ACCESS.
+	if hasValue && !isSelfTransfer && !isContractCreation {
+		gas += params.TxValueCost2780
 	}
 	return gas
 }
