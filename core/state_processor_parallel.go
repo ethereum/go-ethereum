@@ -75,10 +75,10 @@ type txExecResult struct {
 	receipt    *types.Receipt
 	accessList *bal.ConstructionBlockAccessList
 
-	// regular and state are the EIP-8037 per-transaction
+	// execution and state are the EIP-8037 per-transaction
 	// gas contributions to the two block-inclusion dimensions.
-	regular uint64
-	state   uint64
+	execution uint64
+	state     uint64
 
 	// preimages are the SHA3 preimages the transaction's EVM recorded into its
 	// ephemeral state.
@@ -187,7 +187,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		if err := gp.CheckGasAmsterdam(min(gasLimit, params.MaxTxGas), gasLimit); err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
 		}
-		if err := gp.ChargeGasAmsterdam(results[i].regular, results[i].state, receipt.GasUsed); err != nil {
+		if err := gp.ChargeGasAmsterdam(results[i].execution, results[i].state, receipt.GasUsed); err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
 		}
 		// Correct the receipt object with block-level fields
@@ -314,7 +314,7 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 				results[i] = txExecResult{
 					receipt:    receipt,
 					accessList: accessList,
-					regular:    gp.CumulativeRegular(),
+					execution:  gp.CumulativeExecution(),
 					state:      gp.CumulativeState(),
 					preimages:  sdb.Preimages(),
 				}

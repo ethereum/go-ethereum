@@ -897,7 +897,7 @@ func TestOpMCopy(t *testing.T) {
 		if dynamicCost, err := gasMcopy(evm, nil, stack, mem, memorySize); err != nil {
 			t.Error(err)
 		} else {
-			haveGas = GasFastestStep + dynamicCost.RegularGas
+			haveGas = GasFastestStep + dynamicCost.ExecutionGas
 		}
 		// Expand mem
 		if memorySize > 0 {

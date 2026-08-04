@@ -1045,7 +1045,7 @@ func TestBALInEVMCreatePreAccessAbortDestinationExcluded(t *testing.T) {
 func TestBALInEVMCreateOOGDestination(t *testing.T) {
 	factory := common.HexToAddress("0xfac4")
 	// PUSH1 0 (length) PUSH1 0 (offset) PUSH1 0 (value) CREATE POP STOP.
-	// The factory has enough regular gas for CREATE's opcode cost but not enough
+	// The factory has enough execution gas for CREATE's opcode cost but not enough
 	// combined gas to pay Amsterdam's 183,600 account-creation state charge.
 	code := []byte{0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0xf0, 0x50, 0x00}
 	env := newBALTestEnv(types.GenesisAlloc{
