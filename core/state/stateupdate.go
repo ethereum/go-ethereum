@@ -245,7 +245,7 @@ func (sc *StateUpdate) EncodeMPTState() (map[common.Hash][]byte, map[common.Addr
 }
 
 // EncodePBTState encodes all state mutations alongside their original value
-// into the Unified-Binary-Trie representation.
+// into the binary tree representation.
 //
 // It transforms account and storage updates into their corresponding PBT-encoded
 // key-value mappings, using the same encoding rules as the Ethereum state trie.

@@ -239,14 +239,14 @@ func (r *mptTrieReader) Storage(addr common.Address, key common.Hash) (common.Ha
 	return value, nil
 }
 
-// ubtTrieReader implements the StateReader interface, providing functions to access
-// state from the referenced Unified-binary-trie.
+// pbtTrieReader implements the StateReader interface, providing functions to access
+// state from the referenced Partitioned Binary Tree.
 //
-// ubtTrieReader is safe for concurrent read.
-type ubtTrieReader struct {
+// pbtTrieReader is safe for concurrent read.
+type pbtTrieReader struct {
 	root common.Hash      // State root which uniquely represents a state
 	db   *triedb.Database // Database for loading trie
-	tr   Trie             // Referenced unified binary trie
+	tr   Trie             // Referenced binary tree
 	lock sync.Mutex       // Lock for protecting concurrent read
 }
 
@@ -257,12 +257,12 @@ type ubtTrieReader struct {
 // There is no overlay tree to assemble here: this scheme migrates offline, so
 // no state is ever half-converted while consensus is running, and the binary
 // trie satisfies Trie directly rather than needing a wrapper around it.
-func newPBTTrieReader(root common.Hash, db *triedb.Database) (*ubtTrieReader, error) {
+func newPBTTrieReader(root common.Hash, db *triedb.Database) (*pbtTrieReader, error) {
 	tr, err := bintrie.NewBinaryTrie(root, db)
 	if err != nil {
 		return nil, err
 	}
-	return &ubtTrieReader{
+	return &pbtTrieReader{
 		root: root,
 		db:   db,
 		tr:   tr,
@@ -273,7 +273,7 @@ func newPBTTrieReader(root common.Hash, db *triedb.Database) (*ubtTrieReader, er
 //
 // An error will be returned if the trie state is corrupted. A nil account
 // will be returned if it's not existent in the trie.
-func (r *ubtTrieReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *pbtTrieReader) Account(addr common.Address) (*types.StateAccount, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -285,7 +285,7 @@ func (r *ubtTrieReader) Account(addr common.Address) (*types.StateAccount, error
 //
 // An error will be returned if the trie state is corrupted. An empty storage
 // slot will be returned if it's not existent in the trie.
-func (r *ubtTrieReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
+func (r *pbtTrieReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 

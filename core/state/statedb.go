@@ -1127,7 +1127,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 	// If witness building is enabled, gather all the read-only accesses.
-	// Skip witness collection in Unified-binary-trie mode, they will be
+	// Skip witness collection in binary-tree mode, they will be
 	// gathered together at the end.
 	if s.witness != nil && s.db.Type().Is(TypeMPT) {
 		// Pull in anything that has been accessed before destruction

@@ -36,7 +36,7 @@ const (
 	// TypeMPT indicates a Merkle Patricia Trie (MPT) backed database.
 	TypeMPT DatabaseType = iota
 
-	// TypePBT indicates a Unified Binary Trie (PBT) backed database.
+	// TypePBT indicates a Partitioned Binary Tree (PBT) backed database.
 	TypePBT
 )
 
@@ -159,7 +159,7 @@ type Trie interface {
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 
-	// IsPBT returns true if the trie is unified binary trie based.
+	// IsPBT returns true if the trie is binary tree based.
 	IsPBT() bool
 }
 

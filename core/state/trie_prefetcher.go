@@ -206,7 +206,7 @@ func (p *triePrefetcher) used(owner common.Hash, root common.Hash, usedAddr []co
 
 // trieID returns an unique trie identifier consists the trie owner and root hash.
 func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
-	// The trie in ubt is only identified by state root
+	// The binary tree is identified by state root alone
 	if p.isPBT {
 		return p.root.Hex()
 	}
@@ -344,8 +344,8 @@ func (sf *subfetcher) terminate(async bool) {
 
 // openTrie resolves the target trie from database for prefetching.
 func (sf *subfetcher) openTrie() error {
-	// Open the ubt tree if the sub-fetcher is in ubt mode. Note, there is
-	// only a single fetcher for ubt.
+	// Open the binary tree if the sub-fetcher is in binary-tree mode. Note,
+	// there is only a single fetcher for it.
 	if sf.db.Type().Is(TypePBT) {
 		tr, err := sf.db.OpenTrie(sf.state)
 		if err != nil {

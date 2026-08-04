@@ -23,18 +23,18 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// PBTDatabase is an implementation of Database interface for Unified Binary Trie.
-// It provides the same functionality as MPTDatabase but uses unified binary
-// trie for state hashing instead of Merkle Patricia Tries.
+// PBTDatabase is an implementation of Database interface for the EIP-8297
+// Partitioned Binary Tree. It provides the same functionality as MPTDatabase
+// but uses the binary tree for state hashing instead of Merkle Patricia Tries.
 type PBTDatabase struct {
 	triedb *triedb.Database
 	codedb *CodeDB
 }
 
-// Type returns Binary, indicating this database is backed by a Universal Binary Trie.
+// Type returns TypePBT, indicating this database is backed by the binary tree.
 func (db *PBTDatabase) Type() DatabaseType { return TypePBT }
 
-// NewPBTDatabase creates a state database with the Unified binary trie manner.
+// NewPBTDatabase creates a state database backed by the binary tree.
 func NewPBTDatabase(triedb *triedb.Database, codedb *CodeDB) *PBTDatabase {
 	if codedb == nil {
 		codedb = NewCodeDB(triedb.Disk())
