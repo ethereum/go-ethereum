@@ -140,11 +140,24 @@ func (t *BinaryTrie) getStem(n binaryNode, stem []byte, pos int) (binaryNode, *g
 	case *branchNode:
 		m := nn.prefix.matchKey(stem, pos)
 		if m < nn.prefix.n {
+			// matchKey stops at the end of the stem, so a prefix running past
+			// that end is indistinguishable here from one that conflicts.
+			// Agreement all the way to the boundary means this branch belongs
+			// to an expanded stem rather than to a different one, and the
+			// group this walk exists to find does not exist as a single node.
+			if pos+m >= 8*len(stem) {
+				return n, nil, ErrPartialStem
+			}
 			return n, nil, nil // diverges inside the prefix: absent
 		}
 		split := pos + nn.prefix.n
 		if split >= 8*len(stem) {
-			return n, nil, nil // ran out of stem bits: different (longer) zone
+			// The prefix consumed the stem exactly and the tree continues
+			// below, which no whole-group tree produces: two distinct stems of
+			// one zone differ before their end, so a branch above a group
+			// always stops short of it. This is the expanded form again, with
+			// the two leaves diverging on the first sub-index bit.
+			return n, nil, ErrPartialStem
 		}
 		if bitAt(stem, split) == 0 {
 			child, g, err := t.getStem(nn.left, stem, split+1)
@@ -168,11 +181,68 @@ func (t *BinaryTrie) getValue(key []byte) ([]byte, error) {
 	if err := validateKey(key); err != nil {
 		return nil, err
 	}
-	g, err := t.getStemGroup(key[:len(key)-1])
-	if err != nil || g == nil {
+	if t.committed {
+		return nil, trie.ErrCommitted
+	}
+	n, v, err := t.getKey(t.root, key, 0)
+	if err != nil {
 		return nil, err
 	}
-	return g.lookup(key[len(key)-1]), nil
+	t.root = n
+	return v, nil
+}
+
+// getKey walks to a single value by its whole key rather than by its stem.
+//
+// The distinction matters only where a stem is expanded into branches and
+// leaves instead of held as one group, which is what a tree built from a
+// proof looks like. getStem cannot cross that boundary: matchKey stops at the
+// end of the stem, so the branch whose prefix carries the stem's remaining
+// bits plus a few sub-index bits never matches, and the walk reports absence
+// for a value that is present. Walking the whole key gives matchKey the sub
+// bits it needs, and the branch arithmetic below is otherwise identical.
+//
+// For a tree holding whole groups the two walks agree: every branch above a
+// group has a prefix ending before the stem does, so the extra key bits are
+// never consulted.
+func (t *BinaryTrie) getKey(n binaryNode, key []byte, pos int) (binaryNode, []byte, error) {
+	switch nn := n.(type) {
+	case empty:
+		return n, nil, nil
+	case hashedNode:
+		resolved, err := t.resolve(nn, keyWalk(key, pos))
+		if err != nil {
+			return n, nil, err
+		}
+		return t.getKey(resolved, key, pos)
+	case *groupNode:
+		if !bytes.Equal(nn.stem, key[:len(key)-1]) {
+			return n, nil, nil
+		}
+		return n, nn.lookup(key[len(key)-1]), nil
+	case *branchNode:
+		if m := nn.prefix.matchKey(key, pos); m < nn.prefix.n {
+			return n, nil, nil // diverges inside the prefix: absent
+		}
+		split := pos + nn.prefix.n
+		if split >= 8*len(key) {
+			return n, nil, nil // no bit left to branch on
+		}
+		if bitAt(key, split) == 0 {
+			child, v, err := t.getKey(nn.left, key, split+1)
+			if child != nn.left {
+				nn.left = child // only on resolution: a write barrier per level otherwise
+			}
+			return n, v, err
+		}
+		child, v, err := t.getKey(nn.right, key, split+1)
+		if child != nn.right {
+			nn.right = child
+		}
+		return n, v, err
+	default:
+		return n, nil, fmt.Errorf("bintrie: unknown node type %T", n)
+	}
 }
 
 //
@@ -281,7 +351,11 @@ func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]by
 		if m == nn.prefix.n {
 			split := pos + nn.prefix.n
 			if split >= 8*len(stem) {
-				return nil, ErrNonConformantKey
+				// As in getStem: a branch consuming the stem exactly, with the
+				// tree continuing below, is an expanded stem rather than a
+				// malformed key. Writing into it would have to rebuild a fold
+				// this walk cannot see all of.
+				return n, ErrPartialStem
 			}
 			bit := bitAt(stem, split)
 			var (
@@ -306,6 +380,15 @@ func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]by
 			}
 			nn.dirty, nn.modified = true, true
 			return nn, nil
+		}
+		// matchKey stops at the end of the stem, so agreement all the way to
+		// that boundary is not a divergence: the branch belongs to an
+		// expanded stem, and the group this insert would merge into is spread
+		// across nodes below. Refuse before acting on it. Splitting here would
+		// index past the stem in bitAt below, and the pure-deletion path above
+		// would return the tree unchanged - a wrong root reported as success.
+		if pos+m >= 8*len(stem) {
+			return n, ErrPartialStem
 		}
 		// Diverges inside the prefix: split the branch. The survivor keeps
 		// the bits after the split; a new top branch keeps the bits before

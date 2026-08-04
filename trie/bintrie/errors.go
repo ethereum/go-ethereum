@@ -36,4 +36,16 @@ var (
 	// restricts the EIP-8297 key space to the embedding's fixed per-zone
 	// lengths, which is what keeps stems non-nested.
 	ErrNonConformantKey = errors.New("bintrie: key does not conform to zone layout")
+
+	// ErrPartialStem is returned when an operation needs a stem's whole value
+	// set but the tree only holds part of it, as expanded branch and leaf
+	// nodes rather than one group.
+	//
+	// A tree built from a proof is the case that produces this: a proof may
+	// open only the leaves it covers, leaving the rest of the stem behind
+	// sibling hashes. Reading a single covered key works and takes the
+	// key-shaped walk; anything that needs the whole group - scanning a
+	// sub-index range, or writing, which restructures the fold - cannot be
+	// answered and says so rather than reporting a wrong absence.
+	ErrPartialStem = errors.New("bintrie: stem is only partially present")
 )
