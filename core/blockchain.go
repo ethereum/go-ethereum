@@ -280,6 +280,15 @@ func (cfg *BlockChainConfig) triedbConfig(isPBT bool) (*triedb.Config, error) {
 		}
 		return nil, fmt.Errorf("binary tree requires the %q state scheme, got %s", rawdb.PathScheme, scheme)
 	}
+	// Witness statistics read a node's path as a nibble string and its depth as
+	// that string's length, and bucket the result into a fixed sixteen levels.
+	// A binary path is a two-byte bit count followed by packed bits, so the
+	// depth is wrong from the first node and passes sixteen after 113 bits,
+	// which indexes off the end of the histogram. Refuse the flag rather than
+	// collect nonsense until something deep enough panics mid-block.
+	if isPBT && cfg.EnableWitnessStats {
+		return nil, errors.New("witness statistics are not supported for the binary tree")
+	}
 	if cfg.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
 			CleanCacheSize: cfg.TrieCleanLimit * 1024 * 1024,

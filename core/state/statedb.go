@@ -1226,9 +1226,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 
 	hash := s.trie.Hash()
 
-	// If witness building is enabled, gather the account trie witness
+	// If witness building is enabled, gather the trie witness. The binary tree
+	// keeps the paths its nodes were resolved at, because a group record is
+	// not its own hash preimage and cannot be re-keyed from its bytes.
 	if s.witness != nil {
-		s.witness.AddState(s.trie.Witness(), common.Hash{})
+		if s.db.Type().Is(TypePBT) {
+			s.witness.AddNodes(s.trie.Witness())
+		} else {
+			s.witness.AddState(s.trie.Witness(), common.Hash{})
+		}
 	}
 	return hash
 }

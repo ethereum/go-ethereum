@@ -18,7 +18,7 @@ package core
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -44,15 +45,6 @@ import (
 //
 // TODO(karalabe): Would be nice to resolve both issues above somehow and move it.
 func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig vm.Config, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
-	// The witness format and the database rebuilt from it below are both
-	// merkle-patricia shaped: MakeHashDB keys nodes by their keccak hash and
-	// the accounts are RLP leaves. A binary tree state cannot be reconstructed
-	// from that, so running anyway would not fail - it would return a root that
-	// cannot match, and the caller would reject its own valid block. Refuse
-	// instead, the same way historic state does.
-	if config.IsPBT() {
-		return common.Hash{}, common.Hash{}, errors.New("stateless execution is not supported for the binary tree")
-	}
 	// Sanity check if the supplied block accidentally contains a set root or
 	// receipt hash. If so, be very loud, but still continue.
 	if block.Root() != (common.Hash{}) {
@@ -61,9 +53,25 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	if block.ReceiptHash() != (common.Hash{}) {
 		log.Error("stateless runner received receipt root it's expected to calculate (faulty consensus client)", "block", block.Number())
 	}
-	// Create and populate the state database to serve as the stateless backend
-	memdb := witness.MakeHashDB()
-	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), state.NewCodeDB(memdb)))
+	// Create and populate the state database to serve as the stateless backend.
+	//
+	// The two trees are rebuilt differently because they are addressed
+	// differently: a merkle node is named by the hash of its own bytes and can
+	// be re-keyed from a bag of blobs, a binary group record folds at a depth
+	// stored inside it and has to keep the path it was resolved at. Picking the
+	// wrong one does not fail loudly - it produces a root that cannot match,
+	// and the caller rejects its own valid block - so the scheme follows the
+	// chain config rather than being inferred from the witness.
+	var (
+		memdb   ethdb.Database
+		tdbconf *triedb.Config
+	)
+	if config.IsPBT() {
+		memdb, tdbconf = witness.MakePathDB(), triedb.PBTWitnessDefaults
+	} else {
+		memdb, tdbconf = witness.MakeHashDB(), triedb.HashDefaults
+	}
+	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, tdbconf), state.NewCodeDB(memdb)))
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
@@ -88,5 +96,25 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	// Almost everything validated, but receipt and state root needs to be returned
 	receiptRoot := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
 	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
+
+	// A witness that did not cover everything the block touched does not fail
+	// the execution above. A missing node is latched into the state database's
+	// error and the read is answered as an absent account or a zero slot, so
+	// the run completes and returns a root computed from state that was never
+	// there. IntermediateRoot does not consult that error either, which leaves
+	// the mismatch to be discovered by whoever compares roots - or not at all,
+	// where the caller trusts what it gets back.
+	//
+	// Only the binary tree is held to this. Merkle witnesses do not currently
+	// capture every bytecode they read - AddCode is reached from StateDB's
+	// accessors, so a stateObject.Code() arriving by another route is never
+	// recorded - and turning that into a hard failure here would reject blocks
+	// that verify today. That gap is real and worth closing, but it belongs to
+	// the merkle witness rather than to this check; see TODO.md.
+	if config.IsPBT() {
+		if err := db.Error(); err != nil {
+			return common.Hash{}, common.Hash{}, fmt.Errorf("incomplete witness: %w", err)
+		}
+	}
 	return stateRoot, receiptRoot, nil
 }

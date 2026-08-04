@@ -270,6 +270,12 @@ func (db *Database) setStateGenerator() error {
 	// here records. Leaving the generator nil marks the flat state as wholly
 	// available, the same state a finished generator leaves behind.
 	if db.isPBT {
+		// A witness-backed database holds trie nodes and nothing else. It has
+		// no flat state, so it must not be attested as having one; see the
+		// note on Config.WitnessOnly for what an attestation would cost.
+		if db.config.WitnessOnly {
+			return nil
+		}
 		return attestFlatState(db.diskdb, db.readOnly)
 	}
 	if generator == nil {

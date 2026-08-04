@@ -196,10 +196,13 @@ func VerifyProof(root common.Hash, key []byte, proofDb ethdb.KeyValueReader) ([]
 			// Derive the key length before slicing by it. A short preimage
 			// gives a negative bound, and the hash check above does not
 			// constrain the shape of what it hashed.
+			//
+			// The three zone lengths are compared one at a time rather than
+			// listed as switch cases because two of them are equal today: a
+			// switch naming all three would not compile, and one naming only
+			// two silently stops covering code keys the moment they diverge.
 			keyLen := len(preimage) - 1 - 32
-			switch keyLen {
-			case AccountKeyLength, StorageKeyLength:
-			default:
+			if keyLen != AccountKeyLength && keyLen != CodeKeyLength && keyLen != StorageKeyLength {
 				return nil, errInvalidSerializedLength
 			}
 			leafKey := preimage[1 : 1+keyLen]

@@ -19,6 +19,7 @@ package stateless
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 
@@ -42,6 +43,25 @@ func (w *Witness) ToExtWitness() *ExtWitness {
 		return bytes.Compare(a, b)
 	})
 
+	// A binary-tree witness carries its paths, so State and Keys travel as
+	// parallel arrays ordered by path. A merkle witness leaves Keys empty and
+	// sorts State by content, which is what it is keyed by; that keeps its
+	// encoding byte-for-byte what it was before Keys carried anything.
+	if len(w.Nodes) > 0 {
+		paths := make([]string, 0, len(w.Nodes))
+		for path := range w.Nodes {
+			paths = append(paths, path)
+		}
+		slices.Sort(paths)
+
+		ext.Keys = make([]hexutil.Bytes, 0, len(paths))
+		ext.State = make([]hexutil.Bytes, 0, len(paths))
+		for _, path := range paths {
+			ext.Keys = append(ext.Keys, []byte(path))
+			ext.State = append(ext.State, w.Nodes[path])
+		}
+		return ext
+	}
 	ext.State = make([]hexutil.Bytes, 0, len(w.State))
 	for node := range w.State {
 		ext.State = append(ext.State, []byte(node))
@@ -68,10 +88,28 @@ func (w *Witness) FromExtWitness(ext *ExtWitness) error {
 	for _, code := range ext.Codes {
 		w.Codes[string(code)] = struct{}{}
 	}
+	// Keys present means a binary-tree witness: State is path-addressed and
+	// the two arrays must line up exactly, so a mismatch is rejected rather
+	// than silently truncated to the shorter one.
+	if len(ext.Keys) > 0 {
+		if len(ext.Keys) != len(ext.State) {
+			return fmt.Errorf("witness has %d keys for %d nodes", len(ext.Keys), len(ext.State))
+		}
+		w.Nodes = make(map[string][]byte, len(ext.Keys))
+		for i, path := range ext.Keys {
+			if _, dup := w.Nodes[string(path)]; dup {
+				return fmt.Errorf("witness repeats the node at path %x", []byte(path))
+			}
+			w.Nodes[string(path)] = ext.State[i]
+		}
+		w.State = make(map[string]struct{})
+		return nil
+	}
 	w.State = make(map[string]struct{}, len(ext.State))
 	for _, node := range ext.State {
 		w.State[string(node)] = struct{}{}
 	}
+	w.Nodes = make(map[string][]byte)
 	return nil
 }
 
