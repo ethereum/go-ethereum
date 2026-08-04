@@ -229,7 +229,6 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		statedb.AddPreimages(results[i].preimages)
 	}
 	statedb.AddPreimages(postState.Preimages())
-	
 	parallelSystemExecTimer.Update(systemExec)
 	parallelTxExecTimer.Update(txExec)
 	parallelStateHashTimer.Update(stateHash)
