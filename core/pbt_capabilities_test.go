@@ -135,6 +135,66 @@ func TestPBTStatelessExecution(t *testing.T) {
 	}
 }
 
+// TestPBTStatelessExecutionWithWrites covers a block that creates state rather
+// than only reading it.
+//
+// Writes are the harder half. Reading resolves nodes and stops; deploying a
+// contract inserts code chunks across several stems, splits branches to make
+// room for them, and rewrites every hash on the way back up. A stem the
+// witness shipped only part of cannot be written to at all - the fold would
+// have to be rebuilt from values that were never sent - so this is where an
+// under-covered witness shows up if the earlier reads did not surface it.
+func TestPBTStatelessExecutionWithWrites(t *testing.T) {
+	genesis, key, sender := pbtCodeReorgFixture(t)
+	engine := beacon.New(ethash.NewFaker())
+	signer := types.LatestSigner(genesis.Config)
+	deploy, contract := deployBigCode(t, key, sender, signer, 0)
+
+	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, 1, deploy)
+	chain, err := NewBlockChain(db, genesis, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+
+	parent := chain.GetHeaderByNumber(0)
+	res, err := chain.ProcessBlock(context.Background(), parent.Root, blocks[0], ExecuteConfig{MakeWitness: true})
+	if err != nil {
+		t.Fatalf("processing the deploying block: %v", err)
+	}
+	witness := res.Witness()
+	if len(witness.Nodes) == 0 {
+		t.Fatal("the witness holds no nodes")
+	}
+	// The deployed code is not in the witness and should not be: it is produced
+	// by running the init code, not read from state. What the witness owes is
+	// the nodes the write path touched on its way to storing it.
+
+	header := types.CopyHeader(blocks[0].Header())
+	header.Root, header.ReceiptHash = common.Hash{}, common.Hash{}
+	task := types.NewBlockWithHeader(header).WithBody(*blocks[0].Body())
+
+	stateRoot, _, err := ExecuteStateless(context.Background(), chain.Config(), vm.Config{}, task, witness)
+	if err != nil {
+		t.Fatalf("stateless execution of a deploying block failed: %v", err)
+	}
+	if stateRoot != blocks[0].Root() {
+		t.Fatalf("stateless state root mismatch: got %x, want %x", stateRoot, blocks[0].Root())
+	}
+	// The contract has to actually be there afterwards, so the run is known to
+	// have written the code rather than skipped past it.
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+	state, err := chain.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.GetCode(contract)) == 0 {
+		t.Fatalf("no code at %x after the deploy", contract)
+	}
+}
+
 // TestPBTStatelessRejectsIncompleteWitness pins that a witness missing a node
 // the block touches is refused, rather than answered around.
 //
