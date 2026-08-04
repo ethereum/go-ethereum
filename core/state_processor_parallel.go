@@ -83,7 +83,7 @@ type txExecResult struct {
 
 // processParallel executes the block's transactions concurrently using the
 // block-level access list.
-func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, cfg vm.Config) (*ProcessResult, error) {
+func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) (*ProcessResult, error) {
 	var (
 		config = p.chainConfig()
 		header = block.Header()
@@ -155,6 +155,9 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if jumpDestCache != nil {
 		preEVM.SetJumpDestCache(jumpDestCache)
 	}
+	if precompileCache != nil {
+		preEVM.SetPrecompileCache(precompileCache)
+	}
 	blockAccessList.Merge(PreExecution(ctx, block.BeaconRoot(), parent, config, preEVM, header.Number, header.Time))
 	preEVM.Release()
 	systemExec += time.Since(preStart)
@@ -163,7 +166,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	// own ephemeral state instance, whose reads are served from the block-level
 	// access list overlaid on the parent state.
 	txStart := time.Now()
-	results, err := p.executeTransactionsParallel(block, parentRoot, db, base, lookup, signer, jumpDestCache, cfg)
+	results, err := p.executeTransactionsParallel(block, parentRoot, db, base, lookup, signer, jumpDestCache, precompileCache, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -207,6 +210,9 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if jumpDestCache != nil {
 		postEVM.SetJumpDestCache(jumpDestCache)
 	}
+	if precompileCache != nil {
+		postEVM.SetPrecompileCache(precompileCache)
+	}
 	requests, postBAL, err := PostExecution(ctx, config, header.Number, header.Time, allLogs, postEVM, postIndex)
 	postEVM.Release()
 	if err != nil {
@@ -249,7 +255,7 @@ func newAccessListState(db state.Database, parentRoot common.Hash, base state.Re
 // executeTransactionsParallel applies all transactions to independent,
 // access-list-backed state instances using a pool of workers, and returns
 // the per-transaction results in block order.
-func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, signer types.Signer, jumpDestCache vm.JumpDestCache, cfg vm.Config) ([]txExecResult, error) {
+func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, signer types.Signer, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) ([]txExecResult, error) {
 	var (
 		config      = p.chainConfig()
 		header      = block.Header()
@@ -272,6 +278,9 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 			evm := vm.NewEVM(context, nil, config, cfg)
 			if jumpDestCache != nil {
 				evm.SetJumpDestCache(jumpDestCache)
+			}
+			if precompileCache != nil {
+				evm.SetPrecompileCache(precompileCache)
 			}
 			defer evm.Release()
 
