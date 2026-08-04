@@ -166,8 +166,8 @@ func applyMsg(t *testing.T, sdb *state.StateDB, tx *types.Transaction) (*Executi
 // assertBudgetSane validates the final tx-level GasBudget vector:
 //
 //	execution: ExecutionGas + UsedExecutionGas + Spilled == initial.ExecutionGas
-//	state:   StateGas + UsedStateGas               == initial.StateGas + Spilled
-//	scalar:  Used(initial)                         == UsedExecutionGas + UsedStateGas
+//	state:     StateGas + UsedStateGas                   == initial.StateGas + Spilled
+//	scalar:    Used(initial)                             == UsedExecutionGas + UsedStateGas
 func assertBudgetSane(t *testing.T, initial, got vm.GasBudget) {
 	t.Helper()
 	if got.ExecutionGas+got.UsedExecutionGas+got.Spilled != initial.ExecutionGas {
@@ -187,7 +187,7 @@ func assertBudgetSane(t *testing.T, initial, got vm.GasBudget) {
 // assertPoolSane validates the whole 2D block-gas-pool vector after a single tx.
 //
 //	receipt:    cumulativeUsed == res.UsedGas <= res.MaxUsedGas
-//	execution:    cumulativeExecution <= max(res.MaxUsedGas - cumulativeState, floor)
+//	execution:  cumulativeExecution <= max(res.MaxUsedGas - cumulativeState, floor)
 //	            (the calldata floor pads the execution dimension alone, so the
 //	            dimension sum may exceed the pre-refund peak when it binds)
 //	bottleneck: Used() == max(cumulativeExecution, cumulativeState) <= initial

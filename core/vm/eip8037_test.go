@@ -87,8 +87,8 @@ func run8037(t *testing.T, code []byte, gas GasBudget, value *uint256.Int, setup
 // for any frame exit (success, revert or halt), validating the whole vector.
 //
 //	execution: ExecutionGas + UsedExecutionGas + Spilled == initial.ExecutionGas
-//	state:   StateGas + UsedStateGas               == initial.StateGas + Spilled
-//	scalar:  Used(initial)                         == UsedExecutionGas + UsedStateGas
+//	state:     StateGas + UsedStateGas                   == initial.StateGas + Spilled
+//	scalar:    Used(initial)                             == UsedExecutionGas + UsedStateGas
 func assertBudgetSane(t *testing.T, initial, got GasBudget) {
 	t.Helper()
 	if got.ExecutionGas+got.UsedExecutionGas+got.Spilled != initial.ExecutionGas {
