@@ -227,17 +227,12 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
-	// The EVM records SHA3 preimages into whichever state it executes against,
-	// which on this path are the ephemeral states the caller never sees. Fold
-	// them into the canonical statedb, the one WriteBlockWithState persists
-	// from. This has to follow the join above, as StateDB is not safe for
-	// concurrent mutation. The maps are empty unless preimage recording is
-	// enabled, so this stays cheap without consulting the config.
 	statedb.AddPreimages(preState.Preimages())
 	for i := range results {
 		statedb.AddPreimages(results[i].preimages)
 	}
 	statedb.AddPreimages(postState.Preimages())
+	
 	parallelSystemExecTimer.Update(systemExec)
 	parallelTxExecTimer.Update(txExec)
 	parallelStateHashTimer.Update(stateHash)
