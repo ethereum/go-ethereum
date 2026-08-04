@@ -291,6 +291,14 @@ func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
 	}
 }
 
+// AddPreimages adopts the SHA3 preimages recorded by another state, e.g. the
+// ephemeral per-transaction states of parallel block execution. Unlike
+// AddPreimage the slices are taken as-is instead of copied, so the caller must
+// not retain or mutate them.
+func (s *StateDB) AddPreimages(preimages map[common.Hash][]byte) {
+	maps.Copy(s.preimages, preimages)
+}
+
 // Preimages returns a list of SHA3 preimages that have been submitted.
 func (s *StateDB) Preimages() map[common.Hash][]byte {
 	return s.preimages
