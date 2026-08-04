@@ -79,6 +79,10 @@ type txExecResult struct {
 	// gas contributions to the two block-inclusion dimensions.
 	execution uint64
 	state     uint64
+
+	// preimages are the SHA3 preimages the transaction's EVM recorded into its
+	// ephemeral state.
+	preimages map[common.Hash][]byte
 }
 
 // processParallel executes the block's transactions concurrently using the
@@ -226,6 +230,11 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
+	statedb.AddPreimages(preState.Preimages())
+	for i := range results {
+		statedb.AddPreimages(results[i].preimages)
+	}
+	statedb.AddPreimages(postState.Preimages())
 	parallelSystemExecTimer.Update(systemExec)
 	parallelTxExecTimer.Update(txExec)
 	parallelStateHashTimer.Update(stateHash)
@@ -316,6 +325,7 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 					accessList: accessList,
 					execution:  gp.CumulativeExecution(),
 					state:      gp.CumulativeState(),
+					preimages:  sdb.Preimages(),
 				}
 			}
 		})
