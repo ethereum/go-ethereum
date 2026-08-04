@@ -55,7 +55,7 @@ import (
 //	pathdb rollback (Recover)     triedb/pathdb/database.go        triedb/pathdb/pbt_rollback_test.go
 //	state sync / AdoptSyncedState triedb/pathdb/database.go        triedb/pathdb/pbt_rollback_test.go
 //	opening a tree datadir as MPT cmd/utils MakeTrieDatabase       cmd/geth/bintrie_convert_test.go
-//	debug_storageRangeAt          eth/api_debug.go                 not pinned - guard read, no test
+//	debug_storageRangeAt          eth/api_debug.go                 eth/api_debug_test.go
 //
 // Anything on this list failing a spec fixture is a known gap rather than a
 // conformance defect, which is the distinction that makes the reference

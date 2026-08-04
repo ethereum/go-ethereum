@@ -3,48 +3,27 @@
 Known gaps in the EIP-8297 binary tree (PBT) work, recorded so they are not
 rediscovered by accident.
 
-## Pin the `debug_storageRangeAt` refusal with a test
+## The engine API has no stateless-consume or witness-build path for the tree
 
-`storageRangeAt` refuses under the binary tree — `eth/api_debug.go:240`, inside
-the function at `:234`:
+`eth/catalyst/witness.go` has `NewPayloadWithWitnessV1` through **`V5`**,
+`ExecuteStatelessPayloadV1` through `V4`, and `ForkchoiceUpdatedWithWitnessV1`
+through `V3`. So *producing* a binary tree witness already works:
+`NewPayloadWithWitnessV5` is gated on `forks.Amsterdam` and returns one on
+payload insertion.
 
-```go
-if statedb.Database().TrieDB().IsPBT() {
-    return StorageRangeResult{}, errors.New("debug_storageRangeAt is not supported for the binary tree")
-}
-```
+What is missing is the other two directions:
 
-The guard is correct and was verified by reading, but **no test exercises it**.
-It is the one entry in the capability contract index (see the table at the top
-of `core/pbt_capabilities_test.go`) marked *not pinned*, and every other refusal
-in that table has a test next to its guard.
+- **Consumption** — an `ExecuteStatelessPayloadV5`. `V4` stops at Bogota.
+- **Requesting a build with a witness** — a `ForkchoiceUpdatedWithWitnessV4`.
+  `V3` stops at Bogota too.
 
-Why it matters: the tree keeps no per-account storage trie to range over and the
-account carries no storage root, so without the guard the empty value below it
-would report **every contract as having no storage** — a wrong answer rather
-than an error. That is the failure mode the rest of the capability work exists
-to prevent, and it is currently held only by code review.
-
-What the test needs: `TestStorageRangeAt` (`eth/api_debug_test.go:274`) builds
-its state with `state.New(root, db)` over a merkle-patricia database, so a PBT
-case needs a binary-tree `triedb` in the `eth` package. `core/state`'s
-`newPBTState` helper (in `core/state/pbt_semantics_test.go`) is the shape to
-copy — it uses `triedb.NewDatabase(disk, triedb.PBTDefaults)`. Assert the call
-returns an error naming the binary tree, and keep the existing merkle case as
-the control so the refusal is known to be tree-specific.
-
-## The engine API cannot carry a stateless binary tree payload
-
-`eth/catalyst/witness.go` has `ExecuteStatelessPayloadV1` through `V4`, and
-`ForkchoiceUpdatedWithWitnessV1` through `V3`. There is no `V5` of either. The
-binary tree activates at Amsterdam and so needs `NewPayloadV5` /
-`ForkchoiceUpdatedV4`, which means a binary tree payload can neither be
-*requested* with a witness nor stateless-*executed* through the engine API.
-
-Nothing guards this. Those methods relied on the blanket refusal in
-`core/stateless.go`, which is gone now that stateless execution works, so they
-will attempt a binary tree payload and fail somewhere further in rather than
-saying what is missing.
+Both refuse cleanly meanwhile rather than misbehaving, because **Amsterdam is
+absent from both fork gates**. `ExecuteStatelessPayloadV4` admits
+`Prague, Osaka, BPO1-5, Bogota`, so a binary tree payload is rejected with
+*"newPayloadV4 must only be called for prague/osaka payloads"* well before
+reaching `ExecuteStateless`. `ForkchoiceUpdatedWithWitnessV3` admits that set
+plus `Cancun`, and only checks it when payload attributes are present — which
+is exactly the case that requests a build, so the gap that matters is covered.
 
 Shape to copy: `TestWitnessCreationAndConsumption` (`eth/catalyst/api_test.go`)
 drives the whole loop, but only at V3. The binary tree fixture to extend is
