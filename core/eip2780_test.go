@@ -69,7 +69,7 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			value: uint256.NewInt(1),
 			// TxBaseCost + ColdAccountAccess + TxValueCost + TransferLogCost = 21,000
 			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
-				params.TxValueCost2780 + params.TransferLogCost2780,
+				params.TxValueCost2780,
 		},
 		{
 			name:  "contract creation, value = 0",
@@ -84,8 +84,8 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			name:  "contract creation, value > 0",
 			to:    nil,
 			value: uint256.NewInt(1),
-			// TxBaseCost + CreateAccess + TransferLogCost = 24,756 execution.
-			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam + params.TransferLogCost2780,
+			// TxBaseCost + CreateAccess = 24,756 execution.
+			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 		},
 		{
 			name:  "value transfer with authorizations",
@@ -95,7 +95,7 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			// Each authorization adds the state-independent per-auth base
 			// (cold authority access included).
 			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
-				params.TxValueCost2780 + params.TransferLogCost2780 + 3*params.RegularPerAuthBaseCost,
+				params.TxValueCost2780 + 3*params.RegularPerAuthBaseCost,
 		},
 	}
 	for _, tc := range cases {
@@ -156,7 +156,7 @@ func TestEIP2780Gas(t *testing.T) {
 	const (
 		cold     = params.ColdAccountAccessAmsterdam
 		base     = params.TxBaseCost2780
-		valueCst = params.TxValueCost2780 + params.TransferLogCost2780
+		valueCst = params.TxValueCost2780
 	)
 	var (
 		existingEOA  = common.HexToAddress("0xe0a0000000000000000000000000000000000001")
@@ -205,7 +205,7 @@ func TestEIP2780Gas(t *testing.T) {
 		// case 9: contract-creation transaction, value = 0.
 		{"create/zero-value", createTx(0, 300_000, nil), base + params.CreateAccessAmsterdam, newAccountState},
 		// case 10: contract-creation transaction, value > 0.
-		{"create/value", valueCreateTx(1), base + params.CreateAccessAmsterdam + params.TransferLogCost2780, newAccountState},
+		{"create/value", valueCreateTx(1), base + params.CreateAccessAmsterdam, newAccountState},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -404,7 +404,7 @@ func TestEIP2780RecipientOOG(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	recipient := common.HexToAddress("0xbeef000000000000000000000000000000000004")
 	intrinsic := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
-		params.TxValueCost2780 + params.TransferLogCost2780 + params.RegularPerAuthBaseCost
+		params.TxValueCost2780 + params.RegularPerAuthBaseCost
 	// The reservoir case needs a near-cap intrinsic cost. This leaves just
 	// enough total budget for the authorization but not for the recipient leaf.
 	const (
@@ -537,7 +537,7 @@ func TestEIP2780RecipientKinds(t *testing.T) {
 	const (
 		base     = params.TxBaseCost2780
 		cold     = params.ColdAccountAccessAmsterdam
-		valueCst = params.TxValueCost2780 + params.TransferLogCost2780
+		valueCst = params.TxValueCost2780
 	)
 	nonceOnly := common.HexToAddress("0xbeef000000000000000000000000000000000005")
 	precompile := common.BytesToAddress([]byte{4}) // identity; 15 gas for empty input
@@ -668,7 +668,7 @@ func TestEIP2780InstallDispatch(t *testing.T) {
 		base     = params.TxBaseCost2780
 		cold     = params.ColdAccountAccessAmsterdam
 		perAuth  = params.RegularPerAuthBaseCost
-		valueCst = params.TxValueCost2780 + params.TransferLogCost2780
+		valueCst = params.TxValueCost2780
 	)
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	senderAuth, err := types.SignSetCode(senderKey, types.SetCodeAuthorization{
@@ -978,7 +978,7 @@ func TestEIP2780AuthorityAccountWrite(t *testing.T) {
 		cold     = params.ColdAccountAccessAmsterdam
 		aw       = params.AccountWriteAmsterdam
 		perAuth  = params.RegularPerAuthBaseCost
-		valueCst = params.TxValueCost2780 + params.TransferLogCost2780
+		valueCst = params.TxValueCost2780
 	)
 	existingEOA := common.HexToAddress("0xe0a0000000000000000000000000000000000002")
 
