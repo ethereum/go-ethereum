@@ -264,7 +264,7 @@ func TestIntrinsicGas(t *testing.T) {
 			isHomestead: true,
 			isEIP2028:   true,
 			isAmsterdam: true,
-			// EIP-2780: creation regular gas is TxBaseCost + CreateAccess (23,000);
+			// EIP-2780: creation execution gas is TxBaseCost + CreateAccess (23,000);
 			// the new-account state charge is applied at runtime.
 			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 		},

@@ -115,7 +115,7 @@ func (t *muxTracer) OnGasChangeV2(old, new tracing.Gas, reason tracing.GasChange
 		if t.OnGasChangeV2 != nil {
 			t.OnGasChangeV2(old, new, reason)
 		} else if t.OnGasChange != nil {
-			t.OnGasChange(old.Regular, new.Regular, reason)
+			t.OnGasChange(old.Execution, new.Execution, reason)
 		}
 	}
 }

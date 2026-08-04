@@ -271,7 +271,7 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // - any error that occurred
 func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address common.Address, input []byte, gas GasBudget, logger *tracing.Hooks, rules params.Rules, cache *PrecompileCache) (ret []byte, remaining GasBudget, err error) {
 	gasCost := p.RequiredGas(input)
-	prior, ok := gas.ChargeRegular(gasCost)
+	prior, ok := gas.ChargeExecution(gasCost)
 	if !ok {
 		return nil, gas, ErrOutOfGas
 	}

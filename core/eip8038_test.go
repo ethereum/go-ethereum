@@ -38,7 +38,7 @@ func newAuthTestTransition(sdb *state.StateDB) *stateTransition {
 }
 
 // A net-new delegation on a fresh, cold authority is charged ACCOUNT_WRITE in
-// regular gas (the authority's cold access is paid unconditionally at the
+// execution gas (the authority's cold access is paid unconditionally at the
 // intrinsic phase, not here), plus the account leaf and the indicator bytes in
 // state gas.
 func TestAuthRuntimeChargeNetNew(t *testing.T) {
@@ -47,8 +47,8 @@ func TestAuthRuntimeChargeNetNew(t *testing.T) {
 	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != nil {
 		t.Fatal(err)
 	}
-	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
-		t.Fatalf("regular charged = %d, want %d", st.gasRemaining.UsedRegularGas, want)
+	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedExecutionGas != want {
+		t.Fatalf("execution charged = %d, want %d", st.gasRemaining.UsedExecutionGas, want)
 	}
 	if want := int64(authWorstState); st.gasRemaining.UsedStateGas != want {
 		t.Fatalf("state charged = %d, want %d", st.gasRemaining.UsedStateGas, want)
@@ -65,8 +65,8 @@ func TestAuthRuntimeChargeExistingAccount(t *testing.T) {
 	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != nil {
 		t.Fatal(err)
 	}
-	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
-		t.Fatalf("regular charged = %d, want %d", st.gasRemaining.UsedRegularGas, want)
+	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedExecutionGas != want {
+		t.Fatalf("execution charged = %d, want %d", st.gasRemaining.UsedExecutionGas, want)
 	}
 	if want := int64(authBaseState); st.gasRemaining.UsedStateGas != want {
 		t.Fatalf("state charged = %d, want %d", st.gasRemaining.UsedStateGas, want)
@@ -84,8 +84,8 @@ func TestAuthRuntimeChargeWarmAuthority(t *testing.T) {
 	if err := st.applyAuthorization(rules8037, &auth, map[common.Address]*authTracking{}); err != nil {
 		t.Fatal(err)
 	}
-	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
-		t.Fatalf("regular charged = %d, want %d (warm authority)", st.gasRemaining.UsedRegularGas, want)
+	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedExecutionGas != want {
+		t.Fatalf("execution charged = %d, want %d (warm authority)", st.gasRemaining.UsedExecutionGas, want)
 	}
 	if want := int64(authBaseState); st.gasRemaining.UsedStateGas != want {
 		t.Fatalf("state charged = %d, want %d", st.gasRemaining.UsedStateGas, want)
@@ -102,9 +102,9 @@ func TestAuthRuntimeInvalidNoCharge(t *testing.T) {
 	if err := st.applyAuthorization(rules8037, &bad, map[common.Address]*authTracking{}); err == nil {
 		t.Fatal("expected invalid-authorization error")
 	}
-	if st.gasRemaining.UsedRegularGas != 0 || st.gasRemaining.UsedStateGas != 0 {
+	if st.gasRemaining.UsedExecutionGas != 0 || st.gasRemaining.UsedStateGas != 0 {
 		t.Fatalf("charged = <%d,%d>, want <0,0> (invalid authorization)",
-			st.gasRemaining.UsedRegularGas, st.gasRemaining.UsedStateGas)
+			st.gasRemaining.UsedExecutionGas, st.gasRemaining.UsedStateGas)
 	}
 }
 
@@ -122,8 +122,8 @@ func TestAuthRuntimeDuplicateAuthorityOnce(t *testing.T) {
 	if err := st.applyAuthorization(rules8037, &a1, authorities); err != nil {
 		t.Fatal(err)
 	}
-	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedRegularGas != want {
-		t.Fatalf("regular charged = %d, want %d (once)", st.gasRemaining.UsedRegularGas, want)
+	if want := params.AccountWriteAmsterdam; st.gasRemaining.UsedExecutionGas != want {
+		t.Fatalf("execution charged = %d, want %d (once)", st.gasRemaining.UsedExecutionGas, want)
 	}
 	if want := int64(authWorstState); st.gasRemaining.UsedStateGas != want {
 		t.Fatalf("state charged = %d, want %d (once)", st.gasRemaining.UsedStateGas, want)
