@@ -73,6 +73,43 @@ type testPeerV2 struct {
 	nAccessListRequests atomic.Int64
 }
 
+var errInjectedCatchUpBatchWrite = errors.New("injected catch-up batch write failure")
+
+// failCatchUpBatchDB fails the first batch that writes flat state, while direct
+// database writes remain usable for Sync's deferred journal save.
+type failCatchUpBatchDB struct {
+	ethdb.Database
+	failed atomic.Bool
+}
+
+func (db *failCatchUpBatchDB) NewBatch() ethdb.Batch {
+	return &failCatchUpBatch{Batch: db.Database.NewBatch(), db: db}
+}
+
+func (db *failCatchUpBatchDB) NewBatchWithSize(size int) ethdb.Batch {
+	return &failCatchUpBatch{Batch: db.Database.NewBatchWithSize(size), db: db}
+}
+
+type failCatchUpBatch struct {
+	ethdb.Batch
+	db              *failCatchUpBatchDB
+	writesFlatState bool
+}
+
+func (b *failCatchUpBatch) Put(key, value []byte) error {
+	if bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) || bytes.HasPrefix(key, rawdb.SnapshotStoragePrefix) {
+		b.writesFlatState = true
+	}
+	return b.Batch.Put(key, value)
+}
+
+func (b *failCatchUpBatch) Write() error {
+	if b.writesFlatState && b.db.failed.CompareAndSwap(false, true) {
+		return errInjectedCatchUpBatchWrite
+	}
+	return b.Batch.Write()
+}
+
 func newTestPeerV2(id string, t *testing.T, term func()) *testPeerV2 {
 	peer := &testPeerV2{
 		id:                       id,
@@ -1934,6 +1971,66 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 	if loader.pivot.Hash() != wantHash {
 		t.Errorf("persisted pivot mismatch after partial catchUp: got %v, want %v (block A+2)",
 			loader.pivot.Hash(), wantHash)
+	}
+}
+
+// TestCatchUpBatchFailureKeepsCommittedPivot verifies that a failed atomic
+// flat-state and journal commit cannot be followed by a deferred journal save
+// that advances the pivot on its own.
+func TestCatchUpBatchFailureKeepsCommittedPivot(t *testing.T) {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		t.Run(scheme, func(t *testing.T) {
+			fix := seedCompletedSync(t, scheme)
+			header101 := rawdb.ReadHeader(fix.db, fix.header102.ParentHash, fix.pivotA.Number.Uint64()+1)
+			if header101 == nil {
+				t.Fatal("missing catch-up header")
+			}
+			db := &failCatchUpBatchDB{Database: fix.db}
+
+			var (
+				once   sync.Once
+				cancel = make(chan struct{})
+				term   = func() { once.Do(func() { close(cancel) }) }
+			)
+			syncer := newSyncerV2(db, fix.nodeScheme)
+			src := newTestPeerV2("catchup-failure", t, term)
+			src.accessLists = fix.bals
+			syncer.Register(src)
+			src.remote = syncer
+
+			if err := syncer.Sync(header101, cancel); !errors.Is(err, errInjectedCatchUpBatchWrite) {
+				t.Fatalf("expected injected batch failure, got %v", err)
+			}
+			if !db.failed.Load() {
+				t.Fatal("catch-up batch write was not failed")
+			}
+			if syncer.pivot == nil || syncer.pivot.Hash() != fix.pivotA.Hash() {
+				t.Fatalf("in-memory pivot advanced after failed batch: got %v, want %v", syncer.pivot, fix.pivotA.Hash())
+			}
+			progress := decodeJournal(t, db)
+			if progress.Pivot == nil || progress.Pivot.Hash() != fix.pivotA.Hash() {
+				t.Fatalf("persisted pivot advanced after failed batch: got %v, want %v", progress.Pivot, fix.pivotA.Hash())
+			}
+			assertAccountBalance(t, db, fix.hashY, 50)
+
+			// A fresh syncer must retry the failed block instead of treating it as
+			// already applied.
+			retry := newSyncerV2(db, fix.nodeScheme)
+			retry.loadSyncStatus()
+			var (
+				retryOnce   sync.Once
+				retryCancel = make(chan struct{})
+				retryTerm   = func() { retryOnce.Do(func() { close(retryCancel) }) }
+			)
+			retrySrc := newTestPeerV2("catchup-retry", t, retryTerm)
+			retrySrc.accessLists = fix.bals
+			retry.Register(retrySrc)
+			retrySrc.remote = retry
+			if err := retry.catchUp(header101, retryCancel); err != nil {
+				t.Fatalf("catch-up retry failed: %v", err)
+			}
+			assertAccountBalance(t, db, fix.hashY, 1000)
+		})
 	}
 }
 

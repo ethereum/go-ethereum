@@ -918,16 +918,18 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 			}
 
 			// Persist incremental progress so a crash mid-catchUp can resume
-			// from the next unapplied block.
-			s.lock.Lock()
-			s.pivot = headers[hash]
-			s.lock.Unlock()
-			s.saveSyncStatusWithDB(batch)
+			// from the next unapplied block. Serialize the next pivot without
+			// advancing the in-memory pivot until the batch has committed.
+			nextPivot := headers[hash]
+			s.saveSyncStatusWithPivot(batch, nextPivot)
 
 			// Commit the state transition alongside the sync progress atomically.
 			if err := batch.Write(); err != nil {
 				return err
 			}
+			s.lock.Lock()
+			s.pivot = nextPivot
+			s.lock.Unlock()
 		}
 		log.Info("BAL catch-up progress", "applied", end, "target", to, "remaining", to-end)
 	}
@@ -1419,6 +1421,12 @@ func (s *syncerV2) saveSyncStatus() {
 
 // saveSyncStatusWithDB marshals the remaining sync tasks into the given database.
 func (s *syncerV2) saveSyncStatusWithDB(db ethdb.KeyValueWriter) {
+	s.saveSyncStatusWithPivot(db, s.pivot)
+}
+
+// saveSyncStatusWithPivot marshals the remaining sync tasks and the supplied
+// pivot into the given database.
+func (s *syncerV2) saveSyncStatusWithPivot(db ethdb.KeyValueWriter, pivot *types.Header) {
 	// Serialize any partial progress to disk before spinning down
 	for _, task := range s.tasks {
 		// Save the account hashes of completed storage.
@@ -1432,7 +1440,7 @@ func (s *syncerV2) saveSyncStatusWithDB(db ethdb.KeyValueWriter) {
 	}
 	// Store the actual progress markers.
 	progress := &syncProgressV2{
-		Pivot:          s.pivot,
+		Pivot:          pivot,
 		Tasks:          s.tasks,
 		Phase:          s.getPhase(),
 		AccountSynced:  s.accountSynced,
