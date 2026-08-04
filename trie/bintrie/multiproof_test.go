@@ -238,6 +238,78 @@ func TestMultiproofRejectsForgery(t *testing.T) {
 	})
 }
 
+// TestMultiproofProvesAbsence covers the keys a proof says are *not* there.
+//
+// Absence is most of what a stateless client asks about - a fresh storage
+// slot, an account that does not exist - so a proof that can only answer
+// present keys is not usable. It is also the case a root check alone does not
+// force: a group whose queried sub-index is missing hashes the same whether or
+// not the proof opened the path that shows it missing, so the walk has to
+// open it deliberately.
+func TestMultiproofProvesAbsence(t *testing.T) {
+	db, root, addr, codeHash := mpFixture(t, 24576, 64)
+
+	var (
+		ghost = common.Address{0xf0, 0x0d, 0xff} // never written
+		// The header stem holds BASIC_DATA (0), CODE_HASH (1) and the code
+		// chunks from CODE_OFFSET up. Sub-index 5 is a hole inside a stem that
+		// very much exists, which is the harder of the two absence shapes.
+		holeInLiveStem = bintrie.HeaderKey(addr, 5)
+		absentStem     = bintrie.BasicDataKey(ghost)
+		absentSlot     = bintrie.StorageSlotKey(addr, common.Hash{0xab, 0xcd}.Bytes())
+	)
+	for _, tc := range []struct {
+		name string
+		keys [][]byte
+	}{
+		{"hole in a live stem", [][]byte{holeInLiveStem}},
+		{"absent stem", [][]byte{absentStem}},
+		{"absent storage slot", [][]byte{absentSlot}},
+		{"absent only, several", [][]byte{holeInLiveStem, absentStem, absentSlot}},
+		{"absent mixed with present", [][]byte{
+			bintrie.BasicDataKey(addr),
+			holeInLiveStem,
+			bintrie.CodeChunkKey(addr, codeHash, 0),
+			absentStem,
+			bintrie.CodeChunkKey(addr, codeHash, 300),
+			absentSlot,
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ref := openTrie(t, db, root)
+			src := openTrie(t, db, root)
+			mp, err := src.ProveMulti(tc.keys)
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := bintrie.DecodeMultiproof(mp.Encode())
+			if err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			verified, err := bintrie.VerifyMultiproof(root, decoded)
+			if err != nil {
+				t.Fatalf("verify: %v", err)
+			}
+			for _, k := range tc.keys {
+				want, err := ref.GetStemValue(k)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := verified.GetStemValue(k)
+				if err != nil {
+					t.Fatalf("key %x: proof cannot answer it: %v", k, err)
+				}
+				if !bytes.Equal(got, want) {
+					t.Fatalf("key %x: got %x, want %x", k, got, want)
+				}
+				if want == nil && got != nil {
+					t.Fatalf("key %x: absent key answered with %x", k, got)
+				}
+			}
+		})
+	}
+}
+
 // TestCodeZoneKeyVerifies covers the content-addressed code zone against a
 // real root, which nothing did before.
 //

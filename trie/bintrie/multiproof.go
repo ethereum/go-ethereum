@@ -217,15 +217,19 @@ func groupToken(g *groupNode, keys [][]byte, pos int) mpToken {
 	for _, sub := range g.subs {
 		bitmapSet(&tok.present, sub)
 	}
-	// Only keys naming this stem contribute; the rest are absent here and the
-	// stem itself is their witness.
+	// Every queried key that reaches this group opens the leaf its walk lands
+	// on, whether or not the stem and sub-index match. For a key that is
+	// present that leaf holds its value; for one that is absent the leaf is
+	// the witness, since a leaf carrying a different key is what proves the
+	// queried one is not there.
+	//
+	// Marking only present keys - the obvious reading - leaves a group with
+	// no covered sub-index collapsing to a single hash, and a verifier
+	// reading the absent key then resolves into it and reports a missing node
+	// rather than an absence. The root check does not catch that: the group
+	// hashes the same either way.
 	for _, k := range keys {
-		if !bytes.Equal(k[:len(k)-1], g.stem) {
-			continue
-		}
-		if sub := k[len(k)-1]; g.lookup(sub) != nil {
-			bitmapSet(&tok.covered, sub)
-		}
+		bitmapSet(&tok.covered, g.subs[groupLanding(g.subs, k[len(k)-1])])
 	}
 	for i, sub := range g.subs {
 		if bitmapHas(&tok.covered, sub) {
@@ -240,6 +244,31 @@ func groupToken(g *groupNode, keys [][]byte, pos int) mpToken {
 	}
 	collectGroupStubs(g, &tok.covered, 0, len(g.subs), 0, pos, 8*len(g.stem), &tok.stubs)
 	return tok
+}
+
+// groupLanding returns the index in subs of the leaf a walk toward sub
+// reaches, following the same split bits foldRange uses. For a sub-index the
+// stem holds that is its own leaf; for one it does not, it is the leaf whose
+// key diverges from it, which is what a verifier needs to conclude absence.
+//
+// The recursion always shrinks: subs is sorted and b is the first bit on which
+// its extremes differ, so subs[i] has that bit clear and subs[j-1] has it set,
+// putting the split strictly inside the range.
+func groupLanding(subs []byte, sub byte) int {
+	i, j := 0, len(subs)
+	for j-i > 1 {
+		b := 8 - bits.Len8(subs[i]^subs[j-1])
+		m := i + 1
+		for m < j && subs[m]>>(7-b)&1 == 0 {
+			m++
+		}
+		if sub>>(7-b)&1 == 0 {
+			j = m
+		} else {
+			i = m
+		}
+	}
+	return i
 }
 
 // collectGroupStubs mirrors foldRange, emitting the hash of every maximal
