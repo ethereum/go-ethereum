@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"maps"
 	"math/big"
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // The binary tree does not support everything the merkle-patricia trie does.
@@ -162,6 +164,54 @@ func TestPBTStatelessRejectsIncompleteWitness(t *testing.T) {
 		if root != (common.Hash{}) {
 			t.Fatalf("a rejected witness still produced a root: %x", root)
 		}
+	}
+}
+
+// TestPBTWitnessSurvivesEncoding pins that a binary tree witness survives the
+// consensus encoding, which is the form debug_executionWitness hands out and
+// the form anything off-process would receive.
+//
+// The paths are the part at risk. A merkle witness is a bag of blobs and needs
+// no keys, so the key array went unused and unwritten; a binary witness is
+// meaningless without it, and a decoder that dropped or misaligned it would
+// produce a witness that still looks well-formed and rebuilds into the wrong
+// tree.
+func TestPBTWitnessSurvivesEncoding(t *testing.T) {
+	chain, block, witness := pbtWitnessFixture(t)
+
+	var buf bytes.Buffer
+	if err := witness.EncodeRLP(&buf); err != nil {
+		t.Fatalf("encoding a binary tree witness: %v", err)
+	}
+	decoded := new(stateless.Witness)
+	if err := rlp.DecodeBytes(buf.Bytes(), decoded); err != nil {
+		t.Fatalf("decoding a binary tree witness: %v", err)
+	}
+	if len(decoded.Nodes) != len(witness.Nodes) {
+		t.Fatalf("round trip changed the node count: %d -> %d", len(witness.Nodes), len(decoded.Nodes))
+	}
+	for path, want := range witness.Nodes {
+		got, ok := decoded.Nodes[path]
+		if !ok {
+			t.Fatalf("round trip lost the node at path %x", path)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("path %x: node changed across the round trip", path)
+		}
+	}
+	// The real assertion: the decoded witness still reconstructs the state.
+	// Matching maps would not catch paths that survive but no longer address
+	// what they did.
+	header := types.CopyHeader(block.Header())
+	header.Root, header.ReceiptHash = common.Hash{}, common.Hash{}
+	task := types.NewBlockWithHeader(header).WithBody(*block.Body())
+
+	stateRoot, _, err := ExecuteStateless(context.Background(), chain.Config(), vm.Config{}, task, decoded)
+	if err != nil {
+		t.Fatalf("a round-tripped witness failed to execute: %v", err)
+	}
+	if stateRoot != block.Root() {
+		t.Fatalf("round-tripped witness produced root %x, want %x", stateRoot, block.Root())
 	}
 }
 
