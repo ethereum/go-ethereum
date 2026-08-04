@@ -64,6 +64,24 @@ keys a block touched, covering written stems whole (`insStem` refuses a write
 into a partially shipped stem), and the absence handling the multiproof already
 grew. `TestMultiproofSize` exists to measure the swap when it happens.
 
+## Merkle witnesses do not capture every bytecode they read
+
+`ExecuteStateless` checks the state database's latched error before trusting
+its root, but only for the binary tree. Enabling the same check for merkle
+fails `TestWitnessCreationAndConsumption` (`eth/catalyst/api_test.go`) with
+`code is not found <hash>`: the witness is missing a bytecode the replay reads.
+
+`Witness.AddCode` is only reached from `StateDB.GetCode` and
+`StateDB.GetCodeSize`, so a `stateObject.Code()` arriving by any other route is
+never recorded. The replay then substitutes empty code and carries on, because
+`setError` only latches and `IntermediateRoot` never consults it.
+
+The root still matched in that test, which is why nobody noticed - the missing
+code happened not to influence that block's state. On a block where it does,
+the result is a wrong root reported as a good one. Closing this means finding
+every path to `stateObject.Code()` and witnessing there, after which the check
+in `core/stateless.go` can drop its `IsPBT` condition.
+
 ## Witness statistics have no binary-aware histogram
 
 `--vmwitnessstats` is refused on the binary tree

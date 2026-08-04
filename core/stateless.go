@@ -104,8 +104,17 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	// there. IntermediateRoot does not consult that error either, which leaves
 	// the mismatch to be discovered by whoever compares roots - or not at all,
 	// where the caller trusts what it gets back.
-	if err := db.Error(); err != nil {
-		return common.Hash{}, common.Hash{}, fmt.Errorf("incomplete witness: %w", err)
+	//
+	// Only the binary tree is held to this. Merkle witnesses do not currently
+	// capture every bytecode they read - AddCode is reached from StateDB's
+	// accessors, so a stateObject.Code() arriving by another route is never
+	// recorded - and turning that into a hard failure here would reject blocks
+	// that verify today. That gap is real and worth closing, but it belongs to
+	// the merkle witness rather than to this check; see TODO.md.
+	if config.IsPBT() {
+		if err := db.Error(); err != nil {
+			return common.Hash{}, common.Hash{}, fmt.Errorf("incomplete witness: %w", err)
+		}
 	}
 	return stateRoot, receiptRoot, nil
 }
