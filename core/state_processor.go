@@ -160,12 +160,6 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 	var blockAccessList *bal.ConstructionBlockAccessList
 	if config.IsAmsterdam(number, time) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
-
-		// EIP-7997: insert the deterministic deployment factory at the Amsterdam
-		// activation block via an irregular state transition.
-		if !config.IsAmsterdam(parent.Number, parent.Time) {
-			misc.ApplyEIP7997(evm.StateDB)
-		}
 	}
 	// EIP-4788
 	if beaconRoot != nil {
