@@ -228,12 +228,20 @@ func TestPBTAccountDeletion(t *testing.T) {
 	}
 }
 
-// TestPBTCodeShrink pins EIP-7702 delegation clearing: code can shrink on a
-// live account, and the stale header chunk leaves of the longer code must
-// disappear, otherwise a replayed tree diverges from a converted one.
+// TestPBTCodeShrink pins what clearing an EIP-7702 delegation now does, which
+// is less than it used to and deliberately so.
+//
+// The designator is one code chunk, now content-addressed by its own hash. The
+// clearing write is keyed by the empty-code hash, so it addresses a different
+// stem and cannot reach it; whether another account still delegates to the
+// same target is not decidable here. The account is restored but the tree is
+// not, and the roots differ by that orphaned chunk. EIP PR #12114 moves the
+// designator into the account's own header, which restores the stronger
+// property this test used to pin. See TODO.md.
 func TestPBTCodeShrink(t *testing.T) {
 	addr := common.Address{1}
 	delegation := append([]byte{0xef, 0x01, 0x00}, common.Address{9}.Bytes()...)
+	delegationHash := crypto.Keccak256Hash(delegation)
 
 	// Reference: the account never carried code.
 	ref, _ := newPBTState(t)
@@ -251,12 +259,31 @@ func TestPBTCodeShrink(t *testing.T) {
 	sdb.SetCode(addr, delegation, tracing.CodeChangeUnspecified)
 	sdb = reopenPBT(t, sdb, db, 1)
 	sdb.SetCode(addr, nil, tracing.CodeChangeAuthorizationClear)
-	got, err := sdb.Commit(2, true, false)
+	sdb = reopenPBT(t, sdb, db, 2)
+
+	// The account is back to having no code.
+	if got := codeSizeAt(t, sdb, addr); got != 0 {
+		t.Fatalf("code size %d after clearing the delegation, want 0", got)
+	}
+	acc, err := sdb.db.OpenTrie(sdb.originalRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != refRoot {
-		t.Fatalf("cleared delegation left chunk leaves: %x want %x", got, refRoot)
+	got, err := acc.(*bintrie.BinaryTrie).GetAccount(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got.CodeHash, types.EmptyCodeHash[:]) {
+		t.Fatalf("code hash %x after clearing the delegation, want the empty-code hash", got.CodeHash)
+	}
+	// The designator's chunk is not: it outlives the account that referenced
+	// it, which is what content-addressing costs.
+	if chunk := chunkAt(t, sdb, delegationHash, 0); len(chunk) != 32 {
+		t.Fatalf("the delegation chunk is %d bytes, want it still resident at 32", len(chunk))
+	}
+	if sdb.originalRoot == refRoot {
+		t.Fatal("the root equals a never-had-code account, so the delegation chunk was removed after all; " +
+			"if that is now intended, this test should pin the stronger property instead")
 	}
 }
 
@@ -285,13 +312,13 @@ func TestPBTCodeSizePreserved(t *testing.T) {
 
 // chunkAt reads a code chunk leaf straight out of the tree, so a test can tell
 // "the code is still there" from "the code hash still says it is".
-func chunkAt(t *testing.T, sdb *StateDB, addr common.Address, codeHash common.Hash, chunk uint64) []byte {
+func chunkAt(t *testing.T, sdb *StateDB, codeHash common.Hash, chunk uint64) []byte {
 	t.Helper()
 	tr, err := sdb.db.OpenTrie(sdb.originalRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	val, err := tr.(*bintrie.BinaryTrie).GetStemValue(bintrie.CodeChunkKey(addr, codeHash, chunk))
+	val, err := tr.(*bintrie.BinaryTrie).GetStemValue(bintrie.CodeChunkKey(codeHash, chunk))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,6 +341,21 @@ func codeSizeAt(t *testing.T, sdb *StateDB, addr common.Address) uint32 {
 	}
 	_, codeSize, _, _ := bintrie.DecodeBasicData(basic)
 	return codeSize
+}
+
+// codeHashAt reads an account's code-hash leaf. An absent leaf reads back as
+// the zero hash, which no account holding code can produce.
+func codeHashAt(t *testing.T, sdb *StateDB, addr common.Address) common.Hash {
+	t.Helper()
+	tr, err := sdb.db.OpenTrie(sdb.originalRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	val, err := tr.(*bintrie.BinaryTrie).GetStemValue(bintrie.CodeHashKey(addr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return common.BytesToHash(val)
 }
 
 // TestPBTCodeSizeWrites covers the code size across the paths that set it,
@@ -401,16 +443,16 @@ func TestPBTCodeSizeWrites(t *testing.T) {
 		// The case the codeKnown guard exists for. SetStorage rebuilds the
 		// object and re-sets its code from the lazily-loaded field, which is
 		// nil when nothing read the bytecode first, so dirtyCode goes true
-		// under a real code hash with no blob behind it. Both writes have to
-		// decline it: reporting len(obj.code) would zero the size, and handing
-		// that blob to UpdateContractCode would clear every code leaf, because
-		// it clears whatever sub-indices the new code does not fill.
+		// under a real code hash with no blob behind it. The write has to
+		// decline it: reporting len(obj.code) would zero the size, leaving an
+		// account whose code hash names bytecode its own size says is absent.
+		//
+		// Only the account's own leaves can regress here: the code chunks are
+		// content-addressed, so they survive whatever this account does.
 		sdb, db := newPBTState(t)
 		sdb.CreateAccount(addr)
 		sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
 		sdb = reopenPBT(t, sdb, db, 1)
-		codeHash := crypto.Keccak256Hash(code)
-		chunk0 := chunkAt(t, sdb, addr, codeHash, 0)
 
 		// Deliberately no read of the code before the override.
 		sdb.SetStorage(addr, map[common.Hash]common.Hash{{31: 5}: {31: 7}})
@@ -418,8 +460,8 @@ func TestPBTCodeSizeWrites(t *testing.T) {
 		if got := codeSizeAt(t, sdb, addr); got != uint32(len(code)) {
 			t.Fatalf("code size %d after a storage override, want %d", got, len(code))
 		}
-		if got := chunkAt(t, sdb, addr, codeHash, 0); !bytes.Equal(got, chunk0) {
-			t.Fatalf("code chunk 0 is %x after a storage override, want %x", got, chunk0)
+		if got, want := codeHashAt(t, sdb, addr), crypto.Keccak256Hash(code); got != want {
+			t.Fatalf("code hash leaf is %x after a storage override, want %x", got, want)
 		}
 	})
 	t.Run("executed contract", func(t *testing.T) {
@@ -594,15 +636,18 @@ func TestPBTProofsVerify(t *testing.T) {
 	}
 }
 
-// TestPBTSharedOverflowChunks pins the content-addressed code zone: two
-// contracts deployed with identical bytecode longer than the 128 header
-// chunks share their overflow chunk leaves, so the second deployment adds
-// only its own header stem. This is the dedup EIP-8297 exists to provide,
-// and it is invisible to the account-level API.
-func TestPBTSharedOverflowChunks(t *testing.T) {
-	// 130 chunks of code: 128 land in the header stem, 2 overflow into the
-	// content-addressed code zone.
-	code := bytes.Repeat([]byte{0x5b}, 130*31) // JUMPDEST repeated: no PUSH spans
+// TestPBTSharedCodeChunks pins the content-addressed code zone: two contracts
+// deployed with identical bytecode share every chunk leaf, so the second
+// deployment adds only its own header stem - two leaves, whatever the code
+// length. This is the dedup EIP-8297 exists to provide, and it is invisible
+// to the account-level API.
+//
+// Sharing starts at chunk 0, where it used to start at 128: no part of a
+// contract's code is duplicated per holder any more.
+func TestPBTSharedCodeChunks(t *testing.T) {
+	// Long enough to span several code stems, so the saving is not a rounding
+	// effect of one partly-filled group.
+	code := bytes.Repeat([]byte{0x5b}, 600*31) // JUMPDEST repeated: no PUSH spans
 	var (
 		first  = common.Address{1}
 		second = common.Address{2}
@@ -646,21 +691,21 @@ func TestPBTSharedOverflowChunks(t *testing.T) {
 	two = reopenPBT(t, two, twodb, 1)
 	leavesTwo := countLeaves(two, twodb, two.originalRoot)
 
-	// The second contract contributes its own header stem - basic data, code
-	// hash and its 128 header chunks - and nothing else: the 2 overflow
-	// chunks are shared.
-	perAccount := 2 + 128
+	// The second contract contributes its own header stem - basic data and
+	// code hash - and nothing else. Every chunk is shared.
+	perAccount := 2
 	if got, want := leavesTwo-leavesOne, perAccount; got != want {
-		t.Fatalf("second identical contract added %d leaves, want %d (overflow chunks not shared)", got, want)
+		t.Fatalf("second identical contract added %d leaves, want %d (code chunks not shared)", got, want)
 	}
-	// Sanity: the overflow chunks really exist, and both accounts derive the
-	// same key for them.
+	// Sanity: a chunk really is in the code zone, and its key does not depend
+	// on which account holds the code. Chunk 0 is the one that used to be
+	// per-account, so it is the one worth naming here.
 	codeHash := crypto.Keccak256Hash(code)
-	shared := bintrie.CodeChunkKey(first, codeHash, 128)
-	if other := bintrie.CodeChunkKey(second, codeHash, 128); !bytes.Equal(shared, other) {
-		t.Fatal("overflow chunk keys differ between contracts with identical code")
-	}
+	shared := bintrie.CodeChunkKey(codeHash, 0)
 	if shared[0] != bintrie.CodeZone {
-		t.Fatalf("overflow chunk is not in the code zone: zone byte %#x", shared[0])
+		t.Fatalf("chunk 0 is not in the code zone: zone byte %#x", shared[0])
+	}
+	if got := chunkAt(t, two, codeHash, 0); len(got) != 32 {
+		t.Fatalf("chunk 0 is %d bytes in the tree, want 32", len(got))
 	}
 }

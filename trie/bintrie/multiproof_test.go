@@ -140,7 +140,7 @@ func TestMultiproofRoundTrip(t *testing.T) {
 			var keys [][]byte
 			keys = append(keys, bintrie.BasicDataKey(addr), bintrie.CodeHashKey(addr))
 			for _, c := range tc.want(codeHash, addr) {
-				keys = append(keys, bintrie.CodeChunkKey(addr, codeHash, c))
+				keys = append(keys, bintrie.CodeChunkKey(codeHash, c))
 			}
 
 			src := openTrie(t, db, root)
@@ -181,8 +181,8 @@ func TestMultiproofRejectsForgery(t *testing.T) {
 	db, root, addr, codeHash := mpFixture(t, 24576, 64)
 	keys := [][]byte{
 		bintrie.BasicDataKey(addr),
-		bintrie.CodeChunkKey(addr, codeHash, 0),
-		bintrie.CodeChunkKey(addr, codeHash, 300),
+		bintrie.CodeChunkKey(codeHash, 0),
+		bintrie.CodeChunkKey(codeHash, 300),
 	}
 	src := openTrie(t, db, root)
 	mp, err := src.ProveMulti(keys)
@@ -216,18 +216,46 @@ func TestMultiproofRejectsForgery(t *testing.T) {
 	})
 
 	t.Run("mutated byte", func(t *testing.T) {
-		// Every single-byte change must be caught, by the decoder or the root.
-		for i := 0; i < len(blob); i += 97 {
+		// Not every single-byte change is caught; the old assertion passed
+		// only because its sampling stepped over the bytes that survive. Some
+		// sub-indices are not authenticated individually, so the encoding is
+		// malleable there. See TODO.md.
+		//
+		// What must hold is the property malleability could threaten: no flip
+		// may change a value the proof proves. So every byte is tried, and a
+		// survivor has to answer every key exactly as before.
+		want := make([][]byte, len(keys))
+		for i, k := range keys {
+			v, err := src.GetStemValue(k)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want[i] = v
+		}
+		survivors := 0
+		for i := range blob {
 			bad := bytes.Clone(blob)
 			bad[i] ^= 0x01
 			decoded, err := bintrie.DecodeMultiproof(bad)
 			if err != nil {
 				continue
 			}
-			if _, err := bintrie.VerifyMultiproof(root, decoded); err == nil {
-				t.Fatalf("a proof with byte %d flipped verified", i)
+			verified, err := bintrie.VerifyMultiproof(root, decoded)
+			if err != nil {
+				continue
+			}
+			survivors++
+			for j, k := range keys {
+				got, err := verified.GetStemValue(k)
+				if err != nil {
+					t.Fatalf("byte %d flipped: key %x now errors: %v", i, k, err)
+				}
+				if !bytes.Equal(got, want[j]) {
+					t.Fatalf("byte %d flipped: key %x proves %x, want %x", i, k, got, want[j])
+				}
 			}
 		}
+		t.Logf("%d of %d byte flips still verified; none changed a proved value", survivors, len(blob))
 	})
 
 	t.Run("trailing bytes", func(t *testing.T) {
@@ -251,8 +279,8 @@ func TestMultiproofProvesAbsence(t *testing.T) {
 
 	var (
 		ghost = common.Address{0xf0, 0x0d, 0xff} // never written
-		// The header stem holds BASIC_DATA (0), CODE_HASH (1) and the code
-		// chunks from CODE_OFFSET up. Sub-index 5 is a hole inside a stem that
+		// The header stem holds BASIC_DATA (0), CODE_HASH (1) and the header
+		// storage slots from 64 up. Sub-index 5 is a hole inside a stem that
 		// very much exists, which is the harder of the two absence shapes.
 		holeInLiveStem = bintrie.HeaderKey(addr, 5)
 		absentStem     = bintrie.BasicDataKey(ghost)
@@ -269,9 +297,9 @@ func TestMultiproofProvesAbsence(t *testing.T) {
 		{"absent mixed with present", [][]byte{
 			bintrie.BasicDataKey(addr),
 			holeInLiveStem,
-			bintrie.CodeChunkKey(addr, codeHash, 0),
+			bintrie.CodeChunkKey(codeHash, 0),
 			absentStem,
-			bintrie.CodeChunkKey(addr, codeHash, 300),
+			bintrie.CodeChunkKey(codeHash, 300),
 			absentSlot,
 		}},
 	} {
@@ -311,7 +339,8 @@ func TestMultiproofProvesAbsence(t *testing.T) {
 }
 
 // TestCodeZoneKeyVerifies covers the content-addressed code zone against a
-// real root, which nothing did before.
+// real root. Every code chunk lives there now, so this is the ordinary case
+// rather than the overflow one it was written for.
 //
 // It also guards a length check that only works by coincidence: VerifyProof
 // screens a leaf preimage by its key length, and CodeKeyLength happens to
@@ -319,10 +348,11 @@ func TestMultiproofProvesAbsence(t *testing.T) {
 // lengths accepted code keys by accident. Should the lengths ever diverge,
 // this fails instead of code proofs silently becoming unverifiable.
 func TestCodeZoneKeyVerifies(t *testing.T) {
-	db, root, addr, codeHash := mpFixture(t, 24576, 64)
+	db, root, _, codeHash := mpFixture(t, 24576, 64)
 
-	// Chunk 300 is past the header, so its key is in CODE_ZONE.
-	key := bintrie.CodeChunkKey(addr, codeHash, 300)
+	// Chunk 300 sits in the second code stem, so this also covers a chunk
+	// past the first stem boundary rather than only chunk 0.
+	key := bintrie.CodeChunkKey(codeHash, 300)
 	if key[0] != bintrie.CodeZone {
 		t.Fatalf("fixture is not exercising the code zone: zone byte %#x", key[0])
 	}
@@ -372,7 +402,7 @@ func TestMultiproofSize(t *testing.T) {
 		for _, p := range patterns {
 			keys := [][]byte{bintrie.BasicDataKey(addr), bintrie.CodeHashKey(addr)}
 			for _, c := range p.chunks {
-				keys = append(keys, bintrie.CodeChunkKey(addr, codeHash, c))
+				keys = append(keys, bintrie.CodeChunkKey(codeHash, c))
 			}
 			pathB := pathProofSize(t, db, root, keys)
 			recB := recordSize(t, db, root, keys)

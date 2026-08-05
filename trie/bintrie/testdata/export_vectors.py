@@ -129,9 +129,12 @@ def main() -> int:
             {"slot": s, "key": hx(embedding.get_tree_key_for_storage_slot(addr32, U256(s)))}
             for s in (0, 5, 63, 64, 255, 256, 1000, 2**255)
         ],
+        # No address: code chunks are content-addressed. 255/256 straddle the
+        # stem boundary, which is the only boundary left now that chunks no
+        # longer split between the account header and the code zone.
         "chunks": [
-            {"chunk": c, "key": hx(embedding.get_tree_key_for_code_chunk(addr32, code_hash, Uint(c)))}
-            for c in (0, 5, 127, 128, 300, 383, 384)
+            {"chunk": c, "key": hx(embedding.get_tree_key_for_code_chunk(code_hash, Uint(c)))}
+            for c in (0, 5, 127, 128, 255, 256, 300, 383, 384)
         ],
     }
 

@@ -821,13 +821,13 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 }
 
 // DeleteAccount removes everything the account owns in the tree: its whole
-// header stem (basic data, code hash, header storage slots and header code
-// chunks) and its overflow storage bucket. Dropping the bucket is required,
-// not optional: in the merkle-patricia world a destroyed account's storage
-// trie merely becomes unreachable from the state root, so a conversion of
-// that state contains none of it, and leaving those leaves behind here
-// would diverge. The content-addressed code zone is never touched, since
-// its chunks may be shared with living contracts.
+// header stem (basic data, code hash and header storage slots) and its
+// overflow storage bucket. Dropping the bucket is required, not optional: in
+// the merkle-patricia world a destroyed account's storage trie merely becomes
+// unreachable from the state root, so a conversion of that state contains none
+// of it, and leaving those leaves behind here would diverge. The
+// content-addressed code zone is never touched, since its chunks may be shared
+// with living contracts. See TODO.md.
 func (t *BinaryTrie) DeleteAccount(addr common.Address) error {
 	if err := t.removeStem(HeaderStem(addr)); err != nil {
 		return err
@@ -850,14 +850,14 @@ func (t *BinaryTrie) GetStemValue(key []byte) ([]byte, error) {
 
 // HasHeaderStorage reports whether the account's header stem holds any of
 // the storage slots that live there (slots 0..63, at sub-indices
-// HeaderStorageOffset..CodeOffset-1).
+// HeaderStorageOffset..HeaderStorageOffset+HeaderStorageSlots-1).
 func (t *BinaryTrie) HasHeaderStorage(addr common.Address) (bool, error) {
 	g, err := t.getStemGroup(HeaderStem(addr))
 	if err != nil || g == nil {
 		return false, err
 	}
 	for _, sub := range g.subs {
-		if sub >= HeaderStorageOffset && sub < CodeOffset {
+		if sub >= HeaderStorageOffset && sub < HeaderStorageOffset+HeaderStorageSlots {
 			return true, nil
 		}
 	}
@@ -913,11 +913,13 @@ func (t *BinaryTrie) DeleteStorage(addr common.Address, key []byte) error {
 	return t.UpdateStem(k[:len(k)-1], []byte{k[len(k)-1]}, [][]byte{nil})
 }
 
-// UpdateContractCode writes the account's code chunks: chunks 0..127 into
-// the header stem (clearing any leftover header chunks beyond the new code,
-// which shrinks under EIP-7702 delegation clears), chunks 128 and above into
-// the content-addressed code zone shared across contracts with identical
-// bytecode. The code zone is append-only.
+// UpdateContractCode writes the account's code chunks into the
+// content-addressed code zone, grouped StemSubtreeWidth to a stem. The address
+// takes no part and stays only because the Trie interface carries it.
+//
+// Shorter code does not clear what longer code left behind: those leaves are
+// keyed by the old hash, which this call does not have, and they may be
+// shared. See TODO.md.
 //
 // Nothing reference-counts the shared chunks and nothing needs to. Reorgs drop
 // layers rather than reverse them, so chunks written by a reverted block go
@@ -925,27 +927,10 @@ func (t *BinaryTrie) DeleteStorage(addr common.Address, key []byte) error {
 // layer, which the tree refuses to fork beneath. Whether some other account
 // still holds this bytecode is answered by the ancestor state, not by a count.
 // core.TestPBTReorgKeepsSharedCodeChunks pins it.
-func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
+func (t *BinaryTrie) UpdateContractCode(_ common.Address, codeHash common.Hash, code []byte) error {
 	chunks := ChunkifyCode(code)
 	numChunks := len(chunks) / 32
 
-	// Header chunks 0..127, plus explicit clears through sub-index 255 so
-	// stale chunks of longer previous code disappear.
-	headerSubs := make([]byte, 0, StemSubtreeWidth-CodeOffset)
-	headerVals := make([][]byte, 0, StemSubtreeWidth-CodeOffset)
-	for i := 0; i < StemSubtreeWidth-CodeOffset; i++ {
-		headerSubs = append(headerSubs, byte(CodeOffset+i))
-		if i < numChunks {
-			headerVals = append(headerVals, chunks[32*i:32*(i+1)])
-		} else {
-			headerVals = append(headerVals, nil)
-		}
-	}
-	if err := t.UpdateStem(HeaderStem(addr), headerSubs, headerVals); err != nil {
-		return err
-	}
-
-	// Overflow chunks, grouped per content-addressed stem.
 	var (
 		subs []byte
 		vals [][]byte
@@ -959,8 +944,8 @@ func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Has
 		subs, vals = nil, nil
 		return err
 	}
-	for chunk := StemSubtreeWidth - CodeOffset; chunk < numChunks; chunk++ {
-		_, treeIndex, sub := CodeChunkIndex(uint64(chunk))
+	for chunk := 0; chunk < numChunks; chunk++ {
+		treeIndex, sub := CodeChunkIndex(uint64(chunk))
 		if treeIndex != tree {
 			if err := flush(); err != nil {
 				return err

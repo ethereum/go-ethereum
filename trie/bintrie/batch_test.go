@@ -57,7 +57,7 @@ func TestUpdateAccountBatchMatchesSequential(t *testing.T) {
 	for i := range 8 {
 		addrs = append(addrs, common.Address{byte(i + 1), 0xaa})
 		accounts = append(accounts, testAccount(uint64(i+1), uint64((i+1)*1000)))
-		codeLens = append(codeLens, i*31) // spans the header/overflow boundary
+		codeLens = append(codeLens, i*31) // distinct sizes in the packed basic data
 	}
 
 	batched := newTestTrie()

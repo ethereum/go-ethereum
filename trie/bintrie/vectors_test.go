@@ -213,7 +213,7 @@ func TestEmbeddingVectors(t *testing.T) {
 	// will not be obvious from the failure.
 	ch := common.BytesToHash(unhexConst("bb", 32))
 	for _, cv := range ev.Chunks {
-		if got := CodeChunkKey(addr, ch, cv.Chunk); !equalBytes(got, unhex(t, cv.Key)) {
+		if got := CodeChunkKey(ch, cv.Chunk); !equalBytes(got, unhex(t, cv.Key)) {
 			t.Fatalf("chunk %d key mismatch: got %x want %s", cv.Chunk, got, cv.Key)
 		}
 	}

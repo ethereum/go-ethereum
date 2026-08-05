@@ -40,9 +40,9 @@ import (
 // Reverting works by replaying pre-transition account and storage values
 // through the trie until the parent root reappears, which is only valid while
 // the trie is a pure function of those values. The binary tree also stores
-// contract code, and code chunks past the first 128 are content-addressed, so
-// whether such a leaf belongs at the parent root depends on whether any other
-// account held the same bytecode - a question no per-account history answers.
+// contract code, and every code chunk is content-addressed, so whether such a
+// leaf belongs at the parent root depends on whether any other account held
+// the same bytecode - a question no per-account history answers.
 //
 // `stateRecoverable` returning false is therefore the honest answer, not a
 // degradation: `recoverAncestors` and `insertSideChain` both already treat

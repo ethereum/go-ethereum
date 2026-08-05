@@ -703,15 +703,16 @@ func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase) (*bi
 	return bt, nil
 }
 
-// BinaryCodeChunkKey computes the tree key of a code-chunk for a given address.
+// BinaryCodeChunkKey computes the tree key of a code chunk. It takes a code
+// hash rather than an address: chunks are content-addressed.
 func BinaryCodeChunkKey(ctx *cli.Context) error {
-	if ctx.Args().Len() < 2 || ctx.Args().Len() > 3 {
-		return errors.New("invalid number of arguments: expecting an address, a code-chunk number and, for chunks 128 and above, the code hash")
+	if ctx.Args().Len() != 2 {
+		return errors.New("invalid number of arguments: expecting a code hash and a code-chunk number")
 	}
 
-	addr, err := hexutil.Decode(ctx.Args().Get(0))
+	codeHashBytes, err := hexutil.Decode(ctx.Args().Get(0))
 	if err != nil {
-		return fmt.Errorf("error decoding address: %w", err)
+		return fmt.Errorf("error decoding code hash: %w", err)
 	}
 	chunkNumberBytes, err := hexutil.Decode(ctx.Args().Get(1))
 	if err != nil {
@@ -723,20 +724,7 @@ func BinaryCodeChunkKey(ctx *cli.Context) error {
 	if !chunkNumber.IsUint64() {
 		return errors.New("chunk number does not fit in 64 bits")
 	}
-
-	// Overflow chunks (128 and above) are content-addressed: the code hash
-	// is required to derive their keys.
-	var codeHash common.Hash
-	if ctx.Args().Len() >= 3 {
-		codeHashBytes, err := hexutil.Decode(ctx.Args().Get(2))
-		if err != nil {
-			return fmt.Errorf("error decoding code hash: %w", err)
-		}
-		codeHash = common.BytesToHash(codeHashBytes)
-	} else if chunkNumber.Uint64() >= 128 {
-		return errors.New("chunk numbers of 128 and above are content-addressed: pass the code hash as a third argument")
-	}
-	fmt.Printf("%#x\n", bintrie.CodeChunkKey(common.BytesToAddress(addr), codeHash, chunkNumber.Uint64()))
+	fmt.Printf("%#x\n", bintrie.CodeChunkKey(common.BytesToHash(codeHashBytes), chunkNumber.Uint64()))
 
 	return nil
 }

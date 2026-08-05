@@ -36,9 +36,9 @@ import (
 // Reorgs and content-addressed code chunks.
 //
 // Code lives in the tree, and it is the one thing in it whose leaves are
-// shared between accounts: chunks 0..127 sit in the account's own header stem,
-// but chunk 128 onwards is keyed by CodeChunkStem(codeHash, treeIndex) and
-// shared by every contract with identical bytecode. So a reorg that undoes a
+// shared between accounts: every chunk is keyed by
+// CodeChunkStem(codeHash, treeIndex) and shared by every contract with
+// identical bytecode, with no account taking part. So a reorg that undoes a
 // deployment appears to face a question with no answer in the data - may those
 // shared chunks go, or does some other account still need them? - and the
 // usual way out is reference counting.
@@ -55,18 +55,17 @@ import (
 // bytecode already existed on the common ancestor. That variable is the whole
 // question, so it is the only difference between them.
 
-// pbtBigCode is a runtime blob of 130 code chunks: 128 fill the account header
-// stem and 2 overflow into the content-addressed code zone. 128*31 = 3968
-// bytes exactly fills the header, so this is the smallest shape that puts
-// anything in the shared zone at all.
+// pbtBigCode is a runtime blob of 130 code chunks. The length no longer
+// matters for sharing, but it is kept as it was so the deployment still fits
+// the gas limits below.
 //
 // JUMPDEST repeated is not arbitrary: it keeps every byte its own instruction,
 // so no PUSH swallows the bytes that follow it.
 var pbtBigCode = bytes.Repeat([]byte{0x5b}, 130*31)
 
-// pbtOverflowChunk is the first code chunk that lands outside the account
-// header stem, and therefore the first one that is shared.
-const pbtOverflowChunk = 128
+// pbtSharedChunk is the chunk these tests follow across the reorg. Chunk 0 is
+// the pointed choice: it used to live in the account's own header stem.
+const pbtSharedChunk = 0
 
 // pbtCodeDeployGas is the gas limit the deployment transactions carry, and
 // pbtCodeBlockGas the block limit that has to hold one.
@@ -136,11 +135,9 @@ func codeChunkAt(t *testing.T, chain *BlockChain, root, codeHash common.Hash, ch
 	if err != nil {
 		t.Fatalf("cannot open the tree at %x: %v", root, err)
 	}
-	// The address is ignored for chunks at or above 128 - that is what makes
-	// them shared - but pass a real one rather than a zero value, so this
-	// stops compiling rather than silently changing meaning if that ever
-	// stops being true.
-	value, err := tr.GetStemValue(bintrie.CodeChunkKey(common.Address{0x01}, codeHash, chunk))
+	// No address takes part: the key is content-addressed, which is what makes
+	// the leaf shared.
+	value, err := tr.GetStemValue(bintrie.CodeChunkKey(codeHash, chunk))
 	if err != nil {
 		t.Fatalf("failed to read code chunk %d at %x: %v", chunk, root, err)
 	}
@@ -163,7 +160,7 @@ func accountAt(t *testing.T, chain *BlockChain, root common.Hash, addr common.Ad
 }
 
 // TestPBTReorgDropsCodeChunks reorgs away the only block that ever deployed a
-// large contract, and checks its shared overflow chunks went with it.
+// large contract, and checks its shared chunks went with it.
 //
 // Nothing deletes them. The branch that wrote them is dropped from the layer
 // tree, and their leaves were never anywhere else.
@@ -201,8 +198,8 @@ func TestPBTReorgDropsCodeChunks(t *testing.T) {
 	// The premise: the deployment really did put a leaf in the shared zone.
 	// Without this the test below passes for the wrong reason - an absent
 	// chunk is also what a mis-derived key looks like.
-	if got := codeChunkAt(t, chain, branchA[0].Root(), codeHash, pbtOverflowChunk); got == nil {
-		t.Fatal("the deploying branch has no overflow code chunk; the fixture never exercised the shared zone")
+	if got := codeChunkAt(t, chain, branchA[0].Root(), codeHash, pbtSharedChunk); got == nil {
+		t.Fatal("the deploying branch has no shared code chunk; the fixture never exercised the shared zone")
 	}
 	if acct := accountAt(t, chain, branchA[0].Root(), contract); acct == nil {
 		t.Fatal("the contract account is missing on the branch that deployed it")
@@ -222,8 +219,8 @@ func TestPBTReorgDropsCodeChunks(t *testing.T) {
 	if head.Root != branchB[0].Root() {
 		t.Fatalf("head root is %x, want %x", head.Root, branchB[0].Root())
 	}
-	if got := codeChunkAt(t, chain, head.Root, codeHash, pbtOverflowChunk); got != nil {
-		t.Fatalf("the overflow code chunk survived a reorg that dropped its only deployment: %x", got)
+	if got := codeChunkAt(t, chain, head.Root, codeHash, pbtSharedChunk); got != nil {
+		t.Fatalf("the shared code chunk survived a reorg that dropped its only deployment: %x", got)
 	}
 	if acct := accountAt(t, chain, head.Root, contract); acct != nil {
 		t.Fatal("the contract account survived the reorg that dropped its deployment")
@@ -260,12 +257,11 @@ func TestPBTReorgKeepsSharedCodeChunks(t *testing.T) {
 	if branchA[0].Root() == branchB[0].Root() {
 		t.Fatal("the two branches produced the same state root; the fixture does not fork the state")
 	}
-	// The sharing itself: two different contracts, one set of overflow chunks.
-	if !bytes.Equal(
-		bintrie.CodeChunkKey(first, codeHash, pbtOverflowChunk),
-		bintrie.CodeChunkKey(second, codeHash, pbtOverflowChunk),
-	) {
-		t.Fatal("the two contracts derive different overflow chunk keys; they are not sharing")
+	// The sharing itself. Identical bytecode now derives an identical key by
+	// construction, so what is worth asserting is that the key is
+	// content-addressed at all: it lives in the code zone, not in a header.
+	if key := bintrie.CodeChunkKey(codeHash, pbtSharedChunk); key[0] != bintrie.CodeZone {
+		t.Fatalf("chunk %d is not in the code zone: zone byte %#x", pbtSharedChunk, key[0])
 	}
 	chain, err := NewBlockChain(db, genesis, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
 	if err != nil {
@@ -282,8 +278,8 @@ func TestPBTReorgKeepsSharedCodeChunks(t *testing.T) {
 	if _, err := chain.SetCanonical(branchA[0]); err != nil {
 		t.Fatalf("failed to make the second deployment canonical: %v", err)
 	}
-	if got := codeChunkAt(t, chain, branchA[0].Root(), codeHash, pbtOverflowChunk); got == nil {
-		t.Fatal("no overflow code chunk after two deployments; the fixture never exercised the shared zone")
+	if got := codeChunkAt(t, chain, branchA[0].Root(), codeHash, pbtSharedChunk); got == nil {
+		t.Fatal("no shared code chunk after two deployments; the fixture never exercised the shared zone")
 	}
 	if acct := accountAt(t, chain, branchA[0].Root(), second); acct == nil {
 		t.Fatal("the second contract is missing on the branch that deployed it")
@@ -301,8 +297,8 @@ func TestPBTReorgKeepsSharedCodeChunks(t *testing.T) {
 	if head.Root != branchB[0].Root() {
 		t.Fatalf("head root is %x, want %x", head.Root, branchB[0].Root())
 	}
-	if got := codeChunkAt(t, chain, head.Root, codeHash, pbtOverflowChunk); got == nil {
-		t.Fatal("the shared overflow chunk was dropped by a reorg, but the first contract still holds that bytecode")
+	if got := codeChunkAt(t, chain, head.Root, codeHash, pbtSharedChunk); got == nil {
+		t.Fatal("the shared chunk was dropped by a reorg, but the first contract still holds that bytecode")
 	}
 	// The other polarity, in the same test: the reorged-out deployment really
 	// is gone. Without this the check above would pass on a tree that never

@@ -256,9 +256,9 @@ func TestPBTStatelessContractCoinbase(t *testing.T) {
 	}
 	// AddCode was never called for it. That is what regressed before: sizing
 	// the code through the reader recorded nothing, so the replay needed a
-	// blob the witness did not carry. This says nothing about the total
-	// witness size - under the current layout the first 128 code chunks are
-	// leaves of the header stem, which ships anyway to serve BASIC_DATA.
+	// blob the witness did not carry. It now bounds the witness size too: code
+	// chunks live in their own stems rather than riding the header stem, so a
+	// fee recipient nothing executes costs no code leaves at all.
 	if _, ok := witness.Codes[string(genesis.Alloc[coinbase].Code)]; ok {
 		t.Fatal("the fee recipient's bytecode reached witness.Codes despite never being executed")
 	}
