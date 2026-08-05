@@ -670,21 +670,36 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
-	// Encode the account and update the account trie. The code size must
-	// come from CodeSize() rather than len(obj.code): the code is loaded
-	// lazily, so a contract touched without executing it carries a nil code
-	// slice, and passing its length would zero the size the binary tree
-	// packs into the account's basic data.
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, obj.CodeSize()); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
+	// Encode the account and update the account trie. Report a code size only
+	// when this block set the code and the blob is in hand; otherwise say it is
+	// unknown rather than going and finding out. CodeSize() loads the whole
+	// contract through the reader to measure it, and nothing on this path calls
+	// AddCode - that unwitnessed read is what left merkle witnesses short of a
+	// contract the replay then could not supply, and a contract fee recipient
+	// is dirty in every block and executed by none of them.
+	//
+	// dirtyCode alone is not enough to trust len(obj.code). SetStorage rebuilds
+	// the object and re-sets its code, and the blob it carries over is whatever
+	// Code() returned - nil when the bytecode could not be fetched. So an empty
+	// blob can arrive under a real code hash, and neither the size nor the code
+	// itself may be taken from it: writing the size would zero a contract that
+	// has code, and writing the blob would clear every code leaf, since
+	// UpdateContractCode clears the sub-indices the new code does not fill.
+	codeKnown := obj.dirtyCode && (len(obj.code) > 0 || bytes.Equal(obj.CodeHash(), types.EmptyCodeHash[:]))
+	codeLen := -1
+	if codeKnown {
+		codeLen = len(obj.code)
 	}
-	if obj.dirtyCode {
+	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, codeLen); err != nil {
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", obj.Address(), err))
+	}
+	if codeKnown {
 		// The error matters under the binary tree even though it cannot happen
 		// under the merkle-patricia trie, where this is a no-op: the tree writes
 		// the code out as leaves, so this resolves nodes and can fail on a disk
 		// read. Dropping it would commit a root over a half-written code zone.
 		if err := s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code); err != nil {
-			s.setError(fmt.Errorf("updateContractCode (%x) error: %v", obj.Address(), err))
+			s.setError(fmt.Errorf("updateContractCode (%x) error: %w", obj.Address(), err))
 		}
 	}
 }
@@ -692,7 +707,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(addr common.Address) {
 	if err := s.trie.DeleteAccount(addr); err != nil {
-		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
+		s.setError(fmt.Errorf("deleteStateObject (%x) error: %w", addr[:], err))
 	}
 }
 

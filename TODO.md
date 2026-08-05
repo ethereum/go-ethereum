@@ -3,48 +3,27 @@
 Known gaps in the EIP-8297 binary tree (PBT) work, recorded so they are not
 rediscovered by accident.
 
-## Pin the `debug_storageRangeAt` refusal with a test
+## The engine API has no stateless-consume or witness-build path for the tree
 
-`storageRangeAt` refuses under the binary tree — `eth/api_debug.go:240`, inside
-the function at `:234`:
+`eth/catalyst/witness.go` has `NewPayloadWithWitnessV1` through **`V5`**,
+`ExecuteStatelessPayloadV1` through `V4`, and `ForkchoiceUpdatedWithWitnessV1`
+through `V3`. So *producing* a binary tree witness already works:
+`NewPayloadWithWitnessV5` is gated on `forks.Amsterdam` and returns one on
+payload insertion.
 
-```go
-if statedb.Database().TrieDB().IsPBT() {
-    return StorageRangeResult{}, errors.New("debug_storageRangeAt is not supported for the binary tree")
-}
-```
+What is missing is the other two directions:
 
-The guard is correct and was verified by reading, but **no test exercises it**.
-It is the one entry in the capability contract index (see the table at the top
-of `core/pbt_capabilities_test.go`) marked *not pinned*, and every other refusal
-in that table has a test next to its guard.
+- **Consumption** — an `ExecuteStatelessPayloadV5`. `V4` stops at Bogota.
+- **Requesting a build with a witness** — a `ForkchoiceUpdatedWithWitnessV4`.
+  `V3` stops at Bogota too.
 
-Why it matters: the tree keeps no per-account storage trie to range over and the
-account carries no storage root, so without the guard the empty value below it
-would report **every contract as having no storage** — a wrong answer rather
-than an error. That is the failure mode the rest of the capability work exists
-to prevent, and it is currently held only by code review.
-
-What the test needs: `TestStorageRangeAt` (`eth/api_debug_test.go:274`) builds
-its state with `state.New(root, db)` over a merkle-patricia database, so a PBT
-case needs a binary-tree `triedb` in the `eth` package. `core/state`'s
-`newPBTState` helper (in `core/state/pbt_semantics_test.go`) is the shape to
-copy — it uses `triedb.NewDatabase(disk, triedb.PBTDefaults)`. Assert the call
-returns an error naming the binary tree, and keep the existing merkle case as
-the control so the refusal is known to be tree-specific.
-
-## The engine API cannot carry a stateless binary tree payload
-
-`eth/catalyst/witness.go` has `ExecuteStatelessPayloadV1` through `V4`, and
-`ForkchoiceUpdatedWithWitnessV1` through `V3`. There is no `V5` of either. The
-binary tree activates at Amsterdam and so needs `NewPayloadV5` /
-`ForkchoiceUpdatedV4`, which means a binary tree payload can neither be
-*requested* with a witness nor stateless-*executed* through the engine API.
-
-Nothing guards this. Those methods relied on the blanket refusal in
-`core/stateless.go`, which is gone now that stateless execution works, so they
-will attempt a binary tree payload and fail somewhere further in rather than
-saying what is missing.
+Both refuse cleanly meanwhile rather than misbehaving, because **Amsterdam is
+absent from both fork gates**. `ExecuteStatelessPayloadV4` admits
+`Prague, Osaka, BPO1-5, Bogota`, so a binary tree payload is rejected with
+*"newPayloadV4 must only be called for prague/osaka payloads"* well before
+reaching `ExecuteStateless`. `ForkchoiceUpdatedWithWitnessV3` admits that set
+plus `Cancun`, and only checks it when payload attributes are present — which
+is exactly the case that requests a build, so the gap that matters is covered.
 
 Shape to copy: `TestWitnessCreationAndConsumption` (`eth/catalyst/api_test.go`)
 drives the whole loop, but only at V3. The binary tree fixture to extend is
@@ -64,23 +43,76 @@ keys a block touched, covering written stems whole (`insStem` refuses a write
 into a partially shipped stem), and the absence handling the multiproof already
 grew. `TestMultiproofSize` exists to measure the swap when it happens.
 
-## Merkle witnesses do not capture every bytecode they read
+## Two remaining unwitnessed paths to `stateObject.Code()`
 
-`ExecuteStateless` checks the state database's latched error before trusting
-its root, but only for the binary tree. Enabling the same check for merkle
-fails `TestWitnessCreationAndConsumption` (`eth/catalyst/api_test.go`) with
-`code is not found <hash>`: the witness is missing a bytecode the replay reads.
+`Witness.AddCode` is reached only from `StateDB.GetCode` and
+`StateDB.GetCodeSize`, so a `stateObject.Code()` arriving by any other route
+goes unrecorded. The replay then substitutes empty code and carries on, because
+`setError` only latches and `IntermediateRoot` never consults it — a wrong root
+reported as a good one.
 
-`Witness.AddCode` is only reached from `StateDB.GetCode` and
-`StateDB.GetCodeSize`, so a `stateObject.Code()` arriving by any other route is
-never recorded. The replay then substitutes empty code and carries on, because
-`setError` only latches and `IntermediateRoot` never consults it.
+The path that actually fired was `updateStateObject`, which asked for a code
+size on every dirty account and loaded the whole contract to measure it. That
+is fixed: the binary tree takes the size from the stem it is writing, the
+merkle trie never needed it, and `core/stateless.go` now holds both trees to
+the completeness check. Two dormant ones are left.
 
-The root still matched in that test, which is why nobody noticed - the missing
-code happened not to influence that block's state. On a block where it does,
-the result is a wrong root reported as a good one. Closing this means finding
-every path to `stateObject.Code()` and witnessing there, after which the check
-in `core/stateless.go` can drop its `IsPBT` condition.
+- `recordAccessListChanges` (`core/state/statedb.go`) calls `obj.Code()` under
+  `state.codeSet`. Amsterdam/BAL only, and only for accounts with a journalled
+  `SetCode`, whose blob is already in hand — so it does not reach the reader
+  today. Note that this holds by a cache hit rather than by construction:
+  `Code()` short-circuits on `len(s.code) != 0`.
+- `ReaderWithBlockLevelAccessList.Code`/`CodeSize`
+  (`core/state/reader_eip_7928.go`) read code below the `AddCode` layer
+  entirely, falling through to the wrapped reader on an access-list miss.
+
+Neither is reachable in a way that breaks a block today. Both would be found by
+the same test shape that caught the first: a block that touches a contract it
+never executes, replayed with the completeness check on.
+
+## Is `code_size` worth putting in flat state?
+
+Not for the write path — `UpdateAccount` preserves the resident size, which
+costs an in-memory lookup on a group the write resolves anyway. The question is
+the read path, where the cost is adversarially reachable.
+
+`opExtCodeSize` (`core/vm/instructions.go`) reaches `StateDB.GetCodeSize`
+(`core/state/statedb.go`), which reads the whole blob either way:
+
+```go
+if s.witness != nil {
+    s.witness.AddCode(stateObject.Code())   // building a witness: the blob, always
+}
+return stateObject.CodeSize()               // otherwise: a full read on a cold cache
+```
+
+These are alternatives rather than two costs on one call. `Code()` caches into
+`stateObject.code`, so once `AddCode` has run the following `CodeSize()` returns
+from memory and never reaches the reader. With no witness being built,
+`CodeReader.CodeSize` (`core/state/database_code.go`) consults a size-only cache
+first, so a warm node answers cheaply and a cold one does `len(r.Code(...))` —
+reading the entire bytecode to learn its length.
+
+The witness line is the serious one, because no cache spares it: whenever a
+witness is being built the blob goes in. A block whose transactions do nothing
+but `EXTCODESIZE` against many large contracts drags every one of their
+bytecodes into the witness while reading no code at all. At Amsterdam's
+`params.MaxCodeSizeAmsterdam` (64 KiB, enforced in `core/vm/common.go`) that is
+megabyte-scale amplification for a block that learned nothing but a handful of
+integers.
+
+`code_size` in flat state would let both the read and the witness carry four
+bytes instead of the blob. It is not free: flat state persists
+`types.SlimAccount`, so this is a stored-format change requiring regeneration
+on every node.
+
+**Measure before deciding.** Build the adversarial block — many distinct large
+contracts, `EXTCODESIZE` only, nothing warm — and compare its witness size and
+execution time against a block doing the same number of ordinary reads. That
+ratio decides whether the format change earns itself. Do not change
+`types.StateAccount` instead: PBT reads accounts through flat state first, so
+a field the flat reader cannot fill arrives zero and would erase the size it
+was added to carry.
 
 ## Witness statistics have no binary-aware histogram
 

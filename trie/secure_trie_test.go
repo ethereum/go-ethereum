@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/holiman/uint256"
 )
 
 func newEmptySecure() *StateTrie {
@@ -146,4 +147,36 @@ func TestStateTrieConcurrency(t *testing.T) {
 	}
 	// Wait for all threads to finish
 	pend.Wait()
+}
+
+// TestStateTrieUpdateAccountIgnoresCodeLen pins that the code length argument
+// is inert here. It exists for the binary tree, which packs the size into the
+// account, and the shared caller in core/state now passes a negative value to
+// mean "unknown" rather than loading a contract to find out. That is only safe
+// while the merkle-patricia leaf is byte-identical whatever it is told, since
+// the leaf is an RLP encoding of the account alone.
+func TestStateTrieUpdateAccountIgnoresCodeLen(t *testing.T) {
+	acc := &types.StateAccount{
+		Nonce:    3,
+		Balance:  uint256.NewInt(1 << 40),
+		Root:     types.EmptyRootHash,
+		CodeHash: crypto.Keccak256([]byte{0x60, 0x01}),
+	}
+	addr := common.Address{0x01}
+
+	var want common.Hash
+	for i, codeLen := range []int{-1, 0, 1, 24576, 1 << 30} {
+		tr := newEmptySecure()
+		if err := tr.UpdateAccount(addr, acc, codeLen); err != nil {
+			t.Fatalf("codeLen %d: %v", codeLen, err)
+		}
+		got := tr.Hash()
+		if i == 0 {
+			want = got
+			continue
+		}
+		if got != want {
+			t.Fatalf("codeLen %d changed the root: %x, want %x", codeLen, got, want)
+		}
+	}
 }
