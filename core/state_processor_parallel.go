@@ -164,8 +164,6 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	}
 	blockAccessList.Merge(PreExecution(ctx, block.BeaconRoot(), parent, config, preEVM, header.Number, header.Time))
 	preEVM.Release()
-	// The ephemeral state is discarded without ever being committed, so any
-	// database fault swallowed during the system calls must be surfaced here.
 	if err := preState.Error(); err != nil {
 		return nil, fmt.Errorf("database error in pre-execution system calls: %w", err)
 	}
@@ -224,11 +222,6 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	}
 	requests, postBAL, err := PostExecution(ctx, config, header.Number, header.Time, allLogs, postEVM, postIndex)
 	postEVM.Release()
-	// Check the database fault first: it is the root cause of any execution
-	// error it may have induced in the system calls.
-	if dbErr := postState.Error(); dbErr != nil {
-		return nil, fmt.Errorf("database error in post-execution system calls: %w", dbErr)
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -330,17 +323,11 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 				// limit: enough to let the state transition run to completion.
 				gp := NewGasPool(msg.GasLimit)
 				receipt, accessList, err := ApplyTransactionWithEVM(msg, gp, sdb, blockNumber, blockHash, context.Time, tx, evm)
-
-				// A database fault makes reads resolve to empty values instead of
-				// failing the execution, and the ephemeral state is discarded
-				// without ever reaching the database-error checks (root validation,
-				// commit) that guard the sequential path. Surface the fault
-				// instead of a bogus execution result.
-				if dbErr := sdb.Error(); dbErr != nil {
-					return fmt.Errorf("database error while applying tx %d [%v]: %w", i, tx.Hash().Hex(), dbErr)
-				}
 				if err != nil {
 					return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				}
+				if dbErr := sdb.Error(); dbErr != nil {
+					return fmt.Errorf("database error while applying tx %d [%v]: %w", i, tx.Hash().Hex(), dbErr)
 				}
 				results[i] = txExecResult{
 					receipt:    receipt,
