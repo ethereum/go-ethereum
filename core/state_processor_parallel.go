@@ -164,6 +164,9 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	}
 	blockAccessList.Merge(PreExecution(ctx, block.BeaconRoot(), parent, config, preEVM, header.Number, header.Time))
 	preEVM.Release()
+	if err := preState.Error(); err != nil {
+		return nil, fmt.Errorf("database error in pre-execution system calls: %w", err)
+	}
 	systemExec += time.Since(preStart)
 
 	// Execute the transactions concurrently. Each transaction runs against its
@@ -224,6 +227,9 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	}
 	blockAccessList.Merge(postBAL)
 	p.chain.Engine().Finalize(p.chain, header, postState, block.Body(), postIndex, blockAccessList)
+	if err := postState.Error(); err != nil {
+		return nil, fmt.Errorf("database error in post-execution system calls: %w", err)
+	}
 	systemExec += time.Since(postStart)
 
 	// Join the concurrent root computation.
@@ -319,6 +325,9 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 				receipt, accessList, err := ApplyTransactionWithEVM(msg, gp, sdb, blockNumber, blockHash, context.Time, tx, evm)
 				if err != nil {
 					return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				}
+				if dbErr := sdb.Error(); dbErr != nil {
+					return fmt.Errorf("database error while applying tx %d [%v]: %w", i, tx.Hash().Hex(), dbErr)
 				}
 				results[i] = txExecResult{
 					receipt:    receipt,
