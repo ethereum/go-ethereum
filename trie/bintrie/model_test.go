@@ -537,5 +537,10 @@ func TestUpdateAccountCodeSizeVsModel(t *testing.T) {
 					seed, op, addr[0], hashLeaf, m.codeHash)
 			}
 		}
+		// Every write above went through the typed path, so the tree must not
+		// be holding a zero-valued leaf: an account whose nonce, balance and
+		// code size are all zero encodes its basic data to 32 zero bytes, and
+		// the state layer resolves that to absence.
+		assertNoZeroLeaf(t, tr)
 	}
 }

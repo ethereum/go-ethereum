@@ -292,6 +292,34 @@ func (t *BinaryTrie) UpdateStem(stem []byte, subs []byte, values [][]byte) error
 	return nil
 }
 
+// zeroValue is the 32-byte value the state model resolves to absence.
+var zeroValue [32]byte
+
+// isZeroValue reports whether v is the all-zero leaf value.
+func isZeroValue(v []byte) bool {
+	return len(v) == len(zeroValue) && bytes.Equal(v, zeroValue[:])
+}
+
+// stateWrite writes values at subs of stem, resolving an all-zero value to a
+// deletion rather than an insertion.
+//
+// EIP-8297 assigns this to the state transition function rather than to the
+// tree: "no key in the state's tree holds 32 zero bytes", so zero and absent
+// are one state committing to one root, as in the merkle-patricia trie. Only
+// the typed writers on this type are that function; UpdateStem stays raw and
+// can still hold a deliberately-zero leaf, mirroring the reference's trie_set
+// beneath its state_write, and pinned by the zero_value_present vector.
+//
+// values is rewritten in place. Every caller builds it locally.
+func (t *BinaryTrie) stateWrite(stem []byte, subs []byte, values [][]byte) error {
+	for i, v := range values {
+		if isZeroValue(v) {
+			values[i] = nil
+		}
+	}
+	return t.UpdateStem(stem, subs, values)
+}
+
 func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]byte, pos int) (binaryNode, error) {
 	switch nn := n.(type) {
 	case empty:
@@ -833,7 +861,7 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 		if err != nil {
 			return fmt.Errorf("bintrie: UpdateAccount (%x): %w", addr, err)
 		}
-		return t.UpdateStem(stem,
+		return t.stateWrite(stem,
 			[]byte{BasicDataLeafKey, CodeHashLeafKey, DelegationLeafKey},
 			[][]byte{basic[:], nil, EncodeDelegation(delegation)})
 	}
@@ -892,11 +920,11 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 		return fmt.Errorf("bintrie: UpdateAccount (%x): %w", addr, err)
 	}
 	if keepCodeLeaves {
-		return t.UpdateStem(stem, []byte{BasicDataLeafKey}, [][]byte{basic[:]})
+		return t.stateWrite(stem, []byte{BasicDataLeafKey}, [][]byte{basic[:]})
 	}
 	codeHash := make([]byte, 32)
 	copy(codeHash, acc.CodeHash)
-	return t.UpdateStem(stem,
+	return t.stateWrite(stem,
 		[]byte{BasicDataLeafKey, CodeHashLeafKey, DelegationLeafKey},
 		[][]byte{basic[:], codeHash, nil})
 }
@@ -972,20 +1000,17 @@ func (t *BinaryTrie) UpdateStorageBatch(addr common.Address, keys [][]byte, valu
 	return nil
 }
 
-// UpdateStorage writes a storage slot. The value is left-padded to 32
-// bytes; an empty value deletes the slot (zero is encoded as absence at the
-// state layer).
+// UpdateStorage writes a storage slot. The value is left-padded to 32 bytes;
+// a zero value deletes the slot, whether it arrives empty or as 32 zero
+// bytes, because zero is absence at the state layer.
 func (t *BinaryTrie) UpdateStorage(addr common.Address, key, value []byte) error {
 	k := StorageSlotKey(addr, key)
-	if len(value) == 0 {
-		return t.UpdateStem(k[:len(k)-1], []byte{k[len(k)-1]}, [][]byte{nil})
-	}
 	var padded [32]byte
 	if len(value) > 32 {
 		value = value[:32]
 	}
 	copy(padded[32-len(value):], value)
-	return t.UpdateStem(k[:len(k)-1], []byte{k[len(k)-1]}, [][]byte{padded[:]})
+	return t.stateWrite(k[:len(k)-1], []byte{k[len(k)-1]}, [][]byte{padded[:]})
 }
 
 // DeleteStorage removes a storage slot's leaf.
@@ -1039,8 +1064,21 @@ func (t *BinaryTrie) UpdateContractCode(_ common.Address, codeHash common.Hash, 
 			}
 			tree = treeIndex
 		}
+		v := chunks[32*chunk : 32*(chunk+1)]
+		// A run of 31 zero code bytes encodes to 32 zero bytes, which the
+		// state model resolves to absence - so the leaf is not written, and
+		// reads recover the zero it stood for. Chunk presence therefore does
+		// not delimit the code; code_size does.
+		//
+		// Skipped rather than written as a deletion, which is the same thing
+		// here and avoids an empty batch: chunks are content-addressed, so
+		// every chunk of a given code hash always carries the same value and
+		// there is never a stale one at this key to remove.
+		if isZeroValue(v) {
+			continue
+		}
 		subs = append(subs, sub)
-		vals = append(vals, chunks[32*chunk:32*(chunk+1)])
+		vals = append(vals, v)
 	}
 	return flush()
 }

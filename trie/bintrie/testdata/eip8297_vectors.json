@@ -5,6 +5,110 @@
   "generator": "export_vectors.py"
  },
  "empty_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+ "state_vectors": [
+  {
+   "name": "eoa",
+   "accounts": [
+    {
+     "address": "0x1111111111111111111111111111111111111111",
+     "nonce": 3,
+     "balance": 1000000000000000000
+    }
+   ],
+   "root": "0xf645b4eef1fb70a4ee4d4ee4f0fe8301aed8d6834fcb1a3df7d9c7644a1c3db1"
+  },
+  {
+   "name": "contract",
+   "accounts": [
+    {
+     "address": "0x2222222222222222222222222222222222222222",
+     "nonce": 1,
+     "code": "0x600160005500",
+     "storage": {
+      "2": 66,
+      "1024": 67
+     }
+    }
+   ],
+   "root": "0xd4f04474bef7ea62fb85405251cdf4ac68ff3ac0c60f9f8cfd20d957f8cc5c7b"
+  },
+  {
+   "name": "code_with_zero_chunks",
+   "accounts": [
+    {
+     "address": "0x3333333333333333333333333333333333333333",
+     "nonce": 1,
+     "balance": 1,
+     "code": "0x6001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ],
+   "root": "0x70fccab0fc25a687fdcd1c7862ef85ff84293e3c514134cbb03a588a3613fac4"
+  },
+  {
+   "name": "code_all_zero_chunks",
+   "accounts": [
+    {
+     "address": "0x3434343434343434343434343434343434343434",
+     "nonce": 1,
+     "code": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ],
+   "root": "0x8734c02b37eb63be987521239a983b25c2d47cc28b1dec2b8cbbcdc528b6d6ea"
+  },
+  {
+   "name": "zero_basic_data_with_storage",
+   "accounts": [
+    {
+     "address": "0x4444444444444444444444444444444444444444",
+     "storage": {
+      "1": 9,
+      "1280": 11
+     }
+    }
+   ],
+   "root": "0x2faa9bdfc4db5676b28fd1826d14fdab1e477c0532a5da2124506b33c2eb3112"
+  },
+  {
+   "name": "delegated",
+   "accounts": [
+    {
+     "address": "0x5555555555555555555555555555555555555555",
+     "nonce": 2,
+     "balance": 7,
+     "code": "0xef0100cccccccccccccccccccccccccccccccccccccccc"
+    }
+   ],
+   "root": "0x9afacfd749c4dbe83f950409e4ca26afa36bb02d94c09e59043459bc03aa0994"
+  },
+  {
+   "name": "delegated_other_target",
+   "accounts": [
+    {
+     "address": "0x5555555555555555555555555555555555555555",
+     "nonce": 2,
+     "balance": 7,
+     "code": "0xef0100dddddddddddddddddddddddddddddddddddddddd"
+    }
+   ],
+   "root": "0xf1f179b960bf81f6da0a0798ebf3f8c024e2a0daadc328a9efcec036a7fc2944"
+  },
+  {
+   "name": "shared_code",
+   "accounts": [
+    {
+     "address": "0x6666666666666666666666666666666666666666",
+     "nonce": 1,
+     "code": "0x5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b"
+    },
+    {
+     "address": "0x6767676767676767676767676767676767676767",
+     "nonce": 1,
+     "code": "0x5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b"
+    }
+   ],
+   "root": "0x138ac3c221594c110f3dc68b91e38da91341693a03a5ee788cec807228d67e41"
+  }
+ ],
  "trie_vectors": [
   {
    "name": "empty",

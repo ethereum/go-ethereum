@@ -199,17 +199,14 @@ urgent — but it should get a dedicated session rather than another patch.
 These are known and tracked elsewhere; listed so this file is the single place
 to look.
 
-- **The code zone (`0x01`) has no coverage against the reference vectors.**
-  `trie/bintrie/multiproof_test.go`'s `TestCodeZoneKeyVerifies` proves a
-  `CODE_ZONE` key against a real root, so the zone is no longer unverified
-  outright. What is still missing is spec conformance: counting the leading
-  zone byte of every hashed entry in `trie/bintrie/testdata/eip8297_vectors.json`
-  gives 601 for accounts (`0x00`) and 266 for storage (`0xFF`), and **zero** for
-  content-addressed code, which appears only under `embedding_vectors.chunks` —
-  key derivation, never a root. Re-exporting does not close it on its own:
-  `testdata/export_vectors.py` builds its rooted populations from account and
-  storage keys only, so the exporter has to grow one that contains code chunks.
-  That belongs to the EEST/EELS integration phase.
+- **The code zone (`0x01`) is now rooted against the reference.** It used to
+  appear only under `embedding_vectors.chunks` — key derivation, never a root —
+  because `testdata/export_vectors.py` built its rooted populations from
+  account and storage keys alone. The `state_vectors` section embeds whole
+  allocations through the reference's own state layer, so contracts, shared
+  bytecode and zero-collapsing chunks all reach a root that
+  `TestStateVectors` compares against. What is still open is running the EEST
+  fixtures themselves; see the harness blocker below.
 - **One harness blocker before EEST fixtures can run.** `execBlockTest`
   (`tests/block_test.go`) runs every fixture under both the hash and path
   schemes, and the binary tree hard-fails on anything but path. It also always
