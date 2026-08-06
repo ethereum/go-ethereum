@@ -121,6 +121,11 @@ type Trie interface {
 
 	// UpdateAccountBatch attempts to update a list of accounts in the batch manner.
 	// Code lengths and delegations carry the same meaning as in UpdateAccount.
+	//
+	// There is no production caller today. Whoever adds one has to build the
+	// delegations slice alongside the code lengths, the way updateStateObject
+	// does for the single-account path; passing nils wholesale would clear the
+	// indicator of every delegated account in the batch.
 	UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLengths []int, delegations [][]byte) error
 
 	// UpdateStorage associates key with value in the trie. If value has length zero,
@@ -141,6 +146,14 @@ type Trie interface {
 
 	// UpdateContractCode abstracts code write to the trie. It is expected
 	// to be moved to the stateWriter interface when the latter is ready.
+	//
+	// An EIP-7702 designator is not code here. The binary tree keeps it in the
+	// account header, written by UpdateAccount, so this call writes nothing for
+	// one, and a caller that passes a designator without also passing it to
+	// UpdateAccount installs a code-hash leaf naming chunks that were never
+	// written. Nothing reads code chunks back, so such a state would hash
+	// differently without anything noticing: the two calls carry one decision
+	// between them and must be made from the same blob.
 	UpdateContractCode(address common.Address, codeHash common.Hash, code []byte) error
 
 	// Hash returns the root hash of the trie. It does not write to the database and

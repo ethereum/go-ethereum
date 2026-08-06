@@ -747,6 +747,17 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 		// The code is the leading code_size bytes of the leaf, so the hash is
 		// over those. Reading the whole padded value instead would hash nine
 		// bytes of padding into it and disagree with EXTCODEHASH.
+		//
+		// A size of zero is refused rather than hashed. It would produce the
+		// empty-code hash, and the account would then read back as codeless
+		// and EIP-161-empty while holding a delegation - the one wrong answer
+		// this synthesis could give that no caller could detect. Both shapes
+		// that reach it are broken states, not small ones: an absent basic
+		// data leaf, or one saying the account has no code beside an
+		// indicator that is its code.
+		if codeSize == 0 {
+			return nil, fmt.Errorf("bintrie: GetAccount (%x): delegation leaf with a zero code size", addr)
+		}
 		if int(codeSize) > len(delegation) {
 			return nil, fmt.Errorf("bintrie: GetAccount (%x): code size %d exceeds the %d-byte delegation leaf", addr, codeSize, len(delegation))
 		}

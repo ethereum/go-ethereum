@@ -133,6 +133,12 @@ func DelegationKey(addr common.Address) []byte {
 // This is not the chunk encoding. A chunk reserves its first byte for a count
 // of leading push-data bytes, which an indicator does not carry because it is
 // never executed as code.
+//
+// The argument must be an indicator, which types.ParseDelegation defines as
+// exactly 23 bytes behind the marker. Anything longer would be truncated to
+// the leaf width rather than refused here, so the check belongs at the write
+// path: UpdateAccount classifies before it encodes, and is the only
+// production caller.
 func EncodeDelegation(designator []byte) []byte {
 	v := make([]byte, 32)
 	copy(v, designator)
