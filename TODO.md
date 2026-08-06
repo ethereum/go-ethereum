@@ -227,3 +227,12 @@ to look.
   Its natural consumer is the offline conversion in `cmd/geth`, which still
   inserts one stem at a time. Revisit when conversion is benchmarked; delete if
   still unwired.
+- **`UpdateAccountBatch`** has no production caller either, and unlike
+  `StackBuilder` it is now a trap rather than just dead weight. It takes a
+  `delegations` slice that has to be built alongside the code lengths, the way
+  `updateStateObject` does for the single-account path; an adopter who passes
+  nils wholesale clears the EIP-7702 indicator of every delegated account in
+  the batch, and no read would show it — the account simply reads back as
+  codeless. The interface doc says so at the declaration, which is where
+  someone would look, but the safer end state is to delete the method until
+  something needs it.
