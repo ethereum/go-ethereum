@@ -1341,9 +1341,12 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 	}
 
-	// Ensure any missing fields are filled, extract the recipient and input data
-	if err = args.setFeeDefaults(ctx, b, header); err != nil {
-		return nil, 0, nil, err
+	// When all fee fields are omitted, leave them zeroed (as eth_call does) so creation doesn't
+	// fail affordability on fee defaults the sender can't afford; derive them otherwise.
+	if args.GasPrice != nil || args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.BlobFeeCap != nil {
+		if err = args.setFeeDefaults(ctx, b, header); err != nil {
+			return nil, 0, nil, err
+		}
 	}
 	if args.Nonce == nil {
 		nonce := hexutil.Uint64(db.GetNonce(args.from()))
