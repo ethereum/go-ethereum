@@ -768,12 +768,17 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	if err := op.Append(ChainFreezerReceiptTable, num, receipts); err != nil {
 		return fmt.Errorf("can't append block %d receipts: %v", num, err)
 	}
-	// The assumption is held that BAL of ancient block is no longer available
-	// (it may still reachable, but it's not worthwhile to even retrieve it
-	// from the network). A nil entry is stored in the BAL table as the absence
-	// placeholder.
-	if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
-		return fmt.Errorf("can't append block %d bals: %v", num, err)
+	// Block access lists are only retrieved (best effort) for blocks close to
+	// the head of the network chain; a nil entry is stored as the absence
+	// placeholder for anything the network no longer serves.
+	if list := block.AccessList(); list != nil {
+		if err := op.Append(ChainFreezerBALTable, num, list); err != nil {
+			return fmt.Errorf("can't append block %d bals: %v", num, err)
+		}
+	} else {
+		if err := op.AppendRaw(ChainFreezerBALTable, num, nil); err != nil {
+			return fmt.Errorf("can't append block %d bals: %v", num, err)
+		}
 	}
 	return nil
 }
