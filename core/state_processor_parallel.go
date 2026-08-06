@@ -277,11 +277,6 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 	if workers > len(txs) {
 		workers = len(txs)
 	}
-	// The worker group gets its own context, detached from the caller's:
-	// gctx must only ever be cancelled by a sibling worker's failure. Wiring
-	// the caller's context in here would let an aborted engine-API request
-	// abort block execution and surface as a block-validity error
-	// (reportBadBlock, engine INVALID) for a perfectly valid block.
 	var cursor atomic.Int64
 	group, gctx := errgroup.WithContext(context.Background())
 	for w := 0; w < workers; w++ {
@@ -297,10 +292,6 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 			defer evm.Release()
 
 			for {
-				// Stop claiming transactions once a sibling worker has failed:
-				// the block is already known to be invalid, so the remaining
-				// executions are wasted work. Transactions already in flight
-				// still run to completion; only new claims stop.
 				select {
 				case <-gctx.Done():
 					return gctx.Err()
