@@ -191,6 +191,7 @@ type TxFetcher struct {
 
 	buffer *blobpool.BlobBuffer
 
+	idle     chan struct{}    // Notification channel before the fetcher waits (tests only)
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
 	realTime func() time.Time // Real system time or simulated time for tests
@@ -518,8 +519,15 @@ func (f *TxFetcher) loop() {
 			underpricedMeter: txReplyUnderpricedMeter,
 			otherRejectMeter: txReplyOtherRejectMeter,
 		})
+		if f.idle != nil {
+			f.idle <- struct{}{}
+		}
 
 		select {
+		case <-f.buffer.Completed():
+			// A blob transaction was completed by the independent blob fetcher.
+			// Flush it at the top of the next loop iteration.
+
 		case ann := <-f.notify:
 			// Drop part of the new announcements if there are too many accumulated.
 			// Note, we could but do not filter already known transactions here as
