@@ -159,6 +159,96 @@ func TestPBTSetCodeTxWritesDelegationLeaf(t *testing.T) {
 	}
 }
 
+// TestPBTSetCodeTxSameTargetReauth pins the one shape that reaches the tree
+// with a live delegation and no code write: re-authorizing the same target.
+//
+// applyAuthorization bumps the authority's nonce unconditionally but skips
+// SetCode when the target is unchanged, so the account arrives at the tree
+// dirty, with dirtyCode false and therefore no stated size and no designator.
+// Only the preserve branch stops that write rewriting the code leaves from the
+// account - which would put back a code-hash leaf and silently un-delegate an
+// account whose authorization had just been renewed.
+//
+// The second authorization must land on the account, not be dropped, so the
+// nonce is checked too: a test that only read the leaves would also pass on a
+// block where nothing happened at all.
+func TestPBTSetCodeTxSameTargetReauth(t *testing.T) {
+	var (
+		delegate             = common.Address{0xde, 0x1e, 0x9a, 0x7e}
+		designator           = types.AddressToDelegation(delegate)
+		genesis, key, sender = pbtCodeReorgFixture(t)
+		engine               = beacon.New(ethash.NewFaker())
+		signer               = types.LatestSigner(genesis.Config)
+		chainID              = uint256.MustFromBig(genesis.Config.ChainID)
+	)
+	authKey, err := crypto.HexToECDSA("0202020202020202020202020202020202020202020202020202002020202020")
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority := crypto.PubkeyToAddress(authKey.PublicKey)
+
+	// Both authorizations name the same target. The authority's nonce is
+	// bumped by the first, so the second has to carry the incremented value or
+	// it is rejected before reaching the state.
+	auths := make([]types.SetCodeAuthorization, 2)
+	for i := range auths {
+		auth, err := types.SignSetCode(authKey, types.SetCodeAuthorization{
+			ChainID: *chainID,
+			Address: delegate,
+			Nonce:   uint64(i),
+		})
+		if err != nil {
+			t.Fatalf("signing authorization %d: %v", i, err)
+		}
+		auths[i] = auth
+	}
+
+	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2, func(i int, gen *BlockGen) {
+		gen.AddTx(types.MustSignNewTx(key, signer, &types.SetCodeTx{
+			ChainID:   chainID,
+			Nonce:     gen.TxNonce(sender),
+			To:        sender,
+			Value:     new(uint256.Int),
+			Gas:       1_000_000,
+			GasFeeCap: uint256.MustFromBig(new(big.Int).Add(gen.BaseFee(), common.Big1)),
+			GasTipCap: new(uint256.Int),
+			AuthList:  []types.SetCodeAuthorization{auths[i]},
+		}))
+	})
+	chain, cerr := NewBlockChain(db, genesis, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if cerr != nil {
+		t.Fatal(cerr)
+	}
+	defer chain.Stop()
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("importing the re-authorizing chain: %v", err)
+	}
+
+	// After the first block the delegation is installed the ordinary way.
+	want := bintrie.EncodeDelegation(designator)
+	if got := headerLeafAt(t, chain, blocks[0].Root(), authority, bintrie.DelegationLeafKey); !bytes.Equal(got, want) {
+		t.Fatalf("delegation leaf is %x after the first authorization, want %x", got, want)
+	}
+	// After the second it must be exactly where it was, with no code-hash leaf
+	// beside it, even though nothing wrote code in that block.
+	if got := headerLeafAt(t, chain, blocks[1].Root(), authority, bintrie.DelegationLeafKey); !bytes.Equal(got, want) {
+		t.Fatalf("re-authorizing the same target changed the delegation leaf to %x, want %x", got, want)
+	}
+	if got := headerLeafAt(t, chain, blocks[1].Root(), authority, bintrie.CodeHashLeafKey); got != nil {
+		t.Fatalf("re-authorizing the same target installed a code-hash leaf: %x", got)
+	}
+	acct := accountAt(t, chain, blocks[1].Root(), authority)
+	if acct == nil {
+		t.Fatal("the re-authorized account is missing")
+	}
+	if acct.Nonce != 2 {
+		t.Fatalf("authority nonce is %d after two authorizations, want 2; the second never landed", acct.Nonce)
+	}
+	if wantHash := crypto.Keccak256(designator); !bytes.Equal(acct.CodeHash, wantHash) {
+		t.Fatalf("authority code hash is %x, want the designator's %x", acct.CodeHash, wantHash)
+	}
+}
+
 // TestPBTStatelessSetCodeTx re-executes the delegating block from its witness
 // alone.
 //

@@ -465,6 +465,30 @@ func delegationAt(t *testing.T, sdb *StateDB, addr common.Address) []byte {
 	return val
 }
 
+// assertCodeLeaves checks an account's header against the EIP-8297 transition
+// table: the packed code size, and exactly one of the code-hash and delegation
+// leaves. A zero wantHash means the code-hash leaf must be absent, a nil
+// wantDelegation that the delegation leaf must be.
+//
+// Checking the size alone would pass on a swapped pair, which is the one
+// mistake the exclusivity rule exists to prevent.
+func assertCodeLeaves(t *testing.T, sdb *StateDB, addr common.Address, wantSize uint32, wantHash common.Hash, wantDelegation []byte) {
+	t.Helper()
+	if got := codeSizeAt(t, sdb, addr); got != wantSize {
+		t.Fatalf("code size %d, want %d", got, wantSize)
+	}
+	if got := codeHashAt(t, sdb, addr); got != wantHash {
+		t.Fatalf("code hash leaf %x, want %x", got, wantHash)
+	}
+	var want []byte
+	if wantDelegation != nil {
+		want = bintrie.EncodeDelegation(wantDelegation)
+	}
+	if got := delegationAt(t, sdb, addr); !bytes.Equal(got, want) {
+		t.Fatalf("delegation leaf %x, want %x", got, want)
+	}
+}
+
 // TestPBTCodeSizeWrites covers the code size across the paths that set it,
 // where TestPBTCodeSizePreserved covers the path that must not touch it.
 //
@@ -496,26 +520,41 @@ func TestPBTCodeSizeWrites(t *testing.T) {
 		}
 	})
 	t.Run("deploy", func(t *testing.T) {
+		// The control for the delegation cases below: ordinary code holds the
+		// other leaf of the exclusive pair.
 		sdb, db := newPBTState(t)
 		sdb.CreateAccount(addr)
 		sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
 		sdb = reopenPBT(t, sdb, db, 1)
-		if got := codeSizeAt(t, sdb, addr); got != uint32(len(code)) {
-			t.Fatalf("code size %d after deploy, want %d", got, len(code))
-		}
+		assertCodeLeaves(t, sdb, addr, uint32(len(code)), crypto.Keccak256Hash(code), nil)
 	})
 	t.Run("delegation set", func(t *testing.T) {
+		// The indicator becomes the account's code, so the code-hash leaf it
+		// held as a codeless account goes and sub 2 arrives in its place.
 		sdb, db := newPBTState(t)
 		sdb.CreateAccount(addr)
 		sdb.SetCode(addr, delegation, tracing.CodeChangeUnspecified)
 		sdb = reopenPBT(t, sdb, db, 1)
-		if got := codeSizeAt(t, sdb, addr); got != uint32(len(delegation)) {
-			t.Fatalf("code size %d after EIP-7702 delegation, want %d", got, len(delegation))
-		}
+		assertCodeLeaves(t, sdb, addr, 23, common.Hash{}, delegation)
+	})
+	t.Run("re-delegated", func(t *testing.T) {
+		// A live account replacing its indicator - the one code replacement
+		// EIP-8297 allows, and the reason indicators are not kept as shared
+		// code. The old value must not survive beside the new one.
+		other := append([]byte{0xef, 0x01, 0x00}, common.Address{10}.Bytes()...)
+		sdb, db := newPBTState(t)
+		sdb.CreateAccount(addr)
+		sdb.SetCode(addr, delegation, tracing.CodeChangeUnspecified)
+		sdb = reopenPBT(t, sdb, db, 1)
+		sdb.SetCode(addr, other, tracing.CodeChangeAuthorization)
+		sdb = reopenPBT(t, sdb, db, 2)
+		assertCodeLeaves(t, sdb, addr, 23, common.Hash{}, other)
 	})
 	t.Run("delegation cleared", func(t *testing.T) {
 		// Shrinking to nothing: the tree still holds the old size when the
-		// write lands, so this pins that the new value wins.
+		// write lands, so this pins that the new value wins. The account ends
+		// holding the code-hash leaf again, per the spec's "replacing this
+		// leaf with a code_hash leaf holding the hash of empty bytecode".
 		sdb, db := newPBTState(t)
 		sdb.CreateAccount(addr)
 		sdb.SetNonce(addr, 2, tracing.NonceChangeUnspecified) // keep it from being swept as empty
@@ -523,9 +562,7 @@ func TestPBTCodeSizeWrites(t *testing.T) {
 		sdb = reopenPBT(t, sdb, db, 1)
 		sdb.SetCode(addr, nil, tracing.CodeChangeAuthorizationClear)
 		sdb = reopenPBT(t, sdb, db, 2)
-		if got := codeSizeAt(t, sdb, addr); got != 0 {
-			t.Fatalf("code size %d after clearing the delegation, want 0", got)
-		}
+		assertCodeLeaves(t, sdb, addr, 0, types.EmptyCodeHash, nil)
 	})
 	t.Run("recreated after destruct", func(t *testing.T) {
 		// A destroy and a recreate of one address coalesce into a single
