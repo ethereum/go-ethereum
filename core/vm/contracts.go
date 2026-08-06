@@ -1244,9 +1244,7 @@ func (c *bls12381Pairing) Name() string {
 
 // scalarMulG1 sets r to s*p. EIP-2537 has no dedicated MUL precompile, so a
 // plain scalar multiplication reaches G1MSM as k == 1, and the spec asks
-// implementations to recognise it: gnark's smallest Pippenger window is c=4, so
-// MultiExp would pay 64 chunks of bucket setup and a task split across
-// NumCPU*2 goroutines to perform a single double-and-add.
+// implementations to recognise it: MultiExp pays Pippenger setup for one point.
 func scalarMulG1(r, p *bls12381.G1Affine, s *fr.Element) {
 	var b big.Int
 	r.ScalarMultiplication(p, s.BigInt(&b))
