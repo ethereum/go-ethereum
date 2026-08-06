@@ -303,12 +303,11 @@ func isZeroValue(v []byte) bool {
 // stateWrite writes values at subs of stem, resolving an all-zero value to a
 // deletion rather than an insertion.
 //
-// EIP-8297 assigns this to the state transition function rather than to the
-// tree: "no key in the state's tree holds 32 zero bytes", so zero and absent
-// are one state committing to one root, as in the merkle-patricia trie. Only
-// the typed writers on this type are that function; UpdateStem stays raw and
-// can still hold a deliberately-zero leaf, mirroring the reference's trie_set
-// beneath its state_write, and pinned by the zero_value_present vector.
+// EIP-8297 assigns this to the state transition function, not the tree: "no
+// key in the state's tree holds 32 zero bytes", so zero and absent are one
+// state committing to one root. Only the typed writers are that function;
+// UpdateStem stays raw and can still hold a deliberately-zero leaf, as the
+// zero_value_present vector pins.
 //
 // values is rewritten in place. Every caller builds it locally.
 func (t *BinaryTrie) stateWrite(stem []byte, subs []byte, values [][]byte) error {
@@ -1065,15 +1064,11 @@ func (t *BinaryTrie) UpdateContractCode(_ common.Address, codeHash common.Hash, 
 			tree = treeIndex
 		}
 		v := chunks[32*chunk : 32*(chunk+1)]
-		// A run of 31 zero code bytes encodes to 32 zero bytes, which the
-		// state model resolves to absence - so the leaf is not written, and
-		// reads recover the zero it stood for. Chunk presence therefore does
-		// not delimit the code; code_size does.
-		//
-		// Skipped rather than written as a deletion, which is the same thing
-		// here and avoids an empty batch: chunks are content-addressed, so
-		// every chunk of a given code hash always carries the same value and
-		// there is never a stale one at this key to remove.
+		// A run of 31 zero code bytes encodes to 32 zero bytes, which resolves
+		// to absence; reads recover the zero it stood for, and code_size
+		// delimits the code rather than chunk presence. Skipped rather than
+		// deleted, which is the same thing here and avoids an empty batch:
+		// chunks are content-addressed, so no stale value can sit at this key.
 		if isZeroValue(v) {
 			continue
 		}

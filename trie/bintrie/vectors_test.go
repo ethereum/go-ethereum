@@ -152,14 +152,12 @@ func deleteKey(t testing.TB, tr *BinaryTrie, key []byte) {
 // TestStateVectors drives whole allocations through the typed write path and
 // compares the resulting root against the reference.
 //
-// This is the only test that pins what an embedding *writes*, rather than what
+// This is the only test that pins what an embedding *writes* rather than what
 // it derives or how it hashes. The other vector tests are handed reference
 // keys and values and insert them raw, so they cannot see a disagreement about
-// which leaves exist at all - and that is exactly where the state layer makes
-// decisions: EIP-8297 has it resolve a write of 32 zero bytes to a deletion,
-// so an all-zero code chunk or an all-zero basic data leaf is absent, and an
-// implementation that stores either commits to a different root while every
-// read still returns the right answer.
+// which leaves exist at all - and that is where the state layer decides:
+// a write of 32 zero bytes resolves to a deletion, so storing one commits to a
+// different root while every read still returns the right answer.
 func TestStateVectors(t *testing.T) {
 	vf := loadVectors(t)
 	if len(vf.StateVectors) == 0 {
@@ -219,10 +217,9 @@ func TestStateVectors(t *testing.T) {
 
 // assertNoZeroLeaf walks every leaf and checks none holds 32 zero bytes.
 //
-// EIP-8297 states this as a property of the whole tree, not as a rule for one
-// writer: "no key in the state's tree holds 32 zero bytes". Asserting it here
-// catches a write path that bypasses stateWrite, which is the shape of the
-// mistake rather than any particular instance of it.
+// EIP-8297 states this of the whole tree, not of one writer, so asserting it
+// here catches any write path that bypasses stateWrite - the shape of the
+// mistake rather than a particular instance.
 func assertNoZeroLeaf(t *testing.T, tr *BinaryTrie) {
 	t.Helper()
 	it, err := tr.NodeIterator(nil)

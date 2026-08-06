@@ -34,9 +34,10 @@ touches witnesses today.
 
 The witness ships the nodes a block resolved, which is the same shape as the
 per-stem group records: about 26 KB to witness a whole 24 KiB contract, but
-about 4.7 KB to witness reading one chunk of it. `trie/bintrie/multiproof.go`
-answers the same single-chunk read in 672 B, roughly seven times smaller, and
-real blocks read sparsely rather than densely.
+about 9 KB to witness reading one chunk of it, since a chunk now drags in its
+whole code-zone group. `trie/bintrie/multiproof.go` answers the same
+single-chunk read in 879 B, roughly ten times smaller, and real blocks read
+sparsely rather than densely.
 
 Swapping it in needs three things the node-set format does not: recording which
 keys a block touched, covering written stems whole (`insStem` refuses a write
@@ -228,11 +229,8 @@ to look.
   inserts one stem at a time. Revisit when conversion is benchmarked; delete if
   still unwired.
 - **`UpdateAccountBatch`** has no production caller either, and unlike
-  `StackBuilder` it is now a trap rather than just dead weight. It takes a
-  `delegations` slice that has to be built alongside the code lengths, the way
-  `updateStateObject` does for the single-account path; an adopter who passes
-  nils wholesale clears the EIP-7702 indicator of every delegated account in
-  the batch, and no read would show it — the account simply reads back as
-  codeless. The interface doc says so at the declaration, which is where
-  someone would look, but the safer end state is to delete the method until
-  something needs it.
+  `StackBuilder` it is a trap rather than dead weight: its `delegations` slice
+  has to be built alongside the code lengths, and an adopter passing nils
+  wholesale clears every delegated account's EIP-7702 indicator with no read
+  showing it. The interface doc says so at the declaration; the safer end state
+  is to delete the method until something needs it.
