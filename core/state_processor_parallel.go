@@ -283,10 +283,8 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 	if workers > len(txs) {
 		workers = len(txs)
 	}
-	var (
-		cursor atomic.Int64
-		group  errgroup.Group
-	)
+	var cursor atomic.Int64
+	group, gctx := errgroup.WithContext(context.Background())
 	for w := 0; w < workers; w++ {
 		group.Go(func() error {
 			context := NewEVMBlockContext(header, p.chain, nil)
@@ -300,6 +298,11 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 			defer evm.Release()
 
 			for {
+				select {
+				case <-gctx.Done():
+					return gctx.Err()
+				default:
+				}
 				i := int(cursor.Add(1)) - 1
 				if i >= len(txs) {
 					return nil
