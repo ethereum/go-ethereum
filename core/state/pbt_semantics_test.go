@@ -288,12 +288,10 @@ func TestPBTCodeShrink(t *testing.T) {
 // TestPBTDelegationSurvivesBalanceTouch pins that touching a delegated account
 // for its balance alone leaves the delegation exactly where it was.
 //
-// This is the failure no set-then-clear test can see. Such a touch leaves
-// dirtyCode false, so the write states no code size and no designator, and the
-// trie has to keep both from the stem it is about to write. Rewriting the code
-// leaves from the account instead would put back a code-hash leaf and drop the
-// indicator - silently un-delegating an account nobody asked to change, on the
-// commonest write there is.
+// No set-then-clear test can see this. Such a touch leaves dirtyCode false, so
+// the write states no size and no designator and the trie must keep both from
+// the stem. Rewriting the code leaves from the account instead would put back
+// a code-hash leaf and silently un-delegate, on the commonest write there is.
 func TestPBTDelegationSurvivesBalanceTouch(t *testing.T) {
 	addr := common.Address{1}
 	delegation := types.AddressToDelegation(common.Address{9})
@@ -336,13 +334,11 @@ func TestPBTDelegationSurvivesBalanceTouch(t *testing.T) {
 // TestPBTCodeHashIsNotADelegation pins that the discriminator is the
 // sub-index, never the value.
 //
-// EIP #12114 keeps delegation at its own sub-index rather than marking it
-// inside a shared leaf, because a value discriminator would be grindable: a
-// contract whose *code hash* begins with the 0xef0100 marker costs about 2^24
-// offline Keccaks to find, and would then read back as a delegation to that
-// hash's next 20 bytes. Nothing here inspects a leaf's contents to classify
-// it, so such a hash is just a hash - which is what this asserts, without
-// needing to grind a real preimage.
+// EIP #12114 gives delegation its own sub-index because a value discriminator
+// would be grindable: a code hash beginning with 0xef0100 costs about 2^24
+// offline Keccaks and would read back as a delegation. Nothing here inspects a
+// leaf's contents, so such a hash is just a hash - asserted without needing to
+// grind a real preimage.
 func TestPBTCodeHashIsNotADelegation(t *testing.T) {
 	addr := common.Address{1}
 	// A code hash that would be read as a delegation by any value-sniffing
@@ -467,11 +463,8 @@ func delegationAt(t *testing.T, sdb *StateDB, addr common.Address) []byte {
 
 // assertCodeLeaves checks an account's header against the EIP-8297 transition
 // table: the packed code size, and exactly one of the code-hash and delegation
-// leaves. A zero wantHash means the code-hash leaf must be absent, a nil
-// wantDelegation that the delegation leaf must be.
-//
-// Checking the size alone would pass on a swapped pair, which is the one
-// mistake the exclusivity rule exists to prevent.
+// leaves. A zero wantHash or nil wantDelegation means that leaf must be
+// absent. Checking the size alone would pass on a swapped pair.
 func assertCodeLeaves(t *testing.T, sdb *StateDB, addr common.Address, wantSize uint32, wantHash common.Hash, wantDelegation []byte) {
 	t.Helper()
 	if got := codeSizeAt(t, sdb, addr); got != wantSize {
@@ -539,8 +532,7 @@ func TestPBTCodeSizeWrites(t *testing.T) {
 	})
 	t.Run("re-delegated", func(t *testing.T) {
 		// A live account replacing its indicator - the one code replacement
-		// EIP-8297 allows, and the reason indicators are not kept as shared
-		// code. The old value must not survive beside the new one.
+		// EIP-8297 allows. The old value must not survive beside the new.
 		other := append([]byte{0xef, 0x01, 0x00}, common.Address{10}.Bytes()...)
 		sdb, db := newPBTState(t)
 		sdb.CreateAccount(addr)
@@ -553,8 +545,7 @@ func TestPBTCodeSizeWrites(t *testing.T) {
 	t.Run("delegation cleared", func(t *testing.T) {
 		// Shrinking to nothing: the tree still holds the old size when the
 		// write lands, so this pins that the new value wins. The account ends
-		// holding the code-hash leaf again, per the spec's "replacing this
-		// leaf with a code_hash leaf holding the hash of empty bytecode".
+		// holding the code-hash leaf again, as the spec requires.
 		sdb, db := newPBTState(t)
 		sdb.CreateAccount(addr)
 		sdb.SetNonce(addr, 2, tracing.NonceChangeUnspecified) // keep it from being swept as empty

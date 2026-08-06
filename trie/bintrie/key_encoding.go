@@ -42,11 +42,9 @@ const (
 	BasicDataLeafKey = 0 // version ‖ reserved ‖ code_size ‖ nonce ‖ balance
 	CodeHashLeafKey  = 1 // keccak256 of the account's code
 	// DelegationLeafKey holds an EIP-7702 designator, right-padded to 32
-	// bytes. It excludes CodeHashLeafKey rather than joining it: every
-	// account that exists holds exactly one of the two, because a delegated
-	// account's code *is* its indicator. The leaf determines both, a code
-	// read taking the leading code_size bytes of the value and EXTCODEHASH
-	// hashing them.
+	// bytes. It excludes CodeHashLeafKey rather than joining it: a delegated
+	// account's code *is* its indicator, so the leaf determines both the code
+	// and its hash, and every account holds exactly one of the two.
 	DelegationLeafKey = 2
 
 	// HeaderStorageOffset is the header sub-index of storage slot 0, and
@@ -134,11 +132,9 @@ func DelegationKey(addr common.Address) []byte {
 // of leading push-data bytes, which an indicator does not carry because it is
 // never executed as code.
 //
-// The argument must be an indicator, which types.ParseDelegation defines as
-// exactly 23 bytes behind the marker. Anything longer would be truncated to
-// the leaf width rather than refused here, so the check belongs at the write
-// path: UpdateAccount classifies before it encodes, and is the only
-// production caller.
+// The argument must be an indicator - exactly 23 bytes behind the marker.
+// Anything longer is truncated rather than refused, so the check belongs at
+// the write path: UpdateAccount classifies before it encodes.
 func EncodeDelegation(designator []byte) []byte {
 	v := make([]byte, 32)
 	copy(v, designator)

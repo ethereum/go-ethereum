@@ -33,12 +33,10 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// EIP-7702 delegation under the binary tree.
-//
-// Every other test of the delegation leaf drives it synthetically through
-// core/state. These run a real signed authorization down the whole stack -
-// transaction, state transition, tree write, commit - because that is the only
-// path production takes, and it is the one path none of them covered.
+// EIP-7702 delegation under the binary tree. Every other test of the
+// delegation leaf drives it synthetically through core/state; these run a real
+// signed authorization down the whole stack, which is the only path production
+// takes and the one none of them covered.
 
 // headerLeafAt reads one sub-index of an account's header stem at a root,
 // returning nil when the leaf is absent.
@@ -67,8 +65,7 @@ func pbtDelegationChain(t *testing.T, delegate common.Address) (*BlockChain, *ty
 	signer := types.LatestSigner(genesis.Config)
 
 	// A separate account authorizes, so the delegated account is not also the
-	// one paying: the two roles hitting one account would hide a write that
-	// only happens because the account was touched for its balance.
+	// one paying: both roles on one account would hide a balance-only write.
 	authKey, err := crypto.HexToECDSA("0202020202020202020202020202020202020202020202020202002020202020")
 	if err != nil {
 		t.Fatal(err)
@@ -108,16 +105,13 @@ func pbtDelegationChain(t *testing.T, delegate common.Address) (*BlockChain, *ty
 }
 
 // TestPBTSetCodeTxWritesDelegationLeaf pins where a real EIP-7702
-// authorization lands in the tree: the authority's own header, and nowhere
-// else.
+// authorization lands: the authority's own header, and nowhere else.
 //
-// The three negatives carry as much as the positive. No code-hash leaf,
-// because the two are exclusive and a stale one would make the account read
-// back as ordinary code. No code chunk, because chunking the indicator would
-// put a per-account value in the shared zone, where nothing removes it. And
-// the account still has to report the designator's hash to everything above
-// the tree, which is what keeps EIP-161 emptiness and the txpools' delegation
-// probe correct without either of them knowing the leaf exists.
+// The negatives carry as much as the positive. No code-hash leaf, since a
+// stale one would make the account read back as ordinary code. No code chunk,
+// since chunking the indicator would put a per-account value in the shared
+// zone. And the account must still report the designator's hash, which is what
+// keeps EIP-161 emptiness and the txpools' probe correct.
 func TestPBTSetCodeTxWritesDelegationLeaf(t *testing.T) {
 	delegate := common.Address{0xde, 0x1e, 0x9a, 0x7e}
 	chain, block, authority, designator := pbtDelegationChain(t, delegate)
@@ -162,16 +156,13 @@ func TestPBTSetCodeTxWritesDelegationLeaf(t *testing.T) {
 // TestPBTSetCodeTxSameTargetReauth pins the one shape that reaches the tree
 // with a live delegation and no code write: re-authorizing the same target.
 //
-// applyAuthorization bumps the authority's nonce unconditionally but skips
-// SetCode when the target is unchanged, so the account arrives at the tree
-// dirty, with dirtyCode false and therefore no stated size and no designator.
-// Only the preserve branch stops that write rewriting the code leaves from the
-// account - which would put back a code-hash leaf and silently un-delegate an
-// account whose authorization had just been renewed.
+// applyAuthorization bumps the nonce unconditionally but skips SetCode when
+// the target is unchanged, so the account arrives dirty with no stated size
+// and no designator. Only the preserve branch stops that write putting back a
+// code-hash leaf and silently un-delegating a just-renewed account.
 //
-// The second authorization must land on the account, not be dropped, so the
-// nonce is checked too: a test that only read the leaves would also pass on a
-// block where nothing happened at all.
+// The nonce is checked too: reading only the leaves would also pass on a block
+// where nothing happened at all.
 func TestPBTSetCodeTxSameTargetReauth(t *testing.T) {
 	var (
 		delegate             = common.Address{0xde, 0x1e, 0x9a, 0x7e}
@@ -252,13 +243,11 @@ func TestPBTSetCodeTxSameTargetReauth(t *testing.T) {
 // TestPBTStatelessSetCodeTx re-executes the delegating block from its witness
 // alone.
 //
-// Moving the indicator out of the code zone raised a real question for
-// stateless replay: it is witnessed as a code blob, by keccak, and if it had
-// stopped being one the replay would have had to rebuild it from the header
-// stem instead. It has not - the designator is still ordinary code everywhere
-// above the trie, and only its tree representation changed - and the hash the
-// replay looks it up by is the one GetAccount synthesises from the leaf. This
-// is that reasoning checked rather than asserted.
+// Moving the indicator out of the code zone raised a question for replay: it
+// is witnessed as a code blob by keccak, and had it stopped being one the
+// replay would have needed to rebuild it from the header stem. It has not -
+// only the tree representation changed - and the hash replay looks it up by is
+// the one GetAccount synthesises. Checked here rather than assumed.
 func TestPBTStatelessSetCodeTx(t *testing.T) {
 	chain, block, authority, designator := pbtDelegationChain(t, common.Address{0xde, 0x1e, 0x9a, 0x7e})
 

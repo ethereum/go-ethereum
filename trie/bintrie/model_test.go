@@ -509,9 +509,8 @@ func TestUpdateAccountCodeSizeVsModel(t *testing.T) {
 				t.Fatalf("seed %d op %d: basic data drifted: nonce %d/%d balance %d/%d",
 					seed, op, gotNonce, m.nonce, gotBalance.Uint64(), m.balance)
 			}
-			// Exclusivity, across whatever order the shapes above landed in:
-			// an account holds exactly one of the two code leaves, and it is
-			// the one its history says it should.
+			// Exclusivity, across whatever order the shapes landed in: exactly
+			// one of the two code leaves, and the one history says it is.
 			hashLeaf, err := tr.GetStemValue(CodeHashKey(addr))
 			if err != nil {
 				t.Fatalf("seed %d op %d: GetStemValue(code hash): %v", seed, op, err)

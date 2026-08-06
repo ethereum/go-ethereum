@@ -79,15 +79,11 @@ func pathProof(t *testing.T, db *triedb.Database, root common.Hash, key []byte) 
 // TestPBTProofCoversResidentCodeLeaf pins that eth_getProof covers whichever
 // of the code-hash and delegation leaves the account actually holds.
 //
-// The two are mutually exclusive, so an account proof that names only one of
-// them answers for half the accounts. It matters because a proof of this tree
-// does not ship whole stems: proof.go expands a group's canonical leaf/branch
-// structure along the queried key alone, so proving sub-index 0 emits a
-// divergence witness for the rest of the stem rather than their values. A
-// delegated account proved at 0 and 1 therefore comes back with basic data
-// saying code_size is 23 and an absence witness where the code hash would be,
-// and nothing that substantiates the code hash the response reports - which
-// is derived from the very leaf left out.
+// The two are exclusive, so naming only one answers for half the accounts.
+// Proofs of this tree do not ship whole stems - proof.go expands a group along
+// the queried key alone - so a delegated account proved at 0 and 1 comes back
+// with an absence witness where the code hash would be and nothing that
+// substantiates the code hash the response reports.
 func TestPBTProofCoversResidentCodeLeaf(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

@@ -504,10 +504,8 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 //   - accountProof covers the paths to the account's basic-data, code-hash
 //     and delegation leaves, which share a stem and therefore most of their
 //     nodes; the set is deduplicated. All three are proved even though an
-//     account never holds both of the last two: which one is resident is
-//     itself what the proof has to establish, and for a delegated account
-//     the code hash this call reports is derived from the delegation leaf,
-//     so a proof omitting it could not substantiate the answer.
+//     account never holds both of the last two, since which one is resident
+//     is itself what the proof establishes.
 //   - storageHash is zero. There is no per-account storage root to report,
 //     and zero is unambiguous because a keccak root never is.
 //   - each storage proof covers the path to that slot's leaf. Slots below

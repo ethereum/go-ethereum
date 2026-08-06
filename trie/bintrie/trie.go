@@ -712,10 +712,9 @@ func (t *BinaryTrie) GetKey(key []byte) []byte { return key }
 //
 // A delegated account carries no code hash to read, so this derives one by
 // hashing the indicator. Everything above the tree - EIP-161 emptiness, the
-// txpools' delegation probe, EXTCODEHASH - reads a delegated account through
-// types.StateAccount.CodeHash and would misread it as codeless otherwise, so
-// the synthesis is what keeps those callers correct without knowing about the
-// leaf at all.
+// txpools' delegation probe, EXTCODEHASH - reads it through
+// types.StateAccount.CodeHash, so the synthesis keeps those callers correct
+// without any of them knowing the leaf exists.
 func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
 	if t.committed {
 		return nil, trie.ErrCommitted
@@ -748,13 +747,10 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 		// over those. Reading the whole padded value instead would hash nine
 		// bytes of padding into it and disagree with EXTCODEHASH.
 		//
-		// A size of zero is refused rather than hashed. It would produce the
-		// empty-code hash, and the account would then read back as codeless
-		// and EIP-161-empty while holding a delegation - the one wrong answer
-		// this synthesis could give that no caller could detect. Both shapes
-		// that reach it are broken states, not small ones: an absent basic
-		// data leaf, or one saying the account has no code beside an
-		// indicator that is its code.
+		// A zero size is refused rather than hashed: it would produce the
+		// empty-code hash, and the account would read back as codeless and
+		// EIP-161-empty while holding a delegation - the one wrong answer this
+		// synthesis could give that no caller could detect.
 		if codeSize == 0 {
 			return nil, fmt.Errorf("bintrie: GetAccount (%x): delegation leaf with a zero code size", addr)
 		}
@@ -791,16 +787,14 @@ func (t *BinaryTrie) UpdateAccountBatch(addrs []common.Address, accounts []*type
 // UpdateAccount writes the BASIC_DATA leaf of the account header stem, and
 // whichever of CODE_HASH and DELEGATION the account holds, in one walk.
 //
-// A non-nil delegation is the EIP-7702 designator itself, and says the account
-// is delegated: the indicator becomes its code, so the size is 23 and the
-// code-hash leaf is removed. A nil delegation with a stated size removes the
-// delegation leaf instead. Either way both leaves move in the single walk
-// below, so the exclusivity between them is never momentarily broken.
+// A non-nil delegation is the EIP-7702 designator: the indicator becomes the
+// account's code, so the size is 23 and the code-hash leaf is removed. A nil
+// delegation with a stated size removes the delegation leaf instead. Both move
+// in the single walk below, so their exclusivity is never momentarily broken.
 //
-// The designator is passed rather than recognised from the code, because the
-// code is not here to recognise: reading it back to test for the marker is the
-// unwitnessed read this signature's codeLen exists to avoid. Callers hold the
-// blob already whenever they set it.
+// The designator is passed rather than recognised from the code, because
+// reading the blob back to test for the marker is the unwitnessed read codeLen
+// exists to avoid. Callers hold it already whenever they set it.
 //
 // A negative codeLen means the caller declines to state the size, not that it
 // necessarily lacks one: the account-write path passes it for every account
@@ -823,17 +817,15 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 	}
 	stem := HeaderStem(addr)
 	if delegation != nil {
-		// Checked rather than trusted: a value that is not an indicator would
-		// be stored where every reader takes one on faith, and would then be
-		// hashed into a code hash that names bytecode nothing can produce.
+		// Checked rather than trusted: a non-indicator stored here would be
+		// hashed into a code hash naming bytecode nothing can produce.
 		if _, ok := types.ParseDelegation(delegation); !ok {
 			return fmt.Errorf("bintrie: UpdateAccount (%x): the %d-byte delegation is not an indicator", addr, len(delegation))
 		}
 		// The leaf becomes the account's code, so the hash GetAccount reads
-		// back is the indicator's, not the one passed here. Every caller
-		// derives the two from the same blob and they agree; checking says so
-		// rather than leaving a disagreement to surface as a wrong code hash
-		// nothing can trace back to this write.
+		// back is the indicator's, not the one passed here. Callers derive
+		// both from one blob; checking says so rather than letting a
+		// disagreement surface as an untraceable wrong code hash.
 		if got := crypto.Keccak256(delegation); !bytes.Equal(got, acc.CodeHash) {
 			return fmt.Errorf("bintrie: UpdateAccount (%x): the delegation hashes to %x but the account carries %x", addr, got, acc.CodeHash)
 		}
@@ -1017,10 +1009,9 @@ func (t *BinaryTrie) DeleteStorage(addr common.Address, key []byte) error {
 // still holds this bytecode is answered by the ancestor state, not by a count.
 // core.TestPBTReorgKeepsSharedCodeChunks pins it.
 func (t *BinaryTrie) UpdateContractCode(_ common.Address, codeHash common.Hash, code []byte) error {
-	// A delegation indicator is not code as far as the tree is concerned. It
-	// lives in its own account's header, written by UpdateAccount, precisely
-	// so that it is not shared; chunking it here would put it in the shared
-	// zone as well and leave a leaf nothing ever removes.
+	// A delegation indicator is not code here: it lives in its own account's
+	// header, written by UpdateAccount, precisely so it is not shared.
+	// Chunking it would leave a shared leaf nothing ever removes.
 	if _, ok := types.ParseDelegation(code); ok {
 		return nil
 	}

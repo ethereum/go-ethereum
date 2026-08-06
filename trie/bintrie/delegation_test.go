@@ -28,14 +28,11 @@ import (
 // TestGetAccountRefusesBrokenDelegation pins that a delegation leaf beside a
 // code size that cannot describe it is an error rather than an answer.
 //
-// GetAccount derives a delegated account's code hash from the leaf, taking
-// its leading code_size bytes. A size of zero would hash nothing and yield
-// the empty-code hash, so the account would read back as codeless and
-// EIP-161-empty while plainly holding a delegation - and every caller that
-// depends on the synthesis, from the txpools to EXTCODEHASH, would agree with
-// it. Neither shape is reachable through UpdateAccount, which writes the two
-// leaves in one walk; both are reachable from a corrupt or hand-built stem,
-// which is exactly when a wrong answer is worst.
+// A zero size would hash nothing and yield the empty-code hash, so the account
+// would read back as codeless and EIP-161-empty while holding a delegation,
+// and every caller of the synthesis would agree with it. Unreachable through
+// UpdateAccount, which writes both leaves in one walk; reachable from a
+// corrupt stem, which is when a wrong answer is worst.
 func TestGetAccountRefusesBrokenDelegation(t *testing.T) {
 	addr := common.Address{1}
 	designator := types.AddressToDelegation(common.Address{9})
@@ -70,9 +67,8 @@ func TestGetAccountRefusesBrokenDelegation(t *testing.T) {
 		})
 	}
 
-	// The control: the same leaf with a size that does describe it reads back
-	// as the designator's hash, so the guard above rejects the broken shape
-	// rather than the mechanism.
+	// The control: a size that does describe the leaf reads back as the
+	// designator's hash, so the guard rejects the shape, not the mechanism.
 	tr := newTestTrie()
 	basic, err := EncodeBasicData(uint32(len(designator)), 7, uint256.NewInt(1))
 	if err != nil {
