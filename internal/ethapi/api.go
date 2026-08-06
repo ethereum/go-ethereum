@@ -501,9 +501,13 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 // holds all state in one structure, so proofs are node sets of that tree
 // rather than of an account trie plus a storage trie:
 //
-//   - accountProof covers the paths to the account's basic-data and
-//     code-hash leaves, which share a stem and therefore most of their
-//     nodes; the set is deduplicated.
+//   - accountProof covers the paths to the account's basic-data, code-hash
+//     and delegation leaves, which share a stem and therefore most of their
+//     nodes; the set is deduplicated. All three are proved even though an
+//     account never holds both of the last two: which one is resident is
+//     itself what the proof has to establish, and for a delegated account
+//     the code hash this call reports is derived from the delegation leaf,
+//     so a proof omitting it could not substantiate the answer.
 //   - storageHash is zero. There is no per-account storage root to report,
 //     and zero is unambiguous because a keccak root never is.
 //   - each storage proof covers the path to that slot's leaf. Slots below
@@ -522,7 +526,11 @@ func pbtProof(statedb *state.StateDB, root common.Hash, address common.Address, 
 		return nil, fmt.Errorf("expected a binary trie, got %T", tr)
 	}
 	accountProof := newDedupProofList()
-	for _, key := range [][]byte{bintrie.BasicDataKey(address), bintrie.CodeHashKey(address)} {
+	for _, key := range [][]byte{
+		bintrie.BasicDataKey(address),
+		bintrie.CodeHashKey(address),
+		bintrie.DelegationKey(address),
+	} {
 		if err := bt.Prove(key, accountProof); err != nil {
 			return nil, err
 		}
