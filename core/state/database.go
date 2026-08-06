@@ -110,11 +110,20 @@ type Trie interface {
 	// substituting zero: the binary tree stores the code size in the account,
 	// so a zero would erase it. The merkle-patricia trie ignores the argument
 	// entirely.
-	UpdateAccount(address common.Address, account *types.StateAccount, codeLen int) error
+	//
+	// A non-nil delegation is the account's EIP-7702 designator. The binary
+	// tree holds it in the header in place of the code hash, so it must be
+	// passed on every write of a delegated account that states a size; a nil
+	// clears any indicator held. The merkle-patricia trie ignores it too.
+	UpdateAccount(address common.Address, account *types.StateAccount, codeLen int, delegation []byte) error
 
 	// UpdateAccountBatch attempts to update a list of accounts in the batch manner.
-	// Negative code lengths carry the same meaning as in UpdateAccount.
-	UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLengths []int) error
+	// Code lengths and delegations carry the same meaning as in UpdateAccount.
+	//
+	// No production caller today. Whoever adds one must build the delegations
+	// slice alongside the code lengths, as updateStateObject does; passing
+	// nils wholesale clears every delegated account's indicator.
+	UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLengths []int, delegations [][]byte) error
 
 	// UpdateStorage associates key with value in the trie. If value has length zero,
 	// any existing value is deleted from the trie. The value bytes must not be modified
@@ -134,6 +143,12 @@ type Trie interface {
 
 	// UpdateContractCode abstracts code write to the trie. It is expected
 	// to be moved to the stateWriter interface when the latter is ready.
+	//
+	// An EIP-7702 designator is not code here: the binary tree keeps it in the
+	// account header, so this writes nothing for one. A caller passing a
+	// designator without also passing it to UpdateAccount installs a code-hash
+	// leaf naming chunks never written, and nothing reads chunks back to catch
+	// it. The two calls carry one decision and must come from the same blob.
 	UpdateContractCode(address common.Address, codeHash common.Hash, code []byte) error
 
 	// Hash returns the root hash of the trie. It does not write to the database and

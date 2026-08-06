@@ -1,10 +1,114 @@
 {
  "meta": {
-  "source": "execution-specs@ec412acfd (branch eip-8297-tests)",
+  "source": "execution-specs@455d9085d (branch eip-8297-tests)",
   "hasher": "blake3",
   "generator": "export_vectors.py"
  },
  "empty_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+ "state_vectors": [
+  {
+   "name": "eoa",
+   "accounts": [
+    {
+     "address": "0x1111111111111111111111111111111111111111",
+     "nonce": 3,
+     "balance": 1000000000000000000
+    }
+   ],
+   "root": "0xf645b4eef1fb70a4ee4d4ee4f0fe8301aed8d6834fcb1a3df7d9c7644a1c3db1"
+  },
+  {
+   "name": "contract",
+   "accounts": [
+    {
+     "address": "0x2222222222222222222222222222222222222222",
+     "nonce": 1,
+     "code": "0x600160005500",
+     "storage": {
+      "2": 66,
+      "1024": 67
+     }
+    }
+   ],
+   "root": "0xd4f04474bef7ea62fb85405251cdf4ac68ff3ac0c60f9f8cfd20d957f8cc5c7b"
+  },
+  {
+   "name": "code_with_zero_chunks",
+   "accounts": [
+    {
+     "address": "0x3333333333333333333333333333333333333333",
+     "nonce": 1,
+     "balance": 1,
+     "code": "0x6001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ],
+   "root": "0x70fccab0fc25a687fdcd1c7862ef85ff84293e3c514134cbb03a588a3613fac4"
+  },
+  {
+   "name": "code_all_zero_chunks",
+   "accounts": [
+    {
+     "address": "0x3434343434343434343434343434343434343434",
+     "nonce": 1,
+     "code": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ],
+   "root": "0x8734c02b37eb63be987521239a983b25c2d47cc28b1dec2b8cbbcdc528b6d6ea"
+  },
+  {
+   "name": "zero_basic_data_with_storage",
+   "accounts": [
+    {
+     "address": "0x4444444444444444444444444444444444444444",
+     "storage": {
+      "1": 9,
+      "1280": 11
+     }
+    }
+   ],
+   "root": "0x2faa9bdfc4db5676b28fd1826d14fdab1e477c0532a5da2124506b33c2eb3112"
+  },
+  {
+   "name": "delegated",
+   "accounts": [
+    {
+     "address": "0x5555555555555555555555555555555555555555",
+     "nonce": 2,
+     "balance": 7,
+     "code": "0xef0100cccccccccccccccccccccccccccccccccccccccc"
+    }
+   ],
+   "root": "0x9afacfd749c4dbe83f950409e4ca26afa36bb02d94c09e59043459bc03aa0994"
+  },
+  {
+   "name": "delegated_other_target",
+   "accounts": [
+    {
+     "address": "0x5555555555555555555555555555555555555555",
+     "nonce": 2,
+     "balance": 7,
+     "code": "0xef0100dddddddddddddddddddddddddddddddddddddddd"
+    }
+   ],
+   "root": "0xf1f179b960bf81f6da0a0798ebf3f8c024e2a0daadc328a9efcec036a7fc2944"
+  },
+  {
+   "name": "shared_code",
+   "accounts": [
+    {
+     "address": "0x6666666666666666666666666666666666666666",
+     "nonce": 1,
+     "code": "0x5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b"
+    },
+    {
+     "address": "0x6767676767676767676767676767676767676767",
+     "nonce": 1,
+     "code": "0x5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b"
+    }
+   ],
+   "root": "0x138ac3c221594c110f3dc68b91e38da91341693a03a5ee788cec807228d67e41"
+  }
+ ],
  "trie_vectors": [
   {
    "name": "empty",
@@ -84,6 +188,20 @@
     }
    ],
    "root": "0x343a84978f71225f27f6dbdd2e0dd603a2ae3b83028a907ae0f8f4db262c9d13"
+  },
+  {
+   "name": "delegated_account",
+   "entries": [
+    {
+     "key": "0x007b1eefd69ea014244937aaeaea4e8d4d296c04edd75ae47897e5612ef5a1a25200",
+     "value": "0x0000000000000017000000000000000100000000000000000de0b6b3a7640000"
+    },
+    {
+     "key": "0x007b1eefd69ea014244937aaeaea4e8d4d296c04edd75ae47897e5612ef5a1a25202",
+     "value": "0xef0100cccccccccccccccccccccccccccccccccccccccc000000000000000000"
+    }
+   ],
+   "root": "0x820cb98f408b2265a9b3ab64ce8c278e18ae409a455f49682ef13093f28c099f"
   },
   {
    "name": "full_header_stem",
@@ -4597,6 +4715,9 @@
   "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "basic_data_key": "0x00d9ae2d236f8713a5bf808cda488167a56cc97e4b83006f42b1c06c0c3f053bbf00",
   "code_hash_key": "0x00d9ae2d236f8713a5bf808cda488167a56cc97e4b83006f42b1c06c0c3f053bbf01",
+  "delegation_key": "0x00d9ae2d236f8713a5bf808cda488167a56cc97e4b83006f42b1c06c0c3f053bbf02",
+  "delegation_designator": "0xef0100cccccccccccccccccccccccccccccccccccccccc",
+  "delegation_value": "0xef0100cccccccccccccccccccccccccccccccccccccccc000000000000000000",
   "slots": [
    {
     "slot": 0,
@@ -4634,31 +4755,39 @@
   "chunks": [
    {
     "chunk": 0,
-    "key": "0x00d9ae2d236f8713a5bf808cda488167a56cc97e4b83006f42b1c06c0c3f053bbf80"
-   },
-   {
-    "chunk": 5,
-    "key": "0x00d9ae2d236f8713a5bf808cda488167a56cc97e4b83006f42b1c06c0c3f053bbf85"
-   },
-   {
-    "chunk": 127,
-    "key": "0x00d9ae2d236f8713a5bf808cda488167a56cc97e4b83006f42b1c06c0c3f053bbfff"
-   },
-   {
-    "chunk": 128,
     "key": "0x01465f911ccfe7707c51a877fc621cffa8e700a5828cf92df27b142de919c0f6c800"
    },
    {
-    "chunk": 300,
-    "key": "0x01465f911ccfe7707c51a877fc621cffa8e700a5828cf92df27b142de919c0f6c8ac"
+    "chunk": 5,
+    "key": "0x01465f911ccfe7707c51a877fc621cffa8e700a5828cf92df27b142de919c0f6c805"
    },
    {
-    "chunk": 383,
+    "chunk": 127,
+    "key": "0x01465f911ccfe7707c51a877fc621cffa8e700a5828cf92df27b142de919c0f6c87f"
+   },
+   {
+    "chunk": 128,
+    "key": "0x01465f911ccfe7707c51a877fc621cffa8e700a5828cf92df27b142de919c0f6c880"
+   },
+   {
+    "chunk": 255,
     "key": "0x01465f911ccfe7707c51a877fc621cffa8e700a5828cf92df27b142de919c0f6c8ff"
    },
    {
-    "chunk": 384,
+    "chunk": 256,
     "key": "0x0171ad9e407a8d200ab2858bcf828d9016a0b4bc54e6e39dd3e31847b6220a63ce00"
+   },
+   {
+    "chunk": 300,
+    "key": "0x0171ad9e407a8d200ab2858bcf828d9016a0b4bc54e6e39dd3e31847b6220a63ce2c"
+   },
+   {
+    "chunk": 383,
+    "key": "0x0171ad9e407a8d200ab2858bcf828d9016a0b4bc54e6e39dd3e31847b6220a63ce7f"
+   },
+   {
+    "chunk": 384,
+    "key": "0x0171ad9e407a8d200ab2858bcf828d9016a0b4bc54e6e39dd3e31847b6220a63ce80"
    }
   ]
  },

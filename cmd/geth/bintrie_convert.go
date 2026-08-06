@@ -277,7 +277,15 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 		}
 
 		accountHash := common.BytesToHash(accIter.Key)
-		if err := binTrie.UpdateAccount(addr, &acc, len(code)); err != nil {
+		// A delegated account is ordinary code in the merkle source and a
+		// header leaf in the binary tree, so the designator has to be
+		// recognised here. Chunking it instead would leave converted state
+		// disagreeing with replayed state at that account's root.
+		var delegation []byte
+		if _, ok := types.ParseDelegation(code); ok {
+			delegation = code
+		}
+		if err := binTrie.UpdateAccount(addr, &acc, len(code), delegation); err != nil {
 			return common.Hash{}, fmt.Errorf("failed to update account %x: %w", addr, err)
 		}
 		flat.addAccount(addr, accountHash, &acc)

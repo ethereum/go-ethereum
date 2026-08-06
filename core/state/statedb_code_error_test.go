@@ -42,8 +42,8 @@ func (t errCodeTrie) UpdateContractCode(common.Address, common.Hash, []byte) err
 //
 // Under the merkle-patricia trie UpdateContractCode is a no-op returning nil,
 // so dropping its error is invisible. Under the binary tree the call writes the
-// code out as leaves - 128 header-stem subs plus every overflow chunk stem -
-// which resolves nodes and can fail on a disk read. A dropped error there means
+// code out as leaves - one code-zone stem per 256 chunks - which resolves
+// nodes and can fail on a disk read. A dropped error there means
 // the state root is computed over a partially written code zone and committed
 // as if nothing went wrong, because s.dbErr stays nil.
 func TestUpdateContractCodeErrorSurfaces(t *testing.T) {

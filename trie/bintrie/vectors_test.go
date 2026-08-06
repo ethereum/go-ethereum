@@ -19,10 +19,13 @@ package bintrie
 import (
 	"encoding/hex"
 	"encoding/json"
+	"math/big"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
@@ -30,8 +33,19 @@ import (
 // vectorsFile mirrors testdata/eip8297_vectors.json, exported from the EELS
 // reference implementation by testdata/export_vectors.py.
 type vectorsFile struct {
-	Meta        map[string]string `json:"meta"`
-	EmptyRoot   string            `json:"empty_root"`
+	Meta         map[string]string `json:"meta"`
+	EmptyRoot    string            `json:"empty_root"`
+	StateVectors []struct {
+		Name     string `json:"name"`
+		Accounts []struct {
+			Address string            `json:"address"`
+			Nonce   uint64            `json:"nonce"`
+			Balance *big.Int          `json:"balance"`
+			Code    string            `json:"code"`
+			Storage map[string]uint64 `json:"storage"`
+		} `json:"accounts"`
+		Root string `json:"root"`
+	} `json:"state_vectors"`
 	TrieVectors []struct {
 		Name    string `json:"name"`
 		Entries []struct {
@@ -50,10 +64,13 @@ type vectorsFile struct {
 		RootsAfter []string `json:"roots_after"`
 	} `json:"sequence_vectors"`
 	EmbeddingVectors struct {
-		Address      string `json:"address"`
-		BasicDataKey string `json:"basic_data_key"`
-		CodeHashKey  string `json:"code_hash_key"`
-		Slots        []struct {
+		Address              string `json:"address"`
+		BasicDataKey         string `json:"basic_data_key"`
+		CodeHashKey          string `json:"code_hash_key"`
+		DelegationKey        string `json:"delegation_key"`
+		DelegationDesignator string `json:"delegation_designator"`
+		DelegationValue      string `json:"delegation_value"`
+		Slots                []struct {
 			Slot json.Number `json:"slot"`
 			Key  string      `json:"key"`
 		} `json:"slots"`
@@ -132,6 +149,96 @@ func deleteKey(t testing.TB, tr *BinaryTrie, key []byte) {
 
 // TestTrieVectors replays the EELS fixed-population vectors: build each
 // entry set, compare the root byte for byte.
+// TestStateVectors drives whole allocations through the typed write path and
+// compares the resulting root against the reference.
+//
+// This is the only test that pins what an embedding *writes* rather than what
+// it derives or how it hashes. The other vector tests are handed reference
+// keys and values and insert them raw, so they cannot see a disagreement about
+// which leaves exist at all - and that is where the state layer decides:
+// a write of 32 zero bytes resolves to a deletion, so storing one commits to a
+// different root while every read still returns the right answer.
+func TestStateVectors(t *testing.T) {
+	vf := loadVectors(t)
+	if len(vf.StateVectors) == 0 {
+		t.Fatal("no state vectors in the file; the exporter did not write them")
+	}
+	for _, sv := range vf.StateVectors {
+		t.Run(sv.Name, func(t *testing.T) {
+			tr := newTestTrie()
+			for _, a := range sv.Accounts {
+				addr := common.BytesToAddress(unhex(t, a.Address))
+				var code []byte
+				if a.Code != "" { // absent in the file for a codeless account
+					code = unhex(t, a.Code)
+				}
+				balance := new(uint256.Int)
+				if a.Balance != nil {
+					balance = uint256.MustFromBig(a.Balance)
+				}
+				acc := &types.StateAccount{
+					Nonce:    a.Nonce,
+					Balance:  balance,
+					Root:     types.EmptyRootHash,
+					CodeHash: crypto.Keccak256(code),
+				}
+				// The classification the write path makes: a designator goes
+				// in the header, everything else is chunked.
+				var delegation []byte
+				if _, ok := types.ParseDelegation(code); ok {
+					delegation = code
+				}
+				if err := tr.UpdateAccount(addr, acc, len(code), delegation); err != nil {
+					t.Fatalf("account %x: %v", addr, err)
+				}
+				if err := tr.UpdateContractCode(addr, common.BytesToHash(acc.CodeHash), code); err != nil {
+					t.Fatalf("code for %x: %v", addr, err)
+				}
+				for slot, val := range a.Storage {
+					key, ok := new(big.Int).SetString(slot, 10)
+					if !ok {
+						t.Fatalf("bad storage key %q", slot)
+					}
+					var k, v common.Hash
+					key.FillBytes(k[:])
+					new(big.Int).SetUint64(val).FillBytes(v[:])
+					if err := tr.UpdateStorage(addr, k[:], common.TrimLeftZeroes(v[:])); err != nil {
+						t.Fatalf("storage %s of %x: %v", slot, addr, err)
+					}
+				}
+			}
+			if got := tr.Hash(); got != common.HexToHash(sv.Root) {
+				t.Fatalf("root %x, want %s", got, sv.Root)
+			}
+			assertNoZeroLeaf(t, tr)
+		})
+	}
+}
+
+// assertNoZeroLeaf walks every leaf and checks none holds 32 zero bytes.
+//
+// EIP-8297 states this of the whole tree, not of one writer, so asserting it
+// here catches any write path that bypasses stateWrite - the shape of the
+// mistake rather than a particular instance.
+func assertNoZeroLeaf(t *testing.T, tr *BinaryTrie) {
+	t.Helper()
+	it, err := tr.NodeIterator(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for it.Next(true) {
+		if !it.Leaf() {
+			continue
+		}
+		if isZeroValue(it.LeafBlob()) {
+			t.Fatalf("leaf %x holds 32 zero bytes, which no key in the state's tree may", it.LeafKey())
+		}
+	}
+	if err := it.Error(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTrieVectors(t *testing.T) {
 	vf := loadVectors(t)
 	if got := (empty{}).hashAt(0); got != common.HexToHash(vf.EmptyRoot) {
@@ -196,6 +303,15 @@ func TestEmbeddingVectors(t *testing.T) {
 	if got := CodeHashKey(addr); !equalBytes(got, unhex(t, ev.CodeHashKey)) {
 		t.Fatalf("code hash key mismatch: %x", got)
 	}
+	if got := DelegationKey(addr); !equalBytes(got, unhex(t, ev.DelegationKey)) {
+		t.Fatalf("delegation key mismatch: %x", got)
+	}
+	// The padding is the part worth pinning: hashing the padded value rather
+	// than the leading code_size bytes would disagree with EXTCODEHASH, and
+	// both encodings look equally plausible from the Go side alone.
+	if got := EncodeDelegation(unhex(t, ev.DelegationDesignator)); !equalBytes(got, unhex(t, ev.DelegationValue)) {
+		t.Fatalf("delegation value mismatch: got %x want %s", got, ev.DelegationValue)
+	}
 	for _, sv := range ev.Slots {
 		slotInt, err := uint256.FromDecimal(sv.Slot.String())
 		if err != nil {
@@ -213,7 +329,7 @@ func TestEmbeddingVectors(t *testing.T) {
 	// will not be obvious from the failure.
 	ch := common.BytesToHash(unhexConst("bb", 32))
 	for _, cv := range ev.Chunks {
-		if got := CodeChunkKey(addr, ch, cv.Chunk); !equalBytes(got, unhex(t, cv.Key)) {
+		if got := CodeChunkKey(ch, cv.Chunk); !equalBytes(got, unhex(t, cv.Key)) {
 			t.Fatalf("chunk %d key mismatch: got %x want %s", cv.Chunk, got, cv.Key)
 		}
 	}

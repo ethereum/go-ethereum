@@ -34,9 +34,10 @@ touches witnesses today.
 
 The witness ships the nodes a block resolved, which is the same shape as the
 per-stem group records: about 26 KB to witness a whole 24 KiB contract, but
-about 4.7 KB to witness reading one chunk of it. `trie/bintrie/multiproof.go`
-answers the same single-chunk read in 672 B, roughly seven times smaller, and
-real blocks read sparsely rather than densely.
+about 9 KB to witness reading one chunk of it, since a chunk now drags in its
+whole code-zone group. `trie/bintrie/multiproof.go` answers the same
+single-chunk read in 879 B, roughly ten times smaller, and real blocks read
+sparsely rather than densely.
 
 Swapping it in needs three things the node-set format does not: recording which
 keys a block touched, covering written stems whole (`insStem` refuses a write
@@ -126,21 +127,87 @@ Making it work needs the bit count read out of the path encoding and a
 histogram wider than `trie.LevelStats`'s fixed sixteen. Refusing only stops the
 crash.
 
+## Nothing ever reclaims a code-zone leaf
+
+Now that every code chunk is content-addressed, no path in this tree removes
+one. `UpdateContractCode` only writes, and `DeleteAccount` deliberately leaves
+the zone alone. Shorter code, replaced code and destroyed contracts all leave
+their old chunks behind.
+
+The spec requires the opposite: a `CODE_ZONE` leaf must go once no account in
+the resulting state has that `code_hash`, and must be kept otherwise. The
+reference does it in `remove_code_chunks` (`binary_trie/embedding.py`), called
+on account deletion only, gated on a `code_hash_survives` scan of its whole
+account dict, and exempting delegation indicators because those live in their
+account's own header.
+
+Moving the delegation indicator into the account header ([EIP #12114]) is
+implemented and removes the worst of this: a delegation is no longer a shared
+chunk at all, so replacing or clearing one leaves nothing orphaned. What is
+left is deployed contract code.
+
+The remaining work is the survivor check, and geth has nothing to build it on:
+there is no code-hash index and `rawdb.DeleteCode` has no callers.
+Approximating it with the block's touched accounts is unsound — an account the
+block never touched may hold the same bytecode, and dropping the chunks would
+take its code with it.
+
+The tractable route is the one #12114's rationale describes. Removal now fires
+on account deletion only, and post-EIP-6780 a deleted account was created in
+the same transaction; so a chunk leaf that *predates* the transaction is held
+by some account the transaction cannot delete and must be kept, while one first
+written *by* the transaction can only be shared with that transaction's own
+creations, which are all in view. Implementing it therefore needs the tree to
+know which code leaves this transaction first wrote — something nothing tracks
+today, and the reason this is not folded into the delegation change.
+
+Until then the divergence is real but narrow: it needs an account with deployed
+code to be deleted, which post-EIP-6780 means created and destroyed inside one
+transaction.
+
+## The MPT→PBT converter needs rewriting, not patching
+
+`cmd/geth/bintrie_convert.go` was built for a layout that no longer exists, and
+the move of code into the content-addressed zone invalidated its central
+assumption rather than shifting a constant. It still converts, so this is not
+urgent — but it should get a dedicated session rather than another patch.
+
+- **Its write pattern is inverted.** Every contract's chunks used to land in
+  that contract's own header stem, so writes followed the account-hash
+  iteration order the loop is built around. They now scatter into `CODE_ZONE`
+  stems keyed by `KeyHash(code_hash ‖ tree_index)`, interleaved with a
+  commit-and-reload every 1000 accounts (`runConversionLoop`) or on memory
+  pressure (`maybeCommit`). The locality that made those flushes cheap is gone.
+- **Deduplication is now the common case.** Identical bytecode shares leaves
+  from chunk 0 rather than only past chunk 128, so the converter rewrites the
+  same chunks once per holder and the output is smaller than it plans for.
+  Neither is accounted for.
+- **Delegation is handled by a patch rather than by design.** A delegated
+  account in the merkle source is a 23-byte code blob and has to become a
+  header leaf rather than chunks ([EIP #12114]), or converted state disagrees
+  with replayed state. The loop now recognises the designator inline, which
+  fixes it without giving the converter any notion of the distinction — and
+  nothing checks the result, for the reason below.
+- **Nothing would catch any of that.** `bintrie_convert_test.go` reads back
+  through `GetAccount`/`StorageSlotKey` and asserts no root and no leaf counts.
+  The rewrite's first job is the test that is missing: convert a fixture and
+  compare its root against replaying the equivalent transactions.
+
+[EIP #12114]: https://github.com/ethereum/EIPs/pull/12114
+
 ## Also deferred, for context
 
 These are known and tracked elsewhere; listed so this file is the single place
 to look.
 
-- **The code zone (`0x01`) has no coverage against the reference vectors.**
-  `trie/bintrie/multiproof_test.go`'s `TestCodeZoneKeyVerifies` proves a
-  `CODE_ZONE` key against a real root, so the zone is no longer unverified
-  outright. What is still missing is spec conformance: counting the leading
-  zone byte of every hashed entry in `trie/bintrie/testdata/eip8297_vectors.json`
-  gives 601 for accounts (`0x00`) and 266 for storage (`0xFF`), and **zero** for
-  content-addressed code, which appears only under `embedding_vectors.chunks` —
-  key derivation, never a root. Closing it needs a re-export from the reference
-  implementation via `testdata/export_vectors.py`, so it belongs to the
-  EEST/EELS integration phase.
+- **The code zone (`0x01`) is now rooted against the reference.** It used to
+  appear only under `embedding_vectors.chunks` — key derivation, never a root —
+  because `testdata/export_vectors.py` built its rooted populations from
+  account and storage keys alone. The `state_vectors` section embeds whole
+  allocations through the reference's own state layer, so contracts, shared
+  bytecode and zero-collapsing chunks all reach a root that
+  `TestStateVectors` compares against. What is still open is running the EEST
+  fixtures themselves; see the harness blocker below.
 - **One harness blocker before EEST fixtures can run.** `execBlockTest`
   (`tests/block_test.go`) runs every fixture under both the hash and path
   schemes, and the binary tree hard-fails on anything but path. It also always
@@ -148,7 +215,22 @@ to look.
   supports that now.
 - **`TestT8n`** fails on the binary tree fixtures because the prestate is
   reopened with an already-committed trie. Out of scope by instruction.
+- **The encoded multiproof is malleable, though not unsound.** Sweeping every
+  byte of an encoded proof and flipping it, most mutations are rejected, but a
+  run of them still verify: 48 such offsets before this branch, 64 after, in
+  both cases concentrated in two 32-byte spans that look like per-group
+  `present` bitmaps. None of them changes a value the proof proves, which is
+  the property `TestMultiproofRejectsForgery` now asserts. So this is two
+  encodings of one proof rather than a forged answer — but the encoding should
+  be canonical before the multiproof carries a witness, or the same statement
+  gets more than one wire form. The mechanism was not chased down.
 - **`StackBuilder`** (`trie/bintrie/stackbuilder.go`) has no production caller.
   Its natural consumer is the offline conversion in `cmd/geth`, which still
   inserts one stem at a time. Revisit when conversion is benchmarked; delete if
   still unwired.
+- **`UpdateAccountBatch`** has no production caller either, and unlike
+  `StackBuilder` it is a trap rather than dead weight: its `delegations` slice
+  has to be built alongside the code lengths, and an adopter passing nils
+  wholesale clears every delegated account's EIP-7702 indicator with no read
+  showing it. The interface doc says so at the declaration; the safer end state
+  is to delete the method until something needs it.

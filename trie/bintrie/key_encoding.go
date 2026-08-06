@@ -35,19 +35,23 @@ import (
 const (
 	// Zone identifiers, the first byte of every key.
 	AccountZone byte = 0x00 // account header stems
-	CodeZone    byte = 0x01 // content-addressed overflow code
+	CodeZone    byte = 0x01 // content-addressed code
 	StorageZone byte = 0xFF // overflow storage
 
 	// Sub-indices within an account's header stem.
 	BasicDataLeafKey = 0 // version ‖ reserved ‖ code_size ‖ nonce ‖ balance
 	CodeHashLeafKey  = 1 // keccak256 of the account's code
+	// DelegationLeafKey holds an EIP-7702 designator, right-padded to 32
+	// bytes. It excludes CodeHashLeafKey rather than joining it: a delegated
+	// account's code *is* its indicator, so the leaf determines both the code
+	// and its hash, and every account holds exactly one of the two.
+	DelegationLeafKey = 2
 
-	// HeaderStorageOffset is the header sub-index of storage slot 0; slots
-	// 0..63 live in the header stem.
+	// HeaderStorageOffset is the header sub-index of storage slot 0, and
+	// HeaderStorageSlots how many slots live there: slots 0..63 at sub-indices
+	// 64..127. Code used to occupy 128..255 and no longer does.
 	HeaderStorageOffset = 64
-	// CodeOffset is the header sub-index of code chunk 0; chunks 0..127
-	// live in the header stem.
-	CodeOffset = 128
+	HeaderStorageSlots  = 64
 	// StemSubtreeWidth is the number of values grouped under one stem.
 	StemSubtreeWidth = 256
 
@@ -69,7 +73,7 @@ const (
 
 func init() {
 	// Required invariant of the embedding (EIP-8297 "Tree embedding").
-	if !(StemSubtreeWidth > CodeOffset && CodeOffset > HeaderStorageOffset) {
+	if !(HeaderStorageOffset > DelegationLeafKey && HeaderStorageOffset+HeaderStorageSlots <= StemSubtreeWidth) {
 		panic("bintrie: invalid header layout constants")
 	}
 }
@@ -114,6 +118,27 @@ func BasicDataKey(addr common.Address) []byte {
 // CodeHashKey returns the key of addr's code-hash leaf.
 func CodeHashKey(addr common.Address) []byte {
 	return HeaderKey(addr, CodeHashLeafKey)
+}
+
+// DelegationKey returns the key of addr's delegation-indicator leaf.
+func DelegationKey(addr common.Address) []byte {
+	return HeaderKey(addr, DelegationLeafKey)
+}
+
+// EncodeDelegation packs an EIP-7702 designator into its leaf value: the
+// indicator in the leading bytes, zero after.
+//
+// This is not the chunk encoding. A chunk reserves its first byte for a count
+// of leading push-data bytes, which an indicator does not carry because it is
+// never executed as code.
+//
+// The argument must be an indicator - exactly 23 bytes behind the marker.
+// Anything longer is truncated rather than refused, so the check belongs at
+// the write path: UpdateAccount classifies before it encodes.
+func EncodeDelegation(designator []byte) []byte {
+	v := make([]byte, 32)
+	copy(v, designator)
+	return v
 }
 
 // StorageBucketPrefix returns the 33-byte prefix under which all of addr's
@@ -179,20 +204,15 @@ func StorageSlotKey(addr common.Address, slot []byte) []byte {
 	return append(StorageStem(addr, &treeIndex), sub)
 }
 
-// CodeChunkIndex resolves a code chunk number to its tree coordinates:
-// header placement for chunks below 128, otherwise the content-addressed
-// overflow group index and sub-index.
-func CodeChunkIndex(chunk uint64) (inHeader bool, treeIndex uint64, sub byte) {
-	if chunk < StemSubtreeWidth-CodeOffset {
-		return true, 0, byte(CodeOffset + chunk)
-	}
-	overflow := chunk - (StemSubtreeWidth - CodeOffset)
-	return false, overflow / StemSubtreeWidth, byte(overflow % StemSubtreeWidth)
+// CodeChunkIndex resolves a code chunk number to its tree coordinates: the
+// content-addressed group index and the sub-index within it.
+func CodeChunkIndex(chunk uint64) (treeIndex uint64, sub byte) {
+	return chunk / StemSubtreeWidth, byte(chunk % StemSubtreeWidth)
 }
 
-// CodeChunkStem returns the stem of the content-addressed overflow code
-// group: CodeZone ‖ KeyHash(codeHash ‖ treeIndex32), 33 bytes. Contracts
-// with identical bytecode share these stems.
+// CodeChunkStem returns the stem of a content-addressed code group:
+// CodeZone ‖ KeyHash(codeHash ‖ treeIndex32), 33 bytes. Contracts with
+// identical bytecode share these stems.
 func CodeChunkStem(codeHash common.Hash, treeIndex uint64) []byte {
 	var buf [64]byte
 	copy(buf[:32], codeHash[:])
@@ -204,14 +224,10 @@ func CodeChunkStem(codeHash common.Hash, treeIndex uint64) []byte {
 }
 
 // CodeChunkKey returns the tree key of code chunk number chunk of the code
-// with hash codeHash. Chunks below 128 live in the account header stem,
-// keyed per account; chunks from 128 on are content-addressed and shared
-// across contracts with identical bytecode.
-func CodeChunkKey(addr common.Address, codeHash common.Hash, chunk uint64) []byte {
-	inHeader, treeIndex, sub := CodeChunkIndex(chunk)
-	if inHeader {
-		return HeaderKey(addr, sub)
-	}
+// with hash codeHash. No address takes part: chunks are content-addressed, so
+// contracts with identical bytecode share them.
+func CodeChunkKey(codeHash common.Hash, chunk uint64) []byte {
+	treeIndex, sub := CodeChunkIndex(chunk)
 	return append(CodeChunkStem(codeHash, treeIndex), sub)
 }
 

@@ -26,10 +26,10 @@ import (
 //
 // Reverting works by replaying pre-transition account and storage values
 // through the trie until the parent root reappears. The binary tree also
-// stores contract code, and code chunks past the first 128 are
-// content-addressed, so whether such a leaf belongs at the parent root
-// depends on whether any other account held the same bytecode - which no
-// per-account history record describes. Callers fall back to re-executing
+// stores contract code, and every code chunk is content-addressed, so
+// whether such a leaf belongs at the parent root depends on whether any
+// other account held the same bytecode - which no per-account history
+// record describes. Callers fall back to re-executing
 // blocks forward, so a false answer here costs reach, not correctness.
 //
 // The merkle half of this test is what makes the binary half mean anything:

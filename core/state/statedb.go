@@ -683,14 +683,23 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Code() returned - nil when the bytecode could not be fetched. So an empty
 	// blob can arrive under a real code hash, and neither the size nor the code
 	// itself may be taken from it: writing the size would zero a contract that
-	// has code, and writing the blob would clear every code leaf, since
-	// UpdateContractCode clears the sub-indices the new code does not fill.
+	// has code, and handing the blob to UpdateContractCode would chunk nothing
+	// under a code hash that names real bytecode.
 	codeKnown := obj.dirtyCode && (len(obj.code) > 0 || bytes.Equal(obj.CodeHash(), types.EmptyCodeHash[:]))
 	codeLen := -1
+	// A delegated account keeps its designator in its own header rather than
+	// as shared code, so the trie has to be told which it is; it sees only a
+	// length. The blob is in hand exactly when the size is, and leaving this
+	// nil while stating a size clears a live delegation, so the two travel
+	// together.
+	var delegation []byte
 	if codeKnown {
 		codeLen = len(obj.code)
+		if _, ok := types.ParseDelegation(obj.code); ok {
+			delegation = obj.code
+		}
 	}
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, codeLen); err != nil {
+	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, codeLen, delegation); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", obj.Address(), err))
 	}
 	if codeKnown {

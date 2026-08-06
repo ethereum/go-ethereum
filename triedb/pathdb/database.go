@@ -598,8 +598,8 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	// values through the trie and checking the result matches the parent
 	// root. That is only valid while the trie is a pure function of those
 	// values, which holds for the merkle-patricia trie but not here: the
-	// binary tree also stores contract code, and code chunks past the first
-	// 128 are content-addressed, so identical bytecode shares leaves between
+	// binary tree also stores contract code, and every code chunk is
+	// content-addressed, so identical bytecode shares leaves between
 	// accounts. Whether such a leaf belongs at the parent root depends on
 	// whether any other account held that bytecode, which no per-account
 	// history record describes and nothing reference-counts.

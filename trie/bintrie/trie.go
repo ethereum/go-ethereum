@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb/database"
@@ -289,6 +290,33 @@ func (t *BinaryTrie) UpdateStem(stem []byte, subs []byte, values [][]byte) error
 	}
 	t.root = root
 	return nil
+}
+
+// zeroValue is the 32-byte value the state model resolves to absence.
+var zeroValue [32]byte
+
+// isZeroValue reports whether v is the all-zero leaf value.
+func isZeroValue(v []byte) bool {
+	return len(v) == len(zeroValue) && bytes.Equal(v, zeroValue[:])
+}
+
+// stateWrite writes values at subs of stem, resolving an all-zero value to a
+// deletion rather than an insertion.
+//
+// EIP-8297 assigns this to the state transition function, not the tree: "no
+// key in the state's tree holds 32 zero bytes", so zero and absent are one
+// state committing to one root. Only the typed writers are that function;
+// UpdateStem stays raw and can still hold a deliberately-zero leaf, as the
+// zero_value_present vector pins.
+//
+// values is rewritten in place. Every caller builds it locally.
+func (t *BinaryTrie) stateWrite(stem []byte, subs []byte, values [][]byte) error {
+	for i, v := range values {
+		if isZeroValue(v) {
+			values[i] = nil
+		}
+	}
+	return t.UpdateStem(stem, subs, values)
 }
 
 func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]byte, pos int) (binaryNode, error) {
@@ -705,9 +733,15 @@ func (t *BinaryTrie) deleteSubtree(n binaryNode, walk bitstr, pos int) error {
 // exposed keys themselves, so this is the identity.
 func (t *BinaryTrie) GetKey(key []byte) []byte { return key }
 
-// GetAccount reads the account header stem and decodes the BASIC_DATA and
-// CODE_HASH leaves. A missing stem (or missing both leaves) is a missing
-// account.
+// GetAccount reads the account header stem and decodes the BASIC_DATA leaf
+// alongside whichever of CODE_HASH and DELEGATION it holds. A missing stem, or
+// one holding none of the three, is a missing account.
+//
+// A delegated account carries no code hash to read, so this derives one by
+// hashing the indicator. Everything above the tree - EIP-161 emptiness, the
+// txpools' delegation probe, EXTCODEHASH - reads it through
+// types.StateAccount.CodeHash, so the synthesis keeps those callers correct
+// without any of them knowing the leaf exists.
 func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
 	if t.committed {
 		return nil, trie.ErrCommitted
@@ -718,17 +752,40 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	}
 	basic := g.lookup(BasicDataLeafKey)
 	codeHash := g.lookup(CodeHashLeafKey)
-	if basic == nil && codeHash == nil {
+	delegation := g.lookup(DelegationLeafKey)
+	if basic == nil && codeHash == nil && delegation == nil {
 		return nil, nil
 	}
 	acc := &types.StateAccount{Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:]}
+	var codeSize uint32
 	if basic != nil {
-		_, _, nonce, balance := DecodeBasicData(basic)
+		var (
+			nonce   uint64
+			balance *uint256.Int
+		)
+		_, codeSize, nonce, balance = DecodeBasicData(basic)
 		acc.Nonce, acc.Balance = nonce, balance
 	} else {
 		acc.Balance = new(uint256.Int)
 	}
-	if codeHash != nil {
+	switch {
+	case delegation != nil:
+		// The code is the leading code_size bytes of the leaf, so the hash is
+		// over those. Reading the whole padded value instead would hash nine
+		// bytes of padding into it and disagree with EXTCODEHASH.
+		//
+		// A zero size is refused rather than hashed: it would produce the
+		// empty-code hash, and the account would read back as codeless and
+		// EIP-161-empty while holding a delegation - the one wrong answer this
+		// synthesis could give that no caller could detect.
+		if codeSize == 0 {
+			return nil, fmt.Errorf("bintrie: GetAccount (%x): delegation leaf with a zero code size", addr)
+		}
+		if int(codeSize) > len(delegation) {
+			return nil, fmt.Errorf("bintrie: GetAccount (%x): code size %d exceeds the %d-byte delegation leaf", addr, codeSize, len(delegation))
+		}
+		acc.CodeHash = crypto.Keccak256(delegation[:codeSize])
+	case codeHash != nil:
 		acc.CodeHash = append([]byte{}, codeHash...)
 	}
 	return acc, nil
@@ -736,23 +793,35 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 
 // UpdateAccountBatch writes a list of accounts one at a time. See
 // UpdateStorageBatch for why this is a loop rather than a batch.
-func (t *BinaryTrie) UpdateAccountBatch(addrs []common.Address, accounts []*types.StateAccount, codeLens []int) error {
+func (t *BinaryTrie) UpdateAccountBatch(addrs []common.Address, accounts []*types.StateAccount, codeLens []int, delegations [][]byte) error {
 	if len(addrs) != len(accounts) {
 		return fmt.Errorf("addresses and accounts length mismatch: %d != %d", len(addrs), len(accounts))
 	}
 	if len(addrs) != len(codeLens) {
 		return fmt.Errorf("addresses and code lengths mismatch: %d != %d", len(addrs), len(codeLens))
 	}
+	if len(addrs) != len(delegations) {
+		return fmt.Errorf("addresses and delegations length mismatch: %d != %d", len(addrs), len(delegations))
+	}
 	for i, addr := range addrs {
-		if err := t.UpdateAccount(addr, accounts[i], codeLens[i]); err != nil {
+		if err := t.UpdateAccount(addr, accounts[i], codeLens[i], delegations[i]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// UpdateAccount writes the BASIC_DATA and CODE_HASH leaves of the account
-// header stem in one walk.
+// UpdateAccount writes the BASIC_DATA leaf of the account header stem, and
+// whichever of CODE_HASH and DELEGATION the account holds, in one walk.
+//
+// A non-nil delegation is the EIP-7702 designator: the indicator becomes the
+// account's code, so the size is 23 and the code-hash leaf is removed. A nil
+// delegation with a stated size removes the delegation leaf instead. Both move
+// in the single walk below, so their exclusivity is never momentarily broken.
+//
+// The designator is passed rather than recognised from the code, because
+// reading the blob back to test for the marker is the unwitnessed read codeLen
+// exists to avoid. Callers hold it already whenever they set it.
 //
 // A negative codeLen means the caller declines to state the size, not that it
 // necessarily lacks one: the account-write path passes it for every account
@@ -769,12 +838,38 @@ func (t *BinaryTrie) UpdateAccountBatch(addrs []common.Address, accounts []*type
 // of one address coalesce into a single update mutation, so nothing deletes
 // the old stem and the dead contract's size would be inherited by the account
 // that replaced it.
-func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int) error {
+func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int, delegation []byte) error {
 	if len(acc.CodeHash) != 32 {
 		return fmt.Errorf("bintrie: UpdateAccount (%x): code hash is %d bytes, want 32", addr, len(acc.CodeHash))
 	}
 	stem := HeaderStem(addr)
+	if delegation != nil {
+		// Checked rather than trusted: a non-indicator stored here would be
+		// hashed into a code hash naming bytecode nothing can produce.
+		if _, ok := types.ParseDelegation(delegation); !ok {
+			return fmt.Errorf("bintrie: UpdateAccount (%x): the %d-byte delegation is not an indicator", addr, len(delegation))
+		}
+		// The leaf becomes the account's code, so the hash GetAccount reads
+		// back is the indicator's, not the one passed here. Callers derive
+		// both from one blob; checking says so rather than letting a
+		// disagreement surface as an untraceable wrong code hash.
+		if got := crypto.Keccak256(delegation); !bytes.Equal(got, acc.CodeHash) {
+			return fmt.Errorf("bintrie: UpdateAccount (%x): the delegation hashes to %x but the account carries %x", addr, got, acc.CodeHash)
+		}
+		basic, err := EncodeBasicData(uint32(len(delegation)), acc.Nonce, acc.Balance)
+		if err != nil {
+			return fmt.Errorf("bintrie: UpdateAccount (%x): %w", addr, err)
+		}
+		return t.stateWrite(stem,
+			[]byte{BasicDataLeafKey, CodeHashLeafKey, DelegationLeafKey},
+			[][]byte{basic[:], nil, EncodeDelegation(delegation)})
+	}
 	codeSize := uint32(codeLen)
+	// Set when the account is delegated and the caller stated no size, the one
+	// case where the code leaves must be left exactly as they are: rewriting
+	// them from acc would clear the indicator and put back a code-hash leaf,
+	// silently un-delegating an account that was only touched for its balance.
+	keepCodeLeaves := false
 	if codeLen < 0 {
 		codeSize = 0
 		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
@@ -793,14 +888,24 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 			if basic == nil {
 				return fmt.Errorf("bintrie: UpdateAccount (%x): code hash %x with no basic data to preserve a size from", addr, acc.CodeHash)
 			}
+			_, codeSize, _, _ = DecodeBasicData(basic)
 			// The resident size measures the resident code, so it may only be
 			// carried forward under the same hash. A caller changing the hash
 			// while declining to state a length is asking for a size that
 			// measures a different contract.
-			if resident := g.lookup(CodeHashLeafKey); !bytes.Equal(resident, acc.CodeHash) {
+			if resident := g.lookup(DelegationLeafKey); resident != nil {
+				// A delegated account holds no code-hash leaf to compare, so
+				// the same question is put to the hash its indicator implies.
+				if int(codeSize) > len(resident) {
+					return fmt.Errorf("bintrie: UpdateAccount (%x): code size %d exceeds the %d-byte delegation leaf", addr, codeSize, len(resident))
+				}
+				if got := crypto.Keccak256(resident[:codeSize]); !bytes.Equal(got, acc.CodeHash) {
+					return fmt.Errorf("bintrie: UpdateAccount (%x): no code length given and the code hash is changing, %x to %x", addr, got, acc.CodeHash)
+				}
+				keepCodeLeaves = true
+			} else if resident := g.lookup(CodeHashLeafKey); !bytes.Equal(resident, acc.CodeHash) {
 				return fmt.Errorf("bintrie: UpdateAccount (%x): no code length given and the code hash is changing, %x to %x", addr, resident, acc.CodeHash)
 			}
-			_, codeSize, _, _ = DecodeBasicData(basic)
 		}
 	}
 	// No bytecode of non-zero length hashes to the empty hash, so this pair is
@@ -813,21 +918,24 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 	if err != nil {
 		return fmt.Errorf("bintrie: UpdateAccount (%x): %w", addr, err)
 	}
+	if keepCodeLeaves {
+		return t.stateWrite(stem, []byte{BasicDataLeafKey}, [][]byte{basic[:]})
+	}
 	codeHash := make([]byte, 32)
 	copy(codeHash, acc.CodeHash)
-	return t.UpdateStem(stem,
-		[]byte{BasicDataLeafKey, CodeHashLeafKey},
-		[][]byte{basic[:], codeHash})
+	return t.stateWrite(stem,
+		[]byte{BasicDataLeafKey, CodeHashLeafKey, DelegationLeafKey},
+		[][]byte{basic[:], codeHash, nil})
 }
 
 // DeleteAccount removes everything the account owns in the tree: its whole
-// header stem (basic data, code hash, header storage slots and header code
-// chunks) and its overflow storage bucket. Dropping the bucket is required,
-// not optional: in the merkle-patricia world a destroyed account's storage
-// trie merely becomes unreachable from the state root, so a conversion of
-// that state contains none of it, and leaving those leaves behind here
-// would diverge. The content-addressed code zone is never touched, since
-// its chunks may be shared with living contracts.
+// header stem (basic data, code hash and header storage slots) and its
+// overflow storage bucket. Dropping the bucket is required, not optional: in
+// the merkle-patricia world a destroyed account's storage trie merely becomes
+// unreachable from the state root, so a conversion of that state contains none
+// of it, and leaving those leaves behind here would diverge. The
+// content-addressed code zone is never touched, since its chunks may be shared
+// with living contracts. See TODO.md.
 func (t *BinaryTrie) DeleteAccount(addr common.Address) error {
 	if err := t.removeStem(HeaderStem(addr)); err != nil {
 		return err
@@ -850,14 +958,14 @@ func (t *BinaryTrie) GetStemValue(key []byte) ([]byte, error) {
 
 // HasHeaderStorage reports whether the account's header stem holds any of
 // the storage slots that live there (slots 0..63, at sub-indices
-// HeaderStorageOffset..CodeOffset-1).
+// HeaderStorageOffset..HeaderStorageOffset+HeaderStorageSlots-1).
 func (t *BinaryTrie) HasHeaderStorage(addr common.Address) (bool, error) {
 	g, err := t.getStemGroup(HeaderStem(addr))
 	if err != nil || g == nil {
 		return false, err
 	}
 	for _, sub := range g.subs {
-		if sub >= HeaderStorageOffset && sub < CodeOffset {
+		if sub >= HeaderStorageOffset && sub < HeaderStorageOffset+HeaderStorageSlots {
 			return true, nil
 		}
 	}
@@ -891,20 +999,17 @@ func (t *BinaryTrie) UpdateStorageBatch(addr common.Address, keys [][]byte, valu
 	return nil
 }
 
-// UpdateStorage writes a storage slot. The value is left-padded to 32
-// bytes; an empty value deletes the slot (zero is encoded as absence at the
-// state layer).
+// UpdateStorage writes a storage slot. The value is left-padded to 32 bytes;
+// a zero value deletes the slot, whether it arrives empty or as 32 zero
+// bytes, because zero is absence at the state layer.
 func (t *BinaryTrie) UpdateStorage(addr common.Address, key, value []byte) error {
 	k := StorageSlotKey(addr, key)
-	if len(value) == 0 {
-		return t.UpdateStem(k[:len(k)-1], []byte{k[len(k)-1]}, [][]byte{nil})
-	}
 	var padded [32]byte
 	if len(value) > 32 {
 		value = value[:32]
 	}
 	copy(padded[32-len(value):], value)
-	return t.UpdateStem(k[:len(k)-1], []byte{k[len(k)-1]}, [][]byte{padded[:]})
+	return t.stateWrite(k[:len(k)-1], []byte{k[len(k)-1]}, [][]byte{padded[:]})
 }
 
 // DeleteStorage removes a storage slot's leaf.
@@ -913,11 +1018,13 @@ func (t *BinaryTrie) DeleteStorage(addr common.Address, key []byte) error {
 	return t.UpdateStem(k[:len(k)-1], []byte{k[len(k)-1]}, [][]byte{nil})
 }
 
-// UpdateContractCode writes the account's code chunks: chunks 0..127 into
-// the header stem (clearing any leftover header chunks beyond the new code,
-// which shrinks under EIP-7702 delegation clears), chunks 128 and above into
-// the content-addressed code zone shared across contracts with identical
-// bytecode. The code zone is append-only.
+// UpdateContractCode writes the account's code chunks into the
+// content-addressed code zone, grouped StemSubtreeWidth to a stem. The address
+// takes no part and stays only because the Trie interface carries it.
+//
+// Shorter code does not clear what longer code left behind: those leaves are
+// keyed by the old hash, which this call does not have, and they may be
+// shared. See TODO.md.
 //
 // Nothing reference-counts the shared chunks and nothing needs to. Reorgs drop
 // layers rather than reverse them, so chunks written by a reverted block go
@@ -925,27 +1032,16 @@ func (t *BinaryTrie) DeleteStorage(addr common.Address, key []byte) error {
 // layer, which the tree refuses to fork beneath. Whether some other account
 // still holds this bytecode is answered by the ancestor state, not by a count.
 // core.TestPBTReorgKeepsSharedCodeChunks pins it.
-func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
+func (t *BinaryTrie) UpdateContractCode(_ common.Address, codeHash common.Hash, code []byte) error {
+	// A delegation indicator is not code here: it lives in its own account's
+	// header, written by UpdateAccount, precisely so it is not shared.
+	// Chunking it would leave a shared leaf nothing ever removes.
+	if _, ok := types.ParseDelegation(code); ok {
+		return nil
+	}
 	chunks := ChunkifyCode(code)
 	numChunks := len(chunks) / 32
 
-	// Header chunks 0..127, plus explicit clears through sub-index 255 so
-	// stale chunks of longer previous code disappear.
-	headerSubs := make([]byte, 0, StemSubtreeWidth-CodeOffset)
-	headerVals := make([][]byte, 0, StemSubtreeWidth-CodeOffset)
-	for i := 0; i < StemSubtreeWidth-CodeOffset; i++ {
-		headerSubs = append(headerSubs, byte(CodeOffset+i))
-		if i < numChunks {
-			headerVals = append(headerVals, chunks[32*i:32*(i+1)])
-		} else {
-			headerVals = append(headerVals, nil)
-		}
-	}
-	if err := t.UpdateStem(HeaderStem(addr), headerSubs, headerVals); err != nil {
-		return err
-	}
-
-	// Overflow chunks, grouped per content-addressed stem.
 	var (
 		subs []byte
 		vals [][]byte
@@ -959,16 +1055,25 @@ func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Has
 		subs, vals = nil, nil
 		return err
 	}
-	for chunk := StemSubtreeWidth - CodeOffset; chunk < numChunks; chunk++ {
-		_, treeIndex, sub := CodeChunkIndex(uint64(chunk))
+	for chunk := 0; chunk < numChunks; chunk++ {
+		treeIndex, sub := CodeChunkIndex(uint64(chunk))
 		if treeIndex != tree {
 			if err := flush(); err != nil {
 				return err
 			}
 			tree = treeIndex
 		}
+		v := chunks[32*chunk : 32*(chunk+1)]
+		// A run of 31 zero code bytes encodes to 32 zero bytes, which resolves
+		// to absence; reads recover the zero it stood for, and code_size
+		// delimits the code rather than chunk presence. Skipped rather than
+		// deleted, which is the same thing here and avoids an empty batch:
+		// chunks are content-addressed, so no stale value can sit at this key.
+		if isZeroValue(v) {
+			continue
+		}
 		subs = append(subs, sub)
-		vals = append(vals, chunks[32*chunk:32*(chunk+1)])
+		vals = append(vals, v)
 	}
 	return flush()
 }

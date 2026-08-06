@@ -187,7 +187,7 @@ var (
 			{
 				Name:    "code-chunk-key",
 				Aliases: []string{"vck"},
-				Usage:   "compute the binary trie key given an address, a chunk number and, for chunks 128 and above, the code hash",
+				Usage:   "compute the binary trie key given a code hash and a chunk number",
 				Action:  t8ntool.BinaryCodeChunkKey,
 			},
 			{
