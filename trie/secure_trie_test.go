@@ -167,7 +167,7 @@ func TestStateTrieUpdateAccountIgnoresCodeLen(t *testing.T) {
 	var want common.Hash
 	for i, codeLen := range []int{-1, 0, 1, 24576, 1 << 30} {
 		tr := newEmptySecure()
-		if err := tr.UpdateAccount(addr, acc, codeLen); err != nil {
+		if err := tr.UpdateAccount(addr, acc, codeLen, nil); err != nil {
 			t.Fatalf("codeLen %d: %v", codeLen, err)
 		}
 		got := tr.Hash()

@@ -50,10 +50,13 @@ type vectorsFile struct {
 		RootsAfter []string `json:"roots_after"`
 	} `json:"sequence_vectors"`
 	EmbeddingVectors struct {
-		Address      string `json:"address"`
-		BasicDataKey string `json:"basic_data_key"`
-		CodeHashKey  string `json:"code_hash_key"`
-		Slots        []struct {
+		Address              string `json:"address"`
+		BasicDataKey         string `json:"basic_data_key"`
+		CodeHashKey          string `json:"code_hash_key"`
+		DelegationKey        string `json:"delegation_key"`
+		DelegationDesignator string `json:"delegation_designator"`
+		DelegationValue      string `json:"delegation_value"`
+		Slots                []struct {
 			Slot json.Number `json:"slot"`
 			Key  string      `json:"key"`
 		} `json:"slots"`
@@ -195,6 +198,15 @@ func TestEmbeddingVectors(t *testing.T) {
 	}
 	if got := CodeHashKey(addr); !equalBytes(got, unhex(t, ev.CodeHashKey)) {
 		t.Fatalf("code hash key mismatch: %x", got)
+	}
+	if got := DelegationKey(addr); !equalBytes(got, unhex(t, ev.DelegationKey)) {
+		t.Fatalf("delegation key mismatch: %x", got)
+	}
+	// The padding is the part worth pinning: hashing the padded value rather
+	// than the leading code_size bytes would disagree with EXTCODEHASH, and
+	// both encodings look equally plausible from the Go side alone.
+	if got := EncodeDelegation(unhex(t, ev.DelegationDesignator)); !equalBytes(got, unhex(t, ev.DelegationValue)) {
+		t.Fatalf("delegation value mismatch: got %x want %s", got, ev.DelegationValue)
 	}
 	for _, sv := range ev.Slots {
 		slotInt, err := uint256.FromDecimal(sv.Slot.String())

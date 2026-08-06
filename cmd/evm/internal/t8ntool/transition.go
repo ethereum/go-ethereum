@@ -691,7 +691,13 @@ func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase) (*bi
 			CodeHash: crypto.Keccak256Hash(acc.Code).Bytes(),
 			Root:     common.Hash{},
 		}
-		err := bt.UpdateAccount(addr, account, len(acc.Code))
+		// An allocation may pre-install a delegation indicator, which the tree
+		// keeps in the account header rather than as shared code.
+		var delegation []byte
+		if _, ok := types.ParseDelegation(acc.Code); ok {
+			delegation = acc.Code
+		}
+		err := bt.UpdateAccount(addr, account, len(acc.Code), delegation)
 		if err != nil {
 			return nil, fmt.Errorf("error inserting account: %w", err)
 		}

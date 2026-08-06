@@ -92,7 +92,7 @@ func TestDiskRoundTrip(t *testing.T) {
 	for i := byte(1); i <= 8; i++ {
 		addr := common.Address{i}
 		addrs = append(addrs, addr)
-		if err := tr.UpdateAccount(addr, testAccount(uint64(i)), 0); err != nil {
+		if err := tr.UpdateAccount(addr, testAccount(uint64(i)), 0, nil); err != nil {
 			t.Fatal(err)
 		}
 		if err := tr.UpdateStorage(addr, slotLo[:], slotLo[:]); err != nil {
@@ -223,7 +223,7 @@ func TestDiskRoundTrip(t *testing.T) {
 		if addr == addrs[1] {
 			continue
 		}
-		if err := fresh.UpdateAccount(addr, testAccount(uint64(i+1)), 0); err != nil {
+		if err := fresh.UpdateAccount(addr, testAccount(uint64(i+1)), 0, nil); err != nil {
 			t.Fatal(err)
 		}
 		if err := fresh.UpdateStorage(addr, slotLo[:], slotLo[:]); err != nil {
@@ -250,7 +250,7 @@ func TestDiskDeleteToEmpty(t *testing.T) {
 
 	tr := openTrie(t, db, types.EmptyBinaryHash)
 	addr := common.Address{1}
-	if err := tr.UpdateAccount(addr, testAccount(5), 0); err != nil {
+	if err := tr.UpdateAccount(addr, testAccount(5), 0, nil); err != nil {
 		t.Fatal(err)
 	}
 	root1 := commitTrie(t, db, tr, types.EmptyBinaryHash, 1)

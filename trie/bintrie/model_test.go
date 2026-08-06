@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake3"
 	"github.com/holiman/uint256"
 )
@@ -392,10 +393,11 @@ func TestStackBuilderEdges(t *testing.T) {
 // reopens between blocks -- see TestPBTCodeSizePreserved.
 func TestUpdateAccountCodeSizeVsModel(t *testing.T) {
 	type acct struct {
-		nonce    uint64
-		balance  uint64
-		codeHash common.Hash
-		alive    bool
+		nonce     uint64
+		balance   uint64
+		codeHash  common.Hash
+		alive     bool
+		delegated bool
 	}
 	for _, seed := range []int64{1, 42, 8297, 20260804} {
 		rng := rand.New(rand.NewSource(seed))
@@ -433,20 +435,28 @@ func TestUpdateAccountCodeSizeVsModel(t *testing.T) {
 				Root:     types.EmptyRootHash,
 				CodeHash: types.EmptyCodeHash[:],
 			}
-			// Four shapes of write: code set this block (exact length), a
-			// codeless account, a touch that knows nothing and must not
-			// disturb what is there, and the same touch under a hash the
-			// account does not carry.
+			// Five shapes of write: code set this block (exact length), a
+			// delegation, a codeless account, a touch that knows nothing and
+			// must not disturb what is there, and the same touch under a hash
+			// the account does not carry.
 			codeLen := -1
-			switch rng.Intn(4) {
+			var delegation []byte
+			switch rng.Intn(5) {
 			case 0: // deploy or redeploy: exact length under a fresh hash
 				var h common.Hash
 				rng.Read(h[:])
 				n := uint32(rng.Intn(30000) + 1) // non-empty code is never zero-length
 				codeLenOf[h] = n
 				acc.CodeHash, codeLen = h[:], int(n)
-			case 1: // codeless: empty hash, so the size must go to zero
-			case 2: // blind touch under a hash the account does not have
+			case 1: // delegate: the indicator goes in the account's own header
+				var target common.Address
+				rng.Read(target[:])
+				d := types.AddressToDelegation(target)
+				h := crypto.Keccak256Hash(d)
+				codeLenOf[h] = uint32(len(d))
+				acc.CodeHash, codeLen, delegation = h[:], len(d), d
+			case 2: // codeless: empty hash, so the size must go to zero
+			case 3: // blind touch under a hash the account does not have
 				var h common.Hash
 				rng.Read(h[:])
 				acc.CodeHash = h[:]
@@ -462,7 +472,7 @@ func TestUpdateAccountCodeSizeVsModel(t *testing.T) {
 			// different contract.
 			wantErr := codeLen < 0 && !bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) &&
 				(!m.alive || common.BytesToHash(acc.CodeHash) != m.codeHash)
-			err := tr.UpdateAccount(addr, acc, codeLen)
+			err := tr.UpdateAccount(addr, acc, codeLen, delegation)
 			if wantErr {
 				if err == nil {
 					t.Fatalf("seed %d op %d addr %x: a negative length under an unbacked code hash was accepted", seed, op, addr[0])
@@ -472,11 +482,17 @@ func TestUpdateAccountCodeSizeVsModel(t *testing.T) {
 			if err != nil {
 				t.Fatalf("seed %d op %d: UpdateAccount: %v", seed, op, err)
 			}
+			// A blind touch keeps whichever code leaf is resident, so an
+			// account stays delegated across one; anything that states a size
+			// decides afresh, a codeless write included.
+			nowDelegated := delegation != nil ||
+				(codeLen < 0 && m.delegated && !bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]))
 			*m = acct{
-				nonce:    acc.Nonce,
-				balance:  acc.Balance.Uint64(),
-				codeHash: common.BytesToHash(acc.CodeHash),
-				alive:    true,
+				nonce:     acc.Nonce,
+				balance:   acc.Balance.Uint64(),
+				codeHash:  common.BytesToHash(acc.CodeHash),
+				alive:     true,
+				delegated: nowDelegated,
 			}
 			// Read back off the tree rather than trusting the write, and check
 			// the size against what the account's code hash measures.
@@ -492,6 +508,34 @@ func TestUpdateAccountCodeSizeVsModel(t *testing.T) {
 			if gotNonce != m.nonce || gotBalance.Uint64() != m.balance {
 				t.Fatalf("seed %d op %d: basic data drifted: nonce %d/%d balance %d/%d",
 					seed, op, gotNonce, m.nonce, gotBalance.Uint64(), m.balance)
+			}
+			// Exclusivity, across whatever order the shapes above landed in:
+			// an account holds exactly one of the two code leaves, and it is
+			// the one its history says it should.
+			hashLeaf, err := tr.GetStemValue(CodeHashKey(addr))
+			if err != nil {
+				t.Fatalf("seed %d op %d: GetStemValue(code hash): %v", seed, op, err)
+			}
+			delegLeaf, err := tr.GetStemValue(DelegationKey(addr))
+			if err != nil {
+				t.Fatalf("seed %d op %d: GetStemValue(delegation): %v", seed, op, err)
+			}
+			if (delegLeaf != nil) != m.delegated {
+				t.Fatalf("seed %d op %d addr %x: delegation leaf present=%v, want %v",
+					seed, op, addr[0], delegLeaf != nil, m.delegated)
+			}
+			if m.delegated {
+				if hashLeaf != nil {
+					t.Fatalf("seed %d op %d addr %x: a delegated account also holds a code-hash leaf %x",
+						seed, op, addr[0], hashLeaf)
+				}
+				if got := crypto.Keccak256(delegLeaf[:codeLenOf[m.codeHash]]); !bytes.Equal(got, m.codeHash[:]) {
+					t.Fatalf("seed %d op %d addr %x: the indicator hashes to %x, but the account's hash is %x",
+						seed, op, addr[0], got[:4], m.codeHash[:4])
+				}
+			} else if !bytes.Equal(hashLeaf, m.codeHash[:]) {
+				t.Fatalf("seed %d op %d addr %x: code hash leaf %x, want %x",
+					seed, op, addr[0], hashLeaf, m.codeHash)
 			}
 		}
 	}

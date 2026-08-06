@@ -53,20 +53,22 @@ func TestUpdateAccountBatchMatchesSequential(t *testing.T) {
 		addrs    []common.Address
 		accounts []*types.StateAccount
 		codeLens []int
+		delegs   [][]byte
 	)
 	for i := range 8 {
 		addrs = append(addrs, common.Address{byte(i + 1), 0xaa})
 		accounts = append(accounts, testAccount(uint64(i+1), uint64((i+1)*1000)))
 		codeLens = append(codeLens, i*31) // distinct sizes in the packed basic data
+		delegs = append(delegs, nil)      // none of these accounts is delegated
 	}
 
 	batched := newTestTrie()
-	if err := batched.UpdateAccountBatch(addrs, accounts, codeLens); err != nil {
+	if err := batched.UpdateAccountBatch(addrs, accounts, codeLens, delegs); err != nil {
 		t.Fatalf("batch update failed: %v", err)
 	}
 	sequential := newTestTrie()
 	for i, addr := range addrs {
-		if err := sequential.UpdateAccount(addr, accounts[i], codeLens[i]); err != nil {
+		if err := sequential.UpdateAccount(addr, accounts[i], codeLens[i], nil); err != nil {
 			t.Fatalf("sequential update failed: %v", err)
 		}
 	}
@@ -76,11 +78,14 @@ func TestUpdateAccountBatchMatchesSequential(t *testing.T) {
 
 	// A mismatched batch must be refused rather than silently truncated to the
 	// shorter of the two, which would drop accounts on the floor.
-	if err := newTestTrie().UpdateAccountBatch(addrs, accounts[:2], codeLens); err == nil {
+	if err := newTestTrie().UpdateAccountBatch(addrs, accounts[:2], codeLens, delegs); err == nil {
 		t.Fatal("a batch with fewer accounts than addresses was accepted")
 	}
-	if err := newTestTrie().UpdateAccountBatch(addrs, accounts, codeLens[:2]); err == nil {
+	if err := newTestTrie().UpdateAccountBatch(addrs, accounts, codeLens[:2], delegs); err == nil {
 		t.Fatal("a batch with fewer code lengths than addresses was accepted")
+	}
+	if err := newTestTrie().UpdateAccountBatch(addrs, accounts, codeLens, delegs[:2]); err == nil {
+		t.Fatal("a batch with fewer delegations than addresses was accepted")
 	}
 }
 
@@ -134,7 +139,7 @@ func TestUpdateStorageBatchMatchesSequential(t *testing.T) {
 func TestCopyIsIndependent(t *testing.T) {
 	original := newTestTrie()
 	base := testAccount(1, 100)
-	if err := original.UpdateAccount(common.Address{0x01}, base, 0); err != nil {
+	if err := original.UpdateAccount(common.Address{0x01}, base, 0, nil); err != nil {
 		t.Fatal(err)
 	}
 	rootBefore := original.Hash()
@@ -144,7 +149,7 @@ func TestCopyIsIndependent(t *testing.T) {
 		t.Fatalf("the copy did not start from the same state: %x vs %x", got, rootBefore)
 	}
 	// Mutating the copy must leave the original where it was.
-	if err := cp.UpdateAccount(common.Address{0x02}, testAccount(2, 200), 0); err != nil {
+	if err := cp.UpdateAccount(common.Address{0x02}, testAccount(2, 200), 0, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := original.Hash(); got != rootBefore {
@@ -154,7 +159,7 @@ func TestCopyIsIndependent(t *testing.T) {
 		t.Fatal("writing to the copy did not change it; the two may be the same tree")
 	}
 	// And the reverse, since aliasing in either direction is the same bug.
-	if err := original.UpdateAccount(common.Address{0x03}, testAccount(3, 300), 0); err != nil {
+	if err := original.UpdateAccount(common.Address{0x03}, testAccount(3, 300), 0, nil); err != nil {
 		t.Fatal(err)
 	}
 	if cp.Hash() == original.Hash() {

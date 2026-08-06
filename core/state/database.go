@@ -110,11 +110,18 @@ type Trie interface {
 	// substituting zero: the binary tree stores the code size in the account,
 	// so a zero would erase it. The merkle-patricia trie ignores the argument
 	// entirely.
-	UpdateAccount(address common.Address, account *types.StateAccount, codeLen int) error
+	//
+	// A non-nil delegation is the account's EIP-7702 designator, and says the
+	// account is delegated. The binary tree holds it in the account's own
+	// header in place of the code hash, so it must be passed on every write of
+	// a delegated account whose size is stated; a nil says the account is not
+	// delegated and clears any indicator it held. The merkle-patricia trie
+	// ignores this argument too, delegations being ordinary code there.
+	UpdateAccount(address common.Address, account *types.StateAccount, codeLen int, delegation []byte) error
 
 	// UpdateAccountBatch attempts to update a list of accounts in the batch manner.
-	// Negative code lengths carry the same meaning as in UpdateAccount.
-	UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLengths []int) error
+	// Code lengths and delegations carry the same meaning as in UpdateAccount.
+	UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLengths []int, delegations [][]byte) error
 
 	// UpdateStorage associates key with value in the trie. If value has length zero,
 	// any existing value is deleted from the trie. The value bytes must not be modified

@@ -58,7 +58,7 @@ func benchTrie(b *testing.B, n int) *bintrie.BinaryTrie {
 	var slot common.Hash
 	for i := 0; i < n; i++ {
 		addr := benchAddr(i)
-		if err := tr.UpdateAccount(addr, benchAccount(i), 0); err != nil {
+		if err := tr.UpdateAccount(addr, benchAccount(i), 0, nil); err != nil {
 			b.Fatal(err)
 		}
 		slot[31] = 1 // header slot 1
@@ -83,7 +83,7 @@ func BenchmarkEngineInsertAccount(b *testing.B) {
 	}
 	i := 0
 	for b.Loop() {
-		if err := tr.UpdateAccount(benchAddr(i), benchAccount(i), 0); err != nil {
+		if err := tr.UpdateAccount(benchAddr(i), benchAccount(i), 0, nil); err != nil {
 			b.Fatal(err)
 		}
 		i++
@@ -133,7 +133,7 @@ func BenchmarkEngineHashDirty(b *testing.B) {
 		for j := 0; j < 1000; j++ {
 			acc := benchAccount(i + j)
 			acc.Nonce = uint64(i + j + 7)
-			if err := tr.UpdateAccount(benchAddr((i+j)%100_000), acc, 0); err != nil {
+			if err := tr.UpdateAccount(benchAddr((i+j)%100_000), acc, 0, nil); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -152,7 +152,7 @@ func BenchmarkEngineCommit(b *testing.B) {
 	for j := 0; j < 1000; j++ {
 		acc := benchAccount(j)
 		acc.Nonce = uint64(j + 7)
-		if err := tr.UpdateAccount(benchAddr(j), acc, 0); err != nil {
+		if err := tr.UpdateAccount(benchAddr(j), acc, 0, nil); err != nil {
 			b.Fatal(err)
 		}
 	}

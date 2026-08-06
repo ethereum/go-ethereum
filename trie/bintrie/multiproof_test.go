@@ -59,13 +59,13 @@ func mpFixture(t *testing.T, codeLen, filler int) (*triedb.Database, common.Hash
 	for i := 0; i < filler; i++ {
 		var addr common.Address
 		addr[0], addr[1], addr[2] = byte(i), byte(i>>8), byte(i>>16)
-		if err := tr.UpdateAccount(addr, testAccount(uint64(i+1)), 0); err != nil {
+		if err := tr.UpdateAccount(addr, testAccount(uint64(i+1)), 0, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	acct := testAccount(1)
 	acct.CodeHash = codeHash[:]
-	if err := tr.UpdateAccount(target, acct, len(code)); err != nil {
+	if err := tr.UpdateAccount(target, acct, len(code), nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := tr.UpdateContractCode(target, codeHash, code); err != nil {

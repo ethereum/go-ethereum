@@ -41,6 +41,13 @@ const (
 	// Sub-indices within an account's header stem.
 	BasicDataLeafKey = 0 // version ‖ reserved ‖ code_size ‖ nonce ‖ balance
 	CodeHashLeafKey  = 1 // keccak256 of the account's code
+	// DelegationLeafKey holds an EIP-7702 designator, right-padded to 32
+	// bytes. It excludes CodeHashLeafKey rather than joining it: every
+	// account that exists holds exactly one of the two, because a delegated
+	// account's code *is* its indicator. The leaf determines both, a code
+	// read taking the leading code_size bytes of the value and EXTCODEHASH
+	// hashing them.
+	DelegationLeafKey = 2
 
 	// HeaderStorageOffset is the header sub-index of storage slot 0, and
 	// HeaderStorageSlots how many slots live there: slots 0..63 at sub-indices
@@ -68,7 +75,7 @@ const (
 
 func init() {
 	// Required invariant of the embedding (EIP-8297 "Tree embedding").
-	if !(HeaderStorageOffset > CodeHashLeafKey && HeaderStorageOffset+HeaderStorageSlots <= StemSubtreeWidth) {
+	if !(HeaderStorageOffset > DelegationLeafKey && HeaderStorageOffset+HeaderStorageSlots <= StemSubtreeWidth) {
 		panic("bintrie: invalid header layout constants")
 	}
 }
@@ -113,6 +120,23 @@ func BasicDataKey(addr common.Address) []byte {
 // CodeHashKey returns the key of addr's code-hash leaf.
 func CodeHashKey(addr common.Address) []byte {
 	return HeaderKey(addr, CodeHashLeafKey)
+}
+
+// DelegationKey returns the key of addr's delegation-indicator leaf.
+func DelegationKey(addr common.Address) []byte {
+	return HeaderKey(addr, DelegationLeafKey)
+}
+
+// EncodeDelegation packs an EIP-7702 designator into its leaf value: the
+// indicator in the leading bytes, zero after.
+//
+// This is not the chunk encoding. A chunk reserves its first byte for a count
+// of leading push-data bytes, which an indicator does not carry because it is
+// never executed as code.
+func EncodeDelegation(designator []byte) []byte {
+	v := make([]byte, 32)
+	copy(v, designator)
+	return v
 }
 
 // StorageBucketPrefix returns the 33-byte prefix under which all of addr's

@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb/database"
@@ -705,9 +706,16 @@ func (t *BinaryTrie) deleteSubtree(n binaryNode, walk bitstr, pos int) error {
 // exposed keys themselves, so this is the identity.
 func (t *BinaryTrie) GetKey(key []byte) []byte { return key }
 
-// GetAccount reads the account header stem and decodes the BASIC_DATA and
-// CODE_HASH leaves. A missing stem (or missing both leaves) is a missing
-// account.
+// GetAccount reads the account header stem and decodes the BASIC_DATA leaf
+// alongside whichever of CODE_HASH and DELEGATION it holds. A missing stem, or
+// one holding none of the three, is a missing account.
+//
+// A delegated account carries no code hash to read, so this derives one by
+// hashing the indicator. Everything above the tree - EIP-161 emptiness, the
+// txpools' delegation probe, EXTCODEHASH - reads a delegated account through
+// types.StateAccount.CodeHash and would misread it as codeless otherwise, so
+// the synthesis is what keeps those callers correct without knowing about the
+// leaf at all.
 func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
 	if t.committed {
 		return nil, trie.ErrCommitted
@@ -718,17 +726,32 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	}
 	basic := g.lookup(BasicDataLeafKey)
 	codeHash := g.lookup(CodeHashLeafKey)
-	if basic == nil && codeHash == nil {
+	delegation := g.lookup(DelegationLeafKey)
+	if basic == nil && codeHash == nil && delegation == nil {
 		return nil, nil
 	}
 	acc := &types.StateAccount{Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:]}
+	var codeSize uint32
 	if basic != nil {
-		_, _, nonce, balance := DecodeBasicData(basic)
+		var (
+			nonce   uint64
+			balance *uint256.Int
+		)
+		_, codeSize, nonce, balance = DecodeBasicData(basic)
 		acc.Nonce, acc.Balance = nonce, balance
 	} else {
 		acc.Balance = new(uint256.Int)
 	}
-	if codeHash != nil {
+	switch {
+	case delegation != nil:
+		// The code is the leading code_size bytes of the leaf, so the hash is
+		// over those. Reading the whole padded value instead would hash nine
+		// bytes of padding into it and disagree with EXTCODEHASH.
+		if int(codeSize) > len(delegation) {
+			return nil, fmt.Errorf("bintrie: GetAccount (%x): code size %d exceeds the %d-byte delegation leaf", addr, codeSize, len(delegation))
+		}
+		acc.CodeHash = crypto.Keccak256(delegation[:codeSize])
+	case codeHash != nil:
 		acc.CodeHash = append([]byte{}, codeHash...)
 	}
 	return acc, nil
@@ -736,23 +759,37 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 
 // UpdateAccountBatch writes a list of accounts one at a time. See
 // UpdateStorageBatch for why this is a loop rather than a batch.
-func (t *BinaryTrie) UpdateAccountBatch(addrs []common.Address, accounts []*types.StateAccount, codeLens []int) error {
+func (t *BinaryTrie) UpdateAccountBatch(addrs []common.Address, accounts []*types.StateAccount, codeLens []int, delegations [][]byte) error {
 	if len(addrs) != len(accounts) {
 		return fmt.Errorf("addresses and accounts length mismatch: %d != %d", len(addrs), len(accounts))
 	}
 	if len(addrs) != len(codeLens) {
 		return fmt.Errorf("addresses and code lengths mismatch: %d != %d", len(addrs), len(codeLens))
 	}
+	if len(addrs) != len(delegations) {
+		return fmt.Errorf("addresses and delegations length mismatch: %d != %d", len(addrs), len(delegations))
+	}
 	for i, addr := range addrs {
-		if err := t.UpdateAccount(addr, accounts[i], codeLens[i]); err != nil {
+		if err := t.UpdateAccount(addr, accounts[i], codeLens[i], delegations[i]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// UpdateAccount writes the BASIC_DATA and CODE_HASH leaves of the account
-// header stem in one walk.
+// UpdateAccount writes the BASIC_DATA leaf of the account header stem, and
+// whichever of CODE_HASH and DELEGATION the account holds, in one walk.
+//
+// A non-nil delegation is the EIP-7702 designator itself, and says the account
+// is delegated: the indicator becomes its code, so the size is 23 and the
+// code-hash leaf is removed. A nil delegation with a stated size removes the
+// delegation leaf instead. Either way both leaves move in the single walk
+// below, so the exclusivity between them is never momentarily broken.
+//
+// The designator is passed rather than recognised from the code, because the
+// code is not here to recognise: reading it back to test for the marker is the
+// unwitnessed read this signature's codeLen exists to avoid. Callers hold the
+// blob already whenever they set it.
 //
 // A negative codeLen means the caller declines to state the size, not that it
 // necessarily lacks one: the account-write path passes it for every account
@@ -769,12 +806,40 @@ func (t *BinaryTrie) UpdateAccountBatch(addrs []common.Address, accounts []*type
 // of one address coalesce into a single update mutation, so nothing deletes
 // the old stem and the dead contract's size would be inherited by the account
 // that replaced it.
-func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int) error {
+func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int, delegation []byte) error {
 	if len(acc.CodeHash) != 32 {
 		return fmt.Errorf("bintrie: UpdateAccount (%x): code hash is %d bytes, want 32", addr, len(acc.CodeHash))
 	}
 	stem := HeaderStem(addr)
+	if delegation != nil {
+		// Checked rather than trusted: a value that is not an indicator would
+		// be stored where every reader takes one on faith, and would then be
+		// hashed into a code hash that names bytecode nothing can produce.
+		if _, ok := types.ParseDelegation(delegation); !ok {
+			return fmt.Errorf("bintrie: UpdateAccount (%x): the %d-byte delegation is not an indicator", addr, len(delegation))
+		}
+		// The leaf becomes the account's code, so the hash GetAccount reads
+		// back is the indicator's, not the one passed here. Every caller
+		// derives the two from the same blob and they agree; checking says so
+		// rather than leaving a disagreement to surface as a wrong code hash
+		// nothing can trace back to this write.
+		if got := crypto.Keccak256(delegation); !bytes.Equal(got, acc.CodeHash) {
+			return fmt.Errorf("bintrie: UpdateAccount (%x): the delegation hashes to %x but the account carries %x", addr, got, acc.CodeHash)
+		}
+		basic, err := EncodeBasicData(uint32(len(delegation)), acc.Nonce, acc.Balance)
+		if err != nil {
+			return fmt.Errorf("bintrie: UpdateAccount (%x): %w", addr, err)
+		}
+		return t.UpdateStem(stem,
+			[]byte{BasicDataLeafKey, CodeHashLeafKey, DelegationLeafKey},
+			[][]byte{basic[:], nil, EncodeDelegation(delegation)})
+	}
 	codeSize := uint32(codeLen)
+	// Set when the account is delegated and the caller stated no size, the one
+	// case where the code leaves must be left exactly as they are: rewriting
+	// them from acc would clear the indicator and put back a code-hash leaf,
+	// silently un-delegating an account that was only touched for its balance.
+	keepCodeLeaves := false
 	if codeLen < 0 {
 		codeSize = 0
 		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
@@ -793,14 +858,24 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 			if basic == nil {
 				return fmt.Errorf("bintrie: UpdateAccount (%x): code hash %x with no basic data to preserve a size from", addr, acc.CodeHash)
 			}
+			_, codeSize, _, _ = DecodeBasicData(basic)
 			// The resident size measures the resident code, so it may only be
 			// carried forward under the same hash. A caller changing the hash
 			// while declining to state a length is asking for a size that
 			// measures a different contract.
-			if resident := g.lookup(CodeHashLeafKey); !bytes.Equal(resident, acc.CodeHash) {
+			if resident := g.lookup(DelegationLeafKey); resident != nil {
+				// A delegated account holds no code-hash leaf to compare, so
+				// the same question is put to the hash its indicator implies.
+				if int(codeSize) > len(resident) {
+					return fmt.Errorf("bintrie: UpdateAccount (%x): code size %d exceeds the %d-byte delegation leaf", addr, codeSize, len(resident))
+				}
+				if got := crypto.Keccak256(resident[:codeSize]); !bytes.Equal(got, acc.CodeHash) {
+					return fmt.Errorf("bintrie: UpdateAccount (%x): no code length given and the code hash is changing, %x to %x", addr, got, acc.CodeHash)
+				}
+				keepCodeLeaves = true
+			} else if resident := g.lookup(CodeHashLeafKey); !bytes.Equal(resident, acc.CodeHash) {
 				return fmt.Errorf("bintrie: UpdateAccount (%x): no code length given and the code hash is changing, %x to %x", addr, resident, acc.CodeHash)
 			}
-			_, codeSize, _, _ = DecodeBasicData(basic)
 		}
 	}
 	// No bytecode of non-zero length hashes to the empty hash, so this pair is
@@ -813,11 +888,14 @@ func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 	if err != nil {
 		return fmt.Errorf("bintrie: UpdateAccount (%x): %w", addr, err)
 	}
+	if keepCodeLeaves {
+		return t.UpdateStem(stem, []byte{BasicDataLeafKey}, [][]byte{basic[:]})
+	}
 	codeHash := make([]byte, 32)
 	copy(codeHash, acc.CodeHash)
 	return t.UpdateStem(stem,
-		[]byte{BasicDataLeafKey, CodeHashLeafKey},
-		[][]byte{basic[:], codeHash})
+		[]byte{BasicDataLeafKey, CodeHashLeafKey, DelegationLeafKey},
+		[][]byte{basic[:], codeHash, nil})
 }
 
 // DeleteAccount removes everything the account owns in the tree: its whole
@@ -928,6 +1006,13 @@ func (t *BinaryTrie) DeleteStorage(addr common.Address, key []byte) error {
 // still holds this bytecode is answered by the ancestor state, not by a count.
 // core.TestPBTReorgKeepsSharedCodeChunks pins it.
 func (t *BinaryTrie) UpdateContractCode(_ common.Address, codeHash common.Hash, code []byte) error {
+	// A delegation indicator is not code as far as the tree is concerned. It
+	// lives in its own account's header, written by UpdateAccount, precisely
+	// so that it is not shared; chunking it here would put it in the shared
+	// zone as well and leave a leaf nothing ever removes.
+	if _, ok := types.ParseDelegation(code); ok {
+		return nil
+	}
 	chunks := ChunkifyCode(code)
 	numChunks := len(chunks) / 32
 

@@ -687,10 +687,20 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// under a code hash that names real bytecode.
 	codeKnown := obj.dirtyCode && (len(obj.code) > 0 || bytes.Equal(obj.CodeHash(), types.EmptyCodeHash[:]))
 	codeLen := -1
+	// A delegated account keeps its EIP-7702 designator in its own header
+	// rather than as shared code, so the trie has to be told which it is. The
+	// blob is in hand exactly when the size is, and classifying it costs
+	// nothing extra; the trie cannot do it, seeing only a length. Leaving this
+	// nil while stating a size is what would clear a live delegation, so the
+	// two travel together.
+	var delegation []byte
 	if codeKnown {
 		codeLen = len(obj.code)
+		if _, ok := types.ParseDelegation(obj.code); ok {
+			delegation = obj.code
+		}
 	}
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, codeLen); err != nil {
+	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, codeLen, delegation); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", obj.Address(), err))
 	}
 	if codeKnown {

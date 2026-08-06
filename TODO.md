@@ -140,17 +140,25 @@ on account deletion only, gated on a `code_hash_survives` scan of its whole
 account dict, and exempting delegation indicators because those live in their
 account's own header.
 
-Geth has nothing to build that scan on: there is no code-hash index and
-`rawdb.DeleteCode` has no callers. Approximating it with the block's touched
-accounts is unsound — an account the block never touched may hold the same
-bytecode, and dropping the chunks would take its code with it.
+Moving the delegation indicator into the account header ([EIP #12114]) is
+implemented and removes the worst of this: a delegation is no longer a shared
+chunk at all, so replacing or clearing one leaves nothing orphaned. What is
+left is deployed contract code.
 
-This is precisely the locality problem [EIP #12114] removes. With the
-delegation indicator in the account header, the check becomes decidable from
-the transaction alone: `SELFDESTRUCT` reaches only same-transaction creations,
-so any code leaf predating the transaction belongs to an account the
-transaction cannot delete. Build the reclamation on top of that change rather
-than trying to engineer around the scan.
+The remaining work is the survivor check, and geth has nothing to build it on:
+there is no code-hash index and `rawdb.DeleteCode` has no callers.
+Approximating it with the block's touched accounts is unsound — an account the
+block never touched may hold the same bytecode, and dropping the chunks would
+take its code with it.
+
+The tractable route is the one #12114's rationale describes. Removal now fires
+on account deletion only, and post-EIP-6780 a deleted account was created in
+the same transaction; so a chunk leaf that *predates* the transaction is held
+by some account the transaction cannot delete and must be kept, while one first
+written *by* the transaction can only be shared with that transaction's own
+creations, which are all in view. Implementing it therefore needs the tree to
+know which code leaves this transaction first wrote — something nothing tracks
+today, and the reason this is not folded into the delegation change.
 
 Until then the divergence is real but narrow: it needs an account with deployed
 code to be deleted, which post-EIP-6780 means created and destroyed inside one
@@ -173,11 +181,12 @@ urgent — but it should get a dedicated session rather than another patch.
   from chunk 0 rather than only past chunk 128, so the converter rewrites the
   same chunks once per holder and the output is smaller than it plans for.
   Neither is accounted for.
-- **Delegation will add a case it cannot see.** Once the EIP-7702 indicator
-  moves into the account header ([EIP #12114]), a delegated account in the
-  merkle source is still a 23-byte code blob and would be chunked as ordinary
-  code. Converted state would then disagree with replayed state — a
-  correctness break, not a slowdown.
+- **Delegation is handled by a patch rather than by design.** A delegated
+  account in the merkle source is a 23-byte code blob and has to become a
+  header leaf rather than chunks ([EIP #12114]), or converted state disagrees
+  with replayed state. The loop now recognises the designator inline, which
+  fixes it without giving the converter any notion of the distinction — and
+  nothing checks the result, for the reason below.
 - **Nothing would catch any of that.** `bintrie_convert_test.go` reads back
   through `GetAccount`/`StorageSlotKey` and asserts no root and no leaf counts.
   The rewrite's first job is the test that is missing: convert a fixture and

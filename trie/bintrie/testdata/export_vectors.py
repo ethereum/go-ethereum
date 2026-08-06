@@ -63,6 +63,8 @@ def main() -> int:
     def value(i: int) -> bytes:
         return i.to_bytes(32, "big")
 
+    designator = Bytes(bytes.fromhex("ef0100" + "cc" * 20))
+
     # --- trie_vectors: fixed populations -> root -------------------------
     trie_vectors = []
 
@@ -87,6 +89,14 @@ def main() -> int:
         (storage_key(1, 100), value(3)), (storage_key(1, 356), value(4)),
         (account_key(2, 0), value(5))])
     add_trie_vector("zero_value_present", [(account_key(3, 0), b"\x00" * 32)])
+    # A delegated account: basic data sized 23 beside the indicator, and no
+    # code-hash leaf. Roots the delegation sub-index rather than only deriving
+    # its key.
+    add_trie_vector("delegated_account", [
+        (account_key(5, 0),
+         bytes(embedding.encode_basic_data(U32(23), U64(1), U256(10**18)))),
+        (account_key(5, int(embedding.DELEGATION_LEAF_KEY)),
+         bytes(embedding.encode_delegation(designator)))])
     full_stem = [(account_key(4, s), value(s + 1)) for s in range(256)]
     add_trie_vector("full_header_stem", full_stem)
 
@@ -125,6 +135,11 @@ def main() -> int:
         "address": hx(addr20),
         "basic_data_key": hx(embedding.get_tree_key_for_basic_data(addr32)),
         "code_hash_key": hx(embedding.get_tree_key_for_code_hash(addr32)),
+        # A delegated account holds its indicator here in place of a code
+        # hash: the two sub-indices are mutually exclusive.
+        "delegation_key": hx(embedding.get_tree_key_for_delegation(addr32)),
+        "delegation_designator": hx(designator),
+        "delegation_value": hx(embedding.encode_delegation(designator)),
         "slots": [
             {"slot": s, "key": hx(embedding.get_tree_key_for_storage_slot(addr32, U256(s)))}
             for s in (0, 5, 63, 64, 255, 256, 1000, 2**255)
