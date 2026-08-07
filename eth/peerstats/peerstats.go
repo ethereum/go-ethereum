@@ -1,0 +1,241 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// Package peerstats maintains per-peer quality metrics used by the peer
+// dropper to protect high-value peers from random disconnection.
+//
+// The package is a passive accumulator: it exposes entry points for its
+// signal producers (txtracker for inclusion/finalization, the tx fetcher
+// for latency, the handler for peer-drop cleanup) and a read-only
+// snapshot for its consumer (the dropper). It has no goroutine of its
+// own — all mutation is serialized by a single mutex.
+//
+// Peer lifecycle is explicit: an entry exists only between NotifyPeerConnect
+// and NotifyPeerDrop. Every other signal updates an existing entry and is
+// ignored for unknown peers, so a signal that races in after a disconnect (or
+// that names a peer which delivered txs before disconnecting) cannot create or
+// resurrect an entry. This bounds the map to currently-connected peers with no
+// separate sweep.
+//
+// Signal sources:
+//   - NotifyPeerConnect(peer) / NotifyPeerDrop(peer) — lifecycle, from the handler
+//   - NotifyBlock(inclusions, finalized) — per-block deltas from txtracker
+//     (computed under txtracker's own lock, then passed in after release)
+//   - NotifyRequestResult(peer, latency, timeout) — per-request outcomes
+//     from the fetcher; timeouts are reported with the timeout value so
+//     slow peers contribute to the EMA. Non-timeout results are only
+//     reported for deliveries with pool-accepted txs, and only those feed
+//     the activity rate gating latency protection
+package peerstats
+
+import (
+	"sync"
+	"time"
+)
+
+const (
+	// EMA smoothing factor for per-block inclusion rate.
+	emaAlpha = 0.05
+	// EMA smoothing factor for per-block finalization rate. Very slow on
+	// purpose: finalization is permanent, and the score should reflect
+	// sustained contribution over long windows, not recent bursts.
+	// Half-life ≈ 6930 chain heads (~23 hours on 12s blocks).
+	finalizedEMAAlpha = 0.0001
+	// EMA smoothing factor for per-request latency average. Slow on purpose:
+	// short bursts shouldn't shift the score, sustained behavior should.
+	// Half-life ≈ ln(0.5)/ln(0.99) ≈ 69 samples.
+	latencyEMAAlpha = 0.01
+	// EMA smoothing factor for the per-block delivery-presence rate.
+	// Half-life ≈ 50 chain heads (~10 minutes on 12s blocks): eligibility
+	// for latency protection must be continuously maintained at roughly
+	// this cadence, it cannot be front-loaded in a burst and then held.
+	latencyActivityAlpha = 0.014
+	// MinLatencyActivity is the minimum sustained delivery-presence rate a
+	// peer must maintain for its RequestLatencyEMA to be considered for
+	// protection. LatencyActivity is an EMA of a per-block 0/1 signal
+	// (did the peer make ≥1 accepted delivery this block), so it is a
+	// fraction of recent blocks in which the peer was useful; 0.2 ≈ active
+	// in one block in five. Capping the per-block contribution at 1 is what
+	// makes eligibility unforgeable by a burst: a single block of activity
+	// contributes at most latencyActivityAlpha, so clearing the gate takes
+	// ~15 active blocks regardless of how many deliveries land in any one.
+	// This replaces both an absolute sample count (front-loadable) and a
+	// last-sample staleness check (maintainable with one sample per window):
+	// a decaying rate expires on its own and demands sustained useful work.
+	MinLatencyActivity = 0.2
+	// latencyResetThreshold is the activity level below which a peer's
+	// latency state is forgotten entirely. Without this, a peer could
+	// earn a fast EMA, go silent (activity decays, eligibility lost) and
+	// later re-arm the frozen EMA by rebuilding activity alone. Once
+	// activity has decayed this far (~75 minutes of silence from the
+	// eligibility threshold), the peer starts over as a stranger.
+	latencyResetThreshold = 0.001
+)
+
+// PeerStats is the exported per-peer snapshot returned by GetAllPeerStats.
+// It carries exactly the fields the dropper scores on.
+type PeerStats struct {
+	RecentFinalized   float64       // EMA of per-block finalization credits (slow)
+	RecentIncluded    float64       // EMA of per-block inclusions (fast)
+	RequestLatencyEMA time.Duration // Slow EMA of tx-request response latency (timeouts count as the timeout value)
+	LatencyActivity   float64       // EMA of per-block delivery presence (eligibility gate for latency protection)
+}
+
+// peerStats is the internal mutable state per peer.
+type peerStats struct {
+	recentFinalized    float64
+	recentIncluded     float64
+	requestLatencyEMA  time.Duration
+	hadSuccess         bool // recorded ≥1 accepted delivery (gates the silence reset)
+	latencyActivity    float64
+	deliveredThisBlock bool // saw ≥1 accepted delivery since the last NotifyBlock
+}
+
+// Stats is the per-peer quality aggregator.
+type Stats struct {
+	mu    sync.Mutex
+	peers map[string]*peerStats
+}
+
+// New creates an empty Stats.
+func New() *Stats {
+	return &Stats{peers: make(map[string]*peerStats)}
+}
+
+// NotifyPeerConnect registers a peer so its subsequent signals are tracked.
+// It is the only path that creates an entry; every other signal updates an
+// existing one. Idempotent — re-registering a tracked peer keeps its stats.
+func (s *Stats) NotifyPeerConnect(peer string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.peers[peer] == nil {
+		s.peers[peer] = &peerStats{}
+	}
+}
+
+// NotifyBlock ingests a per-block update. `inclusions` is the count of the head
+// block's transactions attributed to each peer, `finalized` the per-peer
+// credits accumulated since the last call. Both only ever update entries for
+// currently-registered (connected) peers; a delta naming an unknown peer is
+// ignored, so a tx delivered before a peer disconnected cannot resurrect its
+// entry once dropped. Registered peers absent from a delta map decay with a
+// zero sample.
+//
+// NotifyBlock must NOT be called while the caller holds any other lock that
+// could be acquired by peerstats callers in reverse order. Current callers
+// (txtracker.handleChainHead) release their lock before invoking NotifyBlock.
+func (s *Stats) NotifyBlock(inclusions, finalized map[string]int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Update inclusion and finalization EMAs for every registered peer. A
+	// peer not present in the respective delta map gets a 0 contribution
+	// — pure decay. Deltas for unregistered peers are ignored entirely.
+	for peer, ps := range s.peers {
+		ps.recentIncluded = (1-emaAlpha)*ps.recentIncluded + emaAlpha*float64(inclusions[peer])
+		ps.recentFinalized = (1-finalizedEMAAlpha)*ps.recentFinalized + finalizedEMAAlpha*float64(finalized[peer])
+
+		// Fold this block's delivery-presence bit (0 or 1) into the activity
+		// rate, then let it decay like the other per-block EMAs. Capping at a
+		// single bit per block — rather than the raw delivery count — is what
+		// prevents a burst (or a backlog accumulated across a chain-head
+		// stall) from buying eligibility that then coasts on decay.
+		sample := 0.0
+		if ps.deliveredThisBlock {
+			sample = 1.0
+		}
+		ps.latencyActivity = (1-latencyActivityAlpha)*ps.latencyActivity + latencyActivityAlpha*sample
+		ps.deliveredThisBlock = false
+
+		// A peer silent long enough for its activity to fully decay forgets
+		// its fast-latency history: a frozen fast EMA from a past active
+		// period must not be re-armable by rebuilding activity alone (see
+		// latencyResetThreshold). The hadSuccess gate limits this to peers
+		// that actually earned a fast EMA — a timeout-only peer's activity is
+		// legitimately zero (not decayed-from-high) and its slow EMA should
+		// persist as its penalty rather than being wiped every block.
+		if ps.latencyActivity < latencyResetThreshold && ps.hadSuccess {
+			ps.latencyActivity = 0
+			ps.requestLatencyEMA = 0
+			ps.hadSuccess = false
+		}
+	}
+}
+
+// NotifyRequestResult records a tx-request outcome for the given peer.
+// latency is the round-trip time (for timeouts, pass the timeout value).
+// timeout indicates whether the request timed out rather than receiving an
+// accepted delivery (the fetcher only reports non-timeout results for
+// deliveries with ≥1 pool-accepted tx). Both cases update the latency EMA —
+// timeouts blend in the timeout value, which is the peer's standing penalty —
+// but only accepted deliveries feed the activity rate that gates protection,
+// so a peer cannot become protection-eligible by timing out. Ignored for
+// peers not currently registered (e.g. a result that races in after the peer
+// disconnected).
+func (s *Stats) NotifyRequestResult(peer string, latency time.Duration, timeout bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ps := s.peers[peer]
+	if ps == nil {
+		return
+	}
+	if ps.requestLatencyEMA == 0 {
+		// Bootstrap the EMA with the first sample so it doesn't drift up
+		// from zero over many samples before reaching realistic values.
+		// A zero EMA marks an uninitialized (or silence-reset) peer; a live
+		// EMA never blends back to exactly zero since every sample is a
+		// positive duration.
+		ps.requestLatencyEMA = latency
+	} else {
+		ps.requestLatencyEMA = time.Duration(
+			float64(ps.requestLatencyEMA)*(1-latencyEMAAlpha) +
+				float64(latency)*latencyEMAAlpha,
+		)
+	}
+	if !timeout {
+		ps.hadSuccess = true
+		ps.deliveredThisBlock = true
+	}
+}
+
+// NotifyPeerDrop removes a peer's stats on disconnect. Since every other
+// signal only updates existing entries, a stray signal racing in after this
+// deletion is ignored rather than recreating an orphan, so the map stays
+// bounded to currently-connected peers with no separate sweep.
+func (s *Stats) NotifyPeerDrop(peer string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.peers, peer)
+}
+
+// GetAllPeerStats returns a snapshot of per-peer stats. Called by the
+// dropper every few minutes; allocation cost is negligible at that rate.
+func (s *Stats) GetAllPeerStats() map[string]PeerStats {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result := make(map[string]PeerStats, len(s.peers))
+	for id, ps := range s.peers {
+		result[id] = PeerStats{
+			RecentFinalized:   ps.recentFinalized,
+			RecentIncluded:    ps.recentIncluded,
+			RequestLatencyEMA: ps.requestLatencyEMA,
+			LatencyActivity:   ps.latencyActivity,
+		}
+	}
+	return result
+}
