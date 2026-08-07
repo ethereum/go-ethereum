@@ -102,6 +102,13 @@ var (
 			Tags:   "womir",
 		},
 		{
+			Name:   "zisk",
+			GOOS:   "tamago",
+			GOARCH: "riscv64",
+			Tags:   "tamago,zisk",
+			Env:    map[string]string{"CGO_ENABLED": "0", "GO_EXTLINK_ENABLED": "0"},
+		},
+		{
 			Name:   "wasm-js",
 			GOOS:   "js",
 			GOARCH: "wasm",
@@ -290,15 +297,30 @@ func doInstallKeeper(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
-	// Configure the toolchain.
+	var csdb *download.ChecksumDB
 	tc := build.GoToolchain{}
 	if *dlgo {
-		csdb := download.MustLoadChecksums("build/checksums.txt")
-		tc.Root = build.DownloadGo(csdb)
+		csdb = download.MustLoadChecksums("build/checksums.txt")
 	}
 
 	for _, target := range keeperTargets {
 		log.Printf("Building keeper-%s", target.Name)
+
+		// Configure the toolchain.
+		if target.GOOS == "tamago" {
+			if runtime.GOOS != "linux" {
+				log.Printf("Skipping keeper-%s (tamago builds are only supported on linux hosts)", target.Name)
+				continue
+			}
+			if !*dlgo {
+				log.Printf("Skipping keeper-%s (tamago build requires -dlgo)", target.Name)
+				continue
+			}
+
+			tc.Root = downloadTamago(csdb)
+		} else if *dlgo {
+			tc.Root = build.DownloadGo(csdb)
+		}
 
 		// Configure the build.
 		tc.GOARCH = target.GOARCH
@@ -338,12 +360,12 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string, t
 		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitCommit="+env.Commit)
 		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitDate="+env.Date)
 	}
+	switch targetOS {
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
-	if targetOS == "darwin" {
+	case "darwin":
 		ld = append(ld, "-s")
-	}
-	if targetOS == "linux" {
+	case "linux":
 		// Enforce the stacksize to 8M, which is the case on most platforms apart from
 		// alpine Linux.
 		// See https://sourceware.org/binutils/docs-2.23.1/ld/Options.html#Options
@@ -358,6 +380,8 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string, t
 			buildTags = append(buildTags, "osusergo", "netgo")
 		}
 		ld = append(ld, "-extldflags", "'"+strings.Join(extld, " ")+"'")
+	case "tamago":
+		ld = append(ld, "-T", "0x80010000", "-R", "0x1000")
 	}
 	// TODO(gballet): revisit after the input api has been defined
 	if runtime.GOARCH == "wasm" {
@@ -461,6 +485,42 @@ func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string
 		log.Fatal(err)
 	}
 	return filepath.Join(cachedir, base)
+}
+
+// downloadTamago downloads the tamago-go toolchain and returns its GOROOT.
+func downloadTamago(csdb *download.ChecksumDB) string {
+	version, err := csdb.FindVersion("tamago")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if runtime.GOOS != "linux" {
+		log.Printf("Skipping tamago toolchain download (unsupported host os: %s)", runtime.GOOS)
+		return ""
+	}
+	arch := runtime.GOARCH
+	if arch == "arm" {
+		arch = "armv7l"
+	}
+	file := fmt.Sprintf("tamago-go%s.%s-%s.tar.gz", version, runtime.GOOS, arch)
+
+	ucache, err := os.UserCacheDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	dst := filepath.Join(ucache, file)
+	if err := csdb.DownloadFileFromKnownURL(dst); err != nil {
+		log.Fatal(err)
+	}
+
+	toolRoot := filepath.Join(ucache, fmt.Sprintf("geth-tamago-go-%s-%s-%s", version, runtime.GOOS, arch))
+	if err := build.ExtractArchive(dst, toolRoot); err != nil {
+		log.Fatal(err)
+	}
+	goroot, err := filepath.Abs(filepath.Join(toolRoot, "usr/local/tamago-go"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return goroot
 }
 
 // doCheckGenerate ensures that re-generating generated files does not cause
