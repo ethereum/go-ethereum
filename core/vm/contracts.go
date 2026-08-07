@@ -710,12 +710,15 @@ func (c *bigModExp) NormalizeInput(input []byte) ([]byte, bool) {
 		expLen  = new(uint256.Int).SetBytes(getData(input, 32, 32))
 		modLen  = new(uint256.Int).SetBytes(getData(input, 64, 32))
 	)
-	// With no base and no modulus the output is empty whatever follows, and an
-	// operand length too large to address cannot be read either way. Both are
-	// decided by the header alone.
+	// A length past what Run can address is not something the header alone
+	// decides. Run truncates it to its low word rather than rejecting it, so it
+	// goes on to read operands, and gas does not always price that out of reach.
+	// Nobody can pay to run these, so skip them rather than reason about them.
 	if !baseLen.IsUint64() || !expLen.IsUint64() || !modLen.IsUint64() {
-		return input[:modExpHeaderLength], true
+		return nil, false
 	}
+	// With no base and no modulus the output is empty whatever follows, so the
+	// header alone identifies it.
 	if baseLen.IsZero() && modLen.IsZero() {
 		return input[:modExpHeaderLength], true
 	}
