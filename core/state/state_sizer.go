@@ -538,7 +538,12 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 
 	// Wait for all goroutines to complete
 	if err := group.Wait(); err != nil {
-		done <- buildResult{err: err}
+		select {
+		case done <- buildResult{err: err}:
+		case <-t.abort:
+			// The tracker was closed and the receiver in init has
+			// already exited, the result is no longer consumed.
+		}
 	} else {
 		stat := SizeStats{
 			StateRoot:            root,
@@ -554,11 +559,16 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 			ContractCodes:        codes,
 			ContractCodeBytes:    codeBytes,
 		}
-		done <- buildResult{
+		select {
+		case done <- buildResult{
 			root:        root,
 			blockNumber: blockNumber,
 			stat:        stat,
 			elapsed:     time.Since(start),
+		}:
+		case <-t.abort:
+			// The tracker was closed and the receiver in init has
+			// already exited, the result is no longer consumed.
 		}
 	}
 }
