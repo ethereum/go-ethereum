@@ -172,6 +172,13 @@ the move of code into the content-addressed zone invalidated its central
 assumption rather than shifting a constant. It still converts, so this is not
 urgent — but it should get a dedicated session rather than another patch.
 
+The spec side is now pinned: EIP-8347 (the conversion/snapshot EIP) merged the
+delegation and zero-chunk rules the rewrite has to satisfy — a delegated
+account takes a single `DELEGATION_LEAF_KEY` leaf with `code_size == 23`, no
+`code_hash` leaf and no chunks; an all-zero chunk MUST NOT be emitted; each
+code leaf MUST be emitted exactly once; and the dual-check verification
+re-derives a delegated account's `codeHash` from the delegation leaf.
+
 - **Its write pattern is inverted.** Every contract's chunks used to land in
   that contract's own header stem, so writes followed the account-hash
   iteration order the loop is built around. They now scatter into `CODE_ZONE`
