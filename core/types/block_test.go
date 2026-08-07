@@ -373,3 +373,91 @@ func TestRlpDecodeParentHash(t *testing.T) {
 		}
 	}
 }
+
+func TestDecodeHeaderReuseClearsOptionalFields(t *testing.T) {
+	full := &Header{
+		ParentHash:          common.Hash{0x01},
+		UncleHash:           EmptyUncleHash,
+		Coinbase:            common.Address{0x02},
+		Root:                common.Hash{0x03},
+		TxHash:              EmptyTxsHash,
+		ReceiptHash:         EmptyReceiptsHash,
+		Difficulty:          big.NewInt(1),
+		Number:              big.NewInt(2),
+		GasLimit:            30_000_000,
+		GasUsed:             21_000,
+		Time:                123,
+		Extra:               []byte{0x04, 0x05},
+		MixDigest:           common.Hash{0x06},
+		Nonce:               BlockNonce{0x07},
+		BaseFee:             big.NewInt(params.InitialBaseFee),
+		WithdrawalsHash:     &common.Hash{0x08},
+		BlobGasUsed:         new(uint64),
+		ExcessBlobGas:       new(uint64),
+		ParentBeaconRoot:    &common.Hash{0x09},
+		RequestsHash:        &common.Hash{0x0a},
+		BlockAccessListHash: &common.Hash{0x0b},
+		SlotNumber:          new(uint64),
+	}
+	*full.BlobGasUsed = 1
+	*full.ExcessBlobGas = 2
+	*full.SlotNumber = 3
+
+	legacy := *full
+	legacy.ParentHash = common.Hash{0x11}
+	legacy.Extra = []byte{0x12}
+	legacy.BaseFee = nil
+	legacy.WithdrawalsHash = nil
+	legacy.BlobGasUsed = nil
+	legacy.ExcessBlobGas = nil
+	legacy.ParentBeaconRoot = nil
+	legacy.RequestsHash = nil
+	legacy.BlockAccessListHash = nil
+	legacy.SlotNumber = nil
+
+	fullRLP, err := rlp.EncodeToBytes(full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyRLP, err := rlp.EncodeToBytes(&legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded Header
+	if err := DecodeHeader(fullRLP, &decoded); err != nil {
+		t.Fatalf("decode full header: %v", err)
+	}
+	if decoded.BaseFee == nil || decoded.WithdrawalsHash == nil || decoded.BlobGasUsed == nil ||
+		decoded.ExcessBlobGas == nil || decoded.ParentBeaconRoot == nil || decoded.RequestsHash == nil ||
+		decoded.BlockAccessListHash == nil || decoded.SlotNumber == nil {
+		t.Fatalf("full header optional fields not decoded")
+	}
+	if err := DecodeHeader(legacyRLP, &decoded); err != nil {
+		t.Fatalf("decode legacy header: %v", err)
+	}
+	if decoded.BaseFee != nil || decoded.WithdrawalsHash != nil || decoded.BlobGasUsed != nil ||
+		decoded.ExcessBlobGas != nil || decoded.ParentBeaconRoot != nil || decoded.RequestsHash != nil ||
+		decoded.BlockAccessListHash != nil || decoded.SlotNumber != nil {
+		t.Fatalf("legacy decode retained optional fields: %#v", decoded)
+	}
+	if !bytes.Equal(decoded.Extra, legacy.Extra) {
+		t.Fatalf("extra mismatch: got %x want %x", decoded.Extra, legacy.Extra)
+	}
+}
+
+func TestDecodeHeaderRejectsTrailingData(t *testing.T) {
+	enc, err := rlp.EncodeToBytes(&Header{
+		UncleHash:   EmptyUncleHash,
+		TxHash:      EmptyTxsHash,
+		ReceiptHash: EmptyReceiptsHash,
+		Difficulty:  big.NewInt(1),
+		Number:      big.NewInt(1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var h Header
+	if err := DecodeHeader(append(enc, 0x80), &h); err != rlp.ErrMoreThanOneValue {
+		t.Fatalf("unexpected error: got %v want %v", err, rlp.ErrMoreThanOneValue)
+	}
+}
