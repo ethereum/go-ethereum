@@ -164,7 +164,7 @@ type (
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
-	// GasChangeHook reports changes to the regular execution gas. Tracers
+	// GasChangeHook reports changes to the execution gas. Tracers
 	// that don't need the EIP-8037 (Amsterdam) state-access dimension can
 	// implement only this hook; it fires unchanged across the fork. If both
 	// this and GasChangeHookV2 are set, only V2 is invoked; implement exactly
@@ -173,7 +173,7 @@ type (
 
 	// GasChangeHookV2 is the multi-dimensional successor to GasChangeHook,
 	// invoked when any gas dimension changes and exposing the EIP-8037
-	// (Amsterdam) state-access dimension alongside the regular one. The
+	// (Amsterdam) state-access dimension alongside the execution one. The
 	// non-changing dimension is passed through unchanged in both `old` and
 	// `new`, so consumers always see the complete gas vector. Pre-Amsterdam
 	// the State field is always zero, making a V2-only tracer behave exactly
@@ -303,7 +303,7 @@ func (h *Hooks) HasGasHook() bool {
 // EmitGasChange dispatches a gas change event to the registered hooks. If the
 // multi-dimensional OnGasChangeV2 hook is set it is invoked with the full Gas
 // vectors; otherwise the single-dimensional OnGasChange hook is invoked with
-// the regular-gas dimension only. The call is a no-op when the receiver is
+// the execution-gas dimension only. The call is a no-op when the receiver is
 // nil, when neither hook is registered, or when the reason is GasChangeIgnored.
 //
 // Call sites SHOULD use this helper instead of invoking the hooks directly so
@@ -317,7 +317,7 @@ func (h *Hooks) EmitGasChange(old, new Gas, reason GasChangeReason) {
 		return
 	}
 	if h.OnGasChange != nil {
-		h.OnGasChange(old.Regular, new.Regular, reason)
+		h.OnGasChange(old.Execution, new.Execution, reason)
 	}
 }
 
@@ -390,16 +390,16 @@ const (
 )
 
 // Gas represents a multi-dimensional gas budget introduced by EIP-8037.
-// It carries the regular execution gas and the state-access gas, which are
+// It carries the execution gas and the state-access gas, which are
 // metered independently from the Amsterdam fork onwards.
 //
-// Before Amsterdam, gas metering is single-dimensional and only the Regular
+// Before Amsterdam, gas metering is single-dimensional and only the Execution
 // field is meaningful; State is always zero. The struct is shaped so that
-// pre-Amsterdam call sites can populate it as Gas{Regular: g} without loss
+// pre-Amsterdam call sites can populate it as Gas{Execution: g} without loss
 // of fidelity relative to the legacy single-uint64 hook.
 type Gas struct {
-	Regular uint64 // Regular is the budget for ordinary execution gas.
-	State   uint64 // State is the budget dedicated to state-access gas (zero pre-Amsterdam).
+	Execution uint64 // Execution is the budget for ordinary execution gas.
+	State     uint64 // State is the budget dedicated to state-access gas (zero pre-Amsterdam).
 }
 
 // GasChangeReason is used to indicate the reason for a gas change, useful

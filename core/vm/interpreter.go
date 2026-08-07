@@ -166,7 +166,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	for {
 		if debug {
 			// Capture pre-execution values for tracing.
-			logged, pcCopy, gasCopy = false, pc, contract.Gas.RegularGas
+			logged, pcCopy, gasCopy = false, pc, contract.Gas.ExecutionGas
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are
@@ -181,7 +181,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if !contract.Gas.ChargeRegularOnly(cost) {
+		if !contract.Gas.ChargeExecutionOnly(cost) {
 			return nil, ErrOutOfGas
 		}
 
@@ -207,12 +207,12 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			// cost is explicitly set so that the capture state defer method can get the proper cost
 			var dynamicCost GasCosts
 			dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
-			cost += dynamicCost.RegularGas // for tracing
+			cost += dynamicCost.ExecutionGas // for tracing
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
 			if dynamicCost.StateGas == 0 {
-				if !contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas) {
+				if !contract.Gas.ChargeExecutionOnly(dynamicCost.ExecutionGas) {
 					return nil, ErrOutOfGas
 				}
 			} else if !contract.Gas.charge(dynamicCost) {
@@ -224,8 +224,8 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		if debug {
 			if evm.Config.Tracer.HasGasHook() {
 				evm.Config.Tracer.EmitGasChange(
-					tracing.Gas{Regular: gasCopy, State: contract.Gas.StateGas},
-					tracing.Gas{Regular: gasCopy - cost, State: contract.Gas.StateGas},
+					tracing.Gas{Execution: gasCopy, State: contract.Gas.StateGas},
+					tracing.Gas{Execution: gasCopy - cost, State: contract.Gas.StateGas},
 					tracing.GasChangeCallOpCode,
 				)
 			}

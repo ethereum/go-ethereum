@@ -551,7 +551,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 			evm.Config.Tracer.EmitGasChange(gas.AsTracing(), halt.AsTracing(), tracing.GasChangeCallFailedExecution)
 		}
 		// EIP-8037 collision rule: the state reservoir is fully preserved on
-		// address collision while regular gas is burnt.
+		// address collision while execution gas is burnt.
 		return nil, common.Address{}, halt, ErrContractAddressCollision
 	}
 	// Create a new account on the state only if the object was not present.
@@ -619,9 +619,9 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
 			return ret, err
 		}
-		// Charge regular gas (hash cost) before state gas.
-		regularCost := toWordSize(uint64(len(ret))) * params.Keccak256WordGas
-		if !contract.chargeRegular(regularCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+		// Charge execution gas (hash cost) before state gas.
+		executionCost := toWordSize(uint64(len(ret))) * params.Keccak256WordGas
+		if !contract.chargeExecution(executionCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
 		}
 		// Charge state gas (code-deposit) afterwards.
@@ -631,7 +631,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		}
 	} else {
 		createDataCost := uint64(len(ret)) * params.CreateDataGas
-		if !contract.chargeRegular(createDataCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+		if !contract.chargeExecution(createDataCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
 		}
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
@@ -695,7 +695,7 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 func (evm *EVM) captureBegin(depth int, typ OpCode, from common.Address, to common.Address, input []byte, startGas GasBudget, value *big.Int) {
 	tracer := evm.Config.Tracer
 	if tracer.OnEnter != nil {
-		tracer.OnEnter(depth, byte(typ), from, to, input, startGas.RegularGas, value)
+		tracer.OnEnter(depth, byte(typ), from, to, input, startGas.ExecutionGas, value)
 	}
 	if tracer.HasGasHook() {
 		tracer.EmitGasChange(tracing.Gas{}, startGas.AsTracing(), tracing.GasChangeCallInitialBalance)
@@ -715,7 +715,7 @@ func (evm *EVM) captureEnd(depth int, startGas GasBudget, leftOverGas GasBudget,
 		reverted = false
 	}
 	if tracer.OnExit != nil {
-		tracer.OnExit(depth, ret, startGas.RegularGas-leftOverGas.RegularGas, VMErrorFromErr(err), reverted)
+		tracer.OnExit(depth, ret, startGas.ExecutionGas-leftOverGas.ExecutionGas, VMErrorFromErr(err), reverted)
 	}
 }
 

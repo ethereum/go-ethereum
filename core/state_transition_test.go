@@ -264,7 +264,7 @@ func TestIntrinsicGas(t *testing.T) {
 			isHomestead: true,
 			isEIP2028:   true,
 			isAmsterdam: true,
-			// EIP-2780: creation regular gas is TxBaseCost + CreateAccess (23,000);
+			// EIP-2780: creation execution gas is TxBaseCost + CreateAccess (23,000);
 			// the new-account state charge is applied at runtime.
 			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 		},
@@ -323,7 +323,7 @@ func TestIntrinsicGas(t *testing.T) {
 			value:       uint256.NewInt(1),
 			// EIP-2780: TxBaseCost + ColdAccountAccess + TransferLogCost + TxValueCost = 21,000.
 			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
-				params.TransferLogCost2780 + params.TxValueCost2780,
+				params.TxValueCost2780,
 		},
 		{
 			name:        "amsterdam/value-bearing-contract-creation",
@@ -334,7 +334,7 @@ func TestIntrinsicGas(t *testing.T) {
 			value:       uint256.NewInt(1),
 			// EIP-2780: TxBaseCost + CreateAccess + TransferLogCost = 24,756;
 			// the new-account state charge is applied at runtime.
-			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam + params.TransferLogCost2780,
+			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 		},
 	}
 	for _, tt := range tests {

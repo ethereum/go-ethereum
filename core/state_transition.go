@@ -185,12 +185,10 @@ func intrinsicBaseGasEIP2780(from common.Address, to *common.Address, value *uin
 
 	// tx.value charge.
 	switch {
-	case !hasValue || isSelfTransfer:
+	case !hasValue || isSelfTransfer || isContractCreation:
 		// No transfer log and no recipient balance write.
-	case isContractCreation:
-		gas += params.TransferLogCost2780
 	default:
-		gas += params.TransferLogCost2780 + params.TxValueCost2780
+		gas += params.TxValueCost2780
 	}
 	return gas
 }
@@ -495,23 +493,23 @@ func (st *stateTransition) buyGas() error {
 // gas remaining after the intrinsic cost has been deducted.
 //
 // After Amsterdam (EIP-8037) the intrinsic cost counts towards the EIP-7825
-// regular-gas cap:
+// execution-gas cap:
 //
-//	execution_gas       = tx.gas - intrinsic_gas
-//	regular_gas_budget  = TX_MAX_GAS_LIMIT - intrinsic_gas
-//	gas_left            = min(regular_gas_budget, execution_gas)
-//	state_gas_reservoir = execution_gas - gas_left
+//	evm_gas              = tx.gas - intrinsic_gas
+//	execution_gas_budget = TX_MAX_GAS_LIMIT - intrinsic_gas
+//	gas_left             = min(execution_gas_budget, evm_gas)
+//	state_gas_reservoir  = evm_gas - gas_left
 func (st *stateTransition) initRuntimeGasBudget(rules params.Rules, intrinsicGas uint64) {
-	executionGas := st.msg.GasLimit - intrinsicGas
-	gasLeft := executionGas
+	evmGas := st.msg.GasLimit - intrinsicGas
+	gasLeft := evmGas
 	if rules.IsAmsterdam {
-		gasLeft = min(params.MaxTxGas-intrinsicGas, executionGas)
+		gasLeft = min(params.MaxTxGas-intrinsicGas, evmGas)
 	}
-	st.gasRemaining = vm.NewGasBudget(gasLeft, executionGas-gasLeft)
+	st.gasRemaining = vm.NewGasBudget(gasLeft, evmGas-gasLeft)
 
 	if st.evm.Config.Tracer.HasGasHook() {
-		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{}, tracing.Gas{Regular: st.msg.GasLimit}, tracing.GasChangeTxInitialBalance)
-		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: st.msg.GasLimit}, st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
+		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{}, tracing.Gas{Execution: st.msg.GasLimit}, tracing.GasChangeTxInitialBalance)
+		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Execution: st.msg.GasLimit}, st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
 	}
 }
 
@@ -798,13 +796,13 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 	if rules.IsAmsterdam && chargedCreation && vmerr != nil {
 		st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 	}
-	// If the top-most frame halted, drain the leftover regular gas rather
+	// If the top-most frame halted, drain the leftover execution gas rather
 	// than returning it to the sender. The frame exit itself already burned
-	// its gas left, but the refill above repays the regular gas the charge
+	// its gas left, but the refill above repays the execution gas the charge
 	// originally borrowed, and on a halt that repayment must be burned as
 	// well. The state dimension is left untouched.
 	if rules.IsAmsterdam && vmerr != nil && vmerr != vm.ErrExecutionReverted {
-		st.gasRemaining.DrainRegular()
+		st.gasRemaining.DrainExecution()
 	}
 	return ret, vmerr
 }
@@ -853,13 +851,13 @@ func (st *stateTransition) executeCall(rules params.Rules, value *uint256.Int) (
 	if rules.IsAmsterdam && vmerr != nil && !value.IsZero() && st.evm.StateDB.Empty(st.to()) {
 		st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 	}
-	// If the top-most frame halted, drain the leftover regular gas rather
+	// If the top-most frame halted, drain the leftover execution gas rather
 	// than returning it to the sender. The frame exit itself already burned
-	// its gas left, but the refill above repays the regular gas the charge
+	// its gas left, but the refill above repays the execution gas the charge
 	// originally borrowed, and on a halt that repayment must be burned as
 	// well.
 	if rules.IsAmsterdam && vmerr != nil && vmerr != vm.ErrExecutionReverted {
-		st.gasRemaining.DrainRegular()
+		st.gasRemaining.DrainExecution()
 	}
 	return ret, vmerr
 }
@@ -873,14 +871,14 @@ func (st *stateTransition) traceHaltedTopFrame(typ vm.OpCode, to common.Address,
 		return
 	}
 	if tracer.OnEnter != nil {
-		tracer.OnEnter(0, byte(typ), st.msg.From, to, input, entryGas.RegularGas, value.ToBig())
+		tracer.OnEnter(0, byte(typ), st.msg.From, to, input, entryGas.ExecutionGas, value.ToBig())
 	}
 	if tracer.HasGasHook() {
 		tracer.EmitGasChange(tracing.Gas{}, entryGas.AsTracing(), tracing.GasChangeCallInitialBalance)
 		tracer.EmitGasChange(entryGas.AsTracing(), endGas.AsTracing(), tracing.GasChangeCallFailedExecution)
 	}
 	if tracer.OnExit != nil {
-		tracer.OnExit(0, nil, entryGas.RegularGas, vm.VMErrorFromErr(vm.ErrOutOfGas), true)
+		tracer.OnExit(0, nil, entryGas.ExecutionGas, vm.VMErrorFromErr(vm.ErrOutOfGas), true)
 	}
 }
 
@@ -925,9 +923,9 @@ func (st *stateTransition) chargeCallRecipientEIP2780(value *uint256.Int) bool {
 	if target, delegated := types.ParseDelegation(st.state.GetCode(to)); delegated {
 		// Pay the delegation-target access before the target is warmed and
 		// its code resolved (loaded).
-		cost := vm.GasCosts{RegularGas: params.ColdAccountAccessAmsterdam}
+		cost := vm.GasCosts{ExecutionGas: params.ColdAccountAccessAmsterdam}
 		if st.state.AddressInAccessList(target) {
-			cost.RegularGas = params.WarmAccountAccessAmsterdam
+			cost.ExecutionGas = params.WarmAccountAccessAmsterdam
 		}
 		if !st.chargeRuntimeGas(cost) {
 			return false
@@ -942,7 +940,7 @@ func (st *stateTransition) chargeCallRecipientEIP2780(value *uint256.Int) bool {
 
 // settleGas finalizes the per-tx gas accounting after EVM execution:
 //
-//   - Snapshots the EIP-8037 block-level 2D figures (tx_regular_gas,
+//   - Snapshots the EIP-8037 block-level 2D figures (tx_execution_gas,
 //     tx_state_gas) before any refund.
 //   - Computes the receipt scalar tx_gas_used by applying the EIP-3529
 //     refund and the EIP-7623 calldata floor.
@@ -957,19 +955,19 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	// EIP-8037:
 	// tx_gas_used_before_refund = tx.gas - tx_output.gas_left - tx_output.state_gas_reservoir
 	// tx_state_gas = tx_output.execution_state_gas_used
-	// tx_regular_gas = max(tx_gas_used_before_refund - tx_state_gas, calldata_floor_gas_cost)
-	gasLeft := st.gasRemaining.RegularGas + st.gasRemaining.StateGas
+	// tx_execution_gas = max(tx_gas_used_before_refund - tx_state_gas, calldata_floor_gas_cost)
+	gasLeft := st.gasRemaining.ExecutionGas + st.gasRemaining.StateGas
 	gasUsedBeforeRefund := st.msg.GasLimit - gasLeft
 
 	if gasUsedBeforeRefund < txStateGas {
-		return 0, 0, fmt.Errorf("negative topmost frame regular gas usage, total: %d, state: %d", gasUsedBeforeRefund, txStateGas)
+		return 0, 0, fmt.Errorf("negative topmost frame execution gas usage, total: %d, state: %d", gasUsedBeforeRefund, txStateGas)
 	}
-	txRegularGas := max(gasUsedBeforeRefund-txStateGas, floorDataGas)
+	txExecutionGas := max(gasUsedBeforeRefund-txStateGas, floorDataGas)
 
 	// EIP-3529: tx_gas_refund = min(tx_gas_used_before_refund/5, refund_counter).
 	refund := st.calcRefund(gasUsedBeforeRefund)
 	if st.evm.Config.Tracer.HasGasHook() {
-		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{Regular: gasLeft + refund}, tracing.GasChangeTxRefunds)
+		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Execution: gasLeft}, tracing.Gas{Execution: gasLeft + refund}, tracing.GasChangeTxRefunds)
 	}
 	gasLeft += refund
 	gasUsed = gasUsedBeforeRefund - refund
@@ -979,7 +977,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	if rules.IsPrague && gasUsed < floorDataGas {
 		diff := floorDataGas - gasUsed
 		if st.evm.Config.Tracer.HasGasHook() {
-			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{Regular: gasLeft - diff}, tracing.GasChangeTxDataFloor)
+			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Execution: gasLeft}, tracing.Gas{Execution: gasLeft - diff}, tracing.GasChangeTxDataFloor)
 		}
 		gasLeft -= diff
 		gasUsed = floorDataGas
@@ -988,7 +986,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 
 	// Settle down the final gas consumption in the block-level pool
 	if rules.IsAmsterdam {
-		if err = st.gp.ChargeGasAmsterdam(txRegularGas, txStateGas, gasUsed); err != nil {
+		if err = st.gp.ChargeGasAmsterdam(txExecutionGas, txStateGas, gasUsed); err != nil {
 			return 0, 0, err
 		}
 	} else {
@@ -1003,7 +1001,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 		st.state.AddBalance(st.msg.From, refund, tracing.BalanceIncreaseGasReturn)
 
 		if st.evm.Config.Tracer.HasGasHook() {
-			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
+			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Execution: gasLeft}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
 		}
 	}
 	return gasUsed, peakUsed, nil
@@ -1088,7 +1086,7 @@ func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.Se
 		//     write to tx.to here is still the first paid write.
 		hasValue := st.msg.Value != nil && !st.msg.Value.IsZero()
 		if !track.written && authority != st.msg.From && (authority != st.to() || !hasValue) {
-			cost.RegularGas += params.AccountWriteAmsterdam
+			cost.ExecutionGas += params.AccountWriteAmsterdam
 			track.written = true
 		}
 		// Durable state growth of the new account
