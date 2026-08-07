@@ -1159,9 +1159,12 @@ func (api *ConsensusAPI) heartbeat() {
 		// Sleep a bit and retrieve the last known consensus updates
 		time.Sleep(5 * time.Second)
 
-		lastTransitionUpdate := time.Unix(api.lastTransitionUpdate.Load(), 0)
-		lastForkchoiceUpdate := time.Unix(api.lastForkchoiceUpdate.Load(), 0)
-		lastNewPayloadUpdate := time.Unix(api.lastNewPayloadUpdate.Load(), 0)
+		lastTransition := api.lastTransitionUpdate.Load()
+		lastForkchoice := api.lastForkchoiceUpdate.Load()
+		lastNewPayload := api.lastNewPayloadUpdate.Load()
+
+		lastForkchoiceUpdate := time.Unix(lastForkchoice, 0)
+		lastNewPayloadUpdate := time.Unix(lastNewPayload, 0)
 
 		// If there have been no updates for the past while, warn the user
 		// that the beacon client is probably offline
@@ -1170,8 +1173,8 @@ func (api *ConsensusAPI) heartbeat() {
 			continue
 		}
 		if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
-			if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
-				if lastTransitionUpdate.IsZero() {
+			if lastForkchoice == 0 && lastNewPayload == 0 {
+				if lastTransition == 0 {
 					log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
 				} else {
 					log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
