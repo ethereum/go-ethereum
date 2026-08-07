@@ -795,6 +795,8 @@ var Forks = map[string]*params.ChainConfig{
 		CancunTime:              u64(0),
 		PragueTime:              u64(0),
 		OsakaTime:               u64(0),
+		BPO1Time:                u64(0),
+		BPO2Time:                u64(0),
 		AmsterdamTime:           u64(0),
 		PBT:                     true,
 		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,

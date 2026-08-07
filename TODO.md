@@ -208,11 +208,21 @@ to look.
   bytecode and zero-collapsing chunks all reach a root that
   `TestStateVectors` compares against. What is still open is running the EEST
   fixtures themselves; see the harness blocker below.
-- **One harness blocker before EEST fixtures can run.** `execBlockTest`
-  (`tests/block_test.go`) runs every fixture under both the hash and path
-  schemes, and the binary tree hard-fails on anything but path. It also always
-  requests witness building, which used to be a second blocker; the tree
-  supports that now.
+- **EEST fixtures run, with three deliberate gaps.** `execBlockTest` restricts
+  a PBT network to the path scheme, and the whole BinaryTree suite passes via
+  `consume direct` and the Go harness. Still open: the engine-format fixtures
+  (`blockchain_tests_engine`) need `consume engine` driving a live geth over
+  the Engine API, which the tree has no consume path for (see the catalyst
+  entry above); CI does not download binary-tree fixtures (needs a published
+  release from the EEST branch and a checksum in `build/ci.go`); and the
+  transaction-test fork list (`tests/transaction_test_util.go`) has no
+  `BinaryTree` entry, so any future PBT `transaction_tests` would pass
+  vacuously - extend the list the day the suite emits that format.
+- **`evm statetest` hard-codes the hash scheme** (`cmd/evm/staterunner.go`),
+  which is harmless under PBT only because `RunNoVerify` ignores the scheme
+  argument on the PBT path and builds its own path-scheme prestate. A
+  scheme-sensitive change there would silently break binary-tree state tests;
+  this note pins the reasoning.
 - **`TestT8n`** fails on the binary tree fixtures because the prestate is
   reopened with an already-committed trie. Out of scope by instruction.
 - **The encoded multiproof is malleable, though not unsound.** Sweeping every
