@@ -18,11 +18,11 @@ package vm
 
 import (
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
@@ -35,25 +35,26 @@ var (
 )
 
 const (
-	// maxCacheablePrecompileInput bounds the input size eligible for result
-	// caching. Larger inputs are rare one-offs and hashing them for the key
-	// eats into the win.
+	// maxCacheablePrecompileInput bounds the normalized input size eligible for
+	// result caching. The key is the input itself, so this also bounds how much
+	// an entry can cost.
 	maxCacheablePrecompileInput = 8192
 
 	// maxCacheablePrecompileOutput bounds the output size stored in the
 	// cache, keeping the worst case memory use of an entry small.
 	maxCacheablePrecompileOutput = 1024
 
-	// precompileCacheEntries is the maximum number of cached results. With
-	// outputs capped by maxCacheablePrecompileOutput, the worst case memory
-	// use stays at a few megabytes.
-	precompileCacheEntries = 4096
+	// maxCacheablePrecompileBytes is the budget each precompile gets, counting
+	// keys as well as values. Entries run from tens of bytes to kilobytes, so a
+	// budget in entries would mean very different memory depending on the mix.
+	maxCacheablePrecompileBytes = 1024 * 1024
 )
 
-// PrecompileCache is a thread-safe LRU of precompile outputs, shared between
-// the state prefetcher and block processing so the serial pass can reuse
-// results the prefetcher already computed. Entries are namespaced by
-// precompile set, so forks never share results across a behaviour change.
+// PrecompileCache is a thread-safe cache of precompile outputs, shared between
+// the state prefetcher and block processing so the serial pass can reuse what
+// the prefetcher already computed. Each precompile gets its own cache per fork,
+// so results never cross a repricing and a cheap precompile cannot evict the
+// results of an expensive one.
 type PrecompileCache struct {
 	data *precompileCacheData
 
@@ -69,8 +70,67 @@ type PrecompileCache struct {
 
 // precompileCacheData is the storage shared by the two cache handles.
 type precompileCacheData struct {
-	mu   sync.RWMutex
-	sets map[*PrecompiledContracts]*lru.Cache[common.Hash, []byte]
+	mu     sync.RWMutex
+	caches map[precompileCacheScope]*precompileResultCache
+}
+
+// precompileResultCache is an LRU of precompile results bounded by the bytes it
+// holds. The key is the input, which is the larger half of most entries, so it
+// counts towards the budget too. Re-adding a key always re-adds the same value,
+// since the key identifies the input of a pure function.
+type precompileResultCache struct {
+	lock    sync.Mutex
+	lru     lru.BasicLRU[string, []byte]
+	size    uint64
+	maxSize uint64
+}
+
+// newPrecompileResultCache constructs a cache of at most maxSize bytes.
+func newPrecompileResultCache(maxSize uint64) *precompileResultCache {
+	return &precompileResultCache{
+		lru:     lru.NewBasicLRU[string, []byte](math.MaxInt),
+		maxSize: maxSize,
+	}
+}
+
+func (c *precompileResultCache) get(key string) ([]byte, bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.lru.Get(key)
+}
+
+// add stores a result, evicting until the cache is back inside its budget.
+func (c *precompileResultCache) add(key string, value []byte) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if !c.lru.Contains(key) {
+		size := c.size + uint64(len(key)+len(value))
+		for size > c.maxSize {
+			k, v, ok := c.lru.RemoveOldest()
+			if !ok {
+				break // nothing left to evict, the entry is larger than the budget
+			}
+			size -= uint64(len(k) + len(v))
+		}
+		c.size = size
+	}
+	c.lru.Add(key, value)
+}
+
+func (c *precompileResultCache) len() int {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.lru.Len()
+}
+
+// precompileCacheScope identifies the cache of one precompile at one fork. The
+// set pointer keeps forks apart, the address keeps precompiles apart.
+type precompileCacheScope struct {
+	set  *PrecompiledContracts
+	addr common.Address
 }
 
 // precompileCacheMeters holds the per-address hit and miss meters.
@@ -82,7 +142,7 @@ type precompileCacheMeters struct {
 // NewPrecompileCache constructs a precompile result cache.
 func NewPrecompileCache() *PrecompileCache {
 	data := &precompileCacheData{
-		sets: make(map[*PrecompiledContracts]*lru.Cache[common.Hash, []byte]),
+		caches: make(map[precompileCacheScope]*precompileResultCache),
 	}
 	return &PrecompileCache{
 		data:   data,
@@ -111,14 +171,14 @@ func (c *PrecompileCache) PrefetchView() *PrecompileCache {
 
 // load retrieves the cached output for the given key. The returned slice is
 // a private copy owned by the caller, entries cross goroutine boundaries.
-func (c *PrecompileCache) load(set *PrecompiledContracts, addr common.Address, key common.Hash) ([]byte, bool) {
+func (c *PrecompileCache) load(scope precompileCacheScope, key []byte) ([]byte, bool) {
 	c.data.mu.RLock()
-	results := c.data.sets[set]
+	results := c.data.caches[scope]
 	c.data.mu.RUnlock()
 
-	meters := c.metersFor(addr)
+	meters := c.metersFor(scope.addr)
 	if results != nil {
-		if output, ok := results.Get(key); ok {
+		if output, ok := results.get(string(key)); ok {
 			c.hit.Mark(1)
 			meters.hit.Mark(1)
 			return common.CopyBytes(output), true
@@ -129,23 +189,25 @@ func (c *PrecompileCache) load(set *PrecompiledContracts, addr common.Address, k
 	return nil, false
 }
 
-// store saves the output of a precompile run under the given key. The value
-// is copied, the cache never aliases caller memory.
-func (c *PrecompileCache) store(set *PrecompiledContracts, addr common.Address, key common.Hash, output []byte) {
+// store saves the output of a precompile run under the given key. Both the key
+// and the value are copied, the cache never aliases caller memory. That matters
+// for the key in particular, it aliases the caller's memory which the EVM goes
+// on to overwrite.
+func (c *PrecompileCache) store(scope precompileCacheScope, key []byte, output []byte) {
 	c.data.mu.RLock()
-	results := c.data.sets[set]
+	results := c.data.caches[scope]
 	c.data.mu.RUnlock()
 
 	if results == nil {
 		c.data.mu.Lock()
-		if results = c.data.sets[set]; results == nil {
-			results = lru.NewCache[common.Hash, []byte](precompileCacheEntries)
-			c.data.sets[set] = results
+		if results = c.data.caches[scope]; results == nil {
+			results = newPrecompileResultCache(maxCacheablePrecompileBytes)
+			c.data.caches[scope] = results
 		}
 		c.data.mu.Unlock()
 	}
-	results.Add(key, common.CopyBytes(output))
-	precompileCacheEntryGauge.Update(int64(results.Len()))
+	results.add(string(key), common.CopyBytes(output))
+	precompileCacheEntryGauge.Update(int64(results.len()))
 }
 
 // metersFor returns the hit and miss meters of the given precompile address,
@@ -171,28 +233,53 @@ func (c *PrecompileCache) metersFor(addr common.Address) *precompileCacheMeters 
 	return meters
 }
 
-// CacheablePrecompile lets a precompile opt out of result caching, either
-// because its output is not a pure function of the input or because it is
-// cheaper to rerun than to cache.
+// CacheablePrecompile is implemented by precompiles that opt in to result
+// caching. Anything that does not implement it is never cached, so a new
+// precompile is not enrolled until someone decides it should be.
 type CacheablePrecompile interface {
 	Cacheable() bool
 }
 
-// cacheablePrecompile reports whether an invocation is eligible for result
-// caching.
-func cacheablePrecompile(p PrecompiledContract, input []byte) bool {
-	if len(input) > maxCacheablePrecompileInput {
-		return false
-	}
-	if c, ok := p.(CacheablePrecompile); ok {
-		return c.Cacheable()
-	}
-	return true
+// NormalizedPrecompile is implemented by precompiles that can narrow an input
+// down to the bytes that determine the result.
+type NormalizedPrecompile interface {
+	// NormalizeInput returns the bytes identifying the result, and whether the
+	// invocation is cacheable at all. Two inputs that normalize alike share an
+	// entry, so they must run to the same output. Returning false skips the
+	// cache, which is how a precompile rejects lengths it will fail on.
+	NormalizeInput(input []byte) ([]byte, bool)
 }
 
-// precompileCacheKey derives the cache key for a precompile invocation. Fork
-// discrimination is handled by the set namespacing, so the key only covers
-// the address and input.
-func precompileCacheKey(addr common.Address, input []byte) common.Hash {
-	return crypto.Keccak256Hash(addr[:], input)
+// precompileCacheKey returns the key identifying an invocation and whether it
+// is eligible for result caching.
+func precompileCacheKey(p PrecompiledContract, input []byte) ([]byte, bool) {
+	c, ok := p.(CacheablePrecompile)
+	if !ok || !c.Cacheable() {
+		return nil, false
+	}
+	key := input
+	if n, ok := p.(NormalizedPrecompile); ok {
+		if key, ok = n.NormalizeInput(input); !ok {
+			return nil, false
+		}
+	}
+	if len(key) > maxCacheablePrecompileInput {
+		return nil, false
+	}
+	return key, true
+}
+
+// normalizeZeroPadded narrows an input for a precompile that reads a fixed
+// length prefix and zero extends anything shorter. Bytes past the prefix are
+// never read, and trailing zeros inside it read the same as not being there,
+// so both can be dropped from the key.
+func normalizeZeroPadded(input []byte, prefix int) []byte {
+	if len(input) > prefix {
+		input = input[:prefix]
+	}
+	end := len(input)
+	for end > 0 && input[end-1] == 0 {
+		end--
+	}
+	return input[:end]
 }
