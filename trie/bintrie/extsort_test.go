@@ -25,7 +25,7 @@ import (
 )
 
 // drainSorted adds every record, sorts, and returns the drained stream.
-func drainSorted(t *testing.T, budget int, recs []leafRecord) []leafRecord {
+func drainSorted(t *testing.T, budget int, recs []sortRecord) []sortRecord {
 	t.Helper()
 	s := NewLeafSorter(t.TempDir(), budget)
 	defer s.Close()
@@ -38,7 +38,7 @@ func drainSorted(t *testing.T, budget int, recs []leafRecord) []leafRecord {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var out []leafRecord
+	var out []sortRecord
 	for {
 		k, v, err := stream.Next()
 		if err == io.EOF {
@@ -47,15 +47,15 @@ func drainSorted(t *testing.T, budget int, recs []leafRecord) []leafRecord {
 		if err != nil {
 			t.Fatal(err)
 		}
-		out = append(out, leafRecord{key: k, value: v})
+		out = append(out, sortRecord{key: k, value: v})
 	}
 }
 
 // randomLeafRecords builds n records with distinct conformant keys.
-func randomLeafRecords(t *testing.T, rng *rand.Rand, n int) []leafRecord {
+func randomLeafRecords(t *testing.T, rng *rand.Rand, n int) []sortRecord {
 	t.Helper()
 	seen := make(map[string]struct{}, n)
-	recs := make([]leafRecord, 0, n)
+	recs := make([]sortRecord, 0, n)
 	for len(recs) < n {
 		key := randomConformantKey(rng)
 		if _, dup := seen[string(key)]; dup {
@@ -67,7 +67,7 @@ func randomLeafRecords(t *testing.T, rng *rand.Rand, n int) []leafRecord {
 		if isZeroValue(value[:]) {
 			value[0] = 1
 		}
-		recs = append(recs, leafRecord{key: key, value: value[:]})
+		recs = append(recs, sortRecord{key: key, value: value[:]})
 	}
 	return recs
 }
@@ -195,7 +195,7 @@ func TestLeafSorterEdges(t *testing.T) {
 		}
 	})
 	t.Run("single", func(t *testing.T) {
-		out := drainSorted(t, 1, []leafRecord{{key: HeaderKey(commonAddress(7), 1), value: bytes.Repeat([]byte{9}, 32)}})
+		out := drainSorted(t, 1, []sortRecord{{key: HeaderKey(commonAddress(7), 1), value: bytes.Repeat([]byte{9}, 32)}})
 		if len(out) != 1 {
 			t.Fatalf("drained %d records, want 1", len(out))
 		}
@@ -286,5 +286,62 @@ func TestLeafSorterMatchesStackBuilder(t *testing.T) {
 	}
 	if got := b.Finish(); got != want {
 		t.Fatalf("sorted-and-built root %x, incremental %x", got, want)
+	}
+}
+
+// TestRecordSorterVarlen pins the generic face of the sorter: keys of
+// arbitrary (non-leaf) shapes and values of assorted lengths, empty included,
+// survive a spill-heavy sort byte for byte. This is the configuration the
+// preimage-file writer runs, where a 20-byte address keys an RLP record of
+// whatever size the account's storage dictates.
+func TestRecordSorterVarlen(t *testing.T) {
+	rng := rand.New(rand.NewSource(20260807))
+	type kv struct{ k, v []byte }
+	var recs []kv
+	for i := 0; i < 200; i++ {
+		key := make([]byte, 20)
+		rng.Read(key)
+		value := make([]byte, rng.Intn(300))
+		rng.Read(value)
+		recs = append(recs, kv{key, value})
+	}
+	recs = append(recs, kv{bytes.Repeat([]byte{0xaa}, 20), nil}) // empty value
+
+	s := NewRecordSorter(t.TempDir(), 128, nil) // spill every few records
+	defer s.Close()
+	for _, r := range recs {
+		if err := s.Add(r.k, r.v); err != nil {
+			t.Fatalf("Add(%x): %v", r.k, err)
+		}
+	}
+	stream, err := s.Sort()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := make(map[string][]byte, len(recs))
+	for _, r := range recs {
+		want[string(r.k)] = r.v
+	}
+	var prev []byte
+	drained := 0
+	for {
+		k, v, err := stream.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if prev != nil && bytes.Compare(prev, k) >= 0 {
+			t.Fatalf("key %x out of order after %x", k, prev)
+		}
+		prev = k
+		if wv, ok := want[string(k)]; !ok || !bytes.Equal(wv, v) {
+			t.Fatalf("key %x drained with the wrong value", k)
+		}
+		drained++
+	}
+	if drained != len(recs) {
+		t.Fatalf("drained %d records, put in %d", drained, len(recs))
 	}
 }

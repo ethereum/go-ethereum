@@ -20,37 +20,41 @@ import (
 	"bufio"
 	"bytes"
 	"container/heap"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"slices"
 )
 
-// LeafSorter sorts a stream of key/value records too large to hold in memory:
-// records accumulate in an in-memory run that is sorted and spilled to a
-// temporary file when it outgrows the budget, and reading the sorted result
-// merges every run. EIP-8347 asks for exactly this - "sort leaves by PBT key
-// order (an external merge-sort for mainnet-scale state)" - and plain
-// bytewise order is the PBT key order, since keys are prefix-free with the
-// zone byte first.
+// RecordSorter sorts a stream of key/value records too large to hold in
+// memory: records accumulate in an in-memory run that is sorted and spilled
+// to a temporary file when it outgrows the budget, and reading the sorted
+// result merges every run. It exists for the conversion pipeline, which
+// EIP-8347 hands two sorting problems at mainnet scale: the tree leaves sort
+// in PBT key order - plain bytewise order, since keys are prefix-free with
+// the zone byte first - and the preimage file's per-account records sort by
+// address.
 //
 // A duplicate key is an error, at Add time within the pending run and at
-// merge time across runs. The one producer of legitimate duplicates, code
-// shared between contracts, is deduplicated at derivation by code hash, so a
+// merge time across runs. Both uses key their records uniquely - a tree leaf
+// by its tree key, an account's preimage record by its address - so a
 // duplicate surviving to the sorter means two different sources claimed the
-// same leaf - corruption, not a coincidence to resolve silently.
-type LeafSorter struct {
+// same record: corruption, not a coincidence to resolve silently.
+type RecordSorter struct {
 	tmpDir    string
 	budget    int // bytes of buffered records that trigger a spill
+	validate  func(key, value []byte) error
 	buffered  int
-	pending   []leafRecord
+	pending   []sortRecord
 	runs      []*os.File
 	sealed    bool
 	discarded bool
 }
 
-type leafRecord struct {
+type sortRecord struct {
 	key   []byte
 	value []byte
 }
@@ -60,31 +64,55 @@ type leafRecord struct {
 // payload alone.
 const spillRecordOverhead = 64
 
-// NewLeafSorter creates a sorter spilling to files in tmpDir once the
+// NewRecordSorter creates a sorter spilling to files in tmpDir once the
 // in-memory run exceeds budget bytes. A zero or negative budget sorts fully
-// in memory and never spills.
-func NewLeafSorter(tmpDir string, budget int) *LeafSorter {
-	return &LeafSorter{tmpDir: tmpDir, budget: budget}
+// in memory and never spills. Every record is passed to validate at Add
+// time; a nil validate accepts everything the format can carry.
+func NewRecordSorter(tmpDir string, budget int, validate func(key, value []byte) error) *RecordSorter {
+	return &RecordSorter{tmpDir: tmpDir, budget: budget, validate: validate}
 }
 
-// Add buffers one record. Keys must be zone-conformant; values must be 32
-// bytes and not all zero - the state layer resolves a zero value to absence,
-// so a zero reaching the sorter is a bug in the caller, not a deletion to
-// honour.
-func (s *LeafSorter) Add(key, value []byte) error {
-	if s.sealed {
-		return errors.New("bintrie: sorter already sorted")
-	}
+// NewLeafSorter creates a sorter for binary tree leaves: keys must be
+// zone-conformant and values 32 bytes and not all zero - the state layer
+// resolves a zero value to absence, so a zero reaching the sorter is a bug
+// in the caller, not a deletion to honour.
+func NewLeafSorter(tmpDir string, budget int) *RecordSorter {
+	return NewRecordSorter(tmpDir, budget, validateLeafRecord)
+}
+
+// validateLeafRecord enforces the tree-leaf shape on a sorter record.
+func validateLeafRecord(key, value []byte) error {
 	if err := validateKey(key); err != nil {
 		return err
 	}
 	if len(value) != 32 {
-		return fmt.Errorf("bintrie: sorter values must be 32 bytes, got %d", len(value))
+		return fmt.Errorf("bintrie: leaf values must be 32 bytes, got %d", len(value))
 	}
 	if isZeroValue(value) {
 		return fmt.Errorf("bintrie: zero value for key %x reached the sorter", key)
 	}
-	s.pending = append(s.pending, leafRecord{
+	return nil
+}
+
+// Add buffers one record. Keys must be 1 to 255 bytes - the run encoding
+// carries the length in one byte - and whatever the sorter's validation hook
+// demands on top.
+func (s *RecordSorter) Add(key, value []byte) error {
+	if s.sealed {
+		return errors.New("bintrie: sorter already sorted")
+	}
+	if len(key) == 0 || len(key) > math.MaxUint8 {
+		return fmt.Errorf("bintrie: sorter keys must be 1 to 255 bytes, got %d", len(key))
+	}
+	if len(value) > math.MaxUint32 {
+		return fmt.Errorf("bintrie: sorter value of %d bytes exceeds the run encoding", len(value))
+	}
+	if s.validate != nil {
+		if err := s.validate(key, value); err != nil {
+			return err
+		}
+	}
+	s.pending = append(s.pending, sortRecord{
 		key:   bytes.Clone(key),
 		value: bytes.Clone(value),
 	})
@@ -96,7 +124,7 @@ func (s *LeafSorter) Add(key, value []byte) error {
 }
 
 // spill sorts the pending run and writes it to a temporary file.
-func (s *LeafSorter) spill() error {
+func (s *RecordSorter) spill() error {
 	if len(s.pending) == 0 {
 		return nil
 	}
@@ -130,8 +158,8 @@ func (s *LeafSorter) spill() error {
 
 // sortPending orders the in-memory run and rejects duplicates, which sorting
 // makes adjacent.
-func (s *LeafSorter) sortPending() error {
-	slices.SortFunc(s.pending, func(a, b leafRecord) int {
+func (s *RecordSorter) sortPending() error {
+	slices.SortFunc(s.pending, func(a, b sortRecord) int {
 		return bytes.Compare(a.key, b.key)
 	})
 	for i := 1; i < len(s.pending); i++ {
@@ -145,7 +173,7 @@ func (s *LeafSorter) sortPending() error {
 // Sort seals the sorter and returns the merged, ascending record stream. The
 // caller owns the stream and must drain or close it; Close on the sorter
 // releases the temporary files either way.
-func (s *LeafSorter) Sort() (*LeafStream, error) {
+func (s *RecordSorter) Sort() (*RecordStream, error) {
 	if s.sealed {
 		return nil, errors.New("bintrie: sorter already sorted")
 	}
@@ -156,13 +184,13 @@ func (s *LeafSorter) Sort() (*LeafStream, error) {
 		if err := s.sortPending(); err != nil {
 			return nil, err
 		}
-		return &LeafStream{pending: s.pending}, nil
+		return &RecordStream{pending: s.pending}, nil
 	}
 	// Spill the tail so the merge reads uniform sources.
 	if err := s.spill(); err != nil {
 		return nil, err
 	}
-	stream := &LeafStream{}
+	stream := &RecordStream{}
 	for _, f := range s.runs {
 		src := &runReader{r: bufio.NewReaderSize(f, 1<<20)}
 		if err := src.advance(); err != nil {
@@ -179,7 +207,7 @@ func (s *LeafSorter) Sort() (*LeafStream, error) {
 
 // Close removes the temporary files. Safe to call more than once, and safe
 // while a returned stream is still live only after the stream is drained.
-func (s *LeafSorter) Close() {
+func (s *RecordSorter) Close() {
 	if s.discarded {
 		return
 	}
@@ -193,11 +221,11 @@ func (s *LeafSorter) Close() {
 	s.pending = nil
 }
 
-// LeafStream yields the sorted records. Exactly one of pending and heap is
+// RecordStream yields the sorted records. Exactly one of pending and heap is
 // populated: the in-memory fast path serves the slice, the merged path pops
 // the run heap.
-type LeafStream struct {
-	pending []leafRecord
+type RecordStream struct {
+	pending []sortRecord
 	next    int
 
 	heap    runHeap
@@ -206,7 +234,7 @@ type LeafStream struct {
 
 // Next returns the next record in ascending key order, or io.EOF when the
 // stream is exhausted. The returned slices are owned by the caller.
-func (ls *LeafStream) Next() (key, value []byte, err error) {
+func (ls *RecordStream) Next() (key, value []byte, err error) {
 	if ls.heap == nil {
 		if ls.next >= len(ls.pending) {
 			return nil, nil, io.EOF
@@ -253,7 +281,11 @@ func (rr *runReader) advance() error {
 	if _, err := io.ReadFull(rr.r, key); err != nil {
 		return fmt.Errorf("bintrie: truncated sort run key: %w", err)
 	}
-	value := make([]byte, 32)
+	var vlen [4]byte
+	if _, err := io.ReadFull(rr.r, vlen[:]); err != nil {
+		return fmt.Errorf("bintrie: truncated sort run value length: %w", err)
+	}
+	value := make([]byte, binary.BigEndian.Uint32(vlen[:]))
 	if _, err := io.ReadFull(rr.r, value); err != nil {
 		return fmt.Errorf("bintrie: truncated sort run value: %w", err)
 	}
@@ -261,13 +293,18 @@ func (rr *runReader) advance() error {
 	return nil
 }
 
-// writeRunRecord encodes one record as keyLen ‖ key ‖ value[32]. Key lengths
-// are zone-fixed and at most 66, so one byte carries them.
+// writeRunRecord encodes one record as keyLen ‖ key ‖ valueLen ‖ value. Key
+// lengths fit one byte - Add enforces it - and value lengths four.
 func writeRunRecord(w *bufio.Writer, key, value []byte) error {
 	if err := w.WriteByte(byte(len(key))); err != nil {
 		return err
 	}
 	if _, err := w.Write(key); err != nil {
+		return err
+	}
+	var vlen [4]byte
+	binary.BigEndian.PutUint32(vlen[:], uint32(len(value)))
+	if _, err := w.Write(vlen[:]); err != nil {
 		return err
 	}
 	_, err := w.Write(value)

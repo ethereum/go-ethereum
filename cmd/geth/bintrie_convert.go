@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"time"
 
@@ -55,6 +56,14 @@ var (
 		Name:  "force",
 		Usage: "Wipe any existing binary tree state before converting",
 	}
+	snapshotOutFlag = &cli.StringFlag{
+		Name:  "snapshot-out",
+		Usage: "File to write the byte-canonical PBT snapshot artifact to",
+	}
+	preimagesOutFlag = &cli.StringFlag{
+		Name:  "preimages-out",
+		Usage: "File to write the address-sorted preimage file to",
+	}
 
 	bintrieCommand = &cli.Command{
 		Name:        "bintrie",
@@ -71,9 +80,13 @@ var (
 					memoryLimitFlag,
 					tmpDirFlag,
 					forceConvertFlag,
+					snapshotOutFlag,
+					preimagesOutFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
-geth bintrie convert [--delete-source] [--memory-limit MB] [--tmpdir DIR] [--force] [state-root]
+geth bintrie convert [--delete-source] [--memory-limit MB] [--tmpdir DIR]
+                     [--force] [--snapshot-out FILE] [--preimages-out FILE]
+                     [state-root]
 
 Converts the Merkle Patricia Trie state into the EIP-8297 binary tree,
 offline, following the EIP-8347 pipeline: every state leaf is derived,
@@ -88,11 +101,18 @@ block's root is used when omitted. The source database must hold the
 account and storage key preimages, which only a node synced with
 --cache.preimages has.
 
+With --snapshot-out and --preimages-out, the conversion also emits the
+EIP-8347 distribution artifacts: the byte-canonical PBT snapshot and the
+address-sorted preimage file, along with the keccak digest of each, which
+every correct producer reproduces for the same anchor state.
+
 Flags:
   --delete-source    Delete MPT trie nodes once the conversion verifies
   --memory-limit     Sort-buffer budget in MB before spilling (default: 4096)
   --tmpdir           Spill-file directory (default: the OS temp dir)
   --force            Wipe existing binary tree state first
+  --snapshot-out     Write the PBT snapshot artifact to this file
+  --preimages-out    Write the preimage file to this file
 `,
 			},
 		},
@@ -141,8 +161,10 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	defer srcTriedb.Close()
 
 	binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{
-		sortBudget: int(ctx.Uint64(memoryLimitFlag.Name)) * 1024 * 1024,
-		tmpDir:     ctx.String(tmpDirFlag.Name),
+		sortBudget:   int(ctx.Uint64(memoryLimitFlag.Name)) * 1024 * 1024,
+		tmpDir:       ctx.String(tmpDirFlag.Name),
+		snapshotPath: ctx.String(snapshotOutFlag.Name),
+		preimagePath: ctx.String(preimagesOutFlag.Name),
 	})
 	if err != nil {
 		return err
@@ -166,8 +188,10 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 
 // conversionOptions carries the tunables of a conversion run.
 type conversionOptions struct {
-	sortBudget int    // bytes of buffered leaves before the sort spills
-	tmpDir     string // spill directory; empty means the OS temp dir
+	sortBudget   int    // bytes of buffered records before a sort spills
+	tmpDir       string // spill directory; empty means the OS temp dir
+	snapshotPath string // PBT snapshot artifact destination; empty writes none
+	preimagePath string // preimage file destination; empty writes none
 }
 
 // conversionStats tracks progress for the periodic report.
@@ -226,9 +250,33 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	sorter := bintrie.NewLeafSorter(opts.tmpDir, opts.sortBudget)
 	defer sorter.Close()
 
+	// The distribution artifacts ride the pipeline: the snapshot writer taps
+	// the sorted leaf stream, the preimage file the scan. Both are finalized
+	// before the database is, so a conversion that fails at the artifacts
+	// leaves a namespace that refuses to open, not a half-published one.
+	var (
+		snapshot  *snapshotWriter
+		preimages *preimageFile
+	)
+	if opts.snapshotPath != "" {
+		sw, err := newSnapshotWriter(opts.snapshotPath)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		snapshot = sw
+		defer func() {
+			if snapshot != nil {
+				snapshot.abort()
+			}
+		}()
+	}
+	if opts.preimagePath != "" {
+		preimages = newPreimageFile(opts.tmpDir, opts.sortBudget)
+		defer preimages.close()
+	}
 	// Phase 1: scan the merkle state, deriving tree leaves into the sorter
 	// and streaming flat state to disk as it goes.
-	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, stats); err != nil {
+	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, preimages, stats); err != nil {
 		return common.Hash{}, err
 	}
 	stats.report(true)
@@ -261,6 +309,11 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		if err != nil {
 			return common.Hash{}, err
 		}
+		if snapshot != nil {
+			if err := snapshot.add(key, value); err != nil {
+				return common.Hash{}, err
+			}
+		}
 		if err := builder.Add(key, value); err != nil {
 			return common.Hash{}, err
 		}
@@ -273,6 +326,25 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, err
 	}
 	log.Info("Built binary tree", "nodes", written, "leaves", stats.leaves)
+
+	if snapshot != nil {
+		digest, err := snapshot.finalize(binRoot)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		log.Info("Wrote PBT snapshot artifact", "path", opts.snapshotPath,
+			"leaves", snapshot.count, "digest", digest)
+		snapshot = nil // finalized; disarm the abort
+	}
+	if preimages != nil {
+		digest, err := preimages.write(opts.preimagePath)
+		if err != nil {
+			os.Remove(opts.preimagePath)
+			return common.Hash{}, err
+		}
+		log.Info("Wrote preimage file", "path", opts.preimagePath,
+			"accounts", preimages.accounts, "digest", digest)
+	}
 
 	// Finalize. The root marker is what a reopening path database reads the
 	// disk-layer root from; no state id is written, so the converted tree is
@@ -287,7 +359,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 // leaf into the sorter, writing flat state alongside. Code is emitted once
 // per distinct code hash - the leaves are content-addressed and shared, and
 // the sorter treats a duplicate key as corruption.
-func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, sorter *bintrie.LeafSorter, stats *conversionStats) error {
+func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, sorter *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats) error {
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
 		return fmt.Errorf("failed to open source trie: %w", err)
@@ -320,6 +392,11 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 			return fmt.Errorf("missing preimage for account hash %x (the source node must have synced with --cache.preimages)", accIter.Key)
 		}
 		addr := common.BytesToAddress(addrBytes)
+		if preimages != nil {
+			if err := preimages.beginAccount(addr); err != nil {
+				return err
+			}
+		}
 
 		var code []byte
 		codeHash := common.BytesToHash(acc.CodeHash)
@@ -391,6 +468,9 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 				slotKey := storageTrie.GetKey(storageIter.Key)
 				if slotKey == nil {
 					return fmt.Errorf("missing preimage for storage key %x (account %x)", storageIter.Key, addr)
+				}
+				if preimages != nil {
+					preimages.addSlot(slotKey)
 				}
 				_, content, _, err := rlp.Split(storageIter.Value)
 				if err != nil {
