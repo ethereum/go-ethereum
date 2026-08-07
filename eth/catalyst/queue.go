@@ -91,6 +91,26 @@ func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayl
 	return nil
 }
 
+// getByStateRoot returns the tracked local payload whose full block has the
+// given state root, along with that block, its build-time receipts, and the
+// transactions tried-and-reverted during building (with their block-access
+// indices).
+func (q *payloadQueue) getByStateRoot(root common.Hash) (*types.Block, []*types.Receipt, []*types.Transaction, []uint32) {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	for _, item := range q.payloads {
+		if item == nil {
+			return nil, nil, nil, nil // no more items
+		}
+		block, receipts, revertedTxs, revertedIdx := item.payload.FullBlockAndReceipts()
+		if block != nil && block.Root() == root {
+			return block, receipts, revertedTxs, revertedIdx
+		}
+	}
+	return nil, nil, nil, nil
+}
+
 // has checks if a particular payload is already tracked.
 func (q *payloadQueue) has(id engine.PayloadID) bool {
 	q.lock.RLock()
