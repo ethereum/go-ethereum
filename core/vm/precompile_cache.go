@@ -31,7 +31,7 @@ var (
 	precompileCacheMissMeter         = metrics.NewRegisteredMeter("chain/cache/precompile/miss", nil)
 	precompileCachePrefetchHitMeter  = metrics.NewRegisteredMeter("chain/cache/precompile/prefetch/hit", nil)
 	precompileCachePrefetchMissMeter = metrics.NewRegisteredMeter("chain/cache/precompile/prefetch/miss", nil)
-	precompileCacheEntryGauge        = metrics.NewRegisteredGauge("chain/cache/precompile/entries", nil)
+	precompileCacheBytesGauge        = metrics.NewRegisteredGauge("chain/cache/precompile/bytes", nil)
 )
 
 const (
@@ -111,6 +111,7 @@ func (c *precompileResultCache) add(key string, value []byte) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	before := c.size
 	if !c.lru.Contains(key) {
 		size := c.size + uint64(len(key)+len(value)+perEntryOverhead)
 		for size > c.maxSize {
@@ -123,13 +124,9 @@ func (c *precompileResultCache) add(key string, value []byte) {
 		c.size = size
 	}
 	c.lru.Add(key, value)
-}
 
-func (c *precompileResultCache) len() int {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	return c.lru.Len()
+	// Evicting can free more than this entry occupies, so the delta is signed.
+	precompileCacheBytesGauge.Inc(int64(c.size) - int64(before))
 }
 
 // precompileCacheScope identifies the cache of one precompile at one fork. The
@@ -213,7 +210,6 @@ func (c *PrecompileCache) store(scope precompileCacheScope, key []byte, output [
 		c.data.mu.Unlock()
 	}
 	results.add(string(key), common.CopyBytes(output))
-	precompileCacheEntryGauge.Update(int64(results.len()))
 }
 
 // metersFor returns the hit and miss meters of the given precompile address,
