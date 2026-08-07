@@ -136,3 +136,12 @@ func (h *ReservationHandle) Has(address common.Address) bool {
 	id, exists := h.tracker.accounts[address]
 	return exists && id != h.id
 }
+
+// Owns reports whether this handle currently owns the reservation for address.
+func (h *ReservationHandle) Owns(address common.Address) bool {
+	h.tracker.lock.RLock()
+	defer h.tracker.lock.RUnlock()
+
+	id, exists := h.tracker.accounts[address]
+	return exists && id == h.id
+}
