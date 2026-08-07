@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,13 +47,18 @@ func allPrecompileSets() map[string]PrecompiledContracts {
 	seen[base], sets["default"] = true, *base
 
 	for i := range rules.NumField() {
+		field := rules.Field(i)
+		if field.Type.Kind() != reflect.Bool {
+			continue
+		}
+		// Activate only this field so the fork resolves to the set it gates.
 		var forked params.Rules
 		reflect.ValueOf(&forked).Elem().Field(i).SetBool(true)
 
 		// Later forks shadow earlier ones, so the first flag reaching a set is
 		// the one that names it.
 		if set := activePrecompiledContracts(forked); !seen[set] {
-			seen[set], sets[rules.Field(i).Name] = true, *set
+			seen[set], sets[strings.TrimPrefix(field.Name, "Is")] = true, *set
 		}
 	}
 	return sets
