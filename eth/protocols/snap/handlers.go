@@ -439,7 +439,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket) (
 	// via snapshot.
 	var reader database.StateReader
 	if chain.Snapshots() != nil {
-		reader = chain.Snapshots().Snapshot(req.Root)
+		reader = snapshot.NewStateReader(chain.Snapshots().Snapshot(req.Root))
 	}
 	if reader == nil {
 		reader, _ = triedb.StateReader(req.Root)
@@ -499,7 +499,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket) (
 				if err != nil || account == nil {
 					break
 				}
-				stRoot = common.BytesToHash(account.Root)
+				stRoot = account.Root
 			}
 
 			id := trie.StorageTrieID(req.Root, common.BytesToHash(accKey), stRoot)
