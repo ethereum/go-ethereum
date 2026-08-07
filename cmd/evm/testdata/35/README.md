@@ -18,9 +18,8 @@ through `ethereum.binary_trie` and hashing it: both produce
 so this fixture pins the key derivation, the code chunking and the tree
 hashing against the spec rather than against geth's own output.
 
-Geth's output is not a second witness to it at the moment: `TestT8n` cannot run
-the binary tree fixtures at all (see `TODO.md`), so the root above rests on the
-reference alone until that is fixed.
+Geth's own execution is the second witness: `TestT8n` runs this fixture and
+must reproduce the reference-derived root exactly.
 
 The expected allocation is spec-blessed too: the reference emits the same
 account, code and both storage slots. Carrying no transactions is what makes

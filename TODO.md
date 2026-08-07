@@ -223,8 +223,6 @@ to look.
   argument on the PBT path and builds its own path-scheme prestate. A
   scheme-sensitive change there would silently break binary-tree state tests;
   this note pins the reasoning.
-- **`TestT8n`** fails on the binary tree fixtures because the prestate is
-  reopened with an already-committed trie. Out of scope by instruction.
 - **The encoded multiproof is malleable, though not unsound.** Sweeping every
   byte of an encoded proof and flipping it, most mutations are rejected, but a
   run of them still verify: 48 such offsets before this branch, 64 after, in

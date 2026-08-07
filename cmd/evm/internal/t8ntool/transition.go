@@ -142,6 +142,19 @@ func Transition(ctx *cli.Context) error {
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
+	// The binary tree cannot be iterated back into an address-keyed alloc -
+	// its leaves are keyed by a hash of the address - so the post-state dump
+	// is rebuilt from the input allocation's keys plus the ones the transition
+	// touched. Streaming would leave no keys to rebuild from: hold the alloc
+	// in memory instead. The streaming path exists for mainnet-scale merkle
+	// allocs, which the binary fixtures are nowhere near.
+	if prestate.AllocPath != "" && chainConfig.IsPBT() {
+		if err := readFile(prestate.AllocPath, "alloc", &prestate.Pre); err != nil {
+			return err
+		}
+		prestate.AllocPath = ""
+	}
+
 	if txIt, err = loadTransactions(txStr, inputData, chainConfig); err != nil {
 		return err
 	}
