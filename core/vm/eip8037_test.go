@@ -191,23 +191,23 @@ func TestSStoreChargedAtOpcodeEnd(t *testing.T) {
 
 // The SSTORE reentrancy sentry checks gas_left only; the reservoir is excluded.
 // Uses a noop write (1->1->1): the two PUSH1s cost 6, leaving gas_left at the
-// sentry (2300) for a 2306 budget. Under EIP-8038 the cold-slot access that
-// follows a cleared sentry costs COLD_STORAGE_ACCESS (3000).
+// sentry (2300) for a 2306 budget. COLD_STORAGE_ACCESS (2100) sits below the
+// sentry, so clearing the sentry is what a successful cold SSTORE needs.
 func TestSStoreStipendExcludesReservoir(t *testing.T) {
 	// regular at the sentry, huge reservoir: must still fail, proving the
 	// reservoir does not count toward the sentry.
 	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(2306, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
 		t.Fatal("expected sentry failure with regular gas at the limit")
 	}
-	// Enough regular gas to clear the sentry and pay the cold-slot access
-	// (6 for the PUSH1s + COLD_STORAGE_ACCESS) succeeds with a huge reservoir.
-	regular := 6 + params.ColdStorageAccessAmsterdam
+	// One past the sentry clears it, and at that point the cold-slot access
+	// (COLD_STORAGE_ACCESS < sentry) is affordable: succeeds.
+	regular := 6 + params.SstoreSentryGasEIP2200 + 1
 	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(regular, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err != nil {
 		t.Fatalf("unexpected failure above sentry: %v", err)
 	}
-	// One gas short of the cold-slot access still fails (now on OOG, not sentry).
+	// One gas short fails on the sentry, huge reservoir or not.
 	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(regular-1, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
-		t.Fatal("expected OOG when regular gas cannot cover cold-slot access")
+		t.Fatal("expected sentry failure when regular gas is one short")
 	}
 }
 
