@@ -75,7 +75,7 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			name:  "contract creation, value = 0",
 			to:    nil,
 			value: uint256.NewInt(0),
-			// TxBaseCost + CreateAccess = 23,000 regular. The new-account state
+			// TxBaseCost + CreateAccess = 23,000 execution. The new-account state
 			// charge depends on whether the deployment target exists and is
 			// charged at runtime, not intrinsically.
 			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
@@ -84,7 +84,7 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			name:  "contract creation, value > 0",
 			to:    nil,
 			value: uint256.NewInt(1),
-			// TxBaseCost + CreateAccess + TransferLogCost = 24,756 regular.
+			// TxBaseCost + CreateAccess = 24,000 execution.
 			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 		},
 		{
@@ -182,9 +182,9 @@ func TestEIP2780Gas(t *testing.T) {
 	}
 
 	cases := []struct {
-		name                   string
-		tx                     *types.Transaction
-		wantRegular, wantState uint64
+		name                     string
+		tx                       *types.Transaction
+		wantExecution, wantState uint64
 	}{
 		// case 1: ETH transfer to self.
 		{"self-transfer", callTx(0, senderAddr, 1, 100_000, nil), base, 0},
@@ -216,8 +216,8 @@ func TestEIP2780Gas(t *testing.T) {
 			if res.Err != nil {
 				t.Fatalf("execution failed: %v", res.Err)
 			}
-			if gp.cumulativeRegular != tc.wantRegular {
-				t.Errorf("regular gas = %d, want %d", gp.cumulativeRegular, tc.wantRegular)
+			if gp.cumulativeExecution != tc.wantExecution {
+				t.Errorf("execution gas = %d, want %d", gp.cumulativeExecution, tc.wantExecution)
 			}
 			if gp.cumulativeState != tc.wantState {
 				t.Errorf("state gas = %d, want %d", gp.cumulativeState, tc.wantState)
@@ -279,8 +279,8 @@ func TestEIP2780WarmRecipientStillChargedCold(t *testing.T) {
 		t.Fatalf("execution failed: %v", res.Err)
 	}
 	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + accessListEntryCost
-	if gp.cumulativeRegular != want {
-		t.Errorf("regular gas = %d, want %d (cold recipient, no access-list discount)", gp.cumulativeRegular, want)
+	if gp.cumulativeExecution != want {
+		t.Errorf("execution gas = %d, want %d (cold recipient, no access-list discount)", gp.cumulativeExecution, want)
 	}
 }
 
@@ -305,8 +305,8 @@ func TestEIP2780DelegatedWarmTarget(t *testing.T) {
 	}
 	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + accessListEntryCost + // recipient cold access (intrinsic)
 		params.WarmAccountAccessAmsterdam // warm delegation-target access (runtime)
-	if gp.cumulativeRegular != want {
-		t.Errorf("regular gas = %d, want %d (warm delegation target)", gp.cumulativeRegular, want)
+	if gp.cumulativeExecution != want {
+		t.Errorf("execution gas = %d, want %d (warm delegation target)", gp.cumulativeExecution, want)
 	}
 }
 
@@ -315,7 +315,7 @@ func TestEIP2780DelegatedWarmTarget(t *testing.T) {
 // changes, including the already applied EIP-7702 delegations — while the
 // sender's nonce increment persists.
 //
-// The halt burns the regular dimension in full; the state dimension is
+// The halt burns the execution dimension in full; the state dimension is
 // refilled by the revert and the reservoir — if any — is preserved and
 // returned to the sender rather than burnt.
 func TestEIP2780RuntimeOOGRevertsDelegations(t *testing.T) {
@@ -323,7 +323,7 @@ func TestEIP2780RuntimeOOGRevertsDelegations(t *testing.T) {
 		name     string
 		gas      uint64
 		numAuths int
-		wantUsed uint64 // = gas − reservoir: all regular burnt, reservoir returned
+		wantUsed uint64 // = gas − reservoir: all execution burnt, reservoir returned
 	}{
 		// No state reservoir (gas below MaxTxGas). Gas covers the intrinsic
 		// cost (TX_BASE_COST + the cold-inclusive per-authorization base for
@@ -333,7 +333,7 @@ func TestEIP2780RuntimeOOGRevertsDelegations(t *testing.T) {
 
 		// A 100,000 state reservoir (gas above MaxTxGas). The 100
 		// authorizations' state charges (~21.9M) overwhelm the reservoir and
-		// the regular budget they spill into. The reservoir is made whole by
+		// the execution budget they spill into. The reservoir is made whole by
 		// the halt-refill and returned to the sender.
 		{"with-reservoir", params.MaxTxGas + 100_000, 100, params.MaxTxGas},
 	}
@@ -376,12 +376,12 @@ func TestEIP2780RuntimeOOGRevertsDelegations(t *testing.T) {
 				t.Fatalf("used gas = %d, want %d", res.UsedGas, tc.wantUsed)
 			}
 			// The charged state gas was refilled on the halt: the receipt is
-			// all regular, burnt in full, and only the reservoir survives.
+			// all execution, burnt in full, and only the reservoir survives.
 			if gp.cumulativeState != 0 {
 				t.Fatalf("state gas = %d, want 0 (refilled on halt)", gp.cumulativeState)
 			}
-			if gp.cumulativeRegular != tc.wantUsed {
-				t.Fatalf("regular gas = %d, want %d (burnt in full)", gp.cumulativeRegular, tc.wantUsed)
+			if gp.cumulativeExecution != tc.wantUsed {
+				t.Fatalf("execution gas = %d, want %d (burnt in full)", gp.cumulativeExecution, tc.wantUsed)
 			}
 			for i, authority := range authorities {
 				if code := sdb.GetCode(authority); len(code) != 0 {
@@ -408,8 +408,8 @@ func TestEIP2780RecipientOOG(t *testing.T) {
 	// The reservoir case needs a near-cap intrinsic cost. This leaves just
 	// enough total budget for the authorization but not for the recipient leaf.
 	const (
-		regularLeft = 100_000
-		reservoir   = 200_000
+		executionLeft = 100_000
+		reservoir     = 200_000
 	)
 	al := types.AccessList{{Address: common.HexToAddress("0xa1")}}
 	baseIntrinsic, err := IntrinsicGas(nil, al, []types.SetCodeAuthorization{auth}, senderAddr, &recipient, uint256.NewInt(1), rules8037)
@@ -417,7 +417,7 @@ func TestEIP2780RecipientOOG(t *testing.T) {
 		t.Fatal(err)
 	}
 	perKey := params.TxAccessListStorageKeyGasAmsterdam + uint64(common.HashLength)*params.TxCostFloorPerToken7976*params.TxTokenPerNonZeroByte
-	al[0].StorageKeys = make([]common.Hash, (params.MaxTxGas-regularLeft-baseIntrinsic)/perKey)
+	al[0].StorageKeys = make([]common.Hash, (params.MaxTxGas-executionLeft-baseIntrinsic)/perKey)
 	alIntrinsic, err := IntrinsicGas(nil, al, []types.SetCodeAuthorization{auth}, senderAddr, &recipient, uint256.NewInt(1), rules8037)
 	if err != nil {
 		t.Fatal(err)
@@ -433,7 +433,7 @@ func TestEIP2780RecipientOOG(t *testing.T) {
 		// This exactly pays the first authorization, leaving no gas for the
 		// fresh recipient's account-leaf charge.
 		{"no-reservoir", setCodeTxGas(0, recipient, 1, intrinsic+params.AccountWriteAmsterdam+authWorstState, []types.SetCodeAuthorization{auth}), intrinsic + params.AccountWriteAmsterdam + authWorstState},
-		// The state reservoir is restored by the halt; only the capped regular
+		// The state reservoir is restored by the halt; only the capped execution
 		// dimension is burnt.
 		{"with-reservoir", setCodeTxGasAL(0, recipient, 1, params.MaxTxGas+reservoir, al, []types.SetCodeAuthorization{auth}), params.MaxTxGas},
 	}
@@ -456,8 +456,8 @@ func TestEIP2780RecipientOOG(t *testing.T) {
 			if sdb.GetNonce(senderAddr) != 1 {
 				t.Fatal("sender nonce not consumed")
 			}
-			if res.UsedGas != tc.want || gp.cumulativeState != 0 || gp.cumulativeRegular != tc.want {
-				t.Fatalf("used/gas = %d/<%d,%d>, want %d/<%d,0>", res.UsedGas, gp.cumulativeRegular, gp.cumulativeState, tc.want, tc.want)
+			if res.UsedGas != tc.want || gp.cumulativeState != 0 || gp.cumulativeExecution != tc.want {
+				t.Fatalf("used/gas = %d/<%d,%d>, want %d/<%d,0>", res.UsedGas, gp.cumulativeExecution, gp.cumulativeState, tc.want, tc.want)
 			}
 		})
 	}
@@ -479,8 +479,8 @@ func TestEIP2780SelfTransferDelegated(t *testing.T) {
 		t.Fatalf("execution failed: %v", res.Err)
 	}
 	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam // base + cold delegation target
-	if gp.cumulativeRegular != want {
-		t.Errorf("regular gas = %d, want %d (base + delegation resolution)", gp.cumulativeRegular, want)
+	if gp.cumulativeExecution != want {
+		t.Errorf("execution gas = %d, want %d (base + delegation resolution)", gp.cumulativeExecution, want)
 	}
 }
 
@@ -542,27 +542,27 @@ func TestEIP2780RecipientKinds(t *testing.T) {
 	nonceOnly := common.HexToAddress("0xbeef000000000000000000000000000000000005")
 	precompile := common.BytesToAddress([]byte{4}) // identity; 15 gas for empty input
 	cases := []struct {
-		name                   string
-		alloc                  types.GenesisAlloc
-		tx                     *types.Transaction
-		wantRegular, wantState uint64
+		name                     string
+		alloc                    types.GenesisAlloc
+		tx                       *types.Transaction
+		wantExecution, wantState uint64
 	}{
 		{
-			name:        "nonce-only",
-			alloc:       types.GenesisAlloc{nonceOnly: {Nonce: 1}},
-			tx:          callTx(0, nonceOnly, 1, 100_000, nil),
-			wantRegular: base + cold + valueCst,
+			name:          "nonce-only",
+			alloc:         types.GenesisAlloc{nonceOnly: {Nonce: 1}},
+			tx:            callTx(0, nonceOnly, 1, 100_000, nil),
+			wantExecution: base + cold + valueCst,
 		},
 		{
-			name:        "precompile/zero",
-			tx:          callTx(0, precompile, 0, 100_000, nil),
-			wantRegular: base + cold + 15,
+			name:          "precompile/zero",
+			tx:            callTx(0, precompile, 0, 100_000, nil),
+			wantExecution: base + cold + 15,
 		},
 		{
-			name:        "precompile/value",
-			tx:          callTx(0, precompile, 1, 300_000, nil),
-			wantRegular: base + cold + valueCst + 15,
-			wantState:   newAccountState,
+			name:          "precompile/value",
+			tx:            callTx(0, precompile, 1, 300_000, nil),
+			wantExecution: base + cold + valueCst + 15,
+			wantState:     newAccountState,
 		},
 	}
 	for _, tc := range cases {
@@ -571,8 +571,8 @@ func TestEIP2780RecipientKinds(t *testing.T) {
 			if err != nil || res.Err != nil {
 				t.Fatalf("result=%v err=%v", res, err)
 			}
-			if gp.cumulativeRegular != tc.wantRegular || gp.cumulativeState != tc.wantState {
-				t.Fatalf("gas = <%d,%d>, want <%d,%d>", gp.cumulativeRegular, gp.cumulativeState, tc.wantRegular, tc.wantState)
+			if gp.cumulativeExecution != tc.wantExecution || gp.cumulativeState != tc.wantState {
+				t.Fatalf("gas = <%d,%d>, want <%d,%d>", gp.cumulativeExecution, gp.cumulativeState, tc.wantExecution, tc.wantState)
 			}
 		})
 	}
@@ -590,8 +590,8 @@ func TestEIP2780RecipientRefill(t *testing.T) {
 	if err != nil || res.Err == nil {
 		t.Fatalf("result=%v err=%v, want exceptional halt", res, err)
 	}
-	if gp.cumulativeState != 0 || gp.cumulativeRegular != params.MaxTxGas {
-		t.Fatalf("gas = <%d,%d>, want <%d,0> after refill", gp.cumulativeRegular, gp.cumulativeState, params.MaxTxGas)
+	if gp.cumulativeState != 0 || gp.cumulativeExecution != params.MaxTxGas {
+		t.Fatalf("gas = <%d,%d>, want <%d,0> after refill", gp.cumulativeExecution, gp.cumulativeState, params.MaxTxGas)
 	}
 	if sdb.Exist(recipient) {
 		t.Fatal("empty recipient persisted after halted dispatch")
@@ -608,8 +608,8 @@ func TestEIP2780Coinbase(t *testing.T) {
 	if err != nil || res.Err != nil {
 		t.Fatalf("result=%v err=%v", res, err)
 	}
-	if want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam; gp.cumulativeRegular != want {
-		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, want)
+	if want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam; gp.cumulativeExecution != want {
+		t.Fatalf("execution gas = %d, want %d", gp.cumulativeExecution, want)
 	}
 }
 
@@ -624,10 +624,10 @@ func TestEIP2780DelegationWarmth(t *testing.T) {
 	recipient := common.HexToAddress("0xde1e000000000000000000000000000000000008")
 	precompile := common.BytesToAddress([]byte{4})
 	cases := []struct {
-		name        string
-		target      common.Address
-		coinbase    common.Address
-		wantRegular uint64
+		name          string
+		target        common.Address
+		coinbase      common.Address
+		wantExecution uint64
 	}{
 		{"precompile", precompile, common.Address{}, base + cold + warm},
 		{"coinbase", common.HexToAddress("0xc01ba5e000000000000000000000000000000002"), common.HexToAddress("0xc01ba5e000000000000000000000000000000002"), base + cold + warm},
@@ -641,8 +641,8 @@ func TestEIP2780DelegationWarmth(t *testing.T) {
 			if err != nil || res.Err != nil {
 				t.Fatalf("result=%v err=%v", res, err)
 			}
-			if gp.cumulativeRegular != tc.wantRegular {
-				t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, tc.wantRegular)
+			if gp.cumulativeExecution != tc.wantExecution {
+				t.Fatalf("execution gas = %d, want %d", gp.cumulativeExecution, tc.wantExecution)
 			}
 		})
 	}
@@ -656,8 +656,8 @@ func TestEIP2780DelegationWarmth(t *testing.T) {
 	st := newStateTransition(amsterdamCoreEVM(sdb), &Message{To: &to, Value: new(uint256.Int)}, NewGasPool(100_000))
 	st.gasRemaining = vm.NewGasBudget(1_000, 0)
 	sdb.AddAddressToAccessList(recipient)
-	if !st.chargeCallRecipientEIP2780(new(uint256.Int)) || st.gasRemaining.UsedRegularGas != warm {
-		t.Fatalf("recipient target charge = %d, want warm %d", st.gasRemaining.UsedRegularGas, warm)
+	if !st.chargeCallRecipientEIP2780(new(uint256.Int)) || st.gasRemaining.UsedExecutionGas != warm {
+		t.Fatalf("recipient target charge = %d, want warm %d", st.gasRemaining.UsedExecutionGas, warm)
 	}
 }
 
@@ -678,40 +678,40 @@ func TestEIP2780InstallDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := []struct {
-		name                   string
-		alloc                  types.GenesisAlloc
-		tx                     *types.Transaction
-		account                common.Address
-		wantRegular, wantState uint64
-		wantNonce              uint64
-		wantBalance            *big.Int
+		name                     string
+		alloc                    types.GenesisAlloc
+		tx                       *types.Transaction
+		account                  common.Address
+		wantExecution, wantState uint64
+		wantNonce                uint64
+		wantBalance              *big.Int
 	}{
 		{
-			name:        "sender",
-			tx:          setCodeTxGas(0, senderAddr, 0, 1_000_000, []types.SetCodeAuthorization{senderAuth}),
-			account:     senderAddr,
-			wantRegular: base + perAuth + cold,
-			wantState:   authBaseState,
-			wantNonce:   2,
+			name:          "sender",
+			tx:            setCodeTxGas(0, senderAddr, 0, 1_000_000, []types.SetCodeAuthorization{senderAuth}),
+			account:       senderAddr,
+			wantExecution: base + perAuth + cold,
+			wantState:     authBaseState,
+			wantNonce:     2,
 		},
 		{
-			name:        "fresh-recipient",
-			tx:          setCodeTxGas(0, authority, 1, 1_000_000, []types.SetCodeAuthorization{auth}),
-			account:     authority,
-			wantRegular: base + cold + valueCst + perAuth + cold,
-			wantState:   authWorstState,
-			wantNonce:   1,
-			wantBalance: big.NewInt(1),
+			name:          "fresh-recipient",
+			tx:            setCodeTxGas(0, authority, 1, 1_000_000, []types.SetCodeAuthorization{auth}),
+			account:       authority,
+			wantExecution: base + cold + valueCst + perAuth + cold,
+			wantState:     authWorstState,
+			wantNonce:     1,
+			wantBalance:   big.NewInt(1),
 		},
 		{
-			name:        "funded-recipient",
-			alloc:       types.GenesisAlloc{authority: {Balance: big.NewInt(3)}},
-			tx:          setCodeTxGas(0, authority, 1, 1_000_000, []types.SetCodeAuthorization{auth}),
-			account:     authority,
-			wantRegular: base + cold + valueCst + perAuth + cold,
-			wantState:   authBaseState,
-			wantNonce:   1,
-			wantBalance: big.NewInt(4),
+			name:          "funded-recipient",
+			alloc:         types.GenesisAlloc{authority: {Balance: big.NewInt(3)}},
+			tx:            setCodeTxGas(0, authority, 1, 1_000_000, []types.SetCodeAuthorization{auth}),
+			account:       authority,
+			wantExecution: base + cold + valueCst + perAuth + cold,
+			wantState:     authBaseState,
+			wantNonce:     1,
+			wantBalance:   big.NewInt(4),
 		},
 	}
 	for _, tc := range cases {
@@ -727,14 +727,14 @@ func TestEIP2780InstallDispatch(t *testing.T) {
 			if tc.wantBalance != nil && sdb.GetBalance(tc.account).Cmp(uint256.MustFromBig(tc.wantBalance)) != 0 {
 				t.Fatalf("balance = %v, want %v", sdb.GetBalance(tc.account), tc.wantBalance)
 			}
-			if gp.cumulativeRegular != tc.wantRegular || gp.cumulativeState != tc.wantState {
-				t.Fatalf("gas = <%d,%d>, want <%d,%d>", gp.cumulativeRegular, gp.cumulativeState, tc.wantRegular, tc.wantState)
+			if gp.cumulativeExecution != tc.wantExecution || gp.cumulativeState != tc.wantState {
+				t.Fatalf("gas = <%d,%d>, want <%d,%d>", gp.cumulativeExecution, gp.cumulativeState, tc.wantExecution, tc.wantState)
 			}
 		})
 	}
 }
 
-// TestEIP2780Floor keeps the EIP-8037 calldata floor in the regular dimension
+// TestEIP2780Floor keeps the EIP-8037 calldata floor in the execution dimension
 // when a top-level EIP-2780 account-leaf charge is also present.
 func TestEIP2780Floor(t *testing.T) {
 	recipient := common.HexToAddress("0xbeef000000000000000000000000000000000007")
@@ -753,14 +753,14 @@ func TestEIP2780Floor(t *testing.T) {
 		t.Fatal(err)
 	}
 	stateGas := newAccountState
-	// This is the v7.2.0 boundary: the floor lifts only the regular
+	// This is the v7.2.0 boundary: the floor lifts only the execution
 	// dimension, while the scalar receipt gas remains the actual intrinsic +
 	// state charge because it is already above the floor.
 	if !(intrinsic < floor && floor < intrinsic+stateGas) {
 		t.Fatalf("expected intrinsic < floor < intrinsic + state: %d < %d < %d", intrinsic, floor, intrinsic+stateGas)
 	}
-	if gp.cumulativeRegular != floor || gp.cumulativeState != stateGas {
-		t.Fatalf("gas = <%d,%d>, want floor/state <%d,%d>", gp.cumulativeRegular, gp.cumulativeState, floor, stateGas)
+	if gp.cumulativeExecution != floor || gp.cumulativeState != stateGas {
+		t.Fatalf("gas = <%d,%d>, want floor/state <%d,%d>", gp.cumulativeExecution, gp.cumulativeState, floor, stateGas)
 	}
 	if want := intrinsic + stateGas; res.UsedGas != want {
 		t.Fatalf("receipt gas = %d, want intrinsic + state = %d", res.UsedGas, want)
@@ -775,22 +775,22 @@ func TestEIP2780Floor(t *testing.T) {
 //     with their state-gas charge (the EIP-7702 delegations of a call tx);
 //   - state gas pre-charged for the frame itself is refilled when the halt
 //     voids it (the account-creation charge of a creation tx);
-//   - after the refill the regular dimension is burnt in full, while any
+//   - after the refill the execution dimension is burnt in full, while any
 //     remaining state reservoir is preserved and returned to the sender.
 func TestEIP2780FirstFrameHaltPreservesPreExecution(t *testing.T) {
 	halting := common.HexToAddress("0xbad0000000000000000000000000000000000002")
 	cases := []struct {
-		name        string
-		create      bool
-		gas         uint64
-		wantUsed    uint64 // = gas − preserved reservoir
-		wantRegular uint64
-		wantState   uint64
+		name          string
+		create        bool
+		gas           uint64
+		wantUsed      uint64 // = gas − preserved reservoir
+		wantExecution uint64
+		wantState     uint64
 	}{
 		// Message call carrying one authorization: the delegation and its
 		// state charge (account + indicator) survive the halt.
 		//
-		// Without a reservoir the charge spills from regular gas and everything is
+		// Without a reservoir the charge spills from execution gas and everything is
 		// burnt;
 		//
 		// With a reservoir, the reservoir remainder is preserved.
@@ -801,7 +801,7 @@ func TestEIP2780FirstFrameHaltPreservesPreExecution(t *testing.T) {
 		// the pre-charged account creation is refilled and no state gas
 		// remains.
 		//
-		// Without a reservoir the refill repays spilled regular gas, which the
+		// Without a reservoir the refill repays spilled execution gas, which the
 		// halt then burns along with the rest;
 		//
 		// With a reservoir, the refill makes the reservoir whole again and it
@@ -845,8 +845,8 @@ func TestEIP2780FirstFrameHaltPreservesPreExecution(t *testing.T) {
 			if res.UsedGas != tc.wantUsed {
 				t.Fatalf("used gas = %d, want %d", res.UsedGas, tc.wantUsed)
 			}
-			if gp.cumulativeRegular != tc.wantRegular {
-				t.Fatalf("regular gas = %d, want %d (burnt in full)", gp.cumulativeRegular, tc.wantRegular)
+			if gp.cumulativeExecution != tc.wantExecution {
+				t.Fatalf("execution gas = %d, want %d (burnt in full)", gp.cumulativeExecution, tc.wantExecution)
 			}
 			if gp.cumulativeState != tc.wantState {
 				t.Fatalf("state gas = %d, want %d", gp.cumulativeState, tc.wantState)
@@ -876,15 +876,15 @@ func TestEIP2780FirstFrameHaltPreservesPreExecution(t *testing.T) {
 // TestEIP2780CreatePreExecutionOOGPreservesReservoir verifies that when a
 // creation transaction cannot afford the pre-execution account-creation state
 // charge (before the init-code frame is entered), the transaction halts with
-// all regular gas burnt while the state reservoir — never touched, since the
+// all execution gas burnt while the state reservoir — never touched, since the
 // charge is atomic and was not applied — is preserved and returned to the
 // sender.
 func TestEIP2780CreatePreExecutionOOGPreservesReservoir(t *testing.T) {
-	// Regular gas left for the pre-execution charge; together with the
+	// Execution gas left for the pre-execution charge; together with the
 	// reservoir it must not cover the account-creation cost.
 	const (
-		regularLeft = 100_000
-		reservoir   = 50_000
+		executionLeft = 100_000
+		reservoir     = 50_000
 	)
 	// Plain creation intrinsic: TX_BASE_COST + CREATE_ACCESS.
 	plainIntrinsic, err := IntrinsicGas(nil, nil, nil, senderAddr, nil, new(uint256.Int), rules8037)
@@ -892,9 +892,9 @@ func TestEIP2780CreatePreExecutionOOGPreservesReservoir(t *testing.T) {
 		t.Fatal(err)
 	}
 	// For the reservoir case the gas limit must exceed MaxTxGas, which leaves
-	// a huge regular budget by default. A big access list drives the intrinsic
-	// cost close to MaxTxGas, shrinking the regular budget back down to
-	// roughly regularLeft. Storage keys work because their intrinsic charge
+	// a huge execution budget by default. A big access list drives the intrinsic
+	// cost close to MaxTxGas, shrinking the execution budget back down to
+	// roughly executionLeft. Storage keys work because their intrinsic charge
 	// exceeds their EIP-7623/7976 floor contribution.
 	al := types.AccessList{{Address: common.HexToAddress("0xa1")}}
 	baseIntrinsic, err := IntrinsicGas(nil, al, nil, senderAddr, nil, new(uint256.Int), rules8037)
@@ -905,13 +905,13 @@ func TestEIP2780CreatePreExecutionOOGPreservesReservoir(t *testing.T) {
 
 	// Fill the transaction with accessList, drain the gas and make it
 	// insufficient for account-creation cost.
-	al[0].StorageKeys = make([]common.Hash, (params.MaxTxGas-regularLeft-baseIntrinsic)/perKey)
+	al[0].StorageKeys = make([]common.Hash, (params.MaxTxGas-executionLeft-baseIntrinsic)/perKey)
 	alIntrinsic, err := IntrinsicGas(nil, al, nil, senderAddr, nil, new(uint256.Int), rules8037)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if left := params.MaxTxGas - alIntrinsic; left+reservoir >= newAccountState {
-		t.Fatalf("setup: regular %d + reservoir %d must not cover the creation charge %d", left, reservoir, newAccountState)
+		t.Fatalf("setup: execution %d + reservoir %d must not cover the creation charge %d", left, reservoir, newAccountState)
 	}
 	alCreateTx := types.MustSignNewTx(senderKey, signer8037,
 		&types.DynamicFeeTx{
@@ -931,7 +931,7 @@ func TestEIP2780CreatePreExecutionOOGPreservesReservoir(t *testing.T) {
 		wantUsed uint64 // = gas − preserved reservoir
 	}{
 		// Gas below MaxTxGas: no reservoir, the whole limit is burnt.
-		{"no-reservoir", createTx(0, plainIntrinsic+regularLeft, nil), plainIntrinsic + regularLeft},
+		{"no-reservoir", createTx(0, plainIntrinsic+executionLeft, nil), plainIntrinsic + executionLeft},
 
 		// Gas above MaxTxGas: the reservoir survives the halt untouched and
 		// is returned to the sender.
@@ -950,8 +950,8 @@ func TestEIP2780CreatePreExecutionOOGPreservesReservoir(t *testing.T) {
 			if res.UsedGas != tc.wantUsed {
 				t.Fatalf("used gas = %d, want %d", res.UsedGas, tc.wantUsed)
 			}
-			if gp.cumulativeRegular != tc.wantUsed {
-				t.Fatalf("regular gas = %d, want %d (burnt in full)", gp.cumulativeRegular, tc.wantUsed)
+			if gp.cumulativeExecution != tc.wantUsed {
+				t.Fatalf("execution gas = %d, want %d (burnt in full)", gp.cumulativeExecution, tc.wantUsed)
 			}
 			if gp.cumulativeState != 0 {
 				t.Fatalf("state gas = %d, want 0 (charge never applied)", gp.cumulativeState)
@@ -1005,82 +1005,82 @@ func TestEIP2780AuthorityAccountWrite(t *testing.T) {
 	fundedAuthority := types.GenesisAlloc{authority: {Balance: big.NewInt(1)}}
 
 	cases := []struct {
-		name                   string
-		alloc                  types.GenesisAlloc
-		tx                     *types.Transaction
-		wantRegular, wantState uint64
+		name                     string
+		alloc                    types.GenesisAlloc
+		tx                       *types.Transaction
+		wantExecution, wantState uint64
 	}{
 		{
 			// Materializing a fresh authority pays the first-write surcharge
 			// alongside the new-account state gas and the indicator bytes.
-			name:        "fresh authority",
-			tx:          tx(existingEOA, 0, auth0),
-			wantRegular: base + cold + perAuth + aw,
-			wantState:   authWorstState,
+			name:          "fresh authority",
+			tx:            tx(existingEOA, 0, auth0),
+			wantExecution: base + cold + perAuth + aw,
+			wantState:     authWorstState,
 		},
 		{
 			// An existing authority still pays the surcharge: the nonce and
 			// indicator stores are the first write to the account within the
 			// transaction.
-			name:        "existing authority",
-			alloc:       fundedAuthority,
-			tx:          tx(existingEOA, 0, auth0),
-			wantRegular: base + cold + perAuth + aw,
-			wantState:   authBaseState,
+			name:          "existing authority",
+			alloc:         fundedAuthority,
+			tx:            tx(existingEOA, 0, auth0),
+			wantExecution: base + cold + perAuth + aw,
+			wantState:     authBaseState,
 		},
 		{
 			// Self-sponsored: the sender's account write is prepaid by
 			// TX_BASE_COST, no surcharge.
-			name:        "authority is sender",
-			tx:          tx(existingEOA, 0, senderAuth),
-			wantRegular: base + cold + perAuth,
-			wantState:   authBaseState,
+			name:          "authority is sender",
+			tx:            tx(existingEOA, 0, senderAuth),
+			wantExecution: base + cold + perAuth,
+			wantState:     authBaseState,
 		},
 		{
 			// authority == tx.to with zero value: no TX_VALUE_COST was paid,
 			// so the authorization write is the first paid write and the
 			// surcharge applies. The recipient becomes delegated, adding a
 			// cold delegation-target access at runtime.
-			name:        "authority is recipient, zero value",
-			alloc:       fundedAuthority,
-			tx:          tx(authority, 0, auth0),
-			wantRegular: base + cold + perAuth + aw + cold,
-			wantState:   authBaseState,
+			name:          "authority is recipient, zero value",
+			alloc:         fundedAuthority,
+			tx:            tx(authority, 0, auth0),
+			wantExecution: base + cold + perAuth + aw + cold,
+			wantState:     authBaseState,
 		},
 		{
 			// authority == tx.to with value: TX_VALUE_COST prepaid the
 			// recipient write, so no surcharge is due.
-			name:        "authority is recipient, value",
-			alloc:       fundedAuthority,
-			tx:          tx(authority, 1, auth0),
-			wantRegular: base + cold + valueCst + perAuth + cold,
-			wantState:   authBaseState,
+			name:          "authority is recipient, value",
+			alloc:         fundedAuthority,
+			tx:            tx(authority, 1, auth0),
+			wantExecution: base + cold + valueCst + perAuth + cold,
+			wantState:     authBaseState,
 		},
 		{
 			// Fresh authority == tx.to with value: the authorization pays the
 			// new-account state gas, and the recipient charge then sees an
 			// existing account, so the leaf is not paid for twice.
-			name:        "authority is fresh recipient, value",
-			tx:          tx(authority, 1, auth0),
-			wantRegular: base + cold + valueCst + perAuth + cold,
-			wantState:   authWorstState,
+			name:          "authority is fresh recipient, value",
+			tx:            tx(authority, 1, auth0),
+			wantExecution: base + cold + valueCst + perAuth + cold,
+			wantState:     authWorstState,
 		},
 		{
 			// The same authority twice: only the first valid authorization
 			// carries the surcharge, the account creation and the indicator.
-			name:        "same authority twice",
-			tx:          tx(existingEOA, 0, auth0, auth1),
-			wantRegular: base + cold + 2*perAuth + aw,
-			wantState:   authWorstState,
+			name:          "same authority twice",
+			tx:            tx(existingEOA, 0, auth0, auth1),
+			wantExecution: base + cold + 2*perAuth + aw,
+			wantState:     authWorstState,
 		},
 		{
 			// An invalid authorization performs no write and does not count
 			// as the first write; the following valid one pays in full. The
 			// per-auth intrinsic base is still paid for the invalid tuple.
-			name:        "invalid then valid",
-			tx:          tx(existingEOA, 0, authBadNonce, auth0),
-			wantRegular: base + cold + 2*perAuth + aw,
-			wantState:   authWorstState,
+			name:          "invalid then valid",
+			tx:            tx(existingEOA, 0, authBadNonce, auth0),
+			wantExecution: base + cold + 2*perAuth + aw,
+			wantState:     authWorstState,
 		},
 	}
 	for _, tc := range cases {
@@ -1096,8 +1096,8 @@ func TestEIP2780AuthorityAccountWrite(t *testing.T) {
 			if res.Err != nil {
 				t.Fatalf("execution failed: %v", res.Err)
 			}
-			if gp.cumulativeRegular != tc.wantRegular {
-				t.Errorf("regular gas = %d, want %d", gp.cumulativeRegular, tc.wantRegular)
+			if gp.cumulativeExecution != tc.wantExecution {
+				t.Errorf("execution gas = %d, want %d", gp.cumulativeExecution, tc.wantExecution)
 			}
 			if gp.cumulativeState != tc.wantState {
 				t.Errorf("state gas = %d, want %d", gp.cumulativeState, tc.wantState)
@@ -1130,8 +1130,8 @@ func TestEIP2780DelegationTargetPrewarmed(t *testing.T) {
 		if res.Err != nil {
 			t.Fatalf("execution failed: %v", res.Err)
 		}
-		if want := base + cold + warm; gp.cumulativeRegular != want {
-			t.Errorf("regular gas = %d, want %d (warm delegation target)", gp.cumulativeRegular, want)
+		if want := base + cold + warm; gp.cumulativeExecution != want {
+			t.Errorf("execution gas = %d, want %d (warm delegation target)", gp.cumulativeExecution, want)
 		}
 		if gp.cumulativeState != 0 {
 			t.Errorf("state gas = %d, want 0", gp.cumulativeState)
@@ -1156,8 +1156,8 @@ func TestEIP2780DelegationTargetPrewarmed(t *testing.T) {
 		if res.Err != nil {
 			t.Fatalf("execution failed: %v", res.Err)
 		}
-		if want := base + cold + perAuth + aw + warm; gp.cumulativeRegular != want {
-			t.Errorf("regular gas = %d, want %d (auth-warmed delegation target)", gp.cumulativeRegular, want)
+		if want := base + cold + perAuth + aw + warm; gp.cumulativeExecution != want {
+			t.Errorf("execution gas = %d, want %d (auth-warmed delegation target)", gp.cumulativeExecution, want)
 		}
 		if gp.cumulativeState != newAccountState {
 			t.Errorf("state gas = %d, want %d (authority account created)", gp.cumulativeState, newAccountState)

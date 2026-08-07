@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Opcode-level tests for EIP-8038 (state-access gas cost update). They reuse the
-// Amsterdam harness from eip8037_test.go and assert the re-priced regular-gas,
+// Amsterdam harness from eip8037_test.go and assert the re-priced execution-gas,
 // state-gas and refund-counter accounting.
 
 package vm
@@ -49,7 +49,7 @@ func run8038(t *testing.T, code []byte, gas GasBudget, value *uint256.Int, setup
 }
 
 // TestEIP8038SStore exercises SSTORE under Amsterdam (EIP-8037 + EIP-8038),
-// asserting the two-dimensional charge (regular + state gas) and the net refund
+// asserting the two-dimensional charge (execution + state gas) and the net refund
 // counter. It covers single stores in isolation (the EIP-8038 cases-table rows,
 // cold access), the warm-access variants, the dirty-slot refund reversals and
 // multi-store round trips.
@@ -70,7 +70,7 @@ func TestEIP8038SStore(t *testing.T) {
 	)
 	set := uint64(params.StorageCreationSize * params.CostPerStateByte) // GAS_STORAGE_SET
 
-	// access(n) is the access-only regular cost for n stores: cold first, warm rest.
+	// access(n) is the access-only execution cost for n stores: cold first, warm rest.
 	access := func(n uint64) uint64 { return cold + (n-1)*warm }
 
 	cases := []struct {
@@ -114,8 +114,8 @@ func TestEIP8038SStore(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.UsedRegularGas != tc.wantReg {
-				t.Errorf("regular gas = %d, want %d", res.UsedRegularGas, tc.wantReg)
+			if res.UsedExecutionGas != tc.wantReg {
+				t.Errorf("execution gas = %d, want %d", res.UsedExecutionGas, tc.wantReg)
 			}
 			if res.UsedStateGas != tc.wantState {
 				t.Errorf("state gas = %d, want %d", res.UsedStateGas, tc.wantState)
@@ -136,8 +136,8 @@ func TestEIP8038SLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := push + params.ColdStorageAccessAmsterdam; res.UsedRegularGas != want {
-		t.Fatalf("cold SLOAD = %d, want %d", res.UsedRegularGas, want)
+	if want := push + params.ColdStorageAccessAmsterdam; res.UsedExecutionGas != want {
+		t.Fatalf("cold SLOAD = %d, want %d", res.UsedExecutionGas, want)
 	}
 	// PUSH1 0x00; SLOAD; PUSH1 0x00; SLOAD  -> second access is warm.
 	warm := []byte{0x60, 0x00, 0x54, 0x60, 0x00, 0x54}
@@ -146,8 +146,8 @@ func TestEIP8038SLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := 2*push + params.ColdStorageAccessAmsterdam + params.WarmStorageReadCostEIP2929
-	if res.UsedRegularGas != want {
-		t.Fatalf("cold+warm SLOAD = %d, want %d", res.UsedRegularGas, want)
+	if res.UsedExecutionGas != want {
+		t.Fatalf("cold+warm SLOAD = %d, want %d", res.UsedExecutionGas, want)
 	}
 }
 
@@ -170,8 +170,8 @@ func TestEIP8038AccountAccess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := push20 + cold; res.UsedRegularGas != want {
-			t.Fatalf("cold BALANCE = %d, want %d", res.UsedRegularGas, want)
+		if want := push20 + cold; res.UsedExecutionGas != want {
+			t.Fatalf("cold BALANCE = %d, want %d", res.UsedExecutionGas, want)
 		}
 	})
 	t.Run("EXTCODEHASH", func(t *testing.T) {
@@ -180,8 +180,8 @@ func TestEIP8038AccountAccess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := push20 + cold; res.UsedRegularGas != want {
-			t.Fatalf("cold EXTCODEHASH = %d, want %d", res.UsedRegularGas, want)
+		if want := push20 + cold; res.UsedExecutionGas != want {
+			t.Fatalf("cold EXTCODEHASH = %d, want %d", res.UsedExecutionGas, want)
 		}
 	})
 	t.Run("EXTCODESIZE adds WARM_ACCESS", func(t *testing.T) {
@@ -190,8 +190,8 @@ func TestEIP8038AccountAccess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := push20 + cold + warm; res.UsedRegularGas != want {
-			t.Fatalf("cold EXTCODESIZE = %d, want %d", res.UsedRegularGas, want)
+		if want := push20 + cold + warm; res.UsedExecutionGas != want {
+			t.Fatalf("cold EXTCODESIZE = %d, want %d", res.UsedExecutionGas, want)
 		}
 	})
 	t.Run("EXTCODECOPY adds WARM_ACCESS", func(t *testing.T) {
@@ -204,14 +204,14 @@ func TestEIP8038AccountAccess(t *testing.T) {
 			t.Fatal(err)
 		}
 		// three PUSH1 + one PUSH20 = 12 gas, zero-length copy => no memory/copy gas.
-		if want := uint64(12) + cold + warm; res.UsedRegularGas != want {
-			t.Fatalf("cold EXTCODECOPY = %d, want %d", res.UsedRegularGas, want)
+		if want := uint64(12) + cold + warm; res.UsedExecutionGas != want {
+			t.Fatalf("cold EXTCODECOPY = %d, want %d", res.UsedExecutionGas, want)
 		}
 	})
 }
 
 // callFamily8038 builds a zero-input/output call-family operation that forwards
-// all remaining regular gas and discards its success flag. CALL and CALLCODE
+// all remaining execution gas and discards its success flag. CALL and CALLCODE
 // take a value argument; DELEGATECALL and STATICCALL do not.
 func callFamily8038(to common.Address, op OpCode, value byte) []byte {
 	code := []byte{0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00}
@@ -248,7 +248,7 @@ func TestEIP8038Calls(t *testing.T) {
 	}{
 		{"call/cold", CALL, 0, false, callBase + cold, 0},
 		// A callee that immediately returns gives the 2,300 stipend back, so
-		// the net regular cost is ACCOUNT_WRITE.
+		// the net execution cost is ACCOUNT_WRITE.
 		{"call/value", CALL, 1, true, callBase + cold + params.AccountWriteAmsterdam, stateGasNewAccount},
 		{"callcode/value", CALLCODE, 1, true, callBase + cold + params.AccountWriteAmsterdam, 0},
 		{"delegatecall/cold", DELEGATECALL, 0, false, plainBase + cold, 0},
@@ -264,8 +264,8 @@ func TestEIP8038Calls(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.UsedRegularGas != tc.wantReg {
-				t.Fatalf("regular gas = %d, want %d", res.UsedRegularGas, tc.wantReg)
+			if res.UsedExecutionGas != tc.wantReg {
+				t.Fatalf("execution gas = %d, want %d", res.UsedExecutionGas, tc.wantReg)
 			}
 			if res.UsedStateGas != tc.wantState {
 				t.Fatalf("state gas = %d, want %d", res.UsedStateGas, tc.wantState)
@@ -281,8 +281,8 @@ func TestEIP8038Calls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := 2*callBase + cold; res.UsedRegularGas != want {
-		t.Fatalf("cold+warm CALL = %d, want %d", res.UsedRegularGas, want)
+	if want := 2*callBase + cold; res.UsedExecutionGas != want {
+		t.Fatalf("cold+warm CALL = %d, want %d", res.UsedExecutionGas, want)
 	}
 
 	// Calling an EIP-7702 authority accesses both the authority and its
@@ -300,12 +300,12 @@ func TestEIP8038Calls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := callBase + cold + params.ColdAccountAccessAmsterdam; res.UsedRegularGas != want {
-		t.Fatalf("delegated CALL = %d, want %d (authority + target)", res.UsedRegularGas, want)
+	if want := callBase + cold + params.ColdAccountAccessAmsterdam; res.UsedExecutionGas != want {
+		t.Fatalf("delegated CALL = %d, want %d (authority + target)", res.UsedExecutionGas, want)
 	}
 
 	// A value CALL receives the 2,300 stipend even when it asks to forward no
-	// regular gas. If the child burns that stipend, the full CALL_VALUE
+	// execution gas. If the child burns that stipend, the full CALL_VALUE
 	// (ACCOUNT_WRITE + stipend) remains charged to the caller.
 	stipendTarget := common.BytesToAddress([]byte("stipend-target"))
 	base := callFamily8038(stipendTarget, CALL, 1)
@@ -319,13 +319,13 @@ func TestEIP8038Calls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := 5*push1 + push20 + push1 + pop + params.WarmAccountAccessAmsterdam + cold + params.CallValueTransferAmsterdam; res.UsedRegularGas != want {
-		t.Fatalf("value CALL with burnt stipend = %d, want %d", res.UsedRegularGas, want)
+	if want := 5*push1 + push20 + push1 + pop + params.WarmAccountAccessAmsterdam + cold + params.CallValueTransferAmsterdam; res.UsedExecutionGas != want {
+		t.Fatalf("value CALL with burnt stipend = %d, want %d", res.UsedExecutionGas, want)
 	}
 }
 
 // TestEIP8038Create checks that CREATE and CREATE2 always pay CREATE_ACCESS
-// in regular gas. With otherwise identical initcode, CREATE2 additionally has
+// in execution gas. With otherwise identical initcode, CREATE2 additionally has
 // one salt push and the address-hash word charge.
 func TestEIP8038Create(t *testing.T) {
 	create, _, err := run8038(t, deployCode(deploy0Init, false, 0), hugeBudget(), new(uint256.Int), nil)
@@ -341,17 +341,17 @@ func TestEIP8038Create(t *testing.T) {
 	const outer = uint64(3 + 3 + 3 + 3 + 3*3)
 	const init = uint64(2 * 3)
 	want := outer + params.CreateAccessAmsterdam + params.InitCodeWordGas + init
-	if create.UsedRegularGas != want {
-		t.Fatalf("CREATE regular gas = %d, want %d", create.UsedRegularGas, want)
+	if create.UsedExecutionGas != want {
+		t.Fatalf("CREATE execution gas = %d, want %d", create.UsedExecutionGas, want)
 	}
-	if want := create.UsedRegularGas + 3 + params.Keccak256WordGas; create2.UsedRegularGas != want {
-		t.Fatalf("CREATE2 regular gas = %d, want %d", create2.UsedRegularGas, want)
+	if want := create.UsedExecutionGas + 3 + params.Keccak256WordGas; create2.UsedExecutionGas != want {
+		t.Fatalf("CREATE2 execution gas = %d, want %d", create2.UsedExecutionGas, want)
 	}
 }
 
 // TestEIP8038SelfdestructAccountWrite checks that SELFDESTRUCT sending a positive
 // balance to an empty account is charged the cold access, an additional
-// ACCOUNT_WRITE (regular) and GAS_NEW_ACCOUNT (state).
+// ACCOUNT_WRITE (execution) and GAS_NEW_ACCOUNT (state).
 func TestEIP8038SelfdestructAccountWrite(t *testing.T) {
 	beneficiary := common.BytesToAddress([]byte("fresh-beneficiary"))
 	// PUSH20 beneficiary; SELFDESTRUCT
@@ -368,8 +368,8 @@ func TestEIP8038SelfdestructAccountWrite(t *testing.T) {
 	}
 	const push20 = uint64(3)
 	wantReg := push20 + params.SelfdestructGasEIP150 + params.ColdAccountAccessAmsterdam + params.AccountWriteAmsterdam
-	if res.UsedRegularGas != wantReg {
-		t.Fatalf("regular gas = %d, want %d", res.UsedRegularGas, wantReg)
+	if res.UsedExecutionGas != wantReg {
+		t.Fatalf("execution gas = %d, want %d", res.UsedExecutionGas, wantReg)
 	}
 	if want := int64(params.AccountCreationSize * params.CostPerStateByte); res.UsedStateGas != want {
 		t.Fatalf("state gas = %d, want %d", res.UsedStateGas, want)

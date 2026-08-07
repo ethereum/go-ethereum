@@ -379,12 +379,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
-		// EIP-7997: insert the deterministic deployment factory at the Amsterdam
-		// activation block via an irregular state transition.
-		if config.IsAmsterdam(b.header.Number, b.header.Time) && !config.IsAmsterdam(parent.Number(), parent.Time()) {
-			misc.ApplyEIP7997(statedb)
-		}
-
 		// Mirror the system calls block processing makes, in the same order,
 		// so a generated chain and an imported one agree on the state root.
 		if config.IsPrague(b.header.Number, b.header.Time) {
