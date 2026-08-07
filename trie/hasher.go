@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -28,10 +29,11 @@ import (
 // hasher is a type used for the trie Hash operation. A hasher has some
 // internal preallocated temp space
 type hasher struct {
-	sha      crypto.KeccakState
-	tmp      []byte
-	encbuf   rlp.EncoderBuffer
-	parallel bool // Whether to use parallel threads when hashing
+	sha       crypto.KeccakState
+	tmp       []byte
+	encbuf    rlp.EncoderBuffer
+	parallel  bool // Whether to use parallel threads when hashing
+	cacheBlob bool // Whether to stash each node's encoding for the committer
 }
 
 // hasherPool holds pureHashers
@@ -45,9 +47,10 @@ var hasherPool = sync.Pool{
 	},
 }
 
-func newHasher(parallel bool) *hasher {
+func newHasher(parallel, cacheBlob bool) *hasher {
 	h := hasherPool.Get().(*hasher)
 	h.parallel = parallel
+	h.cacheBlob = cacheBlob
 	return h
 }
 
@@ -76,6 +79,9 @@ func (h *hasher) hash(n node, force bool) []byte {
 		}
 		hash := h.hashData(enc)
 		n.flags.hash = hash
+		if h.cacheBlob {
+			n.flags.blob = common.CopyBytes(enc)
+		}
 		return hash
 
 	case *fullNode:
@@ -91,6 +97,9 @@ func (h *hasher) hash(n node, force bool) []byte {
 		}
 		hash := h.hashData(enc)
 		n.flags.hash = hash
+		if h.cacheBlob {
+			n.flags.blob = common.CopyBytes(enc)
+		}
 		return hash
 
 	case hashNode:
@@ -148,9 +157,9 @@ func (h *hasher) encodeFullNode(n *fullNode) []byte {
 			go func(i int) {
 				defer wg.Done()
 
-				h := newHasher(false)
-				fn.Children[i] = h.hash(n.Children[i], false)
-				returnHasherToPool(h)
+				h2 := newHasher(false, h.cacheBlob)
+				fn.Children[i] = h2.hash(n.Children[i], false)
+				returnHasherToPool(h2)
 			}(i)
 		}
 		wg.Wait()
