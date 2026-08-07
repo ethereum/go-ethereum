@@ -656,6 +656,26 @@ func TestDecodeSingleCorruptedData(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for invalid restart count")
 	}
+
+	// Test with a restart count large enough to overflow the trailer size
+	// computation (8*nRestarts wraps around for nRestarts >= 1<<29).
+	corrupted = make([]byte, len(keySection))
+	copy(corrupted, keySection)
+	binary.BigEndian.PutUint32(corrupted[len(corrupted)-4:], 1<<29)
+	err = decodeSingle(corrupted, nil)
+	if err == nil {
+		t.Fatal("Expected error for overflowing restart count")
+	}
+
+	// Test with a key offset pointing beyond the end of the key data
+	corrupted = make([]byte, 12)
+	binary.BigEndian.PutUint32(corrupted[0:4], 0xffffffff) // key offset
+	binary.BigEndian.PutUint32(corrupted[4:8], 0)          // value offset
+	binary.BigEndian.PutUint32(corrupted[8:12], 1)         // restart count
+	err = decodeSingle(corrupted, nil)
+	if err == nil {
+		t.Fatal("Expected error for out-of-range key offset")
+	}
 }
 
 // Helper function to test encode/decode cycle
