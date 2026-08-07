@@ -4,7 +4,8 @@
 package {{.Package}}
 
 import (
-	"bytes"
+	"bytes"{{if hasErrors .Contracts}}
+	"fmt"{{end}}
 	"math/big"
 	"errors"
 
@@ -16,7 +17,8 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
-	_ = bytes.Equal
+	_ = bytes.Equal{{if hasErrors .Contracts}}
+	_ = fmt.Sprintf{{end}}
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -218,6 +220,9 @@ var (
 	// UnpackError attempts to decode the provided error data using user-defined
 	// error definitions.
 	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) (any, error) {
+		if len(raw) < 4 {
+			return nil, fmt.Errorf("insufficient error data: have %d, want at least 4", len(raw))
+		}
 		{{- range $k, $v := .Errors}}
 		if bytes.Equal(raw[:4], {{ decapitalise $contract.Type}}.abi.Errors["{{.Normalized.Name}}"].ID.Bytes()[:4]) {
 			return {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw[4:])

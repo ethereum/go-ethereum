@@ -6,6 +6,7 @@ package solc_errors
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -17,6 +18,7 @@ import (
 // Reference imports to suppress errors if they are not otherwise used.
 var (
 	_ = bytes.Equal
+	_ = fmt.Sprintf
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -103,6 +105,9 @@ func (c *C) TryPackFoo() ([]byte, error) {
 // UnpackError attempts to decode the provided error data using user-defined
 // error definitions.
 func (c *C) UnpackError(raw []byte) (any, error) {
+	if len(raw) < 4 {
+		return nil, fmt.Errorf("insufficient error data: have %d, want at least 4", len(raw))
+	}
 	if bytes.Equal(raw[:4], c.abi.Errors["BadThing"].ID.Bytes()[:4]) {
 		return c.UnpackBadThingError(raw[4:])
 	}
@@ -223,6 +228,9 @@ func (c2 *C2) TryPackFoo() ([]byte, error) {
 // UnpackError attempts to decode the provided error data using user-defined
 // error definitions.
 func (c2 *C2) UnpackError(raw []byte) (any, error) {
+	if len(raw) < 4 {
+		return nil, fmt.Errorf("insufficient error data: have %d, want at least 4", len(raw))
+	}
 	if bytes.Equal(raw[:4], c2.abi.Errors["BadThing"].ID.Bytes()[:4]) {
 		return c2.UnpackBadThingError(raw[4:])
 	}
