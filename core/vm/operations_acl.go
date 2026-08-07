@@ -120,6 +120,21 @@ func gasSLoad8038(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	return GasCosts{ExecutionGas: params.WarmStorageReadCostEIP2929}, nil
 }
 
+// gasBlockhashEIP7709 charges valid BLOCKHASH queries as reads from the
+// corresponding EIP-2935 history storage slot.
+func gasBlockhashEIP7709(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	number, valid := blockHashNumber(evm, stack.peek())
+	if !valid {
+		return GasCosts{}, nil
+	}
+	slot := historyStorageSlot(number)
+	if _, slotPresent := evm.StateDB.SlotInAccessList(params.HistoryStorageAddress, slot); !slotPresent {
+		evm.StateDB.AddSlotToAccessList(params.HistoryStorageAddress, slot)
+		return GasCosts{ExecutionGas: params.ColdStorageAccessAmsterdam}, nil
+	}
+	return GasCosts{ExecutionGas: params.WarmStorageReadCostEIP2929}, nil
+}
+
 // gasExtCodeCopyEIP2929 implements extcodecopy according to EIP-2929
 // EIP spec:
 // > If the target is not in accessed_addresses,
