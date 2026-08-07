@@ -82,6 +82,23 @@ Flags:
 	}
 )
 
+// convertState converts the MPT state at root into the binary tree namespace
+// of chaindb and returns the binary root. It is the conversion engine behind
+// the CLI command, factored so tests drive the whole pipeline without a node.
+func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, memLimit uint64) (common.Hash, error) {
+	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+		IsPBT:  true,
+		PathDB: pathdb.Defaults,
+	})
+	defer destTriedb.Close()
+
+	binTrie, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to create binary trie: %w", err)
+	}
+	return runConversionLoop(chaindb, srcTriedb, destTriedb, binTrie, root, memLimit)
+}
+
 type conversionStats struct {
 	accounts   uint64
 	slots      uint64
