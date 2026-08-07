@@ -44,9 +44,10 @@ const (
 	// cache, keeping the worst case memory use of an entry small.
 	maxCacheablePrecompileOutput = 1024
 
-	// maxCacheablePrecompileBytes is the budget each precompile gets, counting
-	// keys as well as values. Entries run from tens of bytes to kilobytes, so a
-	// budget in entries would mean very different memory depending on the mix.
+	// maxCacheablePrecompileBytes is the budget each precompile gets per fork,
+	// counting keys and values along with what an entry costs to hold. Entries
+	// run from tens of bytes to kilobytes, so a budget in entries would mean
+	// very different memory depending on the mix.
 	maxCacheablePrecompileBytes = 1024 * 1024
 
 	// perEntryOverhead approximates what an entry costs beyond its key and
@@ -242,9 +243,9 @@ type CacheablePrecompile interface {
 	Cacheable() bool
 }
 
-// NormalizedPrecompile is implemented by precompiles that can narrow an input
+// NormalizingPrecompile is implemented by precompiles that can narrow an input
 // down to the bytes that determine the result.
-type NormalizedPrecompile interface {
+type NormalizingPrecompile interface {
 	// NormalizeInput returns the bytes identifying the result, and whether the
 	// invocation is cacheable at all. Two inputs that normalize alike share an
 	// entry, so they must run to the same output. Returning false skips the
@@ -260,7 +261,7 @@ func precompileCacheKey(p PrecompiledContract, input []byte) ([]byte, bool) {
 		return nil, false
 	}
 	key := input
-	if n, ok := p.(NormalizedPrecompile); ok {
+	if n, ok := p.(NormalizingPrecompile); ok {
 		if key, ok = n.NormalizeInput(input); !ok {
 			return nil, false
 		}

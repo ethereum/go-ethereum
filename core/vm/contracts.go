@@ -717,8 +717,8 @@ func (c *bigModExp) NormalizeInput(input []byte) ([]byte, bool) {
 	if !baseLen.IsUint64() || !expLen.IsUint64() || !modLen.IsUint64() {
 		return nil, false
 	}
-	// With no base and no modulus the output is empty whatever follows, so the
-	// header alone identifies it.
+	// With no base and no modulus, nothing past the header changes the outcome,
+	// whether that is an empty output or an Osaka length failure.
 	if baseLen.IsZero() && modLen.IsZero() {
 		return input[:modExpHeaderLength], true
 	}

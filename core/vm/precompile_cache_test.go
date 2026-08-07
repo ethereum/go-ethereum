@@ -362,8 +362,9 @@ var precompileCacheFixtures = []struct{ fixture, addr string }{
 // BenchmarkPrecompileCacheHitVsRun compares serving a warm entry against just
 // running the precompile, over the real test vectors. It is the evidence for
 // which precompiles opt in: caching only belongs where the hit is the cheaper
-// path, and for the curve additions that margin is small enough to be worth
-// rechecking on the machine you care about.
+// path, and for sha256 and blake2F that margin is thin enough to be worth
+// rechecking on the machine you care about. Run it with -count and read
+// medians, the first case measured absorbs the warm-up.
 func BenchmarkPrecompileCacheHitVsRun(b *testing.B) {
 	rules := params.Rules{IsByzantium: true, IsIstanbul: true, IsBerlin: true, IsCancun: true, IsPrague: true, IsOsaka: true}
 	set := activePrecompiledContracts(rules)
@@ -427,22 +428,28 @@ func BenchmarkPrecompileCacheSynthetic(b *testing.B) {
 				in[i] = byte(i)
 			}
 			out, err := p.Run(in)
-			if err != nil || len(out) > maxCacheablePrecompileOutput {
+			if err != nil {
 				continue
 			}
 			var (
 				scope = precompileCacheScope{set, addr}
 				cache = NewPrecompileCache()
 			)
-			cache.store(scope, in, out)
-
 			label := fmt.Sprintf("%s/len=%d", tc.name, n)
-			b.Run(label+"/hit", func(b *testing.B) {
-				b.ReportAllocs()
-				for b.Loop() {
-					cache.load(scope, in)
-				}
-			})
+
+			// Only the precompiles that opt in get a hit measured, going through
+			// the same path RunPrecompiledContract does. For the one that does
+			// not, its run cost against the lookups below is the whole argument.
+			if key, ok := precompileCacheKey(p, in); ok && len(out) <= maxCacheablePrecompileOutput {
+				cache.store(scope, key, out)
+				b.Run(label+"/hit", func(b *testing.B) {
+					b.ReportAllocs()
+					for b.Loop() {
+						k, _ := precompileCacheKey(p, in)
+						cache.load(scope, k)
+					}
+				})
+			}
 			b.Run(label+"/run", func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
