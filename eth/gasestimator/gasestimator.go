@@ -219,6 +219,9 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 		if errors.Is(err, core.ErrGasLimitTooHigh) {
 			return true, nil, nil // Special case, lower gas limit
 		}
+		if errors.Is(err, vm.ErrFloorDataGas) {
+			return true, nil, nil // Special case, raise gas limit
+		}
 		return true, nil, err // Bail out
 	}
 	return result.Failed(), result, nil
