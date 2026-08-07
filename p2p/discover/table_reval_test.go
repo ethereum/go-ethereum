@@ -18,6 +18,7 @@ package discover
 
 import (
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,4 +117,63 @@ func TestRevalidation_endpointUpdate(t *testing.T) {
 	if tr.fast.nodes[0].isValidatedLive {
 		t.Fatal("node is marked live after endpoint change")
 	}
+}
+
+// TestRevalidation_concurrentAddAndRun reproduces the data race between the
+// Table.loop goroutine (which calls tableRevalidation.run) and the doRefresh
+// goroutine (which reaches tableRevalidation.nodeAdded via handleAddNode) on
+// revalidationList.nextTime and revalidationList.nodes. See issue #31460.
+//
+// Without proper locking, this test reliably flags a race under "go test -race".
+func TestRevalidation_concurrentAddAndRun(t *testing.T) {
+	var (
+		transport = newPingRecorder()
+		// Real clock + small ping interval so that list.schedule produces
+		// nextTime values close to now, and tr.run repeatedly enters the body.
+		tab, db = newInactiveTestTable(transport, Config{PingInterval: time.Millisecond})
+	)
+	defer db.Close()
+
+	// Seed the fast list so tr.run has something to iterate over.
+	for i := 0; i < 16; i++ {
+		n := nodeAtDistance(tab.self().ID(), 255, net.IP{10, 0, 0, byte(i)})
+		tab.mutex.Lock()
+		tab.handleAddNode(addNodeOp{node: n})
+		tab.mutex.Unlock()
+	}
+
+	// A barrier so both goroutines start their loops together.
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	const iterations = 2000
+
+	// Background goroutine: simulate doRefresh -> loadSeedNodes -> handleAddNode,
+	// which reaches tr.nodeAdded and appends to list.nodes (and may write
+	// list.nextTime via list.schedule).
+	go func() {
+		defer wg.Done()
+		<-start
+		for i := 0; i < iterations; i++ {
+			n := nodeAtDistance(tab.self().ID(), 200, net.IP{11, 0, byte(i >> 8), byte(i)})
+			tab.mutex.Lock()
+			tab.handleAddNode(addNodeOp{node: n})
+			tab.mutex.Unlock()
+		}
+	}()
+
+	// Foreground goroutine: simulate Table.loop repeatedly calling tr.run,
+	// which reads list.nextTime and list.nodes and may write list.nextTime
+	// via list.schedule.
+	go func() {
+		defer wg.Done()
+		<-start
+		for i := 0; i < iterations; i++ {
+			tab.revalidation.run(tab, mclock.System{}.Now())
+		}
+	}()
+
+	close(start)
+	wg.Wait()
 }
