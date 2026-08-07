@@ -1738,7 +1738,7 @@ func (api *TransactionAPI) currentBlobSidecarVersion() byte {
 func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, &invalidParamsError{message: err.Error()}
 	}
 
 	// Convert legacy blob transaction proofs.
@@ -1761,7 +1761,7 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *uint64) (map[string]interface{}, error) {
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
-		return nil, err
+		return nil, &invalidParamsError{message: err.Error()}
 	}
 
 	// Convert legacy blob transaction proofs.
