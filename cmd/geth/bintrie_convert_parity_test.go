@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"math"
 	"math/big"
 	"math/rand"
 	"os"
@@ -134,7 +133,7 @@ func convertAlloc(t *testing.T, alloc types.GenesisAlloc) (common.Hash, ethdb.Da
 	})
 	defer src.Close()
 
-	binRoot, err := convertState(chaindb, src, root, math.MaxUint64)
+	binRoot, err := convertState(chaindb, src, root, conversionOptions{})
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}

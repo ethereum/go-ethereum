@@ -149,6 +149,25 @@ var (
 	// (d) State ID lookups, etc.
 	PBTPrefix = []byte("b")
 
+	// PBTKeyFamilies lists the leading bytes of every key family that binary
+	// tree state lives under within the PBTPrefix table. The table shares its
+	// one-byte prefix with block bodies, whose keys continue with an 8-byte
+	// block number, so a bare scan of the prefix sweeps bodies in with the
+	// tree: scans of the namespace must go family by family instead. No
+	// family byte is reachable as a block number's leading byte before block
+	// 2^62, which keeps the families collision-free.
+	PBTKeyFamilies = [][]byte{
+		TrieNodeAccountPrefix,   // tree nodes
+		TrieNodeStoragePrefix,   // unused by the single-tree layout, scanned defensively
+		SnapshotAccountPrefix,   // flat accounts
+		SnapshotStoragePrefix,   // flat storage slots
+		stateIDPrefix,           // state root to id lookups, and LastStateID
+		SnapshotRootKey[:1],     // SnapshotRoot and the other snapshot markers
+		trieJournalKey[:1],      // TrieJournal
+		pbtFlatStateKey[:1],     // PBTFlatState, the flat-state attestation
+		StateHistoryIndexPrefix, // state history index metadata
+	}
+
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
 	genesisPrefix  = []byte("ethereum-genesis-") // genesis state prefix for the db

@@ -20,7 +20,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // TestAttestFlatState pins the gate protecting binary-tree flat state.
@@ -85,6 +87,37 @@ func TestAttestFlatState(t *testing.T) {
 
 		if err := attestFlatState(db, false); err == nil {
 			t.Fatal("a database carrying trie data but no attestation was accepted")
+		}
+	})
+
+	t.Run("chain data sharing the namespace prefix is not debris", func(t *testing.T) {
+		// The binary tree namespace prefix is a block body's prefix too. A
+		// database holding chain data but no tree state is fresh as far as
+		// the tree is concerned, and refusing it would block every node that
+		// synced a chain before opening a binary tree over it.
+		outer := rawdb.NewMemoryDatabase()
+		rawdb.WriteBody(outer, common.Hash{0x01}, 1, &types.Body{})
+
+		db := rawdb.NewTable(outer, string(rawdb.PBTPrefix))
+		if err := attestFlatState(db, false); err != nil {
+			t.Fatalf("a block body was mistaken for binary tree state: %v", err)
+		}
+	})
+
+	t.Run("database with conversion debris but no attestation is refused", func(t *testing.T) {
+		// A conversion that dies during its scan leaves flat-state records and
+		// nothing else: no state id, no root node - the bottom-up build emits
+		// the root last - and no attestation, which is written last of all.
+		// Attesting that debris as a fresh database would resurrect it as
+		// complete flat state.
+		db := rawdb.NewMemoryDatabase()
+		rawdb.WriteAccountSnapshot(db, common.Hash{0x01}, []byte{0x01})
+
+		if err := attestFlatState(db, false); err == nil {
+			t.Fatal("a database carrying flat-state debris but no attestation was accepted")
+		}
+		if rawdb.ReadPBTFlatState(db) {
+			t.Fatal("a refused database was attested anyway")
 		}
 	})
 }

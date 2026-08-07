@@ -17,7 +17,6 @@
 package main
 
 import (
-	"math"
 	"math/big"
 	"testing"
 
@@ -83,22 +82,24 @@ func TestBintrieConvert(t *testing.T) {
 	})
 	defer srcTriedb2.Close()
 
+	currentRoot, err := convertState(chaindb, srcTriedb2, root, conversionOptions{})
+	if err != nil {
+		t.Fatalf("conversion failed: %v", err)
+	}
+	t.Logf("Binary trie root: %x", currentRoot)
+
+	if err := verifyConvertedState(chaindb, currentRoot); err != nil {
+		t.Fatalf("verification failed: %v", err)
+	}
+
+	// The conversion finalized the namespace on disk; a database opened over
+	// it afterwards - the way a converted node starts - must pick the root up
+	// from there.
 	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
 		IsPBT:  true,
 		PathDB: pathdb.Defaults,
 	})
 	defer destTriedb.Close()
-
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
-	if err != nil {
-		t.Fatalf("failed to create binary trie: %v", err)
-	}
-
-	currentRoot, err := runConversionLoop(chaindb, srcTriedb2, destTriedb, bt, root, math.MaxUint64)
-	if err != nil {
-		t.Fatalf("conversion failed: %v", err)
-	}
-	t.Logf("Binary trie root: %x", currentRoot)
 
 	bt2, err := bintrie.NewBinaryTrie(currentRoot, destTriedb)
 	if err != nil {
@@ -249,25 +250,23 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 		PathDB:    &pathdb.Config{ReadOnly: true},
 	})
 
-	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		IsPBT:  true,
-		PathDB: pathdb.Defaults,
-	})
-
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
-	if err != nil {
-		t.Fatalf("failed to create binary trie: %v", err)
-	}
-
-	newRoot, err := runConversionLoop(chaindb, srcTriedb2, destTriedb, bt, root, math.MaxUint64)
+	newRoot, err := convertState(chaindb, srcTriedb2, root, conversionOptions{})
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
+	}
+	if err := verifyConvertedState(chaindb, newRoot); err != nil {
+		t.Fatalf("verification failed, which must gate deletion: %v", err)
 	}
 
 	if err := deleteMPTData(chaindb, srcTriedb2, root); err != nil {
 		t.Fatalf("deletion failed: %v", err)
 	}
 	srcTriedb2.Close()
+
+	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+		IsPBT:  true,
+		PathDB: pathdb.Defaults,
+	})
 
 	bt2, err := bintrie.NewBinaryTrie(newRoot, destTriedb)
 	if err != nil {
@@ -286,4 +285,76 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 		t.Errorf("balance after deletion: got %s, want %s", acc.Balance, wantBal)
 	}
 	destTriedb.Close()
+}
+
+// TestConvertRefusesDirtyNamespace pins the crash story. Conversion writes
+// flat state and trie nodes first and the attestation marker last, so a run
+// that dies leaves keys in the namespace but no marker. Nothing may treat
+// that debris as either a completed conversion or a fresh database: the
+// converter must refuse to run over it - whatever shape it has, which depends
+// on where the run stopped - and only --force, which wipes the namespace,
+// clears the way. The equivalent refusal at database-open time is pinned in
+// triedb/pathdb (TestAttestFlatState).
+func TestConvertRefusesDirtyNamespace(t *testing.T) {
+	addr1 := common.HexToAddress("0x4444444444444444444444444444444444444444")
+
+	chaindb := rawdb.NewMemoryDatabase()
+	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.Defaults,
+	})
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Alloc: types.GenesisAlloc{
+			addr1: {Balance: big.NewInt(1000000), Nonce: 1},
+		},
+	}
+	genesis := gspec.MustCommit(chaindb, srcTriedb)
+	root := genesis.Root()
+	srcTriedb.Close()
+
+	src := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    &pathdb.Config{ReadOnly: true},
+	})
+	defer src.Close()
+
+	// Scan-phase debris: a single flat-state record, no trie nodes, no root,
+	// no marker. This is the shape a marker probe cannot see.
+	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
+	rawdb.WriteAccountSnapshot(pbtdb, common.Hash{0x01}, []byte{0x01})
+	if !hasBinaryTrieState(chaindb) {
+		t.Fatal("conversion debris is invisible to the namespace probe")
+	}
+	if _, err := convertState(chaindb, src, root, conversionOptions{}); err == nil {
+		t.Fatal("conversion ran over the debris of a previous run")
+	}
+
+	// --force wipes the namespace, after which conversion must run and leave
+	// nothing of the debris behind.
+	if err := wipeBinaryTrieState(chaindb); err != nil {
+		t.Fatalf("wipe failed: %v", err)
+	}
+	binRoot, err := convertState(chaindb, src, root, conversionOptions{})
+	if err != nil {
+		t.Fatalf("conversion failed after wipe: %v", err)
+	}
+	if err := verifyConvertedState(chaindb, binRoot); err != nil {
+		t.Fatalf("verification failed after wipe: %v", err)
+	}
+	if got := rawdb.ReadAccountSnapshot(pbtdb, common.Hash{0x01}); len(got) != 0 {
+		t.Fatal("the wipe left the debris record in place")
+	}
+	// The wipe must not have touched chain data, which shares the namespace
+	// prefix: a block body key is a binary tree key to any bare prefix sweep.
+	if !rawdb.HasBody(chaindb, genesis.Hash(), 0) {
+		t.Fatal("the wipe deleted the genesis block body along with the tree")
+	}
+
+	// A completed conversion is itself a dirty namespace: re-running without
+	// --force must refuse rather than overwrite.
+	if _, err := convertState(chaindb, src, root, conversionOptions{}); err == nil {
+		t.Fatal("conversion ran over a completed conversion")
+	}
 }
