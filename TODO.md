@@ -165,34 +165,6 @@ Until then the divergence is real but narrow: it needs an account with deployed
 code to be deleted, which post-EIP-6780 means created and destroyed inside one
 transaction.
 
-## The MPT→PBT converter needs rewriting, not patching
-
-`cmd/geth/bintrie_convert.go` was built for a layout that no longer exists, and
-the move of code into the content-addressed zone invalidated its central
-assumption rather than shifting a constant. It still converts, so this is not
-urgent — but it should get a dedicated session rather than another patch.
-
-- **Its write pattern is inverted.** Every contract's chunks used to land in
-  that contract's own header stem, so writes followed the account-hash
-  iteration order the loop is built around. They now scatter into `CODE_ZONE`
-  stems keyed by `KeyHash(code_hash ‖ tree_index)`, interleaved with a
-  commit-and-reload every 1000 accounts (`runConversionLoop`) or on memory
-  pressure (`maybeCommit`). The locality that made those flushes cheap is gone.
-- **Deduplication is now the common case.** Identical bytecode shares leaves
-  from chunk 0 rather than only past chunk 128, so the converter rewrites the
-  same chunks once per holder and the output is smaller than it plans for.
-  Neither is accounted for.
-- **Delegation is handled by a patch rather than by design.** A delegated
-  account in the merkle source is a 23-byte code blob and has to become a
-  header leaf rather than chunks ([EIP #12114]), or converted state disagrees
-  with replayed state. The loop now recognises the designator inline, which
-  fixes it without giving the converter any notion of the distinction — and
-  nothing checks the result, for the reason below.
-- **Nothing would catch any of that.** `bintrie_convert_test.go` reads back
-  through `GetAccount`/`StorageSlotKey` and asserts no root and no leaf counts.
-  The rewrite's first job is the test that is missing: convert a fixture and
-  compare its root against replaying the equivalent transactions.
-
 [EIP #12114]: https://github.com/ethereum/EIPs/pull/12114
 
 ## Also deferred, for context
@@ -224,10 +196,6 @@ to look.
   encodings of one proof rather than a forged answer — but the encoding should
   be canonical before the multiproof carries a witness, or the same statement
   gets more than one wire form. The mechanism was not chased down.
-- **`StackBuilder`** (`trie/bintrie/stackbuilder.go`) has no production caller.
-  Its natural consumer is the offline conversion in `cmd/geth`, which still
-  inserts one stem at a time. Revisit when conversion is benchmarked; delete if
-  still unwired.
 - **`UpdateAccountBatch`** has no production caller either, and unlike
   `StackBuilder` it is a trap rather than dead weight: its `delegations` slice
   has to be built alongside the code lengths, and an adopter passing nils
