@@ -40,7 +40,7 @@ var (
 	eip7709StateHash  = common.Hash{0x22}
 )
 
-// bogota7709Config clones MergedTestChainConfig with Amsterdam and Bogotá active.
+// bogota7709Config clones MergedTestChainConfig with Amsterdam and Bogota active.
 func bogota7709Config() *params.ChainConfig {
 	config := *params.MergedTestChainConfig
 	config.AmsterdamTime = new(uint64)
@@ -76,6 +76,7 @@ func new7709EVM(t *testing.T, code []byte, chainConfig *params.ChainConfig) (*EV
 	statedb.SetCode(eip7709TestSelf, code, tracing.CodeChangeUnspecified)
 	statedb.CreateAccount(params.HistoryStorageAddress)
 	statedb.SetNonce(params.HistoryStorageAddress, 1, tracing.NonceChangeUnspecified)
+	statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode, tracing.CodeChangeUnspecified)
 	statedb.SetState(params.HistoryStorageAddress, eip7709TestSlot(eip7709TestBlock-1), eip7709StateHash)
 	statedb.SetState(params.HistoryStorageAddress, eip7709TestSlot(eip7709TestBlock-256), eip7709StateHash)
 	statedb.Finalise(true)
@@ -98,7 +99,7 @@ func new7709EVMWithState(statedb *state.StateDB, chainConfig *params.ChainConfig
 	return evm
 }
 
-// run7709 executes BLOCKHASH for number under the Bogotá ruleset.
+// run7709 executes BLOCKHASH for number under the Bogota ruleset.
 func run7709(t *testing.T, number *uint256.Int) (common.Hash, GasBudget, *state.StateDB) {
 	t.Helper()
 	return run7709Code(t, eip7709TestCode(number), false)
@@ -160,6 +161,48 @@ func TestEIP7709BlockHashBounds(t *testing.T) {
 				if warm != test.warm {
 					t.Fatalf("history slot warm = %v, want %v", warm, test.warm)
 				}
+			}
+		})
+	}
+}
+
+func TestEIP7709BlockHashNumberAtChainStart(t *testing.T) {
+	evm := &EVM{Context: BlockContext{BlockNumber: big.NewInt(100)}}
+	tests := []struct {
+		name   string
+		number uint64
+		valid  bool
+	}{
+		{"genesis", 0, true},
+		{"parent", 99, true},
+		{"current", 100, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, valid := blockHashNumber(evm, new(uint256.Int).SetUint64(test.number))
+			if valid != test.valid {
+				t.Errorf("block %d valid = %v, want %v", test.number, valid, test.valid)
+			}
+		})
+	}
+}
+
+func TestEIP7709HistoryStorageSlot(t *testing.T) {
+	tests := []struct {
+		name   string
+		number uint64
+		want   common.Hash
+	}{
+		{"zero", 0, common.Hash{}},
+		{"one", 1, common.HexToHash("0x01")},
+		{"last slot", params.HistoryServeWindow - 1, common.HexToHash("0x1ffe")},
+		{"wraparound", params.HistoryServeWindow, common.Hash{}},
+		{"after wraparound", params.HistoryServeWindow + 1, common.HexToHash("0x01")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := historyStorageSlot(test.number); got != test.want {
+				t.Errorf("historyStorageSlot(%d) = %v, want %v", test.number, got, test.want)
 			}
 		})
 	}
@@ -232,6 +275,7 @@ func TestEIP7709StatelessWitness(t *testing.T) {
 	initial.SetCode(eip7709TestSelf, code, tracing.CodeChangeUnspecified)
 	initial.CreateAccount(params.HistoryStorageAddress)
 	initial.SetNonce(params.HistoryStorageAddress, 1, tracing.NonceChangeUnspecified)
+	initial.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode, tracing.CodeChangeUnspecified)
 	initial.SetState(params.HistoryStorageAddress, eip7709TestSlot(eip7709TestBlock-1), eip7709StateHash)
 	root, err := initial.Commit(0, true, false)
 	if err != nil {
@@ -259,6 +303,9 @@ func TestEIP7709StatelessWitness(t *testing.T) {
 	fullState.StopPrefetcher()
 	if len(witness.State) == 0 {
 		t.Fatal("BLOCKHASH did not add the history storage proof to the witness")
+	}
+	if _, ok := witness.Codes[string(params.HistoryStorageCode)]; ok {
+		t.Fatal("BLOCKHASH added the EIP-2935 system contract code to the witness")
 	}
 	if len(witness.Headers) != 1 {
 		t.Fatalf("witness contains %d headers, want only the parent header", len(witness.Headers))
