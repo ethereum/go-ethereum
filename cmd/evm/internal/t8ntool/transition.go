@@ -265,20 +265,6 @@ func Transition(ctx *cli.Context) error {
 	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body, btleaves)
 }
 
-type mergeAlloc Alloc
-
-func (m mergeAlloc) OnRoot(common.Hash) {}
-
-func (m mergeAlloc) OnAccount(addr *common.Address, da state.DumpAccount) {
-	if addr == nil {
-		return
-	}
-	if _, exists := m[*addr]; exists {
-		return
-	}
-	m[*addr] = dumpAccountToTypesAccount(da)
-}
-
 // writeStreamedAlloc writes the post-state alloc to path one account at a
 // time, producing the same JSON shape as saveFile on an Alloc map.
 func writeStreamedAlloc(path string, s *state.StateDB) error {

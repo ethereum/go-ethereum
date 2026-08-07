@@ -197,7 +197,7 @@ func TestDeletePrefixVsModel(t *testing.T) {
 		// Drop every distinct storage bucket present, one at a time.
 		prefixes := make(map[string]struct{})
 		for k := range model {
-			if k[0] == byte(StorageZone) {
+			if k[0] == StorageZone {
 				prefixes[k[:33]] = struct{}{}
 			}
 		}
