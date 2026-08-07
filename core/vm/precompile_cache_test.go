@@ -313,7 +313,7 @@ func TestPrecompileCacheByteBudget(t *testing.T) {
 		var held uint64
 		for _, k := range c.lru.Keys() {
 			v, _ := c.lru.Peek(k)
-			held += uint64(len(k) + len(v))
+			held += uint64(len(k) + len(v) + perEntryOverhead)
 		}
 		if held != c.size {
 			t.Errorf("entry size %d: accounted %d bytes, holding %d", entry, c.size, held)

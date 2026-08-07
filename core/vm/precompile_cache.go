@@ -48,6 +48,12 @@ const (
 	// keys as well as values. Entries run from tens of bytes to kilobytes, so a
 	// budget in entries would mean very different memory depending on the mix.
 	maxCacheablePrecompileBytes = 1024 * 1024
+
+	// perEntryOverhead approximates what an entry costs beyond its key and
+	// value: a map bucket slot, a separately allocated list element and a string
+	// header. Small entries are dominated by it, so leaving it out of the
+	// accounting lets a cheap precompile hold far more heap than the budget.
+	perEntryOverhead = 152
 )
 
 // PrecompileCache is a thread-safe cache of precompile outputs, shared between
@@ -106,13 +112,13 @@ func (c *precompileResultCache) add(key string, value []byte) {
 	defer c.lock.Unlock()
 
 	if !c.lru.Contains(key) {
-		size := c.size + uint64(len(key)+len(value))
+		size := c.size + uint64(len(key)+len(value)+perEntryOverhead)
 		for size > c.maxSize {
 			k, v, ok := c.lru.RemoveOldest()
 			if !ok {
 				break // nothing left to evict, the entry is larger than the budget
 			}
-			size -= uint64(len(k) + len(v))
+			size -= uint64(len(k) + len(v) + perEntryOverhead)
 		}
 		c.size = size
 	}
