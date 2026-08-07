@@ -97,6 +97,19 @@ func (s *Suite) dialSnap2() (*Conn, error) {
 	return conn, nil
 }
 
+// dialEth71 creates a connection advertising eth/71 as the only eth capability.
+// This is used by the eth/71 (EIP-8159) test suite to force the peer to
+// negotiate eth/71 rather than falling back to an earlier eth version.
+func (s *Suite) dialEth71() (*Conn, error) {
+	conn, err := s.dial()
+	if err != nil {
+		return nil, fmt.Errorf("dial failed: %v", err)
+	}
+	conn.caps = []p2p.Cap{{Name: "eth", Version: eth.ETH71}}
+	conn.ourHighestProtoVersion = eth.ETH71
+	return conn, nil
+}
+
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
