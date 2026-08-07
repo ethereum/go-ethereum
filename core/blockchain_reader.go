@@ -411,7 +411,7 @@ func (bc *BlockChain) StateRecoverable(root common.Hash) bool {
 // hash either from ephemeral in-memory cache, or from persistent storage.
 func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) []byte {
 	// TODO(rjl493456442) The associated account address is also required
-	// in Verkle scheme. Fix it once snap-sync is supported for Verkle.
+	// in binary tree mode. Fix it once snap-sync supports the binary tree.
 	return bc.codedb.Reader().CodeWithPrefix(common.Address{}, hash)
 }
 
@@ -422,35 +422,21 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	if bc.chainConfig.IsUBT(header.Number, header.Time) {
-		return state.New(header.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
+	if bc.chainConfig.IsPBT() {
+		return state.New(header.Root, state.NewPBTDatabase(bc.triedb, bc.codedb))
 	}
 	return state.New(header.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
-}
-
-// StateAtForkBoundary returns a new mutable state based on the parent state
-// and the given header, handling the transition across the UBT fork.
-func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.Header) (*state.StateDB, error) {
-	// The parent is already in the UBT fork.
-	if bc.chainConfig.IsUBT(parent.Number, parent.Time) {
-		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
-	}
-	// The current block is the first block in the UBT fork
-	// (i.e., the parent is the last MPT block).
-	if bc.chainConfig.IsUBT(header.Number, header.Time) {
-		// TODO(gballet): register chain context if needed
-		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
-	}
-	// Both the parent and current block are in the MPT fork.
-	return state.New(parent.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
 // HistoricState returns a historic state specified by the given header.
 // Live states are not available and won't be served, please use `State`
 // or `StateAt` instead.
 func (bc *BlockChain) HistoricState(header *types.Header) (*state.StateDB, error) {
-	if bc.chainConfig.IsUBT(header.Number, header.Time) {
-		return nil, errors.New("historical state over ubt is not yet supported")
+	// The historic database opens merkle-patricia tries keyed by the hash of
+	// the address, which the binary tree is not. Only reconstruction is out of
+	// reach; live state is still served by State and StateAt.
+	if bc.chainConfig.IsPBT() {
+		return nil, errors.New("historical state is not supported for the binary tree")
 	}
 	return state.New(header.Root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
 }

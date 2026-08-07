@@ -58,7 +58,11 @@ func TestDump(t *testing.T) {
 
 	// check that DumpToCollector contains the state objects that are in trie
 	s.state, _ = New(root, tdb)
-	got := string(s.state.Dump(nil))
+	blob, err := s.state.Dump(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(blob)
 	want := `{
     "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
     "accounts": {
@@ -116,7 +120,9 @@ func TestIterativeDump(t *testing.T) {
 	s.state, _ = New(root, tdb)
 
 	b := &bytes.Buffer{}
-	s.state.IterativeDump(nil, json.NewEncoder(b))
+	if err := s.state.IterativeDump(nil, json.NewEncoder(b)); err != nil {
+		t.Fatal(err)
+	}
 	// check that DumpToCollector contains the state objects that are in trie
 	got := b.String()
 	want := `{"root":"0xd5710ea8166b7b04bc2bfb129d7db12931cee82f75ca8e2d075b4884322bf3de"}

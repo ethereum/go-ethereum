@@ -58,6 +58,13 @@ var (
 	// SnapshotRootKey tracks the hash of the last snapshot.
 	SnapshotRootKey = []byte("SnapshotRoot")
 
+	// pbtFlatStateKey attests that the binary tree's flat state has been
+	// accumulated from genesis and is therefore complete. The binary tree
+	// cannot regenerate flat state by walking the trie, so completeness can
+	// only be established by having accumulated it all along; its absence on
+	// a non-empty database means the flat state cannot be trusted.
+	pbtFlatStateKey = []byte("PBTFlatState")
+
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
 
@@ -135,12 +142,12 @@ var (
 	StateHistoryStorageBlockPrefix    = []byte("mbs") // StateHistoryStorageBlockPrefix + account address hash + storage slot hash + blockID => slot block
 	TrienodeHistoryBlockPrefix        = []byte("mbt") // TrienodeHistoryBlockPrefix + account address hash + trienode path + blockID => trienode block
 
-	// VerklePrefix is the database prefix for Verkle trie data, which includes:
+	// PBTPrefix is the database prefix for binary (PBT) trie data, which includes:
 	// (a) Trie nodes
 	// (b) In-memory trie node journal
 	// (c) Persistent state ID
 	// (d) State ID lookups, etc.
-	VerklePrefix = []byte("v")
+	PBTPrefix = []byte("b")
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db

@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 	"golang.org/x/sync/errgroup"
@@ -125,8 +126,7 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList   *accessList
-	accessEvents *AccessEvents
+	accessList *accessList
 
 	// Per-transaction state access footprint for EIP-7928
 	stateAccessList *bal.ConstructionBlockAccessList
@@ -197,9 +197,6 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
-	}
-	if db.Type().Is(TypeUBT) {
-		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
 }
@@ -368,6 +365,106 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 		return stateObject.Root()
 	}
 	return common.Hash{}
+}
+
+// HasStorage reports whether the account holds any storage, committed or
+// pending. The binary tree keeps no per-account storage root, so emptiness is
+// probed rather than compared against the empty-trie sentinel.
+//
+// Nothing in block processing calls this: EIP-7610 rejects deployments from a
+// hardcoded per-chain address list (see core/vm/eip7610.go) rather than by
+// asking whether an account currently holds storage. It is kept as the only
+// correct way to answer the question under the tree.
+func (s *StateDB) HasStorage(addr common.Address) bool {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return false
+	}
+	// Uncommitted writes count: a slot written earlier in this transaction
+	// makes the account non-empty even though nothing has been committed.
+	for _, value := range stateObject.dirtyStorage {
+		if value != (common.Hash{}) {
+			return true
+		}
+	}
+	for _, value := range stateObject.pendingStorage {
+		if value != (common.Hash{}) {
+			return true
+		}
+	}
+	if !s.db.TrieDB().IsPBT() {
+		return stateObject.Root() != types.EmptyRootHash
+	}
+	// Binary tree: the account's storage lives in two places, the header
+	// stem's slot range (slots below 64) and the overflow bucket.
+	tr, err := s.db.OpenTrie(s.originalRoot)
+	if err != nil {
+		s.setError(err)
+		return false
+	}
+	bt, ok := tr.(*bintrie.BinaryTrie)
+	if !ok {
+		s.setError(fmt.Errorf("expected a binary trie, got %T", tr))
+		return false
+	}
+	has, err := bt.HasHeaderStorage(addr)
+	if err != nil {
+		s.setError(err)
+		return false
+	}
+	if has {
+		return true
+	}
+	has, err = bt.HasPrefix(bintrie.StorageBucketPrefix(addr))
+	if err != nil {
+		s.setError(err)
+		return false
+	}
+	return has
+}
+
+// TouchedState reports every account this state loaded or changed, along with
+// the storage slots touched on each. Addresses and slot keys are both raw,
+// never hashed.
+//
+// This is a set of candidates, not a description of the outcome: an account
+// may appear that no longer exists by the end of the transition, and a slot
+// may appear whose value never changed. Callers are expected to read the
+// resulting values back from the committed state and discard what is absent.
+// Erring wide is deliberate - a spurious candidate costs a redundant read,
+// while a missing one silently drops an account from the caller's view.
+//
+// It exists for state layouts that cannot be walked back to addresses. The
+// binary tree keys its leaves by a hash of the address and keeps no preimages,
+// so a post-state dump there has to be rebuilt from keys already known rather
+// than recovered by iterating the tree.
+//
+// Only meaningful before Commit, which clears the bookkeeping this reads.
+func (s *StateDB) TouchedState() map[common.Address][]common.Hash {
+	touched := make(map[common.Address][]common.Hash, len(s.stateObjects))
+	for addr, obj := range s.stateObjects {
+		// A slot can sit in any of the three maps depending on how far
+		// through the block it is; a key present in several must only be
+		// reported once.
+		var (
+			seen  map[common.Hash]struct{}
+			slots []common.Hash
+		)
+		for _, storage := range []Storage{obj.originStorage, obj.dirtyStorage, obj.pendingStorage} {
+			for key := range storage {
+				if seen == nil {
+					seen = make(map[common.Hash]struct{})
+				}
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+				slots = append(slots, key)
+			}
+		}
+		touched[addr] = slots
+	}
+	return touched
 }
 
 // TxIndex returns the current transaction index set by SetTxContext.
@@ -581,19 +678,53 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
-	// Encode the account and update the account trie
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, len(obj.code)); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
+	// Encode the account and update the account trie. Report a code size only
+	// when this block set the code and the blob is in hand; otherwise say it is
+	// unknown rather than going and finding out. CodeSize() loads the whole
+	// contract through the reader to measure it, and nothing on this path calls
+	// AddCode - that unwitnessed read is what left merkle witnesses short of a
+	// contract the replay then could not supply, and a contract fee recipient
+	// is dirty in every block and executed by none of them.
+	//
+	// dirtyCode alone is not enough to trust len(obj.code). SetStorage rebuilds
+	// the object and re-sets its code, and the blob it carries over is whatever
+	// Code() returned - nil when the bytecode could not be fetched. So an empty
+	// blob can arrive under a real code hash, and neither the size nor the code
+	// itself may be taken from it: writing the size would zero a contract that
+	// has code, and handing the blob to UpdateContractCode would chunk nothing
+	// under a code hash that names real bytecode.
+	codeKnown := obj.dirtyCode && (len(obj.code) > 0 || bytes.Equal(obj.CodeHash(), types.EmptyCodeHash[:]))
+	codeLen := -1
+	// A delegated account keeps its designator in its own header rather than
+	// as shared code, so the trie has to be told which it is; it sees only a
+	// length. The blob is in hand exactly when the size is, and leaving this
+	// nil while stating a size clears a live delegation, so the two travel
+	// together.
+	var delegation []byte
+	if codeKnown {
+		codeLen = len(obj.code)
+		if _, ok := types.ParseDelegation(obj.code); ok {
+			delegation = obj.code
+		}
 	}
-	if obj.dirtyCode {
-		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, codeLen, delegation); err != nil {
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %w", obj.Address(), err))
+	}
+	if codeKnown {
+		// The error matters under the binary tree even though it cannot happen
+		// under the merkle-patricia trie, where this is a no-op: the tree writes
+		// the code out as leaves, so this resolves nodes and can fail on a disk
+		// read. Dropping it would commit a root over a half-written code zone.
+		if err := s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code); err != nil {
+			s.setError(fmt.Errorf("updateContractCode (%x) error: %w", obj.Address(), err))
+		}
 	}
 }
 
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(addr common.Address) {
 	if err := s.trie.DeleteAccount(addr); err != nil {
-		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
+		s.setError(fmt.Errorf("deleteStateObject (%x) error: %w", addr[:], err))
 	}
 }
 
@@ -727,9 +858,6 @@ func (s *StateDB) Copy() *StateDB {
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
-	}
-	if s.accessEvents != nil {
-		state.accessEvents = s.accessEvents.Copy()
 	}
 	// Deep copy cached state objects.
 	for addr, obj := range s.stateObjects {
@@ -925,6 +1053,18 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
+	// If there was a trie prefetcher operating, terminate it async so that the
+	// individual storage tries can be updated as soon as the disk load
+	// finishes. This has to happen before the main trie is materialised
+	// below: adopting a prefetched trie blocks until its sub-fetcher has
+	// been terminated.
+	if s.prefetcher != nil {
+		s.prefetcher.terminate(true)
+		defer func() {
+			s.prefetcher.report()
+			s.prefetcher = nil // Pre-byzantium, unset any used up prefetcher
+		}()
+	}
 	// Initialize the trie if it's not constructed yet. If the prefetch
 	// is enabled, the trie constructed below will be replaced by the
 	// prefetched one.
@@ -932,21 +1072,21 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// This operation must be done before state object storage hashing,
 	// as it assumes the main trie is already loaded.
 	if s.trie == nil {
-		tr, err := s.db.OpenTrie(s.originalRoot)
-		if err != nil {
-			s.setError(err)
-			return common.Hash{}
+		// In binary tree mode a single trie carries the whole state, so the
+		// warm trie can only be adopted here, before anything is written to
+		// it. Later on it would discard uncommitted changes; that is what
+		// the check further below guards against.
+		if s.prefetcher != nil && s.db.TrieDB().IsPBT() {
+			s.trie = s.prefetcher.trie(common.Hash{}, s.originalRoot)
 		}
-		s.trie = tr
-	}
-	// If there was a trie prefetcher operating, terminate it async so that the
-	// individual storage tries can be updated as soon as the disk load finishes.
-	if s.prefetcher != nil {
-		s.prefetcher.terminate(true)
-		defer func() {
-			s.prefetcher.report()
-			s.prefetcher = nil // Pre-byzantium, unset any used up prefetcher
-		}()
+		if s.trie == nil {
+			tr, err := s.db.OpenTrie(s.originalRoot)
+			if err != nil {
+				s.setError(err)
+				return common.Hash{}
+			}
+			s.trie = tr
+		}
 	}
 	// Process all storage updates concurrently. The state object update root
 	// method will internally call a blocking trie fetch from the prefetcher,
@@ -955,7 +1095,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
-	if s.db.Type().Is(TypeUBT) {
+	if s.db.Type().Is(TypePBT) {
 		// Bypass per-account updateTrie() for binary trie. In binary trie mode
 		// there is only one unified trie (OpenStorageTrie returns self), so the
 		// per-account trie setup in updateTrie() (getPrefetchedTrie, getTrie,
@@ -1019,7 +1159,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 	// If witness building is enabled, gather all the read-only accesses.
-	// Skip witness collection in Unified-binary-trie mode, they will be
+	// Skip witness collection in binary-tree mode, they will be
 	// gathered together at the end.
 	if s.witness != nil && s.db.Type().Is(TypeMPT) {
 		// Pull in anything that has been accessed before destruction
@@ -1058,9 +1198,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
 	//
-	// Don't check prefetcher if verkle trie has been used. In the context of verkle,
-	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
-	// here could result in losing uncommitted changes from storage.
+	// Don't check the prefetcher in binary tree mode: a single trie is used
+	// for state hashing there and it was already adopted above, before any
+	// writes. Replacing it here would discard uncommitted storage changes.
 	start = time.Now()
 	if s.prefetcher != nil && s.db.Type().Is(TypeMPT) {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
@@ -1118,9 +1258,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 
 	hash := s.trie.Hash()
 
-	// If witness building is enabled, gather the account trie witness
+	// If witness building is enabled, gather the trie witness. The binary tree
+	// keeps the paths its nodes were resolved at, because a group record is
+	// not its own hash preimage and cannot be re-keyed from its bytes.
 	if s.witness != nil {
-		s.witness.AddState(s.trie.Witness(), common.Hash{})
+		if s.db.Type().Is(TypePBT) {
+			s.witness.AddNodes(s.trie.Witness())
+		} else {
+			s.witness.AddState(s.trie.Witness(), common.Hash{})
+		}
 	}
 	return hash
 }
@@ -1186,6 +1332,53 @@ func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[com
 	return storages, storageOrigins, nodes, nil
 }
 
+// deleteStoragePBT collects the storage deletions for a destroyed account under
+// the binary tree.
+//
+// It is deleteStorage without the merkle-patricia half. The tree drops the
+// account's storage bucket structurally, so there are no per-slot trie nodes to
+// delete and no storage root to check the enumeration against.
+//
+// The slot list is still needed, because the flat store is keyed per slot and
+// has no notion of a bucket. It cannot be recovered from the tree either: a
+// storage key there is a hash of the derived position, so walking the bucket
+// yields tree keys that do not invert back to the slot hashes the flat store
+// uses. The flat store has to be asked about its own keys.
+func (s *StateDB) deleteStoragePBT(addrHash common.Hash) (map[common.Hash]common.Hash, map[common.Hash]common.Hash, error) {
+	var (
+		storages       = make(map[common.Hash]common.Hash)
+		storageOrigins = make(map[common.Hash]common.Hash)
+	)
+	iteratee, err := s.db.Iteratee(s.originalRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+	it, err := iteratee.NewStorageIterator(addrHash, common.Hash{})
+	if err != nil {
+		return nil, nil, err
+	}
+	defer it.Release()
+
+	for it.Next() {
+		slot := it.Slot()
+		// Error might occur after Slot function
+		if err := it.Error(); err != nil {
+			return nil, nil, err
+		}
+		if slot == (common.Hash{}) {
+			return nil, nil, fmt.Errorf("unexpected empty storage slot, addr: %x, slot: %x", addrHash, it.Hash())
+		}
+		key := it.Hash()
+		storages[key] = common.Hash{}
+		storageOrigins[key] = slot
+	}
+	// Error might occur during iteration
+	if err := it.Error(); err != nil {
+		return nil, nil, err
+	}
+	return storages, storageOrigins, nil
+}
+
 // handleDestruction processes all destruction markers and deletes the account
 // and associated storage slots if necessary. There are four potential scenarios
 // as following:
@@ -1228,8 +1421,25 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*Acco
 		}
 		deletes[addrHash] = op
 
+		// The binary tree has no per-account storage root, so prev.Root is
+		// always the empty one and says nothing about whether the account held
+		// storage. Ask the flat store instead.
+		if s.db.Type().Is(TypePBT) {
+			storages, storagesOrigin, err := s.deleteStoragePBT(addrHash)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
+			}
+			if len(storages) != 0 && noStorageWiping {
+				return nil, nil, fmt.Errorf("unexpected storage wiping, %x", addr)
+			}
+			op.Storages = storages
+			op.StoragesOrigin = storagesOrigin
+			// No trie nodes are aggregated: the tree removes the account's
+			// whole storage bucket structurally, through DeletePrefix.
+			continue
+		}
 		// Short circuit if the origin storage was empty.
-		if prev.Root == types.EmptyRootHash || s.db.Type().Is(TypeUBT) {
+		if prev.Root == types.EmptyRootHash {
 			continue
 		}
 		if noStorageWiping {
@@ -1482,9 +1692,6 @@ func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStor
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	if rules.IsEIP2929 && rules.IsEIP4762 {
-		panic("eip2929 and eip4762 are both activated")
-	}
 	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
@@ -1570,8 +1777,4 @@ func (s *StateDB) markUpdate(addr common.Address) {
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
 	return s.witness
-}
-
-func (s *StateDB) AccessEvents() *AccessEvents {
-	return s.accessEvents
 }

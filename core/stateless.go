@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -51,9 +53,25 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	if block.ReceiptHash() != (common.Hash{}) {
 		log.Error("stateless runner received receipt root it's expected to calculate (faulty consensus client)", "block", block.Number())
 	}
-	// Create and populate the state database to serve as the stateless backend
-	memdb := witness.MakeHashDB()
-	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), state.NewCodeDB(memdb)))
+	// Create and populate the state database to serve as the stateless backend.
+	//
+	// The two trees are rebuilt differently because they are addressed
+	// differently: a merkle node is named by the hash of its own bytes and can
+	// be re-keyed from a bag of blobs, a binary group record folds at a depth
+	// stored inside it and has to keep the path it was resolved at. Picking the
+	// wrong one does not fail loudly - it produces a root that cannot match,
+	// and the caller rejects its own valid block - so the scheme follows the
+	// chain config rather than being inferred from the witness.
+	var (
+		memdb   ethdb.Database
+		tdbconf *triedb.Config
+	)
+	if config.IsPBT() {
+		memdb, tdbconf = witness.MakePathDB(), triedb.PBTWitnessDefaults
+	} else {
+		memdb, tdbconf = witness.MakeHashDB(), triedb.HashDefaults
+	}
+	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, tdbconf), state.NewCodeDB(memdb)))
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
@@ -78,5 +96,32 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	// Almost everything validated, but receipt and state root needs to be returned
 	receiptRoot := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
 	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
+
+	// A witness that did not cover everything the block touched does not fail
+	// the execution above. A missing node is latched into the state database's
+	// error and the read is answered as an absent account or a zero slot, so
+	// the run completes and returns a root computed from state that was never
+	// there. IntermediateRoot does not consult that error either, which leaves
+	// the mismatch to be discovered by whoever compares roots - or not at all,
+	// where the caller trusts what it gets back.
+	//
+	// This used to be scoped to the binary tree, because merkle witnesses did
+	// not capture every bytecode they read: updateStateObject asked for a code
+	// size on the account-write path, which loaded the whole contract through
+	// the reader without any AddCode recording it. That read is gone - the
+	// binary tree takes the size from the stem it is writing, and the merkle
+	// trie never needed it - so both are held to the same standard here.
+	//
+	// The check is load-bearing rather than advisory now: a latched error fails
+	// the block instead of surfacing later as a root comparison. Be precise
+	// about what it observes, though. It sees the reads this statedb makes -
+	// the sequential processor's execution, the block access list apply, and
+	// the hashing. On the parallel path each transaction runs against its own
+	// statedb whose error is never consulted, so a read inside a transaction is
+	// not covered here at all. TODO.md carries that gap, along with the two
+	// unwitnessed code reads that remain and why neither fires today.
+	if err := db.Error(); err != nil {
+		return common.Hash{}, common.Hash{}, fmt.Errorf("incomplete witness: %w", err)
+	}
 	return stateRoot, receiptRoot, nil
 }

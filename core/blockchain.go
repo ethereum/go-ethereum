@@ -175,10 +175,9 @@ type BlockChainConfig struct {
 	TrieNoAsyncFlush     bool          // Whether the asynchronous buffer flushing is disallowed
 	TrieJournalDirectory string        // Directory path to the journal used for persisting trie data across node restarts
 
-	Preimages         bool   // Whether to store preimage of trie key to the disk
-	StateScheme       string // Scheme used to store ethereum states and merkle tree nodes on top
-	ArchiveMode       bool   // Whether to enable the archive mode
-	BinTrieGroupDepth int    // Number of levels per serialized group in binary trie (1-8)
+	Preimages   bool   // Whether to store preimage of trie key to the disk
+	StateScheme string // Scheme used to store ethereum states and merkle tree nodes on top
+	ArchiveMode bool   // Whether to enable the archive mode
 
 	// Number of blocks from the chain head for which state histories are retained.
 	// If set to 0, all state histories across the entire chain will be retained;
@@ -264,11 +263,31 @@ func (cfg BlockChainConfig) WithNoAsyncFlush(on bool) *BlockChainConfig {
 }
 
 // triedbConfig derives the configures for trie database.
-func (cfg *BlockChainConfig) triedbConfig(isUBT bool) *triedb.Config {
+func (cfg *BlockChainConfig) triedbConfig(isPBT bool) (*triedb.Config, error) {
 	config := &triedb.Config{
-		Preimages:         cfg.Preimages,
-		IsUBT:             isUBT,
-		BinTrieGroupDepth: cfg.BinTrieGroupDepth,
+		Preimages: cfg.Preimages,
+		IsPBT:     isPBT,
+	}
+	// The binary tree is path-scheme only: hashdb keys nodes by their keccak
+	// hash and decodes account leaves as RLP, neither of which a binary node
+	// set produces. Any other scheme here, including the empty one that would
+	// otherwise fall through to hashdb, has to fail rather than build a
+	// database of the wrong shape.
+	if isPBT && cfg.StateScheme != rawdb.PathScheme {
+		scheme := cfg.StateScheme
+		if scheme == "" {
+			scheme = "unset"
+		}
+		return nil, fmt.Errorf("binary tree requires the %q state scheme, got %s", rawdb.PathScheme, scheme)
+	}
+	// Witness statistics read a node's path as a nibble string and its depth as
+	// that string's length, and bucket the result into a fixed sixteen levels.
+	// A binary path is a two-byte bit count followed by packed bits, so the
+	// depth is wrong from the first node and passes sixteen after 113 bits,
+	// which indexes off the end of the histogram. Refuse the flag rather than
+	// collect nonsense until something deep enough panics mid-block.
+	if isPBT && cfg.EnableWitnessStats {
+		return nil, errors.New("witness statistics are not supported for the binary tree")
 	}
 	if cfg.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
@@ -295,7 +314,7 @@ func (cfg *BlockChainConfig) triedbConfig(isUBT bool) *triedb.Config {
 			NoAsyncFlush: cfg.TrieNoAsyncFlush,
 		}
 	}
-	return config
+	return config, nil
 }
 
 // txLookup is wrapper over transaction lookup along with the corresponding
@@ -387,11 +406,15 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Open trie database with provided config
-	enableVerkle, err := EnableUBTAtGenesis(db, genesis)
+	isPBT, err := pbtEnabled(db, genesis)
 	if err != nil {
 		return nil, err
 	}
-	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle))
+	tdbConfig, err := cfg.triedbConfig(isPBT)
+	if err != nil {
+		return nil, err
+	}
+	triedb := triedb.NewDatabase(db, tdbConfig)
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the
@@ -2150,8 +2173,8 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 	noop := func(*blockProcessingResult) {}
 
 	var sdb state.Database
-	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
-		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
+	if bc.chainConfig.IsPBT() {
+		sdb = state.NewPBTDatabase(bc.triedb, bc.codedb)
 	} else {
 		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
 	}
@@ -2540,6 +2563,14 @@ func (bc *BlockChain) recoverAncestors(ctx context.Context, block *types.Block, 
 		}
 	}
 	if parent == nil {
+		// The binary tree cannot roll its persisted state back, so the states
+		// reachable here are only the ones still held in memory. Running out
+		// of ancestors means the fork point predates the persisted layer,
+		// which re-execution cannot reach either - report that rather than
+		// blaming a missing block.
+		if bc.triedb.IsPBT() {
+			return common.Hash{}, errors.New("no ancestor with live state: the binary tree cannot rewind past the persisted state")
+		}
 		return common.Hash{}, errors.New("missing parent")
 	}
 	// Import all the pruned blocks to make the state available

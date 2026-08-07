@@ -225,7 +225,7 @@ type HistoricDB struct {
 
 // Type returns the trie type of the underlying database.
 func (db *HistoricDB) Type() DatabaseType {
-	// TODO(rjl493456442) support UBT in the future
+	// TODO(rjl493456442) support PBT in the future
 	return TypeMPT
 }
 
@@ -239,6 +239,11 @@ func NewHistoricDatabase(triedb *triedb.Database, codedb *CodeDB) *HistoricDB {
 
 // Reader implements Database interface, returning a reader of the specific state.
 func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
+	// Every trie this database opens is a merkle-patricia one keyed by the
+	// hash of the address, which the binary tree is not.
+	if db.triedb.IsPBT() {
+		return nil, errors.New("historical state is not supported for the binary tree")
+	}
 	var readers []StateReader
 	sr, err := db.triedb.HistoricStateReader(stateRoot)
 	if err == nil {

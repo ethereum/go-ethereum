@@ -1,0 +1,41 @@
+name: PBT nightly
+
+# Deep test tier for the EIP-8297 binary-tree work: full-seed differential
+# suites, fuzzing, and race runs that are too slow for the PR gate. Grows
+# with each phase of the PBT refactor.
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  pbt-deep:
+    name: PBT deep tests
+    runs-on: [self-hosted-ghr, size-l-x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: pbt
+          submodules: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Engine and hasher suites (race)
+        run: go test -race -count=1 ./crypto/blake3/ ./trie/bintrie/...
+
+      - name: Fuzz targets (60s each)
+        run: |
+          for target in $(go test -list 'Fuzz.*' ./trie/bintrie/ | grep '^Fuzz' || true); do
+            go test ./trie/bintrie/ -run=NONE -fuzz="^${target}$" -fuzztime=60s
+          done
+
+      - name: Vector staleness guard
+        run: |
+          # Regenerating vectors requires an EELS checkout; the nightly only
+          # asserts the committed vectors still parse and cover every suite.
+          python3 -c "import json; d = json.load(open('trie/bintrie/testdata/eip8297_vectors.json')); assert d['trie_vectors'] and d['sequence_vectors'], 'vector file incomplete'; print('vectors ok:', d['meta']['source'])"

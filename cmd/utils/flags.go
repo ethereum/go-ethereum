@@ -270,11 +270,6 @@ var (
 		Usage:    "Manually specify the bpo2 fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
-	OverrideUBT = &cli.Uint64Flag{
-		Name:     "override.ubt",
-		Usage:    "Manually specify the UBT fork timestamp, overriding the bundled setting",
-		Category: flags.EthCategory,
-	}
 	OverrideGenesisFlag = &cli.StringFlag{
 		Name:     "override.genesis",
 		Usage:    "Load genesis block and configuration from file at this path",
@@ -307,12 +302,6 @@ var (
 		Name:     "snap.v2",
 		Usage:    "Enable the experimental snap/2 (EIP-8189, BAL-based) sync protocol (advertises and syncs via snap/2; not safe on public networks)",
 		Value:    ethconfig.Defaults.SnapV2,
-		Category: flags.StateCategory,
-	}
-	BinTrieGroupDepthFlag = &cli.IntFlag{
-		Name:     "bintrie.groupdepth",
-		Usage:    "Number of levels per serialized group in binary trie (1-8, default 5). Lower values create smaller groups with more nodes.",
-		Value:    5,
 		Category: flags.StateCategory,
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
@@ -1857,9 +1846,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(TrienodeHistoryFullValueCheckpointFlag.Name) {
 		cfg.NodeFullValueCheckpoint = uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name))
 	}
-	if ctx.IsSet(BinTrieGroupDepthFlag.Name) {
-		cfg.BinTrieGroupDepth = ctx.Int(BinTrieGroupDepthFlag.Name)
-	}
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
@@ -2484,7 +2470,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		StateHistory:            ctx.Uint64(StateHistoryFlag.Name),
 		TrienodeHistory:         ctx.Int64(TrienodeHistoryFlag.Name),
 		NodeFullValueCheckpoint: uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name)),
-		BinTrieGroupDepth:       ctx.Int(BinTrieGroupDepthFlag.Name),
 
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
@@ -2568,16 +2553,32 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 }
 
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
-func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, preimage bool, readOnly bool, isUBT bool) *triedb.Database {
+func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, preimage bool, readOnly bool, isPBT bool) *triedb.Database {
+	// Refuse to open binary tree state as a merkle-patricia trie. The records
+	// are shaped differently and are not keccak-addressed, so a merkle reader
+	// finds nothing and reports it as absent rather than as an error, and the
+	// history freezers are separate directories entirely.
+	//
+	// This is a guard rather than a caller's responsibility because most
+	// callers pass false for want of knowing about the tree, not because they
+	// established the database is a merkle one.
+	if !isPBT && rawdb.HasPBTState(disk) {
+		Fatalf("this database holds binary tree state, which this command does not support")
+	}
 	config := &triedb.Config{
 		Preimages: preimage,
-		IsUBT:     isUBT,
+		IsPBT:     isPBT,
 	}
 	scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), disk)
 	if err != nil {
 		Fatalf("%v", err)
 	}
 	if scheme == rawdb.HashScheme {
+		// The binary tree has no hash-scheme representation, so there is
+		// nothing to fall back to here.
+		if isPBT {
+			Fatalf("binary tree requires the %q state scheme, got %q", rawdb.PathScheme, scheme)
+		}
 		// Read-only mode is not implemented in hash mode,
 		// ignore the parameter silently. TODO(rjl493456442)
 		// please config it if read mode is implemented.

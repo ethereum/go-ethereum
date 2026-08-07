@@ -156,7 +156,6 @@ var (
 			t8ntool.OutputBodyFlag,
 			t8ntool.InputAllocFlag,
 			t8ntool.InputEnvFlag,
-			t8ntool.InputBTFlag,
 			t8ntool.InputTxsFlag,
 			t8ntool.ForknameFlag,
 			t8ntool.ChainIDFlag,
@@ -165,10 +164,10 @@ var (
 		},
 	}
 
-	verkleCommand = &cli.Command{
-		Name:    "verkle",
-		Aliases: []string{"vkt"},
-		Usage:   "Binary Trie helpers",
+	pbtCommand = &cli.Command{
+		Name:    "pbt",
+		Aliases: []string{"vkt", "verkle"},
+		Usage:   "Partitioned binary tree helpers",
 		Subcommands: []*cli.Command{
 			{
 				Name:    "tree-keys",
@@ -188,7 +187,7 @@ var (
 			{
 				Name:    "code-chunk-key",
 				Aliases: []string{"vck"},
-				Usage:   "compute the binary trie key given an address and chunk number",
+				Usage:   "compute the binary trie key given a code hash and a chunk number",
 				Action:  t8ntool.BinaryCodeChunkKey,
 			},
 			{
@@ -263,7 +262,7 @@ func init() {
 		stateTransitionCommand,
 		transactionCommand,
 		blockBuilderCommand,
-		verkleCommand,
+		pbtCommand,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
@@ -342,6 +341,9 @@ func collectFiles(path string) []string {
 func dump(s *state.StateDB) *state.Dump {
 	root := s.IntermediateRoot(false)
 	cpy, _ := state.New(root, s.Database())
-	dump := cpy.RawDump(nil)
+	dump, err := cpy.RawDump(nil)
+	if err != nil {
+		return nil
+	}
 	return &dump
 }

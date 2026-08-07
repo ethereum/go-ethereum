@@ -187,6 +187,9 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
+	// HistoricState refuses the binary tree itself, so there is no separate
+	// check here. Only reconstruction is out of reach: the live state above
+	// still serves the recent blocks tracing usually asks about.
 	statedb, err = eth.blockchain.HistoricState(header)
 	if err == nil {
 		return statedb, noopReleaser, nil

@@ -129,22 +129,21 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 }
 
 // hashAlloc computes the state root according to the genesis specification.
-func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
-	// If a genesis-time verkle trie is requested, create a trie config
-	// with the verkle trie enabled so that the tree can be initialized
+func hashAlloc(ga *types.GenesisAlloc, isPBT bool) (common.Hash, error) {
+	// If a genesis-time binary tree is requested, create a trie config
+	// with the binary tree enabled so that the tree can be initialized
 	// as such.
 	var config *triedb.Config
-	if isUBT {
+	if isPBT {
 		config = &triedb.Config{
-			PathDB:            pathdb.Defaults,
-			IsUBT:             true,
-			BinTrieGroupDepth: triedb.UBTDefaults.BinTrieGroupDepth,
+			PathDB: pathdb.Defaults,
+			IsPBT:  true,
 		}
 	}
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	emptyRoot := types.EmptyRootHash
-	if isUBT {
+	if isPBT {
 		emptyRoot = types.EmptyBinaryHash
 	}
 	db := rawdb.NewMemoryDatabase()
@@ -169,7 +168,7 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 // generated states will be persisted into the given database.
 func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing.Hooks) (common.Hash, error) {
 	emptyRoot := types.EmptyRootHash
-	if triedb.IsUBT() {
+	if triedb.IsPBT() {
 		emptyRoot = types.EmptyBinaryHash
 	}
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil))
@@ -282,7 +281,6 @@ type ChainOverrides struct {
 	OverrideAmsterdam *uint64
 	OverrideBPO1      *uint64
 	OverrideBPO2      *uint64
-	OverrideUBT       *uint64
 }
 
 // apply applies the chain overrides on the supplied chain config.
@@ -301,9 +299,6 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	}
 	if o.OverrideBPO2 != nil {
 		cfg.BPO2Time = o.OverrideBPO2
-	}
-	if o.OverrideUBT != nil {
-		cfg.UBTTime = o.OverrideUBT
 	}
 	return cfg.CheckConfigForkOrder()
 }
@@ -475,15 +470,14 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 	}
 }
 
-// IsUBT indicates whether the state is already stored in a verkle
-// tree at genesis time.
-func (g *Genesis) IsUBT() bool {
-	return g.Config.IsUBTGenesis()
+// IsPBT indicates whether the state is committed with a binary tree.
+func (g *Genesis) IsPBT() bool {
+	return g.Config.IsPBT()
 }
 
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := hashAlloc(&g.Alloc, g.IsUBT())
+	root, err := hashAlloc(&g.Alloc, g.IsPBT())
 	if err != nil {
 		panic(err)
 	}
@@ -616,24 +610,22 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 	return block
 }
 
-// EnableUBTAtGenesis indicates whether the verkle fork should be activated
-// at genesis. This is a temporary solution only for verkle devnet testing, where
-// verkle fork is activated at genesis, and the configured activation date has
-// already passed.
+// pbtEnabled reports whether the chain commits its state with the binary tree,
+// taking the answer from the supplied genesis or, failing that, from the config
+// already stored on disk.
 //
-// In production networks (mainnet and public testnets), verkle activation always
-// occurs after the genesis block, making this function irrelevant in those cases.
-func EnableUBTAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
+// It runs before the trie database exists, so it cannot ask one; that is also
+// why the commitment has to be answerable without a block.
+func pbtEnabled(db ethdb.Database, genesis *Genesis) (bool, error) {
 	if genesis != nil {
 		if genesis.Config == nil {
 			return false, errGenesisNoConfig
 		}
-		return genesis.Config.EnableUBTAtGenesis, nil
+		return genesis.Config.IsPBT(), nil
 	}
 	if ghash := rawdb.ReadCanonicalHash(db, 0); ghash != (common.Hash{}) {
-		chainCfg := rawdb.ReadChainConfig(db, ghash)
-		if chainCfg != nil {
-			return chainCfg.EnableUBTAtGenesis, nil
+		if chainCfg := rawdb.ReadChainConfig(db, ghash); chainCfg != nil {
+			return chainCfg.IsPBT(), nil
 		}
 	}
 	return false, nil

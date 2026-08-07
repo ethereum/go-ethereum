@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -224,10 +225,15 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{
-		Preimages: preimages,
-		HashDB:    hashdb.Defaults,
-	})
+	// The binary tree is path-scheme only; hashdb cannot store its node set.
+	tconf := &triedb.Config{Preimages: preimages}
+	if genesisConfig.Config != nil && genesisConfig.Config.IsPBT() {
+		tconf.IsPBT = true
+		tconf.PathDB = pathdb.Defaults
+	} else {
+		tconf.HashDB = hashdb.Defaults
+	}
+	triedb := triedb.NewDatabase(db, tconf)
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)
 	sdb := state.NewDatabase(triedb, nil)
@@ -349,7 +355,11 @@ func runCmd(ctx *cli.Context) error {
 			fmt.Printf("Failed to open statedb %v\n", err)
 			return err
 		}
-		fmt.Println(string(dumpdb.Dump(nil)))
+		blob, err := dumpdb.Dump(nil)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(blob))
 	}
 
 	if ctx.Bool(DebugFlag.Name) {

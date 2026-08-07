@@ -24,7 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -82,12 +84,12 @@ func TestBintrieConvert(t *testing.T) {
 	defer srcTriedb2.Close()
 
 	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		IsUBT:  true,
+		IsPBT:  true,
 		PathDB: pathdb.Defaults,
 	})
 	defer destTriedb.Close()
 
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb, 8)
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
 	if err != nil {
 		t.Fatalf("failed to create binary trie: %v", err)
 	}
@@ -98,7 +100,7 @@ func TestBintrieConvert(t *testing.T) {
 	}
 	t.Logf("Binary trie root: %x", currentRoot)
 
-	bt2, err := bintrie.NewBinaryTrie(currentRoot, destTriedb, 8)
+	bt2, err := bintrie.NewBinaryTrie(currentRoot, destTriedb)
 	if err != nil {
 		t.Fatalf("failed to reload binary trie: %v", err)
 	}
@@ -133,8 +135,8 @@ func TestBintrieConvert(t *testing.T) {
 		t.Errorf("account2 balance: got %s, want %s", acc2.Balance, wantBal2)
 	}
 
-	treeKey1 := bintrie.GetBinaryTreeKeyStorageSlot(addr2, slotKey1[:])
-	val1, err := bt2.GetWithHashedKey(treeKey1)
+	treeKey1 := bintrie.StorageSlotKey(addr2, slotKey1[:])
+	val1, err := bt2.GetStemValue(treeKey1)
 	if err != nil {
 		t.Fatalf("failed to get storage slot1: %v", err)
 	}
@@ -146,8 +148,8 @@ func TestBintrieConvert(t *testing.T) {
 		t.Errorf("storage slot1: got %x, want %x", got1, slotVal1)
 	}
 
-	treeKey2 := bintrie.GetBinaryTreeKeyStorageSlot(addr2, slotKey2[:])
-	val2, err := bt2.GetWithHashedKey(treeKey2)
+	treeKey2 := bintrie.StorageSlotKey(addr2, slotKey2[:])
+	val2, err := bt2.GetStemValue(treeKey2)
 	if err != nil {
 		t.Fatalf("failed to get storage slot2: %v", err)
 	}
@@ -157,6 +159,64 @@ func TestBintrieConvert(t *testing.T) {
 	got2 := common.BytesToHash(val2)
 	if got2 != slotVal2 {
 		t.Errorf("storage slot2: got %x, want %x", got2, slotVal2)
+	}
+
+	// Everything above reads the trie directly, which is not how a node reads
+	// state. Read the same accounts back the way block processing does.
+	assertConvertedStateReadable(t, chaindb, destTriedb, currentRoot, addr1, addr2, slotKey1, slotVal1)
+}
+
+// TestPBTDiskIsDetectable pins the fact MakeTrieDatabase's guard rests on: a
+// binary tree database can be recognised from disk alone, and a merkle-patricia
+// one is never mistaken for it.
+//
+// The guard refuses to open tree state as merkle, which is what stops the
+// snapshot and db commands - all of which pass isPBT=false for want of knowing
+// about the tree - from reading a database whose records they cannot decode and
+// reporting the absence as emptiness. Both directions matter: a false positive
+// would lock those commands out of ordinary merkle databases.
+func TestPBTDiskIsDetectable(t *testing.T) {
+	merkle := rawdb.NewMemoryDatabase()
+	mtdb := triedb.NewDatabase(merkle, &triedb.Config{PathDB: pathdb.Defaults})
+	mtdb.Close()
+	if rawdb.HasPBTState(merkle) {
+		t.Fatal("a merkle-patricia database is marked as holding a binary tree")
+	}
+
+	binary := rawdb.NewMemoryDatabase()
+	btdb := triedb.NewDatabase(binary, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
+	btdb.Close()
+	if !rawdb.HasPBTState(binary) {
+		t.Fatal("a binary tree database is not detectable from disk; the guard can never fire")
+	}
+}
+
+// assertConvertedStateReadable reads a converted database through the state
+// reader a node actually uses, rather than through the binary trie directly.
+//
+// The distinction is the whole point. PBTDatabase.StateReader puts the flat
+// reader ahead of the trie reader, and multiStateReader returns the first
+// answer that comes back without an error - including "this account does not
+// exist". So a converted database whose flat state is empty reads as empty
+// here while every direct trie assertion above still passes.
+func assertConvertedStateReadable(t *testing.T, chaindb ethdb.Database, destTriedb *triedb.Database, root common.Hash, addr1, addr2 common.Address, slotKey, slotVal common.Hash) {
+	t.Helper()
+
+	statedb, err := state.New(root, state.NewPBTDatabase(destTriedb, state.NewCodeDB(chaindb)))
+	if err != nil {
+		t.Fatalf("failed to open the converted state: %v", err)
+	}
+	if got := statedb.GetNonce(addr1); got != 5 {
+		t.Errorf("account1 nonce through the state reader: got %d, want 5", got)
+	}
+	if got := statedb.GetBalance(addr1).ToBig(); got.Cmp(big.NewInt(1000000)) != 0 {
+		t.Errorf("account1 balance through the state reader: got %s, want 1000000", got)
+	}
+	if got := statedb.GetNonce(addr2); got != 10 {
+		t.Errorf("account2 nonce through the state reader: got %d, want 10", got)
+	}
+	if got := statedb.GetState(addr2, slotKey); got != slotVal {
+		t.Errorf("account2 slot through the state reader: got %x, want %x", got, slotVal)
 	}
 }
 
@@ -190,11 +250,11 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 	})
 
 	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		IsUBT:  true,
+		IsPBT:  true,
 		PathDB: pathdb.Defaults,
 	})
 
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb, 8)
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, destTriedb)
 	if err != nil {
 		t.Fatalf("failed to create binary trie: %v", err)
 	}
@@ -209,7 +269,7 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 	}
 	srcTriedb2.Close()
 
-	bt2, err := bintrie.NewBinaryTrie(newRoot, destTriedb, 8)
+	bt2, err := bintrie.NewBinaryTrie(newRoot, destTriedb)
 	if err != nil {
 		t.Fatalf("failed to reload binary trie after deletion: %v", err)
 	}

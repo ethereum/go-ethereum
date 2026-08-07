@@ -568,8 +568,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				trienodeIndex.add(size)
 
 			// Verkle trie data is detected, determine the sub-category
-			case bytes.HasPrefix(key, VerklePrefix):
-				remain := key[len(VerklePrefix):]
+			case bytes.HasPrefix(key, PBTPrefix):
+				remain := key[len(PBTPrefix):]
 				switch {
 				case IsAccountTrieNode(remain):
 					verkleTries.add(size)

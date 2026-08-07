@@ -97,12 +97,11 @@ func merkleNodeHasher(blob []byte) (common.Hash, error) {
 	return crypto.Keccak256Hash(blob), nil
 }
 
-// binaryNodeHasher computes the hash of the given verkle node.
+// binaryNodeHasher computes the hash of the given binary trie node blob.
+// Leaf and branch records are their own hash preimages; group records fold
+// at their stored depth.
 func binaryNodeHasher(blob []byte) (common.Hash, error) {
-	if len(blob) == 0 {
-		return types.EmptyBinaryHash, nil
-	}
-	return bintrie.DeserializeAndHash(blob, 0)
+	return bintrie.DeserializeAndHash(blob)
 }
 
 // Database is a multiple-layered structure for maintaining in-memory states
@@ -123,7 +122,7 @@ type Database struct {
 	// the shutdown to reject all following unexpected mutations.
 	readOnly bool       // Flag if database is opened in read only mode
 	waitSync bool       // Flag if database is deactivated due to initial state sync
-	isUBT    bool       // Flag if database is used for verkle tree
+	isPBT    bool       // Flag if database is used for binary tree
 	hasher   nodeHasher // Trie node hasher
 
 	config *Config        // Configuration for database
@@ -142,7 +141,7 @@ type Database struct {
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
-func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
+func New(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -150,18 +149,18 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 
 	db := &Database{
 		readOnly: config.ReadOnly,
-		isUBT:    isUBT,
+		isPBT:    isPBT,
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
 	}
-	// Establish a dedicated database namespace tailored for verkle-specific
-	// data, ensuring the isolation of both verkle and merkle tree data. It's
+	// Establish a dedicated database namespace tailored for binary-tree
+	// data, ensuring the isolation of both binary and merkle tree data. It's
 	// important to note that the introduction of a prefix won't lead to
 	// substantial storage overhead, as the underlying database will efficiently
 	// compress the shared key prefix.
-	if isUBT {
-		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
+	if isPBT {
+		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.PBTPrefix))
 		db.hasher = binaryNodeHasher
 	}
 	// Construct the layer tree by resolving the in-disk singleton state
@@ -170,7 +169,7 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 
 	// Repair the history, which might not be aligned with the persistent
 	// state in the key-value store due to an unclean shutdown.
-	states, trienodes, err := repairHistory(db.diskdb, isUBT, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
+	states, trienodes, err := repairHistory(db.diskdb, isPBT, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
 	if err != nil {
 		log.Crit("Failed to repair history", "err", err)
 	}
@@ -192,8 +191,8 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 	db.setHistoryIndexer()
 
 	fields := config.fields()
-	if db.isUBT {
-		fields = append(fields, "verkle", true)
+	if db.isPBT {
+		fields = append(fields, "binarytree", true)
 	}
 	log.Info("Initialized path database", fields...)
 	return db
@@ -224,6 +223,36 @@ func (db *Database) setHistoryIndexer() {
 }
 
 // setStateGenerator loads the state generation progress marker and potentially
+// attestFlatState establishes that the binary tree's flat state is complete,
+// or refuses to open the database.
+//
+// Completeness cannot be verified after the fact and cannot be repaired: the
+// tree is not walkable back into flat state, so a store that missed writes has
+// no way to catch up. It can only be established by construction, by having
+// accumulated flat state from the very first block. A fresh database is
+// therefore attested on the spot; a database carrying state but no attestation
+// predates this and has to be resynced.
+//
+// Getting this wrong is not a degraded read path but silent corruption. Once
+// flat state is treated as complete, a miss is reported as "this account does
+// not exist" with no error and no fallback to the trie, and the answer is
+// cached.
+func attestFlatState(diskdb ethdb.Database, readOnly bool) error {
+	if rawdb.ReadPBTFlatState(diskdb) {
+		return nil
+	}
+	// No attestation. Anything already persisted was written while flat state
+	// was being discarded, so the store is incomplete by construction.
+	if rawdb.ReadPersistentStateID(diskdb) != 0 || len(rawdb.ReadAccountTrieNode(diskdb, nil)) != 0 {
+		return errors.New("binary tree database predates flat state and cannot be upgraded in place: resync required")
+	}
+	if readOnly {
+		return errors.New("binary tree database has no flat state attestation and cannot be written in read-only mode")
+	}
+	rawdb.WritePBTFlatState(diskdb)
+	return nil
+}
+
 // resume the state generation if it's permitted.
 func (db *Database) setStateGenerator() error {
 	// Load the state snapshot generation progress marker to prevent access
@@ -231,6 +260,23 @@ func (db *Database) setStateGenerator() error {
 	generator, root, err := loadGenerator(db.diskdb, db.hasher)
 	if err != nil {
 		return err
+	}
+	// The binary tree has no generator, and cannot have one: generation works
+	// by walking the trie and recovering which account each leaf belongs to,
+	// which is impossible here because leaves are keyed by a hash of the
+	// address and no preimages are kept. Its flat state is only ever
+	// accumulated forward from block commits, so it is complete exactly when
+	// it was accumulated from genesis - which is what the attestation checked
+	// here records. Leaving the generator nil marks the flat state as wholly
+	// available, the same state a finished generator leaves behind.
+	if db.isPBT {
+		// A witness-backed database holds trie nodes and nothing else. It has
+		// no flat state, so it must not be attested as having one; see the
+		// note on Config.WitnessOnly for what an attestation would cost.
+		if db.config.WitnessOnly {
+			return nil
+		}
+		return attestFlatState(db.diskdb, db.readOnly)
 	}
 	if generator == nil {
 		// Initialize an empty generator to rebuild the state snapshot from scratch
@@ -260,8 +306,10 @@ func (db *Database) setStateGenerator() error {
 	// Disable the background snapshot building in these circumstances:
 	// - the database is opened in read only mode
 	// - the snapshot build is explicitly disabled
-	// - the database is opened in verkle tree mode
-	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isUBT
+	// - the database is opened in binary tree mode
+	// Note the binary tree never reaches here: setStateGenerator returns above
+	// for it, since generation by trie walk is impossible there.
+	noBuild := db.readOnly || db.config.SnapshotNoBuild
 
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
@@ -368,6 +416,15 @@ func (db *Database) Disable() error {
 // resetForReactivation performs the pathdb-side bookkeeping shared by both
 // Enable and AdoptSyncedState.
 func (db *Database) resetForReactivation(root common.Hash) error {
+	// Reactivation resets the database to a state some other writer has healed
+	// into place, which for the binary tree would leave flat state describing
+	// the state before the sync. It cannot be regenerated from the tree, so
+	// there would be no way back. A binary-tree sync has to deliver flat state
+	// alongside the nodes; until one exists, refuse. Guarding here rather than
+	// in Enable covers the snap/2 completion path as well.
+	if db.isPBT {
+		return errors.New("state sync is not supported for the binary tree: flat state cannot be regenerated from it")
+	}
 	// Ensure the provided state root matches the stored one.
 	stored, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
 	if err != nil {
@@ -410,7 +467,8 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Re-construct a new disk layer backed by persistent state and schedule
 	// the state snapshot generation if it's permitted.
-	db.tree.init(generateSnapshot(db, root, db.isUBT || db.config.SnapshotNoBuild))
+	// No binary-tree term here: resetForReactivation refuses that scheme above.
+	db.tree.init(generateSnapshot(db, root, db.config.SnapshotNoBuild))
 
 	// After snap sync, the state of the database may have changed completely.
 	// To ensure the history indexer always matches the current state, we must:
@@ -472,6 +530,12 @@ func (db *Database) Recover(root common.Hash) error {
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
+	// Rolling back the binary tree is not possible, see Recoverable. Reaching
+	// here means a caller ignored that answer, so say so rather than running
+	// the merkle machinery over binary data.
+	if db.isPBT {
+		return errors.New("state rollback is not supported for the binary tree")
+	}
 	if db.stateFreezer == nil {
 		return errors.New("state rollback is non-supported")
 	}
@@ -526,6 +590,24 @@ func (db *Database) Recover(root common.Hash) error {
 func (db *Database) Recoverable(root common.Hash) bool {
 	// Nothing is recoverable while a state sync is in progress.
 	if db.waitSync {
+		return false
+	}
+	// The binary tree cannot be rolled back at all.
+	//
+	// Reverting works by replaying the pre-transition account and storage
+	// values through the trie and checking the result matches the parent
+	// root. That is only valid while the trie is a pure function of those
+	// values, which holds for the merkle-patricia trie but not here: the
+	// binary tree also stores contract code, and every code chunk is
+	// content-addressed, so identical bytecode shares leaves between
+	// accounts. Whether such a leaf belongs at the parent root depends on
+	// whether any other account held that bytecode, which no per-account
+	// history record describes and nothing reference-counts.
+	//
+	// Reporting false here is not a degradation: every caller already treats
+	// rollback as the fast path and falls back to re-executing blocks forward
+	// from the closest ancestor whose state is still live.
+	if db.isPBT {
 		return false
 	}
 	// Ensure the requested state is a known state.
@@ -629,8 +711,8 @@ func (db *Database) journalPath() string {
 		return ""
 	}
 	var fname string
-	if db.isUBT {
-		fname = fmt.Sprintf("verkle.journal")
+	if db.isPBT {
+		fname = fmt.Sprintf("pbt.journal")
 	} else {
 		fname = fmt.Sprintf("merkle.journal")
 	}

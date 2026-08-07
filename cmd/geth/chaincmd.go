@@ -65,7 +65,6 @@ var (
 			utils.OverrideAmsterdam,
 			utils.OverrideBPO1,
 			utils.OverrideBPO2,
-			utils.OverrideUBT,
 		}, utils.DatabaseFlags),
 		Description: `
 The init command initializes a new genesis block and definition for the network.
@@ -300,15 +299,11 @@ func initGenesis(ctx *cli.Context) error {
 		v := ctx.Uint64(utils.OverrideBPO2.Name)
 		overrides.OverrideBPO2 = &v
 	}
-	if ctx.IsSet(utils.OverrideUBT.Name) {
-		v := ctx.Uint64(utils.OverrideUBT.Name)
-		overrides.OverrideUBT = &v
-	}
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsUBT())
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsPBT())
 	defer triedb.Close()
 
 	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides, nil)
@@ -698,9 +693,15 @@ func dump(ctx *cli.Context) error {
 		return err
 	}
 	if ctx.Bool(utils.IterativeOutputFlag.Name) {
-		state.IterativeDump(conf, json.NewEncoder(os.Stdout))
+		if err := state.IterativeDump(conf, json.NewEncoder(os.Stdout)); err != nil {
+			return err
+		}
 	} else {
-		fmt.Println(string(state.Dump(conf)))
+		blob, err := state.Dump(conf)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(blob))
 	}
 	return nil
 }

@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
-	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
@@ -215,7 +214,9 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	s.db.StorageReads += time.Since(start)
 
 	// Schedule the resolved storage slots for prefetching if it's enabled.
-	if s.db.prefetcher != nil && s.data.Root != types.EmptyRootHash {
+	// s.origin is nil for accounts created in this block: they have no
+	// committed storage to warm, and no origin root to schedule against.
+	if s.db.prefetcher != nil && s.origin != nil && (s.data.Root != types.EmptyRootHash || s.db.db.TrieDB().IsPBT()) {
 		if err = s.db.prefetcher.prefetch(s.addrHash(), s.origin.Root, s.address, nil, []common.Hash{key}, true); err != nil {
 			log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
 		}
@@ -283,7 +284,7 @@ func (s *stateObject) finalise() {
 			s.db.stateAccessList.StorageWrite(s.db.blockAccessIndex, s.address, key, value)
 		}
 	}
-	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
+	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && (s.data.Root != types.EmptyRootHash || s.db.db.TrieDB().IsPBT()) {
 		if err := s.db.prefetcher.prefetch(s.addrHash(), s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
 			log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
 		}
@@ -469,7 +470,7 @@ func (s *stateObject) commit() (*AccountUpdate, *trienode.NodeSet, error) {
 	// The main account trie commit in stateDB.commit() already calls
 	// CollectNodes on this trie, so calling Commit here again would
 	// redundantly traverse and serialize the entire tree per dirty account.
-	if s.db.GetTrie().IsUBT() {
+	if s.db.GetTrie().IsPBT() {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
@@ -526,12 +527,8 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 
 	switch s.trie.(type) {
 	case *bintrie.BinaryTrie:
-		// UBT uses only one tree, and the copy has already been
-		// made in mustCopyTrie.
-		obj.trie = db.trie
-	case *transitiontrie.TransitionTrie:
-		// Same thing for the transition tree, since the MPT is
-		// read-only.
+		// The binary trie is unified: every object shares the statedb's
+		// single trie, whose copy was already made in mustCopyTrie.
 		obj.trie = db.trie
 	case *trie.StateTrie:
 		obj.trie = mustCopyTrie(s.trie)

@@ -99,12 +99,12 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 			}
 			infos = append(infos, info)
 
-		case MerkleStateFreezerName, VerkleStateFreezerName:
+		case MerkleStateFreezerName, PBTStateFreezerName:
 			datadir, err := db.AncientDatadir()
 			if err != nil {
 				return nil, err
 			}
-			f, err := NewStateFreezer(datadir, freezer == VerkleStateFreezerName, true)
+			f, err := NewStateFreezer(datadir, freezer == PBTStateFreezerName, true)
 			if err != nil {
 				continue // might be possible the state freezer is not existent
 			}
@@ -116,12 +116,12 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 			}
 			infos = append(infos, info)
 
-		case MerkleTrienodeFreezerName, VerkleTrienodeFreezerName:
+		case MerkleTrienodeFreezerName, PBTTrienodeFreezerName:
 			datadir, err := db.AncientDatadir()
 			if err != nil {
 				return nil, err
 			}
-			f, err := NewTrienodeFreezer(datadir, freezer == VerkleTrienodeFreezerName, true)
+			f, err := NewTrienodeFreezer(datadir, freezer == PBTTrienodeFreezerName, true)
 			if err != nil {
 				continue // might be possible the trienode freezer is not existent
 			}
@@ -152,9 +152,9 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 	switch freezerName {
 	case ChainFreezerName:
 		path, tables = resolveChainFreezerDir(ancient), chainFreezerTableConfigs
-	case MerkleStateFreezerName, VerkleStateFreezerName:
+	case MerkleStateFreezerName, PBTStateFreezerName:
 		path, tables = filepath.Join(ancient, freezerName), stateFreezerTableConfigs
-	case MerkleTrienodeFreezerName, VerkleTrienodeFreezerName:
+	case MerkleTrienodeFreezerName, PBTTrienodeFreezerName:
 		path, tables = filepath.Join(ancient, freezerName), trienodeFreezerTableConfigs
 	default:
 		return fmt.Errorf("unknown freezer, supported ones: %v", freezers)

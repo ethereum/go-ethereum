@@ -136,7 +136,11 @@ func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 	}
 	account := new(types.SlimAccount)
 	if err := rlp.DecodeBytes(blob, account); err != nil {
-		panic(err)
+		// A corrupt record is a read failure, not a reason to stop the process.
+		// Reporting it lets the caller fall through to the trie, which is what
+		// the multi-reader is arranged to do; the binary tree in particular
+		// puts this reader ahead of the trie one.
+		return nil, err
 	}
 	return account, nil
 }
@@ -177,7 +181,7 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	return &reader{
 		db:          db,
 		state:       root,
-		noHashCheck: db.isUBT,
+		noHashCheck: db.isPBT,
 		layer:       layer,
 	}, nil
 }
@@ -185,6 +189,17 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 // StateReader returns a reader that allows access to the state data associated
 // with the specified state.
 func (db *Database) StateReader(root common.Hash) (database.StateReader, error) {
+	// A witness-backed database holds trie nodes and nothing else, so refuse
+	// to hand out a flat reader over state that was never written.
+	//
+	// This has to refuse rather than return an empty reader. Callers stack
+	// readers and take the first answer that comes back without an error, and
+	// a flat reader with no data reports "not found" without one - so an empty
+	// reader here would answer every query as absent and the trie behind it
+	// would never be asked.
+	if db.config.WitnessOnly {
+		return nil, errors.New("witness-backed database has no flat state")
+	}
 	layer := db.tree.get(root)
 	if layer == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)
@@ -283,7 +298,7 @@ func (r *HistoricalStateReader) Account(address common.Address) (*types.SlimAcco
 	}
 	account := new(types.SlimAccount)
 	if err := rlp.DecodeBytes(blob, account); err != nil {
-		panic(err)
+		return nil, err
 	}
 	return account, nil
 }

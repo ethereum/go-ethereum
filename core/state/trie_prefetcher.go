@@ -40,7 +40,7 @@ var (
 //
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
-	isUBT    bool                   // Flag whether the prefetcher is in UBT mode
+	isPBT    bool                   // Flag whether the prefetcher is in PBT mode
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
 	fetchers map[string]*subfetcher // Subfetchers for each trie
@@ -67,7 +67,7 @@ type triePrefetcher struct {
 func newTriePrefetcher(db Database, root common.Hash, namespace string, noreads bool) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	return &triePrefetcher{
-		isUBT:    db.Type().Is(TypeUBT),
+		isPBT:    db.Type().Is(TypePBT),
 		db:       db,
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
@@ -175,7 +175,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 		fetcher = newSubfetcher(p.db, p.root, owner, root, addr)
 		p.fetchers[id] = fetcher
 	}
-	return fetcher.schedule(addrs, slots, read)
+	return fetcher.schedule(addr, addrs, slots, read)
 }
 
 // trie returns the trie matching the root hash, blocking until the fetcher of
@@ -206,8 +206,8 @@ func (p *triePrefetcher) used(owner common.Hash, root common.Hash, usedAddr []co
 
 // trieID returns an unique trie identifier consists the trie owner and root hash.
 func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
-	// The trie in ubt is only identified by state root
-	if p.isUBT {
+	// The binary tree is identified by state root alone
+	if p.isPBT {
 		return p.root.Hex()
 	}
 	// The trie in merkle is either identified by state root (account trie),
@@ -256,6 +256,10 @@ type subfetcherTask struct {
 	read bool
 	addr *common.Address
 	slot *common.Hash
+	// owner is the account a slot task belongs to. In binary tree mode one
+	// sub-fetcher serves the whole state, so the slot's owner cannot be
+	// inferred from the sub-fetcher's own address.
+	owner common.Address
 }
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
@@ -280,7 +284,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 }
 
 // schedule adds a batch of trie keys to the queue to prefetch.
-func (sf *subfetcher) schedule(addrs []common.Address, slots []common.Hash, read bool) error {
+func (sf *subfetcher) schedule(owner common.Address, addrs []common.Address, slots []common.Hash, read bool) error {
 	// Ensure the subfetcher is still alive
 	select {
 	case <-sf.term:
@@ -293,7 +297,7 @@ func (sf *subfetcher) schedule(addrs []common.Address, slots []common.Hash, read
 		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, addr: &addr})
 	}
 	for _, slot := range slots {
-		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, slot: &slot})
+		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, slot: &slot, owner: owner})
 	}
 	sf.lock.Unlock()
 
@@ -340,12 +344,12 @@ func (sf *subfetcher) terminate(async bool) {
 
 // openTrie resolves the target trie from database for prefetching.
 func (sf *subfetcher) openTrie() error {
-	// Open the ubt tree if the sub-fetcher is in ubt mode. Note, there is
-	// only a single fetcher for ubt.
-	if sf.db.Type().Is(TypeUBT) {
+	// Open the binary tree if the sub-fetcher is in binary-tree mode. Note,
+	// there is only a single fetcher for it.
+	if sf.db.Type().Is(TypePBT) {
 		tr, err := sf.db.OpenTrie(sf.state)
 		if err != nil {
-			log.Warn("Trie prefetcher failed opening UBT trie", "root", sf.root, "err", err)
+			log.Warn("Trie prefetcher failed opening PBT trie", "root", sf.root, "err", err)
 			return err
 		}
 		sf.trie = tr
@@ -390,7 +394,9 @@ func (sf *subfetcher) loop() {
 
 			var (
 				addresses []common.Address
-				slots     [][]byte
+				// Slots are grouped by owning account: one sub-fetcher can
+				// serve several accounts (all of them, in binary tree mode).
+				slots = make(map[common.Address][][]byte)
 			)
 			for _, task := range tasks {
 				if task.addr != nil {
@@ -440,7 +446,7 @@ func (sf *subfetcher) loop() {
 						}
 						sf.seenWriteSlot[key] = struct{}{}
 					}
-					slots = append(slots, key.Bytes())
+					slots[task.owner] = append(slots[task.owner], key.Bytes())
 				}
 			}
 			if len(addresses) != 0 {
@@ -448,8 +454,8 @@ func (sf *subfetcher) loop() {
 					log.Error("Failed to prefetch accounts", "err", err)
 				}
 			}
-			if len(slots) != 0 {
-				if err := sf.trie.PrefetchStorage(sf.addr, slots); err != nil {
+			for owner, keys := range slots {
+				if err := sf.trie.PrefetchStorage(owner, keys); err != nil {
 					log.Error("Failed to prefetch storage", "err", err)
 				}
 			}

@@ -1,4 +1,4 @@
-// Copyright 2025 go-ethereum Authors
+// Copyright 2026 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,129 +17,369 @@
 package bintrie
 
 import (
-	"bytes"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/blake3"
 	"github.com/holiman/uint256"
 )
 
+// The EIP-8297 state embedding: how accounts, storage slots and code chunks
+// map to tree keys and 32-byte values. Mirrors the EELS reference
+// (ethereum/binary_trie/embedding.py) byte for byte.
+//
+// Every key is zone byte ‖ hash-derived tree position ‖ sub-index byte, with
+// a fixed length per zone; a key's stem is everything except the final
+// sub-index byte. Fixed per-zone lengths keep the key set prefix-free.
+
 const (
-	BasicDataLeafKey        = 0
-	CodeHashLeafKey         = 1
-	BasicDataCodeSizeOffset = 5
-	BasicDataNonceOffset    = 8
-	BasicDataBalanceOffset  = 16
+	// Zone identifiers, the first byte of every key.
+	AccountZone byte = 0x00 // account header stems
+	CodeZone    byte = 0x01 // content-addressed code
+	StorageZone byte = 0xFF // overflow storage
+
+	// Sub-indices within an account's header stem.
+	BasicDataLeafKey = 0 // version ‖ reserved ‖ code_size ‖ nonce ‖ balance
+	CodeHashLeafKey  = 1 // keccak256 of the account's code
+	// DelegationLeafKey holds an EIP-7702 designator, right-padded to 32
+	// bytes. It excludes CodeHashLeafKey rather than joining it: a delegated
+	// account's code *is* its indicator, so the leaf determines both the code
+	// and its hash, and every account holds exactly one of the two.
+	DelegationLeafKey = 2
+
+	// HeaderStorageOffset is the header sub-index of storage slot 0, and
+	// HeaderStorageSlots how many slots live there: slots 0..63 at sub-indices
+	// 64..127. Code used to occupy 128..255 and no longer does.
+	HeaderStorageOffset = 64
+	HeaderStorageSlots  = 64
+	// StemSubtreeWidth is the number of values grouped under one stem.
+	StemSubtreeWidth = 256
+
+	// Per-zone key lengths in bytes.
+	AccountKeyLength = 34
+	CodeKeyLength    = 34
+	StorageKeyLength = 66
+
+	// maxPathBits is the deepest a key can be walked: the longest zone key,
+	// in bits. Every branch prefix is a fragment of one such path, so no
+	// prefix can be longer than this.
+	//
+	// EIP-8297's "Maximum key length" permits far more - the two-byte prefix
+	// count admits 65535 bits - but this engine only ever stores keys of the
+	// three zone lengths, so a record claiming more than this cannot have been
+	// produced by it and is refused on the way in.
+	maxPathBits = 8 * StorageKeyLength
 )
 
-var (
-	zeroInt                             = uint256.NewInt(0)
-	zeroHash                            = common.Hash{}
-	verkleNodeWidthLog2                 = 8
-	headerStorageOffset                 = uint256.NewInt(64)
-	codeOffset                          = uint256.NewInt(128)
-	codeStorageDelta                    = uint256.NewInt(0).Sub(codeOffset, headerStorageOffset)
-	mainStorageOffsetLshVerkleNodeWidth = new(uint256.Int).Lsh(uint256.NewInt(1), 248-uint(verkleNodeWidthLog2))
-	CodeOffset                          = uint256.NewInt(128)
-	VerkleNodeWidth                     = uint256.NewInt(256)
-	HeaderStorageOffset                 = uint256.NewInt(64)
-	VerkleNodeWidthLog2                 = 8
+func init() {
+	// Required invariant of the embedding (EIP-8297 "Tree embedding").
+	if !(HeaderStorageOffset > DelegationLeafKey && HeaderStorageOffset+HeaderStorageSlots <= StemSubtreeWidth) {
+		panic("bintrie: invalid header layout constants")
+	}
+}
+
+// ErrBalanceOverflow is returned when an account balance does not fit the
+// 16-byte BASIC_DATA field.
+var ErrBalanceOverflow = errors.New("bintrie: balance exceeds 16 bytes")
+
+// Address32 converts a 20-byte address to the 32-byte form used in key
+// derivation, prepending 12 zero bytes.
+func Address32(addr common.Address) (a32 [32]byte) {
+	copy(a32[12:], addr[:])
+	return a32
+}
+
+// KeyHash is the tree's key-derivation hash (the same function as node
+// merkelization, per the spec).
+func KeyHash(data []byte) [32]byte {
+	return blake3.Sum256(data)
+}
+
+// HeaderStem returns the stem of addr's account header: AccountZone ‖
+// KeyHash(addr32), 33 bytes. Every account has exactly one header stem.
+func HeaderStem(addr common.Address) []byte {
+	a32 := Address32(addr)
+	h := KeyHash(a32[:])
+	stem := make([]byte, 0, AccountKeyLength-1)
+	stem = append(stem, AccountZone)
+	return append(stem, h[:]...)
+}
+
+// HeaderKey returns the account header key at the given sub-index.
+func HeaderKey(addr common.Address, sub byte) []byte {
+	return append(HeaderStem(addr), sub)
+}
+
+// BasicDataKey returns the key of addr's BASIC_DATA leaf.
+func BasicDataKey(addr common.Address) []byte {
+	return HeaderKey(addr, BasicDataLeafKey)
+}
+
+// CodeHashKey returns the key of addr's code-hash leaf.
+func CodeHashKey(addr common.Address) []byte {
+	return HeaderKey(addr, CodeHashLeafKey)
+}
+
+// DelegationKey returns the key of addr's delegation-indicator leaf.
+func DelegationKey(addr common.Address) []byte {
+	return HeaderKey(addr, DelegationLeafKey)
+}
+
+// EncodeDelegation packs an EIP-7702 designator into its leaf value: the
+// indicator in the leading bytes, zero after.
+//
+// This is not the chunk encoding. A chunk reserves its first byte for a count
+// of leading push-data bytes, which an indicator does not carry because it is
+// never executed as code.
+//
+// The argument must be an indicator - exactly 23 bytes behind the marker.
+// Anything longer is truncated rather than refused, so the check belongs at
+// the write path: UpdateAccount classifies before it encodes.
+func EncodeDelegation(designator []byte) []byte {
+	v := make([]byte, 32)
+	copy(v, designator)
+	return v
+}
+
+// StorageBucketPrefix returns the 33-byte prefix under which all of addr's
+// overflow storage lives: StorageZone ‖ KeyHash(addr32). The subtree below
+// it is the account's storage bucket.
+func StorageBucketPrefix(addr common.Address) []byte {
+	a32 := Address32(addr)
+	h := KeyHash(a32[:])
+	p := make([]byte, 0, 33)
+	p = append(p, StorageZone)
+	return append(p, h[:]...)
+}
+
+// StorageStem returns the stem of addr's overflow storage group at
+// treeIndex: StorageZone ‖ KeyHash(addr32) ‖ KeyHash(addr32 ‖ treeIndex32),
+// 65 bytes.
+func StorageStem(addr common.Address, treeIndex *uint256.Int) []byte {
+	a32 := Address32(addr)
+	prefix := KeyHash(a32[:])
+
+	var buf [64]byte
+	copy(buf[:32], a32[:])
+	treeIndex.PutUint256(buf[32:])
+	suffix := KeyHash(buf[:])
+
+	stem := make([]byte, 0, StorageKeyLength-1)
+	stem = append(stem, StorageZone)
+	stem = append(stem, prefix[:]...)
+	return append(stem, suffix[:]...)
+}
+
+// StorageIndex resolves a raw storage slot key (at most 32 bytes, big
+// endian) to its tree coordinates: header placement for slots below 64,
+// otherwise the overflow group index and sub-index.
+func StorageIndex(slot []byte) (inHeader bool, treeIndex uint256.Int, sub byte) {
+	var padded [32]byte
+	copy(padded[32-len(slot):], slot)
+
+	headerCandidate := padded[31] < HeaderStorageOffset
+	if headerCandidate {
+		for _, b := range padded[:31] {
+			if b != 0 {
+				headerCandidate = false
+				break
+			}
+		}
+	}
+	if headerCandidate {
+		return true, treeIndex, HeaderStorageOffset + padded[31]
+	}
+	treeIndex.SetBytes(padded[:])
+	treeIndex.Rsh(&treeIndex, 8) // slot / StemSubtreeWidth
+	return false, treeIndex, padded[31]
+}
+
+// StorageSlotKey returns the tree key of a raw storage slot. Slots below 64
+// live in the account header stem; the rest in the storage zone.
+func StorageSlotKey(addr common.Address, slot []byte) []byte {
+	inHeader, treeIndex, sub := StorageIndex(slot)
+	if inHeader {
+		return HeaderKey(addr, sub)
+	}
+	return append(StorageStem(addr, &treeIndex), sub)
+}
+
+// CodeChunkIndex resolves a code chunk number to its tree coordinates: the
+// content-addressed group index and the sub-index within it.
+func CodeChunkIndex(chunk uint64) (treeIndex uint64, sub byte) {
+	return chunk / StemSubtreeWidth, byte(chunk % StemSubtreeWidth)
+}
+
+// CodeChunkStem returns the stem of a content-addressed code group:
+// CodeZone ‖ KeyHash(codeHash ‖ treeIndex32), 33 bytes. Contracts with
+// identical bytecode share these stems.
+func CodeChunkStem(codeHash common.Hash, treeIndex uint64) []byte {
+	var buf [64]byte
+	copy(buf[:32], codeHash[:])
+	new(uint256.Int).SetUint64(treeIndex).PutUint256(buf[32:])
+	h := KeyHash(buf[:])
+	stem := make([]byte, 0, CodeKeyLength-1)
+	stem = append(stem, CodeZone)
+	return append(stem, h[:]...)
+}
+
+// CodeChunkKey returns the tree key of code chunk number chunk of the code
+// with hash codeHash. No address takes part: chunks are content-addressed, so
+// contracts with identical bytecode share them.
+func CodeChunkKey(codeHash common.Hash, chunk uint64) []byte {
+	treeIndex, sub := CodeChunkIndex(chunk)
+	return append(CodeChunkStem(codeHash, treeIndex), sub)
+}
+
+// validateStem checks a stem (a key without its sub-index byte) against the
+// engine's key-conformance restriction, without materializing the key.
+func validateStem(stem []byte) error {
+	if len(stem) == 0 {
+		return ErrNonConformantKey
+	}
+	switch stem[0] {
+	case AccountZone:
+		if len(stem) != AccountKeyLength-1 {
+			return ErrNonConformantKey
+		}
+	case CodeZone:
+		if len(stem) != CodeKeyLength-1 {
+			return ErrNonConformantKey
+		}
+	case StorageZone:
+		if len(stem) != StorageKeyLength-1 {
+			return ErrNonConformantKey
+		}
+	default:
+		return ErrNonConformantKey
+	}
+	return nil
+}
+
+// validateKey checks the engine's key-conformance restriction: known zone
+// byte and the zone's exact length. This is what keeps stems non-nested
+// (equal-length stems cannot prefix each other; zones differ in byte 0).
+func validateKey(key []byte) error {
+	if len(key) == 0 {
+		return ErrNonConformantKey
+	}
+	switch key[0] {
+	case AccountZone:
+		if len(key) != AccountKeyLength {
+			return ErrNonConformantKey
+		}
+	case CodeZone:
+		if len(key) != CodeKeyLength {
+			return ErrNonConformantKey
+		}
+	case StorageZone:
+		if len(key) != StorageKeyLength {
+			return ErrNonConformantKey
+		}
+	default:
+		return ErrNonConformantKey
+	}
+	return nil
+}
+
+// ChunkedCode represents a sequence of 32-byte chunks of code (31 bytes of
+// which are code data and 1 byte is the pushdata offset).
+type ChunkedCode []byte
+
+// Copy of the values that determine the stack item count of an instruction.
+const (
+	PUSH_OFFSET = 95
+	PUSH1       = PUSH_OFFSET + 1
+	PUSH32      = PUSH_OFFSET + 32
 )
 
-func GetBinaryTreeKey(addr common.Address, key []byte) []byte {
-	return getBinaryTreeKey(addr, key, false)
-}
-
-func getBinaryTreeKey(addr common.Address, offset []byte, overflow bool) []byte {
-	hasher := newSha256()
-	defer returnSha256(hasher)
-	hasher.Write(zeroHash[:12])
-	hasher.Write(addr[:])
-	var buf [32]byte // TODO: make offset a 33-byte value to avoid an extra stack alloc
-	copy(buf[1:32], offset[:31])
-	if overflow {
-		// Overflow detected when adding MAIN_STORAGE_OFFSET,
-		// reporting it in the shifter 32 byte value.
-		buf[0] = 1
+// ChunkifyCode generates the chunked version of an array representing EVM
+// bytecode. Chunk i holds the i'th 31-byte slice of the code in bytes 1..31,
+// preceded by one byte counting how many of the slice's leading bytes are
+// data of a push instruction that began in an earlier chunk (capped at 31).
+func ChunkifyCode(code []byte) ChunkedCode {
+	var (
+		chunkOffset = 0 // offset in the chunk
+		chunkCount  = len(code) / 31
+		codeOffset  = 0 // offset in the code
+	)
+	if len(code)%31 != 0 {
+		chunkCount++
 	}
-	hasher.Write(buf[:])
-	k := hasher.Sum(nil)
-	k[31] = offset[31]
-	return k
-}
+	chunks := make([]byte, chunkCount*32)
+	for i := 0; i < chunkCount; i++ {
+		// number of bytes to copy, 31 unless the end of the code has been
+		// reached.
+		end := 31 * (i + 1)
+		if len(code) < end {
+			end = len(code)
+		}
+		copy(chunks[i*32+1:], code[31*i:end]) // copy the code itself
 
-func GetBinaryTreeKeyBasicData(addr common.Address) []byte {
-	var k [32]byte
-	k[31] = BasicDataLeafKey
-	return GetBinaryTreeKey(addr, k[:])
-}
+		// chunk offset = taken from the last chunk.
+		if chunkOffset > 31 {
+			// skip offset calculation if push data covers the whole chunk
+			chunks[i*32] = 31
+			chunkOffset = 1
+			continue
+		}
+		chunks[32*i] = byte(chunkOffset)
+		chunkOffset = 0
 
-func GetBinaryTreeKeyCodeHash(addr common.Address) []byte {
-	var k [32]byte
-	k[31] = CodeHashLeafKey
-	return GetBinaryTreeKey(addr, k[:])
-}
-
-func GetBinaryTreeKeyStorageSlot(address common.Address, slotnum []byte) []byte {
-	var offset [32]byte
-
-	// Case when the key belongs to the account header
-	if bytes.Equal(slotnum[:31], zeroHash[:31]) && slotnum[31] < 64 {
-		offset[31] = 64 + slotnum[31]
-		return GetBinaryTreeKey(address, offset[:])
+		// Check each instruction and update the offset it should be 0 unless
+		// a PUSH-N overflows.
+		for ; codeOffset < end; codeOffset++ {
+			if code[codeOffset] >= PUSH1 && code[codeOffset] <= PUSH32 {
+				codeOffset += int(code[codeOffset] - PUSH_OFFSET)
+				if codeOffset+1 >= 31*(i+1) {
+					codeOffset++
+					chunkOffset = codeOffset - 31*(i+1)
+					break
+				}
+			}
+		}
 	}
-
-	// Set the main storage offset offset = MAIN_STORAGE_OFFSET + slotnum
-	//   * Note that MAIN_STORAGE_OFFSET is 1 << 248, so the number
-	//     can overflow into a 33rd byte, but since the value is
-	//     shifted by one byte in getBinaryTreeKey, this only takes
-	//     note of the overflow, and the value will be added after
-	//     the shift, in order to avoid allocating an extra byte.
-	//   * Note that the first 64 bytes of the main offset storage
-	//     are unreachable, which is consistent with the spec.
-	//   * Note that `slotnum` is big-endian
-	overflow := slotnum[0] == 255
-	copy(offset[:], slotnum)
-	offset[0] += 1 // 1 << 248, handle overflow out of band
-
-	return getBinaryTreeKey(address, offset[:], overflow)
+	return chunks
 }
 
-func GetBinaryTreeKeyCodeChunk(address common.Address, chunknr *uint256.Int) []byte {
-	chunkOffset := new(uint256.Int).Add(codeOffset, chunknr).Bytes()
-	return GetBinaryTreeKey(address, chunkOffset)
-}
-
-func StorageIndex(storageKey []byte) (*uint256.Int, byte) {
-	// If the storage slot is in the header, we need to add the header offset.
-	var key uint256.Int
-	key.SetBytes(storageKey)
-	if key.Cmp(codeStorageDelta) < 0 {
-		// This addition is always safe; it can't ever overflow since pos<codeStorageDelta.
-		key.Add(headerStorageOffset, &key)
-
-		// In this branch, the tree-index is zero since we're in the account header,
-		// and the sub-index is the LSB of the modified storage key.
-		return zeroInt, byte(key[0] & 0xFF)
+// EncodeBasicData packs an account's basic data into the 32-byte BASIC_DATA
+// value: version(1) ‖ reserved(3) ‖ code_size(4, BE) ‖ nonce(8, BE) ‖
+// balance(16, BE). The version and reserved bytes are zero; any rewrite of
+// the leaf re-encodes all 32 bytes.
+func EncodeBasicData(codeSize uint32, nonce uint64, balance *uint256.Int) ([32]byte, error) {
+	var out [32]byte
+	if balance != nil {
+		if balance.BitLen() > 128 {
+			return out, ErrBalanceOverflow
+		}
+		var full [32]byte
+		balance.PutUint256(full[:])
+		copy(out[16:], full[16:])
 	}
-	// If the storage slot is in the main storage, we need to add the main storage offset.
+	out[4] = byte(codeSize >> 24)
+	out[5] = byte(codeSize >> 16)
+	out[6] = byte(codeSize >> 8)
+	out[7] = byte(codeSize)
+	out[8] = byte(nonce >> 56)
+	out[9] = byte(nonce >> 48)
+	out[10] = byte(nonce >> 40)
+	out[11] = byte(nonce >> 32)
+	out[12] = byte(nonce >> 24)
+	out[13] = byte(nonce >> 16)
+	out[14] = byte(nonce >> 8)
+	out[15] = byte(nonce)
+	return out, nil
+}
 
-	// The first MAIN_STORAGE_OFFSET group will see its
-	// first 64 slots unreachable. This is either a typo in the
-	// spec or intended to conserve the 256-u256
-	// alignment. If we decide to ever access these 64
-	// slots, uncomment this.
-	// // Get the new offset since we now know that we are above 64.
-	// pos.Sub(&pos, codeStorageDelta)
-	// suffix := byte(pos[0] & 0xFF)
-	suffix := storageKey[len(storageKey)-1]
-
-	// We first divide by VerkleNodeWidth to create room to avoid an overflow next.
-	key.Rsh(&key, uint(verkleNodeWidthLog2))
-
-	// We add mainStorageOffset/VerkleNodeWidth which can't overflow.
-	key.Add(&key, mainStorageOffsetLshVerkleNodeWidth)
-
-	// The sub-index is the LSB of the original storage key, since mainStorageOffset
-	// doesn't affect this byte, so we can avoid masks or shifts.
-	return &key, suffix
+// DecodeBasicData unpacks a BASIC_DATA value.
+func DecodeBasicData(v []byte) (version byte, codeSize uint32, nonce uint64, balance *uint256.Int) {
+	var padded [32]byte
+	copy(padded[:], v)
+	version = padded[0]
+	codeSize = uint32(padded[4])<<24 | uint32(padded[5])<<16 | uint32(padded[6])<<8 | uint32(padded[7])
+	for i := 8; i < 16; i++ {
+		nonce = nonce<<8 | uint64(padded[i])
+	}
+	balance = new(uint256.Int).SetBytes(padded[16:32])
+	return version, codeSize, nonce, balance
 }

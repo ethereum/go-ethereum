@@ -31,30 +31,17 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// ExtWitness is a witness RLP encoding for transferring across clients.
-// This is taken from PR #32216 until it's merged.
-// It contains block headers, contract codes, state nodes, and storage keys
-// required for stateless execution verification.
-type ExtWitness struct {
-	Headers []*types.Header `json:"headers"`
-	Codes   []hexutil.Bytes `json:"codes"`
-	State   []hexutil.Bytes `json:"state"`
-	Keys    []hexutil.Bytes `json:"keys"`
-}
-
-// This is taken from PR #32216 until it's merged
 // fromExtWitness converts the consensus witness format into our internal one.
-func fromExtWitness(ext *ExtWitness) (*stateless.Witness, error) {
-	w := &stateless.Witness{}
-	w.Headers = ext.Headers
-
-	w.Codes = make(map[string]struct{}, len(ext.Codes))
-	for _, code := range ext.Codes {
-		w.Codes[string(code)] = struct{}{}
-	}
-	w.State = make(map[string]struct{}, len(ext.State))
-	for _, node := range ext.State {
-		w.State[string(node)] = struct{}{}
+//
+// This used to redeclare ExtWitness and decode it by hand, which quietly
+// ignored the key array. That was harmless while only the merkle tree built
+// witnesses, since a merkle node is named by the hash of its own bytes and the
+// keys carried nothing. The binary tree names nodes by path, so a witness
+// decoded without them holds no state at all.
+func fromExtWitness(ext *stateless.ExtWitness) (*stateless.Witness, error) {
+	w := new(stateless.Witness)
+	if err := w.FromExtWitness(ext); err != nil {
+		return nil, err
 	}
 	return w, nil
 }
@@ -78,7 +65,7 @@ func getInput() []byte {
 		panic(err)
 	}
 
-	var extwitness ExtWitness
+	var extwitness stateless.ExtWitness
 	err = rlp.DecodeBytes(witnessRlp, &extwitness)
 	if err != nil {
 		panic(err)

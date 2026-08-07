@@ -34,7 +34,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrienodeHistory         int64                  `toml:",omitempty"`
 		NodeFullValueCheckpoint uint32                 `toml:",omitempty"`
 		StateScheme             string                 `toml:",omitempty"`
-		BinTrieGroupDepth       int                    `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
 		SlowBlockThreshold      time.Duration          `toml:",omitempty"`
 		SkipBcVersionCheck      bool                   `toml:"-"`
@@ -68,7 +67,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		OverrideAmsterdam       *uint64       `toml:",omitempty"`
 		OverrideBPO1            *uint64       `toml:",omitempty"`
 		OverrideBPO2            *uint64       `toml:",omitempty"`
-		OverrideUBT             *uint64       `toml:",omitempty"`
 		TxSyncDefaultTimeout    time.Duration `toml:",omitempty"`
 		TxSyncMaxTimeout        time.Duration `toml:",omitempty"`
 		RangeLimit              uint64        `toml:",omitempty"`
@@ -91,7 +89,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TrienodeHistory = c.TrienodeHistory
 	enc.NodeFullValueCheckpoint = c.NodeFullValueCheckpoint
 	enc.StateScheme = c.StateScheme
-	enc.BinTrieGroupDepth = c.BinTrieGroupDepth
 	enc.RequiredBlocks = c.RequiredBlocks
 	enc.SlowBlockThreshold = c.SlowBlockThreshold
 	enc.SkipBcVersionCheck = c.SkipBcVersionCheck
@@ -125,7 +122,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.OverrideAmsterdam = c.OverrideAmsterdam
 	enc.OverrideBPO1 = c.OverrideBPO1
 	enc.OverrideBPO2 = c.OverrideBPO2
-	enc.OverrideUBT = c.OverrideUBT
 	enc.TxSyncDefaultTimeout = c.TxSyncDefaultTimeout
 	enc.TxSyncMaxTimeout = c.TxSyncMaxTimeout
 	enc.RangeLimit = c.RangeLimit
@@ -152,7 +148,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TrienodeHistory         *int64                 `toml:",omitempty"`
 		NodeFullValueCheckpoint *uint32                `toml:",omitempty"`
 		StateScheme             *string                `toml:",omitempty"`
-		BinTrieGroupDepth       *int                   `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
 		SlowBlockThreshold      *time.Duration         `toml:",omitempty"`
 		SkipBcVersionCheck      *bool                  `toml:"-"`
@@ -186,7 +181,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		OverrideAmsterdam       *uint64        `toml:",omitempty"`
 		OverrideBPO1            *uint64        `toml:",omitempty"`
 		OverrideBPO2            *uint64        `toml:",omitempty"`
-		OverrideUBT             *uint64        `toml:",omitempty"`
 		TxSyncDefaultTimeout    *time.Duration `toml:",omitempty"`
 		TxSyncMaxTimeout        *time.Duration `toml:",omitempty"`
 		RangeLimit              *uint64        `toml:",omitempty"`
@@ -245,9 +239,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.StateScheme != nil {
 		c.StateScheme = *dec.StateScheme
-	}
-	if dec.BinTrieGroupDepth != nil {
-		c.BinTrieGroupDepth = *dec.BinTrieGroupDepth
 	}
 	if dec.RequiredBlocks != nil {
 		c.RequiredBlocks = dec.RequiredBlocks
@@ -347,9 +338,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.OverrideBPO2 != nil {
 		c.OverrideBPO2 = dec.OverrideBPO2
-	}
-	if dec.OverrideUBT != nil {
-		c.OverrideUBT = dec.OverrideUBT
 	}
 	if dec.TxSyncDefaultTimeout != nil {
 		c.TxSyncDefaultTimeout = *dec.TxSyncDefaultTimeout

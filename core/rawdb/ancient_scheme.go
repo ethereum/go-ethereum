@@ -122,18 +122,18 @@ var trienodeFreezerTableConfigs = map[string]freezerTableConfig{
 
 // The list of identifiers of ancient stores.
 var (
-	ChainFreezerName          = "chain"           // the folder name of chain segment ancient store.
-	MerkleStateFreezerName    = "state"           // the folder name of state history ancient store.
-	VerkleStateFreezerName    = "state_verkle"    // the folder name of state history ancient store.
-	MerkleTrienodeFreezerName = "trienode"        // the folder name of trienode history ancient store.
-	VerkleTrienodeFreezerName = "trienode_verkle" // the folder name of trienode history ancient store.
+	ChainFreezerName          = "chain"        // the folder name of chain segment ancient store.
+	MerkleStateFreezerName    = "state"        // the folder name of state history ancient store.
+	PBTStateFreezerName       = "state_pbt"    // the folder name of state history ancient store.
+	MerkleTrienodeFreezerName = "trienode"     // the folder name of trienode history ancient store.
+	PBTTrienodeFreezerName    = "trienode_pbt" // the folder name of trienode history ancient store.
 )
 
 // freezers the collections of all builtin freezers.
 var freezers = []string{
 	ChainFreezerName,
-	MerkleStateFreezerName, VerkleStateFreezerName,
-	MerkleTrienodeFreezerName, VerkleTrienodeFreezerName,
+	MerkleStateFreezerName, PBTStateFreezerName,
+	MerkleTrienodeFreezerName, PBTTrienodeFreezerName,
 }
 
 // NewStateFreezer initializes the ancient store for state history.
@@ -148,7 +148,7 @@ func NewStateFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.Reset
 	}
 	var name string
 	if verkle {
-		name = filepath.Join(ancientDir, VerkleStateFreezerName)
+		name = filepath.Join(ancientDir, PBTStateFreezerName)
 	} else {
 		name = filepath.Join(ancientDir, MerkleStateFreezerName)
 	}
@@ -167,7 +167,7 @@ func NewTrienodeFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.Re
 	}
 	var name string
 	if verkle {
-		name = filepath.Join(ancientDir, VerkleTrienodeFreezerName)
+		name = filepath.Join(ancientDir, PBTTrienodeFreezerName)
 	} else {
 		name = filepath.Join(ancientDir, MerkleTrienodeFreezerName)
 	}

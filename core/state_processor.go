@@ -166,7 +166,7 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 		ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
 	}
 	// EIP-2935
-	if config.IsPrague(number, time) || config.IsUBT(number, time) {
+	if config.IsPrague(number, time) {
 		ProcessParentBlockHash(parent.Hash(), evm, blockAccessList)
 	}
 	return blockAccessList
@@ -235,11 +235,6 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 		bal = evm.StateDB.Finalise(true)
 	} else {
 		root = statedb.IntermediateRoot(evm.ChainConfig().IsEIP158(blockNumber)).Bytes()
-	}
-	// Merge the tx-local access event into the "block-local" one, in order to collect
-	// all values, so that the witness can be built.
-	if statedb.Database().Type().Is(state.TypeUBT) {
-		statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
 	return MakeReceipt(evm, result, statedb, blockNumber, blockHash, blockTime, tx, gp.CumulativeUsed(), root), bal, nil
 }
@@ -334,9 +329,6 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, blockAccessList
 	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.AddAddressToAccessList(params.BeaconRootsAddress)
 	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
-	if evm.StateDB.AccessEvents() != nil {
-		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
-	}
 	blockAccessList.Merge(evm.StateDB.Finalise(true))
 }
 
@@ -366,9 +358,6 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 	_, _, err := evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
 	if err != nil {
 		panic(err)
-	}
-	if evm.StateDB.AccessEvents() != nil {
-		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
 	blockAccessList.Merge(evm.StateDB.Finalise(true))
 }
@@ -418,9 +407,6 @@ func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.E
 	evm.StateDB.SetTxContext(common.Hash{}, 0, blockAccessIndex)
 	evm.StateDB.AddAddressToAccessList(addr)
 	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
-	if evm.StateDB.AccessEvents() != nil {
-		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
-	}
 	bal := evm.StateDB.Finalise(true)
 	if err != nil {
 		return fmt.Errorf("system call failed to execute: %v", err)

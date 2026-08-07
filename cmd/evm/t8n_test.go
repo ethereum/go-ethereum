@@ -106,6 +106,9 @@ func (args *t8nOutput) get() (out []string) {
 	} else {
 		out = append(out, "--output.alloc", "")
 	}
+	// The binary tree's leaf dump is deliberately not overridden here: it
+	// defaults to off, and a stray file appearing in the package directory
+	// during a run is the regression this leaves exposed.
 	return out
 }
 
@@ -300,6 +303,25 @@ func TestT8n(t *testing.T) {
 			base: "./testdata/34",
 			input: t8nInput{
 				"alloc.json", "txs.json", "env.json", "Osaka", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
+		{ // EIP-8297 binary tree, storage in both homes, root verified against
+			// the execution specs reference (see the fixture's README).
+			base: "./testdata/35",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "BinaryTree", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
+		{ // EIP-8297 binary tree with transactions: an account created, both
+			// storage homes updated, a slot cleared, and code chunked over a
+			// contract creation (see the fixture's README).
+			base: "./testdata/36",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "BinaryTree", "",
 			},
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",

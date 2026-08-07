@@ -110,6 +110,19 @@ func (dl *diskLayer) markStale() {
 	dl.stale = true
 }
 
+// nodeHash returns the hash the caller will check the blob against.
+//
+// The binary tree's node reader skips that check - its node hashes are not the
+// keccak of the blob, so the comparison could never succeed and noHashCheck
+// disables it. Computing one anyway is pure overhead on the hottest read path
+// in the database, taken on every clean-cache hit and every disk read.
+func (dl *diskLayer) nodeHash(blob []byte) common.Hash {
+	if dl.db.isPBT {
+		return common.Hash{}
+	}
+	return crypto.Keccak256Hash(blob)
+}
+
 // node implements the layer interface, retrieving the trie node with the
 // provided node info. No error will be returned if the node is not found.
 func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, nodeLoc, error) {
@@ -141,7 +154,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		if blob := dl.nodes.Get(nil, key); len(blob) > 0 {
 			cleanNodeHitMeter.Mark(1)
 			cleanNodeReadMeter.Mark(int64(len(blob)))
-			return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locCleanCache, depth: depth}, nil
+			return blob, dl.nodeHash(blob), nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanNodeMissMeter.Mark(1)
 	}
@@ -161,7 +174,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dl.nodes.Set(key, blob)
 		cleanNodeWriteMeter.Mark(int64(len(blob)))
 	}
-	return blob, crypto.Keccak256Hash(blob), nodeLoc{loc: locDiskLayer, depth: depth}, nil
+	return blob, dl.nodeHash(blob), nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // account directly retrieves the account RLP associated with a particular

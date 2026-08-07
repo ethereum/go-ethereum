@@ -62,7 +62,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		if stateDb == nil {
 			return state.Dump{}, errors.New("pending state is not available")
 		}
-		return stateDb.RawDump(opts), nil
+		return stateDb.RawDump(opts)
 	}
 	var header *types.Header
 	switch blockNr {
@@ -86,7 +86,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if err != nil {
 		return state.Dump{}, err
 	}
-	return stateDb.RawDump(opts), nil
+	return stateDb.RawDump(opts)
 }
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
@@ -195,7 +195,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 	if maxResults > AccountRangeMaxResults || maxResults <= 0 {
 		opts.Max = AccountRangeMaxResults
 	}
-	return stateDb.RawDump(opts), nil
+	return stateDb.RawDump(opts)
 }
 
 // StorageRangeResult is the result of a debug_storageRangeAt API call.
@@ -232,6 +232,13 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 }
 
 func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
+	if statedb.Database().TrieDB().IsPBT() {
+		// Under the binary tree there is no per-account storage trie to
+		// range over, and the account carries no storage root: the empty
+		// value below would report every contract as having no storage.
+		// Serving this needs the flat state, which is not wired up yet.
+		return StorageRangeResult{}, errors.New("debug_storageRangeAt is not supported for the binary tree")
+	}
 	storageRoot := statedb.GetStorageRoot(address)
 	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
 		return StorageRangeResult{}, nil // empty storage

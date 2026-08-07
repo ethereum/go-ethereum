@@ -208,7 +208,6 @@ var (
 		PragueTime:              nil,
 		OsakaTime:               nil,
 		BogotaTime:              nil,
-		UBTTime:                 nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
 	}
@@ -265,7 +264,6 @@ var (
 		PragueTime:              nil,
 		OsakaTime:               nil,
 		BogotaTime:              nil,
-		UBTTime:                 nil,
 		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		Ethash:                  nil,
 		Clique:                  &CliqueConfig{Period: 0, Epoch: 30000},
@@ -296,7 +294,6 @@ var (
 		PragueTime:              nil,
 		OsakaTime:               nil,
 		BogotaTime:              nil,
-		UBTTime:                 nil,
 		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -327,7 +324,6 @@ var (
 		PragueTime:              newUint64(0),
 		OsakaTime:               newUint64(0),
 		BogotaTime:              nil,
-		UBTTime:                 nil,
 		TerminalTotalDifficulty: big.NewInt(0),
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -362,7 +358,6 @@ var (
 		PragueTime:              nil,
 		OsakaTime:               nil,
 		BogotaTime:              nil,
-		UBTTime:                 nil,
 		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -403,6 +398,14 @@ var (
 	}
 	// DefaultBPO4BlobConfig is the default blob configuration for the BPO4 fork.
 	DefaultBPO4BlobConfig = &BlobConfig{
+		Target:         14,
+		Max:            21,
+		UpdateFraction: 13739630,
+	}
+	// DefaultBPO5BlobConfig is the default blob configuration for the BPO5 fork.
+	// BPO forks carry blob parameters only; until BPO5's own parameters are
+	// scheduled it inherits BPO4's.
+	DefaultBPO5BlobConfig = &BlobConfig{
 		Target:         14,
 		Max:            21,
 		UpdateFraction: 13739630,
@@ -464,7 +467,6 @@ type ChainConfig struct {
 	BPO5Time      *uint64 `json:"bpo5Time,omitempty"`      // BPO5 switch time (nil = no fork, 0 = already on bpo5)
 	AmsterdamTime *uint64 `json:"amsterdamTime,omitempty"` // Amsterdam switch time (nil = no fork, 0 = already on amsterdam)
 	BogotaTime    *uint64 `json:"bogotaTime,omitempty"`    // Bogota switch time (nil = no fork, 0 = already on bogota)
-	UBTTime       *uint64 `json:"ubtTime,omitempty"`       // UBT switch time (nil = no fork, 0 = already on UBT)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -472,18 +474,12 @@ type ChainConfig struct {
 
 	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
 
-	// EnableUBTAtGenesis is a flag that specifies whether the network uses
-	// the Verkle tree starting from the genesis block. If set to true, the
-	// genesis state will be committed using the Binary tree, eliminating the
-	// need for any Binary transition later.
-	//
-	// This is a temporary flag only for binary devnet testing, where binary is
-	// activated at genesis, and the configured activation date has already passed.
-	//
-	// In production networks (mainnet and public testnets), binary activation
-	// always occurs after the genesis block, making this flag irrelevant in
-	// those cases.
-	EnableUBTAtGenesis bool `json:"enableUBTAtGenesis,omitempty"`
+	// PBT commits the state with the EIP-8297 partitioned binary tree instead of
+	// the merkle-patricia trie. It is a property of the chain rather than a fork:
+	// there is no in-consensus conversion between the two, so a tree chain is
+	// committed as one from genesis onwards. It requires Amsterdam and changes no
+	// execution rule, which is why it is absent from Rules and from the fork order.
+	PBT bool `json:"pbt,omitempty"`
 
 	// Various consensus engines
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
@@ -596,8 +592,8 @@ func (c *ChainConfig) String() string {
 	if c.BogotaTime != nil {
 		result += fmt.Sprintf(", BogotaTime: %v", *c.BogotaTime)
 	}
-	if c.UBTTime != nil {
-		result += fmt.Sprintf(", UBTTime: %v", *c.UBTTime)
+	if c.PBT {
+		result += ", PBT: true"
 	}
 	result += "}"
 	return result
@@ -694,8 +690,8 @@ func (c *ChainConfig) Description() string {
 	if c.BogotaTime != nil {
 		banner += fmt.Sprintf(" - Bogota:                      @%-10v\n", *c.BogotaTime)
 	}
-	if c.UBTTime != nil {
-		banner += fmt.Sprintf(" - UBT:                         @%-10v\n", *c.UBTTime)
+	if c.PBT {
+		banner += " - PBT:                         enabled (binary tree state)\n"
 	}
 	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
@@ -876,28 +872,12 @@ func (c *ChainConfig) IsBogota(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.BogotaTime, time)
 }
 
-// IsUBT returns whether time is either equal to the Verkle fork time or greater.
-func (c *ChainConfig) IsUBT(num *big.Int, time uint64) bool {
-	return c.IsLondon(num) && isTimestampForked(c.UBTTime, time)
-}
-
-// IsUBTGenesis checks whether the verkle fork is activated at the genesis block.
-//
-// Verkle mode is considered enabled if the verkle fork time is configured,
-// regardless of whether the local time has surpassed the fork activation time.
-// This is a temporary workaround for verkle devnet testing, where verkle is
-// activated at genesis, and the configured activation date has already passed.
-//
-// In production networks (mainnet and public testnets), verkle activation
-// always occurs after the genesis block, making this function irrelevant in
-// those cases.
-func (c *ChainConfig) IsUBTGenesis() bool {
-	return c.EnableUBTAtGenesis
-}
-
-// IsEIP4762 returns whether eip 4762 has been activated at given block.
-func (c *ChainConfig) IsEIP4762(num *big.Int, time uint64) bool {
-	return c.IsUBT(num, time)
+// IsPBT reports whether the chain commits its state with the binary tree. It
+// takes no block context on purpose: the commitment is fixed for the chain's
+// lifetime, so every site that opens or generates state gets the same answer,
+// including the ones that run before any block exists.
+func (c *ChainConfig) IsPBT() bool {
+	return c.PBT
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -955,7 +935,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
 		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
 		{name: "osakaTime", timestamp: c.OsakaTime, optional: true},
-		{name: "ubtTime", timestamp: c.UBTTime, optional: true},
 		{name: "bpo1", timestamp: c.BPO1Time, optional: true},
 		{name: "bpo2", timestamp: c.BPO2Time, optional: true},
 		{name: "bpo3", timestamp: c.BPO3Time, optional: true},
@@ -997,6 +976,12 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		if !cur.optional || (cur.block != nil || cur.timestamp != nil) {
 			lastFork = cur
 		}
+	}
+	// The binary tree is not in the list above because it is not a fork, but it
+	// is only defined from Amsterdam onwards, so a chain cannot commit its state
+	// with it without scheduling Amsterdam first.
+	if c.PBT && c.AmsterdamTime == nil {
+		return errors.New("unsupported configuration: the binary tree requires Amsterdam, which is not scheduled")
 	}
 
 	// Check that all forks with blobs explicitly define the blob schedule configuration.
@@ -1112,9 +1097,6 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	}
 	if isForkTimestampIncompatible(c.OsakaTime, newcfg.OsakaTime, headTimestamp) {
 		return newTimestampCompatError("Osaka fork timestamp", c.OsakaTime, newcfg.OsakaTime)
-	}
-	if isForkTimestampIncompatible(c.UBTTime, newcfg.UBTTime, headTimestamp) {
-		return newTimestampCompatError("UBT fork timestamp", c.UBTTime, newcfg.UBTTime)
 	}
 	if isForkTimestampIncompatible(c.BPO1Time, newcfg.BPO1Time, headTimestamp) {
 		return newTimestampCompatError("BPO1 fork timestamp", c.BPO1Time, newcfg.BPO1Time)
@@ -1404,18 +1386,20 @@ func (err *ConfigCompatError) Error() string {
 // phases.
 type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
-	IsEIP2929, IsEIP4762                                    bool
+	IsEIP2929                                               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
-	IsAmsterdam, IsBogota, IsUBT                            bool
+	IsAmsterdam, IsBogota                                   bool
 }
 
 // Rules ensures c's ChainID is not nil.
 func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules {
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
-	isUBT := isMerge && c.IsUBT(num, timestamp)
+	// The binary tree is deliberately absent here. It selects the state
+	// commitment, not the execution rules, so Rules is identical whether or not
+	// it is enabled; consult ChainConfig.IsPBT for the commitment instead.
 	return Rules{
 		IsHomestead:      c.IsHomestead(num),
 		IsEIP150:         c.IsEIP150(num),
@@ -1426,7 +1410,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsPetersburg:     c.IsPetersburg(num),
 		IsIstanbul:       c.IsIstanbul(num),
 		IsBerlin:         c.IsBerlin(num),
-		IsEIP2929:        c.IsBerlin(num) && !isUBT,
+		IsEIP2929:        c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
 		IsShanghai:       isMerge && c.IsShanghai(num, timestamp),
@@ -1435,7 +1419,5 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp),
 		IsAmsterdam:      isMerge && c.IsAmsterdam(num, timestamp),
 		IsBogota:         isMerge && c.IsBogota(num, timestamp),
-		IsUBT:            isUBT,
-		IsEIP4762:        isUBT,
 	}
 }
