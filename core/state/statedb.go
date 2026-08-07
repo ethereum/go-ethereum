@@ -1389,10 +1389,20 @@ func (s *StateDB) deleteStoragePBT(addrHash common.Hash) (map[common.Hash]common
 // with their values be tracked as original value.
 // In case (d), **original** account along with its storages should be deleted,
 // with their values be tracked as original value.
-func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*AccountDelete, []*trienode.NodeSet, error) {
+//
+// The returned flag reports whether any destructed account held storage that
+// had to be wiped. Post-6780 destruction reaches only same-transaction
+// creations, which have no committed storage - but EIP-161 clearing of a
+// pre-existing empty account that holds storage still wipes, and such a state,
+// while unreachable on mainnet, is valid and constructible in fixtures. The
+// wiped slots are enumerated from the tree or flat store, so their origin
+// values are keyed by hash; the caller uses the flag to keep the whole
+// update's storage-key encoding consistent.
+func (s *StateDB) handleDestruction() (map[common.Hash]*AccountDelete, []*trienode.NodeSet, bool, error) {
 	var (
 		nodes   []*trienode.NodeSet
 		deletes = make(map[common.Hash]*AccountDelete)
+		wiped   bool
 	)
 	for addr, prevObj := range s.stateObjectsDestruct {
 		prev := prevObj.origin
@@ -1419,10 +1429,10 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*Acco
 		if s.db.Type().Is(TypePBT) {
 			storages, storagesOrigin, err := s.deleteStoragePBT(addrHash)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
+				return nil, nil, false, fmt.Errorf("failed to delete storage, err: %w", err)
 			}
-			if len(storages) != 0 && noStorageWiping {
-				return nil, nil, fmt.Errorf("unexpected storage wiping, %x", addr)
+			if len(storages) != 0 {
+				wiped = true
 			}
 			op.Storages = storages
 			op.StoragesOrigin = storagesOrigin
@@ -1434,13 +1444,11 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*Acco
 		if prev.Root == types.EmptyRootHash {
 			continue
 		}
-		if noStorageWiping {
-			return nil, nil, fmt.Errorf("unexpected storage wiping, %x", addr)
-		}
+		wiped = true
 		// Remove storage slots belonging to the account.
 		storages, storagesOrigin, set, err := s.deleteStorage(addrHash, prev.Root)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
+			return nil, nil, false, fmt.Errorf("failed to delete storage, err: %w", err)
 		}
 		op.Storages = storages
 		op.StoragesOrigin = storagesOrigin
@@ -1448,7 +1456,7 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*Acco
 		// Aggregate the associated trie node changes.
 		nodes = append(nodes, set)
 	}
-	return deletes, nodes, nil
+	return deletes, nodes, wiped, nil
 }
 
 // GetTrie returns the account trie.
@@ -1512,7 +1520,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	// the same block, account deletions must be processed first. This ensures
 	// that the storage trie nodes deleted during destruction and recreated
 	// during subsequent resurrection can be combined correctly.
-	deletes, delNodes, err := s.handleDestruction(noStorageWiping)
+	deletes, delNodes, wiped, err := s.handleDestruction()
 	if err != nil {
 		return nil, err
 	}
@@ -1607,8 +1615,13 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	origin := s.originalRoot
 	s.originalRoot = root
 
+	// Post-Cancun updates carry raw storage keys, which is possible only while
+	// no deletion had to enumerate slots by hash. A wipe - EIP-161 clearing of
+	// an account that held storage - degrades the whole update to hashed keys:
+	// account updates record their origins in both forms, so nothing is lost,
+	// and mixing the two forms within one update would corrupt it.
 	typ := StorageKeyHashed
-	if noStorageWiping {
+	if noStorageWiping && !wiped {
 		typ = StorageKeyPlain
 	}
 	return NewStateUpdate(typ, origin, root, blockNumber, deletes, updates, nodes), nil
