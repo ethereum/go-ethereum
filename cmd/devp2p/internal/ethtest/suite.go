@@ -55,10 +55,7 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 	if err != nil {
 		return nil, err
 	}
-	engine, err := NewEngineClient(chainDir, engineURL, jwt)
-	if err != nil {
-		return nil, err
-	}
+	engine := NewEngineClient(engineURL, jwt, chain)
 
 	return &Suite{
 		Dest:   dest,
@@ -93,6 +90,10 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "BlobViolations", Fn: s.TestBlobViolations},
 		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
 		{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
+		// test eth/72 blob txs
+		{Name: "BlobTxAvailabilityFailure", Fn: s.TestBlobTxAvailabilityFailure},
+		{Name: "GetCells", Fn: s.TestGetCells},
+		{Name: "BlobTxWithInvalidCells", Fn: s.TestBlobTxWithInvalidCells},
 	}
 }
 
@@ -748,7 +749,7 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 transaction gets propagated.`)
 
 	// Nudge client out of syncing mode to accept pending txs.
-	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
 	from, nonce := s.chain.GetSender(0)
@@ -776,7 +777,7 @@ func (s *Suite) TestInvalidTxs(t *utesting.T) {
 does not propagate them.`)
 
 	// Nudge client out of syncing mode to accept pending txs.
-	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
 
@@ -859,7 +860,7 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 on another peer connection using GetPooledTransactions.`)
 
 	// Nudge client out of syncing mode to accept pending txs.
-	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
 
@@ -936,7 +937,7 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 the transactions using a GetPooledTransactions request.`)
 
 	// Nudge client out of syncing mode to accept pending txs.
-	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
 
@@ -976,7 +977,7 @@ the transactions using a GetPooledTransactions request.`)
 	}
 
 	// Send announcement.
-	ann := eth.NewPooledTransactionHashesPacket71{Types: txTypes, Sizes: sizes, Hashes: hashes}
+	ann := eth.NewPooledTransactionHashesPacket72{Types: txTypes, Sizes: sizes, Hashes: hashes}
 	err = conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann)
 	if err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
@@ -994,7 +995,7 @@ the transactions using a GetPooledTransactions request.`)
 				t.Fatalf("unexpected number of txs requested: wanted %d, got %d", len(hashes), len(msg.GetPooledTransactionsRequest))
 			}
 			return
-		case *eth.NewPooledTransactionHashesPacket71:
+		case *eth.NewPooledTransactionHashesPacket72:
 			continue
 		case *eth.TransactionsPacket:
 			continue
@@ -1020,15 +1021,16 @@ func makeSidecar(data ...byte) *types.BlobTxSidecar {
 	return types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, proofs)
 }
 
-func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Transactions) {
+func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs types.Transactions, blobs [][]kzg4844.Blob) {
 	from, nonce := s.chain.GetSender(5)
-	for i := 0; i < count; i++ {
+	for i := 0; i < txCount; i++ {
 		// Make blob data, max of 2 blobs per tx.
-		blobdata := make([]byte, min(blobs, 2))
+		blobdata := make([]byte, min(blobCount, 2))
 		for i := range blobdata {
 			blobdata[i] = discriminator
-			blobs -= 1
+			blobCount -= 1
 		}
+		sidecar := makeSidecar(blobdata...)
 		inner := &types.BlobTx{
 			ChainID:    uint256.MustFromBig(s.chain.config.ChainID),
 			Nonce:      nonce + uint64(i),
@@ -1036,48 +1038,53 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 			GasFeeCap:  uint256.MustFromBig(s.chain.Head().BaseFee()),
 			Gas:        100000,
 			BlobFeeCap: uint256.MustFromBig(eip4844.CalcBlobFee(s.chain.config, s.chain.Head().Header())),
-			BlobHashes: makeSidecar(blobdata...).BlobHashes(),
-			Sidecar:    makeSidecar(blobdata...),
+			BlobHashes: sidecar.BlobHashes(),
+			Sidecar:    sidecar,
 		}
 		tx, err := s.chain.SignTx(from, types.NewTx(inner))
 		if err != nil {
 			panic("blob tx signing failed")
 		}
-		txs = append(txs, tx)
+		blobs = append(blobs, sidecar.Blobs)
+		scNoBlob := sidecar.Copy()
+		scNoBlob.Blobs = nil
+		txs = append(txs, tx.WithBlobTxSidecar(scNoBlob))
 	}
-	return txs
+	return txs, blobs
 }
 
 func (s *Suite) TestBlobViolations(t *utesting.T) {
 	t.Log(`This test sends some invalid blob tx announcements and expects the node to disconnect.`)
 
-	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
 	// Create blob txs for each tests with unique tx hashes.
 	var (
-		t1 = s.makeBlobTxs(2, 3, 0x1)
-		t2 = s.makeBlobTxs(2, 3, 0x2)
+		t1, _ = s.makeBlobTxs(2, 3, 0x1)
+		t2, _ = s.makeBlobTxs(2, 3, 0x2)
 	)
 	for _, test := range []struct {
-		ann  eth.NewPooledTransactionHashesPacket71
+		ann  eth.NewPooledTransactionHashesPacket72
 		resp eth.PooledTransactionsResponse
 	}{
 		// Invalid tx size.
 		{
-			ann: eth.NewPooledTransactionHashesPacket71{
+			ann: eth.NewPooledTransactionHashesPacket72{
 				Types:  []byte{types.BlobTxType, types.BlobTxType},
 				Sizes:  []uint32{uint32(t1[0].Size()), uint32(t1[1].Size() + 10)},
 				Hashes: []common.Hash{t1[0].Hash(), t1[1].Hash()},
+				Mask:   types.CustodyBitmapAll,
 			},
 			resp: eth.PooledTransactionsResponse(t1),
 		},
 		// Wrong tx type.
 		{
-			ann: eth.NewPooledTransactionHashesPacket71{
+			ann: eth.NewPooledTransactionHashesPacket72{
 				Types:  []byte{types.DynamicFeeTxType, types.BlobTxType},
 				Sizes:  []uint32{uint32(t2[0].Size()), uint32(t2[1].Size())},
 				Hashes: []common.Hash{t2[0].Hash(), t2[1].Hash()},
+				Mask:   types.CustodyBitmapAll,
 			},
 			resp: eth.PooledTransactionsResponse(t2),
 		},
@@ -1105,15 +1112,21 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 		if code, _, err := conn.Read(); err != nil {
 			t.Fatalf("expected disconnect on blob violation, got err: %v", err)
 		} else if code != discMsg {
-			if code == protoOffset(ethProto)+eth.NewPooledTransactionHashesMsg {
-				// sometimes we'll get a blob transaction hashes announcement before the disconnect
-				// because blob transactions are scheduled to be fetched right away.
-				if code, _, err = conn.Read(); err != nil {
-					t.Fatalf("expected disconnect on blob violation, got err on second read: %v", err)
+			for {
+				code, _, err := conn.Read()
+				if err != nil {
+					t.Fatalf("expected disconnect on blob violation, got err: %v", err)
 				}
-			}
-			if code != discMsg {
-				t.Fatalf("expected disconnect on blob violation, got msg code: %d", code)
+				if code == discMsg {
+					break
+				}
+				switch code {
+				case protoOffset(ethProto) + eth.NewPooledTransactionHashesMsg,
+					protoOffset(ethProto) + eth.GetCellsMsg:
+					continue
+				default:
+					t.Fatalf("expected disconnect on blob violation, got msg code: %d", code)
+				}
 			}
 		}
 		conn.Close()
@@ -1132,22 +1145,29 @@ func mangleSidecar(tx *types.Transaction) *types.Transaction {
 
 func (s *Suite) TestBlobTxWithoutSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx := s.makeBlobTxs(1, 2, 42)[0]
-	badTx := tx.WithoutBlobTxSidecar()
-	s.testBadBlobTx(t, tx, badTx)
+	tx, _ := s.makeBlobTxs(1, 2, 42)
+	badTx := tx[0].WithoutBlobTxSidecar()
+	s.testBadBlobTx(t, tx[0], badTx)
 }
 
 func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs, whose commitment don't correspond to the blob_versioned_hashes in the transaction, will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx := s.makeBlobTxs(1, 2, 43)[0]
-	badTx := mangleSidecar(tx)
-	s.testBadBlobTx(t, tx, badTx)
+	tx, _ := s.makeBlobTxs(1, 2, 43)
+	badTx := mangleSidecar(tx[0])
+	s.testBadBlobTx(t, tx[0], badTx)
 }
 
 // readUntil reads eth protocol messages until a message of the target type is
 // received.  It returns an error if there is a disconnect, or if the context
 // is cancelled before a message of the desired type can be read.
 func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
+	// First check the buffer for a previously-stashed match.
+	for i, msg := range conn.pending {
+		if t, ok := msg.(*T); ok {
+			conn.pending = append(conn.pending[:i], conn.pending[i+1:]...)
+			return t, nil
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -1161,11 +1181,10 @@ func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
 			}
 			continue
 		}
-
-		switch res := received.(type) {
-		case *T:
-			return res, nil
+		if t, ok := received.(*T); ok {
+			return t, nil
 		}
+		conn.pending = append(conn.pending, received)
 	}
 }
 
@@ -1203,10 +1222,11 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		ann := eth.NewPooledTransactionHashesPacket71{
+		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
 			Sizes:  []uint32{uint32(badTx.Size())},
 			Hashes: []common.Hash{badTx.Hash()},
+			Mask:   types.CustodyBitmapAll,
 		}
 
 		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
@@ -1254,14 +1274,15 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		ann := eth.NewPooledTransactionHashesPacket71{
+		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
 			Sizes:  []uint32{uint32(tx.Size())},
 			Hashes: []common.Hash{tx.Hash()},
+			Mask:   types.CustodyBitmapAll,
 		}
 
 		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
-			errc <- fmt.Errorf("sending announcement failed: %v", err)
+			errc <- fmt.Errorf("sending first announcement failed: %v", err)
 			return
 		}
 
@@ -1300,7 +1321,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 		close(errc)
 	}
 
-	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
@@ -1309,5 +1330,38 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 	err := <-errc
 	if err != nil {
 		t.Fatalf("%v", err)
+	}
+}
+
+// readAnyFrom waits for a message of type T on any of the given conns
+// and returns the packet and the conn it came from.
+func readAnyFrom[T any](conns ...*Conn) (*T, *Conn, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type result struct {
+		pkt *T
+		c   *Conn
+	}
+	ch := make(chan result, len(conns))
+	errCh := make(chan error, len(conns))
+
+	for _, c := range conns {
+		go func(c *Conn) {
+			pkt, err := readUntil[T](ctx, c)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					errCh <- err
+				}
+				return
+			}
+			ch <- result{pkt, c}
+		}(c)
+	}
+	select {
+	case r := <-ch:
+		return r.pkt, r.c, nil
+	case err := <-errCh:
+		return nil, nil, err
 	}
 }
