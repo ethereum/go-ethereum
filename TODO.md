@@ -202,6 +202,29 @@ re-derives a delegated account's `codeHash` from the delegation leaf.
 
 [EIP #12114]: https://github.com/ethereum/EIPs/pull/12114
 
+## Upstream geth disagrees with the merged EIP-8038 on five constants
+
+Upstream's #35454 ("update 2780 and 8038 parameters", merged 2026-08-04) got
+`TX_VALUE_COST` (6000, calls only) and `ACCESS_LIST_ADDRESS_COST` (2900)
+right, but kept draft-era values the merged EIP text does not carry:
+
+| constant | upstream master | merged EIP-8038 |
+|---|---|---|
+| `ACCOUNT_WRITE` | 8000 | **9000** |
+| `CALL_VALUE` | 10300 | **11300** |
+| `COLD_STORAGE_ACCESS` | 3000 | **2100** (unchanged from EIP-2929) |
+| `STORAGE_CLEAR_REFUND` | 12480 | **11616** = (STORAGE_WRITE + COLD_STORAGE_ACCESS) × 4800/5000 |
+| `CREATE_ACCESS` | 11000, derived from COLD_STORAGE_ACCESS | **12000** = ACCOUNT_WRITE + COLD_ACCOUNT_ACCESS |
+| `ACCESS_LIST_STORAGE_KEY_COST` | 2900 | **2000** = COLD_STORAGE_ACCESS − WARM_ACCESS |
+
+This branch carries the EIP values, and every upstream sync will re-conflict
+on them until upstream updates. The evidence for the EIP side: the reference
+implementation prices identically, and the EEST binary-tree suite passes with
+geth both as consumer and as filler, byte-identical to the reference fills.
+With cold storage access below the reentrancy sentry, upstream's SSTORE
+boundary tests also assume arithmetic that no longer holds; ours are
+reworked. Report upstream when convenient.
+
 ## Also deferred, for context
 
 These are known and tracked elsewhere; listed so this file is the single place
