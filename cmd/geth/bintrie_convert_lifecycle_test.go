@@ -1,0 +1,475 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
+package main
+
+import (
+	"bytes"
+	"math/big"
+	"path/filepath"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm/program"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/holiman/uint256"
+)
+
+// The lifecycle tests. The parity oracles pin what a conversion computes;
+// these pin the surroundings a real one lives in: a source shaped by actual
+// block execution rather than a genesis allocation, a disk-backed database
+// with history freezers, the first live commit on top of the converted base,
+// and the irreversible step of deleting the source.
+
+// TestConvertMatchesChain converts a state built by real block execution -
+// contract deploys sharing bytecode, storage written across the header
+// boundary and cleared again in a later block, an EIP-7702 delegation
+// installed by an actual SetCodeTx - and requires the converted root to
+// match embedding the dumped post-state through the typed writers.
+//
+// The chain is shut down cleanly first, so the head state resolves out of
+// journaled diff layers rather than the persisted disk layer: exactly what
+// the CLI meets on a real node. The preimage store is likewise the one block
+// execution populated, including entries for keys the final state no longer
+// holds, which the converter must ignore.
+func TestConvertMatchesChain(t *testing.T) {
+	var (
+		config = *params.MergedTestChainConfig
+		signer = types.LatestSigner(&config)
+		engine = beacon.New(ethash.NewFaker())
+
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		funds   = new(big.Int).Mul(big.NewInt(1000), big.NewInt(params.Ether))
+
+		// The runtime clears slot 1 on any call; the constructor writes
+		// slots on both sides of the header boundary first.
+		runtime  = program.New().Sstore(1, 0).Bytes()
+		initcode = program.New().
+				Sstore(0, 0x11).Sstore(1, 0x22).Sstore(63, 0x33).Sstore(64, 0x44).Sstore(4096, 0x55).
+				ReturnViaCodeCopy(runtime).Bytes()
+
+		contractA = crypto.CreateAddress(addr1, 0)
+		freshEOA  = common.HexToAddress("0x00000000000000000000000000000000000f0e0a")
+		gasPrice  = big.NewInt(10 * params.GWei)
+	)
+	gspec := &core.Genesis{
+		Config: &config,
+		Alloc: types.GenesisAlloc{
+			addr1: {Balance: funds},
+			addr2: {Balance: funds},
+		},
+	}
+	// key2's account delegates to contract A.
+	auth, err := types.SignSetCode(key2, types.SetCodeAuthorization{
+		ChainID: *uint256.MustFromBig(config.ChainID),
+		Address: contractA,
+		Nonce:   0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *core.BlockGen) {
+		switch i {
+		case 0:
+			// Two deploys of the same initcode: different accounts, shared
+			// runtime bytecode. And a transfer creating a fresh EOA.
+			b.AddTx(types.MustSignNewTx(key1, signer, &types.LegacyTx{
+				Nonce: 0, Gas: 500000, GasPrice: gasPrice, Data: initcode,
+			}))
+			b.AddTx(types.MustSignNewTx(key1, signer, &types.LegacyTx{
+				Nonce: 1, Gas: 500000, GasPrice: gasPrice, Data: initcode,
+			}))
+			b.AddTx(types.MustSignNewTx(key1, signer, &types.LegacyTx{
+				Nonce: 2, Gas: 21000, GasPrice: gasPrice, To: &freshEOA, Value: big.NewInt(1),
+			}))
+		case 1:
+			// Install the delegation, then call A so its runtime clears
+			// slot 1 - the deleted leaf whose preimage lingers in the store.
+			b.AddTx(types.MustSignNewTx(key1, signer, &types.SetCodeTx{
+				ChainID:   uint256.MustFromBig(config.ChainID),
+				Nonce:     3,
+				To:        addr1,
+				Gas:       100000,
+				GasFeeCap: uint256.MustFromBig(gasPrice),
+				GasTipCap: uint256.NewInt(1),
+				AuthList:  []types.SetCodeAuthorization{auth},
+			}))
+			b.AddTx(types.MustSignNewTx(key1, signer, &types.LegacyTx{
+				Nonce: 4, Gas: 100000, GasPrice: gasPrice, To: &contractA,
+			}))
+		}
+	})
+	chaindb := rawdb.NewMemoryDatabase()
+	cfg := core.DefaultConfig()
+	cfg.Preimages = true
+	cfg.StateScheme = rawdb.PathScheme
+	chain, err := core.NewBlockChain(chaindb, gspec, engine, cfg)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d not inserted: %v", n, err)
+	}
+	headRoot := chain.CurrentBlock().Root
+
+	// Dump the post-state while the chain is live; it becomes the oracle.
+	statedb, err := chain.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dump, err := statedb.RawDump(&state.DumpConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	alloc := make(types.GenesisAlloc, len(dump.Accounts))
+	for key, acc := range dump.Accounts {
+		addr := common.HexToAddress(key)
+		if acc.Address != nil {
+			addr = *acc.Address
+		}
+		balance, ok := new(big.Int).SetString(acc.Balance, 10)
+		if !ok {
+			t.Fatalf("bad balance %q for %x", acc.Balance, addr)
+		}
+		entry := types.Account{Nonce: acc.Nonce, Balance: balance, Code: acc.Code}
+		if len(acc.Storage) > 0 {
+			entry.Storage = make(map[common.Hash]common.Hash, len(acc.Storage))
+			for slot, val := range acc.Storage {
+				entry.Storage[slot] = common.HexToHash(val)
+			}
+		}
+		alloc[addr] = entry
+	}
+	// A clean shutdown journals the un-persisted diff layers; the converter
+	// must find the head state through them.
+	chain.Stop()
+
+	src := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.ReadOnly,
+	})
+	defer src.Close()
+
+	binRoot, err := convertState(chaindb, src, headRoot, conversionOptions{})
+	if err != nil {
+		t.Fatalf("conversion failed: %v", err)
+	}
+	if want := embedAlloc(t, alloc); binRoot != want {
+		t.Fatalf("converted root %x, embedding the executed state produces %x", binRoot, want)
+	}
+	assertConvertedTreeClean(t, chaindb, binRoot)
+
+	// Read the interesting shapes back the way a node would.
+	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
+	defer destTriedb.Close()
+	converted, err := state.New(binRoot, state.NewPBTDatabase(destTriedb, state.NewCodeDB(chaindb)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := converted.GetState(contractA, common.BigToHash(big.NewInt(1))); got != (common.Hash{}) {
+		t.Errorf("the cleared slot reads %x, want absence", got)
+	}
+	if got := converted.GetState(contractA, common.BigToHash(big.NewInt(4096))); got != common.BigToHash(big.NewInt(0x55)) {
+		t.Errorf("overflow slot reads %x, want 0x55", got)
+	}
+	if got := converted.GetCode(addr2); !bytes.Equal(got, types.AddressToDelegation(contractA)) {
+		t.Errorf("delegated account's code reads %x, want its designator", got)
+	}
+	if got := converted.GetNonce(addr2); got != 1 {
+		t.Errorf("delegated account's nonce reads %d, want 1", got)
+	}
+	if got := converted.GetBalance(freshEOA); got.CmpUint64(1) != 0 {
+		t.Errorf("fresh EOA balance reads %s, want 1", got)
+	}
+}
+
+// TestBintrieConvertDiskBacked runs the conversion on a pebble database with
+// a real ancient store. This is the configuration every actual node has and
+// no memory-database test can reach: the in-conversion verification must not
+// touch the history freezers (a read-only open of the never-created
+// state_pbt tables kills the process), and the converted namespace must
+// survive two full close-and-reopen cycles - the first creates the freezers,
+// the second meets them.
+func TestBintrieConvertDiskBacked(t *testing.T) {
+	var (
+		datadir = t.TempDir()
+		kvdir   = filepath.Join(datadir, "kv")
+		ancient = filepath.Join(datadir, "ancient")
+	)
+	openDB := func() ethdb.Database {
+		t.Helper()
+		pdb, err := pebble.New(kvdir, 0, 0, "", false)
+		if err != nil {
+			t.Fatalf("failed to open pebble: %v", err)
+		}
+		db, err := rawdb.Open(pdb, rawdb.OpenOptions{Ancient: ancient})
+		if err != nil {
+			t.Fatalf("failed to open freezer database: %v", err)
+		}
+		return db
+	}
+	chaindb := openDB()
+	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.Defaults,
+	})
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Alloc:   artifactAlloc(),
+	}
+	root := gspec.MustCommit(chaindb, srcTriedb).Root()
+	srcTriedb.Close()
+
+	src := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.ReadOnly,
+	})
+	binRoot, err := convertState(chaindb, src, root, conversionOptions{tmpDir: datadir})
+	if err != nil {
+		t.Fatalf("conversion failed on a freezer-backed database: %v", err)
+	}
+	src.Close()
+	chaindb.Close()
+
+	owner := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	for cycle := 0; cycle < 2; cycle++ {
+		chaindb = openDB()
+		destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
+		statedb, err := state.New(binRoot, state.NewPBTDatabase(destTriedb, state.NewCodeDB(chaindb)))
+		if err != nil {
+			t.Fatalf("reopen %d: cannot open the converted state: %v", cycle, err)
+		}
+		if got := statedb.GetNonce(owner); got != 7 {
+			t.Fatalf("reopen %d: nonce reads %d, want 7", cycle, got)
+		}
+		destTriedb.Close()
+		chaindb.Close()
+	}
+}
+
+// TestConvertedBaseAcceptsCommits pins the handoff: the converted namespace
+// is the base of an empty history with no persistent state id, and the first
+// live commit on top of it - state id 1 - must land, survive a reopen, and
+// read back through the node's stack alongside the converted state.
+func TestConvertedBaseAcceptsCommits(t *testing.T) {
+	chaindb := rawdb.NewMemoryDatabase()
+	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.Defaults,
+	})
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Alloc:   artifactAlloc(),
+	}
+	root := gspec.MustCommit(chaindb, srcTriedb).Root()
+	srcTriedb.Close()
+
+	src := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.ReadOnly,
+	})
+	binRoot, err := convertState(chaindb, src, root, conversionOptions{})
+	if err != nil {
+		t.Fatalf("conversion failed: %v", err)
+	}
+	src.Close()
+
+	// The first live commit: one fresh account through the tree's writers.
+	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
+	tr, err := bintrie.NewBinaryTrie(binRoot, destTriedb)
+	if err != nil {
+		t.Fatalf("cannot open the converted tree: %v", err)
+	}
+	var (
+		newAddr = common.HexToAddress("0x7000000000000000000000000000000000000007")
+		acc     = &types.StateAccount{
+			Nonce:    1,
+			Balance:  uint256.NewInt(5),
+			Root:     types.EmptyRootHash,
+			CodeHash: types.EmptyCodeHash.Bytes(),
+		}
+	)
+	if err := tr.UpdateAccount(newAddr, acc, 0, nil); err != nil {
+		t.Fatal(err)
+	}
+	newRoot, nodes := tr.Commit(false)
+
+	states := triedb.NewStateSet()
+	states.Accounts[crypto.Keccak256Hash(newAddr.Bytes())] = types.SlimAccountRLP(*acc)
+	if err := destTriedb.Update(newRoot, binRoot, 1, trienode.NewWithNodeSet(nodes), states); err != nil {
+		t.Fatalf("the first live update was refused: %v", err)
+	}
+	if err := destTriedb.Commit(newRoot, false); err != nil {
+		t.Fatalf("the first live commit was refused: %v", err)
+	}
+	destTriedb.Close()
+
+	// Reopen: both the delta and the converted base must read.
+	destTriedb = triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
+	defer destTriedb.Close()
+	statedb, err := state.New(newRoot, state.NewPBTDatabase(destTriedb, state.NewCodeDB(chaindb)))
+	if err != nil {
+		t.Fatalf("cannot open the committed state: %v", err)
+	}
+	if got := statedb.GetNonce(newAddr); got != 1 {
+		t.Fatalf("the committed account reads nonce %d, want 1", got)
+	}
+	if got := statedb.GetNonce(common.HexToAddress("0x1000000000000000000000000000000000000001")); got != 7 {
+		t.Fatalf("the converted account reads nonce %d after the commit, want 7", got)
+	}
+}
+
+// TestDeleteSourceLifecycle pins the irreversible step on a state with
+// everything in it. After deletion the converted bytes must stand entirely
+// on their own - both verifiers pass, contract code and storage read through
+// the node's stack - the merkle trie must actually be gone, and the stores
+// deletion shares a database with (contract code, preimages) must survive.
+func TestDeleteSourceLifecycle(t *testing.T) {
+	t.Run("path scheme", func(t *testing.T) {
+		alloc := mixedAlloc(424242)
+		chaindb := rawdb.NewMemoryDatabase()
+		srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+			Preimages: true,
+			PathDB:    pathdb.Defaults,
+		})
+		gspec := &core.Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+			Alloc:   alloc,
+		}
+		root := gspec.MustCommit(chaindb, srcTriedb).Root()
+		srcTriedb.Close()
+
+		src := triedb.NewDatabase(chaindb, &triedb.Config{
+			Preimages: true,
+			PathDB:    pathdb.ReadOnly,
+		})
+		defer src.Close()
+
+		binRoot, err := convertState(chaindb, src, root, conversionOptions{})
+		if err != nil {
+			t.Fatalf("conversion failed: %v", err)
+		}
+		if err := deleteMPTData(chaindb, src, root); err != nil {
+			t.Fatalf("deletion failed: %v", err)
+		}
+		// The converted bytes alone must still verify.
+		pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
+		if err := verifyConvertedState(chaindb, binRoot); err != nil {
+			t.Fatalf("tree verification fails after source deletion: %v", err)
+		}
+		if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err != nil {
+			t.Fatalf("flat verification fails after source deletion: %v", err)
+		}
+		// A contract with code and storage reads through the node's stack.
+		var contract common.Address
+		var acct types.Account
+		for addr, a := range alloc {
+			if len(a.Code) > 0 && len(a.Storage) > 0 {
+				if _, delegated := types.ParseDelegation(a.Code); !delegated {
+					contract, acct = addr, a
+					break
+				}
+			}
+		}
+		if contract == (common.Address{}) {
+			t.Fatal("the fixture holds no contract with code and storage")
+		}
+		destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
+		defer destTriedb.Close()
+		statedb, err := state.New(binRoot, state.NewPBTDatabase(destTriedb, state.NewCodeDB(chaindb)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := statedb.GetCode(contract); !bytes.Equal(got, acct.Code) {
+			t.Fatalf("contract code reads %d bytes, want %d", len(got), len(acct.Code))
+		}
+		for slot, val := range acct.Storage {
+			if got := statedb.GetState(contract, slot); got != val {
+				t.Fatalf("slot %x reads %x, want %x", slot, got, val)
+			}
+			break
+		}
+		// The merkle state is actually gone...
+		fresh := triedb.NewDatabase(chaindb, &triedb.Config{PathDB: &pathdb.Config{ReadOnly: true}})
+		defer fresh.Close()
+		if mpt, err := trie.NewStateTrie(trie.StateTrieID(root), fresh); err == nil {
+			it, err := mpt.NodeIterator(nil)
+			if err == nil {
+				found := false
+				for it.Next(true) {
+					found = true
+					break
+				}
+				if found || it.Error() == nil {
+					t.Fatal("the merkle trie still resolves after deletion")
+				}
+			}
+		}
+		// ...while code and preimages survive.
+		if code := rawdb.ReadCode(chaindb, crypto.Keccak256Hash(acct.Code)); len(code) == 0 {
+			t.Fatal("deletion took the contract code with it")
+		}
+		if pre := rawdb.ReadPreimage(chaindb, crypto.Keccak256Hash(contract.Bytes())); len(pre) == 0 {
+			t.Fatal("deletion took the preimages with it")
+		}
+	})
+
+	t.Run("hash scheme", func(t *testing.T) {
+		chaindb := rawdb.NewMemoryDatabase()
+		srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true})
+		gspec := &core.Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+			Alloc:   artifactAlloc(),
+		}
+		root := gspec.MustCommit(chaindb, srcTriedb).Root()
+
+		binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{})
+		if err != nil {
+			t.Fatalf("conversion from a hash-scheme source failed: %v", err)
+		}
+		if err := deleteMPTData(chaindb, srcTriedb, root); err != nil {
+			t.Fatalf("hash-scheme deletion failed: %v", err)
+		}
+		if node := rawdb.ReadLegacyTrieNode(chaindb, root); len(node) != 0 {
+			t.Fatal("the merkle root node survived hash-scheme deletion")
+		}
+		if err := verifyConvertedState(chaindb, binRoot); err != nil {
+			t.Fatalf("tree verification fails after hash-scheme deletion: %v", err)
+		}
+		srcTriedb.Close()
+	})
+}

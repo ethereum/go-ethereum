@@ -116,6 +116,12 @@ func allocOf(t *testing.T, sv stateVector) types.GenesisAlloc {
 // converter over it, returning the binary root and the database it wrote.
 func convertAlloc(t *testing.T, alloc types.GenesisAlloc) (common.Hash, ethdb.Database) {
 	t.Helper()
+	return convertAllocOpts(t, alloc, conversionOptions{})
+}
+
+// convertAllocOpts is convertAlloc under explicit conversion options.
+func convertAllocOpts(t *testing.T, alloc types.GenesisAlloc, opts conversionOptions) (common.Hash, ethdb.Database) {
+	t.Helper()
 	chaindb := rawdb.NewMemoryDatabase()
 	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
 		Preimages: true,
@@ -131,11 +137,11 @@ func convertAlloc(t *testing.T, alloc types.GenesisAlloc) (common.Hash, ethdb.Da
 
 	src := triedb.NewDatabase(chaindb, &triedb.Config{
 		Preimages: true,
-		PathDB:    &pathdb.Config{ReadOnly: true},
+		PathDB:    pathdb.ReadOnly,
 	})
 	defer src.Close()
 
-	binRoot, err := convertState(chaindb, src, root, conversionOptions{})
+	binRoot, err := convertState(chaindb, src, root, opts)
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}
@@ -246,17 +252,43 @@ func TestConvertMatchesReference(t *testing.T) {
 // vectors cannot: shared code discovered in whatever order the account-hash
 // iteration yields it, and stems assembled from leaves that arrive scattered.
 func TestConvertMatchesEmbedding(t *testing.T) {
-	rng := rand.New(rand.NewSource(8347))
+	alloc := mixedAlloc(8347)
+	want := embedAlloc(t, alloc)
+
+	// Once wholly in memory, once spilling every few records: the sort path
+	// must not be able to change the answer.
+	for _, budget := range []int{0, 512} {
+		binRoot, chaindb := convertAllocOpts(t, alloc, conversionOptions{
+			sortBudget: budget,
+			tmpDir:     t.TempDir(),
+		})
+		if binRoot != want {
+			t.Fatalf("budget %d: converted root %x, the typed writers produce %x", budget, binRoot, want)
+		}
+		assertConvertedTreeClean(t, chaindb, binRoot)
+		assertFlatStateMatchesAlloc(t, chaindb, alloc)
+	}
+}
+
+// mixedAlloc builds a deterministic randomized allocation covering the
+// converter-specific hazards the hand-made vectors cannot: shared code
+// discovered in whatever order the account-hash iteration yields it, stems
+// assembled from scattered leaves, and code long enough to span multiple
+// code-zone stems.
+func mixedAlloc(seed int64) types.GenesisAlloc {
+	rng := rand.New(rand.NewSource(seed))
 	alloc := make(types.GenesisAlloc)
 
-	// A pool of code blobs so sharing actually occurs, including a designator
-	// and a zero-tailed blob whose trailing chunks must not be written.
+	// A pool of code blobs so sharing actually occurs, including a designator,
+	// a zero-tailed blob whose trailing chunks must not be written, and a
+	// blob past 256 chunks, whose tail lands in a second code stem.
 	codes := [][]byte{
 		nil,
 		bytes.Repeat([]byte{0x5b}, 40),
 		bytes.Repeat([]byte{0x5b}, 40), // deliberately identical to the previous
 		append([]byte{0x60, 0x01, 0x00}, make([]byte, 80)...),
-		bytes.Repeat([]byte{0x60, 0x01}, 700), // spans several code stems
+		bytes.Repeat([]byte{0x60, 0x01}, 700), // spans several code-zone groups
+		bytes.Repeat([]byte{0x5b}, 10*1024),   // spans code-zone stems
 		types.AddressToDelegation(common.Address{0xde, 0x1e}),
 	}
 	for i := 0; i < 60; i++ {
@@ -287,13 +319,7 @@ func TestConvertMatchesEmbedding(t *testing.T) {
 		}
 		alloc[addr] = acct
 	}
-
-	binRoot, chaindb := convertAlloc(t, alloc)
-	if want := embedAlloc(t, alloc); binRoot != want {
-		t.Fatalf("converted root %x, the typed writers produce %x", binRoot, want)
-	}
-	assertConvertedTreeClean(t, chaindb, binRoot)
-	assertFlatStateMatchesAlloc(t, chaindb, alloc)
+	return alloc
 }
 
 // assertFlatStateMatchesAlloc requires the converted flat store to be, byte

@@ -83,7 +83,7 @@ func TestBintrieConvert(t *testing.T) {
 
 	srcTriedb2 := triedb.NewDatabase(chaindb, &triedb.Config{
 		Preimages: true,
-		PathDB:    &pathdb.Config{ReadOnly: true},
+		PathDB:    pathdb.ReadOnly,
 	})
 	defer srcTriedb2.Close()
 
@@ -264,7 +264,7 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 
 	srcTriedb2 := triedb.NewDatabase(chaindb, &triedb.Config{
 		Preimages: true,
-		PathDB:    &pathdb.Config{ReadOnly: true},
+		PathDB:    pathdb.ReadOnly,
 	})
 
 	newRoot, err := convertState(chaindb, srcTriedb2, root, conversionOptions{})
@@ -333,7 +333,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 
 	src := triedb.NewDatabase(chaindb, &triedb.Config{
 		Preimages: true,
-		PathDB:    &pathdb.Config{ReadOnly: true},
+		PathDB:    pathdb.ReadOnly,
 	})
 	defer src.Close()
 
@@ -398,7 +398,7 @@ func TestConvertVerifiers(t *testing.T) {
 
 	src := triedb.NewDatabase(chaindb, &triedb.Config{
 		Preimages: true,
-		PathDB:    &pathdb.Config{ReadOnly: true},
+		PathDB:    pathdb.ReadOnly,
 	})
 	defer src.Close()
 
@@ -500,7 +500,7 @@ func TestWipeRestoresVirginNamespace(t *testing.T) {
 
 	src := triedb.NewDatabase(chaindb, &triedb.Config{
 		Preimages: true,
-		PathDB:    &pathdb.Config{ReadOnly: true},
+		PathDB:    pathdb.ReadOnly,
 	})
 	defer src.Close()
 
@@ -575,7 +575,7 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 		srcTriedb.Close()
 		src := triedb.NewDatabase(chaindb, &triedb.Config{
 			Preimages: true,
-			PathDB:    &pathdb.Config{ReadOnly: true},
+			PathDB:    pathdb.ReadOnly,
 		})
 		t.Cleanup(func() { src.Close() })
 		return chaindb, src, root

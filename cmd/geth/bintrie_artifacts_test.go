@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
@@ -109,7 +110,7 @@ func convertWithArtifacts(t *testing.T, alloc types.GenesisAlloc, budget int) (c
 
 	src := triedb.NewDatabase(chaindb, &triedb.Config{
 		Preimages: true,
-		PathDB:    &pathdb.Config{ReadOnly: true},
+		PathDB:    pathdb.ReadOnly,
 	})
 	defer src.Close()
 
@@ -319,4 +320,40 @@ func TestArtifactsAreByteCanonical(t *testing.T) {
 			t.Fatalf("the %s file is empty", pair.name)
 		}
 	}
+}
+
+// TestArtifactGoldenDigests freezes the artifact byte format. The digests of
+// the reference-pinned "contract" state vector are recorded as constants: a
+// change to any encoding choice - header layout, record framing, canonical
+// integers, ordering - moves them, and moving them means every existing
+// producer and distributor disagrees with the new bytes. The state vector's
+// root is already pinned against the execution-specs reference, so these
+// constants inherit that provenance for the artifact layer.
+func TestArtifactGoldenDigests(t *testing.T) {
+	const (
+		wantSnapshot  = "0xf10d40938b44dd9b4a27ddf7d265a6cb20b79d2c45118a2c3e114d16e7f251ef"
+		wantPreimages = "0x8b6e6a6c99b425ad7806362e4cfeef8ad5cd81b9e944c7656e6335b309e04900"
+	)
+	for _, sv := range loadStateVectors(t) {
+		if sv.Name != "contract" {
+			continue
+		}
+		_, snapPath, prePath := convertWithArtifacts(t, allocOf(t, sv), 0)
+		snap, err := os.ReadFile(snapPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pre, err := os.ReadFile(prePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := crypto.Keccak256Hash(snap); got != common.HexToHash(wantSnapshot) {
+			t.Fatalf("snapshot digest %x, the recorded golden is %s", got, wantSnapshot)
+		}
+		if got := crypto.Keccak256Hash(pre); got != common.HexToHash(wantPreimages) {
+			t.Fatalf("preimage digest %x, the recorded golden is %s", got, wantPreimages)
+		}
+		return
+	}
+	t.Fatal("the contract state vector is gone from the testdata")
 }
