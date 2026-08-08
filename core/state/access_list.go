@@ -28,12 +28,51 @@ import (
 type accessList struct {
 	addresses map[common.Address]int
 	slots     []map[common.Hash]struct{}
+
+	// Precompiles are warm in every transaction, so they are held here for the
+	// fork instead of being re-inserted above on every one. The sender, the
+	// destination and the coinbase stay in the map, one address each, which leaves
+	// AddSlot's journalling alone. precompileSrc records the slice the map was
+	// built from, and reset replaces the map rather than mutating it, which is
+	// what lets Copy share it.
+	precompileSrc []common.Address
+	precompiles   map[common.Address]struct{}
+}
+
+// prewarmed reports whether the address is a precompile, which EIP-2929 keeps warm
+// for the whole transaction.
+func (al *accessList) prewarmed(address common.Address) bool {
+	_, ok := al.precompiles[address]
+	return ok
+}
+
+// reset empties the list for the next transaction. The address map keeps its
+// buckets so the next transaction inserts into a sized map, and AddSlot replaces
+// the slot maps as it goes, so those need no clearing.
+func (al *accessList) reset(precompiles []common.Address) {
+	clear(al.addresses)
+	al.slots = al.slots[:0]
+
+	// ActivePrecompiles returns the same package level slice for a given fork, so
+	// equal pointers mean the map still stands. The length test also keeps the
+	// indexing below from panicking on the nil the system calls pass.
+	if len(al.precompileSrc) == len(precompiles) &&
+		(len(precompiles) == 0 || &al.precompileSrc[0] == &precompiles[0]) {
+		return
+	}
+	al.precompileSrc = precompiles
+	al.precompiles = make(map[common.Address]struct{}, len(precompiles))
+	for _, addr := range precompiles {
+		al.precompiles[addr] = struct{}{}
+	}
 }
 
 // ContainsAddress returns true if the address is in the access list.
 func (al *accessList) ContainsAddress(address common.Address) bool {
-	_, ok := al.addresses[address]
-	return ok
+	if _, ok := al.addresses[address]; ok {
+		return true
+	}
+	return al.prewarmed(address)
 }
 
 // Contains checks if a slot within an account is present in the access list, returning
@@ -42,7 +81,7 @@ func (al *accessList) Contains(address common.Address, slot common.Hash) (addres
 	idx, ok := al.addresses[address]
 	if !ok {
 		// no such address (and hence zero slots)
-		return false, false
+		return al.prewarmed(address), false
 	}
 	if idx == -1 {
 		// address yes, but no slots
@@ -61,10 +100,10 @@ func newAccessList() *accessList {
 
 // Copy creates an independent copy of an accessList.
 func (al *accessList) Copy() *accessList {
-	cp := &accessList{
-		addresses: maps.Clone(al.addresses),
-		slots:     make([]map[common.Hash]struct{}, len(al.slots)),
-	}
+	cp := new(accessList)
+	*cp = *al
+	cp.addresses = maps.Clone(al.addresses)
+	cp.slots = make([]map[common.Hash]struct{}, len(al.slots))
 	for i, slotMap := range al.slots {
 		cp.slots[i] = maps.Clone(slotMap)
 	}
@@ -74,6 +113,9 @@ func (al *accessList) Copy() *accessList {
 // AddAddress adds an address to the access list, and returns 'true' if the operation
 // caused a change (addr was not previously in the list).
 func (al *accessList) AddAddress(address common.Address) bool {
+	if al.prewarmed(address) {
+		return false // already warm, nothing to journal or revert
+	}
 	if _, present := al.addresses[address]; present {
 		return false
 	}
