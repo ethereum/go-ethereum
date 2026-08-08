@@ -285,10 +285,10 @@ func (contract *Contract) chargeDynamicGas(operation *operation, evm *EVM, stack
 	if gerr != nil {
 		return dynamicCost, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
 	}
-	// A regular-only deduction when there is no state gas, otherwise the full
+	// A execution-only deduction when there is no state gas, otherwise the full
 	// multidimensional charge through the reservoir.
 	if dynamicCost.StateGas == 0 {
-		if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+		if cerr := contract.Gas.ChargeExecutionOnly(dynamicCost.ExecutionGas); cerr != nil {
 			return dynamicCost, cerr
 		}
 	} else if !contract.Gas.charge(dynamicCost) {
@@ -325,8 +325,8 @@ func (contract *Contract) chargeVerkleCodeChunkGas(evm *EVM, pc uint64, isEIP476
 	// associated costs.
 	if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
 		contractAddr := contract.Address()
-		consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
-		contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+		consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.ExecutionGas)
+		contract.chargeExecution(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 		if consumed < wanted {
 			return ErrOutOfGas
 		}
