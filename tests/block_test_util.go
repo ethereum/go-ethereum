@@ -229,9 +229,8 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		ExcessBlobGas: t.json.Genesis.ExcessBlobGas,
 		SlotNumber:    t.json.Genesis.SlotNumber,
 	}
-	// The format does not require the number; carry it only when present.
-	// A genesis above zero is still refused by Commit, with its honest
-	// error rather than a hash mismatch here.
+	// The number is optional; a nonzero genesis is still refused by Commit
+	// with its honest error.
 	if n := t.json.Genesis.Number; n != nil {
 		g.Number = n.Uint64()
 	}

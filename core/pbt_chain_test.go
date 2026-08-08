@@ -55,9 +55,7 @@ var testPBTChainConfig = &params.ChainConfig{
 	TerminalTotalDifficulty: common.Big0,
 	PBT:                     true,
 	DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
-	// Mirrors the Amsterdam entry in tests/init.go: upstream's blob
-	// schedule is BPO-based now, so the per-fork Osaka/Amsterdam fields
-	// this config used to name no longer exist.
+	// Mirrors tests/init.go: upstream's blob schedule is BPO-based now.
 	BlobScheduleConfig: &params.BlobScheduleConfig{
 		Cancun: params.DefaultCancunBlobConfig,
 		Prague: params.DefaultPragueBlobConfig,

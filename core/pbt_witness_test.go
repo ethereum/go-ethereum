@@ -32,10 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// Despite the filename this covers the EIP-2935 history contract on the
-// binary tree, not execution witnesses; witness handling is pinned in
-// pbt_capabilities_test.go. Block-level processing is pinned by the EEST
-// binary-tree fixtures (tests/spec-tests) rather than here.
+// Despite the filename this covers the EIP-2935 history contract; witnesses
+// are pinned in pbt_capabilities_test.go, block processing by the EEST
+// fixtures.
 
 func TestProcessParentBlockHash(t *testing.T) {
 	// This test uses blocks where,
