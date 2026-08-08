@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -100,7 +101,8 @@ one that silently reads as empty.
 The optional state-root argument selects the state to convert; the head
 block's root is used when omitted. The source database must hold the
 account and storage key preimages, which only a node synced with
---cache.preimages has.
+--cache.preimages has; every preimage consumed is verified against the
+hash it was found under.
 
 With --snapshot-out and --preimages-out, the conversion also emits the
 EIP-8347 distribution artifacts: the byte-canonical PBT snapshot and the
@@ -413,6 +415,9 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		if addrBytes == nil {
 			return fmt.Errorf("missing preimage for account hash %x (the source node must have synced with --cache.preimages)", accIter.Key)
 		}
+		if err := checkPreimage(addrBytes, common.BytesToHash(accIter.Key), common.AddressLength); err != nil {
+			return err
+		}
 		addr := common.BytesToAddress(addrBytes)
 		if preimages != nil {
 			if err := preimages.beginAccount(addr); err != nil {
@@ -447,6 +452,9 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 				slotKey := storageTrie.GetKey(storageIter.Key)
 				if slotKey == nil {
 					return fmt.Errorf("missing preimage for storage key %x (account %x)", storageIter.Key, addr)
+				}
+				if err := checkPreimage(slotKey, common.BytesToHash(storageIter.Key), common.HashLength); err != nil {
+					return err
 				}
 				if preimages != nil {
 					preimages.addSlot(slotKey)
@@ -487,6 +495,23 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		return fmt.Errorf("account iteration failed: %w", err)
 	}
 	return flatBatch.Write()
+}
+
+// checkPreimage guards a preimage lookup: the stored value must be the
+// stated length and must hash back to the key it was found under. The store
+// is a bare hash-to-value table with no integrity of its own, so a corrupt
+// entry would otherwise become a wrong-stem tree that every later check -
+// the verifiers included, since they re-derive from the same value -
+// happily confirms. One short keccak per leaf, noise against the blake3
+// derivations each leaf already pays for.
+func checkPreimage(preimage []byte, hash common.Hash, wantLen int) error {
+	if len(preimage) != wantLen {
+		return fmt.Errorf("corrupt preimage for %x: %d bytes, want %d", hash, len(preimage), wantLen)
+	}
+	if crypto.Keccak256Hash(preimage) != hash {
+		return fmt.Errorf("corrupt preimage for %x: value hashes to %x", hash, crypto.Keccak256(preimage))
+	}
+	return nil
 }
 
 // emitAccountHeader derives the header-stem and code-zone leaves of one
@@ -701,6 +726,10 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 			acctIt.Release()
 			return fmt.Errorf("missing preimage for flat account %x", accountHash)
 		}
+		if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
+			acctIt.Release()
+			return err
+		}
 		addr := common.BytesToAddress(addrBytes)
 
 		var slim types.SlimAccount
@@ -755,12 +784,20 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 				slotIt.Release()
 				return fmt.Errorf("missing preimage for flat account %x", accountHash)
 			}
+			if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
+				slotIt.Release()
+				return err
+			}
 			lastHash, lastAddr = accountHash, common.BytesToAddress(addrBytes)
 		}
 		slotKey := srcTriedb.Preimage(slotHash)
 		if slotKey == nil {
 			slotIt.Release()
 			return fmt.Errorf("missing preimage for flat storage key %x (account %x)", slotHash, lastAddr)
+		}
+		if err := checkPreimage(slotKey, slotHash, common.HashLength); err != nil {
+			slotIt.Release()
+			return err
 		}
 		_, content, _, err := rlp.Split(slotIt.Value())
 		if err != nil {

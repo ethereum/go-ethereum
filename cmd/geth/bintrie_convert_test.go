@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
@@ -547,4 +549,86 @@ func TestWipeRestoresVirginNamespace(t *testing.T) {
 	if !bytes.Equal(pre1, pre2) {
 		t.Fatal("re-conversion produced a different preimage file")
 	}
+}
+
+// TestConvertCorruptPreimageRefused pins the integrity of the one input the
+// converter cannot derive: the preimage store. It is a bare hash-to-value
+// table, so a corrupt entry would otherwise become a wrong-stem tree that
+// every downstream check confirms - the verifiers re-derive from the same
+// value - and artifacts whose digests no honest producer reproduces. The
+// conversion must refuse instead, and refuse before anything survives: no
+// artifact files, no attestation.
+func TestConvertCorruptPreimageRefused(t *testing.T) {
+	newFixture := func(t *testing.T) (ethdb.Database, *triedb.Database, common.Hash) {
+		t.Helper()
+		chaindb := rawdb.NewMemoryDatabase()
+		srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+			Preimages: true,
+			PathDB:    pathdb.Defaults,
+		})
+		gspec := &core.Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+			Alloc:   artifactAlloc(),
+		}
+		root := gspec.MustCommit(chaindb, srcTriedb).Root()
+		srcTriedb.Close()
+		src := triedb.NewDatabase(chaindb, &triedb.Config{
+			Preimages: true,
+			PathDB:    &pathdb.Config{ReadOnly: true},
+		})
+		t.Cleanup(func() { src.Close() })
+		return chaindb, src, root
+	}
+	convert := func(t *testing.T, chaindb ethdb.Database, src *triedb.Database, root common.Hash) (error, string, string) {
+		t.Helper()
+		dir := t.TempDir()
+		snapPath, prePath := filepath.Join(dir, "snapshot.bin"), filepath.Join(dir, "preimages.bin")
+		_, err := convertState(chaindb, src, root, conversionOptions{
+			tmpDir:       dir,
+			snapshotPath: snapPath,
+			preimagePath: prePath,
+		})
+		return err, snapPath, prePath
+	}
+	t.Run("wrong account preimage", func(t *testing.T) {
+		chaindb, src, root := newFixture(t)
+		// A well-formed 20-byte value that is not the preimage of its key.
+		addr := common.HexToAddress("0x1000000000000000000000000000000000000001")
+		rawdb.WritePreimages(chaindb, map[common.Hash][]byte{
+			crypto.Keccak256Hash(addr.Bytes()): common.HexToAddress("0x9999999999999999999999999999999999999999").Bytes(),
+		})
+		err, snapPath, prePath := convert(t, chaindb, src, root)
+		if err == nil || !strings.Contains(err.Error(), "corrupt preimage") {
+			t.Fatalf("a corrupt account preimage converted; err = %v", err)
+		}
+		for _, path := range []string{snapPath, prePath} {
+			if _, statErr := os.Stat(path); statErr == nil {
+				t.Fatalf("a refused conversion left the artifact %s behind", path)
+			}
+		}
+		if rawdb.HasPBTState(chaindb) {
+			t.Fatal("a refused conversion attested its namespace")
+		}
+	})
+
+	t.Run("wrong-length slot preimage", func(t *testing.T) {
+		chaindb, src, root := newFixture(t)
+		// 33 bytes: over the word size, which used to reach the key deriver
+		// and panic there rather than error.
+		slot := common.BigToHash(big.NewInt(1))
+		rawdb.WritePreimages(chaindb, map[common.Hash][]byte{
+			crypto.Keccak256Hash(slot[:]): make([]byte, 33),
+		})
+		err, snapPath, _ := convert(t, chaindb, src, root)
+		if err == nil || !strings.Contains(err.Error(), "corrupt preimage") {
+			t.Fatalf("a wrong-length slot preimage converted; err = %v", err)
+		}
+		if _, statErr := os.Stat(snapPath); statErr == nil {
+			t.Fatal("a refused conversion left the snapshot artifact behind")
+		}
+		if rawdb.HasPBTState(chaindb) {
+			t.Fatal("a refused conversion attested its namespace")
+		}
+	})
 }
