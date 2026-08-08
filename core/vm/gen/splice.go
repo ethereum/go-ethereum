@@ -35,7 +35,7 @@ import (
 // gasHelperNames are the gas and memory helpers whose bodies the generator
 // splices instead of calling.
 var gasHelperNames = map[string]bool{
-	"ChargeRegularOnly":        true,
+	"ChargeExecutionOnly":      true,
 	"computeMemorySize":        true,
 	"chargeDynamicGas":         true,
 	"chargeVerkleCodeChunkGas": true,
