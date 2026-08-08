@@ -303,7 +303,10 @@ func (t *UDPv5) RegisterTalkHandler(protocol string, handler TalkRequestHandler)
 // TalkRequest sends a talk request to a node and waits for a response.
 func (t *UDPv5) TalkRequest(n *enode.Node, protocol string, request []byte) ([]byte, error) {
 	req := &v5wire.TalkRequest{Protocol: protocol, Message: request}
-	resp := t.callToNode(n, v5wire.TalkResponseMsg, req)
+	resp, err := t.callToNode(n, v5wire.TalkResponseMsg, req)
+	if err != nil {
+		return nil, err
+	}
 	defer t.callDone(resp)
 	select {
 	case respMsg := <-resp.ch:
@@ -411,7 +414,10 @@ func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 // Ping calls PING on a node and waits for a PONG response.
 func (t *UDPv5) Ping(n *enode.Node) (*v5wire.Pong, error) {
 	req := &v5wire.Ping{ENRSeq: t.localNode.Node().Seq()}
-	resp := t.callToNode(n, v5wire.PongMsg, req)
+	resp, err := t.callToNode(n, v5wire.PongMsg, req)
+	if err != nil {
+		return nil, err
+	}
 	defer t.callDone(resp)
 
 	select {
@@ -436,7 +442,10 @@ func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
 
 // Findnode calls FINDNODE on a node and waits for responses.
 func (t *UDPv5) Findnode(n *enode.Node, distances []uint) ([]*enode.Node, error) {
-	resp := t.callToNode(n, v5wire.NodesMsg, &v5wire.Findnode{Distances: distances})
+	resp, err := t.callToNode(n, v5wire.NodesMsg, &v5wire.Findnode{Distances: distances})
+	if err != nil {
+		return nil, err
+	}
 	return t.waitForNodes(resp, distances)
 }
 
@@ -503,11 +512,14 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 
 // callToNode sends the given call and sets up a handler for response packets (of message
 // type responseType). Responses are dispatched to the call's response channel.
-func (t *UDPv5) callToNode(n *enode.Node, responseType byte, req v5wire.Packet) *callV5 {
-	addr, _ := n.UDPEndpoint()
+func (t *UDPv5) callToNode(n *enode.Node, responseType byte, req v5wire.Packet) (*callV5, error) {
+	addr, ok := n.UDPEndpoint()
+	if !ok {
+		return nil, errNoUDPEndpoint
+	}
 	c := &callV5{id: n.ID(), addr: addr, node: n}
 	t.initCall(c, responseType, req)
-	return c
+	return c, nil
 }
 
 // callToID is like callToNode, but for cases where the node record is not available.
