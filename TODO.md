@@ -161,9 +161,13 @@ creations, which are all in view. Implementing it therefore needs the tree to
 know which code leaves this transaction first wrote — something nothing tracks
 today, and the reason this is not folded into the delegation change.
 
-Until then the divergence is real but narrow: it needs an account with deployed
-code to be deleted, which post-EIP-6780 means created and destroyed inside one
-transaction.
+Until then the divergence is theoretical rather than reachable: post-EIP-6780
+the only deletable account was created inside the same transaction, and such
+an account nets out of the block's state diff before either implementation
+writes its chunks. The EEST fixture pinning exactly this shape
+(`test_unshared_code_chunks_after_same_tx_selfdestruct`) fills against the
+reference and consumes green against geth. The rule starts to matter the day
+a fork reintroduces deletion of aged accounts.
 
 ## The MPT→PBT converter needs rewriting, not patching
 
@@ -219,6 +223,33 @@ the EEST binary-tree suite passes byte-identical to the reference fills -
 so every upstream sync re-conflicts until upstream updates. Report upstream
 when convenient.
 
+## Protocol tests are delegated to the EEST binary-tree suite
+
+The dividing line, settled 2026-08-07: consensus-observable behavior
+(pre-state + transactions → post-state root) is pinned by the EEST fixtures in
+`tests/binary_tree/` on execution-specs' `projects/binary-trie`; geth keeps
+what fixtures cannot observe — engine, database, witness and RPC mechanics,
+the fixture harness itself, and the EELS-vector unit oracle in `trie/bintrie`.
+
+Removed as already pinned (verified against the suite at `8d258bc1d`):
+
+- `core.TestProcessPBT` — subsumed by the blockchain fixtures
+  (`test_multi_block.py`, `test_account_lifecycle.py`), which pin every
+  block's state root; the smoke test asserted no root at all.
+- `core/state.TestPBTZeroIsAbsence` — `test_storage_ops.py` pins both arms
+  end-to-end (`test_sstore_zero_after_nonzero_same_tx`,
+  `test_sstore_zero_across_transactions_or_blocks`).
+
+Scheduled for the same treatment once the port PR lands in EEST:
+`core.TestProcessParentBlockHash` (EIP-2935 ring buffer — the companion EEST
+PR adds the fixture; the verified pin still lacks it) and `core/state.TestPBTCodeShrink`
+(delegation-clear; its leaf probes stay in `TestPBTCodeSizeWrites` and the
+`trie/bintrie` model suite).
+
+Coverage stays manual by decision: fill and consume per the loop in the PR
+description. Reorgs cannot be expressed as fixtures at all — the EEST `Block`
+model has no sidechain mechanism — so the reorg tests stay native regardless.
+
 ## Also deferred, for context
 
 These are known and tracked elsewhere; listed so this file is the single place
@@ -230,8 +261,8 @@ to look.
   account and storage keys alone. The `state_vectors` section embeds whole
   allocations through the reference's own state layer, so contracts, shared
   bytecode and zero-collapsing chunks all reach a root that
-  `TestStateVectors` compares against. What is still open is running the EEST
-  fixtures themselves; see the harness blocker below.
+  `TestStateVectors` compares against. The EEST fixtures themselves run green
+  now; what deliberately remains open is the next bullet.
 - **EEST fixtures run, with three deliberate gaps.** The BinaryTree suite
   passes via `consume direct` and the Go harness, path scheme only. Open:
   engine-format fixtures need a `consume engine` path (see the catalyst
