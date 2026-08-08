@@ -72,6 +72,8 @@ type BlobBuffer struct {
 	completed      []*BlobTxForPool
 	completedCount atomic.Int32
 	cb             BlobBufferFunctions
+
+	completedSignal chan struct{}
 }
 
 type BlobBufferFunctions struct {
@@ -85,7 +87,14 @@ func NewBlobBuffer(cb BlobBufferFunctions) *BlobBuffer {
 		txs:   make(map[common.Hash]*txEntry),
 		cells: make(map[common.Hash]*cellEntry),
 		cb:    cb,
+
+		completedSignal: make(chan struct{}, 1),
 	}
+}
+
+// Completed returns a channel which is signaled when entries are ready to flush.
+func (b *BlobBuffer) Completed() <-chan struct{} {
+	return b.completedSignal
 }
 
 // Flush adds all completed entries to the pool and returns the hashes
@@ -196,6 +205,10 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 
 	b.completed = append(b.completed, pooledTx)
 	b.completedCount.Add(1)
+	select {
+	case b.completedSignal <- struct{}{}:
+	default:
+	}
 	delete(b.cells, hash)
 	delete(b.txs, hash)
 }
