@@ -212,7 +212,7 @@ func (t *BlockTest) Network() string {
 }
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
-	return &core.Genesis{
+	g := &core.Genesis{
 		Config:        config,
 		Nonce:         t.json.Genesis.Nonce.Uint64(),
 		Timestamp:     t.json.Genesis.Timestamp,
@@ -227,7 +227,15 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		BaseFee:       t.json.Genesis.BaseFeePerGas,
 		BlobGasUsed:   t.json.Genesis.BlobGasUsed,
 		ExcessBlobGas: t.json.Genesis.ExcessBlobGas,
+		SlotNumber:    t.json.Genesis.SlotNumber,
 	}
+	// The format does not require the number; carry it only when present.
+	// A genesis above zero is still refused by Commit, with its honest
+	// error rather than a hash mismatch here.
+	if n := t.json.Genesis.Number; n != nil {
+		g.Number = n.Uint64()
+	}
+	return g
 }
 
 /*
