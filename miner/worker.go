@@ -452,8 +452,12 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 			}
 		}
 		// If we don't have enough gas for any further transactions then we're done.
-		if env.gasPool.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
+		minTxGas := params.TxGas
+		if miner.chainConfig.IsAmsterdam(env.header.Number, env.header.Time) {
+			minTxGas = params.TxBaseCost2780
+		}
+		if env.gasPool.Gas() < minTxGas {
+			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", minTxGas)
 			break
 		}
 		// If we don't have enough blob space for any further blob transactions,
