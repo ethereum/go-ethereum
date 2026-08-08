@@ -17,7 +17,10 @@
 package main
 
 import (
+	"bytes"
 	"math/big"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -219,6 +222,18 @@ func assertConvertedStateReadable(t *testing.T, chaindb ethdb.Database, destTrie
 	if got := statedb.GetState(addr2, slotKey); got != slotVal {
 		t.Errorf("account2 slot through the state reader: got %x, want %x", got, slotVal)
 	}
+	// Absence is an answer too, and on this path an authoritative one: a
+	// flat-store miss is "does not exist", with the trie never consulted.
+	absent := common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+	if got := statedb.GetBalance(absent); !got.IsZero() {
+		t.Errorf("absent account has balance %s through the state reader", got)
+	}
+	if got := statedb.GetNonce(absent); got != 0 {
+		t.Errorf("absent account has nonce %d through the state reader", got)
+	}
+	if got := statedb.GetState(addr1, common.HexToHash("0x77")); got != (common.Hash{}) {
+		t.Errorf("absent slot reads %x through the state reader", got)
+	}
 }
 
 func TestBintrieConvertDeleteSource(t *testing.T) {
@@ -324,7 +339,9 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	// no marker. This is the shape a marker probe cannot see.
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	rawdb.WriteAccountSnapshot(pbtdb, common.Hash{0x01}, []byte{0x01})
-	if !hasBinaryTrieState(chaindb) {
+	if dirty, err := hasBinaryTrieState(chaindb); err != nil {
+		t.Fatalf("namespace probe failed: %v", err)
+	} else if !dirty {
 		t.Fatal("conversion debris is invisible to the namespace probe")
 	}
 	if _, err := convertState(chaindb, src, root, conversionOptions{}); err == nil {
@@ -356,5 +373,178 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	// --force must refuse rather than overwrite.
 	if _, err := convertState(chaindb, src, root, conversionOptions{}); err == nil {
 		t.Fatal("conversion ran over a completed conversion")
+	}
+}
+
+// TestConvertVerifiers pins that the two verification passes actually catch
+// what they exist to catch: a tree whose disk records cannot rebuild the
+// root, and a flat store that no longer re-derives it. Each tamper must turn
+// verification red, and undoing it green again.
+func TestConvertVerifiers(t *testing.T) {
+	chaindb := rawdb.NewMemoryDatabase()
+	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.Defaults,
+	})
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Alloc:   artifactAlloc(),
+	}
+	root := gspec.MustCommit(chaindb, srcTriedb).Root()
+	srcTriedb.Close()
+
+	src := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    &pathdb.Config{ReadOnly: true},
+	})
+	defer src.Close()
+
+	binRoot, err := convertState(chaindb, src, root, conversionOptions{})
+	if err != nil {
+		t.Fatalf("conversion failed: %v", err)
+	}
+	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
+
+	// tamper grabs the first record of a family and removes it, returning
+	// the undo.
+	tamper := func(prefix []byte) (key, value []byte) {
+		t.Helper()
+		it := pbtdb.NewIterator(prefix, nil)
+		defer it.Release()
+		if !it.Next() {
+			t.Fatalf("no records under family %x to tamper with", prefix)
+		}
+		key, value = common.CopyBytes(it.Key()), common.CopyBytes(it.Value())
+		if err := pbtdb.Delete(key); err != nil {
+			t.Fatal(err)
+		}
+		return key, value
+	}
+	restore := func(key, value []byte) {
+		t.Helper()
+		if err := pbtdb.Put(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A missing tree record must fail the tree walk.
+	key, value := tamper(rawdb.TrieNodeAccountPrefix)
+	if err := verifyConvertedState(chaindb, binRoot); err == nil {
+		t.Fatal("a missing tree record survived tree verification")
+	}
+	restore(key, value)
+	if err := verifyConvertedState(chaindb, binRoot); err != nil {
+		t.Fatalf("restored tree fails verification: %v", err)
+	}
+
+	// A missing flat account must fail the flat re-derivation - and must NOT
+	// fail the tree walk, which is exactly why the flat pass exists.
+	key, value = tamper(rawdb.SnapshotAccountPrefix)
+	if err := verifyConvertedState(chaindb, binRoot); err != nil {
+		t.Fatalf("a flat-only gap failed the tree walk: %v", err)
+	}
+	if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err == nil {
+		t.Fatal("a missing flat account survived flat-state verification")
+	}
+	restore(key, value)
+	if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err != nil {
+		t.Fatalf("restored flat state fails verification: %v", err)
+	}
+
+	// A corrupt flat slot value must fail the flat re-derivation.
+	key, value = tamper(rawdb.SnapshotStoragePrefix)
+	restore(key, []byte{0x01}) // rlp("") of a different value
+	if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err == nil {
+		t.Fatal("a corrupt flat slot survived flat-state verification")
+	}
+	restore(key, value)
+	if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err != nil {
+		t.Fatalf("restored flat state fails verification: %v", err)
+	}
+}
+
+// TestWipeRestoresVirginNamespace pins two properties of --force. The wipe
+// must return the namespace to exactly its pre-conversion key set - pinning
+// rawdb.PBTKeyFamilies against drift, since any family the list misses would
+// survive as invisible debris - and a re-conversion over the wiped namespace
+// must reproduce the identical root and byte-identical artifacts.
+func TestWipeRestoresVirginNamespace(t *testing.T) {
+	chaindb := rawdb.NewMemoryDatabase()
+	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.Defaults,
+	})
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Alloc:   artifactAlloc(),
+	}
+	root := gspec.MustCommit(chaindb, srcTriedb).Root()
+	srcTriedb.Close()
+
+	// Everything under the namespace prefix before conversion is chain data
+	// (the genesis body) that a wipe must not touch.
+	prefixKeys := func() map[string]struct{} {
+		keys := make(map[string]struct{})
+		it := chaindb.NewIterator(rawdb.PBTPrefix, nil)
+		defer it.Release()
+		for it.Next() {
+			keys[string(it.Key())] = struct{}{}
+		}
+		return keys
+	}
+	before := prefixKeys()
+
+	src := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    &pathdb.Config{ReadOnly: true},
+	})
+	defer src.Close()
+
+	convert := func(dir string) (common.Hash, []byte, []byte) {
+		t.Helper()
+		binRoot, err := convertState(chaindb, src, root, conversionOptions{
+			tmpDir:       dir,
+			snapshotPath: filepath.Join(dir, "snapshot.bin"),
+			preimagePath: filepath.Join(dir, "preimages.bin"),
+		})
+		if err != nil {
+			t.Fatalf("conversion failed: %v", err)
+		}
+		snap, err := os.ReadFile(filepath.Join(dir, "snapshot.bin"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		pre, err := os.ReadFile(filepath.Join(dir, "preimages.bin"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return binRoot, snap, pre
+	}
+	root1, snap1, pre1 := convert(t.TempDir())
+
+	if err := wipeBinaryTrieState(chaindb); err != nil {
+		t.Fatalf("wipe failed: %v", err)
+	}
+	after := prefixKeys()
+	if len(after) != len(before) {
+		t.Fatalf("wipe left %d keys under the namespace prefix, started with %d", len(after), len(before))
+	}
+	for key := range after {
+		if _, ok := before[key]; !ok {
+			t.Fatalf("wipe left a converted key behind: %x", key)
+		}
+	}
+
+	root2, snap2, pre2 := convert(t.TempDir())
+	if root1 != root2 {
+		t.Fatalf("re-conversion produced root %x, first run %x", root2, root1)
+	}
+	if !bytes.Equal(snap1, snap2) {
+		t.Fatal("re-conversion produced a different snapshot artifact")
+	}
+	if !bytes.Equal(pre1, pre2) {
+		t.Fatal("re-conversion produced a different preimage file")
 	}
 }

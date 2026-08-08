@@ -24,6 +24,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -291,4 +293,77 @@ func TestConvertMatchesEmbedding(t *testing.T) {
 		t.Fatalf("converted root %x, the typed writers produce %x", binRoot, want)
 	}
 	assertConvertedTreeClean(t, chaindb, binRoot)
+	assertFlatStateMatchesAlloc(t, chaindb, alloc)
+}
+
+// assertFlatStateMatchesAlloc requires the converted flat store to be, byte
+// for byte, the exact record set a replaying node would hold for alloc: slim
+// accounts with the storage root normalized away, keyed by hashed address,
+// and RLP-trimmed slot values keyed by hashed slot. Both directions matter -
+// a record too many is as wrong as one too few, since the flat store is the
+// authoritative read path.
+func assertFlatStateMatchesAlloc(t *testing.T, chaindb ethdb.Database, alloc types.GenesisAlloc) {
+	t.Helper()
+	var (
+		wantAccounts = make(map[common.Hash][]byte, len(alloc))
+		wantSlots    = make(map[string][]byte)
+	)
+	for addr, acct := range alloc {
+		balance, _ := uint256.FromBig(acct.Balance)
+		wantAccounts[crypto.Keccak256Hash(addr.Bytes())] = types.SlimAccountRLP(types.StateAccount{
+			Nonce:    acct.Nonce,
+			Balance:  balance,
+			Root:     types.EmptyRootHash,
+			CodeHash: crypto.Keccak256(acct.Code),
+		})
+		for slot, val := range acct.Storage {
+			blob, err := rlp.EncodeToBytes(common.TrimLeftZeroes(val[:]))
+			if err != nil {
+				t.Fatal(err)
+			}
+			key := string(crypto.Keccak256(addr.Bytes())) + string(crypto.Keccak256(slot[:]))
+			wantSlots[key] = blob
+		}
+	}
+	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
+
+	acctIt := pbtdb.NewIterator(rawdb.SnapshotAccountPrefix, nil)
+	defer acctIt.Release()
+	for acctIt.Next() {
+		hash := common.BytesToHash(acctIt.Key()[len(rawdb.SnapshotAccountPrefix):])
+		want, ok := wantAccounts[hash]
+		if !ok {
+			t.Fatalf("flat account %x has no counterpart in the allocation", hash)
+		}
+		if !bytes.Equal(acctIt.Value(), want) {
+			t.Fatalf("flat account %x is %x, a replaying node writes %x", hash, acctIt.Value(), want)
+		}
+		delete(wantAccounts, hash)
+	}
+	if err := acctIt.Error(); err != nil {
+		t.Fatal(err)
+	}
+	if len(wantAccounts) != 0 {
+		t.Fatalf("%d accounts converted but missing from the flat store", len(wantAccounts))
+	}
+
+	slotIt := pbtdb.NewIterator(rawdb.SnapshotStoragePrefix, nil)
+	defer slotIt.Release()
+	for slotIt.Next() {
+		key := string(slotIt.Key()[len(rawdb.SnapshotStoragePrefix):])
+		want, ok := wantSlots[key]
+		if !ok {
+			t.Fatalf("flat slot %x has no counterpart in the allocation", slotIt.Key())
+		}
+		if !bytes.Equal(slotIt.Value(), want) {
+			t.Fatalf("flat slot %x is %x, a replaying node writes %x", slotIt.Key(), slotIt.Value(), want)
+		}
+		delete(wantSlots, key)
+	}
+	if err := slotIt.Error(); err != nil {
+		t.Fatal(err)
+	}
+	if len(wantSlots) != 0 {
+		t.Fatalf("%d slots converted but missing from the flat store", len(wantSlots))
+	}
 }

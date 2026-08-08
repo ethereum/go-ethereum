@@ -250,7 +250,12 @@ func attestFlatState(diskdb ethdb.Database, readOnly bool) error {
 	for _, family := range rawdb.PBTKeyFamilies {
 		it := diskdb.NewIterator(family, nil)
 		dirty := it.Next()
+		err := it.Error()
 		it.Release()
+		if err != nil {
+			// An unreadable namespace must not be attested as a fresh one.
+			return fmt.Errorf("failed to probe the binary tree namespace: %w", err)
+		}
 		if dirty {
 			return errors.New("binary tree database predates flat state or holds an unfinished conversion: resync required")
 		}

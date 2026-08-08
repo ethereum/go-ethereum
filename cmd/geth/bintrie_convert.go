@@ -34,7 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
 
@@ -154,7 +155,9 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		if err := wipeBinaryTrieState(chaindb); err != nil {
 			return fmt.Errorf("failed to wipe binary tree state: %w", err)
 		}
-	} else if hasBinaryTrieState(chaindb) {
+	} else if dirty, err := hasBinaryTrieState(chaindb); err != nil {
+		return fmt.Errorf("failed to probe the binary tree namespace: %w", err)
+	} else if dirty {
 		return errors.New("database already holds binary tree state, complete or from an interrupted conversion; re-run with --force to wipe and reconvert")
 	}
 	srcTriedb := utils.MakeTrieDatabase(ctx, stack, chaindb, true, true, false)
@@ -170,11 +173,6 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Conversion complete", "binaryRoot", binRoot)
-
-	if err := verifyConvertedState(chaindb, binRoot); err != nil {
-		return fmt.Errorf("converted state failed verification: %w", err)
-	}
-	log.Info("Converted state verified", "binaryRoot", binRoot)
 
 	if ctx.Bool(deleteSourceFlag.Name) {
 		log.Info("Deleting source MPT data")
@@ -232,17 +230,23 @@ func (s *conversionStats) report(force bool) {
 // roots, and a replaying node records exactly that - so converted and
 // replayed flat state stay byte-identical.
 //
-// The completion marker is the flat-state attestation, written last: opening
-// a binary tree database checks it, so a conversion that dies mid-run leaves
-// a namespace that refuses to open ("resync required") rather than an
-// attested half-state that reads as empty. A re-run after such a death needs
-// --force, which wipes the namespace.
+// Nothing becomes openable or publishable unverified. Both stores are
+// checked from what actually landed on disk - the tree by walking its
+// persisted records back into a root, the flat state by re-deriving the
+// whole leaf set from it - before the artifacts are finalized, and the
+// flat-state attestation is written last of all: opening a binary tree
+// database checks it, so a conversion that dies or fails verification at
+// any point leaves a namespace that refuses to open ("resync required")
+// rather than an attested half-state that reads as empty. A re-run after
+// such a death needs --force, which wipes the namespace.
 func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 
 	// Refuse a namespace that is not virgin: either a completed conversion
 	// (attested) or the debris of an interrupted one. Both need --force.
-	if hasBinaryTrieState(chaindb) {
+	if dirty, err := hasBinaryTrieState(chaindb); err != nil {
+		return common.Hash{}, err
+	} else if dirty {
 		return common.Hash{}, errors.New("binary tree namespace is not empty; re-run with --force to wipe it")
 	}
 	stats := &conversionStats{start: time.Now(), lastReport: time.Now()}
@@ -252,8 +256,9 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 
 	// The distribution artifacts ride the pipeline: the snapshot writer taps
 	// the sorted leaf stream, the preimage file the scan. Both are finalized
-	// before the database is, so a conversion that fails at the artifacts
-	// leaves a namespace that refuses to open, not a half-published one.
+	// only after the converted state verifies, and before the database's own
+	// completion markers, so neither a failed conversion nor a failed
+	// verification leaves a publishable file or an openable namespace.
 	var (
 		snapshot  *snapshotWriter
 		preimages *preimageFile
@@ -288,15 +293,20 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, err
 	}
 	var (
-		batch   = pbtdb.NewBatch()
-		written uint64
+		batch      = pbtdb.NewBatch()
+		written    uint64
+		builderErr error
 	)
 	builder := bintrie.NewStackBuilder(func(path []byte, hash common.Hash, blob []byte) {
+		if builderErr != nil {
+			return
+		}
 		rawdb.WriteAccountTrieNode(batch, path, blob)
 		written++
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.Crit("Failed to write trie nodes", "err", err)
+				builderErr = err
+				return
 			}
 			batch.Reset()
 		}
@@ -318,14 +328,26 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 			return common.Hash{}, err
 		}
 	}
+	// Finish returns the zero hash for an empty stream, which is exactly
+	// types.EmptyBinaryHash.
 	binRoot := builder.Finish()
-	if binRoot == (common.Hash{}) {
-		binRoot = types.EmptyBinaryHash
+	if builderErr != nil {
+		return common.Hash{}, builderErr
 	}
 	if err := batch.Write(); err != nil {
 		return common.Hash{}, err
 	}
 	log.Info("Built binary tree", "nodes", written, "leaves", stats.leaves)
+
+	// Verify before anything becomes publishable or openable: the tree from
+	// its persisted records, the flat state by re-deriving the full leaf set
+	// from it. A failure leaves a namespace with no completion marker.
+	if err := verifyConvertedState(chaindb, binRoot); err != nil {
+		return common.Hash{}, fmt.Errorf("converted tree failed verification: %w", err)
+	}
+	if err := verifyFlatState(chaindb, pbtdb, srcTriedb, binRoot, opts); err != nil {
+		return common.Hash{}, fmt.Errorf("converted flat state failed verification: %w", err)
+	}
 
 	if snapshot != nil {
 		digest, err := snapshot.finalize(binRoot)
@@ -398,51 +420,8 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 			}
 		}
 
-		var code []byte
-		codeHash := common.BytesToHash(acc.CodeHash)
-		if codeHash != types.EmptyCodeHash {
-			code = rawdb.ReadCode(chaindb, codeHash)
-			if code == nil {
-				return fmt.Errorf("missing code for hash %x (account %x)", codeHash, addr)
-			}
-		}
-
-		// The account header. A delegated account holds its designator in a
-		// header leaf in place of the code hash - the two are exclusive - and
-		// produces no code-zone leaves at all.
-		if _, isDelegation := types.ParseDelegation(code); isDelegation {
-			basic, err := bintrie.EncodeBasicData(uint32(len(code)), acc.Nonce, acc.Balance)
-			if err != nil {
-				return fmt.Errorf("account %x: %w", addr, err)
-			}
-			if err := emit(bintrie.BasicDataKey(addr), basic); err != nil {
-				return err
-			}
-			if err := emit(bintrie.DelegationKey(addr), [32]byte(bintrie.EncodeDelegation(code))); err != nil {
-				return err
-			}
-		} else {
-			basic, err := bintrie.EncodeBasicData(uint32(len(code)), acc.Nonce, acc.Balance)
-			if err != nil {
-				return fmt.Errorf("account %x: %w", addr, err)
-			}
-			if err := emit(bintrie.BasicDataKey(addr), basic); err != nil {
-				return err
-			}
-			if err := emit(bintrie.CodeHashKey(addr), codeHash); err != nil {
-				return err
-			}
-			// Code, once per distinct hash: the leaves are content-addressed,
-			// so every holder of this bytecode shares them.
-			if len(code) > 0 {
-				if _, seen := seenCode[codeHash]; !seen {
-					seenCode[codeHash] = struct{}{}
-					stats.codes++
-					if err := emitCodeChunks(codeHash, code, emit); err != nil {
-						return err
-					}
-				}
-			}
+		if err := emitAccountHeader(chaindb, addr, acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash), seenCode, stats, emit); err != nil {
+			return err
 		}
 
 		// Flat state: the slim account, with the storage root normalized to
@@ -510,6 +489,53 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 	return flatBatch.Write()
 }
 
+// emitAccountHeader derives the header-stem and code-zone leaves of one
+// account: the basic data, then either the delegation indicator - exclusive
+// with the code hash, per the account's bytecode being an EIP-7702
+// designator - or the code hash and, once per distinct hash, the code
+// chunks. It is shared between the conversion scan and the flat-state
+// verifier, so both derive from one set of rules; what stays independently
+// pinned is the rules themselves, by the reference-vector parity tests.
+// Storage is the caller's business: it lives in other stems, and the two
+// callers walk it from different stores.
+func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64, balance *uint256.Int, codeHash common.Hash, seenCode map[common.Hash]struct{}, stats *conversionStats, emit func([]byte, [32]byte) error) error {
+	var code []byte
+	if codeHash != types.EmptyCodeHash {
+		code = rawdb.ReadCode(chaindb, codeHash)
+		if code == nil {
+			return fmt.Errorf("missing code for hash %x (account %x)", codeHash, addr)
+		}
+	}
+	basic, err := bintrie.EncodeBasicData(uint32(len(code)), nonce, balance)
+	if err != nil {
+		return fmt.Errorf("account %x: %w", addr, err)
+	}
+	if err := emit(bintrie.BasicDataKey(addr), basic); err != nil {
+		return err
+	}
+	// A delegated account holds its designator in a header leaf in place of
+	// the code hash - the two are exclusive - and produces no code-zone
+	// leaves at all.
+	if _, isDelegation := types.ParseDelegation(code); isDelegation {
+		return emit(bintrie.DelegationKey(addr), [32]byte(bintrie.EncodeDelegation(code)))
+	}
+	if err := emit(bintrie.CodeHashKey(addr), codeHash); err != nil {
+		return err
+	}
+	// Code, once per distinct hash: the leaves are content-addressed, so
+	// every holder of this bytecode shares them.
+	if len(code) > 0 {
+		if _, seen := seenCode[codeHash]; !seen {
+			seenCode[codeHash] = struct{}{}
+			if stats != nil {
+				stats.codes++
+			}
+			return emitCodeChunks(codeHash, code, emit)
+		}
+	}
+	return nil
+}
+
 // emitCodeChunks derives the code-zone leaves of one bytecode. All-zero
 // chunks - 31 zero code bytes carrying no push data - are skipped: the state
 // layer resolves them to absence, and code_size delimits the code rather
@@ -531,17 +557,22 @@ func emitCodeChunks(codeHash common.Hash, code []byte, emit func([]byte, [32]byt
 // died. Which keys the debris consists of depends on where the writer
 // stopped, so every key family is probed - and it has to be by family rather
 // than a bare scan of the namespace prefix, which is shared with block bodies.
-func hasBinaryTrieState(chaindb ethdb.Database) bool {
+func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	for _, family := range rawdb.PBTKeyFamilies {
 		it := pbtdb.NewIterator(family, nil)
 		found := it.Next()
+		err := it.Error()
 		it.Release()
+		if err != nil {
+			// An unreadable namespace is not a clean one.
+			return false, fmt.Errorf("failed to probe the binary tree namespace: %w", err)
+		}
 		if found {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // wipeBinaryTrieState removes everything under the binary tree namespace so a
@@ -581,16 +612,35 @@ func wipeBinaryTrieState(chaindb ethdb.Database) error {
 	return nil
 }
 
+// rawBinaryNodes serves the converted tree's records straight from the
+// database namespace. The verifiers read through it rather than through a
+// path database: opening one requires the flat-state attestation that the
+// verification gates, and a read-only open would demand history freezers
+// that a conversion never creates.
+type rawBinaryNodes struct {
+	pbtdb ethdb.Database
+}
+
+func (r rawBinaryNodes) NodeReader(common.Hash) (database.NodeReader, error) {
+	return r, nil
+}
+
+// Node returns the record at path; a missing record returns nil, which the
+// trie reader turns into a missing-node error. The hash goes unchecked: the
+// verification walk re-derives the root from the leaves, which subsumes
+// per-node hash equality.
+func (r rawBinaryNodes) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
+	return rawdb.ReadAccountTrieNode(r.pbtdb, path), nil
+}
+
 // verifyConvertedState re-derives the converted root from what is actually
 // on disk: every leaf is walked out of the persisted tree and folded through
-// an independent bottom-up build, which must reproduce the root. This is
-// what gates --delete-source: the source is only dropped once the converted
-// bytes alone can stand in for it.
+// an independent bottom-up build, which must reproduce the root. Together
+// with the flat-state verification this is what stands between a conversion
+// and its completion marker - and what gates --delete-source: the source is
+// only dropped once the converted bytes alone can stand in for it.
 func verifyConvertedState(chaindb ethdb.Database, root common.Hash) error {
-	db := triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: &pathdb.Config{ReadOnly: true}})
-	defer db.Close()
-
-	tr, err := bintrie.NewBinaryTrie(root, db)
+	tr, err := bintrie.NewBinaryTrie(root, rawBinaryNodes{pbtdb: rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))})
 	if err != nil {
 		return fmt.Errorf("cannot open the converted tree at %x: %w", root, err)
 	}
@@ -616,6 +666,142 @@ func verifyConvertedState(chaindb ethdb.Database, root common.Hash) error {
 		return fmt.Errorf("disk leaves rebuild to %x, converted root is %x", got, root)
 	}
 	log.Info("Verified converted tree", "leaves", leaves, "root", root)
+	return nil
+}
+
+// verifyFlatState proves the flat store can stand in for the tree: the
+// entire leaf set is re-derived from the flat records - accounts and slots
+// resolved back through the preimage store, code re-read per distinct hash -
+// and must rebuild to the converted root. The flat store is the authoritative
+// read path (a miss there is an absent account, with the trie never
+// consulted), so trie-side verification alone would bless a database that
+// reads as empty; this is the check that makes the attestation honest.
+func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) error {
+	sorter := bintrie.NewLeafSorter(opts.tmpDir, opts.sortBudget)
+	defer sorter.Close()
+
+	var (
+		leaves   uint64
+		seenCode = make(map[common.Hash]struct{})
+		emit     = func(key []byte, value [32]byte) error {
+			if value == ([32]byte{}) {
+				return nil
+			}
+			leaves++
+			return sorter.Add(key, value[:])
+		}
+	)
+	// The flat accounts, walked in hashed order and resolved back to their
+	// addresses through the preimage store.
+	acctIt := pbtdb.NewIterator(rawdb.SnapshotAccountPrefix, nil)
+	for acctIt.Next() {
+		accountHash := common.BytesToHash(acctIt.Key()[len(rawdb.SnapshotAccountPrefix):])
+		addrBytes := srcTriedb.Preimage(accountHash)
+		if addrBytes == nil {
+			acctIt.Release()
+			return fmt.Errorf("missing preimage for flat account %x", accountHash)
+		}
+		addr := common.BytesToAddress(addrBytes)
+
+		var slim types.SlimAccount
+		if err := rlp.DecodeBytes(acctIt.Value(), &slim); err != nil {
+			acctIt.Release()
+			return fmt.Errorf("invalid flat account %x: %w", accountHash, err)
+		}
+		// The binary tree has no per-account storage roots; a flat record
+		// carrying one was not written by this conversion.
+		if len(slim.Root) != 0 {
+			acctIt.Release()
+			return fmt.Errorf("flat account %x carries a storage root %x", accountHash, slim.Root)
+		}
+		codeHash := types.EmptyCodeHash
+		if len(slim.CodeHash) != 0 {
+			codeHash = common.BytesToHash(slim.CodeHash)
+		}
+		balance := slim.Balance
+		if balance == nil {
+			balance = new(uint256.Int)
+		}
+		if err := emitAccountHeader(chaindb, addr, slim.Nonce, balance, codeHash, seenCode, nil, emit); err != nil {
+			acctIt.Release()
+			return err
+		}
+	}
+	if err := acctIt.Error(); err != nil {
+		acctIt.Release()
+		return err
+	}
+	acctIt.Release()
+
+	// The flat slots. The iteration is ordered by account hash, so the
+	// address preimage resolves once per account.
+	var (
+		slotIt   = pbtdb.NewIterator(rawdb.SnapshotStoragePrefix, nil)
+		lastHash common.Hash
+		lastAddr common.Address
+	)
+	for slotIt.Next() {
+		key := slotIt.Key()
+		if len(key) != len(rawdb.SnapshotStoragePrefix)+2*common.HashLength {
+			slotIt.Release()
+			return fmt.Errorf("malformed flat storage key %x", key)
+		}
+		accountHash := common.BytesToHash(key[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength])
+		slotHash := common.BytesToHash(key[len(key)-common.HashLength:])
+
+		if accountHash != lastHash || lastHash == (common.Hash{}) {
+			addrBytes := srcTriedb.Preimage(accountHash)
+			if addrBytes == nil {
+				slotIt.Release()
+				return fmt.Errorf("missing preimage for flat account %x", accountHash)
+			}
+			lastHash, lastAddr = accountHash, common.BytesToAddress(addrBytes)
+		}
+		slotKey := srcTriedb.Preimage(slotHash)
+		if slotKey == nil {
+			slotIt.Release()
+			return fmt.Errorf("missing preimage for flat storage key %x (account %x)", slotHash, lastAddr)
+		}
+		_, content, _, err := rlp.Split(slotIt.Value())
+		if err != nil {
+			slotIt.Release()
+			return fmt.Errorf("invalid flat storage value for key %x (account %x): %w", slotHash, lastAddr, err)
+		}
+		var padded [32]byte
+		copy(padded[32-len(content):], content)
+		if err := emit(bintrie.StorageSlotKey(lastAddr, slotKey), padded); err != nil {
+			slotIt.Release()
+			return err
+		}
+	}
+	if err := slotIt.Error(); err != nil {
+		slotIt.Release()
+		return err
+	}
+	slotIt.Release()
+
+	// The re-derived leaves must rebuild to the converted root.
+	stream, err := sorter.Sort()
+	if err != nil {
+		return err
+	}
+	rebuild := bintrie.NewStackBuilder(nil)
+	for {
+		key, value, err := stream.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if err := rebuild.Add(key, value); err != nil {
+			return err
+		}
+	}
+	if got := rebuild.Finish(); got != root && !(leaves == 0 && root == types.EmptyBinaryHash) {
+		return fmt.Errorf("flat state re-derives to %x, converted root is %x", got, root)
+	}
+	log.Info("Verified converted flat state", "leaves", leaves, "root", root)
 	return nil
 }
 
