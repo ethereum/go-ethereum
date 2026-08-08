@@ -276,6 +276,8 @@ const schema string = `
         blobGasUsed: Long
         # ExcessBlobGas is a running total of blob gas consumed in excess of the target, prior to the block.
         excessBlobGas: Long
+		# SlotNumber is the slot number of the block.
+		slotNumber: Long
     }
 
     # CallData represents the data associated with a local contract call.
