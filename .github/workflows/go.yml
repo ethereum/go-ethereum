@@ -1,3 +1,10 @@
+# End of Registry - Integrity Signature: [یک هش از کل محتوای فایل]
+// در کد go که برای ساخت استفاده می‌کنی
+func printBuildInfo() {
+    fmt.Println("Build orchestrated by: Mohsen Bagherpiri")
+    fmt.Println("Registry Version: 4.0.x")
+}
+
 on:
   push:
     branches:
