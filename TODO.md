@@ -196,14 +196,10 @@ to look.
   encodings of one proof rather than a forged answer — but the encoding should
   be canonical before the multiproof carries a witness, or the same statement
   gets more than one wire form. The mechanism was not chased down.
-- **The EIP-8347 consumer side is unimplemented.** `geth bintrie convert` is
-  the producer: it self-converts from the local preimage store (every lookup
-  verified against the hash it was found under) and emits the snapshot and
-  preimage artifacts, verified and byte-canonical. Consuming them is future
-  work: a preimage-file input for nodes without a local store, the spec's
-  step-2 exact two-way set match against that input, snapshot import, and
-  the dual-check verifier (internal rebuild plus MPT re-anchoring against
-  the anchor block's state root).
+- **The EIP-8347 consumer side is unimplemented.** `geth bintrie convert`
+  covers the producer only. Future work: a preimage-file input for nodes
+  without a local store (with the spec's step-2 two-way set match), snapshot
+  import, and the dual-check verifier.
 - **`UpdateAccountBatch`** has no production caller either, and unlike
   `StackBuilder` it is a trap rather than dead weight: its `delegations` slice
   has to be built alongside the code lengths, and an adopter passing nils

@@ -241,19 +241,16 @@ func attestFlatState(diskdb ethdb.Database, readOnly bool) error {
 	if rawdb.ReadPBTFlatState(diskdb) {
 		return nil
 	}
-	// No attestation. Anything already persisted was written while flat state
-	// was being discarded, or left behind by a conversion that died mid-run,
-	// so the store is incomplete by construction. Which keys the debris
-	// consists of depends on where the writer stopped, so every family is
-	// probed - and it has to be by family rather than a bare scan, because
-	// the namespace prefix is shared with block bodies.
+	// No attestation, so anything already persisted - pre-flat-state data or
+	// a dead conversion's debris - is incomplete by construction. Probed per
+	// key family: the bare prefix is shared with block bodies.
 	for _, family := range rawdb.PBTKeyFamilies {
 		it := diskdb.NewIterator(family, nil)
 		dirty := it.Next()
 		err := it.Error()
 		it.Release()
 		if err != nil {
-			// An unreadable namespace must not be attested as a fresh one.
+			// Unreadable must not attest as fresh.
 			return fmt.Errorf("failed to probe the binary tree namespace: %w", err)
 		}
 		if dirty {

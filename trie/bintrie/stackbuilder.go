@@ -77,9 +77,7 @@ func (b *StackBuilder) Add(key, value []byte) error {
 		return errors.New("bintrie: builder values must be 32 bytes")
 	}
 	if isZeroValue(value) {
-		// The state's tree never holds 32 zero bytes - the state layer
-		// resolves them to absence - so a zero here is corrupt input, and a
-		// rebuild folding one would bless the corruption.
+		// Zero values resolve to absence; folding one would bless corruption.
 		return errors.New("bintrie: builder values must not be 32 zero bytes")
 	}
 	if b.lastKey != nil && bytes.Compare(key, b.lastKey) <= 0 {

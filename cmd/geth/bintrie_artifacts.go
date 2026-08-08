@@ -31,32 +31,23 @@ import (
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
-// The EIP-8347 distribution artifacts. Conversion output is published as two
-// byte-canonical files - the PBT snapshot and the preimage file - which every
-// correct producer reproduces bit for bit for a given anchor state, so that a
-// single keccak digest per file lets nodes compare sources before committing
-// to a download. Byte-canonicality is why every encoding choice here is
-// pinned: keys at full zone length, values and slot keys as canonical RLP
-// integers, records in sorted order, nothing after the last record.
+// The EIP-8347 distribution artifacts: two byte-canonical files every
+// correct producer reproduces bit for bit, so one keccak digest per file
+// lets nodes compare sources before downloading.
 
 // snapshotHeaderSize is the fixed artifact header: pbtRoot[32] followed by
 // leafCount[8, big-endian].
 const snapshotHeaderSize = 40
 
-// snapshotRecord is one leaf of the artifact: the full PBT tree key and the
-// leaf value as a canonical integer, leading zeros dropped. A zero value
-// cannot occur - EIP-8297 keeps zeros out of the tree - so the encoded value
-// is never empty.
+// snapshotRecord is one artifact leaf: the full tree key and the value as a
+// canonical integer (zero values cannot occur).
 type snapshotRecord struct {
 	Key   []byte
 	Value []byte
 }
 
 // snapshotWriter streams the PBT snapshot artifact: a placeholder header,
-// then one RLP record per leaf in the order the sorted stream yields them,
-// then the header backpatched with the root and leaf count once the build
-// fixes them. The digest is one sequential re-read at the end; the artifact
-// is written once and hashed once, never buffered whole.
+// one RLP record per sorted leaf, the header backpatched at finalize.
 type snapshotWriter struct {
 	path  string
 	f     *os.File
@@ -78,9 +69,7 @@ func newSnapshotWriter(path string) (*snapshotWriter, error) {
 	return &snapshotWriter{path: path, f: f, w: w}, nil
 }
 
-// add appends one leaf record. Keys arrive from the sorted stream, so the
-// artifact inherits its order; values arrive as the tree's full 32 bytes and
-// leave as canonical integers.
+// add appends one leaf record.
 func (sw *snapshotWriter) add(key, value []byte) error {
 	if err := rlp.Encode(sw.w, &snapshotRecord{Key: key, Value: common.TrimLeftZeroes(value)}); err != nil {
 		return err
@@ -102,8 +91,7 @@ func (sw *snapshotWriter) finalize(root common.Hash) (common.Hash, error) {
 	if _, err := sw.f.WriteAt(header[:], 0); err != nil {
 		return common.Hash{}, err
 	}
-	// The digest is about to be reported as the file's identity; make sure
-	// the bytes it names are durable first.
+	// The digest names the file; make its bytes durable first.
 	if err := sw.f.Sync(); err != nil {
 		return common.Hash{}, err
 	}
@@ -125,24 +113,16 @@ func (sw *snapshotWriter) abort() {
 	os.Remove(sw.path)
 }
 
-// preimageRecord is one account of the preimage file: the 20-byte address
-// and the account's storage-slot keys as canonical integers, ascending. An
-// account with no storage carries an empty list.
+// preimageRecord is one preimage-file account: the 20-byte address and its
+// slot keys as canonical integers, ascending.
 type preimageRecord struct {
 	Address  []byte
 	SlotKeys [][]byte
 }
 
-// preimageFile accumulates the preimage records of the conversion scan and
-// writes them out sorted by address. The scan walks accounts in hashed-key
-// order, which is no order at all in address terms, so the records pass
-// through the external sorter; each is keyed by its address and carried as
-// its final encoding.
-//
-// The emitted set matches the converted state exactly, by construction: a
-// record is added for precisely the accounts and slots the conversion
-// derived leaves from, and a preimage miss aborts the conversion before any
-// artifact survives.
+// preimageFile accumulates the scan's preimage records and writes them out
+// address-sorted through the external sorter (the scan walks in hashed-key
+// order). By construction the emitted set is exactly the converted one.
 type preimageFile struct {
 	sorter   *bintrie.RecordSorter
 	addr     common.Address
@@ -162,8 +142,7 @@ func newPreimageFile(tmpDir string, budget int) *preimageFile {
 	}
 }
 
-// beginAccount opens the record of one account. The scan visits each account
-// exactly once, so the previous record is complete and can be sealed.
+// beginAccount seals the previous account's record and opens the next.
 func (pf *preimageFile) beginAccount(addr common.Address) error {
 	if err := pf.sealAccount(); err != nil {
 		return err
@@ -173,16 +152,13 @@ func (pf *preimageFile) beginAccount(addr common.Address) error {
 	return nil
 }
 
-// addSlot records one storage-slot key of the open account. The slot arrives
-// as the stored 32-byte preimage; ordering and trimming happen at sealing.
+// addSlot records one slot key of the open account.
 func (pf *preimageFile) addSlot(slotKey []byte) {
 	pf.slots = append(pf.slots, common.CopyBytes(slotKey))
 }
 
-// sealAccount encodes and buffers the open account's record, if any. The
-// slot keys of one account are sorted here, in memory: a record is a single
-// RLP value, so it cannot be assembled without holding the account's slot
-// keys anyway, and even the largest mainnet contracts stay within sense.
+// sealAccount sorts the open account's slot keys and buffers its record; a
+// record is one RLP value, so its slots are held in memory regardless.
 func (pf *preimageFile) sealAccount() error {
 	if pf.accounts == 0 {
 		return nil
@@ -200,9 +176,8 @@ func (pf *preimageFile) sealAccount() error {
 	return pf.sorter.Add(pf.addr[:], blob)
 }
 
-// write seals the last account, sorts the records by address and writes the
-// file, hashing it in the same pass - the format has no header, so nothing
-// needs backpatching. Returns the digest.
+// write seals the last account, writes the address-sorted records and
+// returns the file's digest, hashed in the same pass.
 func (pf *preimageFile) write(path string) (common.Hash, error) {
 	if err := pf.sealAccount(); err != nil {
 		return common.Hash{}, err
@@ -235,8 +210,7 @@ func (pf *preimageFile) write(path string) (common.Hash, error) {
 	if err := w.Flush(); err != nil {
 		return common.Hash{}, err
 	}
-	// The digest is about to be reported as the file's identity; make sure
-	// the bytes it names are durable first.
+	// The digest names the file; make its bytes durable first.
 	if err := f.Sync(); err != nil {
 		return common.Hash{}, err
 	}

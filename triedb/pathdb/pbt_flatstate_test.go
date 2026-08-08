@@ -91,10 +91,8 @@ func TestAttestFlatState(t *testing.T) {
 	})
 
 	t.Run("chain data sharing the namespace prefix is not debris", func(t *testing.T) {
-		// The binary tree namespace prefix is a block body's prefix too. A
-		// database holding chain data but no tree state is fresh as far as
-		// the tree is concerned, and refusing it would block every node that
-		// synced a chain before opening a binary tree over it.
+		// The namespace prefix is a block body's prefix too; chain data is
+		// not tree state.
 		outer := rawdb.NewMemoryDatabase()
 		rawdb.WriteBody(outer, common.Hash{0x01}, 1, &types.Body{})
 
@@ -105,11 +103,8 @@ func TestAttestFlatState(t *testing.T) {
 	})
 
 	t.Run("database with conversion debris but no attestation is refused", func(t *testing.T) {
-		// A conversion that dies during its scan leaves flat-state records and
-		// nothing else: no state id, no root node - the bottom-up build emits
-		// the root last - and no attestation, which is written last of all.
-		// Attesting that debris as a fresh database would resurrect it as
-		// complete flat state.
+		// Scan-phase conversion debris: flat records only, no state id, no
+		// root node, no attestation.
 		db := rawdb.NewMemoryDatabase()
 		rawdb.WriteAccountSnapshot(db, common.Hash{0x01}, []byte{0x01})
 

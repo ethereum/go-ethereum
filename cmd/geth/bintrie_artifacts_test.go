@@ -38,20 +38,12 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
-// The artifact round-trips. The two distribution files are byte-canonical by
-// specification - every correct producer emits identical bytes for the same
-// anchor state - so the tests decode them with an independent parser written
-// against EIP-8347's rules rather than against the writer, and require both
-// the content and the bytes to hold: the snapshot's leaves rebuild to the
-// root its own header claims, the preimage records name exactly the accounts
-// and slots that were converted, and a second conversion of the same state
-// reproduces each file bit for bit.
+// The artifact round-trips: decoded with an independent parser written
+// against EIP-8347's rules, not the writer, and required to be
+// byte-canonical across runs.
 
-// artifactAlloc is a deterministic allocation covering the encoding
-// decisions the artifacts make: shared code (one set of code leaves, two
-// holders), a delegated account (header leaf, no code zone), zero-tailed
-// code (absent trailing chunks), storage on both sides of the slot-64
-// boundary, and slot zero, whose canonical encoding is the empty string.
+// artifactAlloc covers the artifact encoding decisions: shared code, a
+// delegation, zero-tailed code, boundary storage, slot zero.
 func artifactAlloc() types.GenesisAlloc {
 	var (
 		shared   = bytes.Repeat([]byte{0x5b}, 40)
@@ -86,8 +78,8 @@ func artifactAlloc() types.GenesisAlloc {
 	}
 }
 
-// convertWithArtifacts converts alloc under the given sort budget and
-// returns the binary root and the two artifact paths.
+// convertWithArtifacts converts alloc and returns the binary root and the
+// two artifact paths.
 func convertWithArtifacts(t *testing.T, alloc types.GenesisAlloc, budget int) (common.Hash, string, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -126,8 +118,8 @@ func convertWithArtifacts(t *testing.T, alloc types.GenesisAlloc, budget int) (c
 	return binRoot, snapPath, prePath
 }
 
-// mustCanonicalInt asserts EIP-8347's canonical-integer rule on a decoded
-// byte string and returns it left-padded back to 32 bytes.
+// mustCanonicalInt asserts the canonical-integer rule and left-pads back to
+// 32 bytes.
 func mustCanonicalInt(t *testing.T, blob []byte, what string) common.Hash {
 	t.Helper()
 	if len(blob) > 32 {
@@ -141,12 +133,10 @@ func mustCanonicalInt(t *testing.T, blob []byte, what string) common.Hash {
 	return padded
 }
 
-// TestSnapshotArtifactRoundTrip decodes the snapshot artifact the way a
-// downloading node would and requires it to be self-proving: the sorted leaf
-// records, rebuilt bottom-up, must hash to the root the header claims, which
-// must be the root the conversion committed.
+// TestSnapshotArtifactRoundTrip: the decoded leaf records must rebuild to
+// the root the header claims, which must be the committed root.
 func TestSnapshotArtifactRoundTrip(t *testing.T) {
-	// A spill every few records, so the merged sort path writes the artifact.
+	// Spill-heavy, so the merged sort path writes the artifact.
 	binRoot, snapPath, _ := convertWithArtifacts(t, artifactAlloc(), 512)
 
 	f, err := os.Open(snapPath)
@@ -182,7 +172,7 @@ func TestSnapshotArtifactRoundTrip(t *testing.T) {
 		} else if err != nil {
 			t.Fatalf("record %d does not decode: %v", decoded, err)
 		}
-		// The zone byte fixes the key length; anything else is invalid.
+		// The zone byte fixes the key length.
 		var wantLen int
 		switch {
 		case len(rec.Key) == 0:
@@ -218,9 +208,8 @@ func TestSnapshotArtifactRoundTrip(t *testing.T) {
 	}
 }
 
-// TestPreimageFileRoundTrip decodes the preimage file against its canonical
-// encoding rules and requires it to name exactly the accounts and slots the
-// conversion derived leaves from.
+// TestPreimageFileRoundTrip: the decoded records must name exactly the
+// converted accounts and slots.
 func TestPreimageFileRoundTrip(t *testing.T) {
 	alloc := artifactAlloc()
 	_, _, prePath := convertWithArtifacts(t, alloc, 512)
@@ -267,9 +256,7 @@ func TestPreimageFileRoundTrip(t *testing.T) {
 		got[common.BytesToAddress(rec.Address)] = slots
 	}
 
-	// The decoded set must be exactly the allocation: every account present
-	// once, every account's slots present exactly, storageless accounts with
-	// empty lists.
+	// Exactly the allocation, both directions.
 	if len(got) != len(alloc) {
 		t.Fatalf("decoded %d accounts, converted %d", len(got), len(alloc))
 	}
@@ -289,14 +276,10 @@ func TestPreimageFileRoundTrip(t *testing.T) {
 	}
 }
 
-// TestArtifactsAreByteCanonical converts the same state twice, into
-// unrelated databases and files, and requires both artifacts to reproduce
-// bit for bit. This is the property the published digests stand on: one
-// keccak per file that every correct producer agrees on.
+// TestArtifactsAreByteCanonical: two conversions of the same state must
+// reproduce both files bit for bit - the property the digests stand on.
 func TestArtifactsAreByteCanonical(t *testing.T) {
-	// The two runs sort under different budgets - one wholly in memory, one
-	// spilling every few records - because the bytes may not depend on how
-	// the sort ran, only on the state.
+	// Different budgets: the bytes may depend only on the state.
 	alloc := artifactAlloc()
 	_, snapA, preA := convertWithArtifacts(t, alloc, 0)
 	_, snapB, preB := convertWithArtifacts(t, alloc, 512)
@@ -322,13 +305,9 @@ func TestArtifactsAreByteCanonical(t *testing.T) {
 	}
 }
 
-// TestArtifactGoldenDigests freezes the artifact byte format. The digests of
-// the reference-pinned "contract" state vector are recorded as constants: a
-// change to any encoding choice - header layout, record framing, canonical
-// integers, ordering - moves them, and moving them means every existing
-// producer and distributor disagrees with the new bytes. The state vector's
-// root is already pinned against the execution-specs reference, so these
-// constants inherit that provenance for the artifact layer.
+// TestArtifactGoldenDigests freezes the artifact byte format: any encoding
+// change moves these reference-pinned digests, and moving them breaks every
+// existing producer.
 func TestArtifactGoldenDigests(t *testing.T) {
 	const (
 		wantSnapshot  = "0xf10d40938b44dd9b4a27ddf7d265a6cb20b79d2c45118a2c3e114d16e7f251ef"

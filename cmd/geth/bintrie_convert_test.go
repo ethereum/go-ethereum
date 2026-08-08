@@ -172,15 +172,9 @@ func TestBintrieConvert(t *testing.T) {
 	assertConvertedStateReadable(t, chaindb, destTriedb, currentRoot, addr1, addr2, slotKey1, slotVal1)
 }
 
-// TestPBTDiskIsDetectable pins the fact MakeTrieDatabase's guard rests on: a
-// binary tree database can be recognised from disk alone, and a merkle-patricia
-// one is never mistaken for it.
-//
-// The guard refuses to open tree state as merkle, which is what stops the
-// snapshot and db commands - all of which pass isPBT=false for want of knowing
-// about the tree - from reading a database whose records they cannot decode and
-// reporting the absence as emptiness. Both directions matter: a false positive
-// would lock those commands out of ordinary merkle databases.
+// TestPBTDiskIsDetectable pins what MakeTrieDatabase's guard rests on: a
+// binary tree database is recognisable from disk alone, and a merkle one is
+// never mistaken for it.
 func TestPBTDiskIsDetectable(t *testing.T) {
 	merkle := rawdb.NewMemoryDatabase()
 	mtdb := triedb.NewDatabase(merkle, &triedb.Config{PathDB: pathdb.Defaults})
@@ -197,14 +191,9 @@ func TestPBTDiskIsDetectable(t *testing.T) {
 	}
 }
 
-// assertConvertedStateReadable reads a converted database through the state
-// reader a node actually uses, rather than through the binary trie directly.
-//
-// The distinction is the whole point. PBTDatabase.StateReader puts the flat
-// reader ahead of the trie reader, and multiStateReader returns the first
-// answer that comes back without an error - including "this account does not
-// exist". So a converted database whose flat state is empty reads as empty
-// here while every direct trie assertion above still passes.
+// assertConvertedStateReadable reads through the state reader a node uses:
+// flat-first, where a miss is authoritative absence, so an empty flat store
+// reads as empty while direct trie assertions still pass.
 func assertConvertedStateReadable(t *testing.T, chaindb ethdb.Database, destTriedb *triedb.Database, root common.Hash, addr1, addr2 common.Address, slotKey, slotVal common.Hash) {
 	t.Helper()
 
@@ -224,8 +213,7 @@ func assertConvertedStateReadable(t *testing.T, chaindb ethdb.Database, destTrie
 	if got := statedb.GetState(addr2, slotKey); got != slotVal {
 		t.Errorf("account2 slot through the state reader: got %x, want %x", got, slotVal)
 	}
-	// Absence is an answer too, and on this path an authoritative one: a
-	// flat-store miss is "does not exist", with the trie never consulted.
+	// A flat-store miss is authoritative absence.
 	absent := common.HexToAddress("0x00000000000000000000000000000000deadbeef")
 	if got := statedb.GetBalance(absent); !got.IsZero() {
 		t.Errorf("absent account has balance %s through the state reader", got)
@@ -304,14 +292,9 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 	destTriedb.Close()
 }
 
-// TestConvertRefusesDirtyNamespace pins the crash story. Conversion writes
-// flat state and trie nodes first and the attestation marker last, so a run
-// that dies leaves keys in the namespace but no marker. Nothing may treat
-// that debris as either a completed conversion or a fresh database: the
-// converter must refuse to run over it - whatever shape it has, which depends
-// on where the run stopped - and only --force, which wipes the namespace,
-// clears the way. The equivalent refusal at database-open time is pinned in
-// triedb/pathdb (TestAttestFlatState).
+// TestConvertRefusesDirtyNamespace pins the crash story: a dead run leaves
+// namespace keys but no marker, and the converter must refuse that debris
+// until --force wipes it. The open-time refusal is pinned in triedb/pathdb.
 func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	addr1 := common.HexToAddress("0x4444444444444444444444444444444444444444")
 
@@ -337,8 +320,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	})
 	defer src.Close()
 
-	// Scan-phase debris: a single flat-state record, no trie nodes, no root,
-	// no marker. This is the shape a marker probe cannot see.
+	// Scan-phase debris: one flat record, nothing else.
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	rawdb.WriteAccountSnapshot(pbtdb, common.Hash{0x01}, []byte{0x01})
 	if dirty, err := hasBinaryTrieState(chaindb); err != nil {
@@ -350,8 +332,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 		t.Fatal("conversion ran over the debris of a previous run")
 	}
 
-	// --force wipes the namespace, after which conversion must run and leave
-	// nothing of the debris behind.
+	// --force wipes; conversion must then run clean.
 	if err := wipeBinaryTrieState(chaindb, ""); err != nil {
 		t.Fatalf("wipe failed: %v", err)
 	}
@@ -365,23 +346,19 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	if got := rawdb.ReadAccountSnapshot(pbtdb, common.Hash{0x01}); len(got) != 0 {
 		t.Fatal("the wipe left the debris record in place")
 	}
-	// The wipe must not have touched chain data, which shares the namespace
-	// prefix: a block body key is a binary tree key to any bare prefix sweep.
+	// Chain data shares the prefix; the wipe must not touch it.
 	if !rawdb.HasBody(chaindb, genesis.Hash(), 0) {
 		t.Fatal("the wipe deleted the genesis block body along with the tree")
 	}
 
-	// A completed conversion is itself a dirty namespace: re-running without
-	// --force must refuse rather than overwrite.
+	// A completed conversion also refuses without --force.
 	if _, err := convertState(chaindb, src, root, conversionOptions{}); err == nil {
 		t.Fatal("conversion ran over a completed conversion")
 	}
 }
 
-// TestConvertVerifiers pins that the two verification passes actually catch
-// what they exist to catch: a tree whose disk records cannot rebuild the
-// root, and a flat store that no longer re-derives it. Each tamper must turn
-// verification red, and undoing it green again.
+// TestConvertVerifiers pins that each verifier catches its failure class:
+// every tamper turns verification red, undoing it green.
 func TestConvertVerifiers(t *testing.T) {
 	chaindb := rawdb.NewMemoryDatabase()
 	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
@@ -408,8 +385,7 @@ func TestConvertVerifiers(t *testing.T) {
 	}
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 
-	// tamper grabs the first record of a family and removes it, returning
-	// the undo.
+	// tamper removes a family's first record, returning the undo.
 	tamper := func(prefix []byte) (key, value []byte) {
 		t.Helper()
 		it := pbtdb.NewIterator(prefix, nil)
@@ -440,8 +416,7 @@ func TestConvertVerifiers(t *testing.T) {
 		t.Fatalf("restored tree fails verification: %v", err)
 	}
 
-	// A missing flat account must fail the flat re-derivation - and must NOT
-	// fail the tree walk, which is exactly why the flat pass exists.
+	// A missing flat account fails only the flat pass - why it exists.
 	key, value = tamper(rawdb.SnapshotAccountPrefix)
 	if err := verifyConvertedState(chaindb, binRoot); err != nil {
 		t.Fatalf("a flat-only gap failed the tree walk: %v", err)
@@ -466,11 +441,9 @@ func TestConvertVerifiers(t *testing.T) {
 	}
 }
 
-// TestWipeRestoresVirginNamespace pins two properties of --force. The wipe
-// must return the namespace to exactly its pre-conversion key set - pinning
-// rawdb.PBTKeyFamilies against drift, since any family the list misses would
-// survive as invisible debris - and a re-conversion over the wiped namespace
-// must reproduce the identical root and byte-identical artifacts.
+// TestWipeRestoresVirginNamespace: the wipe restores the exact
+// pre-conversion key set (pinning rawdb.PBTKeyFamilies against drift) and
+// re-conversion reproduces identical root and artifacts.
 func TestWipeRestoresVirginNamespace(t *testing.T) {
 	chaindb := rawdb.NewMemoryDatabase()
 	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
@@ -485,8 +458,7 @@ func TestWipeRestoresVirginNamespace(t *testing.T) {
 	root := gspec.MustCommit(chaindb, srcTriedb).Root()
 	srcTriedb.Close()
 
-	// Everything under the namespace prefix before conversion is chain data
-	// (the genesis body) that a wipe must not touch.
+	// Pre-conversion prefix keys are chain data the wipe must not touch.
 	prefixKeys := func() map[string]struct{} {
 		keys := make(map[string]struct{})
 		it := chaindb.NewIterator(rawdb.PBTPrefix, nil)
@@ -551,13 +523,9 @@ func TestWipeRestoresVirginNamespace(t *testing.T) {
 	}
 }
 
-// TestConvertCorruptPreimageRefused pins the integrity of the one input the
-// converter cannot derive: the preimage store. It is a bare hash-to-value
-// table, so a corrupt entry would otherwise become a wrong-stem tree that
-// every downstream check confirms - the verifiers re-derive from the same
-// value - and artifacts whose digests no honest producer reproduces. The
-// conversion must refuse instead, and refuse before anything survives: no
-// artifact files, no attestation.
+// TestConvertCorruptPreimageRefused: a corrupt preimage store entry must
+// abort the conversion with nothing surviving - no artifacts, no
+// attestation.
 func TestConvertCorruptPreimageRefused(t *testing.T) {
 	newFixture := func(t *testing.T) (ethdb.Database, *triedb.Database, common.Hash) {
 		t.Helper()
@@ -593,7 +561,7 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 	}
 	t.Run("wrong account preimage", func(t *testing.T) {
 		chaindb, src, root := newFixture(t)
-		// A well-formed 20-byte value that is not the preimage of its key.
+		// Well-formed length, wrong value.
 		addr := common.HexToAddress("0x1000000000000000000000000000000000000001")
 		rawdb.WritePreimages(chaindb, map[common.Hash][]byte{
 			crypto.Keccak256Hash(addr.Bytes()): common.HexToAddress("0x9999999999999999999999999999999999999999").Bytes(),
@@ -614,8 +582,7 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 
 	t.Run("wrong-length slot preimage", func(t *testing.T) {
 		chaindb, src, root := newFixture(t)
-		// 33 bytes: over the word size, which used to reach the key deriver
-		// and panic there rather than error.
+		// 33 bytes: used to panic in the key deriver.
 		slot := common.BigToHash(big.NewInt(1))
 		rawdb.WritePreimages(chaindb, map[common.Hash][]byte{
 			crypto.Keccak256Hash(slot[:]): make([]byte, 33),

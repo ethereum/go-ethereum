@@ -29,21 +29,11 @@ import (
 	"slices"
 )
 
-// RecordSorter sorts a stream of key/value records too large to hold in
-// memory: records accumulate in an in-memory run that is sorted and spilled
-// to a temporary file when it outgrows the budget, and reading the sorted
-// result merges every run. It exists for the conversion pipeline, which
-// EIP-8347 hands two sorting problems at mainnet scale: the tree leaves sort
-// in PBT key order - plain bytewise order, since keys are prefix-free with
-// the zone byte first - and the preimage file's per-account records sort by
-// address.
-//
-// A duplicate key is an error, at sort time within a run - sorting makes
-// duplicates adjacent - and at merge time across runs. Both uses key their
-// records uniquely - a tree leaf by its tree key, an account's preimage
-// record by its address - so a duplicate surviving to the sorter means two
-// different sources claimed the same record: corruption, not a coincidence
-// to resolve silently.
+// RecordSorter is an external merge-sort: records accumulate in an in-memory
+// run, spilled to a temporary file past the budget, and reading merges the
+// runs. It serves EIP-8347's two mainnet-scale sorts: tree leaves in key
+// order (plain bytewise, the keys being prefix-free) and preimage records by
+// address. Duplicate keys are corruption and error out at sort or merge.
 type RecordSorter struct {
 	tmpDir    string
 	budget    int // bytes of buffered records that trigger a spill
@@ -60,23 +50,18 @@ type sortRecord struct {
 	value []byte
 }
 
-// spillRecordOverhead approximates the bookkeeping bytes per buffered record
-// beyond its key and value, so the budget tracks real memory rather than
-// payload alone.
+// spillRecordOverhead approximates per-record bookkeeping bytes, so the
+// budget tracks real memory.
 const spillRecordOverhead = 64
 
-// NewRecordSorter creates a sorter spilling to files in tmpDir once the
-// in-memory run exceeds budget bytes. A zero or negative budget sorts fully
-// in memory and never spills. Every record is passed to validate at Add
-// time; a nil validate accepts everything the format can carry.
+// NewRecordSorter creates a sorter spilling to tmpDir past budget bytes
+// (non-positive: never spills). validate runs per Add; nil accepts all.
 func NewRecordSorter(tmpDir string, budget int, validate func(key, value []byte) error) *RecordSorter {
 	return &RecordSorter{tmpDir: tmpDir, budget: budget, validate: validate}
 }
 
-// NewLeafSorter creates a sorter for binary tree leaves: keys must be
-// zone-conformant and values 32 bytes and not all zero - the state layer
-// resolves a zero value to absence, so a zero reaching the sorter is a bug
-// in the caller, not a deletion to honour.
+// NewLeafSorter creates a sorter for tree leaves: zone-conformant keys,
+// 32-byte non-zero values.
 func NewLeafSorter(tmpDir string, budget int) *RecordSorter {
 	return NewRecordSorter(tmpDir, budget, validateLeafRecord)
 }
@@ -95,9 +80,8 @@ func validateLeafRecord(key, value []byte) error {
 	return nil
 }
 
-// Add buffers one record. Keys must be 1 to 255 bytes - the run encoding
-// carries the length in one byte - and whatever the sorter's validation hook
-// demands on top.
+// Add buffers one record. Keys must be 1 to 255 bytes for the run encoding,
+// plus whatever the validation hook demands.
 func (s *RecordSorter) Add(key, value []byte) error {
 	if s.sealed {
 		return errors.New("bintrie: sorter already sorted")
@@ -136,9 +120,8 @@ func (s *RecordSorter) spill() error {
 	if err != nil {
 		return err
 	}
-	// Until the run is registered, this function owns the file: an error
-	// removes it, or a failed spill on a full disk would leave a multi-GB
-	// orphan exactly where space just ran out.
+	// Until the run is registered this function owns the file; errors remove
+	// it rather than orphan a spill on a full disk.
 	discard := func(err error) error {
 		f.Close()
 		os.Remove(f.Name())
@@ -176,16 +159,15 @@ func (s *RecordSorter) sortPending() error {
 	return nil
 }
 
-// Sort seals the sorter and returns the merged, ascending record stream. The
-// caller owns the stream and must drain or close it; Close on the sorter
-// releases the temporary files either way.
+// Sort seals the sorter and returns the merged, ascending record stream.
+// Close on the sorter releases the temporary files.
 func (s *RecordSorter) Sort() (*RecordStream, error) {
 	if s.sealed {
 		return nil, errors.New("bintrie: sorter already sorted")
 	}
 	s.sealed = true
 
-	// Everything fit in memory: serve the pending run directly.
+	// Everything fit in memory: serve the pending run.
 	if len(s.runs) == 0 {
 		if err := s.sortPending(); err != nil {
 			return nil, err
@@ -211,8 +193,7 @@ func (s *RecordSorter) Sort() (*RecordStream, error) {
 	return stream, nil
 }
 
-// Close removes the temporary files. Safe to call more than once, and safe
-// while a returned stream is still live only after the stream is drained.
+// Close removes the temporary files; call after any returned stream drains.
 func (s *RecordSorter) Close() {
 	if s.discarded {
 		return
@@ -227,9 +208,8 @@ func (s *RecordSorter) Close() {
 	s.pending = nil
 }
 
-// RecordStream yields the sorted records. Exactly one of pending and heap is
-// populated: the in-memory fast path serves the slice, the merged path pops
-// the run heap.
+// RecordStream yields the sorted records: the in-memory path serves the
+// pending slice, the merged path pops the run heap.
 type RecordStream struct {
 	pending []sortRecord
 	next    int
@@ -238,8 +218,8 @@ type RecordStream struct {
 	lastKey []byte
 }
 
-// Next returns the next record in ascending key order, or io.EOF when the
-// stream is exhausted. The returned slices are owned by the caller.
+// Next returns the next record in ascending key order, io.EOF at the end.
+// The returned slices are the caller's.
 func (ls *RecordStream) Next() (key, value []byte, err error) {
 	if ls.heap == nil {
 		if ls.next >= len(ls.pending) {
@@ -299,8 +279,7 @@ func (rr *runReader) advance() error {
 	return nil
 }
 
-// writeRunRecord encodes one record as keyLen ‖ key ‖ valueLen ‖ value. Key
-// lengths fit one byte - Add enforces it - and value lengths four.
+// writeRunRecord encodes one record as keyLen ‖ key ‖ valueLen ‖ value.
 func writeRunRecord(w *bufio.Writer, key, value []byte) error {
 	if err := w.WriteByte(byte(len(key))); err != nil {
 		return err

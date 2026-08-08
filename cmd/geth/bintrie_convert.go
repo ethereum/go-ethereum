@@ -88,36 +88,15 @@ var (
 					preimagesOutFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
-geth bintrie convert [--delete-source] [--memory-limit MB] [--tmpdir DIR]
-                     [--force] [--snapshot-out FILE] [--preimages-out FILE]
-                     [state-root]
+geth bintrie convert [flags] [state-root]
 
-Converts the Merkle Patricia Trie state into the EIP-8297 binary tree,
-offline, following the EIP-8347 pipeline: every state leaf is derived,
-sorted in tree-key order (spilling to disk past the memory budget), and the
-tree is built bottom-up in one pass. The flat state the binary tree reads
-through is written alongside, and the completion marker lands last, so an
-interrupted conversion leaves a database that refuses to open rather than
-one that silently reads as empty.
-
-The optional state-root argument selects the state to convert; the head
-block's root is used when omitted. The source database must hold the
-account and storage key preimages, which only a node synced with
---cache.preimages has; every preimage consumed is verified against the
-hash it was found under.
-
-With --snapshot-out and --preimages-out, the conversion also emits the
-EIP-8347 distribution artifacts: the byte-canonical PBT snapshot and the
-address-sorted preimage file, along with the keccak digest of each, which
-every correct producer reproduces for the same anchor state.
-
-Flags:
-  --delete-source    Delete MPT trie nodes once the conversion verifies
-  --memory-limit     Total sort-buffer budget in MB before spilling (default: 4096)
-  --tmpdir           Spill-file directory (default: the OS temp dir)
-  --force            Wipe existing binary tree state first
-  --snapshot-out     Write the PBT snapshot artifact to this file
-  --preimages-out    Write the preimage file to this file
+Converts the MPT state into the EIP-8297 binary tree, offline, per the
+EIP-8347 pipeline: derive every leaf, sort in tree-key order, build
+bottom-up, with flat state written alongside. Both stores are verified and
+the completion marker lands last, so an interrupted run refuses to open.
+Defaults to the head root; the source must hold preimages
+(--cache.preimages), each verified against its hash. --snapshot-out and
+--preimages-out emit the byte-canonical EIP-8347 distribution artifacts.
 `,
 			},
 		},
@@ -159,15 +138,13 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	if (snapshotPath == "") != (preimagePath == "") {
 		log.Warn("Emitting one distribution artifact without the other; EIP-8347 distributes the snapshot and the preimage file together")
 	}
-	// The budget travels as MB in a uint64; convert without wrapping the
-	// platform int.
+	// MB to bytes without wrapping the platform int.
 	budgetMB := ctx.Uint64(memoryLimitFlag.Name)
 	if budgetMB > math.MaxInt>>20 {
 		budgetMB = math.MaxInt >> 20
 	}
-	// Check the namespace before MakeTrieDatabase does: its guard fatals on a
-	// completed conversion without saying what to do about it, and misses the
-	// debris of an interrupted one entirely.
+	// Probe before MakeTrieDatabase: its guard fatals on a completed
+	// conversion and cannot see interrupted debris.
 	if ctx.Bool(forceConvertFlag.Name) {
 		if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
 			return fmt.Errorf("failed to wipe binary tree state: %w", err)
@@ -229,38 +206,16 @@ func (s *conversionStats) report(force bool) {
 }
 
 // convertState converts the MPT state at root into the binary tree namespace
-// of chaindb and returns the binary root. It is the conversion engine behind
-// the CLI command, factored so tests drive the whole pipeline without a node.
-//
-// The shape is EIP-8347's: one scan of the source derives every tree leaf,
-// the leaves are sorted in tree-key order - plain byte order, with spills to
-// disk past the memory budget - and the tree is built bottom-up in a single
-// pass, its records streaming straight into the database. No intermediate
-// tree ever exists, so there is nothing to commit-and-reload and the memory
-// high-water mark is the sort buffer.
-//
-// Flat state is written during the scan: the binary tree reads accounts and
-// slots through the flat store first, and treats a miss as authoritative
-// absence, so a conversion writing trie nodes alone would hash to the right
-// root and read as empty. The accounts are slimmed with the storage root
-// normalized to the empty root - the binary tree has no per-account storage
-// roots, and a replaying node records exactly that - so converted and
-// replayed flat state stay byte-identical.
-//
-// Nothing becomes openable or publishable unverified. Both stores are
-// checked from what actually landed on disk - the tree by walking its
-// persisted records back into a root, the flat state by re-deriving the
-// whole leaf set from it - before the artifacts are finalized, and the
-// flat-state attestation is written last of all: opening a binary tree
-// database checks it, so a conversion that dies or fails verification at
-// any point leaves a namespace that refuses to open ("resync required")
-// rather than an attested half-state that reads as empty. A re-run after
-// such a death needs --force, which wipes the namespace.
+// per EIP-8347: one scan derives every leaf and streams flat state, an
+// external sort orders the leaves in tree-key order, and the tree builds
+// bottom-up in one pass. Both stores are verified before the artifacts
+// finalize, and the flat-state attestation lands last: a run that dies or
+// fails verification leaves a namespace that refuses to open, and a re-run
+// needs --force.
 func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 
-	// Refuse a namespace that is not virgin: either a completed conversion
-	// (attested) or the debris of an interrupted one. Both need --force.
+	// A non-virgin namespace, completed or debris, needs --force.
 	if dirty, err := hasBinaryTrieState(chaindb); err != nil {
 		return common.Hash{}, err
 	} else if dirty {
@@ -268,9 +223,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	stats := &conversionStats{start: time.Now(), lastReport: time.Now()}
 
-	// The budget is a total: when the preimage file's sorter runs alongside
-	// the leaf sorter through the scan, each gets half. (The verifier's
-	// sorter runs after both have drained, so it takes the whole budget.)
+	// The budget is a total: halved when the preimage sorter runs alongside.
 	leafBudget := opts.sortBudget
 	if opts.preimagePath != "" {
 		leafBudget = opts.sortBudget / 2
@@ -278,11 +231,6 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	sorter := bintrie.NewLeafSorter(opts.tmpDir, leafBudget)
 	defer sorter.Close()
 
-	// The distribution artifacts ride the pipeline: the snapshot writer taps
-	// the sorted leaf stream, the preimage file the scan. Both are finalized
-	// only after the converted state verifies, and before the database's own
-	// completion markers, so neither a failed conversion nor a failed
-	// verification leaves a publishable file or an openable namespace.
 	var (
 		snapshot  *snapshotWriter
 		preimages *preimageFile
@@ -303,22 +251,18 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		preimages = newPreimageFile(opts.tmpDir, opts.sortBudget-leafBudget)
 		defer preimages.close()
 	}
-	// Phase 1: scan the merkle state, deriving tree leaves into the sorter
-	// and streaming flat state to disk as it goes.
+	// Phase 1: scan, deriving leaves and streaming flat state.
 	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, preimages, stats); err != nil {
 		return common.Hash{}, err
 	}
 	stats.report(true)
 
-	// An empty state derives no leaves and would finalize a zero root - the
-	// zero-root regime is real but pointless to support: no chain with a
-	// genesis converts to nothing.
+	// An empty state would finalize a zero root; not worth supporting.
 	if stats.leaves == 0 {
 		return common.Hash{}, errors.New("refusing to convert an empty state")
 	}
 
-	// Phase 2+3: sort and build. The builder emits each database record
-	// exactly once, children before parents, and the batch flushes on size.
+	// Phase 2+3: sort and build, streaming records to disk.
 	stream, err := sorter.Sort()
 	if err != nil {
 		return common.Hash{}, err
@@ -359,8 +303,6 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 			return common.Hash{}, err
 		}
 	}
-	// Finish returns the zero hash for an empty stream, which is exactly
-	// types.EmptyBinaryHash.
 	binRoot := builder.Finish()
 	if builderErr != nil {
 		return common.Hash{}, builderErr
@@ -370,9 +312,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	log.Info("Built binary tree", "nodes", written, "leaves", stats.leaves)
 
-	// Verify before anything becomes publishable or openable: the tree from
-	// its persisted records, the flat state by re-deriving the full leaf set
-	// from it. A failure leaves a namespace with no completion marker.
+	// Verify both stores before anything becomes publishable or openable.
 	if err := verifyConvertedState(chaindb, binRoot); err != nil {
 		return common.Hash{}, fmt.Errorf("converted tree failed verification: %w", err)
 	}
@@ -399,19 +339,15 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 			"accounts", preimages.accounts, "digest", digest)
 	}
 
-	// Finalize. The root marker is what a reopening path database reads the
-	// disk-layer root from; no state id is written, so the converted tree is
-	// the base of an empty history and live operation numbers layers from 1.
-	// The attestation comes last: it is the completion marker.
+	// No state id: the converted tree bases an empty history and live commits
+	// number from 1. The attestation is the completion marker and comes last.
 	rawdb.WriteSnapshotRoot(pbtdb, binRoot)
 	rawdb.WritePBTFlatState(pbtdb)
 	return binRoot, nil
 }
 
-// deriveLeaves walks the merkle state at root and derives every binary tree
-// leaf into the sorter, writing flat state alongside. Code is emitted once
-// per distinct code hash - the leaves are content-addressed and shared, and
-// the sorter treats a duplicate key as corruption.
+// deriveLeaves walks the merkle state at root, deriving every tree leaf into
+// the sorter and writing flat state alongside.
 func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, sorter *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats) error {
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
@@ -427,8 +363,7 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		seenCode  = make(map[common.Hash]struct{})
 	)
 	emit := func(key []byte, value [32]byte) error {
-		// The state layer resolves 32 zero bytes to absence: such a leaf is
-		// not written, and reads recover the zero it stood for.
+		// Zero values resolve to absence and are never written.
 		if value == ([32]byte{}) {
 			return nil
 		}
@@ -458,15 +393,12 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 			return err
 		}
 
-		// Flat state: the slim account, with the storage root normalized to
-		// the empty root the way every replaying writer records it. The
-		// source's merkle storage root means nothing in this namespace.
+		// Normalize the storage root: replaying nodes record EmptyRootHash.
 		accountHash := common.BytesToHash(accIter.Key)
 		slim := acc
 		slim.Root = types.EmptyRootHash
 		rawdb.WriteAccountSnapshot(flatBatch, accountHash, types.SlimAccountRLP(slim))
 
-		// Storage, from both of its homes.
 		if acc.Root != types.EmptyRootHash {
 			storageTrie, err := trie.NewStateTrie(trie.StorageTrieID(root, accountHash, acc.Root), srcTriedb)
 			if err != nil {
@@ -529,13 +461,9 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 	return flatBatch.Write()
 }
 
-// checkPreimage guards a preimage lookup: the stored value must be the
-// stated length and must hash back to the key it was found under. The store
-// is a bare hash-to-value table with no integrity of its own, so a corrupt
-// entry would otherwise become a wrong-stem tree that every later check -
-// the verifiers included, since they re-derive from the same value -
-// happily confirms. One short keccak per leaf, noise against the blake3
-// derivations each leaf already pays for.
+// checkPreimage rejects a preimage of the wrong length or one that does not
+// hash back to its key: the store has no integrity of its own, and a corrupt
+// entry would convert into a wrong-stem tree the verifiers confirm.
 func checkPreimage(preimage []byte, hash common.Hash, wantLen int) error {
 	if len(preimage) != wantLen {
 		return fmt.Errorf("corrupt preimage for %x: %d bytes, want %d", hash, len(preimage), wantLen)
@@ -546,15 +474,9 @@ func checkPreimage(preimage []byte, hash common.Hash, wantLen int) error {
 	return nil
 }
 
-// emitAccountHeader derives the header-stem and code-zone leaves of one
-// account: the basic data, then either the delegation indicator - exclusive
-// with the code hash, per the account's bytecode being an EIP-7702
-// designator - or the code hash and, once per distinct hash, the code
-// chunks. It is shared between the conversion scan and the flat-state
-// verifier, so both derive from one set of rules; what stays independently
-// pinned is the rules themselves, by the reference-vector parity tests.
-// Storage is the caller's business: it lives in other stems, and the two
-// callers walk it from different stores.
+// emitAccountHeader derives an account's header and code-zone leaves. Shared
+// by the scan and the flat-state verifier; the derivation rules stay pinned
+// by the reference-vector parity tests.
 func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64, balance *uint256.Int, codeHash common.Hash, seenCode map[common.Hash]struct{}, stats *conversionStats, emit func([]byte, [32]byte) error) error {
 	var code []byte
 	if codeHash != types.EmptyCodeHash {
@@ -570,17 +492,14 @@ func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64
 	if err := emit(bintrie.BasicDataKey(addr), basic); err != nil {
 		return err
 	}
-	// A delegated account holds its designator in a header leaf in place of
-	// the code hash - the two are exclusive - and produces no code-zone
-	// leaves at all.
+	// A delegation replaces the code-hash leaf and has no code-zone leaves.
 	if _, isDelegation := types.ParseDelegation(code); isDelegation {
 		return emit(bintrie.DelegationKey(addr), [32]byte(bintrie.EncodeDelegation(code)))
 	}
 	if err := emit(bintrie.CodeHashKey(addr), codeHash); err != nil {
 		return err
 	}
-	// Code, once per distinct hash: the leaves are content-addressed, so
-	// every holder of this bytecode shares them.
+	// Code once per distinct hash: the leaves are content-addressed.
 	if len(code) > 0 {
 		if _, seen := seenCode[codeHash]; !seen {
 			seenCode[codeHash] = struct{}{}
@@ -593,10 +512,8 @@ func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64
 	return nil
 }
 
-// emitCodeChunks derives the code-zone leaves of one bytecode. All-zero
-// chunks - 31 zero code bytes carrying no push data - are skipped: the state
-// layer resolves them to absence, and code_size delimits the code rather
-// than chunk presence.
+// emitCodeChunks derives one bytecode's code-zone leaves; all-zero chunks
+// resolve to absence and are skipped.
 func emitCodeChunks(codeHash common.Hash, code []byte, emit func([]byte, [32]byte) error) error {
 	chunks := bintrie.ChunkifyCode(code)
 	for i := 0; i < len(chunks)/32; i++ {
@@ -609,11 +526,9 @@ func emitCodeChunks(codeHash common.Hash, code []byte, emit func([]byte, [32]byt
 	return nil
 }
 
-// hasBinaryTrieState reports whether anything at all sits in the binary tree
-// namespace: a completed conversion, a live tree, or the debris of a run that
-// died. Which keys the debris consists of depends on where the writer
-// stopped, so every key family is probed - and it has to be by family rather
-// than a bare scan of the namespace prefix, which is shared with block bodies.
+// hasBinaryTrieState reports whether anything sits in the binary tree
+// namespace. Probed per key family: the bare prefix is shared with block
+// bodies.
 func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	for _, family := range rawdb.PBTKeyFamilies {
@@ -622,7 +537,7 @@ func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 		err := it.Error()
 		it.Release()
 		if err != nil {
-			// An unreadable namespace is not a clean one.
+			// Unreadable is not clean.
 			return false, fmt.Errorf("failed to probe the binary tree namespace: %w", err)
 		}
 		if found {
@@ -632,12 +547,9 @@ func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 	return false, nil
 }
 
-// wipeBinaryTrieState removes everything under the binary tree namespace so a
-// conversion can start over. Like the probe, it works family by family: the
-// namespace prefix is shared with block bodies, which a bare prefix sweep
-// would delete along with the tree. The namespace is not only key-value: a
-// node that ran on a previous tree leaves history freezers in the ancient
-// directory and a journal file in triedbDir, so both are cleared too.
+// wipeBinaryTrieState clears the binary tree state: the key families (the
+// bare prefix is shared with block bodies), the PBT history freezers, and
+// the journal file in triedbDir.
 func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	batch := pbtdb.NewBatch()
@@ -692,11 +604,9 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 	return nil
 }
 
-// rawBinaryNodes serves the converted tree's records straight from the
-// database namespace. The verifiers read through it rather than through a
-// path database: opening one requires the flat-state attestation that the
-// verification gates, and a read-only open would demand history freezers
-// that a conversion never creates.
+// rawBinaryNodes reads tree records straight from the namespace: a path
+// database would demand the attestation the verifiers gate, and history
+// freezers a conversion never creates.
 type rawBinaryNodes struct {
 	pbtdb ethdb.Database
 }
@@ -705,20 +615,14 @@ func (r rawBinaryNodes) NodeReader(common.Hash) (database.NodeReader, error) {
 	return r, nil
 }
 
-// Node returns the record at path; a missing record returns nil, which the
-// trie reader turns into a missing-node error. The hash goes unchecked: the
-// verification walk re-derives the root from the leaves, which subsumes
-// per-node hash equality.
+// Node returns the record at path, unverified: the walk re-derives the root
+// from the leaves, which subsumes per-node hash checks.
 func (r rawBinaryNodes) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
 	return rawdb.ReadAccountTrieNode(r.pbtdb, path), nil
 }
 
-// verifyConvertedState re-derives the converted root from what is actually
-// on disk: every leaf is walked out of the persisted tree and folded through
-// an independent bottom-up build, which must reproduce the root. Together
-// with the flat-state verification this is what stands between a conversion
-// and its completion marker - and what gates --delete-source: the source is
-// only dropped once the converted bytes alone can stand in for it.
+// verifyConvertedState refolds every persisted leaf and requires the rebuilt
+// root to match. Gates the completion marker and --delete-source.
 func verifyConvertedState(chaindb ethdb.Database, root common.Hash) error {
 	tr, err := bintrie.NewBinaryTrie(root, rawBinaryNodes{pbtdb: rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))})
 	if err != nil {
@@ -749,22 +653,12 @@ func verifyConvertedState(chaindb ethdb.Database, root common.Hash) error {
 	return nil
 }
 
-// verifyFlatState proves the flat store can stand in for the tree: the
-// entire leaf set is re-derived from the flat records - accounts and slots
-// resolved back through the preimage store, code re-read per distinct hash -
-// and must rebuild to the converted root. The flat store is the authoritative
-// read path (a miss there is an absent account, with the trie never
-// consulted), so trie-side verification alone would bless a database that
-// reads as empty; this is the check that makes the attestation honest.
+// verifyFlatState re-derives the whole leaf set from the flat records and
+// requires it to rebuild to the converted root. Flat state is the
+// authoritative read path - a miss is an absent account - so the tree walk
+// alone would bless a database that reads as empty.
 func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) error {
-	// The budget is a total: when the preimage file's sorter runs alongside
-	// the leaf sorter through the scan, each gets half. (The verifier's
-	// sorter runs after both have drained, so it takes the whole budget.)
-	leafBudget := opts.sortBudget
-	if opts.preimagePath != "" {
-		leafBudget = opts.sortBudget / 2
-	}
-	sorter := bintrie.NewLeafSorter(opts.tmpDir, leafBudget)
+	sorter := bintrie.NewLeafSorter(opts.tmpDir, opts.sortBudget)
 	defer sorter.Close()
 
 	var (
@@ -778,8 +672,6 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 			return sorter.Add(key, value[:])
 		}
 	)
-	// The flat accounts, walked in hashed order and resolved back to their
-	// addresses through the preimage store.
 	acctIt := pbtdb.NewIterator(rawdb.SnapshotAccountPrefix, nil)
 	for acctIt.Next() {
 		accountHash := common.BytesToHash(acctIt.Key()[len(rawdb.SnapshotAccountPrefix):])
@@ -799,8 +691,7 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 			acctIt.Release()
 			return fmt.Errorf("invalid flat account %x: %w", accountHash, err)
 		}
-		// The binary tree has no per-account storage roots; a flat record
-		// carrying one was not written by this conversion.
+		// Converted flat accounts never carry a storage root.
 		if len(slim.Root) != 0 {
 			acctIt.Release()
 			return fmt.Errorf("flat account %x carries a storage root %x", accountHash, slim.Root)
@@ -824,8 +715,7 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 	}
 	acctIt.Release()
 
-	// The flat slots. The iteration is ordered by account hash, so the
-	// address preimage resolves once per account.
+	// Slots are ordered by account hash: the address resolves once per account.
 	var (
 		slotIt   = pbtdb.NewIterator(rawdb.SnapshotStoragePrefix, nil)
 		lastHash common.Hash
@@ -883,7 +773,6 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 	}
 	slotIt.Release()
 
-	// The re-derived leaves must rebuild to the converted root.
 	stream, err := sorter.Sort()
 	if err != nil {
 		return err

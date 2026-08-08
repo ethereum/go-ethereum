@@ -39,17 +39,10 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// The conversion parity oracles.
-//
-// A converter bug is invisible to read-back tests: the tree hashes whatever
-// was written and the readers dutifully return it. What pins the converter is
-// root equality against writers with independent provenance. Two are used:
-//
-//   - the state_vectors in trie/bintrie/testdata are allocation-to-root pairs
-//     computed by the execution-specs reference, covering the shapes where an
-//     embedding makes choices (zero-collapse, delegation, shared code);
-//   - the tree's own typed writers, which every executed block goes through,
-//     pin the converter against replay on randomized allocations.
+// The parity oracles: read-back tests cannot see a converter bug (the tree
+// hashes whatever was written), so the converter is pinned by root equality
+// against independent provenance - the execution-specs state_vectors and the
+// tree's own typed writers.
 
 // stateVector mirrors the state_vectors entries of eip8297_vectors.json.
 type stateVector struct {
@@ -112,8 +105,8 @@ func allocOf(t *testing.T, sv stateVector) types.GenesisAlloc {
 	return alloc
 }
 
-// convertAlloc realizes alloc as a merkle-patricia state and runs the
-// converter over it, returning the binary root and the database it wrote.
+// convertAlloc converts alloc from a merkle genesis and returns the binary
+// root and database.
 func convertAlloc(t *testing.T, alloc types.GenesisAlloc) (common.Hash, ethdb.Database) {
 	t.Helper()
 	return convertAllocOpts(t, alloc, conversionOptions{})
@@ -148,10 +141,8 @@ func convertAllocOpts(t *testing.T, alloc types.GenesisAlloc, opts conversionOpt
 	return binRoot, chaindb
 }
 
-// embedAlloc writes alloc through the tree's typed writers - the same calls
-// every executed block makes - and returns the root. This is the
-// replay-equivalent oracle: converted state and replayed state must commit to
-// the same root or a converted node forks from an executing one.
+// embedAlloc writes alloc through the typed writers - what replay does - and
+// returns the root.
 func embedAlloc(t *testing.T, alloc types.GenesisAlloc) common.Hash {
 	t.Helper()
 	tr, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.PBTDefaults))
@@ -198,8 +189,8 @@ func balanceOf(t *testing.T, b *big.Int) *uint256.Int {
 	return v
 }
 
-// assertConvertedTreeClean walks every leaf of the converted tree and checks
-// the tree-wide invariant EIP-8297 states: no key holds 32 zero bytes.
+// assertConvertedTreeClean checks EIP-8297's invariant: no leaf holds 32
+// zero bytes.
 func assertConvertedTreeClean(t *testing.T, chaindb ethdb.Database, root common.Hash) {
 	t.Helper()
 	db := triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
@@ -224,13 +215,8 @@ func assertConvertedTreeClean(t *testing.T, chaindb ethdb.Database, root common.
 }
 
 // TestConvertMatchesReference pins the converter against the execution-specs
-// reference: each state vector's allocation, realized as a merkle state and
-// converted, must produce the reference-computed binary root.
-//
-// The vectors are the shapes where the embedding decides anything: all-zero
-// code chunks and all-zero basic data (written by no one), EIP-7702
-// delegations (a header leaf, not code), shared bytecode (one set of leaves,
-// however many holders), and storage on both sides of the slot-64 boundary.
+// reference: each vector's allocation, converted, must hit the
+// reference-computed root.
 func TestConvertMatchesReference(t *testing.T) {
 	for _, sv := range loadStateVectors(t) {
 		t.Run(sv.Name, func(t *testing.T) {
@@ -243,20 +229,14 @@ func TestConvertMatchesReference(t *testing.T) {
 	}
 }
 
-// TestConvertMatchesEmbedding is the randomized differential: a large mixed
-// allocation converted from a merkle source must hash identically to the same
-// allocation written through the typed writers, which is what replaying the
-// equivalent transactions would produce.
-//
-// Randomization is what reaches the converter-specific hazards the hand-made
-// vectors cannot: shared code discovered in whatever order the account-hash
-// iteration yields it, and stems assembled from leaves that arrive scattered.
+// TestConvertMatchesEmbedding is the randomized differential: a mixed
+// allocation converted from a merkle source must hash identically to the
+// same allocation written through the typed writers.
 func TestConvertMatchesEmbedding(t *testing.T) {
 	alloc := mixedAlloc(8347)
 	want := embedAlloc(t, alloc)
 
-	// Once wholly in memory, once spilling every few records: the sort path
-	// must not be able to change the answer.
+	// In memory and spilling: the sort path must not change the answer.
 	for _, budget := range []int{0, 512} {
 		binRoot, chaindb := convertAllocOpts(t, alloc, conversionOptions{
 			sortBudget: budget,
@@ -270,18 +250,13 @@ func TestConvertMatchesEmbedding(t *testing.T) {
 	}
 }
 
-// mixedAlloc builds a deterministic randomized allocation covering the
-// converter-specific hazards the hand-made vectors cannot: shared code
-// discovered in whatever order the account-hash iteration yields it, stems
-// assembled from scattered leaves, and code long enough to span multiple
-// code-zone stems.
+// mixedAlloc builds a deterministic randomized allocation: shared code,
+// delegations, boundary slots, code spanning multiple code-zone stems.
 func mixedAlloc(seed int64) types.GenesisAlloc {
 	rng := rand.New(rand.NewSource(seed))
 	alloc := make(types.GenesisAlloc)
 
-	// A pool of code blobs so sharing actually occurs, including a designator,
-	// a zero-tailed blob whose trailing chunks must not be written, and a
-	// blob past 256 chunks, whose tail lands in a second code stem.
+	// Shared blobs, a designator, a zero tail, a blob past 256 chunks.
 	codes := [][]byte{
 		nil,
 		bytes.Repeat([]byte{0x5b}, 40),
@@ -312,8 +287,7 @@ func mixedAlloc(seed int64) types.GenesisAlloc {
 				acct.Storage[k] = common.BigToHash(big.NewInt(int64(rng.Intn(1<<30) + 1)))
 			}
 		}
-		// The genesis writer refuses an account that is entirely absent, so
-		// give the codeless, balance-less ones at least a nonce or a slot.
+		// The genesis writer refuses entirely absent accounts.
 		if acct.Nonce == 0 && acct.Balance.Sign() == 0 && acct.Code == nil && len(acct.Storage) == 0 {
 			acct.Nonce = 1
 		}
@@ -322,12 +296,8 @@ func mixedAlloc(seed int64) types.GenesisAlloc {
 	return alloc
 }
 
-// assertFlatStateMatchesAlloc requires the converted flat store to be, byte
-// for byte, the exact record set a replaying node would hold for alloc: slim
-// accounts with the storage root normalized away, keyed by hashed address,
-// and RLP-trimmed slot values keyed by hashed slot. Both directions matter -
-// a record too many is as wrong as one too few, since the flat store is the
-// authoritative read path.
+// assertFlatStateMatchesAlloc requires the flat store to be byte-exact, in
+// both directions, against what a replaying node would hold for alloc.
 func assertFlatStateMatchesAlloc(t *testing.T, chaindb ethdb.Database, alloc types.GenesisAlloc) {
 	t.Helper()
 	var (

@@ -42,23 +42,13 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// The lifecycle tests. The parity oracles pin what a conversion computes;
-// these pin the surroundings a real one lives in: a source shaped by actual
-// block execution rather than a genesis allocation, a disk-backed database
-// with history freezers, the first live commit on top of the converted base,
-// and the irreversible step of deleting the source.
+// The lifecycle tests: the surroundings a real conversion lives in, where
+// the parity oracles pin only what it computes.
 
 // TestConvertMatchesChain converts a state built by real block execution -
-// contract deploys sharing bytecode, storage written across the header
-// boundary and cleared again in a later block, an EIP-7702 delegation
-// installed by an actual SetCodeTx - and requires the converted root to
-// match embedding the dumped post-state through the typed writers.
-//
-// The chain is shut down cleanly first, so the head state resolves out of
-// journaled diff layers rather than the persisted disk layer: exactly what
-// the CLI meets on a real node. The preimage store is likewise the one block
-// execution populated, including entries for keys the final state no longer
-// holds, which the converter must ignore.
+// deploys, storage writes and clears, a SetCodeTx delegation - resolved out
+// of the journaled diff layers a clean shutdown leaves, against an embedding
+// of the dumped post-state.
 func TestConvertMatchesChain(t *testing.T) {
 	var (
 		config = *params.MergedTestChainConfig
@@ -71,8 +61,8 @@ func TestConvertMatchesChain(t *testing.T) {
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 		funds   = new(big.Int).Mul(big.NewInt(1000), big.NewInt(params.Ether))
 
-		// The runtime clears slot 1 on any call; the constructor writes
-		// slots on both sides of the header boundary first.
+		// The constructor writes slots on both sides of the header boundary;
+		// the runtime clears slot 1 on any call.
 		runtime  = program.New().Sstore(1, 0).Bytes()
 		initcode = program.New().
 				Sstore(0, 0x11).Sstore(1, 0x22).Sstore(63, 0x33).Sstore(64, 0x44).Sstore(4096, 0x55).
@@ -89,7 +79,7 @@ func TestConvertMatchesChain(t *testing.T) {
 			addr2: {Balance: funds},
 		},
 	}
-	// key2's account delegates to contract A.
+	// key2 delegates to contract A.
 	auth, err := types.SignSetCode(key2, types.SetCodeAuthorization{
 		ChainID: *uint256.MustFromBig(config.ChainID),
 		Address: contractA,
@@ -101,8 +91,7 @@ func TestConvertMatchesChain(t *testing.T) {
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *core.BlockGen) {
 		switch i {
 		case 0:
-			// Two deploys of the same initcode: different accounts, shared
-			// runtime bytecode. And a transfer creating a fresh EOA.
+			// Two deploys sharing runtime bytecode, and a fresh EOA.
 			b.AddTx(types.MustSignNewTx(key1, signer, &types.LegacyTx{
 				Nonce: 0, Gas: 500000, GasPrice: gasPrice, Data: initcode,
 			}))
@@ -113,8 +102,7 @@ func TestConvertMatchesChain(t *testing.T) {
 				Nonce: 2, Gas: 21000, GasPrice: gasPrice, To: &freshEOA, Value: big.NewInt(1),
 			}))
 		case 1:
-			// Install the delegation, then call A so its runtime clears
-			// slot 1 - the deleted leaf whose preimage lingers in the store.
+			// Install the delegation, then clear A's slot 1.
 			b.AddTx(types.MustSignNewTx(key1, signer, &types.SetCodeTx{
 				ChainID:   uint256.MustFromBig(config.ChainID),
 				Nonce:     3,
@@ -142,7 +130,7 @@ func TestConvertMatchesChain(t *testing.T) {
 	}
 	headRoot := chain.CurrentBlock().Root
 
-	// Dump the post-state while the chain is live; it becomes the oracle.
+	// The live post-state dump is the oracle.
 	statedb, err := chain.State()
 	if err != nil {
 		t.Fatal(err)
@@ -170,8 +158,7 @@ func TestConvertMatchesChain(t *testing.T) {
 		}
 		alloc[addr] = entry
 	}
-	// A clean shutdown journals the un-persisted diff layers; the converter
-	// must find the head state through them.
+	// A clean shutdown journals the diff layers holding the head state.
 	chain.Stop()
 
 	src := triedb.NewDatabase(chaindb, &triedb.Config{
@@ -189,7 +176,7 @@ func TestConvertMatchesChain(t *testing.T) {
 	}
 	assertConvertedTreeClean(t, chaindb, binRoot)
 
-	// Read the interesting shapes back the way a node would.
+	// Read the interesting shapes back as a node would.
 	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
 	defer destTriedb.Close()
 	converted, err := state.New(binRoot, state.NewPBTDatabase(destTriedb, state.NewCodeDB(chaindb)))
@@ -213,13 +200,9 @@ func TestConvertMatchesChain(t *testing.T) {
 	}
 }
 
-// TestBintrieConvertDiskBacked runs the conversion on a pebble database with
-// a real ancient store. This is the configuration every actual node has and
-// no memory-database test can reach: the in-conversion verification must not
-// touch the history freezers (a read-only open of the never-created
-// state_pbt tables kills the process), and the converted namespace must
-// survive two full close-and-reopen cycles - the first creates the freezers,
-// the second meets them.
+// TestBintrieConvertDiskBacked converts on pebble with a real ancient store:
+// verification must not touch the history freezers, and the namespace must
+// survive two reopen cycles (the first creates the freezers).
 func TestBintrieConvertDiskBacked(t *testing.T) {
 	var (
 		datadir = t.TempDir()
@@ -278,10 +261,8 @@ func TestBintrieConvertDiskBacked(t *testing.T) {
 	}
 }
 
-// TestConvertedBaseAcceptsCommits pins the handoff: the converted namespace
-// is the base of an empty history with no persistent state id, and the first
-// live commit on top of it - state id 1 - must land, survive a reopen, and
-// read back through the node's stack alongside the converted state.
+// TestConvertedBaseAcceptsCommits pins the handoff: the first live commit on
+// the state-id-0 base must land, survive a reopen, and read back.
 func TestConvertedBaseAcceptsCommits(t *testing.T) {
 	chaindb := rawdb.NewMemoryDatabase()
 	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
@@ -306,7 +287,7 @@ func TestConvertedBaseAcceptsCommits(t *testing.T) {
 	}
 	src.Close()
 
-	// The first live commit: one fresh account through the tree's writers.
+	// One fresh account through the tree's writers.
 	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
 	tr, err := bintrie.NewBinaryTrie(binRoot, destTriedb)
 	if err != nil {
@@ -336,7 +317,7 @@ func TestConvertedBaseAcceptsCommits(t *testing.T) {
 	}
 	destTriedb.Close()
 
-	// Reopen: both the delta and the converted base must read.
+	// Both the delta and the converted base must read.
 	destTriedb = triedb.NewDatabase(chaindb, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
 	defer destTriedb.Close()
 	statedb, err := state.New(newRoot, state.NewPBTDatabase(destTriedb, state.NewCodeDB(chaindb)))
@@ -351,11 +332,8 @@ func TestConvertedBaseAcceptsCommits(t *testing.T) {
 	}
 }
 
-// TestDeleteSourceLifecycle pins the irreversible step on a state with
-// everything in it. After deletion the converted bytes must stand entirely
-// on their own - both verifiers pass, contract code and storage read through
-// the node's stack - the merkle trie must actually be gone, and the stores
-// deletion shares a database with (contract code, preimages) must survive.
+// TestDeleteSourceLifecycle: after deletion the converted bytes stand alone,
+// the merkle trie is gone, and code and preimages survive.
 func TestDeleteSourceLifecycle(t *testing.T) {
 	t.Run("path scheme", func(t *testing.T) {
 		alloc := mixedAlloc(424242)
@@ -385,7 +363,7 @@ func TestDeleteSourceLifecycle(t *testing.T) {
 		if err := deleteMPTData(chaindb, src, root); err != nil {
 			t.Fatalf("deletion failed: %v", err)
 		}
-		// The converted bytes alone must still verify.
+		// Converted bytes alone must verify.
 		pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 		if err := verifyConvertedState(chaindb, binRoot); err != nil {
 			t.Fatalf("tree verification fails after source deletion: %v", err)
@@ -393,7 +371,7 @@ func TestDeleteSourceLifecycle(t *testing.T) {
 		if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err != nil {
 			t.Fatalf("flat verification fails after source deletion: %v", err)
 		}
-		// A contract with code and storage reads through the node's stack.
+		// A contract reads through the node's stack.
 		var contract common.Address
 		var acct types.Account
 		for addr, a := range alloc {
@@ -422,7 +400,7 @@ func TestDeleteSourceLifecycle(t *testing.T) {
 			}
 			break
 		}
-		// The merkle state is actually gone...
+		// Merkle gone...
 		fresh := triedb.NewDatabase(chaindb, &triedb.Config{PathDB: &pathdb.Config{ReadOnly: true}})
 		defer fresh.Close()
 		if mpt, err := trie.NewStateTrie(trie.StateTrieID(root), fresh); err == nil {
@@ -438,7 +416,7 @@ func TestDeleteSourceLifecycle(t *testing.T) {
 				}
 			}
 		}
-		// ...while code and preimages survive.
+		// ...code and preimages survive.
 		if code := rawdb.ReadCode(chaindb, crypto.Keccak256Hash(acct.Code)); len(code) == 0 {
 			t.Fatal("deletion took the contract code with it")
 		}

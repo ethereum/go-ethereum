@@ -72,10 +72,8 @@ func randomLeafRecords(t *testing.T, rng *rand.Rand, n int) []sortRecord {
 	return recs
 }
 
-// TestLeafSorterOrders pins that the output is ascending and complete, both
-// on the in-memory fast path and across spilled runs. A tiny budget forces a
-// spill every few records, so the merge is exercised with many runs rather
-// than a token two.
+// TestLeafSorterOrders pins ascending, complete output on the in-memory path
+// and across many spilled runs.
 func TestLeafSorterOrders(t *testing.T) {
 	rng := rand.New(rand.NewSource(8347))
 	recs := randomLeafRecords(t, rng, 500)
@@ -109,9 +107,8 @@ func TestLeafSorterOrders(t *testing.T) {
 	}
 }
 
-// TestLeafSorterRejects covers the input validation: malformed keys, wrong
-// value sizes, zero values, and duplicates - both inside one run and across
-// runs, which fail at different stages.
+// TestLeafSorterRejects covers input validation and duplicates, in-run and
+// cross-run.
 func TestLeafSorterRejects(t *testing.T) {
 	key := HeaderKey(commonAddress(1), 0)
 	value := bytes.Repeat([]byte{1}, 32)
@@ -180,8 +177,7 @@ func TestLeafSorterRejects(t *testing.T) {
 	})
 }
 
-// TestLeafSorterEdges covers empty input, a single record, and temp-file
-// cleanup on Close.
+// TestLeafSorterEdges: empty input, single record, temp-file cleanup.
 func TestLeafSorterEdges(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		s := NewLeafSorter(t.TempDir(), 0)
@@ -247,8 +243,7 @@ func commonAddress(i byte) (a [20]byte) {
 	return a
 }
 
-// TestLeafSorterMatchesStackBuilder ties the two halves of the pipeline: a
-// shuffled record set, externally sorted with a spill-heavy budget and fed to
+// TestLeafSorterMatchesStackBuilder: a shuffled set, spill-sorted and fed to
 // the stack builder, must reproduce the incremental engine's root.
 func TestLeafSorterMatchesStackBuilder(t *testing.T) {
 	rng := rand.New(rand.NewSource(20260807))
@@ -289,11 +284,8 @@ func TestLeafSorterMatchesStackBuilder(t *testing.T) {
 	}
 }
 
-// TestRecordSorterVarlen pins the generic face of the sorter: keys of
-// arbitrary (non-leaf) shapes and values of assorted lengths, empty included,
-// survive a spill-heavy sort byte for byte. This is the configuration the
-// preimage-file writer runs, where a 20-byte address keys an RLP record of
-// whatever size the account's storage dictates.
+// TestRecordSorterVarlen pins the generic face: arbitrary keys and varlen
+// values (empty included) survive a spill-heavy sort byte for byte.
 func TestRecordSorterVarlen(t *testing.T) {
 	rng := rand.New(rand.NewSource(20260807))
 	type kv struct{ k, v []byte }
