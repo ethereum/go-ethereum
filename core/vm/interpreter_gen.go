@@ -39,8 +39,8 @@ mainLoop:
 	for {
 		if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
 			contractAddr := contract.Address()
-			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
-			contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.ExecutionGas)
+			contract.chargeExecution(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
@@ -54,12 +54,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -73,12 +73,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 5 {
+			if contract.Gas.ExecutionGas < 5 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 5
-			contract.Gas.UsedRegularGas += 5
+			contract.Gas.ExecutionGas -= 5
+			contract.Gas.UsedExecutionGas += 5
 
 			sp--
 			x := &sd[sp]
@@ -92,12 +92,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -111,12 +111,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 5 {
+			if contract.Gas.ExecutionGas < 5 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 5
-			contract.Gas.UsedRegularGas += 5
+			contract.Gas.ExecutionGas -= 5
+			contract.Gas.UsedExecutionGas += 5
 
 			sp--
 			x := &sd[sp]
@@ -130,12 +130,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 5 {
+			if contract.Gas.ExecutionGas < 5 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 5
-			contract.Gas.UsedRegularGas += 5
+			contract.Gas.ExecutionGas -= 5
+			contract.Gas.UsedExecutionGas += 5
 
 			sp--
 			x := &sd[sp]
@@ -149,12 +149,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 5 {
+			if contract.Gas.ExecutionGas < 5 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 5
-			contract.Gas.UsedRegularGas += 5
+			contract.Gas.ExecutionGas -= 5
+			contract.Gas.UsedExecutionGas += 5
 
 			sp--
 			x := &sd[sp]
@@ -168,12 +168,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 5 {
+			if contract.Gas.ExecutionGas < 5 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 5
-			contract.Gas.UsedRegularGas += 5
+			contract.Gas.ExecutionGas -= 5
+			contract.Gas.UsedExecutionGas += 5
 
 			sp--
 			x := &sd[sp]
@@ -187,12 +187,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 8 {
+			if contract.Gas.ExecutionGas < 8 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 8
-			contract.Gas.UsedRegularGas += 8
+			contract.Gas.ExecutionGas -= 8
+			contract.Gas.UsedExecutionGas += 8
 
 			sp -= 2
 			x := &sd[sp+1]
@@ -207,12 +207,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 8 {
+			if contract.Gas.ExecutionGas < 8 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 8
-			contract.Gas.UsedRegularGas += 8
+			contract.Gas.ExecutionGas -= 8
+			contract.Gas.UsedExecutionGas += 8
 
 			sp -= 2
 			x := &sd[sp+1]
@@ -227,12 +227,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 5 {
+			if contract.Gas.ExecutionGas < 5 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 5
-			contract.Gas.UsedRegularGas += 5
+			contract.Gas.ExecutionGas -= 5
+			contract.Gas.UsedExecutionGas += 5
 
 			sp--
 			back := &sd[sp]
@@ -246,12 +246,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -269,12 +269,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -292,12 +292,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -315,12 +315,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -338,12 +338,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -361,12 +361,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			x := &sd[sp-1]
 			if x.IsZero() {
@@ -382,12 +382,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -401,12 +401,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -420,12 +420,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			x := &sd[sp]
@@ -439,12 +439,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			x := &sd[sp-1]
 			x.Not(x)
@@ -456,12 +456,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sp--
 			th := &sd[sp]
@@ -476,12 +476,12 @@ mainLoop:
 					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 					break mainLoop
 				}
-				if contract.Gas.RegularGas < 3 {
+				if contract.Gas.ExecutionGas < 3 {
 					res, err = nil, ErrOutOfGas
 					break mainLoop
 				}
-				contract.Gas.RegularGas -= 3
-				contract.Gas.UsedRegularGas += 3
+				contract.Gas.ExecutionGas -= 3
+				contract.Gas.UsedExecutionGas += 3
 
 				sp--
 				shift := &sd[sp]
@@ -503,12 +503,12 @@ mainLoop:
 					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 					break mainLoop
 				}
-				if contract.Gas.RegularGas < 3 {
+				if contract.Gas.ExecutionGas < 3 {
 					res, err = nil, ErrOutOfGas
 					break mainLoop
 				}
-				contract.Gas.RegularGas -= 3
-				contract.Gas.UsedRegularGas += 3
+				contract.Gas.ExecutionGas -= 3
+				contract.Gas.UsedExecutionGas += 3
 
 				sp--
 				shift := &sd[sp]
@@ -530,12 +530,12 @@ mainLoop:
 					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 					break mainLoop
 				}
-				if contract.Gas.RegularGas < 3 {
+				if contract.Gas.ExecutionGas < 3 {
 					res, err = nil, ErrOutOfGas
 					break mainLoop
 				}
-				contract.Gas.RegularGas -= 3
-				contract.Gas.UsedRegularGas += 3
+				contract.Gas.ExecutionGas -= 3
+				contract.Gas.UsedExecutionGas += 3
 
 				sp--
 				shift := &sd[sp]
@@ -564,12 +564,12 @@ mainLoop:
 					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 					break mainLoop
 				}
-				if contract.Gas.RegularGas < 5 {
+				if contract.Gas.ExecutionGas < 5 {
 					res, err = nil, ErrOutOfGas
 					break mainLoop
 				}
-				contract.Gas.RegularGas -= 5
-				contract.Gas.UsedRegularGas += 5
+				contract.Gas.ExecutionGas -= 5
+				contract.Gas.UsedExecutionGas += 5
 
 				x := &sd[sp-1]
 				x.SetUint64(256 - uint64(x.BitLen()))
@@ -584,12 +584,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 30 {
+			if contract.Gas.ExecutionGas < 30 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 30
-			contract.Gas.UsedRegularGas += 30
+			contract.Gas.ExecutionGas -= 30
+			contract.Gas.UsedExecutionGas += 30
 
 			stack.size = sp
 			stack.inner.top = stack.bottom + sp
@@ -612,7 +612,7 @@ mainLoop:
 				break mainLoop
 			}
 			if dynamicCost.StateGas == 0 {
-				if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+				if cerr := contract.Gas.ChargeExecutionOnly(dynamicCost.ExecutionGas); cerr != nil {
 					res, err = nil, cerr
 					break mainLoop
 				}
@@ -637,12 +637,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 2 {
+			if contract.Gas.ExecutionGas < 2 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 2
-			contract.Gas.UsedRegularGas += 2
+			contract.Gas.ExecutionGas -= 2
+			contract.Gas.UsedExecutionGas += 2
 
 			sp--
 			pc++
@@ -653,12 +653,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			stack.size = sp
 			stack.inner.top = stack.bottom + sp
@@ -681,7 +681,7 @@ mainLoop:
 				break mainLoop
 			}
 			if dynamicCost.StateGas == 0 {
-				if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+				if cerr := contract.Gas.ChargeExecutionOnly(dynamicCost.ExecutionGas); cerr != nil {
 					res, err = nil, cerr
 					break mainLoop
 				}
@@ -706,12 +706,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			stack.size = sp
 			stack.inner.top = stack.bottom + sp
@@ -734,7 +734,7 @@ mainLoop:
 				break mainLoop
 			}
 			if dynamicCost.StateGas == 0 {
-				if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+				if cerr := contract.Gas.ChargeExecutionOnly(dynamicCost.ExecutionGas); cerr != nil {
 					res, err = nil, cerr
 					break mainLoop
 				}
@@ -759,12 +759,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			stack.size = sp
 			stack.inner.top = stack.bottom + sp
@@ -787,7 +787,7 @@ mainLoop:
 				break mainLoop
 			}
 			if dynamicCost.StateGas == 0 {
-				if cerr := contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas); cerr != nil {
+				if cerr := contract.Gas.ChargeExecutionOnly(dynamicCost.ExecutionGas); cerr != nil {
 					res, err = nil, cerr
 					break mainLoop
 				}
@@ -812,12 +812,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 8 {
+			if contract.Gas.ExecutionGas < 8 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 8
-			contract.Gas.UsedRegularGas += 8
+			contract.Gas.ExecutionGas -= 8
+			contract.Gas.UsedExecutionGas += 8
 
 			if evm.abort.Load() {
 				res, err = nil, errStopToken
@@ -838,12 +838,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 10 {
+			if contract.Gas.ExecutionGas < 10 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 10
-			contract.Gas.UsedRegularGas += 10
+			contract.Gas.ExecutionGas -= 10
+			contract.Gas.UsedExecutionGas += 10
 
 			if evm.abort.Load() {
 				res, err = nil, errStopToken
@@ -867,12 +867,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 2 {
+			if contract.Gas.ExecutionGas < 2 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 2
-			contract.Gas.UsedRegularGas += 2
+			contract.Gas.ExecutionGas -= 2
+			contract.Gas.UsedExecutionGas += 2
 
 			elem := &sd[sp]
 			sp++
@@ -885,12 +885,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 2 {
+			if contract.Gas.ExecutionGas < 2 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 2
-			contract.Gas.UsedRegularGas += 2
+			contract.Gas.ExecutionGas -= 2
+			contract.Gas.UsedExecutionGas += 2
 
 			elem := &sd[sp]
 			sp++
@@ -899,12 +899,12 @@ mainLoop:
 			continue mainLoop
 
 		case JUMPDEST:
-			if contract.Gas.RegularGas < 1 {
+			if contract.Gas.ExecutionGas < 1 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 1
-			contract.Gas.UsedRegularGas += 1
+			contract.Gas.ExecutionGas -= 1
+			contract.Gas.UsedExecutionGas += 1
 
 			pc++
 			continue mainLoop
@@ -915,12 +915,12 @@ mainLoop:
 					res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 					break mainLoop
 				}
-				if contract.Gas.RegularGas < 2 {
+				if contract.Gas.ExecutionGas < 2 {
 					res, err = nil, ErrOutOfGas
 					break mainLoop
 				}
-				contract.Gas.RegularGas -= 2
-				contract.Gas.UsedRegularGas += 2
+				contract.Gas.ExecutionGas -= 2
+				contract.Gas.UsedExecutionGas += 2
 
 				elem := &sd[sp]
 				sp++
@@ -936,12 +936,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -972,12 +972,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1010,12 +1010,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1049,12 +1049,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1088,12 +1088,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1127,12 +1127,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1166,12 +1166,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1205,12 +1205,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1244,12 +1244,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1283,12 +1283,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1322,12 +1322,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1361,12 +1361,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1400,12 +1400,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1439,12 +1439,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1478,12 +1478,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1517,12 +1517,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1556,12 +1556,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1595,12 +1595,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1634,12 +1634,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1673,12 +1673,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1712,12 +1712,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1751,12 +1751,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1790,12 +1790,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1829,12 +1829,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1868,12 +1868,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1907,12 +1907,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1946,12 +1946,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -1985,12 +1985,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -2024,12 +2024,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -2063,12 +2063,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -2102,12 +2102,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -2141,12 +2141,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			if isEIP4762 {
 				stack.size = sp
@@ -2183,12 +2183,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-1]
 			sp++
@@ -2203,12 +2203,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-2]
 			sp++
@@ -2223,12 +2223,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-3]
 			sp++
@@ -2243,12 +2243,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-4]
 			sp++
@@ -2263,12 +2263,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-5]
 			sp++
@@ -2283,12 +2283,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-6]
 			sp++
@@ -2303,12 +2303,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-7]
 			sp++
@@ -2323,12 +2323,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-8]
 			sp++
@@ -2343,12 +2343,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-9]
 			sp++
@@ -2363,12 +2363,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-10]
 			sp++
@@ -2383,12 +2383,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-11]
 			sp++
@@ -2403,12 +2403,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-12]
 			sp++
@@ -2423,12 +2423,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-13]
 			sp++
@@ -2443,12 +2443,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-14]
 			sp++
@@ -2463,12 +2463,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-15]
 			sp++
@@ -2483,12 +2483,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp] = sd[sp-16]
 			sp++
@@ -2500,12 +2500,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-2], sd[sp-1] = sd[sp-1], sd[sp-2]
 			pc++
@@ -2516,12 +2516,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-3], sd[sp-1] = sd[sp-1], sd[sp-3]
 			pc++
@@ -2532,12 +2532,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 4}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-4], sd[sp-1] = sd[sp-1], sd[sp-4]
 			pc++
@@ -2548,12 +2548,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 5}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-5], sd[sp-1] = sd[sp-1], sd[sp-5]
 			pc++
@@ -2564,12 +2564,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 6}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-6], sd[sp-1] = sd[sp-1], sd[sp-6]
 			pc++
@@ -2580,12 +2580,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 7}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-7], sd[sp-1] = sd[sp-1], sd[sp-7]
 			pc++
@@ -2596,12 +2596,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 8}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-8], sd[sp-1] = sd[sp-1], sd[sp-8]
 			pc++
@@ -2612,12 +2612,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 9}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-9], sd[sp-1] = sd[sp-1], sd[sp-9]
 			pc++
@@ -2628,12 +2628,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 10}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-10], sd[sp-1] = sd[sp-1], sd[sp-10]
 			pc++
@@ -2644,12 +2644,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 11}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-11], sd[sp-1] = sd[sp-1], sd[sp-11]
 			pc++
@@ -2660,12 +2660,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 12}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-12], sd[sp-1] = sd[sp-1], sd[sp-12]
 			pc++
@@ -2676,12 +2676,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 13}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-13], sd[sp-1] = sd[sp-1], sd[sp-13]
 			pc++
@@ -2692,12 +2692,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 14}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-14], sd[sp-1] = sd[sp-1], sd[sp-14]
 			pc++
@@ -2708,12 +2708,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 15}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-15], sd[sp-1] = sd[sp-1], sd[sp-15]
 			pc++
@@ -2724,12 +2724,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 16}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-16], sd[sp-1] = sd[sp-1], sd[sp-16]
 			pc++
@@ -2740,12 +2740,12 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 17}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < 3 {
+			if contract.Gas.ExecutionGas < 3 {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= 3
-			contract.Gas.UsedRegularGas += 3
+			contract.Gas.ExecutionGas -= 3
+			contract.Gas.UsedExecutionGas += 3
 
 			sd[sp-17], sd[sp-1] = sd[sp-1], sd[sp-17]
 			pc++
@@ -2760,12 +2760,12 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: operation.maxStack}
 				break mainLoop
 			}
-			if contract.Gas.RegularGas < operation.constantGas {
+			if contract.Gas.ExecutionGas < operation.constantGas {
 				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
-			contract.Gas.RegularGas -= operation.constantGas
-			contract.Gas.UsedRegularGas += operation.constantGas
+			contract.Gas.ExecutionGas -= operation.constantGas
+			contract.Gas.UsedExecutionGas += operation.constantGas
 
 			stack.size = sp
 			stack.inner.top = stack.bottom + sp

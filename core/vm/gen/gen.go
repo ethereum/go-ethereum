@@ -76,39 +76,39 @@ func (g *generator) emitStackChecks(minExpr, maxExpr any, under, over bool) {
 	}
 }
 
-// emitStaticGas charges amount by splicing ChargeRegularOnly, so the loop makes no
+// emitStaticGas charges amount by splicing ChargeExecutionOnly, so the loop makes no
 // call. amount is a constant on the inlined and direct paths, operation.constantGas in
 // the table path.
 //
-// ChargeRegularOnly reads:
+// ChargeExecutionOnly reads:
 //
-//	if g.RegularGas < r {
+//	if g.ExecutionGas < r {
 //		return ErrOutOfGas
 //	}
-//	g.RegularGas -= r
-//	g.UsedRegularGas += r
+//	g.ExecutionGas -= r
+//	g.UsedExecutionGas += r
 //	return nil
 //
 // and for a 3 gas opcode this emits:
 //
-//	if contract.Gas.RegularGas < 3 {
+//	if contract.Gas.ExecutionGas < 3 {
 //		res, err = nil, ErrOutOfGas
 //		break mainLoop
 //	}
-//	contract.Gas.RegularGas -= 3
-//	contract.Gas.UsedRegularGas += 3
+//	contract.Gas.ExecutionGas -= 3
+//	contract.Gas.UsedExecutionGas += 3
 func (g *generator) emitStaticGas(amount any) {
-	fn := g.gasHelper("ChargeRegularOnly")
+	fn := g.gasHelper("ChargeExecutionOnly")
 
 	// The amount is substituted by parameter name below, so a second parameter would
 	// mean this is rewriting the wrong thing.
 	names := paramNames(fn)
 	if len(names) != 1 {
-		abortf("ChargeRegularOnly takes %d params, want 1", len(names))
+		abortf("ChargeExecutionOnly takes %d params, want 1", len(names))
 	}
 	src := g.renderAst(fn.Body.List)
 
-	// g -> contract.Gas, on word boundaries so RegularGas is left alone.
+	// g -> contract.Gas, on word boundaries so ExecutionGas is left alone.
 	src = regexp.MustCompile(`\b`+recvName(fn)+`\b`).ReplaceAllString(src, "contract.Gas")
 
 	// r -> 3
