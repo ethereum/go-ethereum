@@ -97,14 +97,14 @@ const (
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
 
-	// RegularPerAuthBaseCost is the state-independent per-authorization floor,
+	// ExecutionPerAuthBaseCost is the state-independent per-authorization floor,
 	// defined in EIP-8037 as the sum of:
 	//
 	// - Calldata cost for the authorization tuple
 	// - ECDSA recovery of the authority address
 	// - Cold authority access (COLD_ACCOUNT_ACCESS)
 	// - Warm writes to the authority account
-	RegularPerAuthBaseCost uint64 = 7816
+	ExecutionPerAuthBaseCost uint64 = 7816
 
 	// EIP-2780: resource-based intrinsic transaction gas.
 	TxBaseCost2780  uint64 = 12000
