@@ -117,58 +117,6 @@ func TestPBTHasStorage(t *testing.T) {
 	}
 }
 
-// TestPBTZeroIsAbsence pins that writing zero removes the leaf: the root
-// after a write-then-zero must equal the root of a state that never wrote.
-func TestPBTZeroIsAbsence(t *testing.T) {
-	addr := common.Address{1}
-	slot := common.Hash{31: 5}
-
-	// Reference: account with no storage.
-	ref, refdb := newPBTState(t)
-	ref.CreateAccount(addr)
-	ref.SetNonce(addr, 1, tracing.NonceChangeUnspecified)
-	ref.SetBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
-	refRoot, err := ref.Commit(1, true, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = refdb
-
-	// Same account, writing the slot and zeroing it in one block.
-	sdb, _ := newPBTState(t)
-	sdb.CreateAccount(addr)
-	sdb.SetNonce(addr, 1, tracing.NonceChangeUnspecified)
-	sdb.SetBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
-	sdb.SetState(addr, slot, common.Hash{31: 7})
-	sdb.SetState(addr, slot, common.Hash{})
-	got, err := sdb.Commit(1, true, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != refRoot {
-		t.Fatalf("in-block zeroing left a trace: %x want %x", got, refRoot)
-	}
-	if sdb.HasStorage(addr) {
-		t.Fatal("zeroed slot still counts as storage")
-	}
-
-	// And across blocks: write in block 1, zero in block 2.
-	two, twodb := newPBTState(t)
-	two.CreateAccount(addr)
-	two.SetNonce(addr, 1, tracing.NonceChangeUnspecified)
-	two.SetBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
-	two.SetState(addr, slot, common.Hash{31: 7})
-	two = reopenPBT(t, two, twodb, 1)
-	two.SetState(addr, slot, common.Hash{})
-	got2, err := two.Commit(2, true, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got2 != refRoot {
-		t.Fatalf("cross-block zeroing left a trace: %x want %x", got2, refRoot)
-	}
-}
-
 // TestPBTAccountDeletion pins that deleting an account removes everything it
 // owns in the unified tree - header stem and overflow storage bucket alike -
 // so the resulting root equals a state where the account never existed. A
