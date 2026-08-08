@@ -6,7 +6,7 @@ on:
   pull_request:
     branches:
       - master
-      - pbt
+      - "pbt**" # the stacked integration branches too
   workflow_dispatch:
 
 # Free runner capacity by cancelling superseded PR runs.
