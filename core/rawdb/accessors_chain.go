@@ -618,11 +618,14 @@ func HasAccessList(db ethdb.Reader, hash common.Hash, number uint64) bool {
 func ReadAccessListRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
 	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
-		data, _ = reader.Ancient(ChainFreezerBALTable, number)
-		if len(data) > 0 {
-			return nil
+		// Ancients maintain only canonical data. For a non-canonical hash at an
+		// ancient height, fall back to the key-value store.
+		if isCanon(reader, number, hash) {
+			data, _ = reader.Ancient(ChainFreezerBALTable, number)
+			if len(data) > 0 {
+				return nil
+			}
 		}
-		// Block is not in ancients, read from key-value store by hash and number.
 		data, _ = db.Get(accessListKey(number, hash))
 		return nil
 	})

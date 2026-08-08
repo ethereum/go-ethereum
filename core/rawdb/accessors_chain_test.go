@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/keccak"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -964,6 +965,51 @@ func TestWriteAncientBlocksNilBAL(t *testing.T) {
 	// HasAccessList only consults the KV store and there's nothing there.
 	if HasAccessList(db, hash, number) {
 		t.Fatal("HasAccessList returned true for absent BAL")
+	}
+}
+
+func TestReadAccessListRLPAncientNonCanonical(t *testing.T) {
+	db, err := Open(NewMemoryDatabase(), OpenOptions{Ancient: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to create database with ancient backend: %v", err)
+	}
+	defer db.Close()
+
+	encoded, accessList := makeTestBAL(t)
+	accessListHash := accessList.Hash()
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:              big.NewInt(0),
+		Extra:               []byte("canonical-bal block"),
+		UncleHash:           types.EmptyUncleHash,
+		TxHash:              types.EmptyTxsHash,
+		ReceiptHash:         types.EmptyReceiptsHash,
+		BlockAccessListHash: &accessListHash,
+	}).WithAccessList(accessList)
+	if _, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		if err := op.AppendRaw(ChainFreezerHashTable, 0, block.Hash().Bytes()); err != nil {
+			return err
+		}
+		if err := op.Append(ChainFreezerHeaderTable, 0, block.Header()); err != nil {
+			return err
+		}
+		if err := op.Append(ChainFreezerBodiesTable, 0, block.Body()); err != nil {
+			return err
+		}
+		if err := op.AppendRaw(ChainFreezerReceiptTable, 0, types.EncodeBlockReceiptLists([]types.Receipts{nil})[0]); err != nil {
+			return err
+		}
+		return op.AppendRaw(ChainFreezerBALTable, 0, encoded)
+	}); err != nil {
+		t.Fatalf("failed to write ancient block: %v", err)
+	}
+	if blob := ReadAccessListRLP(db, block.Hash(), block.NumberU64()); len(blob) == 0 {
+		t.Fatal("canonical block access list not found in ancients")
+	}
+	// Ancients contain data only for the canonical hash. Looking up another
+	// hash at the same height must not return the canonical block's access list.
+	nonCanonical := common.HexToHash("0xdeadbeef")
+	if blob := ReadAccessListRLP(db, nonCanonical, block.NumberU64()); len(blob) != 0 {
+		t.Fatalf("ReadAccessListRLP returned canonical data for non-canonical hash: %x", blob)
 	}
 }
 
