@@ -110,9 +110,7 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
 		snapshotConf = []bool{false, true}
 		dbschemeConf = []string{rawdb.HashScheme, rawdb.PathScheme}
 	)
-	// The binary tree exists in the path scheme only - NewBlockChain refuses
-	// the hash scheme outright - so a PBT network runs the path half of the
-	// matrix rather than failing the other half.
+	// The binary tree exists only in the path scheme; run that half.
 	if config, ok := Forks[test.Network()]; ok && config.IsPBT() {
 		dbschemeConf = []string{rawdb.PathScheme}
 	}

@@ -1398,14 +1398,10 @@ func (s *StateDB) deleteStoragePBT(addrHash common.Hash) (map[common.Hash]common
 // In case (d), **original** account along with its storages should be deleted,
 // with their values be tracked as original value.
 //
-// The returned flag reports whether any destructed account held storage that
-// had to be wiped. Post-6780 destruction reaches only same-transaction
-// creations, which have no committed storage - but EIP-161 clearing of a
-// pre-existing empty account that holds storage still wipes, and such a state,
-// while unreachable on mainnet, is valid and constructible in fixtures. The
-// wiped slots are enumerated from the tree or flat store, so their origin
-// values are keyed by hash; the caller uses the flag to keep the whole
-// update's storage-key encoding consistent.
+// The returned flag reports whether any destructed account's storage was
+// wiped (EIP-161 clearing of a storage-holding account: fixture-constructible,
+// mainnet-unreachable). Wiped slots are enumerated by hash, so the caller
+// degrades the update's storage-key encoding to match.
 func (s *StateDB) handleDestruction() (map[common.Hash]*AccountDelete, []*trienode.NodeSet, bool, error) {
 	var (
 		nodes   []*trienode.NodeSet
@@ -1623,11 +1619,8 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	origin := s.originalRoot
 	s.originalRoot = root
 
-	// Post-Cancun updates carry raw storage keys, which is possible only while
-	// no deletion had to enumerate slots by hash. A wipe - EIP-161 clearing of
-	// an account that held storage - degrades the whole update to hashed keys:
-	// account updates record their origins in both forms, so nothing is lost,
-	// and mixing the two forms within one update would corrupt it.
+	// Raw storage keys hold only while no deletion enumerated slots by hash;
+	// a wipe degrades the whole update, since mixing key forms corrupts it.
 	typ := StorageKeyHashed
 	if noStorageWiping && !wiped {
 		typ = StorageKeyPlain

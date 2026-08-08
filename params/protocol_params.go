@@ -107,9 +107,8 @@ const (
 
 	// EIP-2780: resource-based intrinsic transaction gas.
 	TxBaseCost2780 uint64 = 12000
-	// TX_VALUE_COST: the recipient balance write and the EIP-7708 transfer log
-	// of a value-bearing call transaction. A value-bearing contract creation
-	// charges nothing here - the recipient write is covered by CREATE_ACCESS.
+	// TX_VALUE_COST: recipient write plus EIP-7708 log of a value-bearing
+	// call transaction; creations charge nothing here (CREATE_ACCESS covers).
 	TxValueCost2780 uint64 = 6000
 
 	// EIP-8038: state-access gas cost update (Amsterdam).

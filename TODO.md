@@ -172,12 +172,10 @@ the move of code into the content-addressed zone invalidated its central
 assumption rather than shifting a constant. It still converts, so this is not
 urgent — but it should get a dedicated session rather than another patch.
 
-The spec side is now pinned: EIP-8347 (the conversion/snapshot EIP) merged the
-delegation and zero-chunk rules the rewrite has to satisfy — a delegated
-account takes a single `DELEGATION_LEAF_KEY` leaf with `code_size == 23`, no
-`code_hash` leaf and no chunks; an all-zero chunk MUST NOT be emitted; each
-code leaf MUST be emitted exactly once; and the dual-check verification
-re-derives a delegated account's `codeHash` from the delegation leaf.
+EIP-8347 has since merged the rules the rewrite must satisfy: a delegated
+account takes a single `DELEGATION_LEAF_KEY` leaf (`code_size == 23`, no
+`code_hash` leaf, no chunks), all-zero chunks are never emitted, and each
+code leaf is emitted exactly once.
 
 - **Its write pattern is inverted.** Every contract's chunks used to land in
   that contract's own header stem, so writes followed the account-hash
@@ -204,9 +202,8 @@ re-derives a delegated account's `codeHash` from the delegation leaf.
 
 ## Upstream geth disagrees with the merged EIP-8038 on five constants
 
-Upstream's #35454 ("update 2780 and 8038 parameters", merged 2026-08-04) got
-`TX_VALUE_COST` (6000, calls only) and `ACCESS_LIST_ADDRESS_COST` (2900)
-right, but kept draft-era values the merged EIP text does not carry:
+Upstream's #35454 (merged 2026-08-04) kept draft-era values the merged EIP
+text does not carry:
 
 | constant | upstream master | merged EIP-8038 |
 |---|---|---|
@@ -217,13 +214,10 @@ right, but kept draft-era values the merged EIP text does not carry:
 | `CREATE_ACCESS` | 11000, derived from COLD_STORAGE_ACCESS | **12000** = ACCOUNT_WRITE + COLD_ACCOUNT_ACCESS |
 | `ACCESS_LIST_STORAGE_KEY_COST` | 2900 | **2000** = COLD_STORAGE_ACCESS − WARM_ACCESS |
 
-This branch carries the EIP values, and every upstream sync will re-conflict
-on them until upstream updates. The evidence for the EIP side: the reference
-implementation prices identically, and the EEST binary-tree suite passes with
-geth both as consumer and as filler, byte-identical to the reference fills.
-With cold storage access below the reentrancy sentry, upstream's SSTORE
-boundary tests also assume arithmetic that no longer holds; ours are
-reworked. Report upstream when convenient.
+This branch carries the EIP values - the reference prices identically, and
+the EEST binary-tree suite passes byte-identical to the reference fills -
+so every upstream sync re-conflicts until upstream updates. Report upstream
+when convenient.
 
 ## Also deferred, for context
 
@@ -238,21 +232,14 @@ to look.
   bytecode and zero-collapsing chunks all reach a root that
   `TestStateVectors` compares against. What is still open is running the EEST
   fixtures themselves; see the harness blocker below.
-- **EEST fixtures run, with three deliberate gaps.** `execBlockTest` restricts
-  a PBT network to the path scheme, and the whole BinaryTree suite passes via
-  `consume direct` and the Go harness. Still open: the engine-format fixtures
-  (`blockchain_tests_engine`) need `consume engine` driving a live geth over
-  the Engine API, which the tree has no consume path for (see the catalyst
-  entry above); CI does not download binary-tree fixtures (needs a published
-  release from the EEST branch and a checksum in `build/ci.go`); and the
-  transaction-test fork list (`tests/transaction_test_util.go`) has no
-  `BinaryTree` entry, so any future PBT `transaction_tests` would pass
-  vacuously - extend the list the day the suite emits that format.
+- **EEST fixtures run, with three deliberate gaps.** The BinaryTree suite
+  passes via `consume direct` and the Go harness, path scheme only. Open:
+  engine-format fixtures need a `consume engine` path (see the catalyst
+  entry), CI does not download binary-tree fixtures, and the
+  transaction-test fork list has no `BinaryTree` entry.
 - **`evm statetest` hard-codes the hash scheme** (`cmd/evm/staterunner.go`),
-  which is harmless under PBT only because `RunNoVerify` ignores the scheme
-  argument on the PBT path and builds its own path-scheme prestate. A
-  scheme-sensitive change there would silently break binary-tree state tests;
-  this note pins the reasoning.
+  harmless only because `RunNoVerify` builds its own path-scheme prestate on
+  the PBT path.
 - **The encoded multiproof is malleable, though not unsound.** Sweeping every
   byte of an encoded proof and flipping it, most mutations are rejected, but a
   run of them still verify: 48 such offsets before this branch, 64 after, in

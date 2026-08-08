@@ -41,18 +41,9 @@ reproduces it exactly. That pins the *embedding* - key derivation, chunk
 placement, hashing - against the spec, while leaving the *execution* that
 produced the post-state geth's own, for the reason below.
 
-The two used to disagree on gas - this fork prices like Amsterdam in both
-projects, but geth carried draft-era values for the EIP-8038/EIP-2780
-repricing, so the sender's balance (and with it the root) was geth's own.
-Those schedules are aligned to the merged EIPs now, and the whole EEST
-binary-tree suite passes against geth, so the balances here are the gas both
-projects agree on.
-
-Both roots are now witnessed twice over: `TestT8n` executes the fixtures
-through geth, and feeding the resulting post-state through the reference's
-embedding reproduces the same root byte for byte. Fixture `../35` is stronger
-still - it carries no transactions, so the reference derives its root from
-the *input* allocation without executing anything.
+Gas agrees too: geth's draft-era EIP-8038/EIP-2780 values are gone, the
+merged schedules price this fork identically in both projects, and `TestT8n`
+must reproduce the root exactly.
 
 Reproducing the replay cross-check needs two things the reference requires and
 geth does not: transactions pre-signed with `v`/`r`/`s` rather than a

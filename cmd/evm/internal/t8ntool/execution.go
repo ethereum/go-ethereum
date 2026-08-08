@@ -526,9 +526,7 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) 
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
 	}
-	// Reopen at the committed root: a committed trie is spent, whichever
-	// tree backs it. Returning the committed statedb instead fails on the
-	// first trie write of the transition with "trie is already committed".
+	// A committed trie is spent; reopen at the committed root.
 	statedb, err = state.New(root, sdb)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to reopen state after commit: %v", err))
