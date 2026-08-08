@@ -38,11 +38,12 @@ import (
 // the zone byte first - and the preimage file's per-account records sort by
 // address.
 //
-// A duplicate key is an error, at Add time within the pending run and at
-// merge time across runs. Both uses key their records uniquely - a tree leaf
-// by its tree key, an account's preimage record by its address - so a
-// duplicate surviving to the sorter means two different sources claimed the
-// same record: corruption, not a coincidence to resolve silently.
+// A duplicate key is an error, at sort time within a run - sorting makes
+// duplicates adjacent - and at merge time across runs. Both uses key their
+// records uniquely - a tree leaf by its tree key, an account's preimage
+// record by its address - so a duplicate surviving to the sorter means two
+// different sources claimed the same record: corruption, not a coincidence
+// to resolve silently.
 type RecordSorter struct {
 	tmpDir    string
 	budget    int // bytes of buffered records that trigger a spill
@@ -104,7 +105,7 @@ func (s *RecordSorter) Add(key, value []byte) error {
 	if len(key) == 0 || len(key) > math.MaxUint8 {
 		return fmt.Errorf("bintrie: sorter keys must be 1 to 255 bytes, got %d", len(key))
 	}
-	if len(value) > math.MaxUint32 {
+	if uint64(len(value)) > math.MaxUint32 {
 		return fmt.Errorf("bintrie: sorter value of %d bytes exceeds the run encoding", len(value))
 	}
 	if s.validate != nil {
@@ -135,20 +136,25 @@ func (s *RecordSorter) spill() error {
 	if err != nil {
 		return err
 	}
+	// Until the run is registered, this function owns the file: an error
+	// removes it, or a failed spill on a full disk would leave a multi-GB
+	// orphan exactly where space just ran out.
+	discard := func(err error) error {
+		f.Close()
+		os.Remove(f.Name())
+		return err
+	}
 	w := bufio.NewWriterSize(f, 1<<20)
 	for _, rec := range s.pending {
 		if err := writeRunRecord(w, rec.key, rec.value); err != nil {
-			f.Close()
-			return err
+			return discard(err)
 		}
 	}
 	if err := w.Flush(); err != nil {
-		f.Close()
-		return err
+		return discard(err)
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		f.Close()
-		return err
+		return discard(err)
 	}
 	s.runs = append(s.runs, f)
 	s.pending = s.pending[:0]

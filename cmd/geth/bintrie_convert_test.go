@@ -352,7 +352,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 
 	// --force wipes the namespace, after which conversion must run and leave
 	// nothing of the debris behind.
-	if err := wipeBinaryTrieState(chaindb); err != nil {
+	if err := wipeBinaryTrieState(chaindb, ""); err != nil {
 		t.Fatalf("wipe failed: %v", err)
 	}
 	binRoot, err := convertState(chaindb, src, root, conversionOptions{})
@@ -526,7 +526,7 @@ func TestWipeRestoresVirginNamespace(t *testing.T) {
 	}
 	root1, snap1, pre1 := convert(t.TempDir())
 
-	if err := wipeBinaryTrieState(chaindb); err != nil {
+	if err := wipeBinaryTrieState(chaindb, ""); err != nil {
 		t.Fatalf("wipe failed: %v", err)
 	}
 	after := prefixKeys()

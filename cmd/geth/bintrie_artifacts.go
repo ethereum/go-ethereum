@@ -102,6 +102,11 @@ func (sw *snapshotWriter) finalize(root common.Hash) (common.Hash, error) {
 	if _, err := sw.f.WriteAt(header[:], 0); err != nil {
 		return common.Hash{}, err
 	}
+	// The digest is about to be reported as the file's identity; make sure
+	// the bytes it names are durable first.
+	if err := sw.f.Sync(); err != nil {
+		return common.Hash{}, err
+	}
 	if _, err := sw.f.Seek(0, io.SeekStart); err != nil {
 		return common.Hash{}, err
 	}
@@ -228,6 +233,11 @@ func (pf *preimageFile) write(path string) (common.Hash, error) {
 		}
 	}
 	if err := w.Flush(); err != nil {
+		return common.Hash{}, err
+	}
+	// The digest is about to be reported as the file's identity; make sure
+	// the bytes it names are durable first.
+	if err := f.Sync(); err != nil {
 		return common.Hash{}, err
 	}
 	var digest common.Hash

@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
+	"path/filepath"
 	"slices"
 	"time"
 
@@ -47,7 +49,7 @@ var (
 	}
 	memoryLimitFlag = &cli.Uint64Flag{
 		Name:  "memory-limit",
-		Usage: "Sort-buffer budget in MB before leaves spill to disk",
+		Usage: "Total sort-buffer budget in MB before records spill to disk",
 		Value: 4096,
 	}
 	tmpDirFlag = &cli.StringFlag{
@@ -111,7 +113,7 @@ every correct producer reproduces for the same anchor state.
 
 Flags:
   --delete-source    Delete MPT trie nodes once the conversion verifies
-  --memory-limit     Sort-buffer budget in MB before spilling (default: 4096)
+  --memory-limit     Total sort-buffer budget in MB before spilling (default: 4096)
   --tmpdir           Spill-file directory (default: the OS temp dir)
   --force            Wipe existing binary tree state first
   --snapshot-out     Write the PBT snapshot artifact to this file
@@ -150,11 +152,24 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	}
 	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
 
+	snapshotPath, preimagePath := ctx.String(snapshotOutFlag.Name), ctx.String(preimagesOutFlag.Name)
+	if snapshotPath != "" && snapshotPath == preimagePath {
+		return errors.New("--snapshot-out and --preimages-out must name different files")
+	}
+	if (snapshotPath == "") != (preimagePath == "") {
+		log.Warn("Emitting one distribution artifact without the other; EIP-8347 distributes the snapshot and the preimage file together")
+	}
+	// The budget travels as MB in a uint64; convert without wrapping the
+	// platform int.
+	budgetMB := ctx.Uint64(memoryLimitFlag.Name)
+	if budgetMB > math.MaxInt>>20 {
+		budgetMB = math.MaxInt >> 20
+	}
 	// Check the namespace before MakeTrieDatabase does: its guard fatals on a
 	// completed conversion without saying what to do about it, and misses the
 	// debris of an interrupted one entirely.
 	if ctx.Bool(forceConvertFlag.Name) {
-		if err := wipeBinaryTrieState(chaindb); err != nil {
+		if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
 			return fmt.Errorf("failed to wipe binary tree state: %w", err)
 		}
 	} else if dirty, err := hasBinaryTrieState(chaindb); err != nil {
@@ -166,10 +181,10 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	defer srcTriedb.Close()
 
 	binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{
-		sortBudget:   int(ctx.Uint64(memoryLimitFlag.Name)) * 1024 * 1024,
+		sortBudget:   int(budgetMB << 20),
 		tmpDir:       ctx.String(tmpDirFlag.Name),
-		snapshotPath: ctx.String(snapshotOutFlag.Name),
-		preimagePath: ctx.String(preimagesOutFlag.Name),
+		snapshotPath: snapshotPath,
+		preimagePath: preimagePath,
 	})
 	if err != nil {
 		return err
@@ -188,7 +203,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 
 // conversionOptions carries the tunables of a conversion run.
 type conversionOptions struct {
-	sortBudget   int    // bytes of buffered records before a sort spills
+	sortBudget   int    // total bytes of buffered records before the sorts spill
 	tmpDir       string // spill directory; empty means the OS temp dir
 	snapshotPath string // PBT snapshot artifact destination; empty writes none
 	preimagePath string // preimage file destination; empty writes none
@@ -253,7 +268,14 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	stats := &conversionStats{start: time.Now(), lastReport: time.Now()}
 
-	sorter := bintrie.NewLeafSorter(opts.tmpDir, opts.sortBudget)
+	// The budget is a total: when the preimage file's sorter runs alongside
+	// the leaf sorter through the scan, each gets half. (The verifier's
+	// sorter runs after both have drained, so it takes the whole budget.)
+	leafBudget := opts.sortBudget
+	if opts.preimagePath != "" {
+		leafBudget = opts.sortBudget / 2
+	}
+	sorter := bintrie.NewLeafSorter(opts.tmpDir, leafBudget)
 	defer sorter.Close()
 
 	// The distribution artifacts ride the pipeline: the snapshot writer taps
@@ -278,7 +300,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}()
 	}
 	if opts.preimagePath != "" {
-		preimages = newPreimageFile(opts.tmpDir, opts.sortBudget)
+		preimages = newPreimageFile(opts.tmpDir, opts.sortBudget-leafBudget)
 		defer preimages.close()
 	}
 	// Phase 1: scan the merkle state, deriving tree leaves into the sorter
@@ -287,6 +309,13 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, err
 	}
 	stats.report(true)
+
+	// An empty state derives no leaves and would finalize a zero root - the
+	// zero-root regime is real but pointless to support: no chain with a
+	// genesis converts to nothing.
+	if stats.leaves == 0 {
+		return common.Hash{}, errors.New("refusing to convert an empty state")
+	}
 
 	// Phase 2+3: sort and build. The builder emits each database record
 	// exactly once, children before parents, and the batch flushes on size.
@@ -459,9 +488,12 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 				if preimages != nil {
 					preimages.addSlot(slotKey)
 				}
-				_, content, _, err := rlp.Split(storageIter.Value)
+				_, content, rest, err := rlp.Split(storageIter.Value)
 				if err != nil {
 					return fmt.Errorf("invalid storage RLP for key %x (account %x): %w", slotKey, addr, err)
+				}
+				if len(rest) != 0 || len(content) > 32 {
+					return fmt.Errorf("malformed storage value for key %x (account %x)", slotKey, addr)
 				}
 				var padded [32]byte
 				copy(padded[32-len(content):], content)
@@ -603,8 +635,10 @@ func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 // wipeBinaryTrieState removes everything under the binary tree namespace so a
 // conversion can start over. Like the probe, it works family by family: the
 // namespace prefix is shared with block bodies, which a bare prefix sweep
-// would delete along with the tree.
-func wipeBinaryTrieState(chaindb ethdb.Database) error {
+// would delete along with the tree. The namespace is not only key-value: a
+// node that ran on a previous tree leaves history freezers in the ancient
+// directory and a journal file in triedbDir, so both are cleared too.
+func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	batch := pbtdb.NewBatch()
 	wiped := 0
@@ -632,6 +666,27 @@ func wipeBinaryTrieState(chaindb ethdb.Database) error {
 	}
 	if err := batch.Write(); err != nil {
 		return err
+	}
+	if ancient, err := chaindb.AncientDatadir(); err == nil {
+		for _, open := range []func(string, bool, bool) (ethdb.ResettableAncientStore, error){
+			rawdb.NewStateFreezer,
+			rawdb.NewTrienodeFreezer,
+		} {
+			store, err := open(ancient, true, false)
+			if err != nil {
+				return err
+			}
+			err = store.Reset()
+			store.Close()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if triedbDir != "" {
+		if err := os.Remove(filepath.Join(triedbDir, "pbt.journal")); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 	}
 	log.Info("Wiped binary tree state", "records", wiped)
 	return nil
@@ -702,7 +757,14 @@ func verifyConvertedState(chaindb ethdb.Database, root common.Hash) error {
 // consulted), so trie-side verification alone would bless a database that
 // reads as empty; this is the check that makes the attestation honest.
 func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) error {
-	sorter := bintrie.NewLeafSorter(opts.tmpDir, opts.sortBudget)
+	// The budget is a total: when the preimage file's sorter runs alongside
+	// the leaf sorter through the scan, each gets half. (The verifier's
+	// sorter runs after both have drained, so it takes the whole budget.)
+	leafBudget := opts.sortBudget
+	if opts.preimagePath != "" {
+		leafBudget = opts.sortBudget / 2
+	}
+	sorter := bintrie.NewLeafSorter(opts.tmpDir, leafBudget)
 	defer sorter.Close()
 
 	var (
@@ -799,10 +861,14 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 			slotIt.Release()
 			return err
 		}
-		_, content, _, err := rlp.Split(slotIt.Value())
+		_, content, rest, err := rlp.Split(slotIt.Value())
 		if err != nil {
 			slotIt.Release()
 			return fmt.Errorf("invalid flat storage value for key %x (account %x): %w", slotHash, lastAddr, err)
+		}
+		if len(rest) != 0 || len(content) > 32 {
+			slotIt.Release()
+			return fmt.Errorf("malformed flat storage value for key %x (account %x)", slotHash, lastAddr)
 		}
 		var padded [32]byte
 		copy(padded[32-len(content):], content)
