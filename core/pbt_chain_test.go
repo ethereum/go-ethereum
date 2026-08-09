@@ -30,39 +30,14 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// testPBTChainConfig is a proof-of-stake Amsterdam config with the binary
-// tree enabled, shared by the chain-level PBT tests in this package.
-var testPBTChainConfig = &params.ChainConfig{
-	ChainID:                 big.NewInt(1),
-	HomesteadBlock:          big.NewInt(0),
-	EIP150Block:             big.NewInt(0),
-	EIP155Block:             big.NewInt(0),
-	EIP158Block:             big.NewInt(0),
-	ByzantiumBlock:          big.NewInt(0),
-	ConstantinopleBlock:     big.NewInt(0),
-	PetersburgBlock:         big.NewInt(0),
-	IstanbulBlock:           big.NewInt(0),
-	MuirGlacierBlock:        big.NewInt(0),
-	BerlinBlock:             big.NewInt(0),
-	LondonBlock:             big.NewInt(0),
-	MergeNetsplitBlock:      big.NewInt(0),
-	Ethash:                  new(params.EthashConfig),
-	ShanghaiTime:            u64(0),
-	CancunTime:              u64(0),
-	PragueTime:              u64(0),
-	OsakaTime:               u64(0),
-	AmsterdamTime:           u64(0),
-	TerminalTotalDifficulty: common.Big0,
-	PBT:                     true,
-	DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
-	// Mirrors tests/init.go: upstream's blob schedule is BPO-based now.
-	BlobScheduleConfig: &params.BlobScheduleConfig{
-		Cancun: params.DefaultCancunBlobConfig,
-		Prague: params.DefaultPragueBlobConfig,
-		BPO1:   params.DefaultBPO1BlobConfig,
-		BPO2:   params.DefaultBPO2BlobConfig,
-	},
-}
+// testPBTChainConfig is MergedTestChainConfig with Amsterdam scheduled and
+// the binary tree committing the state.
+var testPBTChainConfig = func() *params.ChainConfig {
+	c := *params.MergedTestChainConfig
+	c.AmsterdamTime = u64(0)
+	c.PBT = true
+	return &c
+}()
 
 // pbtTestTxGas is the gas limit the transactions in these tests carry.
 //
