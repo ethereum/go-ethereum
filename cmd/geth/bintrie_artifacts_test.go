@@ -336,3 +336,85 @@ func TestArtifactGoldenDigests(t *testing.T) {
 	}
 	t.Fatal("the contract state vector is gone from the testdata")
 }
+
+// TestArtifactReaders pins the production readers against the writers: every
+// record accepted, counts and digests matching an independent hash of the
+// files, truncation and trailing bytes rejected.
+func TestArtifactReaders(t *testing.T) {
+	_, snapPath, prePath := convertWithArtifacts(t, artifactAlloc(), 0)
+
+	sr, err := openSnapshot(snapPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sr.close()
+	var leaves uint64
+	for {
+		if _, _, err := sr.next(); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatalf("snapshot reader rejected the writer's output: %v", err)
+		}
+		leaves++
+	}
+	if leaves != sr.count {
+		t.Fatalf("read %d leaves, header claims %d", leaves, sr.count)
+	}
+	blob, err := os.ReadFile(snapPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := sr.digest(), crypto.Keccak256Hash(blob); got != want {
+		t.Fatalf("snapshot digest %x, file hashes to %x", got, want)
+	}
+
+	pr, err := openPreimages(prePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pr.close()
+	accounts := 0
+	for {
+		if _, _, err := pr.next(); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatalf("preimage reader rejected the writer's output: %v", err)
+		}
+		accounts++
+	}
+	if accounts != len(artifactAlloc()) {
+		t.Fatalf("read %d preimage records, want %d", accounts, len(artifactAlloc()))
+	}
+	if blob, err = os.ReadFile(prePath); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := pr.digest(), crypto.Keccak256Hash(blob); got != want {
+		t.Fatalf("preimage digest %x, file hashes to %x", got, want)
+	}
+
+	// A trailing byte and a truncation must both reject.
+	for _, tamper := range []struct {
+		name string
+		mod  func([]byte) []byte
+	}{
+		{"trailing byte", func(b []byte) []byte { return append(b, 0x00) }},
+		{"truncated", func(b []byte) []byte { return b[:len(b)-1] }},
+	} {
+		bad := filepath.Join(t.TempDir(), "bad.bin")
+		if err := os.WriteFile(bad, tamper.mod(append([]byte{}, blob...)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		pr2, err := openPreimages(bad)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for {
+			if _, _, err := pr2.next(); err == io.EOF {
+				t.Fatalf("a %s preimage file was accepted", tamper.name)
+			} else if err != nil {
+				break
+			}
+		}
+		pr2.close()
+	}
+}
