@@ -42,9 +42,10 @@ const (
 	// dropping when no more peers can be added. Larger numbers result in more
 	// aggressive drop behavior.
 	peerDropThreshold = 0
-	// Fraction of inbound/dialed peers to protect per inclusion-based
-	// scoring category. The top inclusionProtectionFrac of each category
-	// (by score) are shielded from random dropping. 0.1 = top 10%.
+	// Fraction of inbound/dialed peers to protect per scoring category
+	// (inclusion and latency based). The top inclusionProtectionFrac of
+	// each category (by score) are shielded from random dropping.
+	// 0.1 = top 10%.
 	inclusionProtectionFrac = 0.1
 )
 
@@ -74,6 +75,22 @@ type protectionCategory struct {
 var protectionCategories = []protectionCategory{
 	{func(s peerstats.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac}, // Recent finalized
 	{func(s peerstats.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},  // Recent included
+	{func(s peerstats.PeerStats) float64 { // Request latency
+		// Low-latency peers rank higher. Eligibility requires a sustained
+		// rate of accepted-delivery samples (block-decayed EMA): scoring 0
+		// here lets the `score > 0` filter exclude peers whose EMA rests on
+		// too little, too old, or front-loaded evidence — eligibility
+		// expires on its own when the useful work stops. Peers whose EMA
+		// approaches the fetch timeout score tiny-but-positive via the
+		// reciprocal; per-pool top-N pushes faster peers ahead of them.
+		if s.LatencyActivity < peerstats.MinLatencyActivity {
+			return 0
+		}
+		if s.RequestLatencyEMA <= 0 {
+			return 0
+		}
+		return 1.0 / float64(s.RequestLatencyEMA)
+	}, inclusionProtectionFrac},
 }
 
 // dropper monitors the state of the peer pool and introduces churn by
@@ -92,10 +109,11 @@ var protectionCategories = []protectionCategory{
 //     tx-pool sources. Each pool (inbound/dialed) independently selects its
 //     top fraction of peers per scoring category — a slow EMA of finalized
 //     inclusions (~1-day half-life, rewards sustained long-term
-//     contribution) and a fast EMA of recent block inclusions (rewards
-//     current activity). The union of all protected sets is shielded from
-//     random dropping, and the drop target is chosen randomly from the
-//     remainder.
+//     contribution), a fast EMA of recent block inclusions (rewards
+//     current activity), and tx-request response latency (rewards fast
+//     useful responders, gated on a sustained accepted-delivery rate).
+//     The union of all protected sets is shielded from random dropping,
+//     and the drop target is chosen randomly from the remainder.
 type dropper struct {
 	maxDialPeers    int // maximum number of dialed peers
 	maxInboundPeers int // maximum number of inbound peers
