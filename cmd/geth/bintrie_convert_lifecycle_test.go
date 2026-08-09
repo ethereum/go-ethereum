@@ -259,6 +259,26 @@ func TestBintrieConvertDiskBacked(t *testing.T) {
 		destTriedb.Close()
 		chaindb.Close()
 	}
+
+	// A wipe on a freezer-backed database resets the PBT freezers and removes
+	// the journal file; re-conversion must reproduce the root.
+	chaindb = openDB()
+	if err := wipeBinaryTrieState(chaindb, filepath.Join(datadir, "triedb")); err != nil {
+		t.Fatalf("wipe failed on a freezer-backed database: %v", err)
+	}
+	src = triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.ReadOnly,
+	})
+	root2, err := convertState(chaindb, src, root, conversionOptions{tmpDir: datadir})
+	if err != nil {
+		t.Fatalf("re-conversion after wipe failed: %v", err)
+	}
+	if root2 != binRoot {
+		t.Fatalf("re-conversion produced root %x, first run %x", root2, binRoot)
+	}
+	src.Close()
+	chaindb.Close()
 }
 
 // TestConvertedBaseAcceptsCommits pins the handoff: the first live commit on
