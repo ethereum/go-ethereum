@@ -249,10 +249,10 @@ to look.
   encodings of one proof rather than a forged answer — but the encoding should
   be canonical before the multiproof carries a witness, or the same statement
   gets more than one wire form. The mechanism was not chased down.
-- **`StackBuilder`** (`trie/bintrie/stackbuilder.go`) has no production caller.
-  Its natural consumer is the offline conversion in `cmd/geth`, which still
-  inserts one stem at a time. Revisit when conversion is benchmarked; delete if
-  still unwired.
+- **The EIP-8347 consumer side is unimplemented.** `geth bintrie convert`
+  covers the producer only. Future work: a preimage-file input for nodes
+  without a local store (with the spec's step-2 two-way set match), snapshot
+  import, and the dual-check verifier.
 - **`UpdateAccountBatch`** has no production caller either, and unlike
   `StackBuilder` it is a trap rather than dead weight: its `delegations` slice
   has to be built alongside the code lengths, and an adopter passing nils

@@ -241,10 +241,21 @@ func attestFlatState(diskdb ethdb.Database, readOnly bool) error {
 	if rawdb.ReadPBTFlatState(diskdb) {
 		return nil
 	}
-	// No attestation. Anything already persisted was written while flat state
-	// was being discarded, so the store is incomplete by construction.
-	if rawdb.ReadPersistentStateID(diskdb) != 0 || len(rawdb.ReadAccountTrieNode(diskdb, nil)) != 0 {
-		return errors.New("binary tree database predates flat state and cannot be upgraded in place: resync required")
+	// No attestation, so anything already persisted - pre-flat-state data or
+	// a dead conversion's debris - is incomplete by construction. Probed per
+	// key family: the bare prefix is shared with block bodies.
+	for _, family := range rawdb.PBTKeyFamilies {
+		it := diskdb.NewIterator(family, nil)
+		dirty := it.Next()
+		err := it.Error()
+		it.Release()
+		if err != nil {
+			// Unreadable must not attest as fresh.
+			return fmt.Errorf("failed to probe the binary tree namespace: %w", err)
+		}
+		if dirty {
+			return errors.New("binary tree database predates flat state or holds an unfinished conversion: resync required")
+		}
 	}
 	if readOnly {
 		return errors.New("binary tree database has no flat state attestation and cannot be written in read-only mode")
