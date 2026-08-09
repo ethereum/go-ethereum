@@ -809,9 +809,9 @@ func TestAuthIntrinsicBaseOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The recipient touch and the per-authorization authority access (priced
-	// into RegularPerAuthBaseCost) are both charged at the cold rate
+	// into ExecutionPerAuthBaseCost) are both charged at the cold rate
 	// unconditionally at the intrinsic phase (EIP-2780).
-	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + params.RegularPerAuthBaseCost
+	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + params.ExecutionPerAuthBaseCost
 	if cost != want {
 		t.Fatalf("intrinsic gas = %d, want %d", cost, want)
 	}

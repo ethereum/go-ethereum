@@ -307,14 +307,14 @@ func TestIntrinsicGas(t *testing.T) {
 			isEIP2028:   true,
 			isAmsterdam: true,
 			// EIP-2780: the recipient touch and the per-authorization authority
-			// access (priced into RegularPerAuthBaseCost) are both charged at the
+			// access (priced into ExecutionPerAuthBaseCost) are both charged at the
 			// cold rate unconditionally at the intrinsic phase; the account leaf
 			// and indicator bytes are charged at runtime.
 			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
 				100*params.TxDataNonZeroGasEIP2028 +
 				1*params.TxAccessListAddressGasAmsterdam + 1*params.TxAccessListStorageKeyGasAmsterdam +
 				1*amsterdamAddressCost + 1*amsterdamStorageKeyCost +
-				1*params.RegularPerAuthBaseCost,
+				1*params.ExecutionPerAuthBaseCost,
 		},
 		{
 			name:        "amsterdam/value-transfer-call",

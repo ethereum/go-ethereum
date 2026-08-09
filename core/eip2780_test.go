@@ -95,7 +95,7 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			// Each authorization adds the state-independent per-auth base
 			// (cold authority access included).
 			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
-				params.TxValueCost2780 + 3*params.RegularPerAuthBaseCost,
+				params.TxValueCost2780 + 3*params.ExecutionPerAuthBaseCost,
 		},
 	}
 	for _, tc := range cases {
@@ -404,7 +404,7 @@ func TestEIP2780RecipientOOG(t *testing.T) {
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
 	recipient := common.HexToAddress("0xbeef000000000000000000000000000000000004")
 	intrinsic := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
-		params.TxValueCost2780 + params.RegularPerAuthBaseCost
+		params.TxValueCost2780 + params.ExecutionPerAuthBaseCost
 	// The reservoir case needs a near-cap intrinsic cost. This leaves just
 	// enough total budget for the authorization but not for the recipient leaf.
 	const (
@@ -667,7 +667,7 @@ func TestEIP2780InstallDispatch(t *testing.T) {
 	const (
 		base     = params.TxBaseCost2780
 		cold     = params.ColdAccountAccessAmsterdam
-		perAuth  = params.RegularPerAuthBaseCost
+		perAuth  = params.ExecutionPerAuthBaseCost
 		valueCst = params.TxValueCost2780
 	)
 	auth, authority := signAuth(t, authKeyA, delegate8037, 0)
@@ -977,7 +977,7 @@ func TestEIP2780AuthorityAccountWrite(t *testing.T) {
 		base     = params.TxBaseCost2780
 		cold     = params.ColdAccountAccessAmsterdam
 		aw       = params.AccountWriteAmsterdam
-		perAuth  = params.RegularPerAuthBaseCost
+		perAuth  = params.ExecutionPerAuthBaseCost
 		valueCst = params.TxValueCost2780
 	)
 	existingEOA := common.HexToAddress("0xe0a0000000000000000000000000000000000002")
@@ -1115,7 +1115,7 @@ func TestEIP2780DelegationTargetPrewarmed(t *testing.T) {
 		cold    = params.ColdAccountAccessAmsterdam
 		warm    = params.WarmAccountAccessAmsterdam
 		aw      = params.AccountWriteAmsterdam
-		perAuth = params.RegularPerAuthBaseCost
+		perAuth = params.ExecutionPerAuthBaseCost
 	)
 	delegatedAcct := common.HexToAddress("0xde1e000000000000000000000000000000000002")
 
