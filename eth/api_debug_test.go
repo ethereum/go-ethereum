@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -367,6 +368,95 @@ func TestExecutionWitnessMissingBlock(t *testing.T) {
 	missing := rpc.BlockNumberOrHashWithHash(common.HexToHash("0xdeadbeef"), false)
 	_, err := api.ExecutionWitness(missing)
 	assert.Error(t, err, "expected an error for a missing block, got nil")
+}
+
+func TestGetModifiedAccountsIncludesDeletedAccounts(t *testing.T) {
+	t.Parallel()
+
+	accounts := newAccounts(3)
+	victim := common.HexToAddress("0x000000000000000000000000000000000000dEaD")
+	beneficiary := accounts[2].addr
+
+	// Use a pre-Shanghai chain so SELFDESTRUCT removes the victim account.
+	code := append([]byte{byte(vm.PUSH20)}, beneficiary.Bytes()...)
+	code = append(code, byte(vm.SELFDESTRUCT))
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+			victim:           {Balance: big.NewInt(12345), Code: code},
+		},
+	}
+	signer := types.HomesteadSigner{}
+	blockChain := newTestBlockChain(t, 1, genesis, func(_ int, b *core.BlockGen) {
+		destroy, err := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce: 0, To: &victim, Gas: 100_000, GasPrice: b.BaseFee(),
+		}), signer, accounts[0].key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.AddTx(destroy)
+
+		// Modify an account that remains in the trie as a positive control.
+		modify, err := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce: 0, To: &beneficiary, Value: big.NewInt(1000),
+			Gas: params.TxGas, GasPrice: b.BaseFee(),
+		}), signer, accounts[1].key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.AddTx(modify)
+	})
+	defer blockChain.Stop()
+
+	start := blockChain.GetHeaderByNumber(0)
+	end := blockChain.GetHeaderByNumber(1)
+	oldState, err := blockChain.StateAt(start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newState, err := blockChain.StateAt(end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !oldState.Exist(victim) || newState.Exist(victim) {
+		t.Fatalf("fixture did not create an old-only account")
+	}
+
+	api := NewDebugAPI(&Ethereum{blockchain: blockChain})
+	endNumber := uint64(1)
+	startHash, endHash := start.Hash(), end.Hash()
+	tests := map[string]func() ([]common.Address, error){
+		"GetModifiedAccountsByNumber": func() ([]common.Address, error) {
+			return api.GetModifiedAccountsByNumber(0, &endNumber)
+		},
+		"GetModifiedAccountsByHash": func() ([]common.Address, error) {
+			return api.GetModifiedAccountsByHash(startHash, &endHash)
+		},
+	}
+	for name, getModified := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := getModified()
+			if err != nil {
+				t.Fatal(err)
+			}
+			seen := make(map[common.Address]struct{}, len(got))
+			for _, address := range got {
+				if _, ok := seen[address]; ok {
+					t.Fatalf("duplicate account %s in modified accounts: %v", address, got)
+				}
+				seen[address] = struct{}{}
+			}
+			if !slices.Contains(got, beneficiary) {
+				t.Fatalf("surviving modified account %s not found: %v", beneficiary, got)
+			}
+			if !slices.Contains(got, victim) {
+				t.Fatalf("deleted account %s not found: %v", victim, got)
+			}
+		})
+	}
 }
 
 func TestDebugAPI_ClearTxpool(t *testing.T) {
