@@ -19,14 +19,21 @@
 //
 // The package is a passive accumulator: it exposes entry points for its
 // signal producers (txtracker for inclusion/finalization, the handler for
-// peer-drop cleanup) and a read-only snapshot for its consumer (the
+// peer lifecycle) and a read-only snapshot for its consumer (the
 // dropper). It has no goroutine of its own — all mutation is serialized
 // by a single mutex.
 //
+// Peer lifecycle is explicit: an entry exists only between NotifyPeerConnect
+// and NotifyPeerDrop. Every other signal updates an existing entry and is
+// ignored for unknown peers, so a signal that races in after a disconnect (or
+// that names a peer which delivered txs before disconnecting) cannot create or
+// resurrect an entry. This bounds the map to currently-connected peers with no
+// separate sweep.
+//
 // Signal sources:
+//   - NotifyPeerConnect(peer) / NotifyPeerDrop(peer) — lifecycle, from the handler
 //   - NotifyBlock(inclusions, finalized) — per-block deltas from txtracker
 //     (computed under txtracker's own lock, then passed in after release)
-//   - NotifyPeerDrop(peer) — disconnect cleanup, from the handler
 package peerstats
 
 import (
@@ -67,15 +74,24 @@ func New() *Stats {
 	return &Stats{peers: make(map[string]*peerStats)}
 }
 
-// NotifyBlock ingests a per-block update. `inclusions` is the count of the
-// head block's transactions attributed to each peer, `finalized` the
-// per-peer credits accumulated since the last call.
-//
-// A peer with a positive inclusion delta gets a stats entry on first
-// sight — this is the path by which peerstats learns about a peer.
-// Finalization credits for unknown peers are ignored: they may have been
-// removed by NotifyPeerDrop and must not be resurrected from historical
-// data. Tracked peers absent from a delta map decay with a zero sample.
+// NotifyPeerConnect registers a peer so its subsequent signals are tracked.
+// It is the only path that creates an entry; every other signal updates an
+// existing one. Idempotent — re-registering a tracked peer keeps its stats.
+func (s *Stats) NotifyPeerConnect(peer string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.peers[peer] == nil {
+		s.peers[peer] = &peerStats{}
+	}
+}
+
+// NotifyBlock ingests a per-block update. `inclusions` is the count of the head
+// block's transactions attributed to each peer, `finalized` the per-peer
+// credits accumulated since the last call. Both only ever update entries for
+// currently-registered (connected) peers; a delta naming an unknown peer is
+// ignored, so a tx delivered before a peer disconnected cannot resurrect its
+// entry once dropped. Registered peers absent from a delta map decay with a
+// zero sample.
 //
 // NotifyBlock must NOT be called while the caller holds any other lock that
 // could be acquired by peerstats callers in reverse order. Current callers
@@ -84,23 +100,19 @@ func (s *Stats) NotifyBlock(inclusions, finalized map[string]int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Ensure a stats entry exists for any peer that just had an inclusion.
-	for peer, count := range inclusions {
-		if count > 0 && s.peers[peer] == nil {
-			s.peers[peer] = &peerStats{}
-		}
-	}
-	// Update inclusion and finalization EMAs for every tracked peer. A
+	// Update inclusion and finalization EMAs for every registered peer. A
 	// peer not present in the respective delta map gets a 0 contribution
-	// — pure decay.
+	// — pure decay. Deltas for unregistered peers are ignored entirely.
 	for peer, ps := range s.peers {
 		ps.recentIncluded = (1-emaAlpha)*ps.recentIncluded + emaAlpha*float64(inclusions[peer])
 		ps.recentFinalized = (1-finalizedEMAAlpha)*ps.recentFinalized + finalizedEMAAlpha*float64(finalized[peer])
 	}
 }
 
-// NotifyPeerDrop removes a disconnected peer's stats to prevent unbounded
-// growth. Safe to call from any goroutine.
+// NotifyPeerDrop removes a peer's stats on disconnect. Since every other
+// signal only updates existing entries, a stray signal racing in after this
+// deletion is ignored rather than recreating an orphan, so the map stays
+// bounded to currently-connected peers with no separate sweep.
 func (s *Stats) NotifyPeerDrop(peer string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
