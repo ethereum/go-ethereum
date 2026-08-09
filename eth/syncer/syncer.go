@@ -109,6 +109,7 @@ func (s *Syncer) run() {
 				resync  bool
 				retries int
 				logged  bool
+				header  *types.Header
 			)
 			for {
 				if retries >= 10 {
@@ -122,7 +123,7 @@ func (s *Syncer) run() {
 				default:
 				}
 
-				header, err := s.backend.Downloader().GetHeader(req.hash)
+				h, err := s.backend.Downloader().GetHeader(req.hash)
 				if err != nil {
 					if !logged {
 						logged = true
@@ -132,19 +133,27 @@ func (s *Syncer) run() {
 					retries++
 					continue
 				}
-				if target != nil && header.Number.Cmp(target.Number) <= 0 {
-					req.errc <- fmt.Errorf("stale sync target, current: %d, received: %d", target.Number, header.Number)
+				if target != nil && h.Number.Cmp(target.Number) <= 0 {
+					req.errc <- fmt.Errorf("stale sync target, current: %d, received: %d", target.Number, h.Number)
 					break
 				}
-				target = header
+				header = h
 				resync = true
 				break
 			}
 			if resync {
 				if mode := s.backend.Downloader().ConfigSyncMode(); mode != ethconfig.FullSync {
 					req.errc <- fmt.Errorf("unsupported syncmode %v, please relaunch geth with --syncmode full", mode)
+				} else if err := s.backend.Downloader().BeaconDevSync(header); err != nil {
+					req.errc <- err
 				} else {
-					req.errc <- s.backend.Downloader().BeaconDevSync(target)
+					// Install the target only after the sync request has been
+					// accepted by the downloader. Installing it earlier would
+					// leave the target behind even for a rejected request, and
+					// any retry of the same target would then be refused by the
+					// stale-target check above although no sync ever started.
+					target = header
+					req.errc <- nil
 				}
 			}
 
