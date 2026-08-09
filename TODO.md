@@ -235,14 +235,19 @@ Removed as already pinned (verified against the suite at `8d258bc1d`):
 - `core/state.TestPBTZeroIsAbsence` — `test_storage_ops.py` pins both arms
   end-to-end.
 
-Scheduled for the same treatment once the EEST port PR lands:
-`core.TestProcessParentBlockHash` (EIP-2935 ring buffer) and
-`core/state.TestPBTCodeShrink` (delegation-clear; its leaf probes stay in
-`TestPBTCodeSizeWrites` and the model suite).
+Scheduled for the same treatment: `core.TestProcessParentBlockHash` once the
+EEST port PR (its 2935 fixture) lands, and `core/state.TestPBTCodeShrink` —
+the clear is pinned upstream by `test_delegation_clearing`
+(`valid_from("Prague")`, fills under BinaryTree; 63 filled / 42 consumed
+green), so it waits only on the widened loop below. Leaf probes stay in
+`TestPBTCodeSizeWrites` and the model suite.
 
-Coverage stays manual by decision: fill and consume per the loop in the PR
-description. Reorgs cannot be expressed as fixtures at all — the EEST `Block`
-model has no sidechain mechanism — so the reorg tests stay native regardless.
+Coverage stays manual by decision: fill `tests/binary_tree/` plus
+`tests/prague/eip7702_set_code_tx -k "delegation_clearing or
+ext_code_on_set_code"` at `--fork=BinaryTree` (or the whole tree via
+`just binary-trie-fork tests`), then consume per the PR description. Reorgs
+cannot be expressed as fixtures at all — the EEST `Block` model has no
+sidechain mechanism — so the reorg tests stay native regardless.
 
 ## Also deferred, for context
 
