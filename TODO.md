@@ -165,7 +165,59 @@ Until then the divergence is real but narrow: it needs an account with deployed
 code to be deleted, which post-EIP-6780 means created and destroyed inside one
 transaction.
 
+## The MPT→PBT converter needs rewriting, not patching
+
+`cmd/geth/bintrie_convert.go` was built for a layout that no longer exists, and
+the move of code into the content-addressed zone invalidated its central
+assumption rather than shifting a constant. It still converts, so this is not
+urgent — but it should get a dedicated session rather than another patch.
+
+EIP-8347 has since merged the rules the rewrite must satisfy: a delegated
+account takes a single `DELEGATION_LEAF_KEY` leaf (`code_size == 23`, no
+`code_hash` leaf, no chunks), all-zero chunks are never emitted, and each
+code leaf is emitted exactly once.
+
+- **Its write pattern is inverted.** Every contract's chunks used to land in
+  that contract's own header stem, so writes followed the account-hash
+  iteration order the loop is built around. They now scatter into `CODE_ZONE`
+  stems keyed by `KeyHash(code_hash ‖ tree_index)`, interleaved with a
+  commit-and-reload every 1000 accounts (`runConversionLoop`) or on memory
+  pressure (`maybeCommit`). The locality that made those flushes cheap is gone.
+- **Deduplication is now the common case.** Identical bytecode shares leaves
+  from chunk 0 rather than only past chunk 128, so the converter rewrites the
+  same chunks once per holder and the output is smaller than it plans for.
+  Neither is accounted for.
+- **Delegation is handled by a patch rather than by design.** A delegated
+  account in the merkle source is a 23-byte code blob and has to become a
+  header leaf rather than chunks ([EIP #12114]), or converted state disagrees
+  with replayed state. The loop now recognises the designator inline, which
+  fixes it without giving the converter any notion of the distinction — and
+  nothing checks the result, for the reason below.
+- **Nothing would catch any of that.** `bintrie_convert_test.go` reads back
+  through `GetAccount`/`StorageSlotKey` and asserts no root and no leaf counts.
+  The rewrite's first job is the test that is missing: convert a fixture and
+  compare its root against replaying the equivalent transactions.
+
 [EIP #12114]: https://github.com/ethereum/EIPs/pull/12114
+
+## Upstream geth disagrees with the merged EIP-8038 on five constants
+
+Upstream's #35454 (merged 2026-08-04) kept draft-era values the merged EIP
+text does not carry:
+
+| constant | upstream master | merged EIP-8038 |
+|---|---|---|
+| `ACCOUNT_WRITE` | 8000 | **9000** |
+| `CALL_VALUE` | 10300 | **11300** |
+| `COLD_STORAGE_ACCESS` | 3000 | **2100** (unchanged from EIP-2929) |
+| `STORAGE_CLEAR_REFUND` | 12480 | **11616** = (STORAGE_WRITE + COLD_STORAGE_ACCESS) × 4800/5000 |
+| `CREATE_ACCESS` | 11000, derived from COLD_STORAGE_ACCESS | **12000** = ACCOUNT_WRITE + COLD_ACCOUNT_ACCESS |
+| `ACCESS_LIST_STORAGE_KEY_COST` | 2900 | **2000** = COLD_STORAGE_ACCESS − WARM_ACCESS |
+
+This branch carries the EIP values - the reference prices identically, and
+the EEST binary-tree suite passes byte-identical to the reference fills -
+so every upstream sync re-conflicts until upstream updates. Report upstream
+when convenient.
 
 ## Also deferred, for context
 
@@ -180,13 +232,14 @@ to look.
   bytecode and zero-collapsing chunks all reach a root that
   `TestStateVectors` compares against. What is still open is running the EEST
   fixtures themselves; see the harness blocker below.
-- **One harness blocker before EEST fixtures can run.** `execBlockTest`
-  (`tests/block_test.go`) runs every fixture under both the hash and path
-  schemes, and the binary tree hard-fails on anything but path. It also always
-  requests witness building, which used to be a second blocker; the tree
-  supports that now.
-- **`TestT8n`** fails on the binary tree fixtures because the prestate is
-  reopened with an already-committed trie. Out of scope by instruction.
+- **EEST fixtures run, with three deliberate gaps.** The BinaryTree suite
+  passes via `consume direct` and the Go harness, path scheme only. Open:
+  engine-format fixtures need a `consume engine` path (see the catalyst
+  entry), CI does not download binary-tree fixtures, and the
+  transaction-test fork list has no `BinaryTree` entry.
+- **`evm statetest` hard-codes the hash scheme** (`cmd/evm/staterunner.go`),
+  harmless only because `RunNoVerify` builds its own path-scheme prestate on
+  the PBT path.
 - **The encoded multiproof is malleable, though not unsound.** Sweeping every
   byte of an encoded proof and flipping it, most mutations are rejected, but a
   run of them still verify: 48 such offsets before this branch, 64 after, in

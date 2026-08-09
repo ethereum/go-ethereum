@@ -483,8 +483,3 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 
 	return out
 }
-
-// transitionStateKey = transitionStatusKey + hash
-func transitionStateKey(hash common.Hash) []byte {
-	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
-}
