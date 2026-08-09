@@ -586,3 +586,55 @@ func TestAccessListApplicationDestroyExisting(t *testing.T) {
 			account.Balance, account.Nonce, account.CodeHash)
 	}
 }
+
+// TestAccessListApplicationAccountRead verifies that an account which the block
+// only accessed, without changing its balance, nonce or code, is left alone in
+// the flat state. Notably an account that is empty by the EIP-161 definition,
+// yet still part of the state through its storage, must not be mistaken for
+// one the block has drained and be deleted.
+func TestAccessListApplicationAccountRead(t *testing.T) {
+	t.Parallel()
+	db := rawdb.NewMemoryDatabase()
+	syncer := newSyncerV2(db, rawdb.HashScheme)
+	addr := common.HexToAddress("0x06")
+	accountHash := crypto.Keccak256Hash(addr[:])
+
+	// Zero nonce, zero balance and no code, only kept alive by its storage.
+	original := types.StateAccount{
+		Nonce:    0,
+		Balance:  uint256.NewInt(0),
+		Root:     common.HexToHash("0xbeef"),
+		CodeHash: types.EmptyCodeHash[:],
+	}
+	rawdb.WriteAccountSnapshot(db, accountHash, types.SlimAccountRLP(original))
+
+	// The block reads the account and one of its slots, changing neither.
+	cb := bal.NewConstructionBlockAccessList()
+	cb.AccountRead(addr)
+	cb.StorageRead(addr, common.HexToHash("0xaa"))
+	b := buildTestBAL(t, cb)
+
+	// The application must not produce any database write at all.
+	batch := db.NewBatch()
+	if err := syncer.applyAccessList(b, batch); err != nil {
+		t.Fatalf("applyAccessList failed: %v", err)
+	}
+	if batch.ValueSize() != 0 {
+		t.Errorf("read-only access produced database writes: %d bytes", batch.ValueSize())
+	}
+	if err := batch.Write(); err != nil {
+		t.Fatalf("failed to commit BAL batch: %v", err)
+	}
+	data := rawdb.ReadAccountSnapshot(db, accountHash)
+	if len(data) == 0 {
+		t.Fatal("account read by the block was deleted from flat state")
+	}
+	if !bytes.Equal(data, types.SlimAccountRLP(original)) {
+		account, err := types.FullAccount(data)
+		if err != nil {
+			t.Fatalf("failed to decode account: %v", err)
+		}
+		t.Errorf("account read by the block was modified: balance=%v, nonce=%d, codeHash=%x, root=%v",
+			account.Balance, account.Nonce, account.CodeHash, account.Root)
+	}
+}

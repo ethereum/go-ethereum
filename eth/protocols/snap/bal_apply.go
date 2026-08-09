@@ -124,6 +124,20 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) er
 		if !s.isFetched(accountHash) {
 			continue
 		}
+		// Skip the account update if the block didn't change the account
+		// metadata (balance, nonce, code), mirroring the read-only skip in
+		// the canonical access list application (see applyBlockAccessList
+		// in core/state). Access lists also enumerate addresses that were
+		// only read and accounts with pure storage changes (e.g. system
+		// contracts), so rewriting the unchanged entry every block is
+		// wasted work. Worse, an account that is empty by the EIP-161
+		// definition yet still present in the state would be misclassified
+		// below as drained by the block and deleted. No such account can
+		// exist on mainnet (see EIP-7523), but the flat state must not
+		// invent deletions the access list doesn't express.
+		if len(access.BalanceChanges) == 0 && len(access.NonceChanges) == 0 && len(access.CodeChanges) == 0 {
+			continue
+		}
 		// Read the existing account from flat state (may not exist yet)
 		var (
 			account types.StateAccount
