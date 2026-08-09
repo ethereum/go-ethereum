@@ -422,27 +422,31 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
+	rules := bc.chainConfig.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
 	if bc.chainConfig.IsUBT(header.Number, header.Time) {
-		return state.New(header.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
+		return state.New(header.Root, state.NewUBTDatabase(bc.triedb, bc.codedb), rules)
 	}
-	return state.New(header.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
+	return state.New(header.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps), rules)
 }
 
 // StateAtForkBoundary returns a new mutable state based on the parent state
 // and the given header, handling the transition across the UBT fork.
 func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.Header) (*state.StateDB, error) {
+	// The rules are those of the block about to be executed
+	rules := bc.chainConfig.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
+
 	// The parent is already in the UBT fork.
 	if bc.chainConfig.IsUBT(parent.Number, parent.Time) {
-		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
+		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb), rules)
 	}
 	// The current block is the first block in the UBT fork
 	// (i.e., the parent is the last MPT block).
 	if bc.chainConfig.IsUBT(header.Number, header.Time) {
 		// TODO(gballet): register chain context if needed
-		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
+		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb), rules)
 	}
 	// Both the parent and current block are in the MPT fork.
-	return state.New(parent.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
+	return state.New(parent.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps), rules)
 }
 
 // HistoricState returns a historic state specified by the given header.
@@ -452,7 +456,7 @@ func (bc *BlockChain) HistoricState(header *types.Header) (*state.StateDB, error
 	if bc.chainConfig.IsUBT(header.Number, header.Time) {
 		return nil, errors.New("historical state over ubt is not yet supported")
 	}
-	return state.New(header.Root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
+	return state.New(header.Root, state.NewHistoricDatabase(bc.triedb, bc.codedb), bc.chainConfig.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time))
 }
 
 // Config retrieves the chain's fork configuration.

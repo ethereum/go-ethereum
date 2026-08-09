@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
@@ -34,7 +35,7 @@ type stateEnv struct {
 }
 
 func newStateEnv() *stateEnv {
-	sdb, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	sdb, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 	return &stateEnv{state: sdb}
 }
 
@@ -42,7 +43,7 @@ func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
 	tdb := NewDatabase(triedb, nil)
-	sdb, _ := New(types.EmptyRootHash, tdb)
+	sdb, _ := New(types.EmptyRootHash, tdb, params.Rules{})
 	s := &stateEnv{state: sdb}
 
 	// generate a few entries
@@ -54,10 +55,10 @@ func TestDump(t *testing.T) {
 	obj3.SetBalance(uint256.NewInt(44))
 
 	// write some of them to the trie
-	root, _ := s.state.Commit(0, false, false)
+	root, _ := s.state.Commit(0)
 
 	// check that DumpToCollector contains the state objects that are in trie
-	s.state, _ = New(root, tdb)
+	s.state, _ = New(root, tdb, params.Rules{})
 	got := string(s.state.Dump(nil))
 	want := `{
     "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
@@ -98,7 +99,7 @@ func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
 	tdb := NewDatabase(triedb, nil)
-	sdb, _ := New(types.EmptyRootHash, tdb)
+	sdb, _ := New(types.EmptyRootHash, tdb, params.Rules{})
 	s := &stateEnv{state: sdb}
 
 	// generate a few entries
@@ -112,8 +113,8 @@ func TestIterativeDump(t *testing.T) {
 	obj4.AddBalance(uint256.NewInt(1337))
 
 	// write some of them to the trie
-	root, _ := s.state.Commit(0, false, false)
-	s.state, _ = New(root, tdb)
+	root, _ := s.state.Commit(0)
+	s.state, _ = New(root, tdb, params.Rules{})
 
 	b := &bytes.Buffer{}
 	s.state.IterativeDump(nil, json.NewEncoder(b))
@@ -138,7 +139,7 @@ func TestNull(t *testing.T) {
 	var value common.Hash
 
 	s.state.SetState(address, common.Hash{}, value)
-	s.state.Commit(0, false, false)
+	s.state.Commit(0)
 
 	if value := s.state.GetState(address, common.Hash{}); value != (common.Hash{}) {
 		t.Errorf("expected empty current value, got %x", value)
@@ -189,7 +190,7 @@ func TestSnapshotEmpty(t *testing.T) {
 }
 
 func TestCreateObjectRevert(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 	addr := common.BytesToAddress([]byte("so0"))
 	snap := state.Snapshot()
 

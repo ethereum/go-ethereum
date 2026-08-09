@@ -115,10 +115,12 @@ func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, st
 func TestAccountRange(t *testing.T) {
 	t.Parallel()
 
+	// These states are only dumped/ranged over, never used to finalise a state
+	// transition, so the fork rules do not matter (same for the ones below).
 	var (
 		mdb     = rawdb.NewMemoryDatabase()
 		statedb = state.NewDatabase(triedb.NewDatabase(mdb, &triedb.Config{Preimages: true}), nil)
-		sdb, _  = state.New(types.EmptyRootHash, statedb)
+		sdb, _  = state.New(types.EmptyRootHash, statedb, params.Rules{})
 		addrs   = [AccountRangeMaxResults * 2]common.Address{}
 		m       = map[common.Address]bool{}
 	)
@@ -134,8 +136,8 @@ func TestAccountRange(t *testing.T) {
 			m[addr] = true
 		}
 	}
-	root, _ := sdb.Commit(0, true, false)
-	sdb, _ = state.New(root, statedb)
+	root, _ := sdb.Commit(0)
+	sdb, _ = state.New(root, statedb, params.Rules{})
 
 	trie, err := statedb.OpenTrie(root)
 	if err != nil {
@@ -189,11 +191,11 @@ func TestEmptyAccountRange(t *testing.T) {
 
 	var (
 		statedb = state.NewDatabaseForTesting()
-		st, _   = state.New(types.EmptyRootHash, statedb)
+		st, _   = state.New(types.EmptyRootHash, statedb, params.Rules{})
 	)
 	// Commit(although nothing to flush) and re-init the statedb
-	st.Commit(0, true, false)
-	st, _ = state.New(types.EmptyRootHash, statedb)
+	st.Commit(0)
+	st, _ = state.New(types.EmptyRootHash, statedb, params.Rules{})
 
 	results := st.RawDump(&state.DumpConfig{
 		SkipCode:          true,
@@ -217,7 +219,7 @@ func TestStorageRangeAt(t *testing.T) {
 		mdb    = rawdb.NewMemoryDatabase()
 		tdb    = triedb.NewDatabase(mdb, &triedb.Config{Preimages: true})
 		db     = state.NewDatabase(tdb, nil)
-		sdb, _ = state.New(types.EmptyRootHash, db)
+		sdb, _ = state.New(types.EmptyRootHash, db, params.Rules{})
 		addr   = common.Address{0x01}
 		keys   = []common.Hash{ // hashes of Keys of storage
 			common.HexToHash("340dd630ad21bf010b4e676dbfa9ba9a02175262d1fa356232cfde6cb5b47ef2"),
@@ -235,8 +237,8 @@ func TestStorageRangeAt(t *testing.T) {
 	for _, entry := range storage {
 		sdb.SetState(addr, *entry.Key, entry.Value)
 	}
-	root, _ := sdb.Commit(0, false, false)
-	sdb, _ = state.New(root, db)
+	root, _ := sdb.Commit(0)
+	sdb, _ = state.New(root, db, params.Rules{})
 
 	// Check a few combinations of limit and start/end.
 	tests := []struct {

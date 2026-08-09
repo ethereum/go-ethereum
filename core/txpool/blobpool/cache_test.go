@@ -80,11 +80,13 @@ func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 	}
 	store.Close()
 
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	// The pool only reads accounts from this state; it never finalises a state
+	// transition, so the fork rules are irrelevant here (and below).
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), params.Rules{})
 	for _, a := range addrs {
 		statedb.AddBalance(a, uint256.NewInt(1_000_000_000_000), tracing.BalanceChangeUnspecified)
 	}
-	statedb.Commit(0, true, false)
+	statedb.Commit(0)
 
 	cancunTime := uint64(0)
 	config := &params.ChainConfig{

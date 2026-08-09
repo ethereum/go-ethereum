@@ -253,7 +253,7 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorEVM, errors.New("UBT alloc recorder was not enabled"))
 		}
 		collector = Alloc(rec.Alloc())
-		if err := mergeUnmigratedBaseAlloc(udb, s.IntermediateRoot(false), collector); err != nil {
+		if err := mergeUnmigratedBaseAlloc(udb, s.IntermediateRoot(), collector); err != nil {
 			return NewError(ErrorEVM, fmt.Errorf("failed to merge base MPT alloc: %v", err))
 		}
 	}
@@ -269,7 +269,8 @@ func mergeUnmigratedBaseAlloc(udb *state.UBTDatabase, currentRoot common.Hash, d
 		return nil
 	}
 	mptDB := state.NewMPTDatabase(udb.TrieDB(), nil)
-	sdb, err := state.New(ts.BaseRoot, mptDB)
+	// Read-only walk of the base trie, no state transition is finalised here.
+	sdb, err := state.New(ts.BaseRoot, mptDB, params.Rules{})
 	if err != nil {
 		return fmt.Errorf("open base MPT at %x: %w", ts.BaseRoot, err)
 	}

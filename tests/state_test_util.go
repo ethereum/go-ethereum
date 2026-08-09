@@ -241,11 +241,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 		// recalculate the root.
 		post := t.json.Post[subtest.Fork][subtest.Index]
 		if post.Root != (common.UnprefixedHash{}) {
-			config, _, err := GetChainConfig(subtest.Fork)
-			if err != nil {
-				return fmt.Errorf("failed to get chain config: %w", err)
-			}
-			root = st.StateDB.IntermediateRoot(config.IsEIP158(new(big.Int).SetUint64(t.json.Env.Number)))
+			root = st.StateDB.IntermediateRoot()
 			if root != common.Hash(post.Root) {
 				return fmt.Errorf("post-state root does not match the pre-state root, indicates an error in the test: got %x, want %x", root, post.Root)
 			}
@@ -261,7 +257,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 	if logs := rlpHash(st.StateDB.Logs()); logs != common.Hash(post.Logs) {
 		return fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
-	st.StateDB, _ = state.New(root, st.StateDB.Database())
+	st.StateDB, _ = state.New(root, st.StateDB.Database(), st.StateDB.Rules())
 	return nil
 }
 
@@ -275,7 +271,12 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	vmconfig.ExtraEips = eips
 
 	block := t.genesis(config).ToBlock()
-	st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
+	// The env's random is what makes the block post-merge; it is mirrored into the
+	// block context below. Derive it once so that the state and the EVM cannot end
+	// up disagreeing about which forks are active.
+	isMerge := config.IsLondon(new(big.Int)) && t.json.Env.Random != nil
+
+	st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme, config.Rules(block.Number(), isMerge, block.Time()))
 
 	var baseFee *big.Int
 	if config.IsLondon(new(big.Int)) {
@@ -324,7 +325,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	if t.json.Env.Difficulty != nil {
 		context.Difficulty = new(big.Int).Set(t.json.Env.Difficulty)
 	}
-	if config.IsLondon(new(big.Int)) && t.json.Env.Random != nil {
+	if isMerge {
 		rnd := common.BigToHash(t.json.Env.Random)
 		context.Random = &rnd
 		context.Difficulty = big.NewInt(0)
@@ -360,7 +361,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	st.StateDB.AddBalance(block.Coinbase(), new(uint256.Int), tracing.BalanceChangeUnspecified)
 
 	// Commit state mutations into database.
-	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()), config.IsCancun(block.Number(), block.Time()))
+	root, _ = st.StateDB.Commit(block.NumberU64())
 	if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
 		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
 		tracer.OnTxEnd(receipt, nil)
@@ -525,7 +526,7 @@ type StateTestState struct {
 }
 
 // MakePreState creates a state containing the given allocation.
-func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
+func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string, rules params.Rules) StateTestState {
 	tconf := &triedb.Config{Preimages: true}
 	if scheme == rawdb.HashScheme {
 		tconf.HashDB = hashdb.Defaults
@@ -534,17 +535,21 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	}
 	triedb := triedb.NewDatabase(db, tconf)
 	sdb := state.NewDatabase(triedb, nil)
-	statedb, _ := state.New(types.EmptyRootHash, sdb)
+	statedb, _ := state.New(types.EmptyRootHash, sdb, rules)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeUnspecified)
-		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceChangeUnspecified)
+		balance := new(uint256.Int)
+		if a.Balance != nil {
+			balance = uint256.MustFromBig(a.Balance)
+		}
+		statedb.SetBalance(addr, balance, tracing.BalanceChangeUnspecified)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false, false)
+	root, _ := statedb.Commit(0)
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
@@ -558,7 +563,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
 	sdb = state.NewMPTDatabase(triedb, nil).WithSnapshot(snaps)
-	statedb, _ = state.New(root, sdb)
+	statedb, _ = state.New(root, sdb, rules)
 	return StateTestState{statedb, triedb, snaps}
 }
 

@@ -48,6 +48,9 @@ func amsterdam8037Config() *params.ChainConfig {
 	return &cfg
 }
 
+// amsterdam8037Rules are the fork rules matching amsterdam8037Config at genesis.
+var amsterdam8037Rules = amsterdam8037Config().Rules(new(big.Int), true, 0)
+
 // amsterdam8037EVM builds an EVM with real value transfers and CPSB wired in.
 func amsterdam8037EVM(statedb StateDB) *EVM {
 	ctx := BlockContext{
@@ -71,13 +74,13 @@ func amsterdam8037EVM(statedb StateDB) *EVM {
 func run8037(t *testing.T, code []byte, gas GasBudget, value *uint256.Int, setup func(db *state.StateDB, self common.Address)) ([]byte, GasBudget, error) {
 	t.Helper()
 	self := common.BytesToAddress([]byte("self"))
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), amsterdam8037Rules)
 	statedb.CreateAccount(self)
 	statedb.SetCode(self, code, tracing.CodeChangeUnspecified)
 	if setup != nil {
 		setup(statedb, self)
 	}
-	statedb.Finalise(true)
+	statedb.Finalise()
 	ret, result, err := amsterdam8037EVM(statedb).Call(common.Address{}, self, nil, gas, value)
 	assertBudgetSane(t, gas, result)
 	return ret, result, err

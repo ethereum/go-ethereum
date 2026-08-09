@@ -106,6 +106,10 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	)
 
+	// Fork rules of the block being executed, shared by every ephemeral state
+	// built below.
+	rules := config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
+
 	// Resolve the parent state root, the point all execution reads from.
 	parent := p.chain.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
@@ -135,7 +139,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		stateApply = time.Since(start)
 
 		start = time.Now()
-		statedb.IntermediateRoot(config.IsEIP158(header.Number))
+		statedb.IntermediateRoot()
 		stateHash = time.Since(start)
 		return statedb.Error()
 	})
@@ -151,7 +155,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	// TODO(rjl493456442) both the pre/post execution can be performed alongside
 	// the transaction execution. Measure the overhead before making the changes.
 	preStart := time.Now()
-	preState, err := newAccessListState(db, parentRoot, base, lookup, 0)
+	preState, err := newAccessListState(db, parentRoot, base, lookup, 0, rules)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +213,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	// Post-execution system calls against an ephemeral access-list state at
 	// index n+1.
 	postStart := time.Now()
-	postState, err := newAccessListState(db, parentRoot, base, lookup, int(postIndex))
+	postState, err := newAccessListState(db, parentRoot, base, lookup, int(postIndex), rules)
 	if err != nil {
 		return nil, err
 	}
@@ -263,8 +267,8 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 // newAccessListState constructs an ephemeral state, reading through base, whose
 // view reflects the mutations recorded in the access list for all block-access
 // indices below index.
-func newAccessListState(db state.Database, parentRoot common.Hash, base state.Reader, lookup *bal.Lookup, index int) (*state.StateDB, error) {
-	return state.NewWithReader(parentRoot, db, state.NewReaderWithBlockLevelAccessList(base, lookup, index))
+func newAccessListState(db state.Database, parentRoot common.Hash, base state.Reader, lookup *bal.Lookup, index int, rules params.Rules) (*state.StateDB, error) {
+	return state.NewWithReader(parentRoot, db, state.NewReaderWithBlockLevelAccessList(base, lookup, index), rules)
 }
 
 // executeTransactionsParallel applies all transactions to independent,
@@ -278,6 +282,10 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 		blockNumber = block.Number()
 		txs         = block.Transactions()
 		results     = make([]txExecResult, len(txs))
+
+		// Fork rules of the block being executed, shared by every per-transaction
+		// state built below.
+		rules = config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
 	)
 	workers := runtime.GOMAXPROCS(0)
 	if workers > len(txs) {
@@ -315,7 +323,7 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 
 				// Construct the dedicated pre-tx state with the BAL overlay wrapped.
 				reader := state.NewReaderWithBlockLevelAccessList(base, lookup, i+1)
-				sdb, err := state.NewWithReader(parentRoot, db, reader)
+				sdb, err := state.NewWithReader(parentRoot, db, reader, rules)
 				if err != nil {
 					return err
 				}

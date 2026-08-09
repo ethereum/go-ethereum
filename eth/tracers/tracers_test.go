@@ -75,7 +75,7 @@ func BenchmarkTransactionTraceV2(b *testing.B) {
 		Code:    []byte{},
 		Balance: big.NewInt(500000000000000),
 	}
-	state := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme)
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme, params.AllEthashProtocolChanges.Rules(context.BlockNumber, context.Random != nil, context.Time))
 	defer state.Close()
 
 	evm := vm.NewEVM(context, state.StateDB, params.AllEthashProtocolChanges, vm.Config{})

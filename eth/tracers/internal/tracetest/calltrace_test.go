@@ -114,7 +114,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			var (
 				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
 				context = test.Context.toBlockContext(test.Genesis)
-				st      = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+				st      = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme, test.Genesis.Config.Rules(context.BlockNumber, context.Random != nil, context.Time))
 			)
 			st.Close()
 
@@ -208,7 +208,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
-	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme, test.Genesis.Config.Rules(context.BlockNumber, context.Random != nil, context.Time))
 	defer state.Close()
 
 	b.ReportAllocs()
@@ -351,7 +351,7 @@ func TestInternals(t *testing.T) {
 					origin: types.Account{
 						Balance: big.NewInt(500000000000000),
 					},
-				}, false, rawdb.HashScheme)
+				}, false, rawdb.HashScheme, config.Rules(context.BlockNumber, context.Random != nil, context.Time))
 			defer st.Close()
 
 			logState := vm.StateDB(st.StateDB)

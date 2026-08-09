@@ -132,7 +132,7 @@ func runStateTest(ctx *cli.Context, fname string) ([]testResult, error) {
 			test.Run(st, cfg, false, rawdb.HashScheme, func(err error, state *tests.StateTestState) {
 				var root common.Hash
 				if state.StateDB != nil {
-					root = state.StateDB.IntermediateRoot(false)
+					root = state.StateDB.IntermediateRoot()
 					result.Root = &root
 					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
 					// Dump any state to aid debugging.

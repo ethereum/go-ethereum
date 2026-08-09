@@ -157,18 +157,16 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 	var (
 		statedb *state.StateDB
-
-		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
-		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		rules   = chainConfig.Rules(big.NewInt(int64(pre.Env.Number)), pre.Env.Random != nil, pre.Env.Timestamp)
 	)
 	if pre.AllocPath != "" {
 		var err error
-		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isEIP4762)
+		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, rules)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 	} else {
-		statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
+		statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, rules)
 	}
 	var (
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
@@ -308,7 +306,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		receipts = append(receipts, receipt)
 		blockAccessList.Merge(bal)
 	}
-	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
+	statedb.IntermediateRoot()
 
 	// TODO(rjl493456442) call engine.Finalize() instead
 	// Add mining reward? (-1 means rewards are disabled)
@@ -341,10 +339,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
 		prev := statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 
-		if isEIP4762 {
+		if rules.IsUBT {
 			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
 		}
-		if isAmsterdam {
+		if rules.IsAmsterdam {
 			if w.Amount == 0 {
 				// Zero amount withdrawal, account is accessed potential
 				// without state changes.
@@ -369,7 +367,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	blockAccessList.Merge(bal)
 
 	// Commit block
-	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
+	root, err := statedb.Commit(vmContext.BlockNumber.Uint64())
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
@@ -399,7 +397,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		execRs.RequestsHash = &h
 		execRs.Requests = requests
 	}
-	if isAmsterdam {
+	if rules.IsAmsterdam {
 		encoded := blockAccessList.ToEncodingObj()
 		balRLP, err := rlp.EncodeToBytes(encoded)
 		if err != nil {
@@ -411,7 +409,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 
 	// Re-create statedb instance with new root for MPT mode
-	statedb, err = state.New(root, statedb.Database())
+	statedb, err = state.New(root, statedb.Database(), rules)
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
 	}
@@ -431,40 +429,44 @@ func newPrestateTrieDBConfig(isBintrie bool) *triedb.Config {
 	return &triedb.Config{Preimages: true}
 }
 
-func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool) *state.StateDB {
-	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
+func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, rules params.Rules) *state.StateDB {
+	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(rules.IsUBT))
 	sdb := state.NewDatabase(tdb, nil)
-	if isBintrie {
+	if rules.IsUBT {
 		sdb.(*state.UBTDatabase).EnableAllocRecording()
 	}
 
 	root := types.EmptyRootHash
-	if isBintrie {
+	if rules.IsUBT {
 		root = types.EmptyBinaryHash
 	}
-	statedb, err := state.New(root, sdb)
+	statedb, err := state.New(root, sdb, rules)
 	if err != nil {
 		panic(fmt.Errorf("failed to create initial statedb: %v", err))
 	}
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeGenesis)
-		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceIncreaseGenesisBalance)
+		balance := new(uint256.Int)
+		if a.Balance != nil {
+			balance = uint256.MustFromBig(a.Balance)
+		}
+		statedb.SetBalance(addr, balance, tracing.BalanceIncreaseGenesisBalance)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, err = statedb.Commit(0, false, false)
+	root, err = statedb.Commit(0)
 	if err != nil {
 		panic(fmt.Errorf("failed to commit initial state: %v", err))
 	}
 	// If bintrie mode started, check if conversion happened
-	if isBintrie {
+	if rules.IsUBT {
 		return statedb
 	}
 	// For MPT mode, reopen the state with the committed root
-	statedb, err = state.New(root, sdb)
+	statedb, err = state.New(root, sdb, rules)
 	if err != nil {
 		panic(fmt.Errorf("failed to reopen state after commit: %v", err))
 	}
@@ -473,18 +475,18 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 
 // MakePreStateStreaming is like MakePreState, but decodes the alloc from disk
 // one account at a time so the full map is never held in memory.
-func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) (*state.StateDB, error) {
-	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
+func MakePreStateStreaming(db ethdb.Database, allocPath string, rules params.Rules) (*state.StateDB, error) {
+	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(rules.IsUBT))
 	sdb := state.NewDatabase(tdb, nil)
-	if isBintrie {
+	if rules.IsUBT {
 		sdb.(*state.UBTDatabase).EnableAllocRecording()
 	}
 
 	root := types.EmptyRootHash
-	if isBintrie {
+	if rules.IsUBT {
 		root = types.EmptyBinaryHash
 	}
-	statedb, err := state.New(root, sdb)
+	statedb, err := state.New(root, sdb, rules)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to create initial statedb: %v", err))
 	}
@@ -520,7 +522,11 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) 
 		statedb.SetCode(addr, acct.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, acct.Nonce, tracing.NonceChangeGenesis)
 		if acct.Balance != nil {
-			statedb.SetBalance(addr, uint256.MustFromBig(acct.Balance), tracing.BalanceIncreaseGenesisBalance)
+			balance := new(uint256.Int)
+			if acct.Balance != nil {
+				balance = uint256.MustFromBig(acct.Balance)
+			}
+			statedb.SetBalance(addr, balance, tracing.BalanceIncreaseGenesisBalance)
 		}
 		for k, v := range acct.Storage {
 			statedb.SetState(addr, k, v)
@@ -530,14 +536,14 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) 
 		return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc closing token: %v", err))
 	}
 
-	root, err = statedb.Commit(0, false, false)
+	root, err = statedb.Commit(0)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
 	}
-	if isBintrie {
+	if rules.IsUBT {
 		return statedb, nil
 	}
-	statedb, err = state.New(root, sdb)
+	statedb, err = state.New(root, sdb, rules)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to reopen state after commit: %v", err))
 	}

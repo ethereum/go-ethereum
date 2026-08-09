@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -38,7 +39,7 @@ func TestBurn(t *testing.T) {
 	// 3. contract B sends ether to A
 
 	var burned = new(uint256.Int)
-	s, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	s, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 	hooked := NewHookedState(s, &tracing.Hooks{
 		OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 			if reason == tracing.BalanceDecreaseSelfdestructBurn {
@@ -66,14 +67,14 @@ func TestBurn(t *testing.T) {
 	createAndDestroy(addB)
 	hooked.AddBalance(addA, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
 	hooked.AddBalance(addB, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
-	hooked.Finalise(true)
+	hooked.Finalise()
 
 	// Tx 2: create and destroy address C, then commit
 	createAndDestroy(addC)
 	hooked.AddBalance(addC, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
-	hooked.Finalise(true)
+	hooked.Finalise()
 
-	s.Commit(0, false, false)
+	s.Commit(0)
 	if have, want := burned, uint256.NewInt(600); !have.Eq(want) {
 		t.Fatalf("burn-count wrong, have %v want %v", have, want)
 	}
@@ -81,7 +82,7 @@ func TestBurn(t *testing.T) {
 
 // TestHooks is a basic sanity-check of all hooks
 func TestHooks(t *testing.T) {
-	inner, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	inner, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 	inner.SetTxContext(common.Hash{0x11}, 100, 101) // For the log
 	var result []string
 	var wants = []string{
@@ -137,7 +138,7 @@ func TestHooks(t *testing.T) {
 }
 
 func TestHooks_OnCodeChangeV2(t *testing.T) {
-	inner, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	inner, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 
 	var result []string
 	var wants = []string{
@@ -160,7 +161,7 @@ func TestHooks_OnCodeChangeV2(t *testing.T) {
 	sdb.SetCode(common.Address{0xbb}, []byte{0x13, 38}, tracing.CodeChangeContractCreation)
 	sdb.CreateContract(common.Address{0xbb})
 	sdb.SelfDestruct(common.Address{0xbb})
-	sdb.Finalise(true)
+	sdb.Finalise()
 
 	if len(result) != len(wants) {
 		t.Fatalf("number of tracing events wrong, have %d want %d", len(result), len(wants))

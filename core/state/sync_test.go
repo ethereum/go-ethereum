@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -55,7 +56,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 	db := rawdb.NewMemoryDatabase()
 	nodeDb := triedb.NewDatabase(db, config)
 	sdb := NewDatabase(nodeDb, nil)
-	state, _ := New(types.EmptyRootHash, sdb)
+	state, _ := New(types.EmptyRootHash, sdb, params.Rules{})
 
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
@@ -81,7 +82,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 		}
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit(0, false, false)
+	root, _ := state.Commit(0)
 
 	// Return the generated state
 	return db, sdb, nodeDb, root, accounts
@@ -95,7 +96,7 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, scheme string, root com
 		config.PathDB = pathdb.Defaults
 	}
 	// Check root availability and state contents
-	state, err := New(root, NewDatabase(triedb.NewDatabase(db, &config), nil))
+	state, err := New(root, NewDatabase(triedb.NewDatabase(db, &config), nil), params.Rules{})
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
@@ -121,7 +122,7 @@ func checkStateConsistency(db ethdb.Database, scheme string, root common.Hash) e
 	if scheme == rawdb.PathScheme {
 		config.PathDB = pathdb.Defaults
 	}
-	state, err := New(root, NewDatabase(triedb.NewDatabase(db, config), nil))
+	state, err := New(root, NewDatabase(triedb.NewDatabase(db, config), nil), params.Rules{})
 	if err != nil {
 		return err
 	}

@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -55,7 +56,7 @@ func TestUpdateLeaks(t *testing.T) {
 		tdb = triedb.NewDatabase(db, nil)
 		sdb = NewDatabase(tdb, nil)
 	)
-	state, _ := New(types.EmptyRootHash, sdb)
+	state, _ := New(types.EmptyRootHash, sdb, params.Rules{})
 
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
@@ -70,7 +71,7 @@ func TestUpdateLeaks(t *testing.T) {
 		}
 	}
 
-	root := state.IntermediateRoot(false)
+	root := state.IntermediateRoot()
 	if err := tdb.Commit(root, false); err != nil {
 		t.Errorf("can not commit trie %v to persistent database", root.Hex())
 	}
@@ -91,8 +92,8 @@ func TestIntermediateLeaks(t *testing.T) {
 	finalDb := rawdb.NewMemoryDatabase()
 	transNdb := triedb.NewDatabase(transDb, nil)
 	finalNdb := triedb.NewDatabase(finalDb, nil)
-	transState, _ := New(types.EmptyRootHash, NewDatabase(transNdb, nil))
-	finalState, _ := New(types.EmptyRootHash, NewDatabase(finalNdb, nil))
+	transState, _ := New(types.EmptyRootHash, NewDatabase(transNdb, nil), params.Rules{})
+	finalState, _ := New(types.EmptyRootHash, NewDatabase(finalNdb, nil), params.Rules{})
 
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, uint256.NewInt(uint64(11*i)+uint64(tweak)), tracing.BalanceChangeUnspecified)
@@ -111,7 +112,7 @@ func TestIntermediateLeaks(t *testing.T) {
 		modify(transState, common.Address{i}, i, 0)
 	}
 	// Write modifications to trie.
-	transState.IntermediateRoot(false)
+	transState.IntermediateRoot()
 
 	// Overwrite all the data with new values in the transient database.
 	for i := byte(0); i < 255; i++ {
@@ -120,7 +121,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 
 	// Commit and cross check the databases.
-	transRoot, err := transState.Commit(0, false, false)
+	transRoot, err := transState.Commit(0)
 	if err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
@@ -128,7 +129,7 @@ func TestIntermediateLeaks(t *testing.T) {
 		t.Errorf("can not commit trie %v to persistent database", transRoot.Hex())
 	}
 
-	finalRoot, err := finalState.Commit(0, false, false)
+	finalRoot, err := finalState.Commit(0)
 	if err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
@@ -167,13 +168,13 @@ func TestIntermediateLeaks(t *testing.T) {
 // https://github.com/ethereum/go-ethereum/pull/15549.
 func TestCopy(t *testing.T) {
 	// Create a random state test to copy and modify "independently"
-	orig, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	orig, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 
 	for i := byte(0); i < 255; i++ {
 		obj := orig.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		obj.AddBalance(uint256.NewInt(uint64(i)))
 	}
-	orig.Finalise(false)
+	orig.Finalise()
 
 	// Copy the state
 	copy := orig.Copy()
@@ -195,7 +196,7 @@ func TestCopy(t *testing.T) {
 	// Finalise the changes on all concurrently
 	finalise := func(wg *sync.WaitGroup, db *StateDB) {
 		defer wg.Done()
-		db.Finalise(true)
+		db.Finalise()
 	}
 
 	var wg sync.WaitGroup
@@ -227,7 +228,7 @@ func TestCopy(t *testing.T) {
 // stateDB with dirty journal present.
 func TestCopyWithDirtyJournal(t *testing.T) {
 	db := NewDatabaseForTesting()
-	orig, _ := New(types.EmptyRootHash, db)
+	orig, _ := New(types.EmptyRootHash, db, params.Rules{})
 
 	// Fill up the initial states
 	for i := byte(0); i < 255; i++ {
@@ -235,8 +236,8 @@ func TestCopyWithDirtyJournal(t *testing.T) {
 		obj.AddBalance(uint256.NewInt(uint64(i)))
 		obj.data.Root = common.HexToHash("0xdeadbeef")
 	}
-	root, _ := orig.Commit(0, true, false)
-	orig, _ = New(root, db)
+	root, _ := orig.Commit(0)
+	orig, _ = New(root, db, params.Rules{})
 
 	// modify all in memory without finalizing
 	for i := byte(0); i < 255; i++ {
@@ -246,21 +247,21 @@ func TestCopyWithDirtyJournal(t *testing.T) {
 	}
 	cpy := orig.Copy()
 
-	orig.Finalise(true)
+	orig.Finalise()
 	for i := byte(0); i < 255; i++ {
 		balance := orig.GetBalance(common.BytesToAddress([]byte{i}))
 		if !balance.IsZero() {
 			t.Errorf("Unexpected balance %x", root)
 		}
 	}
-	cpy.Finalise(true)
+	cpy.Finalise()
 	for i := byte(0); i < 255; i++ {
 		balance := cpy.GetBalance(common.BytesToAddress([]byte{i}))
 		if !balance.IsZero() {
 			t.Errorf("Unexpected balance %x", root)
 		}
 	}
-	if cpy.IntermediateRoot(true) != orig.IntermediateRoot(true) {
+	if cpy.IntermediateRoot() != orig.IntermediateRoot() {
 		t.Error("State is not equal after copy")
 	}
 }
@@ -270,7 +271,7 @@ func TestCopyWithDirtyJournal(t *testing.T) {
 // to affect S2. This test checks that the copy properly deep-copies the objectstate
 func TestCopyObjectState(t *testing.T) {
 	db := NewDatabaseForTesting()
-	orig, _ := New(types.EmptyRootHash, db)
+	orig, _ := New(types.EmptyRootHash, db, params.Rules{})
 
 	// Fill up the initial states
 	for i := byte(0); i < 5; i++ {
@@ -278,14 +279,14 @@ func TestCopyObjectState(t *testing.T) {
 		obj.AddBalance(uint256.NewInt(uint64(i)))
 		obj.data.Root = common.HexToHash("0xdeadbeef")
 	}
-	orig.Finalise(true)
+	orig.Finalise()
 	cpy := orig.Copy()
 	for _, op := range cpy.mutations {
 		if have, want := op.applied, false; have != want {
 			t.Fatalf("Error in test itself, the 'done' flag should not be set before Commit, have %v want %v", have, want)
 		}
 	}
-	orig.Commit(0, true, false)
+	orig.Commit(0)
 	for _, op := range cpy.mutations {
 		if have, want := op.applied, false; have != want {
 			t.Fatalf("Error: original state affected copy, have %v want %v", have, want)
@@ -519,7 +520,7 @@ func (test *snapshotTest) String() string {
 func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
-		state, _     = New(types.EmptyRootHash, NewDatabaseForTesting())
+		state, _     = New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 		checkstates  = make([]*StateDB, len(test.snapshots))
@@ -690,8 +691,8 @@ func equalMutationSets(a, b map[common.Address]*journalMutationState) bool {
 func TestTouchDelete(t *testing.T) {
 	s := newStateEnv()
 	s.state.getOrNewStateObject(common.Address{})
-	root, _ := s.state.Commit(0, false, false)
-	s.state, _ = New(root, s.state.db)
+	root, _ := s.state.Commit(0)
+	s.state, _ = New(root, s.state.db, params.Rules{})
 
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(uint256.Int), tracing.BalanceChangeUnspecified)
@@ -706,7 +707,7 @@ func TestTouchDelete(t *testing.T) {
 }
 
 func TestJournalMutationTracking(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 	addr := common.HexToAddress("0x01")
 	key := common.HexToHash("0x02")
 
@@ -750,7 +751,7 @@ func TestJournalMutationTracking(t *testing.T) {
 // TestCopyOfCopy tests that modified objects are carried over to the copy, and the copy of the copy.
 // See https://github.com/ethereum/go-ethereum/pull/15225#issuecomment-380191512
 func TestCopyOfCopy(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 	addr := common.HexToAddress("aaaa")
 	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified)
 
@@ -768,7 +769,7 @@ func TestCopyOfCopy(t *testing.T) {
 // See https://github.com/ethereum/go-ethereum/issues/20106.
 func TestCopyCommitCopy(t *testing.T) {
 	tdb := NewDatabaseForTesting()
-	state, _ := New(types.EmptyRootHash, tdb)
+	state, _ := New(types.EmptyRootHash, tdb, params.Rules{})
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -820,8 +821,8 @@ func TestCopyCommitCopy(t *testing.T) {
 		t.Fatalf("second copy committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Commit state, ensure states can be loaded from disk
-	root, _ := state.Commit(0, false, false)
-	state, _ = New(root, tdb)
+	root, _ := state.Commit(0)
+	state, _ = New(root, tdb, params.Rules{})
 	if balance := state.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
 		t.Fatalf("state post-commit balance mismatch: have %v, want %v", balance, 42)
 	}
@@ -841,7 +842,7 @@ func TestCopyCommitCopy(t *testing.T) {
 //
 // See https://github.com/ethereum/go-ethereum/issues/20106.
 func TestCopyCopyCommitCopy(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -911,7 +912,7 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 // TestCommitCopy tests the copy from a committed state is not fully functional.
 func TestCommitCopy(t *testing.T) {
 	db := NewDatabaseForTesting()
-	state, _ := New(types.EmptyRootHash, db)
+	state, _ := New(types.EmptyRootHash, db, params.Rules{})
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -934,11 +935,11 @@ func TestCommitCopy(t *testing.T) {
 	if val := state.GetCommittedState(addr, skey1); val != (common.Hash{}) {
 		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
-	root, _ := state.Commit(0, true, false)
+	root, _ := state.Commit(0)
 
-	state, _ = New(root, db)
+	state, _ = New(root, db, params.Rules{})
 	state.SetState(addr, skey2, sval2)
-	state.Commit(1, true, false)
+	state.Commit(1)
 
 	// Copy the committed state database, the copied one is not fully functional.
 	copied := state.Copy()
@@ -974,25 +975,25 @@ func TestCommitCopy(t *testing.T) {
 // first, but the journal wiped the entire state object on create-revert.
 func TestDeleteCreateRevert(t *testing.T) {
 	// Create an initial state with a single contract
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 
 	addr := common.BytesToAddress([]byte("so"))
 	state.SetBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
 
-	root, _ := state.Commit(0, false, false)
-	state, _ = New(root, state.db)
+	root, _ := state.Commit(0)
+	state, _ = New(root, state.db, params.Rules{})
 
 	// Simulate self-destructing in one transaction, then create-reverting in another
 	state.SelfDestruct(addr)
-	state.Finalise(true)
+	state.Finalise()
 
 	id := state.Snapshot()
 	state.SetBalance(addr, uint256.NewInt(2), tracing.BalanceChangeUnspecified)
 	state.RevertToSnapshot(id)
 
 	// Commit the entire state and make sure we don't crash and have the correct state
-	root, _ = state.Commit(0, true, false)
-	state, _ = New(root, state.db)
+	root, _ = state.Commit(0)
+	state, _ = New(root, state.db, params.Rules{})
 
 	if state.getStateObject(addr) != nil {
 		t.Fatalf("self-destructed contract came alive")
@@ -1001,16 +1002,16 @@ func TestDeleteCreateRevert(t *testing.T) {
 
 func TestWitnessIncludesAbsentAccountReads(t *testing.T) {
 	db := NewDatabaseForTesting()
-	state, _ := New(types.EmptyRootHash, db)
+	state, _ := New(types.EmptyRootHash, db, params.Rules{})
 	for i := byte(0); i < 3; i++ {
 		addr := common.Address{i + 1}
 		state.SetBalance(addr, uint256.NewInt(uint64(i+1)), tracing.BalanceChangeUnspecified)
 	}
-	root, err := state.Commit(0, false, false)
+	root, err := state.Commit(0)
 	if err != nil {
 		t.Fatalf("failed to commit initial state: %v", err)
 	}
-	state, err = New(root, db)
+	state, err = New(root, db, params.Rules{})
 	if err != nil {
 		t.Fatalf("failed to reopen state: %v", err)
 	}
@@ -1027,7 +1028,7 @@ func TestWitnessIncludesAbsentAccountReads(t *testing.T) {
 	if err := state.Error(); err != nil {
 		t.Fatalf("unexpected state error after read: %v", err)
 	}
-	if got := state.IntermediateRoot(false); got != root {
+	if got := state.IntermediateRoot(); got != root {
 		t.Fatalf("unexpected root after read-only access: have %x want %x", got, root)
 	}
 	if err := state.Error(); err != nil {
@@ -1067,7 +1068,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 	db := NewDatabase(tdb, nil)
 
 	var root common.Hash
-	state, _ := New(types.EmptyRootHash, db)
+	state, _ := New(types.EmptyRootHash, db, params.Rules{})
 	addr := common.BytesToAddress([]byte("so"))
 	{
 		state.SetBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
@@ -1075,7 +1076,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 		a2 := common.BytesToAddress([]byte("another"))
 		state.SetBalance(a2, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
 		state.SetCode(a2, []byte{1, 2, 4}, tracing.CodeChangeUnspecified)
-		root, _ = state.Commit(0, false, false)
+		root, _ = state.Commit(0)
 		t.Logf("root: %x", root)
 		// force-flush
 		tdb.Commit(root, false)
@@ -1098,7 +1099,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 			}
 		}
 	}
-	state, _ = New(root, db)
+	state, _ = New(root, db, params.Rules{})
 	balance := state.GetBalance(addr)
 	// The removed elem should lead to it returning zero balance
 	if exp, got := uint64(0), balance.Uint64(); got != exp {
@@ -1106,7 +1107,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 	}
 	// Modify the state
 	state.SetBalance(addr, uint256.NewInt(2), tracing.BalanceChangeUnspecified)
-	root, err := state.Commit(0, false, false)
+	root, err := state.Commit(0)
 	if err == nil {
 		t.Fatalf("expected error, got root :%x", root)
 	}
@@ -1118,7 +1119,7 @@ func TestStateDBAccessList(t *testing.T) {
 	slot := common.HexToHash
 
 	db := NewDatabaseForTesting()
-	state, _ := New(types.EmptyRootHash, db)
+	state, _ := New(types.EmptyRootHash, db, params.Rules{})
 	state.accessList = newAccessList()
 
 	verifyAddrs := func(astrings ...string) {
@@ -1289,7 +1290,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 		memdb    = rawdb.NewMemoryDatabase()
 		tdb      = triedb.NewDatabase(memdb, triedb.HashDefaults)
 		statedb  = NewDatabase(tdb, nil)
-		state, _ = New(types.EmptyRootHash, statedb)
+		state, _ = New(types.EmptyRootHash, statedb, params.Rules{})
 	)
 	for a := byte(0); a < 10; a++ {
 		state.CreateAccount(common.Address{a})
@@ -1297,7 +1298,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 			state.SetState(common.Address{a}, common.Hash{a, s}, common.Hash{a, s})
 		}
 	}
-	root, err := state.Commit(0, false, false)
+	root, err := state.Commit(0)
 	if err != nil {
 		t.Fatalf("failed to commit state trie: %v", err)
 	}
@@ -1309,7 +1310,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 		t.Fatalf("failed to commit state trie: %v", err)
 	}
 	// Reopen the state trie from flushed disk and verify it
-	state, err = New(root, NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), nil))
+	state, err = New(root, NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), nil), params.Rules{})
 	if err != nil {
 		t.Fatalf("failed to reopen state trie: %v", err)
 	}
@@ -1324,7 +1325,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 
 func TestStateDBTransientStorage(t *testing.T) {
 	db := NewDatabaseForTesting()
-	state, _ := New(types.EmptyRootHash, db)
+	state, _ := New(types.EmptyRootHash, db, params.Rules{})
 
 	key := common.Hash{0x01}
 	value := common.Hash{0x02}
@@ -1361,7 +1362,7 @@ func TestDeleteStorage(t *testing.T) {
 		tdb      = triedb.NewDatabase(disk, nil)
 		snaps, _ = snapshot.New(snapshot.Config{CacheSize: 10}, disk, tdb, types.EmptyRootHash)
 		db       = NewMPTDatabase(tdb, nil).WithSnapshot(snaps)
-		state, _ = New(types.EmptyRootHash, db)
+		state, _ = New(types.EmptyRootHash, db, params.Rules{})
 		addr     = common.HexToAddress("0x1")
 	)
 	// Initialize account and populate storage
@@ -1372,10 +1373,10 @@ func TestDeleteStorage(t *testing.T) {
 		value := common.Hash(uint256.NewInt(uint64(10 * i)).Bytes32())
 		state.SetState(addr, slot, value)
 	}
-	root, _ := state.Commit(0, true, false)
+	root, _ := state.Commit(0)
 	// Init phase done, create two states, one with snap and one without
-	fastState, _ := New(root, NewMPTDatabase(tdb, nil).WithSnapshot(snaps))
-	slowState, _ := New(root, NewMPTDatabase(tdb, nil))
+	fastState, _ := New(root, NewMPTDatabase(tdb, nil).WithSnapshot(snaps), params.Rules{})
+	slowState, _ := New(root, NewMPTDatabase(tdb, nil), params.Rules{})
 
 	obj := fastState.getOrNewStateObject(addr)
 	storageRoot := obj.data.Root
@@ -1414,7 +1415,7 @@ func TestStorageDirtiness(t *testing.T) {
 		disk       = rawdb.NewMemoryDatabase()
 		tdb        = triedb.NewDatabase(disk, nil)
 		db         = NewDatabase(tdb, nil)
-		state, _   = New(types.EmptyRootHash, db)
+		state, _   = New(types.EmptyRootHash, db, params.Rules{})
 		addr       = common.HexToAddress("0x1")
 		checkDirty = func(key common.Hash, value common.Hash, dirty bool) {
 			obj := state.getStateObject(addr)
@@ -1462,7 +1463,7 @@ func TestStateDBCopyUBT(t *testing.T) {
 	tdb := triedb.NewDatabase(disk, triedb.UBTDefaults)
 	sdb := NewDatabase(tdb, nil)
 
-	orig, err := New(types.EmptyRootHash, sdb)
+	orig, err := New(types.EmptyRootHash, sdb, params.Rules{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

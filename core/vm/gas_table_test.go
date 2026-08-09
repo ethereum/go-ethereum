@@ -86,11 +86,11 @@ func TestEIP2200(t *testing.T) {
 	for i, tt := range eip2200Tests {
 		address := common.BytesToAddress([]byte("contract"))
 
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), params.AllEthashProtocolChanges.Rules(big.NewInt(0), true, 0))
 		statedb.CreateAccount(address)
 		statedb.SetCode(address, hexutil.MustDecode(tt.input), tracing.CodeChangeUnspecified)
 		statedb.SetState(address, common.Hash{}, common.BytesToHash([]byte{tt.original}))
-		statedb.Finalise(true) // Push the state into the "original" slot
+		statedb.Finalise() // Push the state into the "original" slot
 
 		vmctx := BlockContext{
 			CanTransfer: func(StateDB, common.Address, *uint256.Int) bool { return true },
@@ -138,10 +138,10 @@ func TestCreateGas(t *testing.T) {
 		var gasUsed = uint64(0)
 		doCheck := func(testGas int) bool {
 			address := common.BytesToAddress([]byte("contract"))
-			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), params.AllEthashProtocolChanges.Rules(big.NewInt(0), true, 0))
 			statedb.CreateAccount(address)
 			statedb.SetCode(address, hexutil.MustDecode(tt.code), tracing.CodeChangeUnspecified)
-			statedb.Finalise(true)
+			statedb.Finalise()
 			vmctx := BlockContext{
 				CanTransfer: func(StateDB, common.Address, *uint256.Int) bool { return true },
 				Transfer:    func(StateDB, common.Address, common.Address, *uint256.Int, *params.Rules) {},

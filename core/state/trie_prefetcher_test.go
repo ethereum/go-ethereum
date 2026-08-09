@@ -26,12 +26,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 
 func filledStateDB() *StateDB {
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -71,7 +72,7 @@ func TestVerklePrefetcher(t *testing.T) {
 	db := triedb.NewDatabase(disk, triedb.UBTDefaults)
 	sdb := NewDatabase(db, nil)
 
-	state, err := New(types.EmptyRootHash, sdb)
+	state, err := New(types.EmptyRootHash, sdb, params.Rules{})
 	if err != nil {
 		t.Fatalf("failed to initialize state: %v", err)
 	}
@@ -83,9 +84,9 @@ func TestVerklePrefetcher(t *testing.T) {
 	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
 	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)          // Change an external metadata
 	state.SetState(addr, skey, sval)                                             // Change the storage trie
-	root, _ := state.Commit(0, true, false)
+	root, _ := state.Commit(0)
 
-	state, _ = New(root, sdb)
+	state, _ = New(root, sdb, params.Rules{})
 	fetcher := newTriePrefetcher(sdb, root, "", false)
 
 	// Read account

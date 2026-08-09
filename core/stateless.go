@@ -53,7 +53,7 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	}
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
-	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), state.NewCodeDB(memdb)))
+	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), state.NewCodeDB(memdb)), config.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time()))
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
@@ -77,6 +77,6 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	}
 	// Almost everything validated, but receipt and state root needs to be returned
 	receiptRoot := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
-	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
+	stateRoot := db.IntermediateRoot()
 	return stateRoot, receiptRoot, nil
 }

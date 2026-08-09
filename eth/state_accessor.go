@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -74,7 +75,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 			// please re-enable it for better performance.
 			tdb := triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
 			database = state.NewDatabase(tdb, nil)
-			if statedb, err = state.New(block.Root(), database); err == nil {
+			if statedb, err = state.New(block.Root(), database, eth.blockchain.Config().Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
 			}
@@ -97,7 +98,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 		// otherwise we would rewind past a persisted block (specific corner case is
 		// chain tracing from the genesis).
 		if !readOnly {
-			statedb, err = state.New(current.Root(), database)
+			statedb, err = state.New(current.Root(), database, eth.blockchain.Config().Rules(current.Number(), current.Difficulty().Sign() == 0, current.Time()))
 			if err == nil {
 				return statedb, noopReleaser, nil
 			}
@@ -116,7 +117,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 			}
 			current = parent
 
-			statedb, err = state.New(current.Root(), database)
+			statedb, err = state.New(current.Root(), database, eth.blockchain.Config().Rules(current.Number(), current.Difficulty().Sign() == 0, current.Time()))
 			if err == nil {
 				break
 			}
@@ -156,12 +157,19 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(current.NumberU64(), eth.blockchain.Config().IsEIP158(current.Number()), eth.blockchain.Config().IsCancun(current.Number(), current.Time()))
+		root, err := statedb.Commit(current.NumberU64())
 		if err != nil {
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
 		}
-		statedb, err = state.New(root, database)
+		// This state is handed to the next loop iteration, which processes the
+		// following block, so bind it to that block's fork rules rather than the
+		// ones of the block just committed.
+		var nextRules params.Rules
+		if h := eth.blockchain.GetHeaderByNumber(current.NumberU64() + 1); h != nil {
+			nextRules = eth.blockchain.Config().Rules(h.Number, h.Difficulty.Sign() == 0, h.Time)
+		}
+		statedb, err = state.New(root, database, nextRules)
 		if err != nil {
 			return nil, nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}
@@ -270,8 +278,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise()
 	}
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

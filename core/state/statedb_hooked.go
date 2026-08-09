@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -139,8 +138,8 @@ func (s *hookedStateDB) AddSlotToAccessList(addr common.Address, slot common.Has
 	s.inner.AddSlotToAccessList(addr, slot)
 }
 
-func (s *hookedStateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList) {
-	s.inner.Prepare(rules, sender, coinbase, dest, precompiles, txAccesses)
+func (s *hookedStateDB) Prepare(sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList) {
+	s.inner.Prepare(sender, coinbase, dest, precompiles, txAccesses)
 }
 
 func (s *hookedStateDB) RevertToSnapshot(i int) {
@@ -230,10 +229,10 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	}
 }
 
-func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
+func (s *hookedStateDB) Finalise() *bal.ConstructionBlockAccessList {
 	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		// Short circuit if no relevant hooks are set.
-		return s.inner.Finalise(deleteEmptyObjects)
+		return s.inner.Finalise()
 	}
 
 	// Collect all self-destructed addresses first, then sort them to ensure
@@ -255,7 +254,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlock
 	// EIP-8246 (Amsterdam) removes the SELFDESTRUCT burn: a self-destructed
 	// account that retains a non-zero balance is preserved as a balance-only
 	// account rather than removed, so its balance is no longer burnt.
-	burnsBalance := s.inner.stateAccessList == nil
+	burnsBalance := !s.inner.rules.IsAmsterdam
 
 	for _, addr := range selfDestructedAddrs {
 		obj := s.inner.stateObjects[addr]
@@ -288,7 +287,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlock
 			s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
 		}
 	}
-	return s.inner.Finalise(deleteEmptyObjects)
+	return s.inner.Finalise()
 }
 
 func (s *hookedStateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint32) {

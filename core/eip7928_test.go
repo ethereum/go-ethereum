@@ -125,7 +125,7 @@ func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, 
 	defer bc.Stop()
 
 	// Parallel path (default for Amsterdam blocks carrying an access list).
-	parState, err := bc.State()
+	parState, err := bc.StateAtForkBoundary(bc.CurrentBlock(), block.Header())
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
@@ -133,10 +133,10 @@ func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, 
 	if err != nil {
 		t.Fatalf("parallel process: %v", err)
 	}
-	parRoot := parState.IntermediateRoot(gspec.Config.IsEIP158(block.Number()))
+	parRoot := parState.IntermediateRoot()
 
 	// Sequential path, forced explicitly via DisableParallelExecution.
-	seqState, err := bc.State()
+	seqState, err := bc.StateAtForkBoundary(bc.CurrentBlock(), block.Header())
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
