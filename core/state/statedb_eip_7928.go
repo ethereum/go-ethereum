@@ -17,6 +17,7 @@
 package state
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"slices"
@@ -216,13 +217,16 @@ func parallelBALApply(tasks, workers int, apply func(int) error) error {
 	}
 	workers = min(max(workers, 1), tasks)
 
-	var (
-		next  atomic.Uint64
-		group errgroup.Group
-	)
+	var next atomic.Uint64
+	group, gctx := errgroup.WithContext(context.Background())
 	for range workers {
 		group.Go(func() error {
 			for {
+				select {
+				case <-gctx.Done():
+					return gctx.Err()
+				default:
+				}
 				i := int(next.Add(1)) - 1
 				if i >= tasks {
 					return nil
