@@ -71,7 +71,7 @@ func pathProof(t *testing.T, db *triedb.Database, root common.Hash, key []byte) 
 	}
 	out := make([]string, len(list.list))
 	for i, blob := range list.list {
-		out[i] = string(blob)
+		out[i] = blob
 	}
 	return out
 }
@@ -114,7 +114,7 @@ func TestPBTProofCoversResidentCodeLeaf(t *testing.T) {
 			}
 			got := make(map[string]struct{}, len(res.AccountProof))
 			for _, blob := range res.AccountProof {
-				got[string(blob)] = struct{}{}
+				got[blob] = struct{}{}
 			}
 			// Every node the resident leaf's own proof needs has to be in the
 			// account proof, or the leaf is not provable from it.

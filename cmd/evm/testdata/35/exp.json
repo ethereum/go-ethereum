@@ -23,6 +23,8 @@
     "currentExcessBlobGas": "0x0",
     "blobGasUsed": "0x0",
     "requestsHash": "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "requests": []
+    "requests": [],
+    "blockAccessList": "0xf887da9400000961ef480eb55e80d19ad83579a64c007002c0c0c0c0c0da94000064d678505ad48f8ccb093bc65613800e8282c0c0c0c0c0da940000bbddc7ce488642fb579f8b00f3a590007251c0c0c0c0c0da940000bff46984e3725691fa540a8c7589300d8282c0c0c0c0c0da94000f3df6d732807ef1319fb7b8bb8522d0beac02c0c0c0c0c0",
+    "blockAccessListHash": "0xde16c6ddf74803b13365055fe28d4db0c52bca0cd26937e06bb2ca56fb8d7a2f"
   }
 }

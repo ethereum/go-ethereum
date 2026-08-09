@@ -142,6 +142,16 @@ func Transition(ctx *cli.Context) error {
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
+	// The binary tree cannot be dumped back into an address-keyed alloc, so
+	// the post-state is rebuilt from the input alloc's keys: hold the alloc
+	// in memory instead of streaming.
+	if prestate.AllocPath != "" && chainConfig.IsPBT() {
+		if err := readFile(prestate.AllocPath, "alloc", &prestate.Pre); err != nil {
+			return err
+		}
+		prestate.AllocPath = ""
+	}
+
 	if txIt, err = loadTransactions(txStr, inputData, chainConfig); err != nil {
 		return err
 	}
@@ -250,20 +260,6 @@ func Transition(ctx *cli.Context) error {
 		}
 	}
 	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body, btleaves)
-}
-
-type mergeAlloc Alloc
-
-func (m mergeAlloc) OnRoot(common.Hash) {}
-
-func (m mergeAlloc) OnAccount(addr *common.Address, da state.DumpAccount) {
-	if addr == nil {
-		return
-	}
-	if _, exists := m[*addr]; exists {
-		return
-	}
-	m[*addr] = dumpAccountToTypesAccount(da)
 }
 
 // writeStreamedAlloc writes the post-state alloc to path one account at a

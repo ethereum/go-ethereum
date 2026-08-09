@@ -217,16 +217,6 @@ func encodePath(key []byte, n int) []byte {
 	return encodeBitPrefix(p)
 }
 
-// bytesToBits expands packed bytes into one bit per byte (test bridge to the
-// EELS reference representation).
-func bytesToBits(data []byte) []byte {
-	out := make([]byte, 8*len(data))
-	for i := range out {
-		out[i] = bitAt(data, i)
-	}
-	return out
-}
-
 // bitsToBitstr packs a one-bit-per-byte slice into a bitstr (test bridge).
 func bitsToBitstr(bits []byte) bitstr {
 	p := bitstr{b: make([]byte, (len(bits)+7)/8), n: len(bits)}

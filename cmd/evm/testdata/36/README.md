@@ -41,23 +41,9 @@ reproduces it exactly. That pins the *embedding* - key derivation, chunk
 placement, hashing - against the spec, while leaving the *execution* that
 produced the post-state geth's own, for the reason below.
 
-Exactly one field differs: the sender's balance, because the two projects do not
-define this fork's gas the same way. The reference's `binary_tree` prices like
-Amsterdam - its gas for a transaction is identical to its Amsterdam gas -
-whereas geth composes EIP-4762 witness pricing onto the fork. For a plain value
-transfer that is 183,600 gas there against 21,000 here. Both tools agree on
-Osaka (27,900 each), so this is a disagreement about what the fork *is*, not
-about either tool's accounting.
-
-So the sender's balance here is geth's own - and the root with it, since the
-root commits to that balance - while everything the disagreement does not
-touch is spec-blessed. Fixture `../35` carries no transactions, which is why
-its root is checkable end to end: the reference embeds the *input* allocation
-there and never has to execute anything.
-
-Neither root here nor `../35`'s is currently confirmed by running geth: `TestT8n`
-cannot execute the binary tree fixtures at all (see `TODO.md`). Both rest on the
-reference until that is fixed.
+Gas agrees too: geth's draft-era EIP-8038/EIP-2780 values are gone, the
+merged schedules price this fork identically in both projects, and `TestT8n`
+must reproduce the root exactly.
 
 Reproducing the replay cross-check needs two things the reference requires and
 geth does not: transactions pre-signed with `v`/`r`/`s` rather than a
