@@ -384,24 +384,38 @@ func (api *DebugAPI) getModifiedAccounts(startHeader, endHeader *types.Header) (
 	if err != nil {
 		return nil, err
 	}
-	oldIt, err := oldTrie.NodeIterator([]byte{})
-	if err != nil {
-		return nil, err
-	}
-	newIt, err := newTrie.NodeIterator([]byte{})
-	if err != nil {
-		return nil, err
-	}
-	diff, _ := trie.NewDifferenceIterator(oldIt, newIt)
-	iter := trie.NewIterator(diff)
-
+	seen := make(map[common.Hash]struct{})
 	var dirty []common.Address
-	for iter.Next() {
-		key := newTrie.GetKey(iter.Key)
-		if key == nil {
-			return nil, fmt.Errorf("no preimage found for hash %x", iter.Key)
+	collect := func(from, to *trie.StateTrie) error {
+		fromIt, err := from.NodeIterator([]byte{})
+		if err != nil {
+			return err
 		}
-		dirty = append(dirty, common.BytesToAddress(key))
+		toIt, err := to.NodeIterator([]byte{})
+		if err != nil {
+			return err
+		}
+		diff, _ := trie.NewDifferenceIterator(fromIt, toIt)
+		iter := trie.NewIterator(diff)
+		for iter.Next() {
+			hash := common.BytesToHash(iter.Key)
+			if _, ok := seen[hash]; ok {
+				continue
+			}
+			key := to.GetKey(iter.Key)
+			if key == nil {
+				return fmt.Errorf("no preimage found for hash %x", iter.Key)
+			}
+			seen[hash] = struct{}{}
+			dirty = append(dirty, common.BytesToAddress(key))
+		}
+		return iter.Err
+	}
+	if err := collect(oldTrie, newTrie); err != nil {
+		return nil, err
+	}
+	if err := collect(newTrie, oldTrie); err != nil {
+		return nil, err
 	}
 	return dirty, nil
 }
