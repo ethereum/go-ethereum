@@ -1,0 +1,124 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// Package peerstats maintains per-peer quality metrics used by the peer
+// dropper to protect high-value peers from random disconnection.
+//
+// The package is a passive accumulator: it exposes entry points for its
+// signal producers (txtracker for inclusion/finalization, the handler for
+// peer-drop cleanup) and a read-only snapshot for its consumer (the
+// dropper). It has no goroutine of its own — all mutation is serialized
+// by a single mutex.
+//
+// Signal sources:
+//   - NotifyBlock(inclusions, finalized) — per-block deltas from txtracker
+//     (computed under txtracker's own lock, then passed in after release)
+//   - NotifyPeerDrop(peer) — disconnect cleanup, from the handler
+package peerstats
+
+import (
+	"sync"
+)
+
+const (
+	// EMA smoothing factor for per-block inclusion rate.
+	emaAlpha = 0.05
+	// EMA smoothing factor for per-block finalization rate. Very slow on
+	// purpose: finalization is permanent, and the score should reflect
+	// sustained contribution over long windows, not recent bursts.
+	// Half-life ≈ 6930 chain heads (~23 hours on 12s blocks).
+	finalizedEMAAlpha = 0.0001
+)
+
+// PeerStats is the exported per-peer snapshot returned by GetAllPeerStats.
+// It carries exactly the fields the dropper scores on.
+type PeerStats struct {
+	RecentFinalized float64 // EMA of per-block finalization credits (slow)
+	RecentIncluded  float64 // EMA of per-block inclusions (fast)
+}
+
+// peerStats is the internal mutable state per peer.
+type peerStats struct {
+	recentFinalized float64
+	recentIncluded  float64
+}
+
+// Stats is the per-peer quality aggregator.
+type Stats struct {
+	mu    sync.Mutex
+	peers map[string]*peerStats
+}
+
+// New creates an empty Stats.
+func New() *Stats {
+	return &Stats{peers: make(map[string]*peerStats)}
+}
+
+// NotifyBlock ingests a per-block update. `inclusions` is the count of the
+// head block's transactions attributed to each peer, `finalized` the
+// per-peer credits accumulated since the last call.
+//
+// A peer with a positive inclusion delta gets a stats entry on first
+// sight — this is the path by which peerstats learns about a peer.
+// Finalization credits for unknown peers are ignored: they may have been
+// removed by NotifyPeerDrop and must not be resurrected from historical
+// data. Tracked peers absent from a delta map decay with a zero sample.
+//
+// NotifyBlock must NOT be called while the caller holds any other lock that
+// could be acquired by peerstats callers in reverse order. Current callers
+// (txtracker.handleChainHead) release their lock before invoking NotifyBlock.
+func (s *Stats) NotifyBlock(inclusions, finalized map[string]int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Ensure a stats entry exists for any peer that just had an inclusion.
+	for peer, count := range inclusions {
+		if count > 0 && s.peers[peer] == nil {
+			s.peers[peer] = &peerStats{}
+		}
+	}
+	// Update inclusion and finalization EMAs for every tracked peer. A
+	// peer not present in the respective delta map gets a 0 contribution
+	// — pure decay.
+	for peer, ps := range s.peers {
+		ps.recentIncluded = (1-emaAlpha)*ps.recentIncluded + emaAlpha*float64(inclusions[peer])
+		ps.recentFinalized = (1-finalizedEMAAlpha)*ps.recentFinalized + finalizedEMAAlpha*float64(finalized[peer])
+	}
+}
+
+// NotifyPeerDrop removes a disconnected peer's stats to prevent unbounded
+// growth. Safe to call from any goroutine.
+func (s *Stats) NotifyPeerDrop(peer string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.peers, peer)
+}
+
+// GetAllPeerStats returns a snapshot of per-peer stats. Called by the
+// dropper every few minutes; allocation cost is negligible at that rate.
+func (s *Stats) GetAllPeerStats() map[string]PeerStats {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result := make(map[string]PeerStats, len(s.peers))
+	for id, ps := range s.peers {
+		result[id] = PeerStats{
+			RecentFinalized: ps.recentFinalized,
+			RecentIncluded:  ps.recentIncluded,
+		}
+	}
+	return result
+}
