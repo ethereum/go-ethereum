@@ -22,9 +22,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
+	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,7 +38,95 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/holiman/uint256"
+	"github.com/urfave/cli/v2"
 )
+
+var (
+	verifyOnlyFlag = &cli.BoolFlag{
+		Name:  "verify-only",
+		Usage: "Run both verification checks without writing anything",
+	}
+
+	bintrieImportCommand = &cli.Command{
+		Name:      "import",
+		Usage:     "Import a binary tree state from distribution artifacts",
+		ArgsUsage: "<snapshot> <preimages> <anchor block-number-or-hash>",
+		Action:    importBinaryTrie,
+		Flags: slices.Concat([]cli.Flag{
+			verifyOnlyFlag,
+			forceConvertFlag,
+			memoryLimitFlag,
+			tmpDirFlag,
+		}, utils.NetworkFlags, utils.DatabaseFlags),
+		Description: `
+geth bintrie import [flags] <snapshot> <preimages> <anchor block-number-or-hash>
+
+Verifies and ingests an EIP-8347 PBT snapshot and preimage file: the tree is
+rebuilt from the leaves against the artifact's claimed root, and the leaves
+are re-derived into the merkle root the anchor block commits, resolved from
+the local header chain - the artifacts never vouch for themselves. Code is
+reassembled from its chunks and pinned to each code hash. A failed check
+leaves nothing openable. --verify-only runs both checks and writes nothing.
+`,
+	}
+)
+
+// importBinaryTrie is the CLI action behind "geth bintrie import".
+func importBinaryTrie(ctx *cli.Context) error {
+	if ctx.NArg() != 3 {
+		return errors.New("usage: geth bintrie import <snapshot> <preimages> <anchor block-number-or-hash>")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, false)
+	defer chaindb.Close()
+
+	// The anchor's state root comes from the local header chain, never from
+	// the operator or the artifacts.
+	var (
+		arg    = ctx.Args().Get(2)
+		header *types.Header
+	)
+	if hashish(arg) {
+		hash := common.HexToHash(arg)
+		number, ok := rawdb.ReadHeaderNumber(chaindb, hash)
+		if !ok {
+			return fmt.Errorf("anchor block %x not found in the local header chain", hash)
+		}
+		header = rawdb.ReadHeader(chaindb, hash, number)
+	} else {
+		number, err := strconv.ParseUint(arg, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid anchor block %q: %v", arg, err)
+		}
+		hash := rawdb.ReadCanonicalHash(chaindb, number)
+		if hash == (common.Hash{}) {
+			return fmt.Errorf("no canonical hash for anchor block %d", number)
+		}
+		header = rawdb.ReadHeader(chaindb, hash, number)
+	}
+	if header == nil {
+		return errors.New("anchor header not found")
+	}
+	log.Info("Importing binary tree state", "anchor", header.Number, "stateRoot", header.Root)
+
+	verifyOnly := ctx.Bool(verifyOnlyFlag.Name)
+	if ctx.Bool(forceConvertFlag.Name) && !verifyOnly {
+		if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
+			return fmt.Errorf("failed to wipe binary tree state: %w", err)
+		}
+	}
+	budgetMB := ctx.Uint64(memoryLimitFlag.Name)
+	if budgetMB > math.MaxInt>>20 {
+		budgetMB = math.MaxInt >> 20
+	}
+	_, err := importState(chaindb, ctx.Args().Get(0), ctx.Args().Get(1), header.Root, verifyOnly, conversionOptions{
+		sortBudget: int(budgetMB << 20),
+		tmpDir:     ctx.String(tmpDirFlag.Name),
+	})
+	return err
+}
 
 // The EIP-8347 consumer: importState ingests a distributed PBT snapshot and
 // preimage file after proving them with the dual-check. Check 1 rebuilds the

@@ -74,6 +74,7 @@ var (
 		Usage:       "A set of commands for binary trie operations",
 		Description: "",
 		Subcommands: []*cli.Command{
+			bintrieImportCommand,
 			{
 				Name:      "convert",
 				Usage:     "Convert MPT state to binary trie",
