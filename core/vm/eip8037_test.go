@@ -190,24 +190,21 @@ func TestSStoreChargedAtOpcodeEnd(t *testing.T) {
 }
 
 // The SSTORE reentrancy sentry checks gas_left only; the reservoir is excluded.
-// Uses a noop write (1->1->1): the two PUSH1s cost 6, leaving gas_left at the
-// sentry (2300) for a 2306 budget. Under EIP-8038 the cold-slot access that
-// follows a cleared sentry costs COLD_STORAGE_ACCESS (3000).
+// Uses a noop write (1->1->1): the two PUSH1s cost 6, so a budget of
+// 6 + SstoreSentryGasEIP2200 leaves gas_left exactly at the sentry.
 func TestSStoreStipendExcludesReservoir(t *testing.T) {
-	// execution at the sentry, huge reservoir: must still fail, proving the
+	const pushes = 6
+
+	// Execution gas at the sentry, huge reservoir: must still fail, proving the
 	// reservoir does not count toward the sentry.
-	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(2306, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
+	atSentry := pushes + params.SstoreSentryGasEIP2200
+	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(atSentry, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
 		t.Fatal("expected sentry failure with execution gas at the limit")
 	}
-	// Enough execution gas to clear the sentry and pay the cold-slot access
-	// (6 for the PUSH1s + COLD_STORAGE_ACCESS) succeeds with a huge reservoir.
-	execution := 6 + params.ColdStorageAccessAmsterdam
-	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(execution, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err != nil {
-		t.Fatalf("unexpected failure above sentry: %v", err)
-	}
-	// One gas short of the cold-slot access still fails (now on OOG, not sentry).
-	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(execution-1, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
-		t.Fatal("expected OOG when execution gas cannot cover cold-slot access")
+	// One gas above the sentry succeeds: the cold-slot access is cheaper than the
+	// sentry, so clearing the sentry is sufficient.
+	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(atSentry+1, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err != nil {
+		t.Fatalf("unexpected failure one gas above the sentry: %v", err)
 	}
 }
 
