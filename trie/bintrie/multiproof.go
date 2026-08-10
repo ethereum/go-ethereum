@@ -19,6 +19,7 @@ package bintrie
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/bits"
 	"slices"
 
@@ -30,12 +31,12 @@ import (
 // cannot work out for itself.
 //
 // The proof this package already had expands every node on every path into a
-// standalone hash preimage, so proving a whole contract's code pays three
-// times over: for internal branches the verifier could recompute from the
-// leaves it was given, for the two child hashes of every branch when only the
-// sibling is unknown, and for a copy of each key it supplied in the request.
-// Measured on a 24 KiB contract those are 50.2%, part of the same 50.2%, and
-// 26.0% of a 106,795-byte proof, against a 25,376-byte payload.
+// standalone hash preimage, so proving a whole contract's code pays three times
+// over: for internal branches the verifier could recompute from the leaves it
+// was given, for the two child hashes of every branch when only the sibling is
+// unknown, and for a copy of each key it supplied in the request. Measured on a
+// 24 KiB contract by TestMultiproofSize, that proof is 107,029 B against a
+// 25,376-byte payload, where the multiproof is 26,165 B.
 //
 // The encoding below is a preorder walk of the union of paths to the queried
 // keys. Branches carry their prefix but neither child; a subtree holding no
@@ -117,26 +118,84 @@ func bitmapCount(m *[32]byte) int {
 // Proving
 //
 
+// ProofPath names a single node by the first Bits bits of Key.
+type ProofPath struct {
+	Key  []byte
+	Bits int
+}
+
+// ProofRequests is everything one proof has to cover. Keys answer one value
+// each, present or absent; Stems answer a whole group, which writes and scans
+// need; Paths answer the node at a bit-prefix, which no key names but a
+// collapse or a prefix deletion resolves.
+type ProofRequests struct {
+	Keys  [][]byte
+	Stems [][]byte
+	Paths []ProofPath
+}
+
+// Request kinds, which differ only in what they cover where their walk ends.
+const (
+	reqKey  = iota // the leaf the key lands on
+	reqStem        // every value the stem holds
+	reqPath        // whatever node is here, its children as hashes
+)
+
+// proofTarget is one request reduced to a walk: the bits to consume, and what
+// to do where they run out.
+type proofTarget struct {
+	kind byte
+	path []byte
+	bits int
+}
+
 // ProveMulti proves every key in keys against the trie's current root.
 //
 // Keys may be present or absent; an absent key is answered by the structure
 // that shows it absent, the same divergence a single-key proof witnesses.
 func (t *BinaryTrie) ProveMulti(keys [][]byte) (*Multiproof, error) {
+	return t.ProveRequests(ProofRequests{Keys: keys})
+}
+
+// ProveRequests proves every request against the trie's current root.
+func (t *BinaryTrie) ProveRequests(req ProofRequests) (*Multiproof, error) {
 	if t.committed {
 		return nil, trie.ErrCommitted
 	}
-	sorted := make([][]byte, 0, len(keys))
-	for _, k := range keys {
+	tgts := make([]proofTarget, 0, len(req.Keys)+len(req.Stems)+len(req.Paths))
+	for _, k := range req.Keys {
 		if err := validateKey(k); err != nil {
 			return nil, err
 		}
-		sorted = append(sorted, k)
+		tgts = append(tgts, proofTarget{kind: reqKey, path: k, bits: 8 * len(k)})
 	}
-	slices.SortFunc(sorted, bytes.Compare)
-	sorted = slices.CompactFunc(sorted, bytes.Equal)
+	for _, s := range req.Stems {
+		if err := validateStem(s); err != nil {
+			return nil, err
+		}
+		tgts = append(tgts, proofTarget{kind: reqStem, path: s, bits: 8 * len(s)})
+	}
+	for _, p := range req.Paths {
+		if p.Bits < 0 || p.Bits > 8*len(p.Key) || p.Bits > maxPathBits {
+			return nil, fmt.Errorf("bintrie: path of %d bits over a %d-byte key", p.Bits, len(p.Key))
+		}
+		tgts = append(tgts, proofTarget{kind: reqPath, path: p.Key, bits: p.Bits})
+	}
+	slices.SortFunc(tgts, func(a, b proofTarget) int {
+		if c := bytes.Compare(a.path, b.path); c != 0 {
+			return c
+		}
+		if c := a.bits - b.bits; c != 0 {
+			return c
+		}
+		return int(a.kind) - int(b.kind)
+	})
+	tgts = slices.CompactFunc(tgts, func(a, b proofTarget) bool {
+		return a.kind == b.kind && a.bits == b.bits && bytes.Equal(a.path, b.path)
+	})
 
 	mp := new(Multiproof)
-	n, err := t.proveMultiWalk(t.root, sorted, 0, mp)
+	n, err := t.proveMultiWalk(t.root, tgts, 0, mp)
 	if err != nil {
 		return nil, err
 	}
@@ -144,13 +203,13 @@ func (t *BinaryTrie) ProveMulti(keys [][]byte) (*Multiproof, error) {
 	return mp, nil
 }
 
-// proveMultiWalk emits the preorder covering keys, which are sorted and all
-// share the bits consumed above this node.
-func (t *BinaryTrie) proveMultiWalk(n binaryNode, keys [][]byte, pos int, mp *Multiproof) (binaryNode, error) {
-	// A subtree no queried key descends into is shipped as one hash. This is
-	// also what keeps absence answerable: a key always routes into a subtree
-	// that gets walked, never into one that collapses.
-	if len(keys) == 0 {
+// proveMultiWalk emits the preorder covering tgts, which all share the bits consumed
+// above this node.
+func (t *BinaryTrie) proveMultiWalk(n binaryNode, tgts []proofTarget, pos int, mp *Multiproof) (binaryNode, error) {
+	// A subtree nothing descends into is shipped as one hash. This is also what
+	// keeps absence answerable: a key always routes into a subtree that gets
+	// walked, never into one that collapses.
+	if len(tgts) == 0 {
 		if _, isEmpty := n.(empty); !isEmpty {
 			mp.tokens = append(mp.tokens, mpToken{kind: mpStub, hash: n.hashAt(pos)})
 		}
@@ -158,38 +217,36 @@ func (t *BinaryTrie) proveMultiWalk(n binaryNode, keys [][]byte, pos int, mp *Mu
 	}
 	switch nn := n.(type) {
 	case empty:
-		// Every queried key here is absent, and an empty tree proves it.
+		// Every request here is answered absent, and an empty tree proves it.
 		return n, nil
 
 	case hashedNode:
-		resolved, err := t.resolve(nn, keyWalk(keys[0], pos))
+		resolved, err := t.resolve(nn, keyWalk(tgts[0].path, pos))
 		if err != nil {
 			return n, err
 		}
-		return t.proveMultiWalk(resolved, keys, pos, mp)
+		return t.proveMultiWalk(resolved, tgts, pos, mp)
 
 	case *groupNode:
-		mp.tokens = append(mp.tokens, groupToken(nn, keys, pos))
+		mp.tokens = append(mp.tokens, groupToken(nn, tgts, pos))
 		return n, nil
 
 	case *branchNode:
 		mp.tokens = append(mp.tokens, mpToken{kind: mpBranch, prefix: nn.prefix})
 		split := pos + nn.prefix.n
 
-		// Keys that diverge from the prefix are absent, and this branch is the
-		// witness; they take no further part in the walk.
-		var live [][]byte
-		for _, k := range keys {
-			if nn.prefix.matchKey(k, pos) == nn.prefix.n && split < 8*len(k) {
-				live = append(live, k)
+		var left, right []proofTarget
+		for _, tg := range tgts {
+			// A target ending at or above the split is answered by the token just
+			// emitted. One diverging from the prefix is absent, and this branch is
+			// the witness. Neither takes any further part in the walk.
+			if tg.bits <= split || nn.prefix.matchKey(tg.path, pos) != nn.prefix.n {
+				continue
 			}
-		}
-		var left, right [][]byte
-		for _, k := range live {
-			if bitAt(k, split) == 0 {
-				left = append(left, k)
+			if bitAt(tg.path, split) == 0 {
+				left = append(left, tg)
 			} else {
-				right = append(right, k)
+				right = append(right, tg)
 			}
 		}
 		l, err := t.proveMultiWalk(nn.left, left, split+1, mp)
@@ -212,7 +269,7 @@ func (t *BinaryTrie) proveMultiWalk(n binaryNode, keys [][]byte, pos int, mp *Mu
 // groupToken describes one stem: which sub-indices it holds, which of them
 // the caller asked for, their values, and one hash per maximal subtree of the
 // stem that holds none of them.
-func groupToken(g *groupNode, keys [][]byte, pos int) mpToken {
+func groupToken(g *groupNode, tgts []proofTarget, pos int) mpToken {
 	tok := mpToken{kind: mpGroup, stem: slices.Clone(g.stem)}
 	// Every queried key that reaches this group opens the leaf its walk lands
 	// on, whether or not the stem and sub-index match. For a key that is
@@ -225,8 +282,22 @@ func groupToken(g *groupNode, keys [][]byte, pos int) mpToken {
 	// reading the absent key then resolves into it and reports a missing node
 	// rather than an absence. The root check does not catch that: the group
 	// hashes the same either way.
-	for _, k := range keys {
-		bitmapSet(&tok.covered, g.subs[groupLanding(g.subs, k[len(k)-1])])
+	for _, tg := range tgts {
+		switch {
+		case tg.kind == reqKey:
+			bitmapSet(&tok.covered, g.subs[groupLanding(g.subs, tg.path[len(tg.path)-1])])
+		case tg.kind == reqStem && bytes.Equal(tg.path, g.stem):
+			// The whole group ships, which is what keeps it writable on the other
+			// side rather than rebuilding as branches and leaves.
+			for _, sub := range g.subs {
+				bitmapSet(&tok.covered, sub)
+			}
+		default:
+			// A stem request that landed on a different stem, or a path naming this
+			// node. One leaf materialises it, and the stem that leaf carries is
+			// what shows the requested one absent.
+			bitmapSet(&tok.covered, g.subs[0])
+		}
 	}
 	loadBearing(g.subs, &tok.covered, 0, len(g.subs), &tok.present)
 	for i, sub := range g.subs {
