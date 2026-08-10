@@ -378,16 +378,37 @@ func TestEIP8038SelfdestructAccountWrite(t *testing.T) {
 
 // TestEIP8038SStoreAccessGuard covers the affordability check that bails out
 // before the slot is read once the gas left cannot cover the slot's access cost.
-// The two PUSH1s cost 6, so a 2506 budget leaves 2500 at the SSTORE: above the
-// reentrancy sentry (2300) yet below COLD_STORAGE_ACCESS (3000). The guard must
-// fire, distinguishable from the sentry/charge OOG by its "slot access" message.
+//
+// Under the current schedule that guard is a backstop rather than a reachable
+// path: both access costs, COLD_STORAGE_ACCESS (2,100) and WARM_ACCESS (100),
+// are below the reentrancy sentry (2,300), and the sentry is checked first, so
+// any gas that reaches the guard already covers the access. The guard is kept
+// as defensive code because the two are independent parameters.
+//
+// This test pins that relationship. If a repricing lifts either access cost
+// above the sentry the guard becomes reachable again, and this test fails to
+// say so rather than letting SSTORE's failure mode change unnoticed.
 func TestEIP8038SStoreAccessGuard(t *testing.T) {
-	budget := NewGasBudget(6+params.SstoreSentryGasEIP2200+200, 0)
+	for _, tc := range []struct {
+		name string
+		cost uint64
+	}{
+		{"cold", params.ColdStorageAccessAmsterdam},
+		{"warm", params.WarmStorageAccessAmsterdam},
+	} {
+		if tc.cost > params.SstoreSentryGasEIP2200 {
+			t.Fatalf("%s slot access (%d) exceeds the reentrancy sentry (%d): the guard "+
+				"is reachable again and needs a test exercising it", tc.name, tc.cost, params.SstoreSentryGasEIP2200)
+		}
+	}
+	// Below the sentry the sentry itself must be what rejects the call, not the
+	// slot-access guard behind it.
+	budget := NewGasBudget(6+params.SstoreSentryGasEIP2200, 0)
 	_, _, err := run8038(t, sstore(0, 1), budget, new(uint256.Int), nil)
 	if err == nil {
-		t.Fatal("expected failure: gas left cannot cover cold-slot access")
+		t.Fatal("expected failure: gas left is at the reentrancy sentry")
 	}
-	if !strings.Contains(err.Error(), "not enough gas for slot access") {
-		t.Fatalf("got %q, want the slot-access guard error", err)
+	if !strings.Contains(err.Error(), "not enough gas for reentrancy sentry") {
+		t.Fatalf("got %q, want the reentrancy sentry error", err)
 	}
 }
