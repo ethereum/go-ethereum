@@ -221,34 +221,6 @@ the EEST binary-tree suite passes byte-identical to the reference fills -
 so every upstream sync re-conflicts until upstream updates. Report upstream
 when convenient.
 
-## Protocol tests are delegated to the EEST binary-tree suite
-
-The dividing line, settled 2026-08-07: consensus-observable behavior is
-pinned by the EEST fixtures; geth keeps what fixtures cannot observe —
-engine, database, witness and RPC mechanics, the harness, and the
-EELS-vector unit oracle in `trie/bintrie`.
-
-Removed as already pinned (verified against the suite at `8d258bc1d`):
-
-- `core.TestProcessPBT` — the blockchain fixtures pin every block's state
-  root; the smoke test asserted none.
-- `core/state.TestPBTZeroIsAbsence` — `test_storage_ops.py` pins both arms
-  end-to-end.
-
-Scheduled for the same treatment: `core.TestProcessParentBlockHash` once the
-EEST port PR (its 2935 fixture) lands, and `core/state.TestPBTCodeShrink` —
-the clear is pinned upstream by `test_delegation_clearing`
-(`valid_from("Prague")`, fills under BinaryTree; 63 filled / 42 consumed
-green), so it waits only on the widened loop below. Leaf probes stay in
-`TestPBTCodeSizeWrites` and the model suite.
-
-Coverage stays manual by decision: fill `tests/binary_tree/` plus
-`tests/prague/eip7702_set_code_tx -k "delegation_clearing or
-ext_code_on_set_code"` at `--fork=BinaryTree` (or the whole tree via
-`just binary-trie-fork tests`), then consume per the PR description. Reorgs
-cannot be expressed as fixtures at all — the EEST `Block` model has no
-sidechain mechanism — so the reorg tests stay native regardless.
-
 ## Also deferred, for context
 
 These are known and tracked elsewhere; listed so this file is the single place
