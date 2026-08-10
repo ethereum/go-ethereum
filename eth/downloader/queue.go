@@ -594,7 +594,18 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 			taskQueue.PopItem()
 			progress = true
 			delete(taskPool, header.Hash())
-			log.Error("Fetch reservation already delivered", "number", header.Number.Uint64())
+
+			// Access lists are a best-effort component that block delivery
+			// never waits on, so a retrieval task outliving the delivery of
+			// its block is expected rather than a sign of queue corruption.
+			// It happens whenever a request in flight across the delivery is
+			// handed back afterwards, be it by the peer not possessing the
+			// list, by a timeout or by a disconnect.
+			if kind == balType {
+				log.Debug("Access list reservation already delivered", "number", header.Number.Uint64())
+			} else {
+				log.Error("Fetch reservation already delivered", "number", header.Number.Uint64())
+			}
 			continue
 		}
 		if throttle {
