@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -417,4 +418,164 @@ func TestArtifactReaders(t *testing.T) {
 		}
 		pr2.close()
 	}
+}
+
+// rawSnapshot writes a snapshot whose records are encoded verbatim, so a case
+// can inject an encoding the writers can never emit.
+func rawSnapshot(t *testing.T, root common.Hash, count uint64, recs [][2][]byte) string {
+	t.Helper()
+	var buf bytes.Buffer
+	header := make([]byte, snapshotHeaderSize)
+	copy(header, root[:])
+	binary.BigEndian.PutUint64(header[32:], count)
+	buf.Write(header)
+	for _, rec := range recs {
+		blob, err := rlp.EncodeToBytes([]any{rec[0], rec[1]})
+		if err != nil {
+			t.Fatal(err)
+		}
+		buf.Write(blob)
+	}
+	path := filepath.Join(t.TempDir(), "snapshot.bin")
+	if err := os.WriteFile(path, buf.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// rawPreimages writes a preimage file from verbatim records: rec[0] is the
+// address, the rest are slot keys.
+func rawPreimages(t *testing.T, recs [][][]byte) string {
+	t.Helper()
+	var buf bytes.Buffer
+	for _, rec := range recs {
+		blob, err := rlp.EncodeToBytes([]any{rec[0], rec[1:]})
+		if err != nil {
+			t.Fatal(err)
+		}
+		buf.Write(blob)
+	}
+	path := filepath.Join(t.TempDir(), "preimages.bin")
+	if err := os.WriteFile(path, buf.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// TestArtifactReadersReject pins the encodings the readers must refuse. They
+// are the only way either artifact enters the importer, so a rule enforced
+// here is enforced everywhere.
+func TestArtifactReadersReject(t *testing.T) {
+	var (
+		key  = bintrie.BasicDataKey(common.Address{1})
+		next = bintrie.BasicDataKey(common.Address{2})
+		good = bytes.Repeat([]byte{1}, 32)
+		addr = common.Address{1}.Bytes()
+	)
+	if bytes.Compare(key, next) > 0 {
+		key, next = next, key
+	}
+	t.Run("snapshot", func(t *testing.T) {
+		for _, tc := range []struct {
+			name    string
+			recs    [][2][]byte
+			count   uint64
+			wantErr string
+		}{
+			{"leading zero value", [][2][]byte{{key, append([]byte{0}, good[1:]...)}}, 1, "canonical"},
+			{"over-long value", [][2][]byte{{key, bytes.Repeat([]byte{1}, 33)}}, 1, "canonical"},
+			{"empty value", [][2][]byte{{key, nil}}, 1, "canonical"},
+			{"short key in a valid zone", [][2][]byte{{key[:33], good}}, 1, "demands 34"},
+			{"long storage key", [][2][]byte{{append([]byte{bintrie.StorageZone}, bytes.Repeat([]byte{1}, 66)...), good}}, 1, "demands 66"},
+			{"duplicate key", [][2][]byte{{key, good}, {key, good}}, 2, "out of order"},
+			{"descending keys", [][2][]byte{{next, good}, {key, good}}, 2, "out of order"},
+			{"fewer records than claimed", [][2][]byte{{key, good}}, 2, "header claims"},
+			{"more records than claimed", [][2][]byte{{key, good}, {next, good}}, 1, "more records"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				sr, err := openSnapshot(rawSnapshot(t, common.Hash{}, tc.count, tc.recs))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer sr.close()
+				var lastErr error
+				for {
+					if _, _, err := sr.next(); err == io.EOF {
+						break
+					} else if err != nil {
+						lastErr = err
+						break
+					}
+				}
+				if lastErr == nil {
+					t.Fatal("the reader accepted it")
+				}
+				if !strings.Contains(lastErr.Error(), tc.wantErr) {
+					t.Fatalf("rejection %q does not name the fault %q", lastErr, tc.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("oversized length prefix", func(t *testing.T) {
+		// A record whose value claims four gigabytes: rlp must refuse it
+		// against the input it actually has rather than allocate for it.
+		blob := append([]byte{0xf8, 0x28, 0xa2}, key...)
+		blob = append(blob, 0xbb, 0xff, 0xff, 0xff, 0xff)
+		path := filepath.Join(t.TempDir(), "snapshot.bin")
+		header := make([]byte, snapshotHeaderSize)
+		binary.BigEndian.PutUint64(header[32:], 1)
+		if err := os.WriteFile(path, append(header, blob...), 0600); err != nil {
+			t.Fatal(err)
+		}
+		sr, err := openSnapshot(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer sr.close()
+		if _, _, err := sr.next(); err == nil {
+			t.Fatal("a four-gigabyte length claim was accepted")
+		}
+	})
+
+	t.Run("preimages", func(t *testing.T) {
+		other := common.Address{2}.Bytes()
+		for _, tc := range []struct {
+			name    string
+			recs    [][][]byte
+			wantErr string
+		}{
+			{"short address", [][][]byte{{addr[:19]}}, "want 20"},
+			{"long address", [][][]byte{{append(addr, 0)}}, "want 20"},
+			{"duplicate address", [][][]byte{{addr}, {addr}}, "out of address order"},
+			{"descending addresses", [][][]byte{{other}, {addr}}, "out of address order"},
+			{"leading zero slot", [][][]byte{{addr, {0x00, 0x01}}}, "canonical"},
+			{"over-long slot", [][][]byte{{addr, bytes.Repeat([]byte{1}, 33)}}, "canonical"},
+			{"descending slots", [][][]byte{{addr, {0x02}, {0x01}}}, "slot keys out of order"},
+			{"duplicate slots", [][][]byte{{addr, {0x02}, {0x02}}}, "slot keys out of order"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				pr, err := openPreimages(rawPreimages(t, tc.recs))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer pr.close()
+				var lastErr error
+				for {
+					if _, _, err := pr.next(); err == io.EOF {
+						break
+					} else if err != nil {
+						lastErr = err
+						break
+					}
+				}
+				if lastErr == nil {
+					t.Fatal("the reader accepted it")
+				}
+				if !strings.Contains(lastErr.Error(), tc.wantErr) {
+					t.Fatalf("rejection %q does not name the fault %q", lastErr, tc.wantErr)
+				}
+			})
+		}
+	})
 }

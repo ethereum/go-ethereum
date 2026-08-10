@@ -254,7 +254,15 @@ func openSnapshot(path string) (*snapshotReader, error) {
 	}
 	sr.root = common.BytesToHash(header[:32])
 	sr.count = binary.BigEndian.Uint64(header[32:])
-	sr.stream = rlp.NewStream(r, 0)
+	// Bound the stream by the bytes that remain: a record's length prefix is
+	// attacker-controlled, and rlp allocates against it unless it can check
+	// the claim against the input it actually has.
+	size, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	sr.stream = rlp.NewStream(r, uint64(max(size.Size()-snapshotHeaderSize, 0)))
 	return sr, nil
 }
 
@@ -333,8 +341,14 @@ func openPreimages(path string) (*preimageReader, error) {
 	if err != nil {
 		return nil, err
 	}
+	size, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
 	pr := &preimageReader{f: f, hasher: crypto.NewKeccakState()}
-	pr.stream = rlp.NewStream(bufio.NewReaderSize(io.TeeReader(f, pr.hasher), 1<<20), 0)
+	// Bounded for the same reason as the snapshot's records.
+	pr.stream = rlp.NewStream(bufio.NewReaderSize(io.TeeReader(f, pr.hasher), 1<<20), uint64(size.Size()))
 	return pr, nil
 }
 

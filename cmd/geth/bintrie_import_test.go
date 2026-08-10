@@ -314,8 +314,15 @@ func TestImportRejects(t *testing.T) {
 		contract  = common.HexToAddress("0x2000000000000000000000000000000000000002")
 		delegated = common.HexToAddress("0x4000000000000000000000000000000000000004")
 		eoa       = common.HexToAddress("0x1000000000000000000000000000000000000001")
+		// The one account whose code no other account shares, so a surgery
+		// on its size or chunks reaches the code limb rather than tripping
+		// the shared-hash size conflict first.
+		loner     = common.HexToAddress("0x5000000000000000000000000000000000000005")
+		alloc     = artifactAlloc()
+		lonerHash = crypto.Keccak256Hash(alloc[loner].Code)
+		lonerCode = uint32(len(alloc[loner].Code))
 	)
-	_, root, _, snapPath, prePath := importFixture(t, artifactAlloc())
+	_, root, _, snapPath, prePath := importFixture(t, alloc)
 
 	findKey := func(recs []snapRecord, key []byte) int {
 		t.Helper()
@@ -522,6 +529,94 @@ func TestImportRejects(t *testing.T) {
 				return insertSorted(recs, snapRecord{key: bintrie.CodeChunkKey(crypto.Keccak256Hash([]byte("junk")), 0), value: common.Hash{31: 1}})
 			},
 			wantErr: "addressed by no account",
+		},
+		{
+			name:      "forged code size",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				i := findKey(recs, bintrie.BasicDataKey(loner))
+				// A four-byte field claiming 4 GB of code: the buffer and the
+				// candidate set are sized from it before anything checks it.
+				for b := 4; b < 8; b++ {
+					recs[i].value[b] = 0xff
+				}
+				return recs
+			},
+			wantErr: "import bound",
+		},
+		{
+			name:      "empty code hash claiming code",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				i := findKey(recs, bintrie.BasicDataKey(eoa))
+				recs[i].value[7] = 10
+				return recs
+			},
+			wantErr: "assembled code hashes to",
+		},
+		{
+			name:      "code hash claiming no code",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				i := findKey(recs, bintrie.BasicDataKey(loner))
+				for b := 4; b < 8; b++ {
+					recs[i].value[b] = 0
+				}
+				return recs
+			},
+			wantErr: "addressed by no account",
+		},
+		{
+			name:      "whole bytecode absent",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				return slices.DeleteFunc(recs, func(r snapRecord) bool {
+					return r.key[0] == bintrie.CodeZone &&
+						bytes.Equal(r.key[:33], bintrie.CodeChunkStem(lonerHash, 0))
+				})
+			},
+			wantErr: "assembled code hashes to",
+		},
+		{
+			name:      "chunk past the code's last",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				chunks := (lonerCode + 30) / 31
+				return insertSorted(recs, snapRecord{
+					key:   bintrie.CodeChunkKey(lonerHash, uint64(chunks)+1),
+					value: common.Hash{31: 1},
+				})
+			},
+			wantErr: "beyond the",
+		},
+		{
+			name:      "account with neither code-hash nor delegation",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				i := findKey(recs, bintrie.CodeHashKey(eoa))
+				return slices.Delete(recs, i, i+1)
+			},
+			wantErr: "holds neither",
+		},
+		{
+			name:      "delegation with a wrong code size",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				i := findKey(recs, bintrie.BasicDataKey(delegated))
+				recs[i].value[7] = 24
+				return recs
+			},
+			wantErr: "must be 23",
+		},
+		{
+			name:      "malformed designator",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				i := findKey(recs, bintrie.DelegationKey(delegated))
+				recs[i].value[0] ^= 1 // breaks the 0xef0100 marker
+				return recs
+			},
+			wantErr: "malformed delegation",
 		},
 		{
 			name:    "wrong anchor root",

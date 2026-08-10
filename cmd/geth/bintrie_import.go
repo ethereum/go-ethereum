@@ -139,6 +139,14 @@ func importBinaryTrie(ctx *cli.Context) error {
 // attestation lands last - and verify-only mode runs the whole pipeline
 // with every writer disarmed.
 
+// maxImportCodeSize bounds the code size an artifact may claim. It is a
+// memory bound rather than a consensus rule - the protocol's own ceiling is
+// params.MaxCodeSizeAmsterdam, sixteen times smaller - because the claim
+// sizes a buffer and a candidate set before anything can be checked against
+// it: a code_size field costs an attacker four bytes and would otherwise
+// cost the verifier gigabytes.
+const maxImportCodeSize = 1 << 20
+
 // Candidate tags: what a preimage-derived tree key stands for.
 const (
 	candBasic = iota
@@ -413,6 +421,9 @@ func importState(chaindb ethdb.Database, snapshotPath, preimagePath string, anch
 			}
 		case g.codeHash != nil:
 			codeHash = common.BytesToHash(g.codeHash[:])
+			if codeSize > maxImportCodeSize {
+				return fmt.Errorf("account %x claims %d bytes of code, over the %d-byte import bound", g.addr, codeSize, maxImportCodeSize)
+			}
 			// Sizes are anchored through the code limb; register every hash
 			// that claims code, and hold shared hashes to one size.
 			if codeSize > 0 || codeHash != types.EmptyCodeHash {
