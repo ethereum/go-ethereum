@@ -26,6 +26,18 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
+// reencode round-trips a proof through its wire form: the canonical-bitmap rule
+// lives in the decoder, so skipping it never checks that the prover emits the
+// one form its own verifier accepts.
+func reencode(t *testing.T, mp *bintrie.Multiproof) *bintrie.Multiproof {
+	t.Helper()
+	decoded, err := bintrie.DecodeMultiproof(mp.Encode())
+	if err != nil {
+		t.Fatalf("the prover emitted a proof its own decoder refuses: %v", err)
+	}
+	return decoded
+}
+
 // recordsDB writes the records of tr into a fresh proof-only database and
 // returns a trie opened on the same root, which is what a consumer does with a
 // proof it has checked.
@@ -68,7 +80,7 @@ func TestWriteRecordsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verified, err := bintrie.VerifyMultiproof(root, mp)
+	verified, err := bintrie.VerifyMultiproof(root, reencode(t, mp))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,11 +144,11 @@ func TestWriteRecordsSkipsStubs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifiedNarrow, err := bintrie.VerifyMultiproof(root, narrow)
+	verifiedNarrow, err := bintrie.VerifyMultiproof(root, reencode(t, narrow))
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifiedWide, err := bintrie.VerifyMultiproof(root, wide)
+	verifiedWide, err := bintrie.VerifyMultiproof(root, reencode(t, wide))
 	if err != nil {
 		t.Fatal(err)
 	}

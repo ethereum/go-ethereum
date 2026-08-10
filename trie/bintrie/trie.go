@@ -509,6 +509,11 @@ func (t *BinaryTrie) removeStem(stem []byte) error {
 	if t.committed {
 		return trie.ErrCommitted
 	}
+	// Validated before it is recorded, as in UpdateStem: a malformed stem reaching
+	// the recorder fails the whole block's proof rather than this one operation.
+	if err := validateStem(stem); err != nil {
+		return err
+	}
 	// Whole, for the same reason as UpdateStem: delStem refuses a stem the tree
 	// holds only part of.
 	t.recorder.AddStem(stem)

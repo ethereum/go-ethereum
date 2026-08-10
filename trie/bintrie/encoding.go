@@ -79,8 +79,11 @@ func serializeNodeErr(n binaryNode, pos int) ([]byte, error) {
 		// an out-of-range one would wrap rather than fail. The record would
 		// then describe a different node, and the mismatch would only surface
 		// on read-back - as a database that cannot reload its own state.
-		if pos > maxPathBits {
-			return nil, fmt.Errorf("bintrie: node position %d exceeds the deepest legal path", pos)
+		//
+		// Bounded by the stem, matching what decodeNode accepts: a looser bound
+		// writes a record that only fails on the way back in.
+		if pos > 8*len(n.stem) {
+			return nil, fmt.Errorf("bintrie: node position %d exceeds the %d bits of its stem", pos, 8*len(n.stem))
 		}
 		if len(n.stem) > 0xff {
 			return nil, fmt.Errorf("bintrie: stem length %d does not fit the record", len(n.stem))

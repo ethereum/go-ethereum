@@ -81,6 +81,18 @@ func partialFixture(t *testing.T, subs []byte) (stem []byte, whole *groupNode, e
 	return stem, whole, expandGroup(whole, 0)
 }
 
+// reencode round-trips a proof through its wire form, so that the decoder's
+// canonical-bitmap rule runs: VerifyMultiproof alone does not apply it, and a
+// test that skips it never checks the prover emits the form its verifier wants.
+func reencode(t *testing.T, mp *Multiproof) *Multiproof {
+	t.Helper()
+	decoded, err := DecodeMultiproof(mp.Encode())
+	if err != nil {
+		t.Fatalf("the prover emitted a proof its own decoder refuses: %v", err)
+	}
+	return decoded
+}
+
 func partialTrie(t *testing.T, root binaryNode) *BinaryTrie {
 	t.Helper()
 	reader, err := trie.NewReader(common.Hash{}, common.Hash{}, nil)
@@ -220,7 +232,7 @@ func TestProofRequestKinds(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := VerifyMultiproof(root, mp)
+		got, err := VerifyMultiproof(root, reencode(t, mp))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -234,7 +246,7 @@ func TestProofRequestKinds(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := VerifyMultiproof(root, mp)
+		got, err := VerifyMultiproof(root, reencode(t, mp))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -270,7 +282,7 @@ func TestProofRequestKinds(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				got, err := VerifyMultiproof(root, mp)
+				got, err := VerifyMultiproof(root, reencode(t, mp))
 				if err != nil {
 					t.Fatal(err)
 				}
