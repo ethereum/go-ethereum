@@ -40,7 +40,13 @@ type BinaryTrie struct {
 	reader    *trie.Reader
 	tracer    *trie.PrevalueTracer
 	ops       *opTracer
+	recorder  *ProofRecorder
 	committed bool
+
+	// proofOnly marks a tree over state rebuilt from a proof or a witness, which
+	// can never be committed - structural changes skip the bookkeeping only a
+	// commit reads.
+	proofOnly bool
 }
 
 // NewBinaryTrie creates a binary trie rooted at the given hash, backed by
@@ -56,6 +62,12 @@ func NewBinaryTrie(root common.Hash, db database.NodeDatabase) (*BinaryTrie, err
 		reader: reader,
 		tracer: trie.NewPrevalueTracer(),
 		ops:    newOpTracer(),
+	}
+	// Asked of the database rather than taken as an argument: only the database
+	// knows whether it will ever be committed, and every other caller would have
+	// to answer a question it has no opinion about.
+	if wo, ok := db.(interface{ ProofOnly() bool }); ok {
+		t.proofOnly = wo.ProofOnly()
 	}
 	if root != types.EmptyBinaryHash && root != types.EmptyRootHash {
 		blob, err := t.resolveBlob(nil, root)
@@ -284,6 +296,10 @@ func (t *BinaryTrie) UpdateStem(stem []byte, subs []byte, values [][]byte) error
 			return fmt.Errorf("bintrie: invalid value length %d", len(v))
 		}
 	}
+	// Whole, and before the walk: insStem refuses a partial stem, and a failed
+	// resolution still owes the proof its request.
+	t.recorder.AddStem(stem)
+
 	root, err := t.insStem(t.root, stem, subs, values, 0)
 	if err != nil {
 		return err
@@ -460,6 +476,11 @@ func (t *BinaryTrie) collapse(n *branchNode, walk bitstr, bit byte) (binaryNode,
 		sibling, siblingBit = n.left, 0
 	}
 	siblingWalk := walk.append(n.prefix).concat(siblingBit, bitstr{})
+	// The survivor sits off every request's walk, so its position is the only
+	// thing that names it. Recorded before the residency test: the producer may
+	// hold it resolved while a verifier rebuilding from a proof does not.
+	t.recorder.addWalk(siblingWalk)
+
 	if h, ok := sibling.(hashedNode); ok {
 		resolved, err := t.resolve(h, siblingWalk)
 		if err != nil {
@@ -488,6 +509,10 @@ func (t *BinaryTrie) removeStem(stem []byte) error {
 	if t.committed {
 		return trie.ErrCommitted
 	}
+	// Whole, for the same reason as UpdateStem: delStem refuses a stem the tree
+	// holds only part of.
+	t.recorder.AddStem(stem)
+
 	root, _, err := t.delStem(t.root, stem, 0)
 	if err != nil {
 		return err
@@ -614,6 +639,10 @@ func (t *BinaryTrie) delPrefix(n binaryNode, P []byte, walk bitstr, pos int) (bi
 		}
 		return t.delPrefix(resolved, P, walk, pos)
 	case *groupNode:
+		// The locator descends a prefix, which is not a key, so nothing else in the
+		// request set names the node this walk ends on.
+		t.recorder.addWalk(walk)
+
 		if len(nn.stem) >= len(P) && bytes.Equal(nn.stem[:len(P)], P) {
 			t.ops.onDelete(pathOf(walk))
 			return empty{}, true, nil
@@ -621,6 +650,11 @@ func (t *BinaryTrie) delPrefix(n binaryNode, P []byte, walk bitstr, pos int) (bi
 		return n, false, nil
 	case *branchNode:
 		covers, diverged, _ := coversPrefix(P, pos, nn.prefix)
+		if diverged || covers {
+			// Both answers are read off this node, so it has to be a node rather
+			// than a hash on the other side.
+			t.recorder.addWalk(walk)
+		}
 		if diverged {
 			return n, false, nil
 		}
@@ -676,10 +710,17 @@ func (t *BinaryTrie) findPrefix(n binaryNode, P []byte, pos int) (binaryNode, bo
 		}
 		return t.findPrefix(resolved, P, pos)
 	case *groupNode:
+		// Same as delPrefix: the answer is read off the node this prefix walk ends
+		// on, which no key names.
+		t.recorder.AddPath(P, pos)
+
 		found := len(nn.stem) >= len(P) && bytes.Equal(nn.stem[:len(P)], P)
 		return n, found, nil
 	case *branchNode:
 		covers, diverged, _ := coversPrefix(P, pos, nn.prefix)
+		if diverged || covers {
+			t.recorder.AddPath(P, pos)
+		}
 		if diverged {
 			return n, false, nil
 		}
@@ -706,6 +747,12 @@ func (t *BinaryTrie) findPrefix(n binaryNode, P []byte, pos int) (binaryNode, bo
 // record through the witness tracer, so Commit can emit the deletions with
 // their previous values.
 func (t *BinaryTrie) deleteSubtree(n binaryNode, walk bitstr, pos int) error {
+	// The deletion list feeds only Commit, which can never follow on a
+	// proof-only tree - and a consumer reading over one would fault on records
+	// the proof need not carry.
+	if t.proofOnly {
+		return nil
+	}
 	switch nn := n.(type) {
 	case empty:
 		return nil
@@ -1094,15 +1141,57 @@ func (t *BinaryTrie) Witness() map[string][]byte {
 	return t.tracer.Values()
 }
 
+// SetProofRecorder attaches a recorder that accumulates what a proof over this
+// trie's opening root has to cover. A nil recorder turns recording off.
+func (t *BinaryTrie) SetProofRecorder(r *ProofRecorder) { t.recorder = r }
+
+// WriteRecords hands every resident node of t to onNode as a database record,
+// skipping stubs and empties so an uncovered read faults rather than answering
+// absence. Each record self-checks against the hash its node commits to -
+// pathdb adopts the parent's claim unchecked - and for the same reason a proof
+// must be verified against its root before its records are written.
+func (t *BinaryTrie) WriteRecords(onNode OnNode) error {
+	if t.committed {
+		return trie.ErrCommitted
+	}
+	return t.writeRecords(t.root, bitstr{}, 0, onNode)
+}
+
+func (t *BinaryTrie) writeRecords(n binaryNode, walk bitstr, pos int, onNode OnNode) error {
+	switch nn := n.(type) {
+	case empty, hashedNode:
+		return nil
+	case *groupNode:
+		return emitRecord(nn, walk, pos, onNode)
+	case *branchNode:
+		child := pos + nn.prefix.n + 1
+		if err := t.writeRecords(nn.left, walk.append(nn.prefix).concat(0, bitstr{}), child, onNode); err != nil {
+			return err
+		}
+		if err := t.writeRecords(nn.right, walk.append(nn.prefix).concat(1, bitstr{}), child, onNode); err != nil {
+			return err
+		}
+		return emitRecord(nn, walk, pos, onNode)
+	default:
+		return fmt.Errorf("bintrie: cannot serialize node type %T", n)
+	}
+}
+
 // Copy creates a deep copy of the trie, including its mutation and witness
 // tracers (a copy that dropped them would emit a wrong node set at commit).
+//
+// The recorder is shared rather than cloned, unlike those tracers: it belongs to
+// whoever is collecting the block's proof requests, and a copy filling its own
+// set would leave that proof short of whatever was applied through the copy.
 func (t *BinaryTrie) Copy() *BinaryTrie {
 	return &BinaryTrie{
 		root:      t.root.copy(),
 		reader:    t.reader,
 		tracer:    t.tracer.Copy(),
 		ops:       t.ops.copy(),
+		recorder:  t.recorder,
 		committed: t.committed,
+		proofOnly: t.proofOnly,
 	}
 }
 

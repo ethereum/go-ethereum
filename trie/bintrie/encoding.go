@@ -36,9 +36,36 @@ import (
 
 const bitmapSize = 32
 
+func emitRecord(n binaryNode, walk bitstr, pos int, onNode OnNode) error {
+	blob, err := serializeNodeErr(n, pos)
+	if err != nil {
+		return err
+	}
+	want := n.hashAt(pos)
+	got, err := DeserializeAndHash(blob)
+	if err != nil {
+		return fmt.Errorf("bintrie: record at path %x does not decode: %w", pathOf(walk), err)
+	}
+	if got != want {
+		return fmt.Errorf("bintrie: record at path %x commits to %x, want %x", pathOf(walk), got, want)
+	}
+	onNode(pathOf(walk), want, blob)
+	return nil
+}
+
 // serializeNode encodes a resolved node at position pos into its database
-// record.
+// record. Its bounds hold by construction for every caller here, so a violation
+// is a bug rather than bad input; serializeNodeErr is the variant for a tree
+// assembled from bytes somebody else supplied.
 func serializeNode(n binaryNode, pos int) []byte {
+	blob, err := serializeNodeErr(n, pos)
+	if err != nil {
+		panic(err.Error())
+	}
+	return blob
+}
+
+func serializeNodeErr(n binaryNode, pos int) ([]byte, error) {
 	switch n := n.(type) {
 	case *groupNode:
 		if len(n.subs) == 1 {
@@ -46,18 +73,17 @@ func serializeNode(n binaryNode, pos int) []byte {
 			blob = append(blob, tagLeaf)
 			blob = append(blob, n.stem...)
 			blob = append(blob, n.subs[0])
-			return append(blob, n.vals[0]...)
+			return append(blob, n.vals[0]...), nil
 		}
 		// Both fields below are written narrower than the values they carry, so
 		// an out-of-range one would wrap rather than fail. The record would
 		// then describe a different node, and the mismatch would only surface
-		// on read-back - as a database that cannot reload its own state. Both
-		// hold by construction, so a violation is a bug here, not bad input.
+		// on read-back - as a database that cannot reload its own state.
 		if pos > maxPathBits {
-			panic(fmt.Sprintf("bintrie: node position %d exceeds the deepest legal path", pos))
+			return nil, fmt.Errorf("bintrie: node position %d exceeds the deepest legal path", pos)
 		}
 		if len(n.stem) > 0xff {
-			panic(fmt.Sprintf("bintrie: stem length %d does not fit the record", len(n.stem)))
+			return nil, fmt.Errorf("bintrie: stem length %d does not fit the record", len(n.stem))
 		}
 		blob := make([]byte, 0, 1+2+1+len(n.stem)+bitmapSize+32*len(n.subs))
 		blob = append(blob, tagGroup, byte(pos>>8), byte(pos))
@@ -71,7 +97,7 @@ func serializeNode(n binaryNode, pos int) []byte {
 		for _, val := range n.vals {
 			blob = append(blob, val...)
 		}
-		return blob
+		return blob, nil
 	case *branchNode:
 		blob := make([]byte, 0, 1+2+len(n.prefix.b)+64)
 		blob = append(blob, tagBranch)
@@ -79,9 +105,9 @@ func serializeNode(n binaryNode, pos int) []byte {
 		child := pos + n.prefix.n + 1
 		left, right := n.left.hashAt(child), n.right.hashAt(child)
 		blob = append(blob, left[:]...)
-		return append(blob, right[:]...)
+		return append(blob, right[:]...), nil
 	default:
-		panic("bintrie: cannot serialize node type")
+		return nil, fmt.Errorf("bintrie: cannot serialize node type %T", n)
 	}
 }
 

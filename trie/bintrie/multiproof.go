@@ -424,6 +424,9 @@ func VerifyMultiproof(root common.Hash, mp *Multiproof) (*BinaryTrie, error) {
 		reader: reader,
 		tracer: trie.NewPrevalueTracer(),
 		ops:    newOpTracer(),
+		// There is no database under this tree and never will be, so the deletion
+		// bookkeeping a commit would read is pure waste here.
+		proofOnly: true,
 	}, nil
 }
 
