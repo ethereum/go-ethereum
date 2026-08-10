@@ -189,6 +189,19 @@ func TestPartialStemRefusesGroupOperations(t *testing.T) {
 					t.Fatalf("group lookup on a partial stem: got %v, want ErrPartialStem", err)
 				}
 			})
+
+			// removeStem is DeleteAccount's route; the delete case above
+			// only covers insStem.
+			t.Run("remove whole stem", func(t *testing.T) {
+				tr := partialTrie(t, expanded)
+				before := tr.Hash()
+				if err := tr.removeStem(stem); !errors.Is(err, ErrPartialStem) {
+					t.Fatalf("removing a partial stem: got %v, want ErrPartialStem", err)
+				}
+				if after := tr.Hash(); after != before {
+					t.Fatalf("refused removal still moved the root: %x -> %x", before, after)
+				}
+			})
 		})
 	}
 }

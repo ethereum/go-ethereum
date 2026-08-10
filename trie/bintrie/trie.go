@@ -513,13 +513,18 @@ func (t *BinaryTrie) delStem(n binaryNode, stem []byte, pos int) (binaryNode, bo
 		t.ops.onDelete(pathOf(keyWalk(stem, pos)))
 		return empty{}, true, nil
 	case *branchNode:
+		// Both boundary arms mirror getStem: agreement past the stem's end means
+		// an expanded stem, and "nothing removed" there would leave it in place.
 		m := nn.prefix.matchKey(stem, pos)
 		if m < nn.prefix.n {
+			if pos+m >= 8*len(stem) {
+				return n, false, ErrPartialStem
+			}
 			return n, false, nil
 		}
 		split := pos + nn.prefix.n
 		if split >= 8*len(stem) {
-			return n, false, nil
+			return n, false, ErrPartialStem
 		}
 		bit := bitAt(stem, split)
 		var (
