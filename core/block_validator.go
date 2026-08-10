@@ -150,6 +150,26 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		return errors.New("nil ProcessResult value")
 	}
 	header := block.Header()
+	// Verify the block-level access list once Amsterdam is enabled. This runs
+	// before the gas and receipt checks: a mismatching access list perturbs
+	// execution itself (transaction reads are served from it), so downstream
+	// divergences should be reported as an access list failure.
+	if !stateless && v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if res.Bal == nil {
+			return errors.New("block access list is not available in amsterdam")
+		}
+		if block.Header().BlockAccessListHash == nil {
+			return errors.New("block access list hash not set in header")
+		}
+		enc := res.Bal.ToEncodingObj()
+		local, remote := enc.Hash(), *block.Header().BlockAccessListHash
+		if local != remote {
+			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
+		}
+		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
+			return fmt.Errorf("invalid block access list: %v", err)
+		}
+	}
 	if block.GasUsed() != res.GasUsed {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), res.GasUsed)
 	}
@@ -181,23 +201,6 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		}
 	} else if res.Requests != nil {
 		return errors.New("block has requests before prague fork")
-	}
-	// Verify Block-level accessList once Amsterdam is enabled
-	if v.config.IsAmsterdam(block.Number(), block.Time()) {
-		if res.Bal == nil {
-			return errors.New("block access list is not available in amsterdam")
-		}
-		if block.Header().BlockAccessListHash == nil {
-			return errors.New("block access list hash not set in header")
-		}
-		enc := res.Bal.ToEncodingObj()
-		local, remote := enc.Hash(), *block.Header().BlockAccessListHash
-		if local != remote {
-			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
-		}
-		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
-			return fmt.Errorf("invalid block access list: %v", err)
-		}
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
