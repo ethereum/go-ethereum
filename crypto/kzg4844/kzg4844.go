@@ -328,6 +328,36 @@ func RecoverBlobsUnchecked(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	return RecoverBlobs(cells, cellIndices)
 }
 
+// RecoverCells returns all CellsPerBlob cells for every blob represented by the
+// input cells, given a sufficient subset (at least DataPerBlob cells per blob).
+// When the full data domain (indices 0..DataPerBlob-1) is present, all cells
+// follow from a cheap systematic extension of the concatenated blobs
+// (ComputeCells), skipping the KZG erasure solve; otherwise it falls back to
+// full erasure recovery. Both paths return byte-identical cells in canonical
+// index order, per blob. Cell proofs are never recomputed: callers that need
+// proofs should retain those shipped with the transaction.
+//
+// Both paths deserialize the cell contents, rejecting non-canonical field
+// elements, but nothing is verified against commitments or cell proofs --
+// authenticity must be established by the caller (e.g. VerifyCells).
+//
+// For the layout of cells and cellIndices, see RecoverBlobs.
+func RecoverCells(cells []Cell, cellIndices []uint64) ([]Cell, error) {
+	if err := validateCellIndices(cells, cellIndices); err != nil {
+		return nil, err
+	}
+	// Fast path: the data cells are all present, so the blobs are a free
+	// concatenation and all cells follow from a systematic extension.
+	if blobs, ok := blobsFromDataCells(cells, cellIndices); ok {
+		return ComputeCells(blobs)
+	}
+	// Slow path: genuine erasure recovery from a non-data subset.
+	if useCKZG.Load() {
+		return ckzgRecoverCells(cells, cellIndices)
+	}
+	return gokzgRecoverCells(cells, cellIndices)
+}
+
 func validateCellIndices(cells []Cell, cellIndices []uint64) error {
 	switch {
 	case len(cellIndices) == 0:

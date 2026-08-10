@@ -435,6 +435,80 @@ func testRecoverBlobWithInsufficientCells(t *testing.T, ckzg bool) {
 	}
 }
 
+func TestCKZGRecoverCells(t *testing.T)  { testRecoverCells(t, true) }
+func TestGoKZGRecoverCells(t *testing.T) { testRecoverCells(t, false) }
+
+// testRecoverCells checks that RecoverCells reconstructs the complete 128-cell
+// set for each blob, via both the fast systematic path (data cells present) and
+// the erasure-recovery slow path (non-data subset), byte-identical to the
+// original cells.
+func testRecoverCells(t *testing.T, ckzg bool) {
+	defer switchBackend(t, ckzg)()
+
+	const blobCount = 2
+	d := newBlobs(t, blobCount)
+
+	collect := func(indices []uint64) []Cell {
+		var cs []Cell
+		for bi := range blobCount {
+			for _, idx := range indices {
+				cs = append(cs, d.cells[bi*CellsPerBlob+int(idx)])
+			}
+		}
+		return cs
+	}
+	seq := func(start, n int) []uint64 {
+		idx := make([]uint64, n)
+		for i := range idx {
+			idx[i] = uint64(start + i)
+		}
+		return idx
+	}
+	assertRecoversAll := func(name string, indices []uint64) {
+		t.Helper()
+		got, err := RecoverCells(collect(indices), indices)
+		if err != nil {
+			t.Fatalf("%s: RecoverCells failed: %v", name, err)
+		}
+		if len(got) != blobCount*CellsPerBlob {
+			t.Fatalf("%s: got %d cells, want %d", name, len(got), blobCount*CellsPerBlob)
+		}
+		for i := range d.cells {
+			if got[i] != d.cells[i] {
+				t.Fatalf("%s: cell %d does not match original", name, i)
+			}
+		}
+	}
+
+	// Fast path: exactly the data cells.
+	assertRecoversAll("fast/data-0..63", seq(0, DataPerBlob))
+	// Slow path: a non-data 64-cell subset (indices 32..95).
+	assertRecoversAll("slow/non-data-32..95", seq(32, DataPerBlob))
+	// Full custody: all cells present (still takes the fast path).
+	assertRecoversAll("full-0..127", seq(0, CellsPerBlob))
+
+	// Fewer than DataPerBlob cells cannot be recovered.
+	short := seq(0, DataPerBlob-1)
+	if _, err := RecoverCells(collect(short), short); err == nil {
+		t.Fatalf("expected error with only %d cells", DataPerBlob-1)
+	}
+
+	// Malformed indices (duplicate tail): the fast path declines and the
+	// erasure path rejects, so both agree on refusal.
+	dup := append(seq(0, DataPerBlob), DataPerBlob-1)
+	if _, err := RecoverCells(collect(dup), dup); err == nil {
+		t.Fatalf("expected error for duplicate index")
+	}
+
+	// Randomized subsets exercise the erasure path with arbitrary shapes
+	// (kept to a few iterations: each is a full erasure decode).
+	for iter := range 3 {
+		rng := mrand.New(mrand.NewSource(int64(iter)))
+		n := DataPerBlob + rng.Intn(CellsPerBlob-DataPerBlob)
+		assertRecoversAll("random", randCellIndices(rng, n))
+	}
+}
+
 func TestCKZGBlobsFromDataCells(t *testing.T)  { testBlobsFromDataCells(t, true) }
 func TestGoKZGBlobsFromDataCells(t *testing.T) { testBlobsFromDataCells(t, false) }
 
