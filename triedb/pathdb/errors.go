@@ -27,6 +27,11 @@ var (
 	// yet and database is disabled to prevent accessing state.
 	errDatabaseWaitSync = errors.New("waiting for sync")
 
+	// errDatabaseProofOnly is returned if a database holding only proof-rebuilt
+	// state is written to. It holds one block's worth of resolved nodes, so a
+	// layer on top of it would describe state that was never there.
+	errDatabaseProofOnly = errors.New("proof only")
+
 	// errSnapshotStale is returned from data accessors if the underlying layer
 	// had been invalidated due to the chain progressing forward far enough
 	// to not maintain the layer's original state.
