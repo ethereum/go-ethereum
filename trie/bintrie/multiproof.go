@@ -75,7 +75,7 @@ type mpToken struct {
 	hash   common.Hash // mpStub
 
 	stem    []byte   // mpGroup
-	present [32]byte // sub-indices the stem holds; fixes the fold shape
+	present [32]byte // sub-indices the fold shape needs; see loadBearing
 	covered [32]byte // those whose value ships here (subset of present)
 	values  [][]byte // in ascending sub-index order
 	stubs   []common.Hash
@@ -214,9 +214,6 @@ func (t *BinaryTrie) proveMultiWalk(n binaryNode, keys [][]byte, pos int, mp *Mu
 // stem that holds none of them.
 func groupToken(g *groupNode, keys [][]byte, pos int) mpToken {
 	tok := mpToken{kind: mpGroup, stem: slices.Clone(g.stem)}
-	for _, sub := range g.subs {
-		bitmapSet(&tok.present, sub)
-	}
 	// Every queried key that reaches this group opens the leaf its walk lands
 	// on, whether or not the stem and sub-index match. For a key that is
 	// present that leaf holds its value; for one that is absent the leaf is
@@ -231,16 +228,11 @@ func groupToken(g *groupNode, keys [][]byte, pos int) mpToken {
 	for _, k := range keys {
 		bitmapSet(&tok.covered, g.subs[groupLanding(g.subs, k[len(k)-1])])
 	}
+	loadBearing(g.subs, &tok.covered, 0, len(g.subs), &tok.present)
 	for i, sub := range g.subs {
 		if bitmapHas(&tok.covered, sub) {
 			tok.values = append(tok.values, slices.Clone(g.vals[i]))
 		}
-	}
-	if len(g.subs) == 1 {
-		if bitmapCount(&tok.covered) == 0 {
-			tok.stubs = append(tok.stubs, g.fold(pos))
-		}
-		return tok
 	}
 	collectGroupStubs(g, &tok.covered, 0, len(g.subs), 0, pos, 8*len(g.stem), &tok.stubs)
 	return tok
@@ -271,18 +263,46 @@ func groupLanding(subs []byte, sub byte) int {
 	return i
 }
 
-// collectGroupStubs mirrors foldRange, emitting the hash of every maximal
-// range that holds no covered sub-index. The verifier walks the same shape
-// from the present bitmap and consumes these in the same order.
-func collectGroupStubs(g *groupNode, covered *[32]byte, i, j, from, extraLo, extraHi int, out *[]common.Hash) {
-	anyCovered := false
+// loadBearing marks what a group token must carry: the covered sub-indices plus
+// the least of every range the fold recursion visits - together they fix every
+// split bit, and anything more enters no preimage and re-opens malleability.
+func loadBearing(subs []byte, covered *[32]byte, i, j int, out *[32]byte) {
+	bitmapSet(out, subs[i])
+	if j-i == 1 || !anyCovered(subs, covered, i, j) {
+		return
+	}
+	m := splitRange(subs, i, j)
+	loadBearing(subs, covered, i, m, out)
+	loadBearing(subs, covered, m, j, out)
+}
+
+// anyCovered reports whether the range holds a sub-index whose value ships.
+func anyCovered(subs []byte, covered *[32]byte, i, j int) bool {
 	for k := i; k < j; k++ {
-		if bitmapHas(covered, g.subs[k]) {
-			anyCovered = true
-			break
+		if bitmapHas(covered, subs[k]) {
+			return true
 		}
 	}
-	if !anyCovered {
+	return false
+}
+
+// splitRange returns the index where foldRange divides the range: the first
+// sub-index whose bit at the extremes' first difference is set.
+func splitRange(subs []byte, i, j int) int {
+	b := 8 - bits.Len8(subs[i]^subs[j-1])
+	m := i + 1
+	for m < j && subs[m]>>(7-b)&1 == 0 {
+		m++
+	}
+	return m
+}
+
+// collectGroupStubs mirrors foldRange, emitting the hash of every maximal
+// range that holds no covered sub-index. The verifier walks the same shape
+// from the present bitmap and consumes these in the same order; the pruned
+// walk's ranges correspond one for one to the resident ones walked here.
+func collectGroupStubs(g *groupNode, covered *[32]byte, i, j, from, extraLo, extraHi int, out *[]common.Hash) {
+	if !anyCovered(g.subs, covered, i, j) {
 		*out = append(*out, g.foldRange(i, j, from, extraLo, extraHi))
 		return
 	}
@@ -290,10 +310,7 @@ func collectGroupStubs(g *groupNode, covered *[32]byte, i, j, from, extraLo, ext
 		return // a covered leaf; its value ships instead
 	}
 	b := 8 - bits.Len8(g.subs[i]^g.subs[j-1])
-	m := i + 1
-	for m < j && g.subs[m]>>(7-b)&1 == 0 {
-		m++
-	}
+	m := splitRange(g.subs, i, j)
 	collectGroupStubs(g, covered, i, m, b+1, 0, 0, out)
 	collectGroupStubs(g, covered, m, j, b+1, 0, 0, out)
 }
@@ -310,6 +327,11 @@ func collectGroupStubs(g *groupNode, covered *[32]byte, i, j, from, extraLo, ext
 // cannot be mistaken for a tree in which those keys are absent.
 func VerifyMultiproof(root common.Hash, mp *Multiproof) (*BinaryTrie, error) {
 	if mp == nil {
+		return nil, ErrProofMalformed
+	}
+	// A lone stub proves nothing: rebuild hands back the hash it was given, so
+	// the comparison below would accept it against any root.
+	if len(mp.tokens) == 1 && mp.tokens[0].kind == mpStub {
 		return nil, ErrProofMalformed
 	}
 	pos := 0
@@ -358,6 +380,11 @@ func rebuild(toks []mpToken, pos *int) (binaryNode, []mpToken, error) {
 
 	case mpBranch:
 		at := *pos
+		// Nothing else bounds the depth, and the tokens come off the wire, so a
+		// stream of branches would recurse until the stack gave out.
+		if at+tok.prefix.n+1 > maxPathBits {
+			return nil, nil, ErrProofMalformed
+		}
 		*pos = at + tok.prefix.n + 1
 		left, rest, err := rebuild(toks[1:], pos)
 		if err != nil {
@@ -485,8 +512,9 @@ func rebuildRange(stem []byte, subs []byte, vals map[byte][]byte, i, j, from, ex
 // Encoding
 //
 
-// Encode serialises the proof. Lengths are fixed by the structure, so the
-// encoding is canonical: one tree and one key set have exactly one form.
+// Encode serialises the proof. Lengths are fixed by the structure and the
+// bitmaps carry only load-bearing bits, so one tree and one key set have one
+// form per token shape; shape itself is not pinned (a stub could ship expanded).
 func (mp *Multiproof) Encode() []byte {
 	var out []byte
 	for _, tok := range mp.tokens {
@@ -589,23 +617,33 @@ func DecodeMultiproof(blob []byte) (*Multiproof, error) {
 	return mp, nil
 }
 
-// stubCount derives how many hashes a stem token carries from its bitmaps.
+// stubCount derives how many hashes a stem token carries from its bitmaps, and
+// refuses a token whose bitmaps are not the form the prover emits.
 func stubCount(tok *mpToken) (int, error) {
 	subs := bitmapSubs(&tok.present)
 	if len(subs) == 0 {
 		return 0, ErrProofMalformed
 	}
 	covered := bitmapSubs(&tok.covered)
+	// A group covering nothing folds to one hash, leaving its stem and bitmaps
+	// outside every preimage; the prover never emits one.
+	if len(covered) == 0 {
+		return 0, ErrProofMalformed
+	}
 	for _, sub := range covered {
 		if !bitmapHas(&tok.present, sub) {
 			return 0, ErrProofMalformed
 		}
 	}
+	// present has to be exactly the load-bearing set, or the same group has more
+	// than one wire form.
+	var want [32]byte
+	loadBearing(subs, &tok.covered, 0, len(subs), &want)
+	if want != tok.present {
+		return 0, ErrProofMalformed
+	}
 	if len(covered) == len(subs) {
 		return 0, nil
-	}
-	if len(subs) == 1 {
-		return 1, nil // uncovered single-value group: its own hash
 	}
 	n := 0
 	countRange(subs, &tok.covered, 0, len(subs), &n)
@@ -613,25 +651,14 @@ func stubCount(tok *mpToken) (int, error) {
 }
 
 func countRange(subs []byte, covered *[32]byte, i, j int, out *int) {
-	anyCovered := false
-	for k := i; k < j; k++ {
-		if bitmapHas(covered, subs[k]) {
-			anyCovered = true
-			break
-		}
-	}
-	if !anyCovered {
+	if !anyCovered(subs, covered, i, j) {
 		*out++
 		return
 	}
 	if j-i == 1 {
 		return
 	}
-	b := 8 - bits.Len8(subs[i]^subs[j-1])
-	m := i + 1
-	for m < j && subs[m]>>(7-b)&1 == 0 {
-		m++
-	}
+	m := splitRange(subs, i, j)
 	countRange(subs, covered, i, m, out)
 	countRange(subs, covered, m, j, out)
 }
