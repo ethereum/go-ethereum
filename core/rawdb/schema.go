@@ -65,6 +65,12 @@ var (
 	// a non-empty database means the flat state cannot be trusted.
 	pbtFlatStateKey = []byte("PBTFlatState")
 
+	// pbtAnchorKey records the block a binary tree state was converted or
+	// imported at: its number and hash. The tree alone does not say which
+	// block it commits, and catching up from an anchor has to start
+	// somewhere.
+	pbtAnchorKey = []byte("PBTAnchor")
+
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
 
@@ -161,7 +167,7 @@ var (
 		stateIDPrefix,           // state ids, LastStateID
 		SnapshotRootKey[:1],     // SnapshotRoot and snapshot markers
 		trieJournalKey[:1],      // TrieJournal
-		pbtFlatStateKey[:1],     // PBTFlatState attestation
+		pbtFlatStateKey[:1],     // PBTFlatState attestation, PBTAnchor
 		StateHistoryIndexPrefix, // history index metadata
 	}
 

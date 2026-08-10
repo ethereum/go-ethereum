@@ -79,7 +79,11 @@ func importBinaryTrie(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chaindb := utils.MakeChainDatabase(ctx, stack, false)
+	// Verification writes nothing, so it takes a read-only handle: a
+	// writable open can repair and compact a datadir the operator only
+	// wanted checked.
+	verifyOnly := ctx.Bool(verifyOnlyFlag.Name)
+	chaindb := utils.MakeChainDatabase(ctx, stack, verifyOnly)
 	defer chaindb.Close()
 
 	// The anchor's state root comes from the local header chain, never from
@@ -93,6 +97,11 @@ func importBinaryTrie(ctx *cli.Context) error {
 		number, ok := rawdb.ReadHeaderNumber(chaindb, hash)
 		if !ok {
 			return fmt.Errorf("anchor block %x not found in the local header chain", hash)
+		}
+		// An anchor must be canonical: a side-chain header at the same height
+		// commits a different state, and the EIP anchors at finalized blocks.
+		if canonical := rawdb.ReadCanonicalHash(chaindb, number); canonical != hash {
+			return fmt.Errorf("anchor block %x is not canonical at height %d", hash, number)
 		}
 		header = rawdb.ReadHeader(chaindb, hash, number)
 	} else {
@@ -111,9 +120,10 @@ func importBinaryTrie(ctx *cli.Context) error {
 	}
 	log.Info("Importing binary tree state", "anchor", header.Number, "stateRoot", header.Root)
 
-	verifyOnly := ctx.Bool(verifyOnlyFlag.Name)
-	if ctx.Bool(forceConvertFlag.Name) && !verifyOnly {
-		if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
+	if ctx.Bool(forceConvertFlag.Name) {
+		if verifyOnly {
+			log.Warn("Ignoring --force: verification writes nothing")
+		} else if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
 			return fmt.Errorf("failed to wipe binary tree state: %w", err)
 		}
 	}
@@ -121,11 +131,26 @@ func importBinaryTrie(ctx *cli.Context) error {
 	if budgetMB > math.MaxInt>>20 {
 		budgetMB = math.MaxInt >> 20
 	}
-	_, err := importState(chaindb, ctx.Args().Get(0), ctx.Args().Get(1), header.Root, verifyOnly, conversionOptions{
-		sortBudget: int(budgetMB << 20),
-		tmpDir:     ctx.String(tmpDirFlag.Name),
-	})
-	return err
+	if _, err := importState(chaindb, importOptions{
+		snapshot:   ctx.Args().Get(0),
+		preimages:  ctx.Args().Get(1),
+		anchor:     header,
+		verifyOnly: verifyOnly,
+		conversionOptions: conversionOptions{
+			sortBudget: int(budgetMB << 20),
+			tmpDir:     ctx.String(tmpDirFlag.Name),
+		},
+	}); err != nil {
+		return err
+	}
+	// The namespace is written, but nothing reads it until the chain commits
+	// its state with the tree; say so rather than leave it to be discovered.
+	if !verifyOnly {
+		if stored := rawdb.ReadChainConfig(chaindb, rawdb.ReadCanonicalHash(chaindb, 0)); stored == nil || !stored.IsPBT() {
+			log.Warn("The chain config does not commit state with the binary tree; the imported state stays dormant until it does")
+		}
+	}
+	return nil
 }
 
 // The EIP-8347 consumer: importState ingests a distributed PBT snapshot and
@@ -223,9 +248,26 @@ type importSlot struct {
 	value [32]byte
 }
 
+// importOptions carries an import's inputs: the two artifacts, the anchor
+// whose header the state is proven against, and the conversion tunables the
+// two commands share.
+type importOptions struct {
+	snapshot   string
+	preimages  string
+	anchor     *types.Header
+	verifyOnly bool
+	conversionOptions
+}
+
 // importState verifies and ingests the artifacts, returning the imported
 // root. With verifyOnly the database is never touched.
-func importState(chaindb ethdb.Database, snapshotPath, preimagePath string, anchorRoot common.Hash, verifyOnly bool, opts conversionOptions) (common.Hash, error) {
+func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error) {
+	var (
+		anchorRoot   = opts.anchor.Root
+		snapshotPath = opts.snapshot
+		preimagePath = opts.preimages
+		verifyOnly   = opts.verifyOnly
+	)
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	if !verifyOnly {
 		if dirty, err := hasBinaryTrieState(chaindb); err != nil {
@@ -238,12 +280,23 @@ func importState(chaindb ethdb.Database, snapshotPath, preimagePath string, anch
 	// budget.
 	quarter := opts.sortBudget / 4
 
-	// Phase 1: derive every candidate tree key the preimages can stand for.
+	// Open both artifacts before the expensive phase: a mistyped path should
+	// not cost a full pass over the other file.
 	pre, err := openPreimages(preimagePath)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	defer pre.close()
+
+	snap, err := openSnapshot(snapshotPath)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer snap.close()
+	if snap.count == 0 {
+		return common.Hash{}, errors.New("refusing to import an empty snapshot")
+	}
+	// Phase 1: derive every candidate tree key the preimages can stand for.
 
 	cand := bintrie.NewRecordSorter(opts.tmpDir, quarter, nil)
 	defer cand.Close()
@@ -287,14 +340,6 @@ func importState(chaindb ethdb.Database, snapshotPath, preimagePath string, anch
 	// Phase 2: stream the snapshot; rebuild the tree; join every account and
 	// storage leaf to its preimage candidate; collect the MPT re-derivation
 	// inputs.
-	snap, err := openSnapshot(snapshotPath)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	defer snap.close()
-	if snap.count == 0 {
-		return common.Hash{}, errors.New("refusing to import an empty snapshot")
-	}
 	candStream, err := cand.Sort()
 	if err != nil {
 		return common.Hash{}, err
@@ -810,17 +855,22 @@ func importState(chaindb ethdb.Database, snapshotPath, preimagePath string, anch
 	log.Info("Verified consensus anchoring", "stateRoot", anchorRoot, "accounts", stats.accounts, "slots", stats.slots)
 
 	if verifyOnly {
-		log.Info("Verification complete, nothing written", "binaryRoot", snap.root)
+		log.Info("Verification complete, nothing written", "binaryRoot", snap.root,
+			"snapshotDigest", snap.digest(), "preimageDigest", pre.digest())
 		return snap.root, nil
 	}
 	preims.flush()
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
 	}
-	// The attestation is the completion marker and comes last; the imported
-	// tree bases an empty history, like a conversion.
+	// The anchor rides with the root: the tree does not say which block it
+	// commits, and catching up from here has to start somewhere. The
+	// attestation is the completion marker and comes last; the imported tree
+	// bases an empty history, like a conversion.
 	rawdb.WriteSnapshotRoot(pbtdb, snap.root)
+	rawdb.WritePBTAnchor(pbtdb, opts.anchor.Number.Uint64(), opts.anchor.Hash())
 	rawdb.WritePBTFlatState(pbtdb)
-	log.Info("Import complete", "binaryRoot", snap.root)
+	log.Info("Import complete", "binaryRoot", snap.root, "anchor", opts.anchor.Number,
+		"snapshotDigest", snap.digest(), "preimageDigest", pre.digest())
 	return snap.root, nil
 }

@@ -107,7 +107,9 @@ func TestImportRoundTrip(t *testing.T) {
 	convDB, root, binRoot, snapPath, prePath := importFixture(t, alloc)
 
 	impDB := rawdb.NewMemoryDatabase()
-	imported, err := importState(impDB, snapPath, prePath, root, false, conversionOptions{tmpDir: t.TempDir()})
+	anchor := &types.Header{Number: big.NewInt(7), Root: root}
+	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+		anchor: anchor, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 	if err != nil {
 		t.Fatalf("import failed: %v", err)
 	}
@@ -128,6 +130,15 @@ func TestImportRoundTrip(t *testing.T) {
 			}
 		}
 	}
+	// The anchor must be recoverable: catching up from an imported state
+	// starts at the block it commits, and the tree does not say which.
+	pbtdb := rawdb.NewTable(impDB, string(rawdb.PBTPrefix))
+	if number, hash, ok := rawdb.ReadPBTAnchor(pbtdb); !ok {
+		t.Fatal("the import recorded no anchor")
+	} else if number != 7 || hash != anchor.Hash() {
+		t.Fatalf("anchor reads back as %d/%x, imported at %d/%x", number, hash, 7, anchor.Hash())
+	}
+
 	// The state must read through the stack a node uses.
 	destTriedb := triedb.NewDatabase(impDB, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
 	defer destTriedb.Close()
@@ -165,7 +176,8 @@ func TestImportVerifyOnly(t *testing.T) {
 	_, root, binRoot, snapPath, prePath := importFixture(t, artifactAlloc())
 
 	impDB := rawdb.NewMemoryDatabase()
-	imported, err := importState(impDB, snapPath, prePath, root, true, conversionOptions{tmpDir: t.TempDir()})
+	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+		anchor: &types.Header{Number: new(big.Int), Root: root}, verifyOnly: true, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 	if err != nil {
 		t.Fatalf("verification failed: %v", err)
 	}
@@ -188,7 +200,8 @@ func TestImportMatchesReference(t *testing.T) {
 			_, root, _, snapPath, prePath := importFixture(t, allocOf(t, sv))
 
 			impDB := rawdb.NewMemoryDatabase()
-			imported, err := importState(impDB, snapPath, prePath, root, false, conversionOptions{tmpDir: t.TempDir()})
+			imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+				anchor: &types.Header{Number: new(big.Int), Root: root}, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 			if err != nil {
 				t.Fatalf("import failed: %v", err)
 			}
@@ -660,7 +673,8 @@ func TestImportRejects(t *testing.T) {
 				anchor = tc.anchor
 			}
 			impDB := rawdb.NewMemoryDatabase()
-			_, err := importState(impDB, badSnap, badPre, anchor, false, conversionOptions{tmpDir: dir})
+			_, err := importState(impDB, importOptions{snapshot: badSnap, preimages: badPre,
+				anchor: &types.Header{Number: new(big.Int), Root: anchor}, conversionOptions: conversionOptions{tmpDir: dir}})
 			if err == nil {
 				t.Fatal("a tampered artifact was imported")
 			}

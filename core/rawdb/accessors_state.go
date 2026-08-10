@@ -156,6 +156,23 @@ func WritePBTFlatState(db ethdb.KeyValueWriter) {
 	}
 }
 
+// ReadPBTAnchor returns the block a binary tree state is anchored at, or
+// false if the state predates the marker or was not anchored at all.
+func ReadPBTAnchor(db ethdb.KeyValueReader) (uint64, common.Hash, bool) {
+	data, _ := db.Get(pbtAnchorKey)
+	if len(data) != 8+common.HashLength {
+		return 0, common.Hash{}, false
+	}
+	return binary.BigEndian.Uint64(data), common.BytesToHash(data[8:]), true
+}
+
+// WritePBTAnchor records the block a binary tree state is anchored at.
+func WritePBTAnchor(db ethdb.KeyValueWriter, number uint64, hash common.Hash) {
+	if err := db.Put(pbtAnchorKey, append(encodeBlockNumber(number), hash.Bytes()...)); err != nil {
+		log.Crit("Failed to store binary tree anchor", "err", err)
+	}
+}
+
 // WritePersistentStateID stores the id of the persistent state into database.
 func WritePersistentStateID(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(persistentStateIDKey, encodeBlockNumber(number)); err != nil {
