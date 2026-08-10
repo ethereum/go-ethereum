@@ -398,6 +398,9 @@ func ProcessBuilderExitQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM
 }
 
 func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.EVM, requestType byte, addr common.Address, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+	if evm.StateDB.GetCodeSize(addr) == 0 {
+		return fmt.Errorf("empty system contract: no code at %v", addr)
+	}
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
