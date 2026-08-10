@@ -845,6 +845,10 @@ func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.Executa
 		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
+	case params.SlotNumber != nil:
+		return invalidStatus, paramsErr("non-nil slotNumber pre-amsterdam")
+	case len(params.BlockAccessList) > 0:
+		return invalidStatus, paramsErr("non-nil blockAccessList pre-amsterdam")
 	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
