@@ -187,8 +187,10 @@ type conversionOptions struct {
 	preimagePath string // preimage file destination; empty writes none
 }
 
-// conversionStats tracks progress for the periodic report.
+// conversionStats tracks progress for the periodic report. The message names
+// the work, since the converter and the importer share the counters.
 type conversionStats struct {
+	what       string
 	accounts   uint64
 	slots      uint64
 	codes      uint64
@@ -197,12 +199,16 @@ type conversionStats struct {
 	lastReport time.Time
 }
 
+func newStats(what string) *conversionStats {
+	return &conversionStats{what: what, start: time.Now(), lastReport: time.Now()}
+}
+
 func (s *conversionStats) report(force bool) {
 	if !force && time.Since(s.lastReport) < 8*time.Second {
 		return
 	}
 	s.lastReport = time.Now()
-	log.Info("Converting state", "accounts", s.accounts, "slots", s.slots,
+	log.Info(s.what, "accounts", s.accounts, "slots", s.slots,
 		"codes", s.codes, "leaves", s.leaves, "elapsed", common.PrettyDuration(time.Since(s.start)))
 }
 
@@ -222,7 +228,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	} else if dirty {
 		return common.Hash{}, errors.New("binary tree namespace is not empty; re-run with --force to wipe it")
 	}
-	stats := &conversionStats{start: time.Now(), lastReport: time.Now()}
+	stats := newStats("Converting state")
 
 	// The budget is a total: halved when the preimage sorter runs alongside.
 	leafBudget := opts.sortBudget

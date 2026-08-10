@@ -158,4 +158,7 @@ func TestBintrieImportCLI(t *testing.T) {
 	if !strings.Contains(out, "--force") {
 		t.Fatalf("re-import refusal does not mention --force:\n%s", out)
 	}
+	// --force wipes and re-imports; on a real datadir this is the one path
+	// where the wipe meets an ancient directory and a node-layout journal.
+	run(consumer, false, "bintrie", "import", "--force", snapPath, prePath, "0")
 }

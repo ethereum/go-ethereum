@@ -268,12 +268,14 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		if dirty, err := hasBinaryTrieState(chaindb); err != nil {
 			return common.Hash{}, err
 		} else if dirty {
-			return common.Hash{}, errors.New("binary tree namespace is not empty; re-run with --force to wipe it")
+			return common.Hash{}, errors.New("binary tree namespace already holds state, whether a finished import or the debris of one; re-run with --force to wipe it")
 		}
 	}
-	// Four sorters live across the pipeline; each gets a quarter of the
-	// budget.
-	quarter := opts.sortBudget / 4
+	// Five sorters live across the pipeline - the candidates, the accounts,
+	// the slots, the chunks and the code stems - and a sealed one keeps its
+	// buffer while its stream drains, so the budget is split five ways rather
+	// than sized for one at a time.
+	quarter := opts.sortBudget / 5
 
 	// Open both artifacts before the expensive phase: a mistyped path should
 	// not cost a full pass over the other file.
@@ -294,7 +296,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	// Phase 1: derive every candidate tree key the preimages can stand for.
 
 	cand := bintrie.NewRecordSorter(opts.tmpDir, quarter, nil)
-	defer cand.Close()
+	defer cand.Close() // a second Close is a no-op; this one covers the error paths
 	var (
 		start        = time.Now()
 		preAccounts  uint64
@@ -329,6 +331,10 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		}
 		preAccounts++
 		prePreimages += 1 + uint64(len(slots))
+		if preAccounts%50_000 == 0 {
+			log.Info("Indexing preimage file", "accounts", preAccounts, "preimages", prePreimages,
+				"elapsed", common.PrettyDuration(time.Since(start)))
+		}
 	}
 	log.Info("Indexed preimage file", "accounts", preAccounts, "preimages", prePreimages,
 		"digest", pre.digest(), "elapsed", common.PrettyDuration(time.Since(start)))
@@ -389,7 +395,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		slotSorter  = bintrie.NewRecordSorter(opts.tmpDir, quarter, nil) // keccak(addr) ‖ keccak(slot) -> rlp value
 		chunkSorter = bintrie.NewRecordSorter(opts.tmpDir, quarter, nil) // codeHash ‖ index -> chunk
 		codeSizes   = make(map[common.Hash]uint32)
-		stats       = &conversionStats{start: time.Now(), lastReport: time.Now()}
+		stats       = newStats("Importing state")
 	)
 	defer acctSorter.Close()
 	defer slotSorter.Close()
@@ -538,10 +544,10 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	// The code zone joins against stems derived from the observed code
 	// hashes, built at the account/code zone boundary.
 	var (
-		codeCand   *bintrie.RecordSorter
-		codeHeld   *heldStream
-		group      *importGroup
-		inCodeZone bool
+		codeCand     *bintrie.RecordSorter
+		codeHeld     *heldStream
+		group        *importGroup
+		pastAccounts bool
 	)
 	defer func() {
 		if codeCand != nil {
@@ -573,7 +579,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			return err
 		}
 		codeHeld = &heldStream{stream: stream}
-		inCodeZone = true
+		pastAccounts = true
 		return nil
 	}
 
@@ -595,7 +601,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		stats.report(false)
 
 		// Zone boundary: the account zone ends where anything else begins.
-		if key[0] != bintrie.AccountZone && !inCodeZone {
+		if key[0] != bintrie.AccountZone && !pastAccounts {
 			if err := enterCodeZone(); err != nil {
 				return common.Hash{}, err
 			}
@@ -724,13 +730,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		held.advance()
 		heldMatched = false
 	}
-	if !inCodeZone {
-		// No code and no storage in the whole snapshot; the code limb still
-		// needs its (empty) candidate set.
-		if err := enterCodeZone(); err != nil {
-			return common.Hash{}, err
-		}
-	}
+	// The code candidates are only ever read inside the loop above, so a
+	// snapshot that never left the account zone needs none built.
+	cand.Close()
 
 	// Check 1: the leaves must rebuild to the claimed root.
 	rebuilt := builder.Finish()
@@ -801,6 +803,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		slotHeld    = &heldStream{stream: slotStream}
 		accountTrie = trie.NewStackTrie(nil)
 		storageTrie = trie.NewStackTrie(nil)
+		rederived   uint64
 	)
 	for {
 		akey, avalue, err := acctStream.Next()
@@ -849,6 +852,11 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		}
 		if err := accountTrie.Update(akey, full); err != nil {
 			return common.Hash{}, err
+		}
+		rederived++
+		if rederived%100_000 == 0 {
+			log.Info("Re-deriving merkle state", "accounts", rederived,
+				"elapsed", common.PrettyDuration(time.Since(stats.start)))
 		}
 	}
 	if skey, _, err := slotHeld.current(); err != nil {

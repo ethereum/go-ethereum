@@ -223,3 +223,68 @@ func BenchmarkConvertState(b *testing.B) {
 	b.ReportMetric(srcMB/seconds, "srcMB/s")
 	b.Logf("converted datadir now %.1f MB", dirSizeMB(b, dir))
 }
+
+// BenchmarkImportState measures the consumer against the producer on the same
+// fixture: a conversion exports the artifacts once, then each iteration
+// verifies and ingests them into the wiped namespace. The question it answers
+// is whether consuming keeps up with producing, which is what bounds how far
+// an anchor can lag.
+func BenchmarkImportState(b *testing.B) {
+	if os.Getenv("BINTRIE_BENCH_VERBOSE") != "" {
+		log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	}
+	var (
+		accounts = benchConvertAccounts()
+		dir      = b.TempDir()
+		snapPath = filepath.Join(dir, "snapshot.bin")
+		prePath  = filepath.Join(dir, "preimages.bin")
+	)
+	chaindb, root := buildConvertSource(b, dir, accounts)
+	src := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.ReadOnly,
+	})
+	if _, err := convertState(chaindb, src, root, conversionOptions{
+		tmpDir:       dir,
+		snapshotPath: snapPath,
+		preimagePath: prePath,
+	}); err != nil {
+		b.Fatalf("fixture conversion failed: %v", err)
+	}
+	src.Close()
+	snapMB, preMB := fileSizeMB(b, snapPath), fileSizeMB(b, prePath)
+	b.Logf("artifacts: snapshot %.1f MB, preimages %.1f MB, %d accounts", snapMB, preMB, accounts)
+
+	header := &types.Header{Number: new(big.Int), Root: root}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		if err := wipeBinaryTrieState(chaindb, ""); err != nil {
+			b.Fatal(err)
+		}
+		b.StartTimer()
+
+		if _, err := importState(chaindb, importOptions{
+			snapshot:          snapPath,
+			preimages:         prePath,
+			anchor:            header,
+			conversionOptions: conversionOptions{tmpDir: dir},
+		}); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.StopTimer()
+	seconds := b.Elapsed().Seconds() / float64(b.N)
+	b.ReportMetric(float64(accounts)/seconds, "accounts/s")
+	b.ReportMetric((snapMB+preMB)/seconds, "artifactMB/s")
+}
+
+// fileSizeMB returns a file's size in MB.
+func fileSizeMB(b *testing.B, path string) float64 {
+	b.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	return float64(info.Size()) / (1 << 20)
+}
