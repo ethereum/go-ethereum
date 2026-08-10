@@ -90,14 +90,16 @@ func newTestBlockChain(t *testing.T, n int, gspec *core.Genesis, generator func(
 }
 
 func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.Dump {
-	result := statedb.RawDump(&state.DumpConfig{
+	result, err := statedb.RawDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
 		OnlyWithAddresses: false,
 		Start:             start.Bytes(),
 		Max:               uint64(requestedNum),
 	})
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(result.Accounts) != expectedNum {
 		t.Fatalf("expected %d results, got %d", expectedNum, len(result.Accounts))
 	}
@@ -195,12 +197,15 @@ func TestEmptyAccountRange(t *testing.T) {
 	st.Commit(0, true, false)
 	st, _ = state.New(types.EmptyRootHash, statedb)
 
-	results := st.RawDump(&state.DumpConfig{
+	results, err := st.RawDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
 		OnlyWithAddresses: true,
 		Max:               uint64(AccountRangeMaxResults),
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if bytes.Equal(results.Next, (common.Hash{}).Bytes()) {
 		t.Fatalf("Empty results should not return a second page")
 	}
@@ -274,6 +279,57 @@ func TestStorageRangeAt(t *testing.T) {
 			t.Fatalf("wrong result for range %#x.., limit %d:\ngot %s\nwant %s",
 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
 		}
+	}
+}
+
+// TestStorageRangeAtBinaryTree pins the refusal under the binary tree. What is
+// being guarded against is not a crash but a wrong answer: the tree keeps no
+// per-account storage trie to range over and the account carries no storage
+// root, so the empty-storage shortcut below the guard would report a contract
+// that does hold storage as holding none.
+//
+// The account is given a slot and committed to establish that premise rather
+// than assert it. The guard is the first statement in storageRangeAt, so no
+// other error path is reachable and the slot cannot discriminate one refusal
+// from another; what it earns is the GetStorageRoot check below, which shows
+// an account that demonstrably holds storage still reporting none.
+func TestStorageRangeAtBinaryTree(t *testing.T) {
+	t.Parallel()
+
+	var (
+		disk  = rawdb.NewMemoryDatabase()
+		tdb   = triedb.NewDatabase(disk, triedb.PBTDefaults)
+		addr  = common.Address{0x01}
+		slot  = common.Hash{0x02}
+		value = common.Hash{0x01}
+	)
+	sdb, err := state.New(types.EmptyBinaryHash, state.NewDatabase(tdb, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sdb.SetState(addr, slot, value)
+	root, err := sdb.Commit(0, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tdb.Commit(root, false); err != nil {
+		t.Fatal(err)
+	}
+	if sdb, err = state.New(root, state.NewDatabase(tdb, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if got := sdb.GetState(addr, slot); got != value {
+		t.Fatalf("storage did not survive the commit: got %x, want %x", got, value)
+	}
+	// The account reports no storage root even though it holds a slot. This is
+	// the value the unguarded path would have turned into an empty result.
+	if got := sdb.GetStorageRoot(addr); got != (common.Hash{}) && got != types.EmptyRootHash {
+		t.Fatalf("binary tree account carries a storage root %x", got)
+	}
+	if _, err := storageRangeAt(sdb, root, addr, nil, 100); err == nil {
+		t.Fatal("storageRangeAt answered for the binary tree instead of refusing")
+	} else if !strings.Contains(err.Error(), "binary tree") {
+		t.Fatalf("refused for the wrong reason: %v", err)
 	}
 }
 

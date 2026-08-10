@@ -64,7 +64,6 @@ var (
 	mergeInstructionSet            = newMergeInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
-	verkleInstructionSet           = newVerkleInstructionSet()
 	pragueInstructionSet           = newPragueInstructionSet()
 	osakaInstructionSet            = newOsakaInstructionSet()
 	amsterdamInstructionSet        = newAmsterdamInstructionSet()
@@ -94,12 +93,6 @@ func validate(jt JumpTable) JumpTable {
 
 func newBogotaInstructionSet() JumpTable {
 	instructionSet := newAmsterdamInstructionSet()
-	return validate(instructionSet)
-}
-
-func newVerkleInstructionSet() JumpTable {
-	instructionSet := newShanghaiInstructionSet()
-	enable4762(&instructionSet)
 	return validate(instructionSet)
 }
 

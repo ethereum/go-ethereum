@@ -146,6 +146,15 @@ func loadGenerator(db ethdb.KeyValueReader, hash nodeHasher) (*journalGenerator,
 	// with each other, both in the legacy state snapshot and the path database.
 	// Therefore, if the SnapshotRoot does not match the trie root,
 	// the entire generator is considered stale and must be discarded.
+	// Require the snapshot root to have actually been recorded. Comparing the
+	// values alone is not enough: a missing key reads back as the zero hash,
+	// which is also the binary tree's empty root, so an unwritten snapshot
+	// would "match" an empty tree and validate a stale generator - including
+	// one claiming the flat state is complete.
+	if !rawdb.HasSnapshotRoot(db) {
+		log.Info("State snapshot root is not recorded")
+		return nil, trieRoot, nil
+	}
 	stateRoot := rawdb.ReadSnapshotRoot(db)
 	if trieRoot != stateRoot {
 		log.Info("State snapshot is not consistent", "trie", trieRoot, "state", stateRoot)
@@ -165,7 +174,7 @@ func (db *Database) loadLayers() layer {
 		root common.Hash
 		err  error
 	)
-	if db.isUBT {
+	if db.isPBT {
 		root = rawdb.ReadSnapshotRoot(db.diskdb)
 		if root == (common.Hash{}) {
 			root = types.EmptyBinaryHash

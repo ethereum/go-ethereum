@@ -433,7 +433,7 @@ func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		return 0, err
 	}
 	var transferGas uint64
-	if transfersValue && !evm.chainRules.IsEIP4762 {
+	if transfersValue {
 		transferGas = params.CallValueTransferGas
 	}
 	var overflow bool
@@ -469,7 +469,7 @@ func gasCallCodeIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 		gas      uint64
 		overflow bool
 	)
-	if stack.back(2).Sign() != 0 && !evm.chainRules.IsEIP4762 {
+	if stack.back(2).Sign() != 0 {
 		gas += params.CallValueTransferGas
 	}
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
@@ -491,7 +491,7 @@ func gasCallCodeIntrinsic8038(evm *EVM, contract *Contract, stack *Stack, mem *M
 		gas      uint64
 		overflow bool
 	)
-	if stack.back(2).Sign() != 0 && !evm.chainRules.IsEIP4762 {
+	if stack.back(2).Sign() != 0 {
 		gas += params.CallValueTransferAmsterdam
 	}
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
@@ -611,7 +611,7 @@ func executionGasCall8038(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 		return 0, err
 	}
 	var transferGas uint64
-	if transfersValue && !evm.chainRules.IsEIP4762 {
+	if transfersValue {
 		transferGas = params.CallValueTransferAmsterdam
 	}
 	var overflow bool

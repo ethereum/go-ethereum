@@ -84,7 +84,6 @@ const (
 	LogTopicGas           uint64 = 375   // Multiplied by the * of the LOG*, per LOG transaction. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
 	CreateGas             uint64 = 32000 // Once per CREATE operation & contract-creation transaction.
 	Create2Gas            uint64 = 32000 // Once per CREATE2 operation
-	CreateNGasEip4762     uint64 = 1000  // Once per CREATEn operations post-verkle
 	SelfdestructRefundGas uint64 = 24000 // Refunded following a selfdestruct operation.
 	MemoryGas             uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
 
@@ -107,21 +106,23 @@ const (
 	ExecutionPerAuthBaseCost uint64 = 7816
 
 	// EIP-2780: resource-based intrinsic transaction gas.
-	TxBaseCost2780  uint64 = 12000
+	TxBaseCost2780 uint64 = 12000
+	// TX_VALUE_COST: recipient write plus EIP-7708 log of a value-bearing
+	// call transaction; creations charge nothing here (CREATE_ACCESS covers).
 	TxValueCost2780 uint64 = 6000
 
 	// EIP-8038: state-access gas cost update (Amsterdam).
 	ColdAccountAccessAmsterdam         uint64 = 3000  // COLD_ACCOUNT_ACCESS: cold touch of an account
 	WarmAccountAccessAmsterdam         uint64 = 100   // WARM_ACCESS: warm touch of an account
-	AccountWriteAmsterdam              uint64 = 8000  // ACCOUNT_WRITE: surcharge for first-time write to an account
-	CallValueTransferAmsterdam         uint64 = 10300 // CALL_VALUE = ACCOUNT_WRITE + CallStipend (2300)
-	ColdStorageAccessAmsterdam         uint64 = 3000  // COLD_STORAGE_ACCESS: cold touch of a storage slot
+	AccountWriteAmsterdam              uint64 = 9000  // ACCOUNT_WRITE: per-operation write to an account's leaf values
+	CallValueTransferAmsterdam         uint64 = 11300 // CALL_VALUE = ACCOUNT_WRITE + CallStipend (2300)
+	ColdStorageAccessAmsterdam         uint64 = 2100  // COLD_STORAGE_ACCESS: cold touch of a storage slot (unchanged from EIP-2929)
 	WarmStorageAccessAmsterdam         uint64 = 100   // WARM_STORAGE_ACCESS: warm touch of a storage slot
-	StorageWriteAmsterdam              uint64 = 10000 // STORAGE_WRITE: surcharge for first-time write to a storage slot
-	StorageClearRefundAmsterdam        uint64 = 12480 // STORAGE_CLEAR_REFUND: refund for clearing a storage slot
-	CreateAccessAmsterdam              uint64 = 11000 // CREATE_ACCESS = ACCOUNT_WRITE + COLD_STORAGE_ACCESS
-	TxAccessListAddressGasAmsterdam    uint64 = 2900  // ACCESS_LIST_ADDRESS_COST
-	TxAccessListStorageKeyGasAmsterdam uint64 = 2900  // ACCESS_LIST_STORAGE_KEY_COST
+	StorageWriteAmsterdam              uint64 = 10000 // STORAGE_WRITE: surcharge for a first-time change to a storage slot
+	StorageClearRefundAmsterdam        uint64 = 11616 // STORAGE_CLEAR_REFUND = (STORAGE_WRITE + COLD_STORAGE_ACCESS) * 4800 / 5000
+	CreateAccessAmsterdam              uint64 = 12000 // CREATE_ACCESS = ACCOUNT_WRITE + COLD_ACCOUNT_ACCESS
+	TxAccessListAddressGasAmsterdam    uint64 = 2900  // ACCESS_LIST_ADDRESS_COST = COLD_ACCOUNT_ACCESS - WARM_ACCESS
+	TxAccessListStorageKeyGasAmsterdam uint64 = 2000  // ACCESS_LIST_STORAGE_KEY_COST = COLD_STORAGE_ACCESS - WARM_ACCESS
 
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.

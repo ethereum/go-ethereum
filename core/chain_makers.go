@@ -125,11 +125,6 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	}
 	b.header.GasUsed = b.gasPool.Used()
 
-	// Merge the tx-local access event into the "block-local" one, in order to collect
-	// all values, so that the witness can be built.
-	if b.statedb.Database().Type().Is(state.TypeUBT) {
-		b.statedb.AccessEvents().Merge(evm.AccessEvents)
-	}
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
 	if b.header.BlobGasUsed != nil {
@@ -384,8 +379,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
-		if config.IsPrague(b.header.Number, b.header.Time) || config.IsUBT(b.header.Number, b.header.Time) {
-			// EIP-2935
+		// Mirror the system calls block processing makes, in the same order,
+		// so a generated chain and an imported one agree on the state root.
+		if config.IsPrague(b.header.Number, b.header.Time) {
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
@@ -445,16 +441,29 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
-		if err = triedb.Commit(root, false); err != nil {
-			panic(fmt.Sprintf("trie write error: %v", err))
+		// Flushing every block is a hash-scheme requirement: hashdb holds nodes
+		// in a dirty cache until they are committed by hash, so skipping it
+		// loses them. The path database has already taken the nodes through
+		// Update and will flatten on its own schedule, and asking it to commit
+		// a root it has already persisted is an error. Real block processing
+		// draws the same line - see the path-scheme early return in
+		// BlockChain.writeBlockWithState.
+		if triedb.Scheme() == rawdb.HashScheme {
+			if err = triedb.Commit(root, false); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
 		}
 		return block, b.receipts
 	}
 
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
+	// The binary tree is path-scheme only, and has to be decided by the same
+	// predicate NewBlockChain uses - a chain generated here is imported by one
+	// built there, so the two disagreeing means generating blocks for a state
+	// layout the chain cannot hold.
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if config.IsUBT(config.ChainID, 0) {
-		triedbConfig = triedb.UBTDefaults
+	if config.IsPBT() {
+		triedbConfig = triedb.PBTDefaults
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
@@ -493,6 +502,22 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		cm.add(block, receipts)
 		parent = block
 	}
+	// Persist once at the end, the way a real node does at shutdown: callers
+	// hand this database back to GenerateChain to extend or fork the chain, so
+	// the generated states have to survive the deferred Close.
+	//
+	// Journal rather than Commit. Committing flattens every layer into the disk
+	// layer, which advances the persisted state past the shared parent and
+	// leaves a second branch from that parent with nothing to build on - a
+	// reorg fixture is exactly that shape. Journalling keeps the layer stack,
+	// so any of the retained states can be reopened, and unlike Commit it
+	// accepts a root that is already the disk layer, which is what a chain of
+	// state-preserving blocks produces.
+	if triedb.Scheme() == rawdb.PathScheme && n > 0 {
+		if err := triedb.Journal(parent.Root()); err != nil {
+			panic(fmt.Sprintf("trie journal error: %v", err))
+		}
+	}
 	return cm.chain, cm.receipts
 }
 
@@ -502,8 +527,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if genesis.Config != nil && genesis.Config.IsUBT(genesis.Config.ChainID, 0) {
-		triedbConfig = triedb.UBTDefaults
+	if genesis.Config != nil && genesis.Config.IsPBT() {
+		triedbConfig = triedb.PBTDefaults
 	}
 	genesisTriedb := triedb.NewDatabase(db, triedbConfig)
 	block, err := genesis.Commit(db, genesisTriedb, nil)

@@ -329,6 +329,11 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 			return nil, errors.New("no slot number set post-amsterdam")
 		}
 		header.SlotNumber = genParams.slotNum
+		// EIP-7928: the block access list hash precedes the slot number among
+		// the optional header fields, so the header cannot encode without it.
+		// The real hash is only known once the block is assembled, so this is a
+		// placeholder that AssembleBlock overwrites.
+		header.BlockAccessListHash = new(common.Hash)
 	}
 	// Could potentially happen if starting to mine in an odd state.
 	// Note genParams.coinbase can be different with header.Coinbase
@@ -346,7 +351,7 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 // makeEnv creates a new environment for the sealing block.
 func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, witness bool) (*environment, error) {
 	// Retrieve the parent state to execute on top.
-	state, err := miner.chain.StateAtForkBoundary(parent, header)
+	state, err := miner.chain.StateAt(parent)
 	if err != nil {
 		return nil, err
 	}

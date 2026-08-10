@@ -84,7 +84,7 @@ func TestEIP2780Intrinsic(t *testing.T) {
 			name:  "contract creation, value > 0",
 			to:    nil,
 			value: uint256.NewInt(1),
-			// TxBaseCost + CreateAccess = 24,756 execution.
+			// TxBaseCost + CreateAccess = 24,000 execution.
 			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 		},
 		{

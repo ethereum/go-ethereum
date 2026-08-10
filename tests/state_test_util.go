@@ -275,7 +275,15 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	vmconfig.ExtraEips = eips
 
 	block := t.genesis(config).ToBlock()
-	st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
+	// A binary-tree fork needs its own pre-state: the requested scheme cannot
+	// apply, since the tree is path-scheme only, and the layout is not a
+	// merkle-patricia trie at all. Building the default one here would run the
+	// test against the wrong state and report a root that means nothing.
+	if config.IsPBT() {
+		st = MakePBTPreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
+	} else {
+		st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
+	}
 
 	var baseFee *big.Int
 	if config.IsLondon(new(big.Int)) {
@@ -526,15 +534,30 @@ type StateTestState struct {
 
 // MakePreState creates a state containing the given allocation.
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
-	tconf := &triedb.Config{Preimages: true}
-	if scheme == rawdb.HashScheme {
+	return makePreState(db, accounts, snapshotter, scheme, false)
+}
+
+// MakePBTPreState creates a binary-tree state containing the given
+// allocation. The binary tree is path-scheme only and starts from its own
+// empty-root sentinel.
+func MakePBTPreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool) StateTestState {
+	return makePreState(db, accounts, snapshotter, rawdb.PathScheme, true)
+}
+
+func makePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string, pbt bool) StateTestState {
+	tconf := &triedb.Config{Preimages: true, IsPBT: pbt}
+	if scheme == rawdb.HashScheme && !pbt {
 		tconf.HashDB = hashdb.Defaults
 	} else {
 		tconf.PathDB = pathdb.Defaults
 	}
 	triedb := triedb.NewDatabase(db, tconf)
 	sdb := state.NewDatabase(triedb, nil)
-	statedb, _ := state.New(types.EmptyRootHash, sdb)
+	root := types.EmptyRootHash
+	if pbt {
+		root = types.EmptyBinaryHash
+	}
+	statedb, _ := state.New(root, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeUnspecified)
@@ -544,7 +567,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false, false)
+	root, _ = statedb.Commit(0, false, false)
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
@@ -557,8 +580,18 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	sdb = state.NewMPTDatabase(triedb, nil).WithSnapshot(snaps)
-	statedb, _ = state.New(root, sdb)
+	// Re-open against the same kind of database the state was committed with.
+	// Reopening a binary-tree root as a merkle-patricia trie fails, and the
+	// error used to be discarded below - surfacing much later as a nil StateDB.
+	if pbt {
+		sdb = state.NewPBTDatabase(triedb, nil)
+	} else {
+		sdb = state.NewMPTDatabase(triedb, nil).WithSnapshot(snaps)
+	}
+	statedb, err := state.New(root, sdb)
+	if err != nil {
+		panic(fmt.Sprintf("failed to reopen the pre-state at %x: %v", root, err))
+	}
 	return StateTestState{statedb, triedb, snaps}
 }
 

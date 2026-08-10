@@ -127,6 +127,17 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	log.Info("Trie dumping started", "root", s.originalRoot)
 	c.OnRoot(s.originalRoot)
 
+	if s.db.TrieDB().IsPBT() {
+		// The binary tree holds no RLP account leaves to decode: its state
+		// is spread over per-zone leaves. DumpPBTLeaves dumps those; an
+		// account-shaped dump has to be rebuilt from flat state, which is
+		// not wired up yet.
+		//
+		// Returned as an error rather than logged: a nil error here reads as a
+		// completed dump, so the caller is handed an empty result and told
+		// nothing went wrong.
+		return nil, errors.New("account dumping is not supported for the binary tree; use the leaf dump instead")
+	}
 	iteratee, err := s.db.Iteratee(s.originalRoot)
 	if err != nil {
 		return nil, err
@@ -214,8 +225,10 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	return nextKey, nil
 }
 
-// DumpBinTrieLeaves collects all binary trie leaf nodes into the provided map.
-func (s *StateDB) DumpBinTrieLeaves(collector map[common.Hash]hexutil.Bytes) error {
+// DumpPBTLeaves collects all binary trie leaves into the provided map, keyed
+// by the hex encoding of the full variable-length tree key (34 or 66 bytes;
+// a fixed-width hash key would silently alias them).
+func (s *StateDB) DumpPBTLeaves(collector map[string]hexutil.Bytes) error {
 	tr, err := s.db.OpenTrie(s.originalRoot)
 	if err != nil {
 		return err
@@ -230,7 +243,7 @@ func (s *StateDB) DumpBinTrieLeaves(collector map[common.Hash]hexutil.Bytes) err
 	}
 	for it.Next(true) {
 		if it.Leaf() {
-			collector[common.BytesToHash(it.LeafKey())] = it.LeafBlob()
+			collector[hexutil.Encode(it.LeafKey())] = it.LeafBlob()
 		}
 	}
 	return nil
@@ -238,26 +251,36 @@ func (s *StateDB) DumpBinTrieLeaves(collector map[common.Hash]hexutil.Bytes) err
 
 // RawDump returns the state. If the processing is aborted e.g. due to options
 // reaching Max, the `Next` key is set on the returned Dump.
-func (s *StateDB) RawDump(opts *DumpConfig) Dump {
+//
+// The error is returned rather than discarded because a dump that could not run
+// is otherwise indistinguishable from a state with no accounts in it.
+func (s *StateDB) RawDump(opts *DumpConfig) (Dump, error) {
 	dump := &Dump{
 		Accounts: make(map[string]DumpAccount),
 	}
-	next, _ := s.DumpToCollector(dump, opts)
+	next, err := s.DumpToCollector(dump, opts)
+	if err != nil {
+		return Dump{}, err
+	}
 	dump.Next = next
-	return *dump
+	return *dump, nil
 }
 
 // Dump returns a JSON string representing the entire state as a single json-object
-func (s *StateDB) Dump(opts *DumpConfig) []byte {
-	dump := s.RawDump(opts)
+func (s *StateDB) Dump(opts *DumpConfig) ([]byte, error) {
+	dump, err := s.RawDump(opts)
+	if err != nil {
+		return nil, err
+	}
 	json, err := json.MarshalIndent(dump, "", "    ")
 	if err != nil {
-		log.Error("Error dumping state", "err", err)
+		return nil, err
 	}
-	return json
+	return json, nil
 }
 
 // IterativeDump dumps out accounts as json-objects, delimited by linebreaks on stdout
-func (s *StateDB) IterativeDump(opts *DumpConfig, output *json.Encoder) {
-	s.DumpToCollector(iterativeDump{output}, opts)
+func (s *StateDB) IterativeDump(opts *DumpConfig, output *json.Encoder) error {
+	_, err := s.DumpToCollector(iterativeDump{output}, opts)
+	return err
 }

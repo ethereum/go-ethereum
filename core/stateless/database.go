@@ -65,3 +65,50 @@ func (w *Witness) MakeHashDB() ethdb.Database {
 	}
 	return memdb
 }
+
+// MakePathDB imports nodes, codes and block hashes from a binary-tree witness
+// into a new path-based memory db.
+//
+// The binary tree cannot use MakeHashDB. A merkle node is named by the hash of
+// its own bytes, so a bag of blobs is a complete description; a binary group
+// record folds at a depth stored inside it, so its hash depends on where it
+// sits and the blob alone cannot be re-keyed. Nodes are therefore addressed by
+// path here, which is what pathdb wants anyway.
+//
+// It is self-validating on the same terms as MakeHashDB. Headers and codes are
+// still keyed by hash. Nodes are checked on read rather than on write: pathdb
+// verifies each one against the hash its parent points at, using the binary
+// hasher that folds group records at their stored depth, so a blob planted at
+// the wrong path or altered in place fails to resolve.
+func (w *Witness) MakePathDB() ethdb.Database {
+	var (
+		memdb  = rawdb.NewMemoryDatabase()
+		hasher = crypto.NewKeccakState()
+		hash   = make([]byte, 32)
+	)
+	for _, header := range w.Headers {
+		rawdb.WriteHeader(memdb, header)
+	}
+	// Code is still content-addressed by keccak in the binary tree; only the
+	// state nodes change shape.
+	for code := range w.Codes {
+		blob := []byte(code)
+
+		hasher.Reset()
+		hasher.Write(blob)
+		hasher.Read(hash)
+
+		rawdb.WriteCode(memdb, common.BytesToHash(hash), blob)
+	}
+	// Binary-tree data lives under its own namespace, the same one pathdb
+	// rebinds itself to when opened in binary mode.
+	tbl := rawdb.NewTable(memdb, string(rawdb.PBTPrefix))
+	for path, blob := range w.Nodes {
+		rawdb.WriteAccountTrieNode(tbl, []byte(path), blob)
+	}
+	// pathdb resolves the disk layer's root from this marker when it opens in
+	// binary mode; without it the layer would come up empty and every lookup
+	// would miss.
+	rawdb.WriteSnapshotRoot(tbl, w.Root())
+	return memdb
+}

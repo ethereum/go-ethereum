@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	stdmath "math"
 	"math/big"
 	"os"
 
@@ -48,9 +47,8 @@ import (
 )
 
 type Prestate struct {
-	Env        stEnv                         `json:"env"`
-	Pre        types.GenesisAlloc            `json:"pre"`
-	TreeLeaves map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
+	Env stEnv              `json:"env"`
+	Pre types.GenesisAlloc `json:"pre"`
 	// AllocPath, when non-empty, causes Apply to stream the alloc from disk
 	// instead of reading Pre, so the full map never materializes in memory.
 	AllocPath string `json:"-"`
@@ -140,7 +138,7 @@ type rejectedTx struct {
 }
 
 // Apply applies a set of transactions to a pre-state
-func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, txIt txIterator, miningReward int64) (*state.StateDB, *ExecutionResult, []byte, error) {
+func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, txIt txIterator, miningReward int64) (*state.StateDB, *ExecutionResult, []byte, map[common.Address][]common.Hash, error) {
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
@@ -158,17 +156,17 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	var (
 		statedb *state.StateDB
 
-		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		isPBT       = chainConfig.IsPBT()
 		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 	)
 	if pre.AllocPath != "" {
 		var err error
-		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isEIP4762)
+		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isPBT)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 	} else {
-		statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762)
+		statedb = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isPBT)
 	}
 	var (
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
@@ -302,7 +300,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
-			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)
+			return nil, nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
 		blobGasUsed += txBlobGas
 		receipts = append(receipts, receipt)
@@ -341,9 +339,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
 		prev := statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 
-		if isEIP4762 {
-			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
-		}
 		if isAmsterdam {
 			if w.Amount == 0 {
 				// Zero amount withdrawal, account is accessed potential
@@ -357,21 +352,27 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 	}
 
-	// Gather the execution-layer triggered requests.
+	// Gather the execution-layer triggered requests. PostExecution covers
+	// EIP-6110, EIP-7002 and EIP-7251 together, including the fork gating.
 	var allLogs []*types.Log
 	for _, receipt := range receipts {
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	requests, bal, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm, uint32(len(receipts)+1))
 	if err != nil {
-		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
+		return nil, nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
 	}
 	blockAccessList.Merge(bal)
+
+	// Record what the transition touched before committing, which clears the
+	// bookkeeping it is read from. The binary tree keys its leaves by a hash
+	// of the address, so this is the only handle on which accounts to dump.
+	touched := statedb.TouchedState()
 
 	// Commit block
 	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
 	if err != nil {
-		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
+		return nil, nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
 	execRs := &ExecutionResult{
 		StateRoot:   root,
@@ -403,7 +404,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		encoded := blockAccessList.ToEncodingObj()
 		balRLP, err := rlp.EncodeToBytes(encoded)
 		if err != nil {
-			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not encode BAL: %v", err))
+			return nil, nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not encode BAL: %v", err))
 		}
 		balHash := encoded.Hash()
 		execRs.BlockAccessListHash = &balHash
@@ -413,18 +414,18 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	// Re-create statedb instance with new root for MPT mode
 	statedb, err = state.New(root, statedb.Database())
 	if err != nil {
-		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
+		return nil, nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
 	}
 	body, _ := rlp.EncodeToBytes(includedTxs)
-	return statedb, execRs, body, nil
+	return statedb, execRs, body, touched, nil
 }
 
 // newPrestateTrieDBConfig returns the triedb config used to construct the
-// prestate. UBT mode requires the path-based backend; the legacy hash-based
-// backend cannot decode UBT-encoded nodes.
+// prestate. PBT mode requires the path-based backend; the legacy hash-based
+// backend cannot decode PBT-encoded nodes.
 func newPrestateTrieDBConfig(isBintrie bool) *triedb.Config {
 	if isBintrie {
-		cfg := *triedb.UBTDefaults
+		cfg := *triedb.PBTDefaults
 		cfg.Preimages = true
 		return &cfg
 	}
@@ -434,9 +435,6 @@ func newPrestateTrieDBConfig(isBintrie bool) *triedb.Config {
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool) *state.StateDB {
 	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
 	sdb := state.NewDatabase(tdb, nil)
-	if isBintrie {
-		sdb.(*state.UBTDatabase).EnableAllocRecording()
-	}
 
 	root := types.EmptyRootHash
 	if isBintrie {
@@ -459,11 +457,8 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 	if err != nil {
 		panic(fmt.Errorf("failed to commit initial state: %v", err))
 	}
-	// If bintrie mode started, check if conversion happened
-	if isBintrie {
-		return statedb
-	}
-	// For MPT mode, reopen the state with the committed root
+	// Reopen at the committed root: a committed trie is spent, whichever
+	// tree backs it.
 	statedb, err = state.New(root, sdb)
 	if err != nil {
 		panic(fmt.Errorf("failed to reopen state after commit: %v", err))
@@ -476,9 +471,6 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) (*state.StateDB, error) {
 	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie))
 	sdb := state.NewDatabase(tdb, nil)
-	if isBintrie {
-		sdb.(*state.UBTDatabase).EnableAllocRecording()
-	}
 
 	root := types.EmptyRootHash
 	if isBintrie {
@@ -534,9 +526,7 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) 
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
 	}
-	if isBintrie {
-		return statedb, nil
-	}
+	// A committed trie is spent; reopen at the committed root.
 	statedb, err = state.New(root, sdb)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to reopen state after commit: %v", err))

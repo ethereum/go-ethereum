@@ -376,18 +376,22 @@ func TestEIP8038SelfdestructAccountWrite(t *testing.T) {
 	}
 }
 
-// TestEIP8038SStoreAccessGuard covers the affordability check that bails out
-// before the slot is read once the gas left cannot cover the slot's access cost.
-// The two PUSH1s cost 6, so a 2506 budget leaves 2500 at the SSTORE: above the
-// reentrancy sentry (2300) yet below COLD_STORAGE_ACCESS (3000). The guard must
-// fire, distinguishable from the sentry/charge OOG by its "slot access" message.
+// TestEIP8038SStoreAccessGuard: with COLD_STORAGE_ACCESS (2100) below the
+// reentrancy sentry (2300) the affordability guard cannot fire - it exists
+// for a future repricing - so what is observable is the ordering: between
+// the two constants the sentry answers, not the guard.
 func TestEIP8038SStoreAccessGuard(t *testing.T) {
-	budget := NewGasBudget(6+params.SstoreSentryGasEIP2200+200, 0)
+	// gas_left between COLD_STORAGE_ACCESS and the sentry: the sentry fires.
+	budget := NewGasBudget(6+params.ColdStorageAccessAmsterdam+100, 0)
 	_, _, err := run8038(t, sstore(0, 1), budget, new(uint256.Int), nil)
 	if err == nil {
-		t.Fatal("expected failure: gas left cannot cover cold-slot access")
+		t.Fatal("expected failure: gas left is at most the reentrancy sentry")
 	}
-	if !strings.Contains(err.Error(), "not enough gas for slot access") {
-		t.Fatalf("got %q, want the slot-access guard error", err)
+	if !strings.Contains(err.Error(), "reentrancy sentry") {
+		t.Fatalf("got %q, want the sentry error", err)
+	}
+	// One past the sentry: the access is affordable by construction.
+	if _, _, err := run8038(t, sstore(0, 1), NewGasBudget(6+params.SstoreSentryGasEIP2200+1, 0), new(uint256.Int), setSlot(0, 1)); err != nil {
+		t.Fatalf("unexpected failure above the sentry: %v", err)
 	}
 }

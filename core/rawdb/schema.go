@@ -58,6 +58,13 @@ var (
 	// SnapshotRootKey tracks the hash of the last snapshot.
 	SnapshotRootKey = []byte("SnapshotRoot")
 
+	// pbtFlatStateKey attests that the binary tree's flat state has been
+	// accumulated from genesis and is therefore complete. The binary tree
+	// cannot regenerate flat state by walking the trie, so completeness can
+	// only be established by having accumulated it all along; its absence on
+	// a non-empty database means the flat state cannot be trusted.
+	pbtFlatStateKey = []byte("PBTFlatState")
+
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
 
@@ -135,12 +142,28 @@ var (
 	StateHistoryStorageBlockPrefix    = []byte("mbs") // StateHistoryStorageBlockPrefix + account address hash + storage slot hash + blockID => slot block
 	TrienodeHistoryBlockPrefix        = []byte("mbt") // TrienodeHistoryBlockPrefix + account address hash + trienode path + blockID => trienode block
 
-	// VerklePrefix is the database prefix for Verkle trie data, which includes:
+	// PBTPrefix is the database prefix for binary (PBT) trie data, which includes:
 	// (a) Trie nodes
 	// (b) In-memory trie node journal
 	// (c) Persistent state ID
 	// (d) State ID lookups, etc.
-	VerklePrefix = []byte("v")
+	PBTPrefix = []byte("b")
+
+	// PBTKeyFamilies lists the leading bytes of every key family under the
+	// PBTPrefix table. The prefix is shared with block bodies, whose keys
+	// continue with an 8-byte block number, so namespace scans must go family
+	// by family; no family byte is a reachable number byte before block 2^62.
+	PBTKeyFamilies = [][]byte{
+		TrieNodeAccountPrefix,   // tree nodes
+		TrieNodeStoragePrefix,   // unused single-tree, scanned defensively
+		SnapshotAccountPrefix,   // flat accounts
+		SnapshotStoragePrefix,   // flat storage slots
+		stateIDPrefix,           // state ids, LastStateID
+		SnapshotRootKey[:1],     // SnapshotRoot and snapshot markers
+		trieJournalKey[:1],      // TrieJournal
+		pbtFlatStateKey[:1],     // PBTFlatState attestation
+		StateHistoryIndexPrefix, // history index metadata
+	}
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
@@ -459,9 +482,4 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 	binary.BigEndian.PutUint32(out[off:], blockID)
 
 	return out
-}
-
-// transitionStateKey = transitionStatusKey + hash
-func transitionStateKey(hash common.Hash) []byte {
-	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
 }
