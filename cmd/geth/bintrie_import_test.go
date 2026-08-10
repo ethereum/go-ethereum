@@ -451,7 +451,7 @@ func TestImportRejects(t *testing.T) {
 				}
 				return recs
 			},
-			wantErr: "surplus preimage",
+			wantErr: "names slot",
 		},
 		{
 			name: "missing preimage slot",
@@ -463,7 +463,7 @@ func TestImportRejects(t *testing.T) {
 				}
 				return recs
 			},
-			wantErr: "has no preimage",
+			wantErr: "does not name",
 		},
 		{
 			name:      "flipped push-data offset",
@@ -542,6 +542,35 @@ func TestImportRejects(t *testing.T) {
 				return insertSorted(recs, snapRecord{key: bintrie.CodeChunkKey(crypto.Keccak256Hash([]byte("junk")), 0), value: common.Hash{31: 1}})
 			},
 			wantErr: "addressed by no account",
+		},
+		{
+			// A header-range slot's number is derived from its sub-index, so
+			// the two directions are exact rather than inferred.
+			name: "header slot the preimage file omits",
+			pre: func(recs []preRecord) []preRecord {
+				for i := range recs {
+					if recs[i].addr == contract {
+						recs[i].slots = slices.DeleteFunc(recs[i].slots, func(h common.Hash) bool {
+							return h == common.BigToHash(big.NewInt(63))
+						})
+					}
+				}
+				return recs
+			},
+			wantErr: "holds slot 63",
+		},
+		{
+			name: "header slot the state does not hold",
+			pre: func(recs []preRecord) []preRecord {
+				for i := range recs {
+					if recs[i].addr == contract {
+						recs[i].slots = append(recs[i].slots, common.BigToHash(big.NewInt(7)))
+						slices.SortFunc(recs[i].slots, func(a, b common.Hash) int { return bytes.Compare(a[:], b[:]) })
+					}
+				}
+				return recs
+			},
+			wantErr: "names slot 7",
 		},
 		{
 			name:      "forged code size",

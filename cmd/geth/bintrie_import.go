@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/bits"
 	"slices"
 	"strconv"
 	"time"
@@ -172,14 +173,6 @@ func importBinaryTrie(ctx *cli.Context) error {
 // cost the verifier gigabytes.
 const maxImportCodeSize = 1 << 20
 
-// Candidate tags: what a preimage-derived tree key stands for.
-const (
-	candBasic = iota
-	candCodeHash
-	candDelegation
-	candSlot
-)
-
 // heldStream wraps a sorted record stream with one record of lookahead, the
 // shape a merge-join needs.
 type heldStream struct {
@@ -235,12 +228,14 @@ func (pw *preimageWriter) flush() {
 
 // importGroup carries one account's header-stem leaves through the join.
 type importGroup struct {
-	stem       []byte
-	addr       common.Address
-	basic      *[32]byte
-	codeHash   *[32]byte
-	delegation *[32]byte
-	slots      []importSlot // header-range storage, in sub-index order
+	stem        []byte
+	addr        common.Address
+	basic       *[32]byte
+	codeHash    *[32]byte
+	delegation  *[32]byte
+	slots       []importSlot // header-range storage, in sub-index order
+	headerClaim uint64       // header-range slots the preimage file lists
+	headerSeen  uint64       // header-range slots the leaves hold
 }
 
 type importSlot struct {
@@ -313,23 +308,24 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		if err != nil {
 			return common.Hash{}, err
 		}
-		tagged := func(tag byte, slot []byte) []byte {
-			v := append([]byte{tag}, addr.Bytes()...)
-			return append(v, slot...)
-		}
-		if err := cand.Add(bintrie.BasicDataKey(addr), tagged(candBasic, nil)); err != nil {
-			return common.Hash{}, err
-		}
-		if err := cand.Add(bintrie.CodeHashKey(addr), tagged(candCodeHash, nil)); err != nil {
-			return common.Hash{}, err
-		}
-		if err := cand.Add(bintrie.DelegationKey(addr), tagged(candDelegation, nil)); err != nil {
-			return common.Hash{}, err
-		}
+		// One candidate per header stem, carrying the address and a bitmap of
+		// the header-range slots this record claims. A header-range slot's
+		// number is its sub-index minus the offset, so it needs no candidate
+		// of its own - unlike an overflow slot, whose stem is a one-way hash
+		// of the slot number and can only be matched by deriving it forward.
+		var headerSlots uint64
 		for _, slot := range slots {
-			if err := cand.Add(bintrie.StorageSlotKey(addr, slot[:]), tagged(candSlot, slot[:])); err != nil {
+			if inHeader, _, sub := bintrie.StorageIndex(slot[:]); inHeader {
+				headerSlots |= 1 << (sub - bintrie.HeaderStorageOffset)
+				continue
+			}
+			if err := cand.Add(bintrie.StorageSlotKey(addr, slot[:]), append(addr.Bytes(), slot[:]...)); err != nil {
 				return common.Hash{}, err
 			}
+		}
+		value := binary.BigEndian.AppendUint64(addr.Bytes(), headerSlots)
+		if err := cand.Add(bintrie.HeaderStem(addr), value); err != nil {
+			return common.Hash{}, err
 		}
 		preAccounts++
 		prePreimages += 1 + uint64(len(slots))
@@ -417,6 +413,18 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	// sealGroup validates one account's header leaves and records the
 	// account everywhere it goes.
 	sealGroup := func(g *importGroup) error {
+		// Header-range slots are derived from sub-indices, so the preimage
+		// file's list of them is checked rather than believed - the exact
+		// match the spec asks for, in both directions.
+		if g.headerClaim != g.headerSeen {
+			missing := g.headerClaim & ^g.headerSeen
+			if missing != 0 {
+				return fmt.Errorf("preimage file names slot %d of %x, which the state does not hold",
+					bits.TrailingZeros64(missing), g.addr)
+			}
+			return fmt.Errorf("account %x holds slot %d, which the preimage file does not name",
+				g.addr, bits.TrailingZeros64(g.headerSeen&^g.headerClaim))
+		}
 		var (
 			nonce    uint64
 			balance  = new(uint256.Int)
@@ -513,30 +521,18 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	// are fine singly (an account holds one of code-hash and delegation, and
 	// basic data collapses at zero) but a whole stem of them means the
 	// preimage file names an address the state does not hold.
-	var (
-		candStem    []byte
-		stemMatched bool
-	)
-	noteCandidate := func(key []byte, matched bool) error {
-		stem := key[:len(key)-1]
-		if !bytes.Equal(candStem, stem) {
-			if candStem != nil && !stemMatched {
-				return errors.New("preimage file names an address or slot the state does not hold")
-			}
-			candStem = bytes.Clone(stem)
-			stemMatched = false
+	// Every candidate must match a leaf, and every leaf a candidate: that is
+	// the spec's exact set match, in both directions. A header-stem candidate
+	// serves its whole group, so it stays held until the leaves move past it,
+	// and heldMatched records whether it ever matched.
+	heldMatched := false
+	surplus := func(ckey, cvalue []byte) error {
+		addr := common.BytesToAddress(cvalue[:common.AddressLength])
+		if ckey[0] == bintrie.AccountZone {
+			return fmt.Errorf("preimage file names address %x, which the state does not hold", addr)
 		}
-		if matched {
-			stemMatched = true
-		}
-		return nil
-	}
-	drainCandidate := func(key, value []byte) error {
-		if value[0] == candSlot {
-			return fmt.Errorf("surplus preimage: slot %x of %x holds no leaf",
-				value[1+common.AddressLength:], value[1:1+common.AddressLength])
-		}
-		return noteCandidate(key, false)
+		return fmt.Errorf("preimage file names slot %x of %x, which the state does not hold",
+			cvalue[common.AddressLength:], addr)
 	}
 
 	// The code zone joins against stems derived from the observed code
@@ -635,33 +631,37 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		}
 
 		// Account and storage zones join against the preimage candidates.
+		// An account leaf matches its stem - one candidate serves the whole
+		// group - and a storage leaf its full key.
+		joinKey := key
+		if key[0] == bintrie.AccountZone {
+			joinKey = key[:len(key)-1]
+		}
 		var matched []byte
 		for {
 			ckey, cvalue, err := held.current()
 			if err != nil {
 				return common.Hash{}, err
 			}
-			if ckey == nil || bytes.Compare(ckey, key) > 0 {
+			if ckey == nil || bytes.Compare(ckey, joinKey) > 0 {
 				return common.Hash{}, fmt.Errorf("leaf %x has no preimage", key)
 			}
-			if bytes.Equal(ckey, key) {
-				matched = cvalue
-				if err := noteCandidate(ckey, true); err != nil {
-					return common.Hash{}, err
-				}
-				held.advance()
+			if bytes.Equal(ckey, joinKey) {
+				matched, heldMatched = cvalue, true
 				break
 			}
-			if err := drainCandidate(ckey, cvalue); err != nil {
-				return common.Hash{}, err
+			// The held candidate is behind this leaf, so it is finished.
+			if !heldMatched {
+				return common.Hash{}, surplus(ckey, cvalue)
 			}
 			held.advance()
+			heldMatched = false
 		}
-		addr := common.BytesToAddress(matched[1 : 1+common.AddressLength])
+		addr := common.BytesToAddress(matched[:common.AddressLength])
 
 		if key[0] == bintrie.StorageZone {
 			accountHash := crypto.Keccak256Hash(addr.Bytes())
-			slot := common.BytesToHash(matched[1+common.AddressLength:])
+			slot := common.BytesToHash(matched[common.AddressLength:])
 			if err := addSlot(accountHash, slot, value); err != nil {
 				return common.Hash{}, err
 			}
@@ -677,20 +677,29 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			group = nil
 		}
 		if group == nil {
-			group = &importGroup{stem: bytes.Clone(stem), addr: addr}
+			group = &importGroup{
+				stem:        bytes.Clone(stem),
+				addr:        addr,
+				headerClaim: binary.BigEndian.Uint64(matched[common.AddressLength:]),
+			}
 		}
 		leaf := value
 		switch {
-		case matched[0] == candBasic && sub == bintrie.BasicDataLeafKey:
+		case sub == bintrie.BasicDataLeafKey:
 			group.basic = &leaf
-		case matched[0] == candCodeHash && sub == bintrie.CodeHashLeafKey:
+		case sub == bintrie.CodeHashLeafKey:
 			group.codeHash = &leaf
-		case matched[0] == candDelegation && sub == bintrie.DelegationLeafKey:
+		case sub == bintrie.DelegationLeafKey:
 			group.delegation = &leaf
-		case matched[0] == candSlot && sub >= bintrie.HeaderStorageOffset && sub < bintrie.HeaderStorageOffset+bintrie.HeaderStorageSlots:
-			group.slots = append(group.slots, importSlot{slot: common.BytesToHash(matched[1+common.AddressLength:]), value: leaf})
+		case sub >= bintrie.HeaderStorageOffset && sub < bintrie.HeaderStorageOffset+bintrie.HeaderStorageSlots:
+			// The slot number is the sub-index, not something the preimage
+			// file has to be trusted for.
+			var slot common.Hash
+			slot[31] = sub - bintrie.HeaderStorageOffset
+			group.slots = append(group.slots, importSlot{slot: slot, value: leaf})
+			group.headerSeen |= 1 << (sub - bintrie.HeaderStorageOffset)
 		default:
-			return common.Hash{}, fmt.Errorf("account leaf %x at unexpected sub-index %d", key, sub)
+			return common.Hash{}, fmt.Errorf("account leaf %x sits at reserved sub-index %d", key, sub)
 		}
 	}
 	if group != nil {
@@ -709,13 +718,11 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		if ckey == nil {
 			break
 		}
-		if err := drainCandidate(ckey, cvalue); err != nil {
-			return common.Hash{}, err
+		if !heldMatched {
+			return common.Hash{}, surplus(ckey, cvalue)
 		}
 		held.advance()
-	}
-	if candStem != nil && !stemMatched {
-		return common.Hash{}, errors.New("preimage file names an address or slot the state does not hold")
+		heldMatched = false
 	}
 	if !inCodeZone {
 		// No code and no storage in the whole snapshot; the code limb still
