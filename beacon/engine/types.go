@@ -328,9 +328,10 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	// even for empty blocks with no state transitions.
 	//
 	// If Amsterdam is not enabled yet, blockAccessListHash is expected
-	// to be nil.
+	// to be nil. An empty blockAccessList carries no access list: leave
+	// the hash unset so the block hash check catches the mismatch.
 	var blockAccessListHash *common.Hash
-	if data.BlockAccessList != nil {
+	if len(data.BlockAccessList) > 0 {
 		hash := crypto.Keccak256Hash(data.BlockAccessList)
 		blockAccessListHash = &hash
 	}
@@ -359,7 +360,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		BlockAccessListHash: blockAccessListHash,
 	}
 	body := types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}
-	if data.BlockAccessList != nil {
+	if len(data.BlockAccessList) > 0 {
 		var accessList bal.BlockAccessList
 		if err := rlp.DecodeBytes(data.BlockAccessList, &accessList); err != nil {
 			return nil, fmt.Errorf("failed to decode BAL: %w", err)
