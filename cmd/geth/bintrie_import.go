@@ -375,6 +375,18 @@ func importState(chaindb ethdb.Database, snapshotPath, preimagePath string, anch
 			if version != 0 {
 				return fmt.Errorf("account %x carries basic-data version %d, must be 0", g.addr, version)
 			}
+			// Re-encode rather than check field by field: the leaf's reserved
+			// bytes take part in no check but the tree's own hash, and the
+			// claimed root is the artifact's to choose, so anything the
+			// decoder ignores would ride through both checks and leave a root
+			// no honest converter produces.
+			want, err := bintrie.EncodeBasicData(codeSize, nonce, balance)
+			if err != nil {
+				return fmt.Errorf("account %x: %w", g.addr, err)
+			}
+			if want != *g.basic {
+				return fmt.Errorf("account %x basic-data leaf is not the canonical encoding of its fields", g.addr)
+			}
 		}
 		var codeHash common.Hash
 		switch {
@@ -389,6 +401,11 @@ func importState(chaindb ethdb.Database, snapshotPath, preimagePath string, anch
 			designator := g.delegation[:23]
 			if _, ok := types.ParseDelegation(designator); !ok {
 				return fmt.Errorf("account %x holds a malformed delegation leaf", g.addr)
+			}
+			// The nine bytes after the designator are padding, and nothing
+			// downstream reads them; see the basic-data note above.
+			if *g.delegation != [32]byte(bintrie.EncodeDelegation(designator)) {
+				return fmt.Errorf("account %x delegation leaf is not the canonical encoding of its designator", g.addr)
 			}
 			codeHash = crypto.Keccak256Hash(designator)
 			if rawBatch != nil {

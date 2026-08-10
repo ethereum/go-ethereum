@@ -473,6 +473,31 @@ func TestImportRejects(t *testing.T) {
 			wantErr: "claimed with sizes",
 		},
 		{
+			// The reserved bytes take part in no check but the tree's hash:
+			// the MPT commits nothing there and the claimed root is the
+			// attacker's to recompute, so only full-value canonicality
+			// catches it.
+			name:      "garbage in the basic-data reserved bytes",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				i := findKey(recs, bintrie.BasicDataKey(contract))
+				recs[i].value[1] = 0xff
+				return recs
+			},
+			wantErr: "canonical",
+		},
+		{
+			// Likewise the nine padding bytes after a 23-byte designator.
+			name:      "garbage in the delegation padding",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				i := findKey(recs, bintrie.DelegationKey(delegated))
+				recs[i].value[23] = 0xff
+				return recs
+			},
+			wantErr: "canonical",
+		},
+		{
 			name:      "nonzero version",
 			recompute: true,
 			snap: func(recs []snapRecord) []snapRecord {
