@@ -21,7 +21,9 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 )
 
 // resultStore implements a structure for maintaining fetchResults, tracking their
@@ -102,6 +104,29 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 
 	res, _, stale, _, err := r.getFetchResult(headerNumber)
 	return res, stale, err
+}
+
+// AttachBAL attaches a retrieved block access list to the cached fetch result
+// of the given block, reporting whether it was actually attached. Results that
+// have already been delivered upstream, or that were never allocated a slot,
+// are rejected: access lists are a best effort component, so a late arrival is
+// simply dropped.
+//
+// The staleness check and the attachment happen under the same write lock, so
+// GetCompleted cannot hand the result upstream in between. That is what keeps
+// the caller's byte accounting balanced, as bytes attached to an already
+// delivered result would never be subtracted again.
+func (r *resultStore) AttachBAL(headerNumber uint64, list *bal.BlockAccessList, size common.StorageSize) bool {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	res, _, stale, _, err := r.getFetchResult(headerNumber)
+	if err != nil || stale || res == nil {
+		return false
+	}
+	res.SetBAL(list, size)
+	res.SetBALDone()
+	return true
 }
 
 // getFetchResult returns the fetchResult corresponding to the given item, and

@@ -896,9 +896,7 @@ func (q *queue) DeliverBALs(id string, bals []rlp.RawValue, hashes []common.Hash
 		}
 		// Attach the access list to the fetch result if the block was not yet
 		// delivered upstream; late arrivals are simply dropped.
-		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale && res != nil {
-			res.SetBAL(list, common.StorageSize(len(bals[i])))
-			res.SetBALDone()
+		if q.resultCache.AttachBAL(header.Number.Uint64(), list, common.StorageSize(len(bals[i]))) {
 			q.balBytes.Add(int64(len(bals[i])))
 			accepted++
 		}
