@@ -161,9 +161,11 @@ creations, which are all in view. Implementing it therefore needs the tree to
 know which code leaves this transaction first wrote — something nothing tracks
 today, and the reason this is not folded into the delegation change.
 
-Until then the divergence is real but narrow: it needs an account with deployed
-code to be deleted, which post-EIP-6780 means created and destroyed inside one
-transaction.
+Until then the divergence is unreachable: post-EIP-6780 the only deletable
+account nets out of the block's state diff before either implementation
+writes its chunks, and the EEST fixture pinning that shape
+(`test_unshared_code_chunks_after_same_tx_selfdestruct`) consumes green. The
+rule matters the day a fork reintroduces deletion of aged accounts.
 
 ## The MPT→PBT converter needs rewriting, not patching
 
@@ -230,8 +232,8 @@ to look.
   account and storage keys alone. The `state_vectors` section embeds whole
   allocations through the reference's own state layer, so contracts, shared
   bytecode and zero-collapsing chunks all reach a root that
-  `TestStateVectors` compares against. What is still open is running the EEST
-  fixtures themselves; see the harness blocker below.
+  `TestStateVectors` compares against. The EEST fixtures themselves run green
+  now; what deliberately remains open is the next bullet.
 - **EEST fixtures run, with three deliberate gaps.** The BinaryTree suite
   passes via `consume direct` and the Go harness, path scheme only. Open:
   engine-format fixtures need a `consume engine` path (see the catalyst

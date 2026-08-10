@@ -30,6 +30,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// testPBTChainConfig is MergedTestChainConfig with Amsterdam scheduled and
+// the binary tree committing the state.
+var testPBTChainConfig = func() *params.ChainConfig {
+	c := *params.MergedTestChainConfig
+	c.AmsterdamTime = u64(0)
+	c.PBT = true
+	return &c
+}()
+
 // pbtTestTxGas is the gas limit the transactions in these tests carry.
 //
 // It is not params.TxGas. These chains run on Amsterdam, which prices a plain
