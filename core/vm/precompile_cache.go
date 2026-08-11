@@ -97,7 +97,7 @@ func NewPrecompileCache() *PrecompileCache {
 		hit:    precompileCacheHitMeter,
 		miss:   precompileCacheMissMeter,
 		meters: make(map[common.Address]*precompileCacheMeters),
-	
+
 		prefetch: &PrecompileCache{
 			data:   data,
 			prefix: "chain/cache/precompile/prefetch",
