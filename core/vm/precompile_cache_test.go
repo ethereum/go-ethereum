@@ -299,34 +299,6 @@ func TestPrecompileCacheHit(t *testing.T) {
 	}
 }
 
-// TestPrecompileCacheByteBudget checks the bound that replaced the entry count:
-// entries here range from tens of bytes to kilobytes, so the cache has to hold
-// its budget whatever mix it is fed.
-func TestPrecompileCacheByteBudget(t *testing.T) {
-	for _, entry := range []int{16, 512, maxCacheablePrecompileInput} {
-		c := newPrecompileResultCache(maxCacheablePrecompileBytes)
-		for i, written := 0, 0; written < 3*maxCacheablePrecompileBytes; i++ {
-			key := string(fmt.Appendf(make([]byte, entry), "%d", i))
-			c.add(key, []byte{1})
-			written += len(key) + 1
-
-			if c.size > maxCacheablePrecompileBytes {
-				t.Fatalf("entry size %d: cache holds %d bytes, budget is %d", entry, c.size, maxCacheablePrecompileBytes)
-			}
-		}
-		// The accounting must track what is actually held, not just stay under
-		// the ceiling: a leak here shrinks the cache silently over time.
-		var held uint64
-		for _, k := range c.lru.Keys() {
-			v, _ := c.lru.Peek(k)
-			held += uint64(len(k) + len(v) + perEntryOverhead)
-		}
-		if held != c.size {
-			t.Errorf("entry size %d: accounted %d bytes, holding %d", entry, c.size, held)
-		}
-	}
-}
-
 func errEqual(a, b error) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil

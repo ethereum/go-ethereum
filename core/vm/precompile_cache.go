@@ -18,7 +18,6 @@ package vm
 
 import (
 	"fmt"
-	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,7 +30,6 @@ var (
 	precompileCacheMissMeter         = metrics.NewRegisteredMeter("chain/cache/precompile/miss", nil)
 	precompileCachePrefetchHitMeter  = metrics.NewRegisteredMeter("chain/cache/precompile/prefetch/hit", nil)
 	precompileCachePrefetchMissMeter = metrics.NewRegisteredMeter("chain/cache/precompile/prefetch/miss", nil)
-	precompileCacheBytesGauge        = metrics.NewRegisteredGauge("chain/cache/precompile/bytes", nil)
 )
 
 const (
@@ -49,12 +47,6 @@ const (
 	// run from tens of bytes to kilobytes, so a budget in entries would mean
 	// very different memory depending on the mix.
 	maxCacheablePrecompileBytes = 1024 * 1024
-
-	// perEntryOverhead approximates what an entry costs beyond its key and
-	// value: a map bucket slot, a separately allocated list element and a string
-	// header. Small entries are dominated by it, so leaving it out of the
-	// accounting lets a cheap precompile hold far more heap than the budget.
-	perEntryOverhead = 152
 )
 
 // PrecompileCache is a thread-safe cache of precompile outputs, shared between
@@ -78,56 +70,7 @@ type PrecompileCache struct {
 // precompileCacheData is the storage shared by the two cache handles.
 type precompileCacheData struct {
 	mu     sync.RWMutex
-	caches map[precompileCacheScope]*precompileResultCache
-}
-
-// precompileResultCache is an LRU of precompile results bounded by the bytes it
-// holds. The key is the input, which is the larger half of most entries, so it
-// counts towards the budget too. Re-adding a key always re-adds the same value,
-// since the key identifies the input of a pure function.
-type precompileResultCache struct {
-	lock    sync.Mutex
-	lru     lru.BasicLRU[string, []byte]
-	size    uint64
-	maxSize uint64
-}
-
-// newPrecompileResultCache constructs a cache of at most maxSize bytes.
-func newPrecompileResultCache(maxSize uint64) *precompileResultCache {
-	return &precompileResultCache{
-		lru:     lru.NewBasicLRU[string, []byte](math.MaxInt),
-		maxSize: maxSize,
-	}
-}
-
-func (c *precompileResultCache) get(key string) ([]byte, bool) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	return c.lru.Get(key)
-}
-
-// add stores a result, evicting until the cache is back inside its budget.
-func (c *precompileResultCache) add(key string, value []byte) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	before := c.size
-	if !c.lru.Contains(key) {
-		size := c.size + uint64(len(key)+len(value)+perEntryOverhead)
-		for size > c.maxSize {
-			k, v, ok := c.lru.RemoveOldest()
-			if !ok {
-				break // nothing left to evict, the entry is larger than the budget
-			}
-			size -= uint64(len(k) + len(v) + perEntryOverhead)
-		}
-		c.size = size
-	}
-	c.lru.Add(key, value)
-
-	// Evicting can free more than this entry occupies, so the delta is signed.
-	precompileCacheBytesGauge.Inc(int64(c.size) - int64(before))
+	caches map[precompileCacheScope]*lru.SizeConstrainedCache[string, []byte]
 }
 
 // precompileCacheScope identifies the cache of one precompile at one fork. The
@@ -146,7 +89,7 @@ type precompileCacheMeters struct {
 // NewPrecompileCache constructs a precompile result cache.
 func NewPrecompileCache() *PrecompileCache {
 	data := &precompileCacheData{
-		caches: make(map[precompileCacheScope]*precompileResultCache),
+		caches: make(map[precompileCacheScope]*lru.SizeConstrainedCache[string, []byte]),
 	}
 	return &PrecompileCache{
 		data:   data,
@@ -154,6 +97,7 @@ func NewPrecompileCache() *PrecompileCache {
 		hit:    precompileCacheHitMeter,
 		miss:   precompileCacheMissMeter,
 		meters: make(map[common.Address]*precompileCacheMeters),
+	
 		prefetch: &PrecompileCache{
 			data:   data,
 			prefix: "chain/cache/precompile/prefetch",
@@ -182,7 +126,7 @@ func (c *PrecompileCache) load(scope precompileCacheScope, key []byte) ([]byte, 
 
 	meters := c.metersFor(scope.addr)
 	if results != nil {
-		if output, ok := results.get(string(key)); ok {
+		if output, ok := results.Get(string(key)); ok {
 			c.hit.Mark(1)
 			meters.hit.Mark(1)
 			return common.CopyBytes(output), true
@@ -205,12 +149,12 @@ func (c *PrecompileCache) store(scope precompileCacheScope, key []byte, output [
 	if results == nil {
 		c.data.mu.Lock()
 		if results = c.data.caches[scope]; results == nil {
-			results = newPrecompileResultCache(maxCacheablePrecompileBytes)
+			results = lru.NewSizeConstrainedCache[string, []byte](maxCacheablePrecompileBytes)
 			c.data.caches[scope] = results
 		}
 		c.data.mu.Unlock()
 	}
-	results.add(string(key), common.CopyBytes(output))
+	results.Add(string(key), common.CopyBytes(output))
 }
 
 // metersFor returns the hit and miss meters of the given precompile address,
