@@ -214,6 +214,11 @@ type decodeFunc = func(v interface{}) error
 // NewFuncCodec creates a codec which uses the given functions to read and write. If conn
 // implements ConnRemoteAddr, log messages will use it to include the remote address of
 // the connection.
+//
+// The decode function must reject input that is not valid JSON, which every
+// json.Decoder based one does. Reading a message relies on it: once a message is
+// known to be well formed, the request is picked apart by finding the bounds of
+// its values rather than by parsing them again.
 func NewFuncCodec(conn deadlineCloser, encodeMsg encodeMsgFunc, encodeBatch encodeBatchFunc, decode decodeFunc) ServerCodec {
 	codec := &jsonCodec{
 		closeCh:     make(chan interface{}),
@@ -358,18 +363,53 @@ func (c *jsonCodec) closed() <-chan interface{} {
 // jsonrpcMessage.
 func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
 	if !isBatch(raw) {
+		// A bare null used to decode into a nil *jsonrpcMessage, and readBatch
+		// relies on that to reject the message.
+		if isJSONNull(raw) {
+			return []*jsonrpcMessage{nil}, false
+		}
 		msgs := []*jsonrpcMessage{{}}
-		json.Unmarshal(raw, &msgs[0])
+		fillMessage(raw, msgs[0])
 		return msgs, false
 	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.Token() // skip '['
 	var msgs []*jsonrpcMessage
-	for dec.More() {
-		msgs = append(msgs, new(jsonrpcMessage))
-		dec.Decode(&msgs[len(msgs)-1])
-	}
+	forEachJSONElement(raw, func(elem []byte) {
+		// A null element decoded into a *jsonrpcMessage used to leave it nil,
+		// and readBatch relies on that to reject the element.
+		if isJSONNull(elem) {
+			msgs = append(msgs, nil)
+			return
+		}
+		msg := new(jsonrpcMessage)
+		fillMessage(elem, msg)
+		msgs = append(msgs, msg)
+	})
 	return msgs, true
+}
+
+// fillMessage picks a message apart into msg. The raw fields end up pointing
+// into input rather than being copied out of it, which matters because params
+// is almost all of a large request. The two string fields still go through
+// encoding/json, so escapes in them are handled as before. Input that does not
+// hold an object leaves msg untouched, which is how the decode this replaced
+// behaved for a request that was valid JSON but not a valid message.
+func fillMessage(input []byte, msg *jsonrpcMessage) {
+	forEachJSONField(input, func(key, value []byte) {
+		switch string(key) {
+		case "jsonrpc":
+			json.Unmarshal(value, &msg.Version)
+		case "id":
+			msg.ID = value
+		case "method":
+			json.Unmarshal(value, &msg.Method)
+		case "params":
+			msg.Params = value
+		case "error":
+			msg.Error = value
+		case "result":
+			msg.Result = value
+		}
+	})
 }
 
 // isBatch returns true when the first non-whitespace characters is '['
@@ -388,18 +428,14 @@ func isBatch(raw json.RawMessage) bool {
 // given types. It returns the parsed values or an error when the args could not be
 // parsed. Missing optional arguments are returned as reflect.Zero values.
 func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]reflect.Value, error) {
-	dec := json.NewDecoder(bytes.NewReader(rawArgs))
 	var args []reflect.Value
-	tok, err := dec.Token()
 	switch {
-	case err == io.EOF || tok == nil && err == nil:
+	case len(bytes.TrimSpace(rawArgs)) == 0 || isJSONNull(rawArgs):
 		// "params" is optional and may be empty. Also allow "params":null even though it's
 		// not in the spec because our own client used to send it.
-	case err != nil:
-		return nil, err
-	case tok == json.Delim('['):
-		// Read argument array.
-		if args, err = parseArgumentArray(dec, types); err != nil {
+	case isJSONArray(rawArgs):
+		var err error
+		if args, err = parseArgumentArray(rawArgs, types); err != nil {
 			return nil, err
 		}
 	default:
@@ -415,24 +451,46 @@ func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]
 	return args, nil
 }
 
-func parseArgumentArray(dec *json.Decoder, types []reflect.Type) ([]reflect.Value, error) {
+// parseArgumentArray decodes an already syntax-checked argument array. It cuts
+// the array into its elements first so that each argument is decoded exactly
+// once. Handing the elements to a json.Decoder instead would walk every
+// argument twice, once to find where it ends and again to decode it, which is
+// costly when an argument is as large as an engine API payload.
+func parseArgumentArray(rawArgs json.RawMessage, types []reflect.Type) ([]reflect.Value, error) {
 	args := make([]reflect.Value, 0, len(types))
-	for i := 0; dec.More(); i++ {
+	var scanErr error
+	forEachJSONElement(rawArgs, func(elem []byte) {
+		if scanErr != nil {
+			return
+		}
+		i := len(args)
 		if i >= len(types) {
-			return args, fmt.Errorf("too many arguments, want at most %d", len(types))
+			scanErr = fmt.Errorf("too many arguments, want at most %d", len(types))
+			return
 		}
 		argval := reflect.New(types[i])
-		if err := dec.Decode(argval.Interface()); err != nil {
-			return args, fmt.Errorf("invalid argument %d: %v", i, err)
+		if err := decodeArgument(elem, argval.Interface()); err != nil {
+			scanErr = fmt.Errorf("invalid argument %d: %v", i, err)
+			return
 		}
 		if argval.IsNil() && types[i].Kind() != reflect.Pointer {
-			return args, fmt.Errorf("missing value for required argument %d", i)
+			scanErr = fmt.Errorf("missing value for required argument %d", i)
+			return
 		}
 		args = append(args, argval.Elem())
+	})
+	return args, scanErr
+}
+
+// decodeArgument decodes one already syntax-checked argument value. A type that
+// unmarshals itself is called directly, skipping the validation pass
+// json.Unmarshal would run first, which for a large argument is most of the cost
+// of decoding it.
+func decodeArgument(elem []byte, arg any) error {
+	if u, ok := arg.(json.Unmarshaler); ok && !isJSONNull(elem) {
+		return u.UnmarshalJSON(elem)
 	}
-	// Read end of args array.
-	_, err := dec.Token()
-	return args, err
+	return json.Unmarshal(elem, arg)
 }
 
 // parseSubscriptionName extracts the subscription name from an encoded argument array.
