@@ -18,21 +18,10 @@ package rpc
 
 import "bytes"
 
-// The helpers here find the boundaries of JSON values without interpreting
-// them. They exist because a request body would otherwise be walked by
-// encoding/json several times over before anything reads it: once to check the
-// syntax, again to cut the envelope apart, again to cut the parameters apart,
-// and only then to decode a value. For a large request, such as an engine API
-// payload holding a few hundred transactions, those extra walks cost more than
-// the decode they lead up to.
-//
-// Every function here requires input that encoding/json has already accepted,
-// which is the state of a message after the codec has decoded it into a
-// json.RawMessage. On such input the structure is known to be well formed, so
-// finding a value only means tracking strings, escapes and nesting depth. The
-// values handed out are sub-slices of the input, so nothing is copied, and they
-// are still decoded by encoding/json afterwards. Do not use these on input that
-// has not been checked.
+// Helpers for finding the bounds of JSON values without parsing them, so a
+// request is not walked by encoding/json once per layer. They require input
+// encoding/json has already accepted, and hand out sub-slices of it which are
+// still decoded afterwards. Do not use these on unchecked input.
 
 func isJSONSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
@@ -111,11 +100,8 @@ func scanJSONValue(data []byte, i int) int {
 	}
 }
 
-// forEachJSONField calls fn with the key and the raw value of every member of
-// the JSON object in data. The key has its quotes stripped but is otherwise
-// untouched, so a key holding an escape will not compare equal to its unescaped
-// form. That is fine for the field names this is used with. Nothing is called
-// if data does not hold an object.
+// forEachJSONField calls fn with the key and raw value of every member of the
+// JSON object in data. Nothing is called if data does not hold an object.
 func forEachJSONField(data []byte, fn func(key, value []byte)) {
 	i := skipJSONSpace(data, 0)
 	if i >= len(data) || data[i] != '{' {
@@ -146,6 +132,8 @@ func forEachJSONField(data []byte, fn func(key, value []byte)) {
 		if keyEnd-1 <= keyStart {
 			return
 		}
+		// The key keeps any escapes it had, which is fine for the field names
+		// this is used with.
 		fn(data[keyStart+1:keyEnd-1], data[valStart:valEnd])
 	}
 }
@@ -171,12 +159,6 @@ func forEachJSONElement(data []byte, fn func(value []byte)) {
 		i = scanJSONValue(data, i)
 		fn(data[start:i])
 	}
-}
-
-// isJSONArray reports whether data holds a JSON array.
-func isJSONArray(data []byte) bool {
-	i := skipJSONSpace(data, 0)
-	return i < len(data) && data[i] == '['
 }
 
 // isJSONNull reports whether data holds the JSON null literal.

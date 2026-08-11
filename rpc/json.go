@@ -212,20 +212,15 @@ type encodeBatchFunc = func(ctx context.Context, msgs []*jsonrpcMessage, isError
 
 type decodeFunc = func(v interface{}) error
 
-// readFrameFunc returns the bytes of the next message. Only transports that know
-// where a message ends without parsing it have one, such as an HTTP body or a
-// WebSocket frame. The bytes must not be handed out again on the next call, as
-// the message keeps pointing into them.
+// readFrameFunc returns the bytes of the next message. Only transports that
+// delimit messages themselves have one. The bytes must not be reused on the next
+// call, the message points into them.
 type readFrameFunc = func() ([]byte, error)
 
 // NewFuncCodec creates a codec which uses the given functions to read and write. If conn
 // implements ConnRemoteAddr, log messages will use it to include the remote address of
-// the connection.
-//
-// The decode function must reject input that is not valid JSON, which every
-// json.Decoder based one does. Reading a message relies on it: once a message is
-// known to be well formed, the request is picked apart by finding the bounds of
-// its values rather than by parsing them again.
+// the connection. The decode function must reject invalid JSON, reading a message
+// relies on it.
 func NewFuncCodec(conn deadlineCloser, encodeMsg encodeMsgFunc, encodeBatch encodeBatchFunc, decode decodeFunc) ServerCodec {
 	return newFuncCodec(conn, encodeMsg, encodeBatch, decode, nil)
 }
@@ -333,27 +328,25 @@ func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err err
 }
 
 // readMessage returns the bytes of the next message, checked to be valid JSON.
-//
-// Where the transport knows where a message ends, the whole message is read and
-// then checked in a single pass. Decoding it into a json.RawMessage instead costs
-// two passes and a copy, because the decoder scans the message to find its end
-// and then the RawMessage scans it again before copying it out. On a stream there
-// is no framing to rely on, so the decoder has to do both jobs.
 func (c *jsonCodec) readMessage() (json.RawMessage, error) {
+	// A stream has no framing, so the decoder finds the message end and checks it.
 	if c.readFrame == nil {
+		// Decode the next JSON object in the input stream.
+		// This verifies basic syntax, etc.
 		var rawmsg json.RawMessage
 		if err := c.decode(&rawmsg); err != nil {
 			return nil, err
 		}
 		return rawmsg, nil
 	}
+	// The transport delimits the message, so one read and one check will do.
+	// Decoding into a json.RawMessage would scan twice and copy.
 	frame, err := c.readFrame()
 	if err != nil {
 		return nil, err
 	}
 	if !json.Valid(frame) {
-		// Decode it to report what is wrong with it and where. This only runs for
-		// a message that is already known to be broken.
+		// Decode the broken message to report where it went wrong.
 		var rawmsg json.RawMessage
 		if err := json.Unmarshal(frame, &rawmsg); err != nil {
 			return nil, err
@@ -405,8 +398,7 @@ func (c *jsonCodec) closed() <-chan interface{} {
 // jsonrpcMessage.
 func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
 	if !isBatch(raw) {
-		// A bare null used to decode into a nil *jsonrpcMessage, and readBatch
-		// relies on that to reject the message.
+		// readBatch rejects a nil message, which is what null must become.
 		if isJSONNull(raw) {
 			return []*jsonrpcMessage{nil}, false
 		}
@@ -416,8 +408,7 @@ func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
 	}
 	var msgs []*jsonrpcMessage
 	forEachJSONElement(raw, func(elem []byte) {
-		// A null element decoded into a *jsonrpcMessage used to leave it nil,
-		// and readBatch relies on that to reject the element.
+		// readBatch rejects a nil message, which is what null must become.
 		if isJSONNull(elem) {
 			msgs = append(msgs, nil)
 			return
@@ -429,16 +420,15 @@ func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
 	return msgs, true
 }
 
-// fillMessage picks a message apart into msg. The raw fields end up pointing
-// into input rather than being copied out of it, which matters because params
-// is almost all of a large request. The two string fields still go through
-// encoding/json, so escapes in them are handled as before. Input that does not
-// hold an object leaves msg untouched, which is how the decode this replaced
-// behaved for a request that was valid JSON but not a valid message.
+// fillMessage picks a message apart into msg. Input that does not hold an object
+// leaves msg zero, and the handler rejects it later.
 func fillMessage(input []byte, msg *jsonrpcMessage) {
+	// The raw fields point into input rather than being copied out of it, which
+	// matters because params is nearly all of a large request.
 	forEachJSONField(input, func(key, value []byte) {
 		switch string(key) {
 		case "jsonrpc":
+			// The string fields go through encoding/json to unescape them.
 			json.Unmarshal(value, &msg.Version)
 		case "id":
 			msg.ID = value
@@ -475,7 +465,8 @@ func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]
 	case len(bytes.TrimSpace(rawArgs)) == 0 || isJSONNull(rawArgs):
 		// "params" is optional and may be empty. Also allow "params":null even though it's
 		// not in the spec because our own client used to send it.
-	case isJSONArray(rawArgs):
+	case isBatch(rawArgs):
+		// Read argument array.
 		var err error
 		if args, err = parseArgumentArray(rawArgs, types); err != nil {
 			return nil, err
@@ -493,12 +484,10 @@ func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]
 	return args, nil
 }
 
-// parseArgumentArray decodes an already syntax-checked argument array. It cuts
-// the array into its elements first so that each argument is decoded exactly
-// once. Handing the elements to a json.Decoder instead would walk every
-// argument twice, once to find where it ends and again to decode it, which is
-// costly when an argument is as large as an engine API payload.
+// parseArgumentArray decodes an already syntax-checked argument array.
 func parseArgumentArray(rawArgs json.RawMessage, types []reflect.Type) ([]reflect.Value, error) {
+	// Cutting the array into elements first means each argument is decoded once.
+	// A json.Decoder would walk every argument twice, once to find where it ends.
 	args := make([]reflect.Value, 0, len(types))
 	var scanErr error
 	forEachJSONElement(rawArgs, func(elem []byte) {
@@ -524,11 +513,10 @@ func parseArgumentArray(rawArgs json.RawMessage, types []reflect.Type) ([]reflec
 	return args, scanErr
 }
 
-// decodeArgument decodes one already syntax-checked argument value. A type that
-// unmarshals itself is called directly, skipping the validation pass
-// json.Unmarshal would run first, which for a large argument is most of the cost
-// of decoding it.
+// decodeArgument decodes one already syntax-checked argument value.
 func decodeArgument(elem []byte, arg any) error {
+	// A type that unmarshals itself is called directly, which skips the
+	// validation pass json.Unmarshal runs first.
 	if u, ok := arg.(json.Unmarshaler); ok && !isJSONNull(elem) {
 		return u.UnmarshalJSON(elem)
 	}

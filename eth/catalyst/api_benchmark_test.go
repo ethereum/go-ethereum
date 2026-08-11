@@ -741,17 +741,13 @@ func BenchmarkGetBlobsV3RPCServerOnly(b *testing.B) {
 }
 
 // benchTxDataSizes is a spread of calldata sizes approximating the mix in a
-// mainnet block, where cheap transfers sit alongside large contract calls. The
-// mix is what matters for a newPayload request: every transaction arrives as its
-// own hex string, so the count and the sizes both drive the cost of reading it.
+// mainnet block, where cheap transfers sit alongside large contract calls.
 // Cycling these gives a mean transaction of roughly 700 bytes, which is what
 // mainnet blocks of 30 to 40 million gas have been carrying.
 var benchTxDataSizes = []int{0, 68, 132, 356, 900, 2500}
 
 // makeBenchNewPayload builds a payload holding numTx transactions, along with
-// the other arguments engine_newPayloadV4 takes. The block hash is filled in
-// from the assembled block, so the payload passes the same checks a real one
-// does rather than failing early.
+// the other arguments engine_newPayloadV4 takes.
 func makeBenchNewPayload(b *testing.B, numTx int) (engine.ExecutableData, []common.Hash, *common.Hash) {
 	config := params.MergedTestChainConfig
 	signer := types.LatestSigner(config)
@@ -840,8 +836,7 @@ func makeBenchNewPayloadRequest(b *testing.B, numTx int) []byte {
 }
 
 // newPayloadDecodeStub answers engine_newPayloadV4 with no chain behind it. With
-// toBlock set it also assembles the block, which is the last thing newPayload
-// does before handing it to the chain.
+// toBlock set it also assembles the block.
 type newPayloadDecodeStub struct {
 	toBlock bool
 	err     error
@@ -861,11 +856,9 @@ func (s *newPayloadDecodeStub) NewPayloadV4(ctx context.Context, params engine.E
 }
 
 // BenchmarkNewPayloadDecode measures what an engine_newPayloadV4 request costs
-// the server before the block reaches the chain, which for a payload holding a
-// few hundred transactions is most of what newPayload does outside execution.
-// The request arrives over HTTP, as it does from a consensus client, and the
-// chain is stubbed out. The decode variant stops once the arguments are decoded,
-// the decode+block variant also assembles and hash checks the block.
+// the server before the block reaches the chain. It arrives over HTTP, as it does
+// from a consensus client. The decode variant stops once the arguments are
+// decoded, decode+block also assembles and hash checks the block.
 func BenchmarkNewPayloadDecode(b *testing.B) {
 	for _, numTx := range []int{64, 192, 384} {
 		req := makeBenchNewPayloadRequest(b, numTx)

@@ -20,73 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"reflect"
+	"strings"
 	"testing"
 )
 
-// parseMessageRef is the encoding/json based implementation that parseMessage
-// replaced. The tests below require the two to agree.
-func parseMessageRef(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
-	if !isBatch(raw) {
-		msgs := []*jsonrpcMessage{{}}
-		json.Unmarshal(raw, &msgs[0])
-		return msgs, false
-	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.Token() // skip '['
-	var msgs []*jsonrpcMessage
-	for dec.More() {
-		msgs = append(msgs, new(jsonrpcMessage))
-		dec.Decode(&msgs[len(msgs)-1])
-	}
-	return msgs, true
-}
-
-// parsePositionalArgumentsRef is the implementation parsePositionalArguments
-// replaced.
-func parsePositionalArgumentsRef(rawArgs json.RawMessage, types []reflect.Type) ([]reflect.Value, error) {
-	dec := json.NewDecoder(bytes.NewReader(rawArgs))
-	var args []reflect.Value
-	tok, err := dec.Token()
-	switch {
-	case err == io.EOF || tok == nil && err == nil:
-	case err != nil:
-		return nil, err
-	case tok == json.Delim('['):
-		args = make([]reflect.Value, 0, len(types))
-		for i := 0; dec.More(); i++ {
-			if i >= len(types) {
-				return args, fmt.Errorf("too many arguments, want at most %d", len(types))
-			}
-			argval := reflect.New(types[i])
-			if err := dec.Decode(argval.Interface()); err != nil {
-				return args, fmt.Errorf("invalid argument %d: %v", i, err)
-			}
-			if argval.IsNil() && types[i].Kind() != reflect.Pointer {
-				return args, fmt.Errorf("missing value for required argument %d", i)
-			}
-			args = append(args, argval.Elem())
-		}
-		if _, err := dec.Token(); err != nil {
-			return args, err
-		}
-	default:
-		return nil, errUnknownArgs
-	}
-	for i := len(args); i < len(types); i++ {
-		if types[i].Kind() != reflect.Pointer {
-			return nil, fmt.Errorf("missing value for required argument %d", i)
-		}
-		args = append(args, reflect.Zero(types[i]))
-	}
-	return args, nil
-}
-
-var errUnknownArgs = fmt.Errorf("non-array args")
-
-// messageCorpus holds inputs that the two implementations must agree on. Every
-// entry is valid JSON, which is what parseMessage is given.
+// messageCorpus seeds the fuzz targets below. Every entry is valid JSON, which
+// is the state of a message by the time parseMessage sees it.
 var messageCorpus = []string{
 	`{}`,
 	`{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}`,
@@ -141,33 +81,94 @@ var messageCorpus = []string{
 	`[{"method":"m","params":["},{"]}]`,
 }
 
-func TestParseMessageMatchesReference(t *testing.T) {
-	for _, input := range messageCorpus {
-		if !json.Valid([]byte(input)) {
-			t.Fatalf("corpus entry is not valid JSON: %s", input)
+// TestParseMessage covers the inputs where the envelope split has to make a
+// decision.
+func TestParseMessage(t *testing.T) {
+	msg := func(version, method, id, params, result string) *jsonrpcMessage {
+		m := &jsonrpcMessage{Version: version, Method: method}
+		if id != "" {
+			m.ID = json.RawMessage(id)
 		}
-		wantMsgs, wantBatch := parseMessageRef(json.RawMessage(input))
-		gotMsgs, gotBatch := parseMessage(json.RawMessage(input))
-		if gotBatch != wantBatch {
-			t.Errorf("%s: batch = %v, want %v", input, gotBatch, wantBatch)
-			continue
+		if params != "" {
+			m.Params = json.RawMessage(params)
 		}
-		if len(gotMsgs) != len(wantMsgs) {
-			t.Errorf("%s: got %d messages, want %d", input, len(gotMsgs), len(wantMsgs))
-			continue
+		if result != "" {
+			m.Result = json.RawMessage(result)
 		}
-		for i := range wantMsgs {
-			if (gotMsgs[i] == nil) != (wantMsgs[i] == nil) {
-				t.Errorf("%s: message %d nil = %v, want %v", input, i, gotMsgs[i] == nil, wantMsgs[i] == nil)
-				continue
+		return m
+	}
+	zero := func() *jsonrpcMessage { return msg("", "", "", "", "") }
+
+	tests := []struct {
+		name  string
+		input string
+		batch bool
+		want  []*jsonrpcMessage
+	}{
+		{"empty object", `{}`, false, []*jsonrpcMessage{zero()}},
+		{
+			"call",
+			`{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}`,
+			false, []*jsonrpcMessage{msg("2.0", "eth_chainId", "1", "[]", "")},
+		},
+		// null stays in the raw fields as the literal. isResponse needs a null
+		// result to count as present.
+		{"null id", `{"id":null}`, false, []*jsonrpcMessage{msg("", "", "null", "", "")}},
+		{"null result", `{"result":null}`, false, []*jsonrpcMessage{msg("", "", "", "", "null")}},
+		{"null params", `{"params":null}`, false, []*jsonrpcMessage{msg("", "", "", "null", "")}},
+
+		{"escaped quote in method", `{"method":"a\"b","id":1}`, false, []*jsonrpcMessage{msg("", `a"b`, "1", "", "")}},
+		{"escaped tab in method", `{"method":"tab\there","id":1}`, false, []*jsonrpcMessage{msg("", "tab\there", "1", "", "")}},
+		{"duplicate key, last wins", `{"method":"first","method":"second","id":1}`, false, []*jsonrpcMessage{msg("", "second", "1", "", "")}},
+
+		// a string holding structural bytes must not end the value early
+		{
+			"structural bytes inside a string",
+			`{"method":"m","params":["a\"},{\"b"],"id":1}`,
+			false, []*jsonrpcMessage{msg("", "m", "1", `["a\"},{\"b"]`, "")},
+		},
+		{"space inside params is kept", `{"params":  [  1  ,  2  ]  ,"id":3}`, false, []*jsonrpcMessage{msg("", "", "3", "[  1  ,  2  ]", "")}},
+		{"space around the message", "\n\t{\"method\":\"m\",\"id\":2}\r\n", false, []*jsonrpcMessage{msg("", "m", "2", "", "")}},
+		{"unknown fields ignored", `{"method":"m","id":1,"extra":{"a":[1,2,3]},"more":"x"}`, false, []*jsonrpcMessage{msg("", "m", "1", "", "")}},
+
+		// valid JSON that is not a message leaves a zero one for the handler to reject
+		{"not an object", `1`, false, []*jsonrpcMessage{zero()}},
+		{"bare null", `null`, false, []*jsonrpcMessage{nil}},
+
+		{"empty batch", `[]`, true, nil},
+		{"batch holding one null", `[null]`, true, []*jsonrpcMessage{nil}},
+		{
+			"batch with a null in it",
+			`[{"method":"a","id":1},null,{"method":"b","id":2}]`,
+			true, []*jsonrpcMessage{msg("", "a", "1", "", ""), nil, msg("", "b", "2", "", "")},
+		},
+		{"batch of non-objects", `[1,2,3]`, true, []*jsonrpcMessage{zero(), zero(), zero()}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if !json.Valid([]byte(tc.input)) {
+				t.Fatalf("test input is not valid JSON: %s", tc.input)
 			}
-			if gotMsgs[i] == nil {
-				continue
+			got, batch := parseMessage(json.RawMessage(tc.input))
+			if batch != tc.batch {
+				t.Fatalf("batch = %v, want %v", batch, tc.batch)
 			}
-			if err := sameMessage(gotMsgs[i], wantMsgs[i]); err != nil {
-				t.Errorf("%s: message %d: %v", input, i, err)
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d messages, want %d", len(got), len(tc.want))
 			}
-		}
+			for i := range tc.want {
+				if (got[i] == nil) != (tc.want[i] == nil) {
+					t.Fatalf("message %d nil = %v, want %v", i, got[i] == nil, tc.want[i] == nil)
+				}
+				if got[i] == nil {
+					continue
+				}
+				if err := sameMessage(got[i], tc.want[i]); err != nil {
+					t.Errorf("message %d: %v", i, err)
+				}
+			}
+		})
 	}
 }
 
@@ -190,44 +191,15 @@ func sameMessage(got, want *jsonrpcMessage) error {
 		if (f.got == nil) != (f.want == nil) {
 			return fmt.Errorf("%s nil = %v, want %v (got %q want %q)", f.name, f.got == nil, f.want == nil, f.got, f.want)
 		}
-		// The raw fields are byte identical apart from surrounding whitespace,
-		// which the reference trims and the scan does not carry either.
-		if !bytes.Equal(bytes.TrimSpace(f.got), bytes.TrimSpace(f.want)) {
+		// A raw field is a slice of the input, so it should come back byte for byte.
+		if !bytes.Equal(f.got, f.want) {
 			return fmt.Errorf("%s = %q, want %q", f.name, f.got, f.want)
 		}
 	}
 	return nil
 }
 
-// argCorpus holds argument arrays paired with the argument types to decode them
-// into.
-var argCorpus = []struct {
-	args  string
-	types []reflect.Type
-}{
-	{`[]`, nil},
-	{`[1]`, []reflect.Type{reflect.TypeOf(int(0))}},
-	{`[1,2]`, []reflect.Type{reflect.TypeOf(int(0)), reflect.TypeOf(int(0))}},
-	{`[1,2,3]`, []reflect.Type{reflect.TypeOf(int(0))}},
-	{`["a"]`, []reflect.Type{reflect.TypeOf("")}},
-	{`[null]`, []reflect.Type{reflect.TypeOf(new(int))}},
-	{`[null]`, []reflect.Type{reflect.TypeOf(int(0))}},
-	{`[{"a":1}]`, []reflect.Type{reflect.TypeOf(map[string]int{})}},
-	{`[[1,2],[3]]`, []reflect.Type{reflect.TypeOf([]int{}), reflect.TypeOf([]int{})}},
-	{`[ 1 , 2 ]`, []reflect.Type{reflect.TypeOf(int(0)), reflect.TypeOf(int(0))}},
-	{`[1]`, []reflect.Type{reflect.TypeOf(int(0)), reflect.TypeOf(new(int))}},
-	{`[1]`, []reflect.Type{reflect.TypeOf(int(0)), reflect.TypeOf(int(0))}},
-	{`["not an int"]`, []reflect.Type{reflect.TypeOf(int(0))}},
-	{`[]`, []reflect.Type{reflect.TypeOf(int(0))}},
-	{`["},{"]`, []reflect.Type{reflect.TypeOf("")}},
-	// a type that decodes itself, which is the case the fast path changes
-	{`["0x1234"]`, []reflect.Type{reflect.TypeOf(selfDecoding{})}},
-	{`[null]`, []reflect.Type{reflect.TypeOf(selfDecoding{})}},
-	{`["bad"]`, []reflect.Type{reflect.TypeOf(selfDecoding{})}},
-}
-
-// selfDecoding stands in for the argument types that unmarshal themselves, such
-// as an engine API payload or a hexutil value.
+// selfDecoding stands in for an argument type that unmarshals itself.
 type selfDecoding struct {
 	Text string
 }
@@ -240,31 +212,66 @@ func (s *selfDecoding) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func TestParsePositionalArgumentsMatchesReference(t *testing.T) {
-	for _, tc := range argCorpus {
-		if !json.Valid([]byte(tc.args)) {
-			t.Fatalf("corpus entry is not valid JSON: %s", tc.args)
-		}
-		wantArgs, wantErr := parsePositionalArgumentsRef(json.RawMessage(tc.args), tc.types)
-		gotArgs, gotErr := parsePositionalArguments(json.RawMessage(tc.args), tc.types)
+// TestParsePositionalArguments covers how an argument array is cut up, including
+// the cases that error.
+func TestParsePositionalArguments(t *testing.T) {
+	var (
+		tInt  = reflect.TypeOf(int(0))
+		tPtr  = reflect.TypeOf(new(int))
+		tStr  = reflect.TypeOf("")
+		tMap  = reflect.TypeOf(map[string]int{})
+		tSelf = reflect.TypeOf(selfDecoding{})
+	)
+	tests := []struct {
+		name    string
+		args    string
+		types   []reflect.Type
+		want    []any
+		wantErr string
+	}{
+		{"no arguments", `[]`, nil, nil, ""},
+		{"two ints", `[1,2]`, []reflect.Type{tInt, tInt}, []any{1, 2}, ""},
+		{"space between arguments", `[ 1 , 2 ]`, []reflect.Type{tInt, tInt}, []any{1, 2}, ""},
+		{"object argument", `[{"a":1}]`, []reflect.Type{tMap}, []any{map[string]int{"a": 1}}, ""},
+		{"structural bytes inside a string", `["},{"]`, []reflect.Type{tStr}, []any{`},{`}, ""},
+		{"null into a pointer", `[null]`, []reflect.Type{tPtr}, []any{(*int)(nil)}, ""},
+		{"null into a value", `[null]`, []reflect.Type{tInt}, []any{0}, ""},
+		{"missing optional argument", `[1]`, []reflect.Type{tInt, tPtr}, []any{1, (*int)(nil)}, ""},
 
-		if (gotErr == nil) != (wantErr == nil) {
-			t.Errorf("%s: err = %v, want %v", tc.args, gotErr, wantErr)
-			continue
-		}
-		if gotErr != nil {
-			continue
-		}
-		if len(gotArgs) != len(wantArgs) {
-			t.Errorf("%s: got %d args, want %d", tc.args, len(gotArgs), len(wantArgs))
-			continue
-		}
-		for i := range wantArgs {
-			g, w := gotArgs[i].Interface(), wantArgs[i].Interface()
-			if !reflect.DeepEqual(g, w) {
-				t.Errorf("%s: arg %d = %#v, want %#v", tc.args, i, g, w)
+		{"too many arguments", `[1,2,3]`, []reflect.Type{tInt}, nil, "too many arguments"},
+		{"missing required argument", `[1]`, []reflect.Type{tInt, tInt}, nil, "missing value for required argument 1"},
+		{"no arguments at all", `[]`, []reflect.Type{tInt}, nil, "missing value for required argument 0"},
+		{"wrong type", `["not an int"]`, []reflect.Type{tInt}, nil, "invalid argument 0"},
+
+		// a self decoding type is handed the value directly, except for null
+		{"self decoding", `["0x1234"]`, []reflect.Type{tSelf}, []any{selfDecoding{Text: "0x1234"}}, ""},
+		{"self decoding null", `[null]`, []reflect.Type{tSelf}, nil, "invalid argument 0"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if !json.Valid([]byte(tc.args)) {
+				t.Fatalf("test input is not valid JSON: %s", tc.args)
 			}
-		}
+			got, err := parsePositionalArguments(json.RawMessage(tc.args), tc.types)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("err = %v, want it to mention %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d arguments, want %d", len(got), len(tc.want))
+			}
+			for i := range tc.want {
+				if v := got[i].Interface(); !reflect.DeepEqual(v, tc.want[i]) {
+					t.Errorf("argument %d = %#v, want %#v", i, v, tc.want[i])
+				}
+			}
+		})
 	}
 }
 
@@ -282,8 +289,8 @@ func TestParsePositionalArgumentsEmpty(t *testing.T) {
 	}
 }
 
-// benchMessages are requests of the shapes the server actually sees, from a
-// one line call to a payload sized one.
+// benchMessages are request shapes the server sees, from a one line call to a
+// payload sized one.
 func benchMessages() []struct {
 	name string
 	req  string
@@ -328,30 +335,22 @@ func benchMessages() []struct {
 	}
 }
 
-// BenchmarkParseMessage compares the scan based envelope split against the
-// encoding/json one it replaced.
+// BenchmarkParseMessage measures the envelope split.
 func BenchmarkParseMessage(b *testing.B) {
 	for _, tc := range benchMessages() {
 		raw := json.RawMessage(tc.req)
-		b.Run(tc.name+"/new", func(b *testing.B) {
+		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(raw)))
 			for b.Loop() {
 				parseMessage(raw)
 			}
 		})
-		b.Run(tc.name+"/ref", func(b *testing.B) {
-			b.ReportAllocs()
-			b.SetBytes(int64(len(raw)))
-			for b.Loop() {
-				parseMessageRef(raw)
-			}
-		})
 	}
 }
 
-// BenchmarkParsePositionalArguments compares the two argument decoders on an
-// argument that decodes itself, which is the shape an engine API payload has.
+// BenchmarkParsePositionalArguments measures argument decoding for a type that
+// decodes itself, which is the shape an engine API payload has.
 func BenchmarkParsePositionalArguments(b *testing.B) {
 	types := []reflect.Type{reflect.TypeOf(selfDecoding{})}
 	for _, size := range []int{1, 64, 512} {
@@ -362,20 +361,11 @@ func BenchmarkParsePositionalArguments(b *testing.B) {
 		}
 		buf.WriteString(`"]`)
 		raw := json.RawMessage(buf.String())
-		b.Run(fmt.Sprintf("kb%d/new", len(raw)/1024), func(b *testing.B) {
+		b.Run(fmt.Sprintf("kb%d", len(raw)/1024), func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(raw)))
 			for b.Loop() {
 				if _, err := parsePositionalArguments(raw, types); err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
-		b.Run(fmt.Sprintf("kb%d/ref", len(raw)/1024), func(b *testing.B) {
-			b.ReportAllocs()
-			b.SetBytes(int64(len(raw)))
-			for b.Loop() {
-				if _, err := parsePositionalArgumentsRef(raw, types); err != nil {
 					b.Fatal(err)
 				}
 			}
