@@ -223,6 +223,8 @@ func (api *adminAPI) StartRPC(host *string, port *int, cors *string, apis *strin
 
 // StopHTTP shuts down the HTTP server.
 func (api *adminAPI) StopHTTP() (bool, error) {
+	api.node.lock.Lock()
+	defer api.node.lock.Unlock()
 	api.node.http.stop()
 	return true, nil
 }
