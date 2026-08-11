@@ -18,9 +18,13 @@ package eth
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -29,6 +33,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -41,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
@@ -405,4 +411,101 @@ func TestDebugAPI_ClearTxpool(t *testing.T) {
 	}
 
 	t.Log("Successfully cleared transaction pool")
+}
+
+// TestGetBadBlocksToFile covers the optional file argument: without it nothing is
+// written, with it the same payload lands on disk as JSON, and an existing file
+// is never clobbered (the path is caller-controlled).
+func TestGetBadBlocksToFile(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(1),
+		Extra:       []byte("bad block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	reverted := []*rawdb.RevertedTx{
+		{Index: 7, Tx: types.NewTx(&types.LegacyTx{Nonce: 3, Gas: 21000, GasPrice: big.NewInt(1)})},
+	}
+	receipts := types.Receipts{
+		{Status: types.ReceiptStatusFailed, CumulativeGasUsed: 21000, Logs: []*types.Log{}},
+	}
+	rawdb.WriteBadBlockWithDetails(db, block, receipts, reverted, "invalid gas used")
+
+	gspec := &core.Genesis{Config: params.MergedTestChainConfig, Difficulty: common.Big0}
+	chain, err := core.NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), nil)
+	if err != nil {
+		t.Fatalf("new blockchain: %v", err)
+	}
+	defer chain.Stop()
+
+	eth := &Ethereum{chainDb: db, blockchain: chain}
+	eth.APIBackend = &EthAPIBackend{eth: eth}
+	api := NewDebugAPI(eth)
+
+	// No file argument: the call still returns the blocks and writes nothing.
+	dir := t.TempDir()
+	want, err := api.GetBadBlocks(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("GetBadBlocks without file: %v", err)
+	}
+	if len(want) != 1 || want[0].Hash != block.Hash() {
+		t.Fatalf("unexpected bad blocks: %+v", want)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("nothing should have been written, found %d entries", len(entries))
+	}
+
+	// With a file argument: the same payload is written as JSON.
+	path := filepath.Join(dir, "bad-blocks.json")
+	got, err := api.GetBadBlocks(context.Background(), &path)
+	if err != nil {
+		t.Fatalf("GetBadBlocks to file: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("payload should go to the file only, got %d entries back", len(got))
+	}
+	blob, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read dump: %v", err)
+	}
+	var dumped []*BadBlockArgs
+	if err := json.Unmarshal(blob, &dumped); err != nil {
+		t.Fatalf("dump is not valid JSON: %v", err)
+	}
+	if len(dumped) != 1 || dumped[0].Hash != want[0].Hash || dumped[0].RLP != want[0].RLP {
+		t.Fatalf("dump does not match the returned payload: %+v", dumped)
+	}
+
+	// The execution detail must survive the dump: it is what makes an imported
+	// bad block replayable on another node.
+	if dumped[0].Detail == "" {
+		t.Fatal("execution detail missing from the dump")
+	}
+	blob2, err := hexutil.Decode(dumped[0].Detail)
+	if err != nil {
+		t.Fatalf("detail is not hex: %v", err)
+	}
+	var detail rawdb.ExecutionDetail
+	if err := rlp.DecodeBytes(blob2, &detail); err != nil {
+		t.Fatalf("detail does not decode: %v", err)
+	}
+	if detail.Reason != "invalid gas used" {
+		t.Errorf("reason = %q, want %q", detail.Reason, "invalid gas used")
+	}
+	if len(detail.Reverted) != 1 || detail.Reverted[0].Index != 7 {
+		t.Fatalf("reverted txs lost in the dump: %+v", detail.Reverted)
+	}
+	if len(detail.Receipts) != 1 {
+		t.Fatalf("receipts lost in the dump: %d", len(detail.Receipts))
+	}
+
+	// A second call to the same path must fail rather than overwrite it.
+	if _, err := api.GetBadBlocks(context.Background(), &path); err == nil {
+		t.Fatal("expected the existing file to be refused")
+	}
+	if after, err := os.ReadFile(path); err != nil || !bytes.Equal(after, blob) {
+		t.Fatal("refused call must leave the existing file untouched")
+	}
 }

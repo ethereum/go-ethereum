@@ -91,11 +91,13 @@ func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayl
 	return nil
 }
 
-// getByStateRoot returns the tracked local payload whose full block has the
-// given state root, along with that block, its build-time receipts, and the
-// transactions tried-and-reverted during building (with their block-access
-// indices).
-func (q *payloadQueue) getByStateRoot(root common.Hash) (*types.Block, []*types.Receipt, []*types.Transaction, []uint32) {
+// getWithDetails returns the tracked local payload with the given state root,
+// along with the block construction details.
+//
+// The state root is used as the key because the consensus client may mutate
+// the returned payload externally by modifying fields (such as Extra), which
+// would otherwise change the block hash.
+func (q *payloadQueue) getWithDetails(root common.Hash) (*types.Block, []*types.Receipt, []*types.Transaction, []uint32) {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 

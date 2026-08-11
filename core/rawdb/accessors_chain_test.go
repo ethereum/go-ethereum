@@ -289,6 +289,124 @@ func TestBadBlockDetailsAndCompat(t *testing.T) {
 			t.Fatal("reconstructed block gained a spurious access list")
 		}
 	})
+
+	// 4. A stored history in the pre-ExecutionDetail layout, where the optional
+	// fields were flat rather than nested, can no longer be decoded. Writing must
+	// discard it and carry on: bad blocks are capped debug data, and taking the
+	// node down over an unreadable history would be far worse than losing it.
+	t.Run("undecodable-history", func(t *testing.T) {
+		db := NewMemoryDatabase()
+		type flatBadBlock struct {
+			Header     *types.Header
+			Body       *types.Body
+			AccessList *bal.BlockAccessList       `rlp:"optional"`
+			Receipts   []*types.ReceiptForStorage `rlp:"optional"`
+			Reason     string                     `rlp:"optional"`
+			Reverted   []*RevertedTx              `rlp:"optional"`
+		}
+		old := types.NewBlockWithHeader(mkHeader(4, "flat"))
+		blob, err := rlp.EncodeToBytes([]*flatBadBlock{{
+			Header:   old.Header(),
+			Body:     old.Body(),
+			Receipts: []*types.ReceiptForStorage{(*types.ReceiptForStorage)(receipts[0])},
+			Reason:   "written by an older geth",
+		}})
+		if err != nil {
+			t.Fatalf("encode flat: %v", err)
+		}
+		if err := db.Put(badBlockKey, blob); err != nil {
+			t.Fatalf("put flat: %v", err)
+		}
+		// Sanity check that this really is a layout the current code rejects,
+		// otherwise the case below would pass without exercising anything.
+		var probe []*badBlock
+		if err := rlp.DecodeBytes(blob, &probe); err == nil {
+			t.Fatal("flat layout unexpectedly still decodes; this case no longer tests the fallback")
+		}
+		fresh := types.NewBlockWithHeader(mkHeader(5, "fresh"))
+		WriteBadBlockWithDetails(db, fresh, receipts, nil, "boom")
+
+		got := ReadAllBadBlocks(db)
+		if len(got) != 1 || got[0].Hash() != fresh.Hash() {
+			t.Fatalf("history not reset around the undecodable record: %v", got)
+		}
+		if d := ReadBadBlockWithDetails(db, fresh.Hash()); d == nil || d.Reason != "boom" {
+			t.Fatalf("fresh record not stored after discarding history: %+v", d)
+		}
+	})
+}
+
+// TestBadBlockExecutionDetailRoundTrip covers the pair of accessors that move a
+// bad block between nodes: the detail read out verbatim must be storable again
+// as-is. Without this the transfer is close to pointless, since the detail is
+// exactly what debug_replayBadBlock needs to reproduce the build side.
+func TestBadBlockExecutionDetailRoundTrip(t *testing.T) {
+	src := NewMemoryDatabase()
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(1),
+		Extra:       []byte("mismatch"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	receipts := types.Receipts{
+		{Status: types.ReceiptStatusFailed, CumulativeGasUsed: 21000, Logs: []*types.Log{}},
+	}
+	reverted := []*RevertedTx{
+		{Index: 2, Tx: types.NewTx(&types.LegacyTx{Nonce: 9, Gas: 21000, GasPrice: big.NewInt(1)})},
+	}
+	WriteBadBlockWithDetails(src, block, receipts, reverted, "access list hash mismatch")
+
+	// Export side: read the detail out without unpacking it.
+	blocks, details := ReadAllBadBlocksWithDetails(src)
+	if len(blocks) != 1 || len(details) != 1 {
+		t.Fatalf("read back %d blocks / %d details, want 1 each", len(blocks), len(details))
+	}
+	if details[0] == nil {
+		t.Fatal("detail missing on the export side")
+	}
+	// Survive an RLP hop, which is how it travels in the dump file.
+	blob, err := rlp.EncodeToBytes(details[0])
+	if err != nil {
+		t.Fatalf("encode detail: %v", err)
+	}
+	shipped := new(ExecutionDetail)
+	if err := rlp.DecodeBytes(blob, shipped); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+
+	// Import side: store it on a fresh node and read it back the normal way.
+	dst := NewMemoryDatabase()
+	WriteBadBlockWithExecutionDetail(dst, blocks[0], shipped)
+
+	got := ReadBadBlockWithDetails(dst, block.Hash())
+	if got == nil {
+		t.Fatal("imported bad block not found")
+	}
+	if got.Reason != "access list hash mismatch" {
+		t.Errorf("reason = %q, want %q", got.Reason, "access list hash mismatch")
+	}
+	if len(got.Receipts) != 1 || got.Receipts[0].CumulativeGasUsed != 21000 {
+		t.Errorf("receipts lost: %+v", got.Receipts)
+	}
+	if len(got.Reverted) != 1 || got.Reverted[0].Index != 2 ||
+		got.Reverted[0].Tx.Hash() != reverted[0].Tx.Hash() {
+		t.Errorf("reverted txs lost: %+v", got.Reverted)
+	}
+
+	// A block with no detail must still store and read back cleanly.
+	plain := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(2),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	WriteBadBlockWithExecutionDetail(dst, plain, nil)
+	if d := ReadBadBlockWithDetails(dst, plain.Hash()); d == nil {
+		t.Fatal("detail-less bad block not found")
+	} else if d.Reason != "" || len(d.Receipts) != 0 || len(d.Reverted) != 0 {
+		t.Fatalf("detail-less block gained details: %+v", d)
+	}
 }
 
 func TestBadBlockStorage(t *testing.T) {

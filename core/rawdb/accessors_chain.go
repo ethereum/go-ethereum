@@ -832,24 +832,29 @@ type badBlock struct {
 	Header *types.Header
 	Body   *types.Body
 
-	// The fields below are optional and trailing, so that legacy records and bad
-	// blocks reported by other clients, which carry none of them still decode
-	// cleanly. They are populated for blocks that were built locally but then
-	// failed to re-import (a build-vs-import inconsistency), to aid debugging.
+	// Detail is optional and trailing, so that bad blocks reported by other
+	// clients, which carry none of it, still decode cleanly. It is populated for
+	// blocks that were built locally but then failed to re-import (a
+	// build-vs-import inconsistency), to aid debugging.
+	Detail *ExecutionDetail `rlp:"optional"`
+}
 
+// ExecutionDetail records what local block building produced for a block that
+// then failed to re-import.
+type ExecutionDetail struct {
 	// AccessList is the EIP-7928 block-level access list attached to the block.
-	AccessList *bal.BlockAccessList `rlp:"optional"`
+	AccessList *bal.BlockAccessList
 
 	// Receipts are the receipts produced during local block building.
-	Receipts []*types.ReceiptForStorage `rlp:"optional"`
+	Receipts []*types.ReceiptForStorage
 
 	// Reason is the error that made the block fail to re-import.
-	Reason string `rlp:"optional"`
+	Reason string
 
 	// Reverted holds the transactions that were executed during local block
 	// building but then reverted (excluded from the block), with the block-access
 	// index each was assigned. They allow the build process to be fully replayed.
-	Reverted []*RevertedTx `rlp:"optional"`
+	Reverted []*RevertedTx
 }
 
 // RevertedTx records a transaction that was executed during local block building
@@ -868,11 +873,8 @@ func (b *badBlock) toBlock() *types.Block {
 	if b.Body != nil {
 		block = block.WithBody(*b.Body)
 	}
-	// A nil AccessList that had to be encoded (because later optional fields are
-	// present) decodes back as a non-nil empty slice; only re-attach a genuinely
-	// non-empty access list so such records don't gain a spurious empty one.
-	if b.AccessList != nil && len(*b.AccessList) > 0 {
-		block = block.WithAccessListUnsafe(b.AccessList)
+	if b.Detail != nil && b.Detail.AccessList != nil && len(*b.Detail.AccessList) > 0 {
+		block = block.WithAccessListUnsafe(b.Detail.AccessList)
 	}
 	return block
 }
@@ -911,9 +913,24 @@ func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 	return blocks
 }
 
+// ReadAllBadBlocksWithDetails retrieves all bad blocks together with the raw
+// execution detail recorded for each, in the same order as ReadAllBadBlocks. The
+// detail is nil for blocks that carry none. It is returned unpacked so callers
+// can transport it verbatim, which BadBlockDetails cannot express.
+func ReadAllBadBlocksWithDetails(db ethdb.Reader) ([]*types.Block, []*ExecutionDetail) {
+	var (
+		blocks  []*types.Block
+		details []*ExecutionDetail
+	)
+	for _, bad := range readBadBlocks(db) {
+		blocks = append(blocks, bad.toBlock())
+		details = append(details, bad.Detail)
+	}
+	return blocks, details
+}
+
 // BadBlockDetails carries a bad block together with any locally-built receipts,
-// access list and failure reason recorded alongside it (populated only for
-// build-vs-import mismatches; empty for legacy or other-client bad blocks).
+// access list and failure reason recorded alongside it.
 type BadBlockDetails struct {
 	Block    *types.Block   // block as stored (carries the access list if present)
 	Receipts types.Receipts // receipts from local block building, nil if not recorded
@@ -926,18 +943,22 @@ type BadBlockDetails struct {
 func ReadBadBlockWithDetails(db ethdb.Reader, hash common.Hash) *BadBlockDetails {
 	for _, bad := range readBadBlocks(db) {
 		if bad.Header.Hash() == hash {
+			detail := bad.Detail
+			if detail == nil {
+				detail = new(ExecutionDetail)
+			}
 			var receipts types.Receipts
-			if len(bad.Receipts) > 0 {
-				receipts = make(types.Receipts, len(bad.Receipts))
-				for i, r := range bad.Receipts {
+			if len(detail.Receipts) > 0 {
+				receipts = make(types.Receipts, len(detail.Receipts))
+				for i, r := range detail.Receipts {
 					receipts[i] = (*types.Receipt)(r)
 				}
 			}
 			return &BadBlockDetails{
 				Block:    bad.toBlock(),
 				Receipts: receipts,
-				Reason:   bad.Reason,
-				Reverted: bad.Reverted,
+				Reason:   detail.Reason,
+				Reverted: detail.Reverted,
 			}
 		}
 	}
@@ -948,6 +969,26 @@ func ReadBadBlockWithDetails(db ethdb.Reader, hash common.Hash) *BadBlockDetails
 // bad blocks exceeds the limitation, the oldest will be dropped.
 func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 	WriteBadBlockWithDetails(db, block, nil, nil, "")
+}
+
+// WriteBadBlockWithExecutionDetail stores a bad block together with an already
+// assembled execution detail, as produced by ReadAllBadBlocksWithDetails. It is
+// the inverse of that reader and exists so a bad block can be moved between
+// nodes without the detail being unpacked and reassembled on the way. A nil
+// detail stores the block alone.
+func WriteBadBlockWithExecutionDetail(db ethdb.KeyValueStore, block *types.Block, detail *ExecutionDetail) {
+	if detail == nil {
+		WriteBadBlock(db, block)
+		return
+	}
+	var receipts types.Receipts
+	if len(detail.Receipts) > 0 {
+		receipts = make(types.Receipts, len(detail.Receipts))
+		for i, r := range detail.Receipts {
+			receipts[i] = (*types.Receipt)(r)
+		}
+	}
+	WriteBadBlockWithDetails(db, block, receipts, detail.Reverted, detail.Reason)
 }
 
 // WriteBadBlockWithDetails serializes a bad block into the database together with
@@ -962,7 +1003,8 @@ func WriteBadBlockWithDetails(db ethdb.KeyValueStore, block *types.Block, receip
 	var badBlocks []*badBlock
 	if len(blob) > 0 {
 		if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
-			log.Crit("Failed to decode old bad blocks", "error", err)
+			log.Warn("Discarding undecodable bad block history", "error", err)
+			badBlocks = nil
 		}
 	}
 	for _, b := range badBlocks {
@@ -979,12 +1021,14 @@ func WriteBadBlockWithDetails(db ethdb.KeyValueStore, block *types.Block, receip
 		}
 	}
 	badBlocks = append(badBlocks, &badBlock{
-		Header:     block.Header(),
-		Body:       block.Body(),
-		AccessList: block.AccessList(),
-		Receipts:   storageReceipts,
-		Reason:     reason,
-		Reverted:   reverted,
+		Header: block.Header(),
+		Body:   block.Body(),
+		Detail: &ExecutionDetail{
+			AccessList: block.AccessList(),
+			Receipts:   storageReceipts,
+			Reason:     reason,
+			Reverted:   reverted,
+		},
 	})
 	slices.SortFunc(badBlocks, func(a, b *badBlock) int {
 		// Note: sorting in descending number order.

@@ -217,7 +217,9 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		ArgsUsage: "<file>",
 		Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `The import-badblocks command loads bad blocks into the database's bad-block
-store so they can be inspected locally.`,
+store so they can be inspected locally.
+
+The input is what debug_getBadBlocks writes when given a file argument.`,
 	}
 	dbExportCmd = &cli.Command{
 		Action:      exportChaindata,
@@ -880,11 +882,19 @@ var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator{
 	},
 }
 
-// badBlockEntry mirrors a single entry of the debug_getBadBlocks RPC output.
-// Only the fields needed for import are decoded.
 type badBlockEntry struct {
-	Hash common.Hash `json:"hash"`
-	RLP  string      `json:"rlp"`
+	Hash   common.Hash `json:"hash"`
+	RLP    string      `json:"rlp"`
+	Detail string      `json:"detail,omitempty"`
+}
+
+// parseBadBlockDump reads and decodes the output of debug_getBadBlocks.
+func parseBadBlockDump(blob []byte) ([]badBlockEntry, error) {
+	var entries []badBlockEntry
+	if err := json.Unmarshal(blob, &entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
 }
 
 // importBadBlocks loads bad blocks from a file into the local bad-block store so
@@ -904,20 +914,16 @@ func importBadBlocks(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to read %q: %v", path, err)
 	}
-	var envelope struct {
-		Result []badBlockEntry `json:"result"`
+	entries, err := parseBadBlockDump(blob)
+	if err != nil {
+		return fmt.Errorf("failed to parse %q as bad-block json: %v", path, err)
 	}
-	if err := json.Unmarshal(blob, &envelope); err != nil || envelope.Result == nil {
-		if err2 := json.Unmarshal(blob, &envelope.Result); err2 != nil {
-			return fmt.Errorf("failed to parse %q as bad-block json: %v", path, err2)
-		}
-	}
-	if len(envelope.Result) == 0 {
+	if len(entries) == 0 {
 		return fmt.Errorf("no bad blocks found in %q", path)
 	}
 
 	var imported int
-	for i, entry := range envelope.Result {
+	for i, entry := range entries {
 		if entry.RLP == "" {
 			log.Warn("Skipping bad block without rlp", "index", i, "hash", entry.Hash)
 			continue
@@ -935,9 +941,22 @@ func importBadBlocks(ctx *cli.Context) error {
 		if entry.Hash != (common.Hash{}) && block.Hash() != entry.Hash {
 			log.Warn("Bad block hash mismatch, importing decoded block anyway", "index", i, "want", entry.Hash, "have", block.Hash())
 		}
-		rawdb.WriteBadBlock(db, &block)
+		var detail *rawdb.ExecutionDetail
+		if entry.Detail != "" {
+			blob, err := hexutil.Decode(entry.Detail)
+			if err != nil {
+				log.Warn("Skipping bad block with invalid detail", "index", i, "hash", entry.Hash, "err", err)
+				continue
+			}
+			detail = new(rawdb.ExecutionDetail)
+			if err := rlp.DecodeBytes(blob, detail); err != nil {
+				log.Warn("Skipping bad block whose detail failed to decode", "index", i, "hash", entry.Hash, "err", err)
+				continue
+			}
+		}
+		rawdb.WriteBadBlockWithExecutionDetail(db, &block, detail)
 		imported++
-		log.Info("Imported bad block", "number", block.NumberU64(), "hash", block.Hash())
+		log.Info("Imported bad block", "number", block.NumberU64(), "hash", block.Hash(), "detail", detail != nil)
 	}
 	log.Info("Imported bad blocks", "file", path, "count", imported, "note", "the bad-block store only retains the highest-numbered blocks (badBlockToKeep)")
 	return nil

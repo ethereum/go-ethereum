@@ -75,10 +75,9 @@ type environment struct {
 	blobs    int
 	bal      *bal.ConstructionBlockAccessList
 
-	// revertedTxs / revertedIdx record transactions that were executed during
+	// revertedTxs and revertedIdx record transactions that were executed during
 	// block building but then reverted (excluded from the block), together with
-	// the block-access index each was tried at (tcount+1). They let the build
-	// process be replayed faithfully for debugging.
+	// the index each was tried at.
 	revertedTxs []*types.Transaction
 	revertedIdx []uint32
 
@@ -121,8 +120,8 @@ type newPayloadResult struct {
 	requests [][]byte               // Consensus layer requests collected during block construction
 	witness  *stateless.Witness     // Witness is an optional stateless proof
 
-	// revertedTxs / revertedIdx record the transactions tried-and-reverted during
-	// construction and the block-access index each was assigned.
+	// revertedTxs and revertedIdx record the transactions tried-and-reverted
+	// during construction and the index each was assigned.
 	revertedTxs []*types.Transaction
 	revertedIdx []uint32
 }
@@ -442,7 +441,7 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		env.gasPool.Set(gp)
 
 		env.revertedTxs = append(env.revertedTxs, tx.WithoutBlobTxSidecar())
-		env.revertedIdx = append(env.revertedIdx, uint32(env.tcount+1))
+		env.revertedIdx = append(env.revertedIdx, uint32(env.tcount))
 		return nil, nil, err
 	}
 	env.header.GasUsed = env.gasPool.Used()

@@ -27,18 +27,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ReplayBadBlock re-executes a stored bad block using all the information
-// captured for build-vs-import mismatches, and returns the build side and the
-// import side of the execution side by side for diffing.
-//
-// Block building and block import execute the block's included transactions
-// identically; the only thing that distinguishes the build from a plain import
-// is the transactions that were tried-and-reverted during building. So both
-// sides are produced by the same serial execution here, and differ only in
-// whether those reverted transactions are injected: the "build" side injects
-// them, the "import" side does not.
+// captured during the block construction, and returns execution details
+// side by side for diffing.
 func (api *DebugAPI) ReplayBadBlock(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	details := rawdb.ReadBadBlockWithDetails(api.eth.chainDb, hash)
 	if details == nil {
@@ -101,9 +96,6 @@ func (api *DebugAPI) ReplayBadBlock(ctx context.Context, hash common.Hash) (map[
 }
 
 // replayBuild re-executes a block's construction against the provided state.
-//
-// Passing reverted == nil yields a plain import; passing the block's recorded
-// reverted transactions yields the build side.
 func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, statedb *state.StateDB, reverted []*rawdb.RevertedTx) (*bal.BlockAccessList, types.Receipts, uint64, common.Hash, error) {
 	bc := api.eth.blockchain
 	config := bc.Config()
@@ -138,35 +130,32 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 	// Pre-execution system calls.
 	blockAL.Merge(core.PreExecution(ctx, header.ParentBeaconRoot, parent, config, evm, header.Number, header.Time))
 
-	// Group the reverted transactions by build slot (index-1). Reverted txs at
-	// slot k were tried when tcount==k, before committing the k-th block tx;
-	// those sharing an index keep their recorded order.
+	// Group the reverted transactions by build slot.
 	revBySlot := make(map[int][]*types.Transaction)
 	for _, r := range reverted {
-		if r.Index == 0 {
-			continue
-		}
-		revBySlot[int(r.Index)-1] = append(revBySlot[int(r.Index)-1], r.Tx)
+		revBySlot[int(r.Index)] = append(revBySlot[int(r.Index)], r.Tx)
 	}
 
-	// applyReverted executes a tx that was reverted during building — so its reads
-	// reach the access list exactly as they did then — and rolls it back. It is
-	// never merged into the block-level access list.
-	applyReverted := func(rtx *types.Transaction) {
-		msg, err := core.TransactionToMessage(rtx, signer, header.BaseFee)
+	// applyReverted executes a tx that was reverted during building.
+	applyReverted := func(tx *types.Transaction) {
+		msg, err := core.TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			return
 		}
-		statedb.SetTxContext(rtx.Hash(), tcount, uint32(tcount+1))
+		statedb.SetTxContext(tx.Hash(), tcount, uint32(tcount+1))
 		snap, gpSnap := statedb.Snapshot(), gp.Snapshot()
-		core.ApplyTransactionWithEVM(msg, gp, statedb, header.Number, blockHash, header.Time, rtx, evm)
+		_, _, err = core.ApplyTransactionWithEVM(msg, gp, statedb, header.Number, blockHash, header.Time, tx, evm)
+		if err == nil {
+			txRLP, _ := rlp.EncodeToBytes(tx)
+			log.Warn("Expect the transaction to be failed", "index", tcount, "hash", tx.Hash(), "rlp", txRLP)
+		}
 		statedb.RevertToSnapshot(snap)
 		gp.Set(gpSnap)
 	}
 
 	for k := 0; k <= len(committed); k++ {
-		for _, rtx := range revBySlot[k] {
-			applyReverted(rtx)
+		for _, tx := range revBySlot[k] {
+			applyReverted(tx)
 		}
 		if k == len(committed) {
 			break
@@ -199,16 +188,12 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 		return nil, nil, 0, common.Hash{}, err
 	}
 	blockAL.Merge(postBal)
+
 	body := types.Body{
 		Transactions: committed,
 		Withdrawals:  block.Withdrawals(),
 	}
 	bc.Engine().Finalize(bc, header, statedb, &body, uint32(tcount+1), blockAL)
-
-	// Compute the post-transition state root. Besides giving a value to compare
-	// against the header's Root (catching invalid-merkle-root style mismatches),
-	// this runs a final Finalise that folds post-finalize state changes (e.g.
-	// withdrawals) into the access list, exactly as AssembleBlock does.
 	root := statedb.IntermediateRoot(config.IsEIP158(header.Number))
 
 	return blockAL.ToEncodingObj(), receipts, gp.Used(), root, nil
