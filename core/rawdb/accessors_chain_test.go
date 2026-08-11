@@ -246,6 +246,40 @@ func TestBadBlockStorage(t *testing.T) {
 	}
 }
 
+// Tests that rewriting an already-stored bad block with an execution detail
+// attaches the detail to the existing entry. This is the order the engine API
+// produces: the import path records the plain bad block first, the newPayload
+// error handler then rewrites it with the details of the local build.
+func TestBadBlockDetailUpgrade(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(1),
+		Extra:       []byte("bad block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	WriteBadBlock(db, block)
+	WriteBadBlockWithDetails(db, block, &ExecutionDetail{Reason: "invalid merkle root"})
+
+	entry := ReadBadBlockWithDetails(db, block.Hash())
+	if entry == nil {
+		t.Fatalf("Stored bad block not found")
+	}
+	if entry.Reason != "invalid merkle root" {
+		t.Fatalf("Detail dropped on duplicated write: reason %q", entry.Reason)
+	}
+	// A later plain rewrite of the same block must not clobber the detail.
+	WriteBadBlock(db, block)
+	if entry := ReadBadBlockWithDetails(db, block.Hash()); entry.Reason != "invalid merkle root" {
+		t.Fatalf("Detail clobbered by plain rewrite: reason %q", entry.Reason)
+	}
+	if blocks := ReadAllBadBlocks(db); len(blocks) != 1 {
+		t.Fatalf("Duplicated bad block stored: %d entries", len(blocks))
+	}
+}
+
 // Tests that canonical numbers can be mapped to hashes and retrieved.
 func TestCanonicalMappingStorage(t *testing.T) {
 	db := NewMemoryDatabase()

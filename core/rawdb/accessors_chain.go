@@ -991,24 +991,35 @@ func WriteBadBlockWithDetails(db ethdb.KeyValueStore, block *types.Block, detail
 			badBlocks = nil
 		}
 	}
+	var known bool
 	for _, b := range badBlocks {
 		if b.Header.Number.Uint64() == block.NumberU64() && b.Header.Hash() == block.Hash() {
-			log.Info("Skip duplicated bad block", "number", block.NumberU64(), "hash", block.Hash())
-			return
+			// The import path records the bad block before the details of the
+			// local build become available, so a rewrite carrying a detail
+			// attaches it to the existing entry rather than being dropped.
+			if detail == nil {
+				log.Info("Skip duplicated bad block", "number", block.NumberU64(), "hash", block.Hash())
+				return
+			}
+			b.Detail = detail
+			known = true
+			break
 		}
 	}
-	// A block's access list is not part of its RLP encoding, so the
-	// detail is the only place it survives.
-	if detail == nil && block.AccessList() != nil {
-		detail = &ExecutionDetail{
-			AccessList: block.AccessList(),
+	if !known {
+		// A block's access list is not part of its RLP encoding, so the
+		// detail is the only place it survives.
+		if detail == nil && block.AccessList() != nil {
+			detail = &ExecutionDetail{
+				AccessList: block.AccessList(),
+			}
 		}
+		badBlocks = append(badBlocks, &badBlock{
+			Header: block.Header(),
+			Body:   block.Body(),
+			Detail: detail,
+		})
 	}
-	badBlocks = append(badBlocks, &badBlock{
-		Header: block.Header(),
-		Body:   block.Body(),
-		Detail: detail,
-	})
 	slices.SortFunc(badBlocks, func(a, b *badBlock) int {
 		// Note: sorting in descending number order.
 		return -a.Header.Number.Cmp(b.Header.Number)
