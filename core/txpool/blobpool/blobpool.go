@@ -1294,13 +1294,16 @@ func (p *BlobPool) vhashesByTx() map[common.Hash][]common.Hash {
 // getByVhash reads and decodes the blob transaction which has the given
 // versioned hash. Returns nil if unavailable.
 func (p *BlobPool) getByVhash(vhash common.Hash) *BlobTxForPool {
+	// Init populates the lookup before assigning the store, so a lookup hit
+	// does not imply a usable store.
 	p.lock.RLock()
+	store := p.store
 	txID, exists := p.lookup.storeidOfBlob(vhash)
 	p.lock.RUnlock()
-	if !exists {
+	if !exists || store == nil {
 		return nil
 	}
-	data, err := p.store.Get(txID)
+	data, err := store.Get(txID)
 	if err != nil {
 		log.Error("Tracked blob transaction missing from store", "id", txID, "err", err)
 		return nil
