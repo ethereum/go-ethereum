@@ -826,7 +826,7 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	DeleteAccessList(db, hash, number)
 }
 
-const badBlockToKeep = 30
+const badBlockToKeep = 10
 
 type badBlock struct {
 	Header *types.Header
@@ -839,8 +839,7 @@ type badBlock struct {
 	Detail *ExecutionDetail `rlp:"optional"`
 }
 
-// ExecutionDetail records what local block building produced for a block that
-// then failed to re-import.
+// ExecutionDetail records the execution details when a local block is produced.
 type ExecutionDetail struct {
 	// AccessList is the EIP-7928 block-level access list attached to the block.
 	AccessList *bal.BlockAccessList
@@ -852,16 +851,14 @@ type ExecutionDetail struct {
 	Reason string
 
 	// Reverted holds the transactions that were executed during local block
-	// building but then reverted (excluded from the block), with the block-access
-	// index each was assigned. They allow the build process to be fully replayed.
+	// building but then reverted (excluded from the block), with the index
+	// each was assigned. They allow the build process to be fully replayed.
 	Reverted []*RevertedTx
 }
 
 // RevertedTx records a transaction that was executed during local block building
-// but then reverted (and excluded from the block), along with the block-access
-// index it was assigned when tried. Persisting these lets the block-building
-// process including transactions that never made it into the block be replayed
-// faithfully.
+// but then reverted (and excluded from the block), along with the index it was
+// assigned when tried.
 type RevertedTx struct {
 	Index uint32
 	Tx    *types.Transaction
@@ -995,7 +992,9 @@ func WriteBadBlockWithDetails(db ethdb.KeyValueStore, block *types.Block, detail
 	// A block's access list is not part of its RLP encoding, so the
 	// detail is the only place it survives.
 	if detail == nil && block.AccessList() != nil {
-		detail = &ExecutionDetail{AccessList: block.AccessList()}
+		detail = &ExecutionDetail{
+			AccessList: block.AccessList(),
+		}
 	}
 	badBlocks = append(badBlocks, &badBlock{
 		Header: block.Header(),
