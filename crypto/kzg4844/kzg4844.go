@@ -265,6 +265,54 @@ func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	return gokzgRecoverBlobs(cells, cellIndices)
 }
 
+// BlobsFromDataCells reconstructs blobs from their data cells without performing
+// any KZG reconstruction. The data cells of a blob (cell indices 0..DataPerBlob-1)
+// are, by definition, its contents, so when all of them are present the blob is
+// simply their concatenation.
+//
+// It returns ok=false when the data cells are not all present, or the inputs are
+// otherwise unsuitable (including non-canonical cell indices), in which case the
+// caller should fall back to RecoverBlobs. The inputs accepted here are a strict
+// subset of those accepted by RecoverBlobs, so a successful result always equals
+// what RecoverBlobs would return. Because it only copies bytes, it is independent
+// of the selected KZG backend.
+//
+// Prerequisite: this performs NO validation of cell contents. Unlike RecoverBlobs
+// (whose deserialization rejects non-canonical field elements), it is a raw byte
+// concatenation and checks neither field-element canonicalness, nor cell proofs,
+// nor the commitment. Callers MUST pass cells already validated (e.g. verified via
+// VerifyCells at ingest); on unvalidated input it silently yields a malformed blob.
+//
+// For the layout of cells and cellIndices, see RecoverBlobs.
+func BlobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
+	if validateCellIndices(cells, cellIndices) != nil {
+		return nil, false
+	}
+	// The fast path applies only when the leading cells are exactly the data
+	// cells in canonical order, i.e. cellIndices[i] == i for i < DataPerBlob.
+	// RecoverBlobs requires ascending indices, so this keeps the accepted inputs
+	// a strict subset of what RecoverBlobs accepts (and thus byte-identical).
+	if len(cellIndices) < DataPerBlob {
+		return nil, false
+	}
+	for i := range DataPerBlob {
+		if cellIndices[i] != uint64(i) {
+			return nil, false
+		}
+	}
+	blobCount := len(cells) / len(cellIndices)
+	blobs := make([]Blob, blobCount)
+	for b := range blobCount {
+		offset := b * len(cellIndices)
+		blob := &blobs[b]
+		for i := range DataPerBlob {
+			cell := &cells[offset+i]
+			copy(blob[i*len(cell):], cell[:])
+		}
+	}
+	return blobs, true
+}
+
 func validateCellIndices(cells []Cell, cellIndices []uint64) error {
 	switch {
 	case len(cellIndices) == 0:
