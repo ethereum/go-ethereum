@@ -368,6 +368,14 @@ type SyncPeerV2 interface {
 //   - The peer remains connected, but does not deliver a response in time
 //   - The peer delivers a stale response after a previous timeout
 //   - The peer delivers a refusal to serve the requested state
+//
+// The whole design is premised on EIP-6780 (self-destruct disabled): already
+// downloaded state is never refetched, it is only rolled forward by applying
+// BAL diffs, so every state change must surface in the access lists. A legacy
+// SELFDESTRUCT wipes an entire storage trie without per-slot writes, which the
+// BALs cannot express; the wiped slots would survive in the flat state and
+// break the sync's core assumption. Networks with self-destruct enabled are
+// therefore not supported.
 type syncerV2 struct {
 	db     ethdb.Database   // Database to store the trie nodes into (and dedup)
 	scheme string           // Node scheme used in node database
@@ -376,20 +384,22 @@ type syncerV2 struct {
 	tasks  []*accountTaskV2 // Current account task set being synced
 	update chan struct{}    // Notification channel for possible sync progression
 
-	peers    map[string]SyncPeerV2 // Currently active peers to download from
-	peerJoin *event.Feed           // Event feed to react to peers joining
-	peerDrop *event.Feed           // Event feed to react to peers dropping
-	rates    *msgrate.Trackers     // Message throughput rates for peers
+	peerJoin *event.Feed       // Event feed to react to peers joining
+	peerDrop *event.Feed       // Event feed to react to peers dropping
+	rates    *msgrate.Trackers // Message throughput rates for peers
+
+	// Peer tracking during syncing phase.
+	//
+	// These fields should be protected by lock.
+	peers            map[string]SyncPeerV2 // Currently active peers to download from
+	statelessPeers   map[string]struct{}   // Peers that failed to deliver state data
+	accountIdlers    map[string]struct{}   // Peers that aren't serving account requests
+	bytecodeIdlers   map[string]struct{}   // Peers that aren't serving bytecode requests
+	storageIdlers    map[string]struct{}   // Peers that aren't serving storage requests
+	accessListIdlers map[string]struct{}   // Peers that aren't serving BAL requests
 
 	// Request tracking during syncing phase.
 	//
-	// These fields should be protected by lock.
-	statelessPeers   map[string]struct{} // Peers that failed to deliver state data
-	accountIdlers    map[string]struct{} // Peers that aren't serving account requests
-	bytecodeIdlers   map[string]struct{} // Peers that aren't serving bytecode requests
-	storageIdlers    map[string]struct{} // Peers that aren't serving storage requests
-	accessListIdlers map[string]struct{} // Peers that aren't serving BAL requests
-
 	// These fields should be protected by lock.
 	accountReqs    map[uint64]*accountRequestV2  // Account requests currently running
 	bytecodeReqs   map[uint64]*bytecodeRequestV2 // Bytecode requests currently running
@@ -507,7 +517,6 @@ func (s *syncerV2) Unregister(id string) error {
 
 	// Remove status markers, even if no sync is running
 	delete(s.statelessPeers, id)
-
 	delete(s.accountIdlers, id)
 	delete(s.storageIdlers, id)
 	delete(s.bytecodeIdlers, id)
@@ -529,6 +538,8 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	s.lock.Lock()
 	s.statelessPeers = make(map[string]struct{})
 	s.lock.Unlock()
+
+	// Track the time when snap sync actually starts
 	if s.startTime.IsZero() {
 		s.startTime = time.Now()
 	}
@@ -798,7 +809,6 @@ func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
 	if canonical == (common.Hash{}) {
 		return true
 	}
-
 	// If canonical at the old pivot's height has a different hash, the
 	// old pivot was reorged out.
 	return canonical != prev.Hash()
@@ -1325,26 +1335,26 @@ func (s *syncerV2) pruneStaleState() error {
 		deleteKeyRange(batch, accountKey(task.Next), keyRangeLimit(bytes.Clone(rawdb.SnapshotAccountPrefix), task.Last))
 
 		protected := make([]common.Hash, 0, len(task.stateCompleted)+len(task.SubTasks))
-		for hash := range task.stateCompleted {
-			if bytes.Compare(hash[:], task.Next[:]) < 0 {
+		for accountHash := range task.stateCompleted {
+			if bytes.Compare(accountHash[:], task.Next[:]) < 0 {
 				return errors.New("unexpected storage marker before the range")
 			}
-			if bytes.Compare(hash[:], task.Last[:]) > 0 {
+			if bytes.Compare(accountHash[:], task.Last[:]) > 0 {
 				return errors.New("unexpected storage marker after the range")
 			}
-			protected = append(protected, hash)
+			protected = append(protected, accountHash)
 		}
-		for hash := range task.SubTasks {
-			if _, ok := task.stateCompleted[hash]; ok {
+		for accountHash := range task.SubTasks {
+			if _, ok := task.stateCompleted[accountHash]; ok {
 				return errors.New("unexpected duplicated storage marker")
 			}
-			if bytes.Compare(hash[:], task.Next[:]) < 0 {
+			if bytes.Compare(accountHash[:], task.Next[:]) < 0 {
 				return errors.New("unexpected storage marker before the range")
 			}
-			if bytes.Compare(hash[:], task.Last[:]) > 0 {
+			if bytes.Compare(accountHash[:], task.Last[:]) > 0 {
 				return errors.New("unexpected storage marker after the range")
 			}
-			protected = append(protected, hash)
+			protected = append(protected, accountHash)
 		}
 		sort.Slice(protected, func(i, j int) bool {
 			return bytes.Compare(protected[i][:], protected[j][:]) < 0
@@ -1524,8 +1534,7 @@ func (s *syncerV2) cleanStorageTasks() {
 			delete(task.SubTasks, account)
 			task.pend--
 
-			// Mark the state as complete to prevent resyncing, regardless
-			// if state healing is necessary.
+			// Mark the state as complete to prevent resyncing
 			task.stateCompleted[account] = struct{}{}
 
 			// If this was the last pending task, forward the account task
@@ -2137,8 +2146,9 @@ func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 		// Check if the account is a contract with an unknown storage trie
 		if account.Root != types.EmptyRootHash {
 			// If the storage was already retrieved in the last cycle, there's no need
-			// to resync it again, regardless of whether the storage root is consistent
-			// or not.
+			// to resync it again, the state difference has already been fixed in the
+			// bal catchup stage. This relies on access lists covering every storage
+			// change, guaranteed post EIP-6780.
 			if _, exist := res.task.stateCompleted[res.hashes[i]]; exist {
 				// The leftover storage tasks are not expected, unless system is
 				// very wrong.
@@ -2158,10 +2168,6 @@ func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 					resumed[res.hashes[i]] = struct{}{}
 					largeStorageResumedGauge.Inc(1)
 				} else {
-					// It's possible that in the hash scheme, the storage, along
-					// with the trie nodes of the given root, is already present
-					// in the database. Schedule the storage task anyway to simplify
-					// the logic here.
 					res.task.stateTasks[res.hashes[i]] = account.Root
 				}
 				res.task.needState[i] = true
@@ -2185,7 +2191,7 @@ func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 				continue
 			}
 			if _, ok := resumed[hash]; !ok {
-				log.Warn("Aborting suspended storage retrieval", "account", hash)
+				log.Error("Aborting suspended storage retrieval", "account", hash)
 				delete(res.task.SubTasks, hash)
 				largeStorageDiscardGauge.Inc(1)
 			}
@@ -2270,8 +2276,7 @@ func (s *syncerV2) processStorageResponse(res *storageResponseV2) {
 			res.mainTask.stateTasks[account] = res.roots[i]
 			continue
 		}
-		// State was delivered, if complete mark as not needed any more, otherwise
-		// mark the account as needing healing
+		// State was delivered, if complete mark as not needed any more
 		for j, hash := range res.mainTask.res.hashes {
 			if account != hash {
 				continue
@@ -2485,6 +2490,7 @@ func (s *syncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, 
 		}
 	}()
 	s.lock.Lock()
+
 	// Ensure the response is for a valid request
 	req, ok := s.accountReqs[id]
 	if !ok {
@@ -2531,6 +2537,7 @@ func (s *syncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, 
 	cont, err := trie.VerifyRangeProof(root, req.origin[:], keys, accounts, nodes.Set())
 	if err != nil {
 		logger.Warn("Account range failed proof", "err", err)
+
 		// Signal this request as failed, and ready for rescheduling
 		s.scheduleRevertAccountRequest(req)
 		return err

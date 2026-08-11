@@ -94,6 +94,12 @@ func (s *syncerV2) isStorageFetched(accountHash, storageHash common.Hash) bool {
 // in the database. For each account, it applies the post-block values (highest
 // TxIdx entry) for balance, nonce, code, and storage. The storageRoot field is
 // intentionally left stale. It will be recomputed during the trie generation.
+//
+// Correctness rests on the access list enumerating every storage change as an
+// individual slot write. This holds post EIP-6780: pre-existing contracts can
+// no longer be destructed, so storage only changes via SSTOREs (all recorded),
+// Networks with the legacy SELFDESTRUCT break this premise: wholesale storage
+// wipes carry no per-slot writes, leaving already-downloaded slots stale.
 func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) error {
 	// Iterate over all accounts in the access list
 	for _, access := range *b {
@@ -166,8 +172,7 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) er
 		}
 
 		// Don't create empty accounts in flat state (EIP-161).
-		isEmpty := account.Balance.IsZero() && account.Nonce == 0 &&
-			bytes.Equal(account.CodeHash, types.EmptyCodeHash[:])
+		isEmpty := account.Balance.IsZero() && account.Nonce == 0 && bytes.Equal(account.CodeHash, types.EmptyCodeHash[:])
 		switch {
 		case isEmpty && isNew:
 			// This covers cases where an account is created and destroyed within the
