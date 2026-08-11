@@ -937,54 +937,104 @@ func doDebianSource(cmdline []string) {
 	cidepfetch.Env = append(cidepfetch.Env, "GOPATH="+filepath.Join(*workdir, "modgopath"))
 	cidepfetch.Run() // Command fails, don't care, we only need the deps to start it
 
-	// Create Debian packages and upload them.
+	// Create Debian packages and upload them. Each distro is independent, so a
+	// failure in one must not stop the others.
+	var failed []string
 	for _, pkg := range debPackages {
 		for _, distro := range debDistros {
-			// Prepare the debian package with the go-ethereum sources.
-			meta := newDebMetadata(distro, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
-			pkgdir := stageDebianSource(*workdir, meta)
-
-			// Add bootstrapper Go source code
-			for i, gobootbundle := range gobootbundles {
-				if err := build.ExtractArchive(gobootbundle, pkgdir); err != nil {
-					log.Fatalf("Failed to extract bootstrapper Go sources: %v", err)
+			target := fmt.Sprintf("%s/%s", pkg.Name, distro)
+			err := retry(debianBuildAttempts, func(attempt int) error {
+				if attempt > 1 {
+					log.Printf("Retrying %s (attempt %d/%d)", target, attempt, debianBuildAttempts)
 				}
-				if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, fmt.Sprintf(".goboot-%d", i+1))); err != nil {
-					log.Fatalf("Failed to rename bootstrapper Go source folder: %v", err)
-				}
+				return buildDebianPackage(*workdir, distro, *signer, *upload, *sshUser, env, now, pkg, gobootbundles, gobundle)
+			})
+			if err != nil {
+				log.Printf("FAILED %s: %v", target, err)
+				failed = append(failed, target)
+				continue
 			}
-			// Add builder Go source code
-			if err := build.ExtractArchive(gobundle, pkgdir); err != nil {
-				log.Fatalf("Failed to extract builder Go sources: %v", err)
-			}
-			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".go")); err != nil {
-				log.Fatalf("Failed to rename builder Go source folder: %v", err)
-			}
-			// Add all dependency modules in compressed form
-			os.MkdirAll(filepath.Join(pkgdir, ".mod", "cache"), 0755)
-			if err := cp.CopyAll(filepath.Join(pkgdir, ".mod", "cache", "download"), filepath.Join(*workdir, "modgopath", "pkg", "mod", "cache", "download")); err != nil {
-				log.Fatalf("Failed to copy Go module dependencies: %v", err)
-			}
-			// Run the packaging and upload to the PPA
-			debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc", "-d", "-Zxz", "-nc")
-			debuild.Dir = pkgdir
-			build.MustRun(debuild)
-
-			var (
-				basename  = fmt.Sprintf("%s_%s", meta.Name(), meta.VersionString())
-				source    = filepath.Join(*workdir, basename+".tar.xz")
-				dsc       = filepath.Join(*workdir, basename+".dsc")
-				changes   = filepath.Join(*workdir, basename+"_source.changes")
-				buildinfo = filepath.Join(*workdir, basename+"_source.buildinfo")
-			)
-			if *signer != "" {
-				build.MustRunCommand("debsign", changes)
-			}
-			if *upload != "" {
-				ppaUpload(*workdir, *upload, *sshUser, []string{source, dsc, changes, buildinfo})
-			}
+			log.Printf("Done %s", target)
 		}
 	}
+	if len(failed) > 0 {
+		log.Fatalf("%d of %d debian packages failed: %s", len(failed), len(debPackages)*len(debDistros), strings.Join(failed, ", "))
+	}
+}
+
+// debianBuildAttempts is how many times a single distro's package is built before
+// giving up on it.
+const debianBuildAttempts = 3
+
+// retry runs fn until it succeeds or the attempts are exhausted, pausing between
+// tries. The attempt number is passed in so callers can report progress. The
+// error from the last attempt is returned.
+func retry(attempts int, fn func(attempt int) error) error {
+	var err error
+	for i := 1; i <= attempts; i++ {
+		if err = fn(i); err == nil {
+			return nil
+		}
+		if i < attempts {
+			log.Printf("Attempt %d/%d failed: %v", i, attempts, err)
+			time.Sleep(5 * time.Second)
+		}
+	}
+	return fmt.Errorf("all %d attempts failed, last error: %w", attempts, err)
+}
+
+// buildDebianPackage stages, builds, signs and uploads the source package for a
+// single distro.
+func buildDebianPackage(workdir, distro, signer, upload, sshUser string, env build.Environment, now time.Time, pkg debPackage, gobootbundles []string, gobundle string) error {
+	// Prepare the debian package with the go-ethereum sources.
+	meta := newDebMetadata(distro, signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
+	pkgdir := stageDebianSource(workdir, meta)
+
+	// Add bootstrapper Go source code
+	for i, gobootbundle := range gobootbundles {
+		if err := build.ExtractArchive(gobootbundle, pkgdir); err != nil {
+			return fmt.Errorf("extracting bootstrapper Go sources: %w", err)
+		}
+		if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, fmt.Sprintf(".goboot-%d", i+1))); err != nil {
+			return fmt.Errorf("renaming bootstrapper Go source folder: %w", err)
+		}
+	}
+	// Add builder Go source code
+	if err := build.ExtractArchive(gobundle, pkgdir); err != nil {
+		return fmt.Errorf("extracting builder Go sources: %w", err)
+	}
+	if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".go")); err != nil {
+		return fmt.Errorf("renaming builder Go source folder: %w", err)
+	}
+	// Add all dependency modules in compressed form
+	os.MkdirAll(filepath.Join(pkgdir, ".mod", "cache"), 0755)
+	if err := cp.CopyAll(filepath.Join(pkgdir, ".mod", "cache", "download"), filepath.Join(workdir, "modgopath", "pkg", "mod", "cache", "download")); err != nil {
+		return fmt.Errorf("copying Go module dependencies: %w", err)
+	}
+	// Run the packaging and upload to the PPA
+	debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc", "-d", "-Zxz", "-nc")
+	debuild.Dir = pkgdir
+	if err := build.Run(debuild); err != nil {
+		return fmt.Errorf("debuild: %w", err)
+	}
+	var (
+		basename  = fmt.Sprintf("%s_%s", meta.Name(), meta.VersionString())
+		source    = filepath.Join(workdir, basename+".tar.xz")
+		dsc       = filepath.Join(workdir, basename+".dsc")
+		changes   = filepath.Join(workdir, basename+"_source.changes")
+		buildinfo = filepath.Join(workdir, basename+"_source.buildinfo")
+	)
+	if signer != "" {
+		if err := build.Run(exec.Command("debsign", changes)); err != nil {
+			return fmt.Errorf("debsign: %w", err)
+		}
+	}
+	if upload != "" {
+		if err := ppaUpload(workdir, upload, sshUser, []string{source, dsc, changes, buildinfo}); err != nil {
+			return fmt.Errorf("ppa upload: %w", err)
+		}
+	}
+	return nil
 }
 
 // downloadGoBootstrapSources downloads the Go source tarball(s) that will be used
@@ -1023,10 +1073,14 @@ func downloadGoSources(cachedir string) string {
 	return dst
 }
 
-func ppaUpload(workdir, ppa, sshUser string, files []string) {
+// ppaUploadAttempts is how many times a single upload is tried. It is separate
+// from debianBuildAttempts so that a flaky upload does not force a rebuild.
+const ppaUploadAttempts = 3
+
+func ppaUpload(workdir, ppa, sshUser string, files []string) error {
 	p := strings.Split(ppa, "/")
 	if len(p) != 2 {
-		log.Fatal("-upload PPA name must contain single /")
+		return fmt.Errorf("-upload PPA name %q must contain a single /", ppa)
 	}
 	if sshUser == "" {
 		sshUser = p[0]
@@ -1040,17 +1094,13 @@ func ppaUpload(workdir, ppa, sshUser string, files []string) {
 			os.WriteFile(idfile, sshkey, 0600)
 		}
 	}
-	// Upload. This doesn't always work, so try up to three times.
+	// Upload. This doesn't always work, so retry here rather than leaning on the
+	// caller's retry, which would redo the whole (slow) package build just to get
+	// back to this point.
 	dest := sshUser + "@ppa.launchpad.net"
-	for i := 0; i < 3; i++ {
-		err := build.UploadSFTP(idfile, dest, incomingDir, files)
-		if err == nil {
-			return
-		}
-		log.Println("PPA upload failed:", err)
-		time.Sleep(5 * time.Second)
-	}
-	log.Fatal("PPA upload failed all attempts.")
+	return retry(ppaUploadAttempts, func(int) error {
+		return build.UploadSFTP(idfile, dest, incomingDir, files)
+	})
 }
 
 func getenvBase64(variable string) []byte {
@@ -1190,6 +1240,12 @@ func (meta debMetadata) ExeConflicts(exe debExecutable) string {
 func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 	pkg := meta.Name() + "-" + meta.VersionString()
 	pkgdir = filepath.Join(tmpdir, pkg)
+
+	// Start from a clean directory so that staging can be repeated, which a retry
+	// of the enclosing build depends on.
+	if err := os.RemoveAll(pkgdir); err != nil {
+		log.Fatal(err)
+	}
 	if err := os.Mkdir(pkgdir, 0755); err != nil {
 		log.Fatal(err)
 	}
