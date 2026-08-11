@@ -136,7 +136,7 @@ func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 	}
 	account := new(types.SlimAccount)
 	if err := rlp.DecodeBytes(blob, account); err != nil {
-		panic(err)
+		return nil, err
 	}
 	return account, nil
 }
@@ -283,7 +283,7 @@ func (r *HistoricalStateReader) Account(address common.Address) (*types.SlimAcco
 	}
 	account := new(types.SlimAccount)
 	if err := rlp.DecodeBytes(blob, account); err != nil {
-		panic(err)
+		return nil, err
 	}
 	return account, nil
 }
