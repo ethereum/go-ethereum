@@ -330,12 +330,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		config.BlobPool.Datadir = stack.ResolvePath(config.BlobPool.Datadir)
 	}
 	eth.blobTxPool = blobpool.New(config.BlobPool, eth.blockchain, legacyPool.HasPendingAuth)
-	eth.blobCache = blobpool.NewCache(eth.blobTxPool)
 
 	eth.txPool, err = txpool.New(config.TxPool.PriceLimit, eth.blockchain, []txpool.SubPool{legacyPool, eth.blobTxPool})
 	if err != nil {
 		return nil, err
 	}
+	// The blob cache must only be started after the blob pool has been
+	// initialized (BlobPool.Init runs inside txpool.New). Starting the cache
+	// earlier lets its loop read the pool's index while the persistent store is
+	// still being assigned, crashing the node with a nil dereference (see #35508).
+	eth.blobCache = blobpool.NewCache(eth.blobTxPool)
 
 	if !config.TxPool.NoLocals {
 		rejournal := config.TxPool.Rejournal

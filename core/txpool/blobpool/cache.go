@@ -524,6 +524,15 @@ func (c *Cache) selectTopTxs() []common.Hash {
 	if head == nil {
 		return nil
 	}
+	// The pool's persistent store is only assigned at the end of Init, whereas
+	// its head and in-memory index are populated earlier in Init. The cache loop
+	// starts immediately on NewCache, so it can run inside this window: selecting
+	// transactions before the store exists makes the update goroutine dereference
+	// the nil store and crash the node. Bail out until the pool is fully
+	// initialized (see #35508).
+	if !p.initialized.Load() {
+		return nil
+	}
 	config := p.chain.Config()
 	baseFee := eip1559.CalcBaseFee(config, head)
 

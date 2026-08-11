@@ -567,6 +567,12 @@ type BlobPool struct {
 	state  *state.StateDB               // Current state at the head of the chain
 	gasTip atomic.Pointer[uint256.Int]  // Currently accepted minimum gas tip
 
+	// initialized is set once Init has completed, signaling that the persistent
+	// store and the in-memory index are ready for the blob cache to read. It is
+	// set only after all of Init's setup (including the store assignment) has
+	// finished, so the cache loop can safely check it without racing on p.store.
+	initialized atomic.Bool
+
 	lookup *lookup                          // Lookup table mapping blobs to txs and txs to billy entries
 	index  map[common.Address][]*blobTxMeta // Blob transactions grouped by accounts, sorted by nonce
 	spent  map[common.Address]*uint256.Int  // Expenditure tracking for individual accounts
@@ -743,6 +749,10 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	if len(convertLimbo) > 0 {
 		p.cQueue.launchConversion(func() { p.convertLegacyLimbo(convertLimbo) })
 	}
+	// The pool is fully set up (head, store, index, limbo, gas tip): signal
+	// readiness so the blob cache can start selecting transactions. The cache
+	// loop may start before this point and must not touch the pool meanwhile.
+	p.initialized.Store(true)
 	return nil
 }
 

@@ -328,3 +328,93 @@ func TestCacheTopKRefresh(t *testing.T) {
 	tc.wait(t, topKTimeout)
 	tc.expectEntries(t, better...)
 }
+
+// TestCacheStartupBeforePoolInit checks that the blob cache tolerates being
+// started before BlobPool.Init has completed. The cache loop begins selecting
+// top transactions immediately on NewCache; if it runs in the window inside
+// Init where the pool's head is set but its persistent store is still nil (the
+// store is only assigned at the very end of Init), the update goroutine reads
+// the nil store and panics. Regression test for #35508.
+func TestCacheStartupBeforePoolInit(t *testing.T) {
+	// Set up a pool but deliberately do NOT call Init: the persistent store
+	// stays nil while we still populate the head and the in-memory index, which
+	// is exactly the state the cache loop can observe during the Init window.
+	storage := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+
+	cancunTime := uint64(0)
+	config := &params.ChainConfig{
+		ChainID:     big.NewInt(1),
+		LondonBlock: big.NewInt(0),
+		BerlinBlock: big.NewInt(0),
+		CancunTime:  &cancunTime,
+		OsakaTime:   &cancunTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: &params.BlobConfig{
+				Target:         1,
+				Max:            1,
+				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+			},
+		},
+	}
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(1),
+		blobfee: uint256.NewInt(1),
+		statedb: statedb,
+	}
+	pool := New(Config{}, chain, nil)
+
+	// Reproduce the mid-Init state observed by the cache loop: the head is set
+	// (as Init does before opening the store) and a transaction has been indexed
+	// from the on-disk scan, but the store itself is still nil.
+	pool.head.Store(chain.CurrentBlock())
+	pool.reserver = newReserver()
+
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, 1_000_000, 1_000_000, 1_000_000, 1, 0, key)
+	blob := encodeForPool(tx)
+	if err := pool.parseTransaction(0, uint32(len(blob)), blob); err != nil {
+		t.Fatalf("index tx: %v", err)
+	}
+	// Sanity check the preconditions that make this exercise the bug: a tx is
+	// indexed, so the only missing piece is the store itself (nil until Init
+	// completes).
+	pool.lock.RLock()
+	indexed := len(pool.index)
+	pool.lock.RUnlock()
+	if indexed == 0 {
+		t.Fatalf("test setup: expected a transaction indexed in the uninitialized pool")
+	}
+
+	clock := &mclock.Simulated{}
+	iterCh := make(chan struct{}, 1)
+	c := newCache(pool, clock, func() {
+		select {
+		case iterCh <- struct{}{}:
+		default:
+		}
+	})
+
+	// Wait for the loop's initial topK iteration. On the unpatched code this
+	// iteration selects the indexed transaction and its update goroutine reads
+	// the nil store, crashing the node. On the patched code selectTopTxs bails
+	// out until Init has completed, so the loop updates nothing.
+	select {
+	case <-iterCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cache loop did not complete its initial iteration")
+	}
+	// Give any spawned update goroutine a chance to run: on the unpatched code
+	// the nil-store dereference aborts the test here.
+	c.inflight.Wait()
+	c.Stop()
+
+	// The cache must not have selected anything from the uninitialized pool.
+	if want := c.selectTopTxs(); len(want) != 0 {
+		t.Fatalf("cache selected %d txs from a blob pool that was not initialized", len(want))
+	}
+}
