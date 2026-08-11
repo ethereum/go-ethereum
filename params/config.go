@@ -512,6 +512,14 @@ func (c CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface, returning a string representation
 // of ChainConfig.
+// GoString implements fmt.GoStringer, so that %#v prints the same readable
+// summary as %v. Without it the default Go-syntax formatting renders every
+// timestamp-based fork as a bare pointer address, which is exactly the part of
+// the config a reader needs when diagnosing a fork-activation problem.
+func (c *ChainConfig) GoString() string {
+	return c.String()
+}
+
 func (c *ChainConfig) String() string {
 	result := fmt.Sprintf("ChainConfig{ChainID: %v", c.ChainID)
 

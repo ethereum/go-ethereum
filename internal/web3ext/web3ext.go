@@ -413,7 +413,14 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'getBadBlocks',
 			call: 'debug_getBadBlocks',
-			params: 0,
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'replayBadBlock',
+			call: 'debug_replayBadBlock',
+			params: 1,
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'storageRangeAt',

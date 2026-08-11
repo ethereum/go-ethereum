@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -104,6 +105,7 @@ Remove blockchain and state databases`,
 			dbCheckStateContentCmd,
 			dbInspectHistoryCmd,
 			dbPebbleUpgradeCmd,
+			dbImportBadBlocksCmd,
 		},
 	}
 	dbInspectCmd = &cli.Command{
@@ -207,6 +209,17 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		ArgsUsage:   "<dumpfile> <start (optional)",
 		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "The import command imports the specific chain data from an RLP encoded stream.",
+	}
+	dbImportBadBlocksCmd = &cli.Command{
+		Action:    importBadBlocks,
+		Name:      "import-badblocks",
+		Usage:     "Imports bad blocks into the local bad-block store from a file",
+		ArgsUsage: "<file>",
+		Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+		Description: `The import-badblocks command loads bad blocks into the database's bad-block
+store so they can be inspected locally.
+
+The input is what debug_getBadBlocks writes when given a file argument.`,
 	}
 	dbExportCmd = &cli.Command{
 		Action:      exportChaindata,
@@ -868,6 +881,85 @@ var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator{
 		iter := db.NewIterator(rawdb.CodePrefix, nil)
 		return &codeIterator{iter: iter}
 	},
+}
+
+type badBlockEntry struct {
+	Hash   common.Hash `json:"hash"`
+	RLP    string      `json:"rlp"`
+	Detail string      `json:"detail,omitempty"`
+}
+
+func parseBadBlockDump(blob []byte) ([]badBlockEntry, error) {
+	var entries []badBlockEntry
+	if err := json.Unmarshal(blob, &entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+// importBadBlocks loads bad blocks from a file into the local bad-block store so
+// they can later be inspected.
+func importBadBlocks(ctx *cli.Context) error {
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	path := ctx.Args().Get(0)
+	blob, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read %q: %v", path, err)
+	}
+	entries, err := parseBadBlockDump(blob)
+	if err != nil {
+		return fmt.Errorf("failed to parse %q as bad-block json: %v", path, err)
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("no bad blocks found in %q", path)
+	}
+
+	var imported int
+	for i, entry := range entries {
+		if entry.RLP == "" {
+			log.Warn("Skipping bad block without rlp", "index", i, "hash", entry.Hash)
+			continue
+		}
+		raw, err := hexutil.Decode(entry.RLP)
+		if err != nil {
+			log.Warn("Skipping bad block with invalid rlp", "index", i, "hash", entry.Hash, "err", err)
+			continue
+		}
+		var block types.Block
+		if err := rlp.DecodeBytes(raw, &block); err != nil {
+			log.Warn("Skipping bad block that failed to decode", "index", i, "hash", entry.Hash, "err", err)
+			continue
+		}
+		if entry.Hash != (common.Hash{}) && block.Hash() != entry.Hash {
+			log.Warn("Bad block hash mismatch, importing decoded block anyway", "index", i, "want", entry.Hash, "have", block.Hash())
+		}
+		var detail *rawdb.ExecutionDetail
+		if entry.Detail != "" {
+			blob, err := hexutil.Decode(entry.Detail)
+			if err != nil {
+				log.Warn("Skipping bad block with invalid detail", "index", i, "hash", entry.Hash, "err", err)
+				continue
+			}
+			detail = new(rawdb.ExecutionDetail)
+			if err := rlp.DecodeBytes(blob, detail); err != nil {
+				log.Warn("Skipping bad block whose detail failed to decode", "index", i, "hash", entry.Hash, "err", err)
+				continue
+			}
+		}
+		rawdb.WriteBadBlockWithDetails(db, &block, detail)
+		imported++
+		log.Info("Imported bad block", "number", block.NumberU64(), "hash", block.Hash(), "detail", detail != nil)
+	}
+	log.Info("Imported bad blocks", "file", path, "count", imported)
+	return nil
 }
 
 func exportChaindata(ctx *cli.Context) error {

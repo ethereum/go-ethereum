@@ -839,10 +839,54 @@ const badBlockToKeep = 10
 type badBlock struct {
 	Header *types.Header
 	Body   *types.Body
+
+	// Detail is optional and trailing, so that bad blocks reported by other
+	// clients, which carry none of it, still decode cleanly. It is populated for
+	// blocks that were built locally but then failed to re-import (a
+	// build-vs-import inconsistency), to aid debugging.
+	Detail *ExecutionDetail `rlp:"optional"`
 }
 
-// ReadBadBlock retrieves the bad block with the corresponding block hash.
-func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
+// ExecutionDetail records the execution details when a local block is produced.
+type ExecutionDetail struct {
+	// AccessList is the EIP-7928 block-level access list attached to the block.
+	AccessList *bal.BlockAccessList
+
+	// Receipts are the receipts produced during local block building.
+	Receipts []*types.ReceiptForStorage
+
+	// Reason is the error that made the block fail to re-import.
+	Reason string
+
+	// Reverted holds the transactions that were executed during local block
+	// building but then reverted (excluded from the block), with the index
+	// each was assigned. They allow the build process to be fully replayed.
+	Reverted []*RevertedTx
+}
+
+// RevertedTx records a transaction that was executed during local block building
+// but then reverted (and excluded from the block), along with the index it was
+// assigned when tried.
+type RevertedTx struct {
+	Index uint32
+	Tx    *types.Transaction
+}
+
+// toBlock reconstructs the stored block, re-attaching the access list if present.
+func (b *badBlock) toBlock() *types.Block {
+	block := types.NewBlockWithHeader(b.Header)
+	if b.Body != nil {
+		block = block.WithBody(*b.Body)
+	}
+	if b.Detail != nil && b.Detail.AccessList != nil && len(*b.Detail.AccessList) > 0 {
+		block = block.WithAccessListUnsafe(b.Detail.AccessList)
+	}
+	return block
+}
+
+// readBadBlocks decodes the stored list of bad blocks, returning nil if the list
+// is absent or cannot be decoded.
+func readBadBlocks(db ethdb.Reader) []*badBlock {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		return nil
@@ -851,13 +895,14 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 	if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
 		return nil
 	}
-	for _, bad := range badBlocks {
+	return badBlocks
+}
+
+// ReadBadBlock retrieves the bad block with the corresponding block hash.
+func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
+	for _, bad := range readBadBlocks(db) {
 		if bad.Header.Hash() == hash {
-			block := types.NewBlockWithHeader(bad.Header)
-			if bad.Body != nil {
-				block = block.WithBody(*bad.Body)
-			}
-			return block
+			return bad.toBlock()
 		}
 	}
 	return nil
@@ -866,28 +911,75 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 // ReadAllBadBlocks retrieves all the bad blocks in the database.
 // All returned blocks are sorted in reverse order by number.
 func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
-	blob, err := db.Get(badBlockKey)
-	if err != nil {
-		return nil
-	}
-	var badBlocks []*badBlock
-	if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
-		return nil
-	}
 	var blocks []*types.Block
-	for _, bad := range badBlocks {
-		block := types.NewBlockWithHeader(bad.Header)
-		if bad.Body != nil {
-			block = block.WithBody(*bad.Body)
-		}
-		blocks = append(blocks, block)
+	for _, bad := range readBadBlocks(db) {
+		blocks = append(blocks, bad.toBlock())
 	}
 	return blocks
+}
+
+// ReadAllBadBlocksWithDetails retrieves all bad blocks together with the raw
+// execution detail recorded for each, in the same order as ReadAllBadBlocks. The
+// detail is nil for blocks that carry none. It is returned unpacked so callers
+// can transport it verbatim, which BadBlockDetails cannot express.
+func ReadAllBadBlocksWithDetails(db ethdb.Reader) ([]*types.Block, []*ExecutionDetail) {
+	var (
+		blocks  []*types.Block
+		details []*ExecutionDetail
+	)
+	for _, bad := range readBadBlocks(db) {
+		blocks = append(blocks, bad.toBlock())
+		details = append(details, bad.Detail)
+	}
+	return blocks, details
+}
+
+// BadBlockDetails carries a bad block together with any locally-built receipts,
+// access list and failure reason recorded alongside it.
+type BadBlockDetails struct {
+	Block    *types.Block   // block as stored (carries the access list if present)
+	Receipts types.Receipts // receipts from local block building, nil if not recorded
+	Reason   string         // reason the block failed to re-import, empty if not recorded
+	Reverted []*RevertedTx  // txs tried-and-reverted during local build, nil if not recorded
+}
+
+// ReadBadBlockWithDetails retrieves a bad block along with the extra debugging
+// information recorded for build-vs-import mismatches. Returns nil if not found.
+func ReadBadBlockWithDetails(db ethdb.Reader, hash common.Hash) *BadBlockDetails {
+	for _, bad := range readBadBlocks(db) {
+		if bad.Header.Hash() == hash {
+			detail := bad.Detail
+			if detail == nil {
+				detail = new(ExecutionDetail)
+			}
+			var receipts types.Receipts
+			if len(detail.Receipts) > 0 {
+				receipts = make(types.Receipts, len(detail.Receipts))
+				for i, r := range detail.Receipts {
+					receipts[i] = (*types.Receipt)(r)
+				}
+			}
+			return &BadBlockDetails{
+				Block:    bad.toBlock(),
+				Receipts: receipts,
+				Reason:   detail.Reason,
+				Reverted: detail.Reverted,
+			}
+		}
+	}
+	return nil
 }
 
 // WriteBadBlock serializes the bad block into the database. If the cumulated
 // bad blocks exceeds the limitation, the oldest will be dropped.
 func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
+	WriteBadBlockWithDetails(db, block, nil)
+}
+
+// WriteBadBlockWithDetails serializes a bad block into the database together with
+// the execution detail recorded for it, which may be nil for blocks that carry
+// none.
+func WriteBadBlockWithDetails(db ethdb.KeyValueStore, block *types.Block, detail *ExecutionDetail) {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		log.Warn("Failed to load old bad blocks", "error", err)
@@ -895,7 +987,8 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 	var badBlocks []*badBlock
 	if len(blob) > 0 {
 		if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
-			log.Crit("Failed to decode old bad blocks", "error", err)
+			log.Warn("Discarding undecodable bad block history", "error", err)
+			badBlocks = nil
 		}
 	}
 	for _, b := range badBlocks {
@@ -904,9 +997,17 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 			return
 		}
 	}
+	// A block's access list is not part of its RLP encoding, so the
+	// detail is the only place it survives.
+	if detail == nil && block.AccessList() != nil {
+		detail = &ExecutionDetail{
+			AccessList: block.AccessList(),
+		}
+	}
 	badBlocks = append(badBlocks, &badBlock{
 		Header: block.Header(),
 		Body:   block.Body(),
+		Detail: detail,
 	})
 	slices.SortFunc(badBlocks, func(a, b *badBlock) int {
 		// Note: sorting in descending number order.
