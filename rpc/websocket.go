@@ -17,9 +17,11 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -302,8 +304,20 @@ func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, readL
 		buf = appendBatch(buf[:0], msgs)
 		return conn.WriteMessage(websocket.TextMessage, buf)
 	}
+	// Every frame is one message, so it can be read in one go and checked once.
+	readFrame := func() ([]byte, error) {
+		_, frame, err := conn.ReadMessage()
+		if err != nil {
+			return nil, err
+		}
+		if len(bytes.TrimSpace(frame)) == 0 {
+			// This is how ReadJSON used to report an empty message.
+			return nil, io.ErrUnexpectedEOF
+		}
+		return frame, nil
+	}
 	wc := &websocketCodec{
-		jsonCodec:    NewFuncCodec(conn, encodeMsg, encodeBatch, conn.ReadJSON).(*jsonCodec),
+		jsonCodec:    newFuncCodec(conn, encodeMsg, encodeBatch, conn.ReadJSON, readFrame),
 		conn:         conn,
 		pingReset:    make(chan struct{}, 1),
 		pongReceived: make(chan struct{}),

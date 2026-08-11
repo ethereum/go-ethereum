@@ -199,6 +199,7 @@ type jsonCodec struct {
 	closer      sync.Once        // close closed channel once
 	closeCh     chan interface{} // closed on Close
 	decode      decodeFunc       // decoder to allow multiple transports
+	readFrame   readFrameFunc    // set when the transport delimits messages itself
 	encMu       sync.Mutex       // guards the encoder
 	encodeMsg   encodeMsgFunc    // single-message encoder
 	encodeBatch encodeBatchFunc  // batch encoder
@@ -211,6 +212,12 @@ type encodeBatchFunc = func(ctx context.Context, msgs []*jsonrpcMessage, isError
 
 type decodeFunc = func(v interface{}) error
 
+// readFrameFunc returns the bytes of the next message. Only transports that know
+// where a message ends without parsing it have one, such as an HTTP body or a
+// WebSocket frame. The bytes must not be handed out again on the next call, as
+// the message keeps pointing into them.
+type readFrameFunc = func() ([]byte, error)
+
 // NewFuncCodec creates a codec which uses the given functions to read and write. If conn
 // implements ConnRemoteAddr, log messages will use it to include the remote address of
 // the connection.
@@ -220,11 +227,17 @@ type decodeFunc = func(v interface{}) error
 // known to be well formed, the request is picked apart by finding the bounds of
 // its values rather than by parsing them again.
 func NewFuncCodec(conn deadlineCloser, encodeMsg encodeMsgFunc, encodeBatch encodeBatchFunc, decode decodeFunc) ServerCodec {
+	return newFuncCodec(conn, encodeMsg, encodeBatch, decode, nil)
+}
+
+// newFuncCodec is NewFuncCodec with the frame reader the built in transports use.
+func newFuncCodec(conn deadlineCloser, encodeMsg encodeMsgFunc, encodeBatch encodeBatchFunc, decode decodeFunc, readFrame readFrameFunc) *jsonCodec {
 	codec := &jsonCodec{
 		closeCh:     make(chan interface{}),
 		encodeMsg:   encodeMsg,
 		encodeBatch: encodeBatch,
 		decode:      decode,
+		readFrame:   readFrame,
 		conn:        conn,
 	}
 	if ra, ok := conn.(ConnRemoteAddr); ok {
@@ -304,10 +317,8 @@ func (c *jsonCodec) remoteAddr() string {
 }
 
 func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err error) {
-	// Decode the next JSON object in the input stream.
-	// This verifies basic syntax, etc.
-	var rawmsg json.RawMessage
-	if err := c.decode(&rawmsg); err != nil {
+	rawmsg, err := c.readMessage()
+	if err != nil {
 		return nil, false, err
 	}
 	messages, batch = parseMessage(rawmsg)
@@ -319,6 +330,37 @@ func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err err
 		}
 	}
 	return messages, batch, nil
+}
+
+// readMessage returns the bytes of the next message, checked to be valid JSON.
+//
+// Where the transport knows where a message ends, the whole message is read and
+// then checked in a single pass. Decoding it into a json.RawMessage instead costs
+// two passes and a copy, because the decoder scans the message to find its end
+// and then the RawMessage scans it again before copying it out. On a stream there
+// is no framing to rely on, so the decoder has to do both jobs.
+func (c *jsonCodec) readMessage() (json.RawMessage, error) {
+	if c.readFrame == nil {
+		var rawmsg json.RawMessage
+		if err := c.decode(&rawmsg); err != nil {
+			return nil, err
+		}
+		return rawmsg, nil
+	}
+	frame, err := c.readFrame()
+	if err != nil {
+		return nil, err
+	}
+	if !json.Valid(frame) {
+		// Decode it to report what is wrong with it and where. This only runs for
+		// a message that is already known to be broken.
+		var rawmsg json.RawMessage
+		if err := json.Unmarshal(frame, &rawmsg); err != nil {
+			return nil, err
+		}
+		return nil, errors.New("invalid JSON request")
+	}
+	return frame, nil
 }
 
 func (c *jsonCodec) writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error {

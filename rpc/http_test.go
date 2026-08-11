@@ -17,8 +17,10 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -263,3 +265,142 @@ func TestNewContextWithHeaders(t *testing.T) {
 		t.Error("call failed:", err)
 	}
 }
+
+// TestHTTPRequestFraming covers what the server answers for the shapes of body
+// that reach it, including the ones that are not valid JSON.
+func TestHTTPRequestFraming(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string // substring the response must contain, empty means no response
+	}{
+		{
+			name: "call",
+			body: `{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}`,
+			want: `"result"`,
+		},
+		{
+			name: "call with surrounding space",
+			body: "  \n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test_echo\",\"params\":[\"x\",3]}\n ",
+			want: `"result"`,
+		},
+		{
+			name: "batch",
+			body: `[{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}]`,
+			want: `"result"`,
+		},
+		{
+			name: "empty body",
+			body: ``,
+			want: ``,
+		},
+		{
+			name: "whitespace only",
+			body: "   \n\t ",
+			want: ``,
+		},
+		{
+			name: "truncated object",
+			body: `{"jsonrpc":"2.0","id":1,"method":"test_echo"`,
+			want: `parse error`,
+		},
+		{
+			name: "not json",
+			body: `hello`,
+			want: `parse error`,
+		},
+		{
+			name: "unbalanced bracket",
+			body: `[{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}`,
+			want: `parse error`,
+		},
+		{
+			name: "control character in string",
+			body: "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test_\x01echo\",\"params\":[]}",
+			want: `parse error`,
+		},
+		{
+			// A body holding more than one value is rejected. The decoder this
+			// replaced stopped after the first value and ignored the rest.
+			name: "trailing second value",
+			body: `{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}{"a":1}`,
+			want: `parse error`,
+		},
+		{
+			name: "trailing garbage",
+			body: `{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]} oops`,
+			want: `parse error`,
+		},
+	}
+
+	srv := newTestServer()
+	defer srv.Stop()
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
+			req.Header.Set("content-type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+
+			body := rec.Body.String()
+			if tc.want == "" {
+				if strings.TrimSpace(body) != "" {
+					t.Fatalf("want no response, got %q", body)
+				}
+				return
+			}
+			if !strings.Contains(body, tc.want) {
+				t.Fatalf("want response containing %q, got %q", tc.want, body)
+			}
+		})
+	}
+}
+
+// TestHTTPRequestFramingChunked checks a body with no content length, which is
+// the case the size hint cannot help with.
+func TestHTTPRequestFramingChunked(t *testing.T) {
+	srv := newTestServer()
+	defer srv.Stop()
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}`
+	req := httptest.NewRequest(http.MethodPost, "/", io.NopCloser(strings.NewReader(body)))
+	req.Header.Set("content-type", "application/json")
+	req.ContentLength = -1
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	if got := rec.Body.String(); !strings.Contains(got, `"result"`) {
+		t.Fatalf("want a result, got %q", got)
+	}
+}
+
+// TestReadAllBody checks the body reader against io.ReadAll for both a helpful
+// and an unhelpful size hint.
+func TestReadAllBody(t *testing.T) {
+	for _, size := range []int{0, 1, 511, 512, 513, 4096, 100000} {
+		want := bytes.Repeat([]byte("ab"), size/2)
+		for _, hint := range []int{0, 1, size, size + 1, size * 2} {
+			got, err := readAllBody(bytes.NewReader(want), hint)
+			if err != nil {
+				t.Fatalf("size %d hint %d: %v", size, hint, err)
+			}
+			if !bytes.Equal(got, want) {
+				t.Fatalf("size %d hint %d: got %d bytes, want %d", size, hint, len(got), len(want))
+			}
+		}
+	}
+}
+
+// TestReadAllBodyError checks that a read failure is reported rather than
+// treated as the end of the body.
+func TestReadAllBodyError(t *testing.T) {
+	r := io.MultiReader(strings.NewReader(`{"a":`), &errReader{})
+	if _, err := readAllBody(r, 0); err == nil {
+		t.Fatal("want an error")
+	}
+}
+
+type errReader struct{}
+
+func (*errReader) Read([]byte) (int, error) { return 0, io.ErrClosedPipe }
