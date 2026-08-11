@@ -19,6 +19,7 @@ package rpc
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -404,3 +405,58 @@ func TestReadAllBodyError(t *testing.T) {
 type errReader struct{}
 
 func (*errReader) Read([]byte) (int, error) { return 0, io.ErrClosedPipe }
+
+// TestHTTPBatchRequestFraming checks a batch whose items each carry a sizeable
+// argument. Every message in a batch points into the same buffer, so this would
+// catch one item's arguments bleeding into another's.
+func TestHTTPBatchRequestFraming(t *testing.T) {
+	srv := newTestServer()
+	defer srv.Stop()
+
+	const items = 12
+	var body strings.Builder
+	body.WriteByte('[')
+	for i := 0; i < items; i++ {
+		if i > 0 {
+			body.WriteByte(',')
+		}
+		// A distinct payload per item, large enough to span several reads.
+		pad := strings.Repeat(string(rune('a'+i)), 4096)
+		fmt.Fprintf(&body, `{"jsonrpc":"2.0","id":%d,"method":"test_echo","params":["%s",%d,{"S":"%s"}]}`,
+			i, pad, i, pad)
+	}
+	body.WriteByte(']')
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body.String()))
+	req.Header.Set("content-type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	confirmStatusCode(t, rec.Code, http.StatusOK)
+
+	var resps []struct {
+		ID     int `json:"id"`
+		Result struct {
+			String string
+			Int    int
+			Args   *echoArgs
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resps); err != nil {
+		t.Fatalf("decoding the batch response failed: %v", err)
+	}
+	if len(resps) != items {
+		t.Fatalf("got %d responses, want %d", len(resps), items)
+	}
+	for _, r := range resps {
+		want := strings.Repeat(string(rune('a'+r.ID)), 4096)
+		if r.Result.Int != r.ID {
+			t.Errorf("id %d: Int = %d", r.ID, r.Result.Int)
+		}
+		if r.Result.String != want {
+			t.Errorf("id %d: String is not its own argument", r.ID)
+		}
+		if r.Result.Args == nil || r.Result.Args.S != want {
+			t.Errorf("id %d: Args is not its own argument", r.ID)
+		}
+	}
+}
