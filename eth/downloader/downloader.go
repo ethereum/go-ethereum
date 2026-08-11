@@ -365,8 +365,8 @@ func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	// The beacon header syncer is async. It will start this synchronization and
 	// will continue doing other tasks. However, if synchronization needs to be
 	// cancelled, the syncer needs to know if we reached the startup point (and
-	// inited the cancel channel) or not yet. Make sure that we'll signal even in
-	// case of a failure.
+	// registered the fetchers for cancellation) or not yet. Make sure that we'll
+	// signal even in case of a failure.
 	if beaconPing != nil {
 		defer func() {
 			select {
@@ -435,10 +435,7 @@ func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	d.mode.Store(uint32(mode))
 	defer d.mode.Store(0)
 
-	if beaconPing != nil {
-		close(beaconPing)
-	}
-	return d.syncToHead()
+	return d.syncToHead(beaconPing)
 }
 
 // getMode returns the sync mode used within current cycle.
@@ -459,7 +456,7 @@ func (d *Downloader) SubscribeSyncEvents(ch chan<- SyncEvent) event.Subscription
 
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
-func (d *Downloader) syncToHead() (err error) {
+func (d *Downloader) syncToHead(beaconPing chan struct{}) (err error) {
 	mode := d.getMode()
 	d.feed.Send(SyncEvent{Type: SyncStarted, Mode: mode})
 	defer func() {
@@ -643,14 +640,21 @@ func (d *Downloader) syncToHead() (err error) {
 	} else if mode == ethconfig.FullSync {
 		fetchers = append(fetchers, func() error { return d.processFullSyncContent() })
 	}
-	return d.spawnSync(fetchers)
+	return d.spawnSync(fetchers, beaconPing)
 }
 
 // spawnSync runs d.process and all given fetcher functions to completion in
 // separate goroutines, returning the first error that appears.
-func (d *Downloader) spawnSync(fetchers []func() error) error {
+func (d *Downloader) spawnSync(fetchers []func() error, beaconPing chan struct{}) error {
 	errc := make(chan error, len(fetchers))
 	d.cancelWg.Add(len(fetchers))
+
+	// Only now that the fetchers are registered on the cancellation WaitGroup
+	// can a concurrent Cancel wait for them instead of racing the registration;
+	// signal the beacon syncer that it's safe to cancel.
+	if beaconPing != nil {
+		close(beaconPing)
+	}
 	for _, fn := range fetchers {
 		go func() { defer d.cancelWg.Done(); errc <- fn() }()
 	}
