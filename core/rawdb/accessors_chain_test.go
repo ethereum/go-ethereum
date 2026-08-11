@@ -185,6 +185,113 @@ func TestPartialBlockStorage(t *testing.T) {
 }
 
 // Tests block storage and retrieval operations.
+func TestBadBlockDetailsAndCompat(t *testing.T) {
+	mkHeader := func(n int64, extra string) *types.Header {
+		return &types.Header{
+			Number:      big.NewInt(n),
+			Extra:       []byte(extra),
+			UncleHash:   types.EmptyUncleHash,
+			TxHash:      types.EmptyTxsHash,
+			ReceiptHash: types.EmptyReceiptsHash,
+		}
+	}
+	receipts := types.Receipts{
+		{Status: types.ReceiptStatusSuccessful, CumulativeGasUsed: 21000, Logs: []*types.Log{}},
+		{Status: types.ReceiptStatusFailed, CumulativeGasUsed: 42000, Logs: []*types.Log{}},
+	}
+
+	// 1. Legacy compatibility: a record written in the old two-field format
+	// (Header, Body only), as produced by older geth or other clients, must
+	// still decode with empty details.
+	t.Run("legacy", func(t *testing.T) {
+		db := NewMemoryDatabase()
+		type legacyBadBlockV1 struct {
+			Header *types.Header
+			Body   *types.Body
+		}
+		h := mkHeader(1, "legacy")
+		blk := types.NewBlockWithHeader(h)
+		blob, err := rlp.EncodeToBytes([]*legacyBadBlockV1{{Header: h, Body: blk.Body()}})
+		if err != nil {
+			t.Fatalf("encode legacy: %v", err)
+		}
+		if err := db.Put(badBlockKey, blob); err != nil {
+			t.Fatalf("put legacy: %v", err)
+		}
+		if got := ReadAllBadBlocks(db); len(got) != 1 || got[0].Hash() != blk.Hash() {
+			t.Fatalf("legacy bad block not decoded: %v", got)
+		}
+		if d := ReadBadBlockWithDetails(db, blk.Hash()); d == nil {
+			t.Fatal("legacy details not found")
+		} else if len(d.Receipts) != 0 || d.Reason != "" {
+			t.Fatalf("legacy should have empty details, got receipts=%d reason=%q", len(d.Receipts), d.Reason)
+		}
+	})
+
+	// 2. A locally-built mismatch block with receipts, reason and access list
+	// round-trips, and the legacy ReadBadBlock still works on it.
+	t.Run("with-details", func(t *testing.T) {
+		db := NewMemoryDatabase()
+		al := bal.NewConstructionBlockAccessList()
+		al.BalanceChange(1, common.Address{0xaa}, uint256.NewInt(100))
+		block := types.NewBlockWithHeader(mkHeader(2, "mismatch")).WithAccessList(al.ToEncodingObj())
+		reverted := []*RevertedTx{
+			{Index: 3, Tx: types.NewTx(&types.LegacyTx{Nonce: 7, Gas: 21000, GasPrice: big.NewInt(1)})},
+			{Index: 5, Tx: types.NewTx(&types.LegacyTx{Nonce: 8, Gas: 21000, GasPrice: big.NewInt(1)})},
+		}
+
+		WriteBadBlockWithDetails(db, block, receipts, reverted, "access list hash mismatch")
+
+		d := ReadBadBlockWithDetails(db, block.Hash())
+		if d == nil {
+			t.Fatal("details not found")
+		}
+		if d.Reason != "access list hash mismatch" {
+			t.Fatalf("reason mismatch: %q", d.Reason)
+		}
+		if len(d.Receipts) != 2 || d.Receipts[0].CumulativeGasUsed != 21000 || d.Receipts[1].CumulativeGasUsed != 42000 {
+			t.Fatalf("receipts round-trip failed: %+v", d.Receipts)
+		}
+		if d.Block.AccessList() == nil {
+			t.Fatal("access list lost")
+		}
+		if len(d.Reverted) != 2 || d.Reverted[0].Index != 3 || d.Reverted[1].Index != 5 ||
+			d.Reverted[0].Tx.Hash() != reverted[0].Tx.Hash() || d.Reverted[1].Tx.Hash() != reverted[1].Tx.Hash() {
+			t.Fatalf("reverted txs round-trip failed: %+v", d.Reverted)
+		}
+		if b := ReadBadBlock(db, block.Hash()); b == nil || b.Hash() != block.Hash() {
+			t.Fatal("ReadBadBlock failed for detailed record")
+		}
+	})
+
+	// 3. Details present but no access list (nil middle optional field) must
+	// still round-trip.
+	t.Run("details-no-accesslist", func(t *testing.T) {
+		db := NewMemoryDatabase()
+		plain := types.NewBlockWithHeader(mkHeader(3, "no-al"))
+		if plain.AccessList() != nil {
+			t.Fatal("expected nil access list")
+		}
+		reverted := []*RevertedTx{{Index: 1, Tx: types.NewTx(&types.LegacyTx{Nonce: 1, Gas: 21000, GasPrice: big.NewInt(1)})}}
+
+		// AccessList is nil while Receipts/Reason/Reverted are present: the nil
+		// access list is a non-trailing empty optional. The trailing fields must
+		// still round-trip, and the reconstructed block must not gain a spurious
+		// (empty) access list.
+		WriteBadBlockWithDetails(db, plain, receipts, reverted, "invalid gas used")
+		d := ReadBadBlockWithDetails(db, plain.Hash())
+		if d == nil || d.Reason != "invalid gas used" || len(d.Receipts) != 2 {
+			t.Fatalf("no-access-list round-trip failed: %+v", d)
+		}
+		if len(d.Reverted) != 1 || d.Reverted[0].Index != 1 {
+			t.Fatalf("reverted round-trip failed with nil access list: %+v", d.Reverted)
+		}
+		if d.Block.AccessList() != nil {
+			t.Fatal("reconstructed block gained a spurious access list")
+		}
+	})
+}
+
 func TestBadBlockStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
