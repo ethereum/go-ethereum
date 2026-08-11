@@ -1010,7 +1010,16 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 					Tx:    tx,
 				}
 			}
-			rawdb.WriteBadBlockWithDetails(api.eth.ChainDb(), localBlock, localReceipts, reverted, err.Error())
+			receipts := make([]*types.ReceiptForStorage, len(localReceipts))
+			for i, r := range localReceipts {
+				receipts[i] = (*types.ReceiptForStorage)(r)
+			}
+			rawdb.WriteBadBlockWithDetails(api.eth.ChainDb(), localBlock, &rawdb.ExecutionDetail{
+				AccessList: localBlock.AccessList(),
+				Receipts:   receipts,
+				Reason:     err.Error(),
+				Reverted:   reverted,
+			})
 		}
 		api.invalidLock.Lock()
 		api.invalidBlocksHits[block.Hash()] = 1

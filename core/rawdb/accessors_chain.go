@@ -968,34 +968,13 @@ func ReadBadBlockWithDetails(db ethdb.Reader, hash common.Hash) *BadBlockDetails
 // WriteBadBlock serializes the bad block into the database. If the cumulated
 // bad blocks exceeds the limitation, the oldest will be dropped.
 func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
-	WriteBadBlockWithDetails(db, block, nil, nil, "")
-}
-
-// WriteBadBlockWithExecutionDetail stores a bad block together with an already
-// assembled execution detail, as produced by ReadAllBadBlocksWithDetails. It is
-// the inverse of that reader and exists so a bad block can be moved between
-// nodes without the detail being unpacked and reassembled on the way. A nil
-// detail stores the block alone.
-func WriteBadBlockWithExecutionDetail(db ethdb.KeyValueStore, block *types.Block, detail *ExecutionDetail) {
-	if detail == nil {
-		WriteBadBlock(db, block)
-		return
-	}
-	var receipts types.Receipts
-	if len(detail.Receipts) > 0 {
-		receipts = make(types.Receipts, len(detail.Receipts))
-		for i, r := range detail.Receipts {
-			receipts[i] = (*types.Receipt)(r)
-		}
-	}
-	WriteBadBlockWithDetails(db, block, receipts, detail.Reverted, detail.Reason)
+	WriteBadBlockWithDetails(db, block, nil)
 }
 
 // WriteBadBlockWithDetails serializes a bad block into the database together with
-// the receipts, tried-and-reverted transactions and failure reason from local
-// block building. Any of receipts/reverted/reason may be empty for ordinary bad
-// blocks.
-func WriteBadBlockWithDetails(db ethdb.KeyValueStore, block *types.Block, receipts types.Receipts, reverted []*RevertedTx, reason string) {
+// the execution detail recorded for it, which may be nil for blocks that carry
+// none.
+func WriteBadBlockWithDetails(db ethdb.KeyValueStore, block *types.Block, detail *ExecutionDetail) {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		log.Warn("Failed to load old bad blocks", "error", err)
@@ -1013,22 +992,15 @@ func WriteBadBlockWithDetails(db ethdb.KeyValueStore, block *types.Block, receip
 			return
 		}
 	}
-	var storageReceipts []*types.ReceiptForStorage
-	if len(receipts) > 0 {
-		storageReceipts = make([]*types.ReceiptForStorage, len(receipts))
-		for i, r := range receipts {
-			storageReceipts[i] = (*types.ReceiptForStorage)(r)
-		}
+	// A block's access list is not part of its RLP encoding, so the
+	// detail is the only place it survives.
+	if detail == nil && block.AccessList() != nil {
+		detail = &ExecutionDetail{AccessList: block.AccessList()}
 	}
 	badBlocks = append(badBlocks, &badBlock{
 		Header: block.Header(),
 		Body:   block.Body(),
-		Detail: &ExecutionDetail{
-			AccessList: block.AccessList(),
-			Receipts:   storageReceipts,
-			Reason:     reason,
-			Reverted:   reverted,
-		},
+		Detail: detail,
 	})
 	slices.SortFunc(badBlocks, func(a, b *badBlock) int {
 		// Note: sorting in descending number order.

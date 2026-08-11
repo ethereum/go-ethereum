@@ -888,7 +888,6 @@ type badBlockEntry struct {
 	Detail string      `json:"detail,omitempty"`
 }
 
-// parseBadBlockDump reads and decodes the output of debug_getBadBlocks.
 func parseBadBlockDump(blob []byte) ([]badBlockEntry, error) {
 	var entries []badBlockEntry
 	if err := json.Unmarshal(blob, &entries); err != nil {
@@ -898,7 +897,7 @@ func parseBadBlockDump(blob []byte) ([]badBlockEntry, error) {
 }
 
 // importBadBlocks loads bad blocks from a file into the local bad-block store so
-// they can later be inspected with debug.traceBadBlock / debug.getBadBlocks.
+// they can later be inspected.
 func importBadBlocks(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
@@ -954,11 +953,11 @@ func importBadBlocks(ctx *cli.Context) error {
 				continue
 			}
 		}
-		rawdb.WriteBadBlockWithExecutionDetail(db, &block, detail)
+		rawdb.WriteBadBlockWithDetails(db, &block, detail)
 		imported++
 		log.Info("Imported bad block", "number", block.NumberU64(), "hash", block.Hash(), "detail", detail != nil)
 	}
-	log.Info("Imported bad blocks", "file", path, "count", imported, "note", "the bad-block store only retains the highest-numbered blocks (badBlockToKeep)")
+	log.Info("Imported bad blocks", "file", path, "count", imported)
 	return nil
 }
 

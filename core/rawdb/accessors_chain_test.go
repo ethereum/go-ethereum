@@ -184,6 +184,22 @@ func TestPartialBlockStorage(t *testing.T) {
 }
 
 // Tests block storage and retrieval operations.
+// detailOf assembles an ExecutionDetail the way a caller recording a
+// build-vs-import mismatch would, so the tests below keep reading in terms of
+// receipts/reverted/reason rather than the storage struct.
+func detailOf(block *types.Block, receipts types.Receipts, reverted []*RevertedTx, reason string) *ExecutionDetail {
+	storage := make([]*types.ReceiptForStorage, len(receipts))
+	for i, r := range receipts {
+		storage[i] = (*types.ReceiptForStorage)(r)
+	}
+	return &ExecutionDetail{
+		AccessList: block.AccessList(),
+		Receipts:   storage,
+		Reason:     reason,
+		Reverted:   reverted,
+	}
+}
+
 func TestBadBlockDetailsAndCompat(t *testing.T) {
 	mkHeader := func(n int64, extra string) *types.Header {
 		return &types.Header{
@@ -239,7 +255,7 @@ func TestBadBlockDetailsAndCompat(t *testing.T) {
 			{Index: 5, Tx: types.NewTx(&types.LegacyTx{Nonce: 8, Gas: 21000, GasPrice: big.NewInt(1)})},
 		}
 
-		WriteBadBlockWithDetails(db, block, receipts, reverted, "access list hash mismatch")
+		WriteBadBlockWithDetails(db, block, detailOf(block, receipts, reverted, "access list hash mismatch"))
 
 		d := ReadBadBlockWithDetails(db, block.Hash())
 		if d == nil {
@@ -277,7 +293,7 @@ func TestBadBlockDetailsAndCompat(t *testing.T) {
 		// access list is a non-trailing empty optional. The trailing fields must
 		// still round-trip, and the reconstructed block must not gain a spurious
 		// (empty) access list.
-		WriteBadBlockWithDetails(db, plain, receipts, reverted, "invalid gas used")
+		WriteBadBlockWithDetails(db, plain, detailOf(plain, receipts, reverted, "invalid gas used"))
 		d := ReadBadBlockWithDetails(db, plain.Hash())
 		if d == nil || d.Reason != "invalid gas used" || len(d.Receipts) != 2 {
 			t.Fatalf("no-access-list round-trip failed: %+v", d)
@@ -324,7 +340,7 @@ func TestBadBlockDetailsAndCompat(t *testing.T) {
 			t.Fatal("flat layout unexpectedly still decodes; this case no longer tests the fallback")
 		}
 		fresh := types.NewBlockWithHeader(mkHeader(5, "fresh"))
-		WriteBadBlockWithDetails(db, fresh, receipts, nil, "boom")
+		WriteBadBlockWithDetails(db, fresh, detailOf(fresh, receipts, nil, "boom"))
 
 		got := ReadAllBadBlocks(db)
 		if len(got) != 1 || got[0].Hash() != fresh.Hash() {
@@ -355,7 +371,7 @@ func TestBadBlockExecutionDetailRoundTrip(t *testing.T) {
 	reverted := []*RevertedTx{
 		{Index: 2, Tx: types.NewTx(&types.LegacyTx{Nonce: 9, Gas: 21000, GasPrice: big.NewInt(1)})},
 	}
-	WriteBadBlockWithDetails(src, block, receipts, reverted, "access list hash mismatch")
+	WriteBadBlockWithDetails(src, block, detailOf(block, receipts, reverted, "access list hash mismatch"))
 
 	// Export side: read the detail out without unpacking it.
 	blocks, details := ReadAllBadBlocksWithDetails(src)
@@ -377,7 +393,7 @@ func TestBadBlockExecutionDetailRoundTrip(t *testing.T) {
 
 	// Import side: store it on a fresh node and read it back the normal way.
 	dst := NewMemoryDatabase()
-	WriteBadBlockWithExecutionDetail(dst, blocks[0], shipped)
+	WriteBadBlockWithDetails(dst, blocks[0], shipped)
 
 	got := ReadBadBlockWithDetails(dst, block.Hash())
 	if got == nil {
@@ -394,6 +410,23 @@ func TestBadBlockExecutionDetailRoundTrip(t *testing.T) {
 		t.Errorf("reverted txs lost: %+v", got.Reverted)
 	}
 
+	// A block with an access list but no build detail keeps the access list: it
+	// is not part of the block's RLP, so dropping the detail would lose it.
+	al := bal.NewConstructionBlockAccessList()
+	al.BalanceChange(1, common.Address{0xbb}, uint256.NewInt(7))
+	withAL := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(3),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	}).WithAccessList(al.ToEncodingObj())
+	WriteBadBlockWithDetails(dst, withAL, nil)
+	if d := ReadBadBlockWithDetails(dst, withAL.Hash()); d == nil {
+		t.Fatal("access-list-only bad block not found")
+	} else if d.Block.AccessList() == nil {
+		t.Fatal("access list lost for a block stored without build detail")
+	}
+
 	// A block with no detail must still store and read back cleanly.
 	plain := types.NewBlockWithHeader(&types.Header{
 		Number:      big.NewInt(2),
@@ -401,7 +434,7 @@ func TestBadBlockExecutionDetailRoundTrip(t *testing.T) {
 		TxHash:      types.EmptyTxsHash,
 		ReceiptHash: types.EmptyReceiptsHash,
 	})
-	WriteBadBlockWithExecutionDetail(dst, plain, nil)
+	WriteBadBlockWithDetails(dst, plain, nil)
 	if d := ReadBadBlockWithDetails(dst, plain.Hash()); d == nil {
 		t.Fatal("detail-less bad block not found")
 	} else if d.Reason != "" || len(d.Receipts) != 0 || len(d.Reverted) != 0 {
