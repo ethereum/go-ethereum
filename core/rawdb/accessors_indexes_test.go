@@ -267,6 +267,27 @@ func TestExtractReceiptFields(t *testing.T) {
 	invalidReceiptBlob, _ := rlp.EncodeToBytes(&invalidReceipt)
 	invalidReceiptBlob[len(invalidReceiptBlob)-1] = 0xf
 
+	// An EIP-8141 frame receipt stores its logs inside the per-frame sub-receipts
+	// and leaves the top-level list empty, so the log count has to be gathered
+	// from the frames or the running log index skews for later transactions.
+	frameReceipt := types.ReceiptForStorage(types.Receipt{
+		Type:              types.FrameTxType,
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 100,
+		Payer:             common.BytesToAddress([]byte{0x9}),
+		FrameReceipts: []*types.FrameReceipt{
+			{Status: types.ReceiptStatusSuccessful, GasUsed: 10, Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x1}), Topics: []common.Hash{common.BytesToHash([]byte{0x1})}, Data: []byte{0x1}},
+			}},
+			{Status: types.ReceiptStatusSkipped},
+			{Status: types.ReceiptStatusSuccessful, GasUsed: 20, Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x2}), Topics: []common.Hash{common.BytesToHash([]byte{0x2})}, Data: []byte{0x2}},
+				{Address: common.BytesToAddress([]byte{0x3}), Topics: []common.Hash{common.BytesToHash([]byte{0x3})}, Data: []byte{0x3}},
+			}},
+		},
+	})
+	frameReceiptBlob, _ := rlp.EncodeToBytes(&frameReceipt)
+
 	var cases = []struct {
 		logs       rlp.RawValue
 		expErr     error
@@ -276,6 +297,7 @@ func TestExtractReceiptFields(t *testing.T) {
 		{receiptWithPostStateBlob, nil, 100, 0},
 		{receiptNoLogBlob, nil, 100, 0},
 		{receiptWithLogBlob, nil, 100, 2},
+		{frameReceiptBlob, nil, 100, 3},
 		{invalidReceiptBlob, rlp.ErrExpectedList, 100, 0},
 	}
 	for _, c := range cases {

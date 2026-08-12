@@ -249,13 +249,25 @@ func extractReceiptFields(receiptRLP rlp.RawValue) (uint64, uint, error) {
 		return 0, 0, err
 	}
 	// Decode the field: logs (type: rlp list)
-	logList, _, err := rlp.SplitList(rest)
+	logList, rest, err := rlp.SplitList(rest)
 	if err != nil {
 		return 0, 0, err
 	}
 	logCount, err := rlp.CountValues(logList)
 	if err != nil {
 		return 0, 0, err
+	}
+	// An EIP-8141 frame receipt keeps its logs in the per-frame sub-receipts and
+	// leaves the top-level list empty, so the count above would be zero and the
+	// running log index would skew for every later transaction in the block.
+	// Trailing fields are present only for frame receipts, so the slow path here
+	// costs nothing for every other receipt.
+	if len(rest) > 0 {
+		var stored types.ReceiptForStorage
+		if err := rlp.DecodeBytes(receiptRLP, &stored); err != nil {
+			return 0, 0, err
+		}
+		return stored.CumulativeGasUsed, uint(len(stored.Logs)), nil
 	}
 	return gasUsed, uint(logCount), nil
 }
