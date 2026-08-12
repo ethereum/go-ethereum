@@ -40,8 +40,6 @@ func (p *precompileContract) Name() string {
 }
 
 func TestStateOverrideMovePrecompile(t *testing.T) {
-	// The overrides are only applied and read back, no state transition is
-	// finalised, so the fork rules are irrelevant.
 	db := state.NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
 	statedb, err := state.New(types.EmptyRootHash, db)
 	if err != nil {

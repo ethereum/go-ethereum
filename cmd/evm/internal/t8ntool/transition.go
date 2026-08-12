@@ -269,7 +269,6 @@ func mergeUnmigratedBaseAlloc(udb *state.UBTDatabase, currentRoot common.Hash, d
 		return nil
 	}
 	mptDB := state.NewMPTDatabase(udb.TrieDB(), nil)
-	// Read-only walk of the base trie, no state transition is finalised here.
 	sdb, err := state.New(ts.BaseRoot, mptDB)
 	if err != nil {
 		return fmt.Errorf("open base MPT at %x: %w", ts.BaseRoot, err)

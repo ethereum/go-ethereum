@@ -278,10 +278,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	block := t.genesis(config).ToBlock()
 	// The env's random is what makes the block post-merge; it is mirrored into the
-	// block context below. Derive it once so that the state and the EVM cannot end
-	// up disagreeing about which forks are active.
+	// block context below.
 	isMerge := config.IsLondon(new(big.Int)) && t.json.Env.Random != nil
-
 	rules := config.Rules(block.Number(), isMerge, block.Time())
 	st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
 
@@ -546,18 +544,13 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeUnspecified)
-		balance := new(uint256.Int)
-		if a.Balance != nil {
-			balance = uint256.MustFromBig(a.Balance)
-		}
-		statedb.SetBalance(addr, balance, tracing.BalanceChangeUnspecified)
+		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceChangeUnspecified)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	// Materialising the pre-state alloc is not a fork-governed state transition:
-	// accounts are written exactly as the fixture declares them.
+	// Materialising the alloc is not a fork-governed state transition.
 	root, _ := statedb.Commit(params.Rules{}, 0)
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.

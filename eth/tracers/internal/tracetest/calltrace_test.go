@@ -352,7 +352,6 @@ func TestInternals(t *testing.T) {
 						Balance: big.NewInt(500000000000000),
 					},
 				}, false, rawdb.HashScheme)
-
 			defer st.Close()
 
 			logState := vm.StateDB(st.StateDB)

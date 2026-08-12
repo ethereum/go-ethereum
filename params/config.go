@@ -1420,19 +1420,6 @@ type Rules struct {
 }
 
 // Rules ensures c's ChainID is not nil.
-//
-// isMerge says whether the block is post-merge. It gates every fork that
-// activates by timestamp, so getting it wrong silently disables Shanghai and
-// everything after it. Derive it, never hardcode it, from whichever form of the
-// block is at hand:
-//
-//   - given a header or block, use header.Difficulty.Sign() == 0
-//   - given a vm.BlockContext, use blockCtx.Random != nil
-//
-// The two are the same fact: NewEVMBlockContext sets Random exactly when the
-// header's difficulty is zero. Prefer Random at the block-context layer even
-// though BlockContext also carries Difficulty, as that field exists to serve
-// the DIFFICULTY opcode rather than to describe consensus state.
 func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules {
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)

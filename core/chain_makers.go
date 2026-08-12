@@ -461,8 +461,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	defer triedb.Close()
 
 	for i := 0; i < n; i++ {
-		// The block's difficulty is not known yet, and generated chains
-		// are expected to have every configured fork active, assume merged.
 		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
 		if err != nil {
 			panic(err)

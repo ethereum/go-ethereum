@@ -234,8 +234,6 @@ func (r *reserver) Has(address common.Address) bool {
 }
 
 func setupPoolWithConfig(config *params.ChainConfig) (*LegacyPool, *ecdsa.PrivateKey) {
-	// The pool only reads accounts from this state; it never finalises a state
-	// transition, so the fork rules are irrelevant here (and below).
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	blockchain := newTestBlockChain(config, 10000000, statedb, new(event.Feed))
 

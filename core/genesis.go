@@ -149,8 +149,6 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 	}
 	db := rawdb.NewMemoryDatabase()
 
-	// Genesis allocation only writes accounts, so no fork-dependent
-	// finalization behavior applies here.
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return common.Hash{}, err
@@ -175,7 +173,6 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing
 	if triedb.IsUBT() {
 		emptyRoot = types.EmptyBinaryHash
 	}
-	// See hashAlloc: no fork-dependent finalization behavior applies.
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil))
 	if err != nil {
 		return common.Hash{}, err

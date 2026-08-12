@@ -80,8 +80,6 @@ func TestTransactionFutureAttack(t *testing.T) {
 	t.Parallel()
 
 	// Create the pool to test the limit enforcement with
-	// The pool only reads accounts from this state; it never finalises a state
-	// transition, so the fork rules are irrelevant here (and below).
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	blockchain := newTestBlockChain(eip1559Config, 1000000, statedb, new(event.Feed))
 

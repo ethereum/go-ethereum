@@ -105,11 +105,6 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		// blockAccessList is the access list rebuilt from the actual execution.
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	)
-
-	// Fork rules of the block being executed, shared by every ephemeral state
-	// built below.
-	rules := config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
-
 	// Resolve the parent state root, the point all execution reads from.
 	parent := p.chain.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
@@ -155,7 +150,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	// TODO(rjl493456442) both the pre/post execution can be performed alongside
 	// the transaction execution. Measure the overhead before making the changes.
 	preStart := time.Now()
-	preState, err := newAccessListState(db, parentRoot, base, lookup, 0, rules)
+	preState, err := newAccessListState(db, parentRoot, base, lookup, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +208,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	// Post-execution system calls against an ephemeral access-list state at
 	// index n+1.
 	postStart := time.Now()
-	postState, err := newAccessListState(db, parentRoot, base, lookup, int(postIndex), rules)
+	postState, err := newAccessListState(db, parentRoot, base, lookup, int(postIndex))
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +262,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 // newAccessListState constructs an ephemeral state, reading through base, whose
 // view reflects the mutations recorded in the access list for all block-access
 // indices below index.
-func newAccessListState(db state.Database, parentRoot common.Hash, base state.Reader, lookup *bal.Lookup, index int, rules params.Rules) (*state.StateDB, error) {
+func newAccessListState(db state.Database, parentRoot common.Hash, base state.Reader, lookup *bal.Lookup, index int) (*state.StateDB, error) {
 	return state.NewWithReader(parentRoot, db, state.NewReaderWithBlockLevelAccessList(base, lookup, index))
 }
 

@@ -713,8 +713,6 @@ func TestOpenDrops(t *testing.T) {
 	store.Close()
 
 	// Create a blob pool out of the pre-seeded data
-	// The pool only reads accounts from this state; it never finalises a state
-	// transition, so the fork rules are irrelevant here (and below).
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(crypto.PubkeyToAddress(gapper.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(dangler.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)

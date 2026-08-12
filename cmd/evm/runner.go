@@ -339,14 +339,11 @@ func runCmd(ctx *cli.Context) error {
 	output, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
-		// Mirrors the pre-refactor arguments (deleteEmptyObjects=true,
-		// noStorageWiping=false) so that --dump output is unchanged.
 		root, err := runtimeConfig.State.Commit(params.Rules{IsEIP158: true}, genesisConfig.Number)
 		if err != nil {
 			fmt.Printf("Failed to commit changes %v\n", err)
 			return err
 		}
-		// Read-only dump of the committed state.
 		dumpdb, err := state.New(root, sdb)
 		if err != nil {
 			fmt.Printf("Failed to open statedb %v\n", err)

@@ -42,15 +42,6 @@ import (
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 )
 
-// newTestState builds a state bound to the same fork rules the runtime derives
-// from a default Config, so that execution and state finalisation agree.
-func newTestState() *state.StateDB {
-	cfg := new(Config)
-	setDefaults(cfg)
-	sdb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-	return sdb
-}
-
 func TestDefaults(t *testing.T) {
 	cfg := new(Config)
 	setDefaults(cfg)
@@ -129,9 +120,7 @@ func TestExecute(t *testing.T) {
 }
 
 func TestCall(t *testing.T) {
-	// Scratch state for the EVM runtime; no transition is finalised here, so the
-	// fork rules are irrelevant. Same for the other zero-value rules below.
-	state := newTestState()
+	state, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	address := common.HexToAddress("0xaa")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,
@@ -186,9 +175,9 @@ func BenchmarkCall(b *testing.B) {
 }
 func benchmarkEVM_Create(bench *testing.B, code string) {
 	var (
-		statedb  = newTestState()
-		sender   = common.BytesToAddress([]byte("sender"))
-		receiver = common.BytesToAddress([]byte("receiver"))
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		sender     = common.BytesToAddress([]byte("sender"))
+		receiver   = common.BytesToAddress([]byte("receiver"))
 	)
 
 	statedb.CreateAccount(sender)
@@ -250,7 +239,7 @@ func BenchmarkEVM_SWAP1(b *testing.B) {
 		return contract
 	}
 
-	state := newTestState()
+	state, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	contractAddr := common.BytesToAddress([]byte("contract"))
 
 	b.Run("10k", func(b *testing.B) {
@@ -277,7 +266,7 @@ func BenchmarkEVM_RETURN(b *testing.B) {
 		return contract
 	}
 
-	state := newTestState()
+	state, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	contractAddr := common.BytesToAddress([]byte("contract"))
 
 	for _, n := range []uint64{1_000, 10_000, 100_000, 1_000_000} {
@@ -804,7 +793,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 	main := common.HexToAddress("0xaa")
 	for i, jsTracer := range jsTracers {
 		for j, tc := range tests {
-			statedb := newTestState()
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			statedb.SetCode(main, tc.code, tracing.CodeChangeUnspecified)
 			statedb.SetCode(common.HexToAddress("0xbb"), calleeCode, tracing.CodeChangeUnspecified)
 			statedb.SetCode(common.HexToAddress("0xcc"), calleeCode, tracing.CodeChangeUnspecified)
@@ -846,7 +835,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 	exit: function(res) { this.exits++ }}`
 	code := []byte{byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN)}
 
-	statedb := newTestState()
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil, params.MergedTestChainConfig)
 	if err != nil {
 		t.Fatal(err)
@@ -894,7 +883,7 @@ func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 // TestDelegatedAccountAccessCost tests that calling an account with an EIP-7702
 // delegation designator incurs the correct amount of gas based on the tracer.
 func TestDelegatedAccountAccessCost(t *testing.T) {
-	statedb := newTestState()
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.SetCode(common.HexToAddress("0xff"), types.AddressToDelegation(common.HexToAddress("0xaa")), tracing.CodeChangeUnspecified)
 	statedb.SetCode(common.HexToAddress("0xaa"), program.New().Return(0, 0).Bytes(), tracing.CodeChangeUnspecified)
 
@@ -985,7 +974,7 @@ func TestManyLargeStacks(t *testing.T) {
 	}...)
 
 	main := common.HexToAddress("0xbb")
-	statedb := newTestState()
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.SetCode(main, code, tracing.CodeChangeUnspecified)
 
 	//tracer := logger.NewJSONLogger(nil, os.Stdout)

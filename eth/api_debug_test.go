@@ -115,8 +115,6 @@ func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, st
 func TestAccountRange(t *testing.T) {
 	t.Parallel()
 
-	// These states are only dumped/ranged over, never used to finalise a state
-	// transition, so the fork rules do not matter (same for the ones below).
 	var (
 		mdb     = rawdb.NewMemoryDatabase()
 		statedb = state.NewDatabase(triedb.NewDatabase(mdb, &triedb.Config{Preimages: true}), nil)

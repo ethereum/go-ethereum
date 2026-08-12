@@ -173,7 +173,7 @@ type StateDB struct {
 	CodeUpdateBytes int // Total bytes of persisted code written
 }
 
-// New creates a new state with a given state root.
+// New creates a new state from a given trie.
 func New(root common.Hash, db Database) (*StateDB, error) {
 	reader, err := db.Reader(root)
 	if err != nil {

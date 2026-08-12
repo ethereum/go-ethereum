@@ -693,7 +693,6 @@ func dump(ctx *cli.Context) error {
 	triedb := utils.MakeTrieDatabase(ctx, stack, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
-	// Read-only dump, no state transition is finalised here.
 	state, err := state.New(root, state.NewDatabase(triedb, nil))
 	if err != nil {
 		return err

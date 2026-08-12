@@ -125,13 +125,13 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	}
 	setDefaults(cfg)
 
-	rules := cfg.ChainConfig.Rules(cfg.BlockNumber, cfg.Random != nil, cfg.Time)
 	if cfg.State == nil {
 		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"))
 		vmenv   = NewEnv(cfg)
+		rules   = cfg.ChainConfig.Rules(cfg.BlockNumber, cfg.Random != nil, cfg.Time)
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
@@ -168,11 +168,13 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	}
 	setDefaults(cfg)
 
-	rules := cfg.ChainConfig.Rules(cfg.BlockNumber, cfg.Random != nil, cfg.Time)
 	if cfg.State == nil {
 		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	}
-	vmenv := NewEnv(cfg)
+	var (
+		vmenv = NewEnv(cfg)
+		rules = cfg.ChainConfig.Rules(cfg.BlockNumber, cfg.Random != nil, cfg.Time)
+	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
 	}

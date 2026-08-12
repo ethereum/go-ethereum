@@ -1641,7 +1641,6 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
-	rules := bc.chainConfig.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())
 	if !bc.HasHeader(block.ParentHash(), block.NumberU64()-1) {
 		return consensus.ErrUnknownAncestor
 	}
@@ -1667,6 +1666,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		err          error
 		root         common.Hash
 		hasStateHook = bc.logger != nil && bc.logger.OnStateUpdate != nil
+		rules        = bc.chainConfig.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())
 	)
 	if hasStateHook {
 		r, update, err := statedb.CommitWithUpdate(rules, block.NumberU64())
