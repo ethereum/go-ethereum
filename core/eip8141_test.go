@@ -21,6 +21,7 @@
 package core
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"math/big"
 	"testing"
@@ -251,6 +252,103 @@ func TestFrameTxApproveScopeExceedsFlags(t *testing.T) {
 	if _, err := applyFrameTx(t, sdb, tx); !errors.Is(err, ErrFrameInvalid) {
 		t.Fatalf("err = %v, want ErrFrameInvalid", err)
 	}
+}
+
+// codeYulAccount is a minimal EIP-8141 smart account compiled from standalone
+// Yul with solc 0.8.30 (`solc --strict-assembly`), using verbatim builtins to
+// emit the new opcodes. Source in the project notes; the runtime is:
+//
+//	PUSH0 SLOAD              // owner from slot 0
+//	PUSH0 PUSH0 SIGPARAM     // resolved_signer of signature 0
+//	DUP2 DUP2 SUB PUSH1 0x10 JUMPI
+//	PUSH1 0x03 PUSH0 PUSH0 APPROVE   // scope, length, offset
+//	JUMPDEST PUSH0 PUSH0 REVERT
+//
+// It approves execution and payment iff the protocol-validated signer of
+// signature 0 matches the owner. The protocol has already checked that
+// signature against the canonical signature hash, so the account only decides
+// whether it trusts the signer.
+var codeYulAccount = common.FromHex("5f545f5fb481810360105760035f5faa5b5f5ffd")
+
+var frameOwnerKey, _ = crypto.HexToECDSA("0202020202020202020202020202020202020202020202020202002020202020")
+
+// TestFrameTxYulSmartAccount runs a smart account compiled by an unmodified
+// solc through the frame execution path, proving the opcodes are reachable from
+// a real toolchain: standalone Yul + verbatim needs no compiler fork.
+func TestFrameTxYulSmartAccount(t *testing.T) {
+	owner := crypto.PubkeyToAddress(frameOwnerKey.PublicKey)
+
+	buildTx := func(t *testing.T, signWith *ecdsa.PrivateKey, signer common.Address) *types.Transaction {
+		t.Helper()
+		ftx := &types.FrameTx{
+			ChainID: frameChainConfig().ChainID,
+			Sender:  frameSenderAddress,
+			Frames: []types.Frame{
+				selfVerifyFrame(100_000),
+				senderFrame(frameStoreAddr, 300_000, 0),
+			},
+			GasTipCap:  big.NewInt(0),
+			GasFeeCap:  big.NewInt(0),
+			BlobFeeCap: new(uint256.Int),
+			// An explicit signer, so the account can distinguish the key that
+			// signed from the account address itself.
+			Signatures: []types.FrameSignature{{
+				Scheme: types.SignatureSchemeSecp256k1,
+				Signer: signer.Bytes(),
+			}},
+		}
+		sigHash := ftx.ComputeSigHash()
+		sig, err := crypto.Sign(sigHash[:], signWith)
+		if err != nil {
+			t.Fatalf("sign: %v", err)
+		}
+		frameSig := make([]byte, 65)
+		frameSig[0] = sig[64]
+		copy(frameSig[1:33], sig[:32])
+		copy(frameSig[33:65], sig[32:65])
+		ftx.Signatures[0].Signature = frameSig
+		return types.NewTx(ftx)
+	}
+
+	newState := func() *state.StateDB {
+		sdb := mkState(types.GenesisAlloc{
+			frameSenderAddress: {
+				Balance: newGwei(1_000_000_000),
+				Code:    codeYulAccount,
+				Storage: map[common.Hash]common.Hash{{}: common.BytesToHash(owner.Bytes())},
+			},
+			frameStoreAddr: {Code: codeStore, Balance: common.Big0},
+		})
+		return sdb
+	}
+
+	t.Run("owner signs", func(t *testing.T) {
+		sdb := newState()
+		res, err := applyFrameTx(t, sdb, buildTx(t, frameOwnerKey, owner))
+		if err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+		if res.Payer != frameSenderAddress {
+			t.Errorf("payer = %v, want the account %v", res.Payer, frameSenderAddress)
+		}
+		if got := res.FrameReceipts[0].Status; got != types.ReceiptStatusSuccessful {
+			t.Errorf("VERIFY frame status = %d, want success", got)
+		}
+		if !slotSet(sdb, frameStoreAddr) {
+			t.Error("SENDER frame did not run")
+		}
+	})
+
+	t.Run("stranger signs", func(t *testing.T) {
+		// A validly signed transaction from a key the account does not trust:
+		// the protocol accepts the signature, the account rejects the signer, so
+		// the VERIFY frame reverts and the transaction is invalid.
+		stranger := crypto.PubkeyToAddress(frameSenderKey.PublicKey)
+		sdb := newState()
+		if _, err := applyFrameTx(t, sdb, buildTx(t, frameSenderKey, stranger)); !errors.Is(err, ErrFrameInvalid) {
+			t.Fatalf("err = %v, want ErrFrameInvalid", err)
+		}
+	})
 }
 
 // TestFrameTxNoPayerIsInvalid checks that a transaction whose frames never
