@@ -201,9 +201,7 @@ func (d *dialScheduler) stop() {
 	d.wg.Wait()
 }
 
-// addStatic adds a static dial candidate. The node is handed over to the scheduler
-// loop, or an error is returned if the dialer has already been stopped and the node
-// was not accepted for tracking.
+// addStatic adds a static dial candidate.
 func (d *dialScheduler) addStatic(n *enode.Node) error {
 	select {
 	case d.addStaticCh <- n:
