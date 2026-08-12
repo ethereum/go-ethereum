@@ -69,6 +69,7 @@ var (
 	osakaInstructionSet            = newOsakaInstructionSet()
 	amsterdamInstructionSet        = newAmsterdamInstructionSet()
 	bogotaInstructionSet           = newBogotaInstructionSet()
+	frameInstructionSet            = newFrameInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -94,6 +95,14 @@ func validate(jt JumpTable) JumpTable {
 
 func newBogotaInstructionSet() JumpTable {
 	instructionSet := newAmsterdamInstructionSet()
+	return validate(instructionSet)
+}
+
+// newFrameInstructionSet applies the EIP-8141 frame transaction opcodes on top
+// of the most recent instruction set.
+func newFrameInstructionSet() JumpTable {
+	instructionSet := newBogotaInstructionSet()
+	enableFrame(&instructionSet)
 	return validate(instructionSet)
 }
 

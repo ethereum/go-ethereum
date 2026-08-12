@@ -95,6 +95,33 @@ var (
 	gasReturnDataCopy = memoryCopierGas(2)
 )
 
+// gasSigParam returns the gas cost of SIGPARAM. Params 0-3 cost GasQuickStep.
+// The copy operation (param 0x04) is priced exactly as CALLDATACOPY.
+func gasSigParam(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if stack.back(1).Uint64() != 0x04 {
+		return GasCosts{ExecutionGas: GasQuickStep}, nil
+	}
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return GasCosts{}, err
+	}
+	words, overflow := stack.back(4).Uint64WithOverflow()
+	if overflow {
+		return GasCosts{}, ErrGasUintOverflow
+	}
+	if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
+		return GasCosts{}, ErrGasUintOverflow
+	}
+	if gas, overflow = math.SafeAdd(gas, words); overflow {
+		return GasCosts{}, ErrGasUintOverflow
+	}
+	// CALLDATACOPY includes a fixed cost of GasFastestStep.
+	if gas, overflow = math.SafeAdd(gas, GasFastestStep); overflow {
+		return GasCosts{}, ErrGasUintOverflow
+	}
+	return GasCosts{ExecutionGas: gas}, nil
+}
+
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	if evm.readOnly {
 		return GasCosts{}, ErrWriteProtection

@@ -134,6 +134,10 @@ type EVM struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 
 	arena *stackArena
+
+	// frameCtx carries EIP-8141 frame transaction state, or nil when not
+	// executing a frame transaction.
+	frameCtx *FrameContext
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -153,6 +157,8 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	evm.precompiles = *activePrecompiledContracts(evm.chainRules)
 
 	switch {
+	case evm.chainRules.IsFrame:
+		evm.table = &frameInstructionSet
 	case evm.chainRules.IsBogota:
 		evm.table = &bogotaInstructionSet
 	case evm.chainRules.IsAmsterdam:
@@ -243,6 +249,17 @@ func (evm *EVM) SetTxContext(txCtx TxContext) {
 // it's safe to be called multiple times.
 func (evm *EVM) Cancel() {
 	evm.abort.Store(true)
+}
+
+// ReadOnly reports whether the EVM is currently in read-only mode (STATICCALL).
+func (evm *EVM) ReadOnly() bool {
+	return evm.readOnly
+}
+
+// SetReadOnly sets the EVM read-only mode. Used by the frame execution path to
+// run VERIFY frames as static calls.
+func (evm *EVM) SetReadOnly(v bool) {
+	evm.readOnly = v
 }
 
 // Release returns some memory allocated by the EVM, should be called after the EVM was used

@@ -267,6 +267,10 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
 		receipt.BlobGasPrice = evm.Context.BlobBaseFee
 	}
+	if tx.Type() == types.FrameTxType {
+		receipt.Payer = result.Payer
+		receipt.FrameReceipts = result.FrameReceipts
+	}
 
 	// If the transaction created a contract, store the creation address in the receipt.
 	if tx.To() == nil {

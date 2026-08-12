@@ -49,6 +49,11 @@ type txJSON struct {
 	S                    *hexutil.Big           `json:"s"`
 	YParity              *hexutil.Uint64        `json:"yParity,omitempty"`
 
+	// EIP-8141 frame transaction encoding:
+	Sender     common.Address `json:"sender,omitempty"`
+	Frames     []*frameJSON   `json:"frames,omitempty"`
+	Signatures []*sigJSON     `json:"signatures,omitempty"`
+
 	// Blob transaction sidecar encoding:
 	Blobs       []kzg4844.Blob       `json:"blobs,omitempty"`
 	Commitments []kzg4844.Commitment `json:"commitments,omitempty"`
@@ -56,6 +61,24 @@ type txJSON struct {
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
+}
+
+// frameJSON is the JSON representation of a frame.
+type frameJSON struct {
+	Mode     uint64          `json:"mode"`
+	Flags    uint64          `json:"flags"`
+	Target   *common.Address `json:"target"`
+	GasLimit uint64          `json:"gasLimit"`
+	Value    *hexutil.Big    `json:"value"`
+	Data     hexutil.Bytes   `json:"data"`
+}
+
+// sigJSON is the JSON representation of a frame signature entry.
+type sigJSON struct {
+	Scheme    uint64         `json:"scheme"`
+	Signer    common.Address `json:"signer"`
+	Msg       hexutil.Bytes  `json:"msg"`
+	Signature hexutil.Bytes  `json:"signature"`
 }
 
 // yParityValue returns the YParity value from JSON. For backwards-compatibility reasons,
@@ -170,6 +193,44 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(itx.S.ToBig())
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
+
+	case *FrameTx:
+		enc.ChainID = (*hexutil.Big)(itx.ChainID)
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Sender = itx.Sender
+		enc.Gas = (*hexutil.Uint64)(func() *uint64 { g := tx.Gas(); return &g }())
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.GasTipCap)
+		if itx.BlobFeeCap != nil {
+			enc.MaxFeePerBlobGas = (*hexutil.Big)(itx.BlobFeeCap.ToBig())
+		}
+		enc.BlobVersionedHashes = itx.BlobHashes
+		enc.Frames = make([]*frameJSON, len(itx.Frames))
+		for i := range itx.Frames {
+			f := &itx.Frames[i]
+			enc.Frames[i] = &frameJSON{
+				Mode:     uint64(f.Mode),
+				Flags:    uint64(f.Flags),
+				Target:   copyAddressPtr(f.Target),
+				GasLimit: f.GasLimit,
+				Value:    (*hexutil.Big)(f.Value.ToBig()),
+				Data:     f.Data,
+			}
+		}
+		enc.Signatures = make([]*sigJSON, len(itx.Signatures))
+		for i := range itx.Signatures {
+			s := &itx.Signatures[i]
+			var signer common.Address
+			if len(s.Signer) == 20 {
+				signer = common.BytesToAddress(s.Signer)
+			}
+			enc.Signatures[i] = &sigJSON{
+				Scheme:    uint64(s.Scheme),
+				Signer:    signer,
+				Msg:       s.Msg,
+				Signature: s.Signature,
+			}
+		}
 	}
 	return json.Marshal(&enc)
 }
@@ -508,6 +569,57 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			if err := sanityCheckSignature(vbig, itx.R.ToBig(), itx.S.ToBig(), false); err != nil {
 				return err
 			}
+		}
+
+	case FrameTxType:
+		var itx FrameTx
+		inner = &itx
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		itx.ChainID = dec.ChainID.ToInt()
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		itx.Nonce = uint64(*dec.Nonce)
+		itx.Sender = dec.Sender
+		if dec.MaxPriorityFeePerGas == nil {
+			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
+		}
+		itx.GasTipCap = dec.MaxPriorityFeePerGas.ToInt()
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		}
+		itx.GasFeeCap = dec.MaxFeePerGas.ToInt()
+		if dec.MaxFeePerBlobGas != nil {
+			itx.BlobFeeCap, _ = uint256.FromBig(dec.MaxFeePerBlobGas.ToInt())
+		} else {
+			itx.BlobFeeCap = new(uint256.Int)
+		}
+		itx.BlobHashes = dec.BlobVersionedHashes
+		itx.Frames = make([]Frame, len(dec.Frames))
+		for i, fj := range dec.Frames {
+			f := &itx.Frames[i]
+			f.Mode = byte(fj.Mode)
+			f.Flags = byte(fj.Flags)
+			f.Target = copyAddressPtr(fj.Target)
+			f.GasLimit = fj.GasLimit
+			if fj.Value != nil {
+				f.Value, _ = uint256.FromBig(fj.Value.ToInt())
+			} else {
+				f.Value = new(uint256.Int)
+			}
+			f.Data = fj.Data
+		}
+		itx.Signatures = make([]FrameSignature, len(dec.Signatures))
+		for i, sj := range dec.Signatures {
+			s := &itx.Signatures[i]
+			s.Scheme = byte(sj.Scheme)
+			if sj.Signer != (common.Address{}) {
+				s.Signer = sj.Signer.Bytes()
+			}
+			s.Msg = sj.Msg
+			s.Signature = sj.Signature
 		}
 
 	default:

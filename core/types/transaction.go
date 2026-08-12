@@ -50,6 +50,7 @@ const (
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
 	SetCodeTxType    = 0x04
+	FrameTxType      = 0x06
 )
 
 // Transaction is an Ethereum transaction.
@@ -212,6 +213,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		inner = new(BlobTx)
 	case SetCodeTxType:
 		inner = new(SetCodeTx)
+	case FrameTxType:
+		inner = new(FrameTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -276,6 +279,11 @@ func (tx *Transaction) Protected() bool {
 // Type returns the transaction type.
 func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
+}
+
+// Inner returns the underlying transaction data.
+func (tx *Transaction) Inner() TxData {
+	return tx.inner
 }
 
 // ChainId returns the EIP155 chain ID of the transaction. The return value will always be

@@ -224,6 +224,16 @@ const (
 	AuthorizationCreationSize = 23
 	CostPerStateByte          = 1530
 	SystemMaxSStoresPerCall   = 16
+
+	// EIP-8141 frame transaction constants.
+	FrameTxIntrinsicCost      = 15000  // Base intrinsic cost of a frame transaction
+	FrameTxPerFrameCost       = 475    // Fixed per-frame cost (CALL overhead + receipt log entry)
+	FrameTxMaxFrames          = 64     // Maximum number of frames in a frame transaction
+	FrameTxSignatureSecp256k1 = 2800   // Gas cost of verifying a secp256k1 signature entry
+	FrameTxSignatureP256      = 6700   // Gas cost of verifying a P256 signature entry
+	FrameTxSignatureArbitrary = 100    // Gas cost of a structurally-checked arbitrary signature entry
+	FrameTxMaxVerifyGas       = 100000 // Maximum gas a node spends validating the mempool validation prefix
+	FrameTxMaxNonCanonicalPM  = 1      // Max pending txns per non-canonical paymaster in the public mempool
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation

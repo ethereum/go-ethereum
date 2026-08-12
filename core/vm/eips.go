@@ -569,6 +569,57 @@ func enable7702(jt *JumpTable) {
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
 }
 
+// enableFrame applies the EIP-8141 frame transaction opcodes.
+func enableFrame(jt *JumpTable) {
+	// APPROVE: [offset, length, scope] -> [], charges only memory expansion.
+	jt[APPROVE] = &operation{
+		execute:    opApprove,
+		dynamicGas: gasReturn,
+		minStack:   minStack(3, 0),
+		maxStack:   maxStack(3, 0),
+		memorySize: memoryReturn,
+	}
+	// TXPARAM: [param] -> [value]
+	jt[TXPARAM] = &operation{
+		execute:     opTxparam,
+		constantGas: GasQuickStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	// FRAMEDATALOAD: [frameIndex, offset] -> [value]
+	jt[FRAMEDATALOAD] = &operation{
+		execute:     opFrameDataLoad,
+		constantGas: GasFastestStep,
+		minStack:    minStack(2, 1),
+		maxStack:    maxStack(2, 1),
+	}
+	// FRAMEDATACOPY: [frameIndex, memOffset, dataOffset, length] -> []
+	jt[FRAMEDATACOPY] = &operation{
+		execute:     opFrameDataCopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  gasCallDataCopy,
+		minStack:    minStack(4, 0),
+		maxStack:    maxStack(4, 0),
+		memorySize:  memoryCallDataCopy,
+	}
+	// FRAMEPARAM: [param, frameIndex] -> [value]
+	jt[FRAMEPARAM] = &operation{
+		execute:     opFrameParam,
+		constantGas: GasQuickStep,
+		minStack:    minStack(2, 1),
+		maxStack:    maxStack(2, 1),
+	}
+	// SIGPARAM: [param, signatureIndex] -> [value] or [] for param 0x04.
+	// Gas is 2 for params 0-3 and matches CALLDATACOPY for the copy (param 0x04).
+	jt[SIGPARAM] = &operation{
+		execute:    opSigparam,
+		dynamicGas: gasSigParam,
+		minStack:   minStack(2, 1),
+		maxStack:   maxStack(2, 1),
+		memorySize: memorySigParam,
+	}
+}
+
 // opSlotNum enables the SLOTNUM opcode
 func opSlotNum(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.get().SetUint64(evm.Context.SlotNum)

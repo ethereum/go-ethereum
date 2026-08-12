@@ -465,6 +465,7 @@ type ChainConfig struct {
 	AmsterdamTime *uint64 `json:"amsterdamTime,omitempty"` // Amsterdam switch time (nil = no fork, 0 = already on amsterdam)
 	BogotaTime    *uint64 `json:"bogotaTime,omitempty"`    // Bogota switch time (nil = no fork, 0 = already on bogota)
 	UBTTime       *uint64 `json:"ubtTime,omitempty"`       // UBT switch time (nil = no fork, 0 = already on UBT)
+	FrameTime     *uint64 `json:"frameTime,omitempty"`     // Frame transaction switch time (EIP-8141, nil = no fork, 0 = already on frame)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -607,6 +608,9 @@ func (c *ChainConfig) String() string {
 	if c.UBTTime != nil {
 		result += fmt.Sprintf(", UBTTime: %v", *c.UBTTime)
 	}
+	if c.FrameTime != nil {
+		result += fmt.Sprintf(", FrameTime: %v", *c.FrameTime)
+	}
 	result += "}"
 	return result
 }
@@ -704,6 +708,9 @@ func (c *ChainConfig) Description() string {
 	}
 	if c.UBTTime != nil {
 		banner += fmt.Sprintf(" - UBT:                         @%-10v\n", *c.UBTTime)
+	}
+	if c.FrameTime != nil {
+		banner += fmt.Sprintf(" - Frame:                       @%-10v\n", *c.FrameTime)
 	}
 	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
@@ -889,6 +896,12 @@ func (c *ChainConfig) IsUBT(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.UBTTime, time)
 }
 
+// IsFrame returns whether time is either equal to the frame transaction fork
+// time or greater (EIP-8141).
+func (c *ChainConfig) IsFrame(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.FrameTime, time)
+}
+
 // IsUBTGenesis checks whether the verkle fork is activated at the genesis block.
 //
 // Verkle mode is considered enabled if the verkle fork time is configured,
@@ -971,6 +984,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "bpo5", timestamp: c.BPO5Time, optional: true},
 		{name: "amsterdam", timestamp: c.AmsterdamTime, optional: true},
 		{name: "bogota", timestamp: c.BogotaTime, optional: true},
+		{name: "frame", timestamp: c.FrameTime, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {
@@ -1417,6 +1431,7 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
 	IsAmsterdam, IsBogota, IsUBT                            bool
+	IsFrame                                                 bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1445,5 +1460,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsBogota:         isMerge && c.IsBogota(num, timestamp),
 		IsUBT:            isUBT,
 		IsEIP4762:        isUBT,
+		IsFrame:          isMerge && c.IsFrame(num, timestamp),
 	}
 }

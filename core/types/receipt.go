@@ -49,6 +49,14 @@ const (
 	ReceiptStatusSuccessful = uint64(1)
 )
 
+// FrameReceipt is the receipt sub-entry for a single frame within a frame
+// transaction (EIP-8141).
+type FrameReceipt struct {
+	Status  uint64
+	GasUsed uint64
+	Logs    []*Log
+}
+
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// Consensus fields: These fields are defined by the Yellow Paper
@@ -58,6 +66,10 @@ type Receipt struct {
 	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
 	Logs              []*Log `json:"logs"              gencodec:"required"`
+
+	// EIP-8141 frame transaction fields:
+	Payer         common.Address  `json:"payer,omitempty"`
+	FrameReceipts []*FrameReceipt `json:"frameReceipts,omitempty"`
 
 	// Implementation fields: These fields are added by geth when processing a transaction.
 	TxHash            common.Hash    `json:"transactionHash" gencodec:"required"`
@@ -102,6 +114,21 @@ type storedReceiptRLP struct {
 	Logs              []*Log
 }
 
+// frameReceiptRLP is the consensus encoding of a single frame receipt.
+type frameReceiptRLP struct {
+	Status  uint64
+	GasUsed uint64
+	Logs    []*Log
+}
+
+// receiptFrameRLP is the consensus encoding of a frame transaction receipt:
+// [cumulative_gas_used, payer, [frame_receipt, ...]].
+type receiptFrameRLP struct {
+	CumulativeGasUsed uint64
+	Payer             common.Address
+	FrameReceipts     []frameReceiptRLP
+}
+
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
 // Deprecated: create receipts using a struct literal instead.
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
@@ -137,6 +164,13 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 // encodeTyped writes the canonical encoding of a typed receipt to w.
 func (r *Receipt) encodeTyped(data *receiptRLP, w *bytes.Buffer) error {
 	w.WriteByte(r.Type)
+	if r.Type == FrameTxType {
+		fr := &receiptFrameRLP{r.CumulativeGasUsed, r.Payer, make([]frameReceiptRLP, len(r.FrameReceipts))}
+		for i, frr := range r.FrameReceipts {
+			fr.FrameReceipts[i] = frameReceiptRLP{frr.Status, frr.GasUsed, frr.Logs}
+		}
+		return rlp.Encode(w, fr)
+	}
 	return rlp.Encode(w, data)
 }
 
@@ -213,6 +247,24 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		}
 		r.Type = b[0]
 		return r.setFromRLP(data)
+	case FrameTxType:
+		var data receiptFrameRLP
+		if err := rlp.DecodeBytes(b[1:], &data); err != nil {
+			return err
+		}
+		r.Type = b[0]
+		r.CumulativeGasUsed = data.CumulativeGasUsed
+		r.Payer = data.Payer
+		r.FrameReceipts = make([]*FrameReceipt, len(data.FrameReceipts))
+		for i := range data.FrameReceipts {
+			r.FrameReceipts[i] = &FrameReceipt{
+				Status:  data.FrameReceipts[i].Status,
+				GasUsed: data.FrameReceipts[i].GasUsed,
+				Logs:    data.FrameReceipts[i].Logs,
+			}
+		}
+		r.Status = ReceiptStatusSuccessful
+		return nil
 	default:
 		return ErrTxTypeNotSupported
 	}
@@ -321,6 +373,9 @@ type ReceiptForStorage Receipt
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
 // into an RLP stream.
 func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
+	if r.Type == FrameTxType {
+		return r.encodeFrameStorageRLP(_w)
+	}
 	w := rlp.NewEncoderBuffer(_w)
 	outerList := w.List()
 	w.WriteBytes((*Receipt)(r).statusEncoding())
@@ -336,9 +391,54 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	return w.Flush()
 }
 
+// frameReceiptForStorageRLP is the storage encoding of a single frame receipt.
+type frameReceiptForStorageRLP struct {
+	Status  uint64
+	GasUsed uint64
+	Logs    []*Log
+}
+
+// storedFrameReceiptRLP is the storage encoding of a frame receipt payload.
+type storedFrameReceiptRLP struct {
+	CumulativeGasUsed uint64
+	Payer             common.Address
+	FrameReceipts     []frameReceiptForStorageRLP
+}
+
+// encodeFrameStorageRLP encodes a frame transaction receipt for storage.
+func (r *ReceiptForStorage) encodeFrameStorageRLP(w io.Writer) error {
+	frs := make([]frameReceiptForStorageRLP, len(r.FrameReceipts))
+	for i, fr := range r.FrameReceipts {
+		frs[i] = frameReceiptForStorageRLP{fr.Status, fr.GasUsed, fr.Logs}
+	}
+	return rlp.Encode(w, &storedFrameReceiptRLP{r.CumulativeGasUsed, r.Payer, frs})
+}
+
+// decodeFrameStorageRLP decodes a stored frame transaction receipt.
+func (r *ReceiptForStorage) decodeFrameStorageRLP(s *rlp.Stream) error {
+	var stored storedFrameReceiptRLP
+	if err := s.Decode(&stored); err != nil {
+		return err
+	}
+	r.CumulativeGasUsed = stored.CumulativeGasUsed
+	r.Payer = stored.Payer
+	r.FrameReceipts = make([]*FrameReceipt, len(stored.FrameReceipts))
+	for i := range stored.FrameReceipts {
+		r.FrameReceipts[i] = &FrameReceipt{
+			Status:  stored.FrameReceipts[i].Status,
+			GasUsed: stored.FrameReceipts[i].GasUsed,
+			Logs:    stored.FrameReceipts[i].Logs,
+		}
+	}
+	return nil
+}
+
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
 // fields of a receipt from an RLP stream.
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
+	if r.Type == FrameTxType {
+		return r.decodeFrameStorageRLP(s)
+	}
 	var stored storedReceiptRLP
 	if err := s.Decode(&stored); err != nil {
 		return err
@@ -370,6 +470,12 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	switch r.Type {
 	case AccessListTxType, DynamicFeeTxType, BlobTxType, SetCodeTxType:
 		rlp.Encode(w, data)
+	case FrameTxType:
+		fr := &receiptFrameRLP{r.CumulativeGasUsed, r.Payer, make([]frameReceiptRLP, len(r.FrameReceipts))}
+		for i, frr := range r.FrameReceipts {
+			fr.FrameReceipts[i] = frameReceiptRLP{frr.Status, frr.GasUsed, frr.Logs}
+		}
+		rlp.Encode(w, fr)
 	default:
 		// For unsupported types, write nothing. Since this is for
 		// DeriveSha, the error will be caught matching the derived hash

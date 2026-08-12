@@ -41,6 +41,8 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer {
 	var signer Signer
 	switch {
+	case config.IsFrame(blockNumber, blockTime):
+		signer = NewFrameSigner(config.ChainID)
 	case config.IsPrague(blockNumber, blockTime):
 		signer = NewPragueSigner(config.ChainID)
 	case config.IsCancun(blockNumber, blockTime):
@@ -70,6 +72,8 @@ func LatestSigner(config *params.ChainConfig) Signer {
 	var signer Signer
 	if config.ChainID != nil {
 		switch {
+		case config.FrameTime != nil:
+			signer = NewFrameSigner(config.ChainID)
 		case config.PragueTime != nil:
 			signer = NewPragueSigner(config.ChainID)
 		case config.CancunTime != nil:
@@ -231,6 +235,9 @@ func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
 	if fork >= forks.Prague {
 		s.txtypes.set(SetCodeTxType)
 	}
+	if fork >= forks.Frame {
+		s.txtypes.set(FrameTxType)
+	}
 	return s
 }
 
@@ -258,6 +265,14 @@ func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
 	}
 	if tt == LegacyTxType {
 		return s.legacy.Sender(tx)
+	}
+	// EIP-8141 frame transactions carry an explicit sender field and no outer
+	// ECDSA signature.
+	if ftx, ok := tx.inner.(*FrameTx); ok {
+		if ftx.ChainID.Cmp(s.chainID) != 0 {
+			return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, ftx.ChainID, s.chainID)
+		}
+		return ftx.Sender, nil
 	}
 	if tx.ChainId().Cmp(s.chainID) != 0 {
 		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainID)
@@ -288,6 +303,12 @@ func (s *modernSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	}
 	V = big.NewInt(int64(sig[64]))
 	return R, S, V, nil
+}
+
+// NewFrameSigner returns a signer that accepts, in addition to the types
+// supported by the Prague signer, EIP-8141 frame transactions.
+func NewFrameSigner(chainId *big.Int) Signer {
+	return newModernSigner(chainId, forks.Frame)
 }
 
 // NewPragueSigner returns a signer that accepts
