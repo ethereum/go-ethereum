@@ -273,6 +273,19 @@ func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common
 	return logs
 }
 
+// TxLogs returns the logs recorded for the current transaction, in emission
+// order. The result aliases the internal slice and must not be retained across
+// further mutation.
+func (s *StateDB) TxLogs() []*types.Log {
+	return s.logs[s.thash]
+}
+
+// ClearTransientStorage discards all transient storage. It is used by EIP-8141
+// frame transactions, which reset transient storage between frames.
+func (s *StateDB) ClearTransientStorage() {
+	s.transientStorage = newTransientStorage()
+}
+
 func (s *StateDB) Logs() []*types.Log {
 	logs := make([]*types.Log, 0, s.logSize)
 	for _, lgs := range s.logs {

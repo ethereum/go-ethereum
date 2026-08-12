@@ -103,6 +103,10 @@ func (s *hookedStateDB) GetTransientState(addr common.Address, key common.Hash) 
 	return s.inner.GetTransientState(addr, key)
 }
 
+func (s *hookedStateDB) ClearTransientStorage() {
+	s.inner.ClearTransientStorage()
+}
+
 func (s *hookedStateDB) SetTransientState(addr common.Address, key, value common.Hash) {
 	s.inner.SetTransientState(addr, key, value)
 }

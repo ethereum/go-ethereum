@@ -569,6 +569,15 @@ func enable7702(jt *JumpTable) {
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
 }
 
+const (
+	// sigParamCopy is the SIGPARAM parameter selecting the memory-copy form.
+	sigParamCopy = 0x04
+
+	// sigParamCopyStack is the number of operands the copy form consumes:
+	// signatureIndex, param, memOffset, dataOffset, length.
+	sigParamCopyStack = 5
+)
+
 // enableFrame applies the EIP-8141 frame transaction opcodes.
 func enableFrame(jt *JumpTable) {
 	// APPROVE: [offset, length, scope] -> [], charges only memory expansion.
@@ -609,8 +618,13 @@ func enableFrame(jt *JumpTable) {
 		minStack:    minStack(2, 1),
 		maxStack:    maxStack(2, 1),
 	}
-	// SIGPARAM: [param, signatureIndex] -> [value] or [] for param 0x04.
-	// Gas is 2 for params 0-3 and matches CALLDATACOPY for the copy (param 0x04).
+	// SIGPARAM: [signatureIndex, param] -> [value], or the copy form
+	// [signatureIndex, param, memOffset, dataOffset, length] -> [] for param
+	// 0x04. Gas is 2 for params 0-3 and matches CALLDATACOPY for the copy.
+	//
+	// The bounds here describe the two-operand metadata form; opSigparam checks
+	// the deeper requirement of the copy form itself, since the jump table
+	// cannot express a stack effect that depends on an operand value.
 	jt[SIGPARAM] = &operation{
 		execute:    opSigparam,
 		dynamicGas: gasSigParam,

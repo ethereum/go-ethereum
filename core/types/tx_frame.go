@@ -47,10 +47,6 @@ const (
 	SignatureSchemeArbitrary byte = 0x0
 	SignatureSchemeSecp256k1 byte = 0x1
 	SignatureSchemeP256      byte = 0x2
-
-	// Entry point and expiry verifier addresses.
-	FrameEntryPoint     = 0xaa
-	FrameExpiryVerifier = 0x8141
 )
 
 // Frame represents a single frame within a frame transaction.
@@ -61,6 +57,15 @@ type Frame struct {
 	GasLimit uint64
 	Value    *uint256.Int
 	Data     []byte
+}
+
+// Value256 returns the frame's value, treating a nil value as zero. A frame
+// decoded from RLP always has a non-nil value, but one built in memory may not.
+func (f *Frame) Value256() *uint256.Int {
+	if f.Value == nil {
+		return new(uint256.Int)
+	}
+	return f.Value
 }
 
 // copy returns a deep copy of the frame.
@@ -257,75 +262,137 @@ func (tx *FrameTx) SignatureVerificationCost() (uint64, error) {
 	return total, nil
 }
 
-// tokenIn returns the number of data tokens in b (EIP-8141 tokens_in).
-func tokenIn(b []byte) uint64 {
-	var tokens uint64
-	for _, c := range b {
-		if c == 0 {
-			tokens++
-		} else {
-			tokens += 4
-		}
+// ErrFrameGasOverflow is returned when a frame transaction's declared gas
+// figures do not fit in 64 bits, which makes the transaction invalid.
+var ErrFrameGasOverflow = errors.New("frame transaction gas overflow")
+
+func addGas(a, b uint64) (uint64, error) {
+	if math.MaxUint64-a < b {
+		return 0, ErrFrameGasOverflow
 	}
-	return tokens
+	return a + b, nil
 }
 
-// CalldataCost returns the standard calldata cost of the frame data and
-// signature metadata (EIP-8141 calldata_cost).
-func (tx *FrameTx) CalldataCost() uint64 {
-	var cost uint64
-	for i := range tx.Frames {
-		cost += tokenIn(tx.Frames[i].Data) * params.TxDataNonZeroGasEIP2028
+func mulGas(a, b uint64) (uint64, error) {
+	if a != 0 && math.MaxUint64/a < b {
+		return 0, ErrFrameGasOverflow
 	}
-	for i := range tx.Signatures {
-		s := &tx.Signatures[i]
-		cost += (tokenIn(s.Signer) + tokenIn(s.Msg) + tokenIn(s.Signature)) * params.TxDataNonZeroGasEIP2028
+	return a * b, nil
+}
+
+// tokenIn returns the number of data tokens in b (EIP-8141 tokens_in): one
+// token per zero byte and TxTokenPerNonZeroByte per non-zero byte.
+func tokenIn(b []byte) uint64 {
+	var zero uint64
+	for _, c := range b {
+		if c == 0 {
+			zero++
+		}
 	}
-	return cost
+	// No overflow is possible: len(b) is bounded by the decoded payload size.
+	return zero + (uint64(len(b))-zero)*params.TxTokenPerNonZeroByte
 }
 
 // calldataTokens returns the total number of data tokens across frames and
 // signatures (EIP-8141 calldata_tokens).
-func (tx *FrameTx) calldataTokens() uint64 {
-	var tokens uint64
+func (tx *FrameTx) calldataTokens() (uint64, error) {
+	var (
+		tokens uint64
+		err    error
+	)
 	for i := range tx.Frames {
-		tokens += tokenIn(tx.Frames[i].Data)
+		if tokens, err = addGas(tokens, tokenIn(tx.Frames[i].Data)); err != nil {
+			return 0, err
+		}
 	}
 	for i := range tx.Signatures {
 		s := &tx.Signatures[i]
-		tokens += tokenIn(s.Signer) + tokenIn(s.Msg) + tokenIn(s.Signature)
+		for _, b := range [][]byte{s.Signer, s.Msg, s.Signature} {
+			if tokens, err = addGas(tokens, tokenIn(b)); err != nil {
+				return 0, err
+			}
+		}
 	}
-	return tokens
+	return tokens, nil
 }
 
 // SumFrameGas returns the sum of all frame gas limits.
-func (tx *FrameTx) SumFrameGas() uint64 {
-	var total uint64
+func (tx *FrameTx) SumFrameGas() (uint64, error) {
+	var (
+		total uint64
+		err   error
+	)
 	for i := range tx.Frames {
-		total += tx.Frames[i].GasLimit
+		if total, err = addGas(total, tx.Frames[i].GasLimit); err != nil {
+			return 0, err
+		}
 	}
-	return total
+	return total, nil
 }
 
-// StandardGasLimit returns the standard gas limit of the transaction
-// (EIP-8141 standard_gas_limit).
-func (tx *FrameTx) StandardGasLimit() uint64 {
-	base := params.FrameTxIntrinsicCost + uint64(len(tx.Frames))*params.FrameTxPerFrameCost
-	sigVerify, _ := tx.SignatureVerificationCost()
-	return base + tx.CalldataCost() + sigVerify + tx.SumFrameGas()
+// GasLimits computes the three EIP-8141 gas figures of the transaction:
+// standard_gas_limit, calldata_floor_gas and max_gas.
+//
+// Both limits share a base of the intrinsic cost, the per-frame cost and the
+// signature verification cost. The standard limit adds the calldata cost at
+// STANDARD_TOKEN_COST per token plus the sum of the frame gas limits; the floor
+// charges TOTAL_COST_FLOOR_PER_TOKEN per token instead and excludes frame gas.
+func (tx *FrameTx) GasLimits() (standard, floor, maxGas uint64, err error) {
+	sigVerify, err := tx.SignatureVerificationCost()
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	base, err := mulGas(uint64(len(tx.Frames)), params.FrameTxPerFrameCost)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if base, err = addGas(base, params.FrameTxIntrinsicCost); err != nil {
+		return 0, 0, 0, err
+	}
+	if base, err = addGas(base, sigVerify); err != nil {
+		return 0, 0, 0, err
+	}
+	tokens, err := tx.calldataTokens()
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	// standard_gas_limit = base + STANDARD_TOKEN_COST*tokens + sum(frame.gas_limit).
+	// STANDARD_TOKEN_COST is 4, which params spells as the per-zero-byte cost.
+	calldataCost, err := mulGas(tokens, params.TxDataZeroGas)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if standard, err = addGas(base, calldataCost); err != nil {
+		return 0, 0, 0, err
+	}
+	frameGas, err := tx.SumFrameGas()
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if standard, err = addGas(standard, frameGas); err != nil {
+		return 0, 0, 0, err
+	}
+	// calldata_floor_gas = base + TOTAL_COST_FLOOR_PER_TOKEN*tokens.
+	floorCost, err := mulGas(tokens, params.TxCostFloorPerToken)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if floor, err = addGas(base, floorCost); err != nil {
+		return 0, 0, 0, err
+	}
+	return standard, floor, max(standard, floor), nil
 }
 
-// CalldataFloorGas returns the calldata floor gas of the transaction
-// (EIP-8141 calldata_floor_gas).
-func (tx *FrameTx) CalldataFloorGas() uint64 {
-	base := params.FrameTxIntrinsicCost + uint64(len(tx.Frames))*params.FrameTxPerFrameCost
-	sigVerify, _ := tx.SignatureVerificationCost()
-	return base + sigVerify + params.TxCostFloorPerToken*tx.calldataTokens()
-}
-
-// MaxGas returns the maximum gas the transaction may consume (EIP-8141 max_gas).
+// MaxGas returns the maximum gas the transaction may consume (EIP-8141 max_gas),
+// saturating to MaxUint64 when the figures overflow. Overflow makes the
+// transaction invalid, which validateFrameTx reports via GasLimits; saturating
+// here keeps the value monotonic so the block gas check rejects it either way.
 func (tx *FrameTx) MaxGas() uint64 {
-	return max(tx.StandardGasLimit(), tx.CalldataFloorGas())
+	_, _, maxGas, err := tx.GasLimits()
+	if err != nil {
+		return math.MaxUint64
+	}
+	return maxGas
 }
 
 // ValidateSignature validates a single signature entry against the canonical
@@ -419,6 +486,3 @@ func validateP256Signature(sig *FrameSignature, msg common.Hash, resolved common
 	}
 	return secp256r1.Verify(msg[:], r, s, qx, qy)
 }
-
-// FramesData returns the concatenated frame data (helper for introspection).
-func (tx *FrameTx) FramesData() []byte { return nil }

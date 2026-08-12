@@ -272,8 +272,10 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 		receipt.FrameReceipts = result.FrameReceipts
 	}
 
-	// If the transaction created a contract, store the creation address in the receipt.
-	if tx.To() == nil {
+	// If the transaction created a contract, store the creation address in the
+	// receipt. A frame transaction has no top-level recipient either, but it
+	// never creates a contract at the top level.
+	if tx.To() == nil && tx.Type() != types.FrameTxType {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 

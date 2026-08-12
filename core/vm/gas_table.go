@@ -97,8 +97,11 @@ var (
 
 // gasSigParam returns the gas cost of SIGPARAM. Params 0-3 cost GasQuickStep.
 // The copy operation (param 0x04) is priced exactly as CALLDATACOPY.
+//
+// A copy form with too few operands is priced as a metadata form; opSigparam
+// then rejects it with a stack underflow, so no gas is refunded for the attempt.
 func gasSigParam(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	if stack.back(1).Uint64() != 0x04 {
+	if !isSigParamCopy(stack) {
 		return GasCosts{ExecutionGas: GasQuickStep}, nil
 	}
 	gas, err := memoryGasCost(mem, memorySize)

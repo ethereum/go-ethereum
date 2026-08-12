@@ -282,6 +282,9 @@ func (tx *Transaction) Type() uint8 {
 }
 
 // Inner returns the underlying transaction data.
+//
+// The result must be treated as read-only: it is the transaction's own data, not
+// a copy, and mutating it invalidates the cached hash and size.
 func (tx *Transaction) Inner() TxData {
 	return tx.inner
 }

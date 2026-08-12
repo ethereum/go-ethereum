@@ -73,12 +73,14 @@ type frameJSON struct {
 	Data     hexutil.Bytes   `json:"data"`
 }
 
-// sigJSON is the JSON representation of a frame signature entry.
+// sigJSON is the JSON representation of a frame signature entry. Signer is raw
+// bytes rather than an address because an empty signer means "resolve to
+// tx.sender", which is distinct from an explicit zero address.
 type sigJSON struct {
-	Scheme    uint64         `json:"scheme"`
-	Signer    common.Address `json:"signer"`
-	Msg       hexutil.Bytes  `json:"msg"`
-	Signature hexutil.Bytes  `json:"signature"`
+	Scheme    uint64        `json:"scheme"`
+	Signer    hexutil.Bytes `json:"signer"`
+	Msg       hexutil.Bytes `json:"msg"`
+	Signature hexutil.Bytes `json:"signature"`
 }
 
 // yParityValue returns the YParity value from JSON. For backwards-compatibility reasons,
@@ -198,7 +200,8 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.ChainID = (*hexutil.Big)(itx.ChainID)
 		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
 		enc.Sender = itx.Sender
-		enc.Gas = (*hexutil.Uint64)(func() *uint64 { g := tx.Gas(); return &g }())
+		gas := tx.Gas()
+		enc.Gas = (*hexutil.Uint64)(&gas)
 		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
 		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.GasTipCap)
 		if itx.BlobFeeCap != nil {
@@ -220,13 +223,9 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Signatures = make([]*sigJSON, len(itx.Signatures))
 		for i := range itx.Signatures {
 			s := &itx.Signatures[i]
-			var signer common.Address
-			if len(s.Signer) == 20 {
-				signer = common.BytesToAddress(s.Signer)
-			}
 			enc.Signatures[i] = &sigJSON{
 				Scheme:    uint64(s.Scheme),
-				Signer:    signer,
+				Signer:    s.Signer,
 				Msg:       s.Msg,
 				Signature: s.Signature,
 			}
@@ -615,9 +614,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		for i, sj := range dec.Signatures {
 			s := &itx.Signatures[i]
 			s.Scheme = byte(sj.Scheme)
-			if sj.Signer != (common.Address{}) {
-				s.Signer = sj.Signer.Bytes()
-			}
+			s.Signer = sj.Signer
 			s.Msg = sj.Msg
 			s.Signature = sj.Signature
 		}

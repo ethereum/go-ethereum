@@ -22,7 +22,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 		CumulativeGasUsed hexutil.Uint64  `json:"cumulativeGasUsed" gencodec:"required"`
 		Bloom             Bloom           `json:"logsBloom"         gencodec:"required"`
 		Logs              []*Log          `json:"logs"              gencodec:"required"`
-		Payer             common.Address  `json:"payer,omitempty"`
+		Payer             *common.Address `json:"payer,omitempty"`
 		FrameReceipts     []*FrameReceipt `json:"frameReceipts,omitempty"`
 		TxHash            common.Hash     `json:"transactionHash" gencodec:"required"`
 		ContractAddress   common.Address  `json:"contractAddress"`
@@ -41,7 +41,9 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.CumulativeGasUsed = hexutil.Uint64(r.CumulativeGasUsed)
 	enc.Bloom = r.Bloom
 	enc.Logs = r.Logs
-	enc.Payer = r.Payer
+	if r.Type == FrameTxType {
+		enc.Payer = &r.Payer
+	}
 	enc.FrameReceipts = r.FrameReceipts
 	enc.TxHash = r.TxHash
 	enc.ContractAddress = r.ContractAddress

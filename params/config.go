@@ -897,9 +897,10 @@ func (c *ChainConfig) IsUBT(num *big.Int, time uint64) bool {
 }
 
 // IsFrame returns whether time is either equal to the frame transaction fork
-// time or greater (EIP-8141).
+// time or greater (EIP-8141). The frame instruction set is layered on Bogota, so
+// the fork is only active once Bogota is.
 func (c *ChainConfig) IsFrame(num *big.Int, time uint64) bool {
-	return c.IsLondon(num) && isTimestampForked(c.FrameTime, time)
+	return c.IsBogota(num, time) && isTimestampForked(c.FrameTime, time)
 }
 
 // IsUBTGenesis checks whether the verkle fork is activated at the genesis block.
@@ -1178,6 +1179,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	london := c.LondonBlock
 
 	switch {
+	case c.IsFrame(london, time):
+		return forks.Frame
 	case c.IsBogota(london, time):
 		return forks.Bogota
 	case c.IsAmsterdam(london, time):

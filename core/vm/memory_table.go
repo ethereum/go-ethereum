@@ -29,13 +29,23 @@ func memoryReturnDataCopy(stack *Stack) (uint64, bool) {
 }
 
 // memorySigParam returns the memory size required by the SIGPARAM copy
-// operation (param 0x04). For params 0-3 no memory is used.
+// operation (param 0x04). The metadata forms (params 0x00-0x03) use no memory.
+//
+// Only the copy form reads beyond the two operands the jump table guarantees, so
+// the stack depth has to be checked here before back(2)/back(4) are touched.
 func memorySigParam(stack *Stack) (uint64, bool) {
-	if stack.back(1).Uint64() != 0x04 {
+	if !isSigParamCopy(stack) {
 		return 0, false
 	}
 	// Stack: [signatureIndex, param, memOffset, dataOffset, length].
 	return calcMemSize64(stack.back(2), stack.back(4))
+}
+
+// isSigParamCopy reports whether a SIGPARAM invocation is the memory-copy form
+// and carries enough operands for it.
+func isSigParamCopy(stack *Stack) bool {
+	param, overflow := stack.back(1).Uint64WithOverflow()
+	return !overflow && param == sigParamCopy && stack.len() >= sigParamCopyStack
 }
 
 func memoryCodeCopy(stack *Stack) (uint64, bool) {
