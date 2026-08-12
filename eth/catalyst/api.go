@@ -229,8 +229,6 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
 		case params.SlotNumber == nil:
 			return engine.STATUS_INVALID, attributesErr("missing slot number")
-		case params.TargetGasLimit == nil:
-			return engine.STATUS_INVALID, attributesErr("missing target gas limit")
 		case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
 		}
