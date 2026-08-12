@@ -206,6 +206,53 @@ func TestFrameTxDefaultCode(t *testing.T) {
 	}
 }
 
+// TestFrameTxContractSenderApprove checks the APPROVE opcode itself, as opposed
+// to the default code path: a sender that carries its own code approves both
+// scopes from EVM bytecode. It also covers the EIP-8141 rule that EIP-3607 does
+// not apply, so a contract may be tx.sender.
+func TestFrameTxContractSenderApprove(t *testing.T) {
+	// APPROVE takes offset, length, scope from the top of the stack, so scope is
+	// pushed first: PUSH1 0x03 (APPROVE_EXECUTION_AND_PAYMENT), PUSH0, PUSH0, APPROVE.
+	codeApprove := common.FromHex("60035f5faa")
+	sdb := mkState(types.GenesisAlloc{
+		frameSenderAddress: {Balance: newGwei(1_000_000_000), Code: codeApprove},
+		frameStoreAddr:     {Code: codeStore, Balance: common.Big0},
+	})
+	tx := newFrameTx(t, selfVerifyFrame(100_000), senderFrame(frameStoreAddr, 300_000, 0))
+
+	res, err := applyFrameTx(t, sdb, tx)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if res.Payer != frameSenderAddress {
+		t.Errorf("payer = %v, want %v", res.Payer, frameSenderAddress)
+	}
+	if got := res.FrameReceipts[0].Status; got != types.ReceiptStatusSuccessful {
+		t.Errorf("VERIFY frame status = %d, want success", got)
+	}
+	if !slotSet(sdb, frameStoreAddr) {
+		t.Error("SENDER frame did not run")
+	}
+}
+
+// TestFrameTxApproveScopeExceedsFlags checks that APPROVE reverts when it asks
+// for a scope the frame's flags do not permit.
+func TestFrameTxApproveScopeExceedsFlags(t *testing.T) {
+	// Asks for scope 0x3 while the frame only allows 0x1.
+	codeApprove := common.FromHex("60035f5faa")
+	sdb := mkState(types.GenesisAlloc{
+		frameSenderAddress: {Balance: newGwei(1_000_000_000), Code: codeApprove},
+	})
+	frame := selfVerifyFrame(100_000)
+	frame.Flags = types.FrameFlagApprovePayment // 0x1, so 0x3 is out of scope
+	tx := newFrameTx(t, frame)
+
+	// The VERIFY frame reverts, which invalidates the whole transaction.
+	if _, err := applyFrameTx(t, sdb, tx); !errors.Is(err, ErrFrameInvalid) {
+		t.Fatalf("err = %v, want ErrFrameInvalid", err)
+	}
+}
+
 // TestFrameTxNoPayerIsInvalid checks that a transaction whose frames never
 // approve payment is rejected outright.
 func TestFrameTxNoPayerIsInvalid(t *testing.T) {
