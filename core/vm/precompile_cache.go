@@ -149,7 +149,11 @@ func (c *PrecompileCache) store(scope precompileCacheScope, key []byte, output [
 	if results == nil {
 		c.data.mu.Lock()
 		if results = c.data.caches[scope]; results == nil {
-			results = lru.NewSizeConstrainedCache[string, []byte](maxCacheablePrecompileBytes)
+			// The key is the precompile input, which dwarfs the output (up to
+			// maxCacheablePrecompileInput against maxCacheablePrecompileOutput),
+			// so it must count towards the budget. Without it an empty output
+			// (e.g. a failed ECRECOVER) would let the cache grow without bound.
+			results = lru.NewSizeConstrainedCacheWithKeySize[string, []byte](maxCacheablePrecompileBytes, func(k string) uint64 { return uint64(len(k)) })
 			c.data.caches[scope] = results
 		}
 		c.data.mu.Unlock()

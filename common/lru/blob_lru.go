@@ -30,22 +30,47 @@ type blobType interface {
 // is at capacity, and a new item is added, older items are evicted until the size
 // constraint is met.
 //
+// By default only the value bytes count towards the size constraint. If the key
+// carries a meaningful share of an entry's memory, pass a key-size function to
+// NewSizeConstrainedCacheWithKeySize so it is accounted too.
+//
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
 type SizeConstrainedCache[K comparable, V blobType] struct {
 	size    uint64
 	maxSize uint64
+	keySize func(K) uint64
 	lru     BasicLRU[K, V]
 	lock    sync.Mutex
 }
 
-// NewSizeConstrainedCache creates a new size-constrained LRU cache.
+// NewSizeConstrainedCache creates a new size-constrained LRU cache in which only
+// the value bytes count towards the size constraint.
 func NewSizeConstrainedCache[K comparable, V blobType](maxSize uint64) *SizeConstrainedCache[K, V] {
+	return NewSizeConstrainedCacheWithKeySize[K, V](maxSize, nil)
+}
+
+// NewSizeConstrainedCacheWithKeySize is like NewSizeConstrainedCache but also
+// charges each entry's key against the size constraint, measured by keySize.
+// This matters when the key, not the value, holds the bulk of an entry's memory.
+// A nil keySize counts keys as free, identical to NewSizeConstrainedCache.
+func NewSizeConstrainedCacheWithKeySize[K comparable, V blobType](maxSize uint64, keySize func(K) uint64) *SizeConstrainedCache[K, V] {
 	return &SizeConstrainedCache[K, V]{
 		size:    0,
 		maxSize: maxSize,
+		keySize: keySize,
 		lru:     NewBasicLRU[K, V](math.MaxInt),
 	}
+}
+
+// entrySize reports the number of bytes an entry counts for against the size
+// constraint: the value length, plus the key size when a measure was provided.
+func (c *SizeConstrainedCache[K, V]) entrySize(key K, value V) uint64 {
+	n := uint64(len(value))
+	if c.keySize != nil {
+		n += c.keySize(key)
+	}
+	return n
 }
 
 // Add adds a value to the cache.  Returns true if an eviction occurred.
@@ -59,15 +84,15 @@ func (c *SizeConstrainedCache[K, V]) Add(key K, value V) (evicted bool) {
 	// Unless it is already present, might need to evict something.
 	// OBS: If it is present, we still call Add internally to bump the recentness.
 	if !c.lru.Contains(key) {
-		targetSize := c.size + uint64(len(value))
+		targetSize := c.size + c.entrySize(key, value)
 		for targetSize > c.maxSize {
 			evicted = true
-			_, v, ok := c.lru.RemoveOldest()
+			k, v, ok := c.lru.RemoveOldest()
 			if !ok {
 				// list is now empty. Break
 				break
 			}
-			targetSize -= uint64(len(v))
+			targetSize -= c.entrySize(k, v)
 		}
 		c.size = targetSize
 	}
