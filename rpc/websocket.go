@@ -308,7 +308,7 @@ func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, readL
 		return frame, err
 	}
 	wc := &websocketCodec{
-		jsonCodec:    newFuncCodec(conn, encodeMsg, encodeBatch, conn.ReadJSON, readFrame),
+		jsonCodec:    newFuncCodec(conn, encodeMsg, encodeBatch, nil, readFrame),
 		conn:         conn,
 		pingReset:    make(chan struct{}, 1),
 		pongReceived: make(chan struct{}),

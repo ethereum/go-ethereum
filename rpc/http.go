@@ -284,9 +284,6 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 		return httpWrite(ctx, w, buf, isError)
 	}
 
-	dec := json.NewDecoder(conn)
-	dec.UseNumber()
-
 	// The body holds one message, so it can be read in one go and checked once.
 	readFrame := func() ([]byte, error) {
 		hint := 0
@@ -304,7 +301,7 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 		}
 		return frame, nil
 	}
-	return newFuncCodec(conn, encodeMsg, encodeBatch, dec.Decode, readFrame)
+	return newFuncCodec(conn, encodeMsg, encodeBatch, nil, readFrame)
 }
 
 // readAllBody reads r to the end, sizing the buffer from the hint when there is

@@ -226,6 +226,7 @@ func NewFuncCodec(conn deadlineCloser, encodeMsg encodeMsgFunc, encodeBatch enco
 }
 
 // newFuncCodec is NewFuncCodec with the frame reader the built in transports use.
+// A transport with a frame reader never calls decode, so it may be nil.
 func newFuncCodec(conn deadlineCloser, encodeMsg encodeMsgFunc, encodeBatch encodeBatchFunc, decode decodeFunc, readFrame readFrameFunc) *jsonCodec {
 	codec := &jsonCodec{
 		closeCh:     make(chan interface{}),
@@ -346,12 +347,15 @@ func (c *jsonCodec) readMessage() (json.RawMessage, error) {
 		return nil, err
 	}
 	if !json.Valid(frame) {
-		// Decode the broken message to report where it went wrong.
+		// Decode the broken message to report where it went wrong. Unmarshal
+		// checks syntax the same way Valid does, so it fails here too. The
+		// fallback only guards against the two ever disagreeing.
 		var rawmsg json.RawMessage
-		if err := json.Unmarshal(frame, &rawmsg); err != nil {
-			return nil, err
+		err := json.Unmarshal(frame, &rawmsg)
+		if err == nil {
+			err = errors.New("invalid JSON request")
 		}
-		return nil, errors.New("invalid JSON request")
+		return nil, err
 	}
 	return frame, nil
 }
@@ -442,11 +446,9 @@ func fillMessage(input []byte, msg *jsonrpcMessage) {
 		case "result":
 			msg.Result = value
 		default:
-			// An unknown key. encoding/json matched field names case
-			// insensitively and unescaped them first, so it may still name
-			// a field. Have it redo the whole message instead of mirroring
-			// those rules here. The fallback exists only to keep decoding
-			// behavior unchanged.
+			// encoding/json matched field names case insensitively and
+			// unescaped them, so an unknown key may still name a field.
+			// Redo the message with it to keep that behavior.
 			redo = true
 		}
 	})
