@@ -547,7 +547,9 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 
 	// Retrieve the previous sync status from DB. If there's no persisted
 	// status, sync is either fresh or already complete.
-	s.loadSyncStatus()
+	if err := s.loadSyncStatus(); err != nil {
+		return err
+	}
 
 	// isPivotChanged is true when we have prior progress against a different
 	// pivot. That means we need to roll forward via catchUp, or wipe and
@@ -572,7 +574,9 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	// right after the commit just needs to recommit.
 	if prevPivot != nil && s.getPhase() == phaseComplete && isPivotCommitted(s.db, prevPivot) {
 		log.Warn("Reenabled snap sync over a completed one, restarting from scratch", "oldpivot", prevPivot.Number, "target", target.Number)
-		s.resetSyncState()
+		if err := s.resetSyncState(); err != nil {
+			return err
+		}
 		prevPivot = nil
 		isPivotChanged = false
 	}
@@ -614,7 +618,9 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 			// flushed snapshot data the journal doesn't cover.
 			if err := s.pruneStaleState(); err != nil {
 				log.Warn("Persisted progress unusable, restarting snap sync from scratch", "err", err)
-				s.resetSyncState()
+				if err := s.resetSyncState(); err != nil {
+					return err
+				}
 			}
 		}
 	} else {
@@ -624,20 +630,26 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 		switch {
 		case isPivotReorged(s.db, prevPivot, target):
 			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
-			s.resetSyncState()
+			if err := s.resetSyncState(); err != nil {
+				return err
+			}
 		case catchUpExceedsRetention(prevPivot, target):
 			// The pivot moved further than the BAL retention window. The access
 			// lists required for catch-up are almost certainly unavailable from
 			// peers, so discard the stale progress and resync from scratch
 			// instead of starting a catch-up doomed to stall.
 			log.Warn("Catch-up gap exceeds BAL retention, restarting snap sync from scratch", "oldnumber", prevPivot.Number, "newnumber", target.Number, "gap", new(big.Int).Sub(target.Number, prevPivot.Number), "limit", maxCatchUpBlocks)
-			s.resetSyncState()
+			if err := s.resetSyncState(); err != nil {
+				return err
+			}
 		default:
 			// An unclean shutdown may have left flushed snapshot data the journal
 			// doesn't cover.
 			if err := s.pruneStaleState(); err != nil {
 				log.Warn("Persisted progress unusable, restarting snap sync from scratch", "err", err)
-				s.resetSyncState()
+				if err := s.resetSyncState(); err != nil {
+					return err
+				}
 				break
 			}
 			// A canonical pivot move past a frozen pivot should be impossible:
@@ -1209,7 +1221,7 @@ func (s *syncerV2) processAccessListResponse(res *accessListResponse, headers ma
 // or generates a fresh one if none is available. The persisted blob is framed
 // as `[version byte | JSON payload]`; a missing or mismatching version byte
 // causes the progress to be discarded and sync to start fresh.
-func (s *syncerV2) loadSyncStatus() {
+func (s *syncerV2) loadSyncStatus() error {
 	var progress syncProgressV2
 
 	if raw := rawdb.ReadSnapshotSyncStatus(s.db); len(raw) > 0 {
@@ -1246,11 +1258,11 @@ func (s *syncerV2) loadSyncStatus() {
 			// eth_syncing reports real stats during catch-up and trie generation
 			// after a resume, instead of the zero-valued initial snapshot.
 			s.refreshProgressLocked()
-			return
+			return nil
 		}
 	}
 	// Either we've failed to decode the previous state, or there was none.
-	s.resetSyncState()
+	return s.resetSyncState()
 }
 
 // increaseKey increase the input key by one bit. Return nil if the entire
@@ -1379,14 +1391,14 @@ func (s *syncerV2) pruneStaleState() error {
 // resetSyncState wipes all persisted snap-sync data (sync status, account
 // and storage snapshots) and re-initializes in-memory state with a fresh
 // chunking of the account hash range.
-func (s *syncerV2) resetSyncState() {
+func (s *syncerV2) resetSyncState() error {
 	batch := s.db.NewBatch()
 	rawdb.DeleteSnapshotSyncStatus(batch)
 	deleteRange(batch, rawdb.SnapshotAccountPrefix)
 	deleteRange(batch, rawdb.SnapshotStoragePrefix)
 	s.resetTrienodes(batch)
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed to wipe snap sync state", "err", err)
+		return err
 	}
 
 	s.lock.Lock()
@@ -1424,6 +1436,7 @@ func (s *syncerV2) resetSyncState() {
 		log.Debug("Created account sync task", "from", next, "last", last)
 		next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
 	}
+	return nil
 }
 
 // saveSyncStatus marshals the remaining sync tasks into db.
