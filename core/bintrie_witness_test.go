@@ -217,7 +217,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		}
 	}
 	t.Run("MPT", func(t *testing.T) {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), params.MergedTestChainConfig.Rules(new(big.Int), true, 0))
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		checkBlockHashes(statedb, false)
 	})
 	t.Run("UBT", func(t *testing.T) {
@@ -226,7 +226,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig.BinTrieGroupDepth = triedb.DefaultBinTrieGroupDepth
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
-		statedb, _ := state.New(types.EmptyBinaryHash, state.NewDatabase(triedb, nil), testUBTChainConfig.Rules(new(big.Int), true, 0))
+		statedb, _ := state.New(types.EmptyBinaryHash, state.NewDatabase(triedb, nil))
 		checkBlockHashes(statedb, true)
 	})
 }

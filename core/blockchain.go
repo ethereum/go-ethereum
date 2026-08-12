@@ -1641,6 +1641,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
+	rules := bc.chainConfig.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())
 	if !bc.HasHeader(block.ParentHash(), block.NumberU64()-1) {
 		return consensus.ErrUnknownAncestor
 	}
@@ -1668,7 +1669,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		hasStateHook = bc.logger != nil && bc.logger.OnStateUpdate != nil
 	)
 	if hasStateHook {
-		r, update, err := statedb.CommitWithUpdate(block.NumberU64())
+		r, update, err := statedb.CommitWithUpdate(rules, block.NumberU64())
 		if err != nil {
 			return err
 		}
@@ -1679,7 +1680,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.logger.OnStateUpdate(trUpdate)
 		root = r
 	} else {
-		root, err = statedb.Commit(block.NumberU64())
+		root, err = statedb.Commit(rules, block.NumberU64())
 		if err != nil {
 			return err
 		}
@@ -2136,10 +2137,6 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 	}
 	wantWitness := config.StatelessSelfValidation || config.MakeWitness
 
-	// Fork rules of the block being executed, fixed for the lifetime of the
-	// state object built below.
-	rules := bc.chainConfig.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())
-
 	switch warmer, ok := sdb.(prewarmReader); {
 	case bc.useBALExecution(block, wantWitness):
 		base, err := sdb.Reader(parentRoot)
@@ -2147,7 +2144,7 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 			return nil, nil, err
 		}
 		reader, stop := state.NewBlockExecutionReader(base, prefetchHint(block.AccessList()), runtime.NumCPU())
-		statedb, err := state.NewWithReader(parentRoot, sdb, reader, rules)
+		statedb, err := state.NewWithReader(parentRoot, sdb, reader)
 		if err != nil {
 			stop()
 			return nil, nil, err
@@ -2155,7 +2152,7 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 		return statedb, func(*blockProcessingResult) { stop() }, nil
 
 	case bc.cfg.NoPrefetch || !ok:
-		statedb, err := state.New(parentRoot, sdb, rules)
+		statedb, err := state.New(parentRoot, sdb)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -2168,11 +2165,11 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 		if err != nil {
 			return nil, nil, err
 		}
-		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch, rules)
+		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch)
 		if err != nil {
 			return nil, nil, err
 		}
-		statedb, err := state.NewWithReader(parentRoot, sdb, process, rules)
+		statedb, err := state.NewWithReader(parentRoot, sdb, process)
 		if err != nil {
 			return nil, nil, err
 		}

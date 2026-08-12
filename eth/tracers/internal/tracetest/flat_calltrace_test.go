@@ -98,7 +98,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	}
 	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
 	context := test.Context.toBlockContext(test.Genesis)
-	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme, test.Genesis.Config.Rules(context.BlockNumber, context.Random != nil, context.Time))
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 	defer state.Close()
 
 	// Create the tracer, the EVM environment and run it

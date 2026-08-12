@@ -231,7 +231,7 @@ func runCmd(ctx *cli.Context) error {
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)
 	sdb := state.NewDatabase(triedb, nil)
-	prestate, _ = state.New(genesis.Root(), sdb, genesisConfig.Config.Rules(new(big.Int).SetUint64(genesisConfig.Number), genesisConfig.Difficulty == nil || genesisConfig.Difficulty.Sign() == 0, genesisConfig.Timestamp))
+	prestate, _ = state.New(genesis.Root(), sdb)
 	chainConfig = genesisConfig.Config
 
 	if ctx.String(SenderFlag.Name) != "" {
@@ -339,13 +339,15 @@ func runCmd(ctx *cli.Context) error {
 	output, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
-		root, err := runtimeConfig.State.Commit(genesisConfig.Number)
+		// Mirrors the pre-refactor arguments (deleteEmptyObjects=true,
+		// noStorageWiping=false) so that --dump output is unchanged.
+		root, err := runtimeConfig.State.Commit(params.Rules{IsEIP158: true}, genesisConfig.Number)
 		if err != nil {
 			fmt.Printf("Failed to commit changes %v\n", err)
 			return err
 		}
 		// Read-only dump of the committed state.
-		dumpdb, err := state.New(root, sdb, params.Rules{})
+		dumpdb, err := state.New(root, sdb)
 		if err != nil {
 			fmt.Printf("Failed to open statedb %v\n", err)
 			return err

@@ -128,10 +128,6 @@ type StateDB struct {
 	accessList   *accessList
 	accessEvents *AccessEvents
 
-	// Fork rules of the block this state transition belongs to. A block cannot
-	// span a fork, so these are fixed for the lifetime of the object.
-	rules params.Rules
-
 	// Per-transaction state access footprint for EIP-7928
 	stateAccessList *bal.ConstructionBlockAccessList
 
@@ -178,25 +174,21 @@ type StateDB struct {
 }
 
 // New creates a new state with a given state root.
-func New(root common.Hash, db Database, rules params.Rules) (*StateDB, error) {
+func New(root common.Hash, db Database) (*StateDB, error) {
 	reader, err := db.Reader(root)
 	if err != nil {
 		return nil, err
 	}
-	return NewWithReader(root, db, reader, rules)
+	return NewWithReader(root, db, reader)
 }
 
 // NewWithReader creates a new state for the specified state root. Unlike New,
 // this function accepts an additional Reader which is bound to the given root.
-func NewWithReader(root common.Hash, db Database, reader Reader, rules params.Rules) (*StateDB, error) {
-	if rules.IsEIP2929 && rules.IsEIP4762 {
-		panic("eip2929 and eip4762 are both activated")
-	}
+func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                   db,
 		originalRoot:         root,
 		reader:               reader,
-		rules:                rules,
 		stateObjects:         make(map[common.Address]*stateObject),
 		stateObjectsDestruct: make(map[common.Address]*stateObject),
 		mutations:            make(map[common.Address]*mutation),
@@ -708,7 +700,6 @@ func (s *StateDB) Copy() *StateDB {
 		db:                   s.db,
 		reader:               s.reader,
 		originalRoot:         s.originalRoot,
-		rules:                s.rules,
 		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
 		stateObjectsDestruct: make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),
 		mutations:            make(map[common.Address]*mutation, len(s.mutations)),
@@ -767,11 +758,6 @@ func (s *StateDB) Copy() *StateDB {
 	return state
 }
 
-// Rules returns the fork rules this state transition is bound to.
-func (s *StateDB) Rules() params.Rules {
-	return s.rules
-}
-
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
 	return s.journal.snapshot()
@@ -790,9 +776,9 @@ func (s *StateDB) GetRefund() uint64 {
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
-func (s *StateDB) Finalise() *bal.ConstructionBlockAccessList {
-	if s.rules.IsAmsterdam {
-		return s.finaliseAmsterdam()
+func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList {
+	if rules.IsAmsterdam {
+		return s.finaliseAmsterdam(rules)
 	}
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.mutations))
 	for addr := range s.journal.mutations {
@@ -809,7 +795,7 @@ func (s *StateDB) Finalise() *bal.ConstructionBlockAccessList {
 			// finalise or delete, so ignore it here.
 			continue
 		}
-		if obj.selfDestructed || (s.rules.IsEIP158 && obj.empty()) {
+		if obj.selfDestructed || (rules.IsEIP158 && obj.empty()) {
 			delete(s.stateObjects, obj.address)
 			s.markDelete(addr)
 
@@ -868,7 +854,7 @@ func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMut
 }
 
 // finaliseAmsterdam is the Amsterdam-and-later variant of Finalise.
-func (s *StateDB) finaliseAmsterdam() *bal.ConstructionBlockAccessList {
+func (s *StateDB) finaliseAmsterdam(rules params.Rules) *bal.ConstructionBlockAccessList {
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.mutations))
 	for addr, state := range s.journal.mutations {
 		obj, exist := s.stateObjects[addr]
@@ -905,7 +891,7 @@ func (s *StateDB) finaliseAmsterdam() *bal.ConstructionBlockAccessList {
 				}
 			}
 
-		case s.rules.IsEIP158 && obj.empty():
+		case rules.IsEIP158 && obj.empty():
 			// EIP-161: a touched, empty account is removed.
 			delete(s.stateObjects, obj.address)
 			s.markDelete(addr)
@@ -940,9 +926,9 @@ func (s *StateDB) finaliseAmsterdam() *bal.ConstructionBlockAccessList {
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
-func (s *StateDB) IntermediateRoot() common.Hash {
+func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
-	s.Finalise()
+	s.Finalise(rules)
 
 	// Initialize the trie if it's not constructed yet. If the prefetch
 	// is enabled, the trie constructed below will be replaced by the
@@ -1231,7 +1217,7 @@ func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[com
 // with their values be tracked as original value.
 // In case (d), **original** account along with its storages should be deleted,
 // with their values be tracked as original value.
-func (s *StateDB) handleDestruction() (map[common.Hash]*AccountDelete, []*trienode.NodeSet, error) {
+func (s *StateDB) handleDestruction(rules params.Rules) (map[common.Hash]*AccountDelete, []*trienode.NodeSet, error) {
 	var (
 		nodes   []*trienode.NodeSet
 		deletes = make(map[common.Hash]*AccountDelete)
@@ -1259,7 +1245,7 @@ func (s *StateDB) handleDestruction() (map[common.Hash]*AccountDelete, []*trieno
 		if prev.Root == types.EmptyRootHash || s.db.Type().Is(TypeUBT) {
 			continue
 		}
-		if s.rules.IsCancun {
+		if rules.IsCancun {
 			return nil, nil, fmt.Errorf("unexpected storage wiping, %x", addr)
 		}
 		// Remove storage slots belonging to the account.
@@ -1283,13 +1269,13 @@ func (s *StateDB) GetTrie() Trie {
 
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
-func (s *StateDB) commit(blockNumber uint64) (*StateUpdate, error) {
+func (s *StateDB) commit(rules params.Rules, blockNumber uint64) (*StateUpdate, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
-	root := s.IntermediateRoot()
+	root := s.IntermediateRoot(rules)
 
 	// Short circuit if any error occurs within the IntermediateRoot.
 	if s.dbErr != nil {
@@ -1337,7 +1323,7 @@ func (s *StateDB) commit(blockNumber uint64) (*StateUpdate, error) {
 	// the same block, account deletions must be processed first. This ensures
 	// that the storage trie nodes deleted during destruction and recreated
 	// during subsequent resurrection can be combined correctly.
-	deletes, delNodes, err := s.handleDestruction()
+	deletes, delNodes, err := s.handleDestruction(rules)
 	if err != nil {
 		return nil, err
 	}
@@ -1433,7 +1419,7 @@ func (s *StateDB) commit(blockNumber uint64) (*StateUpdate, error) {
 	s.originalRoot = root
 
 	typ := StorageKeyHashed
-	if s.rules.IsCancun {
+	if rules.IsCancun {
 		typ = StorageKeyPlain
 	}
 	return NewStateUpdate(typ, origin, root, blockNumber, deletes, updates, nodes), nil
@@ -1441,8 +1427,8 @@ func (s *StateDB) commit(blockNumber uint64) (*StateUpdate, error) {
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
 // to the configured data stores.
-func (s *StateDB) commitAndFlush(block uint64, deriveCodeFields bool) (*StateUpdate, error) {
-	ret, err := s.commit(block)
+func (s *StateDB) commitAndFlush(rules params.Rules, block uint64, deriveCodeFields bool) (*StateUpdate, error) {
+	ret, err := s.commit(rules, block)
 	if err != nil {
 		return nil, err
 	}
@@ -1475,8 +1461,8 @@ func (s *StateDB) commitAndFlush(block uint64, deriveCodeFields bool) (*StateUpd
 //
 // Whether empty accounts are deleted and whether storage wiping is permitted
 // both follow from the fork rules this state was created with.
-func (s *StateDB) Commit(block uint64) (common.Hash, error) {
-	ret, err := s.commitAndFlush(block, false)
+func (s *StateDB) Commit(rules params.Rules, block uint64) (common.Hash, error) {
+	ret, err := s.commitAndFlush(rules, block, false)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1485,8 +1471,8 @@ func (s *StateDB) Commit(block uint64) (common.Hash, error) {
 
 // CommitWithUpdate writes the state mutations and returns the state update for
 // external processing (e.g., live tracing hooks or size tracker).
-func (s *StateDB) CommitWithUpdate(block uint64) (common.Hash, *StateUpdate, error) {
-	ret, err := s.commitAndFlush(block, true)
+func (s *StateDB) CommitWithUpdate(rules params.Rules, block uint64) (common.Hash, *StateUpdate, error) {
+	ret, err := s.commitAndFlush(rules, block, true)
 	if err != nil {
 		return common.Hash{}, nil, err
 	}
@@ -1506,8 +1492,11 @@ func (s *StateDB) CommitWithUpdate(block uint64) (common.Hash, *StateUpdate, err
 // - Reset access list (Berlin)
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
-func (s *StateDB) Prepare(sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	if s.rules.IsEIP2929 {
+func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+	if rules.IsEIP2929 && rules.IsEIP4762 {
+		panic("eip2929 and eip4762 are both activated")
+	}
+	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
 		s.accessList = al
@@ -1526,14 +1515,14 @@ func (s *StateDB) Prepare(sender, coinbase common.Address, dst *common.Address, 
 				al.AddSlot(el.Address, key)
 			}
 		}
-		if s.rules.IsShanghai { // EIP-3651: warm coinbase
+		if rules.IsShanghai { // EIP-3651: warm coinbase
 			al.AddAddress(coinbase)
 		}
 	}
 	// Reset transient storage at the beginning of transaction execution
 	s.transientStorage = newTransientStorage()
 
-	if s.rules.IsAmsterdam {
+	if rules.IsAmsterdam {
 		s.stateAccessList = bal.NewConstructionBlockAccessList()
 	}
 }

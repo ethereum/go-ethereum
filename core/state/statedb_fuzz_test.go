@@ -211,26 +211,26 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, NewMPTDatabase(tdb, nil).WithSnapshot(snaps), params.Rules{})
+		state, err := New(root, NewMPTDatabase(tdb, nil).WithSnapshot(snaps))
 		if err != nil {
 			panic(err)
 		}
 		for i, action := range actions {
 			if i%test.chunk == 0 && i != 0 {
 				if byzantium {
-					state.Finalise() // call finalise at the transaction boundary
+					state.Finalise(params.Rules{IsEIP158: true}) // call finalise at the transaction boundary
 				} else {
-					state.IntermediateRoot() // call intermediateRoot at the transaction boundary
+					state.IntermediateRoot(params.Rules{IsEIP158: true}) // call intermediateRoot at the transaction boundary
 				}
 			}
 			action.fn(action, state)
 		}
 		if byzantium {
-			state.Finalise() // call finalise at the transaction boundary
+			state.Finalise(params.Rules{IsEIP158: true}) // call finalise at the transaction boundary
 		} else {
-			state.IntermediateRoot() // call intermediateRoot at the transaction boundary
+			state.IntermediateRoot(params.Rules{IsEIP158: true}) // call intermediateRoot at the transaction boundary
 		}
-		ret, err := state.commitAndFlush(0, false) // call commit at the block boundary
+		ret, err := state.commitAndFlush(params.Rules{IsEIP158: true}, 0, false) // call commit at the block boundary
 		if err != nil {
 			panic(err)
 		}

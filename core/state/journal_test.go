@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -116,7 +115,7 @@ func FuzzJournal(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		sdb, err := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
+		sdb, err := New(types.EmptyRootHash, NewDatabaseForTesting())
 		if err != nil {
 			t.Fatal(err)
 		}

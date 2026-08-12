@@ -151,7 +151,7 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 
 	// Genesis allocation only writes accounts, so no fork-dependent
 	// finalization behavior applies here.
-	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil), params.Rules{})
+	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -165,7 +165,7 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 			statedb.SetState(addr, key, value)
 		}
 	}
-	return statedb.Commit(0)
+	return statedb.Commit(params.Rules{}, 0)
 }
 
 // flushAlloc is very similar with hash, but the main difference is all the
@@ -176,7 +176,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing
 		emptyRoot = types.EmptyBinaryHash
 	}
 	// See hashAlloc: no fork-dependent finalization behavior applies.
-	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil), params.Rules{})
+	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -195,7 +195,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing
 
 	var root common.Hash
 	if tracer != nil && tracer.OnStateUpdate != nil {
-		r, update, err := statedb.CommitWithUpdate(0)
+		r, update, err := statedb.CommitWithUpdate(params.Rules{}, 0)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -206,7 +206,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing
 		tracer.OnStateUpdate(trUpdate)
 		root = r
 	} else {
-		root, err = statedb.Commit(0)
+		root, err = statedb.Commit(params.Rules{}, 0)
 		if err != nil {
 			return common.Hash{}, err
 		}

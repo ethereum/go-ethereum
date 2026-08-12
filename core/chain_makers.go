@@ -441,7 +441,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		block := AssembleBlock(cm, b.header, statedb, &body, b.receipts, b.bal)
 
 		// Write state changes to db
-		root, err := statedb.Commit(b.header.Number.Uint64())
+		rules := config.Rules(b.header.Number, b.header.Difficulty.Sign() == 0, b.header.Time)
+		root, err := statedb.Commit(rules, b.header.Number.Uint64())
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
@@ -460,13 +461,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	defer triedb.Close()
 
 	for i := 0; i < n; i++ {
-		num := new(big.Int).Add(parent.Number(), common.Big1)
-
 		// The block's difficulty is not known yet, and generated chains
 		// are expected to have every configured fork active, assume merged.
-		rules := config.Rules(num, true, parent.Time()+10)
-
-		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil), rules)
+		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
 		if err != nil {
 			panic(err)
 		}
@@ -526,7 +523,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 	time := parent.Time() + 10 // block time is fixed at 10 seconds
 	parentHeader := parent.Header()
 	header := &types.Header{
-		Root:       state.IntermediateRoot(),
+		Root:       state.IntermediateRoot(cm.config.Rules(parent.Number(), parent.Difficulty().Sign() == 0, parent.Time())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: engine.CalcDifficulty(cm, time, parentHeader),

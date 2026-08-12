@@ -55,7 +55,7 @@ var (
 
 // mkState builds an in-memory StateDB from a genesis allocation.
 func mkState(alloc types.GenesisAlloc) *state.StateDB {
-	sdb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), rules8037)
+	sdb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	for addr, acc := range alloc {
 		sdb.CreateAccount(addr)
 		if acc.Balance != nil {
@@ -71,7 +71,7 @@ func mkState(alloc types.GenesisAlloc) *state.StateDB {
 			sdb.SetState(addr, k, v)
 		}
 	}
-	sdb.Finalise()
+	sdb.Finalise(params.Rules{IsEIP158: true})
 	return sdb
 }
 
@@ -82,7 +82,7 @@ func mkState(alloc types.GenesisAlloc) *state.StateDB {
 func mkCommittedState(t *testing.T, alloc types.GenesisAlloc) *state.StateDB {
 	t.Helper()
 	db := state.NewDatabaseForTesting()
-	sdb, _ := state.New(types.EmptyRootHash, db, rules8037)
+	sdb, _ := state.New(types.EmptyRootHash, db)
 	for addr, acc := range alloc {
 		sdb.CreateAccount(addr)
 		if acc.Balance != nil {
@@ -98,11 +98,11 @@ func mkCommittedState(t *testing.T, alloc types.GenesisAlloc) *state.StateDB {
 			sdb.SetState(addr, k, v)
 		}
 	}
-	root, err := sdb.Commit(0)
+	root, err := sdb.Commit(params.Rules{}, 0)
 	if err != nil {
 		t.Fatalf("commit prestate: %v", err)
 	}
-	sdb, err = state.New(root, db, rules8037)
+	sdb, err = state.New(root, db)
 	if err != nil {
 		t.Fatalf("reopen prestate: %v", err)
 	}

@@ -44,10 +44,10 @@ func TestLoopInterrupt(t *testing.T) {
 	}
 
 	for i, tt := range loopInterruptTests {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), params.AllEthashProtocolChanges.Rules(big.NewInt(0), true, 0))
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.CreateAccount(address)
 		statedb.SetCode(address, common.Hex2Bytes(tt), tracing.CodeChangeUnspecified)
-		statedb.Finalise()
+		statedb.Finalise(params.Rules{IsEIP158: true})
 
 		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{})
 
@@ -79,7 +79,7 @@ func TestLoopInterrupt(t *testing.T) {
 
 func BenchmarkInterpreter(b *testing.B) {
 	var (
-		statedb, _        = state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), params.MergedTestChainConfig.Rules(big.NewInt(1), true, 1))
+		statedb, _        = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		evm               = NewEVM(BlockContext{BlockNumber: big.NewInt(1), Time: 1, Random: &common.Hash{}}, statedb, params.MergedTestChainConfig, Config{})
 		startGas   uint64 = 100_000_000
 		value             = uint256.NewInt(0)

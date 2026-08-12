@@ -133,7 +133,7 @@ func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, 
 	if err != nil {
 		t.Fatalf("parallel process: %v", err)
 	}
-	parRoot := parState.IntermediateRoot()
+	parRoot := parState.IntermediateRoot(gspec.Config.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time()))
 
 	// Sequential path, forced explicitly via DisableParallelExecution.
 	seqState, err := bc.StateAtForkBoundary(bc.CurrentBlock(), block.Header())

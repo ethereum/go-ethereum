@@ -37,13 +37,13 @@ import (
 func run8038(t *testing.T, code []byte, gas GasBudget, value *uint256.Int, setup func(*state.StateDB, common.Address)) (GasBudget, uint64, error) {
 	t.Helper()
 	self := common.BytesToAddress([]byte("self"))
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), amsterdam8037Rules)
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.CreateAccount(self)
 	statedb.SetCode(self, code, tracing.CodeChangeUnspecified)
 	if setup != nil {
 		setup(statedb, self)
 	}
-	statedb.Finalise()
+	statedb.Finalise(params.Rules{IsEIP158: true})
 	_, result, err := amsterdam8037EVM(statedb).Call(common.Address{}, self, nil, gas, value)
 	return result, statedb.GetRefund(), err
 }

@@ -139,7 +139,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		stateApply = time.Since(start)
 
 		start = time.Now()
-		statedb.IntermediateRoot()
+		statedb.IntermediateRoot(config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time))
 		stateHash = time.Since(start)
 		return statedb.Error()
 	})
@@ -268,7 +268,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 // view reflects the mutations recorded in the access list for all block-access
 // indices below index.
 func newAccessListState(db state.Database, parentRoot common.Hash, base state.Reader, lookup *bal.Lookup, index int, rules params.Rules) (*state.StateDB, error) {
-	return state.NewWithReader(parentRoot, db, state.NewReaderWithBlockLevelAccessList(base, lookup, index), rules)
+	return state.NewWithReader(parentRoot, db, state.NewReaderWithBlockLevelAccessList(base, lookup, index))
 }
 
 // executeTransactionsParallel applies all transactions to independent,
@@ -282,10 +282,6 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 		blockNumber = block.Number()
 		txs         = block.Transactions()
 		results     = make([]txExecResult, len(txs))
-
-		// Fork rules of the block being executed, shared by every per-transaction
-		// state built below.
-		rules = config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
 	)
 	workers := runtime.GOMAXPROCS(0)
 	if workers > len(txs) {
@@ -323,7 +319,7 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 
 				// Construct the dedicated pre-tx state with the BAL overlay wrapped.
 				reader := state.NewReaderWithBlockLevelAccessList(base, lookup, i+1)
-				sdb, err := state.NewWithReader(parentRoot, db, reader, rules)
+				sdb, err := state.NewWithReader(parentRoot, db, reader)
 				if err != nil {
 					return err
 				}

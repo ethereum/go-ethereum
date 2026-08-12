@@ -577,7 +577,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 
 func TestOpTstore(t *testing.T) {
 	var (
-		statedb, _   = state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), params.TestChainConfig.Rules(new(big.Int), true, 0))
+		statedb, _   = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		evm          = NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
 		stack        = newStackForTesting()
 		mem          = NewMemory()

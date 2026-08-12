@@ -306,7 +306,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		receipts = append(receipts, receipt)
 		blockAccessList.Merge(bal)
 	}
-	statedb.IntermediateRoot()
+	statedb.IntermediateRoot(rules)
 
 	// TODO(rjl493456442) call engine.Finalize() instead
 	// Add mining reward? (-1 means rewards are disabled)
@@ -367,7 +367,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	blockAccessList.Merge(bal)
 
 	// Commit block
-	root, err := statedb.Commit(vmContext.BlockNumber.Uint64())
+	root, err := statedb.Commit(rules, vmContext.BlockNumber.Uint64())
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
@@ -409,7 +409,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 
 	// Re-create statedb instance with new root for MPT mode
-	statedb, err = state.New(root, statedb.Database(), rules)
+	statedb, err = state.New(root, statedb.Database())
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
 	}
@@ -440,7 +440,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, rules params.R
 	if rules.IsUBT {
 		root = types.EmptyBinaryHash
 	}
-	statedb, err := state.New(root, sdb, rules)
+	statedb, err := state.New(root, sdb)
 	if err != nil {
 		panic(fmt.Errorf("failed to create initial statedb: %v", err))
 	}
@@ -457,7 +457,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, rules params.R
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, err = statedb.Commit(0)
+	root, err = statedb.Commit(params.Rules{}, 0)
 	if err != nil {
 		panic(fmt.Errorf("failed to commit initial state: %v", err))
 	}
@@ -466,7 +466,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, rules params.R
 		return statedb
 	}
 	// For MPT mode, reopen the state with the committed root
-	statedb, err = state.New(root, sdb, rules)
+	statedb, err = state.New(root, sdb)
 	if err != nil {
 		panic(fmt.Errorf("failed to reopen state after commit: %v", err))
 	}
@@ -486,7 +486,7 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, rules params.Rul
 	if rules.IsUBT {
 		root = types.EmptyBinaryHash
 	}
-	statedb, err := state.New(root, sdb, rules)
+	statedb, err := state.New(root, sdb)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to create initial statedb: %v", err))
 	}
@@ -536,14 +536,14 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, rules params.Rul
 		return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc closing token: %v", err))
 	}
 
-	root, err = statedb.Commit(0)
+	root, err = statedb.Commit(params.Rules{}, 0)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
 	}
 	if rules.IsUBT {
 		return statedb, nil
 	}
-	statedb, err = state.New(root, sdb, rules)
+	statedb, err = state.New(root, sdb)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to reopen state after commit: %v", err))
 	}

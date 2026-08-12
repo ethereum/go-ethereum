@@ -32,7 +32,7 @@ import (
 )
 
 func filledStateDB() *StateDB {
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), params.Rules{})
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -72,7 +72,7 @@ func TestVerklePrefetcher(t *testing.T) {
 	db := triedb.NewDatabase(disk, triedb.UBTDefaults)
 	sdb := NewDatabase(db, nil)
 
-	state, err := New(types.EmptyRootHash, sdb, params.Rules{})
+	state, err := New(types.EmptyRootHash, sdb)
 	if err != nil {
 		t.Fatalf("failed to initialize state: %v", err)
 	}
@@ -84,9 +84,9 @@ func TestVerklePrefetcher(t *testing.T) {
 	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
 	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)          // Change an external metadata
 	state.SetState(addr, skey, sval)                                             // Change the storage trie
-	root, _ := state.Commit(0)
+	root, _ := state.Commit(params.Rules{IsEIP158: true}, 0)
 
-	state, _ = New(root, sdb, params.Rules{})
+	state, _ = New(root, sdb)
 	fetcher := newTriePrefetcher(sdb, root, "", false)
 
 	// Read account

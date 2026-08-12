@@ -47,7 +47,7 @@ import (
 func newTestState() *state.StateDB {
 	cfg := new(Config)
 	setDefaults(cfg)
-	sdb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), cfg.ChainConfig.Rules(cfg.BlockNumber, cfg.Random != nil, cfg.Time))
+	sdb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	return sdb
 }
 
@@ -430,7 +430,7 @@ func TestBlockhash(t *testing.T) {
 func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode string, b *testing.B) {
 	cfg := new(Config)
 	setDefaults(cfg)
-	cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), cfg.ChainConfig.Rules(cfg.BlockNumber, cfg.Random != nil, cfg.Time))
+	cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	cfg.GasLimit = gas
 	if len(tracerCode) > 0 {
 		tracer, err := tracers.DefaultDirectory.New(tracerCode, new(tracers.Context), nil, cfg.ChainConfig)

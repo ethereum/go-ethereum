@@ -194,7 +194,7 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 		Withdrawals:  block.Withdrawals(),
 	}
 	bc.Engine().Finalize(bc, header, statedb, &body, uint32(tcount+1), blockAL)
-	root := statedb.IntermediateRoot()
+	root := statedb.IntermediateRoot(evm.GetRules())
 
 	return blockAL.ToEncodingObj(), receipts, gp.Used(), root, nil
 }

@@ -43,14 +43,14 @@ func TestApplyBlockAccessListConcurrentPrefetch(t *testing.T) {
 	// Base state: n contracts, each with a pre-existing storage slot so its
 	// storage root is non-empty.
 	db := NewDatabaseForTesting()
-	base, _ := New(types.EmptyRootHash, db, params.Rules{})
+	base, _ := New(types.EmptyRootHash, db)
 	for i := range n {
 		addr := addrOf(i)
 		base.SetBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
 		base.SetCode(addr, code, tracing.CodeChangeUnspecified)
 		base.SetState(addr, slot, common.HexToHash("0xaa"))
 	}
-	root0, err := base.Commit(0)
+	root0, err := base.Commit(params.Rules{}, 0)
 	if err != nil {
 		t.Fatalf("commit base: %v", err)
 	}
@@ -62,9 +62,9 @@ func TestApplyBlockAccessListConcurrentPrefetch(t *testing.T) {
 			s.SetState(addr, slot, common.BigToHash(uint256.NewInt(uint64(i+1)).ToBig()))
 		}
 	}
-	seq, _ := New(root0, db, params.Rules{})
+	seq, _ := New(root0, db)
 	mutate(seq)
-	wantRoot := seq.IntermediateRoot()
+	wantRoot := seq.IntermediateRoot(params.Rules{IsEIP158: true})
 
 	cb := bal.NewConstructionBlockAccessList()
 	for i := range n {
@@ -72,13 +72,13 @@ func TestApplyBlockAccessListConcurrentPrefetch(t *testing.T) {
 		cb.BalanceChange(0, addr, uint256.NewInt(uint64(200+i)))
 		cb.StorageWrite(0, addr, slot, common.BigToHash(uint256.NewInt(uint64(i+1)).ToBig()))
 	}
-	balState, _ := New(root0, db, params.Rules{})
+	balState, _ := New(root0, db)
 	balState.StartPrefetcher("test", nil)
 	if err := balState.ApplyBlockAccessList(cb.ToEncodingObj()); err != nil {
 		balState.StopPrefetcher()
 		t.Fatalf("apply block access list: %v", err)
 	}
-	gotRoot := balState.IntermediateRoot()
+	gotRoot := balState.IntermediateRoot(params.Rules{IsEIP158: true})
 	balState.StopPrefetcher()
 
 	if gotRoot != wantRoot {
@@ -107,14 +107,14 @@ func TestApplyBlockAccessListMatchesSequential(t *testing.T) {
 	// some storage (so its storage root is non-empty and the storage-trie
 	// prefetch path is exercised).
 	db := NewDatabaseForTesting()
-	base, _ := New(types.EmptyRootHash, db, params.Rules{})
+	base, _ := New(types.EmptyRootHash, db)
 	base.SetBalance(existing, uint256.NewInt(1000), tracing.BalanceChangeUnspecified)
 	base.SetNonce(existing, 1, tracing.NonceChangeUnspecified)
 	base.SetBalance(contract, uint256.NewInt(50), tracing.BalanceChangeUnspecified)
 	base.SetCode(contract, code, tracing.CodeChangeUnspecified)
 	base.SetState(contract, slotA, common.HexToHash("0xaa"))
 	base.SetState(contract, slotB, common.HexToHash("0xbb"))
-	root0, err := base.Commit(0)
+	root0, err := base.Commit(params.Rules{}, 0)
 	if err != nil {
 		t.Fatalf("commit base: %v", err)
 	}
@@ -130,9 +130,9 @@ func TestApplyBlockAccessListMatchesSequential(t *testing.T) {
 	}
 
 	// Sequential reference root.
-	seq, _ := New(root0, db, params.Rules{})
+	seq, _ := New(root0, db)
 	mutate(seq)
-	wantRoot := seq.IntermediateRoot()
+	wantRoot := seq.IntermediateRoot(params.Rules{IsEIP158: true})
 	if wantRoot == root0 {
 		t.Fatal("mutations did not change the state root")
 	}
@@ -147,13 +147,13 @@ func TestApplyBlockAccessListMatchesSequential(t *testing.T) {
 	cb.NonceChange(fresh, 0, 1)
 	list := cb.ToEncodingObj()
 
-	balState, _ := New(root0, db, params.Rules{})
+	balState, _ := New(root0, db)
 	balState.StartPrefetcher("test", nil)
 	if err := balState.ApplyBlockAccessList(list); err != nil {
 		balState.StopPrefetcher()
 		t.Fatalf("apply block access list: %v", err)
 	}
-	gotRoot := balState.IntermediateRoot()
+	gotRoot := balState.IntermediateRoot(params.Rules{IsEIP158: true})
 	balState.StopPrefetcher()
 
 	if gotRoot != wantRoot {

@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -44,7 +43,7 @@ func TestStateOverrideMovePrecompile(t *testing.T) {
 	// The overrides are only applied and read back, no state transition is
 	// finalised, so the fork rules are irrelevant.
 	db := state.NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
-	statedb, err := state.New(types.EmptyRootHash, db, params.Rules{})
+	statedb, err := state.New(types.EmptyRootHash, db)
 	if err != nil {
 		t.Fatalf("failed to create statedb: %v", err)
 	}

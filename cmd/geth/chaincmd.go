@@ -694,7 +694,7 @@ func dump(ctx *cli.Context) error {
 	defer triedb.Close()
 
 	// Read-only dump, no state transition is finalised here.
-	state, err := state.New(root, state.NewDatabase(triedb, nil), params.Rules{})
+	state, err := state.New(root, state.NewDatabase(triedb, nil))
 	if err != nil {
 		return err
 	}

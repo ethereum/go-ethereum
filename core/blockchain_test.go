@@ -156,7 +156,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			}
 			return err
 		}
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), state.NewDatabase(blockchain.triedb, blockchain.codedb), blockchain.chainConfig.Rules(block.Number(), true, block.Time()))
+		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), state.NewDatabase(blockchain.triedb, blockchain.codedb))
 		if err != nil {
 			return err
 		}
@@ -173,7 +173,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 
 		blockchain.chainmu.MustLock()
 		rawdb.WriteBlock(blockchain.db, block)
-		statedb.Commit(block.NumberU64())
+		statedb.Commit(params.Rules{}, block.NumberU64())
 		blockchain.chainmu.Unlock()
 	}
 	return nil
