@@ -425,6 +425,7 @@ func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
 func fillMessage(input []byte, msg *jsonrpcMessage) {
 	// The raw fields point into input rather than being copied out of it, which
 	// matters because params is nearly all of a large request.
+	redo := false
 	forEachJSONField(input, func(key, value []byte) {
 		switch string(key) {
 		case "jsonrpc":
@@ -440,8 +441,19 @@ func fillMessage(input []byte, msg *jsonrpcMessage) {
 			msg.Error = value
 		case "result":
 			msg.Result = value
+		default:
+			// An unknown key. encoding/json matched field names case
+			// insensitively and unescaped them first, so it may still name
+			// a field. Have it redo the whole message instead of mirroring
+			// those rules here. The fallback exists only to keep decoding
+			// behavior unchanged.
+			redo = true
 		}
 	})
+	if redo {
+		*msg = jsonrpcMessage{}
+		json.Unmarshal(input, msg)
+	}
 }
 
 // isBatch returns true when the first non-whitespace characters is '['

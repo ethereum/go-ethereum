@@ -55,6 +55,11 @@ var messageCorpus = []string{
 	// duplicate keys, last one wins
 	`{"method":"first","method":"second","id":1}`,
 	`{"id":1,"id":2}`,
+	// keys in other spellings, matched the way encoding/json matched them
+	`{"METHOD":"m","ID":1}`,
+	`{"Method":"m","Id":1,"Jsonrpc":"2.0"}`,
+	"{\"metho\\u0064\":\"m\",\"i\\u0064\":7}",
+	`{"metho\\u0064":"not the method key"}`,
 	// unknown fields are ignored
 	`{"method":"m","id":1,"extra":{"a":[1,2,3]},"more":"x"}`,
 	// nested params
@@ -120,6 +125,13 @@ func TestParseMessage(t *testing.T) {
 		{"escaped quote in method", `{"method":"a\"b","id":1}`, false, []*jsonrpcMessage{msg("", `a"b`, "1", "", "")}},
 		{"escaped tab in method", `{"method":"tab\there","id":1}`, false, []*jsonrpcMessage{msg("", "tab\there", "1", "", "")}},
 		{"duplicate key, last wins", `{"method":"first","method":"second","id":1}`, false, []*jsonrpcMessage{msg("", "second", "1", "", "")}},
+
+		// encoding/json matched keys case insensitively and unescaped them
+		// first, and clients may depend on that
+		{"cased keys", `{"Method":"m","ID":1,"Params":[1]}`, false, []*jsonrpcMessage{msg("", "m", "1", "[1]", "")}},
+		{"upper case keys", `{"METHOD":"m","JSONRPC":"2.0"}`, false, []*jsonrpcMessage{msg("2.0", "m", "", "", "")}},
+		{"escaped keys", "{\"metho\\u0064\":\"m\",\"i\\u0064\":7}", false, []*jsonrpcMessage{msg("", "m", "7", "", "")}},
+		{"key escapes apply once", `{"metho\\u0064":"m"}`, false, []*jsonrpcMessage{zero()}},
 
 		// a string holding structural bytes must not end the value early
 		{
@@ -410,6 +422,29 @@ func FuzzJSONScanFields(f *testing.F) {
 			if !bytes.Equal(bytes.TrimSpace(gv), bytes.TrimSpace(wv)) {
 				t.Fatalf("field %q = %q, want %q (input %s)", k, gv, wv, input)
 			}
+		}
+	})
+}
+
+// FuzzFillMessage checks that the envelope split fills the same fields
+// encoding/json fills, for any valid JSON value.
+func FuzzFillMessage(f *testing.F) {
+	for _, s := range messageCorpus {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, input string) {
+		data := []byte(input)
+		if !json.Valid(data) {
+			return
+		}
+		// The old decoder ignored the decode error and kept whatever fields
+		// had been filled in, so the comparison does too.
+		var want jsonrpcMessage
+		json.Unmarshal(data, &want)
+		got := new(jsonrpcMessage)
+		fillMessage(data, got)
+		if err := sameMessage(got, &want); err != nil {
+			t.Fatalf("%v (input %s)", err, input)
 		}
 	})
 }
