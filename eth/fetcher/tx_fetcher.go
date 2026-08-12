@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -101,8 +102,31 @@ type txAnnounce struct {
 // txMetadata provides the extra data transmitted along with the announcement
 // for better fetch scheduling.
 type txMetadata struct {
-	kind byte   // Transaction consensus type
-	size uint32 // Transaction size in bytes
+	kind    byte   // Transaction consensus type
+	size    uint32 // Transaction size in bytes, as announced
+	version uint   // Protocol version of the announcing peer
+}
+
+// txDeliveryMeta is the metadata of a delivered transaction. eth72 announces
+// blob transactions without the blob payload, so both sizes are kept.
+type txDeliveryMeta struct {
+	kind            byte   // Transaction consensus type
+	size            uint32 // Size with blobs
+	sizeWithoutBlob uint32 // Size without blobs (eth72)
+}
+
+// sizeForVersion returns the size an announcer on the given version advertises.
+func (m *txDeliveryMeta) sizeForVersion(version uint) uint32 {
+	if m.kind == types.BlobTxType && version >= eth.ETH72 {
+		return m.sizeWithoutBlob
+	}
+	return m.size
+}
+
+// blobPayloadSize returns the encoded size of the blob payload omitted (under eth72)
+func blobPayloadSize(n int) uint32 {
+	const blobRLPSize = params.BlobTxFieldElementsPerBlob*params.BlobTxBytesPerFieldElement + 4
+	return uint32(n)*blobRLPSize + 4
 }
 
 // txMetadataWithSeq is a wrapper of transaction metadata with an extra field
@@ -123,11 +147,11 @@ type txRequest struct {
 // txDelivery is the notification that a batch of transactions have been added
 // to the pool and should be untracked.
 type txDelivery struct {
-	origin    string        // Identifier of the peer originating the notification
-	hashes    []common.Hash // Batch of transaction hashes having been delivered
-	metas     []txMetadata  // Batch of metadata associated with the delivered hashes
-	direct    bool          // Whether this is a direct reply or a broadcast
-	violation error         // Whether we encountered a protocol violation
+	origin    string           // Identifier of the peer originating the notification
+	hashes    []common.Hash    // Batch of transaction hashes having been delivered
+	metas     []txDeliveryMeta // Batch of metadata associated with the delivered hashes
+	direct    bool             // Whether this is a direct reply or a broadcast
+	violation error            // Whether we encountered a protocol violation
 }
 
 // txDrop is the notification that a peer has disconnected.
@@ -241,7 +265,7 @@ func NewTxFetcherForTests(
 
 // Notify announces the fetcher of the potential availability of a new batch of
 // transactions in the network. It returns array of hashes decided to be fetched.
-func (f *TxFetcher) Notify(peer string, kinds []byte, sizes []uint32, hashes []common.Hash) ([]common.Hash, error) {
+func (f *TxFetcher) Notify(peer string, version uint, kinds []byte, sizes []uint32, hashes []common.Hash) ([]common.Hash, error) {
 	// Keep track of all the announced transactions
 	txAnnounceInMeter.Mark(int64(len(hashes)))
 
@@ -292,7 +316,7 @@ func (f *TxFetcher) Notify(peer string, kinds []byte, sizes []uint32, hashes []c
 		// Transaction metadata has been available since eth68, and all
 		// legacy eth protocols (prior to eth68) have been deprecated.
 		// Therefore, metadata is always expected in the announcement.
-		unknownMetas = append(unknownMetas, txMetadata{kind: kinds[i], size: sizes[i]})
+		unknownMetas = append(unknownMetas, txMetadata{kind: kinds[i], size: sizes[i], version: version})
 	}
 	txAnnounceKnownMeter.Mark(duplicate)
 	txAnnounceUnderpricedMeter.Mark(underpriced)
@@ -356,7 +380,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 	// re-requesting them and dropping the peer in case of malicious transfers.
 	var (
 		added = make([]common.Hash, 0, len(txs))
-		metas = make([]txMetadata, 0, len(txs))
+		metas = make([]txDeliveryMeta, 0, len(txs))
 	)
 	// proceed in batches
 	for i := 0; i < len(txs); i += addTxsBatchSize {
@@ -401,10 +425,21 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 				violation = err
 			}
 			added = append(added, batch[j].Hash())
-			metas = append(metas, txMetadata{
-				kind: batch[j].Type(),
-				size: uint32(batch[j].Size()),
-			})
+			size := uint32(batch[j].Size())
+			meta := txDeliveryMeta{
+				kind:            batch[j].Type(),
+				size:            size,
+				sizeWithoutBlob: size,
+			}
+			if sc := batch[j].BlobTxSidecar(); sc != nil {
+				if version >= eth.ETH72 {
+					// tx should be delivered without blobs
+					meta.size += blobPayloadSize(len(sc.Commitments))
+				} else {
+					meta.sizeWithoutBlob -= blobPayloadSize(len(sc.Commitments))
+				}
+			}
+			metas = append(metas, meta)
 			// Terminate the transaction processing if violation is encountered. All
 			// the remaining transactions in response will be silently discarded.
 			if violation != nil {
@@ -755,9 +790,9 @@ func (f *TxFetcher) loop() {
 							if delivery.metas[i].kind != meta.kind {
 								log.Warn("Announced transaction type mismatch", "peer", peer, "tx", hash, "type", delivery.metas[i].kind, "ann", meta.kind)
 								f.dropPeer(peer)
-							} else if delivery.metas[i].size != meta.size {
-								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
-									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
+							} else if size := delivery.metas[i].sizeForVersion(meta.version); size != meta.size {
+								if math.Abs(float64(size)-float64(meta.size)) > 8 {
+									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", size, "ann", meta.size)
 
 									// Normally we should drop a peer considering this is a protocol violation.
 									// However, due to the RLP vs consensus format messyness, allow a few bytes
@@ -781,9 +816,9 @@ func (f *TxFetcher) loop() {
 							if delivery.metas[i].kind != meta.kind {
 								log.Warn("Announced transaction type mismatch", "peer", peer, "tx", hash, "type", delivery.metas[i].kind, "ann", meta.kind)
 								f.dropPeer(peer)
-							} else if delivery.metas[i].size != meta.size {
-								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
-									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
+							} else if size := delivery.metas[i].sizeForVersion(meta.version); size != meta.size {
+								if math.Abs(float64(size)-float64(meta.size)) > 8 {
+									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", size, "ann", meta.size)
 
 									// Normally we should drop a peer considering this is a protocol violation.
 									// However, due to the RLP vs consensus format messyness, allow a few bytes
