@@ -209,8 +209,8 @@ var (
 		utils.MetricsInfluxDBTokenFlag,
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
-		utils.StateSizeTrackingFlag,
 		utils.SnapV2Flag,
+		utils.StateSizeTrackingFlag, // deprecated
 	}
 )
 

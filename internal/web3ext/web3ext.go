@@ -476,12 +476,6 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'stateSize',
-			call: 'debug_stateSize',
-			params: 1,
-			inputFormatter: [null],
-		}),
-		new web3._extend.Method({
 			name: 'executionWitness',
 			call: 'debug_executionWitness',
 			params: 1,

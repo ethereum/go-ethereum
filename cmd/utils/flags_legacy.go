@@ -19,6 +19,7 @@ package utils
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
 )
 
@@ -30,7 +31,21 @@ var ShowDeprecated = &cli.Command{
 	Description: "Show flags that have been deprecated and will soon be removed",
 }
 
-var DeprecatedFlags = []cli.Flag{}
+var DeprecatedFlags = []cli.Flag{
+	StateSizeTrackingFlag,
+}
+
+var (
+	// Deprecated August 2026, state size tracking was removed along with the
+	// debug_stateSize endpoint it fed. Kept registered so that nodes carrying
+	// the flag in their startup scripts do not fail to boot.
+	StateSizeTrackingFlag = &cli.BoolFlag{
+		Name:     "state.size-tracking",
+		Hidden:   true,
+		Usage:    "Enable state size tracking (deprecated)",
+		Category: flags.DeprecatedCategory,
+	}
+)
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.
 func showDeprecated(*cli.Context) error {
