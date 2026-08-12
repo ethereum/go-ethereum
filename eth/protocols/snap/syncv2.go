@@ -1385,7 +1385,9 @@ func (s *syncerV2) resetSyncState() {
 	deleteRange(batch, rawdb.SnapshotAccountPrefix)
 	deleteRange(batch, rawdb.SnapshotStoragePrefix)
 	s.resetTrienodes(batch)
-	batch.Write()
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to wipe snap sync state", "err", err)
+	}
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
