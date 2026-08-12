@@ -389,6 +389,11 @@ func TestReadAllBody(t *testing.T) {
 			if !bytes.Equal(got, want) {
 				t.Fatalf("size %d hint %d: got %d bytes, want %d", size, hint, len(got), len(want))
 			}
+			// A hint covering the body must be enough, reading to EOF must
+			// not grow the buffer past it.
+			if hint >= len(want) && cap(got) > max(hint+1, 512) {
+				t.Fatalf("size %d hint %d: buffer grew to %d", size, hint, cap(got))
+			}
 		}
 	}
 }
