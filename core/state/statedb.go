@@ -1459,7 +1459,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping 
 }
 
 // CommitWithUpdate writes the state mutations and returns the state update for
-// external processing (e.g., live tracing hooks or size tracker).
+// external processing (e.g., live tracing hooks).
 func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *StateUpdate, error) {
 	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping, true)
 	if err != nil {
