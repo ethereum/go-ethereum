@@ -286,19 +286,18 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 	// Serve pure precompiles from the shared result cache if one is attached.
 	// Gas accounting and state touching above are identical on hit and miss,
 	// only the recomputation is skipped.
-	if cache != nil && cacheablePrecompile(p, input) {
-		var (
-			set = activePrecompiledContracts(rules)
-			key = precompileCacheKey(address, input)
-		)
-		if output, ok := cache.load(set, address, key); ok {
-			return output, gas, nil
+	if cache != nil {
+		if key, ok := precompileCacheKey(p, input); ok {
+			scope := precompileCacheScope{activePrecompiledContracts(rules), address}
+			if output, ok := cache.load(scope, key); ok {
+				return output, gas, nil
+			}
+			output, err := p.Run(input)
+			if err == nil && len(output) <= maxCacheablePrecompileOutput {
+				cache.store(scope, key, output)
+			}
+			return output, gas, err
 		}
-		output, err := p.Run(input)
-		if err == nil && len(output) <= maxCacheablePrecompileOutput {
-			cache.store(set, address, key, output)
-		}
-		return output, gas, err
 	}
 	output, err := p.Run(input)
 	return output, gas, err
@@ -307,13 +306,15 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 // ecrecover implemented as a native contract.
 type ecrecover struct{}
 
+// ecRecoverInputLength is the number of input bytes ecrecover reads, shorter
+// inputs are right padded and longer ones are ignored past this point.
+const ecRecoverInputLength = 128
+
 func (c *ecrecover) RequiredGas(input []byte) uint64 {
 	return params.EcrecoverGas
 }
 
 func (c *ecrecover) Run(input []byte) ([]byte, error) {
-	const ecRecoverInputLength = 128
-
 	input = common.RightPadBytes(input, ecRecoverInputLength)
 	// "input" is (hash, v, r, s), each 32 bytes
 	// but for ecrecover we want (r, s, v)
@@ -346,6 +347,13 @@ func (c *ecrecover) Name() string {
 	return "ECREC"
 }
 
+func (c *ecrecover) Cacheable() bool { return true }
+
+// NormalizeInput drops everything past the bytes Run reads.
+func (c *ecrecover) NormalizeInput(input []byte) ([]byte, bool) {
+	return normalizeZeroPadded(input, ecRecoverInputLength), true
+}
+
 // SHA256 implemented as a native contract.
 type sha256hash struct{}
 
@@ -365,9 +373,7 @@ func (c *sha256hash) Name() string {
 	return "SHA256"
 }
 
-// Cacheable opts out of result caching, deriving the cache key costs about
-// as much as running the hash itself.
-func (c *sha256hash) Cacheable() bool { return false }
+func (c *sha256hash) Cacheable() bool { return true }
 
 // RIPEMD160 implemented as a native contract.
 type ripemd160hash struct{}
@@ -389,9 +395,7 @@ func (c *ripemd160hash) Name() string {
 	return "RIPEMD160"
 }
 
-// Cacheable opts out of result caching, hashing the input for the cache key
-// costs about as much as running it.
-func (c *ripemd160hash) Cacheable() bool { return false }
+func (c *ripemd160hash) Cacheable() bool { return true }
 
 // data copy implemented as a native contract.
 type dataCopy struct{}
@@ -410,10 +414,6 @@ func (c *dataCopy) Run(in []byte) ([]byte, error) {
 func (c *dataCopy) Name() string {
 	return "ID"
 }
-
-// Cacheable opts out of result caching, identity is cheaper to rerun than
-// to cache.
-func (c *dataCopy) Cacheable() bool { return false }
 
 // bigModExp implements a native big integer exponential modular operation.
 type bigModExp struct {
@@ -598,6 +598,10 @@ func osakaModexpGas(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 
 	return max(gas, minGas)
 }
 
+// modExpHeaderLength is the size of the modexp header holding the base,
+// exponent and modulus lengths.
+const modExpHeaderLength = 96
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	// Parse input lengths
@@ -682,7 +686,7 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 		// Modulo 0 is undefined, return zero
 		return common.LeftPadBytes([]byte{}, int(modLen)), nil
 	case base.BitLen() == 1: // a bit length of 1 means it's 1 (or -1).
-		//If base == 1, then we can just return base % mod (if mod >= 1, which it is)
+		// If base == 1, then we can just return base % mod (if mod >= 1, which it is)
 		v = base.Mod(base, mod).Bytes()
 	default:
 		v = base.Exp(base, exp, mod).Bytes()
@@ -692,6 +696,39 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 
 func (c *bigModExp) Name() string {
 	return "MODEXP"
+}
+
+func (c *bigModExp) Cacheable() bool { return true }
+
+// NormalizeInput drops everything past the operands the header declares.
+func (c *bigModExp) NormalizeInput(input []byte) ([]byte, bool) {
+	if len(input) <= modExpHeaderLength {
+		return input, true
+	}
+	var (
+		baseLen = new(uint256.Int).SetBytes(getData(input, 0, 32))
+		expLen  = new(uint256.Int).SetBytes(getData(input, 32, 32))
+		modLen  = new(uint256.Int).SetBytes(getData(input, 64, 32))
+	)
+	// A length past what Run can address is not something the header alone
+	// decides. Run truncates it to its low word rather than rejecting it, so it
+	// goes on to read operands, and gas does not always price that out of reach.
+	// Nobody can pay to run these, so skip them rather than reason about them.
+	if !baseLen.IsUint64() || !expLen.IsUint64() || !modLen.IsUint64() {
+		return nil, false
+	}
+	// With no base and no modulus, nothing past the header changes the outcome,
+	// whether that is an empty output or an Osaka length failure.
+	if baseLen.IsZero() && modLen.IsZero() {
+		return input[:modExpHeaderLength], true
+	}
+	end := new(uint256.Int).AddUint64(baseLen, modExpHeaderLength)
+	end.Add(end, expLen)
+	end.Add(end, modLen)
+	if !end.IsUint64() || end.Uint64() >= uint64(len(input)) {
+		return input, true
+	}
+	return input[:end.Uint64()], true
 }
 
 // newCurvePoint unmarshals a binary blob into a bn256 elliptic curve point,
@@ -713,6 +750,10 @@ func newTwistPoint(blob []byte) (*bn256.G2, error) {
 	}
 	return p, nil
 }
+
+// bn256AddInputLength is the number of input bytes runBn256Add reads, shorter
+// inputs are zero padded and longer ones are ignored past this point.
+const bn256AddInputLength = 128
 
 // runBn256Add implements the Bn256Add precompile, referenced by both
 // Byzantium and Istanbul operations.
@@ -747,6 +788,13 @@ func (c *bn256AddIstanbul) Name() string {
 	return "BN254_ADD"
 }
 
+func (c *bn256AddIstanbul) Cacheable() bool { return true }
+
+// NormalizeInput drops everything past the bytes runBn256Add reads.
+func (c *bn256AddIstanbul) NormalizeInput(input []byte) ([]byte, bool) {
+	return normalizeZeroPadded(input, bn256AddInputLength), true
+}
+
 // bn256AddByzantium implements a native elliptic curve point addition
 // conforming to Byzantium consensus rules.
 type bn256AddByzantium struct{}
@@ -763,6 +811,18 @@ func (c *bn256AddByzantium) Run(input []byte) ([]byte, error) {
 func (c *bn256AddByzantium) Name() string {
 	return "BN254_ADD"
 }
+
+func (c *bn256AddByzantium) Cacheable() bool { return true }
+
+// NormalizeInput drops everything past the bytes runBn256Add reads.
+func (c *bn256AddByzantium) NormalizeInput(input []byte) ([]byte, bool) {
+	return normalizeZeroPadded(input, bn256AddInputLength), true
+}
+
+// bn256ScalarMulInputLength is the number of input bytes runBn256ScalarMul
+// reads, shorter inputs are zero padded and longer ones are ignored past this
+// point.
+const bn256ScalarMulInputLength = 96
 
 // runBn256ScalarMul implements the Bn256ScalarMul precompile, referenced by
 // both Byzantium and Istanbul operations.
@@ -793,6 +853,13 @@ func (c *bn256ScalarMulIstanbul) Name() string {
 	return "BN254_MUL"
 }
 
+func (c *bn256ScalarMulIstanbul) Cacheable() bool { return true }
+
+// NormalizeInput drops everything past the bytes runBn256ScalarMul reads.
+func (c *bn256ScalarMulIstanbul) NormalizeInput(input []byte) ([]byte, bool) {
+	return normalizeZeroPadded(input, bn256ScalarMulInputLength), true
+}
+
 // bn256ScalarMulByzantium implements a native elliptic curve scalar
 // multiplication conforming to Byzantium consensus rules.
 type bn256ScalarMulByzantium struct{}
@@ -808,6 +875,13 @@ func (c *bn256ScalarMulByzantium) Run(input []byte) ([]byte, error) {
 
 func (c *bn256ScalarMulByzantium) Name() string {
 	return "BN254_MUL"
+}
+
+func (c *bn256ScalarMulByzantium) Cacheable() bool { return true }
+
+// NormalizeInput drops everything past the bytes runBn256ScalarMul reads.
+func (c *bn256ScalarMulByzantium) NormalizeInput(input []byte) ([]byte, bool) {
+	return normalizeZeroPadded(input, bn256ScalarMulInputLength), true
 }
 
 var (
@@ -869,6 +943,13 @@ func (c *bn256PairingIstanbul) Name() string {
 	return "BN254_PAIRING"
 }
 
+func (c *bn256PairingIstanbul) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *bn256PairingIstanbul) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input)%192 == 0
+}
+
 // bn256PairingByzantium implements a pairing pre-compile for the bn256 curve
 // conforming to Byzantium consensus rules.
 type bn256PairingByzantium struct{}
@@ -884,6 +965,13 @@ func (c *bn256PairingByzantium) Run(input []byte) ([]byte, error) {
 
 func (c *bn256PairingByzantium) Name() string {
 	return "BN254_PAIRING"
+}
+
+func (c *bn256PairingByzantium) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *bn256PairingByzantium) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input)%192 == 0
 }
 
 type blake2F struct{}
@@ -951,6 +1039,13 @@ func (c *blake2F) Name() string {
 	return "BLAKE2F"
 }
 
+func (c *blake2F) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *blake2F) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) == blake2FInputLength
+}
+
 var (
 	errBLS12381InvalidInputLength          = errors.New("invalid input length")
 	errBLS12381InvalidFieldElementTopBytes = errors.New("invalid field element top bytes")
@@ -996,6 +1091,13 @@ func (c *bls12381G1Add) Run(input []byte) ([]byte, error) {
 
 func (c *bls12381G1Add) Name() string {
 	return "BLS12_G1ADD"
+}
+
+func (c *bls12381G1Add) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *bls12381G1Add) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) == 256
 }
 
 // bls12381G1MultiExp implements EIP-2537 G1MultiExp precompile.
@@ -1062,6 +1164,13 @@ func (c *bls12381G1MultiExp) Name() string {
 	return "BLS12_G1MSM"
 }
 
+func (c *bls12381G1MultiExp) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *bls12381G1MultiExp) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) != 0 && len(input)%160 == 0
+}
+
 // bls12381G2Add implements EIP-2537 G2Add precompile.
 type bls12381G2Add struct{}
 
@@ -1101,6 +1210,13 @@ func (c *bls12381G2Add) Run(input []byte) ([]byte, error) {
 
 func (c *bls12381G2Add) Name() string {
 	return "BLS12_G2ADD"
+}
+
+func (c *bls12381G2Add) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *bls12381G2Add) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) == 512
 }
 
 // bls12381G2MultiExp implements EIP-2537 G2MultiExp precompile.
@@ -1165,6 +1281,13 @@ func (c *bls12381G2MultiExp) Run(input []byte) ([]byte, error) {
 
 func (c *bls12381G2MultiExp) Name() string {
 	return "BLS12_G2MSM"
+}
+
+func (c *bls12381G2MultiExp) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *bls12381G2MultiExp) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) != 0 && len(input)%288 == 0
 }
 
 // bls12381Pairing implements EIP-2537 Pairing precompile.
@@ -1232,6 +1355,13 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 
 func (c *bls12381Pairing) Name() string {
 	return "BLS12_PAIRING_CHECK"
+}
+
+func (c *bls12381Pairing) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *bls12381Pairing) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) != 0 && len(input)%384 == 0
 }
 
 func decodePointG1(in []byte) (*bls12381.G1Affine, error) {
@@ -1356,6 +1486,13 @@ func (c *bls12381MapG1) Name() string {
 	return "BLS12_MAP_FP_TO_G1"
 }
 
+func (c *bls12381MapG1) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *bls12381MapG1) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) == 64
+}
+
 // bls12381MapG2 implements EIP-2537 MapG2 precompile.
 type bls12381MapG2 struct{}
 
@@ -1391,6 +1528,13 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 func (c *bls12381MapG2) Name() string {
 	return "BLS12_MAP_FP2_TO_G2"
+}
+
+func (c *bls12381MapG2) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *bls12381MapG2) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) == 128
 }
 
 // kzgPointEvaluation implements the EIP-4844 point evaluation precompile.
@@ -1453,6 +1597,13 @@ func (b *kzgPointEvaluation) Name() string {
 	return "KZG_POINT_EVALUATION"
 }
 
+func (b *kzgPointEvaluation) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (b *kzgPointEvaluation) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) == blobVerifyInputLength
+}
+
 // kZGToVersionedHash implements kzg_to_versioned_hash from EIP-4844
 func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 	h := sha256.Sum256(kzg[:])
@@ -1470,9 +1621,11 @@ func (c *p256Verify) RequiredGas(input []byte) uint64 {
 	return params.P256VerifyGas
 }
 
+// p256VerifyInputLength is the only input length p256Verify accepts.
+const p256VerifyInputLength = 160
+
 // Run executes the precompiled contract with given 160 bytes of param, returning the output and the used gas
 func (c *p256Verify) Run(input []byte) ([]byte, error) {
-	const p256VerifyInputLength = 160
 	if len(input) != p256VerifyInputLength {
 		return nil, nil
 	}
@@ -1491,4 +1644,11 @@ func (c *p256Verify) Run(input []byte) ([]byte, error) {
 
 func (c *p256Verify) Name() string {
 	return "P256VERIFY"
+}
+
+func (c *p256Verify) Cacheable() bool { return true }
+
+// NormalizeInput skips inputs Run rejects on length.
+func (c *p256Verify) NormalizeInput(input []byte) ([]byte, bool) {
+	return input, len(input) == p256VerifyInputLength
 }
