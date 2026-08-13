@@ -473,6 +473,7 @@ type syncer struct {
 	storageSynced  uint64             // Number of storage slots downloaded
 	storageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
 
+	codeCache   *codeCache    // Bytecode presence cache for the account processing phase
 	extProgress *syncProgress // progress that can be exposed to external caller.
 
 	// Request tracking during healing phase
@@ -516,8 +517,9 @@ type syncer struct {
 // the package obtain a Syncer through NewV1Syncer.
 func newSyncer(db ethdb.KeyValueStore, scheme string) *syncer {
 	return &syncer{
-		db:     db,
-		scheme: scheme,
+		db:        db,
+		scheme:    scheme,
+		codeCache: newCodeCache(db),
 
 		peers:    make(map[string]SyncPeer),
 		peerJoin: new(event.Feed),
@@ -627,6 +629,10 @@ func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		log.Debug("Snapshot sync already completed")
 		return nil
 	}
+	// Warm up the bytecode presence cache for the account processing phase
+	if len(s.tasks) > 0 && !s.codeCache.loaded() {
+		s.codeCache.load()
+	}
 	defer func() { // Persist any progress, independent of failure
 		for _, task := range s.tasks {
 			s.forwardAccountTask(task)
@@ -705,6 +711,10 @@ func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		s.assignStorageTasks(storageResps, storageReqFails, cancel)
 
 		if len(s.tasks) == 0 {
+			// Account phase is over, release the bytecode presence cache
+			if s.codeCache.loaded() {
+				s.codeCache.release()
+			}
 			// State sync phase completed, record the elapsed time in metrics.
 			// Note: the initial state sync runs only once, regardless of whether
 			// a new cycle is started later. Any state differences in subsequent
@@ -1961,7 +1971,7 @@ func (s *syncer) processAccountResponse(res *accountResponse) {
 	for i, account := range res.accounts {
 		// Check if the account is a contract with an unknown code
 		if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
-			if !rawdb.HasCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)) {
+			if !s.codeCache.has(common.BytesToHash(account.CodeHash)) {
 				res.task.codeTasks[common.BytesToHash(account.CodeHash)] = struct{}{}
 				res.task.needCode[i] = true
 				res.task.pend++
@@ -2072,6 +2082,7 @@ func (s *syncer) processBytecodeResponse(res *bytecodeResponse) {
 		// Push the bytecode into a database batch
 		codes++
 		rawdb.WriteCode(batch, hash, code)
+		s.codeCache.mark(hash)
 	}
 	bytes := common.StorageSize(batch.ValueSize())
 	commitStart := time.Now()
