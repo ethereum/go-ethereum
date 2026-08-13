@@ -59,6 +59,11 @@ func (c *Cell) MarshalText() ([]byte, error) {
 // Blob represents a 4844 data blob.
 type Blob [131072]byte
 
+// A blob is exactly its DataPerBlob data cells, concatenated; the remaining
+// cells (indices DataPerBlob..CellsPerBlob-1) carry redundancy only. Code
+// reassembling blobs from cells relies on this, so assert it at compile time.
+var _ [len(Blob{})]byte = [DataPerBlob * len(Cell{})]byte{}
+
 // UnmarshalJSON parses a blob in hex syntax.
 func (b *Blob) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalFixedJSON(blobT, input, b[:])
