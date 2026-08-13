@@ -306,6 +306,13 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 			return 0, err
 		}
 	}
+	// Truncating a table that holds nothing below the new head realigns its tail
+	// down as well, so pull the cached group tails along with it.
+	for _, cached := range f.tails {
+		if cached.Load() > items {
+			cached.Store(items)
+		}
+	}
 	f.head.Store(items)
 	return oitems, nil
 }
