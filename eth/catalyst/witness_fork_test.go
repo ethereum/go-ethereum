@@ -252,25 +252,14 @@ func assertStatelessRoots(t *testing.T, api *ConsensusAPI, fork witnessFork, env
 	}
 }
 
-// forkTestChain builds a merged chain of n blocks whose genesis also pre-deploys
-// the system contracts the post-shanghai forks call into. generateMergeChain
-// carries only the beacon roots and deposit contracts, and the missing ones
-// cannot be added afterwards: the alloc feeds the genesis hash, so a late
-// addition orphans the blocks generated against the original.
+// forkTestChain builds a merged chain of n blocks, each carrying one transaction
+// so that the payloads under test are not empty. The genesis comes from
+// generateMergeChain, which pre-deploys the system contracts every post-shanghai
+// fork calls into.
 func forkTestChain(t *testing.T, n int) (*core.Genesis, []*types.Block) {
 	t.Helper()
 
 	genesis, _ := generateMergeChain(0, true)
-	for addr, code := range map[common.Address][]byte{
-		params.HistoryStorageAddress:       params.HistoryStorageCode,
-		params.WithdrawalQueueAddress:      params.WithdrawalQueueCode,
-		params.ConsolidationQueueAddress:   params.ConsolidationQueueCode,
-		params.BuilderDepositAddress:       params.BuilderDepositCode,
-		params.BuilderExitAddress:          params.BuilderExitCode,
-		params.DeterministicFactoryAddress: params.DeterministicFactoryCode,
-	} {
-		genesis.Alloc[addr] = types.Account{Nonce: 1, Code: code, Balance: common.Big0}
-	}
 	var nonce uint64
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, beacon.New(ethash.NewFaker()), n, func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
