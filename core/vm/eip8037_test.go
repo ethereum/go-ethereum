@@ -77,7 +77,7 @@ func run8037(t *testing.T, code []byte, gas GasBudget, value *uint256.Int, setup
 	if setup != nil {
 		setup(statedb, self)
 	}
-	statedb.Finalise(true)
+	statedb.Finalise(params.Rules{IsEIP158: true})
 	ret, result, err := amsterdam8037EVM(statedb).Call(common.Address{}, self, nil, gas, value)
 	assertBudgetSane(t, gas, result)
 	return ret, result, err
@@ -86,22 +86,22 @@ func run8037(t *testing.T, code []byte, gas GasBudget, value *uint256.Int, setup
 // assertBudgetSane verifies the GasBudget conservation identities that must hold
 // for any frame exit (success, revert or halt), validating the whole vector.
 //
-//	regular: RegularGas + UsedRegularGas + Spilled == initial.RegularGas
-//	state:   StateGas + UsedStateGas               == initial.StateGas + Spilled
-//	scalar:  Used(initial)                         == UsedRegularGas + UsedStateGas
+//	execution: ExecutionGas + UsedExecutionGas + Spilled == initial.ExecutionGas
+//	state:     StateGas + UsedStateGas                   == initial.StateGas + Spilled
+//	scalar:    Used(initial)                             == UsedExecutionGas + UsedStateGas
 func assertBudgetSane(t *testing.T, initial, got GasBudget) {
 	t.Helper()
-	if got.RegularGas+got.UsedRegularGas+got.Spilled != initial.RegularGas {
-		t.Fatalf("regular not conserved: R=%d usedR=%d spilled=%d, want sum %d",
-			got.RegularGas, got.UsedRegularGas, got.Spilled, initial.RegularGas)
+	if got.ExecutionGas+got.UsedExecutionGas+got.Spilled != initial.ExecutionGas {
+		t.Fatalf("execution not conserved: R=%d usedR=%d spilled=%d, want sum %d",
+			got.ExecutionGas, got.UsedExecutionGas, got.Spilled, initial.ExecutionGas)
 	}
 	if int64(got.StateGas)+got.UsedStateGas != int64(initial.StateGas)+int64(got.Spilled) {
 		t.Fatalf("state not conserved: S=%d usedS=%d spilled=%d, want %d+spilled",
 			got.StateGas, got.UsedStateGas, got.Spilled, initial.StateGas)
 	}
-	if int64(got.Used(initial)) != int64(got.UsedRegularGas)+got.UsedStateGas {
+	if int64(got.Used(initial)) != int64(got.UsedExecutionGas)+got.UsedStateGas {
 		t.Fatalf("scalar mismatch: used=%d, usedR=%d usedS=%d",
-			got.Used(initial), got.UsedRegularGas, got.UsedStateGas)
+			got.Used(initial), got.UsedExecutionGas, got.UsedStateGas)
 	}
 }
 
@@ -178,7 +178,7 @@ func TestSStoreOtherWrite(t *testing.T) {
 }
 
 // New-slot charge is metered at the opcode: with a reservoir smaller than the
-// charge it spills into regular gas exactly at the SSTORE.
+// charge it spills into execution gas exactly at the SSTORE.
 func TestSStoreChargedAtOpcodeEnd(t *testing.T) {
 	_, res, err := run8037(t, sstore(0, 1), NewGasBudget(1_000_000, 100), new(uint256.Int), nil)
 	if err != nil {
@@ -190,24 +190,21 @@ func TestSStoreChargedAtOpcodeEnd(t *testing.T) {
 }
 
 // The SSTORE reentrancy sentry checks gas_left only; the reservoir is excluded.
-// Uses a noop write (1->1->1): the two PUSH1s cost 6, leaving gas_left at the
-// sentry (2300) for a 2306 budget. Under EIP-8038 the cold-slot access that
-// follows a cleared sentry costs COLD_STORAGE_ACCESS (3000).
+// Uses a noop write (1->1->1): the two PUSH1s cost 6, so a budget of
+// 6 + SstoreSentryGasEIP2200 leaves gas_left exactly at the sentry.
 func TestSStoreStipendExcludesReservoir(t *testing.T) {
-	// regular at the sentry, huge reservoir: must still fail, proving the
+	const pushes = 6
+
+	// Execution gas at the sentry, huge reservoir: must still fail, proving the
 	// reservoir does not count toward the sentry.
-	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(2306, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
-		t.Fatal("expected sentry failure with regular gas at the limit")
+	atSentry := pushes + params.SstoreSentryGasEIP2200
+	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(atSentry, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
+		t.Fatal("expected sentry failure with execution gas at the limit")
 	}
-	// Enough regular gas to clear the sentry and pay the cold-slot access
-	// (6 for the PUSH1s + COLD_STORAGE_ACCESS) succeeds with a huge reservoir.
-	regular := 6 + params.ColdStorageAccessAmsterdam
-	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(regular, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err != nil {
-		t.Fatalf("unexpected failure above sentry: %v", err)
-	}
-	// One gas short of the cold-slot access still fails (now on OOG, not sentry).
-	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(regular-1, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err == nil {
-		t.Fatal("expected OOG when regular gas cannot cover cold-slot access")
+	// One gas above the sentry succeeds: the cold-slot access is cheaper than the
+	// sentry, so clearing the sentry is sufficient.
+	if _, _, err := run8037(t, sstore(0, 1), NewGasBudget(atSentry+1, math.MaxUint64/2), new(uint256.Int), setSlot(0, 1)); err != nil {
+		t.Fatalf("unexpected failure one gas above the sentry: %v", err)
 	}
 }
 
@@ -521,7 +518,7 @@ func TestSelfdestructPreexistingNoRefill(t *testing.T) {
 // ===================== Reservoir / gas_left mechanics =====================
 
 // State-gas is drawn from the reservoir first: a charge within reservoir size
-// does not spill into regular gas.
+// does not spill into execution gas.
 func TestReservoirDrawnFirst(t *testing.T) {
 	_, res, err := run8037(t, sstore(0, 1), NewGasBudget(1_000_000, 200_000), new(uint256.Int), nil)
 	if err != nil {
@@ -547,7 +544,7 @@ func TestGasOpcodeExcludesReservoir(t *testing.T) {
 	}
 }
 
-// Refills are LIFO: borrowed regular gas is repaid before the reservoir. With a
+// Refills are LIFO: borrowed execution gas is repaid before the reservoir. With a
 // zero reservoir, a 0->x->0 SSTORE repays the spill and leaves the reservoir at 0.
 func TestLIFORefillOrder(t *testing.T) {
 	code := append(sstore(0, 1), sstore(0, 0)...)
@@ -589,30 +586,30 @@ func TestStateGasMeteredAtFrameBoundary(t *testing.T) {
 
 // ===================== LIFO refill vector invariant =========================
 
-// Charge A then B (both spilling into regular because the reservoir is too
-// small), then refill only A. The refill must repay the borrowed regular gas
+// Charge A then B (both spilling into execution because the reservoir is too
+// small), then refill only A. The refill must repay the borrowed execution gas
 // first (Spilled -> 0) before crediting the reservoir, leaving B outstanding.
-func TestLIFORefillRepaysRegularBeforeReservoir(t *testing.T) {
+func TestLIFORefillRepaysExecutionBeforeReservoir(t *testing.T) {
 	initial := NewGasBudget(1000, 100) // reservoir covers only 100 of state gas
 	b := initial
 
-	b.ChargeState(150) // A: 100 from reservoir, 50 spills into regular
+	b.ChargeState(150) // A: 100 from reservoir, 50 spills into execution
 	b.ChargeState(30)  // B: reservoir empty, all 30 spills
 	if b.Spilled != 80 || b.StateGas != 0 {
 		t.Fatalf("after A+B: spilled=%d reservoir=%d, want 80/0", b.Spilled, b.StateGas)
 	}
 
-	b.RefundState(150) // refill A: repay 80 to regular first, 70 tops reservoir
+	b.RefundState(150) // refill A: repay 80 to execution first, 70 tops reservoir
 	if b.Spilled != 0 {
-		t.Fatalf("spilled=%d, want 0 (regular repaid before reservoir)", b.Spilled)
+		t.Fatalf("spilled=%d, want 0 (execution repaid before reservoir)", b.Spilled)
 	}
 	if b.StateGas != 70 {
-		t.Fatalf("reservoir=%d, want 70 (remainder after repaying regular)", b.StateGas)
+		t.Fatalf("reservoir=%d, want 70 (remainder after repaying execution)", b.StateGas)
 	}
 	assertBudgetSane(t, initial, b)
 }
 
-// Fuzz arbitrary sequences of state/regular charges and LIFO refills around the
+// Fuzz arbitrary sequences of state/execution charges and LIFO refills around the
 // reservoir/spill boundary: the GasBudget vector must stay self-consistent after
 // every op and across all three frame-exit forms, and refilling every charge
 // must restore the state side exactly (reservoir to initial, nothing borrowed).
@@ -624,14 +621,14 @@ func TestLIFOVectorInvariantUnderRandomOps(t *testing.T) {
 		outstanding := int64(0) // state-gas charged but not yet refilled
 		for step := 0; step < 40; step++ {
 			switch rng.Intn(3) {
-			case 0: // state charge (may spill into regular)
+			case 0: // state charge (may spill into execution)
 				if s := uint64(rng.Intn(400)); b.CanAfford(GasCosts{StateGas: s}) {
 					b.ChargeState(s)
 					outstanding += int64(s)
 				}
-			case 1: // regular charge
-				if r := uint64(rng.Intn(400)); b.CanAfford(GasCosts{RegularGas: r}) {
-					b.ChargeRegular(r)
+			case 1: // execution charge
+				if r := uint64(rng.Intn(400)); b.CanAfford(GasCosts{ExecutionGas: r}) {
+					b.ChargeExecution(r)
 				}
 			case 2: // LIFO refill of part of the outstanding state gas
 				if outstanding > 0 {
@@ -666,12 +663,12 @@ func concat(parts ...[]byte) []byte {
 }
 
 // assertHalted checks the predictable terminal budget of an exceptionally
-// halted frame: regular gas fully consumed, state restored to the frame's
+// halted frame: execution gas fully consumed, state restored to the frame's
 // initial reservoir, and no net state-gas used.
 func assertHalted(t *testing.T, initial, got GasBudget) {
 	t.Helper()
-	if got.RegularGas != 0 {
-		t.Fatalf("RegularGas = %d, want 0 (gas_left consumed on halt)", got.RegularGas)
+	if got.ExecutionGas != 0 {
+		t.Fatalf("ExecutionGas = %d, want 0 (gas_left consumed on halt)", got.ExecutionGas)
 	}
 	if got.StateGas != initial.StateGas {
 		t.Fatalf("StateGas = %d, want %d (reservoir restored)", got.StateGas, initial.StateGas)

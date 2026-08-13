@@ -91,6 +91,28 @@ func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayl
 	return nil
 }
 
+// getWithDetails returns the tracked local payload with the given state root,
+// along with the block construction details.
+//
+// The state root is used as the key because the consensus client may mutate
+// the returned payload externally by modifying fields (such as Extra), which
+// would otherwise change the block hash.
+func (q *payloadQueue) getWithDetails(root common.Hash) (*types.Block, []*types.Receipt, []*types.Transaction, []uint32) {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	for _, item := range q.payloads {
+		if item == nil {
+			return nil, nil, nil, nil // no more items
+		}
+		block, receipts, revertedTxs, revertedIdx := item.payload.FullBlockAndReceipts()
+		if block != nil && block.Root() == root {
+			return block, receipts, revertedTxs, revertedIdx
+		}
+	}
+	return nil, nil, nil, nil
+}
+
 // has checks if a particular payload is already tracked.
 func (q *payloadQueue) has(id engine.PayloadID) bool {
 	q.lock.RLock()

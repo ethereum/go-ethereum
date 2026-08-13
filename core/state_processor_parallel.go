@@ -75,15 +75,19 @@ type txExecResult struct {
 	receipt    *types.Receipt
 	accessList *bal.ConstructionBlockAccessList
 
-	// regular and state are the EIP-8037 per-transaction
+	// execution and state are the EIP-8037 per-transaction
 	// gas contributions to the two block-inclusion dimensions.
-	regular uint64
-	state   uint64
+	execution uint64
+	state     uint64
+
+	// preimages are the SHA3 preimages the transaction's EVM recorded into its
+	// ephemeral state.
+	preimages map[common.Hash][]byte
 }
 
 // processParallel executes the block's transactions concurrently using the
 // block-level access list.
-func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, cfg vm.Config) (*ProcessResult, error) {
+func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) (*ProcessResult, error) {
 	var (
 		config = p.chainConfig()
 		header = block.Header()
@@ -101,7 +105,6 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		// blockAccessList is the access list rebuilt from the actual execution.
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	)
-
 	// Resolve the parent state root, the point all execution reads from.
 	parent := p.chain.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
@@ -131,7 +134,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		stateApply = time.Since(start)
 
 		start = time.Now()
-		statedb.IntermediateRoot(config.IsEIP158(header.Number))
+		statedb.IntermediateRoot(config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time))
 		stateHash = time.Since(start)
 		return statedb.Error()
 	})
@@ -155,15 +158,21 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if jumpDestCache != nil {
 		preEVM.SetJumpDestCache(jumpDestCache)
 	}
+	if precompileCache != nil {
+		preEVM.SetPrecompileCache(precompileCache)
+	}
 	blockAccessList.Merge(PreExecution(ctx, block.BeaconRoot(), parent, config, preEVM, header.Number, header.Time))
 	preEVM.Release()
+	if err := preState.Error(); err != nil {
+		return nil, fmt.Errorf("database error in pre-execution system calls: %w", err)
+	}
 	systemExec += time.Since(preStart)
 
 	// Execute the transactions concurrently. Each transaction runs against its
 	// own ephemeral state instance, whose reads are served from the block-level
 	// access list overlaid on the parent state.
 	txStart := time.Now()
-	results, err := p.executeTransactionsParallel(block, parentRoot, db, base, lookup, context, signer, jumpDestCache, cfg)
+	results, err := p.executeTransactionsParallel(block, parentRoot, db, base, lookup, signer, jumpDestCache, precompileCache, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +192,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		if err := gp.CheckGasAmsterdam(min(gasLimit, params.MaxTxGas), gasLimit); err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
 		}
-		if err := gp.ChargeGasAmsterdam(results[i].regular, results[i].state, receipt.GasUsed); err != nil {
+		if err := gp.ChargeGasAmsterdam(results[i].execution, results[i].state, receipt.GasUsed); err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
 		}
 		// Correct the receipt object with block-level fields
@@ -207,6 +216,9 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if jumpDestCache != nil {
 		postEVM.SetJumpDestCache(jumpDestCache)
 	}
+	if precompileCache != nil {
+		postEVM.SetPrecompileCache(precompileCache)
+	}
 	requests, postBAL, err := PostExecution(ctx, config, header.Number, header.Time, allLogs, postEVM, postIndex)
 	postEVM.Release()
 	if err != nil {
@@ -214,12 +226,20 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	}
 	blockAccessList.Merge(postBAL)
 	p.chain.Engine().Finalize(p.chain, header, postState, block.Body(), postIndex, blockAccessList)
+	if err := postState.Error(); err != nil {
+		return nil, fmt.Errorf("database error in post-execution system calls: %w", err)
+	}
 	systemExec += time.Since(postStart)
 
 	// Join the concurrent root computation.
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
+	statedb.AddPreimages(preState.Preimages())
+	for i := range results {
+		statedb.AddPreimages(results[i].preimages)
+	}
+	statedb.AddPreimages(postState.Preimages())
 	parallelSystemExecTimer.Update(systemExec)
 	parallelTxExecTimer.Update(txExec)
 	parallelStateHashTimer.Update(stateHash)
@@ -249,7 +269,7 @@ func newAccessListState(db state.Database, parentRoot common.Hash, base state.Re
 // executeTransactionsParallel applies all transactions to independent,
 // access-list-backed state instances using a pool of workers, and returns
 // the per-transaction results in block order.
-func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, context vm.BlockContext, signer types.Signer, jumpDestCache vm.JumpDestCache, cfg vm.Config) ([]txExecResult, error) {
+func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, signer types.Signer, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) ([]txExecResult, error) {
 	var (
 		config      = p.chainConfig()
 		header      = block.Header()
@@ -262,19 +282,26 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 	if workers > len(txs) {
 		workers = len(txs)
 	}
-	var (
-		cursor atomic.Int64
-		group  errgroup.Group
-	)
+	var cursor atomic.Int64
+	group, gctx := errgroup.WithContext(context.Background())
 	for w := 0; w < workers; w++ {
 		group.Go(func() error {
+			context := NewEVMBlockContext(header, p.chain, nil)
 			evm := vm.NewEVM(context, nil, config, cfg)
 			if jumpDestCache != nil {
 				evm.SetJumpDestCache(jumpDestCache)
 			}
+			if precompileCache != nil {
+				evm.SetPrecompileCache(precompileCache)
+			}
 			defer evm.Release()
 
 			for {
+				select {
+				case <-gctx.Done():
+					return gctx.Err()
+				default:
+				}
 				i := int(cursor.Add(1)) - 1
 				if i >= len(txs) {
 					return nil
@@ -301,11 +328,15 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 				if err != nil {
 					return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 				}
+				if dbErr := sdb.Error(); dbErr != nil {
+					return fmt.Errorf("database error while applying tx %d [%v]: %w", i, tx.Hash().Hex(), dbErr)
+				}
 				results[i] = txExecResult{
 					receipt:    receipt,
 					accessList: accessList,
-					regular:    gp.CumulativeRegular(),
+					execution:  gp.CumulativeExecution(),
 					state:      gp.CumulativeState(),
+					preimages:  sdb.Preimages(),
 				}
 			}
 		})

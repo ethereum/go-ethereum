@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -49,7 +50,7 @@ func TestApplyBlockAccessListConcurrentPrefetch(t *testing.T) {
 		base.SetCode(addr, code, tracing.CodeChangeUnspecified)
 		base.SetState(addr, slot, common.HexToHash("0xaa"))
 	}
-	root0, err := base.Commit(0, false, false)
+	root0, err := base.Commit(params.Rules{}, 0)
 	if err != nil {
 		t.Fatalf("commit base: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestApplyBlockAccessListConcurrentPrefetch(t *testing.T) {
 	}
 	seq, _ := New(root0, db)
 	mutate(seq)
-	wantRoot := seq.IntermediateRoot(true)
+	wantRoot := seq.IntermediateRoot(params.Rules{IsEIP158: true})
 
 	cb := bal.NewConstructionBlockAccessList()
 	for i := range n {
@@ -77,7 +78,7 @@ func TestApplyBlockAccessListConcurrentPrefetch(t *testing.T) {
 		balState.StopPrefetcher()
 		t.Fatalf("apply block access list: %v", err)
 	}
-	gotRoot := balState.IntermediateRoot(true)
+	gotRoot := balState.IntermediateRoot(params.Rules{IsEIP158: true})
 	balState.StopPrefetcher()
 
 	if gotRoot != wantRoot {
@@ -113,7 +114,7 @@ func TestApplyBlockAccessListMatchesSequential(t *testing.T) {
 	base.SetCode(contract, code, tracing.CodeChangeUnspecified)
 	base.SetState(contract, slotA, common.HexToHash("0xaa"))
 	base.SetState(contract, slotB, common.HexToHash("0xbb"))
-	root0, err := base.Commit(0, false, false)
+	root0, err := base.Commit(params.Rules{}, 0)
 	if err != nil {
 		t.Fatalf("commit base: %v", err)
 	}
@@ -131,7 +132,7 @@ func TestApplyBlockAccessListMatchesSequential(t *testing.T) {
 	// Sequential reference root.
 	seq, _ := New(root0, db)
 	mutate(seq)
-	wantRoot := seq.IntermediateRoot(true)
+	wantRoot := seq.IntermediateRoot(params.Rules{IsEIP158: true})
 	if wantRoot == root0 {
 		t.Fatal("mutations did not change the state root")
 	}
@@ -152,7 +153,7 @@ func TestApplyBlockAccessListMatchesSequential(t *testing.T) {
 		balState.StopPrefetcher()
 		t.Fatalf("apply block access list: %v", err)
 	}
-	gotRoot := balState.IntermediateRoot(true)
+	gotRoot := balState.IntermediateRoot(params.Rules{IsEIP158: true})
 	balState.StopPrefetcher()
 
 	if gotRoot != wantRoot {

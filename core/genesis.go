@@ -148,6 +148,7 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 		emptyRoot = types.EmptyBinaryHash
 	}
 	db := rawdb.NewMemoryDatabase()
+
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return common.Hash{}, err
@@ -162,7 +163,7 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 			statedb.SetState(addr, key, value)
 		}
 	}
-	return statedb.Commit(0, false, false)
+	return statedb.Commit(params.Rules{}, 0)
 }
 
 // flushAlloc is very similar with hash, but the main difference is all the
@@ -191,7 +192,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing
 
 	var root common.Hash
 	if tracer != nil && tracer.OnStateUpdate != nil {
-		r, update, err := statedb.CommitWithUpdate(0, false, false)
+		r, update, err := statedb.CommitWithUpdate(params.Rules{}, 0)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -202,7 +203,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing
 		tracer.OnStateUpdate(trUpdate)
 		root = r
 	} else {
-		root, err = statedb.Commit(0, false, false)
+		root, err = statedb.Commit(params.Rules{}, 0)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -263,6 +264,7 @@ type genesisSpecMarshaling struct {
 	BaseFee       *math.HexOrDecimal256
 	ExcessBlobGas *math.HexOrDecimal64
 	BlobGasUsed   *math.HexOrDecimal64
+	SlotNumber    *math.HexOrDecimal64
 }
 
 // GenesisMismatchError is raised when trying to overwrite an existing

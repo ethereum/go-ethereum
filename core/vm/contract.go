@@ -126,10 +126,10 @@ func (c *Contract) Caller() common.Address {
 	return c.caller
 }
 
-// chargeRegular deducts regular gas only, with tracer integration.
-// Returns false on OOG. Delegates the arithmetic to GasBudget.ChargeRegular.
-func (c *Contract) chargeRegular(r uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) bool {
-	prior, ok := c.Gas.ChargeRegular(r)
+// chargeExecution deducts execution gas only, with tracer integration.
+// Returns false on OOG. Delegates the arithmetic to GasBudget.ChargeExecution.
+func (c *Contract) chargeExecution(r uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) bool {
+	prior, ok := c.Gas.ChargeExecution(r)
 	if !ok {
 		return false
 	}
@@ -139,7 +139,7 @@ func (c *Contract) chargeRegular(r uint64, logger *tracing.Hooks, reason tracing
 	return true
 }
 
-// chargeState deducts state gas (spilling into regular when the reservoir is
+// chargeState deducts state gas (spilling into execution when the reservoir is
 // exhausted), with tracer integration. Returns false on OOG.
 func (c *Contract) chargeState(s uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) bool {
 	prior, ok := c.Gas.ChargeState(s)
@@ -171,18 +171,18 @@ func (c *Contract) refundGas(child GasBudget, logger *tracing.Hooks, reason trac
 	}
 }
 
-// forwardGas drains `regular` regular gas and the entire state reservoir
+// forwardGas drains `execution` gas and the entire state reservoir
 // from this contract's running budget and returns the initial GasBudget for
-// a child frame. The caller's UsedRegularGas is bumped by the forwarded
+// a child frame. The caller's UsedExecutionGas is bumped by the forwarded
 // amount so that the absorb-on-return path correctly reclaims the unused
 // portion. Thin wrapper around GasBudget.Forward with tracer integration.
 //
-// Caller must ensure `regular` is no larger than the running balance (the
+// Caller must ensure `execution` is no larger than the running balance (the
 // opcode's dynamic gas table is expected to validate that before invoking
 // the opcode handler).
-func (c *Contract) forwardGas(regular uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) GasBudget {
+func (c *Contract) forwardGas(execution uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) GasBudget {
 	prior := c.Gas
-	child := c.Gas.Forward(regular)
+	child := c.Gas.Forward(execution)
 	if logger.HasGasHook() && reason != tracing.GasChangeIgnored {
 		logger.EmitGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
 	}
