@@ -72,28 +72,25 @@ type syncProfile struct {
 	idle     profStat // runloop blocked in select, waiting for events
 	schedule profStat // runloop top-of-loop cleanup/assignment work
 
-	deliver [profKinds]profStat // peer threads blocked handing a verified response to the runloop
-	process [profKinds]profStat // runloop handling one response
-	commit  [profKinds]profStat // batch writes within the response handlers
-
-	// commitTally accumulates the batch-write time of the current runloop
-	// operation, letting the enclosing process observation net the commits
-	// out.
-	commitTally time.Duration
+	deliver    [profKinds]profStat // peer threads blocked handing a verified response to the runloop
+	process    [profKinds]profStat // runloop bookkeeping of one response, persistence excluded
+	submitWait [profKinds]profStat // runloop blocked acquiring an in-flight slot on job submission
+	exec       [profKinds]profStat // job execution on the worker pool, net of commits
+	commit     [profKinds]profStat // batch writes within the job execution on the worker threads
 }
 
-// observeCommit records one batch write, tallying it up so the enclosing
-// process/forward observation can net it out.
-func (s *syncer) observeCommit(kind int, start time.Time) {
+// observeCommit records one batch write, returning its duration so that the
+// enclosing job execution can net it out of its own timing.
+func (s *syncer) observeCommit(kind int, start time.Time) time.Duration {
 	elapsed := time.Since(start)
 	s.profile.commit[kind].observe(elapsed)
-	s.profile.commitTally += elapsed
+	return elapsed
 }
 
 // reportProfile dumps the accumulated statistics.
 func (s *syncer) reportProfile() {
-	log.Info("State sync profile", "idle", s.profile.idle.String(), "schedule", s.profile.schedule.String())
+	log.Info("State sync profile", "idle", s.profile.idle.String(), "schedule", s.profile.schedule.String(), "skippableheals", s.skippableHeals.Load())
 	for i, name := range profKindNames {
-		log.Info("State sync profile: "+name, "wait", s.profile.deliver[i].String(), "process", s.profile.process[i].String(), "commit", s.profile.commit[i].String())
+		log.Info("State sync profile: "+name, "deliverwait", s.profile.deliver[i].String(), "process", s.profile.process[i].String(), "submitwait", s.profile.submitWait[i].String(), "exec", s.profile.exec[i].String(), "commit", s.profile.commit[i].String())
 	}
 }
