@@ -70,6 +70,8 @@ var (
 			testTAPFlag,
 			testListen1Flag,
 			testListen2Flag,
+			testExpectedIPFlag,
+			testExpectedIP6Flag,
 		},
 	}
 	discv5ListenCommand = &cli.Command{
@@ -125,9 +127,11 @@ func discv5Crawl(ctx *cli.Context) error {
 // discv5Test runs the protocol test suite.
 func discv5Test(ctx *cli.Context) error {
 	suite := &v5test.Suite{
-		Dest:    getNodeArg(ctx),
-		Listen1: ctx.String(testListen1Flag.Name),
-		Listen2: ctx.String(testListen2Flag.Name),
+		Dest:      getNodeArg(ctx),
+		Listen1:   ctx.String(testListen1Flag.Name),
+		Listen2:   ctx.String(testListen2Flag.Name),
+		ExpectIP:  ctx.String(testExpectedIPFlag.Name),
+		ExpectIP6: ctx.String(testExpectedIP6Flag.Name),
 	}
 	return runTests(ctx, suite.AllTests())
 }

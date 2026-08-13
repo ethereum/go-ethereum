@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -397,9 +398,13 @@ func FindnodePastExpiration(t *utesting.T) {
 
 // bond performs the endpoint proof with the remote node.
 func bond(t *utesting.T, te *testenv) {
+	bondWithTCP(t, te, 0)
+}
+
+func bondWithTCP(t *utesting.T, te *testenv, tcpPort uint16) {
 	pingHash := te.send(te.l1, &v4wire.Ping{
 		Version:    4,
-		From:       te.localEndpoint(te.l1),
+		From:       te.localEndpointWithTCP(te.l1, tcpPort),
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	})
@@ -425,6 +430,126 @@ func bond(t *utesting.T, te *testenv) {
 			gotPong = true
 		}
 	}
+}
+
+// FindnodeDistinctUDPAndTCP checks that a learned peer keeps distinct UDP and TCP ports
+// when returned through NEIGHBORS.
+func FindnodeDistinctUDPAndTCP(t *utesting.T) {
+	seed := newTestEnv(Remote, Listen1, Listen2)
+	defer seed.close()
+	query := newTestEnv(Remote, Listen1, Listen2)
+	defer query.close()
+
+	seedEndpoint := seed.localEndpoint(seed.l1)
+	seedTCP := distinctTCPPort(seedEndpoint.UDP)
+	seedID := v4wire.EncodePubkey(&seed.key.PublicKey)
+	t.Logf("bonding seed peer %x at %v:%d with advertised TCP port %d", seedID[:8], seedEndpoint.IP, seedEndpoint.UDP, seedTCP)
+	bondWithTCP(t, seed, seedTCP)
+
+	t.Log("bonding query peer")
+	bond(t, query)
+
+	deadline := time.Now().Add(60 * time.Second)
+	var last []v4wire.Node
+	var lastMismatch string
+	for time.Now().Before(deadline) {
+		node, found, nodes, err := query.findNeighbor(seedID)
+		if err != nil {
+			t.Fatal("findnode failed:", err)
+		}
+		last = nodes
+		if found {
+			if err := checkNeighborPorts(node, seedEndpoint, seedTCP); err == nil {
+				t.Logf("NEIGHBORS preserved distinct ports for seed %x: udp=%d tcp=%d", node.ID[:8], node.UDP, node.TCP)
+				return
+			} else {
+				lastMismatch = err.Error()
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	if lastMismatch != "" {
+		t.Fatalf("seed peer %x was returned by NEIGHBORS with wrong endpoint fields: %s; last response had %d nodes: %s",
+			seedID[:8], lastMismatch, len(last), formatNodes(last))
+	}
+	t.Fatalf("seed peer %x not returned by NEIGHBORS before timeout; last response had %d nodes: %s",
+		seedID[:8], len(last), formatNodes(last))
+}
+
+func (te *testenv) findNeighbor(target v4wire.Pubkey) (v4wire.Node, bool, []v4wire.Node, error) {
+	var findnode v4wire.Findnode
+	findnode.Target = target
+	findnode.Expiration = futureExpiration()
+	te.send(te.l1, &findnode)
+
+	deadline := time.Now().Add(2 * time.Second)
+	var nodes []v4wire.Node
+	for time.Now().Before(deadline) {
+		reply, hash, err := te.read(te.l1)
+		if isTimeout(err) {
+			return v4wire.Node{}, false, nodes, nil
+		}
+		if err != nil {
+			return v4wire.Node{}, false, nodes, err
+		}
+
+		switch msg := reply.(type) {
+		case *v4wire.Ping:
+			te.send(te.l1, &v4wire.Pong{
+				To:         te.remoteEndpoint(),
+				ReplyTok:   hash,
+				Expiration: futureExpiration(),
+			})
+		case *v4wire.Neighbors:
+			nodes = append(nodes, msg.Nodes...)
+			for _, node := range msg.Nodes {
+				if node.ID == target {
+					return node, true, nodes, nil
+				}
+			}
+		}
+	}
+	return v4wire.Node{}, false, nodes, nil
+}
+
+func checkNeighborPorts(node v4wire.Node, wantEndpoint v4wire.Endpoint, wantTCP uint16) error {
+	if !node.IP.Equal(wantEndpoint.IP) {
+		return fmt.Errorf("IP got %v, want %v", node.IP, wantEndpoint.IP)
+	}
+	if node.UDP != wantEndpoint.UDP {
+		return fmt.Errorf("UDP port got %d, want %d", node.UDP, wantEndpoint.UDP)
+	}
+	if node.TCP != wantTCP {
+		return fmt.Errorf("TCP port got %d, want %d", node.TCP, wantTCP)
+	}
+	return nil
+}
+
+func distinctTCPPort(udp uint16) uint16 {
+	if udp > 32768 {
+		return udp - 10000
+	}
+	return udp + 10000
+}
+
+func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	netErr, ok := err.(net.Error)
+	return ok && netErr.Timeout()
+}
+
+func formatNodes(nodes []v4wire.Node) string {
+	if len(nodes) == 0 {
+		return "[]"
+	}
+	formatted := make([]string, len(nodes))
+	for i, node := range nodes {
+		formatted[i] = fmt.Sprintf("{id=%x ip=%v udp=%d tcp=%d}", node.ID[:8], node.IP, node.UDP, node.TCP)
+	}
+	return "[" + strings.Join(formatted, ", ") + "]"
 }
 
 // FindnodeAmplificationInvalidPongHash attempts to perform a traffic amplification attack against a
@@ -544,6 +669,7 @@ var AllTests = []utesting.Test{
 	{Name: "ENRRequest", Fn: ENRRequest},
 	{Name: "Findnode/WithoutEndpointProof", Fn: FindnodeWithoutEndpointProof},
 	{Name: "Findnode/BasicFindnode", Fn: BasicFindnode},
+	{Name: "Findnode/DistinctUDPAndTCP", Fn: FindnodeDistinctUDPAndTCP},
 	{Name: "Findnode/UnsolicitedNeighbors", Fn: UnsolicitedNeighbors},
 	{Name: "Findnode/PastExpiration", Fn: FindnodePastExpiration},
 	{Name: "Amplification/InvalidPongHash", Fn: FindnodeAmplificationInvalidPongHash},
