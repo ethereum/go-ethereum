@@ -303,11 +303,9 @@ func BlobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
 	blobCount := len(cells) / len(cellIndices)
 	blobs := make([]Blob, blobCount)
 	for b := range blobCount {
-		offset := b * len(cellIndices)
-		blob := &blobs[b]
-		for i := range DataPerBlob {
-			cell := &cells[offset+i]
-			copy(blob[i*len(cell):], cell[:])
+		data := cells[b*len(cellIndices):][:DataPerBlob]
+		for i := range data {
+			copy(blobs[b][i*len(data[i]):], data[i][:])
 		}
 	}
 	return blobs, true
