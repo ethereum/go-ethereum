@@ -502,10 +502,11 @@ type syncer struct {
 	storageHealed      uint64             // Number of storage slots downloaded during the healing stage
 	storageHealedBytes common.StorageSize // Number of raw storage bytes persisted to disk during the healing stage
 
-	startTime     time.Time // Time instance when snapshot sync started
-	healStartTime time.Time // Time instance when the state healing started
-	syncTimeOnce  sync.Once // Ensure that the state sync time is uploaded only once
-	logTime       time.Time // Time instance when status was last reported
+	startTime     time.Time   // Time instance when snapshot sync started
+	healStartTime time.Time   // Time instance when the state healing started
+	syncTimeOnce  sync.Once   // Ensure that the state sync time is uploaded only once
+	logTime       time.Time   // Time instance when status was last reported
+	profile       syncProfile // Wall-clock statistics of the runloop and the peer handovers
 
 	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
@@ -684,6 +685,7 @@ func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	)
 	for {
 		// Remove all completed tasks and terminate sync if everything's done
+		schedStart := time.Now()
 		s.cleanStorageTasks()
 		s.cleanAccountTasks()
 		if len(s.tasks) == 0 && s.healer.scheduler.Pending() == 0 {
@@ -710,6 +712,7 @@ func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			s.syncTimeOnce.Do(func() {
 				stateSyncTimeGauge.Update(int64(time.Since(s.startTime)))
 				log.Info("State sync phase is completed", "elapsed", common.PrettyDuration(time.Since(s.startTime)))
+				s.reportProfile()
 			})
 			if s.healStartTime.IsZero() {
 				s.healStartTime = time.Now()
@@ -732,37 +735,53 @@ func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			BytecodeHealBytes:  s.bytecodeHealBytes,
 		}
 		s.lock.Unlock()
+		s.profile.schedule.observe(time.Since(schedStart))
+
 		// Wait for something to happen
+		idleStart := time.Now()
 		select {
 		case <-s.update:
 			// Something happened (new peer, delivery, timeout), recheck tasks
+			s.profile.idle.observe(time.Since(idleStart))
 		case <-peerJoin:
 			// A new peer joined, try to schedule it new tasks
+			s.profile.idle.observe(time.Since(idleStart))
 		case id := <-peerDrop:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertRequests(id)
 		case <-cancel:
 			return ErrCancelled
 
 		case req := <-accountReqFails:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertAccountRequest(req)
 		case req := <-bytecodeReqFails:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertBytecodeRequest(req)
 		case req := <-storageReqFails:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertStorageRequest(req)
 		case req := <-trienodeHealReqFails:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertTrienodeHealRequest(req)
 		case req := <-bytecodeHealReqFails:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertBytecodeHealRequest(req)
 
 		case res := <-accountResps:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.processAccountResponse(res)
 		case res := <-bytecodeResps:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.processBytecodeResponse(res)
 		case res := <-storageResps:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.processStorageResponse(res)
 		case res := <-trienodeHealResps:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.processTrienodeHealResponse(res)
 		case res := <-bytecodeHealResps:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.processBytecodeHealResponse(res)
 		}
 		// Report stats if something meaningful happened
@@ -1903,6 +1922,8 @@ func (s *syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
 // processAccountResponse integrates an already validated account range response
 // into the account tasks.
 func (s *syncer) processAccountResponse(res *accountResponse) {
+	start := time.Now()
+
 	// Switch the task from pending to filling
 	res.task.req = nil
 	res.task.res = res
@@ -2012,6 +2033,8 @@ func (s *syncer) processAccountResponse(res *accountResponse) {
 			}
 		}
 	}
+	s.profile.process[profAccount].observe(time.Since(start))
+
 	// If the account range contained no contracts, or all have been fully filled
 	// beforehand, short circuit storage filling and forward to the next task
 	if res.task.pend == 0 {
@@ -2025,9 +2048,12 @@ func (s *syncer) processAccountResponse(res *accountResponse) {
 // processBytecodeResponse integrates an already validated bytecode response
 // into the account tasks.
 func (s *syncer) processBytecodeResponse(res *bytecodeResponse) {
-	batch := s.db.NewBatch()
-
-	var codes uint64
+	var (
+		start = time.Now()
+		tally = s.profile.commitTally
+		batch = s.db.NewBatch()
+		codes uint64
+	)
 	for i, hash := range res.hashes {
 		code := res.codes[i]
 
@@ -2048,13 +2074,15 @@ func (s *syncer) processBytecodeResponse(res *bytecodeResponse) {
 		rawdb.WriteCode(batch, hash, code)
 	}
 	bytes := common.StorageSize(batch.ValueSize())
+	commitStart := time.Now()
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist bytecodes", "err", err)
 	}
+	s.observeCommit(profBytecode, commitStart)
 	s.bytecodeSynced += codes
 	s.bytecodeBytes += bytes
-
 	log.Debug("Persisted set of bytecodes", "count", codes, "bytes", bytes)
+	s.profile.process[profBytecode].observe(time.Since(start) - (s.profile.commitTally - tally))
 
 	// If this delivery completed the last pending task, forward the account task
 	// to the next chunk
@@ -2069,6 +2097,10 @@ func (s *syncer) processBytecodeResponse(res *bytecodeResponse) {
 // processStorageResponse integrates an already validated storage response
 // into the account tasks.
 func (s *syncer) processStorageResponse(res *storageResponse) {
+	var (
+		start = time.Now()
+		tally = s.profile.commitTally
+	)
 	// Switch the subtask from pending to idle
 	if res.subTask != nil {
 		res.subTask.req = nil
@@ -2264,9 +2296,11 @@ func (s *syncer) processStorageResponse(res *storageResponse) {
 	if res.subTask != nil {
 		if res.subTask.done {
 			root := res.subTask.genTrie.commit(res.subTask.Last == common.MaxHash)
+			commitStart := time.Now()
 			if err := res.subTask.genBatch.Write(); err != nil {
 				log.Error("Failed to persist stack slots", "err", err)
 			}
+			s.observeCommit(profStorage, commitStart)
 			res.subTask.genBatch.Reset()
 
 			// If the chunk's root is an overflown but full delivery,
@@ -2282,19 +2316,23 @@ func (s *syncer) processStorageResponse(res *storageResponse) {
 			}
 		} else if res.subTask.genBatch.ValueSize() > batchSizeThreshold {
 			res.subTask.genTrie.commit(false)
+			commitStart := time.Now()
 			if err := res.subTask.genBatch.Write(); err != nil {
 				log.Error("Failed to persist stack slots", "err", err)
 			}
+			s.observeCommit(profStorage, commitStart)
 			res.subTask.genBatch.Reset()
 		}
 	}
 	// Flush anything written just now and update the stats
+	commitStart := time.Now()
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist storage slots", "err", err)
 	}
+	s.observeCommit(profStorage, commitStart)
 	s.storageSynced += uint64(slots)
-
 	log.Debug("Persisted set of storage slots", "accounts", len(res.hashes), "slots", slots, "bytes", s.storageBytes-oldStorageBytes)
+	s.profile.process[profStorage].observe(time.Since(start) - (s.profile.commitTally - tally))
 
 	// If this delivery completed the last pending task, forward the account task
 	// to the next chunk
@@ -2439,6 +2477,10 @@ func (s *syncer) forwardAccountTask(task *accountTask) {
 	}
 	task.res = nil
 
+	start, tally := time.Now(), s.profile.commitTally
+	defer func() {
+		s.profile.process[profAccount].observe(time.Since(start) - (s.profile.commitTally - tally))
+	}()
 	// Persist the received account segments. These flat state maybe
 	// outdated during the sync, but it can be fixed later during the
 	// snapshot generation.
@@ -2475,9 +2517,11 @@ func (s *syncer) forwardAccountTask(task *accountTask) {
 		}
 	}
 	// Flush anything written just now and update the stats
+	commitStart := time.Now()
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist accounts", "err", err)
 	}
+	s.observeCommit(profAccount, commitStart)
 	s.accountSynced += uint64(len(res.accounts))
 
 	// Task filling persisted, push it the chunk marker forward to the first
@@ -2505,15 +2549,19 @@ func (s *syncer) forwardAccountTask(task *accountTask) {
 	// write as it will only cause more data to be downloaded during heal.
 	if task.done {
 		task.genTrie.commit(task.Last == common.MaxHash)
+		gbStart := time.Now()
 		if err := task.genBatch.Write(); err != nil {
 			log.Error("Failed to persist stack account", "err", err)
 		}
+		s.observeCommit(profAccount, gbStart)
 		task.genBatch.Reset()
 	} else if task.genBatch.ValueSize() > batchSizeThreshold {
 		task.genTrie.commit(false)
+		gbStart := time.Now()
 		if err := task.genBatch.Write(); err != nil {
 			log.Error("Failed to persist stack account", "err", err)
 		}
+		s.observeCommit(profAccount, gbStart)
 		task.genBatch.Reset()
 	}
 	log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "bytes", s.accountBytes-oldAccountBytes)
@@ -2611,11 +2659,13 @@ func (s *syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 		accounts: accs,
 		cont:     cont,
 	}
+	deliverStart := time.Now()
 	select {
 	case req.deliver <- response:
 	case <-req.cancel:
 	case <-req.stale:
 	}
+	s.profile.deliver[profAccount].observe(time.Since(deliverStart))
 	return nil
 }
 
@@ -2722,11 +2772,13 @@ func (s *syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 		hashes: req.hashes,
 		codes:  codes,
 	}
+	deliverStart := time.Now()
 	select {
 	case req.deliver <- response:
 	case <-req.cancel:
 	case <-req.stale:
 	}
+	s.profile.deliver[profBytecode].observe(time.Since(deliverStart))
 	return nil
 }
 
@@ -2871,11 +2923,13 @@ func (s *syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		slots:    slots,
 		cont:     cont,
 	}
+	deliverStart := time.Now()
 	select {
 	case req.deliver <- response:
 	case <-req.cancel:
 	case <-req.stale:
 	}
+	s.profile.deliver[profStorage].observe(time.Since(deliverStart))
 	return nil
 }
 
