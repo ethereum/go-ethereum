@@ -122,8 +122,6 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	// Now finalize the changes. Finalize is normally performed between transactions.
 	// By using finalize, the overrides are semantically behaving as
 	// if they were created in a transaction just before the tracing occur.
-	// The overrides are not part of any fork-governed state transition, so no
-	// fork behaviour applies: empty accounts are kept exactly as overridden.
 	statedb.Finalise(params.Rules{})
 	return nil
 }

@@ -471,9 +471,10 @@ func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
 // body and receipts.
 func AssembleBlock(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, blockAccessList *bal.ConstructionBlockAccessList) *types.Block {
 	// Assign the post-transition state root
-	header.Root = state.IntermediateRoot(chain.Config().Rules(header.Number, header.Difficulty.Sign() == 0, header.Time))
+	rules := chain.Config().Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
+	header.Root = state.IntermediateRoot(rules)
 
-	if !chain.Config().IsAmsterdam(header.Number, header.Time) {
+	if !rules.IsAmsterdam {
 		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 	}
 	// Assign the BlockAccessListHash if Amsterdam has been enabled

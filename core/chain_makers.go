@@ -356,7 +356,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 	genblock := func(i int, parent *types.Block, triedb *triedb.Database, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, cm: cm, parent: parent, statedb: statedb, engine: engine}
-		b.header = cm.makeHeader(parent, statedb, b.engine)
+		b.header = cm.makeHeader(parent, b.engine)
 		b.bal = bal.NewConstructionBlockAccessList()
 
 		// Set the difficulty for clique block. The chain maker doesn't have access
@@ -453,7 +453,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
-	var triedbConfig *triedb.Config = triedb.HashDefaults
+	var triedbConfig = triedb.HashDefaults
 	if config.IsUBT(config.ChainID, 0) {
 		triedbConfig = triedb.UBTDefaults
 	}
@@ -517,11 +517,10 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	return db, blocks, receipts
 }
 
-func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
+func (cm *chainMaker) makeHeader(parent *types.Block, engine consensus.Engine) *types.Header {
 	time := parent.Time() + 10 // block time is fixed at 10 seconds
 	parentHeader := parent.Header()
 	header := &types.Header{
-		Root:       state.IntermediateRoot(cm.config.Rules(parent.Number(), parent.Difficulty().Sign() == 0, parent.Time())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: engine.CalcDifficulty(cm, time, parentHeader),
@@ -529,7 +528,6 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		Time:       time,
 	}
-
 	if cm.config.IsLondon(header.Number) {
 		header.BaseFee = eip1559.CalcBaseFee(cm.config, parentHeader)
 		if !cm.config.IsLondon(parent.Number()) {
