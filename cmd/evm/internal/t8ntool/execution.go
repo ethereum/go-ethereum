@@ -160,6 +160,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 
 		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		rules       = chainConfig.Rules(big.NewInt(int64(pre.Env.Number)), pre.Env.Random != nil, pre.Env.Timestamp)
 	)
 	if pre.AllocPath != "" {
 		var err error
@@ -308,7 +309,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		receipts = append(receipts, receipt)
 		blockAccessList.Merge(bal)
 	}
-	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
+	statedb.IntermediateRoot(rules)
 
 	// TODO(rjl493456442) call engine.Finalize() instead
 	// Add mining reward? (-1 means rewards are disabled)
@@ -369,7 +370,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	blockAccessList.Merge(bal)
 
 	// Commit block
-	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
+	root, err := statedb.Commit(rules, vmContext.BlockNumber.Uint64())
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
@@ -455,7 +456,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, err = statedb.Commit(0, false, false)
+	root, err = statedb.Commit(params.Rules{}, 0)
 	if err != nil {
 		panic(fmt.Errorf("failed to commit initial state: %v", err))
 	}
@@ -530,7 +531,7 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) 
 		return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc closing token: %v", err))
 	}
 
-	root, err = statedb.Commit(0, false, false)
+	root, err = statedb.Commit(params.Rules{}, 0)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
 	}

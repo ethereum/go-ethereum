@@ -230,10 +230,10 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	}
 }
 
-func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
+func (s *hookedStateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList {
 	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		// Short circuit if no relevant hooks are set.
-		return s.inner.Finalise(deleteEmptyObjects)
+		return s.inner.Finalise(rules)
 	}
 
 	// Collect all self-destructed addresses first, then sort them to ensure
@@ -255,7 +255,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlock
 	// EIP-8246 (Amsterdam) removes the SELFDESTRUCT burn: a self-destructed
 	// account that retains a non-zero balance is preserved as a balance-only
 	// account rather than removed, so its balance is no longer burnt.
-	burnsBalance := s.inner.stateAccessList == nil
+	burnsBalance := !rules.IsAmsterdam
 
 	for _, addr := range selfDestructedAddrs {
 		obj := s.inner.stateObjects[addr]
@@ -288,7 +288,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlock
 			s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
 		}
 	}
-	return s.inner.Finalise(deleteEmptyObjects)
+	return s.inner.Finalise(rules)
 }
 
 func (s *hookedStateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint32) {

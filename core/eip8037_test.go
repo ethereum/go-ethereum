@@ -71,7 +71,7 @@ func mkState(alloc types.GenesisAlloc) *state.StateDB {
 			sdb.SetState(addr, k, v)
 		}
 	}
-	sdb.Finalise(true)
+	sdb.Finalise(params.Rules{IsEIP158: true})
 	return sdb
 }
 
@@ -98,7 +98,7 @@ func mkCommittedState(t *testing.T, alloc types.GenesisAlloc) *state.StateDB {
 			sdb.SetState(addr, k, v)
 		}
 	}
-	root, err := sdb.Commit(0, false, false)
+	root, err := sdb.Commit(params.Rules{}, 0)
 	if err != nil {
 		t.Fatalf("commit prestate: %v", err)
 	}

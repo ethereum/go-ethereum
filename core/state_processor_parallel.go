@@ -105,7 +105,6 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		// blockAccessList is the access list rebuilt from the actual execution.
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	)
-
 	// Resolve the parent state root, the point all execution reads from.
 	parent := p.chain.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
@@ -135,7 +134,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		stateApply = time.Since(start)
 
 		start = time.Now()
-		statedb.IntermediateRoot(config.IsEIP158(header.Number))
+		statedb.IntermediateRoot(config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time))
 		stateHash = time.Since(start)
 		return statedb.Error()
 	})

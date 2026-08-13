@@ -77,7 +77,7 @@ func run8037(t *testing.T, code []byte, gas GasBudget, value *uint256.Int, setup
 	if setup != nil {
 		setup(statedb, self)
 	}
-	statedb.Finalise(true)
+	statedb.Finalise(params.Rules{IsEIP158: true})
 	ret, result, err := amsterdam8037EVM(statedb).Call(common.Address{}, self, nil, gas, value)
 	assertBudgetSane(t, gas, result)
 	return ret, result, err

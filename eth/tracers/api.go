@@ -514,12 +514,12 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	defer release()
 
 	var (
-		roots              []common.Hash
-		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		chainConfig        = api.backend.ChainConfig()
-		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
-		evm                = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+		roots       []common.Hash
+		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
+		chainConfig = api.backend.ChainConfig()
+		rules       = chainConfig.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())
+		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		evm         = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
 	)
 	defer evm.Release()
 	// Run pre-execution system calls
@@ -543,7 +543,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		}
 		// Calling IntermediateRoot will internally call Finalize on the state
 		// so any modifications are written to the trie
-		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
+		roots = append(roots, statedb.IntermediateRoot(rules))
 	}
 	return roots, nil
 }
@@ -687,8 +687,7 @@ txloop:
 			break txloop
 		}
 		// Finalize the state so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(evm.GetRules())
 	}
 
 	close(jobs)
@@ -766,8 +765,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 				return dumps, err
 			}
 			// Finalize the state so any modifications are written to the trie
-			// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-			statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+			statedb.Finalise(evm.GetRules())
 			continue
 		}
 		// The transaction should be traced.
@@ -810,8 +808,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			return dumps, err
 		}
 		// Finalize the state so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(chainConfig.IsEIP158(block.Number()))
+		statedb.Finalise(evm.GetRules())
 
 		// If we've traced the transaction we were looking for, abort
 		if tx.Hash() == txHash {

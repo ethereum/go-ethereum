@@ -84,7 +84,7 @@ func newTestCache(t *testing.T, txConfig []txSpec) *testCache {
 	for _, a := range addrs {
 		statedb.AddBalance(a, uint256.NewInt(1_000_000_000_000), tracing.BalanceChangeUnspecified)
 	}
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	cancunTime := uint64(0)
 	config := &params.ChainConfig{
