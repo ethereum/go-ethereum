@@ -157,7 +157,14 @@ var (
 // the result with p.
 func (g *generator) spliceOpcodeBody(handler string) string {
 	fn := g.opHandler(handler)
-	return g.rewriteOpcodeReturns(g.renderBody(fn.Body.List, nil))
+	return useContractLocal(g.rewriteOpcodeReturns(g.renderBody(fn.Body.List, nil)))
+}
+
+// useContractLocal points a spliced body at the loop's own contract variable. The
+// handlers reach it through the scope they are handed, but the generated loop already
+// holds it, so every one of those is a pointer load the switch does not need.
+func useContractLocal(src string) string {
+	return strings.ReplaceAll(src, "scope.Contract", "contract")
 }
 
 // spliceOpcodeFactoryBody splices the executionFunc closure a make* factory returns,
@@ -188,7 +195,7 @@ func (g *generator) spliceOpcodeFactoryBody(factory string, args ...int) string 
 	for i, nm := range names {
 		params[nm] = args[i]
 	}
-	return g.rewriteOpcodeReturns(g.renderBody(lit.Body.List, params))
+	return useContractLocal(g.rewriteOpcodeReturns(g.renderBody(lit.Body.List, params)))
 }
 
 // factoryClosure returns the executionFunc literal that a make* factory's body
