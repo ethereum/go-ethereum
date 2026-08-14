@@ -496,30 +496,39 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamp
 // HandlePartialReceipts re-request partial receipts
 func (p *Peer) requestPartialReceipts(id uint64) error {
 	p.receiptBufferLock.Lock()
-	defer p.receiptBufferLock.Unlock()
 
 	// Do not re-request for the stale request
-	if _, ok := p.receiptBuffer[id]; !ok {
+	buffer, ok := p.receiptBuffer[id]
+	if !ok {
+		p.receiptBufferLock.Unlock()
 		return nil
 	}
-	lastBlock := len(p.receiptBuffer[id].list) - 1
-	lastReceipt := p.receiptBuffer[id].list[lastBlock].items.Len()
+	lastBlock := len(buffer.list) - 1
+	lastReceipt := buffer.list[lastBlock].items.Len()
 
-	hashes := p.receiptBuffer[id].request[lastBlock:]
+	hashes := buffer.request[lastBlock:]
+	p.receiptBufferLock.Unlock()
 
-	req := &Request{
-		id:   id,
-		sink: nil,
-		code: GetReceiptsMsg,
-		want: ReceiptsMsg,
-		data: &GetReceiptsPacket70{
-			RequestId:              id,
-			FirstBlockReceiptIndex: uint64(lastReceipt),
-			GetReceiptsRequest:     hashes,
-		},
-		numItems: len(hashes),
+	// The follow-up continues the original request and reuses its id, so it is
+	// sent directly instead of being dispatched: the original request is the
+	// one pending in the dispatcher and the one the completed response will be
+	// delivered to. Going through the dispatcher would also deadlock the peer,
+	// as the buffer lock would have to be held across the dispatch, which the
+	// dispatcher itself acquires when a request is cancelled.
+	treq := tracker.Request{
+		ID:       id,
+		ReqCode:  GetReceiptsMsg,
+		RespCode: ReceiptsMsg,
+		Size:     len(hashes),
 	}
-	return p.dispatchRequest(req)
+	if err := p.tracker.Track(treq); err != nil {
+		return err
+	}
+	return p2p.Send(p.rw, GetReceiptsMsg, &GetReceiptsPacket70{
+		RequestId:              id,
+		FirstBlockReceiptIndex: uint64(lastReceipt),
+		GetReceiptsRequest:     hashes,
+	})
 }
 
 // bufferReceipts validates a receipt packet and buffer the incomplete packet.
