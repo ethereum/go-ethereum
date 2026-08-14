@@ -923,9 +923,12 @@ func (s *StateDB) finaliseAmsterdam(rules params.Rules) *bal.ConstructionBlockAc
 	return bal
 }
 
-// IntermediateRoot computes the current root hash of the state trie.
-// It is called in between transactions to get the root hash that
-// goes into transaction receipts.
+// IntermediateRoot computes the current root hash of the state trie. It
+// flushes all outstanding state changes into the trie without committing
+// them to disk. It is called at the end of block processing to fill in the
+// header state root when building a block and to verify it when validating
+// one. Under pre-Byzantium rules it is also called in between transactions
+// to get the root hash that goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(rules)
