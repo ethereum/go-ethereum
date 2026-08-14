@@ -118,6 +118,10 @@ const (
 
 var errLegacyTx = errors.New("legacy transaction format")
 
+// ErrBlobTxNotFound is returned when cell delivery targets a transaction that
+// is not currently tracked by the blobpool.
+var ErrBlobTxNotFound = errors.New("blob transaction not found")
+
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
 // schedule the blob transactions into the following blocks. Only ever add the
 // bare minimum needed fields to keep the size down (and thus number of entries
@@ -2638,7 +2642,148 @@ func (p *BlobPool) GetCustody(hash common.Hash) *types.CustodyBitmap {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	if meta := p.lookup.txIndex[hash]; meta != nil {
-		return &meta.custody
+		custody := meta.custody
+		return &custody
 	}
 	return nil
+}
+
+// MergeCells verifies and merges additional cells into an existing pooled
+// transaction. It returns the peers whose deliveries failed verification.
+func (p *BlobPool) MergeCells(hash common.Hash, deliveries map[string]*PeerDelivery) ([]string, error) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	lookupMeta := p.lookup.txIndex[hash]
+	if lookupMeta == nil {
+		return nil, fmt.Errorf("%w: %s", ErrBlobTxNotFound, hash)
+	}
+	data, err := p.store.Get(lookupMeta.id)
+	if err != nil {
+		return nil, err
+	}
+	var ptx BlobTxForPool
+	if err := rlp.DecodeBytes(data, &ptx); err != nil {
+		return nil, err
+	}
+	if ptx.CellSidecar == nil {
+		return nil, errors.New("blob transaction sidecar missing")
+	}
+	from, err := types.Sender(p.signer, ptx.Tx)
+	if err != nil {
+		return nil, err
+	}
+	var meta *blobTxMeta
+	for _, candidate := range p.index[from] {
+		if candidate.hash == hash {
+			meta = candidate
+			break
+		}
+	}
+	if meta == nil || meta.id != lookupMeta.id {
+		return nil, errors.New("blob transaction metadata missing")
+	}
+	sidecar := ptx.CellSidecar
+	var badPeers []string
+	for peer, delivery := range deliveries {
+		candidate := &types.BlobTxCellSidecar{
+			Version:     sidecar.Version,
+			Cells:       delivery.Cells,
+			Commitments: sidecar.Commitments,
+			Proofs:      sidecar.Proofs,
+			Custody:     types.NewCustodyBitmap(delivery.Indices),
+		}
+		if err := txpool.ValidateCells(candidate); err != nil {
+			badPeers = append(badPeers, peer)
+		}
+	}
+	if len(badPeers) > 0 {
+		return badPeers, nil
+	}
+
+	merged, changed, err := mergeCellDeliveries(sidecar, deliveries)
+	if err != nil || !changed {
+		return nil, err
+	}
+	ptx.CellSidecar = merged
+	blob, err := rlp.EncodeToBytes(&ptx)
+	if err != nil {
+		return nil, err
+	}
+	newID, err := p.store.Put(blob)
+	if err != nil {
+		return nil, err
+	}
+	newStorageSize := p.store.Size(newID)
+	oldID := lookupMeta.id
+	if err := p.store.Delete(oldID); err != nil {
+		if cleanupErr := p.store.Delete(newID); cleanupErr != nil {
+			log.Error("Failed to roll back merged blob transaction", "id", newID, "err", cleanupErr)
+		}
+		return nil, fmt.Errorf("failed to delete superseded blob transaction %d: %w", oldID, err)
+	}
+	oldStorageSize := meta.storageSize
+	meta.id = newID
+	meta.storageSize = newStorageSize
+	meta.size = ptx.txSize()
+	meta.sizeWithoutBlob = ptx.txSizeWithoutBlob()
+	meta.custody = &ptx.CellSidecar.Custody
+
+	lookupMeta.id = newID
+	lookupMeta.size = meta.size
+	lookupMeta.sizeWithoutBlob = meta.sizeWithoutBlob
+	lookupMeta.custody = ptx.CellSidecar.Custody
+	p.stored = p.stored - uint64(oldStorageSize) + uint64(newStorageSize)
+	p.updateStorageMetrics()
+	return nil, nil
+}
+
+func mergeCellDeliveries(sidecar *types.BlobTxCellSidecar, deliveries map[string]*PeerDelivery) (*types.BlobTxCellSidecar, bool, error) {
+	blobCount := len(sidecar.Commitments)
+	oldIndices := sidecar.Custody.Indices()
+	if len(sidecar.Cells) != blobCount*len(oldIndices) {
+		return nil, false, errors.New("invalid stored cell count")
+	}
+	mergedCustody := sidecar.Custody
+	for _, delivery := range deliveries {
+		if len(delivery.Cells) != blobCount*len(delivery.Indices) {
+			return nil, false, errors.New("invalid delivered cell count")
+		}
+		mergedCustody = mergedCustody.Union(types.NewCustodyBitmap(delivery.Indices))
+	}
+	if mergedCustody == sidecar.Custody {
+		return sidecar, false, nil
+	}
+	byBlob := make([]map[uint64]kzg4844.Cell, blobCount)
+	for blob := range blobCount {
+		byBlob[blob] = make(map[uint64]kzg4844.Cell, mergedCustody.OneCount())
+		for pos, index := range oldIndices {
+			byBlob[blob][index] = sidecar.Cells[blob*len(oldIndices)+pos]
+		}
+	}
+	for _, delivery := range deliveries {
+		for blob := range blobCount {
+			for pos, index := range delivery.Indices {
+				byBlob[blob][index] = delivery.Cells[blob*len(delivery.Indices)+pos]
+			}
+		}
+	}
+	indices := mergedCustody.Indices()
+	cells := make([]kzg4844.Cell, 0, blobCount*len(indices))
+	for blob := range blobCount {
+		for _, index := range indices {
+			cell, ok := byBlob[blob][index]
+			if !ok {
+				return nil, false, errors.New("missing merged cell")
+			}
+			cells = append(cells, cell)
+		}
+	}
+	return &types.BlobTxCellSidecar{
+		Version:     sidecar.Version,
+		Cells:       cells,
+		Commitments: sidecar.Commitments,
+		Proofs:      sidecar.Proofs,
+		Custody:     mergedCustody,
+	}, true, nil
 }

@@ -102,6 +102,10 @@ type doBlobEnqueue struct {
 	custody types.CustodyBitmap
 }
 
+type doCustodyUpdate struct {
+	custody types.CustodyBitmap
+}
+
 type blobDoFunc func(*BlobFetcher)
 
 type isWaitingAvailability map[common.Hash]map[string]struct{}
@@ -824,6 +828,10 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 			}
 			<-wait
 
+		case doCustodyUpdate:
+			fetcher.UpdateCustody(step.custody)
+			<-wait
+
 		case blobDoFunc:
 			step(fetcher)
 
@@ -1007,21 +1015,11 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 
 					// Check fetched indices
 					if expected.fetched != nil {
-						if len(fetchStatus.fetched) != len(expected.fetched) {
-							t.Errorf("step %d, hash %x: fetched length mismatch, got %d, want %d", i, hash, len(fetchStatus.fetched), len(expected.fetched))
-						} else {
-							// Sort both slices before comparing
-							gotFetched := make([]uint64, len(fetchStatus.fetched))
-							copy(gotFetched, fetchStatus.fetched)
-							slices.Sort(gotFetched)
-
-							expectedFetched := make([]uint64, len(expected.fetched))
-							copy(expectedFetched, expected.fetched)
-							slices.Sort(expectedFetched)
-
-							if !slices.Equal(gotFetched, expectedFetched) {
-								t.Errorf("step %d, hash %x: fetched indices mismatch", i, hash)
-							}
+						gotFetched := fetchStatus.fetched.Indices()
+						expectedFetched := slices.Clone(expected.fetched)
+						slices.Sort(expectedFetched)
+						if !slices.Equal(gotFetched, expectedFetched) {
+							t.Errorf("step %d, hash %x: fetched indices mismatch", i, hash)
 						}
 					}
 				}
@@ -1149,4 +1147,221 @@ func TestMultiBlobDeliveryVerification(t *testing.T) {
 	if verifyErr != nil {
 		t.Fatalf("KZG cell verification failed after multi-blob delivery: %v", verifyErr)
 	}
+}
+
+func TestBlobFetcherCustodyExpansion(t *testing.T) {
+	expanded := types.NewCustodyBitmap([]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11})
+	delta := expanded.Difference(custody)
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload:    func(common.Hash) bool { return false },
+					AddCells:      func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error { return nil },
+					DropPeer:      func(string) {},
+				},
+				custody,
+				&mockRand{value: 60},
+				15,
+			)
+		},
+		steps: []interface{}{
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			doBlobNotify{peer: "B", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			doCustodyUpdate{custody: expanded},
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[0], custody: expanded}},
+					"B": {{hash: testBlobTxHashes[0], custody: expanded}},
+				},
+				fetching: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[0], custody: custody}},
+					"B": {{hash: testBlobTxHashes[0], custody: delta}},
+				},
+			},
+			isFetching{hashes: map[common.Hash]fetchInfo{
+				testBlobTxHashes[0]: {fetching: &expanded, fetched: []uint64{}},
+			}},
+		},
+	})
+}
+
+func TestBlobFetcherCustodyContractionCompletesCoveredFetch(t *testing.T) {
+	contracted := types.NewCustodyBitmap([]uint64{0, 1})
+	fetched := types.NewCustodyBitmap([]uint64{0, 1, 2})
+	completed := make(chan types.CustodyBitmap, 1)
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload: func(common.Hash) bool { return false },
+					AddCells: func(_ common.Hash, _ map[string]*PeerCellDelivery, cells types.CustodyBitmap) {
+						completed <- cells
+					},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error { return nil },
+					DropPeer:      func(string) {},
+				},
+				custody,
+				&mockRand{value: 60},
+				15,
+			)
+		},
+		steps: []interface{}{
+			blobDoFunc(func(f *BlobFetcher) {
+				f.partial[testBlobTxHashes[0]] = struct{}{}
+				f.fetches[testBlobTxHashes[0]] = &fetchStatus{
+					fetching: fetched,
+					fetched:  fetched,
+					deliveries: map[string]*PeerCellDelivery{
+						"A": {},
+					},
+				}
+			}),
+			doCustodyUpdate{custody: contracted},
+			isCompleted{testBlobTxHashes[0]},
+			blobDoFunc(func(*BlobFetcher) {
+				select {
+				case got := <-completed:
+					if got != fetched {
+						t.Fatalf("unexpected collected custody: got %v, want %v", got, fetched)
+					}
+				default:
+					t.Fatal("covered fetch was not completed after custody contraction")
+				}
+			}),
+		},
+	})
+}
+
+func TestBlobFetcherCustodyUpdateNoop(t *testing.T) {
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload:    func(common.Hash) bool { return false },
+					AddCells:      func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error { return nil },
+					DropPeer:      func(string) {},
+				},
+				custody,
+				&mockRand{value: 60},
+				15,
+			)
+		},
+		steps: []interface{}{
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			doCustodyUpdate{custody: custody},
+			isWaitingAvailability{testBlobTxHashes[0]: {"A": {}}},
+		},
+	})
+}
+
+func TestBlobFetcherCustodyUpdateWhileWaiting(t *testing.T) {
+	expanded := types.NewCustodyBitmap([]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload:    func(common.Hash) bool { return false },
+					AddCells:      func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error { return nil },
+					DropPeer:      func(string) {},
+				},
+				custody,
+				&mockRand{value: 60},
+				15,
+			)
+		},
+		steps: []interface{}{
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			doCustodyUpdate{custody: expanded},
+			isWaitingAvailability{testBlobTxHashes[0]: {"A": {}}},
+			isBlobScheduled{announces: map[string][]blobAnnounce{}, fetching: map[string][]blobAnnounce{}},
+		},
+	})
+}
+
+func TestBlobFetcherSupplementsPooledTransaction(t *testing.T) {
+	stored := types.NewCustodyBitmap([]uint64{0, 1, 2, 3})
+	required := types.NewCustodyBitmap([]uint64{0, 1, 2, 3, 4, 5})
+	delta := required.Difference(stored)
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload: func(common.Hash) bool { return true },
+					GetCustody: func(hash common.Hash) *types.CustodyBitmap {
+						if hash == testBlobTxHashes[0] {
+							return &stored
+						}
+						return nil
+					},
+					AddCells:      func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error { return nil },
+					DropPeer:      func(string) {},
+				},
+				required,
+				&mockRand{value: 60},
+				15,
+			)
+		},
+		steps: []interface{}{
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[0], custody: delta}},
+				},
+				fetching: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[0], custody: delta}},
+				},
+			},
+			isFetching{hashes: map[common.Hash]fetchInfo{
+				testBlobTxHashes[0]: {fetching: &required, fetched: stored.Indices()},
+			}},
+		},
+	})
+}
+
+func TestBlobFetcherCustodyExpansionReactivatesPooledTransaction(t *testing.T) {
+	stored := types.NewCustodyBitmap([]uint64{0, 1, 2, 3})
+	expanded := types.NewCustodyBitmap([]uint64{0, 1, 2, 3, 4, 5})
+	delta := expanded.Difference(stored)
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload: func(common.Hash) bool { return true },
+					GetCustody: func(hash common.Hash) *types.CustodyBitmap {
+						if hash == testBlobTxHashes[0] {
+							return &stored
+						}
+						return nil
+					},
+					AddCells:      func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error { return nil },
+					DropPeer:      func(string) {},
+				},
+				stored,
+				&mockRand{value: 60},
+				15,
+			)
+		},
+		steps: []interface{}{
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			isBlobScheduled{announces: map[string][]blobAnnounce{}, fetching: map[string][]blobAnnounce{}},
+			doCustodyUpdate{custody: expanded},
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[0], custody: expanded}},
+				},
+				fetching: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[0], custody: delta}},
+				},
+			},
+			isFetching{hashes: map[common.Hash]fetchInfo{
+				testBlobTxHashes[0]: {fetching: &expanded, fetched: stored.Indices()},
+			}},
+		},
+	})
 }

@@ -2439,3 +2439,96 @@ func TestGetCells(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeCells(t *testing.T) {
+	storage := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(params.BlobTxMaxBlobs), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key)
+	ptx, err := newBlobTxForPool(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selectCells := func(mask types.CustodyBitmap) []kzg4844.Cell {
+		var cells []kzg4844.Cell
+		for blob := range len(ptx.CellSidecar.Commitments) {
+			for _, index := range mask.Indices() {
+				cells = append(cells, ptx.CellSidecar.Cells[blob*kzg4844.CellsPerBlob+int(index)])
+			}
+		}
+		return cells
+	}
+	stored := types.NewCustodyBitmap([]uint64{0, 1, 2, 3})
+	delta := types.NewCustodyBitmap([]uint64{4, 5})
+	allCells := ptx.CellSidecar.Cells
+	ptx.CellSidecar.Cells = selectCells(stored)
+	ptx.CellSidecar.Custody = stored
+	blob, err := rlp.EncodeToBytes(ptx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Put(blob); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(crypto.PubkeyToAddress(key.PublicKey), uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	deltaCells := make([]kzg4844.Cell, 0, len(delta.Indices())*len(ptx.CellSidecar.Commitments))
+	for blob := range len(ptx.CellSidecar.Commitments) {
+		for _, index := range delta.Indices() {
+			deltaCells = append(deltaCells, allCells[blob*kzg4844.CellsPerBlob+int(index)])
+		}
+	}
+	badPeers, err := pool.MergeCells(tx.Hash(), map[string]*PeerDelivery{
+		"peer": {Cells: deltaCells, Indices: delta.Indices()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(badPeers) != 0 {
+		t.Fatalf("valid delivery rejected from peers %v", badPeers)
+	}
+	wantCustody := stored.Union(delta)
+	if got := pool.GetCustody(tx.Hash()); got == nil || *got != wantCustody {
+		t.Fatalf("custody mismatch: got %v, want %v", got, wantCustody)
+	}
+	cells, _, err := pool.GetBlobCells(pool.GetBlobHashes(tx.Hash()), wantCustody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for blob, got := range cells {
+		if len(got) != wantCustody.OneCount() {
+			t.Fatalf("blob %d returned %d cells, want %d", blob, len(got), wantCustody.OneCount())
+		}
+		for i, cell := range got {
+			if cell == nil {
+				t.Fatalf("blob %d cell %d is missing", blob, i)
+			}
+		}
+	}
+	if _, err := pool.MergeCells(common.HexToHash("0xdead"), nil); !errors.Is(err, ErrBlobTxNotFound) {
+		t.Fatalf("missing transaction error mismatch: got %v, want %v", err, ErrBlobTxNotFound)
+	}
+}
