@@ -161,7 +161,13 @@ func (a *Archiver) processTrie(owner common.Hash, t *Trie) error {
 		found   uint64
 	)
 
-	for iter.Next(true) {
+	// descend controls whether the next iterator step visits the current
+	// node's children. It is reset to true at the top of every iteration
+	// and cleared when the current subtree provably contains no height-3
+	// subtree (archived, expired, or too short).
+	descend := true
+	for iter.Next(descend) {
+		descend = true
 		if iter.Leaf() {
 			continue
 		}
@@ -188,13 +194,32 @@ func (a *Archiver) processTrie(owner common.Hash, t *Trie) error {
 		// This does NOT load the trie into memory — it reads blobs from
 		// the DB, decodes them, computes height, and discards them.
 		height := a.probeHeight(owner, path, hash, 3)
-		if height != 3 {
-			// Too small to archive; the iterator will visit children.
+		if height > 3 {
 			// Too tall — descend into children to find height-3 subtrees.
 			continue
 		}
+		if height < 0 {
+			// Already expired — nothing below, skip the subtree.
+			descend = false
+			continue
+		}
+		if height < 3 {
+			// Height 1 or 2: no descendant can be height 3, skip.
+			// Height 0 may also mean a probe failure (missing or
+			// undecodable blob in the raw DB), so keep descending in
+			// that case to preserve the iterator's error reporting.
+			descend = height == 0
+			continue
+		}
 
-		// height == 3: collect and archive this subtree immediately.
+		// height == 3: nothing below this root can itself be height 3,
+		// and on successful archival the subtree is deleted from the DB —
+		// either way, do not descend into it. The loop-head Next(descend)
+		// then advances to the subtree's path-successor, so no sibling is
+		// ever skipped.
+		descend = false
+
+		// Collect and archive this subtree immediately.
 		info := a.collectSubtree(owner, path, hash)
 		if info == nil {
 			continue
@@ -211,10 +236,6 @@ func (a *Archiver) processTrie(owner common.Hash, t *Trie) error {
 		if err := a.maybeCompact(); err != nil {
 			log.Warn("Compaction failed", "err", err)
 		}
-
-		// Skip children — they're now archived.
-		// We call Next(false) to move past the subtree without descending.
-		iter.Next(false)
 	}
 
 	if iter.Error() != nil {
@@ -294,9 +315,11 @@ func (a *Archiver) nodeHeight(n node, path []byte, owner common.Hash, maxHeight 
 			case valueNode:
 				childHeight = 0
 			case hashNode:
-				if maxH+1 > maxHeight {
-					return maxHeight + 1
-				}
+				// probeHeight saturates at maxHeight for taller children,
+				// so h = childHeight+1 exceeds maxHeight below and exits
+				// early. Do NOT bail out based on previous children's
+				// maxH: maxH == maxHeight means the node is exactly
+				// maxHeight tall so far, not taller.
 				childHeight = a.probeHeight(owner, childPath, common.BytesToHash(c), maxHeight-1)
 			default:
 				childHeight = a.nodeHeight(c, childPath, owner, maxHeight-1)
@@ -355,7 +378,9 @@ func (a *Archiver) collectSubtree(owner common.Hash, path []byte, hash common.Ha
 
 	info.height = height
 	info.leaves = leaves
-	info.nodePaths = append([][]byte{copyBytes(path)}, nodePaths...)
+	// nodePaths[0] is the subtree root's own path: both the shortNode and
+	// fullNode cases of collectNodeLeaves record their own absPath first.
+	info.nodePaths = nodePaths
 	return info
 }
 
@@ -444,7 +469,10 @@ func (a *Archiver) collectNodeLeaves(n node, absPath, relPath []byte, owner comm
 				maxHeight = h
 			}
 		}
-		return allLeaves, allPaths, maxHeight, nil
+		// Record this node's own path (first) so it gets deleted along
+		// with its descendants; only the subtree root (nodePaths[0]) is
+		// kept and overwritten with the expired marker.
+		return allLeaves, append([][]byte{copyBytes(absPath)}, allPaths...), maxHeight, nil
 
 	case hashNode:
 		resolved, err := a.resolveRawNode(owner, absPath, common.BytesToHash(n))
