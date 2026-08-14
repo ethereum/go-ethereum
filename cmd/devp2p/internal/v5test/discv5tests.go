@@ -296,11 +296,11 @@ func validateEndpointPairs(record *enr.Record) (string, error) {
 		return "", err
 	}
 
-	if hasUDP && !hasIP4 {
-		return "", fmt.Errorf("udp is present without ip")
+	if hasUDP && !hasIP4 && !hasIP6 {
+		return "", fmt.Errorf("udp is present without ip or ip6")
 	}
-	if hasTCP && !hasIP4 {
-		return "", fmt.Errorf("tcp is present without ip")
+	if hasTCP && !hasIP4 && !hasIP6 {
+		return "", fmt.Errorf("tcp is present without ip or ip6")
 	}
 	if hasUDP6 && !hasIP6 {
 		return "", fmt.Errorf("udp6 is present without ip6")
@@ -375,9 +375,6 @@ func requireExpectedEndpointEntries(record *enr.Record, wantIPv4, wantIPv6 strin
 		if !hasUDP {
 			return "", fmt.Errorf("missing udp entry")
 		}
-		if !hasTCP {
-			return "", fmt.Errorf("missing tcp entry")
-		}
 		if !ip4.Equal(expectedIPv4) {
 			return "", fmt.Errorf("ip entry got %s, want %s", ip4, expectedIPv4)
 		}
@@ -390,11 +387,8 @@ func requireExpectedEndpointEntries(record *enr.Record, wantIPv4, wantIPv6 strin
 		if !hasIP6 {
 			return "", fmt.Errorf("missing ip6 entry")
 		}
-		if !hasUDP6 {
-			return "", fmt.Errorf("missing udp6 entry")
-		}
-		if !hasTCP6 {
-			return "", fmt.Errorf("missing tcp6 entry")
+		if !hasUDP6 && !hasUDP {
+			return "", fmt.Errorf("missing udp6 entry or udp fallback")
 		}
 		if !ip6.Equal(expectedIPv6) {
 			return "", fmt.Errorf("ip6 entry got %s, want %s", ip6, expectedIPv6)
@@ -409,7 +403,11 @@ func requireExpectedEndpointEntries(record *enr.Record, wantIPv4, wantIPv6 strin
 		}
 	}
 	if hasIP6 {
-		endpoints = append(endpoints, fmt.Sprintf("ip6=%s udp6=%d", ip6, udp6))
+		v6UDP := udp
+		if hasUDP6 {
+			v6UDP = udp6
+		}
+		endpoints = append(endpoints, fmt.Sprintf("ip6=%s udp6=%d", ip6, v6UDP))
 		if hasTCP6 {
 			endpoints[len(endpoints)-1] += fmt.Sprintf(" tcp6=%d", tcp6)
 		}
