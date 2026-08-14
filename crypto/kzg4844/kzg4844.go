@@ -282,11 +282,13 @@ func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 // what RecoverBlobs would return. Because it only copies bytes, it is independent
 // of the selected KZG backend.
 //
-// Prerequisite: this performs NO validation of cell contents. Unlike RecoverBlobs
-// (whose deserialization rejects non-canonical field elements), it is a raw byte
-// concatenation and checks neither field-element canonicalness, nor cell proofs,
-// nor the commitment. Callers MUST pass cells already validated (e.g. verified via
-// VerifyCells at ingest); on unvalidated input it silently yields a malformed blob.
+// Prerequisite: this checks nothing about the cell contents. Being a raw byte
+// concatenation, it does not even reject non-canonical field-element encodings --
+// the one check RecoverBlobs performs, as a side effect of deserialization. Note
+// that neither this nor RecoverBlobs verifies cell proofs or the commitment, so
+// establishing authenticity is the caller's responsibility in both cases: callers
+// MUST pass cells already verified (e.g. via VerifyCells at ingest); on unverified
+// input this silently yields a malformed blob.
 //
 // For the layout of cells and cellIndices, see RecoverBlobs.
 func BlobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
@@ -314,6 +316,27 @@ func BlobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
 		}
 	}
 	return blobs, true
+}
+
+// RecoverBlobsUnchecked is RecoverBlobs for callers that have already
+// established the cells' authenticity (e.g. verified via VerifyCells at ingest).
+// When the data cells are all present it returns their concatenation directly
+// (via BlobsFromDataCells), skipping the KZG erasure decode; otherwise it falls
+// back to full recovery. The result is byte-identical to RecoverBlobs either way.
+//
+// Prerequisite: "unchecked" refers to the cell contents -- neither this nor
+// RecoverBlobs verifies cell proofs or the commitment. The paths differ only in
+// field-element canonicalness: the erasure-decode fallback rejects non-canonical
+// encodings while deserializing, whereas the fast path (a raw concatenation, see
+// BlobsFromDataCells) does not. Since callers cannot choose which path runs, the
+// weaker contract governs: pass only cells whose authenticity is already assured.
+//
+// For the layout of cells and cellIndices, see RecoverBlobs.
+func RecoverBlobsUnchecked(cells []Cell, cellIndices []uint64) ([]Blob, error) {
+	if blobs, ok := BlobsFromDataCells(cells, cellIndices); ok {
+		return blobs, nil
+	}
+	return RecoverBlobs(cells, cellIndices)
 }
 
 func validateCellIndices(cells []Cell, cellIndices []uint64) error {

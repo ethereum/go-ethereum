@@ -520,3 +520,68 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 		t.Fatalf("insufficient: fast path succeeded, expected decline")
 	}
 }
+
+func TestCKZGRecoverBlobsUnchecked(t *testing.T)  { testRecoverBlobsUnchecked(t, true) }
+func TestGoKZGRecoverBlobsUnchecked(t *testing.T) { testRecoverBlobsUnchecked(t, false) }
+
+// testRecoverBlobsUnchecked checks that the unchecked recovery takes the
+// KZG-free fast path when the data cells are present and falls back to full
+// erasure recovery otherwise, matching the original blobs in both cases.
+func testRecoverBlobsUnchecked(t *testing.T, ckzg bool) {
+	defer switchBackend(t, ckzg)()
+
+	const blobCount = 3
+	d := newBlobs(t, blobCount)
+
+	// collect gathers the cells for the given per-blob indices across all blobs.
+	collect := func(indices []uint64) []Cell {
+		var cells []Cell
+		for bi := range blobCount {
+			for _, idx := range indices {
+				cells = append(cells, d.cells[bi*CellsPerBlob+int(idx)])
+			}
+		}
+		return cells
+	}
+	// assertRecovers checks recovery succeeds, verifies against the cell proofs,
+	// and matches the original blobs.
+	assertRecovers := func(name string, indices []uint64) {
+		t.Helper()
+		blobs, err := RecoverBlobsUnchecked(collect(indices), indices)
+		if err != nil {
+			t.Fatalf("%s: recovery failed: %v", name, err)
+		}
+		if err := VerifyCellProofs(blobs, d.commitments, d.proofs); err != nil {
+			t.Fatalf("%s: recovered blobs failed verification: %v", name, err)
+		}
+		for i := range d.blobs {
+			if blobs[i] != d.blobs[i] {
+				t.Fatalf("%s: recovered blob %d does not match original", name, i)
+			}
+		}
+	}
+
+	// Fast path: exactly the data cells, in canonical order.
+	dataIndices := make([]uint64, DataPerBlob)
+	for i := range dataIndices {
+		dataIndices[i] = uint64(i)
+	}
+	assertRecovers("data-only (fast path)", dataIndices)
+
+	// Fallback: a non-data subset that BlobsFromDataCells declines (data cell 0
+	// dropped, extension cell 64 added), so recovery must route through the KZG
+	// erasure decode -- and still reconstruct the originals.
+	sparse := slices.Clone(dataIndices)
+	sparse[0] = DataPerBlob // drop data cell 0, add extension cell 64
+	slices.Sort(sparse)
+	if _, ok := BlobsFromDataCells(collect(sparse), sparse); ok {
+		t.Fatalf("test setup: expected fast path to decline for the sparse subset")
+	}
+	assertRecovers("sparse (fallback)", sparse)
+
+	// Insufficient cells: recovery must error, like RecoverBlobs.
+	short := dataIndices[:DataPerBlob-1]
+	if _, err := RecoverBlobsUnchecked(collect(short), short); err == nil {
+		t.Fatalf("insufficient: expected error, got none")
+	}
+}
