@@ -519,6 +519,50 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 	if _, ok := BlobsFromDataCells(collect(short), short); ok {
 		t.Fatalf("insufficient: fast path succeeded, expected decline")
 	}
+
+	// Malformed extension tails: the leading data cells are canonical, but the
+	// tail is not something RecoverBlobs would accept (the concatenation never
+	// reads it, and the KZG library that would reject it is never reached on
+	// the fast path). Each must be declined rather than accepted.
+	duplicate := append(slices.Clone(dataIndices), DataPerBlob-1) // 63 repeated
+	if _, ok := BlobsFromDataCells(collect(duplicate), duplicate); ok {
+		t.Fatalf("duplicate-tail: fast path succeeded, expected decline")
+	}
+	if _, err := RecoverBlobs(collect(duplicate), duplicate); err == nil {
+		t.Fatalf("duplicate-tail: RecoverBlobs succeeded, expected error")
+	}
+	unorderedTail := append(slices.Clone(dataIndices), 65, 64)
+	if _, ok := BlobsFromDataCells(collect(unorderedTail), unorderedTail); ok {
+		t.Fatalf("unordered-tail: fast path succeeded, expected decline")
+	}
+	outOfRange := append(slices.Clone(dataIndices), CellsPerBlob)
+	cellsOOR := append(slices.Clone(collect(dataIndices)[:DataPerBlob]), Cell{}) // one blob
+	if _, ok := BlobsFromDataCells(cellsOOR, outOfRange); ok {
+		t.Fatalf("out-of-range-tail: fast path succeeded, expected decline")
+	}
+
+	// Single blob: the slicing math must hold for blobCount == 1 too.
+	d1 := newBlobs(t, 1)
+	single, ok := BlobsFromDataCells(d1.cells[:DataPerBlob], dataIndices)
+	if !ok {
+		t.Fatalf("single-blob: fast path declined, expected success")
+	}
+	if single[0] != d1.blobs[0] {
+		t.Fatalf("single-blob: reconstructed blob does not match original")
+	}
+
+	// Randomized well-formed tails: the data cells plus a random sorted subset
+	// of the extension indices must be accepted and agree with RecoverBlobs.
+	for iter := range 10 {
+		rng := mrand.New(mrand.NewSource(int64(iter)))
+		perm := rng.Perm(CellsPerBlob - DataPerBlob)
+		tail := make([]uint64, rng.Intn(CellsPerBlob-DataPerBlob+1))
+		for i := range tail {
+			tail[i] = uint64(DataPerBlob + perm[i])
+		}
+		slices.Sort(tail)
+		assertRecovers("random-tail", append(slices.Clone(dataIndices), tail...))
+	}
 }
 
 func TestCKZGRecoverBlobsUnchecked(t *testing.T)  { testRecoverBlobsUnchecked(t, true) }

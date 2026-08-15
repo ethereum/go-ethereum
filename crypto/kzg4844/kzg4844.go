@@ -307,6 +307,15 @@ func BlobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
 			return nil, false
 		}
 	}
+	// The extension tail is ignored by the concatenation, but it must still be
+	// checked: the slow paths delegate index validation to the KZG library,
+	// which the fast path never reaches. Declining malformed tails here keeps
+	// the accepted inputs a strict subset of what RecoverBlobs accepts.
+	for i := DataPerBlob; i < len(cellIndices); i++ {
+		if cellIndices[i] <= cellIndices[i-1] || cellIndices[i] >= CellsPerBlob {
+			return nil, false
+		}
+	}
 	blobCount := len(cells) / len(cellIndices)
 	blobs := make([]Blob, blobCount)
 	for b := range blobCount {
