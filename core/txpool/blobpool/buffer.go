@@ -188,10 +188,10 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 			errs[i] = errPeerBufferFull
 			continue
 		}
-		// Make room for the transaction, discarding the entries that have been
-		// waiting for their cells the longest.
+		// Make room for the transaction, at the expense of the peers holding
+		// the largest share of the buffer.
 		for b.txBytes+size > b.maxBytes && len(b.txs) > 0 {
-			b.evictOldest()
+			b.evictOne()
 		}
 		blobBufferTxFirstCounter.Inc(1)
 		b.insertTx(hash, tx, peer)
@@ -300,15 +300,31 @@ func (b *BlobBuffer) removeTx(hash common.Hash) {
 	delete(b.txs, hash)
 }
 
-// evictOldest drops the transaction that has been waiting for its cells the
-// longest. Entries are only ordered by age, which is a fair enough proxy for
-// how likely their cells are to still show up.
-func (b *BlobBuffer) evictOldest() {
+// evictOne drops a single transaction to make room for an incoming delivery.
+//
+// The victim is the oldest entry of the peer holding the largest share of the
+// buffer. Evicting the globally oldest entry instead would let a handful of
+// peers that fill the buffer push out the transactions of all the others,
+// turning the cap itself into a way of denying service. Charging the eviction
+// to the largest holder keeps that pressure on whoever is causing it.
+func (b *BlobBuffer) evictOne() {
+	var (
+		worst string
+		held  uint64
+	)
+	for peer, size := range b.peerTxBytes {
+		if size > held {
+			worst, held = peer, size
+		}
+	}
 	var (
 		oldest common.Hash
 		added  time.Time
 	)
 	for hash, entry := range b.txs {
+		if entry.peer != worst {
+			continue
+		}
 		if added.IsZero() || entry.added.Before(added) {
 			oldest, added = hash, entry.added
 		}

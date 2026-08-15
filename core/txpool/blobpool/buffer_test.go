@@ -84,6 +84,46 @@ func TestBufferByteCap(t *testing.T) {
 	}
 }
 
+// TestBufferFairEviction checks that a peer filling the buffer displaces its
+// own transactions rather than those of quieter peers.
+func TestBufferFairEviction(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+
+	// Size the buffer so that it fits exactly three transactions.
+	probe := makeV1Tx(t, 0, 1, 0, key)
+	buf.maxBytes = 3 * probe.Size()
+
+	// The quiet peer delivers first, so it also holds the oldest entry.
+	quiet := makeV1Tx(t, 0, 1, 0, key)
+	if err := buf.AddTx([]*types.Transaction{quiet}, "peerB")[0]; err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+
+	var greedy []common.Hash
+	for nonce := uint64(1); nonce < 5; nonce++ {
+		tx := makeV1Tx(t, nonce, 1, 0, key)
+		greedy = append(greedy, tx.Hash())
+		if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
+			t.Fatalf("tx %d: %v", nonce, err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !buf.HasTx(quiet.Hash()) {
+		t.Error("oldest entry of the quiet peer was evicted")
+	}
+	if len(buf.txs) != 3 {
+		t.Fatalf("expected 3 buffered txs, got %d", len(buf.txs))
+	}
+	// The greedy peer keeps only its two most recent transactions.
+	for i, hash := range greedy {
+		if want := i >= 2; buf.HasTx(hash) != want {
+			t.Errorf("greedy tx %d: buffered %v, want %v", i, buf.HasTx(hash), want)
+		}
+	}
+}
+
 // TestBufferPeerCap checks that a peer whose deliveries never complete stalls
 // against its own allowance instead of consuming the whole buffer.
 func TestBufferPeerCap(t *testing.T) {
