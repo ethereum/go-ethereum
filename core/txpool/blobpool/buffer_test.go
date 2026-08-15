@@ -3,7 +3,9 @@ package blobpool
 import (
 	"crypto/ecdsa"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -44,6 +46,81 @@ func newTestBuffer(t *testing.T) *BlobBuffer {
 		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
 		DropPeer:   func(peer string) {},
 	})
+}
+
+// TestBufferByteCap checks that transactions whose cells never arrive cannot
+// grow the buffer past its byte limit, and that the oldest ones give way.
+func TestBufferByteCap(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+
+	// Size the buffer so that it fits exactly three transactions.
+	probe := makeV1Tx(t, 0, 1, 0, key)
+	buf.maxBytes = 3 * probe.Size()
+
+	var hashes []common.Hash
+	for nonce := uint64(0); nonce < 6; nonce++ {
+		tx := makeV1Tx(t, nonce, 1, 0, key)
+		hashes = append(hashes, tx.Hash())
+		if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
+			t.Fatalf("tx %d: %v", nonce, err)
+		}
+		// Entries are stamped with wall clock time, so make sure consecutive
+		// transactions are distinguishable by age.
+		time.Sleep(time.Millisecond)
+	}
+	if buf.txBytes > buf.maxBytes {
+		t.Errorf("buffer over its limit: %d > %d", buf.txBytes, buf.maxBytes)
+	}
+	if len(buf.txs) != 3 {
+		t.Errorf("expected 3 buffered txs, got %d", len(buf.txs))
+	}
+	// The three most recent transactions should have displaced the earlier ones.
+	for i, hash := range hashes {
+		if want := i >= 3; buf.HasTx(hash) != want {
+			t.Errorf("tx %d: buffered %v, want %v", i, buf.HasTx(hash), want)
+		}
+	}
+}
+
+// TestBufferByteAccounting checks that the accounted size tracks the buffer
+// content across every path that adds or removes an entry.
+func TestBufferByteAccounting(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	blobCount := 1
+	buf := newTestBuffer(t)
+
+	tx := makeV1Tx(t, 0, blobCount, 0, key)
+	hash := tx.Hash()
+
+	// A repeated delivery must not be counted twice.
+	buf.AddTx([]*types.Transaction{tx}, "peerA")
+	buf.AddTx([]*types.Transaction{tx}, "peerB")
+	if buf.txBytes != tx.Size() {
+		t.Fatalf("after duplicate delivery: accounted %d, want %d", buf.txBytes, tx.Size())
+	}
+
+	// Completing the transaction must release its space.
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	buf.AddCells(hash, map[string]*PeerDelivery{
+		"peerC": makePeerDelivery(t, 0, blobCount, indices),
+	}, types.NewCustodyBitmap(indices))
+	if buf.txBytes != 0 {
+		t.Fatalf("after completion: accounted %d, want 0", buf.txBytes)
+	}
+
+	// So must expiry.
+	buf.AddTx([]*types.Transaction{makeV1Tx(t, 1, blobCount, 0, key)}, "peerA")
+	for _, entry := range buf.txs {
+		entry.added = time.Now().Add(-2 * bufferLifetime)
+	}
+	buf.AddTx([]*types.Transaction{makeV1Tx(t, 2, blobCount, 0, key)}, "peerA")
+	if want := makeV1Tx(t, 2, blobCount, 0, key).Size(); buf.txBytes != want {
+		t.Fatalf("after expiry: accounted %d, want %d", buf.txBytes, want)
+	}
 }
 
 func TestSortCells(t *testing.T) {
