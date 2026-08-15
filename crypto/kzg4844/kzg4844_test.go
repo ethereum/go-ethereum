@@ -494,9 +494,8 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 	}
 	assertRecovers("full-custody", allIndices)
 
-	// Data cells present but not in canonical order: RecoverBlobs rejects
-	// non-ascending indices, so the fast path must decline too rather than
-	// accept an input the slow path would error on.
+	// Data cells present but out of order: must decline, as RecoverBlobs
+	// rejects non-ascending indices.
 	unordered := slices.Clone(dataIndices)
 	unordered[0], unordered[1] = unordered[1], unordered[0]
 	if _, ok := blobsFromDataCells(collect(unordered), unordered); ok {
@@ -520,10 +519,8 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 		t.Fatalf("insufficient: fast path succeeded, expected decline")
 	}
 
-	// Malformed extension tails: the leading data cells are canonical, but the
-	// tail is not something RecoverBlobs would accept (the concatenation never
-	// reads it, and the KZG library that would reject it is never reached on
-	// the fast path). Each must be declined rather than accepted.
+	// Malformed extension tails: inputs RecoverBlobs would reject, which the
+	// fast path must decline rather than accept.
 	duplicate := append(slices.Clone(dataIndices), DataPerBlob-1) // 63 repeated
 	if _, ok := blobsFromDataCells(collect(duplicate), duplicate); ok {
 		t.Fatalf("duplicate-tail: fast path succeeded, expected decline")
@@ -612,9 +609,8 @@ func testRecoverBlobsUnchecked(t *testing.T, ckzg bool) {
 	}
 	assertRecovers("data-only (fast path)", dataIndices)
 
-	// Fallback: a non-data subset that blobsFromDataCells declines (data cell 0
-	// dropped, extension cell 64 added), so recovery must route through the KZG
-	// erasure decode -- and still reconstruct the originals.
+	// Fallback: a non-data subset (data cell 0 swapped for extension cell 64)
+	// must route through the KZG erasure decode and still reconstruct.
 	sparse := slices.Clone(dataIndices)
 	sparse[0] = DataPerBlob // drop data cell 0, add extension cell 64
 	slices.Sort(sparse)

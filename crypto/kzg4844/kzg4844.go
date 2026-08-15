@@ -270,35 +270,20 @@ func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	return gokzgRecoverBlobs(cells, cellIndices)
 }
 
-// blobsFromDataCells reconstructs blobs from their data cells without performing
-// any KZG reconstruction. The data cells of a blob (cell indices 0..DataPerBlob-1)
-// are, by definition, its contents, so when all of them are present the blob is
-// simply their concatenation.
-//
-// It returns ok=false when the data cells are not all present, or the inputs are
-// otherwise unsuitable (including non-canonical cell indices), in which case the
-// caller should fall back to RecoverBlobs. The inputs accepted here are a strict
-// subset of those accepted by RecoverBlobs, so a successful result always equals
-// what RecoverBlobs would return. Because it only copies bytes, it is independent
-// of the selected KZG backend.
-//
-// Prerequisite: this checks nothing about the cell contents. Being a raw byte
-// concatenation, it does not even reject non-canonical field-element encodings --
-// the one check RecoverBlobs performs, as a side effect of deserialization. Note
-// that neither this nor RecoverBlobs verifies cell proofs or the commitment, so
-// establishing authenticity is the caller's responsibility in both cases: callers
-// MUST pass cells already verified (e.g. via VerifyCells at ingest); on unverified
-// input this silently yields a malformed blob.
+// blobsFromDataCells reconstructs blobs by concatenating their data cells (cell
+// indices 0..DataPerBlob-1, by definition the blob contents), with no KZG
+// involvement and no validation of the cell contents whatsoever (see
+// RecoverBlobsUnchecked for the contract). It accepts a strict subset of the
+// inputs RecoverBlobs accepts and returns identical bytes; on ok=false the
+// caller should fall back to RecoverBlobs.
 //
 // For the layout of cells and cellIndices, see RecoverBlobs.
 func blobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
 	if validateCellIndices(cells, cellIndices) != nil {
 		return nil, false
 	}
-	// The fast path applies only when the leading cells are exactly the data
-	// cells in canonical order, i.e. cellIndices[i] == i for i < DataPerBlob.
-	// RecoverBlobs requires ascending indices, so this keeps the accepted inputs
-	// a strict subset of what RecoverBlobs accepts (and thus byte-identical).
+	// The head must be exactly the data cells in canonical order:
+	// cellIndices[i] == i for i < DataPerBlob.
 	if len(cellIndices) < DataPerBlob {
 		return nil, false
 	}
@@ -307,10 +292,8 @@ func blobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
 			return nil, false
 		}
 	}
-	// The extension tail is ignored by the concatenation, but it must still be
-	// checked: the slow paths delegate index validation to the KZG library,
-	// which the fast path never reaches. Declining malformed tails here keeps
-	// the accepted inputs a strict subset of what RecoverBlobs accepts.
+	// The tail is ignored by the concatenation but must still be well-formed:
+	// the KZG library that would reject it is never reached on this path.
 	for i := DataPerBlob; i < len(cellIndices); i++ {
 		if cellIndices[i] <= cellIndices[i-1] || cellIndices[i] >= CellsPerBlob {
 			return nil, false
@@ -328,17 +311,14 @@ func blobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
 }
 
 // RecoverBlobsUnchecked is RecoverBlobs for callers that have already
-// established the cells' authenticity (e.g. verified via VerifyCells at ingest).
-// When the data cells are all present it returns their concatenation directly
-// (via blobsFromDataCells), skipping the KZG erasure decode; otherwise it falls
-// back to full recovery. The result is byte-identical to RecoverBlobs either way.
+// established the cells' authenticity (e.g. via VerifyCells at ingest): when the
+// data cells are all present, the blobs are returned as their concatenation,
+// skipping the KZG erasure decode. The result is byte-identical to RecoverBlobs.
 //
-// Prerequisite: "unchecked" refers to the cell contents -- neither this nor
-// RecoverBlobs verifies cell proofs or the commitment. The paths differ only in
-// field-element canonicalness: the erasure-decode fallback rejects non-canonical
-// encodings while deserializing, whereas the fast path (a raw concatenation, see
-// blobsFromDataCells) does not. Since callers cannot choose which path runs, the
-// weaker contract governs: pass only cells whose authenticity is already assured.
+// "Unchecked" refers to the cell contents: the concatenation validates nothing,
+// not even field-element canonicalness -- the one check RecoverBlobs performs
+// (neither verifies cell proofs or the commitment). Pass only cells whose
+// authenticity is already assured.
 //
 // For the layout of cells and cellIndices, see RecoverBlobs.
 func RecoverBlobsUnchecked(cells []Cell, cellIndices []uint64) ([]Blob, error) {
