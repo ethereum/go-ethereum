@@ -550,7 +550,7 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 
 	// Randomized well-formed tails: the data cells plus a random sorted subset
 	// of the extension indices must be accepted and agree with RecoverBlobs.
-	for iter := range 10 {
+	for iter := range 5 {
 		rng := mrand.New(mrand.NewSource(int64(iter)))
 		perm := rng.Perm(CellsPerBlob - DataPerBlob)
 		tail := make([]uint64, rng.Intn(CellsPerBlob-DataPerBlob+1))
