@@ -2,6 +2,7 @@ package blobpool
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"testing"
 	"time"
 
@@ -80,6 +81,49 @@ func TestBufferByteCap(t *testing.T) {
 		if want := i >= 3; buf.HasTx(hash) != want {
 			t.Errorf("tx %d: buffered %v, want %v", i, buf.HasTx(hash), want)
 		}
+	}
+}
+
+// TestBufferPeerCap checks that a peer whose deliveries never complete stalls
+// against its own allowance instead of consuming the whole buffer.
+func TestBufferPeerCap(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+
+	// Allow each peer two transactions, with room in the buffer for many more.
+	probe := makeV1Tx(t, 0, 1, 0, key)
+	buf.maxPeerBytes = 2 * probe.Size()
+
+	for nonce := uint64(0); nonce < 4; nonce++ {
+		tx := makeV1Tx(t, nonce, 1, 0, key)
+		err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]
+		if want := nonce >= 2; (err != nil) != want {
+			t.Fatalf("tx %d: err %v, want rejection %v", nonce, err, want)
+		} else if want && !errors.Is(err, errPeerBufferFull) {
+			t.Fatalf("tx %d: err %v, want %v", nonce, err, errPeerBufferFull)
+		}
+	}
+	if len(buf.txs) != 2 {
+		t.Errorf("expected peer to hold 2 txs, got %d", len(buf.txs))
+	}
+	// A second peer is unaffected by the first one's exhausted allowance.
+	tx := makeV1Tx(t, 4, 1, 0, key)
+	if err := buf.AddTx([]*types.Transaction{tx}, "peerB")[0]; err != nil {
+		t.Fatalf("second peer rejected: %v", err)
+	}
+
+	// Completing a transaction gives the allowance back.
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	done := makeV1Tx(t, 0, 1, 0, key)
+	buf.AddCells(done.Hash(), map[string]*PeerDelivery{
+		"peerC": makePeerDelivery(t, 0, 1, indices),
+	}, types.NewCustodyBitmap(indices))
+
+	if err := buf.AddTx([]*types.Transaction{makeV1Tx(t, 5, 1, 0, key)}, "peerA")[0]; err != nil {
+		t.Fatalf("peer allowance not released on completion: %v", err)
 	}
 }
 

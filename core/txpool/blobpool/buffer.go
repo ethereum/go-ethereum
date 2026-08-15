@@ -58,7 +58,22 @@ const (
 	// The cell side needs no equivalent cap, being bounded by the blob
 	// fetcher's per peer request budget (see maxCellRequests in eth/fetcher).
 	maxBufferedTxBytes = 64 * 1024 * 1024
+
+	// maxBufferedPeerTxBytes bounds how much of the buffer a single peer can
+	// hold with transactions whose cells have not arrived yet.
+	//
+	// It is deliberately well below maxBufferedTxBytes, so that a peer whose
+	// deliveries never complete stalls against its own budget rather than
+	// pushing everyone else's entries out. No judgement on the peer's intent is
+	// needed for that: a peer serving useful transactions gets its budget back
+	// as they complete, usually within seconds, while one that only ever adds
+	// to the pile stops being able to add to it.
+	maxBufferedPeerTxBytes = 4 * 1024 * 1024
 )
+
+// errPeerBufferFull is returned when a peer has more transactions waiting for
+// their cells than its share of the buffer allows.
+var errPeerBufferFull = errors.New("peer blob buffer allowance exhausted")
 
 // PeerDelivery holds cells delivered by a single peer, in blob-major order.
 type PeerDelivery struct {
@@ -72,7 +87,7 @@ type txEntry struct {
 	// This is mainly for per peer size limit check.
 	peer  string
 	added time.Time
-	size  uint64 // Encoded size, as accounted against the buffer limit
+	size  uint64 // Encoded size, as accounted against the buffer limits
 }
 
 type cellEntry struct {
@@ -87,8 +102,10 @@ type BlobBuffer struct {
 	txs   map[common.Hash]*txEntry
 	cells map[common.Hash]*cellEntry
 
-	txBytes  uint64 // Total encoded size of the buffered transactions
-	maxBytes uint64 // Cap on txBytes, lowered by tests
+	txBytes      uint64            // Total encoded size of the buffered transactions
+	peerTxBytes  map[string]uint64 // Encoded size of the buffered transactions, per delivering peer
+	maxBytes     uint64            // Cap on txBytes, lowered by tests
+	maxPeerBytes uint64            // Cap on any single peerTxBytes entry, lowered by tests
 
 	completed      []*BlobTxForPool
 	completedCount atomic.Int32
@@ -103,10 +120,12 @@ type BlobBufferFunctions struct {
 
 func NewBlobBuffer(cb BlobBufferFunctions) *BlobBuffer {
 	return &BlobBuffer{
-		txs:      make(map[common.Hash]*txEntry),
-		cells:    make(map[common.Hash]*cellEntry),
-		maxBytes: maxBufferedTxBytes,
-		cb:       cb,
+		txs:          make(map[common.Hash]*txEntry),
+		cells:        make(map[common.Hash]*cellEntry),
+		peerTxBytes:  make(map[string]uint64),
+		maxBytes:     maxBufferedTxBytes,
+		maxPeerBytes: maxBufferedPeerTxBytes,
+		cb:           cb,
 	}
 }
 
@@ -162,9 +181,15 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 			b.storeCompleted(hash, tx, entry)
 			continue
 		}
+		// Refuse the transaction if the peer already holds its share of the
+		// buffer. Its earlier deliveries have to complete or expire first.
+		size := tx.Size()
+		if b.peerTxBytes[peer]+size > b.maxPeerBytes {
+			errs[i] = errPeerBufferFull
+			continue
+		}
 		// Make room for the transaction, discarding the entries that have been
 		// waiting for their cells the longest.
-		size := tx.Size()
 		for b.txBytes+size > b.maxBytes && len(b.txs) > 0 {
 			b.evictOldest()
 		}
@@ -258,15 +283,20 @@ func (b *BlobBuffer) insertTx(hash common.Hash, tx *types.Transaction, peer stri
 	size := tx.Size()
 	b.txs[hash] = &txEntry{tx: tx, peer: peer, added: time.Now(), size: size}
 	b.txBytes += size
+	b.peerTxBytes[peer] += size
 }
 
-// removeTx drops a buffered transaction and releases the space it occupied.
+// removeTx drops a buffered transaction and releases the space it occupied,
+// both globally and from the allowance of the peer that delivered it.
 func (b *BlobBuffer) removeTx(hash common.Hash) {
 	entry, ok := b.txs[hash]
 	if !ok {
 		return
 	}
 	b.txBytes -= entry.size
+	if b.peerTxBytes[entry.peer] -= entry.size; b.peerTxBytes[entry.peer] == 0 {
+		delete(b.peerTxBytes, entry.peer)
+	}
 	delete(b.txs, hash)
 }
 
