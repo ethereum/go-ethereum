@@ -270,7 +270,7 @@ func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	return gokzgRecoverBlobs(cells, cellIndices)
 }
 
-// BlobsFromDataCells reconstructs blobs from their data cells without performing
+// blobsFromDataCells reconstructs blobs from their data cells without performing
 // any KZG reconstruction. The data cells of a blob (cell indices 0..DataPerBlob-1)
 // are, by definition, its contents, so when all of them are present the blob is
 // simply their concatenation.
@@ -291,7 +291,7 @@ func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 // input this silently yields a malformed blob.
 //
 // For the layout of cells and cellIndices, see RecoverBlobs.
-func BlobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
+func blobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
 	if validateCellIndices(cells, cellIndices) != nil {
 		return nil, false
 	}
@@ -330,19 +330,19 @@ func BlobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
 // RecoverBlobsUnchecked is RecoverBlobs for callers that have already
 // established the cells' authenticity (e.g. verified via VerifyCells at ingest).
 // When the data cells are all present it returns their concatenation directly
-// (via BlobsFromDataCells), skipping the KZG erasure decode; otherwise it falls
+// (via blobsFromDataCells), skipping the KZG erasure decode; otherwise it falls
 // back to full recovery. The result is byte-identical to RecoverBlobs either way.
 //
 // Prerequisite: "unchecked" refers to the cell contents -- neither this nor
 // RecoverBlobs verifies cell proofs or the commitment. The paths differ only in
 // field-element canonicalness: the erasure-decode fallback rejects non-canonical
 // encodings while deserializing, whereas the fast path (a raw concatenation, see
-// BlobsFromDataCells) does not. Since callers cannot choose which path runs, the
+// blobsFromDataCells) does not. Since callers cannot choose which path runs, the
 // weaker contract governs: pass only cells whose authenticity is already assured.
 //
 // For the layout of cells and cellIndices, see RecoverBlobs.
 func RecoverBlobsUnchecked(cells []Cell, cellIndices []uint64) ([]Blob, error) {
-	if blobs, ok := BlobsFromDataCells(cells, cellIndices); ok {
+	if blobs, ok := blobsFromDataCells(cells, cellIndices); ok {
 		return blobs, nil
 	}
 	return RecoverBlobs(cells, cellIndices)

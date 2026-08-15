@@ -462,7 +462,7 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 	assertRecovers := func(name string, indices []uint64) {
 		t.Helper()
 		cells := collect(indices)
-		fast, ok := BlobsFromDataCells(cells, indices)
+		fast, ok := blobsFromDataCells(cells, indices)
 		if !ok {
 			t.Fatalf("%s: fast path declined, expected success", name)
 		}
@@ -499,7 +499,7 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 	// accept an input the slow path would error on.
 	unordered := slices.Clone(dataIndices)
 	unordered[0], unordered[1] = unordered[1], unordered[0]
-	if _, ok := BlobsFromDataCells(collect(unordered), unordered); ok {
+	if _, ok := blobsFromDataCells(collect(unordered), unordered); ok {
 		t.Fatalf("unordered-data: fast path succeeded, expected decline")
 	}
 
@@ -507,7 +507,7 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 	// path must decline, while RecoverBlobs can still reconstruct.
 	missing := slices.Clone(dataIndices)
 	missing[DataPerBlob-1] = DataPerBlob // drop data cell 63, add extension cell 64
-	if _, ok := BlobsFromDataCells(collect(missing), missing); ok {
+	if _, ok := blobsFromDataCells(collect(missing), missing); ok {
 		t.Fatalf("missing-data: fast path succeeded, expected decline")
 	}
 	if _, err := RecoverBlobs(collect(missing), missing); err != nil {
@@ -516,7 +516,7 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 
 	// Too few cells for recovery at all: fast path declines.
 	short := dataIndices[:DataPerBlob-1]
-	if _, ok := BlobsFromDataCells(collect(short), short); ok {
+	if _, ok := blobsFromDataCells(collect(short), short); ok {
 		t.Fatalf("insufficient: fast path succeeded, expected decline")
 	}
 
@@ -525,25 +525,25 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 	// reads it, and the KZG library that would reject it is never reached on
 	// the fast path). Each must be declined rather than accepted.
 	duplicate := append(slices.Clone(dataIndices), DataPerBlob-1) // 63 repeated
-	if _, ok := BlobsFromDataCells(collect(duplicate), duplicate); ok {
+	if _, ok := blobsFromDataCells(collect(duplicate), duplicate); ok {
 		t.Fatalf("duplicate-tail: fast path succeeded, expected decline")
 	}
 	if _, err := RecoverBlobs(collect(duplicate), duplicate); err == nil {
 		t.Fatalf("duplicate-tail: RecoverBlobs succeeded, expected error")
 	}
 	unorderedTail := append(slices.Clone(dataIndices), 65, 64)
-	if _, ok := BlobsFromDataCells(collect(unorderedTail), unorderedTail); ok {
+	if _, ok := blobsFromDataCells(collect(unorderedTail), unorderedTail); ok {
 		t.Fatalf("unordered-tail: fast path succeeded, expected decline")
 	}
 	outOfRange := append(slices.Clone(dataIndices), CellsPerBlob)
 	cellsOOR := append(slices.Clone(collect(dataIndices)[:DataPerBlob]), Cell{}) // one blob
-	if _, ok := BlobsFromDataCells(cellsOOR, outOfRange); ok {
+	if _, ok := blobsFromDataCells(cellsOOR, outOfRange); ok {
 		t.Fatalf("out-of-range-tail: fast path succeeded, expected decline")
 	}
 
 	// Single blob: the slicing math must hold for blobCount == 1 too.
 	d1 := newBlobs(t, 1)
-	single, ok := BlobsFromDataCells(d1.cells[:DataPerBlob], dataIndices)
+	single, ok := blobsFromDataCells(d1.cells[:DataPerBlob], dataIndices)
 	if !ok {
 		t.Fatalf("single-blob: fast path declined, expected success")
 	}
@@ -612,13 +612,13 @@ func testRecoverBlobsUnchecked(t *testing.T, ckzg bool) {
 	}
 	assertRecovers("data-only (fast path)", dataIndices)
 
-	// Fallback: a non-data subset that BlobsFromDataCells declines (data cell 0
+	// Fallback: a non-data subset that blobsFromDataCells declines (data cell 0
 	// dropped, extension cell 64 added), so recovery must route through the KZG
 	// erasure decode -- and still reconstruct the originals.
 	sparse := slices.Clone(dataIndices)
 	sparse[0] = DataPerBlob // drop data cell 0, add extension cell 64
 	slices.Sort(sparse)
-	if _, ok := BlobsFromDataCells(collect(sparse), sparse); ok {
+	if _, ok := blobsFromDataCells(collect(sparse), sparse); ok {
 		t.Fatalf("test setup: expected fast path to decline for the sparse subset")
 	}
 	assertRecovers("sparse (fallback)", sparse)
