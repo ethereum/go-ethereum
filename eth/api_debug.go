@@ -500,6 +500,12 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*stateless.ExtW
 	if err != nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
 	}
+	// BlockByNumberOrHash returns a nil block without an error when the
+	// requested block does not exist (per the RPC spec). Guard against it
+	// to avoid a nil pointer dereference below.
+	if block == nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
+	}
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block %v found, but parent missing", bn)
