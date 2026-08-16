@@ -1791,13 +1791,15 @@ func (p *BlobPool) GetRLP(hash common.Hash, version uint) []byte {
 			return enc
 		}
 	}
-	getRLPCacheMissMeter.Mark(1)
-
 	data := p.getRLP(hash)
 	if len(data) == 0 {
 		// Not in this pool, do not log.
 		return nil
 	}
+	// Count misses only for transactions the pool actually holds, so the
+	// hit/miss ratio reflects cache effectiveness rather than unknown-tx
+	// requests.
+	getRLPCacheMissMeter.Mark(1)
 	rlp, err := encodeForNetwork(data, version)
 	if err != nil {
 		log.Error("Failed to encode pooled tx into the network type", "hash", hash, "err", err)
