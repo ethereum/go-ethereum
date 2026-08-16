@@ -337,9 +337,11 @@ func RecoverBlobsUnchecked(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 // index order, per blob. Cell proofs are never recomputed: callers that need
 // proofs should retain those shipped with the transaction.
 //
-// Both paths deserialize the cell contents, rejecting non-canonical field
-// elements, but nothing is verified against commitments or cell proofs --
-// authenticity must be established by the caller (e.g. VerifyCells).
+// The erasure path deserializes every input cell, rejecting non-canonical
+// field elements; the systematic path parses only the data cells (extension
+// cells in the input are ignored, contents unchecked). Nothing is verified
+// against commitments or cell proofs -- authenticity must be established by
+// the caller (e.g. VerifyCells).
 //
 // For the layout of cells and cellIndices, see RecoverBlobs.
 func RecoverCells(cells []Cell, cellIndices []uint64) ([]Cell, error) {
