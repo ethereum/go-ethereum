@@ -167,6 +167,89 @@ func TestBufferPeerCap(t *testing.T) {
 	}
 }
 
+// TestBufferCellAccounting checks that buffered cells are counted, charged to
+// the peers that delivered them, and released again.
+//
+// The cells are the larger half of what the buffer holds, and were for a while
+// the half nothing counted.
+func TestBufferCellAccounting(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	blobCount := 1
+	buf := newTestBuffer(t)
+
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	var (
+		tx      = makeV1Tx(t, 0, blobCount, 0, key)
+		hash    = tx.Hash()
+		custody = types.NewCustodyBitmap(indices)
+		first   = makePeerDelivery(t, 0, blobCount, indices[:len(indices)/2])
+		second  = makePeerDelivery(t, 0, blobCount, indices[len(indices)/2:])
+	)
+	buf.AddCells(hash, map[string]*PeerDelivery{"peerA": first, "peerB": second}, custody)
+
+	want := cellsSize(first) + cellsSize(second)
+	if buf.cellBytes != want {
+		t.Fatalf("accounted %d cell bytes, want %d", buf.cellBytes, want)
+	}
+	if buf.cellBytes == 0 {
+		t.Fatal("cells accounted as occupying nothing")
+	}
+	// Each peer is charged for what it delivered, not for the whole entry.
+	if got := buf.peerBytes["peerA"]; got != cellsSize(first) {
+		t.Errorf("peerA charged %d, want %d", got, cellsSize(first))
+	}
+	if got := buf.peerBytes["peerB"]; got != cellsSize(second) {
+		t.Errorf("peerB charged %d, want %d", got, cellsSize(second))
+	}
+	// The transaction completes the entry, which releases all of it.
+	if err := buf.AddTx([]*types.Transaction{tx}, "peerC")[0]; err != nil {
+		t.Fatal(err)
+	}
+	if buf.buffered() != 0 {
+		t.Fatalf("after completion: %d bytes still accounted", buf.buffered())
+	}
+	if len(buf.peerBytes) != 0 {
+		t.Fatalf("after completion: %d peers still charged", len(buf.peerBytes))
+	}
+}
+
+// TestBufferCellsExpire checks that cells nobody ever claims are released with
+// their entry when it times out.
+func TestBufferCellsExpire(t *testing.T) {
+	buf := newTestBuffer(t)
+
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	var hash common.Hash
+	hash[0] = 0xaa
+	buf.AddCells(hash, map[string]*PeerDelivery{
+		"peerA": makePeerDelivery(t, 0, 1, indices),
+	}, types.NewCustodyBitmap(indices))
+
+	if buf.cellBytes == 0 {
+		t.Fatal("cells accounted as occupying nothing")
+	}
+	for _, entry := range buf.cells {
+		entry.added = time.Now().Add(-2 * bufferLifetime)
+	}
+	// Any operation sweeps the expired entries.
+	buf.AddCells(common.Hash{0xbb}, map[string]*PeerDelivery{
+		"peerB": makePeerDelivery(t, 0, 1, indices[:1]),
+	}, types.NewCustodyBitmap(indices[:1]))
+
+	if _, ok := buf.cells[hash]; ok {
+		t.Fatal("expired cells still buffered")
+	}
+	if _, ok := buf.peerBytes["peerA"]; ok {
+		t.Fatal("peerA still charged for expired cells")
+	}
+}
+
 // TestBufferByteAccounting checks that the accounted size tracks the buffer
 // content across every path that adds or removes an entry.
 func TestBufferByteAccounting(t *testing.T) {
