@@ -350,6 +350,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := options.TrieCleanLimit + options.TrieDirtyLimit + options.SnapshotLimit
+
+
+	// Fallback to full sync when initializing at genesis (block 0) because snap sync 
+	// cannot complete without existing peer state snapshots on a brand new network (#28222).
+	syncMode := config.SyncMode
+	if eth.blockchain.CurrentBlock().Number.Uint64() == 0 {
+		log.Info("Starting at genesis block, switching sync mode to full sync", "old", syncMode, "new", downloader.FullSync)
+		syncMode = downloader.FullSync
+	}
+
+
 	if eth.handler, err = newHandler(&handlerConfig{
 		NodeID:           eth.p2pServer.Self().ID(),
 		Database:         chainDb,
@@ -357,7 +368,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		TxPool:           eth.txPool,
 		BlobPool:         eth.blobTxPool,
 		Network:          networkID,
-		Sync:             config.SyncMode,
+		Sync:             syncMode,
 		BloomCache:       uint64(cacheLimit),
 		RequiredBlocks:   config.RequiredBlocks,
 		SnapV2:           config.SnapV2,
