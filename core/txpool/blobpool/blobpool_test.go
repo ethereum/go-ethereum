@@ -2439,3 +2439,46 @@ func TestGetCells(t *testing.T) {
 		})
 	}
 }
+
+// TestOffloadSwappedOutBySigner checks that offload does not treat a same-nonce
+// replacement as a failure: when the included-block map does not contain the
+// pooled hash, the blob stays out of limbo (issue #31363).
+func TestOffloadSwappedOutBySigner(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	tx := makeTx(0, 1, 1, 1, key)
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+
+	store, err := billy.Open(billy.Options{Path: t.TempDir()}, newSlotterEIP7594(params.BlobTxMaxBlobs), nil)
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	id, err := store.Put(encodeForPool(tx))
+	if err != nil {
+		t.Fatalf("failed to store tx: %v", err)
+	}
+
+	limbo, _, err := newLimbo(params.MainnetChainConfig, t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to open limbo: %v", err)
+	}
+	defer limbo.Close()
+
+	pool := &BlobPool{store: store, limbo: limbo}
+
+	// Inclusions name a different hash, as if the signer swapped the nonce.
+	pool.offload(addr, 0, id, map[common.Hash]uint64{{}: 1})
+	if _, ok := limbo.index[tx.Hash()]; ok {
+		t.Fatal("swapped-out blob transaction was pushed into limbo")
+	}
+	if _, err := store.Get(id); err != nil {
+		t.Fatalf("swapped-out blob should remain in the store: %v", err)
+	}
+
+	// Positive control: the same stored blob is offloaded when it really was included.
+	pool.offload(addr, 0, id, map[common.Hash]uint64{tx.Hash(): 42})
+	if _, ok := limbo.index[tx.Hash()]; !ok {
+		t.Fatal("included blob transaction was not pushed into limbo")
+	}
+}
