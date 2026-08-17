@@ -76,6 +76,7 @@ type Peer struct {
 	tracker     *tracker.Tracker
 	reqDispatch chan *request  // Dispatch channel to send requests and track then until fulfillment
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
+	reqResend   chan *resend   // Dispatch channel to send follow-ups for still-pending requests
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
 	chainConfig *params.ChainConfig // Chain configuration for fork-aware validation
@@ -102,6 +103,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool, blo
 		tracker:       tracker.New(cap, id, 5*time.Minute),
 		reqDispatch:   make(chan *request),
 		reqCancel:     make(chan *cancel),
+		reqResend:     make(chan *resend),
 		resDispatch:   make(chan *response),
 		txpool:        txpool,
 		blobpool:      blobpool,
@@ -488,12 +490,19 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamp
 		}
 	}
 	if err := p.dispatchRequest(req); err != nil {
+		// Clean the buffer entry up if the request never made it out.
+		if p.version > ETH69 {
+			p.receiptBufferLock.Lock()
+			delete(p.receiptBuffer, id)
+			p.receiptBufferLock.Unlock()
+		}
 		return nil, err
 	}
 	return req, nil
 }
 
-// HandlePartialReceipts re-request partial receipts
+// requestPartialReceipts re-requests the remainder of a partially delivered
+// receipt request under its original id.
 func (p *Peer) requestPartialReceipts(id uint64) error {
 	p.receiptBufferLock.Lock()
 
@@ -509,22 +518,11 @@ func (p *Peer) requestPartialReceipts(id uint64) error {
 	hashes := buffer.request[lastBlock:]
 	p.receiptBufferLock.Unlock()
 
-	// The follow-up continues the original request and reuses its id, so it is
-	// sent directly instead of being dispatched: the original request is the
-	// one pending in the dispatcher and the one the completed response will be
-	// delivered to. Going through the dispatcher would also deadlock the peer,
-	// as the buffer lock would have to be held across the dispatch, which the
-	// dispatcher itself acquires when a request is cancelled.
-	treq := tracker.Request{
-		ID:       id,
-		ReqCode:  GetReceiptsMsg,
-		RespCode: ReceiptsMsg,
-		Size:     len(hashes),
-	}
-	if err := p.tracker.Track(treq); err != nil {
-		return err
-	}
-	return p2p.Send(p.rw, GetReceiptsMsg, &GetReceiptsPacket70{
+	// The follow-up continues the original request under its original id,
+	// hand it to the dispatcher as a resend operation. The dispatcher only
+	// sends it if the original request is still pending, or silently drop
+	// the request if the original one is cancelled (with no error returned).
+	return p.dispatchResend(id, GetReceiptsMsg, len(hashes), &GetReceiptsPacket70{
 		RequestId:              id,
 		FirstBlockReceiptIndex: uint64(lastReceipt),
 		GetReceiptsRequest:     hashes,

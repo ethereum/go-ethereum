@@ -94,6 +94,18 @@ type cancel struct {
 	fail chan error
 }
 
+// resend is a maintenance type on the dispatcher to send a follow-up packet
+// continuing a pending request under its original id. Routing it through the
+// dispatcher serializes the continuation against cancellation: the follow-up
+// is only sent if the original request is still pending.
+type resend struct {
+	id   uint64      // Request ID to continue
+	code uint64      // Message code of the follow-up packet
+	size int         // Number of items requested by the follow-up
+	data interface{} // Data content of the follow-up packet
+	fail chan error
+}
+
 // Response is a reply packet to a previously created request. It is delivered
 // on the channel assigned by the requester subsystem and contains the original
 // request embedded to allow uniquely matching it caller side.
@@ -133,6 +145,25 @@ func (p *Peer) dispatchRequest(req *Request) error {
 	select {
 	case p.reqDispatch <- reqOp:
 		return <-reqOp.fail
+	case <-p.term:
+		return errDisconnected
+	}
+}
+
+// dispatchResend schedules a follow-up packet continuing a pending request,
+// blocking until it's sent. The follow-up is silently dropped if the original
+// request has already been cancelled or fulfilled.
+func (p *Peer) dispatchResend(id uint64, code uint64, size int, data interface{}) error {
+	resendOp := &resend{
+		id:   id,
+		code: code,
+		size: size,
+		data: data,
+		fail: make(chan error),
+	}
+	select {
+	case p.reqResend <- resendOp:
+		return <-resendOp.fail
 	case <-p.term:
 		return errDisconnected
 	}
@@ -213,12 +244,36 @@ loop:
 				reqOp.fail <- err
 				continue loop
 			}
-
-			// do not overwrite if it is re-request
-			if _, ok := pending[req.id]; !ok {
-				pending[req.id] = req
-			}
+			pending[req.id] = req
 			reqOp.fail <- nil
+
+		case resendOp := <-p.reqResend:
+			// Only continue a request that is still pending: if it has been
+			// cancelled or fulfilled in the meantime, drop the follow-up
+			// silently instead of re-requesting on behalf of nobody.
+			req := pending[resendOp.id]
+			if req == nil {
+				resendOp.fail <- nil
+				continue loop
+			}
+			treq := tracker.Request{
+				ID:       req.id,
+				ReqCode:  req.code,
+				RespCode: req.want,
+				Size:     resendOp.size,
+			}
+			if err := p.tracker.Track(treq); err != nil {
+				resendOp.fail <- err
+				continue loop
+			}
+			if err := p2p.Send(p.rw, resendOp.code, resendOp.data); err != nil {
+				resendOp.fail <- err
+				continue loop
+			}
+			// Restart the RTT measurement for the follow-up round, so the
+			// response time doesn't span multiple network round trips.
+			req.Sent = time.Now()
+			resendOp.fail <- nil
 
 		case cancelOp := <-p.reqCancel:
 			// Retrieve the pending request to cancel and short circuit if it
