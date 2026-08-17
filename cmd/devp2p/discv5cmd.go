@@ -147,9 +147,9 @@ func discv5Test(ctx *cli.Context) error {
 	if (expectIP.IsValid() || expectIP6.IsValid()) && ctx.IsSet(testPatternFlag.Name) {
 		matches := utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
 		if !slices.ContainsFunc(matches, func(test utesting.Test) bool {
-			return test.Name == "FindnodeZeroDistance"
+			return test.Name == v5test.FindnodeZeroDistanceName
 		}) {
-			return errors.New("--expect-ip and --expect-ip6 require running FindnodeZeroDistance")
+			return fmt.Errorf("--expect-ip and --expect-ip6 require running %s", v5test.FindnodeZeroDistanceName)
 		}
 	}
 	return runTests(ctx, tests)
@@ -169,6 +169,9 @@ func parseExpectedIP(raw string, ipv6 bool) (netip.Addr, error) {
 		}
 	} else if !addr.Is4() {
 		return netip.Addr{}, fmt.Errorf("invalid expected IPv4 address %q", raw)
+	}
+	if addr.Zone() != "" || addr.IsUnspecified() || addr.IsMulticast() {
+		return netip.Addr{}, fmt.Errorf("invalid expected IP address %q", raw)
 	}
 	return addr, nil
 }

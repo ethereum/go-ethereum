@@ -439,33 +439,44 @@ func bondWithTCP(t *utesting.T, te *testenv, tcpPort uint16) v4wire.Endpoint {
 // FindnodeDistinctUDPAndTCP checks that a learned peer keeps distinct UDP and TCP ports
 // when returned through NEIGHBORS.
 func FindnodeDistinctUDPAndTCP(t *utesting.T) {
-	te := newTestEnv(Remote, Listen1, Listen2)
-	defer te.close()
+	seed := newTestEnv(Remote, Listen1, Listen2)
+	defer seed.close()
+	query := newTestEnv(Remote, Listen1, Listen2)
+	defer query.close()
 
-	local := te.localEndpoint(te.l1)
+	local := seed.localEndpoint(seed.l1)
 	tcpPort := local.UDP ^ 1
-	id := v4wire.EncodePubkey(&te.key.PublicKey)
+	id := v4wire.EncodePubkey(&seed.key.PublicKey)
 	t.Logf("bonding peer %x at %v:%d with advertised TCP port %d", id[:8], local.IP, local.UDP, tcpPort)
-	observed := bondWithTCP(t, te, tcpPort)
+	observed := bondWithTCP(t, seed, tcpPort)
+	done := make(chan struct{})
+	seedErr := seed.answerPings(done)
+	defer func() {
+		close(done)
+		<-seedErr
+	}()
+	bond(t, query)
 
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	var last []v4wire.Node
 	var lastMismatch error
 	for time.Now().Before(deadline) {
-		node, found, nodes, err := te.findNeighbor(id)
+		if err := checkSeedResponder(seedErr); err != nil {
+			t.Fatal("seed responder failed:", err)
+		}
+		node, found, nodes, err := query.findNeighbor(id)
 		if err != nil {
 			t.Fatal("findnode failed:", err)
 		}
 		last = nodes
 		if found {
-			if err := checkNeighborPorts(node, observed.UDP, tcpPort); err != nil {
+			if err := checkNeighborEndpoint(node, observed, tcpPort); err != nil {
 				lastMismatch = err
 			} else {
 				t.Logf("NEIGHBORS preserved distinct ports for seed %x: udp=%d tcp=%d", node.ID[:8], node.UDP, node.TCP)
 				return
 			}
 		}
-		time.Sleep(500 * time.Millisecond)
 	}
 
 	if lastMismatch != nil {
@@ -474,6 +485,50 @@ func FindnodeDistinctUDPAndTCP(t *utesting.T) {
 	}
 	t.Fatalf("seed peer %x not returned by NEIGHBORS before timeout; last response had %d nodes: %s",
 		id[:8], len(last), formatNodes(last))
+}
+
+func (te *testenv) answerPings(done <-chan struct{}) <-chan error {
+	errc := make(chan error, 1)
+	go func() {
+		defer close(errc)
+		for {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			req, hash, err := te.read(te.l1)
+			if isTimeout(err) {
+				continue
+			}
+			if err != nil {
+				select {
+				case <-done:
+				case errc <- err:
+				}
+				return
+			}
+			if req.Kind() == v4wire.PingPacket {
+				te.send(te.l1, &v4wire.Pong{
+					To:         te.remoteEndpoint(),
+					ReplyTok:   hash,
+					Expiration: futureExpiration(),
+				})
+			}
+		}
+	}()
+	return errc
+}
+
+func checkSeedResponder(errc <-chan error) error {
+	select {
+	case err, ok := <-errc:
+		if ok {
+			return err
+		}
+	default:
+	}
+	return nil
 }
 
 func (te *testenv) findNeighbor(target v4wire.Pubkey) (v4wire.Node, bool, []v4wire.Node, error) {
@@ -487,7 +542,7 @@ func (te *testenv) findNeighbor(target v4wire.Pubkey) (v4wire.Node, bool, []v4wi
 	for time.Now().Before(deadline) {
 		reply, hash, err := te.read(te.l1)
 		if isTimeout(err) {
-			return v4wire.Node{}, false, nodes, nil
+			continue
 		}
 		if err != nil {
 			return v4wire.Node{}, false, nodes, err
@@ -512,9 +567,12 @@ func (te *testenv) findNeighbor(target v4wire.Pubkey) (v4wire.Node, bool, []v4wi
 	return v4wire.Node{}, false, nodes, nil
 }
 
-func checkNeighborPorts(node v4wire.Node, wantUDP, wantTCP uint16) error {
-	if node.UDP != wantUDP {
-		return fmt.Errorf("UDP port got %d, want %d", node.UDP, wantUDP)
+func checkNeighborEndpoint(node v4wire.Node, want v4wire.Endpoint, wantTCP uint16) error {
+	if !node.IP.Equal(want.IP) {
+		return fmt.Errorf("IP got %v, want %v", node.IP, want.IP)
+	}
+	if node.UDP != want.UDP {
+		return fmt.Errorf("UDP port got %d, want %d", node.UDP, want.UDP)
 	}
 	if node.TCP != wantTCP {
 		return fmt.Errorf("TCP port got %d, want %d", node.TCP, wantTCP)
@@ -523,7 +581,11 @@ func checkNeighborPorts(node v4wire.Node, wantUDP, wantTCP uint16) error {
 }
 
 func isTimeout(err error) bool {
-	return errors.Is(err, os.ErrDeadlineExceeded)
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func formatNodes(nodes []v4wire.Node) string {

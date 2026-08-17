@@ -62,6 +62,56 @@ func TestCheckSelfRecordRejectsUDPWithoutIPAddress(t *testing.T) {
 	}
 }
 
+func TestCheckSelfRecordRejectsZeroPortEntries(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []enr.Entry
+		wantErr string
+	}{
+		{
+			name: "udp",
+			entries: []enr.Entry{
+				enr.IPv4Addr(mustAddr("203.0.113.1")),
+				enr.UDP(0),
+			},
+			wantErr: "udp entry is zero",
+		},
+		{
+			name: "tcp",
+			entries: []enr.Entry{
+				enr.IPv4Addr(mustAddr("203.0.113.1")),
+				enr.TCP(0),
+			},
+			wantErr: "tcp entry is zero",
+		},
+		{
+			name: "udp6",
+			entries: []enr.Entry{
+				enr.IPv6Addr(mustAddr("2001:db8::1")),
+				enr.UDP6(0),
+			},
+			wantErr: "udp6 entry is zero",
+		},
+		{
+			name: "tcp6",
+			entries: []enr.Entry{
+				enr.IPv6Addr(mustAddr("2001:db8::1")),
+				enr.TCP6(0),
+			},
+			wantErr: "tcp6 entry is zero",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := newTestNode(tt.entries...)
+			_, err := checkSelfRecord(node, netip.Addr{}, netip.Addr{})
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("expected %q error, got %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
 func TestCheckSelfRecordDoesNotRequireTCP(t *testing.T) {
 	node := newTestNode(
 		enr.IPv4Addr(mustAddr("203.0.113.1")),

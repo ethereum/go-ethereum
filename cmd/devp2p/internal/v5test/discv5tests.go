@@ -42,6 +42,9 @@ type Suite struct {
 	ExpectIP6        netip.Addr
 }
 
+// FindnodeZeroDistanceName is the test name that checks the remote self record.
+const FindnodeZeroDistanceName = "FindnodeZeroDistance"
+
 func (s *Suite) listen1(log logger) (*conn, net.PacketConn) {
 	c := newConn(s.Dest, log)
 	l := c.listen(s.Listen1)
@@ -61,7 +64,7 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "PingMultiIP", Fn: s.TestPingMultiIP},
 		{Name: "HandshakeResend", Fn: s.TestHandshakeResend},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
-		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
+		{Name: FindnodeZeroDistanceName, Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
 	}
 }
@@ -365,6 +368,18 @@ func loadEntry(record *enr.Record, entry enr.Entry) (bool, error) {
 }
 
 func (entries endpointEntries) checkDanglingPorts() error {
+	if entries.hasUDP && entries.udp == 0 {
+		return fmt.Errorf("udp entry is zero")
+	}
+	if entries.hasTCP && entries.tcp == 0 {
+		return fmt.Errorf("tcp entry is zero")
+	}
+	if entries.hasUDP6 && entries.udp6 == 0 {
+		return fmt.Errorf("udp6 entry is zero")
+	}
+	if entries.hasTCP6 && entries.tcp6 == 0 {
+		return fmt.Errorf("tcp6 entry is zero")
+	}
 	if entries.hasUDP && !entries.hasIP4 && !entries.hasIP6 {
 		return fmt.Errorf("udp is present without ip or ip6")
 	}
