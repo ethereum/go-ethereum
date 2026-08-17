@@ -473,7 +473,7 @@ type syncer struct {
 	storageSynced  uint64       // Number of storage slots downloaded
 	storageBytes   atomic.Int64 // Number of storage trie bytes persisted to disk, updated by the workers
 
-	syncExec       *syncRunner  // Executor running persistence and trie generation off the runloop
+	syncRunner     *syncRunner  // Executor running persistence and trie generation off the runloop
 	skippableHeals atomic.Int64 // Number of storages healed even though they were retrieved in full
 
 	extProgress *syncProgress // progress that can be exposed to external caller.
@@ -546,7 +546,7 @@ func newSyncer(db ethdb.KeyValueStore, scheme string) *syncer {
 
 		extProgress: new(syncProgress),
 	}
-	s.syncExec = newSyncRunner(s)
+	s.syncRunner = newSyncRunner(s)
 	return s
 }
 
@@ -693,7 +693,7 @@ func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		schedStart := time.Now()
 		s.cleanStorageTasks()
 		s.cleanAccountTasks()
-		if len(s.tasks) == 0 && s.healer.scheduler.Pending() == 0 && !s.syncExec.pending() {
+		if len(s.tasks) == 0 && s.healer.scheduler.Pending() == 0 && !s.syncRunner.pending() {
 			// State healing phase completed, record the elapsed time in metrics.
 			// Note: healing may be rerun in subsequent cycles to fill gaps between
 			// pivot states (e.g., if chain sync takes longer).
@@ -709,7 +709,7 @@ func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		s.assignBytecodeTasks(bytecodeResps, bytecodeReqFails, cancel)
 		s.assignStorageTasks(storageResps, storageReqFails, cancel)
 
-		if len(s.tasks) == 0 && !s.syncExec.pending() {
+		if len(s.tasks) == 0 && !s.syncRunner.pending() {
 			// State sync phase completed, record the elapsed time in metrics.
 			// Note: the initial state sync runs only once, regardless of whether
 			// a new cycle is started later. Any state differences in subsequent
@@ -918,7 +918,7 @@ func (s *syncer) loadSyncStatus() {
 // saveSyncStatus marshals the remaining sync tasks into leveldb.
 func (s *syncer) saveSyncStatus() {
 	// Wait out all the in-flight jobs
-	s.syncExec.barrier()
+	s.syncRunner.barrier()
 
 	// Serialize any partial progress to disk before spinning down
 	for _, task := range s.tasks {
@@ -2090,7 +2090,7 @@ func (s *syncer) processBytecodeResponse(res *bytecodeResponse) {
 	// writes over to the workers keyed by the job itself (fully parallel).
 	if len(hashes) > 0 {
 		job := &bytecodeJob{hashes: hashes, codes: blobs}
-		s.syncExec.submit(profBytecode, job, func() { s.executeBytecodeJob(job) })
+		s.syncRunner.submit(profBytecode, job, func() { s.executeBytecodeJob(job) })
 	}
 	log.Debug("Queued set of bytecodes", "count", codes)
 
@@ -2279,11 +2279,10 @@ func (s *syncer) processStorageResponse(res *storageResponse) {
 				subHashes:  res.hashes[i],
 				subSlots:   res.slots[i],
 				finish:     res.subTask.done,
-				mainTask:   res.mainTask,
 			}
 		} else {
 			if smallJob == nil {
-				smallJob = &storageJob{mainTask: res.mainTask}
+				smallJob = new(storageJob)
 			}
 			smallJob.accounts = append(smallJob.accounts, account)
 			smallJob.hashes = append(smallJob.hashes, res.hashes[i])
@@ -2295,11 +2294,11 @@ func (s *syncer) processStorageResponse(res *storageResponse) {
 	// itself; subtask feeds serialize on their subtask.
 	if smallJob != nil {
 		job := smallJob
-		s.syncExec.submit(profStorage, job, func() { s.executeStorageJob(job) })
+		s.syncRunner.submit(profStorage, job, func() { s.executeStorageJob(job) })
 	}
 	if subJob != nil {
 		job := subJob
-		s.syncExec.submit(profStorage, job.subTask, func() { s.executeStorageJob(job) })
+		s.syncRunner.submit(profStorage, job.subTask, func() { s.executeStorageJob(job) })
 	}
 	s.storageSynced += uint64(slots)
 
@@ -2493,7 +2492,7 @@ func (s *syncer) forwardAccountTask(task *accountTask) {
 		needHeal: task.needHeal[:last],
 		finish:   task.done,
 	}
-	s.syncExec.submit(profAccount, task, func() { s.executeAccountJob(job) })
+	s.syncRunner.submit(profAccount, task, func() { s.executeAccountJob(job) })
 }
 
 // OnAccounts is a callback method to invoke when a range of accounts are

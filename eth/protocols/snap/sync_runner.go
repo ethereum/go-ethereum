@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// syncTaskThreshold bounds the jobs buffered in the sync executor. Submissions
+// syncTaskThreshold bounds the jobs buffered in the sync runner. Submissions
 // block once the bound is hit, pushing the backpressure onto the runloop and
 // further onto the peers.
 const syncTaskThreshold = 512
@@ -50,12 +50,10 @@ type storageJob struct {
 	subAccount common.Hash
 	subHashes  []common.Hash
 	subSlots   [][]byte
-	finish     bool         // subtask completed by this feed
-	mainTask   *accountTask // origin account task
+	finish     bool // subtask completed by this feed
 }
 
-// syncRunner runs sync jobs (storage deliveries and account deliveries) on a
-// bounded worker pool.
+// syncRunner runs sync jobs on a bounded worker pool.
 type syncRunner struct {
 	s      *syncer
 	lock   sync.Mutex
@@ -112,14 +110,17 @@ func (e *syncRunner) drain(key any) {
 		if empty {
 			delete(e.queues, key)
 		}
+		idle := len(e.queues) == 0
 		e.lock.Unlock()
 
 		<-e.tasks
 
-		// Ping the runloop on every completed job
-		select {
-		case e.s.update <- struct{}{}:
-		default:
+		// Wake the runloop when the runner drains fully
+		if idle {
+			select {
+			case e.s.update <- struct{}{}:
+			default:
+			}
 		}
 		if empty {
 			return
