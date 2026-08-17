@@ -59,6 +59,11 @@ func (c *Cell) MarshalText() ([]byte, error) {
 // Blob represents a 4844 data blob.
 type Blob [131072]byte
 
+// A blob is exactly its DataPerBlob data cells, concatenated; the remaining
+// cells (indices DataPerBlob..CellsPerBlob-1) carry redundancy only. Code
+// reassembling blobs from cells relies on this, so assert it at compile time.
+var _ [len(Blob{})]byte = [DataPerBlob * len(Cell{})]byte{}
+
 // UnmarshalJSON parses a blob in hex syntax.
 func (b *Blob) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalFixedJSON(blobT, input, b[:])
@@ -263,6 +268,64 @@ func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 		return ckzgRecoverBlobs(cells, cellIndices)
 	}
 	return gokzgRecoverBlobs(cells, cellIndices)
+}
+
+// blobsFromDataCells reconstructs blobs by concatenating their data cells (cell
+// indices 0..DataPerBlob-1, by definition the blob contents), with no KZG
+// involvement and no validation of the cell contents whatsoever (see
+// RecoverBlobsUnchecked for the contract). It accepts a strict subset of the
+// inputs RecoverBlobs accepts and returns identical bytes; on ok=false the
+// caller should fall back to RecoverBlobs.
+//
+// For the layout of cells and cellIndices, see RecoverBlobs.
+func blobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
+	if validateCellIndices(cells, cellIndices) != nil {
+		return nil, false
+	}
+	// The head must be exactly the data cells in canonical order:
+	// cellIndices[i] == i for i < DataPerBlob.
+	if len(cellIndices) < DataPerBlob {
+		return nil, false
+	}
+	for i := range DataPerBlob {
+		if cellIndices[i] != uint64(i) {
+			return nil, false
+		}
+	}
+	// The tail is ignored by the concatenation but must still be well-formed:
+	// the KZG library that would reject it is never reached on this path.
+	for i := DataPerBlob; i < len(cellIndices); i++ {
+		if cellIndices[i] <= cellIndices[i-1] || cellIndices[i] >= CellsPerBlob {
+			return nil, false
+		}
+	}
+	blobCount := len(cells) / len(cellIndices)
+	blobs := make([]Blob, blobCount)
+	for b := range blobCount {
+		data := cells[b*len(cellIndices):][:DataPerBlob]
+		for i := range data {
+			copy(blobs[b][i*len(data[i]):], data[i][:])
+		}
+	}
+	return blobs, true
+}
+
+// RecoverBlobsUnchecked is RecoverBlobs for callers that have already
+// established the cells' authenticity (e.g. via VerifyCells at ingest): when the
+// data cells are all present, the blobs are returned as their concatenation,
+// skipping the KZG erasure decode. The result is byte-identical to RecoverBlobs.
+//
+// "Unchecked" refers to the cell contents: the concatenation validates nothing,
+// not even field-element canonicalness -- the one check RecoverBlobs performs
+// (neither verifies cell proofs or the commitment). Pass only cells whose
+// authenticity is already assured.
+//
+// For the layout of cells and cellIndices, see RecoverBlobs.
+func RecoverBlobsUnchecked(cells []Cell, cellIndices []uint64) ([]Blob, error) {
+	if blobs, ok := blobsFromDataCells(cells, cellIndices); ok {
+		return blobs, nil
+	}
+	return RecoverBlobs(cells, cellIndices)
 }
 
 func validateCellIndices(cells []Cell, cellIndices []uint64) error {
