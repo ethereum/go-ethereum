@@ -466,7 +466,19 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 	options.TxLookupLimit = 0 // index all txs
 
 	accman, acc := newTestAccountManager(t)
+	if gspec.Alloc == nil {
+		gspec.Alloc = types.GenesisAlloc{}
+	}
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
+
+	// Most of the configs used here are merged up to the latest fork, whose
+	// system calls invalidate every generated block unless the contracts they
+	// target are deployed. Anything the caller allocated explicitly wins.
+	for addr, account := range core.SystemContractAllocs() {
+		if _, ok := gspec.Alloc[addr]; !ok {
+			gspec.Alloc[addr] = account
+		}
+	}
 
 	// Generate blocks for testing
 	db, blocks, receipts := core.GenerateChainWithGenesis(gspec, engine, n+1, generator)
