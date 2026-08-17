@@ -1387,14 +1387,14 @@ func TestTraceBlockWithBasefee(t *testing.T) {
 	t.Parallel()
 	accounts := newAccounts(1)
 	target := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	alloc := core.SystemContractAllocs()
+	alloc[accounts[0].addr] = types.Account{Balance: big.NewInt(1 * params.Ether)}
+	alloc[target] = types.Account{Nonce: 1, Code: []byte{
+		byte(vm.BASEFEE), byte(vm.STOP),
+	}}
 	genesis := &core.Genesis{
 		Config: params.AllDevChainProtocolChanges,
-		Alloc: types.GenesisAlloc{
-			accounts[0].addr: {Balance: big.NewInt(1 * params.Ether)},
-			target: {Nonce: 1, Code: []byte{
-				byte(vm.BASEFEE), byte(vm.STOP),
-			}},
-		},
+		Alloc:  alloc,
 	}
 	genBlocks := 1
 	signer := types.HomesteadSigner{}

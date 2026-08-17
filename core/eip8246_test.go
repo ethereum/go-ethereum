@@ -55,9 +55,9 @@ func TestEIP8246SelfdestructNoBurn(t *testing.T) {
 
 	gspec := &Genesis{
 		Config: &config,
-		Alloc: types.GenesisAlloc{
+		Alloc: withSystemContracts(types.GenesisAlloc{
 			addr1: {Balance: newGwei(1_000_000_000)},
-		},
+		}),
 	}
 	// The contract created by addr1's first (nonce 0) transaction.
 	created := crypto.CreateAddress(addr1, 0)
@@ -138,10 +138,10 @@ func TestEIP8246SelfdestructRefunded(t *testing.T) {
 	factoryCode = append(factoryCode, 0x00)
 	gspec := &Genesis{
 		Config: &config,
-		Alloc: types.GenesisAlloc{
+		Alloc: withSystemContracts(types.GenesisAlloc{
 			sender:  {Balance: newGwei(1_000_000_000)},
 			factory: {Nonce: 1, Code: factoryCode, Balance: big.NewInt(15)},
-		},
+		}),
 	}
 	child := crypto.CreateAddress(factory, 1)
 	db, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(_ int, b *BlockGen) {
@@ -204,10 +204,10 @@ func TestEIP8246Create2RecreatesBalanceOnly(t *testing.T) {
 	)
 	gspec := &Genesis{
 		Config: &config,
-		Alloc: types.GenesisAlloc{
+		Alloc: withSystemContracts(types.GenesisAlloc{
 			sender:  {Balance: newGwei(1_000_000_000)},
 			factory: {Nonce: 1, Code: factoryCode, Balance: common.Big0},
-		},
+		}),
 	}
 	var salt [32]byte
 	salt[31] = 1
