@@ -96,6 +96,12 @@ func New256(key []byte) (hash.Hash, error) { return newDigest(Size256, key) }
 // and BinaryUnmarshaler for state (de)serialization as documented by hash.Hash.
 func New(size int, key []byte) (hash.Hash, error) { return newDigest(size, key) }
 
+// maxAsmRounds bounds the work a single assembly call does. Assembly is not
+// preemptible, so an unbounded rounds argument holds every P in stop-the-world
+// for the length of the call. It must stay a multiple of 10 so that the message
+// schedule realigns at a chunk boundary.
+const maxAsmRounds = 4090
+
 // F is a compression function for BLAKE2b. It takes as an argument the state
 // vector `h`, message block vector `m`, offset counter `t`, final block indicator
 // flag `f`, and number of rounds `rounds`. The state vector provided as the first
@@ -105,7 +111,11 @@ func F(h *[8]uint64, m [16]uint64, c [2]uint64, final bool, rounds uint32) {
 	if final {
 		flag = 0xFFFFFFFFFFFFFFFF
 	}
-	f(h, &m, c[0], c[1], flag, uint64(rounds))
+	if rounds <= maxAsmRounds {
+		f(h, &m, c[0], c[1], flag, uint64(rounds))
+		return
+	}
+	fLong(h, &m, c[0], c[1], flag, uint64(rounds))
 }
 
 func newDigest(hashSize int, key []byte) (*digest, error) {
