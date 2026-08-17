@@ -18,8 +18,10 @@ package bintrie
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake3"
 	"github.com/holiman/uint256"
 )
@@ -340,6 +342,65 @@ func ChunkifyCode(code []byte) ChunkedCode {
 		}
 	}
 	return chunks
+}
+
+// IndexedChunk is one code-zone leaf of a bytecode: the chunk's index and
+// its 32-byte value.
+type IndexedChunk struct {
+	Index uint64
+	Chunk [32]byte
+}
+
+// AssembleCode recovers a bytecode from its code-zone leaves and proves the
+// recovery, per EIP-8347's code limb. The chunks - strictly ascending by
+// index, absent indices reading as 31 zero code bytes - are laid out and
+// truncated to codeSize, and the result must keccak-hash to codeHash. The
+// code is then re-chunked and must reproduce the given leaves exactly, no
+// chunk more or less: the hash pins the code bytes, the re-chunking pins
+// each chunk's push-data offset byte, its zero padding and its placement.
+func AssembleCode(codeHash common.Hash, codeSize uint32, chunks []IndexedChunk) ([]byte, error) {
+	if codeSize == 0 {
+		return nil, fmt.Errorf("bintrie: zero code size for code %x", codeHash)
+	}
+	chunkCount := (uint64(codeSize) + 30) / 31
+	code := make([]byte, chunkCount*31)
+	var prev uint64
+	for i, c := range chunks {
+		if c.Index >= chunkCount {
+			return nil, fmt.Errorf("bintrie: chunk %d beyond the %d chunks of code %x", c.Index, chunkCount, codeHash)
+		}
+		if i > 0 && c.Index <= prev {
+			return nil, fmt.Errorf("bintrie: code chunks of %x out of order at index %d", codeHash, c.Index)
+		}
+		prev = c.Index
+		copy(code[c.Index*31:], c.Chunk[1:])
+	}
+	code = code[:codeSize]
+	if crypto.Keccak256Hash(code) != codeHash {
+		return nil, fmt.Errorf("bintrie: assembled code hashes to %x, want %x", crypto.Keccak256(code), codeHash)
+	}
+	rechunked := ChunkifyCode(code)
+	next := 0
+	for i := uint64(0); i < chunkCount; i++ {
+		var want [32]byte
+		copy(want[:], rechunked[i*32:(i+1)*32])
+		given := next < len(chunks) && chunks[next].Index == i
+		if want == ([32]byte{}) {
+			// All-zero chunks resolve to absence and may not be present.
+			if given {
+				return nil, fmt.Errorf("bintrie: code %x carries all-zero chunk %d, which must be absent", codeHash, i)
+			}
+			continue
+		}
+		if !given || chunks[next].Chunk != want {
+			return nil, fmt.Errorf("bintrie: chunk %d of code %x does not match its re-chunking", i, codeHash)
+		}
+		next++
+	}
+	if next != len(chunks) {
+		return nil, fmt.Errorf("bintrie: %d surplus chunks for code %x", len(chunks)-next, codeHash)
+	}
+	return code, nil
 }
 
 // EncodeBasicData packs an account's basic data into the 32-byte BASIC_DATA

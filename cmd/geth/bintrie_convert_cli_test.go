@@ -111,3 +111,54 @@ func TestBintrieConvertCLI(t *testing.T) {
 		t.Fatalf("deletion did not report completion:\n%s", out)
 	}
 }
+
+// TestBintrieImportCLI drives the consumer story end to end through the real
+// command: artifacts produced on one datadir, verified and imported on a
+// second that holds headers but no state and no preimages, anchored at the
+// genesis block resolved from its own header chain.
+func TestBintrieImportCLI(t *testing.T) {
+	t.Parallel()
+	producer := t.TempDir()
+	json := filepath.Join(producer, "genesis.json")
+	if err := os.WriteFile(json, []byte(bintrieCLIGenesis), 0600); err != nil {
+		t.Fatal(err)
+	}
+	run := func(datadir string, expectFail bool, args ...string) string {
+		t.Helper()
+		geth := runGeth(t, append([]string{"--datadir", datadir}, args...)...)
+		geth.WaitExit()
+		if failed := geth.ExitStatus() != 0; failed != expectFail {
+			t.Fatalf("geth %v: exit status %d, expected failure %v\nstderr:\n%s",
+				args, geth.ExitStatus(), expectFail, geth.StderrText())
+		}
+		return geth.StderrText()
+	}
+
+	// The producer converts and exports.
+	outdir := t.TempDir()
+	snapPath := filepath.Join(outdir, "snapshot.bin")
+	prePath := filepath.Join(outdir, "preimages.bin")
+	run(producer, false, "--cache.preimages", "init", json)
+	run(producer, false, "bintrie", "convert", "--snapshot-out", snapPath, "--preimages-out", prePath)
+
+	// The consumer holds only headers: same genesis, no preimages.
+	consumer := t.TempDir()
+	run(consumer, false, "init", json)
+
+	// Verify first, writing nothing; then import; then refuse a re-import.
+	out := run(consumer, false, "bintrie", "import", "--verify-only", snapPath, prePath, "0")
+	if !strings.Contains(out, "nothing written") {
+		t.Fatalf("verify-only did not report itself:\n%s", out)
+	}
+	out = run(consumer, false, "bintrie", "import", snapPath, prePath, "0")
+	if !strings.Contains(out, "Import complete") {
+		t.Fatalf("import did not complete:\n%s", out)
+	}
+	out = run(consumer, true, "bintrie", "import", snapPath, prePath, "0")
+	if !strings.Contains(out, "--force") {
+		t.Fatalf("re-import refusal does not mention --force:\n%s", out)
+	}
+	// --force wipes and re-imports; on a real datadir this is the one path
+	// where the wipe meets an ancient directory and a node-layout journal.
+	run(consumer, false, "bintrie", "import", "--force", snapPath, prePath, "0")
+}
