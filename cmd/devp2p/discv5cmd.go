@@ -19,11 +19,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/urfave/cli/v2"
 )
@@ -126,14 +128,49 @@ func discv5Crawl(ctx *cli.Context) error {
 
 // discv5Test runs the protocol test suite.
 func discv5Test(ctx *cli.Context) error {
+	expectIP, err := parseExpectedIP(ctx.String(testExpectedIPFlag.Name), false)
+	if err != nil {
+		return err
+	}
+	expectIP6, err := parseExpectedIP(ctx.String(testExpectedIP6Flag.Name), true)
+	if err != nil {
+		return err
+	}
 	suite := &v5test.Suite{
 		Dest:      getNodeArg(ctx),
 		Listen1:   ctx.String(testListen1Flag.Name),
 		Listen2:   ctx.String(testListen2Flag.Name),
-		ExpectIP:  ctx.String(testExpectedIPFlag.Name),
-		ExpectIP6: ctx.String(testExpectedIP6Flag.Name),
+		ExpectIP:  expectIP,
+		ExpectIP6: expectIP6,
 	}
-	return runTests(ctx, suite.AllTests())
+	tests := suite.AllTests()
+	if (expectIP.IsValid() || expectIP6.IsValid()) && ctx.IsSet(testPatternFlag.Name) {
+		matches := utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
+		if !slices.ContainsFunc(matches, func(test utesting.Test) bool {
+			return test.Name == "FindnodeZeroDistance"
+		}) {
+			return errors.New("--expect-ip and --expect-ip6 require running FindnodeZeroDistance")
+		}
+	}
+	return runTests(ctx, tests)
+}
+
+func parseExpectedIP(raw string, ipv6 bool) (netip.Addr, error) {
+	if raw == "" {
+		return netip.Addr{}, nil
+	}
+	addr, err := netip.ParseAddr(raw)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	if ipv6 {
+		if !addr.Is6() || addr.Is4In6() {
+			return netip.Addr{}, fmt.Errorf("invalid expected IPv6 address %q", raw)
+		}
+	} else if !addr.Is4() {
+		return netip.Addr{}, fmt.Errorf("invalid expected IPv4 address %q", raw)
+	}
+	return addr, nil
 }
 
 func discv5Listen(ctx *cli.Context) error {

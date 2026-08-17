@@ -17,19 +17,20 @@
 package v5test
 
 import (
-	"net"
+	"net/netip"
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
-func TestValidateEndpointPairsAllowsIPv6UDPFallback(t *testing.T) {
-	record := newTestRecord(
-		enr.IPv6(net.ParseIP("2001:db8::1").To16()),
+func TestCheckSelfRecordAllowsIPv6UDPFallback(t *testing.T) {
+	node := newTestNode(
+		enr.IPv6Addr(mustAddr("2001:db8::1")),
 		enr.UDP(30303),
 	)
-	summary, err := validateEndpointPairs(record)
+	summary, err := checkSelfRecord(node, netip.Addr{}, netip.Addr{})
 	if err != nil {
 		t.Fatalf("expected IPv6 endpoint with UDP fallback to be valid: %v", err)
 	}
@@ -38,13 +39,13 @@ func TestValidateEndpointPairsAllowsIPv6UDPFallback(t *testing.T) {
 	}
 }
 
-func TestValidateEndpointPairsAllowsRedundantUDPWithIPv6Endpoint(t *testing.T) {
-	record := newTestRecord(
-		enr.IPv6(net.ParseIP("2001:db8::1").To16()),
+func TestCheckSelfRecordAllowsRedundantUDPWithIPv6Endpoint(t *testing.T) {
+	node := newTestNode(
+		enr.IPv6Addr(mustAddr("2001:db8::1")),
 		enr.UDP(30303),
 		enr.UDP6(30304),
 	)
-	summary, err := validateEndpointPairs(record)
+	summary, err := checkSelfRecord(node, netip.Addr{}, netip.Addr{})
 	if err != nil {
 		t.Fatalf("expected IPv6 endpoint with redundant UDP to be valid: %v", err)
 	}
@@ -53,21 +54,21 @@ func TestValidateEndpointPairsAllowsRedundantUDPWithIPv6Endpoint(t *testing.T) {
 	}
 }
 
-func TestValidateEndpointPairsRejectsUDPWithoutIPAddress(t *testing.T) {
-	record := newTestRecord(enr.UDP(30303))
-	_, err := validateEndpointPairs(record)
+func TestCheckSelfRecordRejectsUDPWithoutIPAddress(t *testing.T) {
+	node := newTestNode(enr.UDP(30303))
+	_, err := checkSelfRecord(node, netip.Addr{}, netip.Addr{})
 	if err == nil || !strings.Contains(err.Error(), "udp is present without ip or ip6") {
 		t.Fatalf("expected UDP without IP address to be rejected, got %v", err)
 	}
 }
 
-func TestRequireExpectedEndpointEntriesDoesNotRequireTCP(t *testing.T) {
-	record := newTestRecord(
-		enr.IPv4(net.ParseIP("203.0.113.1").To4()),
-		enr.IPv6(net.ParseIP("2001:db8::1").To16()),
+func TestCheckSelfRecordDoesNotRequireTCP(t *testing.T) {
+	node := newTestNode(
+		enr.IPv4Addr(mustAddr("203.0.113.1")),
+		enr.IPv6Addr(mustAddr("2001:db8::1")),
 		enr.UDP(30303),
 	)
-	summary, err := requireExpectedEndpointEntries(record, "203.0.113.1", "2001:db8::1")
+	summary, err := checkSelfRecord(node, mustAddr("203.0.113.1"), mustAddr("2001:db8::1"))
 	if err != nil {
 		t.Fatalf("expected discovery endpoints without TCP entries to be valid: %v", err)
 	}
@@ -79,11 +80,23 @@ func TestRequireExpectedEndpointEntriesDoesNotRequireTCP(t *testing.T) {
 	}
 }
 
-func TestRequireExpectedEndpointEntriesNeedsIPv6DiscoveryPort(t *testing.T) {
-	record := newTestRecord(enr.IPv6(net.ParseIP("2001:db8::1").To16()))
-	_, err := requireExpectedEndpointEntries(record, "", "2001:db8::1")
+func TestCheckSelfRecordNeedsIPv6DiscoveryPort(t *testing.T) {
+	node := newTestNode(enr.IPv6Addr(mustAddr("2001:db8::1")))
+	_, err := checkSelfRecord(node, netip.Addr{}, mustAddr("2001:db8::1"))
 	if err == nil || !strings.Contains(err.Error(), "missing udp6 entry or udp fallback") {
 		t.Fatalf("expected missing IPv6 discovery port error, got %v", err)
+	}
+}
+
+func TestCheckSelfRecordAllowsZeroSequence(t *testing.T) {
+	record := newTestRecord(
+		enr.IPv4Addr(mustAddr("203.0.113.1")),
+		enr.UDP(30303),
+	)
+	record.SetSeq(0)
+	node := enode.SignNull(record, enode.ID{})
+	if _, err := checkSelfRecord(node, netip.Addr{}, netip.Addr{}); err != nil {
+		t.Fatalf("expected sequence zero to be accepted: %v", err)
 	}
 }
 
@@ -94,4 +107,16 @@ func newTestRecord(entries ...enr.Entry) *enr.Record {
 		record.Set(entry)
 	}
 	return &record
+}
+
+func newTestNode(entries ...enr.Entry) *enode.Node {
+	return enode.SignNull(newTestRecord(entries...), enode.ID{})
+}
+
+func mustAddr(raw string) netip.Addr {
+	addr, err := netip.ParseAddr(raw)
+	if err != nil {
+		panic(err)
+	}
+	return addr
 }

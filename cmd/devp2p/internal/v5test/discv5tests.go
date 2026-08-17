@@ -18,8 +18,10 @@ package v5test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"slices"
 	"strings"
 	"sync"
@@ -36,8 +38,8 @@ import (
 type Suite struct {
 	Dest             *enode.Node
 	Listen1, Listen2 string // listening addresses
-	ExpectIP         string
-	ExpectIP6        string
+	ExpectIP         netip.Addr
+	ExpectIP6        netip.Addr
 }
 
 func (s *Suite) listen1(log logger) (*conn, net.PacketConn) {
@@ -253,258 +255,166 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	if nodes[0].ID() != conn.remote.ID() {
 		t.Errorf("ID of response node is %v, want %v", nodes[0].ID(), conn.remote.ID())
 	}
-	summary, err := validateEndpointPairs(nodes[0].Record())
+	summary, err := checkSelfRecord(nodes[0], s.ExpectIP, s.ExpectIP6)
 	if err != nil {
 		t.Fatal("self record has invalid endpoint entries:", err)
-	}
-	if s.ExpectIP != "" || s.ExpectIP6 != "" {
-		summary, err = requireExpectedEndpointEntries(nodes[0].Record(), s.ExpectIP, s.ExpectIP6)
-		if err != nil {
-			t.Fatal("self record does not include expected endpoint entries:", err)
-		}
 	}
 	t.Logf("self record seq=%d endpoints: %s", nodes[0].Seq(), summary)
 }
 
-func validateEndpointPairs(record *enr.Record) (string, error) {
-	if record.Seq() == 0 {
-		return "", fmt.Errorf("ENR sequence is zero")
-	}
-
-	ip4, hasIP4, err := loadENRIPv4(record)
+func checkSelfRecord(n *enode.Node, wantIP4, wantIP6 netip.Addr) (string, error) {
+	entries, err := loadEndpointEntries(n.Record())
 	if err != nil {
 		return "", err
 	}
-	ip6, hasIP6, err := loadENRIPv6(record)
-	if err != nil {
+	if err := entries.checkDanglingPorts(); err != nil {
 		return "", err
 	}
-	udp, hasUDP, err := loadENRUDP(record)
-	if err != nil {
-		return "", err
-	}
-	udp6, hasUDP6, err := loadENRUDP6(record)
-	if err != nil {
-		return "", err
-	}
-	tcp, hasTCP, err := loadENRTCP(record)
-	if err != nil {
-		return "", err
-	}
-	tcp6, hasTCP6, err := loadENRTCP6(record)
-	if err != nil {
-		return "", err
-	}
-
-	if hasUDP && !hasIP4 && !hasIP6 {
-		return "", fmt.Errorf("udp is present without ip or ip6")
-	}
-	if hasTCP && !hasIP4 && !hasIP6 {
-		return "", fmt.Errorf("tcp is present without ip or ip6")
-	}
-	if hasUDP6 && !hasIP6 {
-		return "", fmt.Errorf("udp6 is present without ip6")
-	}
-	if hasTCP6 && !hasIP6 {
-		return "", fmt.Errorf("tcp6 is present without ip6")
-	}
-	if hasIP4 && !hasUDP {
-		return "", fmt.Errorf("ip is present without udp")
-	}
-	if hasIP6 && !hasUDP6 && !hasUDP {
-		return "", fmt.Errorf("ip6 is present without udp6 or udp fallback")
-	}
-	if !((hasIP4 && hasUDP) || (hasIP6 && (hasUDP6 || hasUDP))) {
-		return "", fmt.Errorf("ENR has no usable discovery endpoint")
-	}
-
-	var endpoints []string
-	if hasIP4 {
-		endpoints = append(endpoints, fmt.Sprintf("ip=%s udp=%d", ip4, udp))
-		if hasTCP {
-			endpoints[len(endpoints)-1] += fmt.Sprintf(" tcp=%d", tcp)
-		}
-	}
-	if hasIP6 {
-		v6UDP := udp
-		if hasUDP6 {
-			v6UDP = udp6
-		}
-		endpoints = append(endpoints, fmt.Sprintf("ip6=%s udp6=%d", ip6, v6UDP))
-		if hasTCP6 {
-			endpoints[len(endpoints)-1] += fmt.Sprintf(" tcp6=%d", tcp6)
-		}
-	}
-	return strings.Join(endpoints, "; "), nil
-}
-
-func requireExpectedEndpointEntries(record *enr.Record, wantIPv4, wantIPv6 string) (string, error) {
-	ip4, hasIP4, err := loadENRIPv4(record)
-	if err != nil {
-		return "", err
-	}
-	ip6, hasIP6, err := loadENRIPv6(record)
-	if err != nil {
-		return "", err
-	}
-	udp, hasUDP, err := loadENRUDP(record)
-	if err != nil {
-		return "", err
-	}
-	udp6, hasUDP6, err := loadENRUDP6(record)
-	if err != nil {
-		return "", err
-	}
-	tcp, hasTCP, err := loadENRTCP(record)
-	if err != nil {
-		return "", err
-	}
-	tcp6, hasTCP6, err := loadENRTCP6(record)
-	if err != nil {
-		return "", err
-	}
-
-	if wantIPv4 != "" {
-		expectedIPv4 := net.ParseIP(wantIPv4).To4()
-		if expectedIPv4 == nil {
-			return "", fmt.Errorf("invalid expected IPv4 address %q", wantIPv4)
-		}
-		if !hasIP4 {
+	if wantIP4.IsValid() {
+		if !entries.hasIP4 {
 			return "", fmt.Errorf("missing ip entry")
 		}
-		if !hasUDP {
+		if entries.udp == 0 {
 			return "", fmt.Errorf("missing udp entry")
 		}
-		if !ip4.Equal(expectedIPv4) {
-			return "", fmt.Errorf("ip entry got %s, want %s", ip4, expectedIPv4)
+		if entries.ip4 != wantIP4 {
+			return "", fmt.Errorf("ip entry got %s, want %s", entries.ip4, wantIP4)
 		}
 	}
-	if wantIPv6 != "" {
-		expectedIPv6 := net.ParseIP(wantIPv6)
-		if expectedIPv6 == nil || expectedIPv6.To4() != nil {
-			return "", fmt.Errorf("invalid expected IPv6 address %q", wantIPv6)
-		}
-		if !hasIP6 {
+	if wantIP6.IsValid() {
+		if !entries.hasIP6 {
 			return "", fmt.Errorf("missing ip6 entry")
 		}
-		if !hasUDP6 && !hasUDP {
+		if entries.ip6 != wantIP6 {
+			return "", fmt.Errorf("ip6 entry got %s, want %s", entries.ip6, wantIP6)
+		}
+		if entries.udp6 == 0 && entries.udp == 0 {
 			return "", fmt.Errorf("missing udp6 entry or udp fallback")
 		}
-		if !ip6.Equal(expectedIPv6) {
-			return "", fmt.Errorf("ip6 entry got %s, want %s", ip6, expectedIPv6)
-		}
 	}
+	if _, ok := n.UDPEndpoint(); !ok && !entries.hasUsableDiscoveryEndpoint() {
+		return "", errors.New("record has no usable UDP endpoint")
+	}
+	return entries.summary(), nil
+}
 
+type endpointEntries struct {
+	ip4, ip6             netip.Addr
+	udp, udp6, tcp, tcp6 uint16
+	hasIP4, hasIP6       bool
+	hasUDP, hasUDP6      bool
+	hasTCP, hasTCP6      bool
+}
+
+func loadEndpointEntries(record *enr.Record) (endpointEntries, error) {
+	var entries endpointEntries
+	var ip4 enr.IPv4Addr
+	var ip6 enr.IPv6Addr
+	var udp enr.UDP
+	var udp6 enr.UDP6
+	var tcp enr.TCP
+	var tcp6 enr.TCP6
+
+	loaders := []struct {
+		entry enr.Entry
+		set   func(bool)
+	}{
+		{&ip4, func(ok bool) {
+			entries.hasIP4 = ok
+			entries.ip4 = netip.Addr(ip4)
+		}},
+		{&ip6, func(ok bool) {
+			entries.hasIP6 = ok
+			entries.ip6 = netip.Addr(ip6)
+		}},
+		{&udp, func(ok bool) {
+			entries.hasUDP = ok
+			entries.udp = uint16(udp)
+		}},
+		{&udp6, func(ok bool) {
+			entries.hasUDP6 = ok
+			entries.udp6 = uint16(udp6)
+		}},
+		{&tcp, func(ok bool) {
+			entries.hasTCP = ok
+			entries.tcp = uint16(tcp)
+		}},
+		{&tcp6, func(ok bool) {
+			entries.hasTCP6 = ok
+			entries.tcp6 = uint16(tcp6)
+		}},
+	}
+	for _, loader := range loaders {
+		ok, err := loadEntry(record, loader.entry)
+		if err != nil {
+			return endpointEntries{}, err
+		}
+		loader.set(ok)
+	}
+	return entries, nil
+}
+
+func loadEntry(record *enr.Record, entry enr.Entry) (bool, error) {
+	if err := record.Load(entry); err != nil {
+		if enr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("invalid %s entry: %w", entry.ENRKey(), err)
+	}
+	return true, nil
+}
+
+func (entries endpointEntries) checkDanglingPorts() error {
+	if entries.hasUDP && !entries.hasIP4 && !entries.hasIP6 {
+		return fmt.Errorf("udp is present without ip or ip6")
+	}
+	if entries.hasTCP && !entries.hasIP4 && !entries.hasIP6 {
+		return fmt.Errorf("tcp is present without ip or ip6")
+	}
+	if entries.hasUDP6 && !entries.hasIP6 {
+		return fmt.Errorf("udp6 is present without ip6")
+	}
+	if entries.hasTCP6 && !entries.hasIP6 {
+		return fmt.Errorf("tcp6 is present without ip6")
+	}
+	return nil
+}
+
+func (entries endpointEntries) hasUsableDiscoveryEndpoint() bool {
+	return entries.hasIP4 && usableIP(entries.ip4) && entries.udp != 0 ||
+		entries.hasIP6 && usableIP(entries.ip6) && (entries.udp6 != 0 || entries.udp != 0)
+}
+
+func usableIP(addr netip.Addr) bool {
+	return addr.IsValid() && !addr.IsUnspecified() && !addr.IsMulticast()
+}
+
+func (entries endpointEntries) summary() string {
 	var endpoints []string
-	if hasIP4 {
-		endpoints = append(endpoints, fmt.Sprintf("ip=%s udp=%d", ip4, udp))
-		if hasTCP {
-			endpoints[len(endpoints)-1] += fmt.Sprintf(" tcp=%d", tcp)
+	if entries.hasIP4 {
+		fields := []string{fmt.Sprintf("ip=%s", entries.ip4)}
+		if entries.hasUDP {
+			fields = append(fields, fmt.Sprintf("udp=%d", entries.udp))
 		}
-	}
-	if hasIP6 {
-		v6UDP := udp
-		if hasUDP6 {
-			v6UDP = udp6
+		if entries.hasTCP {
+			fields = append(fields, fmt.Sprintf("tcp=%d", entries.tcp))
 		}
-		endpoints = append(endpoints, fmt.Sprintf("ip6=%s udp6=%d", ip6, v6UDP))
-		if hasTCP6 {
-			endpoints[len(endpoints)-1] += fmt.Sprintf(" tcp6=%d", tcp6)
+		endpoints = append(endpoints, strings.Join(fields, " "))
+	}
+	if entries.hasIP6 {
+		fields := []string{fmt.Sprintf("ip6=%s", entries.ip6)}
+		switch {
+		case entries.hasUDP6:
+			fields = append(fields, fmt.Sprintf("udp6=%d", entries.udp6))
+		case entries.hasUDP:
+			fields = append(fields, fmt.Sprintf("udp6=%d", entries.udp))
 		}
-	}
-	return strings.Join(endpoints, "; "), nil
-}
-
-func loadENRIPv4(record *enr.Record) (net.IP, bool, error) {
-	var ip enr.IPv4
-	if err := record.Load(&ip); err != nil {
-		if enr.IsNotFound(err) {
-			return nil, false, nil
+		if entries.hasTCP6 {
+			fields = append(fields, fmt.Sprintf("tcp6=%d", entries.tcp6))
 		}
-		return nil, false, fmt.Errorf("invalid ip entry: %w", err)
+		endpoints = append(endpoints, strings.Join(fields, " "))
 	}
-	ip4 := net.IP(ip).To4()
-	if ip4 == nil {
-		return nil, false, fmt.Errorf("ip entry is not IPv4: %v", net.IP(ip))
-	}
-	if ip4.IsUnspecified() || ip4.IsMulticast() {
-		return nil, false, fmt.Errorf("ip entry is not usable: %v", ip4)
-	}
-	return ip4, true, nil
-}
-
-func loadENRIPv6(record *enr.Record) (net.IP, bool, error) {
-	var ip enr.IPv6
-	if err := record.Load(&ip); err != nil {
-		if enr.IsNotFound(err) {
-			return nil, false, nil
-		}
-		return nil, false, fmt.Errorf("invalid ip6 entry: %w", err)
-	}
-	ip6 := net.IP(ip)
-	if ip6.To16() == nil || ip6.To4() != nil {
-		return nil, false, fmt.Errorf("ip6 entry is not native IPv6: %v", ip6)
-	}
-	if ip6.IsUnspecified() || ip6.IsMulticast() {
-		return nil, false, fmt.Errorf("ip6 entry is not usable: %v", ip6)
-	}
-	return ip6, true, nil
-}
-
-func loadENRUDP(record *enr.Record) (uint16, bool, error) {
-	var port enr.UDP
-	if err := record.Load(&port); err != nil {
-		if enr.IsNotFound(err) {
-			return 0, false, nil
-		}
-		return 0, false, fmt.Errorf("invalid udp entry: %w", err)
-	}
-	if port == 0 {
-		return 0, false, fmt.Errorf("udp entry is zero")
-	}
-	return uint16(port), true, nil
-}
-
-func loadENRUDP6(record *enr.Record) (uint16, bool, error) {
-	var port enr.UDP6
-	if err := record.Load(&port); err != nil {
-		if enr.IsNotFound(err) {
-			return 0, false, nil
-		}
-		return 0, false, fmt.Errorf("invalid udp6 entry: %w", err)
-	}
-	if port == 0 {
-		return 0, false, fmt.Errorf("udp6 entry is zero")
-	}
-	return uint16(port), true, nil
-}
-
-func loadENRTCP(record *enr.Record) (uint16, bool, error) {
-	var port enr.TCP
-	if err := record.Load(&port); err != nil {
-		if enr.IsNotFound(err) {
-			return 0, false, nil
-		}
-		return 0, false, fmt.Errorf("invalid tcp entry: %w", err)
-	}
-	if port == 0 {
-		return 0, false, fmt.Errorf("tcp entry is zero")
-	}
-	return uint16(port), true, nil
-}
-
-func loadENRTCP6(record *enr.Record) (uint16, bool, error) {
-	var port enr.TCP6
-	if err := record.Load(&port); err != nil {
-		if enr.IsNotFound(err) {
-			return 0, false, nil
-		}
-		return 0, false, fmt.Errorf("invalid tcp6 entry: %w", err)
-	}
-	if port == 0 {
-		return 0, false, fmt.Errorf("tcp6 entry is zero")
-	}
-	return uint16(port), true, nil
+	return strings.Join(endpoints, "; ")
 }
 
 func (s *Suite) TestFindnodeResults(t *utesting.T) {

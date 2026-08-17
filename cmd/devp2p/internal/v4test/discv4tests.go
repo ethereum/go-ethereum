@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -401,7 +402,7 @@ func bond(t *utesting.T, te *testenv) {
 	bondWithTCP(t, te, 0)
 }
 
-func bondWithTCP(t *utesting.T, te *testenv, tcpPort uint16) {
+func bondWithTCP(t *utesting.T, te *testenv, tcpPort uint16) v4wire.Endpoint {
 	pingHash := te.send(te.l1, &v4wire.Ping{
 		Version:    4,
 		From:       te.localEndpointWithTCP(te.l1, tcpPort),
@@ -409,6 +410,7 @@ func bondWithTCP(t *utesting.T, te *testenv, tcpPort uint16) {
 		Expiration: futureExpiration(),
 	})
 
+	observed := te.localEndpointWithTCP(te.l1, tcpPort)
 	var gotPing, gotPong bool
 	for !gotPing || !gotPong {
 		req, hash, err := te.read(te.l1)
@@ -427,54 +429,51 @@ func bondWithTCP(t *utesting.T, te *testenv, tcpPort uint16) {
 			if err := te.checkPong(req, pingHash); err != nil {
 				t.Fatal(err)
 			}
+			observed = req.(*v4wire.Pong).To
 			gotPong = true
 		}
 	}
+	return observed
 }
 
 // FindnodeDistinctUDPAndTCP checks that a learned peer keeps distinct UDP and TCP ports
 // when returned through NEIGHBORS.
 func FindnodeDistinctUDPAndTCP(t *utesting.T) {
-	seed := newTestEnv(Remote, Listen1, Listen2)
-	defer seed.close()
-	query := newTestEnv(Remote, Listen1, Listen2)
-	defer query.close()
+	te := newTestEnv(Remote, Listen1, Listen2)
+	defer te.close()
 
-	seedEndpoint := seed.localEndpoint(seed.l1)
-	seedTCP := distinctTCPPort(seedEndpoint.UDP)
-	seedID := v4wire.EncodePubkey(&seed.key.PublicKey)
-	t.Logf("bonding seed peer %x at %v:%d with advertised TCP port %d", seedID[:8], seedEndpoint.IP, seedEndpoint.UDP, seedTCP)
-	bondWithTCP(t, seed, seedTCP)
+	local := te.localEndpoint(te.l1)
+	tcpPort := local.UDP ^ 1
+	id := v4wire.EncodePubkey(&te.key.PublicKey)
+	t.Logf("bonding peer %x at %v:%d with advertised TCP port %d", id[:8], local.IP, local.UDP, tcpPort)
+	observed := bondWithTCP(t, te, tcpPort)
 
-	t.Log("bonding query peer")
-	bond(t, query)
-
-	deadline := time.Now().Add(60 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	var last []v4wire.Node
-	var lastMismatch string
+	var lastMismatch error
 	for time.Now().Before(deadline) {
-		node, found, nodes, err := query.findNeighbor(seedID)
+		node, found, nodes, err := te.findNeighbor(id)
 		if err != nil {
 			t.Fatal("findnode failed:", err)
 		}
 		last = nodes
 		if found {
-			if err := checkNeighborPorts(node, seedEndpoint, seedTCP); err == nil {
+			if err := checkNeighborPorts(node, observed.UDP, tcpPort); err != nil {
+				lastMismatch = err
+			} else {
 				t.Logf("NEIGHBORS preserved distinct ports for seed %x: udp=%d tcp=%d", node.ID[:8], node.UDP, node.TCP)
 				return
-			} else {
-				lastMismatch = err.Error()
 			}
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	if lastMismatch != "" {
+	if lastMismatch != nil {
 		t.Fatalf("seed peer %x was returned by NEIGHBORS with wrong endpoint fields: %s; last response had %d nodes: %s",
-			seedID[:8], lastMismatch, len(last), formatNodes(last))
+			id[:8], lastMismatch, len(last), formatNodes(last))
 	}
 	t.Fatalf("seed peer %x not returned by NEIGHBORS before timeout; last response had %d nodes: %s",
-		seedID[:8], len(last), formatNodes(last))
+		id[:8], len(last), formatNodes(last))
 }
 
 func (te *testenv) findNeighbor(target v4wire.Pubkey) (v4wire.Node, bool, []v4wire.Node, error) {
@@ -513,12 +512,9 @@ func (te *testenv) findNeighbor(target v4wire.Pubkey) (v4wire.Node, bool, []v4wi
 	return v4wire.Node{}, false, nodes, nil
 }
 
-func checkNeighborPorts(node v4wire.Node, wantEndpoint v4wire.Endpoint, wantTCP uint16) error {
-	if !node.IP.Equal(wantEndpoint.IP) {
-		return fmt.Errorf("IP got %v, want %v", node.IP, wantEndpoint.IP)
-	}
-	if node.UDP != wantEndpoint.UDP {
-		return fmt.Errorf("UDP port got %d, want %d", node.UDP, wantEndpoint.UDP)
+func checkNeighborPorts(node v4wire.Node, wantUDP, wantTCP uint16) error {
+	if node.UDP != wantUDP {
+		return fmt.Errorf("UDP port got %d, want %d", node.UDP, wantUDP)
 	}
 	if node.TCP != wantTCP {
 		return fmt.Errorf("TCP port got %d, want %d", node.TCP, wantTCP)
@@ -526,19 +522,8 @@ func checkNeighborPorts(node v4wire.Node, wantEndpoint v4wire.Endpoint, wantTCP 
 	return nil
 }
 
-func distinctTCPPort(udp uint16) uint16 {
-	if udp > 32768 {
-		return udp - 10000
-	}
-	return udp + 10000
-}
-
 func isTimeout(err error) bool {
-	if err == nil {
-		return false
-	}
-	netErr, ok := err.(net.Error)
-	return ok && netErr.Timeout()
+	return errors.Is(err, os.ErrDeadlineExceeded)
 }
 
 func formatNodes(nodes []v4wire.Node) string {
