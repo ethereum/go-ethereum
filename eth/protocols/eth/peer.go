@@ -468,6 +468,14 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamp
 				FirstBlockReceiptIndex: 0,
 				GetReceiptsRequest:     hashes,
 			},
+			// The buffer entry lives and dies with the request: the dispatcher
+			// releases it if the request is cancelled or fails to send, while
+			// a completed response consumes it on the delivery path.
+			cleanup: func() {
+				p.receiptBufferLock.Lock()
+				delete(p.receiptBuffer, id)
+				p.receiptBufferLock.Unlock()
+			},
 		}
 		p.receiptBufferLock.Lock()
 		p.receiptBuffer[id] = &receiptRequest{
@@ -490,12 +498,6 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamp
 		}
 	}
 	if err := p.dispatchRequest(req); err != nil {
-		// Clean the buffer entry up if the request never made it out.
-		if p.version > ETH69 {
-			p.receiptBufferLock.Lock()
-			delete(p.receiptBuffer, id)
-			p.receiptBufferLock.Unlock()
-		}
 		return nil, err
 	}
 	return req, nil

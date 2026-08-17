@@ -52,6 +52,7 @@ type Request struct {
 	want     uint64      // Message code of the response packet
 	numItems int         // Number of requested items
 	data     interface{} // Data content of the request packet
+	cleanup  func()      // Optional callback to release protocol-specific state if the request dies unfulfilled
 
 	Peer string    // Demultiplexer if cross-peer requests are batched together
 	Sent time.Time // Timestamp when the request was sent
@@ -237,10 +238,16 @@ loop:
 				Size:     req.numItems,
 			}
 			if err := p.tracker.Track(treq); err != nil {
+				if req.cleanup != nil {
+					req.cleanup()
+				}
 				reqOp.fail <- err
 				continue loop
 			}
 			if err := p2p.Send(p.rw, req.code, req.data); err != nil {
+				if req.cleanup != nil {
+					req.cleanup()
+				}
 				reqOp.fail <- err
 				continue loop
 			}
@@ -283,15 +290,12 @@ loop:
 				cancelOp.fail <- nil
 				continue
 			}
-			// Stop tracking the request
+			// Stop tracking the request and release any protocol-specific
+			// state tied to it.
 			delete(pending, cancelOp.id)
-
-			// Not sure if the request is about the receipt, but remove it anyway.
-			// TODO(rjl493456442, bosul): investigate whether we can avoid leaking peer fields here.
-			p.receiptBufferLock.Lock()
-			delete(p.receiptBuffer, cancelOp.id)
-			p.receiptBufferLock.Unlock()
-
+			if req.cleanup != nil {
+				req.cleanup()
+			}
 			cancelOp.fail <- nil
 
 		case resOp := <-p.resDispatch:
