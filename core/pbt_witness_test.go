@@ -58,7 +58,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		}
 		// Read block hashes for block 0 .. num-1
 		for i := 0; i < num; i++ {
-			have, want := getContractStoredBlockHash(statedb, uint64(i), isPBT), common.Hash{byte(i + 1)}
+			have, want := getContractStoredBlockHash(statedb, uint64(i)), common.Hash{byte(i + 1)}
 			if have != want {
 				t.Errorf("block %d, pbt=%v, have parent hash %v, want %v", i, isPBT, have, want)
 			}
@@ -83,12 +83,9 @@ func TestProcessParentBlockHash(t *testing.T) {
 }
 
 // getContractStoredBlockHash is a utility method which reads the stored parent blockhash for block 'number'
-func getContractStoredBlockHash(statedb *state.StateDB, number uint64, isPBT bool) common.Hash {
+func getContractStoredBlockHash(statedb *state.StateDB, number uint64) common.Hash {
 	ringIndex := number % params.HistoryServeWindow
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
-	if isPBT {
-		return statedb.GetState(params.HistoryStorageAddress, key)
-	}
 	return statedb.GetState(params.HistoryStorageAddress, key)
 }
