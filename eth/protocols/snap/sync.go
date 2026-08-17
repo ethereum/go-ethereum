@@ -917,7 +917,11 @@ func (s *syncer) loadSyncStatus() {
 
 // saveSyncStatus marshals the remaining sync tasks into leveldb.
 func (s *syncer) saveSyncStatus() {
-	// Wait out all the in-flight jobs
+	// Wait out all the in-flight jobs: the in-memory task cursors run ahead
+	// of the database, so the journal must not be persisted until every job
+	// it accounts for has flushed its data. On this side of the barrier the
+	// journal can only ever trail the disk, which a resume repairs by
+	// re-downloading the overlap.
 	s.syncRunner.barrier()
 
 	// Serialize any partial progress to disk before spinning down
@@ -2455,7 +2459,10 @@ func (s *syncer) forwardAccountTask(task *accountTask) {
 	}()
 
 	// Determine the consecutive prefix of complete accounts and push the
-	// chunk marker forward over them.
+	// chunk marker forward over them. Note the cursor advances before the
+	// data is persisted by the packaged job below: the in-memory progress
+	// runs ahead of the database, which is safe as the journal is only
+	// saved behind a runner barrier.
 	last := len(res.hashes)
 	for i := range res.hashes {
 		if task.needCode[i] || task.needState[i] {
