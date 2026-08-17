@@ -468,18 +468,16 @@ type ChainConfig struct {
 	AmsterdamTime *uint64 `json:"amsterdamTime,omitempty"` // Amsterdam switch time (nil = no fork, 0 = already on amsterdam)
 	BogotaTime    *uint64 `json:"bogotaTime,omitempty"`    // Bogota switch time (nil = no fork, 0 = already on bogota)
 
+	// BinaryTrieTime schedules the EIP-8297 partitioned binary tree, which swaps
+	// the state commitment from the merkle-patricia trie; the key is shared with
+	// besu.
+	BinaryTrieTime *uint64 `json:"binaryTrieTime,omitempty"` // Binary tree switch time (nil = no fork)
+
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
 	TerminalTotalDifficulty *big.Int `json:"terminalTotalDifficulty,omitempty"`
 
 	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
-
-	// PBT commits the state with the EIP-8297 partitioned binary tree instead of
-	// the merkle-patricia trie. It is a property of the chain rather than a fork:
-	// there is no in-consensus conversion between the two, so a tree chain is
-	// committed as one from genesis onwards. It requires Amsterdam and changes no
-	// execution rule, which is why it is absent from Rules and from the fork order.
-	PBT bool `json:"pbt,omitempty"`
 
 	// Various consensus engines
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
@@ -592,8 +590,8 @@ func (c *ChainConfig) String() string {
 	if c.BogotaTime != nil {
 		result += fmt.Sprintf(", BogotaTime: %v", *c.BogotaTime)
 	}
-	if c.PBT {
-		result += ", PBT: true"
+	if c.BinaryTrieTime != nil {
+		result += fmt.Sprintf(", BinaryTrieTime: %v", *c.BinaryTrieTime)
 	}
 	result += "}"
 	return result
@@ -690,8 +688,8 @@ func (c *ChainConfig) Description() string {
 	if c.BogotaTime != nil {
 		banner += fmt.Sprintf(" - Bogota:                      @%-10v\n", *c.BogotaTime)
 	}
-	if c.PBT {
-		banner += " - PBT:                         enabled (binary tree state)\n"
+	if c.BinaryTrieTime != nil {
+		banner += fmt.Sprintf(" - BinaryTrie:                  @%-10v\n", *c.BinaryTrieTime)
 	}
 	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
@@ -872,12 +870,9 @@ func (c *ChainConfig) IsBogota(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.BogotaTime, time)
 }
 
-// IsPBT reports whether the chain commits its state with the binary tree. It
-// takes no block context on purpose: the commitment is fixed for the chain's
-// lifetime, so every site that opens or generates state gets the same answer,
-// including the ones that run before any block exists.
+// IsPBT reports whether the chain schedules the binary tree fork.
 func (c *ChainConfig) IsPBT() bool {
-	return c.PBT
+	return c.BinaryTrieTime != nil
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -977,11 +972,15 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			lastFork = cur
 		}
 	}
-	// The binary tree is not in the list above because it is not a fork, but it
-	// is only defined from Amsterdam onwards, so a chain cannot commit its state
-	// with it without scheduling Amsterdam first.
-	if c.PBT && c.AmsterdamTime == nil {
-		return errors.New("unsupported configuration: the binary tree requires Amsterdam, which is not scheduled")
+	// The binary tree stays out of the fork list above: an optional entry there
+	// would not force Amsterdam to be scheduled and would wrongly bound Bogota.
+	if c.BinaryTrieTime != nil {
+		if c.AmsterdamTime == nil {
+			return errors.New("unsupported configuration: the binary tree requires Amsterdam, which is not scheduled")
+		}
+		if *c.BinaryTrieTime < *c.AmsterdamTime {
+			return fmt.Errorf("unsupported configuration: binaryTrieTime (%d) must not be before amsterdamTime (%d)", *c.BinaryTrieTime, *c.AmsterdamTime)
+		}
 	}
 
 	// Check that all forks with blobs explicitly define the blob schedule configuration.
@@ -1118,6 +1117,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	}
 	if isForkTimestampIncompatible(c.BogotaTime, newcfg.BogotaTime, headTimestamp) {
 		return newTimestampCompatError("Bogota fork timestamp", c.BogotaTime, newcfg.BogotaTime)
+	}
+	if isForkTimestampIncompatible(c.BinaryTrieTime, newcfg.BinaryTrieTime, headTimestamp) {
+		return newTimestampCompatError("BinaryTrie fork timestamp", c.BinaryTrieTime, newcfg.BinaryTrieTime)
 	}
 	return nil
 }
@@ -1397,9 +1399,9 @@ type Rules struct {
 func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules {
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
-	// The binary tree is deliberately absent here. It selects the state
+	// The binary tree fork is deliberately absent here. It selects the state
 	// commitment, not the execution rules, so Rules is identical whether or not
-	// it is enabled; consult ChainConfig.IsPBT for the commitment instead.
+	// it is scheduled; consult ChainConfig.IsPBT for the commitment instead.
 	return Rules{
 		IsHomestead:      c.IsHomestead(num),
 		IsEIP150:         c.IsEIP150(num),

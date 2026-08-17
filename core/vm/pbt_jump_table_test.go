@@ -83,7 +83,7 @@ func pbtRulePair(t *testing.T, apply func(*params.ChainConfig)) (params.Rules, p
 	plainCfg := pbtVMBase()
 	apply(plainCfg)
 	treeCfg := *plainCfg
-	treeCfg.PBT = true
+	treeCfg.BinaryTrieTime = new(uint64)
 
 	if !treeCfg.IsPBT() {
 		t.Fatal("the binary tree is not active; this case proves nothing")
@@ -164,7 +164,7 @@ func TestPBTTableSelectedByEVM(t *testing.T) {
 	// Amsterdam-with-binary-tree is the combination the BinaryTree fork means.
 	cfg := pbtVMBase()
 	withTree := *cfg
-	withTree.PBT = true
+	withTree.BinaryTrieTime = new(uint64)
 
 	blockCtx := BlockContext{BlockNumber: big.NewInt(1), Random: &common.Hash{}, Time: 1}
 	plain := NewEVM(blockCtx, nil, cfg, Config{})

@@ -17,8 +17,10 @@
 package params
 
 import (
+	"encoding/json"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -83,7 +85,7 @@ func TestPBTChangesNoExecutionRule(t *testing.T) {
 			plainCfg := pbtRulesBase()
 			tc.apply(plainCfg)
 			treeCfg := *plainCfg
-			treeCfg.PBT = true
+			treeCfg.BinaryTrieTime = u64ptr(0)
 
 			// Both configurations must be valid: the tree is optional on these
 			// forks, so the plain one has to stay legal.
@@ -121,7 +123,7 @@ func TestPBTKeepsEIP2929(t *testing.T) {
 	cfg := pbtRulesBase()
 	cfg.ShanghaiTime, cfg.CancunTime, cfg.PragueTime = u64ptr(0), u64ptr(0), u64ptr(0)
 	cfg.OsakaTime, cfg.AmsterdamTime = u64ptr(0), u64ptr(0)
-	cfg.PBT = true
+	cfg.BinaryTrieTime = u64ptr(0)
 
 	if !cfg.IsPBT() {
 		t.Fatal("the binary tree is not active; this proves nothing")
@@ -131,17 +133,14 @@ func TestPBTKeepsEIP2929(t *testing.T) {
 	}
 }
 
-// TestPBTRequiresAmsterdam pins the one configuration rule the commitment has.
-//
-// The tree is only defined from Amsterdam onwards, and it commits the state
-// from genesis, so a chain that never schedules Amsterdam cannot use it. The
-// check has to live outside the fork-ordering list, because the tree is not a
-// fork and has no timestamp to order against.
+// TestPBTRequiresAmsterdam pins the ordering rules the binary tree fork has:
+// it is only defined from Amsterdam onwards, so it cannot be scheduled on a
+// chain that never reaches Amsterdam, nor before Amsterdam's own time.
 func TestPBTRequiresAmsterdam(t *testing.T) {
 	withoutAmsterdam := pbtRulesBase()
 	withoutAmsterdam.ShanghaiTime, withoutAmsterdam.CancunTime = u64ptr(0), u64ptr(0)
 	withoutAmsterdam.PragueTime, withoutAmsterdam.OsakaTime = u64ptr(0), u64ptr(0)
-	withoutAmsterdam.PBT = true
+	withoutAmsterdam.BinaryTrieTime = u64ptr(0)
 
 	if err := withoutAmsterdam.CheckConfigForkOrder(); err == nil {
 		t.Fatal("the binary tree was accepted on a chain that never schedules Amsterdam")
@@ -149,8 +148,90 @@ func TestPBTRequiresAmsterdam(t *testing.T) {
 
 	// The same chain is fine without the tree - Osaka on the merkle-patricia
 	// trie is an ordinary configuration, and the new rule must not reject it.
-	withoutAmsterdam.PBT = false
+	withoutAmsterdam.BinaryTrieTime = nil
 	if err := withoutAmsterdam.CheckConfigForkOrder(); err != nil {
 		t.Fatalf("a merkle-patricia chain stopping at Osaka is rejected: %v", err)
+	}
+
+	// With Amsterdam scheduled, the tree may activate with it or after it, but
+	// never before it.
+	withAmsterdam := pbtRulesBase()
+	withAmsterdam.ShanghaiTime, withAmsterdam.CancunTime = u64ptr(0), u64ptr(0)
+	withAmsterdam.PragueTime, withAmsterdam.OsakaTime = u64ptr(0), u64ptr(0)
+	withAmsterdam.AmsterdamTime = u64ptr(100)
+
+	for _, tc := range []struct {
+		name string
+		time *uint64
+		ok   bool
+	}{
+		{"before amsterdam", u64ptr(99), false},
+		{"at amsterdam", u64ptr(100), true},
+		{"after amsterdam", u64ptr(101), true},
+		{"unscheduled", nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := *withAmsterdam
+			cfg.BinaryTrieTime = tc.time
+			err := cfg.CheckConfigForkOrder()
+			if tc.ok && err != nil {
+				t.Fatalf("a legal schedule is rejected: %v", err)
+			}
+			if !tc.ok && err == nil {
+				t.Fatal("a binary tree scheduled before Amsterdam was accepted")
+			}
+		})
+	}
+
+	// Bogota does not bound the tree: folding it into the ordered fork list
+	// would reject this legal schedule.
+	trailing := *withAmsterdam
+	trailing.BogotaTime = u64ptr(150)
+	trailing.BinaryTrieTime = u64ptr(200)
+	if err := trailing.CheckConfigForkOrder(); err != nil {
+		t.Fatalf("bogota bounded the binary tree: %v", err)
+	}
+}
+
+// TestBinaryTrieTimeJSONKey pins the genesis key the fork is configured with.
+// The key is shared with besu, which reads it case-insensitively as
+// "binarytrietime", so both spellings have to decode; the retired "pbt"
+// boolean must be ignored.
+func TestBinaryTrieTimeJSONKey(t *testing.T) {
+	cfg := pbtRulesBase()
+	cfg.BinaryTrieTime = u64ptr(0)
+	blob, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(blob), `"binaryTrieTime":0`) {
+		t.Fatalf("the config does not serialize the binaryTrieTime key: %s", blob)
+	}
+	if strings.Contains(string(blob), `"pbt"`) {
+		t.Fatalf("the retired pbt key is serialized: %s", blob)
+	}
+
+	for _, tc := range []struct {
+		name string
+		blob string
+		want *uint64
+	}{
+		{"geth spelling", `{"binaryTrieTime":7}`, u64ptr(7)},
+		{"besu spelling", `{"binarytrietime":7}`, u64ptr(7)},
+		{"absent", `{}`, nil},
+		{"retired pbt boolean", `{"pbt":true}`, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var decoded ChainConfig
+			if err := json.Unmarshal([]byte(tc.blob), &decoded); err != nil {
+				t.Fatal(err)
+			}
+			switch {
+			case tc.want == nil && decoded.BinaryTrieTime != nil:
+				t.Fatalf("binaryTrieTime decoded as %d, want unset", *decoded.BinaryTrieTime)
+			case tc.want != nil && (decoded.BinaryTrieTime == nil || *decoded.BinaryTrieTime != *tc.want):
+				t.Fatalf("binaryTrieTime decoded as %v, want %d", decoded.BinaryTrieTime, *tc.want)
+			}
+		})
 	}
 }

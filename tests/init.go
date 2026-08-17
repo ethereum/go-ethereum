@@ -798,7 +798,7 @@ var Forks = map[string]*params.ChainConfig{
 		BPO1Time:                u64(0),
 		BPO2Time:                u64(0),
 		AmsterdamTime:           u64(0),
-		PBT:                     true,
+		BinaryTrieTime:          u64(0),
 		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,

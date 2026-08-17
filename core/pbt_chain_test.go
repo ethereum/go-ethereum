@@ -35,7 +35,7 @@ import (
 var testPBTChainConfig = func() *params.ChainConfig {
 	c := *params.MergedTestChainConfig
 	c.AmsterdamTime = u64(0)
-	c.PBT = true
+	c.BinaryTrieTime = u64(0)
 	return &c
 }()
 

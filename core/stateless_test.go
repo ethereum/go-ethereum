@@ -52,8 +52,8 @@ import (
 // It runs at Amsterdam as well as at Osaka because the two unwitnessed code
 // reads TODO.md still lists are both Amsterdam-only - recordAccessListChanges
 // needs a block access list, and ReaderWithBlockLevelAccessList is the EIP-7928
-// layer. PBT is a standalone config flag rather than an Amsterdam consequence,
-// so merkle-at-Amsterdam is a real configuration.
+// layer. PBT is an optional fork on top of Amsterdam rather than an Amsterdam
+// consequence, so merkle-at-Amsterdam is a real configuration.
 //
 // Be clear about what the Amsterdam arm does and does not establish. It does
 // take the parallel processor, which is the path an Amsterdam node takes and
@@ -64,7 +64,7 @@ import (
 // never consulted, so only the root comparison is doing work. See TODO.md.
 func TestStatelessContractCoinbaseMerkle(t *testing.T) {
 	amsterdam := *testPBTChainConfig
-	amsterdam.PBT = false // same forks, merkle state
+	amsterdam.BinaryTrieTime = nil // same forks, merkle state
 	amsterdam.Ethash = nil
 
 	for _, tc := range []struct {

@@ -58,7 +58,11 @@ func runParityChain(t *testing.T, pbt bool, forkTweak func(*params.ChainConfig))
 		config    = *testPBTChainConfig
 	)
 	config.Ethash = nil
-	config.PBT = pbt
+	if pbt {
+		config.BinaryTrieTime = u64(0)
+	} else {
+		config.BinaryTrieTime = nil
+	}
 	if forkTweak != nil {
 		forkTweak(&config)
 	}

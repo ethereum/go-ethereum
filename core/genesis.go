@@ -472,7 +472,7 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 
 // IsPBT indicates whether the state is committed with a binary tree.
 func (g *Genesis) IsPBT() bool {
-	return g.Config.IsPBT()
+	return g.Config != nil && g.Config.IsPBT()
 }
 
 // ToBlock returns the genesis block according to genesis specification.

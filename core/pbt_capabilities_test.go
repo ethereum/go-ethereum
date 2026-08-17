@@ -55,6 +55,7 @@ import (
 //	pathdb rollback (Recover)     triedb/pathdb/database.go        triedb/pathdb/pbt_rollback_test.go
 //	state sync / AdoptSyncedState triedb/pathdb/database.go        triedb/pathdb/pbt_rollback_test.go
 //	opening a tree datadir as MPT cmd/utils MakeTrieDatabase       cmd/geth/bintrie_convert_test.go
+//	tree datadir on merkle config core/blockchain.go NewBlockChain this file
 //	debug_storageRangeAt          eth/api_debug.go                 eth/api_debug_test.go
 //
 // Anything on this list failing a spec fixture is a known gap rather than a
@@ -386,7 +387,7 @@ func TestPBTRefusesWitnessStats(t *testing.T) {
 	// is known to be about the tree rather than about the flag.
 	plain := *genesis
 	cfg := *genesis.Config
-	cfg.PBT = false
+	cfg.BinaryTrieTime = nil
 	plain.Config = &cfg
 	mdb, _, _ := GenerateChainWithGenesis(&plain, engine, 1, func(i int, gen *BlockGen) {})
 	mchain, err := NewBlockChain(mdb, &plain, engine, options)
@@ -394,6 +395,48 @@ func TestPBTRefusesWitnessStats(t *testing.T) {
 		t.Fatalf("witness statistics were refused on a merkle chain: %v", err)
 	}
 	mchain.Stop()
+}
+
+// TestPBTDatadirRefusesMerkleReopen pins the config-migration guard: a
+// database holding binary tree state must not reopen under a config that
+// does not schedule the fork - exactly what a stored config from before the
+// key rename decodes to, since json drops unknown keys.
+func TestPBTDatadirRefusesMerkleReopen(t *testing.T) {
+	genesis, _, _, _ := pbtChainGenesis(t)
+	engine := beacon.New(ethash.NewFaker())
+	db, _, _ := GenerateChainWithGenesis(genesis, engine, 1, func(i int, gen *BlockGen) {})
+
+	options := DefaultConfig().WithStateScheme(rawdb.PathScheme)
+
+	// The control first: with the stored config intact, the datadir reopens.
+	chain, err := NewBlockChain(db, nil, engine, options)
+	if err != nil {
+		t.Fatalf("a binary tree datadir failed to reopen on its own config: %v", err)
+	}
+	chain.Stop()
+
+	// Strip the fork from the stored config, as an old "pbt" config decodes.
+	ghash := rawdb.ReadCanonicalHash(db, 0)
+	cfg := *genesis.Config
+	cfg.BinaryTrieTime = nil
+	rawdb.WriteChainConfig(db, ghash, &cfg)
+
+	if _, err := NewBlockChain(db, nil, engine, options); err == nil {
+		t.Fatal("a binary tree datadir reopened as merkle-patricia")
+	} else if !strings.Contains(err.Error(), "binaryTrieTime") {
+		t.Fatalf("the refusal does not point at the config key: %v", err)
+	}
+
+	// The supplied-genesis route resolves the flavour the same way.
+	supplied := *genesis
+	suppliedCfg := *genesis.Config
+	suppliedCfg.BinaryTrieTime = nil
+	supplied.Config = &suppliedCfg
+	if _, err := NewBlockChain(db, &supplied, engine, options); err == nil {
+		t.Fatal("a binary tree datadir reopened from a fork-less supplied genesis")
+	} else if !strings.Contains(err.Error(), "binaryTrieTime") {
+		t.Fatalf("the refusal does not point at the config key: %v", err)
+	}
 }
 
 // TestPBTStatelessSelfValidationOnImport drives the whole thing through

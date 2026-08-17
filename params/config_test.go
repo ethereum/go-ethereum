@@ -110,6 +110,17 @@ func TestCheckCompatible(t *testing.T) {
 				RewindToTime: 9,
 			},
 		},
+		{
+			stored:        &ChainConfig{BinaryTrieTime: newUint64(10)},
+			new:           &ChainConfig{BinaryTrieTime: newUint64(20)},
+			headTimestamp: 25,
+			wantErr: &ConfigCompatError{
+				What:         "BinaryTrie fork timestamp",
+				StoredTime:   newUint64(10),
+				NewTime:      newUint64(20),
+				RewindToTime: 9,
+			},
+		},
 	}
 
 	for _, test := range tests {
