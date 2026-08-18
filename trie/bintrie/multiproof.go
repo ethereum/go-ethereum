@@ -191,6 +191,12 @@ func (t *BinaryTrie) ProveRequests(req ProofRequests) (*Multiproof, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A proof of nothing encodes to no bytes and is refused at decode. Only a
+	// wholly empty tree gets here, and its caller has to recognise that rather
+	// than ship a quietly dropped proof.
+	if len(mp.tokens) == 0 {
+		return nil, ErrProofMalformed
+	}
 	t.root = n
 	return mp, nil
 }
@@ -209,7 +215,12 @@ func (t *BinaryTrie) proveMultiWalk(n binaryNode, tgts []proofTarget, pos int, m
 	}
 	switch nn := n.(type) {
 	case empty:
-		// Every request here is answered absent, and an empty tree proves it.
+		// Only a wholly empty tree has nothing to prove. Below the root an empty
+		// side would emit no token and desynchronise the positional rebuild;
+		// canonical trees have no such side, enforced here.
+		if pos != 0 {
+			return n, ErrProofMalformed
+		}
 		return n, nil
 
 	case hashedNode:
@@ -424,6 +435,9 @@ func VerifyMultiproof(root common.Hash, mp *Multiproof) (*BinaryTrie, error) {
 		reader: reader,
 		tracer: trie.NewPrevalueTracer(),
 		ops:    newOpTracer(),
+		// There is no database under this tree and never will be, so the deletion
+		// bookkeeping a commit would read is pure waste here.
+		proofOnly: true,
 	}, nil
 }
 

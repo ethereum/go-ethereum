@@ -195,3 +195,30 @@ func TestVerifyProofRejectsMalformedLeaf(t *testing.T) {
 		})
 	}
 }
+
+// TestProveEmptyTreeRefused pins that a tree with nothing in it cannot be
+// proved: success would hand the caller bytes that drop silently, so an empty
+// pre-state has to be recognised by the caller instead.
+func TestProveEmptyTreeRefused(t *testing.T) {
+	tr := partialTrie(t, empty{})
+	if _, err := tr.ProveRequests(ProofRequests{Paths: []ProofPath{{Bits: 0}}}); !errors.Is(err, ErrProofMalformed) {
+		t.Fatalf("proving an empty tree: got %v, want ErrProofMalformed", err)
+	}
+}
+
+// TestRemoveStemValidatesStem pins that a malformed stem is refused before it
+// is recorded: ProveRequests fails the whole set on the first bad stem, so an
+// unvalidated one would cost the block its proof.
+func TestRemoveStemValidatesStem(t *testing.T) {
+	_, whole, _ := partialFixture(t, []byte{0x05, 0x80})
+	tr := partialTrie(t, whole)
+	tr.SetProofRecorder(NewProofRecorder())
+
+	if err := tr.removeStem([]byte{AccountZone, 0x01}); err == nil {
+		t.Fatal("removing a stem of the wrong length succeeded")
+	}
+	// The block's proof must be unaffected: only the seeded root request remains.
+	if got := tr.recorder.Len(); got != 1 {
+		t.Fatalf("the recorder holds %d requests, want only the seeded root", got)
+	}
+}

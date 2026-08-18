@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -78,6 +79,18 @@ func partialFixture(t *testing.T, subs []byte) (stem []byte, whole *groupNode, e
 		},
 	}
 	return stem, whole, expandGroup(whole, 0)
+}
+
+// reencode round-trips a proof through its wire form, so that the decoder's
+// canonical-bitmap rule runs: VerifyMultiproof alone does not apply it, and a
+// test that skips it never checks the prover emits the form its verifier wants.
+func reencode(t *testing.T, mp *Multiproof) *Multiproof {
+	t.Helper()
+	decoded, err := DecodeMultiproof(mp.Encode())
+	if err != nil {
+		t.Fatalf("the prover emitted a proof its own decoder refuses: %v", err)
+	}
+	return decoded
 }
 
 func partialTrie(t *testing.T, root binaryNode) *BinaryTrie {
@@ -219,7 +232,7 @@ func TestProofRequestKinds(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := VerifyMultiproof(root, mp)
+		got, err := VerifyMultiproof(root, reencode(t, mp))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -233,7 +246,7 @@ func TestProofRequestKinds(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := VerifyMultiproof(root, mp)
+		got, err := VerifyMultiproof(root, reencode(t, mp))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -269,7 +282,7 @@ func TestProofRequestKinds(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				got, err := VerifyMultiproof(root, mp)
+				got, err := VerifyMultiproof(root, reencode(t, mp))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -283,6 +296,53 @@ func TestProofRequestKinds(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestProofTreeSkipsSubtreeEnumeration pins that a proof-only tree skips the
+// detached-subtree walk: its deletion list is never read, and the walk would
+// fault on records the proof need not carry. Copy keeps the flag.
+func TestProofTreeSkipsSubtreeEnumeration(t *testing.T) {
+	// A branch whose prefix covers the whole bucket, with both children
+	// unresolved - which is what a proof that never opened them looks like.
+	prefix := StorageBucketPrefix(common.Address{0xbb})
+	newRoot := func() *branchNode {
+		return &branchNode{
+			prefix: slice(prefix, 0, 8*len(prefix)),
+			left:   hashedNode(common.Hash{0x11}),
+			right:  hashedNode(common.Hash{0x22}),
+		}
+	}
+	for _, tc := range []struct {
+		name      string
+		proofOnly bool
+		wantErr   bool
+	}{
+		{"committing tree resolves the subtree", false, true},
+		{"proof-only tree detaches it", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := partialTrie(t, newRoot())
+			tr.proofOnly = tc.proofOnly
+
+			err := tr.DeletePrefix(prefix)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("dropping a prefix over unresolved children succeeded")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("dropping a prefix on a proof-only tree: %v", err)
+			}
+			if got := tr.Hash(); got != types.EmptyBinaryHash {
+				t.Fatalf("the bucket did not detach: root is %x", got)
+			}
+			// Copy has to carry the flag, or the next operation walks again.
+			if !tr.Copy().proofOnly {
+				t.Fatal("Copy dropped the proof-only flag")
+			}
+		})
+	}
 }
 
 // TestWholeStemUnaffected is the control: the guard added for partial stems

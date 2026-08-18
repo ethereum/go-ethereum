@@ -39,10 +39,14 @@ whole code-zone group. `trie/bintrie/multiproof.go` answers the same
 single-chunk read in 879 B, roughly ten times smaller, and real blocks read
 sparsely rather than densely.
 
-Swapping it in needs three things the node-set format does not: recording which
-keys a block touched, covering written stems whole (`insStem` refuses a write
-into a partially shipped stem), and the absence handling the multiproof already
-grew. `TestMultiproofSize` exists to measure the swap when it happens.
+The three things the swap needed beyond the node-set format now exist:
+`ProofRecorder` records what a block touches, `ProveRequests` covers whole
+stems and bare positions, and the multiproof already grew the absence handling.
+The swap itself was built, measured (about a third off on this tree's fixtures;
+the ~10x is confined to sparse reads into large groups) and archived on
+`pbt-engine-stateless` rather than pursued - stateless execution is superseded
+by validity proofs, so the machinery stays for proof serving.
+`TestMultiproofSize` keeps the node-set baseline it would be measured against.
 
 ## Two remaining unwitnessed paths to `stateObject.Code()`
 

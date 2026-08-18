@@ -417,3 +417,13 @@ func (db *Database) SnapshotCompleted() bool {
 	}
 	return pdb.SnapshotCompleted()
 }
+
+// ProofOnly reports whether the database holds only state rebuilt from a proof
+// or a witness (pathdb's WitnessOnly config) and is never committed to.
+func (db *Database) ProofOnly() bool {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return false
+	}
+	return pdb.ProofOnly()
+}

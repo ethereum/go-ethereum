@@ -360,6 +360,11 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
+	// The binary tree relies on this refusal: a proof-only trie skips the
+	// deletion bookkeeping only a commit reads.
+	if db.config.WitnessOnly {
+		return errDatabaseProofOnly
+	}
 	var nodesWithOrigins *nodeSetWithOrigin
 	if db.config.TrienodeHistory >= 0 {
 		nodesWithOrigins = NewNodeSetWithOrigin(nodes.NodeAndOrigins())
@@ -813,6 +818,11 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 	}
 	return newFastStorageIterator(db, root, account, seek)
 }
+
+// ProofOnly reports whether the database holds only rebuilt state - what one
+// proof or witness resolved (Config.WitnessOnly) - and is never committed to,
+// which lets the trie skip bookkeeping only a commit reads.
+func (db *Database) ProofOnly() bool { return db.config.WitnessOnly }
 
 // SnapshotCompleted returns the flag indicating if the snapshot generation is completed.
 func (db *Database) SnapshotCompleted() bool {
