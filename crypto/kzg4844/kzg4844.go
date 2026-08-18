@@ -339,9 +339,12 @@ func RecoverBlobsUnchecked(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 //
 // The erasure path deserializes every input cell, rejecting non-canonical
 // field elements; the systematic path parses only the data cells (extension
-// cells in the input are ignored, contents unchecked). Nothing is verified
-// against commitments or cell proofs -- authenticity must be established by
-// the caller (e.g. VerifyCells).
+// cells in the input are ignored, contents unchecked). Neither path checks
+// that redundant input cells are consistent with the data: the underlying
+// erasure decode assumes consistency and silently returns wrong cells
+// otherwise. Nothing is verified against commitments or cell proofs -- the
+// authenticity of every input cell must be established by the caller (e.g.
+// VerifyCells at ingest), which also guarantees consistency.
 //
 // For the layout of cells and cellIndices, see RecoverBlobs.
 func RecoverCells(cells []Cell, cellIndices []uint64) ([]Cell, error) {
