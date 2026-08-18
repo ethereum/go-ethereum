@@ -88,6 +88,16 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 				Nonce:   0,
 				Balance: big.NewInt(0),
 			},
+			// The post-shanghai forks issue system calls into these contracts on
+			// every block, and an empty one invalidates the block, so they have
+			// to be present from genesis. The alloc feeds the genesis hash, so
+			// they cannot be added after the chain has been generated.
+			params.HistoryStorageAddress:       {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
+			params.WithdrawalQueueAddress:      {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
+			params.ConsolidationQueueAddress:   {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
+			params.BuilderDepositAddress:       {Nonce: 1, Code: params.BuilderDepositCode, Balance: common.Big0},
+			params.BuilderExitAddress:          {Nonce: 1, Code: params.BuilderExitCode, Balance: common.Big0},
+			params.DeterministicFactoryAddress: {Nonce: 1, Code: params.DeterministicFactoryCode, Balance: common.Big0},
 		},
 		ExtraData:  []byte("test genesis"),
 		Timestamp:  9000,

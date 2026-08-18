@@ -591,6 +591,18 @@ func TestSelfdestructStateTracer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			// The post-6780 cases run on a config merged up to the latest fork,
+			// whose system calls invalidate the block unless their contracts are
+			// deployed. Anything the case allocated explicitly wins.
+			if tt.genesis.Alloc == nil {
+				tt.genesis.Alloc = types.GenesisAlloc{}
+			}
+			for addr, account := range core.SystemContractAllocs() {
+				if _, ok := tt.genesis.Alloc[addr]; !ok {
+					tt.genesis.Alloc[addr] = account
+				}
+			}
+
 			var (
 				signer = types.HomesteadSigner{}
 				tx     *types.Transaction
