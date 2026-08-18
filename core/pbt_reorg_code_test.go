@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -308,5 +309,177 @@ func TestPBTReorgKeepsSharedCodeChunks(t *testing.T) {
 	}
 	if acct := accountAt(t, chain, head.Root, first); acct == nil {
 		t.Fatal("the surviving contract account is gone")
+	}
+}
+
+// TestPBTReorgCodeAcrossThePersistedLayer pins the delete-or-keep answer when
+// the surviving bytecode is below the disk layer rather than in a live diff
+// layer, which is the only case the two tests above do not reach.
+func TestPBTReorgCodeAcrossThePersistedLayer(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds a chain longer than the layer window")
+	}
+	for _, prior := range []bool{true, false} {
+		name := "code already deployed below the disk layer"
+		if !prior {
+			name = "code first deployed on the reorged-out branch"
+		}
+		t.Run(name, func(t *testing.T) {
+			reorgCodeAcrossPersisted(t, prior)
+		})
+	}
+}
+
+func reorgCodeAcrossPersisted(t *testing.T, prior bool) {
+	t.Helper()
+
+	var (
+		genesis, key, sender = pbtCodeReorgFixture(t)
+		engine               = beacon.New(ethash.NewFaker())
+		signer               = types.LatestSigner(genesis.Config)
+		codeHash             = crypto.Keccak256Hash(pbtBigCode)
+		// 120 + 30 puts the head at 150 and the disk layer at 22, so block 1 is
+		// persisted and the fork point at 120 is still live.
+		trunkLen, branchLen = 120, 30
+	)
+	deployFirst, first := deployBigCode(t, key, sender, signer, 0)
+	deploySecond, second := deployBigCode(t, key, sender, signer, uint64(trunkLen))
+	if first == second {
+		t.Fatal("both deployments landed at the same address")
+	}
+	pay := payTo(t, key, sender, common.Address{0xaa}, signer, 1000)
+
+	db, trunk, _ := GenerateChainWithGenesis(genesis, engine, trunkLen, func(i int, gen *BlockGen) {
+		if i == 0 && prior {
+			deployFirst(i, gen)
+			return
+		}
+		pay(i, gen)
+	})
+	tip := trunk[len(trunk)-1]
+	branchA, _ := GenerateChain(genesis.Config, tip, engine, db, branchLen, func(i int, gen *BlockGen) {
+		if i == 0 {
+			deploySecond(i, gen)
+			return
+		}
+		pay(i, gen)
+	})
+	branchB, _ := GenerateChain(genesis.Config, tip, engine, db, branchLen, payTo(t, key, sender, common.Address{0xbb}, signer, 2000))
+
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), genesis, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+
+	if n, err := chain.InsertChain(trunk); err != nil || n != len(trunk) {
+		t.Fatalf("imported %d of %d trunk blocks: %v", n, len(trunk), err)
+	}
+	// The second deployment is only redundant if the first one already landed.
+	if got := codeChunkAt(t, chain, tip.Root(), codeHash, pbtSharedChunk); prior != (got != nil) {
+		t.Fatalf("at the trunk tip: chunk present=%v, want %v", got != nil, prior)
+	}
+	if n, err := chain.InsertChain(branchA); err != nil || n != len(branchA) {
+		t.Fatalf("imported %d of %d branch blocks: %v", n, len(branchA), err)
+	}
+	// Without these the test could pass for the in-memory reason the fixtures
+	// above already cover.
+	if chain.HasState(trunk[0].Root()) {
+		t.Fatal("block 1 is still live, so nothing was persisted")
+	}
+	if !chain.HasState(tip.Root()) {
+		t.Fatal("the fork point is not live, so the reorg cannot be served at all")
+	}
+	if chain.StateRecoverable(trunk[0].Root()) || chain.StateRecoverable(tip.Root()) {
+		t.Fatal("a history route is available; this is not a layer-tree-only result")
+	}
+	if got := codeChunkAt(t, chain, chain.CurrentBlock().Root, codeHash, pbtSharedChunk); got == nil {
+		t.Fatal("the chunk is absent on the branch that deployed it")
+	}
+
+	for _, block := range branchB {
+		if _, err := chain.InsertBlockWithoutSetHead(context.Background(), block, false); err != nil {
+			t.Fatalf("failed to import a branch B block: %v", err)
+		}
+	}
+	if _, err := chain.SetCanonical(branchB[len(branchB)-1]); err != nil {
+		t.Fatalf("failed to reorg onto branch B: %v", err)
+	}
+	head := chain.CurrentBlock()
+	if head.Root != branchB[len(branchB)-1].Root() {
+		t.Fatalf("head root is %x, want %x", head.Root, branchB[len(branchB)-1].Root())
+	}
+	if got := codeChunkAt(t, chain, head.Root, codeHash, pbtSharedChunk); prior != (got != nil) {
+		t.Fatalf("after the reorg: chunk present=%v, want %v", got != nil, prior)
+	}
+	if acct := accountAt(t, chain, head.Root, second); acct != nil {
+		t.Fatal("the reorged-out contract survived")
+	}
+	if acct := accountAt(t, chain, head.Root, first); prior != (acct != nil) {
+		t.Fatalf("after the reorg: first contract present=%v, want %v", acct != nil, prior)
+	}
+}
+
+// TestPBTReorgPastThePersistedLayerRefusesWithCode pins that once the block
+// which deployed the code has itself been persisted, the reorg that would have
+// to unpick it is refused rather than answered.
+func TestPBTReorgPastThePersistedLayerRefusesWithCode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds a chain longer than the layer window")
+	}
+	var (
+		genesis, key, sender = pbtCodeReorgFixture(t)
+		engine               = beacon.New(ethash.NewFaker())
+		signer               = types.LatestSigner(genesis.Config)
+		// Branch A must outrun the window by enough that its own first block,
+		// the one holding the deployment, ends up below the disk layer.
+		trunkLen, branchALen, branchBLen = 120, 130, 30
+	)
+	deploy, _ := deployBigCode(t, key, sender, signer, uint64(trunkLen))
+	pay := payTo(t, key, sender, common.Address{0xaa}, signer, 1000)
+
+	db, trunk, _ := GenerateChainWithGenesis(genesis, engine, trunkLen, pay)
+	tip := trunk[len(trunk)-1]
+	// Branch B first: generating the long branch A flattens the fork point out of
+	// the generator's own layer tree, leaving nothing to build B on.
+	branchB, _ := GenerateChain(genesis.Config, tip, engine, db, branchBLen, payTo(t, key, sender, common.Address{0xbb}, signer, 2000))
+	branchA, _ := GenerateChain(genesis.Config, tip, engine, db, branchALen, func(i int, gen *BlockGen) {
+		if i == 0 {
+			deploy(i, gen)
+			return
+		}
+		pay(i, gen)
+	})
+
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), genesis, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+
+	if n, err := chain.InsertChain(trunk); err != nil || n != len(trunk) {
+		t.Fatalf("imported %d of %d trunk blocks: %v", n, len(trunk), err)
+	}
+	if n, err := chain.InsertChain(branchA); err != nil || n != len(branchA) {
+		t.Fatalf("imported %d of %d branch A blocks: %v", n, len(branchA), err)
+	}
+	if chain.HasState(tip.Root()) {
+		t.Fatal("the fork point is still live; the fixture does not reach the ceiling")
+	}
+	var failure error
+	for _, block := range branchB {
+		if _, err := chain.InsertBlockWithoutSetHead(context.Background(), block, false); err != nil {
+			failure = err
+			break
+		}
+	}
+	if failure == nil {
+		_, failure = chain.SetCanonical(branchB[len(branchB)-1])
+	}
+	if failure == nil {
+		t.Fatal("a reorg past the persisted deployment was accepted")
+	}
+	if !strings.Contains(failure.Error(), "cannot rewind past the persisted state") {
+		t.Fatalf("refused, but not by name: %v", failure)
 	}
 }
