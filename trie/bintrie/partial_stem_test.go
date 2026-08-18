@@ -189,8 +189,100 @@ func TestPartialStemRefusesGroupOperations(t *testing.T) {
 					t.Fatalf("group lookup on a partial stem: got %v, want ErrPartialStem", err)
 				}
 			})
+
+			// removeStem is DeleteAccount's route; the delete case above
+			// only covers insStem.
+			t.Run("remove whole stem", func(t *testing.T) {
+				tr := partialTrie(t, expanded)
+				before := tr.Hash()
+				if err := tr.removeStem(stem); !errors.Is(err, ErrPartialStem) {
+					t.Fatalf("removing a partial stem: got %v, want ErrPartialStem", err)
+				}
+				if after := tr.Hash(); after != before {
+					t.Fatalf("refused removal still moved the root: %x -> %x", before, after)
+				}
+			})
 		})
 	}
+}
+
+// TestProofRequestKinds pins what each request kind covers: a key-only proof
+// answers reads, a stem keeps its group writable, a path materialises a node
+// no key names.
+func TestProofRequestKinds(t *testing.T) {
+	stem, whole, expanded := partialFixture(t, []byte{0x05, 0x80})
+	root := whole.hashAt(0)
+	key := func(sub byte) []byte { return append(append([]byte{}, stem...), sub) }
+
+	t.Run("key covers one leaf", func(t *testing.T) {
+		mp, err := partialTrie(t, whole).ProveRequests(ProofRequests{Keys: [][]byte{key(whole.subs[0])}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := VerifyMultiproof(root, mp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := got.getStemGroup(stem); !errors.Is(err, ErrPartialStem) {
+			t.Fatalf("group lookup over a key-only proof: got %v, want ErrPartialStem", err)
+		}
+	})
+
+	t.Run("stem covers the whole group", func(t *testing.T) {
+		mp, err := partialTrie(t, whole).ProveRequests(ProofRequests{Stems: [][]byte{stem}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := VerifyMultiproof(root, mp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g, err := got.getStemGroup(stem)
+		if err != nil {
+			t.Fatalf("group lookup over a stem proof: %v", err)
+		}
+		if g == nil || len(g.subs) != len(whole.subs) {
+			t.Fatalf("proved group holds %v, want %v", g, whole.subs)
+		}
+		// Staying writable is the point of the kind: insStem refuses a stem the
+		// tree holds only part of.
+		if err := got.UpdateStem(stem, []byte{0x40}, [][]byte{bytes.Repeat([]byte{0xcc}, 32)}); err != nil {
+			t.Fatalf("write into a proved whole stem: %v", err)
+		}
+	})
+
+	t.Run("path materialises a node no key names", func(t *testing.T) {
+		// The expanded form puts the two leaves under one branch, so the sibling
+		// of the proved leaf is a node the request set can only name by its path.
+		// That is what collapse resolves when a deletion merges into it.
+		sibling := ProofPath{Key: key(whole.subs[1]), Bits: expanded.prefix.n + 1}
+		for _, tc := range []struct {
+			name string
+			req  ProofRequests
+			stub bool
+		}{
+			{"without the path", ProofRequests{Keys: [][]byte{key(whole.subs[0])}}, true},
+			{"with the path", ProofRequests{Keys: [][]byte{key(whole.subs[0])}, Paths: []ProofPath{sibling}}, false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				mp, err := partialTrie(t, expanded).ProveRequests(tc.req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := VerifyMultiproof(root, mp)
+				if err != nil {
+					t.Fatal(err)
+				}
+				br, ok := got.root.(*branchNode)
+				if !ok {
+					t.Fatalf("proved root is %T, want a branch", got.root)
+				}
+				if _, isStub := br.right.(hashedNode); isStub != tc.stub {
+					t.Fatalf("sibling is %T, stub expected: %v", br.right, tc.stub)
+				}
+			})
+		}
+	})
 }
 
 // TestWholeStemUnaffected is the control: the guard added for partial stems

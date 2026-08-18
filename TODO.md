@@ -209,15 +209,12 @@ to look.
 - **`evm statetest` hard-codes the hash scheme** (`cmd/evm/staterunner.go`),
   harmless only because `RunNoVerify` builds its own path-scheme prestate on
   the PBT path.
-- **The encoded multiproof is malleable, though not unsound.** Sweeping every
-  byte of an encoded proof and flipping it, most mutations are rejected, but a
-  run of them still verify: 48 such offsets before this branch, 64 after, in
-  both cases concentrated in two 32-byte spans that look like per-group
-  `present` bitmaps. None of them changes a value the proof proves, which is
-  the property `TestMultiproofRejectsForgery` now asserts. So this is two
-  encodings of one proof rather than a forged answer — but the encoding should
-  be canonical before the multiproof carries a witness, or the same statement
-  gets more than one wire form. The mechanism was not chased down.
+- **A multiproof's token shape is not pinned, though its bytes now are.** Every
+  single-bit flip of an encoded proof is refused, which
+  `TestMultiproofRejectsForgery` asserts. What no verifier holding only the
+  proof can tell is a stub from the branch and two stubs that hash to it, so one
+  statement still has more than one shape. Nothing reads a shape it did not ask
+  for, so this costs bytes rather than soundness.
 - **BAL-replay catch-up is unimplemented.** `geth bintrie convert` produces
   the EIP-8347 artifacts and `geth bintrie import` consumes them - dual-check
   verified, anchored to the local header chain. What remains of the migration
