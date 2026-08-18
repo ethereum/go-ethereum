@@ -1016,6 +1016,13 @@ func (s *StateDB) finaliseAmsterdam(deleteEmptyObjects bool) *bal.ConstructionBl
 
 		case deleteEmptyObjects && obj.empty():
 			// EIP-161: a touched, empty account is removed.
+			//
+			// A touch changes no value, so nothing below records the removal and a
+			// consumer rebuilding post-state from the list alone keeps the account.
+			// Only for an account that existed: ordinary shapes touch absent ones.
+			if obj.origin != nil {
+				s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, new(uint256.Int))
+			}
 			delete(s.stateObjects, obj.address)
 			s.markDelete(addr)
 			if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
@@ -1398,10 +1405,11 @@ func (s *StateDB) deleteStoragePBT(addrHash common.Hash) (map[common.Hash]common
 // In case (d), **original** account along with its storages should be deleted,
 // with their values be tracked as original value.
 //
-// The returned flag reports whether any destructed account's storage was
-// wiped (EIP-161 clearing of a storage-holding account: fixture-constructible,
-// mainnet-unreachable). Wiped slots are enumerated by hash, so the caller
-// degrades the update's storage-key encoding to match.
+// The returned flag reports whether any destructed account's storage was wiped
+// (EIP-161 clearing of a storage-holding account; execution cannot produce one,
+// so this needs state predating the rule - a genesis allocation, or the 28
+// mainnet accounts core/vm/eip7610.go lists). Wiped slots are enumerated by
+// hash, so the caller degrades the update's storage-key encoding to match.
 func (s *StateDB) handleDestruction() (map[common.Hash]*AccountDelete, []*trienode.NodeSet, bool, error) {
 	var (
 		nodes   []*trienode.NodeSet
