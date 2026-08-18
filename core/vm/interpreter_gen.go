@@ -1034,11 +1034,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+3)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 3 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 3 {
+				elem.SetBytes3(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 3 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 3
 			pc++
@@ -1073,11 +1078,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+4)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 4 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 4 {
+				elem.SetBytes4(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 4 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 4
 			pc++
@@ -1112,11 +1122,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+5)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 5 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 5 {
+				elem.SetBytes5(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 5 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 5
 			pc++
@@ -1151,11 +1166,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+6)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 6 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 6 {
+				elem.SetBytes6(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 6 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 6
 			pc++
@@ -1190,11 +1210,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+7)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 7 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 7 {
+				elem.SetBytes7(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 7 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 7
 			pc++
@@ -1229,11 +1254,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+8)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 8 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 8 {
+				elem.SetBytes8(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 8 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 8
 			pc++
@@ -1268,11 +1298,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+9)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 9 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 9 {
+				elem.SetBytes9(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 9 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 9
 			pc++
@@ -1307,11 +1342,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+10)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 10 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 10 {
+				elem.SetBytes10(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 10 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 10
 			pc++
@@ -1346,11 +1386,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+11)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 11 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 11 {
+				elem.SetBytes11(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 11 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 11
 			pc++
@@ -1385,11 +1430,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+12)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 12 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 12 {
+				elem.SetBytes12(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 12 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 12
 			pc++
@@ -1424,11 +1474,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+13)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 13 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 13 {
+				elem.SetBytes13(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 13 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 13
 			pc++
@@ -1463,11 +1518,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+14)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 14 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 14 {
+				elem.SetBytes14(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 14 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 14
 			pc++
@@ -1502,11 +1562,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+15)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 15 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 15 {
+				elem.SetBytes15(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 15 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 15
 			pc++
@@ -1541,11 +1606,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+16)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 16 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 16 {
+				elem.SetBytes16(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 16 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 16
 			pc++
@@ -1580,11 +1650,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+17)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 17 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 17 {
+				elem.SetBytes17(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 17 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 17
 			pc++
@@ -1619,11 +1694,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+18)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 18 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 18 {
+				elem.SetBytes18(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 18 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 18
 			pc++
@@ -1658,11 +1738,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+19)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 19 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 19 {
+				elem.SetBytes19(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 19 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 19
 			pc++
@@ -1697,11 +1782,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+20)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 20 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 20 {
+				elem.SetBytes20(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 20 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 20
 			pc++
@@ -1736,11 +1826,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+21)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 21 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 21 {
+				elem.SetBytes21(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 21 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 21
 			pc++
@@ -1775,11 +1870,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+22)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 22 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 22 {
+				elem.SetBytes22(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 22 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 22
 			pc++
@@ -1814,11 +1914,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+23)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 23 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 23 {
+				elem.SetBytes23(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 23 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 23
 			pc++
@@ -1853,11 +1958,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+24)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 24 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 24 {
+				elem.SetBytes24(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 24 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 24
 			pc++
@@ -1892,11 +2002,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+25)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 25 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 25 {
+				elem.SetBytes25(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 25 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 25
 			pc++
@@ -1931,11 +2046,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+26)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 26 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 26 {
+				elem.SetBytes26(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 26 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 26
 			pc++
@@ -1970,11 +2090,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+27)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 27 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 27 {
+				elem.SetBytes27(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 27 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 27
 			pc++
@@ -2009,11 +2134,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+28)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 28 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 28 {
+				elem.SetBytes28(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 28 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 28
 			pc++
@@ -2048,11 +2178,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+29)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 29 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 29 {
+				elem.SetBytes29(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 29 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 29
 			pc++
@@ -2087,11 +2222,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+30)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 30 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 30 {
+				elem.SetBytes30(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 30 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 30
 			pc++
@@ -2126,11 +2266,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+31)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 31 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 31 {
+				elem.SetBytes31(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 31 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 31
 			pc++
@@ -2165,11 +2310,16 @@ mainLoop:
 				start   = min(codeLen, int(pc+1))
 				end     = min(codeLen, start+32)
 			)
-			a := &sd[sp]
+			elem := &sd[sp]
 			sp++
-			a.SetBytes(contract.Code[start:end])
-			if missing := 32 - (end - start); missing > 0 {
-				a.Lsh(a, uint(8*missing))
+			if end-start == 32 {
+				elem.SetBytes32(contract.Code[start:end])
+			} else {
+				elem.SetBytes(contract.Code[start:end])
+
+				if missing := 32 - (end - start); missing > 0 {
+					elem.Lsh(elem, uint(8*missing))
+				}
 			}
 			pc += 32
 			pc++
