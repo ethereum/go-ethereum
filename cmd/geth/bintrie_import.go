@@ -144,11 +144,11 @@ func importBinaryTrie(ctx *cli.Context) error {
 	}); err != nil {
 		return err
 	}
-	// The namespace is written, but nothing reads it until the chain commits
-	// its state with the tree; say so rather than leave it to be discovered.
+	// The namespace is written, but the node refuses to start until the chain
+	// config schedules the tree; say so rather than leave it to be discovered.
 	if !verifyOnly {
 		if stored := rawdb.ReadChainConfig(chaindb, rawdb.ReadCanonicalHash(chaindb, 0)); stored == nil || !stored.IsPBT() {
-			log.Warn("The chain config does not commit state with the binary tree; the imported state stays dormant until it does")
+			log.Warn("The chain config does not schedule the binary tree; the node will refuse to start until it does")
 		}
 	}
 	return nil

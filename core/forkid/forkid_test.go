@@ -462,3 +462,37 @@ func TestTimeBasedForkInGenesis(t *testing.T) {
 		}
 	}
 }
+
+// TestBinaryTrieForkIDNeutral pins that a genesis-active binaryTrieTime stays
+// out of the fork ID: at-genesis time forks are dropped from the checksum.
+func TestBinaryTrieForkIDNeutral(t *testing.T) {
+	var (
+		time    = uint64(1690475657)
+		genesis = types.NewBlockWithHeader(&types.Header{Time: time})
+		config  = func(binaryTrie *uint64) *params.ChainConfig {
+			return &params.ChainConfig{
+				ChainID:                 big.NewInt(1337),
+				HomesteadBlock:          big.NewInt(0),
+				EIP150Block:             big.NewInt(0),
+				EIP155Block:             big.NewInt(0),
+				EIP158Block:             big.NewInt(0),
+				ByzantiumBlock:          big.NewInt(0),
+				ConstantinopleBlock:     big.NewInt(0),
+				PetersburgBlock:         big.NewInt(0),
+				IstanbulBlock:           big.NewInt(0),
+				BerlinBlock:             big.NewInt(0),
+				LondonBlock:             big.NewInt(0),
+				TerminalTotalDifficulty: big.NewInt(0),
+				MergeNetsplitBlock:      big.NewInt(0),
+				ShanghaiTime:            new(uint64),
+				BinaryTrieTime:          binaryTrie,
+				Ethash:                  new(params.EthashConfig),
+			}
+		}
+	)
+	with := NewID(config(&time), genesis, 0, time)
+	without := NewID(config(nil), genesis, 0, time)
+	if with != without {
+		t.Fatalf("binaryTrieTime changed the fork id: have %x, want %x", with, without)
+	}
+}

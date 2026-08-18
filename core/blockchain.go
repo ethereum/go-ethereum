@@ -410,6 +410,12 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if err != nil {
 		return nil, err
 	}
+	// A binary tree database must never be reopened as merkle: a stored config
+	// that lost the fork (e.g. written when the key was "pbt") would silently
+	// point the node at an empty merkle namespace.
+	if !isPBT && rawdb.HasPBTState(db) {
+		return nil, errors.New("database holds binary tree state but the chain configuration does not schedule it (the genesis config key is \"binaryTrieTime\"); re-run init with an updated genesis, or resync")
+	}
 	tdbConfig, err := cfg.triedbConfig(isPBT)
 	if err != nil {
 		return nil, err

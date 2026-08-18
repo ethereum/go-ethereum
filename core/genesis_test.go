@@ -286,8 +286,8 @@ func TestPBTGenesisCommit(t *testing.T) {
 		PragueTime:              &pbtTime,
 		OsakaTime:               &pbtTime,
 		AmsterdamTime:           &pbtTime,
+		BinaryTrieTime:          &pbtTime,
 		TerminalTotalDifficulty: big.NewInt(0),
-		PBT:                     true,
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
@@ -339,5 +339,13 @@ func TestPBTGenesisCommit(t *testing.T) {
 	vdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
 	if !rawdb.HasAccountTrieNode(vdb, nil) {
 		t.Fatal("could not find node")
+	}
+}
+
+// TestGenesisIsPBTNilConfig pins the nil guard chaincmd relies on: genesis
+// JSON without a config reaches IsPBT before any validation.
+func TestGenesisIsPBTNilConfig(t *testing.T) {
+	if (&Genesis{}).IsPBT() {
+		t.Fatal("a config-less genesis claims the binary tree")
 	}
 }
