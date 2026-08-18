@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
@@ -275,6 +276,73 @@ func TestStorageRangeAt(t *testing.T) {
 			t.Fatalf("wrong result for range %#x.., limit %d:\ngot %s\nwant %s",
 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
 		}
+	}
+}
+
+// TestStorageRangeAtMissingNode ensures that storageRangeAt returns an error,
+// rather than a silently truncated result, when a storage trie node cannot be
+// resolved mid-range. The iterator reports the end of a range and an I/O
+// failure the same way (Next returns false), so without checking the iterator
+// error a partial result would be returned with a nil NextKey, falsely claiming
+// that every key was included.
+func TestStorageRangeAtMissingNode(t *testing.T) {
+	t.Parallel()
+
+	// Build a state where an account has enough storage entries that its storage
+	// trie contains internal nodes (so there is a non-root node to remove).
+	var (
+		mdb    = rawdb.NewMemoryDatabase()
+		tdb    = triedb.NewDatabase(mdb, &triedb.Config{Preimages: true})
+		db     = state.NewDatabase(tdb, nil)
+		sdb, _ = state.New(types.EmptyRootHash, db)
+		addr   = common.Address{0x01}
+	)
+	for i := 0; i < 64; i++ {
+		sdb.SetState(addr, common.BytesToHash([]byte{byte(i)}), common.BytesToHash([]byte{byte(i + 1)}))
+	}
+	root, _ := sdb.Commit(params.Rules{}, 0)
+
+	// Flush the committed nodes to the underlying disk so a freshly opened trie
+	// database is forced to resolve them from there.
+	if err := tdb.Commit(root, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Locate a non-root node of the account's storage trie.
+	sdb, _ = state.New(root, db)
+	storageRoot := sdb.GetStorageRoot(addr)
+	id := trie.StorageTrieID(root, crypto.Keccak256Hash(addr.Bytes()), storageRoot)
+	str, err := trie.NewStateTrie(id, tdb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeIt, err := str.NodeIterator(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var victim common.Hash
+	for nodeIt.Next(true) {
+		if h := nodeIt.Hash(); h != (common.Hash{}) && h != storageRoot {
+			victim = h
+			break
+		}
+	}
+	if victim == (common.Hash{}) {
+		t.Fatal("could not find a non-root storage trie node to remove")
+	}
+
+	// Remove the node from disk, simulating a missing/corrupt trie node, then
+	// re-open the state on a fresh trie database so the deletion is not masked by
+	// an in-memory cache.
+	rawdb.DeleteTrieNode(mdb, common.Hash{}, nil, victim, tdb.Scheme())
+
+	tdb2 := triedb.NewDatabase(mdb, &triedb.Config{Preimages: true})
+	sdb2, err := state.New(root, state.NewDatabase(tdb2, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storageRangeAt(sdb2, root, addr, nil, 1000); err == nil {
+		t.Fatal("expected an error when a storage trie node is missing, got nil")
 	}
 }
 
