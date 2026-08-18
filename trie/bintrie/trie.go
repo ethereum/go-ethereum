@@ -335,6 +335,23 @@ func (t *BinaryTrie) stateWrite(stem []byte, subs []byte, values [][]byte) error
 	return t.UpdateStem(stem, subs, values)
 }
 
+// emptiedBy reports whether applying the batch to g would remove its last
+// value. Callers give distinct subs, so each resident sub is decided once.
+func emptiedBy(g *groupNode, subs []byte, vals [][]byte) bool {
+	for i, v := range vals {
+		if v != nil && g.lookup(subs[i]) == nil {
+			return false // an insertion keeps the group alive whatever else goes
+		}
+	}
+	for _, sub := range g.subs {
+		i := bytes.IndexByte(subs, sub)
+		if i < 0 || vals[i] != nil {
+			return false // survives: untouched, or overwritten rather than deleted
+		}
+	}
+	return true
+}
+
 func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]byte, pos int) (binaryNode, error) {
 	switch nn := n.(type) {
 	case empty:
@@ -354,12 +371,15 @@ func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]by
 
 	case *groupNode:
 		if bytes.Equal(nn.stem, stem) {
-			for i, v := range vals {
-				nn.set(subs[i], v)
-			}
-			if len(nn.subs) == 0 {
+			// Decided before anything is written: emptying hands the parent a
+			// collapse, which can fail, and set mutates in place - applying
+			// first left a refused write half applied.
+			if emptiedBy(nn, subs, vals) {
 				t.ops.onDelete(pathOf(keyWalk(stem, pos)))
 				return empty{}, nil
+			}
+			for i, v := range vals {
+				nn.set(subs[i], v)
 			}
 			return nn, nil
 		}

@@ -207,6 +207,12 @@ func (g *groupNode) hashAt(pos int) common.Hash {
 // independent); multiple values form branches whose top prefix carries the
 // stem's remaining bits.
 func (g *groupNode) fold(pos int) common.Hash {
+	if len(g.subs) == 0 {
+		// An empty leaf set is the empty subtree. Only a half-applied write leaves
+		// one attached, and the fold runs on a worker goroutine where a panic
+		// cannot be recovered, so answer rather than index past the end.
+		return common.Hash{}
+	}
 	if len(g.subs) == 1 {
 		return leafHash(g.stem, g.subs[0], g.vals[0])
 	}
