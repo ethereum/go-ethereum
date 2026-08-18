@@ -1175,7 +1175,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 	}
 	block, ok := inclusions[ptx.Tx.Hash()]
 	if !ok {
-		log.Debug("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
+		log.Info("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
 		return
 	}
 	if err := p.limbo.push(&ptx, block); err != nil {
