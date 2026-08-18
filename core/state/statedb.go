@@ -1108,7 +1108,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		// per-account trie setup in updateTrie() (getPrefetchedTrie, getTrie,
 		// prefetcher.used) is redundant overhead. Apply all storage updates
 		// directly in a single pass.
-		for addr, op := range s.mutations {
+		// Sorted, not map order: a write splits branches and a zero write
+		// collapses them, so which nodes this pass resolves depends on the order -
+		// and a proof recorded under one order can be short for another.
+		for _, addr := range slices.SortedFunc(maps.Keys(s.mutations), common.Address.Cmp) {
+			op := s.mutations[addr]
 			if op.applied || op.isDelete() {
 				continue
 			}
@@ -1116,7 +1120,8 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			if len(obj.uncommittedStorage) == 0 {
 				continue
 			}
-			for key, origin := range obj.uncommittedStorage {
+			for _, key := range slices.SortedFunc(maps.Keys(obj.uncommittedStorage), common.Hash.Cmp) {
+				origin := obj.uncommittedStorage[key]
 				value, exist := obj.pendingStorage[key]
 				if value == origin || !exist {
 					continue
@@ -1230,7 +1235,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		usedAddrs    []common.Address
 		deletedAddrs []common.Address
 	)
-	for addr, op := range s.mutations {
+	// Sorted for the same reason as the storage pass above: deletedAddrs inherits
+	// this order, and a deletion collapses branches whose surviving sibling has to
+	// be in the proof.
+	for _, addr := range slices.SortedFunc(maps.Keys(s.mutations), common.Address.Cmp) {
+		op := s.mutations[addr]
 		if op.applied {
 			continue
 		}
