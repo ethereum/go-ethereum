@@ -60,8 +60,9 @@ import (
 // which nothing else in the tree exercises - the assertion below makes sure of
 // that, because the access list is easy to drop by accident. What it cannot
 // show is that the completeness check would catch an unwitnessed read there:
-// on that path every transaction runs against its own statedb whose error is
-// never consulted, so only the root comparison is doing work. See TODO.md.
+// that path answers reads from the access list itself wherever it can, so a
+// read the witness never covered is served rather than latched, and only the
+// root comparison is doing work.
 func TestStatelessContractCoinbaseMerkle(t *testing.T) {
 	amsterdam := *testPBTChainConfig
 	amsterdam.BinaryTrieTime = nil // same forks, merkle state

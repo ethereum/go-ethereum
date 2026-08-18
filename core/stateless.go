@@ -97,29 +97,11 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	receiptRoot := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
 	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
 
-	// A witness that did not cover everything the block touched does not fail
-	// the execution above. A missing node is latched into the state database's
-	// error and the read is answered as an absent account or a zero slot, so
-	// the run completes and returns a root computed from state that was never
-	// there. IntermediateRoot does not consult that error either, which leaves
-	// the mismatch to be discovered by whoever compares roots - or not at all,
-	// where the caller trusts what it gets back.
-	//
-	// This used to be scoped to the binary tree, because merkle witnesses did
-	// not capture every bytecode they read: updateStateObject asked for a code
-	// size on the account-write path, which loaded the whole contract through
-	// the reader without any AddCode recording it. That read is gone - the
-	// binary tree takes the size from the stem it is writing, and the merkle
-	// trie never needed it - so both are held to the same standard here.
-	//
-	// The check is load-bearing rather than advisory now: a latched error fails
-	// the block instead of surfacing later as a root comparison. Be precise
-	// about what it observes, though. It sees the reads this statedb makes -
-	// the sequential processor's execution, the block access list apply, and
-	// the hashing. On the parallel path each transaction runs against its own
-	// statedb whose error is never consulted, so a read inside a transaction is
-	// not covered here at all. TODO.md carries that gap, along with the two
-	// unwitnessed code reads that remain and why neither fires today.
+	// An uncovered read does not fail the execution above: a missing node only
+	// latches into the statedb error and the read answers as absence, so this
+	// check is what fails the block. It sees the reads this statedb makes; the
+	// parallel processor checks its per-transaction statedbs itself, and reads
+	// answered from the block access list never reach the witness at all.
 	if err := db.Error(); err != nil {
 		return common.Hash{}, common.Hash{}, fmt.Errorf("incomplete witness: %w", err)
 	}
