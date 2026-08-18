@@ -30,14 +30,6 @@ import (
 // A multiproof answers a set of keys at once, shipping only what a verifier
 // cannot work out for itself.
 //
-// The proof this package already had expands every node on every path into a
-// standalone hash preimage, so proving a whole contract's code pays three times
-// over: for internal branches the verifier could recompute from the leaves it
-// was given, for the two child hashes of every branch when only the sibling is
-// unknown, and for a copy of each key it supplied in the request. Measured on a
-// 24 KiB contract by TestMultiproofSize, that proof is 107,029 B against a
-// 25,376-byte payload, where the multiproof is 26,165 B.
-//
 // The encoding below is a preorder walk of the union of paths to the queried
 // keys. Branches carry their prefix but neither child; a subtree holding no
 // queried key collapses to its hash; and a stem ships its values against a
