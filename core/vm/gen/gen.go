@@ -201,9 +201,6 @@ func (g *generator) emitInlineOp(code byte) {
 
 	// opcode body
 	switch factory := factoryName(spec.execFn); factory {
-	case "makePush": // PUSH3-PUSH32: splice makePush(size, size)
-		n := int(code) - 0x5f
-		g.p("%s", g.spliceOpcodeFactoryBody("makePush", n, n))
 	case "makeDup": // DUP1-DUP16: splice makeDup(n)
 		g.p("%s", g.spliceOpcodeFactoryBody("makeDup", int(code)-0x7f))
 	case "": // the rest: splice the opXxx handler body
