@@ -280,7 +280,7 @@ func newDiffState(t testing.TB) *state.StateDB {
 	// Caller EOA with a balance.
 	statedb.CreateAccount(diffCaller)
 	statedb.SetBalance(diffCaller, uint256.NewInt(1<<62), tracing.BalanceChangeUnspecified)
-	statedb.Finalise(true)
+	statedb.Finalise(params.Rules{IsEIP158: true})
 	return statedb
 }
 
@@ -315,7 +315,7 @@ func TestExtraEIPs(t *testing.T) {
 	code := asm(PUSH0, STOP)
 	statedb := newDiffState(t)
 	statedb.SetCode(diffContractAddr, code, tracing.CodeChangeUnspecified)
-	statedb.Finalise(true)
+	statedb.Finalise(params.Rules{IsEIP158: true})
 
 	evm := NewEVM(diffBlockCtx(false), statedb, params.TestChainConfig, Config{ExtraEips: []int{3855}})
 	evm.SetTxContext(TxContext{
@@ -334,7 +334,7 @@ func runOne(t testing.TB, cfg *params.ChainConfig, merged, useTableLoop bool, co
 	t.Helper()
 	statedb := newDiffState(t)
 	statedb.SetCode(diffContractAddr, code, tracing.CodeChangeUnspecified)
-	statedb.Finalise(true)
+	statedb.Finalise(params.Rules{IsEIP158: true})
 
 	evm := NewEVM(diffBlockCtx(merged), statedb, cfg, Config{})
 	evm.SetTxContext(TxContext{
@@ -354,7 +354,7 @@ func runOne(t testing.TB, cfg *params.ChainConfig, merged, useTableLoop bool, co
 		gas:    leftOver,
 		errStr: errStr,
 		refund: statedb.GetRefund(),
-		root:   statedb.IntermediateRoot(true),
+		root:   statedb.IntermediateRoot(params.Rules{IsEIP158: true}),
 		logs:   statedb.Logs(),
 	}
 }
@@ -464,7 +464,7 @@ func isStackReceiver(x ast.Expr) bool {
 func TestTracerUsesTableLoop(t *testing.T) {
 	statedb := newDiffState(t)
 	statedb.SetCode(diffContractAddr, asm(PUSH1, 0x01, PUSH1, 0x02, ADD, STOP), tracing.CodeChangeUnspecified)
-	statedb.Finalise(true)
+	statedb.Finalise(params.Rules{IsEIP158: true})
 
 	var seen []OpCode
 	cfg := Config{Tracer: &tracing.Hooks{
