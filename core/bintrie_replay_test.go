@@ -130,8 +130,9 @@ func runShadowReplay(t *testing.T, genesis *Genesis, n int, gen func(int, *Block
 		t.Fatal(err)
 	}
 
-	// Per-block replay over a shadow living beside the chain's own state.
-	shadow := triedb.NewDatabase(db, triedb.PBTDefaults)
+	// Per-block replay on the engine's own store: the chain runs its own
+	// follower over db, and two writers must not share one shadow namespace.
+	shadow := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.PBTDefaults)
 	defer shadow.Close()
 	var (
 		sdb        = state.NewPBTDatabase(shadow, nil)

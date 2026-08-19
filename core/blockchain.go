@@ -354,6 +354,7 @@ type BlockChain struct {
 	precompileCache *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
 	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
 	stateMode       stateMode                        // How the chain relates to the binary tree
+	follower        *bintrieFollower                 // Shadow tree follower, nil unless migrating
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -614,6 +615,12 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// Start tx indexer if it's enabled.
 	if bc.cfg.TxLookupLimit >= 0 {
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
+	}
+
+	// Start the shadow follower on a migrating chain: the binary tree has to
+	// reach the fork already caught up.
+	if bc.stateMode == modeMigration && !bc.triedb.IsPBT() {
+		bc.follower = newBintrieFollower(bc)
 	}
 
 	// Start state size tracker
@@ -1394,6 +1401,11 @@ func (bc *BlockChain) stopWithoutSaving() {
 	if bc.txIndexer != nil {
 		bc.txIndexer.close()
 	}
+	// Signal shutdown to the shadow follower before the subscription scope
+	// dies under its event loop.
+	if bc.follower != nil {
+		bc.follower.close()
+	}
 	// Unsubscribe all subscriptions registered from blockchain.
 	bc.scope.Close()
 
@@ -1431,6 +1443,11 @@ func (bc *BlockChain) Stop() {
 		// Ensure that the in-memory trie nodes are journaled to disk properly.
 		if err := bc.triedb.Journal(bc.CurrentBlock().Root); err != nil {
 			log.Info("Failed to journal in-memory trie nodes", "err", err)
+		}
+		// The shadow journals at its own root - the chain head's belongs to
+		// the other tree.
+		if bc.follower != nil {
+			bc.follower.journal()
 		}
 	} else {
 		// Ensure the state of a recent block is also stored to disk before exiting.
