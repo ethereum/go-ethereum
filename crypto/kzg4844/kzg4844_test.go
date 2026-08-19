@@ -18,6 +18,8 @@ package kzg4844
 
 import (
 	"crypto/rand"
+	"encoding/binary"
+	"math/big"
 	mrand "math/rand"
 	"slices"
 	"testing"
@@ -509,6 +511,15 @@ func testRecoverCells(t *testing.T, ckzg bool) {
 	}
 }
 
+// erasureRecoverBlobs runs the KZG erasure recovery directly, bypassing the
+// concat fast path RecoverBlobs takes, so the two can be compared.
+func erasureRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
+	if useCKZG.Load() {
+		return ckzgRecoverBlobs(cells, cellIndices)
+	}
+	return gokzgRecoverBlobs(cells, cellIndices)
+}
+
 func TestCKZGBlobsFromDataCells(t *testing.T)  { testBlobsFromDataCells(t, true) }
 func TestGoKZGBlobsFromDataCells(t *testing.T) { testBlobsFromDataCells(t, false) }
 
@@ -518,7 +529,7 @@ func TestGoKZGBlobsFromDataCells(t *testing.T) { testBlobsFromDataCells(t, false
 func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 	defer switchBackend(t, ckzg)()
 
-	const blobCount = 3
+	const blobCount = 2
 	d := newBlobs(t, blobCount)
 
 	// collect gathers the cells for the given per-blob indices across all blobs.
@@ -532,7 +543,7 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 		return cells
 	}
 	// assertRecovers checks the fast path succeeds and matches both the original
-	// blobs and RecoverBlobs.
+	// blobs and the erasure recovery it stands in for.
 	assertRecovers := func(name string, indices []uint64) {
 		t.Helper()
 		cells := collect(indices)
@@ -540,16 +551,16 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 		if !ok {
 			t.Fatalf("%s: fast path declined, expected success", name)
 		}
-		slow, err := RecoverBlobs(cells, indices)
+		slow, err := erasureRecoverBlobs(cells, indices)
 		if err != nil {
-			t.Fatalf("%s: RecoverBlobs failed: %v", name, err)
+			t.Fatalf("%s: erasure recovery failed: %v", name, err)
 		}
 		for i := range d.blobs {
 			if fast[i] != d.blobs[i] {
 				t.Fatalf("%s: fast blob %d does not match original", name, i)
 			}
 			if fast[i] != slow[i] {
-				t.Fatalf("%s: fast blob %d does not match RecoverBlobs", name, i)
+				t.Fatalf("%s: fast blob %d does not match the erasure recovery", name, i)
 			}
 		}
 	}
@@ -612,6 +623,38 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 		t.Fatalf("out-of-range-tail: fast path succeeded, expected decline")
 	}
 
+	// Non-canonical field elements: the fast path bypasses the KZG library, so
+	// it has to reject what that library would reject while deserializing. The
+	// offending element goes in the last slot of the last cell of the last blob,
+	// so a check that only looked at the first element, cell or blob would still
+	// be caught, and it is the modulus itself, the tightest non-canonical value.
+	var modulus [32]byte
+	fr.Modulus().FillBytes(modulus[:])
+	poison := func(cells []Cell) {
+		last := &cells[len(cells)-1]
+		copy(last[len(last)-32:], modulus[:])
+	}
+	// In a data cell, which the concatenation reads:
+	badData := slices.Clone(collect(dataIndices))
+	poison(badData)
+	if _, ok := blobsFromDataCells(badData, dataIndices); ok {
+		t.Fatalf("non-canonical-data: fast path succeeded, expected decline")
+	}
+	if _, err := RecoverBlobs(badData, dataIndices); err == nil {
+		t.Fatalf("non-canonical-data: RecoverBlobs succeeded, expected error")
+	}
+	// And in a tail cell, which it ignores: declining keeps RecoverBlobs
+	// rejecting exactly what the erasure path rejects.
+	withTail := append(slices.Clone(dataIndices), DataPerBlob)
+	badTail := collect(withTail)
+	poison(badTail)
+	if _, ok := blobsFromDataCells(badTail, withTail); ok {
+		t.Fatalf("non-canonical-tail: fast path succeeded, expected decline")
+	}
+	if _, err := RecoverBlobs(badTail, withTail); err == nil {
+		t.Fatalf("non-canonical-tail: RecoverBlobs succeeded, expected error")
+	}
+
 	// Single blob: the slicing math must hold for blobCount == 1 too.
 	d1 := newBlobs(t, 1)
 	single, ok := blobsFromDataCells(d1.cells[:DataPerBlob], dataIndices)
@@ -636,16 +679,16 @@ func testBlobsFromDataCells(t *testing.T, ckzg bool) {
 	}
 }
 
-func TestCKZGRecoverBlobsUnchecked(t *testing.T)  { testRecoverBlobsUnchecked(t, true) }
-func TestGoKZGRecoverBlobsUnchecked(t *testing.T) { testRecoverBlobsUnchecked(t, false) }
+func TestCKZGRecoverBlobsFastPath(t *testing.T)  { testRecoverBlobsFastPath(t, true) }
+func TestGoKZGRecoverBlobsFastPath(t *testing.T) { testRecoverBlobsFastPath(t, false) }
 
-// testRecoverBlobsUnchecked checks that the unchecked recovery takes the
-// KZG-free fast path when the data cells are present and falls back to full
-// erasure recovery otherwise, matching the original blobs in both cases.
-func testRecoverBlobsUnchecked(t *testing.T, ckzg bool) {
+// testRecoverBlobsFastPath checks that RecoverBlobs takes the KZG-free fast
+// path when the data cells are present and falls back to full erasure recovery
+// otherwise, matching the original blobs in both cases.
+func testRecoverBlobsFastPath(t *testing.T, ckzg bool) {
 	defer switchBackend(t, ckzg)()
 
-	const blobCount = 3
+	const blobCount = 2
 	d := newBlobs(t, blobCount)
 
 	// collect gathers the cells for the given per-blob indices across all blobs.
@@ -662,7 +705,7 @@ func testRecoverBlobsUnchecked(t *testing.T, ckzg bool) {
 	// and matches the original blobs.
 	assertRecovers := func(name string, indices []uint64) {
 		t.Helper()
-		blobs, err := RecoverBlobsUnchecked(collect(indices), indices)
+		blobs, err := RecoverBlobs(collect(indices), indices)
 		if err != nil {
 			t.Fatalf("%s: recovery failed: %v", name, err)
 		}
@@ -693,9 +736,95 @@ func testRecoverBlobsUnchecked(t *testing.T, ckzg bool) {
 	}
 	assertRecovers("sparse (fallback)", sparse)
 
-	// Insufficient cells: recovery must error, like RecoverBlobs.
+	// Insufficient cells: recovery must error on either path.
 	short := dataIndices[:DataPerBlob-1]
-	if _, err := RecoverBlobsUnchecked(collect(short), short); err == nil {
+	if _, err := RecoverBlobs(collect(short), short); err == nil {
 		t.Fatalf("insufficient: expected error, got none")
+	}
+
+	// A redundant cell that is canonical but inconsistent with the data pins the
+	// one intentional divergence between the paths: the data cells decide, so the
+	// blobs come back correct, where the erasure recovery would have mixed the
+	// conflicting cell into the polynomial and returned neither faithfully.
+	conflicting := append(slices.Clone(dataIndices), DataPerBlob)
+	cells := collect(conflicting)
+	clear(cells[DataPerBlob][:]) // zero is canonical, and is not the real cell
+	if !isCanonicalCell(&cells[DataPerBlob]) {
+		t.Fatalf("conflicting-tail: test setup must leave the cell canonical")
+	}
+	blobs, err := RecoverBlobs(cells, conflicting)
+	if err != nil {
+		t.Fatalf("conflicting-tail: RecoverBlobs failed: %v", err)
+	}
+	for i := range d.blobs {
+		if blobs[i] != d.blobs[i] {
+			t.Fatalf("conflicting-tail: blob %d was not taken from the data cells", i)
+		}
+	}
+}
+
+// TestFieldModulusLimbs pins the hardcoded modulus limbs used by the
+// canonicalness check against the field's own definition.
+func TestFieldModulusLimbs(t *testing.T) {
+	var want [32]byte
+	fr.Modulus().FillBytes(want[:])
+
+	var got [32]byte
+	binary.BigEndian.PutUint64(got[0:8], frModulusW0)
+	binary.BigEndian.PutUint64(got[8:16], frModulusW1)
+	binary.BigEndian.PutUint64(got[16:24], frModulusW2)
+	binary.BigEndian.PutUint64(got[24:32], frModulusW3)
+
+	if got != want {
+		t.Fatalf("modulus limbs encode %x, field modulus is %x", got, want)
+	}
+}
+
+// TestIsCanonicalFieldElement cross-checks the hand-rolled comparison against
+// the field implementation whose deserialization it stands in for: the two
+// extremes, uniform random inputs, and the boundary region where the limb
+// comparison chain has to walk past equal limbs.
+func TestIsCanonicalFieldElement(t *testing.T) {
+	var (
+		e   fr.Element
+		buf [32]byte
+	)
+	check := func() {
+		t.Helper()
+		want := e.SetBytesCanonical(buf[:]) == nil
+		if got := isCanonicalFieldElement(buf[:]); got != want {
+			t.Fatalf("isCanonicalFieldElement(%x) = %v, library says %v", buf, got, want)
+		}
+	}
+	// The extremes, which random input never produces: all-zero (buf as it
+	// stands) and all-ones.
+	check()
+	for i := range buf {
+		buf[i] = 0xff
+	}
+	check()
+
+	// Uniform 32-byte values: a little under half are canonical, so both
+	// answers get exercised.
+	rng := mrand.New(mrand.NewSource(1))
+	for range 4096 {
+		if _, err := rng.Read(buf[:]); err != nil {
+			t.Fatal(err)
+		}
+		check()
+	}
+	// One step either side of each limb's modulus value: only these inputs
+	// reach the comparison of the limb in question.
+	mod := fr.Modulus()
+	for limb := range 4 {
+		unit := new(big.Int).Lsh(big.NewInt(1), uint(64*(3-limb)))
+		for _, delta := range []int64{-2, -1, 0, 1, 2} {
+			v := new(big.Int).Add(mod, new(big.Int).Mul(big.NewInt(delta), unit))
+			if v.Sign() < 0 || v.BitLen() > 256 {
+				continue
+			}
+			v.FillBytes(buf[:])
+			check()
+		}
 	}
 }
