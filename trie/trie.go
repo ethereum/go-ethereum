@@ -965,7 +965,14 @@ func (t *Trie) walk(n node, path []byte, fn func([]byte, []byte) error) (WalkSta
 		}
 		return stats, nil
 	case hashNode:
-		resolved, err := t.resolveAndTrack(n, path)
+		// Resolve WITHOUT tracking: Walk is read-only and a full-state
+		// walk through resolveAndTrack would retain every resolved node
+		// blob in the prevalue tracer, growing memory unboundedly.
+		blob, err := t.reader.Node(path, common.BytesToHash(n))
+		if err != nil {
+			return WalkStats{}, err
+		}
+		resolved, err := decodeNodeUnsafe(n, blob)
 		if err != nil {
 			return WalkStats{}, err
 		}
