@@ -437,6 +437,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		numHashPairings    stat
 		hashNumPairings    stat
 		blockAccessList    stat
+		shadowRoots        stat
 		legacyTries        stat
 		stateLookups       stat
 		accountTries       stat
@@ -510,6 +511,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				hashNumPairings.add(size)
 			case bytes.HasPrefix(key, accessListPrefix) && len(key) == len(accessListPrefix)+8+common.HashLength:
 				blockAccessList.add(size)
+			case bytes.HasPrefix(key, shadowRootPrefix) && len(key) == len(shadowRootPrefix)+8+common.HashLength:
+				shadowRoots.add(size)
 
 			case IsLegacyTrieNode(key, it.Value()):
 				legacyTries.add(size)
@@ -653,6 +656,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Block number->hash", numHashPairings.sizeString(), numHashPairings.countString()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.sizeString(), hashNumPairings.countString()},
 		{"Key-Value store", "Block accessList", blockAccessList.sizeString(), blockAccessList.countString()},
+		{"Key-Value store", "Shadow state roots", shadowRoots.sizeString(), shadowRoots.countString()},
 		{"Key-Value store", "Transaction index", txLookups.sizeString(), txLookups.countString()},
 		{"Key-Value store", "Log index filter-map rows", filterMapRows.sizeString(), filterMapRows.countString()},
 		{"Key-Value store", "Log index last-block-of-map", filterMapLastBlock.sizeString(), filterMapLastBlock.countString()},
@@ -715,6 +719,7 @@ var knownMetadataKeys = [][]byte{
 	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
 	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
 	filterMapsRangeKey, headStateHistoryIndexKey, headTrienodeHistoryIndexKey, VerkleTransitionStatePrefix,
+	pbtMigrationCursorKey, pbtMigrationDoneKey,
 }
 
 // printChainMetadata prints out chain metadata to stderr.
