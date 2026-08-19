@@ -421,8 +421,10 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
+// The flavour comes from the trie database, not the schedule: a migrating
+// chain serves merkle state until the fork.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	if bc.chainConfig.IsPBT() {
+	if bc.triedb.IsPBT() {
 		return state.New(header.Root, state.NewPBTDatabase(bc.triedb, bc.codedb))
 	}
 	return state.New(header.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
@@ -435,7 +437,7 @@ func (bc *BlockChain) HistoricState(header *types.Header) (*state.StateDB, error
 	// The historic database opens merkle-patricia tries keyed by the hash of
 	// the address, which the binary tree is not. Only reconstruction is out of
 	// reach; live state is still served by State and StateAt.
-	if bc.chainConfig.IsPBT() {
+	if bc.triedb.IsPBT() {
 		return nil, errors.New("historical state is not supported for the binary tree")
 	}
 	return state.New(header.Root, state.NewHistoricDatabase(bc.triedb, bc.codedb))

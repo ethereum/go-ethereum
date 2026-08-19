@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
 
@@ -464,6 +465,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	var triedbConfig *triedb.Config = triedb.HashDefaults
 	if config.IsBinaryTrie(parent.Number(), parent.Time()) {
 		triedbConfig = triedb.PBTDefaults
+	} else if config.IsPBT() {
+		// A migrating chain runs the merkle trie on the path scheme - the
+		// only scheme NewBlockChain accepts for it - so generate there too.
+		triedbConfig = &triedb.Config{PathDB: pathdb.Defaults}
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
@@ -529,6 +534,8 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	var triedbConfig *triedb.Config = triedb.HashDefaults
 	if genesis.IsPBT() {
 		triedbConfig = triedb.PBTDefaults
+	} else if genesis.Config != nil && genesis.Config.IsPBT() {
+		triedbConfig = &triedb.Config{PathDB: pathdb.Defaults}
 	}
 	genesisTriedb := triedb.NewDatabase(db, triedbConfig)
 	block, err := genesis.Commit(db, genesisTriedb, nil)

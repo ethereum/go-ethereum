@@ -2194,8 +2194,10 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.Block, config ExecuteConfig, interrupt *atomic.Bool, execIndex *atomic.Int64) (*state.StateDB, func(*blockProcessingResult), error) {
 	noop := func(*blockProcessingResult) {}
 
+	// The flavour comes from the trie database, not the schedule: a migrating
+	// chain runs on the merkle trie until the fork, whatever is scheduled.
 	var sdb state.Database
-	if bc.chainConfig.IsPBT() {
+	if bc.triedb.IsPBT() {
 		sdb = state.NewPBTDatabase(bc.triedb, bc.codedb)
 	} else {
 		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)

@@ -17,25 +17,34 @@
 package core
 
 import (
+	"crypto/ecdsa"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // migrationForkTime is far enough in the future that no generated block
 // reaches it.
 const migrationForkTime = uint64(1) << 40
 
-// migrationGenesis clones the PBT chain genesis with the fork pushed past
-// genesis - the migration configuration.
-func migrationGenesis(t *testing.T) *Genesis {
-	genesis, _, _, _ := pbtChainGenesis(t)
+// migrationChainGenesis clones the PBT chain genesis with the fork pushed
+// past genesis - the migration configuration - keeping the funded key.
+func migrationChainGenesis(t *testing.T) (*Genesis, *ecdsa.PrivateKey, common.Address, common.Address) {
+	genesis, key, sender, recipient := pbtChainGenesis(t)
 	cfg := *genesis.Config
 	forkTime := migrationForkTime
 	cfg.BinaryTrieTime = &forkTime
 	genesis.Config = &cfg
+	return genesis, key, sender, recipient
+}
+
+// migrationGenesis is migrationChainGenesis for tests that only need the spec.
+func migrationGenesis(t *testing.T) *Genesis {
+	genesis, _, _, _ := migrationChainGenesis(t)
 	return genesis
 }
 
@@ -146,5 +155,34 @@ func TestUnscheduledPBTStateStillRefused(t *testing.T) {
 	engine := beacon.New(ethash.NewFaker())
 	if _, err := NewBlockChain(db, merkleGenesis(t), engine, DefaultConfig().WithStateScheme(rawdb.PathScheme)); err == nil {
 		t.Fatal("binary state accepted under a config that never schedules the fork")
+	}
+}
+
+// TestMigrationChainProcessesBlocks pins that a migrating chain executes
+// blocks as a plain merkle chain: state opens on the merkle side even though
+// the fork is scheduled.
+func TestMigrationChainProcessesBlocks(t *testing.T) {
+	genesis, key, sender, recipient := migrationChainGenesis(t)
+	engine := beacon.New(ethash.NewFaker())
+	signer := types.LatestSigner(genesis.Config)
+
+	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2, payTo(t, key, sender, recipient, signer, 1000))
+	chain, err := NewBlockChain(db, genesis, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("migration chain rejected its own blocks: %v", err)
+	}
+	if _, err := chain.SetCanonical(blocks[len(blocks)-1]); err != nil {
+		t.Fatal(err)
+	}
+	st, err := chain.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := st.GetBalance(recipient); got.Uint64() != 2000 {
+		t.Fatalf("recipient balance = %v, want 2000", got)
 	}
 }
