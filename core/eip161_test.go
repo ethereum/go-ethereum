@@ -88,7 +88,7 @@ func eip161ChainConfig(config *params.ChainConfig, sequential bool) *BlockChainC
 // generation roots sequentially, so each arm passing is what proves agreement.
 func TestEIP161ClearingAgreesAcrossExecutors(t *testing.T) {
 	merkle := *testPBTChainConfig
-	merkle.PBT = false
+	merkle.BinaryTrieTime = nil
 
 	for _, tc := range []struct {
 		name   string
