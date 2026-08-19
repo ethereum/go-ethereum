@@ -353,6 +353,7 @@ type BlockChain struct {
 	jumpDestCache   vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
 	precompileCache *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
 	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
+	stateMode       stateMode                        // How the chain relates to the binary tree
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -406,15 +407,29 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Open trie database with provided config
-	isPBT, err := pbtEnabled(db, genesis)
+	mode, storedConfig, err := resolveStateMode(db, genesis)
 	if err != nil {
 		return nil, err
 	}
 	// A binary tree database must never be reopened as merkle: a stored config
 	// that lost the fork (e.g. written when the key was "pbt") would silently
-	// point the node at an empty merkle namespace.
-	if !isPBT && rawdb.HasPBTState(db) {
+	// point the node at an empty merkle namespace. A migrating chain holds
+	// binary state on purpose.
+	if mode == modeMPT && rawdb.HasPBTState(db) {
 		return nil, errors.New("database holds binary tree state but the chain configuration does not schedule it (the genesis config key is \"binaryTrieTime\"); re-run init with an updated genesis, or resync")
+	}
+	isPBT := mode == modePBTNative
+	if mode == modeMigration {
+		// The migration runs both trees, so the merkle side has to live on
+		// the path scheme too.
+		if cfg.StateScheme != rawdb.PathScheme {
+			return nil, fmt.Errorf("state migration requires the %q state scheme, got %q", rawdb.PathScheme, cfg.StateScheme)
+		}
+		// The canonical commitment follows the head across the fork: a node
+		// restarted after activation reopens on the binary tree.
+		if head := rawdb.ReadHeadHeader(db); head != nil && storedConfig.IsBinaryTrie(head.Number, head.Time) {
+			isPBT = true
+		}
 	}
 	tdbConfig, err := cfg.triedbConfig(isPBT)
 	if err != nil {
@@ -442,6 +457,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		chainConfig:        chainConfig,
 		cfg:                cfg,
 		db:                 db,
+		stateMode:          mode,
 		triedb:             triedb,
 		codedb:             state.NewCodeDB(db),
 		jumpDestCache:      NewJumpDestCache(),
