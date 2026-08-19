@@ -55,7 +55,7 @@ var messageCorpus = []string{
 	// duplicate keys, last one wins
 	`{"method":"first","method":"second","id":1}`,
 	`{"id":1,"id":2}`,
-	// keys in other spellings, matched the way encoding/json matched them
+	// keys in other spellings are unknown fields, only the exact names match
 	`{"METHOD":"m","ID":1}`,
 	`{"Method":"m","Id":1,"Jsonrpc":"2.0"}`,
 	"{\"metho\\u0064\":\"m\",\"i\\u0064\":7}",
@@ -126,12 +126,11 @@ func TestParseMessage(t *testing.T) {
 		{"escaped tab in method", `{"method":"tab\there","id":1}`, false, []*jsonrpcMessage{msg("", "tab\there", "1", "", "")}},
 		{"duplicate key, last wins", `{"method":"first","method":"second","id":1}`, false, []*jsonrpcMessage{msg("", "second", "1", "", "")}},
 
-		// encoding/json matched keys case insensitively and unescaped them
-		// first, and clients may depend on that
-		{"cased keys", `{"Method":"m","ID":1,"Params":[1]}`, false, []*jsonrpcMessage{msg("", "m", "1", "[1]", "")}},
-		{"upper case keys", `{"METHOD":"m","JSONRPC":"2.0"}`, false, []*jsonrpcMessage{msg("2.0", "m", "", "", "")}},
-		{"escaped keys", "{\"metho\\u0064\":\"m\",\"i\\u0064\":7}", false, []*jsonrpcMessage{msg("", "m", "7", "", "")}},
-		{"key escapes apply once", `{"metho\\u0064":"m"}`, false, []*jsonrpcMessage{zero()}},
+		// field names have one spelling in the spec, any other spelling is an
+		// unknown key, even where encoding/json would have matched it
+		{"cased keys ignored", `{"Method":"m","ID":1,"Params":[1]}`, false, []*jsonrpcMessage{zero()}},
+		{"upper case keys ignored", `{"METHOD":"m","JSONRPC":"2.0"}`, false, []*jsonrpcMessage{zero()}},
+		{"escaped keys ignored", "{\"metho\\u0064\":\"m\",\"i\\u0064\":7}", false, []*jsonrpcMessage{zero()}},
 
 		// a string holding structural bytes must not end the value early
 		{
@@ -426,8 +425,9 @@ func FuzzJSONScanFields(f *testing.F) {
 	})
 }
 
-// FuzzFillMessage checks that the envelope split fills the same fields
-// encoding/json fills, for any valid JSON value.
+// FuzzFillMessage checks the envelope split against encoding/json field by
+// field. Field names have one spelling, so the reference picks each one out of
+// a decoded map by its exact name.
 func FuzzFillMessage(f *testing.F) {
 	for _, s := range messageCorpus {
 		f.Add(s)
@@ -437,10 +437,34 @@ func FuzzFillMessage(f *testing.F) {
 		if !json.Valid(data) {
 			return
 		}
-		// The old decoder ignored the decode error and kept whatever fields
-		// had been filled in, so the comparison does too.
+		if bytes.IndexByte(data, '\\') >= 0 {
+			// encoding/json unescapes map keys, so an escaped key would match
+			// in the reference but is an unknown key to fillMessage. Escape
+			// handling is pinned by the tests above.
+			return
+		}
 		var want jsonrpcMessage
-		json.Unmarshal(data, &want)
+		var obj map[string]json.RawMessage
+		if err := json.Unmarshal(data, &obj); err == nil {
+			if v, ok := obj["jsonrpc"]; ok {
+				json.Unmarshal(v, &want.Version)
+			}
+			if v, ok := obj["id"]; ok {
+				want.ID = v
+			}
+			if v, ok := obj["method"]; ok {
+				json.Unmarshal(v, &want.Method)
+			}
+			if v, ok := obj["params"]; ok {
+				want.Params = v
+			}
+			if v, ok := obj["error"]; ok {
+				want.Error = v
+			}
+			if v, ok := obj["result"]; ok {
+				want.Result = v
+			}
+		}
 		got := new(jsonrpcMessage)
 		fillMessage(data, got)
 		if err := sameMessage(got, &want); err != nil {

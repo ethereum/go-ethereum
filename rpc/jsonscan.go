@@ -132,7 +132,6 @@ func forEachJSONField(data []byte, fn func(key, value []byte)) {
 		if keyEnd-1 <= keyStart {
 			return
 		}
-		// The key keeps any escapes it had, the caller deals with them.
 		fn(data[keyStart+1:keyEnd-1], data[valStart:valEnd])
 	}
 }
