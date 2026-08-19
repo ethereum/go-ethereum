@@ -1,0 +1,34 @@
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  copr:
+    name: COPR Upload
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Show environment
+      run: |
+        env
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: Install rpm toolchain
+      run: |
+        apt-get update
+        apt-get -yq --no-install-suggests --no-install-recommends install rpm xz-utils python3-pip
+        pip3 install --break-system-packages copr-cli
+
+    - name: Run ci.go
+      run: |
+        go run build/ci.go rpmsrc -upload go-ethereum/go-ethereum -packager "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
+      env:
+        COPR_API_TOKEN: ${{ secrets.COPR_API_TOKEN }}
