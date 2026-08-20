@@ -88,6 +88,8 @@ func TestAddTxThenCells(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	blobCount := 2
 	buf := newTestBuffer(t)
+	txFirstBefore := blobBufferTxFirstCounter.Snapshot().Count()
+	cellsFirstBefore := blobBufferCellsFirstCounter.Snapshot().Count()
 
 	tx := makeV1Tx(t, 0, blobCount, 0, key)
 	hash := tx.Hash()
@@ -110,12 +112,20 @@ func TestAddTxThenCells(t *testing.T) {
 	if buf.HasTx(hash) || buf.HasCells(hash) {
 		t.Fatal("buffer should be empty after add")
 	}
+	if got := blobBufferTxFirstCounter.Snapshot().Count() - txFirstBefore; got != 1 {
+		t.Fatalf("tx-first counter incremented by %d, want 1", got)
+	}
+	if got := blobBufferCellsFirstCounter.Snapshot().Count() - cellsFirstBefore; got != 0 {
+		t.Fatalf("cells-first counter incremented by %d, want 0", got)
+	}
 }
 
 func TestAddCellsThenTx(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	blobCount := 2
 	buf := newTestBuffer(t)
+	txFirstBefore := blobBufferTxFirstCounter.Snapshot().Count()
+	cellsFirstBefore := blobBufferCellsFirstCounter.Snapshot().Count()
 
 	tx := makeV1Tx(t, 0, blobCount, 0, key)
 	hash := tx.Hash()
@@ -137,6 +147,12 @@ func TestAddCellsThenTx(t *testing.T) {
 	}
 	if buf.HasTx(hash) || buf.HasCells(hash) {
 		t.Fatal("buffer should be empty after add")
+	}
+	if got := blobBufferTxFirstCounter.Snapshot().Count() - txFirstBefore; got != 0 {
+		t.Fatalf("tx-first counter incremented by %d, want 0", got)
+	}
+	if got := blobBufferCellsFirstCounter.Snapshot().Count() - cellsFirstBefore; got != 1 {
+		t.Fatalf("cells-first counter incremented by %d, want 1", got)
 	}
 }
 
