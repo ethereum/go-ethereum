@@ -116,6 +116,17 @@ func (f *bintrieFollower) loop() {
 	for {
 		select {
 		case ev := <-f.headCh:
+			// Once a post-fork block finalizes, the window closes: the other
+			// tree stops being maintained and may be disposed of.
+			if final := f.chain.CurrentFinalBlock(); final != nil && f.config.IsBinaryTrie(final.Number, final.Time) {
+				if done != nil {
+					close(stop)
+					<-done
+				}
+				rawdb.WritePBTMigrationDone(f.db)
+				log.Info("State migration finished", "finalized", final.Number)
+				return
+			}
 			latest = ev.Header
 			if done == nil {
 				launch(latest)

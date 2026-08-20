@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -140,5 +141,43 @@ func TestMigrationNodeCrossesTheFork(t *testing.T) {
 		if got := statedb.GetBalance(testAddr).ToBig(); got.Cmp(testBalance) != 0 {
 			t.Fatalf("balance at block %d = %v, want %v", number, got, testBalance)
 		}
+	}
+
+	// Finalizing a post-fork block closes the window: on the next head the
+	// follower marks the migration done and stops for good.
+	head := chain.CurrentBlock()
+	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
+	if _, err := api.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
+		t.Fatalf("finalizing: %v", err)
+	}
+	slot, targetGasLimit := uint64(6), head.GasLimit
+	attrs := &engine.PayloadAttributes{
+		Timestamp:             head.Time + 12,
+		Random:                common.Hash{},
+		SuggestedFeeRecipient: common.Address{},
+		Withdrawals:           []*types.Withdrawal{},
+		BeaconRoot:            &common.Hash{},
+		SlotNumber:            &slot,
+		TargetGasLimit:        &targetGasLimit,
+	}
+	resp, err := api.ForkchoiceUpdatedV4(context.Background(), engine.ForkchoiceStateV1{HeadBlockHash: head.Hash()}, attrs, nil)
+	if err != nil {
+		t.Fatalf("post-finality build: %v", err)
+	}
+	payload, err := api.getPayload(*resp.PayloadID, true, nil, nil)
+	if err != nil {
+		t.Fatalf("post-finality payload: %v", err)
+	}
+	if status, err := api.NewPayloadV5(context.Background(), *payload.ExecutionPayload, []common.Hash{}, &common.Hash{}, []hexutil.Bytes{}); err != nil || status.Status != engine.VALID {
+		t.Fatalf("post-finality import: %v %v", status.Status, err)
+	}
+	if _, err := api.ForkchoiceUpdatedV4(context.Background(), engine.ForkchoiceStateV1{HeadBlockHash: payload.ExecutionPayload.BlockHash}, nil, nil); err != nil {
+		t.Fatalf("post-finality set head: %v", err)
+	}
+	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("migration never marked itself done after finality")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

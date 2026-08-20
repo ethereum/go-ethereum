@@ -1447,8 +1447,19 @@ func (bc *BlockChain) Stop() {
 		bc.snaps.Release()
 	}
 	if bc.triedb.Scheme() == rawdb.PathScheme {
-		// Ensure that the in-memory trie nodes are journaled to disk properly.
-		if err := bc.triedb.Journal(bc.CurrentBlock().Root); err != nil {
+		// Journal the canonical handle at the newest root it holds: past the
+		// activation boundary the head commits the other tree, and this
+		// handle's newest root sits at the last block of its own flavour.
+		root := bc.CurrentBlock().Root
+		if bc.follower != nil {
+			for h := bc.CurrentBlock(); h != nil; h = bc.GetHeader(h.ParentHash, h.Number.Uint64()-1) {
+				if bc.chainConfig.IsBinaryTrie(h.Number, h.Time) == bc.triedb.IsPBT() {
+					root = h.Root
+					break
+				}
+			}
+		}
+		if err := bc.triedb.Journal(root); err != nil {
 			log.Info("Failed to journal in-memory trie nodes", "err", err)
 		}
 		// The shadow journals at its own root - the chain head's belongs to

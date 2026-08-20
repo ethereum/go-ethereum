@@ -186,3 +186,23 @@ func TestMigrationChainProcessesBlocks(t *testing.T) {
 		t.Fatalf("recipient balance = %v, want 2000", got)
 	}
 }
+
+// TestMigrationDoneSkipsFollower pins the terminal marker: a database whose
+// migration finished starts no follower and consults no disposed tree.
+func TestMigrationDoneSkipsFollower(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	rawdb.WritePBTMigrationDone(db)
+
+	engine := beacon.New(ethash.NewFaker())
+	chain, err := NewBlockChain(db, migrationGenesis(t), engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+	if chain.follower != nil {
+		t.Fatal("a finished migration started a follower")
+	}
+	if p := chain.MigrationProgress(); p.Phase != "inactive" {
+		t.Fatalf("progress phase %q, want inactive", p.Phase)
+	}
+}
