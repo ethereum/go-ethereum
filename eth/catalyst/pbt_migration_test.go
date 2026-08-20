@@ -29,7 +29,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -266,5 +271,102 @@ func awaitShadowReady(t *testing.T, chain *core.BlockChain, header *types.Header
 			t.Fatalf("shadow never reached block %d (%+v)", header.Number, chain.MigrationProgress())
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// startPersistentEthService is startEthService over a real data directory,
+// so a test can stop the node and reboot it on the same chain data.
+func startPersistentEthService(t testing.TB, datadir string, genesis *core.Genesis, blocks []*types.Block, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
+	t.Helper()
+	n, err := node.New(&node.Config{
+		DataDir: datadir,
+		Name:    "geth",
+		P2P: p2p.Config{
+			ListenAddr:  "0.0.0.0:0",
+			NoDiscovery: true,
+			MaxPeers:    25,
+		}})
+	if err != nil {
+		t.Fatal("can't create node:", err)
+	}
+	ethcfg := &ethconfig.Config{
+		Genesis:         genesis,
+		SyncMode:        ethconfig.FullSync,
+		TrieTimeout:     time.Minute,
+		TrieDirtyCache:  256,
+		TrieCleanCache:  256,
+		DatabaseCache:   64,
+		DatabaseHandles: 64,
+		Miner:           miner.DefaultConfig,
+	}
+	for _, mod := range mods {
+		mod(ethcfg)
+	}
+	ethservice, err := eth.New(n, ethcfg)
+	if err != nil {
+		t.Fatal("can't create eth service:", err)
+	}
+	if err := n.Start(); err != nil {
+		t.Fatal("can't start node:", err)
+	}
+	if len(blocks) > 0 {
+		if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
+			n.Close()
+			t.Fatal("can't import test blocks:", err)
+		}
+	}
+	if err := ethservice.TxPool().Sync(); err != nil {
+		t.Fatal("failed to sync txpool after initial blockchain import:", err)
+	}
+	ethservice.SetSynced()
+	return n, ethservice
+}
+
+// TestMerkleWindowResumesAfterRestart pins the shutdown contract: both
+// handles journal at their newest roots, so a rebooted window resumes from
+// its cursor. The deleted lists make any re-replay a loud stall.
+func TestMerkleWindowResumesAfterRestart(t *testing.T) {
+	genesis := migrationTestGenesis()
+	datadir := t.TempDir()
+	n, ethservice := startPersistentEthService(t, datadir, genesis, nil)
+	closed := false
+	defer func() {
+		if !closed {
+			n.Close()
+		}
+	}()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	head := chain.GetHeaderByNumber(5)
+	awaitShadowReady(t, chain, head)
+	want, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), 5, head.Hash())
+	for _, number := range []uint64{4, 5} {
+		rawdb.DeleteAccessList(ethservice.ChainDb(), chain.GetHeaderByNumber(number).Hash(), number)
+	}
+	n.Close()
+	closed = true
+
+	n2, eth2 := startPersistentEthService(t, datadir, genesis, nil)
+	defer n2.Close()
+	reopened := eth2.BlockChain()
+	if got := reopened.CurrentBlock(); got.Hash() != head.Hash() {
+		t.Fatalf("rebooted head %d %x, want %d: binary state lost on shutdown", got.Number, got.Hash(), head.Number)
+	}
+	for start := time.Now(); ; time.Sleep(10 * time.Millisecond) {
+		p := reopened.MigrationProgress()
+		if p.Phase == "synced" && p.ShadowRoot == want {
+			return
+		}
+		if p.Phase == "stalled" {
+			t.Fatalf("window re-replayed instead of resuming: %s", p.Error)
+		}
+		if time.Since(start) > 10*time.Second {
+			t.Fatalf("window never resumed: %+v", p)
+		}
 	}
 }

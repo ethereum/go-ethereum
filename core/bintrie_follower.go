@@ -635,22 +635,37 @@ func (f *bintrieFollower) stalledFor(number uint64, hash common.Hash) error {
 	return t.stall
 }
 
+// cursorRoot returns the direction's cursor root, zero when it never
+// resolved.
+func (f *bintrieFollower) cursorRoot(pbt bool) common.Hash {
+	t := f.peek(pbt)
+	if t == nil {
+		return common.Hash{}
+	}
+	_, _, root := t.cursor()
+	return root
+}
+
 // journal persists and releases the follower's directions.
-func (f *bintrieFollower) journal() {
+func (f *bintrieFollower) journal(head *types.Header) {
 	for _, t := range f.live() {
-		t.journal()
+		t.journal(head)
 	}
 }
 
-// journal persists the tree's layers at its own root - the chain head's
-// belongs to the other tree - and releases it. Only owned handles are
-// touched; a failed journal re-replays on the next start.
-func (t *followerTree) journal() {
+// journal persists the tree's layers at the newest root the handle holds -
+// the head's root while execution commits this flavour, the replay cursor's
+// otherwise - and releases it. Owned handles only; a failed journal
+// re-replays on the next start.
+func (t *followerTree) journal(head *types.Header) {
 	t.f.mu.Lock()
 	handle, owned, root := t.handle, t.owned, t.cursorRoot
 	t.f.mu.Unlock()
 	if handle == nil || !owned {
 		return
+	}
+	if head != nil && t.f.config.IsBinaryTrie(head.Number, head.Time) == t.pbt {
+		root = head.Root
 	}
 	if err := handle.Journal(root); err != nil {
 		log.Warn("Failed to journal shadow trie", "err", err)

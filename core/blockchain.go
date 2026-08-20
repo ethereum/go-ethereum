@@ -1443,13 +1443,19 @@ func (bc *BlockChain) Stop() {
 	}
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		// Past the activation boundary the head commits the other tree; this
-		// handle's newest root sits at the last block of its own flavour.
-		root := bc.CurrentBlock().Root
-		if bc.follower != nil {
-			for h := bc.CurrentBlock(); h != nil; h = bc.GetHeader(h.ParentHash, h.Number.Uint64()-1) {
-				if bc.chainConfig.IsBinaryTrie(h.Number, h.Time) == bc.triedb.IsPBT() {
-					root = h.Root
-					break
+		// handle's newest root is then its window direction's replay cursor,
+		// with the last own-flavour header as the never-ran fallback.
+		head := bc.CurrentBlock()
+		root := head.Root
+		if bc.follower != nil && bc.chainConfig.IsBinaryTrie(head.Number, head.Time) != bc.triedb.IsPBT() {
+			if r := bc.follower.cursorRoot(bc.triedb.IsPBT()); r != (common.Hash{}) {
+				root = r
+			} else {
+				for h := head; h != nil; h = bc.GetHeader(h.ParentHash, h.Number.Uint64()-1) {
+					if bc.chainConfig.IsBinaryTrie(h.Number, h.Time) == bc.triedb.IsPBT() {
+						root = h.Root
+						break
+					}
 				}
 			}
 		}
@@ -1457,7 +1463,7 @@ func (bc *BlockChain) Stop() {
 			log.Info("Failed to journal in-memory trie nodes", "err", err)
 		}
 		if bc.follower != nil {
-			bc.follower.journal()
+			bc.follower.journal(head)
 		}
 	} else {
 		// Ensure the state of a recent block is also stored to disk before exiting.
