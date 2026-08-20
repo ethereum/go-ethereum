@@ -248,6 +248,15 @@ func (c *curvePoint) Mul(a *curvePoint, scalar *big.Int, pool *bnPool) *curvePoi
 // MakeAffine converts c to affine form and returns c. If c is ∞, then it sets
 // c to 0 : 1 : 0.
 func (c *curvePoint) MakeAffine(pool *bnPool) *curvePoint {
+	// Add and Double leave their outputs unreduced, so z has to be brought
+	// into [0, P) before anything below can look at it: Bits reports the
+	// magnitude and would read -1 as 1, IsInfinity only recognises an exact
+	// zero, and ModInverse returns nil for a z that is a non-zero multiple of
+	// P, which would make the multiplication that consumes it a nil
+	// dereference.
+	if c.z.Sign() < 0 || c.z.Cmp(P) >= 0 {
+		c.z.Mod(c.z, P)
+	}
 	if words := c.z.Bits(); len(words) == 1 && words[0] == 1 {
 		return c
 	}
@@ -258,6 +267,8 @@ func (c *curvePoint) MakeAffine(pool *bnPool) *curvePoint {
 		c.t.SetInt64(0)
 		return c
 	}
+	// z is reduced and non-zero at this point and P is prime, so the two are
+	// coprime and ModInverse cannot fail.
 	zInv := pool.Get().ModInverse(c.z, P)
 	t := pool.Get().Mul(c.y, zInv)
 	t.Mod(t, P)

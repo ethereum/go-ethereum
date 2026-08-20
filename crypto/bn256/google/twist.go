@@ -230,6 +230,11 @@ func (c *twistPoint) Mul(a *twistPoint, scalar *big.Int, pool *bnPool) *twistPoi
 // MakeAffine converts c to affine form and returns c. If c is ∞, then it sets
 // c to 0 : 1 : 0.
 func (c *twistPoint) MakeAffine(pool *bnPool) *twistPoint {
+	// For the reasoning here, see the same function in curve.go. The failure
+	// mode differs: a z that is a non-zero multiple of P has a zero norm, so
+	// Invert below returns zero and the point at infinity silently becomes the
+	// bogus affine point 0 : 0 : 1 rather than panicking.
+	c.z.Minimal()
 	if c.z.IsOne() {
 		return c
 	}
@@ -240,6 +245,8 @@ func (c *twistPoint) MakeAffine(pool *bnPool) *twistPoint {
 		c.t.SetZero()
 		return c
 	}
+	// z is reduced and non-zero at this point, so its norm is non-zero and
+	// Invert cannot fail.
 	zInv := newGFp2(pool).Invert(c.z, pool)
 	t := newGFp2(pool).Mul(c.y, zInv, pool)
 	zInv2 := newGFp2(pool).Square(zInv, pool)
