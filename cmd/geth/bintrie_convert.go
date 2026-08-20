@@ -558,6 +558,11 @@ func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 // bare prefix is shared with block bodies), the PBT history freezers, and
 // the journal file in triedbDir.
 func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
+	// Bookkeeping before state: any crash prefix leaves stale state the next
+	// import detects, never a position that shadows a fresh anchor.
+	if err := rawdb.WipeMigrationState(chaindb); err != nil {
+		return err
+	}
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	batch := pbtdb.NewBatch()
 	wiped := 0
@@ -584,11 +589,6 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 		}
 	}
 	if err := batch.Write(); err != nil {
-		return err
-	}
-	// The raw-namespace migration position names the state wiped above; a
-	// stale cursor would shadow a freshly imported anchor.
-	if err := rawdb.WipeMigrationState(chaindb); err != nil {
 		return err
 	}
 	if ancient, err := chaindb.AncientDatadir(); err == nil {

@@ -111,11 +111,12 @@ func WritePBTMigrationDone(db ethdb.KeyValueWriter) {
 	}
 }
 
-// WipeMigrationState clears the raw-namespace migration bookkeeping - both
-// cursors, the done marker and the shadow-root records - so a fresh
-// conversion artifact is adopted instead of a stale position.
+// WipeMigrationState clears the raw-namespace migration bookkeeping so a
+// fresh conversion artifact is adopted instead of a stale position. The done
+// marker goes first: any crash prefix leaves state the next boot detects,
+// never a position it trusts.
 func WipeMigrationState(db ethdb.KeyValueStore) error {
-	for _, key := range [][]byte{pbtMigrationCursorKey, mptMigrationCursorKey, pbtMigrationDoneKey} {
+	for _, key := range [][]byte{pbtMigrationDoneKey, pbtMigrationCursorKey, mptMigrationCursorKey} {
 		if err := db.Delete(key); err != nil {
 			return err
 		}
@@ -131,6 +132,12 @@ func WipeMigrationState(db ethdb.KeyValueStore) error {
 		}
 		if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
 			return err
+		}
+		if batch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			batch.Reset()
 		}
 	}
 	if err := it.Error(); err != nil {
