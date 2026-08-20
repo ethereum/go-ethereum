@@ -228,7 +228,7 @@ func (c *twistPoint) Mul(a *twistPoint, scalar *big.Int, pool *bnPool) *twistPoi
 }
 
 // MakeAffine converts c to affine form and returns c. If c is ∞, then it sets
-// c to 0 : 1 : 0.
+// c to 0 : 1 : 0. On return the coordinates are reduced to [0, P).
 func (c *twistPoint) MakeAffine(pool *bnPool) *twistPoint {
 	// For the reasoning here, see the same function in curve.go. The failure
 	// mode differs: a z that is a non-zero multiple of P has a zero norm, so
@@ -236,6 +236,12 @@ func (c *twistPoint) MakeAffine(pool *bnPool) *twistPoint {
 	// bogus affine point 0 : 0 : 1 rather than panicking.
 	c.z.Minimal()
 	if c.z.IsOne() {
+		// Reduce x and y for the same reason as in curve.go, and set t: Add
+		// never writes it, so a point that arrives here affine can be carrying
+		// a stale one, and the Miller loop does read t.
+		c.x.Minimal()
+		c.y.Minimal()
+		c.t.SetOne()
 		return c
 	}
 	if c.IsInfinity() {
