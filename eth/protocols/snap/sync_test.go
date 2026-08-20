@@ -131,6 +131,7 @@ type testPeer struct {
 	test          *testing.T
 	remote        *syncer
 	logger        log.Logger
+	trieLock      sync.Mutex
 	accountTrie   *trie.Trie
 	accountValues []*kv
 	storageTries  map[common.Hash]*trie.Trie
@@ -217,6 +218,9 @@ func (t *testPeer) RequestByteCodes(id uint64, hashes []common.Hash, bytes int) 
 
 // defaultTrieRequestHandler is a well-behaving handler for trie healing requests
 func defaultTrieRequestHandler(t *testPeer, requestId uint64, root common.Hash, paths []TrieNodePathSet, cap int) error {
+	t.trieLock.Lock()
+	defer t.trieLock.Unlock()
+
 	// Pass the response
 	var nodes [][]byte
 	for _, pathset := range paths {
@@ -256,6 +260,9 @@ func defaultAccountRequestHandler(t *testPeer, id uint64, root common.Hash, orig
 }
 
 func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.Hash, limit common.Hash, cap int) (keys []common.Hash, vals [][]byte, proofs [][]byte) {
+	t.trieLock.Lock()
+	defer t.trieLock.Unlock()
+
 	var size int
 	if limit == (common.Hash{}) {
 		limit = common.MaxHash
@@ -313,6 +320,9 @@ func defaultCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max
 }
 
 func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []common.Hash, origin, limit []byte, max int) (hashes [][]common.Hash, slots [][][]byte, proofs [][]byte) {
+	t.trieLock.Lock()
+	defer t.trieLock.Unlock()
+
 	var size int
 	for _, account := range accounts {
 		// The first account might start from a different origin and end sooner
@@ -379,6 +389,9 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 // createStorageRequestResponseAlwaysProve tests a cornercase, where the peer always
 // supplies the proof for the last account, even if it is 'complete'.
 func createStorageRequestResponseAlwaysProve(t *testPeer, root common.Hash, accounts []common.Hash, bOrigin, bLimit []byte, max int) (hashes [][]common.Hash, slots [][][]byte, proofs [][]byte) {
+	t.trieLock.Lock()
+	defer t.trieLock.Unlock()
+
 	var size int
 	max = max * 3 / 4
 
