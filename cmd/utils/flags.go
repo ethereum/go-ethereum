@@ -2564,9 +2564,10 @@ func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, p
 	// established the database is a merkle one.
 	if !isPBT && rawdb.HasPBTState(disk) {
 		// A migrating datadir legitimately holds both trees; merkle commands
-		// keep working on the merkle side while the fork is scheduled.
+		// keep working while the merkle side is still canonical.
 		stored := rawdb.ReadChainConfig(disk, rawdb.ReadCanonicalHash(disk, 0))
-		if stored == nil || !stored.IsPBT() {
+		head := rawdb.ReadHeadHeader(disk)
+		if stored == nil || head == nil || stored.IsBinaryTrie(head.Number, head.Time) {
 			Fatalf("this database holds binary tree state, which this command does not support")
 		}
 	}
