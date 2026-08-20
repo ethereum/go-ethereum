@@ -536,12 +536,14 @@ func opJumpdest(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opPc(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.get().SetUint64(*pc)
+	elem := scope.Stack.get()
+	elem.SetUint64(*pc)
 	return nil, nil
 }
 
 func opMsize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.get().SetUint64(uint64(scope.Memory.Len()))
+	elem := scope.Stack.get()
+	elem.SetUint64(uint64(scope.Memory.Len()))
 	return nil, nil
 }
 
@@ -1131,10 +1133,8 @@ func makeLog(size int) executionFunc {
 
 // opPush1 is a specialized version of pushN
 func opPush1(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	var (
-		codeLen = uint64(len(scope.Contract.Code))
-		elem    = scope.Stack.get()
-	)
+	codeLen := uint64(len(scope.Contract.Code))
+	elem := scope.Stack.get()
 	*pc += 1
 	if *pc < codeLen {
 		elem.SetUint64(uint64(scope.Contract.Code[*pc]))
@@ -1146,10 +1146,8 @@ func opPush1(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 // opPush2 is a specialized version of pushN
 func opPush2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	var (
-		codeLen = uint64(len(scope.Contract.Code))
-		elem    = scope.Stack.get()
-	)
+	codeLen := uint64(len(scope.Contract.Code))
+	elem := scope.Stack.get()
 	if *pc+2 < codeLen {
 		elem.SetBytes2(scope.Contract.Code[*pc+1 : *pc+3])
 	} else if *pc+1 < codeLen {
@@ -1161,24 +1159,634 @@ func opPush2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
 }
 
-// make push instruction function
-func makePush(size uint64, pushByteSize int) executionFunc {
-	return func(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-		var (
-			codeLen = len(scope.Contract.Code)
-			start   = min(codeLen, int(*pc+1))
-			end     = min(codeLen, start+pushByteSize)
-		)
-		a := scope.Stack.get()
-		a.SetBytes(scope.Contract.Code[start:end])
+func opPush3(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+3)
+	)
+	elem := scope.Stack.get()
+	if end-start == 3 {
+		elem.SetBytes3(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
 
-		// Missing bytes: pushByteSize - len(pushData)
-		if missing := pushByteSize - (end - start); missing > 0 {
-			a.Lsh(a, uint(8*missing))
+		// Missing bytes: 3 - len(pushData)
+		if missing := 3 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
 		}
-		*pc += size
-		return nil, nil
 	}
+	*pc += 3
+	return nil, nil
+}
+
+func opPush4(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+4)
+	)
+	elem := scope.Stack.get()
+	if end-start == 4 {
+		elem.SetBytes4(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 4 - len(pushData)
+		if missing := 4 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 4
+	return nil, nil
+}
+
+func opPush5(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+5)
+	)
+	elem := scope.Stack.get()
+	if end-start == 5 {
+		elem.SetBytes5(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 5 - len(pushData)
+		if missing := 5 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 5
+	return nil, nil
+}
+
+func opPush6(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+6)
+	)
+	elem := scope.Stack.get()
+	if end-start == 6 {
+		elem.SetBytes6(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 6 - len(pushData)
+		if missing := 6 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 6
+	return nil, nil
+}
+
+func opPush7(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+7)
+	)
+	elem := scope.Stack.get()
+	if end-start == 7 {
+		elem.SetBytes7(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 7 - len(pushData)
+		if missing := 7 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 7
+	return nil, nil
+}
+
+func opPush8(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+8)
+	)
+	elem := scope.Stack.get()
+	if end-start == 8 {
+		elem.SetBytes8(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 8 - len(pushData)
+		if missing := 8 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 8
+	return nil, nil
+}
+
+func opPush9(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+9)
+	)
+	elem := scope.Stack.get()
+	if end-start == 9 {
+		elem.SetBytes9(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 9 - len(pushData)
+		if missing := 9 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 9
+	return nil, nil
+}
+
+func opPush10(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+10)
+	)
+	elem := scope.Stack.get()
+	if end-start == 10 {
+		elem.SetBytes10(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 10 - len(pushData)
+		if missing := 10 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 10
+	return nil, nil
+}
+
+func opPush11(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+11)
+	)
+	elem := scope.Stack.get()
+	if end-start == 11 {
+		elem.SetBytes11(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 11 - len(pushData)
+		if missing := 11 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 11
+	return nil, nil
+}
+
+func opPush12(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+12)
+	)
+	elem := scope.Stack.get()
+	if end-start == 12 {
+		elem.SetBytes12(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 12 - len(pushData)
+		if missing := 12 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 12
+	return nil, nil
+}
+
+func opPush13(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+13)
+	)
+	elem := scope.Stack.get()
+	if end-start == 13 {
+		elem.SetBytes13(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 13 - len(pushData)
+		if missing := 13 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 13
+	return nil, nil
+}
+
+func opPush14(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+14)
+	)
+	elem := scope.Stack.get()
+	if end-start == 14 {
+		elem.SetBytes14(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 14 - len(pushData)
+		if missing := 14 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 14
+	return nil, nil
+}
+
+func opPush15(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+15)
+	)
+	elem := scope.Stack.get()
+	if end-start == 15 {
+		elem.SetBytes15(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 15 - len(pushData)
+		if missing := 15 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 15
+	return nil, nil
+}
+
+func opPush16(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+16)
+	)
+	elem := scope.Stack.get()
+	if end-start == 16 {
+		elem.SetBytes16(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 16 - len(pushData)
+		if missing := 16 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 16
+	return nil, nil
+}
+
+func opPush17(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+17)
+	)
+	elem := scope.Stack.get()
+	if end-start == 17 {
+		elem.SetBytes17(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 17 - len(pushData)
+		if missing := 17 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 17
+	return nil, nil
+}
+
+func opPush18(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+18)
+	)
+	elem := scope.Stack.get()
+	if end-start == 18 {
+		elem.SetBytes18(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 18 - len(pushData)
+		if missing := 18 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 18
+	return nil, nil
+}
+
+func opPush19(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+19)
+	)
+	elem := scope.Stack.get()
+	if end-start == 19 {
+		elem.SetBytes19(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 19 - len(pushData)
+		if missing := 19 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 19
+	return nil, nil
+}
+
+func opPush20(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+20)
+	)
+	elem := scope.Stack.get()
+	if end-start == 20 {
+		elem.SetBytes20(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 20 - len(pushData)
+		if missing := 20 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 20
+	return nil, nil
+}
+
+func opPush21(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+21)
+	)
+	elem := scope.Stack.get()
+	if end-start == 21 {
+		elem.SetBytes21(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 21 - len(pushData)
+		if missing := 21 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 21
+	return nil, nil
+}
+
+func opPush22(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+22)
+	)
+	elem := scope.Stack.get()
+	if end-start == 22 {
+		elem.SetBytes22(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 22 - len(pushData)
+		if missing := 22 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 22
+	return nil, nil
+}
+
+func opPush23(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+23)
+	)
+	elem := scope.Stack.get()
+	if end-start == 23 {
+		elem.SetBytes23(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 23 - len(pushData)
+		if missing := 23 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 23
+	return nil, nil
+}
+
+func opPush24(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+24)
+	)
+	elem := scope.Stack.get()
+	if end-start == 24 {
+		elem.SetBytes24(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 24 - len(pushData)
+		if missing := 24 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 24
+	return nil, nil
+}
+
+func opPush25(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+25)
+	)
+	elem := scope.Stack.get()
+	if end-start == 25 {
+		elem.SetBytes25(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 25 - len(pushData)
+		if missing := 25 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 25
+	return nil, nil
+}
+
+func opPush26(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+26)
+	)
+	elem := scope.Stack.get()
+	if end-start == 26 {
+		elem.SetBytes26(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 26 - len(pushData)
+		if missing := 26 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 26
+	return nil, nil
+}
+
+func opPush27(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+27)
+	)
+	elem := scope.Stack.get()
+	if end-start == 27 {
+		elem.SetBytes27(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 27 - len(pushData)
+		if missing := 27 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 27
+	return nil, nil
+}
+
+func opPush28(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+28)
+	)
+	elem := scope.Stack.get()
+	if end-start == 28 {
+		elem.SetBytes28(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 28 - len(pushData)
+		if missing := 28 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 28
+	return nil, nil
+}
+
+func opPush29(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+29)
+	)
+	elem := scope.Stack.get()
+	if end-start == 29 {
+		elem.SetBytes29(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 29 - len(pushData)
+		if missing := 29 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 29
+	return nil, nil
+}
+
+func opPush30(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+30)
+	)
+	elem := scope.Stack.get()
+	if end-start == 30 {
+		elem.SetBytes30(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 30 - len(pushData)
+		if missing := 30 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 30
+	return nil, nil
+}
+
+func opPush31(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+31)
+	)
+	elem := scope.Stack.get()
+	if end-start == 31 {
+		elem.SetBytes31(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 31 - len(pushData)
+		if missing := 31 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 31
+	return nil, nil
+}
+
+func opPush32(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = len(scope.Contract.Code)
+		start   = min(codeLen, int(*pc+1))
+		end     = min(codeLen, start+32)
+	)
+	elem := scope.Stack.get()
+	if end-start == 32 {
+		elem.SetBytes32(scope.Contract.Code[start:end])
+	} else {
+		elem.SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: 32 - len(pushData)
+		if missing := 32 - (end - start); missing > 0 {
+			elem.Lsh(elem, uint(8*missing))
+		}
+	}
+	*pc += 32
+	return nil, nil
 }
 
 // make dup instruction function
