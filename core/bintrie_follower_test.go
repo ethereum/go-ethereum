@@ -513,3 +513,19 @@ func TestFollowerRefusesTreesDuringSnapSync(t *testing.T) {
 		t.Fatalf("shadow never resolved after snap sync: %v", err)
 	}
 }
+
+// TestWaitCaughtUpAbortsOnStop pins the wait against dead followers: a
+// stopped loop - shutdown or a closed window - fails fast, not by timeout.
+func TestWaitCaughtUpAbortsOnStop(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 1)
+	chain := openMigrationChain(t, db, genesis)
+	advance(t, chain, blocks)
+	f := chain.follower
+	chain.Stop()
+
+	start := time.Now()
+	err := f.waitCaughtUp(99, common.Hash{0xaa}, 30*time.Second)
+	if err == nil || time.Since(start) > time.Second {
+		t.Fatalf("wait on a stopped follower = %v after %v", err, time.Since(start))
+	}
+}

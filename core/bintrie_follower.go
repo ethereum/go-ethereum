@@ -75,7 +75,7 @@ type bintrieFollower struct {
 
 	chain   *BlockChain // nil when driven synchronously in tests
 	headCh  chan ChainHeadEvent
-	kickCh  chan struct{}
+	kickCh  chan *types.Header
 	headSub event.Subscription
 	term    chan chan struct{}
 	closed  chan struct{}
@@ -104,7 +104,7 @@ func newBintrieFollower(chain *BlockChain) *bintrieFollower {
 		cfg:    chain.cfg,
 		chain:  chain,
 		headCh: make(chan ChainHeadEvent),
-		kickCh: make(chan struct{}, 1),
+		kickCh: make(chan *types.Header, 1),
 		term:   make(chan chan struct{}),
 		closed: make(chan struct{}),
 	}
@@ -183,7 +183,10 @@ func (f *bintrieFollower) loop() {
 			kickCh = nil // the running sync's completion re-arms
 		}
 		select {
-		case <-kickCh:
+		case head := <-kickCh:
+			if head != nil {
+				latest = head // canonical is past the last head event
+			}
 			if latest != nil {
 				launch(latest)
 			}
@@ -315,11 +318,26 @@ func (f *bintrieFollower) setRequester(req func([]BALRequest)) {
 	f.mu.Unlock()
 }
 
-// kick re-arms a stalled sync, typically after new lists landed.
-func (f *bintrieFollower) kick() {
-	select {
-	case f.kickCh <- struct{}{}:
-	default:
+// kick re-arms a sync, toward the given header when the caller advanced the
+// canonical chain without a head event yet; nil retries the latest.
+func (f *bintrieFollower) kick(head *types.Header) {
+	if head == nil {
+		select {
+		case f.kickCh <- nil:
+		default: // a wake-up is already queued
+		}
+		return
+	}
+	for {
+		select {
+		case f.kickCh <- head:
+			return
+		default:
+			select {
+			case <-f.kickCh:
+			default:
+			}
+		}
 	}
 }
 
@@ -711,10 +729,20 @@ func (t *followerTree) replayedRoot(number uint64, hash common.Hash) (common.Has
 // the direction that would replay it, or the timeout. Batched-over blocks
 // never get a record; wait near the tip.
 func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout time.Duration) error {
+	// A batch import advances canonical without head events: drive the
+	// replay to the waited block instead of hoping one arrives.
+	if header := rawdb.ReadHeader(f.db, hash, number); header != nil {
+		f.kick(header)
+	}
 	deadline := time.Now().Add(timeout)
 	for {
 		if _, ok := rawdb.ReadShadowStateRoot(f.db, number, hash); ok {
 			return nil
+		}
+		select {
+		case <-f.closed:
+			return errors.New("migration follower stopped")
+		default:
 		}
 		if err := f.stalledFor(number, hash); err != nil {
 			return err
@@ -842,7 +870,7 @@ func (bc *BlockChain) SetBALRequester(req func([]BALRequest)) {
 // lists landed.
 func (bc *BlockChain) KickMigration() {
 	if bc.follower != nil {
-		bc.follower.kick()
+		bc.follower.kick(nil)
 	}
 }
 

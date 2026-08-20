@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -762,5 +764,35 @@ func TestShadowRootStreamNeverBlocksImport(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 20*time.Second {
 		t.Fatalf("30 recordless heads took %v: the stream backpressures imports", elapsed)
+	}
+}
+
+// TestBatchImportAcrossTheFork pins full sync: one InsertChain spanning the
+// boundary must drive the shadow itself - the head event only fires after
+// the batch.
+func TestBatchImportAcrossTheFork(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	var blocks []*types.Block
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+		blocks = append(blocks, chain.GetBlockByHash(parent.Hash()))
+	}
+
+	importer, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer importer.Stop()
+	if _, err := importer.InsertChain(blocks); err != nil {
+		t.Fatalf("batch import across the fork: %v", err)
+	}
+	if head := importer.CurrentBlock(); head.Number.Uint64() != 5 {
+		t.Fatalf("imported head %d, want 5", head.Number)
 	}
 }
