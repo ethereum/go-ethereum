@@ -26,6 +26,7 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 		Stack         []hexutil.U256              `json:"stack"`
 		ReturnData    hexutil.Bytes               `json:"returnData,omitempty"`
 		Storage       map[common.Hash]common.Hash `json:"-"`
+		CreateAddr    *common.Address             `json:"createAddr,omitempty"`
 		Depth         int                         `json:"depth"`
 		RefundCounter uint64                      `json:"refund"`
 		Err           error                       `json:"-"`
@@ -47,6 +48,7 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 	}
 	enc.ReturnData = s.ReturnData
 	enc.Storage = s.Storage
+	enc.CreateAddr = s.CreateAddr
 	enc.Depth = s.Depth
 	enc.RefundCounter = s.RefundCounter
 	enc.Err = s.Err
@@ -67,6 +69,7 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		Stack         []hexutil.U256              `json:"stack"`
 		ReturnData    *hexutil.Bytes              `json:"returnData,omitempty"`
 		Storage       map[common.Hash]common.Hash `json:"-"`
+		CreateAddr    *common.Address             `json:"createAddr,omitempty"`
 		Depth         *int                        `json:"depth"`
 		RefundCounter *uint64                     `json:"refund"`
 		Err           error                       `json:"-"`
@@ -104,6 +107,9 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Storage != nil {
 		s.Storage = dec.Storage
+	}
+	if dec.CreateAddr != nil {
+		s.CreateAddr = dec.CreateAddr
 	}
 	if dec.Depth != nil {
 		s.Depth = *dec.Depth
