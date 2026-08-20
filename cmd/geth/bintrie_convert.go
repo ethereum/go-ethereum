@@ -586,6 +586,11 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 	if err := batch.Write(); err != nil {
 		return err
 	}
+	// The raw-namespace migration position names the state wiped above; a
+	// stale cursor would shadow a freshly imported anchor.
+	if err := rawdb.WipeMigrationState(chaindb); err != nil {
+		return err
+	}
 	if ancient, err := chaindb.AncientDatadir(); err == nil {
 		for _, open := range []func(string, bool, bool) (ethdb.ResettableAncientStore, error){
 			rawdb.NewStateFreezer,

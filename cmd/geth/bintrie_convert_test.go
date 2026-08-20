@@ -599,3 +599,21 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 		}
 	})
 }
+
+// TestWipeClearsMigrationKeys pins that --force adopts a fresh anchor: the
+// raw-namespace cursors and records must not outlive the state they name.
+func TestWipeClearsMigrationKeys(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	rawdb.WritePBTMigrationCursor(db, 5, common.Hash{0x01}, common.Hash{0x02})
+	rawdb.WriteShadowStateRoot(db, 5, common.Hash{0x01}, common.Hash{0x02})
+
+	if err := wipeBinaryTrieState(db, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if rawdb.HasPBTMigrationCursor(db) {
+		t.Fatal("migration cursor survived the wipe")
+	}
+	if _, ok := rawdb.ReadShadowStateRoot(db, 5, common.Hash{0x01}); ok {
+		t.Fatal("shadow-root record survived the wipe")
+	}
+}

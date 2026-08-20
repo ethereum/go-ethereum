@@ -104,3 +104,23 @@ func TestMPTMigrationCursorStorage(t *testing.T) {
 		t.Fatal("truncated cursor not detected as present")
 	}
 }
+
+// TestWipeMigrationState pins that a re-anchor clears every raw-namespace
+// migration key: a stale cursor would shadow the fresh anchor.
+func TestWipeMigrationState(t *testing.T) {
+	db := NewMemoryDatabase()
+	WritePBTMigrationCursor(db, 5, common.Hash{0x01}, common.Hash{0x02})
+	WriteMPTMigrationCursor(db, 6, common.Hash{0x03}, common.Hash{0x04})
+	WritePBTMigrationDone(db)
+	WriteShadowStateRoot(db, 5, common.Hash{0x01}, common.Hash{0x02})
+
+	if err := WipeMigrationState(db); err != nil {
+		t.Fatal(err)
+	}
+	if HasPBTMigrationCursor(db) || HasMPTMigrationCursor(db) || ReadPBTMigrationDone(db) {
+		t.Fatal("migration keys survived the wipe")
+	}
+	if _, ok := ReadShadowStateRoot(db, 5, common.Hash{0x01}); ok {
+		t.Fatal("shadow-root record survived the wipe")
+	}
+}

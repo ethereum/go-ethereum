@@ -253,3 +253,10 @@ bintrie import`) but has no end-to-end test pairing the importer with the
 follower. Fetching access lists over eth/71 for ranges the node never
 executed, re-anchoring, and the shadow-root sidecar are unstarted; the
 design doc lists them under "later".
+
+## Producer-side re-anchoring is distributor tooling
+
+EIP-8347 re-anchors by re-running conversion at a cadence of finalized
+heights. The node side adopts any fresh artifact - the --force wipe clears
+the stale migration position - while the cadence loop and artifact serving
+belong to distributor tooling that does not exist yet.

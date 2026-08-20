@@ -110,3 +110,31 @@ func WritePBTMigrationDone(db ethdb.KeyValueWriter) {
 		log.Crit("Failed to store migration done marker", "err", err)
 	}
 }
+
+// WipeMigrationState clears the raw-namespace migration bookkeeping - both
+// cursors, the done marker and the shadow-root records - so a fresh
+// conversion artifact is adopted instead of a stale position.
+func WipeMigrationState(db ethdb.KeyValueStore) error {
+	for _, key := range [][]byte{pbtMigrationCursorKey, mptMigrationCursorKey, pbtMigrationDoneKey} {
+		if err := db.Delete(key); err != nil {
+			return err
+		}
+	}
+	var (
+		it    = db.NewIterator(shadowRootPrefix, nil)
+		batch = db.NewBatch()
+	)
+	defer it.Release()
+	for it.Next() {
+		if len(it.Key()) != len(shadowRootPrefix)+8+common.HashLength {
+			continue
+		}
+		if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
+			return err
+		}
+	}
+	if err := it.Error(); err != nil {
+		return err
+	}
+	return batch.Write()
+}
