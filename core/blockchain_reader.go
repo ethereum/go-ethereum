@@ -431,7 +431,7 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-// The header's own time picks the tree.
+// StateAt returns the state database rooted at the given header.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
 	sdb, err := bc.stateDatabaseFor(bc.chainConfig.IsBinaryTrie(header.Number, header.Time))
 	if err != nil {

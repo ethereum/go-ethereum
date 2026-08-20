@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // TestShadowStateRootStorage exercises the shadow-root table.
@@ -43,28 +44,40 @@ func TestShadowStateRootStorage(t *testing.T) {
 	}
 }
 
-// TestPBTMigrationCursorStorage pins the cursor roundtrip.
-func TestPBTMigrationCursorStorage(t *testing.T) {
-	db := NewMemoryDatabase()
-	if _, _, _, ok := ReadPBTMigrationCursor(db); ok {
-		t.Fatal("cursor reported present on an empty database")
+// TestMigrationCursorStorage pins both directions' cursor roundtrips and
+// the present-but-corrupt probe the resolvers rely on.
+func TestMigrationCursorStorage(t *testing.T) {
+	cases := []struct {
+		name  string
+		key   []byte
+		has   func(ethdb.KeyValueReader) bool
+		read  func(ethdb.KeyValueReader) (uint64, common.Hash, common.Hash, bool)
+		write func(ethdb.KeyValueWriter, uint64, common.Hash, common.Hash)
+	}{
+		{"pbt", pbtMigrationCursorKey, HasPBTMigrationCursor, ReadPBTMigrationCursor, WritePBTMigrationCursor},
+		{"mpt", mptMigrationCursorKey, HasMPTMigrationCursor, ReadMPTMigrationCursor, WriteMPTMigrationCursor},
 	}
-	if HasPBTMigrationCursor(db) {
-		t.Fatal("cursor key present on an empty database")
-	}
-	WritePBTMigrationCursor(db, 42, common.Hash{0x02}, common.Hash{0xbb})
-	num, hash, root, ok := ReadPBTMigrationCursor(db)
-	if !ok || num != 42 || hash != (common.Hash{0x02}) || root != (common.Hash{0xbb}) {
-		t.Fatalf("cursor = %d %x %x %v, want 42, 0x02.., 0xbb.., true", num, hash, root, ok)
-	}
-	if err := db.Put(pbtMigrationCursorKey, []byte{0x01, 0x02}); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, _, ok := ReadPBTMigrationCursor(db); ok {
-		t.Fatal("truncated cursor reported present")
-	}
-	if !HasPBTMigrationCursor(db) {
-		t.Fatal("truncated cursor not detected as present: the seeding fallbacks would run")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := NewMemoryDatabase()
+			if _, _, _, ok := tc.read(db); ok || tc.has(db) {
+				t.Fatal("cursor present on an empty database")
+			}
+			tc.write(db, 42, common.Hash{0x02}, common.Hash{0xbb})
+			num, hash, root, ok := tc.read(db)
+			if !ok || num != 42 || hash != (common.Hash{0x02}) || root != (common.Hash{0xbb}) {
+				t.Fatalf("cursor = %d %x %x %v, want 42, 0x02.., 0xbb.., true", num, hash, root, ok)
+			}
+			if err := db.Put(tc.key, []byte{0x01, 0x02}); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, _, ok := tc.read(db); ok {
+				t.Fatal("truncated cursor reported present")
+			}
+			if !tc.has(db) {
+				t.Fatal("truncated cursor not detected: the seeding fallbacks would run")
+			}
+		})
 	}
 }
 
@@ -77,31 +90,6 @@ func TestPBTMigrationDoneFlag(t *testing.T) {
 	WritePBTMigrationDone(db)
 	if !ReadPBTMigrationDone(db) {
 		t.Fatal("migration not done after writing the marker")
-	}
-}
-
-// TestMPTMigrationCursorStorage pins the merkle window cursor's roundtrip.
-func TestMPTMigrationCursorStorage(t *testing.T) {
-	db := NewMemoryDatabase()
-	if _, _, _, ok := ReadMPTMigrationCursor(db); ok {
-		t.Fatal("cursor reported present on an empty database")
-	}
-	if HasMPTMigrationCursor(db) {
-		t.Fatal("cursor key present on an empty database")
-	}
-	WriteMPTMigrationCursor(db, 7, common.Hash{0x03}, common.Hash{0xcc})
-	num, hash, root, ok := ReadMPTMigrationCursor(db)
-	if !ok || num != 7 || hash != (common.Hash{0x03}) || root != (common.Hash{0xcc}) {
-		t.Fatalf("cursor = %d %x %x %v, want 7, 0x03.., 0xcc.., true", num, hash, root, ok)
-	}
-	if err := db.Put(mptMigrationCursorKey, []byte{0x01}); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, _, ok := ReadMPTMigrationCursor(db); ok {
-		t.Fatal("truncated cursor reported present")
-	}
-	if !HasMPTMigrationCursor(db) {
-		t.Fatal("truncated cursor not detected as present")
 	}
 }
 

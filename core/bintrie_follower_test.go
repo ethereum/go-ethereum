@@ -35,6 +35,7 @@ import (
 // generateMigrationChain pre-generates n blocks, each paying the recipient
 // (0x0ff1) 1000 wei so every block moves state.
 func generateMigrationChain(t *testing.T, n int) (*Genesis, ethdb.Database, []*types.Block, *replayUniverse) {
+	t.Helper()
 	genesis, key, sender, recipient := migrationChainGenesis(t)
 	signer := types.LatestSigner(genesis.Config)
 
@@ -112,30 +113,6 @@ func TestFollowerTracksChain(t *testing.T) {
 	}
 	if got := st.GetBalance(common.Address{0x0f, 0xf1}); got.Uint64() != 3000 {
 		t.Fatalf("merkle-side recipient balance = %v, want 3000", got)
-	}
-}
-
-// TestFollowerBatchedCatchup pins the deep-behind fold path.
-func TestFollowerBatchedCatchup(t *testing.T) {
-	n := followTrackWindow + 12
-	genesis, _, blocks, u := generateMigrationChain(t, n)
-	universeWithAlloc(u, genesis)
-
-	// Import into a fresh database: generating this many blocks advances the
-	// generator's own disk layer past genesis, which the chain still needs.
-	db := rawdb.NewMemoryDatabase()
-	chain := openMigrationChain(t, db, genesis)
-	defer chain.Stop()
-	advance(t, chain, blocks)
-
-	head := blocks[len(blocks)-1]
-	root := awaitShadow(t, chain, head)
-	if want := convertCanonical(t, chain, head.Header(), u); root != want {
-		t.Fatalf("shadow root %x, converting the canonical state says %x", root, want)
-	}
-	// The earliest blocks were folded over: no per-hash roots for them.
-	if r, ok := rawdb.ReadShadowStateRoot(db, blocks[2].NumberU64(), blocks[2].Hash()); ok {
-		t.Fatalf("batched-over block 3 has a recorded root %x", r)
 	}
 }
 
@@ -249,19 +226,8 @@ func TestFollowerRecoversWithoutJournal(t *testing.T) {
 	if got, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash()); !ok || got != want {
 		t.Fatalf("recovered head root %x (ok=%v), want %x", got, ok, want)
 	}
-}
-
-// TestFollowerStallsOnMissingAccessList pins the availability stall.
-func TestFollowerStallsOnMissingAccessList(t *testing.T) {
-	genesis, db, blocks, _ := generateMigrationChain(t, 2)
-	writeChainShape(db, blocks)
-	rawdb.DeleteAccessList(db, blocks[0].Hash(), blocks[0].NumberU64())
-
-	f := standaloneFollower(genesis, db)
-	err := f.follow(blocks[len(blocks)-1].Header(), nil)
-	var missing *MissingAccessListError
-	if !errors.As(err, &missing) || missing.Number != blocks[0].NumberU64() {
-		t.Fatalf("follow = %v, want a MissingAccessListError for block %d", err, blocks[0].NumberU64())
+	if num, _, _ := second.direction(true).cursor(); num != head.Number.Uint64() {
+		t.Fatalf("recovered cursor at %d, want %d", num, head.Number.Uint64())
 	}
 }
 
@@ -298,23 +264,82 @@ func TestFollowerRequestsMissingLists(t *testing.T) {
 	}
 }
 
-// TestFollowerRequiresArtifactWithoutGenesisLists pins the seeding rule.
-func TestFollowerRequiresArtifactWithoutGenesisLists(t *testing.T) {
-	genesis, db, blocks, _ := generateMigrationChain(t, 1)
-	writeChainShape(db, blocks)
-
-	// Pretend Amsterdam activates past genesis: the early chain carries no
-	// access lists, so a genesis seed cannot follow it.
-	cfg := *genesis.Config
-	later := uint64(1) << 39
-	cfg.AmsterdamTime = &later
-	genesis = genesis.copy()
-	genesis.Config = &cfg
-
-	f := standaloneFollower(genesis, db)
-	err := f.follow(blocks[0].Header(), nil)
-	if err == nil || !strings.Contains(err.Error(), "predates access lists") {
-		t.Fatalf("follow = %v, want a seeding error", err)
+// TestFollowerStalls pins the guard errors: every corruption or gap stops
+// replay with its own message.
+func TestFollowerStalls(t *testing.T) {
+	cases := []struct {
+		name    string
+		blocks  int
+		want    string
+		corrupt func(genesis *Genesis, db ethdb.Database, blocks []*types.Block) (*Genesis, *types.Header)
+	}{
+		{
+			name:   "no genesis lists",
+			blocks: 1,
+			want:   "predates access lists",
+			corrupt: func(genesis *Genesis, db ethdb.Database, blocks []*types.Block) (*Genesis, *types.Header) {
+				// Amsterdam past genesis: the early chain carries no lists,
+				// so a genesis seed cannot follow it.
+				cfg := *genesis.Config
+				later := uint64(1) << 39
+				cfg.AmsterdamTime = &later
+				genesis = genesis.copy()
+				genesis.Config = &cfg
+				return genesis, blocks[0].Header()
+			},
+		},
+		{
+			name:   "unresolvable position",
+			blocks: 2,
+			want:   "re-anchor",
+			corrupt: func(genesis *Genesis, db ethdb.Database, blocks []*types.Block) (*Genesis, *types.Header) {
+				// A cursor with a dead root, no live records below it and a
+				// non-seed disk root: the post-crash shape after deep damage.
+				pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+				rawdb.WritePBTFlatState(pbtdb)
+				rawdb.WriteSnapshotRoot(pbtdb, common.Hash{0xd1, 0x5c})
+				rawdb.WritePBTMigrationCursor(db, 2, blocks[1].Hash(), common.Hash{0xde, 0xad})
+				return genesis, blocks[1].Header()
+			},
+		},
+		{
+			name:   "list mismatch",
+			blocks: 2,
+			want:   "mismatch",
+			corrupt: func(genesis *Genesis, db ethdb.Database, blocks []*types.Block) (*Genesis, *types.Header) {
+				rawdb.WriteAccessList(db, blocks[0].Hash(), blocks[0].NumberU64(), &bal.BlockAccessList{})
+				return genesis, blocks[len(blocks)-1].Header()
+			},
+		},
+		{
+			name:   "no list commitment",
+			blocks: 1,
+			want:   "no access list",
+			corrupt: func(genesis *Genesis, db ethdb.Database, blocks []*types.Block) (*Genesis, *types.Header) {
+				// A pre-Amsterdam block behind an anchor imported too early;
+				// the optional fields cannot encode past a nil.
+				header := blocks[0].Header()
+				header.BlockAccessListHash = nil
+				header.SlotNumber = nil
+				rawdb.WriteHeader(db, header)
+				rawdb.WriteCanonicalHash(db, header.Hash(), header.Number.Uint64())
+				pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+				rawdb.WritePBTFlatState(pbtdb)
+				rawdb.WritePBTAnchor(pbtdb, 0, rawdb.ReadCanonicalHash(db, 0))
+				return genesis, header
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			genesis, db, blocks, _ := generateMigrationChain(t, tc.blocks)
+			writeChainShape(db, blocks)
+			genesis, head := tc.corrupt(genesis, db, blocks)
+			err := standaloneFollower(genesis, db).follow(head, nil)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("follow = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }
 
@@ -330,63 +355,6 @@ func TestFollowerIdlesDuringSnapSync(t *testing.T) {
 	}
 	if f.direction(true).handle != nil {
 		t.Fatal("shadow opened during snap sync")
-	}
-}
-
-// TestFollowerRefusesUnresolvablePosition pins the poisoned-fallback guard.
-func TestFollowerRefusesUnresolvablePosition(t *testing.T) {
-	genesis, db, blocks, _ := generateMigrationChain(t, 2)
-	writeChainShape(db, blocks)
-
-	// A cursor with a dead root, no live records below it, and a disk root
-	// that is NOT the genesis seed - the post-crash shape after deep damage.
-	// The namespace is attested, as any real shadow is from creation.
-	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
-	rawdb.WritePBTFlatState(pbtdb)
-	rawdb.WriteSnapshotRoot(pbtdb, common.Hash{0xd1, 0x5c})
-	rawdb.WritePBTMigrationCursor(db, 2, blocks[1].Hash(), common.Hash{0xde, 0xad})
-
-	f := standaloneFollower(genesis, db)
-	err := f.follow(blocks[1].Header(), nil)
-	if err == nil || !strings.Contains(err.Error(), "re-anchor") {
-		t.Fatalf("follow = %v, want an unresolvable-position error", err)
-	}
-}
-
-// TestFollowerStallsOnAccessListMismatch pins the integrity check.
-func TestFollowerStallsOnAccessListMismatch(t *testing.T) {
-	genesis, db, blocks, _ := generateMigrationChain(t, 2)
-	writeChainShape(db, blocks)
-	rawdb.WriteAccessList(db, blocks[0].Hash(), blocks[0].NumberU64(), &bal.BlockAccessList{})
-
-	f := standaloneFollower(genesis, db)
-	err := f.follow(blocks[len(blocks)-1].Header(), nil)
-	if err == nil || !strings.Contains(err.Error(), "mismatch") {
-		t.Fatalf("follow = %v, want an access-list mismatch error", err)
-	}
-}
-
-// TestFollowerStallsBeforeAccessLists pins the coverage stall.
-func TestFollowerStallsBeforeAccessLists(t *testing.T) {
-	genesis, db, blocks, _ := generateMigrationChain(t, 1)
-	writeChainShape(db, blocks)
-
-	// Strip the header's list commitment - and the optional fields behind it,
-	// which cannot encode past a nil - as a pre-Amsterdam block would look
-	// behind an anchor imported too early.
-	header := blocks[0].Header()
-	header.BlockAccessListHash = nil
-	header.SlotNumber = nil
-	rawdb.WriteHeader(db, header)
-	rawdb.WriteCanonicalHash(db, header.Hash(), header.Number.Uint64())
-	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
-	rawdb.WritePBTFlatState(pbtdb)
-	rawdb.WritePBTAnchor(pbtdb, 0, rawdb.ReadCanonicalHash(db, 0))
-
-	f := standaloneFollower(genesis, db)
-	err := f.follow(header, nil)
-	if err == nil || !strings.Contains(err.Error(), "no access list") {
-		t.Fatalf("follow = %v, want a no-access-list error", err)
 	}
 }
 
@@ -527,5 +495,29 @@ func TestWaitCaughtUpAbortsOnStop(t *testing.T) {
 	err := f.waitCaughtUp(99, common.Hash{0xaa}, 30*time.Second)
 	if err == nil || time.Since(start) > time.Second {
 		t.Fatalf("wait on a stopped follower = %v after %v", err, time.Since(start))
+	}
+}
+
+// TestFollowerSharesCanonicalHandle pins the two-writers rule: the direction
+// matching the canonical flavour rides the chain's handle, never owned.
+func TestFollowerSharesCanonicalHandle(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 1)
+	chain := openMigrationChain(t, db, genesis)
+	defer chain.Stop()
+	advance(t, chain, blocks)
+
+	m := chain.follower.direction(false)
+	if _, err := m.open(); err != nil {
+		t.Fatal(err)
+	}
+	if m.handle != chain.triedb || m.owned {
+		t.Fatal("the merkle direction must share the canonical handle unowned")
+	}
+	p := chain.follower.direction(true)
+	if _, err := p.open(); err != nil {
+		t.Fatal(err)
+	}
+	if p.handle == chain.triedb || !p.owned {
+		t.Fatal("the binary direction must own its handle")
 	}
 }

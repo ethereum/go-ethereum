@@ -31,6 +31,7 @@ const migrationForkTime = uint64(1) << 40
 
 // migrationChainGenesis is the PBT chain genesis with the fork past genesis.
 func migrationChainGenesis(t *testing.T) (*Genesis, *ecdsa.PrivateKey, common.Address, common.Address) {
+	t.Helper()
 	genesis, key, sender, recipient := pbtChainGenesis(t)
 	cfg := *genesis.Config
 	forkTime := migrationForkTime
@@ -41,12 +42,14 @@ func migrationChainGenesis(t *testing.T) (*Genesis, *ecdsa.PrivateKey, common.Ad
 
 // migrationGenesis is migrationChainGenesis for tests that only need the spec.
 func migrationGenesis(t *testing.T) *Genesis {
+	t.Helper()
 	genesis, _, _, _ := migrationChainGenesis(t)
 	return genesis
 }
 
 // merkleGenesis clones the PBT chain genesis with the fork removed entirely.
 func merkleGenesis(t *testing.T) *Genesis {
+	t.Helper()
 	genesis, _, _, _ := pbtChainGenesis(t)
 	cfg := *genesis.Config
 	cfg.BinaryTrieTime = nil

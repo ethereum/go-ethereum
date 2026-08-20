@@ -33,8 +33,7 @@ import (
 const balFetchTimeout = 5 * time.Second
 
 // balFetcher resolves the migration's missing access lists from eth/71+
-// peers: every list is proven against the local header's commitment, forging
-// peers are dropped, unavailability rotates on. One fetch runs at a time.
+// peers, one fetch at a time.
 type balFetcher struct {
 	db    ethdb.Database
 	chain *core.BlockChain
@@ -116,8 +115,7 @@ func (f *balFetcher) fetch(pending []core.BALRequest) bool {
 	return stored
 }
 
-// fetchFrom asks one peer, stores what verifies and returns what is still
-// missing. Nothing is stored from a peer caught forging.
+// fetchFrom asks one peer, stores what verifies and returns what is still missing.
 func (f *balFetcher) fetchFrom(peer *eth.Peer, pending []core.BALRequest) (int, []core.BALRequest) {
 	hashes := make([]common.Hash, len(pending))
 	for i, r := range pending {

@@ -611,10 +611,9 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 	return block
 }
 
-// stateMode is how a chain relates to the binary tree: never (merkle only),
-// native (the fork is active at genesis), or migrating (the fork is scheduled
-// past genesis, so the chain starts on the merkle trie and a shadow binary
-// tree has to catch up before the fork).
+// stateMode is how a chain relates to the binary tree: never, active at
+// genesis, or scheduled later - which means starting on the merkle trie with
+// a shadow binary tree catching up before the fork.
 type stateMode int
 
 const (

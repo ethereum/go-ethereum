@@ -219,12 +219,9 @@ to look.
   proof can tell is a stub from the branch and two stubs that hash to it, so one
   statement still has more than one shape. Nothing reads a shape it did not ask
   for, so this costs bytes rather than soundness.
-- **BAL-replay catch-up is implemented end to end.** `geth bintrie convert`
-  produces the EIP-8347 artifacts, `geth bintrie import` consumes them, and
-  the follower advances the anchor to the tip by replaying Block-Level
-  Access Lists - `TestAnchorSeededCatchup` pairs the two, missing lists
-  backfill over eth/71, and a fresh artifact replaces a stale position via
-  the --force wipe.
+- **BAL-replay catch-up is implemented end to end.** convert produces the
+  artifacts, import consumes them, the follower replays anchor to tip, and
+  missing lists backfill over eth/71.
 - **`UpdateAccountBatch`** has no production caller, and it is a trap rather
   than dead weight: its `delegations` slice
   has to be built alongside the code lengths, and an adopter passing nils
@@ -232,20 +229,8 @@ to look.
   showing it. The interface doc says so at the declaration; the safer end state
   is to delete the method until something needs it.
 
-## Migration leftovers are scope choices, not gaps
+## Out of scope, deliberately
 
-The follower runs one direction per flavour, so the merkle window advances
-live through an in-process crossing - proven against a reverse conversion
-of the binary state - and shutdown journals each handle at the newest root
-it holds, letting mid-window reboots resume from their cursors on the
-persistent-datadir harness. `TestFullMigrationLifecycle` drives empty state
-to a finished node; the knob variant closes by block count. What remains is
-deliberate scope: snap serving for post-activation PBT roots, anchors below
-a history-pruned cutoff, and a thin-history mode for the shadow's pathdb.
-
-## Producer-side re-anchoring is distributor tooling
-
-EIP-8347 re-anchors by re-running conversion at a cadence of finalized
-heights. The node side adopts any fresh artifact - the --force wipe clears
-the stale migration position - while the cadence loop and artifact serving
-belong to distributor tooling that does not exist yet.
+Snap serving for post-activation PBT roots, anchors below a history-pruned
+cutoff, a thin-history mode for the shadow's pathdb, and the producer-side
+re-anchor cadence (the node adopts any fresh artifact via the --force wipe).

@@ -151,7 +151,7 @@ func NewStateFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.Reset
 	var name, namespace string
 	if verkle {
 		name = filepath.Join(ancientDir, PBTStateFreezerName)
-		namespace = "eth/db/state_pbt/"
+		namespace = "eth/db/state_pbt"
 	} else {
 		name = filepath.Join(ancientDir, MerkleStateFreezerName)
 		namespace = "eth/db/state"
@@ -172,7 +172,7 @@ func NewTrienodeFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.Re
 	var name, namespace string
 	if verkle {
 		name = filepath.Join(ancientDir, PBTTrienodeFreezerName)
-		namespace = "eth/db/trienode_pbt/"
+		namespace = "eth/db/trienode_pbt"
 	} else {
 		name = filepath.Join(ancientDir, MerkleTrienodeFreezerName)
 		namespace = "eth/db/trienode"

@@ -624,8 +624,6 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
 	}
 
-	// Until the migration is done, the non-canonical tree is maintained by
-	// replay whichever side is canonical.
 	if bc.stateMode == modeMigration && !rawdb.ReadPBTMigrationDone(db) {
 		bc.follower = newBintrieFollower(bc)
 	}
@@ -2093,7 +2091,7 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		}
 		// At the activation boundary the pre-state lives in the shadow tree;
 		// give a lagging follower a bounded moment.
-		if bc.follower != nil && !bc.ActivationReady(block) {
+		if !bc.ActivationReady(block) {
 			if err := bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), 30*time.Second); err != nil {
 				return nil, it.index, fmt.Errorf("activation waits on the shadow tree: %w", err)
 			}
@@ -2224,8 +2222,7 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 	return supportsParallelExecution(block, bc.chainConfig, wantWitness, bc.cfg.VmConfig.Tracer != nil, bc.cfg.VmConfig.DisableParallelExecution)
 }
 
-// treeFor returns the trie database holding the given flavour: the canonical
-// handle, or - on a migrating chain - the follower's for the other tree.
+// treeFor returns the trie database holding the given flavour.
 func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
 	if bc.triedb.IsPBT() == pbt {
 		return bc.triedb, nil
@@ -2239,8 +2236,7 @@ func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
 	return bc.follower.tree(pbt)
 }
 
-// stateDatabaseFor returns a state database over the tree of the given
-// flavour.
+// stateDatabaseFor returns a state database over the given flavour's tree.
 func (bc *BlockChain) stateDatabaseFor(pbt bool) (state.Database, error) {
 	tdb, err := bc.treeFor(pbt)
 	if err != nil {
@@ -2323,8 +2319,6 @@ func (bc *BlockChain) StateForBuilding(parent *types.Header, number *big.Int, ti
 func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.Block, config ExecuteConfig, interrupt *atomic.Bool, execIndex *atomic.Int64) (*state.StateDB, func(*blockProcessingResult), error) {
 	noop := func(*blockProcessingResult) {}
 
-	// The block's own time picks the tree; at the activation boundary the
-	// pre-state root is the parent's recorded shadow root.
 	flavor := bc.chainConfig.IsBinaryTrie(block.Number(), block.Time())
 	sdb, err := bc.stateDatabaseFor(flavor)
 	if err != nil {

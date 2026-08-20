@@ -132,7 +132,6 @@ func (f *bintrieFollower) direction(pbt bool) *followerTree {
 	return t
 }
 
-// peek returns the tree of the given flavour if it exists.
 func (f *bintrieFollower) peek(pbt bool) *followerTree {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -359,8 +358,7 @@ func (f *bintrieFollower) allStalled() bool {
 	return stalled
 }
 
-// follow advances the direction the head calls for: the one opposite its
-// flavour.
+// follow advances the direction opposite the head's flavour.
 func (f *bintrieFollower) follow(head *types.Header, stop chan struct{}) error {
 	return f.direction(!f.config.IsBinaryTrie(head.Number, head.Time)).follow(head, stop)
 }
@@ -578,7 +576,6 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	return t.handle, nil
 }
 
-// hasCursor reports whether the direction's cursor was ever persisted.
 func (t *followerTree) hasCursor() bool {
 	if t.pbt {
 		return rawdb.HasPBTMigrationCursor(t.f.db)
@@ -586,7 +583,6 @@ func (t *followerTree) hasCursor() bool {
 	return rawdb.HasMPTMigrationCursor(t.f.db)
 }
 
-// readCursor loads the direction's persisted cursor.
 func (t *followerTree) readCursor() (uint64, common.Hash, common.Hash, bool) {
 	if t.pbt {
 		return rawdb.ReadPBTMigrationCursor(t.f.db)
@@ -594,7 +590,6 @@ func (t *followerTree) readCursor() (uint64, common.Hash, common.Hash, bool) {
 	return rawdb.ReadMPTMigrationCursor(t.f.db)
 }
 
-// persistCursor stores the direction's cursor.
 func (t *followerTree) persistCursor(num uint64, hash common.Hash, root common.Hash) {
 	if t.pbt {
 		rawdb.WritePBTMigrationCursor(t.f.db, num, hash, root)
@@ -770,8 +765,7 @@ func (f *bintrieFollower) stalledFor(number uint64, hash common.Hash) error {
 	return t.stall
 }
 
-// cursorRoot returns the direction's cursor root, zero when it never
-// resolved.
+// cursorRoot returns the direction's cursor root, zero if never resolved.
 func (f *bintrieFollower) cursorRoot(pbt bool) common.Hash {
 	t := f.peek(pbt)
 	if t == nil {
@@ -790,8 +784,7 @@ func (f *bintrieFollower) journal(head *types.Header) {
 
 // journal persists the tree's layers at the newest root the handle holds -
 // the head's root while execution commits this flavour, the replay cursor's
-// otherwise - and releases it. Owned handles only; a failed journal
-// re-replays on the next start.
+// otherwise - and releases it. Owned handles only.
 func (t *followerTree) journal(head *types.Header) {
 	t.f.mu.Lock()
 	handle, owned, root := t.handle, t.owned, t.cursorRoot
@@ -858,22 +851,21 @@ type DirectionProgress struct {
 	Error      string      // what stalled the direction, if anything
 }
 
-// SetBALRequester wires the fetcher that resolves missing access lists; the
-// migration hands it the blocks a stalled replay needs.
+// SetBALRequester wires the fetcher that resolves missing access lists.
 func (bc *BlockChain) SetBALRequester(req func([]BALRequest)) {
 	if bc.follower != nil {
 		bc.follower.setRequester(req)
 	}
 }
 
-// KickMigration re-arms a stalled migration sync, typically after new access
-// lists landed.
+// KickMigration re-arms a stalled migration sync.
 func (bc *BlockChain) KickMigration() {
 	if bc.follower != nil {
 		bc.follower.kick(nil)
 	}
 }
 
+// MigrationProgress reports where a migrating chain stands, per direction.
 func (bc *BlockChain) MigrationProgress() MigrationProgress {
 	if rawdb.ReadPBTMigrationDone(bc.db) {
 		return MigrationProgress{Phase: "done"}

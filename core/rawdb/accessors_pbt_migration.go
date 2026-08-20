@@ -97,8 +97,7 @@ func WriteMPTMigrationCursor(db ethdb.KeyValueWriter, number uint64, hash common
 	}
 }
 
-// ReadPBTMigrationDone reports whether the migration finished: the fork
-// finalized and the retired tree stopped being maintained.
+// ReadPBTMigrationDone reports whether the migration finished.
 func ReadPBTMigrationDone(db ethdb.KeyValueReader) bool {
 	data, _ := db.Get(pbtMigrationDoneKey)
 	return len(data) == 1 && data[0] == 1
@@ -111,10 +110,9 @@ func WritePBTMigrationDone(db ethdb.KeyValueWriter) {
 	}
 }
 
-// WipeMigrationState clears the raw-namespace migration bookkeeping so a
-// fresh conversion artifact is adopted instead of a stale position. The done
-// marker goes first: any crash prefix leaves state the next boot detects,
-// never a position it trusts.
+// WipeMigrationState clears the migration bookkeeping - done marker first -
+// so a crash prefix leaves state the next boot detects, never a stale
+// position a fresh anchor would lose to.
 func WipeMigrationState(db ethdb.KeyValueStore) error {
 	for _, key := range [][]byte{pbtMigrationDoneKey, pbtMigrationCursorKey, mptMigrationCursorKey} {
 		if err := db.Delete(key); err != nil {

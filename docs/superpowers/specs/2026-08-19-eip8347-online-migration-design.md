@@ -1,5 +1,7 @@
 # EIP-8347 online migration: dual-tree runtime + BAL replay
 
+Status: shipped on `pbt-bal-replay`.
+
 2026-08-19. Base: `pbt` @ bcf30164bf. Status: approved design.
 
 ## Context
@@ -132,30 +134,6 @@ the creation transaction; EIP-161 empties do not exist).
   maintenance gap is unfixable). Until then MPT state history keeps accumulating — that is what
   "recoverable to MPT" requires.
 
-## Task breakdown (stacked PRs)
-
-M2 — replay engine + follower (shadow is write-only extra; no behavior change elsewhere):
-
-1. `params`: `IsBinaryTrie(num, time)`.
-2. `core/types/bal`: `Fold` + deletion-split guard (+ fuzz vs per-block replay).
-3. `core/rawdb`: shadow-root table, cursor, phase key.
-4. `core`: tri-state mode resolver; `Genesis.IsPBT` redefinition; NewBlockChain guard/mode
-   plumbing (runtime inert: canonical stays MPT).
-5. `core/bintrie_replay.go`: per-block + batched replay over a shadow handle.
-6. `core/bintrie_follower.go`: lifecycle, seeding, catch-up/tracking, hash-walk reorgs, crash
-   recovery, snap-sync interlock, `MigrationProgress`.
-7. `core/rawdb`: freezer metrics namespace split for the PBT flavor.
-
-M3 — activation + window:
-
-8. `core`: `execStateAndRoot` + boundary translation (setupExecutionState / StateAt /
-   HistoricState / HasBlockAndState).
-9. `miner`: `StateForBuilding`.
-10. `core` + `eth/catalyst`: the import gate.
-11. `core`: role swap, `swapped-tracking` MPT replay, restart-mid-window, finality termination.
-12. `cmd/utils` + `cmd/geth`: `MakeTrieDatabase` guard parameterization for hybrid datadirs.
-13. `eth` / `internal/ethapi`: MigrationProgress RPC.
-
 ## Verification
 
 - THE invariant (primary oracle): the shadow root at height B equals `convertState` over the
@@ -183,16 +161,3 @@ M3 — activation + window:
 - Two pathdb write buffers double memory in migration mode; consider halving the shadow's.
 - Snap serving/downloading for PBT roots post-activation is out of scope.
 - History-pruned nodes with an anchor below the cutoff: unresolved, later milestone.
-
-## Status addendum (2026-08-20)
-
-Everything above shipped on `pbt-bal-replay`, and the completion sprint closed the honest
-gaps: the follower runs one direction per flavour and the merkle window advances live through
-the fork (proven against a reverse conversion of the binary state); shutdown journals each
-handle at the newest root it holds, so mid-window reboots resume from cursors on a
-persistent-datadir harness; the importer pairs with the follower end to end from an anchor;
-missing access lists backfill over eth/71 with forging peers dropped; a fresh artifact
-replaces a stale position through the --force wipe; MigrationWindowBlocks closes rehearsal
-windows without finality; progress reports per direction; and debug_shadowStateRoot plus the
-debug_shadowRoots stream expose the sidecar feed. TestFullMigrationLifecycle and
-TestFullMigrationLifecycleBlocksKnob are the acceptance runs.

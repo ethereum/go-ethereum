@@ -41,14 +41,9 @@ func mutated(acc *AccountAccess) bool {
 		len(acc.NonceChanges) != 0 || len(acc.CodeChanges) != 0
 }
 
-// Fold coalesces consecutive blocks' access lists into one installing the
-// range's end state, last write wins per field and slot. A removed account
-// must not fold past its recreation, so a prefix is consumed and its length
-// returned.
-//
-// Fold requires canonical lists proven against their header commitments: a
-// storage write without metadata implies the account runs its own code and
-// survives, and every removal is metadata-visible.
+// Fold coalesces consecutive canonical (header-proven) lists into one
+// installing the range's end state, last write wins. A removed account must
+// not fold past its recreation, so a consumed prefix length is returned.
 func Fold(lists []*BlockAccessList) (*BlockAccessList, int) {
 	if len(lists) == 0 {
 		return nil, 0

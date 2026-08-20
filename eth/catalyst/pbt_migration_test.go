@@ -31,12 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -102,34 +98,74 @@ func buildBlock(t *testing.T, api *ConsensusAPI, parent *types.Header, slot uint
 	return head
 }
 
-// TestMigrationNodeCrossesTheFork drives the rehearsal through the engine
-// API: merkle blocks, the swap on the shadow's recorded root, native binary
-// blocks with the merkle window live, and the finality close.
-func TestMigrationNodeCrossesTheFork(t *testing.T) {
+// waitFor polls cond until it holds or the timeout fails the test.
+func waitFor(t *testing.T, timeout time.Duration, msg string, cond func() bool) {
+	t.Helper()
+	for start := time.Now(); !cond(); time.Sleep(10 * time.Millisecond) {
+		if time.Since(start) > timeout {
+			t.Fatal(msg)
+		}
+	}
+}
+
+// awaitShadowReady waits for the follower to record the given block.
+func awaitShadowReady(t *testing.T, chain *core.BlockChain, header *types.Header) {
+	t.Helper()
+	for start := time.Now(); !chain.ShadowReady(header.Hash(), header.Number.Uint64()); {
+		if time.Since(start) > 10*time.Second {
+			t.Fatalf("shadow never reached block %d (%+v)", header.Number, chain.MigrationProgress())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestFullMigrationLifecycle is the acceptance run: a merkle-born node
+// replays the shadow from genesis, swaps at the fork, keeps the old tree live
+// through the window - across a reboot - and retires it at finality.
+func TestFullMigrationLifecycle(t *testing.T) {
 	genesis := migrationTestGenesis()
-	n, ethservice := startEthService(t, genesis, nil)
-	defer n.Close()
+	datadir := t.TempDir()
+	n, ethservice := startEthServiceAt(t, datadir, genesis, nil)
+	closed := false
+	defer func() {
+		if !closed {
+			n.Close()
+		}
+	}()
 
 	api := NewConsensusAPI(ethservice)
 	chain := ethservice.BlockChain()
 	if chain.TrieDB().IsPBT() {
 		t.Fatal("migrating node opened on the binary tree")
 	}
-
+	// Pre-fork only the binary direction runs.
 	parent := chain.CurrentBlock()
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 2; i++ {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
 	}
-	// The boundary parent's shadow root fed the activation block, and past
-	// the boundary the roles flip: the window records merkle roots for the
-	// binary blocks until the close.
-	boundaryParent := chain.GetHeaderByNumber(3)
-	if !chain.ShadowReady(boundaryParent.Hash(), 3) {
+	awaitShadowReady(t, chain, chain.CurrentBlock())
+	if p := chain.MigrationProgress(); p.Phase != "running" || p.Binary == nil || p.Merkle != nil {
+		t.Fatalf("pre-fork progress %+v, want running with only the binary direction", p)
+	}
+	for i := 2; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	// The boundary parent's record fed the swap; the window records merkle
+	// roots for the binary blocks, proven against a reverse conversion.
+	if !chain.ShadowReady(chain.GetHeaderByNumber(3).Hash(), 3) {
 		t.Fatal("the boundary parent has no recorded shadow root")
 	}
-	awaitShadowReady(t, chain, chain.GetHeaderByNumber(4))
-	awaitShadowReady(t, chain, chain.GetHeaderByNumber(5))
-
+	for _, number := range []uint64{4, 5} {
+		header := chain.GetHeaderByNumber(number)
+		awaitShadowReady(t, chain, header)
+		got, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), number, header.Hash())
+		if want := convertCanonicalMerkle(t, chain, ethservice.ChainDb(), genesis, header); got != want {
+			t.Fatalf("block %d window root %x, reverse conversion says %x", number, got, want)
+		}
+	}
+	if rawdb.ReadPBTMigrationDone(ethservice.ChainDb()) {
+		t.Fatal("window closed without finality")
+	}
 	// Both sides of the boundary stay readable.
 	for _, number := range []uint64{2, 5} {
 		header := chain.GetHeaderByNumber(number)
@@ -141,47 +177,88 @@ func TestMigrationNodeCrossesTheFork(t *testing.T) {
 			t.Fatalf("balance at block %d = %v, want %v", number, got, testBalance)
 		}
 	}
+	if p := chain.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "parked" ||
+		p.Merkle == nil || (p.Merkle.Phase != "following" && p.Merkle.Phase != "synced") {
+		t.Fatalf("post-fork progress %+v, want binary parked and the window working", p)
+	}
+	// Reboot mid-window; the deleted lists make any re-replay a loud stall.
+	head := chain.GetHeaderByNumber(5)
+	want, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), 5, head.Hash())
+	for _, number := range []uint64{4, 5} {
+		rawdb.DeleteAccessList(ethservice.ChainDb(), chain.GetHeaderByNumber(number).Hash(), number)
+	}
+	n.Close()
+	closed = true
 
-	// Finality closes the window on the next head.
-	head := chain.CurrentBlock()
-	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
-	if _, err := api.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
+	n2, eth2 := startEthServiceAt(t, datadir, genesis, nil)
+	closed2 := false
+	defer func() {
+		if !closed2 {
+			n2.Close()
+		}
+	}()
+	api2 := NewConsensusAPI(eth2)
+	chain2 := eth2.BlockChain()
+	if got := chain2.CurrentBlock(); got.Number.Uint64() != 5 {
+		t.Fatalf("rebooted head %d, want 5: binary state lost on shutdown", got.Number)
+	}
+	if !chain2.TrieDB().IsPBT() {
+		t.Fatal("rebooted node did not open on the binary tree")
+	}
+	waitFor(t, 10*time.Second, "window never resumed from its cursor", func() bool {
+		m := chain2.MigrationProgress().Merkle
+		if m != nil && m.Phase == "stalled" {
+			t.Fatalf("window re-replayed instead of resuming: %s", m.Error)
+		}
+		return m != nil && m.Phase == "synced" && m.ShadowRoot == want
+	})
+	newHead := buildBlock(t, api2, chain2.CurrentBlock(), 6, common.Hash{})
+	awaitShadowReady(t, chain2, newHead)
+	if p := chain2.MigrationProgress(); p.Binary != nil {
+		t.Fatalf("binary direction revived without a pre-fork head: %+v", p.Binary)
+	}
+	// Finality closes the window; a finished node boots without a follower.
+	fin := engine.ForkchoiceStateV1{HeadBlockHash: newHead.Hash(), SafeBlockHash: newHead.Hash(), FinalizedBlockHash: newHead.Hash()}
+	if _, err := api2.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
 		t.Fatalf("finalizing: %v", err)
 	}
-	buildBlock(t, api, head, 6, common.Hash{})
-	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
-		if time.Since(start) > 5*time.Second {
-			t.Fatal("migration never marked itself done after finality")
-		}
-		time.Sleep(10 * time.Millisecond)
+	buildBlock(t, api2, newHead, 7, common.Hash{})
+	waitFor(t, 5*time.Second, "progress never reached done", func() bool {
+		return chain2.MigrationProgress().Phase == "done"
+	})
+	n2.Close()
+	closed2 = true
+
+	n3, eth3 := startEthServiceAt(t, datadir, genesis, nil)
+	defer n3.Close()
+	if p := eth3.BlockChain().MigrationProgress(); p.Phase != "done" {
+		t.Fatalf("finished node progress %q, want done", p.Phase)
+	}
+	if _, err := eth3.BlockChain().State(); err != nil {
+		t.Fatalf("finished node cannot open its state: %v", err)
 	}
 }
 
-// TestMerkleWindowAdvancesLive proves the window's records: each post-fork
-// block's merkle root matches an independent reverse conversion of its
-// binary state.
-func TestMerkleWindowAdvancesLive(t *testing.T) {
+// TestFullMigrationLifecycleBlocksKnob is the same rehearsal closed by the
+// block-count knob, never finalizing.
+func TestFullMigrationLifecycleBlocksKnob(t *testing.T) {
 	genesis := migrationTestGenesis()
-	n, ethservice := startEthService(t, genesis, nil)
+	n, ethservice := startEthService(t, genesis, nil, func(cfg *ethconfig.Config) {
+		cfg.MigrationWindowBlocks = 3
+	})
 	defer n.Close()
 
 	api := NewConsensusAPI(ethservice)
 	chain := ethservice.BlockChain()
-
 	parent := chain.CurrentBlock()
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 6; i++ {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
 	}
-	for _, number := range []uint64{4, 5} {
-		header := chain.GetHeaderByNumber(number)
-		awaitShadowReady(t, chain, header)
-		got, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), number, header.Hash())
-		if want := convertCanonicalMerkle(t, chain, ethservice.ChainDb(), genesis, header); got != want {
-			t.Fatalf("block %d window root %x, reverse conversion says %x", number, got, want)
-		}
-	}
-	if rawdb.ReadPBTMigrationDone(ethservice.ChainDb()) {
-		t.Fatal("window closed without finality or a block-count knob")
+	waitFor(t, 5*time.Second, "knob never closed the window", func() bool {
+		return rawdb.ReadPBTMigrationDone(ethservice.ChainDb())
+	})
+	if p := chain.MigrationProgress(); p.Phase != "done" {
+		t.Fatalf("progress %q, want done", p.Phase)
 	}
 }
 
@@ -206,256 +283,12 @@ func TestDirectionPRevivesOnReorg(t *testing.T) {
 	awaitShadowReady(t, chain, sibling)
 }
 
-// convertCanonicalMerkle rebuilds a merkle trie from the canonical binary
-// state at the given header - the reverse of the offline conversion. The
-// universe is the genesis allocation plus every account and slot a stored
-// access list ever wrote.
-func convertCanonicalMerkle(t *testing.T, chain *core.BlockChain, db ethdb.Database, genesis *core.Genesis, header *types.Header) common.Hash {
-	t.Helper()
-	src, err := chain.StateAt(header)
-	if err != nil {
-		t.Fatal(err)
-	}
-	universe := make(map[common.Address]map[common.Hash]bool)
-	touch := func(addr common.Address) map[common.Hash]bool {
-		if universe[addr] == nil {
-			universe[addr] = make(map[common.Hash]bool)
-		}
-		return universe[addr]
-	}
-	for addr, account := range genesis.Alloc {
-		slots := touch(addr)
-		for key := range account.Storage {
-			slots[key] = true
-		}
-	}
-	for n := uint64(1); n <= header.Number.Uint64(); n++ {
-		hash := rawdb.ReadCanonicalHash(db, n)
-		list := rawdb.ReadAccessList(db, hash, n)
-		if list == nil {
-			t.Fatalf("no stored access list for block %d", n)
-		}
-		for _, acc := range *list {
-			slots := touch(acc.Address)
-			for _, sw := range acc.StorageChanges {
-				slots[common.Hash(sw.Slot.Bytes32())] = true
-			}
-		}
-	}
-	tdb := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.HashDefaults)
-	defer tdb.Close()
-	dst, err := state.New(types.EmptyRootHash, state.NewDatabase(tdb, nil))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for addr, slots := range universe {
-		if !src.Exist(addr) {
-			continue
-		}
-		dst.AddBalance(addr, src.GetBalance(addr), tracing.BalanceIncreaseGenesisBalance)
-		dst.SetCode(addr, src.GetCode(addr), tracing.CodeChangeGenesis)
-		dst.SetNonce(addr, src.GetNonce(addr), tracing.NonceChangeGenesis)
-		for slot := range slots {
-			if value := src.GetState(addr, slot); value != (common.Hash{}) {
-				dst.SetState(addr, slot, value)
-			}
-		}
-	}
-	root, err := dst.Commit(0, false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
-
-// awaitShadowReady waits for the follower to record the given block.
-func awaitShadowReady(t *testing.T, chain *core.BlockChain, header *types.Header) {
-	t.Helper()
-	for start := time.Now(); !chain.ShadowReady(header.Hash(), header.Number.Uint64()); {
-		if time.Since(start) > 10*time.Second {
-			t.Fatalf("shadow never reached block %d (%+v)", header.Number, chain.MigrationProgress())
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-// startPersistentEthService is startEthService over a real data directory,
-// so a test can stop the node and reboot it on the same chain data.
-func startPersistentEthService(t testing.TB, datadir string, genesis *core.Genesis, blocks []*types.Block, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
-	t.Helper()
-	n, err := node.New(&node.Config{
-		DataDir: datadir,
-		Name:    "geth",
-		P2P: p2p.Config{
-			ListenAddr:  "0.0.0.0:0",
-			NoDiscovery: true,
-			MaxPeers:    25,
-		}})
-	if err != nil {
-		t.Fatal("can't create node:", err)
-	}
-	ethcfg := &ethconfig.Config{
-		Genesis:         genesis,
-		SyncMode:        ethconfig.FullSync,
-		TrieTimeout:     time.Minute,
-		TrieDirtyCache:  256,
-		TrieCleanCache:  256,
-		DatabaseCache:   64,
-		DatabaseHandles: 64,
-		Miner:           miner.DefaultConfig,
-	}
-	for _, mod := range mods {
-		mod(ethcfg)
-	}
-	ethservice, err := eth.New(n, ethcfg)
-	if err != nil {
-		t.Fatal("can't create eth service:", err)
-	}
-	if err := n.Start(); err != nil {
-		t.Fatal("can't start node:", err)
-	}
-	if len(blocks) > 0 {
-		if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
-			n.Close()
-			t.Fatal("can't import test blocks:", err)
-		}
-	}
-	if err := ethservice.TxPool().Sync(); err != nil {
-		t.Fatal("failed to sync txpool after initial blockchain import:", err)
-	}
-	ethservice.SetSynced()
-	return n, ethservice
-}
-
-// TestMerkleWindowResumesAfterRestart pins the shutdown contract: both
-// handles journal at their newest roots, so a rebooted window resumes from
-// its cursor. The deleted lists make any re-replay a loud stall.
-func TestMerkleWindowResumesAfterRestart(t *testing.T) {
-	genesis := migrationTestGenesis()
-	datadir := t.TempDir()
-	n, ethservice := startPersistentEthService(t, datadir, genesis, nil)
-	closed := false
-	defer func() {
-		if !closed {
-			n.Close()
-		}
-	}()
-
-	api := NewConsensusAPI(ethservice)
-	chain := ethservice.BlockChain()
-	parent := chain.CurrentBlock()
-	for i := 0; i < 5; i++ {
-		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
-	}
-	head := chain.GetHeaderByNumber(5)
-	awaitShadowReady(t, chain, head)
-	want, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), 5, head.Hash())
-	for _, number := range []uint64{4, 5} {
-		rawdb.DeleteAccessList(ethservice.ChainDb(), chain.GetHeaderByNumber(number).Hash(), number)
-	}
-	n.Close()
-	closed = true
-
-	n2, eth2 := startPersistentEthService(t, datadir, genesis, nil)
-	defer n2.Close()
-	reopened := eth2.BlockChain()
-	if got := reopened.CurrentBlock(); got.Hash() != head.Hash() {
-		t.Fatalf("rebooted head %d %x, want %d: binary state lost on shutdown", got.Number, got.Hash(), head.Number)
-	}
-	for start := time.Now(); ; time.Sleep(10 * time.Millisecond) {
-		if m := reopened.MigrationProgress().Merkle; m != nil {
-			if m.Phase == "synced" && m.ShadowRoot == want {
-				return
-			}
-			if m.Phase == "stalled" {
-				t.Fatalf("window re-replayed instead of resuming: %s", m.Error)
-			}
-		}
-		if time.Since(start) > 10*time.Second {
-			t.Fatalf("window never resumed: %+v", reopened.MigrationProgress())
-		}
-	}
-}
-
-// TestMigrationProgressPhases pins the debug surface: one direction per
-// flavour, parked or working by which side of the boundary the head is on,
-// and a terminal done.
-func TestMigrationProgressPhases(t *testing.T) {
-	genesis := migrationTestGenesis()
-	n, ethservice := startEthService(t, genesis, nil)
-	defer n.Close()
-
-	api := NewConsensusAPI(ethservice)
-	chain := ethservice.BlockChain()
-
-	parent := chain.CurrentBlock()
-	for i := 0; i < 2; i++ {
-		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
-	}
-	awaitShadowReady(t, chain, chain.CurrentBlock())
-	p := chain.MigrationProgress()
-	if p.Phase != "running" || p.Binary == nil || p.Merkle != nil {
-		t.Fatalf("pre-fork progress %+v, want running with only the binary direction", p)
-	}
-	if got := p.Binary.Phase; got != "following" && got != "synced" {
-		t.Fatalf("pre-fork binary phase %q", got)
-	}
-
-	for i := 2; i < 5; i++ {
-		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
-	}
-	awaitShadowReady(t, chain, chain.CurrentBlock())
-	p = chain.MigrationProgress()
-	if p.Binary == nil || p.Binary.Phase != "parked" {
-		t.Fatalf("post-fork binary progress %+v, want parked", p.Binary)
-	}
-	if p.Merkle == nil || (p.Merkle.Phase != "following" && p.Merkle.Phase != "synced") {
-		t.Fatalf("post-fork merkle progress %+v, want it working", p.Merkle)
-	}
-
-	head := chain.CurrentBlock()
-	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
-	if _, err := api.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
-		t.Fatalf("finalizing: %v", err)
-	}
-	buildBlock(t, api, head, 6, common.Hash{})
-	for start := time.Now(); chain.MigrationProgress().Phase != "done"; {
-		if time.Since(start) > 5*time.Second {
-			t.Fatalf("progress never reached done: %+v", chain.MigrationProgress())
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-// TestWindowClosesByBlockCount pins the rehearsal knob: two post-fork blocks
-// close the window with no finality in sight.
-func TestWindowClosesByBlockCount(t *testing.T) {
-	genesis := migrationTestGenesis()
-	n, ethservice := startEthService(t, genesis, nil, func(cfg *ethconfig.Config) {
-		cfg.MigrationWindowBlocks = 2
-	})
-	defer n.Close()
-
-	api := NewConsensusAPI(ethservice)
-	chain := ethservice.BlockChain()
-	parent := chain.CurrentBlock()
-	for i := 0; i < 5; i++ {
-		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
-	}
-	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
-		if time.Since(start) > 5*time.Second {
-			t.Fatal("block-count knob never closed the window")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 // TestMigrationSurvivesRestartPreFork reboots a migrating node before the
 // fork: the shadow resumes from its cursor and the migration completes.
 func TestMigrationSurvivesRestartPreFork(t *testing.T) {
 	genesis := migrationTestGenesis()
 	datadir := t.TempDir()
-	n, ethservice := startPersistentEthService(t, datadir, genesis, nil)
+	n, ethservice := startEthServiceAt(t, datadir, genesis, nil)
 	closed := false
 	defer func() {
 		if !closed {
@@ -473,7 +306,7 @@ func TestMigrationSurvivesRestartPreFork(t *testing.T) {
 	n.Close()
 	closed = true
 
-	n2, eth2 := startPersistentEthService(t, datadir, genesis, nil)
+	n2, eth2 := startEthServiceAt(t, datadir, genesis, nil)
 	defer n2.Close()
 	api2 := NewConsensusAPI(eth2)
 	chain2 := eth2.BlockChain()
@@ -495,62 +328,38 @@ func TestMigrationSurvivesRestartPreFork(t *testing.T) {
 		t.Fatalf("finalizing: %v", err)
 	}
 	buildBlock(t, api2, head, 6, common.Hash{})
-	for start := time.Now(); !rawdb.ReadPBTMigrationDone(eth2.ChainDb()); {
-		if time.Since(start) > 5*time.Second {
-			t.Fatal("migration never finished after the reboot")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitFor(t, 5*time.Second, "migration never finished after the reboot", func() bool {
+		return rawdb.ReadPBTMigrationDone(eth2.ChainDb())
+	})
 }
 
-// TestMigrationSurvivesRestartMidWindow reboots inside the window: the
-// merkle direction resumes via its cursor, the binary one stays lazy, and
-// finality closes as usual.
-func TestMigrationSurvivesRestartMidWindow(t *testing.T) {
+// TestBatchImportAcrossTheFork pins full sync: one InsertChain spanning the
+// boundary must drive the shadow itself - the head event only fires after
+// the batch.
+func TestBatchImportAcrossTheFork(t *testing.T) {
 	genesis := migrationTestGenesis()
-	datadir := t.TempDir()
-	n, ethservice := startPersistentEthService(t, datadir, genesis, nil)
-	closed := false
-	defer func() {
-		if !closed {
-			n.Close()
-		}
-	}()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
 
 	api := NewConsensusAPI(ethservice)
 	chain := ethservice.BlockChain()
 	parent := chain.CurrentBlock()
+	var blocks []*types.Block
 	for i := 0; i < 5; i++ {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
-	}
-	awaitShadowReady(t, chain, chain.CurrentBlock())
-	n.Close()
-	closed = true
-
-	n2, eth2 := startPersistentEthService(t, datadir, genesis, nil)
-	defer n2.Close()
-	api2 := NewConsensusAPI(eth2)
-	chain2 := eth2.BlockChain()
-	head := chain2.CurrentBlock()
-	if head.Number.Uint64() != 5 {
-		t.Fatalf("rebooted head %d, want 5", head.Number)
-	}
-	head = buildBlock(t, api2, head, 6, common.Hash{})
-	awaitShadowReady(t, chain2, head)
-	if p := chain2.MigrationProgress(); p.Binary != nil {
-		t.Fatalf("binary direction revived without a pre-fork head: %+v", p.Binary)
+		blocks = append(blocks, chain.GetBlockByHash(parent.Hash()))
 	}
 
-	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
-	if _, err := api2.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
-		t.Fatalf("finalizing: %v", err)
+	importer, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
 	}
-	buildBlock(t, api2, head, 7, common.Hash{})
-	for start := time.Now(); !rawdb.ReadPBTMigrationDone(eth2.ChainDb()); {
-		if time.Since(start) > 5*time.Second {
-			t.Fatal("migration never finished after the reboot")
-		}
-		time.Sleep(10 * time.Millisecond)
+	defer importer.Stop()
+	if _, err := importer.InsertChain(blocks); err != nil {
+		t.Fatalf("batch import across the fork: %v", err)
+	}
+	if head := importer.CurrentBlock(); head.Number.Uint64() != 5 {
+		t.Fatalf("imported head %d, want 5", head.Number)
 	}
 }
 
@@ -621,112 +430,6 @@ func TestShadowRootSidecar(t *testing.T) {
 	}
 }
 
-// TestFullMigrationLifecycle is the acceptance run: a node born on the
-// merkle tree replays the shadow from genesis, swaps at the fork, keeps the
-// old tree live through the window - across a reboot - and retires it at
-// finality.
-func TestFullMigrationLifecycle(t *testing.T) {
-	genesis := migrationTestGenesis()
-	datadir := t.TempDir()
-	n, ethservice := startPersistentEthService(t, datadir, genesis, nil)
-	closed := false
-	defer func() {
-		if !closed {
-			n.Close()
-		}
-	}()
-
-	api := NewConsensusAPI(ethservice)
-	chain := ethservice.BlockChain()
-	if chain.TrieDB().IsPBT() {
-		t.Fatal("migrating node opened on the binary tree")
-	}
-	parent := chain.CurrentBlock()
-	for i := 0; i < 5; i++ {
-		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
-	}
-	// The swap happened on the shadow's root and the window records verify
-	// against an independent reverse conversion.
-	postFork := chain.GetHeaderByNumber(4)
-	awaitShadowReady(t, chain, postFork)
-	got, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), 4, postFork.Hash())
-	if want := convertCanonicalMerkle(t, chain, ethservice.ChainDb(), genesis, postFork); got != want {
-		t.Fatalf("window root %x, reverse conversion says %x", got, want)
-	}
-	awaitShadowReady(t, chain, chain.CurrentBlock())
-	n.Close()
-	closed = true
-
-	// Rebooted mid-window on the binary tree, the window keeps recording.
-	n2, eth2 := startPersistentEthService(t, datadir, genesis, nil)
-	closed2 := false
-	defer func() {
-		if !closed2 {
-			n2.Close()
-		}
-	}()
-	api2 := NewConsensusAPI(eth2)
-	chain2 := eth2.BlockChain()
-	if head := chain2.CurrentBlock(); head.Number.Uint64() != 5 {
-		t.Fatalf("rebooted head %d, want 5", head.Number)
-	}
-	if !chain2.TrieDB().IsPBT() {
-		t.Fatal("rebooted node did not open on the binary tree")
-	}
-	head := buildBlock(t, api2, chain2.CurrentBlock(), 6, common.Hash{})
-	awaitShadowReady(t, chain2, head)
-
-	// Finality closes the window; a finished node boots without a follower.
-	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
-	if _, err := api2.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
-		t.Fatalf("finalizing: %v", err)
-	}
-	buildBlock(t, api2, head, 7, common.Hash{})
-	for start := time.Now(); !rawdb.ReadPBTMigrationDone(eth2.ChainDb()); {
-		if time.Since(start) > 5*time.Second {
-			t.Fatal("migration never marked itself done")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	n2.Close()
-	closed2 = true
-
-	n3, eth3 := startPersistentEthService(t, datadir, genesis, nil)
-	defer n3.Close()
-	if p := eth3.BlockChain().MigrationProgress(); p.Phase != "done" {
-		t.Fatalf("finished node progress %q, want done", p.Phase)
-	}
-	if _, err := eth3.BlockChain().State(); err != nil {
-		t.Fatalf("finished node cannot open its state: %v", err)
-	}
-}
-
-// TestFullMigrationLifecycleBlocksKnob is the same rehearsal closed by the
-// block-count knob, never finalizing.
-func TestFullMigrationLifecycleBlocksKnob(t *testing.T) {
-	genesis := migrationTestGenesis()
-	n, ethservice := startEthService(t, genesis, nil, func(cfg *ethconfig.Config) {
-		cfg.MigrationWindowBlocks = 3
-	})
-	defer n.Close()
-
-	api := NewConsensusAPI(ethservice)
-	chain := ethservice.BlockChain()
-	parent := chain.CurrentBlock()
-	for i := 0; i < 6; i++ {
-		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
-	}
-	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
-		if time.Since(start) > 5*time.Second {
-			t.Fatal("knob never closed the window")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if p := chain.MigrationProgress(); p.Phase != "done" {
-		t.Fatalf("progress %q, want done", p.Phase)
-	}
-}
-
 // TestShadowRootStreamNeverBlocksImport pins the sidecar's decoupling: a
 // closed migration stops producing records, and the subscription must not
 // backpressure the head feed while it waits for ones that never come.
@@ -752,12 +455,9 @@ func TestShadowRootStreamNeverBlocksImport(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
 	}
-	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
-		if time.Since(start) > 5*time.Second {
-			t.Fatal("knob never closed the window")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitFor(t, 5*time.Second, "knob never closed the window", func() bool {
+		return rawdb.ReadPBTMigrationDone(ethservice.ChainDb())
+	})
 	start := time.Now()
 	for i := 5; i < 35; i++ {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
@@ -767,32 +467,64 @@ func TestShadowRootStreamNeverBlocksImport(t *testing.T) {
 	}
 }
 
-// TestBatchImportAcrossTheFork pins full sync: one InsertChain spanning the
-// boundary must drive the shadow itself - the head event only fires after
-// the batch.
-func TestBatchImportAcrossTheFork(t *testing.T) {
-	genesis := migrationTestGenesis()
-	n, ethservice := startEthService(t, genesis, nil)
-	defer n.Close()
-
-	api := NewConsensusAPI(ethservice)
-	chain := ethservice.BlockChain()
-	parent := chain.CurrentBlock()
-	var blocks []*types.Block
-	for i := 0; i < 5; i++ {
-		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
-		blocks = append(blocks, chain.GetBlockByHash(parent.Hash()))
-	}
-
-	importer, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+// convertCanonicalMerkle rebuilds a merkle trie from the canonical binary
+// state at the given header - the reverse of the offline conversion. The
+// universe is the genesis allocation plus every account and slot a stored
+// access list ever wrote.
+func convertCanonicalMerkle(t *testing.T, chain *core.BlockChain, db ethdb.Database, genesis *core.Genesis, header *types.Header) common.Hash {
+	t.Helper()
+	src, err := chain.StateAt(header)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer importer.Stop()
-	if _, err := importer.InsertChain(blocks); err != nil {
-		t.Fatalf("batch import across the fork: %v", err)
+	universe := make(map[common.Address]map[common.Hash]bool)
+	touch := func(addr common.Address) map[common.Hash]bool {
+		if universe[addr] == nil {
+			universe[addr] = make(map[common.Hash]bool)
+		}
+		return universe[addr]
 	}
-	if head := importer.CurrentBlock(); head.Number.Uint64() != 5 {
-		t.Fatalf("imported head %d, want 5", head.Number)
+	for addr, account := range genesis.Alloc {
+		slots := touch(addr)
+		for key := range account.Storage {
+			slots[key] = true
+		}
 	}
+	for n := uint64(1); n <= header.Number.Uint64(); n++ {
+		hash := rawdb.ReadCanonicalHash(db, n)
+		list := rawdb.ReadAccessList(db, hash, n)
+		if list == nil {
+			t.Fatalf("no stored access list for block %d", n)
+		}
+		for _, acc := range *list {
+			slots := touch(acc.Address)
+			for _, sw := range acc.StorageChanges {
+				slots[common.Hash(sw.Slot.Bytes32())] = true
+			}
+		}
+	}
+	tdb := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.HashDefaults)
+	defer tdb.Close()
+	dst, err := state.New(types.EmptyRootHash, state.NewDatabase(tdb, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for addr, slots := range universe {
+		if !src.Exist(addr) {
+			continue
+		}
+		dst.AddBalance(addr, src.GetBalance(addr), tracing.BalanceIncreaseGenesisBalance)
+		dst.SetCode(addr, src.GetCode(addr), tracing.CodeChangeGenesis)
+		dst.SetNonce(addr, src.GetNonce(addr), tracing.NonceChangeGenesis)
+		for slot := range slots {
+			if value := src.GetState(addr, slot); value != (common.Hash{}) {
+				dst.SetState(addr, slot, value)
+			}
+		}
+	}
+	root, err := dst.Commit(0, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
 }
