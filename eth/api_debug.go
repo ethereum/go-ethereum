@@ -536,3 +536,9 @@ func (api *DebugAPI) ClearTxpool() error {
 	api.eth.TxPool().Clear()
 	return nil
 }
+
+// MigrationProgress reports where the binary tree migration stands: the
+// shadow follower's phase, cursor and root, or an inactive report.
+func (api *DebugAPI) MigrationProgress() core.MigrationProgress {
+	return api.eth.BlockChain().MigrationProgress()
+}
