@@ -2102,6 +2102,25 @@ type ExecuteConfig struct {
 	EnableWitnessStats bool
 }
 
+// vmConfig returns the EVM configuration to execute a block with, honouring the
+// caller's tracing intent.
+//
+// The tracer held in bc.cfg.VmConfig is the node-wide live tracer: a single
+// stateful instance shared by the whole node, whose hooks are documented as
+// being invoked serially from the chain-insertion goroutine. Callers that
+// execute blocks outside that goroutine (RPC handlers such as
+// debug_executionWitness) must not fire it: interleaving two hook streams
+// corrupts the tracer's internal state, and any state journal wrapped around it
+// (see tracing.WrapWithJournal), and reports blocks that were never imported.
+// Such callers leave EnableTracer false, which detaches the tracer here.
+func (bc *BlockChain) vmConfig(config ExecuteConfig) vm.Config {
+	vmConfig := bc.cfg.VmConfig
+	if !config.EnableTracer {
+		vmConfig.Tracer = nil
+	}
+	return vmConfig
+}
+
 // useBALExecution reports whether the block will be executed through the
 // BAL-driven parallel processor.
 func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool {
@@ -2174,9 +2193,9 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 			return nil, nil, err
 		}
 		go func(start time.Time) {
-			// Disable tracing for prefetcher executions.
-			vmCfg := bc.cfg.VmConfig
-			vmCfg.Tracer = nil
+			// Speculative prefetching is never traced, regardless of the caller's
+			// intent: its execution is discarded and runs on its own goroutine.
+			vmCfg := bc.vmConfig(ExecuteConfig{EnableTracer: false})
 			bc.prefetcher.Prefetch(block, throwaway, bc.jumpDestCache, bc.precompileCache.PrefetchView(), vmCfg, interrupt, execIndex)
 
 			blockPrefetchExecuteTimer.Update(time.Since(start))
@@ -2243,6 +2262,12 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		defer statedb.StopPrefetcher()
 	}
 
+	// Resolve the EVM config for this execution. The live tracer stored in
+	// bc.cfg.VmConfig is a stateful, node-wide singleton whose hooks are only
+	// safe to drive from the chain-insertion goroutine, so it is attached only
+	// when the caller opts in via EnableTracer.
+	vmConfig := bc.vmConfig(config)
+
 	// Instrument the blockchain tracing
 	if config.EnableTracer {
 		if bc.logger != nil && bc.logger.OnBlockStart != nil {
@@ -2262,7 +2287,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
 	pctx, _, spanEnd := telemetry.StartSpan(ctx, "bc.processor.Process")
-	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.precompileCache, bc.cfg.VmConfig, &execIndex)
+	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.precompileCache, vmConfig, &execIndex)
 	spanEnd(&err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
@@ -2297,7 +2322,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
 
 		// Run the stateless self-cross-validation
-		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, bc.cfg.VmConfig, task, witness)
+		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, vmConfig, task, witness)
 		if err != nil {
 			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
 		}
