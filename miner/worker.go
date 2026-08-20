@@ -350,8 +350,10 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 
 // makeEnv creates a new environment for the sealing block.
 func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, witness bool) (*environment, error) {
-	// Retrieve the parent state to execute on top.
-	state, err := miner.chain.StateAt(parent)
+	// Retrieve the parent state to execute on top. The sealing block's own
+	// time picks the tree: across the activation boundary that is the shadow
+	// tree at the parent's recorded root, not the root the parent commits.
+	state, err := miner.chain.StateForBuilding(parent, header.Number, header.Time)
 	if err != nil {
 		return nil, err
 	}

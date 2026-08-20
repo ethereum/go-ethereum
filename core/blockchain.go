@@ -624,9 +624,10 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Start the shadow follower on a migrating chain: the binary tree has to
-	// reach the fork already caught up.
-	if bc.stateMode == modeMigration && !bc.triedb.IsPBT() {
-		bc.follower = newBintrieFollower(bc)
+	// reach the fork already caught up, and until the migration is done the
+	// other tree is maintained by replay whichever side is canonical.
+	if bc.stateMode == modeMigration && !rawdb.ReadPBTMigrationDone(db) {
+		bc.follower = newBintrieFollower(bc, !bc.triedb.IsPBT())
 	}
 
 	// Start state size tracker
@@ -2076,6 +2077,14 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
+		// At the activation boundary the pre-state lives in the shadow tree;
+		// give a lagging follower a bounded moment rather than failing the
+		// import outright.
+		if bc.follower != nil && !bc.ActivationReady(block) {
+			if err := bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), 30*time.Second); err != nil {
+				return nil, it.index, fmt.Errorf("activation waits on the shadow tree: %w", err)
+			}
+		}
 		// The traced section of block import.
 		start := time.Now()
 		config := ExecuteConfig{
@@ -2214,16 +2223,111 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 //     speculative whole-block prefetcher share one cached reader.
 //
 //   - No prefetching: a plain reader, with a no-op cleanup.
+//
+// treeFor returns the trie database holding the given flavour: the canonical
+// handle, or - on a migrating chain - the follower's for the other tree.
+func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
+	if bc.triedb.IsPBT() == pbt {
+		return bc.triedb, nil
+	}
+	if bc.follower == nil {
+		if pbt {
+			return nil, errors.New("no binary tree on this node")
+		}
+		return nil, errors.New("no merkle trie on this node")
+	}
+	return bc.follower.openTree()
+}
+
+// stateDatabaseFor returns a state database over the tree of the given
+// flavour.
+func (bc *BlockChain) stateDatabaseFor(pbt bool) (state.Database, error) {
+	tdb, err := bc.treeFor(pbt)
+	if err != nil {
+		return nil, err
+	}
+	if pbt {
+		return state.NewPBTDatabase(tdb, bc.codedb), nil
+	}
+	mpt := state.NewMPTDatabase(tdb, bc.codedb)
+	if tdb == bc.triedb {
+		return mpt.WithSnapshot(bc.snaps), nil
+	}
+	return mpt, nil
+}
+
+// execParentRoot returns the pre-state root for a block of the given flavour
+// on the given parent: the parent's own root or, across the activation
+// boundary, the recorded shadow root - the parent's header commits the other
+// tree there.
+func (bc *BlockChain) execParentRoot(parent *types.Header, pbt bool) (common.Hash, error) {
+	if bc.chainConfig.IsBinaryTrie(parent.Number, parent.Time) == pbt {
+		return parent.Root, nil
+	}
+	root, ok := rawdb.ReadShadowStateRoot(bc.db, parent.Number.Uint64(), parent.Hash())
+	if !ok {
+		return common.Hash{}, fmt.Errorf("shadow tree not caught up to block %d %x", parent.Number, parent.Hash())
+	}
+	return root, nil
+}
+
+// ShadowReady reports whether the shadow tree recorded the given block - the
+// activation gate's cheap probe.
+func (bc *BlockChain) ShadowReady(hash common.Hash, number uint64) bool {
+	_, ok := rawdb.ReadShadowStateRoot(bc.db, number, hash)
+	return ok
+}
+
+// ActivationReady reports whether the given block can execute now: true
+// unless it sits at the activation boundary with the shadow tree behind.
+func (bc *BlockChain) ActivationReady(block *types.Block) bool {
+	if bc.follower == nil {
+		return true
+	}
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return true
+	}
+	flavor := bc.chainConfig.IsBinaryTrie(block.Number(), block.Time())
+	if flavor == bc.chainConfig.IsBinaryTrie(parent.Number, parent.Time) {
+		return true
+	}
+	return bc.ShadowReady(parent.Hash(), parent.Number.Uint64())
+}
+
+// StateForBuilding returns the state to seal a block of the given number and
+// time on the parent - across the activation boundary that is the shadow
+// tree at the parent's recorded root.
+func (bc *BlockChain) StateForBuilding(parent *types.Header, number *big.Int, time uint64) (*state.StateDB, error) {
+	flavor := bc.chainConfig.IsBinaryTrie(number, time)
+	sdb, err := bc.stateDatabaseFor(flavor)
+	if err != nil {
+		return nil, err
+	}
+	root, err := bc.execParentRoot(parent, flavor)
+	if err != nil {
+		return nil, err
+	}
+	return state.New(root, sdb)
+}
+
 func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.Block, config ExecuteConfig, interrupt *atomic.Bool, execIndex *atomic.Int64) (*state.StateDB, func(*blockProcessingResult), error) {
 	noop := func(*blockProcessingResult) {}
 
-	// The flavour comes from the trie database, not the schedule: a migrating
-	// chain runs on the merkle trie until the fork, whatever is scheduled.
-	var sdb state.Database
-	if bc.triedb.IsPBT() {
-		sdb = state.NewPBTDatabase(bc.triedb, bc.codedb)
-	} else {
-		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+	// The tree is the one the block's own time commits to; on a migrating
+	// chain that may be the follower's, and at the activation boundary the
+	// pre-state root is the parent's recorded shadow root.
+	flavor := bc.chainConfig.IsBinaryTrie(block.Number(), block.Time())
+	sdb, err := bc.stateDatabaseFor(flavor)
+	if err != nil {
+		return nil, noop, err
+	}
+	if parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1); parent != nil {
+		if bc.chainConfig.IsBinaryTrie(parent.Number, parent.Time) != flavor {
+			if parentRoot, err = bc.execParentRoot(parent, flavor); err != nil {
+				return nil, noop, err
+			}
+		}
 	}
 	type prewarmReader interface {
 		// ReadersWithCacheStats creates a pair of state readers that share the

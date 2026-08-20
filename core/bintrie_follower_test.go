@@ -208,6 +208,7 @@ func standaloneFollower(genesis *Genesis, db ethdb.Database) *bintrieFollower {
 		db:     db,
 		config: genesis.Config,
 		cfg:    cfg,
+		pbt:    true,
 	}
 }
 
