@@ -532,6 +532,11 @@ func (f *bintrieFollower) tree(pbt bool) (*triedb.Database, error) {
 // follower-owned one otherwise.
 func (t *followerTree) open() (*triedb.Database, error) {
 	f := t.f
+	// An unfinished snap sync disables - or kills - a handle opened over it;
+	// refuse until the flag clears, covering every probe, not just replay.
+	if rawdb.ReadSnapSyncStatusFlag(f.db) == rawdb.StateSyncRunning {
+		return nil, errors.New("snap sync running: shadow trees wait")
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if t.handle != nil {

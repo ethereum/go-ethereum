@@ -490,3 +490,26 @@ func TestFollowerBatchesDeepCatchup(t *testing.T) {
 		t.Fatalf("per-block root %x (ok=%v), batched said %x", got, ok, want)
 	}
 }
+
+// TestFollowerRefusesTreesDuringSnapSync pins the open guard: a probe while
+// the sync flag is up must not poison the handle for the later replay.
+func TestFollowerRefusesTreesDuringSnapSync(t *testing.T) {
+	genesis, db, _, _ := generateMigrationChain(t, 2)
+	rawdb.WriteSnapSyncStatusFlag(db, rawdb.StateSyncRunning)
+	chain := openMigrationChain(t, db, genesis)
+	defer chain.Stop()
+
+	if chain.HasState(common.Hash{0x01}) {
+		t.Fatal("probe found state during snap sync")
+	}
+	if _, err := chain.follower.tree(true); err == nil {
+		t.Fatal("tree opened during snap sync")
+	}
+	rawdb.WriteSnapSyncStatusFlag(db, rawdb.StateSyncFinished)
+	if _, err := chain.follower.tree(true); err != nil {
+		t.Fatalf("tree still refused after snap sync: %v", err)
+	}
+	if err := chain.follower.direction(true).ensure(); err != nil {
+		t.Fatalf("shadow never resolved after snap sync: %v", err)
+	}
+}
