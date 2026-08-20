@@ -551,3 +551,70 @@ func TestMigrationSurvivesRestartMidWindow(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// shadowRootEvent mirrors the debug_shadowRoots stream payload.
+type shadowRootEvent struct {
+	BlockHash  common.Hash    `json:"blockHash"`
+	Number     hexutil.Uint64 `json:"number"`
+	ShadowRoot common.Hash    `json:"shadowRoot"`
+}
+
+// TestShadowRootSidecar pins the distributor surface: the getter answers by
+// block hash and the subscription streams one record per head.
+func TestShadowRootSidecar(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	client := n.Attach()
+	defer client.Close()
+	events := make(chan shadowRootEvent, 16)
+	ctx := context.Background()
+	sub, err := client.Subscribe(ctx, "debug", events, "shadowRoots")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Unsubscribe()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+
+	seen := make(map[uint64]common.Hash)
+	timeout := time.After(15 * time.Second)
+	for len(seen) < 5 {
+		select {
+		case ev := <-events:
+			seen[uint64(ev.Number)] = ev.ShadowRoot
+		case err := <-sub.Err():
+			t.Fatalf("subscription died: %v", err)
+		case <-timeout:
+			t.Fatalf("only %d of 5 shadow roots streamed", len(seen))
+		}
+	}
+	for number, root := range seen {
+		header := chain.GetHeaderByNumber(number)
+		if want, ok := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), number, header.Hash()); !ok || root != want {
+			t.Fatalf("streamed root %x for block %d, record says %x (ok=%v)", root, number, want, ok)
+		}
+	}
+
+	var got *common.Hash
+	boundary := chain.GetHeaderByNumber(3)
+	if err := client.CallContext(ctx, &got, "debug_shadowStateRoot", boundary.Hash()); err != nil {
+		t.Fatalf("getter: %v", err)
+	}
+	if want, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), 3, boundary.Hash()); got == nil || *got != want {
+		t.Fatalf("getter said %v, record says %x", got, want)
+	}
+	var absent *common.Hash
+	if err := client.CallContext(ctx, &absent, "debug_shadowStateRoot", common.Hash{0xde, 0xad}); err != nil {
+		t.Fatalf("getter for unknown hash: %v", err)
+	}
+	if absent != nil {
+		t.Fatalf("unknown block got a root: %x", *absent)
+	}
+}

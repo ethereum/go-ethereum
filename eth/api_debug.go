@@ -541,3 +541,68 @@ func (api *DebugAPI) ClearTxpool() error {
 func (api *DebugAPI) MigrationProgress() core.MigrationProgress {
 	return api.eth.BlockChain().MigrationProgress()
 }
+
+// ShadowStateRoot returns the migration's recorded shadow root of the given
+// block, nil when no record exists.
+func (api *DebugAPI) ShadowStateRoot(hash common.Hash) *common.Hash {
+	header := api.eth.BlockChain().GetHeaderByHash(hash)
+	if header == nil {
+		return nil
+	}
+	root, ok := rawdb.ReadShadowStateRoot(api.eth.ChainDb(), header.Number.Uint64(), hash)
+	if !ok {
+		return nil
+	}
+	return &root
+}
+
+// ShadowRootEvent pairs a block with its recorded migration shadow root.
+type ShadowRootEvent struct {
+	BlockHash  common.Hash    `json:"blockHash"`
+	Number     hexutil.Uint64 `json:"number"`
+	ShadowRoot common.Hash    `json:"shadowRoot"`
+}
+
+// shadowRootGrace bounds how long the stream waits for a head's record.
+const shadowRootGrace = 5 * time.Second
+
+// ShadowRoots streams every new head's shadow root record. A head whose
+// record does not land within the grace window is skipped: consumers see
+// complete pairs only, lag shows in debug_migrationProgress.
+func (api *DebugAPI) ShadowRoots(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+	var (
+		rpcSub  = notifier.CreateSubscription()
+		heads   = make(chan core.ChainHeadEvent, 16)
+		headSub = api.eth.BlockChain().SubscribeChainHeadEvent(heads)
+		db      = api.eth.ChainDb()
+	)
+	go func() {
+		defer headSub.Unsubscribe()
+		for {
+			select {
+			case ev := <-heads:
+				var (
+					number   = ev.Header.Number.Uint64()
+					hash     = ev.Header.Hash()
+					deadline = time.Now().Add(shadowRootGrace)
+				)
+				root, ok := rawdb.ReadShadowStateRoot(db, number, hash)
+				for !ok && time.Now().Before(deadline) {
+					time.Sleep(10 * time.Millisecond)
+					root, ok = rawdb.ReadShadowStateRoot(db, number, hash)
+				}
+				if !ok {
+					continue
+				}
+				notifier.Notify(rpcSub.ID, &ShadowRootEvent{BlockHash: hash, Number: hexutil.Uint64(number), ShadowRoot: root})
+			case <-rpcSub.Err():
+				return
+			}
+		}
+	}()
+	return rpcSub, nil
+}
