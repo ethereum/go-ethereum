@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
@@ -82,6 +83,11 @@ const (
 	// Note, transactions resurrected by a reorg are also subject to this limit,
 	// so pushing it down too aggressively might make resurrections non-functional.
 	maxTxsPerAccount = 16
+
+	// getRLPCacheSize is the byte budget of the cache of encoded
+	// GetPooledTransactions responses. It bounds the memory spent on serving
+	// the same blob transactions to multiple (legacy) peers.
+	getRLPCacheSize = 16 * 1024 * 1024
 
 	// pendingTransactionStore is the subfolder containing the currently queued
 	// blob transactions.
@@ -575,7 +581,20 @@ type BlobPool struct {
 	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
 	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
 
+	// rlpCache memoizes encoded GetPooledTransactions responses, keyed by
+	// (tx hash, whether full blobs are needed). It is content-addressed: a
+	// pooled tx's encoding is stable, so a cached entry is valid as long as the
+	// tx is still in the pool (checked on lookup before serving a hit).
+	rlpCache *lru.SizeConstrainedCache[rlpCacheKey, []byte]
+
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
+}
+
+// rlpCacheKey keys the encoded-response cache. full is true for pre eth/72
+// requests (which carry full blobs) and false for eth/72+ (blob payload elided).
+type rlpCacheKey struct {
+	hash common.Hash
+	full bool
 }
 
 // New creates a new blob transaction pool to gather, sort and filter inbound
@@ -595,6 +614,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		spent:          make(map[common.Address]*uint256.Int),
 		gapped:         make(map[common.Address][]*BlobTxForPool),
 		gappedSource:   make(map[common.Hash]common.Address),
+		rlpCache:       lru.NewSizeConstrainedCache[rlpCacheKey, []byte](getRLPCacheSize),
 	}
 }
 
@@ -1753,17 +1773,39 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 }
 
 // GetRLP returns an RLP-encoded transaction if it is contained in the pool.
+//
+// The encoded response is memoized: legacy (pre eth/72) peers fetch full blobs
+// via GetPooledTransactions, and the same transaction is typically requested
+// by multiple peers. Without the cache, each request re-reads the tx from disk
+// and re-encodes it, recovering the blobs from the stored cells.
 func (p *BlobPool) GetRLP(hash common.Hash, version uint) []byte {
+	key := rlpCacheKey{hash: hash, full: version < 72}
+	if enc, ok := p.rlpCache.Get(key); ok {
+		// The encoding is content-addressed, but only serve it while the tx is
+		// still pooled so a hit cannot resurrect a dropped transaction.
+		p.lock.RLock()
+		_, pooled := p.lookup.storeidOfTx(hash)
+		p.lock.RUnlock()
+		if pooled {
+			getRLPCacheHitMeter.Mark(1)
+			return enc
+		}
+	}
 	data := p.getRLP(hash)
 	if len(data) == 0 {
 		// Not in this pool, do not log.
 		return nil
 	}
+	// Count misses only for transactions the pool actually holds, so the
+	// hit/miss ratio reflects cache effectiveness rather than unknown-tx
+	// requests.
+	getRLPCacheMissMeter.Mark(1)
 	rlp, err := encodeForNetwork(data, version)
 	if err != nil {
 		log.Error("Failed to encode pooled tx into the network type", "hash", hash, "err", err)
 		return nil
 	}
+	p.rlpCache.Add(key, rlp)
 	return rlp
 }
 
