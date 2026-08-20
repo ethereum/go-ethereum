@@ -76,6 +76,7 @@ type Peer struct {
 	tracker     *tracker.Tracker
 	reqDispatch chan *request  // Dispatch channel to send requests and track then until fulfillment
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
+	reqResend   chan *resend   // Dispatch channel to send follow-ups for still-pending requests
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
 	chainConfig *params.ChainConfig // Chain configuration for fork-aware validation
@@ -102,6 +103,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool, blo
 		tracker:       tracker.New(cap, id, 5*time.Minute),
 		reqDispatch:   make(chan *request),
 		reqCancel:     make(chan *cancel),
+		reqResend:     make(chan *resend),
 		resDispatch:   make(chan *response),
 		txpool:        txpool,
 		blobpool:      blobpool,
@@ -466,6 +468,14 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamp
 				FirstBlockReceiptIndex: 0,
 				GetReceiptsRequest:     hashes,
 			},
+			// The buffer entry lives and dies with the request: the dispatcher
+			// releases it if the request is cancelled or fails to send, while
+			// a completed response consumes it on the delivery path.
+			cleanup: func() {
+				p.receiptBufferLock.Lock()
+				delete(p.receiptBuffer, id)
+				p.receiptBufferLock.Unlock()
+			},
 		}
 		p.receiptBufferLock.Lock()
 		p.receiptBuffer[id] = &receiptRequest{
@@ -493,33 +503,32 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamp
 	return req, nil
 }
 
-// HandlePartialReceipts re-request partial receipts
+// requestPartialReceipts re-requests the remainder of a partially delivered
+// receipt request under its original id.
 func (p *Peer) requestPartialReceipts(id uint64) error {
 	p.receiptBufferLock.Lock()
-	defer p.receiptBufferLock.Unlock()
 
 	// Do not re-request for the stale request
-	if _, ok := p.receiptBuffer[id]; !ok {
+	buffer, ok := p.receiptBuffer[id]
+	if !ok {
+		p.receiptBufferLock.Unlock()
 		return nil
 	}
-	lastBlock := len(p.receiptBuffer[id].list) - 1
-	lastReceipt := p.receiptBuffer[id].list[lastBlock].items.Len()
+	lastBlock := len(buffer.list) - 1
+	lastReceipt := buffer.list[lastBlock].items.Len()
 
-	hashes := p.receiptBuffer[id].request[lastBlock:]
+	hashes := buffer.request[lastBlock:]
+	p.receiptBufferLock.Unlock()
 
-	req := &Request{
-		id:   id,
-		sink: nil,
-		code: GetReceiptsMsg,
-		want: ReceiptsMsg,
-		data: &GetReceiptsPacket70{
-			RequestId:              id,
-			FirstBlockReceiptIndex: uint64(lastReceipt),
-			GetReceiptsRequest:     hashes,
-		},
-		numItems: len(hashes),
-	}
-	return p.dispatchRequest(req)
+	// The follow-up continues the original request under its original id,
+	// hand it to the dispatcher as a resend operation. The dispatcher only
+	// sends it if the original request is still pending, or silently drop
+	// the request if the original one is cancelled (with no error returned).
+	return p.dispatchResend(id, GetReceiptsMsg, len(hashes), &GetReceiptsPacket70{
+		RequestId:              id,
+		FirstBlockReceiptIndex: uint64(lastReceipt),
+		GetReceiptsRequest:     hashes,
+	})
 }
 
 // bufferReceipts validates a receipt packet and buffer the incomplete packet.
