@@ -821,7 +821,14 @@ func copyNode(n node) node {
 func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	switch n := n.(type) {
 	case hashNode:
-		return t.resolveAndTrack(n, prefix)
+		rn, err := t.resolveAndTrack(n, prefix)
+		if err != nil {
+			return nil, err
+		}
+		if en, ok := rn.(*expiredNode); ok {
+			return resolveExpiredNodeData(en)
+		}
+		return rn, nil
 	case *expiredNode:
 		return resolveExpiredNodeData(n)
 	}
