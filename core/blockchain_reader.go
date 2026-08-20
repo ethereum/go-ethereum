@@ -385,7 +385,7 @@ func (bc *BlockChain) HasState(hash common.Hash) bool {
 		return true
 	}
 	if bc.follower != nil {
-		if tdb, err := bc.follower.openTree(); err == nil {
+		if tdb, err := bc.follower.tree(!bc.triedb.IsPBT()); err == nil {
 			if _, err := tdb.NodeReader(hash); err == nil {
 				return true
 			}

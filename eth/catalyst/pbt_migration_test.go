@@ -26,7 +26,11 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // migrationTestGenesis schedules the fork at t=48: the fourth twelve-second
@@ -40,9 +44,60 @@ func migrationTestGenesis() *core.Genesis {
 	return genesis
 }
 
+// buildBlock seals one block on the given parent through the engine API and
+// makes it the head.
+func buildBlock(t *testing.T, api *ConsensusAPI, parent *types.Header, slot uint64, random common.Hash) *types.Header {
+	t.Helper()
+	chain := api.eth.BlockChain()
+	// Building on a merkle parent needs the shadow caught up to it; the
+	// consensus layer's retries hide this in production, the test waits.
+	if !chain.Config().IsBinaryTrie(parent.Number, parent.Time) {
+		awaitShadowReady(t, chain, parent)
+	}
+	targetGasLimit := parent.GasLimit
+	attrs := &engine.PayloadAttributes{
+		Timestamp:             parent.Time + 12,
+		Random:                random,
+		SuggestedFeeRecipient: common.Address{},
+		Withdrawals:           []*types.Withdrawal{},
+		BeaconRoot:            &common.Hash{},
+		SlotNumber:            &slot,
+		TargetGasLimit:        &targetGasLimit,
+	}
+	fcState := engine.ForkchoiceStateV1{HeadBlockHash: parent.Hash()}
+	resp, err := api.ForkchoiceUpdatedV4(context.Background(), fcState, attrs, nil)
+	if err != nil {
+		t.Fatalf("slot %d: forkchoice update failed: %v", slot, err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("slot %d: forkchoice update not valid: %v", slot, resp.PayloadStatus.Status)
+	}
+	payload, err := api.getPayload(*resp.PayloadID, true, nil, nil)
+	if err != nil {
+		t.Fatalf("slot %d: payload retrieval failed: %v", slot, err)
+	}
+	execData := payload.ExecutionPayload
+	status, err := api.NewPayloadV5(context.Background(), *execData, []common.Hash{}, &common.Hash{}, []hexutil.Bytes{})
+	if err != nil {
+		t.Fatalf("slot %d: payload import failed: %v", slot, err)
+	}
+	if status.Status != engine.VALID {
+		t.Fatalf("slot %d: imported payload not valid: %v (%s)", slot, status.Status, derefErr(status.ValidationError))
+	}
+	fcState = engine.ForkchoiceStateV1{HeadBlockHash: execData.BlockHash}
+	if _, err := api.ForkchoiceUpdatedV4(context.Background(), fcState, nil, nil); err != nil {
+		t.Fatalf("slot %d: setting head failed: %v", slot, err)
+	}
+	head := chain.CurrentBlock()
+	if head.Hash() != execData.BlockHash {
+		t.Fatalf("slot %d: head is %x, expected %x", slot, head.Hash(), execData.BlockHash)
+	}
+	return head
+}
+
 // TestMigrationNodeCrossesTheFork drives the rehearsal through the engine
 // API: merkle blocks, the swap on the shadow's recorded root, native binary
-// blocks, and the finality close.
+// blocks with the merkle window live, and the finality close.
 func TestMigrationNodeCrossesTheFork(t *testing.T) {
 	genesis := migrationTestGenesis()
 	n, ethservice := startEthService(t, genesis, nil)
@@ -56,60 +111,17 @@ func TestMigrationNodeCrossesTheFork(t *testing.T) {
 
 	parent := chain.CurrentBlock()
 	for i := 0; i < 5; i++ {
-		// Building on a merkle parent needs the shadow caught up to it; the
-		// consensus layer's retries hide this in production, the test waits.
-		if !genesis.Config.IsBinaryTrie(parent.Number, parent.Time) {
-			awaitShadowReady(t, chain, parent)
-		}
-		slot, targetGasLimit := uint64(i+1), parent.GasLimit
-		attrs := &engine.PayloadAttributes{
-			Timestamp:             parent.Time + 12,
-			Random:                common.Hash{},
-			SuggestedFeeRecipient: common.Address{},
-			Withdrawals:           []*types.Withdrawal{},
-			BeaconRoot:            &common.Hash{},
-			SlotNumber:            &slot,
-			TargetGasLimit:        &targetGasLimit,
-		}
-		fcState := engine.ForkchoiceStateV1{HeadBlockHash: parent.Hash()}
-		resp, err := api.ForkchoiceUpdatedV4(context.Background(), fcState, attrs, nil)
-		if err != nil {
-			t.Fatalf("block %d: forkchoice update failed: %v", i+1, err)
-		}
-		if resp.PayloadStatus.Status != engine.VALID {
-			t.Fatalf("block %d: forkchoice update not valid: %v", i+1, resp.PayloadStatus.Status)
-		}
-		payload, err := api.getPayload(*resp.PayloadID, true, nil, nil)
-		if err != nil {
-			t.Fatalf("block %d: payload retrieval failed: %v", i+1, err)
-		}
-		execData := payload.ExecutionPayload
-		status, err := api.NewPayloadV5(context.Background(), *execData, []common.Hash{}, &common.Hash{}, []hexutil.Bytes{})
-		if err != nil {
-			t.Fatalf("block %d: payload import failed: %v", i+1, err)
-		}
-		if status.Status != engine.VALID {
-			t.Fatalf("block %d: imported payload not valid: %v (%s)", i+1, status.Status, derefErr(status.ValidationError))
-		}
-		fcState = engine.ForkchoiceStateV1{HeadBlockHash: execData.BlockHash}
-		if _, err := api.ForkchoiceUpdatedV4(context.Background(), fcState, nil, nil); err != nil {
-			t.Fatalf("block %d: setting head failed: %v", i+1, err)
-		}
-		parent = chain.CurrentBlock()
-		if parent.Hash() != execData.BlockHash {
-			t.Fatalf("block %d: head is %x, expected %x", i+1, parent.Hash(), execData.BlockHash)
-		}
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
 	}
-	// The boundary parent's shadow root exists - it fed the activation block -
-	// while post-fork blocks get none: execution owns the tree from there.
+	// The boundary parent's shadow root fed the activation block, and past
+	// the boundary the roles flip: the window records merkle roots for the
+	// binary blocks until the close.
 	boundaryParent := chain.GetHeaderByNumber(3)
 	if !chain.ShadowReady(boundaryParent.Hash(), 3) {
 		t.Fatal("the boundary parent has no recorded shadow root")
 	}
-	postFork := chain.GetHeaderByNumber(4)
-	if chain.ShadowReady(postFork.Hash(), 4) {
-		t.Fatal("a post-fork block got a shadow root recorded")
-	}
+	awaitShadowReady(t, chain, chain.GetHeaderByNumber(4))
+	awaitShadowReady(t, chain, chain.GetHeaderByNumber(5))
 
 	// Both sides of the boundary stay readable.
 	for _, number := range []uint64{2, 5} {
@@ -129,36 +141,121 @@ func TestMigrationNodeCrossesTheFork(t *testing.T) {
 	if _, err := api.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
 		t.Fatalf("finalizing: %v", err)
 	}
-	slot, targetGasLimit := uint64(6), head.GasLimit
-	attrs := &engine.PayloadAttributes{
-		Timestamp:             head.Time + 12,
-		Random:                common.Hash{},
-		SuggestedFeeRecipient: common.Address{},
-		Withdrawals:           []*types.Withdrawal{},
-		BeaconRoot:            &common.Hash{},
-		SlotNumber:            &slot,
-		TargetGasLimit:        &targetGasLimit,
-	}
-	resp, err := api.ForkchoiceUpdatedV4(context.Background(), engine.ForkchoiceStateV1{HeadBlockHash: head.Hash()}, attrs, nil)
-	if err != nil {
-		t.Fatalf("post-finality build: %v", err)
-	}
-	payload, err := api.getPayload(*resp.PayloadID, true, nil, nil)
-	if err != nil {
-		t.Fatalf("post-finality payload: %v", err)
-	}
-	if status, err := api.NewPayloadV5(context.Background(), *payload.ExecutionPayload, []common.Hash{}, &common.Hash{}, []hexutil.Bytes{}); err != nil || status.Status != engine.VALID {
-		t.Fatalf("post-finality import: %v %v", status.Status, err)
-	}
-	if _, err := api.ForkchoiceUpdatedV4(context.Background(), engine.ForkchoiceStateV1{HeadBlockHash: payload.ExecutionPayload.BlockHash}, nil, nil); err != nil {
-		t.Fatalf("post-finality set head: %v", err)
-	}
+	buildBlock(t, api, head, 6, common.Hash{})
 	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
 		if time.Since(start) > 5*time.Second {
 			t.Fatal("migration never marked itself done after finality")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+// TestMerkleWindowAdvancesLive proves the window's records: each post-fork
+// block's merkle root matches an independent reverse conversion of its
+// binary state.
+func TestMerkleWindowAdvancesLive(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+
+	parent := chain.CurrentBlock()
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	for _, number := range []uint64{4, 5} {
+		header := chain.GetHeaderByNumber(number)
+		awaitShadowReady(t, chain, header)
+		got, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), number, header.Hash())
+		if want := convertCanonicalMerkle(t, chain, ethservice.ChainDb(), genesis, header); got != want {
+			t.Fatalf("block %d window root %x, reverse conversion says %x", number, got, want)
+		}
+	}
+}
+
+// TestDirectionPRevivesOnReorg parks the binary direction past the fork,
+// then reorgs to a pre-fork sibling: replay must resume on the new branch.
+func TestDirectionPRevivesOnReorg(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+
+	parent := chain.CurrentBlock()
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	sibling := buildBlock(t, api, chain.GetHeaderByNumber(2), 3, common.Hash{1})
+	if sibling.Number.Uint64() != 3 {
+		t.Fatalf("sibling landed at height %d, want 3", sibling.Number)
+	}
+	awaitShadowReady(t, chain, sibling)
+}
+
+// convertCanonicalMerkle rebuilds a merkle trie from the canonical binary
+// state at the given header - the reverse of the offline conversion. The
+// universe is the genesis allocation plus every account and slot a stored
+// access list ever wrote.
+func convertCanonicalMerkle(t *testing.T, chain *core.BlockChain, db ethdb.Database, genesis *core.Genesis, header *types.Header) common.Hash {
+	t.Helper()
+	src, err := chain.StateAt(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	universe := make(map[common.Address]map[common.Hash]bool)
+	touch := func(addr common.Address) map[common.Hash]bool {
+		if universe[addr] == nil {
+			universe[addr] = make(map[common.Hash]bool)
+		}
+		return universe[addr]
+	}
+	for addr, account := range genesis.Alloc {
+		slots := touch(addr)
+		for key := range account.Storage {
+			slots[key] = true
+		}
+	}
+	for n := uint64(1); n <= header.Number.Uint64(); n++ {
+		hash := rawdb.ReadCanonicalHash(db, n)
+		list := rawdb.ReadAccessList(db, hash, n)
+		if list == nil {
+			t.Fatalf("no stored access list for block %d", n)
+		}
+		for _, acc := range *list {
+			slots := touch(acc.Address)
+			for _, sw := range acc.StorageChanges {
+				slots[common.Hash(sw.Slot.Bytes32())] = true
+			}
+		}
+	}
+	tdb := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.HashDefaults)
+	defer tdb.Close()
+	dst, err := state.New(types.EmptyRootHash, state.NewDatabase(tdb, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for addr, slots := range universe {
+		if !src.Exist(addr) {
+			continue
+		}
+		dst.AddBalance(addr, src.GetBalance(addr), tracing.BalanceIncreaseGenesisBalance)
+		dst.SetCode(addr, src.GetCode(addr), tracing.CodeChangeGenesis)
+		dst.SetNonce(addr, src.GetNonce(addr), tracing.NonceChangeGenesis)
+		for slot := range slots {
+			if value := src.GetState(addr, slot); value != (common.Hash{}) {
+				dst.SetState(addr, slot, value)
+			}
+		}
+	}
+	root, err := dst.Commit(0, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
 }
 
 // awaitShadowReady waits for the follower to record the given block.

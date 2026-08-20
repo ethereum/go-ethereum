@@ -43,18 +43,17 @@ const (
 	followBatchBlocks = 128
 )
 
-// bintrieFollower replays block access lists onto the shadow tree. It follows
-// the canonical chain only; the shadow database is the truth for where it
-// stands, the persisted cursor a hint a crash may leave ahead of it.
+// bintrieFollower replays block access lists onto the shadow trees: the
+// binary one ahead of the fork, the merkle one through the window after it.
+// Each tree is the truth for where its replay stands; the persisted cursors
+// are hints a crash may leave ahead of them.
 type bintrieFollower struct {
 	db     ethdb.Database
 	config *params.ChainConfig
 	cfg    *BlockChainConfig
-	pbt    bool // the primary direction: the canonical tree's opposite
 
-	mu    sync.Mutex
-	dir   *followerTree // created on first use
-	stall error
+	mu   sync.Mutex
+	dirs [2]*followerTree // binary then merkle; created on first use
 
 	chain   *BlockChain // nil when driven synchronously in tests
 	headCh  chan ChainHeadEvent
@@ -69,21 +68,21 @@ type bintrieFollower struct {
 type followerTree struct {
 	f     *bintrieFollower
 	pbt   bool
-	owned bool // opened by the follower: journaled and closed by it
+	owned bool // opened by the follower: journaled, closed and batched on
 
 	handle     *triedb.Database // opened lazily; nil while idle
 	sdb        state.Database
 	cursorNum  uint64
 	cursorHash common.Hash
 	cursorRoot common.Hash
+	stall      error
 }
 
-func newBintrieFollower(chain *BlockChain, pbt bool) *bintrieFollower {
+func newBintrieFollower(chain *BlockChain) *bintrieFollower {
 	f := &bintrieFollower{
 		db:     chain.db,
 		config: chain.chainConfig,
 		cfg:    chain.cfg,
-		pbt:    pbt,
 		chain:  chain,
 		headCh: make(chan ChainHeadEvent),
 		term:   make(chan chan struct{}),
@@ -94,14 +93,43 @@ func newBintrieFollower(chain *BlockChain, pbt bool) *bintrieFollower {
 	return f
 }
 
-// primary returns the follower's direction, creating it on first use.
-func (f *bintrieFollower) primary() *followerTree {
+func dirIndex(pbt bool) int {
+	if pbt {
+		return 0
+	}
+	return 1
+}
+
+// direction returns the tree of the given flavour, creating it on first use.
+func (f *bintrieFollower) direction(pbt bool) *followerTree {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.dir == nil {
-		f.dir = &followerTree{f: f, pbt: f.pbt}
+	if i := dirIndex(pbt); f.dirs[i] != nil {
+		return f.dirs[i]
 	}
-	return f.dir
+	t := &followerTree{f: f, pbt: pbt}
+	f.dirs[dirIndex(pbt)] = t
+	return t
+}
+
+// peek returns the tree of the given flavour if it exists.
+func (f *bintrieFollower) peek(pbt bool) *followerTree {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.dirs[dirIndex(pbt)]
+}
+
+// live returns the directions created so far, binary first.
+func (f *bintrieFollower) live() []*followerTree {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []*followerTree
+	for _, t := range f.dirs {
+		if t != nil {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // loop runs one sync at a time. A head arriving mid-run re-arms on
@@ -132,12 +160,17 @@ func (f *bintrieFollower) loop() {
 	for {
 		select {
 		case ev := <-f.headCh:
-			// Once a post-fork block finalizes, the window closes: the other
+			// Once a post-fork block finalizes, the window closes: the merkle
 			// tree stops being maintained and may be disposed of.
 			if final := f.chain.CurrentFinalBlock(); final != nil && f.config.IsBinaryTrie(final.Number, final.Time) {
 				if done != nil {
 					close(stop)
 					<-done
+				}
+				if m := f.peek(false); m == nil {
+					log.Warn("Merkle window closing without ever running", "finalized", final.Number)
+				} else if num, _, _ := m.cursor(); num < final.Number.Uint64() {
+					log.Warn("Merkle window closing behind", "cursor", num, "finalized", final.Number)
 				}
 				rawdb.WritePBTMigrationDone(f.db)
 				log.Info("State migration finished", "finalized", final.Number)
@@ -149,10 +182,7 @@ func (f *bintrieFollower) loop() {
 			}
 		case <-done:
 			stop, done = nil, nil
-			f.mu.Lock()
-			stalled := f.stall
-			f.mu.Unlock()
-			if stalled == nil && latest != nil && latest.Hash() != launched.Hash() {
+			if !f.allStalled() && latest != nil && latest.Hash() != launched.Hash() {
 				launch(latest)
 			}
 		case ch := <-f.term:
@@ -175,20 +205,44 @@ func (f *bintrieFollower) close() {
 	}
 }
 
-// sync is one follow attempt, its outcome latched; the next head retries.
+// sync runs every live direction once, ensuring the one the head calls for
+// exists: the direction opposite the head's flavour does the replay work,
+// its sibling only parks or rewinds. Outcomes latch; the next head retries.
 func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
-	err := f.follow(head, stop)
-	f.mu.Lock()
-	f.stall = err
-	f.mu.Unlock()
-	if err != nil {
-		log.Warn("Binary tree shadow stalled", "head", head.Number, "err", err)
+	f.direction(!f.config.IsBinaryTrie(head.Number, head.Time))
+	for _, t := range f.live() {
+		err := t.follow(head, stop)
+		f.mu.Lock()
+		t.stall = err
+		f.mu.Unlock()
+		if err != nil {
+			log.Warn("Migration direction stalled", "pbt", t.pbt, "head", head.Number, "err", err)
+		}
 	}
 }
 
-// follow advances the primary direction to the given head.
+// allStalled reports whether every live direction stalled; an idle follower
+// has not.
+func (f *bintrieFollower) allStalled() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	stalled := false
+	for _, t := range f.dirs {
+		if t == nil {
+			continue
+		}
+		if t.stall == nil {
+			return false
+		}
+		stalled = true
+	}
+	return stalled
+}
+
+// follow advances the direction the head calls for: the one opposite its
+// flavour.
 func (f *bintrieFollower) follow(head *types.Header, stop chan struct{}) error {
-	return f.primary().follow(head, stop)
+	return f.direction(!f.config.IsBinaryTrie(head.Number, head.Time)).follow(head, stop)
 }
 
 // follow advances the tree to the head along the canonical chain. Every
@@ -221,7 +275,7 @@ func (t *followerTree) follow(head *types.Header, stop chan struct{}) error {
 		if !found {
 			return errors.New("shadow reorged past its live states: re-anchor")
 		}
-		log.Info("Binary tree shadow following reorg", "forkpoint", num)
+		log.Info("Shadow tree following reorg", "pbt", t.pbt, "forkpoint", num)
 		t.setCursor(num, hash, root)
 	}
 	prev := hash
@@ -233,7 +287,7 @@ func (t *followerTree) follow(head *types.Header, stop chan struct{}) error {
 		if rawdb.ReadSnapSyncStatusFlag(f.db) == rawdb.StateSyncRunning {
 			return nil
 		}
-		if behind := head.Number.Uint64() - n; behind > followTrackWindow {
+		if behind := head.Number.Uint64() - n; behind > followTrackWindow && t.owned {
 			consumed, newRoot, newPrev, err := t.replayBatch(n, head.Number.Uint64(), root, prev)
 			if err != nil {
 				return err
@@ -277,7 +331,7 @@ func (t *followerTree) follow(head *types.Header, stop chan struct{}) error {
 		}
 		root, prev = newRoot, hash
 		rawdb.WriteShadowStateRoot(f.db, n, hash, root)
-		rawdb.WritePBTMigrationCursor(f.db, n, hash, root)
+		t.persistCursor(n, hash, root)
 		t.setCursor(n, hash, root)
 	}
 	return nil
@@ -356,7 +410,7 @@ func (t *followerTree) replayBatch(from, head uint64, root common.Hash, prev com
 		endHash = hashes[end]
 	)
 	rawdb.WriteShadowStateRoot(f.db, endNum, endHash, root)
-	rawdb.WritePBTMigrationCursor(f.db, endNum, endHash, root)
+	t.persistCursor(endNum, endHash, root)
 	t.setCursor(endNum, endHash, root)
 	if root != start {
 		if err := t.handle.Commit(root, false); err != nil {
@@ -366,9 +420,9 @@ func (t *followerTree) replayBatch(from, head uint64, root common.Hash, prev com
 	return uint64(len(blocks)), root, endHash, nil
 }
 
-// openTree opens the primary direction's handle on first use.
-func (f *bintrieFollower) openTree() (*triedb.Database, error) {
-	return f.primary().open()
+// tree opens and returns the handle of the given flavour.
+func (f *bintrieFollower) tree(pbt bool) (*triedb.Database, error) {
+	return f.direction(pbt).open()
 }
 
 // open resolves the tree handle on first use: the canonical handle when the
@@ -399,6 +453,31 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	return t.handle, nil
 }
 
+// hasCursor reports whether the direction's cursor was ever persisted.
+func (t *followerTree) hasCursor() bool {
+	if t.pbt {
+		return rawdb.HasPBTMigrationCursor(t.f.db)
+	}
+	return rawdb.HasMPTMigrationCursor(t.f.db)
+}
+
+// readCursor loads the direction's persisted cursor.
+func (t *followerTree) readCursor() (uint64, common.Hash, common.Hash, bool) {
+	if t.pbt {
+		return rawdb.ReadPBTMigrationCursor(t.f.db)
+	}
+	return rawdb.ReadMPTMigrationCursor(t.f.db)
+}
+
+// persistCursor stores the direction's cursor.
+func (t *followerTree) persistCursor(num uint64, hash common.Hash, root common.Hash) {
+	if t.pbt {
+		rawdb.WritePBTMigrationCursor(t.f.db, num, hash, root)
+	} else {
+		rawdb.WriteMPTMigrationCursor(t.f.db, num, hash, root)
+	}
+}
+
 // ensure opens the tree and resolves the replay position. With a cursor ever
 // written it must resolve through it or the records: the seeding fallbacks
 // bind pathdb's disk root to a guessed block, poisoning the rest.
@@ -415,8 +494,8 @@ func (t *followerTree) ensure() error {
 		return err
 	}
 
-	if rawdb.HasPBTMigrationCursor(f.db) {
-		num, hash, root, ok := rawdb.ReadPBTMigrationCursor(f.db)
+	if t.hasCursor() {
+		num, hash, root, ok := t.readCursor()
 		if !ok {
 			return errors.New("migration cursor corrupt: re-anchor")
 		}
@@ -444,8 +523,8 @@ func (t *followerTree) ensure() error {
 		return errors.New("shadow position unresolvable: re-anchor")
 	}
 	if !t.pbt {
-		// The merkle window follower has no artifacts: its floor is the
-		// newest block whose header commits its tree with the state alive.
+		// The merkle window has no artifacts: its floor is the newest block
+		// whose header commits its tree with the state alive.
 		head := rawdb.ReadHeadHeader(f.db)
 		if head == nil {
 			return errors.New("missing head header")
@@ -500,7 +579,7 @@ func (t *followerTree) ensure() error {
 		return err
 	}
 	rawdb.WriteShadowStateRoot(f.db, 0, ghash, root)
-	rawdb.WritePBTMigrationCursor(f.db, 0, ghash, root)
+	t.persistCursor(0, ghash, root)
 	t.setCursor(0, ghash, root)
 	log.Info("Seeded binary tree shadow from genesis", "root", root)
 	return nil
@@ -521,19 +600,17 @@ func (t *followerTree) replayedRoot(number uint64, hash common.Hash) (common.Has
 	return common.Hash{}, false
 }
 
-// waitCaughtUp blocks until the given block's root is recorded, a stall, or
-// the timeout. Batched-over blocks never get a record; wait near the tip.
+// waitCaughtUp blocks until the given block's root is recorded, a stall in
+// the direction that would replay it, or the timeout. Batched-over blocks
+// never get a record; wait near the tip.
 func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
 		if _, ok := rawdb.ReadShadowStateRoot(f.db, number, hash); ok {
 			return nil
 		}
-		f.mu.Lock()
-		stall := f.stall
-		f.mu.Unlock()
-		if stall != nil {
-			return stall
+		if err := f.stalledFor(number, hash); err != nil {
+			return err
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("shadow has not reached block %d %x", number, hash)
@@ -542,13 +619,26 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 	}
 }
 
+// stalledFor returns the stall of the direction responsible for replaying
+// the given block, if any.
+func (f *bintrieFollower) stalledFor(number uint64, hash common.Hash) error {
+	header := rawdb.ReadHeader(f.db, hash, number)
+	if header == nil {
+		return nil
+	}
+	t := f.peek(!f.config.IsBinaryTrie(header.Number, header.Time))
+	if t == nil {
+		return nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return t.stall
+}
+
 // journal persists and releases the follower's directions.
 func (f *bintrieFollower) journal() {
-	f.mu.Lock()
-	dir := f.dir
-	f.mu.Unlock()
-	if dir != nil {
-		dir.journal()
+	for _, t := range f.live() {
+		t.journal()
 	}
 }
 
@@ -625,14 +715,23 @@ func (bc *BlockChain) MigrationProgress() MigrationProgress {
 func (f *bintrieFollower) progress(head uint64) MigrationProgress {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	p := MigrationProgress{Phase: "following"}
-	if f.dir != nil {
-		p.Cursor, p.CursorHash, p.ShadowRoot = f.dir.cursorNum, f.dir.cursorHash, f.dir.cursorRoot
+	t := f.dirs[0]
+	if t == nil {
+		t = f.dirs[1]
+	}
+	if t == nil {
+		return MigrationProgress{Phase: "idle"}
+	}
+	p := MigrationProgress{
+		Phase:      "following",
+		Cursor:     t.cursorNum,
+		CursorHash: t.cursorHash,
+		ShadowRoot: t.cursorRoot,
 	}
 	switch {
-	case f.stall != nil:
-		p.Phase, p.Error = "stalled", f.stall.Error()
-	case f.dir == nil || f.dir.handle == nil:
+	case t.stall != nil:
+		p.Phase, p.Error = "stalled", t.stall.Error()
+	case t.handle == nil:
 		p.Phase = "idle"
 	case p.Cursor >= head:
 		p.Phase = "synced"

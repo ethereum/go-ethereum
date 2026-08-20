@@ -622,7 +622,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// Until the migration is done, the non-canonical tree is maintained by
 	// replay whichever side is canonical.
 	if bc.stateMode == modeMigration && !rawdb.ReadPBTMigrationDone(db) {
-		bc.follower = newBintrieFollower(bc, !bc.triedb.IsPBT())
+		bc.follower = newBintrieFollower(bc)
 	}
 
 	// Start state size tracker
@@ -2225,7 +2225,7 @@ func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
 		}
 		return nil, errors.New("no merkle trie on this node")
 	}
-	return bc.follower.openTree()
+	return bc.follower.tree(pbt)
 }
 
 // stateDatabaseFor returns a state database over the tree of the given

@@ -202,7 +202,6 @@ func standaloneFollower(genesis *Genesis, db ethdb.Database) *bintrieFollower {
 		db:     db,
 		config: genesis.Config,
 		cfg:    cfg,
-		pbt:    true,
 	}
 }
 
@@ -237,7 +236,7 @@ func TestFollowerRecoversWithoutJournal(t *testing.T) {
 	head := blocks[len(blocks)-1].Header()
 
 	first, want := firstPass(t, genesis, db, head)
-	if err := first.dir.handle.Close(); err != nil { // crash: no journal
+	if err := first.direction(true).handle.Close(); err != nil { // crash: no journal
 		t.Fatal(err)
 	}
 
@@ -293,7 +292,7 @@ func TestFollowerIdlesDuringSnapSync(t *testing.T) {
 	if err := f.follow(blocks[0].Header(), nil); err != nil {
 		t.Fatalf("follow during snap sync = %v, want quiet idle", err)
 	}
-	if f.dir.handle != nil {
+	if f.direction(true).handle != nil {
 		t.Fatal("shadow opened during snap sync")
 	}
 }
@@ -365,10 +364,10 @@ func TestFollowerResumesFromRecordAboveCursor(t *testing.T) {
 	first, want := firstPass(t, genesis, db, head)
 	// Make the head root durable, then crash with the cursor rewound to a
 	// block whose own root died with the in-memory layers.
-	if err := first.dir.handle.Commit(want, false); err != nil {
+	if err := first.direction(true).handle.Commit(want, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := first.dir.handle.Close(); err != nil {
+	if err := first.direction(true).handle.Close(); err != nil {
 		t.Fatal(err)
 	}
 	rawdb.WritePBTMigrationCursor(db, 2, blocks[1].Hash(), common.Hash{0xde, 0xad})
@@ -377,7 +376,7 @@ func TestFollowerResumesFromRecordAboveCursor(t *testing.T) {
 	if err := second.follow(head, nil); err != nil {
 		t.Fatalf("recovery pass: %v", err)
 	}
-	if num, _, root := second.dir.cursor(); num != head.Number.Uint64() || root != want {
+	if num, _, root := second.direction(true).cursor(); num != head.Number.Uint64() || root != want {
 		t.Fatalf("resumed at %d root %x, want %d root %x", num, root, head.Number.Uint64(), want)
 	}
 }
@@ -407,7 +406,7 @@ func TestFollowerStopsOnCanonicalDiscontinuity(t *testing.T) {
 	if err := f.follow(branchB[1].Header(), nil); err != nil {
 		t.Fatalf("follow across the splice = %v, want a clean stop", err)
 	}
-	if num, hash, _ := f.dir.cursor(); num != 1 || hash != branchA[0].Hash() {
+	if num, hash, _ := f.direction(true).cursor(); num != 1 || hash != branchA[0].Hash() {
 		t.Fatalf("cursor moved to %d %x across a splice", num, hash)
 	}
 	if _, ok := rawdb.ReadShadowStateRoot(db, 2, branchB[1].Hash()); ok {
