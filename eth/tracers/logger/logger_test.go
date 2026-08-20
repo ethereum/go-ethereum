@@ -17,6 +17,7 @@
 package logger
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -24,16 +25,20 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
 type dummyStatedb struct {
 	state.StateDB
+	nonce uint64
 }
 
 func (*dummyStatedb) GetRefund() uint64                                    { return 1337 }
+func (db *dummyStatedb) GetNonce(common.Address) uint64                    { return db.nonce }
 func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash { return common.Hash{} }
 func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) common.Hash {
 	return common.Hash{}
@@ -41,6 +46,108 @@ func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) co
 
 func (*dummyStatedb) GetStateAndCommittedState(common.Address, common.Hash) (common.Hash, common.Hash) {
 	return common.Hash{}, common.Hash{}
+}
+
+type testOpContext struct {
+	memory  []byte
+	stack   []uint256.Int
+	address common.Address
+}
+
+func (c testOpContext) MemoryData() []byte       { return c.memory }
+func (c testOpContext) StackData() []uint256.Int { return c.stack }
+func (c testOpContext) Caller() common.Address   { return common.Address{} }
+func (c testOpContext) Address() common.Address  { return c.address }
+func (c testOpContext) CallValue() *uint256.Int  { return new(uint256.Int) }
+func (c testOpContext) CallInput() []byte        { return nil }
+func (c testOpContext) ContractCode() []byte     { return nil }
+
+func testStack(values ...uint64) []uint256.Int {
+	stack := make([]uint256.Int, len(values))
+	for i, value := range values {
+		stack[i].SetUint64(value)
+	}
+	return stack
+}
+
+func TestStructLoggerCapturesCreateAddress(t *testing.T) {
+	var (
+		caller = common.HexToAddress("0x1234")
+		db     = &dummyStatedb{nonce: 7}
+		logger = NewStructLogger(nil)
+	)
+	logger.OnTxStart(&tracing.VMContext{StateDB: db}, nil, common.Address{})
+	logger.OnOpcode(0, byte(vm.CREATE), 0, 0, testOpContext{
+		address: caller,
+		stack:   testStack(0, 0, 0),
+	}, nil, 0, nil)
+
+	var result struct {
+		CreateAddr *common.Address `json:"createAddr"`
+	}
+	if err := json.Unmarshal(logger.logs[0], &result); err != nil {
+		t.Fatal(err)
+	}
+	want := crypto.CreateAddress(caller, db.nonce)
+	if result.CreateAddr == nil || *result.CreateAddr != want {
+		t.Fatalf("unexpected create address: have %v want %v", result.CreateAddr, want)
+	}
+}
+
+func TestJSONLoggerCapturesCreate2Address(t *testing.T) {
+	var (
+		caller = common.HexToAddress("0x1234")
+		memory = []byte{0xaa, 0xbb}
+		salt   = uint64(42)
+		output bytes.Buffer
+		db     = new(dummyStatedb)
+		hooks  = NewJSONLogger(nil, &output)
+	)
+	hooks.OnTxStart(&tracing.VMContext{StateDB: db}, nil, common.Address{})
+	hooks.OnOpcode(0, byte(vm.CREATE2), 0, 0, testOpContext{
+		address: caller,
+		memory:  memory,
+		stack:   testStack(salt, uint64(len(memory)), 0, 0),
+	}, nil, 0, nil)
+
+	var result struct {
+		CreateAddr *common.Address `json:"createAddr"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	want := crypto.CreateAddress2(caller, testStack(salt)[0].Bytes32(), crypto.Keccak256(memory))
+	if result.CreateAddr == nil || *result.CreateAddr != want {
+		t.Fatalf("unexpected create2 address: have %v want %v", result.CreateAddr, want)
+	}
+}
+
+func TestJSONLoggerCapturesCreate2AddressWithZeroSize(t *testing.T) {
+	var (
+		caller = common.HexToAddress("0x1234")
+		salt   = uint64(42)
+		output bytes.Buffer
+		db     = new(dummyStatedb)
+		hooks  = NewJSONLogger(nil, &output)
+		stack  = testStack(salt, 0, 0, 0)
+	)
+	stack[2].SetBytes(bytes.Repeat([]byte{0xff}, 32))
+	hooks.OnTxStart(&tracing.VMContext{StateDB: db}, nil, common.Address{})
+	hooks.OnOpcode(0, byte(vm.CREATE2), 0, 0, testOpContext{
+		address: caller,
+		stack:   stack,
+	}, nil, 0, nil)
+
+	var result struct {
+		CreateAddr *common.Address `json:"createAddr"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	want := crypto.CreateAddress2(caller, stack[0].Bytes32(), crypto.Keccak256(nil))
+	if result.CreateAddr == nil || *result.CreateAddr != want {
+		t.Fatalf("unexpected create2 address: have %v want %v", result.CreateAddr, want)
+	}
 }
 
 func TestStoreCapture(t *testing.T) {
