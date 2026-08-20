@@ -176,27 +176,15 @@ func TestBALFetcherFetchesMissing(t *testing.T) {
 	}
 }
 
-// TestBALFetcherDropsForgingPeer serves syntactically valid lists of the
-// wrong block: nothing may be stored and the peer must go.
-func TestBALFetcherDropsForgingPeer(t *testing.T) {
-	gspec, blocks := balRigChain(t)
-	local := newBALTestHandler(t, gspec, blocks)
-	defer local.close()
-
-	target := blocks[2]
-	forged := rawdb.ReadAccessListRLP(local.db, blocks[0].Hash(), blocks[0].NumberU64())
-	if len(forged) == 0 {
-		t.Fatal("rig: no list to forge with")
-	}
-	rawdb.DeleteAccessList(local.db, target.Hash(), target.NumberU64())
-
+// serveBALs wires a manual eth/71 remote into the handler, answering every
+// list request with item's value per requested hash plus extra filler items.
+func serveBALs(t *testing.T, local *testHandler, item func(i int) rlp.RawValue, extra int) {
+	t.Helper()
 	p2pLocal, p2pRemote := p2p.MsgPipe()
-	defer p2pLocal.Close()
-	defer p2pRemote.Close()
+	t.Cleanup(func() { p2pLocal.Close(); p2pRemote.Close() })
 	peerAtLocal := eth.NewPeer(eth.ETH71, p2p.NewPeerPipe(enode.ID{1}, "", nil, p2pLocal), p2pLocal, local.txpool, local.txpool, nil)
 	remote := eth.NewPeer(eth.ETH71, p2p.NewPeerPipe(enode.ID{2}, "", nil, p2pRemote), p2pRemote, local.txpool, local.txpool, nil)
-	defer peerAtLocal.Close()
-	defer remote.Close()
+	t.Cleanup(func() { peerAtLocal.Close(); remote.Close() })
 	go local.handler.runEthPeer(peerAtLocal, func(p *eth.Peer) error {
 		return eth.Handle((*ethHandler)(local.handler), p)
 	})
@@ -219,13 +207,42 @@ func TestBALFetcherDropsForgingPeer(t *testing.T) {
 				return
 			}
 			var list rlp.RawList[rlp.RawValue]
-			for range query.GetBlockAccessListsRequest {
-				list.AppendRaw(forged)
+			for i := range query.GetBlockAccessListsRequest {
+				list.AppendRaw(item(i))
+			}
+			for i := 0; i < extra; i++ {
+				list.AppendRaw(rlp.EmptyString)
 			}
 			remote.ReplyBlockAccessLists(query.RequestId, list)
 		}
 	}()
 	waitPeers(t, local.handler, 1)
+}
+
+// TestBALFetcherDropsForgingPeer pairs a genuine list with a forged one: a
+// single forged item voids the whole response and the peer.
+func TestBALFetcherDropsForgingPeer(t *testing.T) {
+	gspec, blocks := balRigChain(t)
+	local := newBALTestHandler(t, gspec, blocks)
+	defer local.close()
+
+	targets := []*types.Block{blocks[1], blocks[2]}
+	genuine := rawdb.ReadAccessListRLP(local.db, targets[0].Hash(), targets[0].NumberU64())
+	forged := rawdb.ReadAccessListRLP(local.db, blocks[0].Hash(), blocks[0].NumberU64())
+	if len(genuine) == 0 || len(forged) == 0 {
+		t.Fatal("rig: no lists to serve")
+	}
+	var reqs []core.BALRequest
+	for _, b := range targets {
+		reqs = append(reqs, core.BALRequest{Number: b.NumberU64(), Hash: b.Hash()})
+		rawdb.DeleteAccessList(local.db, b.Hash(), b.NumberU64())
+	}
+	serveBALs(t, local, func(i int) rlp.RawValue {
+		if i == 0 {
+			return genuine
+		}
+		return forged
+	}, 0)
 
 	dropped := make(chan struct{})
 	var once sync.Once
@@ -234,20 +251,48 @@ func TestBALFetcherDropsForgingPeer(t *testing.T) {
 		local.handler.removePeer(id)
 	}, func() {})
 	defer f.stop()
-	f.request([]core.BALRequest{{Number: target.NumberU64(), Hash: target.Hash()}})
+	f.request(reqs)
 
 	select {
 	case <-dropped:
 	case <-time.After(5 * time.Second):
 		t.Fatal("forging peer never dropped")
 	}
-	if rawdb.HasAccessList(local.db, target.Hash(), target.NumberU64()) {
-		t.Fatal("a forged list was stored")
+	for _, r := range reqs {
+		if rawdb.HasAccessList(local.db, r.Hash, r.Number) {
+			t.Fatalf("block %d stored from a forging peer", r.Number)
+		}
 	}
 	for start := time.Now(); local.handler.peers.len() != 0; time.Sleep(10 * time.Millisecond) {
 		if time.Since(start) > 3*time.Second {
 			t.Fatal("peer still registered after the drop")
 		}
+	}
+}
+
+// TestBALFetcherRejectsOversizedReply pins the layer below: an over-answering
+// peer is cut at the dispatcher, nothing reaches the store.
+func TestBALFetcherRejectsOversizedReply(t *testing.T) {
+	gspec, blocks := balRigChain(t)
+	local := newBALTestHandler(t, gspec, blocks)
+	defer local.close()
+
+	target := blocks[2]
+	genuine := rawdb.ReadAccessListRLP(local.db, target.Hash(), target.NumberU64())
+	rawdb.DeleteAccessList(local.db, target.Hash(), target.NumberU64())
+	serveBALs(t, local, func(int) rlp.RawValue { return genuine }, 1)
+
+	f := newBALFetcher(local.db, local.chain, local.handler.peers, func(string) {}, func() {})
+	defer f.stop()
+	f.request([]core.BALRequest{{Number: target.NumberU64(), Hash: target.Hash()}})
+
+	for start := time.Now(); local.handler.peers.len() != 0; time.Sleep(10 * time.Millisecond) {
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("over-answering peer still connected")
+		}
+	}
+	if rawdb.HasAccessList(local.db, target.Hash(), target.NumberU64()) {
+		t.Fatal("an oversized reply stored a list")
 	}
 }
 
@@ -261,43 +306,7 @@ func TestBALFetcherSkipsUnavailable(t *testing.T) {
 
 	target := blocks[2]
 	rawdb.DeleteAccessList(local.db, target.Hash(), target.NumberU64())
-
-	p2pLocal, p2pRemote := p2p.MsgPipe()
-	defer p2pLocal.Close()
-	defer p2pRemote.Close()
-	peerAtLocal := eth.NewPeer(eth.ETH71, p2p.NewPeerPipe(enode.ID{1}, "", nil, p2pLocal), p2pLocal, local.txpool, local.txpool, nil)
-	remote := eth.NewPeer(eth.ETH71, p2p.NewPeerPipe(enode.ID{2}, "", nil, p2pRemote), p2pRemote, local.txpool, local.txpool, nil)
-	defer peerAtLocal.Close()
-	defer remote.Close()
-	go local.handler.runEthPeer(peerAtLocal, func(p *eth.Peer) error {
-		return eth.Handle((*ethHandler)(local.handler), p)
-	})
-	head := local.chain.CurrentBlock()
-	if err := remote.Handshake(1, local.chain, eth.BlockRangeUpdatePacket{EarliestBlock: 0, LatestBlock: head.Number.Uint64(), LatestBlockHash: head.Hash()}); err != nil {
-		t.Fatalf("handshake: %v", err)
-	}
-	go func() {
-		for {
-			msg, err := p2pRemote.ReadMsg()
-			if err != nil {
-				return
-			}
-			if msg.Code != eth.GetBlockAccessListsMsg {
-				msg.Discard()
-				continue
-			}
-			var query eth.GetBlockAccessListsPacket
-			if err := msg.Decode(&query); err != nil {
-				return
-			}
-			var list rlp.RawList[rlp.RawValue]
-			for range query.GetBlockAccessListsRequest {
-				list.AppendRaw(rlp.EmptyString)
-			}
-			remote.ReplyBlockAccessLists(query.RequestId, list)
-		}
-	}()
-	waitPeers(t, local.handler, 1)
+	serveBALs(t, local, func(int) rlp.RawValue { return rlp.EmptyString }, 0)
 
 	f := newBALFetcher(local.db, local.chain, local.handler.peers, func(id string) {
 		t.Errorf("unavailable peer %s was dropped", id)

@@ -132,13 +132,10 @@ func (f *balFetcher) fetchFrom(peer *eth.Peer, pending []core.BALRequest) (int, 
 	defer timeout.Stop()
 	select {
 	case res := <-resCh:
+		// The dispatcher rejects oversized replies before they reach the
+		// sink, so at most one item per request arrives here.
 		items := ([]rlp.RawValue)(*res.Res.(*eth.BlockAccessListResponse))
 		metas := res.Meta.([]common.Hash)
-		if len(items) > len(pending) {
-			res.Done <- errors.New("oversized access list response")
-			f.drop(peer.ID())
-			return 0, pending
-		}
 		// Verify everything before storing anything: one forged item voids
 		// the whole response and the peer.
 		var verified []int

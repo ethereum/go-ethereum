@@ -18,6 +18,7 @@ package catalyst
 
 import (
 	"context"
+	"math/big"
 	"testing"
 	"time"
 
@@ -30,9 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -138,7 +141,17 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	if chain.TrieDB().IsPBT() {
 		t.Fatal("migrating node opened on the binary tree")
 	}
-	// Pre-fork only the binary direction runs.
+	var (
+		signer    = types.LatestSigner(genesis.Config)
+		recipient = common.Address{0xba, 0x17}
+		pay       = func(pool *txpool.TxPool, nonce uint64) {
+			pool.Add([]*types.Transaction{types.MustSignNewTx(testKey, signer, &types.LegacyTx{
+				Nonce: nonce, Gas: 1_000_000, GasPrice: big.NewInt(2 * params.InitialBaseFee), To: &recipient, Value: big.NewInt(1000),
+			})}, true)
+		}
+	)
+	// Pre-fork only the binary direction runs; block 1 carries a transfer.
+	pay(ethservice.TxPool(), 0)
 	parent := chain.CurrentBlock()
 	for i := 0; i < 2; i++ {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
@@ -166,15 +179,15 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	if rawdb.ReadPBTMigrationDone(ethservice.ChainDb()) {
 		t.Fatal("window closed without finality")
 	}
-	// Both sides of the boundary stay readable.
+	// Both sides of the boundary stay readable, transfer included.
 	for _, number := range []uint64{2, 5} {
 		header := chain.GetHeaderByNumber(number)
 		statedb, err := chain.StateAt(header)
 		if err != nil {
 			t.Fatalf("state at block %d: %v", number, err)
 		}
-		if got := statedb.GetBalance(testAddr).ToBig(); got.Cmp(testBalance) != 0 {
-			t.Fatalf("balance at block %d = %v, want %v", number, got, testBalance)
+		if got := statedb.GetBalance(recipient).Uint64(); got != 1000 {
+			t.Fatalf("recipient balance at block %d = %d, want 1000", number, got)
 		}
 	}
 	if p := chain.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "parked" ||
@@ -212,8 +225,15 @@ func TestFullMigrationLifecycle(t *testing.T) {
 		}
 		return m != nil && m.Phase == "synced" && m.ShadowRoot == want
 	})
+	// The window replays a transaction-bearing binary block after the reboot.
+	pay(eth2.TxPool(), 1)
 	newHead := buildBlock(t, api2, chain2.CurrentBlock(), 6, common.Hash{})
 	awaitShadowReady(t, chain2, newHead)
+	if st, err := chain2.StateAt(newHead); err != nil {
+		t.Fatalf("state at the new head: %v", err)
+	} else if got := st.GetBalance(recipient).Uint64(); got != 2000 {
+		t.Fatalf("recipient balance after the boundary transfer = %d, want 2000", got)
+	}
 	if p := chain2.MigrationProgress(); p.Binary != nil {
 		t.Fatalf("binary direction revived without a pre-fork head: %+v", p.Binary)
 	}
@@ -459,11 +479,11 @@ func TestShadowRootStreamNeverBlocksImport(t *testing.T) {
 		return rawdb.ReadPBTMigrationDone(ethservice.ChainDb())
 	})
 	start := time.Now()
-	for i := 5; i < 35; i++ {
+	for i := 5; i < 75; i++ {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
 	}
 	if elapsed := time.Since(start); elapsed > 20*time.Second {
-		t.Fatalf("30 recordless heads took %v: the stream backpressures imports", elapsed)
+		t.Fatalf("70 recordless heads took %v: the stream backpressures imports", elapsed)
 	}
 }
 
