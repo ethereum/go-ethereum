@@ -24,18 +24,18 @@ func TestG1AddAliasing(t *testing.T) {
 
 	got := new(G1).ScalarBaseMult(big.NewInt(7))
 	if got.Add(got, got); !bytes.Equal(got.Marshal(), doubled) {
-		t.Errorf("g.Add(g, g) = %x, want %x", got.Marshal(), doubled)
+		t.Errorf("got.Add(got, got) = %x, want %x", got.Marshal(), doubled)
 	}
 	if got = new(G1).Add(a, a); !bytes.Equal(got.Marshal(), doubled) {
-		t.Errorf("e.Add(g, g) = %x, want %x", got.Marshal(), doubled)
+		t.Errorf("new(G1).Add(a, a) = %x, want %x", got.Marshal(), doubled)
 	}
 	got = new(G1).ScalarBaseMult(big.NewInt(7))
 	if got.Add(got, b); !bytes.Equal(got.Marshal(), sum) {
-		t.Errorf("e.Add(e, b) = %x, want %x", got.Marshal(), sum)
+		t.Errorf("got.Add(got, b) = %x, want %x", got.Marshal(), sum)
 	}
 	got = new(G1).ScalarBaseMult(big.NewInt(11))
 	if got.Add(a, got); !bytes.Equal(got.Marshal(), sum) {
-		t.Errorf("e.Add(a, e) = %x, want %x", got.Marshal(), sum)
+		t.Errorf("got.Add(a, got) = %x, want %x", got.Marshal(), sum)
 	}
 }
 
@@ -49,18 +49,18 @@ func TestG2AddAliasing(t *testing.T) {
 
 	got := new(G2).ScalarBaseMult(big.NewInt(7))
 	if got.Add(got, got); !bytes.Equal(got.Marshal(), doubled) {
-		t.Errorf("g.Add(g, g) = %x, want %x", got.Marshal(), doubled)
+		t.Errorf("got.Add(got, got) = %x, want %x", got.Marshal(), doubled)
 	}
 	if got = new(G2).Add(a, a); !bytes.Equal(got.Marshal(), doubled) {
-		t.Errorf("e.Add(g, g) = %x, want %x", got.Marshal(), doubled)
+		t.Errorf("new(G2).Add(a, a) = %x, want %x", got.Marshal(), doubled)
 	}
 	got = new(G2).ScalarBaseMult(big.NewInt(7))
 	if got.Add(got, b); !bytes.Equal(got.Marshal(), sum) {
-		t.Errorf("e.Add(e, b) = %x, want %x", got.Marshal(), sum)
+		t.Errorf("got.Add(got, b) = %x, want %x", got.Marshal(), sum)
 	}
 	got = new(G2).ScalarBaseMult(big.NewInt(11))
 	if got.Add(a, got); !bytes.Equal(got.Marshal(), sum) {
-		t.Errorf("e.Add(a, e) = %x, want %x", got.Marshal(), sum)
+		t.Errorf("got.Add(a, got) = %x, want %x", got.Marshal(), sum)
 	}
 }
 
