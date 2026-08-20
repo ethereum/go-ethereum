@@ -37,6 +37,8 @@ var (
 	blobBufferCellsFirstCounter = metrics.NewRegisteredCounter("blobpool/buffer/cellsfirst", nil)
 	blobBufferTotalTx           = metrics.NewRegisteredGauge("blobpool/buffer/txcount", nil)
 	blobBufferTotalCells        = metrics.NewRegisteredGauge("blobpool/buffer/cellcount", nil)
+	blobBufferExtendedCounter   = metrics.NewRegisteredCounter("blobpool/buffer/extended", nil)
+	blobBufferExtendFailCounter = metrics.NewRegisteredCounter("blobpool/buffer/extendfail", nil)
 )
 
 const (
@@ -167,8 +169,10 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 	blobBufferCellsFirstCounter.Inc(1)
 }
 
-// storeCompleted verifies cells per-peer, sorts them, and schedules them for
-// addition into the pool. The actual addition happens in Flush().
+// storeCompleted verifies cells per-peer, sorts them, completes the extended
+// cell set when the collected cells suffice to reconstruct it (provider
+// extension), and schedules the transaction for addition into the pool. The
+// actual addition happens in Flush().
 func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cells *cellEntry) {
 	sidecar := tx.BlobTxSidecar()
 
@@ -181,6 +185,27 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 	}
 	blobCount := len(tx.BlobHashes())
 	sorted, custody := sortCells(cells, blobCount)
+
+	// Provider extension: if the collected cells suffice to reconstruct the
+	// blobs but don't cover the full extended set, complete it locally. This
+	// trades a few ms of compute for not downloading the remaining cells, and
+	// lets the node announce -- and serve -- full availability, as the provider
+	// role requires. The reconstructed cells are determined by the already-
+	// verified input, but the shipped proofs of the non-custodied indices have
+	// not been verified yet, so check them before adopting: a transaction whose
+	// own proofs don't match its data is invalid and is discarded.
+	if n := custody.OneCount(); n >= kzg4844.DataPerBlob && n < kzg4844.CellsPerBlob {
+		extended, err := extendCells(sidecar, sorted, custody)
+		if err != nil {
+			log.Warn("Dropping blob tx with unverifiable extension proofs", "hash", hash, "err", err)
+			blobBufferExtendFailCounter.Inc(1)
+			delete(b.cells, hash)
+			delete(b.txs, hash)
+			return
+		}
+		sorted, custody = extended, types.CustodyBitmapAll
+		blobBufferExtendedCounter.Inc(1)
+	}
 
 	cellSidecar := types.BlobTxCellSidecar{
 		Version:     sidecar.Version,
@@ -315,4 +340,36 @@ func sortCells(entry *cellEntry, blobCount int) ([]kzg4844.Cell, types.CustodyBi
 
 	custody := types.NewCustodyBitmap(indices)
 	return res, custody
+}
+
+// extendCells completes a reconstructable cell set (at least DataPerBlob cells
+// per blob, in ascending custody order, already proof-verified by the caller)
+// to the full extended set, and verifies the newly produced cells against the
+// transaction's shipped proofs. Those proofs could not be checked before: their
+// cells did not exist until reconstruction.
+func extendCells(sidecar *types.BlobTxSidecar, cells []kzg4844.Cell, custody types.CustodyBitmap) ([]kzg4844.Cell, error) {
+	blobCount := len(sidecar.Commitments)
+	if len(sidecar.Proofs) != blobCount*kzg4844.CellProofsPerBlob {
+		return nil, fmt.Errorf("invalid number of cell proofs: %d", len(sidecar.Proofs))
+	}
+	all, err := kzg4844.RecoverCells(cells, custody.Indices())
+	if err != nil {
+		return nil, err
+	}
+	// Verify the not-previously-covered indices in one batch.
+	var (
+		newIndices = types.CustodyBitmapAll.Difference(custody).Indices()
+		vcells     = make([]kzg4844.Cell, 0, blobCount*len(newIndices))
+		vproofs    = make([]kzg4844.Proof, 0, blobCount*len(newIndices))
+	)
+	for b := range blobCount {
+		for _, idx := range newIndices {
+			vcells = append(vcells, all[b*kzg4844.CellsPerBlob+int(idx)])
+			vproofs = append(vproofs, sidecar.Proofs[b*kzg4844.CellProofsPerBlob+int(idx)])
+		}
+	}
+	if err := kzg4844.VerifyCells(vcells, sidecar.Commitments, vproofs, newIndices); err != nil {
+		return nil, err
+	}
+	return all, nil
 }
