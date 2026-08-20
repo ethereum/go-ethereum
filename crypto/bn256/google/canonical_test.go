@@ -102,3 +102,21 @@ func TestNegativeIsCanonical(t *testing.T) {
 		}
 	}
 }
+
+// TestGFp2IsOneCanonical checks that IsOne only accepts the reduced one. It
+// reads y through Bits, which reports the magnitude, so -1 used to pass.
+func TestGFp2IsOneCanonical(t *testing.T) {
+	for _, e := range []*gfP2{
+		{new(big.Int), big.NewInt(-1)},
+		{new(big.Int), new(big.Int).Add(P, big.NewInt(1))},
+		{new(big.Int).Set(P), big.NewInt(1)},
+	} {
+		if e.IsOne() {
+			t.Errorf("gfP2%s.IsOne() = true, want false", e)
+		}
+	}
+	one := newGFp2(nil).SetOne()
+	if !one.IsOne() {
+		t.Errorf("gfP2%s.IsOne() = false, want true", one)
+	}
+}

@@ -64,8 +64,13 @@ func (e *gfP2) IsZero() bool {
 	return e.x.Sign() == 0 && e.y.Sign() == 0
 }
 
+// IsOne reports whether e is the canonical representation of one. Values that
+// are congruent to one but not reduced, such as P+1, report false, so call
+// Minimal first where that matters.
 func (e *gfP2) IsOne() bool {
-	if e.x.Sign() != 0 {
+	// Bits reports the magnitude of y and would read -1 as 1, so reject a
+	// negative y before consulting it.
+	if e.x.Sign() != 0 || e.y.Sign() < 0 {
 		return false
 	}
 	words := e.y.Bits()
