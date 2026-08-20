@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // generateMigrationChain pre-generates n blocks, each paying the recipient
@@ -446,5 +447,46 @@ func TestFollowerStopsOnCanonicalDiscontinuity(t *testing.T) {
 	}
 	if _, ok := rawdb.ReadShadowStateRoot(db, 2, branchB[1].Hash()); ok {
 		t.Fatal("a spliced block got a shadow root recorded")
+	}
+}
+
+// TestFollowerBatchesDeepCatchup pins the fold path: a follower far behind
+// folds ranges - sparse records - and lands on the root the per-block path
+// produces.
+func TestFollowerBatchesDeepCatchup(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 300)
+	writeChainShape(db, blocks)
+	head := blocks[len(blocks)-1].Header()
+
+	batched := standaloneFollower(genesis, db)
+	if err := batched.follow(head, nil); err != nil {
+		t.Fatalf("batched catch-up: %v", err)
+	}
+	want, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash())
+	if !ok {
+		t.Fatal("batched catch-up recorded no head root")
+	}
+	if _, ok := rawdb.ReadShadowStateRoot(db, 50, blocks[49].Hash()); ok {
+		t.Fatal("a folded-over block got a record")
+	}
+	if _, ok := rawdb.ReadShadowStateRoot(db, 128, blocks[127].Hash()); !ok {
+		t.Fatal("the batch end got no record")
+	}
+
+	db2 := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(db2, triedb.HashDefaults)
+	defer tdb.Close()
+	if _, err := genesis.Commit(db2, tdb, nil); err != nil {
+		t.Fatal(err)
+	}
+	writeChainShape(db2, blocks)
+	perBlock := standaloneFollower(genesis, db2)
+	for _, n := range []int{100, 200, 300} {
+		if err := perBlock.follow(blocks[n-1].Header(), nil); err != nil {
+			t.Fatalf("per-block catch-up to %d: %v", n, err)
+		}
+	}
+	if got, ok := rawdb.ReadShadowStateRoot(db2, head.Number.Uint64(), head.Hash()); !ok || got != want {
+		t.Fatalf("per-block root %x (ok=%v), batched said %x", got, ok, want)
 	}
 }

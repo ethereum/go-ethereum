@@ -250,3 +250,66 @@ func TestBALFetcherDropsForgingPeer(t *testing.T) {
 		}
 	}
 }
+
+// TestBALFetcherSkipsUnavailable pins the rotation contract: a peer without
+// the lists is left alone - nothing stored, nothing dropped - and the
+// request stays pending for the next peer.
+func TestBALFetcherSkipsUnavailable(t *testing.T) {
+	gspec, blocks := balRigChain(t)
+	local := newBALTestHandler(t, gspec, blocks)
+	defer local.close()
+
+	target := blocks[2]
+	rawdb.DeleteAccessList(local.db, target.Hash(), target.NumberU64())
+
+	p2pLocal, p2pRemote := p2p.MsgPipe()
+	defer p2pLocal.Close()
+	defer p2pRemote.Close()
+	peerAtLocal := eth.NewPeer(eth.ETH71, p2p.NewPeerPipe(enode.ID{1}, "", nil, p2pLocal), p2pLocal, local.txpool, local.txpool, nil)
+	remote := eth.NewPeer(eth.ETH71, p2p.NewPeerPipe(enode.ID{2}, "", nil, p2pRemote), p2pRemote, local.txpool, local.txpool, nil)
+	defer peerAtLocal.Close()
+	defer remote.Close()
+	go local.handler.runEthPeer(peerAtLocal, func(p *eth.Peer) error {
+		return eth.Handle((*ethHandler)(local.handler), p)
+	})
+	head := local.chain.CurrentBlock()
+	if err := remote.Handshake(1, local.chain, eth.BlockRangeUpdatePacket{EarliestBlock: 0, LatestBlock: head.Number.Uint64(), LatestBlockHash: head.Hash()}); err != nil {
+		t.Fatalf("handshake: %v", err)
+	}
+	go func() {
+		for {
+			msg, err := p2pRemote.ReadMsg()
+			if err != nil {
+				return
+			}
+			if msg.Code != eth.GetBlockAccessListsMsg {
+				msg.Discard()
+				continue
+			}
+			var query eth.GetBlockAccessListsPacket
+			if err := msg.Decode(&query); err != nil {
+				return
+			}
+			var list rlp.RawList[rlp.RawValue]
+			for range query.GetBlockAccessListsRequest {
+				list.AppendRaw(rlp.EmptyString)
+			}
+			remote.ReplyBlockAccessLists(query.RequestId, list)
+		}
+	}()
+	waitPeers(t, local.handler, 1)
+
+	f := newBALFetcher(local.db, local.chain, local.handler.peers, func(id string) {
+		t.Errorf("unavailable peer %s was dropped", id)
+	}, func() {})
+	defer f.stop()
+
+	reqs := []core.BALRequest{{Number: target.NumberU64(), Hash: target.Hash()}}
+	stored, rest := f.fetchFrom(local.handler.peers.all()[0].Peer, reqs)
+	if stored != 0 || len(rest) != 1 || rest[0] != reqs[0] {
+		t.Fatalf("unavailable reply: stored %d, rest %v", stored, rest)
+	}
+	if rawdb.HasAccessList(local.db, target.Hash(), target.NumberU64()) {
+		t.Fatal("an unavailable reply stored a list")
+	}
+}
