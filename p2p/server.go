@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"cmp"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -85,6 +86,7 @@ type Server struct {
 	running bool
 
 	listener     net.Listener
+	quicListener *quicListener
 	ourHandshake *protoHandshake
 	loopWG       sync.WaitGroup // loop, listenLoop
 	peerFeed     event.Feed
@@ -111,6 +113,7 @@ type Server struct {
 	checkpointAddPeer       chan *conn
 
 	// State of run loop and listenLoop.
+	inboundLock    sync.Mutex
 	inboundHistory expHeap
 }
 
@@ -325,6 +328,9 @@ func (srv *Server) Stop() {
 		// this unblocks listener Accept
 		srv.listener.Close()
 	}
+	if srv.quicListener != nil {
+		srv.quicListener.Close()
+	}
 	close(srv.quit)
 	srv.lock.Unlock()
 	srv.loopWG.Wait()
@@ -372,7 +378,7 @@ func (srv *Server) Start() (err error) {
 	if srv.clock == nil {
 		srv.clock = mclock.System{}
 	}
-	if srv.NoDial && srv.ListenAddr == "" {
+	if srv.NoDial && srv.ListenTCPAddr == "" && srv.ListenQUICAddr == "" {
 		srv.log.Warn("P2P server will be useless, neither dialing nor listening")
 	}
 
@@ -400,10 +406,8 @@ func (srv *Server) Start() (err error) {
 	}
 	srv.setupPortMapping()
 
-	if srv.ListenAddr != "" {
-		if err := srv.setupListening(); err != nil {
-			return err
-		}
+	if err := srv.setupListening(); err != nil {
+		return err
 	}
 	if err := srv.setupDiscovery(); err != nil {
 		return err
@@ -537,7 +541,12 @@ func (srv *Server) setupDialScheduler() {
 		config.resolver = srv.discv4
 	}
 	if config.dialer == nil {
-		config.dialer = tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
+		tcp := tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
+		if srv.quicListener != nil {
+			config.dialer = &quicDialer{tcp: tcp, ln: srv.quicListener}
+		} else {
+			config.dialer = tcp
+		}
 	}
 	srv.dialsched = newDialScheduler(config, srv.discmix, srv.SetupConn)
 	for _, n := range srv.StaticNodes {
@@ -565,13 +574,27 @@ func (srv *Server) MaxDialedConns() (limit int) {
 }
 
 func (srv *Server) setupListening() error {
+	if srv.ListenTCPAddr != "" {
+		if err := srv.setupTCP(); err != nil {
+			return err
+		}
+	}
+	if srv.ListenQUICAddr != "" {
+		if err := srv.setupQUIC(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (srv *Server) setupTCP() error {
 	// Launch the listener.
-	listener, err := srv.listenFunc("tcp", srv.ListenAddr)
+	listener, err := srv.listenFunc("tcp", srv.ListenTCPAddr)
 	if err != nil {
 		return err
 	}
 	srv.listener = listener
-	srv.ListenAddr = listener.Addr().String()
+	srv.ListenTCPAddr = listener.Addr().String()
 
 	// Update the local node record and map the TCP listening port if NAT is configured.
 	tcp, isTCP := listener.Addr().(*net.TCPAddr)
@@ -587,12 +610,36 @@ func (srv *Server) setupListening() error {
 	}
 
 	srv.loopWG.Add(1)
-	go srv.listenLoop()
+	go srv.listenLoop(listener)
+	return nil
+}
+
+func (srv *Server) setupQUIC() error {
+	tlsConf, err := generateQUICTLSConfig()
+	if err != nil {
+		return err
+	}
+	listener, err := newQUICListener(srv.ListenQUICAddr, tlsConf)
+	if err != nil {
+		return err
+	}
+	srv.quicListener = listener
+	srv.ListenQUICAddr = listener.Addr().String()
+
+	if udp, ok := listener.Addr().(*net.UDPAddr); ok {
+		srv.localnode.Set(enr.QUIC(udp.Port))
+	}
+	srv.localnode.Set(quicCertHash(sha256.Sum256(tlsConf.Certificates[0].Certificate[0])))
+
+	//todo: port mapping
+
+	srv.loopWG.Add(1)
+	go srv.listenLoop(listener)
 	return nil
 }
 
 func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
-	listenAddr := srv.ListenAddr
+	listenAddr := srv.ListenTCPAddr
 
 	// Use an alternate listening address for UDP if
 	// a custom discovery address is configured.
@@ -780,8 +827,8 @@ func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *
 
 // listenLoop runs in its own goroutine and accepts
 // inbound connections.
-func (srv *Server) listenLoop() {
-	srv.log.Debug("TCP listener up", "addr", srv.listener.Addr())
+func (srv *Server) listenLoop(ln net.Listener) {
+	srv.log.Debug("Listener up", "addr", ln.Addr())
 
 	// The slots channel limits accepts of new connections.
 	tokens := defaultMaxPendingPeers
@@ -812,7 +859,7 @@ func (srv *Server) listenLoop() {
 			lastLog time.Time
 		)
 		for {
-			fd, err = srv.listener.Accept()
+			fd, err = ln.Accept()
 			if netutil.IsTemporaryError(err) {
 				if time.Since(lastLog) > 1*time.Second {
 					srv.log.Debug("Temporary read error", "err", err)
@@ -859,6 +906,8 @@ func (srv *Server) checkInboundConn(remoteIP netip.Addr) error {
 		return errors.New("not in netrestrict list")
 	}
 	// Reject Internet peers that try too often.
+	srv.inboundLock.Lock()
+	defer srv.inboundLock.Unlock()
 	now := srv.clock.Now()
 	srv.inboundHistory.expire(now, nil)
 	if !netutil.AddrIsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
@@ -878,10 +927,14 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 			srv.dialsched.inboundCompleted(c.node.ID())
 		}
 	}()
-	if dialDest == nil {
-		c.transport = srv.newTransport(fd, nil)
+	var dialPub *ecdsa.PublicKey
+	if dialDest != nil {
+		dialPub = dialDest.Pubkey()
+	}
+	if qc := unwrapQUICConn(fd); qc != nil {
+		c.transport = newQUICTransport(fd, qc.qc, dialPub)
 	} else {
-		c.transport = srv.newTransport(fd, dialDest.Pubkey())
+		c.transport = srv.newTransport(fd, dialPub)
 	}
 
 	err := srv.setupConn(c, dialDest)
@@ -956,9 +1009,11 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 func nodeFromConn(pubkey *ecdsa.PublicKey, conn net.Conn) *enode.Node {
 	var ip net.IP
 	var port int
-	if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
-		ip = tcp.IP
-		port = tcp.Port
+	switch addr := conn.RemoteAddr().(type) {
+	case *net.TCPAddr:
+		ip, port = addr.IP, addr.Port
+	case *net.UDPAddr:
+		ip, port = addr.IP, addr.Port
 	}
 	return enode.NewV4(pubkey, ip, port, port)
 }
@@ -1042,7 +1097,7 @@ func (srv *Server) NodeInfo() *NodeInfo {
 		Enode:      node.URLv4(),
 		ID:         node.ID().String(),
 		IP:         node.IPAddr().String(),
-		ListenAddr: srv.ListenAddr,
+		ListenAddr: srv.ListenTCPAddr,
 		Protocols:  make(map[string]interface{}),
 	}
 	info.Ports.Discovery = node.UDP()

@@ -44,19 +44,33 @@ const (
 	discWriteTimeout = 1 * time.Second
 )
 
-// rlpxTransport is the transport used by actual (non-test) connections.
-// It wraps an RLPx connection with locks and read/write deadlines.
-type rlpxTransport struct {
+// wireConn is the connection layer underneath a wireTransport. Implementations
+// provide the encryption handshake and message framing of a specific wire
+// protocol, e.g. RLPx over TCP or RLP plaintext frames over a QUIC stream.
+type wireConn interface {
+	Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error)
+	Read() (code uint64, data []byte, wireSize int, err error)
+	Write(code uint64, data []byte) (uint32, error)
+	SetSnappy(snappy bool)
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
+	SetDeadline(t time.Time) error
+	Close() error
+}
+
+// wireTransport is the transport used by actual (non-test) connections.
+// It wraps a wireConn with locks and read/write deadlines.
+type wireTransport struct {
 	rmu, wmu sync.Mutex
 	wbuf     bytes.Buffer
-	conn     *rlpx.Conn
+	conn     wireConn
 }
 
 func newRLPX(conn net.Conn, dialDest *ecdsa.PublicKey) transport {
-	return &rlpxTransport{conn: rlpx.NewConn(conn, dialDest)}
+	return &wireTransport{conn: rlpx.NewConn(conn, dialDest)}
 }
 
-func (t *rlpxTransport) ReadMsg() (Msg, error) {
+func (t *wireTransport) ReadMsg() (Msg, error) {
 	t.rmu.Lock()
 	defer t.rmu.Unlock()
 
@@ -65,8 +79,8 @@ func (t *rlpxTransport) ReadMsg() (Msg, error) {
 	code, data, wireSize, err := t.conn.Read()
 	if err == nil {
 		// Protocol messages are dispatched to subprotocol handlers asynchronously,
-		// but package rlpx may reuse the returned 'data' buffer on the next call
-		// to Read. Copy the message data to avoid this being an issue.
+		// but the wire connection may reuse the returned 'data' buffer on the
+		// next call to Read. Copy the message data to avoid this being an issue.
 		data = common.CopyBytes(data)
 		msg = Msg{
 			ReceivedAt: time.Now(),
@@ -79,7 +93,7 @@ func (t *rlpxTransport) ReadMsg() (Msg, error) {
 	return msg, err
 }
 
-func (t *rlpxTransport) WriteMsg(msg Msg) error {
+func (t *wireTransport) WriteMsg(msg Msg) error {
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
 
@@ -106,7 +120,7 @@ func (t *rlpxTransport) WriteMsg(msg Msg) error {
 	return nil
 }
 
-func (t *rlpxTransport) close(err error) {
+func (t *wireTransport) close(err error) {
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
 
@@ -126,12 +140,12 @@ func (t *rlpxTransport) close(err error) {
 	t.conn.Close()
 }
 
-func (t *rlpxTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
+func (t *wireTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 	t.conn.SetDeadline(time.Now().Add(handshakeTimeout))
 	return t.conn.Handshake(prv)
 }
 
-func (t *rlpxTransport) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
+func (t *wireTransport) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
 	// Writing our handshake happens concurrently, we prefer
 	// returning the handshake read error. If the remote side
 	// disconnects us early with a valid reason, we should return it

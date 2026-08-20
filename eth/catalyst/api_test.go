@@ -445,9 +445,9 @@ func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block,
 
 	n, err := node.New(&node.Config{
 		P2P: p2p.Config{
-			ListenAddr:  "0.0.0.0:0",
-			NoDiscovery: true,
-			MaxPeers:    25,
+			ListenTCPAddr: "0.0.0.0:0",
+			NoDiscovery:   true,
+			MaxPeers:      25,
 		}})
 	if err != nil {
 		t.Fatal("can't create node:", err)

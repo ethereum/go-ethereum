@@ -93,13 +93,14 @@ type Config struct {
 	// each peer.
 	Protocols []Protocol `toml:"-" json:"-"`
 
-	// If ListenAddr is set to a non-nil address, the server
+	// If ListenTCPAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
 	//
 	// If the port is zero, the operating system will pick a port. The
-	// ListenAddr field will be updated with the actual address when
+	// ListenTCPAddr field will be updated with the actual address when
 	// the server is started.
-	ListenAddr string
+	ListenTCPAddr  string
+	ListenQUICAddr string
 
 	// If DiscAddr is set to a non-nil value, the server will use ListenAddr
 	// for TCP and DiscAddr for the UDP discovery protocol.
