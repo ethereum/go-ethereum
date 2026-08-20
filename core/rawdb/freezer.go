@@ -328,10 +328,13 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 
 // lowestTail returns the smallest tail among the tail groups.
 func (f *Freezer) lowestTail() uint64 {
-	var lowest uint64
+	var (
+		lowest uint64
+		first  = true
+	)
 	for _, tail := range f.tails {
-		if v := tail.Load(); v < lowest {
-			lowest = v
+		if v := tail.Load(); first || v < lowest {
+			lowest, first = v, false
 		}
 	}
 	return lowest
