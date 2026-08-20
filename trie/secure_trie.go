@@ -83,6 +83,10 @@ func NewStateTrie(id *ID, db database.NodeDatabase) (*StateTrie, error) {
 	if err != nil {
 		return nil, err
 	}
+	// State tries always follow a hash-then-commit lifecycle, so cache the node
+	// encodings produced during hashing for reuse by the subsequent commit.
+	trie.cacheBlob = true
+
 	tr := &StateTrie{
 		trie:        *trie,
 		db:          db,
