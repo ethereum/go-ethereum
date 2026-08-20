@@ -496,6 +496,28 @@ func TestChainFreezerBALAlignment(t *testing.T) {
 	if !bytes.Equal(got, balPayload) {
 		t.Fatalf("BAL[%d]: got %x, want %x", items, got, balPayload)
 	}
+	// Rewinding below the aligned tail must be permitted: the BAL table holds
+	// nothing down there, so dropping it is lossless. Rejecting it would abort
+	// the rewind, and because the other tables are truncated first, the freezer
+	// would be left inconsistent and fail to open again.
+	rewind := items / 2
+	if _, err := f.TruncateHead(rewind); err != nil {
+		t.Fatalf("truncate head to %d: %v", rewind, err)
+	}
+	if tail, err := f.Tail(ChainFreezerBALGroup); err != nil || tail != rewind {
+		t.Fatalf("BAL tail after rewind: got %d (err %v), want %d", tail, err, rewind)
+	}
+	require.NoError(t, f.Close())
+
+	reopened, err := NewFreezer(dir, "", false, 2049, chainFreezerTableConfigs)
+	if err != nil {
+		t.Fatalf("can't re-open freezer after rewind: %v", err)
+	}
+	defer reopened.Close()
+
+	if got, _ := reopened.Ancients(); got != rewind {
+		t.Fatalf("head after re-open: got %d, want %d", got, rewind)
+	}
 }
 
 func TestFreezerCloseSync(t *testing.T) {
