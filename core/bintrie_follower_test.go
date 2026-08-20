@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -257,8 +258,42 @@ func TestFollowerStallsOnMissingAccessList(t *testing.T) {
 
 	f := standaloneFollower(genesis, db)
 	err := f.follow(blocks[len(blocks)-1].Header(), nil)
-	if err == nil || !strings.Contains(err.Error(), "access list") {
-		t.Fatalf("follow = %v, want a missing-access-list error", err)
+	var missing *MissingAccessListError
+	if !errors.As(err, &missing) || missing.Number != blocks[0].NumberU64() {
+		t.Fatalf("follow = %v, want a MissingAccessListError for block %d", err, blocks[0].NumberU64())
+	}
+}
+
+// TestFollowerRequestsMissingLists pins the fetcher hook: a stall on a
+// missing list hands the requester exactly the absent blocks, and replay
+// completes once they land.
+func TestFollowerRequestsMissingLists(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 4)
+	writeChainShape(db, blocks)
+	missing := blocks[1]
+	list := rawdb.ReadAccessList(db, missing.Hash(), missing.NumberU64())
+	rawdb.DeleteAccessList(db, missing.Hash(), missing.NumberU64())
+
+	var got []BALRequest
+	f := standaloneFollower(genesis, db)
+	f.setRequester(func(reqs []BALRequest) { got = append(got, reqs...) })
+
+	head := blocks[len(blocks)-1].Header()
+	f.sync(head, nil)
+	var stall *MissingAccessListError
+	if err := f.direction(true).stall; !errors.As(err, &stall) || stall.Number != missing.NumberU64() || stall.Hash != missing.Hash() {
+		t.Fatalf("stall = %v, want the missing list of block %d", err, missing.NumberU64())
+	}
+	if len(got) != 1 || got[0] != (BALRequest{Number: missing.NumberU64(), Hash: missing.Hash()}) {
+		t.Fatalf("requested %v, want exactly the missing block", got)
+	}
+
+	rawdb.WriteAccessList(db, missing.Hash(), missing.NumberU64(), list)
+	if err := f.follow(head, nil); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if _, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash()); !ok {
+		t.Fatal("head never recorded after the lists landed")
 	}
 }
 

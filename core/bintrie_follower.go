@@ -43,6 +43,23 @@ const (
 	followBatchBlocks = 128
 )
 
+// MissingAccessListError names a canonical block whose access list is not
+// stored; replay stalls on it until the list arrives.
+type MissingAccessListError struct {
+	Number uint64
+	Hash   common.Hash
+}
+
+func (e *MissingAccessListError) Error() string {
+	return fmt.Sprintf("access list missing for block %d %x", e.Number, e.Hash)
+}
+
+// BALRequest identifies a block whose access list the migration needs.
+type BALRequest struct {
+	Number uint64
+	Hash   common.Hash
+}
+
 // bintrieFollower replays block access lists onto the shadow trees: the
 // binary one ahead of the fork, the merkle one through the window after it.
 // Each tree is the truth for where its replay stands; the persisted cursors
@@ -52,11 +69,13 @@ type bintrieFollower struct {
 	config *params.ChainConfig
 	cfg    *BlockChainConfig
 
-	mu   sync.Mutex
-	dirs [2]*followerTree // binary then merkle; created on first use
+	mu        sync.Mutex
+	dirs      [2]*followerTree // binary then merkle; created on first use
+	requester func([]BALRequest)
 
 	chain   *BlockChain // nil when driven synchronously in tests
 	headCh  chan ChainHeadEvent
+	kickCh  chan struct{}
 	headSub event.Subscription
 	term    chan chan struct{}
 	closed  chan struct{}
@@ -85,6 +104,7 @@ func newBintrieFollower(chain *BlockChain) *bintrieFollower {
 		cfg:    chain.cfg,
 		chain:  chain,
 		headCh: make(chan ChainHeadEvent),
+		kickCh: make(chan struct{}, 1),
 		term:   make(chan chan struct{}),
 		closed: make(chan struct{}),
 	}
@@ -158,7 +178,15 @@ func (f *bintrieFollower) loop() {
 		launch(head)
 	}
 	for {
+		kickCh := f.kickCh
+		if done != nil {
+			kickCh = nil // the running sync's completion re-arms
+		}
 		select {
+		case <-kickCh:
+			if latest != nil {
+				launch(latest)
+			}
 		case ev := <-f.headCh:
 			// A closed window stops maintaining the merkle tree for good; it
 			// may be disposed of, and a deeper reorg afterwards means
@@ -249,7 +277,49 @@ func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
 		f.mu.Unlock()
 		if err != nil {
 			log.Warn("Migration direction stalled", "pbt", t.pbt, "head", head.Number, "err", err)
+			var missing *MissingAccessListError
+			if errors.As(err, &missing) {
+				f.requestLists(missing.Number, head.Number.Uint64())
+			}
 		}
+	}
+}
+
+// requestLists hands the requester the absent lists from the given block up
+// to the head, at most one batch; the requester must not block.
+func (f *bintrieFollower) requestLists(from, head uint64) {
+	f.mu.Lock()
+	req := f.requester
+	f.mu.Unlock()
+	if req == nil {
+		return
+	}
+	var reqs []BALRequest
+	for n := from; n <= head && len(reqs) < followBatchBlocks; n++ {
+		hash := rawdb.ReadCanonicalHash(f.db, n)
+		if hash == (common.Hash{}) {
+			break
+		}
+		if !rawdb.HasAccessList(f.db, hash, n) {
+			reqs = append(reqs, BALRequest{Number: n, Hash: hash})
+		}
+	}
+	if len(reqs) > 0 {
+		req(reqs)
+	}
+}
+
+func (f *bintrieFollower) setRequester(req func([]BALRequest)) {
+	f.mu.Lock()
+	f.requester = req
+	f.mu.Unlock()
+}
+
+// kick re-arms a stalled sync, typically after new lists landed.
+func (f *bintrieFollower) kick() {
+	select {
+	case f.kickCh <- struct{}{}:
+	default:
 	}
 }
 
@@ -378,7 +448,7 @@ func (f *bintrieFollower) readVerifiedList(header *types.Header) (*bal.BlockAcce
 	}
 	list := rawdb.ReadAccessList(f.db, header.Hash(), number)
 	if list == nil {
-		return nil, fmt.Errorf("access list missing for block %d %x", number, header.Hash())
+		return nil, &MissingAccessListError{Number: number, Hash: header.Hash()}
 	}
 	if h := list.Hash(); h != *header.BlockAccessListHash {
 		return nil, fmt.Errorf("access list mismatch for block %d %x: have %x, header commits %x", number, header.Hash(), h, *header.BlockAccessListHash)
@@ -753,6 +823,22 @@ type DirectionProgress struct {
 	CursorHash common.Hash // last replayed block hash
 	ShadowRoot common.Hash // the tree root of that block
 	Error      string      // what stalled the direction, if anything
+}
+
+// SetBALRequester wires the fetcher that resolves missing access lists; the
+// migration hands it the blocks a stalled replay needs.
+func (bc *BlockChain) SetBALRequester(req func([]BALRequest)) {
+	if bc.follower != nil {
+		bc.follower.setRequester(req)
+	}
+}
+
+// KickMigration re-arms a stalled migration sync, typically after new access
+// lists landed.
+func (bc *BlockChain) KickMigration() {
+	if bc.follower != nil {
+		bc.follower.kick()
+	}
 }
 
 func (bc *BlockChain) MigrationProgress() MigrationProgress {
