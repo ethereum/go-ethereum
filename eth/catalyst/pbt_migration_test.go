@@ -724,3 +724,43 @@ func TestFullMigrationLifecycleBlocksKnob(t *testing.T) {
 		t.Fatalf("progress %q, want done", p.Phase)
 	}
 }
+
+// TestShadowRootStreamNeverBlocksImport pins the sidecar's decoupling: a
+// closed migration stops producing records, and the subscription must not
+// backpressure the head feed while it waits for ones that never come.
+func TestShadowRootStreamNeverBlocksImport(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil, func(cfg *ethconfig.Config) {
+		cfg.MigrationWindowBlocks = 2
+	})
+	defer n.Close()
+
+	client := n.Attach()
+	defer client.Close()
+	events := make(chan shadowRootEvent, 64)
+	sub, err := client.Subscribe(context.Background(), "debug", events, "shadowRoots")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Unsubscribe()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("knob never closed the window")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	start := time.Now()
+	for i := 5; i < 35; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	if elapsed := time.Since(start); elapsed > 20*time.Second {
+		t.Fatalf("30 recordless heads took %v: the stream backpressures imports", elapsed)
+	}
+}

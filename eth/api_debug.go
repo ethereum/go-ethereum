@@ -563,8 +563,12 @@ type ShadowRootEvent struct {
 	ShadowRoot common.Hash    `json:"shadowRoot"`
 }
 
-// shadowRootGrace bounds how long the stream waits for a head's record.
-const shadowRootGrace = 5 * time.Second
+// shadowRootGrace bounds how long the stream waits for a head's record;
+// shadowRootQueue bounds how many heads may wait.
+const (
+	shadowRootGrace = 5 * time.Second
+	shadowRootQueue = 64
+)
 
 // ShadowRoots streams every new head's shadow root record. A head whose
 // record does not land within the grace window is skipped: consumers see
@@ -577,17 +581,41 @@ func (api *DebugAPI) ShadowRoots(ctx context.Context) (*rpc.Subscription, error)
 	var (
 		rpcSub  = notifier.CreateSubscription()
 		heads   = make(chan core.ChainHeadEvent, 16)
+		pending = make(chan *types.Header, shadowRootQueue)
 		headSub = api.eth.BlockChain().SubscribeChainHeadEvent(heads)
 		db      = api.eth.ChainDb()
 	)
+	// The head feed blocks on slow receivers, so this loop only queues:
+	// a full queue drops the oldest head rather than ever backpressuring.
 	go func() {
 		defer headSub.Unsubscribe()
 		for {
 			select {
 			case ev := <-heads:
+				select {
+				case pending <- ev.Header:
+				default:
+					select {
+					case <-pending:
+					default:
+					}
+					select {
+					case pending <- ev.Header:
+					default:
+					}
+				}
+			case <-rpcSub.Err():
+				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case header := <-pending:
 				var (
-					number   = ev.Header.Number.Uint64()
-					hash     = ev.Header.Hash()
+					number   = header.Number.Uint64()
+					hash     = header.Hash()
 					deadline = time.Now().Add(shadowRootGrace)
 				)
 				root, ok := rawdb.ReadShadowStateRoot(db, number, hash)
