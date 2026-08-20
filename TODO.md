@@ -231,3 +231,25 @@ to look.
   wholesale clears every delegated account's EIP-7702 indicator with no read
   showing it. The interface doc says so at the declaration; the safer end state
   is to delete the method until something needs it.
+
+## The transition window's merkle side engages only after a restart
+
+The follower's flavour is fixed at chain construction: the canonical tree's
+opposite. A node that crosses the fork without restarting keeps its
+binary-flavoured follower parked at the boundary, so post-fork merkle state
+is not advanced until the process restarts - the follower then comes up
+merkle-flavoured and resolves its floor through pre-fork headers. Reorgs
+back across the boundary work either way, since pre-fork merkle state is
+retained, but the EIP's strong reading of "both trees maintained" wants the
+merkle side advanced live. In-process flavour flipping is the missing piece;
+`TestMigrationNodeCrossesTheFork` pins everything up to it, and a
+restart-mid-window test needs a persistent-datadir harness the catalyst
+tests do not have.
+
+## Migration pieces EIP-8347 still wants
+
+Anchor-seeded catch-up resolves `rawdb.ReadPBTAnchor` (written by `geth
+bintrie import`) but has no end-to-end test pairing the importer with the
+follower. Fetching access lists over eth/71 for ranges the node never
+executed, re-anchoring, and the shadow-root sidecar are unstarted; the
+design doc lists them under "later".
