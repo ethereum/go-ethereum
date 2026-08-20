@@ -183,3 +183,16 @@ M3 — activation + window:
 - Two pathdb write buffers double memory in migration mode; consider halving the shadow's.
 - Snap serving/downloading for PBT roots post-activation is out of scope.
 - History-pruned nodes with an anchor below the cutoff: unresolved, later milestone.
+
+## Status addendum (2026-08-20)
+
+Everything above shipped on `pbt-bal-replay`, and the completion sprint closed the honest
+gaps: the follower runs one direction per flavour and the merkle window advances live through
+the fork (proven against a reverse conversion of the binary state); shutdown journals each
+handle at the newest root it holds, so mid-window reboots resume from cursors on a
+persistent-datadir harness; the importer pairs with the follower end to end from an anchor;
+missing access lists backfill over eth/71 with forging peers dropped; a fresh artifact
+replaces a stale position through the --force wipe; MigrationWindowBlocks closes rehearsal
+windows without finality; progress reports per direction; and debug_shadowStateRoot plus the
+debug_shadowRoots stream expose the sidecar feed. TestFullMigrationLifecycle and
+TestFullMigrationLifecycleBlocksKnob are the acceptance runs.

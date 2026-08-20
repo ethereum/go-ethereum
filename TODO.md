@@ -219,12 +219,12 @@ to look.
   proof can tell is a stub from the branch and two stubs that hash to it, so one
   statement still has more than one shape. Nothing reads a shape it did not ask
   for, so this costs bytes rather than soundness.
-- **BAL-replay catch-up is unimplemented.** `geth bintrie convert` produces
-  the EIP-8347 artifacts and `geth bintrie import` consumes them - dual-check
-  verified, anchored to the local header chain. What remains of the migration
-  lifecycle is advancing an imported anchor to the tip by replaying
-  Block-Level Access Lists, plus re-anchoring and reorg handling: networking
-  workstreams with no importer dependency.
+- **BAL-replay catch-up is implemented end to end.** `geth bintrie convert`
+  produces the EIP-8347 artifacts, `geth bintrie import` consumes them, and
+  the follower advances the anchor to the tip by replaying Block-Level
+  Access Lists - `TestAnchorSeededCatchup` pairs the two, missing lists
+  backfill over eth/71, and a fresh artifact replaces a stale position via
+  the --force wipe.
 - **`UpdateAccountBatch`** has no production caller, and it is a trap rather
   than dead weight: its `delegations` slice
   has to be built alongside the code lengths, and an adopter passing nils
@@ -232,27 +232,16 @@ to look.
   showing it. The interface doc says so at the declaration; the safer end state
   is to delete the method until something needs it.
 
-## The transition window's merkle side engages only after a restart
+## Migration leftovers are scope choices, not gaps
 
-The follower's flavour is fixed at chain construction: the canonical tree's
-opposite. A node that crosses the fork without restarting keeps its
-binary-flavoured follower parked at the boundary, so post-fork merkle state
-is not advanced until the process restarts - the follower then comes up
-merkle-flavoured and resolves its floor through pre-fork headers. Reorgs
-back across the boundary work either way, since pre-fork merkle state is
-retained, but the EIP's strong reading of "both trees maintained" wants the
-merkle side advanced live. In-process flavour flipping is the missing piece;
-`TestMigrationNodeCrossesTheFork` pins everything up to it, and a
-restart-mid-window test needs a persistent-datadir harness the catalyst
-tests do not have.
-
-## Migration pieces EIP-8347 still wants
-
-Anchor-seeded catch-up resolves `rawdb.ReadPBTAnchor` (written by `geth
-bintrie import`) but has no end-to-end test pairing the importer with the
-follower. Fetching access lists over eth/71 for ranges the node never
-executed, re-anchoring, and the shadow-root sidecar are unstarted; the
-design doc lists them under "later".
+The follower runs one direction per flavour, so the merkle window advances
+live through an in-process crossing - proven against a reverse conversion
+of the binary state - and shutdown journals each handle at the newest root
+it holds, letting mid-window reboots resume from their cursors on the
+persistent-datadir harness. `TestFullMigrationLifecycle` drives empty state
+to a finished node; the knob variant closes by block count. What remains is
+deliberate scope: snap serving for post-activation PBT roots, anchors below
+a history-pruned cutoff, and a thin-history mode for the shadow's pathdb.
 
 ## Producer-side re-anchoring is distributor tooling
 

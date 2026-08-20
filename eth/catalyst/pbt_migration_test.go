@@ -618,3 +618,109 @@ func TestShadowRootSidecar(t *testing.T) {
 		t.Fatalf("unknown block got a root: %x", *absent)
 	}
 }
+
+// TestFullMigrationLifecycle is the acceptance run: a node born on the
+// merkle tree replays the shadow from genesis, swaps at the fork, keeps the
+// old tree live through the window - across a reboot - and retires it at
+// finality.
+func TestFullMigrationLifecycle(t *testing.T) {
+	genesis := migrationTestGenesis()
+	datadir := t.TempDir()
+	n, ethservice := startPersistentEthService(t, datadir, genesis, nil)
+	closed := false
+	defer func() {
+		if !closed {
+			n.Close()
+		}
+	}()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	if chain.TrieDB().IsPBT() {
+		t.Fatal("migrating node opened on the binary tree")
+	}
+	parent := chain.CurrentBlock()
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	// The swap happened on the shadow's root and the window records verify
+	// against an independent reverse conversion.
+	postFork := chain.GetHeaderByNumber(4)
+	awaitShadowReady(t, chain, postFork)
+	got, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), 4, postFork.Hash())
+	if want := convertCanonicalMerkle(t, chain, ethservice.ChainDb(), genesis, postFork); got != want {
+		t.Fatalf("window root %x, reverse conversion says %x", got, want)
+	}
+	awaitShadowReady(t, chain, chain.CurrentBlock())
+	n.Close()
+	closed = true
+
+	// Rebooted mid-window on the binary tree, the window keeps recording.
+	n2, eth2 := startPersistentEthService(t, datadir, genesis, nil)
+	closed2 := false
+	defer func() {
+		if !closed2 {
+			n2.Close()
+		}
+	}()
+	api2 := NewConsensusAPI(eth2)
+	chain2 := eth2.BlockChain()
+	if head := chain2.CurrentBlock(); head.Number.Uint64() != 5 {
+		t.Fatalf("rebooted head %d, want 5", head.Number)
+	}
+	if !chain2.TrieDB().IsPBT() {
+		t.Fatal("rebooted node did not open on the binary tree")
+	}
+	head := buildBlock(t, api2, chain2.CurrentBlock(), 6, common.Hash{})
+	awaitShadowReady(t, chain2, head)
+
+	// Finality closes the window; a finished node boots without a follower.
+	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
+	if _, err := api2.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
+		t.Fatalf("finalizing: %v", err)
+	}
+	buildBlock(t, api2, head, 7, common.Hash{})
+	for start := time.Now(); !rawdb.ReadPBTMigrationDone(eth2.ChainDb()); {
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("migration never marked itself done")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	n2.Close()
+	closed2 = true
+
+	n3, eth3 := startPersistentEthService(t, datadir, genesis, nil)
+	defer n3.Close()
+	if p := eth3.BlockChain().MigrationProgress(); p.Phase != "done" {
+		t.Fatalf("finished node progress %q, want done", p.Phase)
+	}
+	if _, err := eth3.BlockChain().State(); err != nil {
+		t.Fatalf("finished node cannot open its state: %v", err)
+	}
+}
+
+// TestFullMigrationLifecycleBlocksKnob is the same rehearsal closed by the
+// block-count knob, never finalizing.
+func TestFullMigrationLifecycleBlocksKnob(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil, func(cfg *ethconfig.Config) {
+		cfg.MigrationWindowBlocks = 3
+	})
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	for i := 0; i < 6; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("knob never closed the window")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if p := chain.MigrationProgress(); p.Phase != "done" {
+		t.Fatalf("progress %q, want done", p.Phase)
+	}
+}
