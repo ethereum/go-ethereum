@@ -2563,7 +2563,12 @@ func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, p
 	// callers pass false for want of knowing about the tree, not because they
 	// established the database is a merkle one.
 	if !isPBT && rawdb.HasPBTState(disk) {
-		Fatalf("this database holds binary tree state, which this command does not support")
+		// A migrating datadir legitimately holds both trees; merkle commands
+		// keep working on the merkle side while the fork is scheduled.
+		stored := rawdb.ReadChainConfig(disk, rawdb.ReadCanonicalHash(disk, 0))
+		if stored == nil || !stored.IsPBT() {
+			Fatalf("this database holds binary tree state, which this command does not support")
+		}
 	}
 	config := &triedb.Config{
 		Preimages: preimage,
