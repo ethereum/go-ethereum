@@ -75,6 +75,10 @@ var (
 	// only: the shadow database is the truth, and a crash may leave it behind.
 	pbtMigrationCursorKey = []byte("PBTMigrationCursor")
 
+	// mptMigrationCursorKey hints at the merkle window follower's last
+	// replayed block, with the same contract as pbtMigrationCursorKey.
+	mptMigrationCursorKey = []byte("MPTMigrationCursor")
+
 	// pbtMigrationDoneKey marks a finished migration.
 	pbtMigrationDoneKey = []byte("PBTMigrationDone")
 

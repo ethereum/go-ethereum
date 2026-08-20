@@ -79,3 +79,28 @@ func TestPBTMigrationDoneFlag(t *testing.T) {
 		t.Fatal("migration not done after writing the marker")
 	}
 }
+
+// TestMPTMigrationCursorStorage pins the merkle window cursor's roundtrip.
+func TestMPTMigrationCursorStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+	if _, _, _, ok := ReadMPTMigrationCursor(db); ok {
+		t.Fatal("cursor reported present on an empty database")
+	}
+	if HasMPTMigrationCursor(db) {
+		t.Fatal("cursor key present on an empty database")
+	}
+	WriteMPTMigrationCursor(db, 7, common.Hash{0x03}, common.Hash{0xcc})
+	num, hash, root, ok := ReadMPTMigrationCursor(db)
+	if !ok || num != 7 || hash != (common.Hash{0x03}) || root != (common.Hash{0xcc}) {
+		t.Fatalf("cursor = %d %x %x %v, want 7, 0x03.., 0xcc.., true", num, hash, root, ok)
+	}
+	if err := db.Put(mptMigrationCursorKey, []byte{0x01}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, ok := ReadMPTMigrationCursor(db); ok {
+		t.Fatal("truncated cursor reported present")
+	}
+	if !HasMPTMigrationCursor(db) {
+		t.Fatal("truncated cursor not detected as present")
+	}
+}

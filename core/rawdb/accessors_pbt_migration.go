@@ -71,6 +71,32 @@ func WritePBTMigrationCursor(db ethdb.KeyValueWriter, number uint64, hash common
 	}
 }
 
+// HasMPTMigrationCursor mirrors HasPBTMigrationCursor for the merkle window.
+func HasMPTMigrationCursor(db ethdb.KeyValueReader) bool {
+	has, _ := db.Has(mptMigrationCursorKey)
+	return has
+}
+
+// ReadMPTMigrationCursor mirrors ReadPBTMigrationCursor for the merkle window.
+func ReadMPTMigrationCursor(db ethdb.KeyValueReader) (uint64, common.Hash, common.Hash, bool) {
+	data, _ := db.Get(mptMigrationCursorKey)
+	if len(data) != 8+2*common.HashLength {
+		return 0, common.Hash{}, common.Hash{}, false
+	}
+	number := binary.BigEndian.Uint64(data)
+	hash := common.BytesToHash(data[8 : 8+common.HashLength])
+	root := common.BytesToHash(data[8+common.HashLength:])
+	return number, hash, root, true
+}
+
+// WriteMPTMigrationCursor records the merkle window follower's position.
+func WriteMPTMigrationCursor(db ethdb.KeyValueWriter, number uint64, hash common.Hash, root common.Hash) {
+	data := append(append(encodeBlockNumber(number), hash.Bytes()...), root.Bytes()...)
+	if err := db.Put(mptMigrationCursorKey, data); err != nil {
+		log.Crit("Failed to store merkle window cursor", "err", err)
+	}
+}
+
 // ReadPBTMigrationDone reports whether the migration finished: the fork
 // finalized and the retired tree stopped being maintained.
 func ReadPBTMigrationDone(db ethdb.KeyValueReader) bool {
