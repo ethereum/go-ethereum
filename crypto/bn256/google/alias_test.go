@@ -85,6 +85,15 @@ func TestPointDoubleAliasing(t *testing.T) {
 			t.Fatalf("%d: aliased curvePoint.Double = (%s, %s), want (%s, %s)", i, got.x, got.y, want.x, want.y)
 		}
 
+		want.Negative(cp)
+		want.MakeAffine(pool)
+		got.Set(cp)
+		got.Negative(got)
+		got.MakeAffine(pool)
+		if got.x.Cmp(want.x) != 0 || got.y.Cmp(want.y) != 0 {
+			t.Fatalf("%d: aliased curvePoint.Negative = (%s, %s), want (%s, %s)", i, got.x, got.y, want.x, want.y)
+		}
+
 		tp := newTwistPoint(pool).Mul(twistGen, k, pool)
 		wantT := newTwistPoint(pool)
 		wantT.Double(tp, pool)
