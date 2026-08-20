@@ -447,3 +447,107 @@ func TestWindowClosesByBlockCount(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// TestMigrationSurvivesRestartPreFork reboots a migrating node before the
+// fork: the shadow resumes from its cursor and the migration completes.
+func TestMigrationSurvivesRestartPreFork(t *testing.T) {
+	genesis := migrationTestGenesis()
+	datadir := t.TempDir()
+	n, ethservice := startPersistentEthService(t, datadir, genesis, nil)
+	closed := false
+	defer func() {
+		if !closed {
+			n.Close()
+		}
+	}()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	for i := 0; i < 2; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	awaitShadowReady(t, chain, chain.CurrentBlock())
+	n.Close()
+	closed = true
+
+	n2, eth2 := startPersistentEthService(t, datadir, genesis, nil)
+	defer n2.Close()
+	api2 := NewConsensusAPI(eth2)
+	chain2 := eth2.BlockChain()
+	parent = chain2.CurrentBlock()
+	if parent.Number.Uint64() != 2 {
+		t.Fatalf("rebooted head %d, want 2", parent.Number)
+	}
+	if p := chain2.MigrationProgress(); p.Merkle != nil {
+		t.Fatalf("merkle window opened before the fork: %+v", p.Merkle)
+	}
+	for i := 2; i < 5; i++ {
+		parent = buildBlock(t, api2, parent, uint64(i+1), common.Hash{})
+	}
+	awaitShadowReady(t, chain2, chain2.CurrentBlock())
+
+	head := chain2.CurrentBlock()
+	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
+	if _, err := api2.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
+		t.Fatalf("finalizing: %v", err)
+	}
+	buildBlock(t, api2, head, 6, common.Hash{})
+	for start := time.Now(); !rawdb.ReadPBTMigrationDone(eth2.ChainDb()); {
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("migration never finished after the reboot")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestMigrationSurvivesRestartMidWindow reboots inside the window: the
+// merkle direction resumes via its cursor, the binary one stays lazy, and
+// finality closes as usual.
+func TestMigrationSurvivesRestartMidWindow(t *testing.T) {
+	genesis := migrationTestGenesis()
+	datadir := t.TempDir()
+	n, ethservice := startPersistentEthService(t, datadir, genesis, nil)
+	closed := false
+	defer func() {
+		if !closed {
+			n.Close()
+		}
+	}()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	awaitShadowReady(t, chain, chain.CurrentBlock())
+	n.Close()
+	closed = true
+
+	n2, eth2 := startPersistentEthService(t, datadir, genesis, nil)
+	defer n2.Close()
+	api2 := NewConsensusAPI(eth2)
+	chain2 := eth2.BlockChain()
+	head := chain2.CurrentBlock()
+	if head.Number.Uint64() != 5 {
+		t.Fatalf("rebooted head %d, want 5", head.Number)
+	}
+	head = buildBlock(t, api2, head, 6, common.Hash{})
+	awaitShadowReady(t, chain2, head)
+	if p := chain2.MigrationProgress(); p.Binary != nil {
+		t.Fatalf("binary direction revived without a pre-fork head: %+v", p.Binary)
+	}
+
+	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
+	if _, err := api2.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
+		t.Fatalf("finalizing: %v", err)
+	}
+	buildBlock(t, api2, head, 7, common.Hash{})
+	for start := time.Now(); !rawdb.ReadPBTMigrationDone(eth2.ChainDb()); {
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("migration never finished after the reboot")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
