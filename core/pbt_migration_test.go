@@ -149,7 +149,7 @@ func TestMigrationDoneSkipsFollower(t *testing.T) {
 	if chain.follower != nil {
 		t.Fatal("a finished migration started a follower")
 	}
-	if p := chain.MigrationProgress(); p.Phase != "inactive" {
-		t.Fatalf("progress phase %q, want inactive", p.Phase)
+	if p := chain.MigrationProgress(); p.Phase != "done" {
+		t.Fatalf("progress phase %q, want done", p.Phase)
 	}
 }

@@ -707,37 +707,53 @@ func interrupted(stop chan struct{}) bool {
 	}
 }
 
-// MigrationProgress reports where a migrating chain's shadow tree stands.
+// MigrationProgress reports where a migrating chain stands.
 type MigrationProgress struct {
-	Phase      string      // inactive, idle, following, synced or stalled
+	Phase  string             // inactive, running or done
+	Binary *DirectionProgress // the binary shadow; nil before it runs
+	Merkle *DirectionProgress // the merkle window; nil before it runs
+}
+
+// DirectionProgress reports one direction's replay position.
+type DirectionProgress struct {
+	Phase      string      // idle, following, synced, parked or stalled
 	Cursor     uint64      // last replayed block number
 	CursorHash common.Hash // last replayed block hash
-	ShadowRoot common.Hash // the shadow root of that block
-	Error      string      // what stalled the follower, if anything
+	ShadowRoot common.Hash // the tree root of that block
+	Error      string      // what stalled the direction, if anything
 }
 
 func (bc *BlockChain) MigrationProgress() MigrationProgress {
+	if rawdb.ReadPBTMigrationDone(bc.db) {
+		return MigrationProgress{Phase: "done"}
+	}
 	if bc.follower == nil {
 		return MigrationProgress{Phase: "inactive"}
 	}
-	var head uint64
-	if h := bc.CurrentBlock(); h != nil {
-		head = h.Number.Uint64()
+	head := bc.CurrentBlock()
+	if head == nil {
+		return MigrationProgress{Phase: "running"}
 	}
 	return bc.follower.progress(head)
 }
 
-func (f *bintrieFollower) progress(head uint64) MigrationProgress {
+func (f *bintrieFollower) progress(head *types.Header) MigrationProgress {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	t := f.dirs[0]
-	if t == nil {
-		t = f.dirs[1]
+	p := MigrationProgress{Phase: "running"}
+	if t := f.dirs[dirIndex(true)]; t != nil {
+		p.Binary = t.progressLocked(head)
 	}
-	if t == nil {
-		return MigrationProgress{Phase: "idle"}
+	if t := f.dirs[dirIndex(false)]; t != nil {
+		p.Merkle = t.progressLocked(head)
 	}
-	p := MigrationProgress{
+	return p
+}
+
+// progressLocked snapshots the direction under the follower's mutex. A
+// direction whose flavour matches the head has nothing to replay: parked.
+func (t *followerTree) progressLocked(head *types.Header) *DirectionProgress {
+	p := &DirectionProgress{
 		Phase:      "following",
 		Cursor:     t.cursorNum,
 		CursorHash: t.cursorHash,
@@ -748,7 +764,9 @@ func (f *bintrieFollower) progress(head uint64) MigrationProgress {
 		p.Phase, p.Error = "stalled", t.stall.Error()
 	case t.handle == nil:
 		p.Phase = "idle"
-	case p.Cursor >= head:
+	case t.f.config.IsBinaryTrie(head.Number, head.Time) == t.pbt:
+		p.Phase = "parked"
+	case p.Cursor >= head.Number.Uint64():
 		p.Phase = "synced"
 	}
 	return p

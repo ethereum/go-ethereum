@@ -358,15 +358,66 @@ func TestMerkleWindowResumesAfterRestart(t *testing.T) {
 		t.Fatalf("rebooted head %d %x, want %d: binary state lost on shutdown", got.Number, got.Hash(), head.Number)
 	}
 	for start := time.Now(); ; time.Sleep(10 * time.Millisecond) {
-		p := reopened.MigrationProgress()
-		if p.Phase == "synced" && p.ShadowRoot == want {
-			return
-		}
-		if p.Phase == "stalled" {
-			t.Fatalf("window re-replayed instead of resuming: %s", p.Error)
+		if m := reopened.MigrationProgress().Merkle; m != nil {
+			if m.Phase == "synced" && m.ShadowRoot == want {
+				return
+			}
+			if m.Phase == "stalled" {
+				t.Fatalf("window re-replayed instead of resuming: %s", m.Error)
+			}
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("window never resumed: %+v", p)
+			t.Fatalf("window never resumed: %+v", reopened.MigrationProgress())
 		}
+	}
+}
+
+// TestMigrationProgressPhases pins the debug surface: one direction per
+// flavour, parked or working by which side of the boundary the head is on,
+// and a terminal done.
+func TestMigrationProgressPhases(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+
+	parent := chain.CurrentBlock()
+	for i := 0; i < 2; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	awaitShadowReady(t, chain, chain.CurrentBlock())
+	p := chain.MigrationProgress()
+	if p.Phase != "running" || p.Binary == nil || p.Merkle != nil {
+		t.Fatalf("pre-fork progress %+v, want running with only the binary direction", p)
+	}
+	if got := p.Binary.Phase; got != "following" && got != "synced" {
+		t.Fatalf("pre-fork binary phase %q", got)
+	}
+
+	for i := 2; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	awaitShadowReady(t, chain, chain.CurrentBlock())
+	p = chain.MigrationProgress()
+	if p.Binary == nil || p.Binary.Phase != "parked" {
+		t.Fatalf("post-fork binary progress %+v, want parked", p.Binary)
+	}
+	if p.Merkle == nil || (p.Merkle.Phase != "following" && p.Merkle.Phase != "synced") {
+		t.Fatalf("post-fork merkle progress %+v, want it working", p.Merkle)
+	}
+
+	head := chain.CurrentBlock()
+	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
+	if _, err := api.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
+		t.Fatalf("finalizing: %v", err)
+	}
+	buildBlock(t, api, head, 6, common.Hash{})
+	for start := time.Now(); chain.MigrationProgress().Phase != "done"; {
+		if time.Since(start) > 5*time.Second {
+			t.Fatalf("progress never reached done: %+v", chain.MigrationProgress())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

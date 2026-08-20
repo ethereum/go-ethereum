@@ -101,8 +101,8 @@ func TestFollowerTracksChain(t *testing.T) {
 	if want := convertCanonical(t, chain, head.Header(), u); root != want {
 		t.Fatalf("shadow root %x, converting the canonical state says %x", root, want)
 	}
-	if p := chain.MigrationProgress(); p.Phase != "synced" {
-		t.Fatalf("progress phase %q, want synced (%+v)", p.Phase, p)
+	if p := chain.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "synced" {
+		t.Fatalf("binary progress %+v, want synced", p.Binary)
 	}
 	st, err := chain.State()
 	if err != nil {
