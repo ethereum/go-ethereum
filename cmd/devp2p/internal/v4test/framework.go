@@ -37,11 +37,11 @@ type testenv struct {
 }
 
 func newTestEnv(remote string, listen1, listen2 string) *testenv {
-	l1, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen1))
+	l1, err := net.ListenPacket("udp", net.JoinHostPort(listen1, "0"))
 	if err != nil {
 		panic(err)
 	}
-	l2, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen2))
+	l2, err := net.ListenPacket("udp", net.JoinHostPort(listen2, "0"))
 	if err != nil {
 		panic(err)
 	}
@@ -103,11 +103,15 @@ func (te *testenv) read(c net.PacketConn) (v4wire.Packet, []byte, error) {
 }
 
 func (te *testenv) localEndpoint(c net.PacketConn) v4wire.Endpoint {
+	return te.localEndpointWithTCP(c, 0)
+}
+
+func (te *testenv) localEndpointWithTCP(c net.PacketConn, tcpPort uint16) v4wire.Endpoint {
 	addr := c.LocalAddr().(*net.UDPAddr)
 	return v4wire.Endpoint{
 		IP:  addr.IP.To4(),
 		UDP: uint16(addr.Port),
-		TCP: 0,
+		TCP: tcpPort,
 	}
 }
 

@@ -99,7 +99,7 @@ func (tc *conn) setEndpoint(c net.PacketConn) {
 }
 
 func (tc *conn) listen(ip string) net.PacketConn {
-	l, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", ip))
+	l, err := net.ListenPacket("udp", net.JoinHostPort(ip, "0"))
 	if err != nil {
 		panic(err)
 	}

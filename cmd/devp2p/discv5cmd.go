@@ -19,11 +19,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/urfave/cli/v2"
 )
@@ -70,6 +72,8 @@ var (
 			testTAPFlag,
 			testListen1Flag,
 			testListen2Flag,
+			testExpectedIPFlag,
+			testExpectedIP6Flag,
 		},
 	}
 	discv5ListenCommand = &cli.Command{
@@ -124,12 +128,52 @@ func discv5Crawl(ctx *cli.Context) error {
 
 // discv5Test runs the protocol test suite.
 func discv5Test(ctx *cli.Context) error {
-	suite := &v5test.Suite{
-		Dest:    getNodeArg(ctx),
-		Listen1: ctx.String(testListen1Flag.Name),
-		Listen2: ctx.String(testListen2Flag.Name),
+	expectIP, err := parseExpectedIP(ctx.String(testExpectedIPFlag.Name), false)
+	if err != nil {
+		return err
 	}
-	return runTests(ctx, suite.AllTests())
+	expectIP6, err := parseExpectedIP(ctx.String(testExpectedIP6Flag.Name), true)
+	if err != nil {
+		return err
+	}
+	suite := &v5test.Suite{
+		Dest:      getNodeArg(ctx),
+		Listen1:   ctx.String(testListen1Flag.Name),
+		Listen2:   ctx.String(testListen2Flag.Name),
+		ExpectIP:  expectIP,
+		ExpectIP6: expectIP6,
+	}
+	tests := suite.AllTests()
+	if (expectIP.IsValid() || expectIP6.IsValid()) && ctx.IsSet(testPatternFlag.Name) {
+		matches := utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
+		if !slices.ContainsFunc(matches, func(test utesting.Test) bool {
+			return test.Name == v5test.FindnodeZeroDistanceName
+		}) {
+			return fmt.Errorf("--expect-ip and --expect-ip6 require running %s", v5test.FindnodeZeroDistanceName)
+		}
+	}
+	return runTests(ctx, tests)
+}
+
+func parseExpectedIP(raw string, ipv6 bool) (netip.Addr, error) {
+	if raw == "" {
+		return netip.Addr{}, nil
+	}
+	addr, err := netip.ParseAddr(raw)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	if ipv6 {
+		if !addr.Is6() || addr.Is4In6() {
+			return netip.Addr{}, fmt.Errorf("invalid expected IPv6 address %q", raw)
+		}
+	} else if !addr.Is4() {
+		return netip.Addr{}, fmt.Errorf("invalid expected IPv4 address %q", raw)
+	}
+	if addr.Zone() != "" || addr.IsUnspecified() || addr.IsMulticast() {
+		return netip.Addr{}, fmt.Errorf("invalid expected IP address %q", raw)
+	}
+	return addr, nil
 }
 
 func discv5Listen(ctx *cli.Context) error {

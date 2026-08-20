@@ -77,6 +77,16 @@ var (
 		Value:    v4test.Listen2,
 		Category: flags.TestingCategory,
 	}
+	testExpectedIPFlag = &cli.StringFlag{
+		Name:     "expect-ip",
+		Usage:    "IPv4 address expected in the remote node's discv5 self record",
+		Category: flags.TestingCategory,
+	}
+	testExpectedIP6Flag = &cli.StringFlag{
+		Name:     "expect-ip6",
+		Usage:    "IPv6 address expected in the remote node's discv5 self record",
+		Category: flags.TestingCategory,
+	}
 )
 
 func runTests(ctx *cli.Context, tests []utesting.Test) error {
