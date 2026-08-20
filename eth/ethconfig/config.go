@@ -113,7 +113,11 @@ type Config struct {
 	LogNoHistory         bool   `toml:",omitempty"` // No log search index is maintained.
 	LogExportCheckpoints string // export log index checkpoints to file
 	StateHistory         uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
-	TrienodeHistory      int64  `toml:",omitempty"` // Number of blocks from the chain head for which trienode histories are retained
+
+	// MigrationWindowBlocks closes the state migration window this many
+	// post-fork blocks past the boundary, on top of finality; 0 = finality only.
+	MigrationWindowBlocks uint64 `toml:",omitempty"`
+	TrienodeHistory       int64  `toml:",omitempty"` // Number of blocks from the chain head for which trienode histories are retained
 
 	// The frequency of full-value encoding. For example, a value of 16 means
 	// that, on average, for a given trie node across its 16 consecutive historical

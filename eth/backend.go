@@ -244,6 +244,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			SnapshotLimit:           config.SnapshotCache,
 			Preimages:               config.Preimages,
 			StateHistory:            config.StateHistory,
+			MigrationWindowBlocks:   config.MigrationWindowBlocks,
 			TrienodeHistory:         config.TrienodeHistory,
 			NodeFullValueCheckpoint: config.NodeFullValueCheckpoint,
 			StateScheme:             scheme,

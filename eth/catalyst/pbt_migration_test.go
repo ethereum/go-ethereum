@@ -178,6 +178,9 @@ func TestMerkleWindowAdvancesLive(t *testing.T) {
 			t.Fatalf("block %d window root %x, reverse conversion says %x", number, got, want)
 		}
 	}
+	if rawdb.ReadPBTMigrationDone(ethservice.ChainDb()) {
+		t.Fatal("window closed without finality or a block-count knob")
+	}
 }
 
 // TestDirectionPRevivesOnReorg parks the binary direction past the fork,
@@ -417,6 +420,29 @@ func TestMigrationProgressPhases(t *testing.T) {
 	for start := time.Now(); chain.MigrationProgress().Phase != "done"; {
 		if time.Since(start) > 5*time.Second {
 			t.Fatalf("progress never reached done: %+v", chain.MigrationProgress())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestWindowClosesByBlockCount pins the rehearsal knob: two post-fork blocks
+// close the window with no finality in sight.
+func TestWindowClosesByBlockCount(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil, func(cfg *ethconfig.Config) {
+		cfg.MigrationWindowBlocks = 2
+	})
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+	}
+	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("block-count knob never closed the window")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

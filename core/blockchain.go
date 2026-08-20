@@ -183,6 +183,11 @@ type BlockChainConfig struct {
 	// If set to 0, all state histories across the entire chain will be retained;
 	StateHistory uint64
 
+	// MigrationWindowBlocks closes the migration window this many post-fork
+	// blocks past the boundary, on top of finality; 0 keeps it finality-only.
+	// Closing is irreversible: a deeper reorg afterwards means re-anchoring.
+	MigrationWindowBlocks uint64
+
 	// Number of blocks from the chain head for which trienode histories are retained.
 	// If set to 0, all trienode histories across the entire chain will be retained;
 	// If set to -1, no trienode history will be retained;

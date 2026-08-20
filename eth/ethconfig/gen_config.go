@@ -31,6 +31,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		LogNoHistory            bool   `toml:",omitempty"`
 		LogExportCheckpoints    string
 		StateHistory            uint64                 `toml:",omitempty"`
+		MigrationWindowBlocks   uint64                 `toml:",omitempty"`
 		TrienodeHistory         int64                  `toml:",omitempty"`
 		NodeFullValueCheckpoint uint32                 `toml:",omitempty"`
 		StateScheme             string                 `toml:",omitempty"`
@@ -86,6 +87,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.LogNoHistory = c.LogNoHistory
 	enc.LogExportCheckpoints = c.LogExportCheckpoints
 	enc.StateHistory = c.StateHistory
+	enc.MigrationWindowBlocks = c.MigrationWindowBlocks
 	enc.TrienodeHistory = c.TrienodeHistory
 	enc.NodeFullValueCheckpoint = c.NodeFullValueCheckpoint
 	enc.StateScheme = c.StateScheme
@@ -145,6 +147,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		LogNoHistory            *bool   `toml:",omitempty"`
 		LogExportCheckpoints    *string
 		StateHistory            *uint64                `toml:",omitempty"`
+		MigrationWindowBlocks   *uint64                `toml:",omitempty"`
 		TrienodeHistory         *int64                 `toml:",omitempty"`
 		NodeFullValueCheckpoint *uint32                `toml:",omitempty"`
 		StateScheme             *string                `toml:",omitempty"`
@@ -230,6 +233,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.StateHistory != nil {
 		c.StateHistory = *dec.StateHistory
+	}
+	if dec.MigrationWindowBlocks != nil {
+		c.MigrationWindowBlocks = *dec.MigrationWindowBlocks
 	}
 	if dec.TrienodeHistory != nil {
 		c.TrienodeHistory = *dec.TrienodeHistory

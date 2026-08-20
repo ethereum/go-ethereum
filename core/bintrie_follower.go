@@ -160,20 +160,21 @@ func (f *bintrieFollower) loop() {
 	for {
 		select {
 		case ev := <-f.headCh:
-			// Once a post-fork block finalizes, the window closes: the merkle
-			// tree stops being maintained and may be disposed of.
-			if final := f.chain.CurrentFinalBlock(); final != nil && f.config.IsBinaryTrie(final.Number, final.Time) {
+			// A closed window stops maintaining the merkle tree for good; it
+			// may be disposed of, and a deeper reorg afterwards means
+			// re-anchoring.
+			if closer := f.windowClose(ev.Header); closer != nil {
 				if done != nil {
 					close(stop)
 					<-done
 				}
 				if m := f.peek(false); m == nil {
-					log.Warn("Merkle window closing without ever running", "finalized", final.Number)
-				} else if num, _, _ := m.cursor(); num < final.Number.Uint64() {
-					log.Warn("Merkle window closing behind", "cursor", num, "finalized", final.Number)
+					log.Warn("Merkle window closing without ever running", "closed", closer.Number)
+				} else if num, _, _ := m.cursor(); num < closer.Number.Uint64() {
+					log.Warn("Merkle window closing behind", "cursor", num, "closed", closer.Number)
 				}
 				rawdb.WritePBTMigrationDone(f.db)
-				log.Info("State migration finished", "finalized", final.Number)
+				log.Info("State migration finished", "closed", closer.Number)
 				return
 			}
 			latest = ev.Header
@@ -194,6 +195,37 @@ func (f *bintrieFollower) loop() {
 			return
 		}
 	}
+}
+
+// windowClose returns the block closing the window at this head, if any: a
+// finalized post-fork block, or the head once MigrationWindowBlocks post-fork
+// blocks stand under it.
+func (f *bintrieFollower) windowClose(head *types.Header) *types.Header {
+	if final := f.chain.CurrentFinalBlock(); final != nil && f.config.IsBinaryTrie(final.Number, final.Time) {
+		return final
+	}
+	n := f.cfg.MigrationWindowBlocks
+	if n == 0 || !f.config.IsBinaryTrie(head.Number, head.Time) {
+		return nil
+	}
+	if head.Number.Uint64()-f.firstPostFork(head)+1 >= n {
+		return head
+	}
+	return nil
+}
+
+// firstPostFork walks the canonical headers down to the activation boundary.
+// The walk is bounded: the window closes before it exceeds the knob.
+func (f *bintrieFollower) firstPostFork(head *types.Header) uint64 {
+	h := head
+	for h.Number.Uint64() > 0 {
+		parent := f.chain.GetHeader(h.ParentHash, h.Number.Uint64()-1)
+		if parent == nil || !f.config.IsBinaryTrie(parent.Number, parent.Time) {
+			break
+		}
+		h = parent
+	}
+	return h.Number.Uint64()
 }
 
 func (f *bintrieFollower) close() {
