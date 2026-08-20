@@ -4031,24 +4031,47 @@ func TestEIP7910Config(t *testing.T) {
 			},
 		}
 	)
-	gspec := core.DefaultHoodiGenesisBlock()
-	gspec.Config = config
+	// bpoConfig schedules the optional BPO forks only partially: Osaka, BPO1 and
+	// BPO2 are configured, BPO3-BPO5 are not, and Amsterdam is scheduled after.
+	// The next fork after BPO2 must skip the unconfigured BPO forks and report
+	// Amsterdam.
+	bpoConfig := *config
+	bpoConfig.OsakaTime = newUint64(1743000832)
+	bpoConfig.BPO1Time = newUint64(1743001832)
+	bpoConfig.BPO2Time = newUint64(1743002832)
+	bpoConfig.AmsterdamTime = newUint64(1743003832)
+	bpoConfig.BlobScheduleConfig = &params.BlobScheduleConfig{
+		Cancun: params.DefaultCancunBlobConfig,
+		Prague: params.DefaultPragueBlobConfig,
+		BPO1:   params.DefaultBPO1BlobConfig,
+		BPO2:   params.DefaultBPO2BlobConfig,
+	}
 
 	var testSuite = []struct {
-		time uint64
-		file string
+		config *params.ChainConfig
+		time   uint64
+		file   string
 	}{
 		{
-			time: 0,
-			file: "next-and-last",
+			config: config,
+			time:   0,
+			file:   "next-and-last",
 		},
 		{
-			time: *gspec.Config.PragueTime,
-			file: "current",
+			config: config,
+			time:   *config.PragueTime,
+			file:   "current",
+		},
+		{
+			config: &bpoConfig,
+			time:   *bpoConfig.BPO2Time,
+			file:   "bpo-skip",
 		},
 	}
 
 	for i, tt := range testSuite {
+		gspec := core.DefaultHoodiGenesisBlock()
+		gspec.Config = tt.config
 		backend := configTimeBackend{nil, gspec, tt.time}
 		api := NewBlockChainAPI(backend)
 		result, err := api.Config(context.Background())
