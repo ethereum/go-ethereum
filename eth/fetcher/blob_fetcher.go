@@ -64,6 +64,7 @@ type blobTxAnnounce struct {
 	origin string              // Identifier of the peer that sent the announcement
 	txs    []common.Hash       // Hashes of transactions announced
 	cells  types.CustodyBitmap // Custody information of transactions being announced
+	pooled map[common.Hash]types.CustodyBitmap
 }
 
 type cellRequest struct {
@@ -80,8 +81,9 @@ type payloadDelivery struct {
 }
 
 type cellWithSeq struct {
-	seq   uint64
-	cells types.CustodyBitmap
+	seq       uint64
+	cells     types.CustodyBitmap
+	available types.CustodyBitmap
 }
 
 // PeerCellDelivery holds cells delivered by a single peer.
@@ -92,12 +94,13 @@ type PeerCellDelivery struct {
 
 type fetchStatus struct {
 	fetching   types.CustodyBitmap          // To avoid fetching cells which had already been fetched / currently being fetched
-	fetched    []uint64                     // Custody indices that have been fetched (per-blob, same for all blobs)
+	fetched    types.CustodyBitmap          // Custody indices that have been fetched (per-blob, same for all blobs)
 	deliveries map[string]*PeerCellDelivery // Per-peer cell deliveries
 }
 
 type BlobFetcherFunctions struct {
 	HasPayload    func(common.Hash) bool
+	GetCustody    func(common.Hash) *types.CustodyBitmap
 	AddCells      func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap)
 	FetchPayloads func(string, []common.Hash, types.CustodyBitmap) error
 	DropPeer      func(string)
@@ -141,6 +144,7 @@ type BlobFetcher struct {
 	fetches    map[common.Hash]*fetchStatus                   // Hash -> Bitmap, in-flight transaction cells
 	requests   map[string][]*cellRequest                      // In-flight transaction retrievals
 	alternates map[common.Hash]map[string]types.CustodyBitmap // In-flight transaction alternate origins (in case the peer is dropped)
+	sources    map[common.Hash]map[string]types.CustodyBitmap // Peer availability retained for pooled partial transactions
 
 	fn               BlobFetcherFunctions // callbacks
 	fetchProbability uint64
@@ -179,6 +183,7 @@ func NewBlobFetcher(fn BlobFetcherFunctions, custody types.CustodyBitmap, rand r
 		fetches:          make(map[common.Hash]*fetchStatus),
 		requests:         make(map[string][]*cellRequest),
 		alternates:       make(map[common.Hash]map[string]types.CustodyBitmap),
+		sources:          make(map[common.Hash]map[string]types.CustodyBitmap),
 		peerTokens:       make(map[string]*token),
 		fn:               fn,
 		fetchProbability: fetchProbability,
@@ -192,15 +197,23 @@ func NewBlobFetcher(fn BlobFetcherFunctions, custody types.CustodyBitmap, rand r
 // Notify is called when a Type 3 transaction is observed on the network. (TransactionPacket / NewPooledTransactionHashesPacket)
 func (f *BlobFetcher) Notify(peer string, txs []common.Hash, cells types.CustodyBitmap) error {
 	blobAnnounceInMeter.Mark(int64(len(txs)))
-	anns := make([]common.Hash, 0)
+	anns := make([]common.Hash, 0, len(txs))
+	pooled := make(map[common.Hash]types.CustodyBitmap)
 	for _, tx := range txs {
+		if f.fn.GetCustody != nil {
+			if custody := f.fn.GetCustody(tx); custody != nil {
+				anns = append(anns, tx)
+				pooled[tx] = *custody
+				continue
+			}
+		}
 		if f.fn.HasPayload(tx) {
 			continue
 		}
 		anns = append(anns, tx)
 	}
 
-	blobAnnounce := &blobTxAnnounce{origin: peer, txs: anns, cells: cells}
+	blobAnnounce := &blobTxAnnounce{origin: peer, txs: anns, cells: cells, pooled: pooled}
 	select {
 	case f.notify <- blobAnnounce:
 		return nil
@@ -297,6 +310,31 @@ func (f *BlobFetcher) loop() {
 				reschedule = make(map[string]struct{})
 			)
 			for _, hash := range ann.txs {
+				if stored, ok := ann.pooled[hash]; ok {
+					f.rememberSource(hash, ann.origin, ann.cells)
+					missing := f.custody.Difference(stored)
+					if missing.OneCount() == 0 {
+						continue
+					}
+					f.partial[hash] = struct{}{}
+					cells := ann.cells.Intersection(missing)
+					if cells.OneCount() == 0 {
+						continue
+					}
+					if f.fetches[hash] == nil {
+						f.fetches[hash] = &fetchStatus{
+							fetching:   stored,
+							fetched:    stored,
+							deliveries: make(map[string]*PeerCellDelivery),
+						}
+					}
+					if f.announces[ann.origin] == nil {
+						f.announces[ann.origin] = make(map[common.Hash]*cellWithSeq)
+					}
+					f.announces[ann.origin][hash] = &cellWithSeq{cells: cells, available: ann.cells, seq: nextSeq()}
+					reschedule[ann.origin] = struct{}{}
+					continue
+				}
 				if oldPeer && f.announces[ann.origin][hash] != nil {
 					// Ignore already announced information
 					// We also have to prevent reannouncement by changing cells field.
@@ -335,13 +373,15 @@ func (f *BlobFetcher) loop() {
 						f.announces[ann.origin] = make(map[common.Hash]*cellWithSeq)
 					}
 					f.announces[ann.origin][hash] = &cellWithSeq{
-						cells: types.CustodyBitmapData,
-						seq:   nextSeq(),
+						cells:     types.CustodyBitmapData,
+						available: types.CustodyBitmapData,
+						seq:       nextSeq(),
 					}
 					reschedule[ann.origin] = struct{}{}
 					continue
 				}
 				if _, ok := f.partial[hash]; ok {
+					f.rememberSource(hash, ann.origin, ann.cells)
 					// 2) Decided to send partial request of the tx
 					if f.waitlist[hash] != nil {
 						// it is already waiting for availability check
@@ -367,8 +407,9 @@ func (f *BlobFetcher) loop() {
 									f.announces[peer] = make(map[common.Hash]*cellWithSeq)
 								}
 								f.announces[peer][hash] = &cellWithSeq{
-									cells: f.custody,
-									seq:   nextSeq(),
+									cells:     f.custody,
+									available: types.CustodyBitmapAll,
+									seq:       nextSeq(),
 								}
 								delete(f.waitslots[peer], hash)
 								if len(f.waitslots[peer]) == 0 {
@@ -390,8 +431,9 @@ func (f *BlobFetcher) loop() {
 						f.announces[ann.origin] = make(map[common.Hash]*cellWithSeq)
 					}
 					f.announces[ann.origin][hash] = &cellWithSeq{
-						cells: ann.cells.Intersection(f.custody),
-						seq:   nextSeq(),
+						cells:     ann.cells.Intersection(f.custody),
+						available: ann.cells,
+						seq:       nextSeq(),
 					}
 					reschedule[ann.origin] = struct{}{}
 				}
@@ -426,8 +468,9 @@ func (f *BlobFetcher) loop() {
 							f.announces[peer] = make(map[common.Hash]*cellWithSeq)
 						}
 						f.announces[peer][hash] = &cellWithSeq{
-							cells: types.CustodyBitmapData,
-							seq:   f.txSeq,
+							cells:     types.CustodyBitmapData,
+							available: types.CustodyBitmapData,
+							seq:       f.txSeq,
 						}
 						f.txSeq++
 						delete(f.waitslots[peer], hash)
@@ -526,7 +569,7 @@ func (f *BlobFetcher) loop() {
 						Cells:   delivery.cells[i],
 						Indices: indices,
 					}
-					status.fetched = append(status.fetched, indices...)
+					status.fetched = status.fetched.Union(delivery.cellBitmap)
 				}
 
 				// Update announces of this peer
@@ -540,24 +583,10 @@ func (f *BlobFetcher) loop() {
 				}
 
 				// Check whether the all required cells are fetched
-				completed := false
-				if _, ok := f.full[hash]; ok && len(f.fetches[hash].fetched) >= kzg4844.DataPerBlob {
-					completed = true
-				} else if _, ok := f.partial[hash]; ok {
-					fetched := make([]uint64, len(f.fetches[hash].fetched))
-					copy(fetched, f.fetches[hash].fetched)
-					slices.Sort(fetched)
-
-					custodyIndices := f.custody.Indices()
-
-					completed = slices.Equal(fetched, custodyIndices)
-				}
-
-				if completed {
+				if f.completed(hash) {
 					blobFetcherFetchTime.Update(int64(time.Duration(f.clock.Now() - request.time)))
 					status := f.fetches[hash]
-					collectedCustody := types.NewCustodyBitmap(status.fetched)
-					f.fn.AddCells(hash, status.deliveries, collectedCustody)
+					f.fn.AddCells(hash, status.deliveries, status.fetched)
 
 					f.discard(hash)
 				}
@@ -634,6 +663,12 @@ func (f *BlobFetcher) loop() {
 				delete(f.announces, drop.peer)
 			}
 			delete(f.announces, drop.peer)
+			for hash, sources := range f.sources {
+				delete(sources, drop.peer)
+				if len(sources) == 0 {
+					delete(f.sources, hash)
+				}
+			}
 
 			// Clean up any active requests
 			if request, ok := f.requests[drop.peer]; ok && len(request) != 0 {
@@ -658,7 +693,11 @@ func (f *BlobFetcher) loop() {
 			}
 
 		case cells := <-f.custodyCh:
+			if cells == f.custody {
+				break
+			}
 			f.custody = cells
+			f.reconcileCustody(timeoutTimer, timeoutTrigger)
 
 		case <-f.quit:
 			return
@@ -758,7 +797,7 @@ func (f *BlobFetcher) recoverable(hash common.Hash) bool {
 	// union of already fetched cells and the cells still announced by peers
 	var covered types.CustodyBitmap
 	if status := f.fetches[hash]; status != nil {
-		covered = types.NewCustodyBitmap(status.fetched)
+		covered = status.fetched
 	}
 	for _, anns := range f.announces {
 		if cs, ok := anns[hash]; ok {
@@ -772,6 +811,113 @@ func (f *BlobFetcher) recoverable(hash common.Hash) bool {
 	// Partial case:
 	// return true if our custody can be covered
 	return f.custody.Difference(covered).OneCount() == 0
+}
+
+func (f *BlobFetcher) rememberSource(hash common.Hash, peer string, cells types.CustodyBitmap) {
+	if f.sources[hash] == nil {
+		f.sources[hash] = make(map[string]types.CustodyBitmap)
+	}
+	f.sources[hash][peer] = cells
+}
+
+func (f *BlobFetcher) completed(hash common.Hash) bool {
+	status := f.fetches[hash]
+	if status == nil {
+		return false
+	}
+	if _, ok := f.full[hash]; ok {
+		return status.fetched.OneCount() >= kzg4844.DataPerBlob
+	}
+	if _, ok := f.partial[hash]; ok {
+		return f.custody.Difference(status.fetched).OneCount() == 0
+	}
+	return false
+}
+
+func (f *BlobFetcher) reconcileCustody(timer *mclock.Timer, timeout chan struct{}) {
+	if f.fn.GetCustody != nil {
+		for hash := range f.sources {
+			if _, active := f.full[hash]; active {
+				continue
+			}
+			stored := f.fn.GetCustody(hash)
+			if stored == nil {
+				if _, active := f.partial[hash]; active {
+					continue
+				}
+				delete(f.sources, hash)
+				continue
+			}
+			if _, active := f.partial[hash]; active {
+				if f.fetches[hash] == nil {
+					f.fetches[hash] = &fetchStatus{
+						fetching:   *stored,
+						fetched:    *stored,
+						deliveries: make(map[string]*PeerCellDelivery),
+					}
+				}
+				continue
+			}
+			if f.custody.Difference(*stored).OneCount() == 0 {
+				continue
+			}
+			f.partial[hash] = struct{}{}
+			f.fetches[hash] = &fetchStatus{
+				fetching:   *stored,
+				fetched:    *stored,
+				deliveries: make(map[string]*PeerCellDelivery),
+			}
+		}
+	}
+	for peer, anns := range f.announces {
+		for hash, ann := range anns {
+			if _, ok := f.partial[hash]; !ok {
+				continue
+			}
+			ann.cells = ann.available.Intersection(f.custody)
+			if ann.cells.OneCount() == 0 {
+				delete(anns, hash)
+				delete(f.alternates[hash], peer)
+				continue
+			}
+			if f.alternates[hash] != nil {
+				f.alternates[hash][peer] = ann.cells
+			}
+		}
+		if len(anns) == 0 {
+			delete(f.announces, peer)
+		}
+	}
+	for hash := range f.partial {
+		if f.completed(hash) {
+			status := f.fetches[hash]
+			if len(status.deliveries) > 0 {
+				f.fn.AddCells(hash, status.deliveries, status.fetched)
+			}
+			f.discard(hash)
+			continue
+		}
+		if f.waitlist[hash] != nil {
+			continue
+		}
+		for peer, available := range f.sources[hash] {
+			cells := available.Intersection(f.custody)
+			if cells.OneCount() == 0 {
+				continue
+			}
+			if f.announces[peer] == nil {
+				f.announces[peer] = make(map[common.Hash]*cellWithSeq)
+			}
+			if ann := f.announces[peer][hash]; ann != nil {
+				ann.cells = cells
+				ann.available = available
+			} else {
+				f.announces[peer][hash] = &cellWithSeq{cells: cells, available: available, seq: f.txSeq}
+				f.txSeq++
+			}
+		}
+	}
+	f.scheduleFetches(timer, timeout, nil)
 }
 
 // discard removes every trace of a transaction from the fetcher: its fetch
@@ -834,7 +980,6 @@ func (f *BlobFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}
 				if f.fetches[hash] == nil {
 					f.fetches[hash] = &fetchStatus{
 						fetching:   unfetched,
-						fetched:    make([]uint64, 0),
 						deliveries: make(map[string]*PeerCellDelivery),
 					}
 				} else {

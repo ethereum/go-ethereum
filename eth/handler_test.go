@@ -245,6 +245,13 @@ func (p *testTxPool) GetCustody(hash common.Hash) *types.CustodyBitmap {
 	return &mask
 }
 
+func (p *testTxPool) MergeCells(hash common.Hash, _ map[string]*blobpool.PeerDelivery) ([]string, error) {
+	if p.GetCustody(hash) == nil {
+		return nil, blobpool.ErrBlobTxNotFound
+	}
+	return nil, nil
+}
+
 // AddCells adds cells for a specific transaction hash (for testing)
 func (p *testTxPool) AddCells(hash common.Hash, cells []kzg4844.Cell, mask types.CustodyBitmap) {
 	p.lock.Lock()

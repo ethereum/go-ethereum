@@ -107,6 +107,7 @@ type blobPool interface {
 	GetBlobHashes(hash common.Hash) []common.Hash
 	GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error)
 	GetCustody(hash common.Hash) *types.CustodyBitmap
+	MergeCells(hash common.Hash, deliveries map[string]*blobpool.PeerDelivery) ([]string, error)
 	AddPooledTx(pooledTx *blobpool.BlobTxForPool) error
 	ValidateTxBasics(pooledTx *types.Transaction) error
 }
@@ -225,12 +226,24 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		HasPayload: func(hash common.Hash) bool {
 			return h.blobpool.Has(hash) || blobBuffer.HasCells(hash)
 		},
+		GetCustody: h.blobpool.GetCustody,
 		AddCells: func(hash common.Hash, deliveries map[string]*fetcher.PeerCellDelivery, custody types.CustodyBitmap) {
 			converted := make(map[string]*blobpool.PeerDelivery, len(deliveries))
 			for peer, d := range deliveries {
 				converted[peer] = &blobpool.PeerDelivery{Cells: d.Cells, Indices: d.Indices}
 			}
-			blobBuffer.AddCells(hash, converted, custody)
+			badPeers, err := h.blobpool.MergeCells(hash, converted)
+			if errors.Is(err, blobpool.ErrBlobTxNotFound) {
+				blobBuffer.AddCells(hash, converted, custody)
+				return
+			}
+			if err != nil {
+				log.Error("Failed to merge blob cells", "hash", hash, "err", err)
+				return
+			}
+			for _, peer := range badPeers {
+				h.removePeer(peer)
+			}
 		},
 		DropPeer: h.removePeer,
 	}
