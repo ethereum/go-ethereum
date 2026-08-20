@@ -684,11 +684,11 @@ func newKnownCache(max int) *knownCache {
 
 // Add adds a list of elements to the set.
 func (k *knownCache) Add(hashes ...common.Hash) {
-	for k.hashes.Cardinality() > max(0, k.max-len(hashes)) {
-		k.hashes.Pop()
-	}
 	for _, hash := range hashes {
 		k.hashes.Add(hash)
+	}
+	for k.hashes.Cardinality() > k.max {
+		k.hashes.Pop()
 	}
 }
 
