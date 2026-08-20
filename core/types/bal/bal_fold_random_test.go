@@ -25,9 +25,8 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// fuzzState is a toy post-state interpreter mirroring ApplyBlockAccessList's
-// semantics: last write per field wins, and an account left with zero
-// balance, zero nonce and no code is removed together with its storage.
+// fuzzState mirrors ApplyBlockAccessList: last write per field wins, and an
+// account left empty is removed together with its storage.
 type fuzzState map[common.Address]*fuzzAccount
 
 type fuzzAccount struct {
@@ -73,7 +72,7 @@ func (st fuzzState) apply(list *BlockAccessList) {
 	}
 }
 
-// randomList builds a small, unvalidated-but-shaped access list.
+// randomList builds a small canonical-shaped access list.
 func randomList(rng *rand.Rand) *BlockAccessList {
 	var (
 		pool = []common.Address{{0x01}, {0x02}, {0x03}}
@@ -106,10 +105,8 @@ func randomList(rng *rand.Rand) *BlockAccessList {
 				})
 			}
 		}
-		// Canonical lists never write storage on an account that dies with no
-		// metadata trace: a storage write implies the account runs its own
-		// code, and removals are metadata-visible. Pin the invariant Fold
-		// documents by pairing bare storage writes with one or the other.
+		// Pin Fold's canonical-list invariant: bare storage writes carry
+		// either alive metadata or an explicit removal marker.
 		if len(acc.StorageChanges) > 0 && len(acc.BalanceChanges) == 0 && len(acc.NonceChanges) == 0 && len(acc.CodeChanges) == 0 {
 			if rng.Intn(2) == 0 {
 				acc.CodeChanges = []encodingCodeChange{{BlockAccessIndex: idx, NewCode: []byte{0x60}}}
@@ -125,9 +122,8 @@ func randomList(rng *rand.Rand) *BlockAccessList {
 }
 
 // TestFoldMatchesSequentialApply drives random block sequences through the
-// interpreter twice - list by list, and through Fold's batching loop - and
-// the end states must agree. This is the guard's real proof: folding across
-// a removal boundary would leak storage the sequential arm wiped.
+// interpreter list by list and through Fold's batching loop; the end states
+// must agree, or a fold leaked storage a removal wiped.
 func TestFoldMatchesSequentialApply(t *testing.T) {
 	rng := rand.New(rand.NewSource(0x8347))
 	for round := 0; round < 500; round++ {
@@ -149,16 +145,7 @@ func TestFoldMatchesSequentialApply(t *testing.T) {
 			rest = rest[taken:]
 		}
 		if !reflect.DeepEqual(sequential, folded) {
-			for addr, acc := range sequential {
-				t.Logf("sequential %x: %+v storage=%v", addr, *acc, acc.storage)
-			}
-			for addr, acc := range folded {
-				t.Logf("folded     %x: %+v storage=%v", addr, *acc, acc.storage)
-			}
-			for i, l := range lists {
-				t.Logf("list %d: %+v", i, *l)
-			}
-			t.Fatalf("round %d: folded state diverged", round)
+			t.Fatalf("round %d (seed 0x8347): folded state diverged\nlists: %+v", round, lists)
 		}
 	}
 }

@@ -470,9 +470,8 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 	}
 }
 
-// IsPBT indicates whether the genesis state is committed with a binary tree.
-// The fork has to be active at genesis for that: a later schedule starts the
-// chain on the merkle-patricia trie and migrates.
+// IsPBT indicates whether the genesis state is committed with a binary tree:
+// the fork must be active at genesis, a later schedule migrates.
 func (g *Genesis) IsPBT() bool {
 	return g.Config != nil && g.Config.IsBinaryTrie(new(big.Int).SetUint64(g.Number), g.Timestamp)
 }
@@ -625,9 +624,7 @@ const (
 )
 
 // resolveStateMode reports how the chain relates to the binary tree, and the
-// chain config it read that from: the supplied genesis or, failing that, the
-// config and genesis header already stored on disk. It runs before the trie
-// database exists, so it cannot ask one.
+// config it read that from. It runs before the trie database exists.
 func resolveStateMode(db ethdb.Database, genesis *Genesis) (stateMode, *params.ChainConfig, error) {
 	var (
 		config *params.ChainConfig
@@ -645,8 +642,6 @@ func resolveStateMode(db ethdb.Database, genesis *Genesis) (stateMode, *params.C
 			return modeMPT, nil, nil
 		}
 		if config = rawdb.ReadChainConfig(db, ghash); config == nil {
-			// An initialized database without a readable config cannot say
-			// whether it was migrating; treat it as merkle, loudly.
 			log.Warn("Stored chain config unreadable; assuming a merkle-only chain")
 			return modeMPT, nil, nil
 		}

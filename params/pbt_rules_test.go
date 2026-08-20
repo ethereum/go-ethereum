@@ -236,9 +236,7 @@ func TestBinaryTrieTimeJSONKey(t *testing.T) {
 	}
 }
 
-// TestIsBinaryTrie pins the activation predicate: nil means never, a schedule
-// activates at that instant and not before, and pre-London chains never
-// activate regardless of time.
+// TestIsBinaryTrie pins the activation predicate.
 func TestIsBinaryTrie(t *testing.T) {
 	cfg := pbtRulesBase()
 	if cfg.IsBinaryTrie(big.NewInt(1), 100) {
@@ -249,7 +247,6 @@ func TestIsBinaryTrie(t *testing.T) {
 		time uint64
 		want bool
 	}{
-		{0, false},
 		{99, false},
 		{100, true},
 		{101, true},

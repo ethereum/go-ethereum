@@ -69,31 +69,40 @@ func TestFoldLastWriteWinsAcrossBlocks(t *testing.T) {
 	}
 }
 
-// TestFoldSplitsOnRemovalThenTouch pins the deletion guard: an account whose
-// latest folded balance is zero may have been removed at that block's commit,
-// so a later block touching it again must start a fresh batch.
-func TestFoldSplitsOnRemovalThenTouch(t *testing.T) {
+// TestFoldRemovalSplit pins the split-before-recreation guard: split when the
+// folded metadata is emptiness-consistent, fold through when provably alive.
+func TestFoldRemovalSplit(t *testing.T) {
 	addr := common.Address{0x02}
-	first := foldList(AccountAccess{
-		Address:        addr,
-		BalanceChanges: []encodingBalanceChange{{BlockAccessIndex: 3, PostBalance: u256(0)}},
-	})
-	second := foldList(AccountAccess{
+	touch := foldList(AccountAccess{
 		Address:        addr,
 		BalanceChanges: []encodingBalanceChange{{BlockAccessIndex: 1, PostBalance: u256(5)}},
 	})
-
-	folded, n := Fold([]*BlockAccessList{first, second})
-	if n != 1 {
-		t.Fatalf("folded %d lists, want 1 (split before the recreation)", n)
-	}
-	if got := (*folded)[0].BalanceChanges[0].PostBalance; !got.IsZero() {
-		t.Fatalf("folded balance = %v, want the removal's zero", got)
+	for _, tc := range []struct {
+		name  string
+		first AccountAccess
+		want  int
+	}{
+		{"zero balance", AccountAccess{
+			Address:        addr,
+			BalanceChanges: []encodingBalanceChange{{BlockAccessIndex: 3, PostBalance: u256(0)}},
+		}, 1},
+		{"empty code, zero nonce", AccountAccess{
+			Address:      addr,
+			NonceChanges: []encodingAccountNonce{{BlockAccessIndex: 1, PostNonce: 0}},
+			CodeChanges:  []encodingCodeChange{{BlockAccessIndex: 1, NewCode: []byte{}}},
+		}, 1},
+		{"alive nonce", AccountAccess{
+			Address:      addr,
+			NonceChanges: []encodingAccountNonce{{BlockAccessIndex: 1, PostNonce: 1}},
+		}, 2},
+	} {
+		if _, n := Fold([]*BlockAccessList{foldList(tc.first), touch}); n != tc.want {
+			t.Fatalf("%s: folded %d lists, want %d", tc.name, n, tc.want)
+		}
 	}
 }
 
-// TestFoldRemovalMarkerIsLatestOnly pins that a zero balance overwritten
-// within the same block is not a removal: only the latest value counts.
+// TestFoldRemovalMarkerIsLatestOnly pins that only the latest value counts.
 func TestFoldRemovalMarkerIsLatestOnly(t *testing.T) {
 	addr := common.Address{0x03}
 	first := foldList(AccountAccess{
@@ -118,8 +127,7 @@ func TestFoldRemovalMarkerIsLatestOnly(t *testing.T) {
 	}
 }
 
-// TestFoldDropsReadOnlyAccounts pins that accounts with no mutation vanish:
-// the folded list installs state, and reads install nothing.
+// TestFoldDropsReadOnlyAccounts pins that accounts with no mutation vanish.
 func TestFoldDropsReadOnlyAccounts(t *testing.T) {
 	reader := AccountAccess{
 		Address:      common.Address{0x04},
@@ -179,7 +187,7 @@ func TestFoldOrdersAccountsAndSlots(t *testing.T) {
 }
 
 // TestFoldPreservesEmptyCodeChange pins the 7702 clear: an empty NewCode is a
-// change (back to no code) and must survive folding as one, not vanish.
+// change and must survive folding as one.
 func TestFoldPreservesEmptyCodeChange(t *testing.T) {
 	addr := common.Address{0x06}
 	list := foldList(AccountAccess{
@@ -197,8 +205,7 @@ func TestFoldPreservesEmptyCodeChange(t *testing.T) {
 	}
 }
 
-// TestFoldEmptyInput pins the degenerate shapes: no lists folds nothing, and
-// empty per-block lists are consumed without contributing accounts.
+// TestFoldEmptyInput pins the degenerate shapes.
 func TestFoldEmptyInput(t *testing.T) {
 	if folded, n := Fold(nil); folded != nil || n != 0 {
 		t.Fatalf("Fold(nil) = %v, %d, want nil, 0", folded, n)
@@ -210,43 +217,5 @@ func TestFoldEmptyInput(t *testing.T) {
 	}
 	if len(*folded) != 0 {
 		t.Fatalf("fold of empty lists has %d accounts, want 0", len(*folded))
-	}
-}
-
-// TestFoldSplitsOnEmptinessConsistentTouch pins the widened guard: removal
-// triggers on full emptiness, so metadata changes that are all consistent
-// with emptiness - not only a zero balance - must split before a later touch.
-func TestFoldSplitsOnEmptinessConsistentTouch(t *testing.T) {
-	addr := common.Address{0x07}
-	first := foldList(AccountAccess{
-		Address:      addr,
-		NonceChanges: []encodingAccountNonce{{BlockAccessIndex: 1, PostNonce: 0}},
-		CodeChanges:  []encodingCodeChange{{BlockAccessIndex: 1, NewCode: []byte{}}},
-	})
-	second := foldList(AccountAccess{
-		Address:        addr,
-		BalanceChanges: []encodingBalanceChange{{BlockAccessIndex: 1, PostBalance: u256(5)}},
-	})
-
-	if _, n := Fold([]*BlockAccessList{first, second}); n != 1 {
-		t.Fatalf("folded %d lists, want 1 (split before the recreation)", n)
-	}
-}
-
-// TestFoldNoSplitOnLiveAccount pins the guard's other side: a nonzero nonce
-// proves the account alive, so a later touch folds through.
-func TestFoldNoSplitOnLiveAccount(t *testing.T) {
-	addr := common.Address{0x08}
-	first := foldList(AccountAccess{
-		Address:      addr,
-		NonceChanges: []encodingAccountNonce{{BlockAccessIndex: 1, PostNonce: 1}},
-	})
-	second := foldList(AccountAccess{
-		Address:        addr,
-		BalanceChanges: []encodingBalanceChange{{BlockAccessIndex: 1, PostBalance: u256(5)}},
-	})
-
-	if _, n := Fold([]*BlockAccessList{first, second}); n != 2 {
-		t.Fatalf("folded %d lists, want 2 (the account is provably alive)", n)
 	}
 }

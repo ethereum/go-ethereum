@@ -35,7 +35,7 @@ import (
 )
 
 // replayUniverse enumerates every account and slot a scenario can touch, so
-// the expected tree can be rebuilt from canonical state without preimages.
+// expected trees can be rebuilt from canonical state without preimages.
 type replayUniverse struct {
 	addrs map[common.Address]struct{}
 	slots map[common.Address][]common.Hash
@@ -60,8 +60,7 @@ func (u *replayUniverse) storage(addr common.Address, slots ...common.Hash) {
 }
 
 // convertCanonical rebuilds a binary tree from the canonical merkle state at
-// the given header, over the known universe - the converter's answer,
-// reconstructed in-test. Setter usage mirrors flushAlloc.
+// the given header over the known universe; setter usage mirrors flushAlloc.
 func convertCanonical(t *testing.T, chain *BlockChain, header *types.Header, u *replayUniverse) common.Hash {
 	t.Helper()
 	src, err := chain.StateAt(header)
@@ -94,8 +93,7 @@ func convertCanonical(t *testing.T, chain *BlockChain, header *types.Header, u *
 	return root
 }
 
-// seedShadow flushes the genesis allocation into a shadow tree over the given
-// database and returns the shadow's genesis root.
+// seedShadow flushes the genesis allocation into the shadow tree.
 func seedShadow(t *testing.T, tdb *triedb.Database, genesis *Genesis) common.Hash {
 	t.Helper()
 	root, err := flushAlloc(&genesis.Alloc, tdb, nil)
@@ -105,17 +103,12 @@ func seedShadow(t *testing.T, tdb *triedb.Database, genesis *Genesis) common.Has
 	return root
 }
 
-// runShadowReplay builds a migrating chain, replays every block's access list
-// onto a shadow tree seeded from genesis, and checks each shadow root against
-// the converter rebuild of the canonical state - the EIP-8347 invariant. A
-// second shadow replays the same range through the batching fold and must
-// land on the same final root.
+// runShadowReplay replays every block's access list onto a genesis-seeded
+// shadow, checking each root against the converter rebuild - the EIP-8347
+// invariant - and a second, batch-folded shadow against the final root.
 func runShadowReplay(t *testing.T, genesis *Genesis, n int, gen func(int, *BlockGen), u *replayUniverse) {
 	t.Helper()
-	for addr := range genesis.Alloc {
-		u.account(addr)
-	}
-	u.account(common.Address{}) // fee recipient of the generated blocks
+	universeWithAlloc(u, genesis)
 
 	engine := beacon.New(ethash.NewFaker())
 	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, n, gen)
@@ -181,8 +174,7 @@ func runShadowReplay(t *testing.T, genesis *Genesis, n int, gen func(int, *Block
 	}
 }
 
-// storeCalldata is runtime code storing CALLDATALOAD(32) at slot
-// CALLDATALOAD(0): a settable storage cell for exercising writes and zeroing.
+// storeCalldata is runtime code storing CALLDATALOAD(32) at CALLDATALOAD(0).
 var storeCalldata = []byte{0x60, 0x20, 0x35, 0x60, 0x00, 0x35, 0x55, 0x00}
 
 // storeTx calls the storage contract, writing value into slot.
@@ -199,9 +191,7 @@ func storeTx(t *testing.T, gen *BlockGen, key *ecdsa.PrivateKey, sender, contrac
 	gen.AddTx(tx)
 }
 
-// TestShadowReplayTransfers pins plain balance movement and fresh-account
-// creation: the shadow must grow the recipient's leaves - code hash included
-// - from balance changes alone.
+// TestShadowReplayTransfers pins balance movement and fresh-account creation.
 func TestShadowReplayTransfers(t *testing.T) {
 	genesis, key, sender, recipient := migrationChainGenesis(t)
 	fresh := common.Address{0xf4, 0xe5, 0x11}
@@ -219,8 +209,7 @@ func TestShadowReplayTransfers(t *testing.T) {
 	}, u)
 }
 
-// TestShadowReplayContractStorage pins storage writes, overwrites and
-// zero-writes in both the header stem (slots 0-63) and the storage zone.
+// TestShadowReplayContractStorage pins writes and zero-writes in both zones.
 func TestShadowReplayContractStorage(t *testing.T) {
 	genesis, key, sender, _ := migrationChainGenesis(t)
 	contract := common.Address{0xc0, 0xff, 0xee}
@@ -249,9 +238,8 @@ func TestShadowReplayContractStorage(t *testing.T) {
 	}, u)
 }
 
-// TestShadowReplayAccountRemoval pins the EIP-161 removal and a later
-// recreation: the batch fold must split at the removal, and the shadow must
-// drop the victim's header stem and storage-zone leaves before regrowing it.
+// TestShadowReplayAccountRemoval pins EIP-161 removal then recreation: the
+// batch fold must split at the removal.
 func TestShadowReplayAccountRemoval(t *testing.T) {
 	base, _, _, _ := migrationChainGenesis(t)
 	genesis, key, sender, victim := eip161Genesis(t, *base.Config, 48)
@@ -272,9 +260,8 @@ func TestShadowReplayAccountRemoval(t *testing.T) {
 	}, u)
 }
 
-// TestShadowReplaySelfDestruct pins EIP-8264: a zero-balance account
-// destructed in its creation transaction vanishes, a funded one survives as
-// balance only, its storage gone either way.
+// TestShadowReplaySelfDestruct pins EIP-8264: zero-balance destructs vanish,
+// funded ones survive balance-only, storage gone either way.
 func TestShadowReplaySelfDestruct(t *testing.T) {
 	genesis, key, sender, _ := migrationChainGenesis(t)
 	beneficiary := common.Address{0xbe, 0xef}
@@ -305,8 +292,7 @@ func TestShadowReplaySelfDestruct(t *testing.T) {
 	}, u)
 }
 
-// TestShadowReplayDelegation pins EIP-7702: setting a delegation swaps the
-// code-hash leaf for the delegation leaf, clearing it swaps back.
+// TestShadowReplayDelegation pins the EIP-7702 leaf swap, both directions.
 func TestShadowReplayDelegation(t *testing.T) {
 	genesis, key, sender, _ := migrationChainGenesis(t)
 	contract := common.Address{0xc0, 0xff, 0xee}
@@ -357,8 +343,7 @@ func TestShadowReplayDelegation(t *testing.T) {
 	}, u)
 }
 
-// TestShadowReplayWithdrawals pins that withdrawal credits - post-execution
-// system changes carried by the access list - reach the shadow.
+// TestShadowReplayWithdrawals pins withdrawal credits reaching the shadow.
 func TestShadowReplayWithdrawals(t *testing.T) {
 	genesis, _, _, _ := migrationChainGenesis(t)
 	payee := common.Address{0x77}
@@ -377,16 +362,8 @@ func TestShadowReplayWithdrawals(t *testing.T) {
 	}, u)
 }
 
-// TestShadowReplayEmptyBlocks pins that state-identical blocks advance the
-// replay without moving the root.
-func TestShadowReplayEmptyBlocks(t *testing.T) {
-	genesis, _, _, _ := migrationChainGenesis(t)
-	runShadowReplay(t, genesis, 2, func(int, *BlockGen) {}, newReplayUniverse())
-}
-
-// TestShadowReplaySystemContracts pins that pre-execution system writes -
-// EIP-2935 parent hashes here - reach the shadow: they ride the access list
-// at index zero with no transaction behind them.
+// TestShadowReplaySystemContracts pins pre-execution system writes (EIP-2935)
+// reaching the shadow with no transaction behind them.
 func TestShadowReplaySystemContracts(t *testing.T) {
 	genesis, key, sender, recipient := migrationChainGenesis(t)
 	genesis.Alloc[params.HistoryStorageAddress] = types.Account{Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0}

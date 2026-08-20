@@ -875,8 +875,8 @@ func (c *ChainConfig) IsPBT() bool {
 	return c.BinaryTrieTime != nil
 }
 
-// IsBinaryTrie reports whether the binary tree commits the state at the given
-// block: the merkle-patricia trie before BinaryTrieTime, the tree from it on.
+// IsBinaryTrie reports whether the binary tree commits the state at the
+// given block.
 func (c *ChainConfig) IsBinaryTrie(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.BinaryTrieTime, time)
 }

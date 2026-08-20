@@ -71,13 +71,11 @@ var (
 	// somewhere.
 	pbtAnchorKey = []byte("PBTAnchor")
 
-	// pbtMigrationCursorKey hints at the shadow follower's last replayed
-	// block: number, hash and shadow root. A hint only - the shadow database
-	// is the truth, and the cursor may run ahead of it across a crash.
+	// pbtMigrationCursorKey hints at the follower's last replayed block. A hint
+	// only: the shadow database is the truth, and a crash may leave it behind.
 	pbtMigrationCursorKey = []byte("PBTMigrationCursor")
 
-	// pbtMigrationDoneKey marks a finished migration: the fork finalized, the
-	// retired tree stopped being maintained and may be disposed of.
+	// pbtMigrationDoneKey marks a finished migration.
 	pbtMigrationDoneKey = []byte("PBTMigrationDone")
 
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.

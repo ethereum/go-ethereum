@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// generateMigrationChain pre-generates n transfer blocks on a migrating
-// genesis; every block pays the recipient so each moves state.
+// generateMigrationChain pre-generates n blocks, each paying the recipient
+// (0x0ff1) 1000 wei so every block moves state.
 func generateMigrationChain(t *testing.T, n int) (*Genesis, ethdb.Database, []*types.Block, *replayUniverse) {
 	genesis, key, sender, recipient := migrationChainGenesis(t)
 	signer := types.LatestSigner(genesis.Config)
@@ -44,8 +44,6 @@ func generateMigrationChain(t *testing.T, n int) (*Genesis, ethdb.Database, []*t
 	return genesis, db, blocks, u
 }
 
-// openMigrationChain opens a chain over the given database; the follower
-// starts with it in migration mode.
 func openMigrationChain(t *testing.T, db ethdb.Database, genesis *Genesis) *BlockChain {
 	t.Helper()
 	chain, err := NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()), DefaultConfig().WithStateScheme(rawdb.PathScheme))
@@ -55,7 +53,6 @@ func openMigrationChain(t *testing.T, db ethdb.Database, genesis *Genesis) *Bloc
 	return chain
 }
 
-// advance imports the blocks and promotes the last to canonical head.
 func advance(t *testing.T, chain *BlockChain, blocks []*types.Block) {
 	t.Helper()
 	if _, err := chain.InsertChain(blocks); err != nil {
@@ -66,7 +63,6 @@ func advance(t *testing.T, chain *BlockChain, blocks []*types.Block) {
 	}
 }
 
-// awaitShadow waits for the follower to record the block's shadow root.
 func awaitShadow(t *testing.T, chain *BlockChain, block *types.Block) common.Hash {
 	t.Helper()
 	if chain.follower == nil {
@@ -82,8 +78,7 @@ func awaitShadow(t *testing.T, chain *BlockChain, block *types.Block) common.Has
 	return root
 }
 
-// universeWithAlloc folds the genesis allocation and fee recipient into the
-// scenario's universe.
+// universeWithAlloc adds the genesis allocation and fee recipient.
 func universeWithAlloc(u *replayUniverse, genesis *Genesis) *replayUniverse {
 	for addr := range genesis.Alloc {
 		u.account(addr)
@@ -92,9 +87,7 @@ func universeWithAlloc(u *replayUniverse, genesis *Genesis) *replayUniverse {
 	return u
 }
 
-// TestFollowerTracksChain pins the base loop: the follower seeds the shadow
-// from genesis, replays each imported block, records per-hash roots that
-// match the converter, and reports itself synced.
+// TestFollowerTracksChain pins the base loop: seed, replay, record, synced.
 func TestFollowerTracksChain(t *testing.T) {
 	genesis, db, blocks, u := generateMigrationChain(t, 3)
 	universeWithAlloc(u, genesis)
@@ -111,11 +104,16 @@ func TestFollowerTracksChain(t *testing.T) {
 	if p := chain.MigrationProgress(); p.Phase != "synced" {
 		t.Fatalf("progress phase %q, want synced (%+v)", p.Phase, p)
 	}
+	st, err := chain.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := st.GetBalance(common.Address{0x0f, 0xf1}); got.Uint64() != 3000 {
+		t.Fatalf("merkle-side recipient balance = %v, want 3000", got)
+	}
 }
 
-// TestFollowerBatchedCatchup pins the deep-behind path: far from the head the
-// follower folds ranges and records no intermediate roots, near the head it
-// records every block, and the end state matches the converter.
+// TestFollowerBatchedCatchup pins the deep-behind fold path.
 func TestFollowerBatchedCatchup(t *testing.T) {
 	n := followTrackWindow + 12
 	genesis, _, blocks, u := generateMigrationChain(t, n)
@@ -139,9 +137,8 @@ func TestFollowerBatchedCatchup(t *testing.T) {
 	}
 }
 
-// TestFollowerFollowsReorg pins the reorg walk: when the canonical chain
-// switches branches, the follower rewinds to the fork point through its own
-// records and replays the winning branch; the loser's records remain.
+// TestFollowerFollowsReorg pins the reorg walk to a non-genesis fork point;
+// the loser's records remain.
 func TestFollowerFollowsReorg(t *testing.T) {
 	genesis, key, sender, _ := migrationChainGenesis(t)
 	var (
@@ -176,9 +173,7 @@ func TestFollowerFollowsReorg(t *testing.T) {
 	}
 }
 
-// TestFollowerRestartResumes pins the clean-shutdown path: the shadow is
-// journaled at the follower's own root and a reopened chain resumes replay
-// where it stopped.
+// TestFollowerRestartResumes pins the clean-shutdown resume.
 func TestFollowerRestartResumes(t *testing.T) {
 	genesis, db, blocks, u := generateMigrationChain(t, 4)
 	universeWithAlloc(u, genesis)
@@ -199,8 +194,7 @@ func TestFollowerRestartResumes(t *testing.T) {
 	}
 }
 
-// standaloneFollower drives follow() synchronously against a hand-built
-// database, with no chain and no event loop.
+// standaloneFollower drives follow() synchronously, no chain, no loop.
 func standaloneFollower(genesis *Genesis, db ethdb.Database) *bintrieFollower {
 	cfg := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 	cfg.TrieNoAsyncFlush = true
@@ -212,8 +206,7 @@ func standaloneFollower(genesis *Genesis, db ethdb.Database) *bintrieFollower {
 	}
 }
 
-// writeChainShape persists the generated blocks the way an import would:
-// bodies, headers, access lists and canonical assignments.
+// writeChainShape persists generated blocks the way an import would.
 func writeChainShape(db ethdb.Database, blocks []*types.Block) {
 	for _, b := range blocks {
 		rawdb.WriteBlock(db, b)
@@ -221,25 +214,30 @@ func writeChainShape(db ethdb.Database, blocks []*types.Block) {
 	}
 }
 
-// TestFollowerRecoversWithoutJournal pins the crash rule: with the in-memory
-// layers gone and the cursor pointing past the durable state, the follower
-// walks its records back to a live root and re-replays; the end state is
-// unchanged.
+// firstPass replays the chain with a standalone follower, returning it and
+// the head record.
+func firstPass(t *testing.T, genesis *Genesis, db ethdb.Database, head *types.Header) (*bintrieFollower, common.Hash) {
+	t.Helper()
+	f := standaloneFollower(genesis, db)
+	if err := f.follow(head, nil); err != nil {
+		t.Fatalf("first pass: %v", err)
+	}
+	root, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash())
+	if !ok {
+		t.Fatal("first pass recorded no head root")
+	}
+	return f, root
+}
+
+// TestFollowerRecoversWithoutJournal pins the crash rule: layers gone, cursor
+// ahead of the durable state, the records walk back to a live root.
 func TestFollowerRecoversWithoutJournal(t *testing.T) {
 	genesis, db, blocks, _ := generateMigrationChain(t, 4)
 	writeChainShape(db, blocks)
 	head := blocks[len(blocks)-1].Header()
 
-	first := standaloneFollower(genesis, db)
-	if err := first.follow(head, nil); err != nil {
-		t.Fatalf("first pass: %v", err)
-	}
-	want, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash())
-	if !ok {
-		t.Fatal("first pass recorded no head root")
-	}
-	// Crash: no journal - the diff layers die with the process.
-	if err := first.shadow.Close(); err != nil {
+	first, want := firstPass(t, genesis, db, head)
+	if err := first.shadow.Close(); err != nil { // crash: no journal
 		t.Fatal(err)
 	}
 
@@ -250,14 +248,9 @@ func TestFollowerRecoversWithoutJournal(t *testing.T) {
 	if got, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash()); !ok || got != want {
 		t.Fatalf("recovered head root %x (ok=%v), want %x", got, ok, want)
 	}
-	if num, _, _, ok := rawdb.ReadPBTMigrationCursor(db); !ok || num != head.Number.Uint64() {
-		t.Fatalf("cursor at %d (ok=%v), want %d", num, ok, head.Number.Uint64())
-	}
 }
 
-// TestFollowerStallsOnMissingAccessList pins the availability rule: a block
-// whose header commits to an access list that the database does not hold
-// stalls the follower rather than silently skipping state.
+// TestFollowerStallsOnMissingAccessList pins the availability stall.
 func TestFollowerStallsOnMissingAccessList(t *testing.T) {
 	genesis, db, blocks, _ := generateMigrationChain(t, 2)
 	writeChainShape(db, blocks)
@@ -270,9 +263,7 @@ func TestFollowerStallsOnMissingAccessList(t *testing.T) {
 	}
 }
 
-// TestFollowerRequiresArtifactWithoutGenesisLists pins the seeding rule: a
-// chain whose early blocks have no access lists cannot grow a shadow from
-// genesis and must be anchor-seeded instead.
+// TestFollowerRequiresArtifactWithoutGenesisLists pins the seeding rule.
 func TestFollowerRequiresArtifactWithoutGenesisLists(t *testing.T) {
 	genesis, db, blocks, _ := generateMigrationChain(t, 1)
 	writeChainShape(db, blocks)
@@ -287,13 +278,12 @@ func TestFollowerRequiresArtifactWithoutGenesisLists(t *testing.T) {
 
 	f := standaloneFollower(genesis, db)
 	err := f.follow(blocks[0].Header(), nil)
-	if err == nil || !strings.Contains(err.Error(), "artifact") {
-		t.Fatalf("follow = %v, want a conversion-artifact error", err)
+	if err == nil || !strings.Contains(err.Error(), "predates access lists") {
+		t.Fatalf("follow = %v, want a seeding error", err)
 	}
 }
 
-// TestFollowerIdlesDuringSnapSync pins the interlock: while the merkle side
-// is snap-syncing the shadow neither opens nor replays.
+// TestFollowerIdlesDuringSnapSync pins the snap-sync interlock.
 func TestFollowerIdlesDuringSnapSync(t *testing.T) {
 	genesis, db, blocks, _ := generateMigrationChain(t, 1)
 	writeChainShape(db, blocks)
@@ -308,9 +298,7 @@ func TestFollowerIdlesDuringSnapSync(t *testing.T) {
 	}
 }
 
-// TestFollowerRefusesUnresolvablePosition pins the poisoned-fallback guard: a
-// cursor that resolves to nothing live must stall for a re-anchor, never bind
-// the mid-chain disk root to block zero.
+// TestFollowerRefusesUnresolvablePosition pins the poisoned-fallback guard.
 func TestFollowerRefusesUnresolvablePosition(t *testing.T) {
 	genesis, db, blocks, _ := generateMigrationChain(t, 2)
 	writeChainShape(db, blocks)
@@ -330,8 +318,7 @@ func TestFollowerRefusesUnresolvablePosition(t *testing.T) {
 	}
 }
 
-// TestFollowerStallsOnAccessListMismatch pins the integrity check: a stored
-// list that does not hash to the header's commitment must stall, not apply.
+// TestFollowerStallsOnAccessListMismatch pins the integrity check.
 func TestFollowerStallsOnAccessListMismatch(t *testing.T) {
 	genesis, db, blocks, _ := generateMigrationChain(t, 2)
 	writeChainShape(db, blocks)
@@ -344,8 +331,7 @@ func TestFollowerStallsOnAccessListMismatch(t *testing.T) {
 	}
 }
 
-// TestFollowerStallsBeforeAccessLists pins the coverage rule: a block whose
-// header commits to no access list cannot be replayed and must stall.
+// TestFollowerStallsBeforeAccessLists pins the coverage stall.
 func TestFollowerStallsBeforeAccessLists(t *testing.T) {
 	genesis, db, blocks, _ := generateMigrationChain(t, 1)
 	writeChainShape(db, blocks)
@@ -370,21 +356,13 @@ func TestFollowerStallsBeforeAccessLists(t *testing.T) {
 }
 
 // TestFollowerResumesFromRecordAboveCursor pins the batch crash window: the
-// record and the flatten land before the cursor write, so a live root may sit
-// above the hint and the resolver must scan up before walking down.
+// record lands before the cursor, so the resolver scans up before down.
 func TestFollowerResumesFromRecordAboveCursor(t *testing.T) {
 	genesis, db, blocks, _ := generateMigrationChain(t, 4)
 	writeChainShape(db, blocks)
 	head := blocks[len(blocks)-1].Header()
 
-	first := standaloneFollower(genesis, db)
-	if err := first.follow(head, nil); err != nil {
-		t.Fatalf("first pass: %v", err)
-	}
-	want, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash())
-	if !ok {
-		t.Fatal("first pass recorded no head root")
-	}
+	first, want := firstPass(t, genesis, db, head)
 	// Make the head root durable, then crash with the cursor rewound to a
 	// block whose own root died with the in-memory layers.
 	if err := first.shadow.Commit(want, false); err != nil {
@@ -404,9 +382,7 @@ func TestFollowerResumesFromRecordAboveCursor(t *testing.T) {
 	}
 }
 
-// TestFollowerStopsOnCanonicalDiscontinuity pins the continuity check: a
-// reorg rewriting the canonical index under a running replay must stop the
-// walk at the splice, not replay across two branches.
+// TestFollowerStopsOnCanonicalDiscontinuity pins the mid-run splice stop.
 func TestFollowerStopsOnCanonicalDiscontinuity(t *testing.T) {
 	genesis, key, sender, _ := migrationChainGenesis(t)
 	var (

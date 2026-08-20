@@ -26,10 +26,8 @@ import (
 )
 
 // replayAccessList installs one block's recorded post-state into the shadow
-// tree: state opens at the parent's shadow root, the access list is applied
-// without executing anything, and the commit runs with the canonical import's
-// own arguments, so the shadow's leaves come from the same machinery
-// execution uses. A state-identical block returns the parent root unchanged.
+// tree, committing with the canonical import's own arguments so the leaves
+// come from the machinery execution uses.
 func replayAccessList(sdb state.Database, config *params.ChainConfig, parentRoot common.Hash, number *big.Int, time uint64, list *bal.BlockAccessList) (common.Hash, error) {
 	statedb, err := state.New(parentRoot, sdb)
 	if err != nil {
@@ -48,10 +46,8 @@ type replayBlock struct {
 	list   *bal.BlockAccessList
 }
 
-// replayRange folds a run of consecutive blocks and installs the range's end
-// state in one commit. The fold may stop early at an account removal (see
-// bal.Fold), so the number of blocks consumed is returned alongside the new
-// shadow root.
+// replayRange folds consecutive blocks into one commit; the fold may stop at
+// an account removal (see bal.Fold), so the consumed count is returned.
 func replayRange(sdb state.Database, config *params.ChainConfig, parentRoot common.Hash, blocks []replayBlock) (common.Hash, int, error) {
 	lists := make([]*bal.BlockAccessList, len(blocks))
 	for i, b := range blocks {

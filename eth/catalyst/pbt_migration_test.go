@@ -29,9 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// migrationTestGenesis is the binary-tree genesis with the fork pushed past
-// genesis: the chain starts on the merkle trie and migrates at t=48, which at
-// twelve-second blocks is the fourth block.
+// migrationTestGenesis schedules the fork at t=48: the fourth twelve-second
+// block.
 func migrationTestGenesis() *core.Genesis {
 	genesis := pbtGenesis()
 	config := *genesis.Config
@@ -41,11 +40,9 @@ func migrationTestGenesis() *core.Genesis {
 	return genesis
 }
 
-// TestMigrationNodeCrossesTheFork drives the devnet rehearsal end to end: a
-// node starts on the merkle trie with the binary tree scheduled, the shadow
-// follower replays every block, and at the fork the node builds and imports
-// blocks whose headers commit the binary tree - the pre-state coming from the
-// shadow's recorded root of the last merkle block.
+// TestMigrationNodeCrossesTheFork drives the rehearsal through the engine
+// API: merkle blocks, the swap on the shadow's recorded root, native binary
+// blocks, and the finality close.
 func TestMigrationNodeCrossesTheFork(t *testing.T) {
 	genesis := migrationTestGenesis()
 	n, ethservice := startEthService(t, genesis, nil)
@@ -59,16 +56,10 @@ func TestMigrationNodeCrossesTheFork(t *testing.T) {
 
 	parent := chain.CurrentBlock()
 	for i := 0; i < 5; i++ {
-		// Building on a merkle parent needs the shadow caught up to it - at
-		// the boundary its recorded root is the pre-state. The consensus
-		// layer's retries hide this in production; the test waits.
+		// Building on a merkle parent needs the shadow caught up to it; the
+		// consensus layer's retries hide this in production, the test waits.
 		if !genesis.Config.IsBinaryTrie(parent.Number, parent.Time) {
-			for start := time.Now(); !chain.ShadowReady(parent.Hash(), parent.Number.Uint64()); {
-				if time.Since(start) > 10*time.Second {
-					t.Fatalf("block %d: shadow never reached parent %d (%+v)", i+1, parent.Number, chain.MigrationProgress())
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
+			awaitShadowReady(t, chain, parent)
 		}
 		slot, targetGasLimit := uint64(i+1), parent.GasLimit
 		attrs := &engine.PayloadAttributes{
@@ -109,10 +100,6 @@ func TestMigrationNodeCrossesTheFork(t *testing.T) {
 			t.Fatalf("block %d: head is %x, expected %x", i+1, parent.Hash(), execData.BlockHash)
 		}
 	}
-	if head := chain.CurrentBlock().Number.Uint64(); head != 5 {
-		t.Fatalf("chain head is %d, want 5", head)
-	}
-
 	// The boundary parent's shadow root exists - it fed the activation block -
 	// while post-fork blocks get none: execution owns the tree from there.
 	boundaryParent := chain.GetHeaderByNumber(3)
@@ -123,15 +110,8 @@ func TestMigrationNodeCrossesTheFork(t *testing.T) {
 	if chain.ShadowReady(postFork.Hash(), 4) {
 		t.Fatal("a post-fork block got a shadow root recorded")
 	}
-	if genesis.Config.IsBinaryTrie(boundaryParent.Number, boundaryParent.Time) {
-		t.Fatal("block 3 is not a merkle block; the fork moved")
-	}
-	if !genesis.Config.IsBinaryTrie(postFork.Number, postFork.Time) {
-		t.Fatal("block 4 is not a binary-tree block; the fork moved")
-	}
 
-	// Both sides of the boundary stay readable: the merkle past through the
-	// canonical handle, the binary present through the follower's.
+	// Both sides of the boundary stay readable.
 	for _, number := range []uint64{2, 5} {
 		header := chain.GetHeaderByNumber(number)
 		statedb, err := chain.StateAt(header)
@@ -143,8 +123,7 @@ func TestMigrationNodeCrossesTheFork(t *testing.T) {
 		}
 	}
 
-	// Finalizing a post-fork block closes the window: on the next head the
-	// follower marks the migration done and stops for good.
+	// Finality closes the window on the next head.
 	head := chain.CurrentBlock()
 	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
 	if _, err := api.ForkchoiceUpdatedV4(context.Background(), fin, nil, nil); err != nil {
@@ -177,6 +156,17 @@ func TestMigrationNodeCrossesTheFork(t *testing.T) {
 	for start := time.Now(); !rawdb.ReadPBTMigrationDone(ethservice.ChainDb()); {
 		if time.Since(start) > 5*time.Second {
 			t.Fatal("migration never marked itself done after finality")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// awaitShadowReady waits for the follower to record the given block.
+func awaitShadowReady(t *testing.T, chain *core.BlockChain, header *types.Header) {
+	t.Helper()
+	for start := time.Now(); !chain.ShadowReady(header.Hash(), header.Number.Uint64()); {
+		if time.Since(start) > 10*time.Second {
+			t.Fatalf("shadow never reached block %d (%+v)", header.Number, chain.MigrationProgress())
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

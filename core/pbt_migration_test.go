@@ -24,15 +24,12 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// migrationForkTime is far enough in the future that no generated block
-// reaches it.
+// migrationForkTime is past every generated block.
 const migrationForkTime = uint64(1) << 40
 
-// migrationChainGenesis clones the PBT chain genesis with the fork pushed
-// past genesis - the migration configuration - keeping the funded key.
+// migrationChainGenesis is the PBT chain genesis with the fork past genesis.
 func migrationChainGenesis(t *testing.T) (*Genesis, *ecdsa.PrivateKey, common.Address, common.Address) {
 	genesis, key, sender, recipient := pbtChainGenesis(t)
 	cfg := *genesis.Config
@@ -57,8 +54,7 @@ func merkleGenesis(t *testing.T) *Genesis {
 	return genesis
 }
 
-// TestStateModeResolution pins the three-way split - no fork, fork at
-// genesis, fork past genesis - from a supplied genesis and from a stored one.
+// TestStateModeResolution pins the three-way split.
 func TestStateModeResolution(t *testing.T) {
 	native, _, _, _ := pbtChainGenesis(t)
 	for _, tc := range []struct {
@@ -79,25 +75,9 @@ func TestStateModeResolution(t *testing.T) {
 		}
 	}
 
-	// The stored path answers the same with no genesis in hand.
-	db := rawdb.NewMemoryDatabase()
-	engine := beacon.New(ethash.NewFaker())
-	chain, err := NewBlockChain(db, migrationGenesis(t), engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
-	if err != nil {
-		t.Fatal(err)
-	}
-	chain.Stop()
-	mode, _, err := resolveStateMode(db, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if mode != modeMigration {
-		t.Fatalf("stored mode = %d, want %d", mode, modeMigration)
-	}
 }
 
-// TestMigrationGenesisIsMerkle pins that scheduling the fork past genesis
-// does not move the genesis hash: the chain starts as a plain merkle chain.
+// TestMigrationGenesisIsMerkle pins that the fork does not move the genesis.
 func TestMigrationGenesisIsMerkle(t *testing.T) {
 	var (
 		migration       = migrationGenesis(t)
@@ -119,25 +99,27 @@ func TestMigrationGenesisIsMerkle(t *testing.T) {
 }
 
 // TestNewBlockChainMigrationMode pins that a migration chain opens on the
-// merkle trie, and that a populated binary namespace - an anchor import may
-// precede the first start - is not treated as corruption.
+// merkle trie, tolerates a pre-populated binary namespace (an anchor import
+// may precede the first start), and resolves its stored mode on reopen.
 func TestNewBlockChainMigrationMode(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	rawdb.WritePBTFlatState(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
 
-	engine := beacon.New(ethash.NewFaker())
-	chain, err := NewBlockChain(db, migrationGenesis(t), engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer chain.Stop()
+	chain := openMigrationChain(t, db, migrationGenesis(t))
 	if chain.TrieDB().IsPBT() {
 		t.Fatal("migration chain opened on the binary tree")
 	}
+	chain.Stop()
+	mode, _, err := resolveStateMode(db, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode != modeMigration {
+		t.Fatalf("stored mode = %d, want %d", mode, modeMigration)
+	}
 }
 
-// TestMigrationRequiresPathScheme pins that the migration refuses the hash
-// scheme: the second tree cannot exist there.
+// TestMigrationRequiresPathScheme pins the path-scheme requirement.
 func TestMigrationRequiresPathScheme(t *testing.T) {
 	engine := beacon.New(ethash.NewFaker())
 	_, err := NewBlockChain(rawdb.NewMemoryDatabase(), migrationGenesis(t), engine, DefaultConfig().WithStateScheme(rawdb.HashScheme))
@@ -146,8 +128,7 @@ func TestMigrationRequiresPathScheme(t *testing.T) {
 	}
 }
 
-// TestUnscheduledPBTStateStillRefused pins the narrowed guard: binary state
-// under a config that never schedules the fork stays corruption.
+// TestUnscheduledPBTStateStillRefused pins the narrowed reopen guard.
 func TestUnscheduledPBTStateStillRefused(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	rawdb.WritePBTFlatState(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
@@ -158,46 +139,12 @@ func TestUnscheduledPBTStateStillRefused(t *testing.T) {
 	}
 }
 
-// TestMigrationChainProcessesBlocks pins that a migrating chain executes
-// blocks as a plain merkle chain: state opens on the merkle side even though
-// the fork is scheduled.
-func TestMigrationChainProcessesBlocks(t *testing.T) {
-	genesis, key, sender, recipient := migrationChainGenesis(t)
-	engine := beacon.New(ethash.NewFaker())
-	signer := types.LatestSigner(genesis.Config)
-
-	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2, payTo(t, key, sender, recipient, signer, 1000))
-	chain, err := NewBlockChain(db, genesis, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer chain.Stop()
-	if _, err := chain.InsertChain(blocks); err != nil {
-		t.Fatalf("migration chain rejected its own blocks: %v", err)
-	}
-	if _, err := chain.SetCanonical(blocks[len(blocks)-1]); err != nil {
-		t.Fatal(err)
-	}
-	st, err := chain.State()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := st.GetBalance(recipient); got.Uint64() != 2000 {
-		t.Fatalf("recipient balance = %v, want 2000", got)
-	}
-}
-
-// TestMigrationDoneSkipsFollower pins the terminal marker: a database whose
-// migration finished starts no follower and consults no disposed tree.
+// TestMigrationDoneSkipsFollower pins the terminal marker.
 func TestMigrationDoneSkipsFollower(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	rawdb.WritePBTMigrationDone(db)
 
-	engine := beacon.New(ethash.NewFaker())
-	chain, err := NewBlockChain(db, migrationGenesis(t), engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
-	if err != nil {
-		t.Fatal(err)
-	}
+	chain := openMigrationChain(t, db, migrationGenesis(t))
 	defer chain.Stop()
 	if chain.follower != nil {
 		t.Fatal("a finished migration started a follower")

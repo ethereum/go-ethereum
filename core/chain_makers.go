@@ -466,8 +466,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	if config.IsBinaryTrie(parent.Number(), parent.Time()) {
 		triedbConfig = triedb.PBTDefaults
 	} else if config.IsPBT() {
-		// A migrating chain runs the merkle trie on the path scheme - the
-		// only scheme NewBlockChain accepts for it - so generate there too.
+		// A migrating chain only opens on the path scheme; generate there too.
 		triedbConfig = &triedb.Config{PathDB: pathdb.Defaults}
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)

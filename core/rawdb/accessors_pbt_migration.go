@@ -24,10 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// ReadShadowStateRoot returns the recorded shadow root of the given block -
-// the root of the tree its header does not commit. Presence is reported
-// separately: the empty binary root is the zero hash, so the root value alone
-// cannot say whether the block was replayed.
+// ReadShadowStateRoot returns the recorded shadow root of the given block: the
+// root of the tree its header does not commit. The empty binary root is the
+// zero hash, so presence is reported separately.
 func ReadShadowStateRoot(db ethdb.KeyValueReader, number uint64, hash common.Hash) (common.Hash, bool) {
 	data, _ := db.Get(shadowRootKey(number, hash))
 	if len(data) != common.HashLength {
@@ -43,13 +42,6 @@ func WriteShadowStateRoot(db ethdb.KeyValueWriter, number uint64, hash common.Ha
 	}
 }
 
-// DeleteShadowStateRoot removes the recorded shadow root of the given block.
-func DeleteShadowStateRoot(db ethdb.KeyValueWriter, number uint64, hash common.Hash) {
-	if err := db.Delete(shadowRootKey(number, hash)); err != nil {
-		log.Crit("Failed to delete shadow state root", "err", err)
-	}
-}
-
 // HasPBTMigrationCursor reports whether a migration cursor was ever written,
 // readable or not. A present-but-corrupt cursor must not be mistaken for a
 // virgin database: the seeding fallbacks are only safe on the latter.
@@ -58,9 +50,8 @@ func HasPBTMigrationCursor(db ethdb.KeyValueReader) bool {
 	return has
 }
 
-// ReadPBTMigrationCursor returns the shadow follower's last replayed block and
-// shadow root, or ok=false if no readable cursor was written. The cursor is a
-// resume hint; the shadow database itself is the truth.
+// ReadPBTMigrationCursor returns the follower's last replayed block and shadow
+// root, or ok=false without a readable cursor.
 func ReadPBTMigrationCursor(db ethdb.KeyValueReader) (uint64, common.Hash, common.Hash, bool) {
 	data, _ := db.Get(pbtMigrationCursorKey)
 	if len(data) != 8+2*common.HashLength {

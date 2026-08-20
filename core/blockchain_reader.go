@@ -379,8 +379,7 @@ func (bc *BlockChain) TxIndexDone() bool {
 }
 
 // HasState checks if state trie is fully present in the database or not. A
-// migrating node holds two trees: a root the canonical handle does not know
-// may be the other side's.
+// migrating node answers for both trees.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
 	if _, err := bc.triedb.NodeReader(hash); err == nil {
 		return true
@@ -432,8 +431,7 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-// The tree is the one the header's own time commits to; through a migration
-// both sides stay readable.
+// The header's own time picks the tree.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
 	sdb, err := bc.stateDatabaseFor(bc.chainConfig.IsBinaryTrie(header.Number, header.Time))
 	if err != nil {
