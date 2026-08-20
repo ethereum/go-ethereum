@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -72,6 +73,17 @@ func (p *hookedPrompter) AppendHistory(command string)                    {}
 func (p *hookedPrompter) ClearHistory()                                   {}
 func (p *hookedPrompter) SetWordCompleter(completer prompt.WordCompleter) {}
 
+// eofPrompter simulates a closed or non-terminal stdin by returning io.EOF.
+type eofPrompter struct{}
+
+func (eofPrompter) PromptInput(string) (string, error)              { return "", io.EOF }
+func (eofPrompter) PromptPassword(string) (string, error)           { return "", io.EOF }
+func (eofPrompter) PromptConfirm(string) (bool, error)              { return false, io.EOF }
+func (eofPrompter) SetHistory([]string)                             {}
+func (eofPrompter) AppendHistory(string)                            {}
+func (eofPrompter) ClearHistory()                                   {}
+func (eofPrompter) SetWordCompleter(completer prompt.WordCompleter) {}
+
 // tester is a console test environment for the console tests to operate on.
 type tester struct {
 	workspace string
@@ -85,6 +97,10 @@ type tester struct {
 // newTester creates a test environment based on which the console can operate.
 // Please ensure you call Close() on the returned tester to avoid leaks.
 func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
+	return newTesterWithPrompter(t, &hookedPrompter{scheduler: make(chan string)}, confOverride)
+}
+
+func newTesterWithPrompter(t *testing.T, prompter prompt.UserPrompter, confOverride func(*ethconfig.Config)) *tester {
 	// Create a temporary storage for the node keys and initialize it
 	workspace := t.TempDir()
 
@@ -115,7 +131,6 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 		client.Close()
 	})
 
-	prompter := &hookedPrompter{scheduler: make(chan string)}
 	printer := new(bytes.Buffer)
 
 	console, err := New(Config{
@@ -130,12 +145,16 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 		t.Fatalf("failed to create JavaScript console: %v", err)
 	}
 	// Create the final tester and return
+	var input *hookedPrompter
+	if hp, ok := prompter.(*hookedPrompter); ok {
+		input = hp
+	}
 	return &tester{
 		workspace: workspace,
 		stack:     stack,
 		ethereum:  ethBackend,
 		console:   console,
-		input:     prompter,
+		input:     input,
 		output:    printer,
 	}
 }
@@ -185,6 +204,19 @@ func TestEvaluate(t *testing.T) {
 	tester.console.Evaluate("2 + 2")
 	if output := tester.output.String(); !strings.Contains(output, "4") {
 		t.Fatalf("statement evaluation failed: have %s, want %s", output, "4")
+	}
+}
+
+// Tests that Interactive exits with a helpful message when stdin is closed.
+func TestInteractiveEOF(t *testing.T) {
+	tester := newTesterWithPrompter(t, eofPrompter{}, nil)
+	defer tester.Close(t)
+
+	tester.console.Interactive()
+
+	output := tester.output.String()
+	if want := "not a terminal"; !strings.Contains(output, want) {
+		t.Fatalf("console output missing EOF hint: have\n%s\nwant substring %s", output, want)
 	}
 }
 
