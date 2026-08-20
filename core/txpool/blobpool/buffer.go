@@ -81,8 +81,11 @@ const (
 )
 
 // errPeerBufferFull is returned when a peer is already holding as much of the
-// buffer as its share allows.
-var errPeerBufferFull = errors.New("peer blob buffer allowance exhausted")
+// buffer as its share allows. It reports out of capacity so that whoever
+// handles the delivery can tell "no room" from "bad delivery": nothing is wrong
+// with the transaction or with the peer, and the same one would have been taken
+// a moment earlier.
+var errPeerBufferFull = fmt.Errorf("%w: peer blob buffer allowance exhausted", txpool.ErrOutOfCapacity)
 
 // PeerDelivery holds cells delivered by a single peer, in blob-major order.
 type PeerDelivery struct {

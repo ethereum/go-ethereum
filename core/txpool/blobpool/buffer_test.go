@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -152,6 +153,11 @@ func TestBufferPeerCap(t *testing.T) {
 			t.Fatalf("tx %d: err %v, want rejection %v", nonce, err, want)
 		} else if want && !errors.Is(err, errPeerBufferFull) {
 			t.Fatalf("tx %d: err %v, want %v", nonce, err, errPeerBufferFull)
+		} else if want && !errors.Is(err, txpool.ErrOutOfCapacity) {
+			// Whoever handles the delivery has to be able to tell "no room"
+			// from "bad delivery": nothing is wrong with the transaction or
+			// the peer, and it should be fetched again when there is room.
+			t.Fatalf("tx %d: refusal for want of room reported as %v", nonce, err)
 		}
 	}
 	if len(buf.txs) != 2 {
