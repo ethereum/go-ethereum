@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
@@ -381,4 +382,23 @@ func TestShadowReplayWithdrawals(t *testing.T) {
 func TestShadowReplayEmptyBlocks(t *testing.T) {
 	genesis, _, _, _ := migrationChainGenesis(t)
 	runShadowReplay(t, genesis, 2, func(int, *BlockGen) {}, newReplayUniverse())
+}
+
+// TestShadowReplaySystemContracts pins that pre-execution system writes -
+// EIP-2935 parent hashes here - reach the shadow: they ride the access list
+// at index zero with no transaction behind them.
+func TestShadowReplaySystemContracts(t *testing.T) {
+	genesis, key, sender, recipient := migrationChainGenesis(t)
+	genesis.Alloc[params.HistoryStorageAddress] = types.Account{Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0}
+	signer := types.LatestSigner(genesis.Config)
+
+	blocks := 3
+	u := newReplayUniverse()
+	u.account(recipient)
+	for i := 0; i < blocks; i++ {
+		u.storage(params.HistoryStorageAddress, common.BigToHash(big.NewInt(int64(i))))
+	}
+	runShadowReplay(t, genesis, blocks, func(i int, gen *BlockGen) {
+		payTo(t, key, sender, recipient, signer, 1000)(i, gen)
+	}, u)
 }

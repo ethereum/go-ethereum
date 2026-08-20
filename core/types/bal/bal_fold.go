@@ -45,9 +45,15 @@ func mutated(acc *AccountAccess) bool {
 // Fold coalesces consecutive blocks' access lists into one list installing the
 // range's end state: last write wins per field and per slot, emitted at index
 // zero. Access indexes order writes only within one block, so lists cannot be
-// merged index-wise; and an account whose latest balance is zero may have been
-// removed at that block's commit, so a later block touching it starts a fresh
-// batch. Fold consumes a prefix and returns how many lists it took.
+// merged index-wise; and an account the range may have removed must not be
+// folded past its recreation, so Fold consumes a prefix and returns how many
+// lists it took.
+//
+// Fold requires canonical lists, proven against their header commitments: a
+// storage write without metadata changes implies the account runs its own
+// code and survives the block, and every removal is metadata-visible - an
+// explicit zero balance for a touched-empty account, or the emptying of the
+// fields a creation set. Synthetic lists breaking that stay wrong.
 func Fold(lists []*BlockAccessList) (*BlockAccessList, int) {
 	if len(lists) == 0 {
 		return nil, 0
@@ -115,15 +121,36 @@ func Fold(lists []*BlockAccessList) (*BlockAccessList, int) {
 	return &out, taken
 }
 
-// touchesRemoved reports whether the list mutates an account whose latest
-// folded balance is zero - the removal marker a batch must not fold across.
+// possiblyRemoved reports whether the folded account may be gone at a block
+// boundary: something changed, and every changed field is consistent with the
+// emptiness that triggers deletion (zero balance, zero nonce, no code).
+// Unchanged fields are unknown here and must count as consistent.
+func (fa *foldedAccount) possiblyRemoved() bool {
+	if fa.balance == nil && fa.nonce == nil && !fa.hasCode {
+		return false
+	}
+	if fa.balance != nil && !fa.balance.IsZero() {
+		return false
+	}
+	if fa.nonce != nil && *fa.nonce != 0 {
+		return false
+	}
+	if fa.hasCode && len(fa.code) != 0 {
+		return false
+	}
+	return true
+}
+
+// touchesRemoved reports whether the list mutates an account the folded range
+// may have removed - the boundary a batch must not fold across, since the
+// removal's storage wipe has to materialize before a recreation applies.
 func touchesRemoved(folded map[common.Address]*foldedAccount, list BlockAccessList) bool {
 	for i := range list {
 		acc := &list[i]
 		if !mutated(acc) {
 			continue
 		}
-		if fa := folded[acc.Address]; fa != nil && fa.balance != nil && fa.balance.IsZero() {
+		if fa := folded[acc.Address]; fa != nil && fa.possiblyRemoved() {
 			return true
 		}
 	}

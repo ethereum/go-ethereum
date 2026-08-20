@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -52,10 +53,9 @@ type bintrieFollower struct {
 	config *params.ChainConfig
 	cfg    *BlockChainConfig
 
-	shadow *triedb.Database // opened lazily; nil while idle
-	sdb    state.Database
-
 	mu         sync.Mutex
+	shadow     *triedb.Database // opened lazily; nil while idle
+	sdb        state.Database
 	cursorNum  uint64
 	cursorHash common.Hash
 	cursorRoot common.Hash
@@ -84,19 +84,22 @@ func newBintrieFollower(chain *BlockChain) *bintrieFollower {
 	return f
 }
 
-// loop runs one sync at a time, re-arming when the head moved past what the
-// finished run saw - heads arriving mid-run must not be dropped, or the
-// shadow parks one event behind the tip.
+// loop runs one sync at a time. A head arriving mid-run re-arms the sync on
+// completion - the shadow must not park one event behind the tip - but a run
+// that could not progress does not re-arm itself, or an idle wait (snap sync,
+// canonical shorter than the head) becomes a busy loop.
 func (f *bintrieFollower) loop() {
 	defer close(f.closed)
 	defer f.headSub.Unsubscribe()
 
 	var (
-		latest *types.Header
-		stop   chan struct{}
-		done   chan struct{}
+		latest   *types.Header
+		launched *types.Header
+		stop     chan struct{}
+		done     chan struct{}
 	)
 	launch := func(head *types.Header) {
+		launched = head
 		stop = make(chan struct{})
 		done = make(chan struct{})
 		go func() {
@@ -118,9 +121,9 @@ func (f *bintrieFollower) loop() {
 		case <-done:
 			stop, done = nil, nil
 			f.mu.Lock()
-			hash, stalled := f.cursorHash, f.stall
+			stalled := f.stall
 			f.mu.Unlock()
-			if stalled == nil && latest != nil && hash != latest.Hash() {
+			if stalled == nil && latest != nil && latest.Hash() != launched.Hash() {
 				launch(latest)
 			}
 		case ch := <-f.term:
@@ -144,24 +147,24 @@ func (f *bintrieFollower) close() {
 	}
 }
 
-// sync is one follow attempt with the stall latched for reporting; the next
-// head event retries, since a missing access list may have arrived meanwhile.
+// sync is one follow attempt; the outcome is latched for reporting. A stall
+// retries on the next head event - a missing access list may have arrived.
 func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
+	err := f.follow(head, stop)
 	f.mu.Lock()
-	f.stall = nil
+	f.stall = err
 	f.mu.Unlock()
-
-	if err := f.follow(head, stop); err != nil {
-		f.mu.Lock()
-		f.stall = err
-		f.mu.Unlock()
+	if err != nil {
 		log.Warn("Binary tree shadow stalled", "head", head.Number, "err", err)
 	}
 }
 
 // follow advances the shadow to the given head along the canonical chain:
 // resolve where the shadow stands, walk back across a reorg, fold ranges
-// while far behind, and replay block by block near the tip.
+// while far behind, and replay block by block near the tip. Every replayed
+// block is proven to chain onto the previous one and its access list is
+// proven against the header's commitment - a wrong shadow root would
+// otherwise surface only at the fork.
 func (f *bintrieFollower) follow(head *types.Header, stop chan struct{}) error {
 	// While the merkle side is snap-syncing there is nothing consistent to
 	// replay from, and a shadow opened now would be disabled by the same
@@ -181,7 +184,7 @@ func (f *bintrieFollower) follow(head *types.Header, stop chan struct{}) error {
 		var found bool
 		for n := int64(num) - 1; n >= 0; n-- {
 			ch := rawdb.ReadCanonicalHash(f.db, uint64(n))
-			if r := rawdb.ReadShadowStateRoot(f.db, uint64(n), ch); r != (common.Hash{}) && f.hasState(r) {
+			if r, ok := rawdb.ReadShadowStateRoot(f.db, uint64(n), ch); ok && f.hasState(r) {
 				num, hash, root, found = uint64(n), ch, r, true
 				break
 			}
@@ -192,17 +195,25 @@ func (f *bintrieFollower) follow(head *types.Header, stop chan struct{}) error {
 		log.Info("Binary tree shadow following reorg", "forkpoint", num)
 		f.setCursor(num, hash, root)
 	}
+	prev := hash
 	for n := num + 1; n <= head.Number.Uint64(); n++ {
 		if interrupted(stop) {
 			return nil
 		}
+		// A snap sync starting mid-run rewrites the chain under the replay.
+		if rawdb.ReadSnapSyncStatusFlag(f.db) == rawdb.StateSyncRunning {
+			return nil
+		}
 		if behind := head.Number.Uint64() - n; behind > followTrackWindow {
-			consumed, newRoot, err := f.replayBatch(n, head.Number.Uint64(), root)
+			consumed, newRoot, newPrev, err := f.replayBatch(n, head.Number.Uint64(), root, prev)
 			if err != nil {
 				return err
 			}
+			if consumed == 0 {
+				return nil // canonical moved under the run; retry on the next head
+			}
 			n += consumed - 1
-			root = newRoot
+			root, prev = newRoot, newPrev
 			continue
 		}
 		hash := rawdb.ReadCanonicalHash(f.db, n)
@@ -213,15 +224,20 @@ func (f *bintrieFollower) follow(head *types.Header, stop chan struct{}) error {
 		if header == nil {
 			return fmt.Errorf("missing canonical header %d %x", n, hash)
 		}
-		list := rawdb.ReadAccessList(f.db, hash, n)
-		if list == nil && header.BlockAccessListHash != nil {
-			return fmt.Errorf("access list missing for block %d %x", n, hash)
+		// The canonical index is rewritten under a mid-run reorg; splicing
+		// two branches must stop the walk, never replay across it.
+		if header.ParentHash != prev {
+			return nil
+		}
+		list, err := f.readVerifiedList(header)
+		if err != nil {
+			return err
 		}
 		newRoot, err := replayAccessList(f.sdb, f.config, root, header.Number, header.Time, list)
 		if err != nil {
 			return fmt.Errorf("replaying block %d %x: %w", n, hash, err)
 		}
-		root = newRoot
+		root, prev = newRoot, hash
 		rawdb.WriteShadowStateRoot(f.db, n, hash, root)
 		rawdb.WritePBTMigrationCursor(f.db, n, hash, root)
 		f.setCursor(n, hash, root)
@@ -229,10 +245,30 @@ func (f *bintrieFollower) follow(head *types.Header, stop chan struct{}) error {
 	return nil
 }
 
+// readVerifiedList loads a block's access list and proves it against the
+// header's commitment - the only integrity check the shadow gets before the
+// fork validates its lineage.
+func (f *bintrieFollower) readVerifiedList(header *types.Header) (*bal.BlockAccessList, error) {
+	number := header.Number.Uint64()
+	if header.BlockAccessListHash == nil {
+		return nil, fmt.Errorf("block %d %x commits no access list: anchor past their activation", number, header.Hash())
+	}
+	list := rawdb.ReadAccessList(f.db, header.Hash(), number)
+	if list == nil {
+		return nil, fmt.Errorf("access list missing for block %d %x", number, header.Hash())
+	}
+	if h := list.Hash(); h != *header.BlockAccessListHash {
+		return nil, fmt.Errorf("access list mismatch for block %d %x: have %x, header commits %x", number, header.Hash(), h, *header.BlockAccessListHash)
+	}
+	return list, nil
+}
+
 // replayBatch folds up to followBatchBlocks starting at from into end-state
 // commits, staying outside the tracking window; the layers are flattened so a
-// long catch-up holds bounded memory. Only the batch end gets a root record.
-func (f *bintrieFollower) replayBatch(from, head uint64, root common.Hash) (uint64, common.Hash, error) {
+// long catch-up holds bounded memory. Only the batch end gets a root record,
+// written before the flatten: a crash between them re-replays, the other
+// order strands a live root no record names.
+func (f *bintrieFollower) replayBatch(from, head uint64, root common.Hash, prev common.Hash) (uint64, common.Hash, common.Hash, error) {
 	var (
 		blocks []replayBlock
 		hashes []common.Hash
@@ -244,39 +280,36 @@ func (f *bintrieFollower) replayBatch(from, head uint64, root common.Hash) (uint
 		}
 		header := rawdb.ReadHeader(f.db, hash, n)
 		if header == nil {
-			return 0, common.Hash{}, fmt.Errorf("missing canonical header %d %x", n, hash)
+			return 0, common.Hash{}, common.Hash{}, fmt.Errorf("missing canonical header %d %x", n, hash)
 		}
-		list := rawdb.ReadAccessList(f.db, hash, n)
-		if list == nil && header.BlockAccessListHash != nil {
-			return 0, common.Hash{}, fmt.Errorf("access list missing for block %d %x", n, hash)
+		if header.ParentHash != prev {
+			break // reorged mid-collection; the next run re-walks
+		}
+		list, err := f.readVerifiedList(header)
+		if err != nil {
+			return 0, common.Hash{}, common.Hash{}, err
 		}
 		blocks = append(blocks, replayBlock{number: header.Number, time: header.Time, list: list})
 		hashes = append(hashes, hash)
+		prev = hash
 	}
 	if len(blocks) == 0 {
-		return 0, common.Hash{}, fmt.Errorf("no canonical blocks to batch at %d", from)
+		return 0, root, prev, nil // canonical moved under the run; retry later
 	}
-	var (
-		start = root
-		taken int
-	)
-	for rest := blocks; len(rest) > 0; rest = rest[taken:] {
+	start := root
+	for rest, taken := blocks, 0; len(rest) > 0; rest = rest[taken:] {
 		var (
 			next common.Hash
 			err  error
 		)
 		next, taken, err = replayRange(f.sdb, f.config, root, rest)
 		if err != nil {
-			return 0, common.Hash{}, err
+			return 0, common.Hash{}, common.Hash{}, err
+		}
+		if taken == 0 {
+			return 0, common.Hash{}, common.Hash{}, errors.New("fold made no progress")
 		}
 		root = next
-	}
-	// Flatten the batch into the disk layer; without this a deep catch-up
-	// accumulates one layer per fold.
-	if root != start {
-		if err := f.shadow.Commit(root, false); err != nil {
-			return 0, common.Hash{}, err
-		}
 	}
 	var (
 		end     = uint64(len(blocks) - 1)
@@ -286,14 +319,24 @@ func (f *bintrieFollower) replayBatch(from, head uint64, root common.Hash) (uint
 	rawdb.WriteShadowStateRoot(f.db, endNum, endHash, root)
 	rawdb.WritePBTMigrationCursor(f.db, endNum, endHash, root)
 	f.setCursor(endNum, endHash, root)
-	return uint64(len(blocks)), root, nil
+	if root != start {
+		if err := f.shadow.Commit(root, false); err != nil {
+			return 0, common.Hash{}, common.Hash{}, err
+		}
+	}
+	return uint64(len(blocks)), root, endHash, nil
 }
 
-// ensureShadow opens the shadow database and resolves the replay position:
-// the cursor hint if its state is live, the deepest recorded live root below
-// it otherwise, an imported anchor, or a fresh genesis seed.
+// ensureShadow opens the shadow database and resolves the replay position.
+// With a cursor ever written, the position must resolve through it or the
+// records - the seeding fallbacks read pathdb's current disk root, and past
+// the first replay that root's block is a guess; binding it wrongly poisons
+// every record from there on.
 func (f *bintrieFollower) ensureShadow() error {
-	if f.shadow != nil {
+	f.mu.Lock()
+	opened := f.shadow != nil
+	f.mu.Unlock()
+	if opened {
 		return nil
 	}
 	tdbConfig, err := f.cfg.triedbConfig(true)
@@ -301,38 +344,57 @@ func (f *bintrieFollower) ensureShadow() error {
 		return err
 	}
 	shadow := triedb.NewDatabase(f.db, tdbConfig)
+	f.mu.Lock()
 	f.shadow = shadow
 	f.sdb = state.NewPBTDatabase(shadow, nil)
+	f.mu.Unlock()
 
-	// The hint is only a hint: a crash loses the in-memory layers, and the
-	// durable shadow may sit behind it. Walk the records back to a live root.
-	if num, hash, root, ok := rawdb.ReadPBTMigrationCursor(f.db); ok {
+	if rawdb.HasPBTMigrationCursor(f.db) {
+		num, hash, root, ok := rawdb.ReadPBTMigrationCursor(f.db)
+		if !ok {
+			return errors.New("migration cursor is corrupt: re-anchor with a conversion artifact")
+		}
 		if f.hasState(root) {
 			f.setCursor(num, hash, root)
 			return nil
 		}
+		// A batch crashing between its record and the cursor write leaves
+		// the durable root recorded above the hint; scan one batch up first,
+		// then walk down to the deepest live record.
+		for n := num + 1; n <= num+followBatchBlocks; n++ {
+			ch := rawdb.ReadCanonicalHash(f.db, n)
+			if r, ok := rawdb.ReadShadowStateRoot(f.db, n, ch); ok && f.hasState(r) {
+				f.setCursor(n, ch, r)
+				return nil
+			}
+		}
 		for n := int64(num) - 1; n >= 0; n-- {
 			ch := rawdb.ReadCanonicalHash(f.db, uint64(n))
-			if r := rawdb.ReadShadowStateRoot(f.db, uint64(n), ch); r != (common.Hash{}) && f.hasState(r) {
+			if r, ok := rawdb.ReadShadowStateRoot(f.db, uint64(n), ch); ok && f.hasState(r) {
 				f.setCursor(uint64(n), ch, r)
 				return nil
 			}
 		}
+		return errors.New("shadow position unresolvable: re-anchor with a conversion artifact")
 	}
 	pbtdb := rawdb.NewTable(f.db, string(rawdb.PBTPrefix))
 	if num, hash, ok := rawdb.ReadPBTAnchor(pbtdb); ok {
-		// Virgin import: the disk root is the anchor's state. Once replay has
-		// run, the records above resolve first.
+		// Virgin import: the follower never ran, so the disk root is the
+		// anchor's state, and both are proven before use.
 		if rawdb.ReadCanonicalHash(f.db, num) != hash {
 			return errors.New("imported anchor is not canonical: re-import a conversion artifact")
 		}
-		f.setCursor(num, hash, rawdb.ReadSnapshotRoot(pbtdb))
+		root := rawdb.ReadSnapshotRoot(pbtdb)
+		if !f.hasState(root) {
+			return errors.New("imported anchor state is gone: re-import a conversion artifact")
+		}
+		f.setCursor(num, hash, root)
 		return nil
 	}
 	ghash := rawdb.ReadCanonicalHash(f.db, 0)
 	if root := rawdb.ReadSnapshotRoot(pbtdb); root != (common.Hash{}) {
-		// Seeded but no cursor: the crash window right after the genesis
-		// flush. Only the seed writes the namespace without a cursor.
+		// Seeded, then crashed before the first record: only the genesis
+		// seed writes the namespace with no cursor ever recorded.
 		f.setCursor(0, ghash, root)
 		return nil
 	}
@@ -352,7 +414,7 @@ func (f *bintrieFollower) ensureShadow() error {
 	if alloc == nil {
 		return errors.New("genesis allocation unavailable: seed the shadow from a conversion artifact")
 	}
-	root, err := flushAlloc(&alloc, f.shadow, nil)
+	root, err := flushAlloc(&alloc, shadow, nil)
 	if err != nil {
 		return err
 	}
@@ -369,7 +431,7 @@ func (f *bintrieFollower) ensureShadow() error {
 func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
-		if r := rawdb.ReadShadowStateRoot(f.db, number, hash); r != (common.Hash{}) {
+		if _, ok := rawdb.ReadShadowStateRoot(f.db, number, hash); ok {
 			return nil
 		}
 		f.mu.Lock()
@@ -386,7 +448,9 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 }
 
 // journal persists the shadow's in-memory layers at the follower's own root -
-// not the chain head's, which belongs to the other tree - and releases it.
+// not the chain head's, which belongs to the other tree - and releases it. A
+// failed journal is survivable: the next start walks the records back to the
+// disk layer and re-replays.
 func (f *bintrieFollower) journal() {
 	f.mu.Lock()
 	shadow, root := f.shadow, f.cursorRoot
@@ -395,7 +459,7 @@ func (f *bintrieFollower) journal() {
 		return
 	}
 	if err := shadow.Journal(root); err != nil {
-		log.Info("Failed to journal shadow trie", "err", err)
+		log.Warn("Failed to journal shadow trie; restart will re-replay", "err", err)
 	}
 	if err := shadow.Close(); err != nil {
 		log.Error("Failed to close shadow trie", "err", err)
@@ -417,7 +481,10 @@ func (f *bintrieFollower) setCursor(num uint64, hash common.Hash, root common.Ha
 // hasState reports whether the shadow still holds the given root, in memory
 // or on disk.
 func (f *bintrieFollower) hasState(root common.Hash) bool {
-	_, err := f.shadow.NodeReader(root)
+	f.mu.Lock()
+	shadow := f.shadow
+	f.mu.Unlock()
+	_, err := shadow.NodeReader(root)
 	return err == nil
 }
 

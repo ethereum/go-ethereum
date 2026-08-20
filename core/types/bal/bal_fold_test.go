@@ -212,3 +212,41 @@ func TestFoldEmptyInput(t *testing.T) {
 		t.Fatalf("fold of empty lists has %d accounts, want 0", len(*folded))
 	}
 }
+
+// TestFoldSplitsOnEmptinessConsistentTouch pins the widened guard: removal
+// triggers on full emptiness, so metadata changes that are all consistent
+// with emptiness - not only a zero balance - must split before a later touch.
+func TestFoldSplitsOnEmptinessConsistentTouch(t *testing.T) {
+	addr := common.Address{0x07}
+	first := foldList(AccountAccess{
+		Address:      addr,
+		NonceChanges: []encodingAccountNonce{{BlockAccessIndex: 1, PostNonce: 0}},
+		CodeChanges:  []encodingCodeChange{{BlockAccessIndex: 1, NewCode: []byte{}}},
+	})
+	second := foldList(AccountAccess{
+		Address:        addr,
+		BalanceChanges: []encodingBalanceChange{{BlockAccessIndex: 1, PostBalance: u256(5)}},
+	})
+
+	if _, n := Fold([]*BlockAccessList{first, second}); n != 1 {
+		t.Fatalf("folded %d lists, want 1 (split before the recreation)", n)
+	}
+}
+
+// TestFoldNoSplitOnLiveAccount pins the guard's other side: a nonzero nonce
+// proves the account alive, so a later touch folds through.
+func TestFoldNoSplitOnLiveAccount(t *testing.T) {
+	addr := common.Address{0x08}
+	first := foldList(AccountAccess{
+		Address:      addr,
+		NonceChanges: []encodingAccountNonce{{BlockAccessIndex: 1, PostNonce: 1}},
+	})
+	second := foldList(AccountAccess{
+		Address:        addr,
+		BalanceChanges: []encodingBalanceChange{{BlockAccessIndex: 1, PostBalance: u256(5)}},
+	})
+
+	if _, n := Fold([]*BlockAccessList{first, second}); n != 2 {
+		t.Fatalf("folded %d lists, want 2 (the account is provably alive)", n)
+	}
+}

@@ -145,7 +145,7 @@ func Transition(ctx *cli.Context) error {
 	// The binary tree cannot be dumped back into an address-keyed alloc, so
 	// the post-state is rebuilt from the input alloc's keys: hold the alloc
 	// in memory instead of streaming.
-	if prestate.AllocPath != "" && chainConfig.IsPBT() {
+	if prestate.AllocPath != "" && chainConfig.IsBinaryTrie(new(big.Int).SetUint64(prestate.Env.Number), prestate.Env.Timestamp) {
 		if err := readFile(prestate.AllocPath, "alloc", &prestate.Pre); err != nil {
 			return err
 		}
@@ -229,7 +229,7 @@ func Transition(ctx *cli.Context) error {
 		collector Alloc
 		btleaves  map[string]hexutil.Bytes
 	)
-	isBinary := chainConfig.IsPBT()
+	isBinary := chainConfig.IsBinaryTrie(new(big.Int).SetUint64(prestate.Env.Number), prestate.Env.Timestamp)
 	allocOutput := ctx.String(OutputAllocFlag.Name)
 	switch {
 	case !isBinary && allocOutput != "" && allocOutput != "stdout" && allocOutput != "stderr":

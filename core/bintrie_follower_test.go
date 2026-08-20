@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -74,7 +75,11 @@ func awaitShadow(t *testing.T, chain *BlockChain, block *types.Block) common.Has
 	if err := chain.follower.waitCaughtUp(block.NumberU64(), block.Hash(), 10*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	return rawdb.ReadShadowStateRoot(chain.db, block.NumberU64(), block.Hash())
+	root, ok := rawdb.ReadShadowStateRoot(chain.db, block.NumberU64(), block.Hash())
+	if !ok {
+		t.Fatalf("caught up to block %d but no shadow root recorded", block.NumberU64())
+	}
+	return root
 }
 
 // universeWithAlloc folds the genesis allocation and fee recipient into the
@@ -129,7 +134,7 @@ func TestFollowerBatchedCatchup(t *testing.T) {
 		t.Fatalf("shadow root %x, converting the canonical state says %x", root, want)
 	}
 	// The earliest blocks were folded over: no per-hash roots for them.
-	if r := rawdb.ReadShadowStateRoot(db, blocks[2].NumberU64(), blocks[2].Hash()); r != (common.Hash{}) {
+	if r, ok := rawdb.ReadShadowStateRoot(db, blocks[2].NumberU64(), blocks[2].Hash()); ok {
 		t.Fatalf("batched-over block 3 has a recorded root %x", r)
 	}
 }
@@ -148,8 +153,10 @@ func TestFollowerFollowsReorg(t *testing.T) {
 	u := universeWithAlloc(newReplayUniverse(), genesis)
 	u.account(onlyOnA, onlyOnB)
 
+	// The branches fork at block 1, not genesis: the walk must resolve at a
+	// replayed non-genesis ancestor.
 	db, branchA, _ := GenerateChainWithGenesis(genesis, engine, 2, payTo(t, key, sender, onlyOnA, signer, 1000))
-	branchB, _ := GenerateChain(genesis.Config, genesis.ToBlock(), engine, db, 3, payTo(t, key, sender, onlyOnB, signer, 5000))
+	branchB, _ := GenerateChain(genesis.Config, branchA[0], engine, db, 3, payTo(t, key, sender, onlyOnB, signer, 5000))
 
 	chain := openMigrationChain(t, db, genesis)
 	defer chain.Stop()
@@ -164,7 +171,7 @@ func TestFollowerFollowsReorg(t *testing.T) {
 	if want := convertCanonical(t, chain, tipB.Header(), u); root != want {
 		t.Fatalf("post-reorg shadow root %x, converter says %x", root, want)
 	}
-	if r := rawdb.ReadShadowStateRoot(db, tipA.NumberU64(), tipA.Hash()); r == (common.Hash{}) {
+	if _, ok := rawdb.ReadShadowStateRoot(db, tipA.NumberU64(), tipA.Hash()); !ok {
 		t.Fatal("the losing branch lost its recorded shadow root")
 	}
 }
@@ -226,8 +233,8 @@ func TestFollowerRecoversWithoutJournal(t *testing.T) {
 	if err := first.follow(head, nil); err != nil {
 		t.Fatalf("first pass: %v", err)
 	}
-	want := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash())
-	if want == (common.Hash{}) {
+	want, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash())
+	if !ok {
 		t.Fatal("first pass recorded no head root")
 	}
 	// Crash: no journal - the diff layers die with the process.
@@ -239,8 +246,8 @@ func TestFollowerRecoversWithoutJournal(t *testing.T) {
 	if err := second.follow(head, nil); err != nil {
 		t.Fatalf("recovery pass: %v", err)
 	}
-	if got := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash()); got != want {
-		t.Fatalf("recovered head root %x, want %x", got, want)
+	if got, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash()); !ok || got != want {
+		t.Fatalf("recovered head root %x (ok=%v), want %x", got, ok, want)
 	}
 	if num, _, _, ok := rawdb.ReadPBTMigrationCursor(db); !ok || num != head.Number.Uint64() {
 		t.Fatalf("cursor at %d (ok=%v), want %d", num, ok, head.Number.Uint64())
@@ -297,5 +304,136 @@ func TestFollowerIdlesDuringSnapSync(t *testing.T) {
 	}
 	if f.shadow != nil {
 		t.Fatal("shadow opened during snap sync")
+	}
+}
+
+// TestFollowerRefusesUnresolvablePosition pins the poisoned-fallback guard: a
+// cursor that resolves to nothing live must stall for a re-anchor, never bind
+// the mid-chain disk root to block zero.
+func TestFollowerRefusesUnresolvablePosition(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 2)
+	writeChainShape(db, blocks)
+
+	// A cursor with a dead root, no live records below it, and a disk root
+	// that is NOT the genesis seed - the post-crash shape after deep damage.
+	// The namespace is attested, as any real shadow is from creation.
+	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+	rawdb.WritePBTFlatState(pbtdb)
+	rawdb.WriteSnapshotRoot(pbtdb, common.Hash{0xd1, 0x5c})
+	rawdb.WritePBTMigrationCursor(db, 2, blocks[1].Hash(), common.Hash{0xde, 0xad})
+
+	f := standaloneFollower(genesis, db)
+	err := f.follow(blocks[1].Header(), nil)
+	if err == nil || !strings.Contains(err.Error(), "re-anchor") {
+		t.Fatalf("follow = %v, want an unresolvable-position error", err)
+	}
+}
+
+// TestFollowerStallsOnAccessListMismatch pins the integrity check: a stored
+// list that does not hash to the header's commitment must stall, not apply.
+func TestFollowerStallsOnAccessListMismatch(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 2)
+	writeChainShape(db, blocks)
+	rawdb.WriteAccessList(db, blocks[0].Hash(), blocks[0].NumberU64(), &bal.BlockAccessList{})
+
+	f := standaloneFollower(genesis, db)
+	err := f.follow(blocks[len(blocks)-1].Header(), nil)
+	if err == nil || !strings.Contains(err.Error(), "mismatch") {
+		t.Fatalf("follow = %v, want an access-list mismatch error", err)
+	}
+}
+
+// TestFollowerStallsBeforeAccessLists pins the coverage rule: a block whose
+// header commits to no access list cannot be replayed and must stall.
+func TestFollowerStallsBeforeAccessLists(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 1)
+	writeChainShape(db, blocks)
+
+	// Strip the header's list commitment - and the optional fields behind it,
+	// which cannot encode past a nil - as a pre-Amsterdam block would look
+	// behind an anchor imported too early.
+	header := blocks[0].Header()
+	header.BlockAccessListHash = nil
+	header.SlotNumber = nil
+	rawdb.WriteHeader(db, header)
+	rawdb.WriteCanonicalHash(db, header.Hash(), header.Number.Uint64())
+	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+	rawdb.WritePBTFlatState(pbtdb)
+	rawdb.WritePBTAnchor(pbtdb, 0, rawdb.ReadCanonicalHash(db, 0))
+
+	f := standaloneFollower(genesis, db)
+	err := f.follow(header, nil)
+	if err == nil || !strings.Contains(err.Error(), "no access list") {
+		t.Fatalf("follow = %v, want a no-access-list error", err)
+	}
+}
+
+// TestFollowerResumesFromRecordAboveCursor pins the batch crash window: the
+// record and the flatten land before the cursor write, so a live root may sit
+// above the hint and the resolver must scan up before walking down.
+func TestFollowerResumesFromRecordAboveCursor(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 4)
+	writeChainShape(db, blocks)
+	head := blocks[len(blocks)-1].Header()
+
+	first := standaloneFollower(genesis, db)
+	if err := first.follow(head, nil); err != nil {
+		t.Fatalf("first pass: %v", err)
+	}
+	want, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash())
+	if !ok {
+		t.Fatal("first pass recorded no head root")
+	}
+	// Make the head root durable, then crash with the cursor rewound to a
+	// block whose own root died with the in-memory layers.
+	if err := first.shadow.Commit(want, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.shadow.Close(); err != nil {
+		t.Fatal(err)
+	}
+	rawdb.WritePBTMigrationCursor(db, 2, blocks[1].Hash(), common.Hash{0xde, 0xad})
+
+	second := standaloneFollower(genesis, db)
+	if err := second.follow(head, nil); err != nil {
+		t.Fatalf("recovery pass: %v", err)
+	}
+	if num, _, root := second.cursor(); num != head.Number.Uint64() || root != want {
+		t.Fatalf("resumed at %d root %x, want %d root %x", num, root, head.Number.Uint64(), want)
+	}
+}
+
+// TestFollowerStopsOnCanonicalDiscontinuity pins the continuity check: a
+// reorg rewriting the canonical index under a running replay must stop the
+// walk at the splice, not replay across two branches.
+func TestFollowerStopsOnCanonicalDiscontinuity(t *testing.T) {
+	genesis, key, sender, _ := migrationChainGenesis(t)
+	var (
+		onlyOnA = common.Address{0xaa, 0xaa}
+		onlyOnB = common.Address{0xbb, 0xbb}
+		signer  = types.LatestSigner(genesis.Config)
+		engine  = beacon.New(ethash.NewFaker())
+	)
+	db, branchA, _ := GenerateChainWithGenesis(genesis, engine, 3, payTo(t, key, sender, onlyOnA, signer, 1000))
+	branchB, _ := GenerateChain(genesis.Config, genesis.ToBlock(), engine, db, 3, payTo(t, key, sender, onlyOnB, signer, 5000))
+	writeChainShape(db, branchA[:1])
+
+	f := standaloneFollower(genesis, db)
+	if err := f.follow(branchA[0].Header(), nil); err != nil {
+		t.Fatal(err)
+	}
+	// A reorg to branch B caught mid-rewrite: block 2 already re-pointed,
+	// block 1 still branch A. The next block does not chain onto the cursor.
+	rawdb.WriteBlock(db, branchB[1])
+	rawdb.WriteCanonicalHash(db, branchB[1].Hash(), 2)
+
+	if err := f.follow(branchB[1].Header(), nil); err != nil {
+		t.Fatalf("follow across the splice = %v, want a clean stop", err)
+	}
+	if num, hash, _ := f.cursor(); num != 1 || hash != branchA[0].Hash() {
+		t.Fatalf("cursor moved to %d %x across a splice", num, hash)
+	}
+	if _, ok := rawdb.ReadShadowStateRoot(db, 2, branchB[1].Hash()); ok {
+		t.Fatal("a spliced block got a shadow root recorded")
 	}
 }

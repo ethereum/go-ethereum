@@ -227,7 +227,7 @@ func runCmd(ctx *cli.Context) error {
 	db := rawdb.NewMemoryDatabase()
 	// The binary tree is path-scheme only; hashdb cannot store its node set.
 	tconf := &triedb.Config{Preimages: preimages}
-	if genesisConfig.Config != nil && genesisConfig.Config.IsPBT() {
+	if genesisConfig.IsPBT() {
 		tconf.IsPBT = true
 		tconf.PathDB = pathdb.Defaults
 	} else {

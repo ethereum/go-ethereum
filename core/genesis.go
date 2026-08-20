@@ -645,6 +645,9 @@ func resolveStateMode(db ethdb.Database, genesis *Genesis) (stateMode, *params.C
 			return modeMPT, nil, nil
 		}
 		if config = rawdb.ReadChainConfig(db, ghash); config == nil {
+			// An initialized database without a readable config cannot say
+			// whether it was migrating; treat it as merkle, loudly.
+			log.Warn("Stored chain config unreadable; assuming a merkle-only chain")
 			return modeMPT, nil, nil
 		}
 		if header := rawdb.ReadHeader(db, ghash, 0); header != nil {

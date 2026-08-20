@@ -408,7 +408,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Open trie database with provided config
-	mode, storedConfig, err := resolveStateMode(db, genesis)
+	mode, resolvedConfig, err := resolveStateMode(db, genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -422,13 +422,19 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	isPBT := mode == modePBTNative
 	if mode == modeMigration {
 		// The migration runs both trees, so the merkle side has to live on
-		// the path scheme too.
+		// the path scheme too, and the shadow's configuration must be valid
+		// up front rather than stalling the follower forever.
 		if cfg.StateScheme != rawdb.PathScheme {
 			return nil, fmt.Errorf("state migration requires the %q state scheme, got %q", rawdb.PathScheme, cfg.StateScheme)
 		}
+		if _, err := cfg.triedbConfig(true); err != nil {
+			return nil, err
+		}
 		// The canonical commitment follows the head across the fork: a node
-		// restarted after activation reopens on the binary tree.
-		if head := rawdb.ReadHeadHeader(db); head != nil && storedConfig.IsBinaryTrie(head.Number, head.Time) {
+		// restarted after activation reopens on the binary tree. The head
+		// BLOCK decides - during sync the header chain runs ahead of the
+		// state the node actually owns.
+		if head := rawdb.ReadHeadBlock(db); head != nil && resolvedConfig.IsBinaryTrie(head.Number(), head.Time()) {
 			isPBT = true
 		}
 	}

@@ -25,14 +25,15 @@ import (
 )
 
 // ReadShadowStateRoot returns the recorded shadow root of the given block -
-// the root of the tree its header does not commit - or zero if the block was
-// never replayed.
-func ReadShadowStateRoot(db ethdb.KeyValueReader, number uint64, hash common.Hash) common.Hash {
+// the root of the tree its header does not commit. Presence is reported
+// separately: the empty binary root is the zero hash, so the root value alone
+// cannot say whether the block was replayed.
+func ReadShadowStateRoot(db ethdb.KeyValueReader, number uint64, hash common.Hash) (common.Hash, bool) {
 	data, _ := db.Get(shadowRootKey(number, hash))
 	if len(data) != common.HashLength {
-		return common.Hash{}
+		return common.Hash{}, false
 	}
-	return common.BytesToHash(data)
+	return common.BytesToHash(data), true
 }
 
 // WriteShadowStateRoot records the shadow root of the given block.
@@ -49,9 +50,17 @@ func DeleteShadowStateRoot(db ethdb.KeyValueWriter, number uint64, hash common.H
 	}
 }
 
+// HasPBTMigrationCursor reports whether a migration cursor was ever written,
+// readable or not. A present-but-corrupt cursor must not be mistaken for a
+// virgin database: the seeding fallbacks are only safe on the latter.
+func HasPBTMigrationCursor(db ethdb.KeyValueReader) bool {
+	has, _ := db.Has(pbtMigrationCursorKey)
+	return has
+}
+
 // ReadPBTMigrationCursor returns the shadow follower's last replayed block and
-// shadow root, or ok=false if no cursor was written. The cursor is a resume
-// hint; the shadow database itself is the truth.
+// shadow root, or ok=false if no readable cursor was written. The cursor is a
+// resume hint; the shadow database itself is the truth.
 func ReadPBTMigrationCursor(db ethdb.KeyValueReader) (uint64, common.Hash, common.Hash, bool) {
 	data, _ := db.Get(pbtMigrationCursorKey)
 	if len(data) != 8+2*common.HashLength {

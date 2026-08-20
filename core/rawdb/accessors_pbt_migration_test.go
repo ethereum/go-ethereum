@@ -30,19 +30,24 @@ func TestShadowStateRootStorage(t *testing.T) {
 		hash = common.Hash{0x01}
 		root = common.Hash{0xaa}
 	)
-	if got := ReadShadowStateRoot(db, 7, hash); got != (common.Hash{}) {
-		t.Fatalf("unwritten shadow root = %x, want zero", got)
+	if _, ok := ReadShadowStateRoot(db, 7, hash); ok {
+		t.Fatal("unwritten shadow root reported present")
 	}
 	WriteShadowStateRoot(db, 7, hash, root)
-	if got := ReadShadowStateRoot(db, 7, hash); got != root {
-		t.Fatalf("shadow root = %x, want %x", got, root)
+	if got, ok := ReadShadowStateRoot(db, 7, hash); !ok || got != root {
+		t.Fatalf("shadow root = %x (ok=%v), want %x", got, ok, root)
 	}
-	if got := ReadShadowStateRoot(db, 8, hash); got != (common.Hash{}) {
-		t.Fatalf("wrong-number read = %x, want zero", got)
+	// The empty binary root is the zero hash; presence must survive it.
+	WriteShadowStateRoot(db, 9, hash, common.Hash{})
+	if got, ok := ReadShadowStateRoot(db, 9, hash); !ok || got != (common.Hash{}) {
+		t.Fatalf("zero shadow root = %x (ok=%v), want present zero", got, ok)
+	}
+	if _, ok := ReadShadowStateRoot(db, 8, hash); ok {
+		t.Fatal("wrong-number read reported present")
 	}
 	DeleteShadowStateRoot(db, 7, hash)
-	if got := ReadShadowStateRoot(db, 7, hash); got != (common.Hash{}) {
-		t.Fatalf("deleted shadow root = %x, want zero", got)
+	if _, ok := ReadShadowStateRoot(db, 7, hash); ok {
+		t.Fatal("deleted shadow root reported present")
 	}
 }
 
@@ -52,6 +57,9 @@ func TestPBTMigrationCursorStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 	if _, _, _, ok := ReadPBTMigrationCursor(db); ok {
 		t.Fatal("cursor reported present on an empty database")
+	}
+	if HasPBTMigrationCursor(db) {
+		t.Fatal("cursor key present on an empty database")
 	}
 	WritePBTMigrationCursor(db, 42, common.Hash{0x02}, common.Hash{0xbb})
 	num, hash, root, ok := ReadPBTMigrationCursor(db)
@@ -63,6 +71,9 @@ func TestPBTMigrationCursorStorage(t *testing.T) {
 	}
 	if _, _, _, ok := ReadPBTMigrationCursor(db); ok {
 		t.Fatal("truncated cursor reported present")
+	}
+	if !HasPBTMigrationCursor(db) {
+		t.Fatal("truncated cursor not detected as present: the seeding fallbacks would run")
 	}
 }
 
