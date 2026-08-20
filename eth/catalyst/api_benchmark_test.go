@@ -23,12 +23,15 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -735,4 +738,160 @@ func BenchmarkGetBlobsV3RPCServerOnly(b *testing.B) {
 	}
 	b.StopTimer()
 	b.ReportMetric(float64(b.Elapsed().Milliseconds())/float64(b.N), "ms/op")
+}
+
+// benchTxDataSizes is a spread of calldata sizes approximating the mix in a
+// mainnet block, where cheap transfers sit alongside large contract calls.
+// Cycling these gives a mean transaction of roughly 700 bytes, which is what
+// mainnet blocks of 30 to 40 million gas have been carrying.
+var benchTxDataSizes = []int{0, 68, 132, 356, 900, 2500}
+
+// makeBenchNewPayload builds a payload holding numTx transactions, along with
+// the other arguments engine_newPayloadV4 takes.
+func makeBenchNewPayload(b *testing.B, numTx int) (engine.ExecutableData, []common.Hash, *common.Hash) {
+	config := params.MergedTestChainConfig
+	signer := types.LatestSigner(config)
+
+	txs := make([][]byte, numTx)
+	for i := range txs {
+		size := benchTxDataSizes[i%len(benchTxDataSizes)]
+		data := make([]byte, size)
+		for j := range data {
+			data[j] = byte(i + j)
+		}
+		tx := types.MustSignNewTx(testKey, signer, &types.DynamicFeeTx{
+			ChainID:   config.ChainID,
+			Nonce:     uint64(i),
+			GasTipCap: big.NewInt(params.GWei),
+			GasFeeCap: big.NewInt(10 * params.GWei),
+			Gas:       21000 + uint64(size)*16,
+			To:        &testAddr,
+			Value:     big.NewInt(1),
+			Data:      data,
+		})
+		enc, err := tx.MarshalBinary()
+		if err != nil {
+			b.Fatalf("encoding transaction %d failed: %v", i, err)
+		}
+		txs[i] = enc
+	}
+
+	withdrawals := make([]*types.Withdrawal, 16)
+	for i := range withdrawals {
+		withdrawals[i] = &types.Withdrawal{
+			Index:     uint64(i),
+			Validator: uint64(i),
+			Address:   testAddr,
+			Amount:    1e9,
+		}
+	}
+
+	beaconRoot := common.Hash{0x42}
+	data := engine.ExecutableData{
+		ParentHash:    common.Hash{0x01},
+		FeeRecipient:  testAddr,
+		StateRoot:     common.Hash{0x02},
+		ReceiptsRoot:  common.Hash{0x03},
+		LogsBloom:     make([]byte, 256),
+		Random:        common.Hash{0x04},
+		Number:        1,
+		GasLimit:      60_000_000,
+		GasUsed:       30_000_000,
+		Timestamp:     1700000000,
+		ExtraData:     []byte("benchmark"),
+		BaseFeePerGas: big.NewInt(params.GWei),
+		Transactions:  txs,
+		Withdrawals:   withdrawals,
+		BlobGasUsed:   new(uint64),
+		ExcessBlobGas: new(uint64),
+	}
+	vhashes := []common.Hash{}
+	block, err := engine.ExecutableDataToBlockNoHash(data, vhashes, &beaconRoot, [][]byte{})
+	if err != nil {
+		b.Fatalf("assembling the payload failed: %v", err)
+	}
+	data.BlockHash = block.Hash()
+	return data, vhashes, &beaconRoot
+}
+
+// makeBenchNewPayloadRequest serializes a payload the way a consensus client
+// would send it.
+func makeBenchNewPayloadRequest(b *testing.B, numTx int) []byte {
+	data, vhashes, beaconRoot := makeBenchNewPayload(b, numTx)
+	payload, err := json.Marshal(data)
+	if err != nil {
+		b.Fatalf("marshaling the payload failed: %v", err)
+	}
+	hashes, err := json.Marshal(vhashes)
+	if err != nil {
+		b.Fatalf("marshaling the versioned hashes failed: %v", err)
+	}
+	root, err := json.Marshal(beaconRoot)
+	if err != nil {
+		b.Fatalf("marshaling the beacon root failed: %v", err)
+	}
+	return []byte(fmt.Sprintf(
+		`{"jsonrpc":"2.0","id":1,"method":"engine_newPayloadV4","params":[%s,%s,%s,[]]}`,
+		payload, hashes, root))
+}
+
+// newPayloadDecodeStub answers engine_newPayloadV4 with no chain behind it. With
+// toBlock set it also assembles the block.
+type newPayloadDecodeStub struct {
+	toBlock bool
+	err     error
+}
+
+func (s *newPayloadDecodeStub) NewPayloadV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (engine.PayloadStatusV1, error) {
+	if s.toBlock {
+		requests := make([][]byte, len(executionRequests))
+		for i, r := range executionRequests {
+			requests[i] = r
+		}
+		if _, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests); err != nil {
+			s.err = err
+		}
+	}
+	return engine.PayloadStatusV1{Status: engine.VALID}, nil
+}
+
+// BenchmarkNewPayloadDecode measures what an engine_newPayloadV4 request costs
+// the server before the block reaches the chain. It arrives over HTTP, as it does
+// from a consensus client. The decode variant stops once the arguments are
+// decoded, decode+block also assembles and hash checks the block.
+func BenchmarkNewPayloadDecode(b *testing.B) {
+	for _, numTx := range []int{64, 192, 384} {
+		req := makeBenchNewPayloadRequest(b, numTx)
+		for _, variant := range []struct {
+			label   string
+			toBlock bool
+		}{{"decode", false}, {"decode+block", true}} {
+			b.Run(fmt.Sprintf("txs=%d/kb=%d/%s", numTx, len(req)/1024, variant.label), func(b *testing.B) {
+				stub := &newPayloadDecodeStub{toBlock: variant.toBlock}
+				srv := rpc.NewServer()
+				if err := srv.RegisterName("engine", stub); err != nil {
+					b.Fatalf("registering the stub failed: %v", err)
+				}
+				defer srv.Stop()
+
+				body := string(req)
+				b.ReportAllocs()
+				b.SetBytes(int64(len(req)))
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+					r.Header.Set("content-type", "application/json")
+					w := httptest.NewRecorder()
+					srv.ServeHTTP(w, r)
+					if w.Code != http.StatusOK {
+						b.Fatalf("status %d: %s", w.Code, w.Body.String())
+					}
+				}
+				b.StopTimer()
+				if stub.err != nil {
+					b.Fatalf("assembling the block failed: %v", stub.err)
+				}
+			})
+		}
+	}
 }

@@ -302,8 +302,13 @@ func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, readL
 		buf = appendBatch(buf[:0], msgs)
 		return conn.WriteMessage(websocket.TextMessage, buf)
 	}
+	// Every frame is one message, so it can be read in one go and checked once.
+	readFrame := func() ([]byte, error) {
+		_, frame, err := conn.ReadMessage()
+		return frame, err
+	}
 	wc := &websocketCodec{
-		jsonCodec:    NewFuncCodec(conn, encodeMsg, encodeBatch, conn.ReadJSON).(*jsonCodec),
+		jsonCodec:    newFuncCodec(conn, encodeMsg, encodeBatch, nil, readFrame),
 		conn:         conn,
 		pingReset:    make(chan struct{}, 1),
 		pongReceived: make(chan struct{}),
