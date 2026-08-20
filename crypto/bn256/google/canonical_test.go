@@ -120,3 +120,36 @@ func TestGFp2IsOneCanonical(t *testing.T) {
 		t.Errorf("gfP2%s.IsOne() = false, want true", one)
 	}
 }
+
+// TestGFp2InvertZero checks that inverting zero returns zero rather than
+// whatever the pool last held, matching the 0⁻¹ = 0 convention of the
+// cloudflare and gnark backends.
+func TestGFp2InvertZero(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		x, y *big.Int
+	}{
+		{"0", big.NewInt(0), big.NewInt(0)},
+		{"non-canonical 0", new(big.Int).Set(P), new(big.Int).Set(P)},
+	} {
+		pool := new(bnPool)
+		// Poison the pool so a discarded ModInverse failure would show up.
+		for i := 0; i < 8; i++ {
+			pool.Put(new(big.Int).SetInt64(0xdead0000 + int64(i)))
+		}
+		a := newGFp2(pool)
+		a.x.Set(tc.x)
+		a.y.Set(tc.y)
+
+		inv := newGFp2(pool).Invert(a, pool)
+		if !inv.IsZero() {
+			t.Errorf("Invert(%s) = %s, want (0,0)", tc.name, inv)
+		}
+
+		a.Put(pool)
+		inv.Put(pool)
+		if c := pool.Count(); c > 0 {
+			t.Errorf("Invert(%s) leaked %d pool entries", tc.name, c)
+		}
+	}
+}
