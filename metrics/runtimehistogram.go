@@ -224,7 +224,7 @@ func (h *runtimeHistogramSnapshot) computePercentiles(thresh []float64) {
 	for i, count := range h.internal.Counts {
 		totalCount += float64(count)
 
-		for len(thresh) > 0 && thresh[0] < totalCount {
+		for len(thresh) > 0 && thresh[0] <= totalCount {
 			thresh[0] = h.internal.Buckets[i]
 			thresh = thresh[1:]
 		}
