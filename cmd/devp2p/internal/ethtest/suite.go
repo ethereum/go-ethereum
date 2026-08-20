@@ -81,6 +81,8 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
 		{Name: "SameRequestID", Fn: s.TestSameRequestID},
 		{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
+		// get block access lists (eth/71)
+		{Name: "GetBlockAccessLists", Fn: s.TestEth71GetBlockAccessLists},
 		// get history
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
 		{Name: "GetReceipts", Fn: s.TestGetReceipts},
