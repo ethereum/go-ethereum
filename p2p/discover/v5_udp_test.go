@@ -333,6 +333,26 @@ func TestUDPv5_pingCall(t *testing.T) {
 	}
 }
 
+func TestUDPv5_requestNoEndpoint(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	n := enode.NewV4(&test.remotekey.PublicKey, nil, 0, 0)
+	if _, err := test.udp.TalkRequest(n, "", nil); err != errNoUDPEndpoint {
+		t.Fatalf("TalkRequest error: got %q, want %q", err, errNoUDPEndpoint)
+	}
+	if _, err := test.udp.Ping(n); err != errNoUDPEndpoint {
+		t.Fatalf("Ping error: got %q, want %q", err, errNoUDPEndpoint)
+	}
+	if _, err := test.udp.Findnode(n, []uint{0}); err != errNoUDPEndpoint {
+		t.Fatalf("Findnode error: got %q, want %q", err, errNoUDPEndpoint)
+	}
+	if _, err := test.udp.RequestENR(n); err != errNoUDPEndpoint {
+		t.Fatalf("RequestENR error: got %q, want %q", err, errNoUDPEndpoint)
+	}
+}
+
 // This test checks that outgoing FINDNODE calls work and multiple NODES
 // replies are aggregated.
 func TestUDPv5_findnodeCall(t *testing.T) {
