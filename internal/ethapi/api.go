@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	gomath "math"
 	"math/big"
 	"strings"
@@ -1331,12 +1332,15 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if db == nil || err != nil {
 		return nil, 0, nil, err
 	}
+	isPostMerge := header.Difficulty.Sign() == 0
+	rules := b.ChainConfig().Rules(header.Number, isPostMerge, header.Time)
+	precompileSet := maps.Clone(vm.ActivePrecompiledContracts(rules))
 
 	// Apply state overrides immediately after StateAndHeaderByNumberOrHash.
 	// If not applied here, there could be cases where user-specified overrides (e.g., nonce)
 	// may conflict with default values from the database, leading to inconsistencies.
 	if stateOverrides != nil {
-		if err := stateOverrides.Apply(db, nil); err != nil {
+		if err := stateOverrides.Apply(db, precompileSet); err != nil {
 			return nil, 0, nil, err
 		}
 	}
@@ -1360,9 +1364,11 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	} else {
 		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce))
 	}
-	isPostMerge := header.Difficulty.Sign() == 0
 	// Retrieve the precompiles since they don't need to be added to the access list
-	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge, header.Time))
+	precompiles := make([]common.Address, 0, len(precompileSet))
+	for addr := range precompileSet {
+		precompiles = append(precompiles, addr)
+	}
 
 	// addressesToExclude contains sender, receiver, precompiles and valid authorizations
 	addressesToExclude := map[common.Address]struct{}{args.from(): {}, to: {}}
@@ -1410,6 +1416,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		tracer := logger.NewAccessListTracer(accessList, addressesToExclude)
 		config := vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true}
 		evm := b.GetEVM(ctx, statedb, header, &config, nil)
+		evm.SetPrecompiles(precompileSet)
 
 		// Lower the basefee to 0 to avoid breaking EVM
 		// invariants (basefee < feecap).
