@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -66,6 +68,14 @@ func (n *expiredNode) SetArchiveResolver(resolver archive.ResolverFn) {
 	n.archiveResolver = resolver
 }
 
+// verifiedArchiveOffsets remembers subtree hashes that already passed archive
+// reconstruction verification, keyed by file offset. The archive file is
+// append-only, so an offset uniquely identifies its content: once a
+// reconstruction hashed to the expected value, repeat resolutions of the
+// same offset can skip the O(subtree) re-hash. A differing expected hash
+// (never the case in practice) falls back to full verification.
+var verifiedArchiveOffsets = lru.NewCache[uint64, common.Hash](65536)
+
 // resolveExpiredNodeData resolves an expired node from the archive, verifies
 // the reconstructed subtree hash, and stamps the cached hash onto the root.
 // Returns an error if the archive data is corrupted (hash mismatch).
@@ -79,22 +89,26 @@ func resolveExpiredNodeData(n *expiredNode) (node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to rebuild expired node from archive: %w", err)
 	}
-	depth := subtreeDepth(resolved)
 	log.Debug("Resurrected expired node from archive",
 		"offset", n.offset, "archiveBytes", n.size,
-		"records", len(records), "depth", depth,
+		"records", len(records),
 		"elapsed", time.Since(start))
 	// Verify hash integrity: if the original hash is known, check that the
 	// reconstructed subtree produces the same hash. A mismatch means the
 	// archive is corrupted (e.g. missing leaves due to unresolvable hashNodes
-	// during archival) and any data from it is unreliable.
+	// during archival) and any data from it is unreliable. Offsets that have
+	// already been verified against the same expected hash are skipped.
 	if n.cachedHash != nil {
-		h := newHasher(false)
-		gotHash := h.hash(resolved, true)
-		returnHasherToPool(h)
-		if !bytes.Equal(gotHash, n.cachedHash) {
-			return nil, fmt.Errorf("expired node hash mismatch at offset=%d size=%d: archive data is corrupted (expected %x got %x, %d records)",
-				n.offset, n.size, []byte(n.cachedHash), gotHash, len(records))
+		expected := common.BytesToHash(n.cachedHash)
+		if prev, ok := verifiedArchiveOffsets.Get(n.offset); !ok || prev != expected {
+			h := newHasher(false)
+			gotHash := h.hash(resolved, true)
+			returnHasherToPool(h)
+			if !bytes.Equal(gotHash, n.cachedHash) {
+				return nil, fmt.Errorf("expired node hash mismatch at offset=%d size=%d: archive data is corrupted (expected %x got %x, %d records)",
+					n.offset, n.size, []byte(n.cachedHash), gotHash, len(records))
+			}
+			verifiedArchiveOffsets.Add(n.offset, expected)
 		}
 		// Stamp the original hash onto the resolved subtree root so the
 		// hasher returns it directly instead of re-computing.
@@ -119,26 +133,6 @@ func resolveExpiredNodeData(n *expiredNode) (node, error) {
 	// marking is harmless — the nodes are discarded when the trie is GC'd.
 	markSubtreeDirty(resolved)
 	return resolved, nil
-}
-
-// subtreeDepth returns the maximum depth of a trie subtree.
-func subtreeDepth(n node) int {
-	switch n := n.(type) {
-	case *fullNode:
-		max := 0
-		for _, child := range &n.Children {
-			if child != nil {
-				if d := subtreeDepth(child); d > max {
-					max = d
-				}
-			}
-		}
-		return 1 + max
-	case *shortNode:
-		return 1 + subtreeDepth(n.Val)
-	default:
-		return 0
-	}
 }
 
 // markSubtreeDirty recursively marks all fullNode and shortNode in the
