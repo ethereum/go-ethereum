@@ -164,8 +164,9 @@ var (
 		"noble",  // 24.04, EOL: 04/2034
 	}
 
-	// COPR chroots the source RPM is built for. Fedora releases older than 42
-	// ship a Go too old for our go.mod directive, so they are not buildable.
+	// COPR chroots the source RPM is built for. The builder Go is shipped in the
+	// source package, so the only requirement on a chroot is a Go able to
+	// bootstrap it; releases are dropped from this list once COPR retires them.
 	fedoraChroots = []string{
 		"fedora-43-x86_64",
 		"fedora-43-aarch64",
@@ -1298,8 +1299,15 @@ func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 //
 // Fedora packages are produced by handing a source RPM to COPR, which is the
 // Fedora counterpart of Launchpad's PPA builders.
+//
+// As for the debian packages, the Go sources are shipped inside the source
+// package and the builder compiles them before building go-ethereum. Fedora
+// tracks Go closely enough that its system Go regularly runs ahead of what our
+// dependency tree supports, so relying on it makes the packaging break every
+// time Fedora rebases (Fedora 45 shipping Go 1.27 is the current example).
 func doRPMSource(cmdline []string) {
 	var (
+		cachedir = flag.String("cachedir", "./build/cache", `Filesystem path to cache the downloaded Go bundles at`)
 		packager = flag.String("packager", "", `Package author, in "name <email>" form`)
 		upload   = flag.String("upload", "", `COPR project to submit the source package to`)
 		chroots  = flag.String("chroots", strings.Join(fedoraChroots, ","), `Comma separated COPR chroots to build for, empty means every chroot enabled in the project`)
@@ -1317,6 +1325,8 @@ func doRPMSource(cmdline []string) {
 	if *upload != "" {
 		writeCoprConfig()
 	}
+	gobundle := downloadGoSources(*cachedir)
+
 	modgopath := filepath.Join(*workdir, "modgopath")
 
 	srcdepfetch := tc.Go("mod", "download")
@@ -1333,7 +1343,7 @@ func doRPMSource(cmdline []string) {
 			if attempt > 1 {
 				log.Printf("Retrying %s (attempt %d/%d)", pkg.Name, attempt, rpmBuildAttempts)
 			}
-			return buildRPMPackage(*workdir, modgopath, *packager, *upload, *chroots, *wait, env, now, pkg)
+			return buildRPMPackage(*workdir, modgopath, *packager, *upload, *chroots, *wait, env, now, pkg, gobundle)
 		})
 		if err != nil {
 			log.Printf("FAILED %s: %v", pkg.Name, err)
@@ -1351,7 +1361,7 @@ const rpmBuildAttempts = 3
 
 // buildRPMPackage stages the sources, packs them, turns the result into a source
 // RPM and optionally submits it to COPR.
-func buildRPMPackage(workdir, modgopath, packager, upload, chroots string, wait bool, env build.Environment, now time.Time, pkg distroPackage) error {
+func buildRPMPackage(workdir, modgopath, packager, upload, chroots string, wait bool, env build.Environment, now time.Time, pkg distroPackage, gobundle string) error {
 	meta := newRPMMetadata(packager, env, now, pkg)
 
 	var (
@@ -1368,7 +1378,7 @@ func buildRPMPackage(workdir, modgopath, packager, upload, chroots string, wait 
 			return err
 		}
 	}
-	pkgdir, err := stageRPMSource(workdir, modgopath, meta)
+	pkgdir, err := stageRPMSource(workdir, modgopath, gobundle, meta)
 	if err != nil {
 		return err
 	}
@@ -1398,8 +1408,8 @@ func buildRPMPackage(workdir, modgopath, packager, upload, chroots string, wait 
 }
 
 // stageRPMSource checks the repository out into a versioned directory and adds
-// the bundled Go module cache to it.
-func stageRPMSource(workdir, modgopath string, meta rpmMetadata) (pkgdir string, err error) {
+// the bundled Go sources and module cache to it.
+func stageRPMSource(workdir, modgopath, gobundle string, meta rpmMetadata) (pkgdir string, err error) {
 	pkgdir = filepath.Join(workdir, meta.Name()+"-"+meta.Version)
 
 	if err := os.RemoveAll(pkgdir); err != nil {
@@ -1409,6 +1419,13 @@ func stageRPMSource(workdir, modgopath string, meta rpmMetadata) (pkgdir string,
 		return "", err
 	}
 	build.MustRunCommand("git", "checkout-index", "-a", "--prefix", pkgdir+string(filepath.Separator))
+
+	if err := build.ExtractArchive(gobundle, pkgdir); err != nil {
+		return "", fmt.Errorf("extracting builder Go sources: %w", err)
+	}
+	if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".go")); err != nil {
+		return "", fmt.Errorf("renaming builder Go source folder: %w", err)
+	}
 
 	if err := os.MkdirAll(filepath.Join(pkgdir, ".mod", "cache"), 0755); err != nil {
 		return "", err

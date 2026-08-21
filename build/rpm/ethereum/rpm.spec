@@ -12,7 +12,9 @@ License:        GPL-3.0-or-later AND LGPL-3.0-or-later
 URL:            https://geth.ethereum.org
 Source0:        {{.SourceName}}
 
-BuildRequires:  golang >= 1.24
+# Only used to bootstrap the Go shipped in the source tarball, so the floor is
+# Go's own bootstrap requirement rather than the one in our go.mod.
+BuildRequires:  golang >= 1.22.6
 BuildRequires:  gcc
 {{range .Executables}}Requires:       {{$.ExeName .}} = %{version}-%{release}
 {{end}}
@@ -32,11 +34,16 @@ Conflicts:      {{$.ExeConflicts .}}
 %autosetup -n {{.Name}}-{{.Version}}
 
 %build
+export GOCACHE=%{_builddir}/go-build
+export GOROOT_BOOTSTRAP=$(go env GOROOT)
+
+mv .go %{_builddir}/goroot
+(cd %{_builddir}/goroot/src && ./make.bash)
+
 # COPR builders have no network access, so all module downloads are faked out
 # with the cache shipped inside the source tarball. GOPROXY=off makes a missing
 # module fail loudly instead of hanging on a network timeout.
 export GOPATH=%{_builddir}/gopath
-export GOCACHE=%{_builddir}/go-build
 export GOPROXY=off
 export GOSUMDB=off
 export GOTOOLCHAIN=local
@@ -44,7 +51,7 @@ export GOTOOLCHAIN=local
 mkdir -p $GOPATH/pkg
 mv .mod $GOPATH/pkg/mod
 
-go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
+%{_builddir}/goroot/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
 
 %install
 install -d %{buildroot}%{_bindir}
