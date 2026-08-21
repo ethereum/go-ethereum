@@ -66,7 +66,7 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 		memdb   ethdb.Database
 		tdbconf *triedb.Config
 	)
-	if config.IsPBT() {
+	if config.IsBinaryTrie(block.Number(), block.Time()) {
 		memdb, tdbconf = witness.MakePathDB(), triedb.PBTWitnessDefaults
 	} else {
 		memdb, tdbconf = witness.MakeHashDB(), triedb.HashDefaults

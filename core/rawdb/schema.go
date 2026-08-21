@@ -71,6 +71,17 @@ var (
 	// somewhere.
 	pbtAnchorKey = []byte("PBTAnchor")
 
+	// pbtMigrationCursorKey hints at the follower's last replayed block. A hint
+	// only: the shadow database is the truth, and a crash may leave it behind.
+	pbtMigrationCursorKey = []byte("PBTMigrationCursor")
+
+	// mptMigrationCursorKey hints at the merkle window follower's last
+	// replayed block, with the same contract as pbtMigrationCursorKey.
+	mptMigrationCursorKey = []byte("MPTMigrationCursor")
+
+	// pbtMigrationDoneKey marks a finished migration.
+	pbtMigrationDoneKey = []byte("PBTMigrationDone")
+
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
 
@@ -126,6 +137,7 @@ var (
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 	accessListPrefix    = []byte("j") // accessListPrefix + num (uint64 big endian) + hash -> block access list
+	shadowRootPrefix    = []byte("k") // shadowRootPrefix + num (uint64 big endian) + hash -> shadow state root
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -247,6 +259,11 @@ func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 // accessListKey = accessListPrefix + num (uint64 big endian) + hash
 func accessListKey(number uint64, hash common.Hash) []byte {
 	return append(append(accessListPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// shadowRootKey = shadowRootPrefix + num (uint64 big endian) + hash
+func shadowRootKey(number uint64, hash common.Hash) []byte {
+	return append(append(shadowRootPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
 // txLookupKey = txLookupPrefix + hash

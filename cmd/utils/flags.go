@@ -2563,7 +2563,15 @@ func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, p
 	// callers pass false for want of knowing about the tree, not because they
 	// established the database is a merkle one.
 	if !isPBT && rawdb.HasPBTState(disk) {
-		Fatalf("this database holds binary tree state, which this command does not support")
+		// A migrating datadir legitimately holds both trees; merkle commands
+		// keep working while the merkle side is still canonical.
+		// The head block, not the header chain, which runs ahead of the
+		// state during sync - the same rule NewBlockChain applies.
+		stored := rawdb.ReadChainConfig(disk, rawdb.ReadCanonicalHash(disk, 0))
+		head := rawdb.ReadHeadBlock(disk)
+		if stored == nil || head == nil || stored.IsBinaryTrie(head.Number(), head.Time()) {
+			Fatalf("this database holds binary tree state, which this command does not support")
+		}
 	}
 	config := &triedb.Config{
 		Preimages: preimage,

@@ -875,6 +875,17 @@ func (c *ChainConfig) IsPBT() bool {
 	return c.BinaryTrieTime != nil
 }
 
+// IsBinaryTrie reports whether the binary tree commits the state at the
+// given block.
+func (c *ChainConfig) IsBinaryTrie(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.BinaryTrieTime, time)
+}
+
+// IsBinaryTrieAt is IsBinaryTrie for a block number already in hand.
+func (c *ChainConfig) IsBinaryTrieAt(num, time uint64) bool {
+	return c.IsBinaryTrie(new(big.Int).SetUint64(num), time)
+}
+
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time uint64) *ConfigCompatError {

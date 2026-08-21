@@ -100,9 +100,10 @@ type Ethereum struct {
 	localTxTracker *locals.TxTracker
 	blockchain     *core.BlockChain
 
-	handler *handler
-	discmix *enode.FairMix
-	dropper *dropper
+	handler    *handler
+	balFetcher *balFetcher
+	discmix    *enode.FairMix
+	dropper    *dropper
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -244,6 +245,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			SnapshotLimit:           config.SnapshotCache,
 			Preimages:               config.Preimages,
 			StateHistory:            config.StateHistory,
+			MigrationWindowBlocks:   config.MigrationWindowBlocks,
 			TrienodeHistory:         config.TrienodeHistory,
 			NodeFullValueCheckpoint: config.NodeFullValueCheckpoint,
 			StateScheme:             scheme,
@@ -362,6 +364,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	eth.dropper = newDropper(eth.p2pServer.MaxDialedConns(), eth.p2pServer.MaxInboundConns())
+
+	// A migrating chain resolves access lists it is missing over eth/71.
+	if eth.blockchain.Migrating() {
+		eth.balFetcher = newBALFetcher(chainDb, eth.blockchain, eth.handler.peers, eth.handler.removePeer, eth.blockchain.KickMigration)
+		eth.blockchain.SetBALRequester(eth.balFetcher.request)
+	}
 
 	eth.miner = miner.New(eth, config.Miner, eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
@@ -600,6 +608,9 @@ func (s *Ethereum) setupDiscovery() error {
 func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.discmix.Close()
+	if s.balFetcher != nil {
+		s.balFetcher.stop()
+	}
 	s.dropper.Stop()
 	s.handler.txTracker.Stop()
 	s.handler.Stop()

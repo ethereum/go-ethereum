@@ -470,9 +470,10 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 	}
 }
 
-// IsPBT indicates whether the state is committed with a binary tree.
+// IsPBT indicates whether the genesis state is committed with a binary tree:
+// the fork must be active at genesis, a later schedule migrates.
 func (g *Genesis) IsPBT() bool {
-	return g.Config != nil && g.Config.IsPBT()
+	return g.Config != nil && g.Config.IsBinaryTrieAt(g.Number, g.Timestamp)
 }
 
 // ToBlock returns the genesis block according to genesis specification.
@@ -610,25 +611,51 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 	return block
 }
 
-// pbtEnabled reports whether the chain commits its state with the binary tree,
-// taking the answer from the supplied genesis or, failing that, from the config
-// already stored on disk.
-//
-// It runs before the trie database exists, so it cannot ask one; that is also
-// why the commitment has to be answerable without a block.
-func pbtEnabled(db ethdb.Database, genesis *Genesis) (bool, error) {
+// stateMode is how a chain relates to the binary tree: never, active at
+// genesis, or scheduled later - which means starting on the merkle trie with
+// a shadow binary tree catching up before the fork.
+type stateMode int
+
+const (
+	modeMPT stateMode = iota
+	modePBTNative
+	modeMigration
+)
+
+// resolveStateMode reports how the chain relates to the binary tree, and the
+// config it read that from. It runs before the trie database exists.
+func resolveStateMode(db ethdb.Database, genesis *Genesis) (stateMode, *params.ChainConfig, error) {
+	var (
+		config *params.ChainConfig
+		number uint64
+		time   uint64
+	)
 	if genesis != nil {
 		if genesis.Config == nil {
-			return false, errGenesisNoConfig
+			return modeMPT, nil, errGenesisNoConfig
 		}
-		return genesis.Config.IsPBT(), nil
-	}
-	if ghash := rawdb.ReadCanonicalHash(db, 0); ghash != (common.Hash{}) {
-		if chainCfg := rawdb.ReadChainConfig(db, ghash); chainCfg != nil {
-			return chainCfg.IsPBT(), nil
+		config, number, time = genesis.Config, genesis.Number, genesis.Timestamp
+	} else {
+		ghash := rawdb.ReadCanonicalHash(db, 0)
+		if ghash == (common.Hash{}) {
+			return modeMPT, nil, nil
+		}
+		if config = rawdb.ReadChainConfig(db, ghash); config == nil {
+			log.Warn("Stored chain config unreadable; assuming a merkle-only chain")
+			return modeMPT, nil, nil
+		}
+		if header := rawdb.ReadHeader(db, ghash, 0); header != nil {
+			time = header.Time
 		}
 	}
-	return false, nil
+	switch {
+	case config.IsBinaryTrieAt(number, time):
+		return modePBTNative, config, nil
+	case config.IsPBT():
+		return modeMigration, config, nil
+	default:
+		return modeMPT, config, nil
+	}
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.

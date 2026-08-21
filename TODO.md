@@ -219,15 +219,18 @@ to look.
   proof can tell is a stub from the branch and two stubs that hash to it, so one
   statement still has more than one shape. Nothing reads a shape it did not ask
   for, so this costs bytes rather than soundness.
-- **BAL-replay catch-up is unimplemented.** `geth bintrie convert` produces
-  the EIP-8347 artifacts and `geth bintrie import` consumes them - dual-check
-  verified, anchored to the local header chain. What remains of the migration
-  lifecycle is advancing an imported anchor to the tip by replaying
-  Block-Level Access Lists, plus re-anchoring and reorg handling: networking
-  workstreams with no importer dependency.
+- **BAL-replay catch-up is implemented end to end.** convert produces the
+  artifacts, import consumes them, the follower replays anchor to tip, and
+  missing lists backfill over eth/71.
 - **`UpdateAccountBatch`** has no production caller, and it is a trap rather
   than dead weight: its `delegations` slice
   has to be built alongside the code lengths, and an adopter passing nils
   wholesale clears every delegated account's EIP-7702 indicator with no read
   showing it. The interface doc says so at the declaration; the safer end state
   is to delete the method until something needs it.
+
+## Out of scope, deliberately
+
+Snap serving for post-activation PBT roots, anchors below a history-pruned
+cutoff, a thin-history mode for the shadow's pathdb, and the producer-side
+re-anchor cadence (the node adopts any fresh artifact via the --force wipe).

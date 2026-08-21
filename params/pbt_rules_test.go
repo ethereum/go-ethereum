@@ -235,3 +235,28 @@ func TestBinaryTrieTimeJSONKey(t *testing.T) {
 		})
 	}
 }
+
+// TestIsBinaryTrie pins the activation predicate.
+func TestIsBinaryTrie(t *testing.T) {
+	cfg := pbtRulesBase()
+	if cfg.IsBinaryTrie(big.NewInt(1), 100) {
+		t.Fatal("binary tree active without a schedule")
+	}
+	cfg.BinaryTrieTime = u64ptr(100)
+	for _, tc := range []struct {
+		time uint64
+		want bool
+	}{
+		{99, false},
+		{100, true},
+		{101, true},
+	} {
+		if got := cfg.IsBinaryTrie(big.NewInt(1), tc.time); got != tc.want {
+			t.Errorf("IsBinaryTrie(time=%d) = %v, want %v", tc.time, got, tc.want)
+		}
+	}
+	preLondon := &ChainConfig{ChainID: big.NewInt(1), BinaryTrieTime: u64ptr(100)}
+	if preLondon.IsBinaryTrie(big.NewInt(0), 100) {
+		t.Fatal("binary tree active on a pre-London chain")
+	}
+}

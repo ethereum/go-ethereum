@@ -599,3 +599,5 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 		}
 	})
 }
+
+// raw-namespace cursors and records must not outlive the state they name.

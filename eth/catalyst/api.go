@@ -990,6 +990,13 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 		log.Warn("State not available, ignoring new payload")
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
+	// Across the activation boundary the parent's state lives in the shadow
+	// tree; a lagging follower is a sync condition, not an invalid payload.
+	if !api.eth.BlockChain().ActivationReady(block) {
+		api.remoteBlocks.put(block.Hash(), block.Header())
+		log.Warn("Shadow tree not caught up, delaying new payload", "parent", block.ParentHash())
+		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
+	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
 	start := time.Now()
 	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(ctx, block, witness)

@@ -536,3 +536,92 @@ func (api *DebugAPI) ClearTxpool() error {
 	api.eth.TxPool().Clear()
 	return nil
 }
+
+// MigrationProgress reports where the binary tree migration stands.
+func (api *DebugAPI) MigrationProgress() core.MigrationProgress {
+	return api.eth.BlockChain().MigrationProgress()
+}
+
+// ShadowStateRoot returns the migration's recorded shadow root of the given
+// block, nil when no record exists.
+func (api *DebugAPI) ShadowStateRoot(hash common.Hash) *common.Hash {
+	header := api.eth.BlockChain().GetHeaderByHash(hash)
+	if header == nil {
+		return nil
+	}
+	root, ok := rawdb.ReadShadowStateRoot(api.eth.ChainDb(), hash, header.Number.Uint64())
+	if !ok {
+		return nil
+	}
+	return &root
+}
+
+// ShadowRootEvent pairs a block with its recorded migration shadow root.
+type ShadowRootEvent struct {
+	BlockHash  common.Hash    `json:"blockHash"`
+	Number     hexutil.Uint64 `json:"number"`
+	ShadowRoot common.Hash    `json:"shadowRoot"`
+}
+
+// shadowRootGrace bounds how long the stream waits for a head's record;
+// shadowRootQueue bounds how many heads may wait.
+const (
+	shadowRootGrace = 5 * time.Second
+	shadowRootQueue = 64
+)
+
+// ShadowRoots streams every new head's shadow root record. A head whose
+// record does not land within the grace window is skipped: consumers see
+// complete pairs only, lag shows in debug_migrationProgress.
+func (api *DebugAPI) ShadowRoots(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+	var (
+		rpcSub  = notifier.CreateSubscription()
+		heads   = make(chan core.ChainHeadEvent, 16)
+		pending = make(chan *types.Header, shadowRootQueue)
+		headSub = api.eth.BlockChain().SubscribeChainHeadEvent(heads)
+		db      = api.eth.ChainDb()
+	)
+	// The head feed blocks on slow receivers, so this loop only queues.
+	go func() {
+		defer headSub.Unsubscribe()
+		for {
+			select {
+			case ev := <-heads:
+				select {
+				case pending <- ev.Header:
+				default: // the poller is behind; skip rather than block the feed
+				}
+			case <-rpcSub.Err():
+				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case header := <-pending:
+				var (
+					number   = header.Number.Uint64()
+					hash     = header.Hash()
+					deadline = time.Now().Add(shadowRootGrace)
+				)
+				root, ok := rawdb.ReadShadowStateRoot(db, hash, number)
+				for !ok && time.Now().Before(deadline) {
+					time.Sleep(10 * time.Millisecond)
+					root, ok = rawdb.ReadShadowStateRoot(db, hash, number)
+				}
+				if !ok {
+					continue
+				}
+				notifier.Notify(rpcSub.ID, &ShadowRootEvent{BlockHash: hash, Number: hexutil.Uint64(number), ShadowRoot: root})
+			case <-rpcSub.Err():
+				return
+			}
+		}
+	}()
+	return rpcSub, nil
+}

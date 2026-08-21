@@ -183,6 +183,11 @@ type BlockChainConfig struct {
 	// If set to 0, all state histories across the entire chain will be retained;
 	StateHistory uint64
 
+	// MigrationWindowBlocks closes the migration window this many post-fork
+	// blocks past the boundary, on top of finality; 0 keeps it finality-only.
+	// Closing is irreversible: a deeper reorg afterwards means re-anchoring.
+	MigrationWindowBlocks uint64
+
 	// Number of blocks from the chain head for which trienode histories are retained.
 	// If set to 0, all trienode histories across the entire chain will be retained;
 	// If set to -1, no trienode history will be retained;
@@ -353,6 +358,8 @@ type BlockChain struct {
 	jumpDestCache   vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
 	precompileCache *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
 	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
+	stateMode       stateMode                        // How the chain relates to the binary tree
+	follower        *bintrieFollower                 // Shadow tree follower, nil unless migrating
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -406,15 +413,31 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Open trie database with provided config
-	isPBT, err := pbtEnabled(db, genesis)
+	mode, resolvedConfig, err := resolveStateMode(db, genesis)
 	if err != nil {
 		return nil, err
 	}
 	// A binary tree database must never be reopened as merkle: a stored config
 	// that lost the fork (e.g. written when the key was "pbt") would silently
 	// point the node at an empty merkle namespace.
-	if !isPBT && rawdb.HasPBTState(db) {
-		return nil, errors.New("database holds binary tree state but the chain configuration does not schedule it (the genesis config key is \"binaryTrieTime\"); re-run init with an updated genesis, or resync")
+	if mode == modeMPT && rawdb.HasPBTState(db) {
+		return nil, errors.New(`database holds binary tree state but the config does not schedule it (genesis key "binaryTrieTime")`)
+	}
+	isPBT := mode == modePBTNative
+	if mode == modeMigration {
+		// Both trees live on the path scheme, and the shadow's configuration
+		// must be valid up front rather than stalling the follower forever.
+		if cfg.StateScheme != rawdb.PathScheme {
+			return nil, fmt.Errorf("state migration requires the %q state scheme, got %q", rawdb.PathScheme, cfg.StateScheme)
+		}
+		if _, err := cfg.triedbConfig(true); err != nil {
+			return nil, err
+		}
+		// The canonical commitment follows the head BLOCK across the fork -
+		// during sync the header chain runs ahead of the state the node owns.
+		if head := rawdb.ReadHeadBlock(db); head != nil && resolvedConfig.IsBinaryTrie(head.Number(), head.Time()) {
+			isPBT = true
+		}
 	}
 	tdbConfig, err := cfg.triedbConfig(isPBT)
 	if err != nil {
@@ -598,6 +621,10 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// Start tx indexer if it's enabled.
 	if bc.cfg.TxLookupLimit >= 0 {
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
+	}
+
+	if mode == modeMigration && !rawdb.ReadPBTMigrationDone(db) {
+		bc.follower = newBintrieFollower(bc)
 	}
 
 	// Start state size tracker
@@ -1378,6 +1405,11 @@ func (bc *BlockChain) stopWithoutSaving() {
 	if bc.txIndexer != nil {
 		bc.txIndexer.close()
 	}
+	// Signal shutdown to the shadow follower before the subscription scope
+	// dies under its event loop.
+	if bc.follower != nil {
+		bc.follower.close()
+	}
 	// Unsubscribe all subscriptions registered from blockchain.
 	bc.scope.Close()
 
@@ -1412,9 +1444,30 @@ func (bc *BlockChain) Stop() {
 		bc.snaps.Release()
 	}
 	if bc.triedb.Scheme() == rawdb.PathScheme {
-		// Ensure that the in-memory trie nodes are journaled to disk properly.
-		if err := bc.triedb.Journal(bc.CurrentBlock().Root); err != nil {
+		// Past the activation boundary the head commits the other tree; this
+		// handle's newest root is then its window direction's replay cursor,
+		// with the last own-flavour header as the never-ran fallback.
+		head := bc.CurrentBlock()
+		root, pbt := head.Root, bc.triedb.IsPBT()
+		if bc.follower != nil && bc.chainConfig.IsBinaryTrie(head.Number, head.Time) != pbt {
+			if r := bc.follower.cursorRoot(pbt); r != (common.Hash{}) {
+				root = r
+			} else {
+				// The head is the wrong flavour by the branch above, so the
+				// walk starts at its parent.
+				for h := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1); h != nil; h = bc.GetHeader(h.ParentHash, h.Number.Uint64()-1) {
+					if bc.chainConfig.IsBinaryTrie(h.Number, h.Time) == pbt {
+						root = h.Root
+						break
+					}
+				}
+			}
+		}
+		if err := bc.triedb.Journal(root); err != nil {
 			log.Info("Failed to journal in-memory trie nodes", "err", err)
+		}
+		if bc.follower != nil {
+			bc.follower.journal(head)
 		}
 	} else {
 		// Ensure the state of a recent block is also stored to disk before exiting.
@@ -2037,6 +2090,13 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
+		// At the activation boundary the pre-state lives in the shadow tree;
+		// give a lagging follower a bounded moment.
+		if bc.follower != nil && !bc.ActivationReady(block) {
+			if err := bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), activationWaitTimeout); err != nil {
+				return nil, it.index, fmt.Errorf("activation waits on the shadow tree: %w", err)
+			}
+		}
 		// The traced section of block import.
 		start := time.Now()
 		config := ExecuteConfig{
@@ -2163,6 +2223,88 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 	return supportsParallelExecution(block, bc.chainConfig, wantWitness, bc.cfg.VmConfig.Tracer != nil, bc.cfg.VmConfig.DisableParallelExecution)
 }
 
+// treeFor returns the trie database holding the given flavour.
+func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
+	if bc.triedb.IsPBT() == pbt {
+		return bc.triedb, nil
+	}
+	if bc.follower == nil {
+		if pbt {
+			return nil, errors.New("no binary tree on this node")
+		}
+		return nil, errors.New("no merkle trie on this node")
+	}
+	return bc.follower.tree(pbt)
+}
+
+// stateDatabaseFor returns a state database over the given flavour's tree.
+func (bc *BlockChain) stateDatabaseFor(pbt bool) (state.Database, error) {
+	tdb, err := bc.treeFor(pbt)
+	if err != nil {
+		return nil, err
+	}
+	if pbt {
+		return state.NewPBTDatabase(tdb, bc.codedb), nil
+	}
+	mpt := state.NewMPTDatabase(tdb, bc.codedb)
+	if tdb == bc.triedb {
+		return mpt.WithSnapshot(bc.snaps), nil
+	}
+	return mpt, nil
+}
+
+// execParentRoot returns the pre-state root for a block of the given flavour:
+// the parent's own root or, across the activation boundary, its recorded
+// shadow root.
+func (bc *BlockChain) execParentRoot(parent *types.Header, pbt bool) (common.Hash, error) {
+	if bc.chainConfig.IsBinaryTrie(parent.Number, parent.Time) == pbt {
+		return parent.Root, nil
+	}
+	root, ok := rawdb.ReadShadowStateRoot(bc.db, parent.Hash(), parent.Number.Uint64())
+	if !ok {
+		return common.Hash{}, fmt.Errorf("shadow tree not caught up to block %d %x", parent.Number, parent.Hash())
+	}
+	return root, nil
+}
+
+// ShadowReady reports whether the shadow tree recorded the given block.
+func (bc *BlockChain) ShadowReady(hash common.Hash, number uint64) bool {
+	_, ok := rawdb.ReadShadowStateRoot(bc.db, hash, number)
+	return ok
+}
+
+// ActivationReady reports whether the given block can execute now: true
+// unless it sits at the activation boundary with the shadow tree behind.
+func (bc *BlockChain) ActivationReady(block *types.Block) bool {
+	if bc.follower == nil {
+		return true
+	}
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return true
+	}
+	flavor := bc.chainConfig.IsBinaryTrie(block.Number(), block.Time())
+	if flavor == bc.chainConfig.IsBinaryTrie(parent.Number, parent.Time) {
+		return true
+	}
+	return bc.ShadowReady(parent.Hash(), parent.Number.Uint64())
+}
+
+// StateForBuilding returns the state to seal a block of the given number and
+// time on the parent, crossing the activation boundary when they differ.
+func (bc *BlockChain) StateForBuilding(parent *types.Header, number *big.Int, time uint64) (*state.StateDB, error) {
+	flavor := bc.chainConfig.IsBinaryTrie(number, time)
+	sdb, err := bc.stateDatabaseFor(flavor)
+	if err != nil {
+		return nil, err
+	}
+	root, err := bc.execParentRoot(parent, flavor)
+	if err != nil {
+		return nil, err
+	}
+	return state.New(root, sdb)
+}
+
 // setupExecutionState builds the state instance that block execution reads from
 // and writes to.
 //
@@ -2178,11 +2320,15 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.Block, config ExecuteConfig, interrupt *atomic.Bool, execIndex *atomic.Int64) (*state.StateDB, func(*blockProcessingResult), error) {
 	noop := func(*blockProcessingResult) {}
 
-	var sdb state.Database
-	if bc.chainConfig.IsPBT() {
-		sdb = state.NewPBTDatabase(bc.triedb, bc.codedb)
-	} else {
-		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+	flavor := bc.chainConfig.IsBinaryTrie(block.Number(), block.Time())
+	sdb, err := bc.stateDatabaseFor(flavor)
+	if err != nil {
+		return nil, noop, err
+	}
+	if parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1); parent != nil {
+		if parentRoot, err = bc.execParentRoot(parent, flavor); err != nil {
+			return nil, noop, err
+		}
 	}
 	type prewarmReader interface {
 		// ReadersWithCacheStats creates a pair of state readers that share the

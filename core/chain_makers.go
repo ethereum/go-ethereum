@@ -462,8 +462,11 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	// built there, so the two disagreeing means generating blocks for a state
 	// layout the chain cannot hold.
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if config.IsPBT() {
+	if config.IsBinaryTrie(parent.Number(), parent.Time()) {
 		triedbConfig = triedb.PBTDefaults
+	} else if config.IsPBT() {
+		// A migrating chain only opens on the path scheme; generate there too.
+		triedbConfig = triedb.PathDefaults
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
@@ -527,8 +530,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if genesis.Config != nil && genesis.Config.IsPBT() {
+	if genesis.IsPBT() {
 		triedbConfig = triedb.PBTDefaults
+	} else if genesis.Config != nil && genesis.Config.IsPBT() {
+		triedbConfig = triedb.PathDefaults
 	}
 	genesisTriedb := triedb.NewDatabase(db, triedbConfig)
 	block, err := genesis.Commit(db, genesisTriedb, nil)

@@ -378,9 +378,17 @@ func (bc *BlockChain) TxIndexDone() bool {
 	return progress.Done()
 }
 
-// HasState checks if state trie is fully present in the database or not.
+// HasState checks if state trie is fully present in the database or not. A
+// migrating node answers for both trees.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
-	_, err := bc.triedb.NodeReader(hash)
+	if _, err := bc.triedb.NodeReader(hash); err == nil {
+		return true
+	}
+	tdb, err := bc.treeFor(!bc.triedb.IsPBT())
+	if err != nil {
+		return false
+	}
+	_, err = tdb.NodeReader(hash)
 	return err == nil
 }
 
@@ -420,12 +428,13 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 	return bc.StateAt(bc.CurrentBlock())
 }
 
-// StateAt returns a new mutable state based on a particular point in time.
+// StateAt returns the state database rooted at the given header.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	if bc.chainConfig.IsPBT() {
-		return state.New(header.Root, state.NewPBTDatabase(bc.triedb, bc.codedb))
+	sdb, err := bc.stateDatabaseFor(bc.chainConfig.IsBinaryTrie(header.Number, header.Time))
+	if err != nil {
+		return nil, err
 	}
-	return state.New(header.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
+	return state.New(header.Root, sdb)
 }
 
 // HistoricState returns a historic state specified by the given header.
@@ -435,10 +444,14 @@ func (bc *BlockChain) HistoricState(header *types.Header) (*state.StateDB, error
 	// The historic database opens merkle-patricia tries keyed by the hash of
 	// the address, which the binary tree is not. Only reconstruction is out of
 	// reach; live state is still served by State and StateAt.
-	if bc.chainConfig.IsPBT() {
+	if bc.chainConfig.IsBinaryTrie(header.Number, header.Time) {
 		return nil, errors.New("historical state is not supported for the binary tree")
 	}
-	return state.New(header.Root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
+	tdb, err := bc.treeFor(false)
+	if err != nil {
+		return nil, err
+	}
+	return state.New(header.Root, state.NewHistoricDatabase(tdb, bc.codedb))
 }
 
 // Config retrieves the chain's fork configuration.

@@ -432,8 +432,18 @@ func TestEth2DeepReorg(t *testing.T) {
 // configuration can be adjusted through optional modifier functions.
 func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
 	t.Helper()
+	return startEthServiceAt(t, "", genesis, blocks, mods...)
+}
+
+// startEthServiceAt runs the service on a real data directory. An ephemeral
+// node cannot be rebooted: its state history freezer is rebuilt empty on each
+// open, and pathdb crits instead of failing the test.
+func startEthServiceAt(t testing.TB, datadir string, genesis *core.Genesis, blocks []*types.Block, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
+	t.Helper()
 
 	n, err := node.New(&node.Config{
+		DataDir: datadir,
+		Name:    "geth",
 		P2P: p2p.Config{
 			ListenAddr:  "0.0.0.0:0",
 			NoDiscovery: true,
@@ -444,12 +454,14 @@ func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block,
 	}
 
 	ethcfg := &ethconfig.Config{
-		Genesis:        genesis,
-		SyncMode:       ethconfig.FullSync,
-		TrieTimeout:    time.Minute,
-		TrieDirtyCache: 256,
-		TrieCleanCache: 256,
-		Miner:          miner.DefaultConfig,
+		Genesis:         genesis,
+		SyncMode:        ethconfig.FullSync,
+		TrieTimeout:     time.Minute,
+		TrieDirtyCache:  256,
+		TrieCleanCache:  256,
+		DatabaseCache:   64,
+		DatabaseHandles: 64,
+		Miner:           miner.DefaultConfig,
 	}
 	for _, mod := range mods {
 		mod(ethcfg)
