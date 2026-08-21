@@ -71,11 +71,12 @@ type bintrieFollower struct {
 
 	mu        sync.Mutex
 	dirs      [2]*followerTree // binary then merkle; created on first use
+	kickHead  *types.Header    // a kick's target, when it named one
 	requester func([]BALRequest)
 
 	chain   *BlockChain // nil when driven synchronously in tests
 	headCh  chan ChainHeadEvent
-	kickCh  chan *types.Header
+	kickCh  chan struct{}
 	headSub event.Subscription
 	term    chan chan struct{}
 	closed  chan struct{}
@@ -104,7 +105,7 @@ func newBintrieFollower(chain *BlockChain) *bintrieFollower {
 		cfg:    chain.cfg,
 		chain:  chain,
 		headCh: make(chan ChainHeadEvent),
-		kickCh: make(chan *types.Header, 1),
+		kickCh: make(chan struct{}, 1),
 		term:   make(chan chan struct{}),
 		closed: make(chan struct{}),
 	}
@@ -182,8 +183,8 @@ func (f *bintrieFollower) loop() {
 			kickCh = nil // the running sync's completion re-arms
 		}
 		select {
-		case head := <-kickCh:
-			if head != nil {
+		case <-kickCh:
+			if head := f.takeKickHead(); head != nil {
 				latest = head // canonical is past the last head event
 			}
 			if latest != nil {
@@ -318,26 +319,28 @@ func (f *bintrieFollower) setRequester(req func([]BALRequest)) {
 }
 
 // kick re-arms a sync, toward the given header when the caller advanced the
-// canonical chain without a head event yet; nil retries the latest.
+// canonical chain without a head event yet; nil retries the latest head.
 func (f *bintrieFollower) kick(head *types.Header) {
-	if head == nil {
-		select {
-		case f.kickCh <- nil:
-		default: // a wake-up is already queued
+	if head != nil {
+		f.mu.Lock()
+		if f.kickHead == nil || head.Number.Uint64() > f.kickHead.Number.Uint64() {
+			f.kickHead = head
 		}
-		return
+		f.mu.Unlock()
 	}
-	for {
-		select {
-		case f.kickCh <- head:
-			return
-		default:
-			select {
-			case <-f.kickCh:
-			default:
-			}
-		}
+	select {
+	case f.kickCh <- struct{}{}:
+	default: // a wake-up is already queued
 	}
+}
+
+// takeKickHead returns and clears the pending kick target.
+func (f *bintrieFollower) takeKickHead() *types.Header {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	head := f.kickHead
+	f.kickHead = nil
+	return head
 }
 
 // allStalled reports whether every live direction stalled; an idle follower
@@ -417,26 +420,21 @@ func (t *followerTree) follow(head *types.Header, stop chan struct{}) error {
 			root, prev = newRoot, newPrev
 			continue
 		}
-		hash := rawdb.ReadCanonicalHash(f.db, n)
-		if hash == (common.Hash{}) {
-			return nil // canonical chain shorter than the head; retry later
+		header, err := t.canonicalStep(n, prev)
+		if err != nil {
+			return err
 		}
-		header := rawdb.ReadHeader(f.db, hash, n)
 		if header == nil {
-			return fmt.Errorf("missing canonical header %d %x", n, hash)
+			return nil // chain short or spliced; the next head re-walks
 		}
-		// The canonical index is rewritten under a mid-run reorg; splicing
-		// two branches must stop the walk, never replay across it.
-		if header.ParentHash != prev {
-			return nil
-		}
+		canonical := header.Hash()
 		if f.config.IsBinaryTrie(header.Number, header.Time) == t.pbt {
 			if t.pbt {
 				// Activation: execution commits this tree from here on.
 				return nil
 			}
-			root, prev = header.Root, hash
-			t.setCursor(n, hash, header.Root)
+			root, prev = header.Root, canonical
+			t.setCursor(n, canonical, header.Root)
 			continue
 		}
 		list, err := f.readVerifiedList(header)
@@ -445,14 +443,32 @@ func (t *followerTree) follow(head *types.Header, stop chan struct{}) error {
 		}
 		newRoot, err := replayAccessList(t.sdb, f.config, root, header.Number, header.Time, list)
 		if err != nil {
-			return fmt.Errorf("replaying block %d %x: %w", n, hash, err)
+			return fmt.Errorf("replaying block %d %x: %w", n, canonical, err)
 		}
-		root, prev = newRoot, hash
-		rawdb.WriteShadowStateRoot(f.db, n, hash, root)
-		t.persistCursor(n, hash, root)
-		t.setCursor(n, hash, root)
+		root, prev = newRoot, canonical
+		rawdb.WriteShadowStateRoot(f.db, n, canonical, root)
+		t.persistCursor(n, canonical, root)
+		t.setCursor(n, canonical, root)
 	}
 	return nil
+}
+
+// canonicalStep returns the canonical header at n when it chains onto prev,
+// nil when the walk must stop - the chain is short of n, or a mid-run reorg
+// spliced two branches - and an error only when the header itself is gone.
+func (t *followerTree) canonicalStep(n uint64, prev common.Hash) (*types.Header, error) {
+	hash := rawdb.ReadCanonicalHash(t.f.db, n)
+	if hash == (common.Hash{}) {
+		return nil, nil
+	}
+	header := rawdb.ReadHeader(t.f.db, hash, n)
+	if header == nil {
+		return nil, fmt.Errorf("missing canonical header %d %x", n, hash)
+	}
+	if header.ParentHash != prev {
+		return nil, nil
+	}
+	return header, nil
 }
 
 // readVerifiedList loads a block's access list and proves it against the
@@ -482,16 +498,12 @@ func (t *followerTree) replayBatch(from, head uint64, root common.Hash, prev com
 		hashes []common.Hash
 	)
 	for n := from; n <= head && head-n > followTrackWindow && len(blocks) < followBatchBlocks; n++ {
-		hash := rawdb.ReadCanonicalHash(f.db, n)
-		if hash == (common.Hash{}) {
-			break
+		header, err := t.canonicalStep(n, prev)
+		if err != nil {
+			return 0, common.Hash{}, common.Hash{}, err
 		}
-		header := rawdb.ReadHeader(f.db, hash, n)
 		if header == nil {
-			return 0, common.Hash{}, common.Hash{}, fmt.Errorf("missing canonical header %d %x", n, hash)
-		}
-		if header.ParentHash != prev {
-			break // reorged mid-collection; the next run re-walks
+			break
 		}
 		if f.config.IsBinaryTrie(header.Number, header.Time) == t.pbt {
 			break // the per-block loop owns flavour boundaries
@@ -501,26 +513,22 @@ func (t *followerTree) replayBatch(from, head uint64, root common.Hash, prev com
 			return 0, common.Hash{}, common.Hash{}, err
 		}
 		blocks = append(blocks, replayBlock{number: header.Number, time: header.Time, list: list})
-		hashes = append(hashes, hash)
-		prev = hash
+		hashes = append(hashes, header.Hash())
+		prev = header.Hash()
 	}
 	if len(blocks) == 0 {
 		return 0, root, prev, nil // canonical moved under the run; retry later
 	}
 	start := root
-	for rest, taken := blocks, 0; len(rest) > 0; rest = rest[taken:] {
-		var (
-			next common.Hash
-			err  error
-		)
-		next, taken, err = replayRange(t.sdb, f.config, root, rest)
+	for rest := blocks; len(rest) > 0; {
+		next, taken, err := replayRange(t.sdb, f.config, root, rest)
 		if err != nil {
 			return 0, common.Hash{}, common.Hash{}, err
 		}
 		if taken == 0 {
 			return 0, common.Hash{}, common.Hash{}, errors.New("fold made no progress")
 		}
-		root = next
+		root, rest = next, rest[taken:]
 	}
 	var (
 		end     = uint64(len(blocks) - 1)
@@ -708,9 +716,15 @@ func (t *followerTree) replayedRoot(number uint64, hash common.Hash) (common.Has
 func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout time.Duration) error {
 	// A batch import advances canonical without head events: drive the
 	// replay to the waited block instead of hoping one arrives.
-	if header := rawdb.ReadHeader(f.db, hash, number); header != nil {
-		f.kick(header)
+	header := rawdb.ReadHeader(f.db, hash, number)
+	if header == nil {
+		return fmt.Errorf("missing header for block %d %x", number, hash)
 	}
+	f.kick(header)
+
+	// The block's flavour fixes which direction owes it, so only the
+	// direction lookup repeats - the header read must not.
+	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
 	deadline := time.Now().Add(timeout)
 	for {
 		if _, ok := rawdb.ReadShadowStateRoot(f.db, number, hash); ok {
@@ -721,30 +735,19 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 			return errors.New("migration follower stopped")
 		default:
 		}
-		if err := f.stalledFor(number, hash); err != nil {
-			return err
+		if t := f.peek(pbt); t != nil {
+			f.mu.Lock()
+			stall := t.stall
+			f.mu.Unlock()
+			if stall != nil {
+				return stall
+			}
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("shadow has not reached block %d %x", number, hash)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-}
-
-// stalledFor returns the stall of the direction responsible for replaying
-// the given block, if any.
-func (f *bintrieFollower) stalledFor(number uint64, hash common.Hash) error {
-	header := rawdb.ReadHeader(f.db, hash, number)
-	if header == nil {
-		return nil
-	}
-	t := f.peek(!f.config.IsBinaryTrie(header.Number, header.Time))
-	if t == nil {
-		return nil
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return t.stall
 }
 
 // cursorRoot returns the direction's cursor root, zero if never resolved.
