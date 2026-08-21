@@ -473,7 +473,7 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 // IsPBT indicates whether the genesis state is committed with a binary tree:
 // the fork must be active at genesis, a later schedule migrates.
 func (g *Genesis) IsPBT() bool {
-	return g.Config != nil && g.Config.IsBinaryTrie(new(big.Int).SetUint64(g.Number), g.Timestamp)
+	return g.Config != nil && g.Config.IsBinaryTrieAt(g.Number, g.Timestamp)
 }
 
 // ToBlock returns the genesis block according to genesis specification.
@@ -649,7 +649,7 @@ func resolveStateMode(db ethdb.Database, genesis *Genesis) (stateMode, *params.C
 		}
 	}
 	switch {
-	case config.IsBinaryTrie(new(big.Int).SetUint64(number), time):
+	case config.IsBinaryTrieAt(number, time):
 		return modePBTNative, config, nil
 	case config.IsPBT():
 		return modeMigration, config, nil
