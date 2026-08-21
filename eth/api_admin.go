@@ -42,7 +42,7 @@ func NewAdminAPI(eth *Ethereum) *AdminAPI {
 
 // ExportChain exports the current blockchain into a local file,
 // or a range of blocks if first and last are non-nil.
-func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool, error) {
+func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (success bool, err error) {
 	if first == nil && last != nil {
 		return false, errors.New("last cannot be specified without first")
 	}
@@ -60,13 +60,25 @@ func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool
 	if err != nil {
 		return false, err
 	}
-	defer out.Close()
 
 	var writer io.Writer = out
+	var gzipWriter io.WriteCloser
 	if strings.HasSuffix(file, ".gz") {
-		writer = gzip.NewWriter(writer)
-		defer writer.(*gzip.Writer).Close()
+		gzipWriter = newAdminGzipWriter(out)
+		writer = gzipWriter
 	}
+	defer func() {
+		if gzipWriter != nil {
+			if closeErr := gzipWriter.Close(); err == nil && closeErr != nil {
+				success = false
+				err = fmt.Errorf("failed to finalize gzip export: %w", closeErr)
+			}
+		}
+		if closeErr := out.Close(); err == nil && closeErr != nil {
+			success = false
+			err = fmt.Errorf("failed to close export file: %w", closeErr)
+		}
+	}()
 
 	// Export the blockchain
 	if first != nil {
@@ -77,6 +89,10 @@ func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool
 		return false, err
 	}
 	return true, nil
+}
+
+var newAdminGzipWriter = func(w io.Writer) io.WriteCloser {
+	return gzip.NewWriter(w)
 }
 
 func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
