@@ -39,7 +39,7 @@ import (
 func awaitRecord(t *testing.T, db ethdb.Database, number uint64, hash common.Hash) common.Hash {
 	t.Helper()
 	for start := time.Now(); ; time.Sleep(10 * time.Millisecond) {
-		if root, ok := rawdb.ReadShadowStateRoot(db, number, hash); ok {
+		if root, ok := rawdb.ReadShadowStateRoot(db, hash, number); ok {
 			return root
 		}
 		if time.Since(start) > 15*time.Second {
@@ -141,7 +141,7 @@ func TestAnchorSeededCatchup(t *testing.T) {
 	}
 	// The wipe cleared all records, so one below the anchor means the
 	// follower re-seeded from genesis instead of adopting the anchor.
-	if _, ok := rawdb.ReadShadowStateRoot(chaindb, 2, blocks[1].Hash()); ok {
+	if _, ok := rawdb.ReadShadowStateRoot(chaindb, blocks[1].Hash(), 2); ok {
 		t.Fatal("follower replayed below the anchor")
 	}
 }

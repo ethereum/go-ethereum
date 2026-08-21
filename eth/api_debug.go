@@ -549,7 +549,7 @@ func (api *DebugAPI) ShadowStateRoot(hash common.Hash) *common.Hash {
 	if header == nil {
 		return nil
 	}
-	root, ok := rawdb.ReadShadowStateRoot(api.eth.ChainDb(), header.Number.Uint64(), hash)
+	root, ok := rawdb.ReadShadowStateRoot(api.eth.ChainDb(), hash, header.Number.Uint64())
 	if !ok {
 		return nil
 	}
@@ -609,10 +609,10 @@ func (api *DebugAPI) ShadowRoots(ctx context.Context) (*rpc.Subscription, error)
 					hash     = header.Hash()
 					deadline = time.Now().Add(shadowRootGrace)
 				)
-				root, ok := rawdb.ReadShadowStateRoot(db, number, hash)
+				root, ok := rawdb.ReadShadowStateRoot(db, hash, number)
 				for !ok && time.Now().Before(deadline) {
 					time.Sleep(10 * time.Millisecond)
-					root, ok = rawdb.ReadShadowStateRoot(db, number, hash)
+					root, ok = rawdb.ReadShadowStateRoot(db, hash, number)
 				}
 				if !ok {
 					continue

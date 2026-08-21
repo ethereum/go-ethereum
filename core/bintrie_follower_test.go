@@ -74,7 +74,7 @@ func awaitShadow(t *testing.T, chain *BlockChain, block *types.Block) common.Has
 	if err := chain.follower.waitCaughtUp(block.NumberU64(), block.Hash(), 10*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	root, ok := rawdb.ReadShadowStateRoot(chain.db, block.NumberU64(), block.Hash())
+	root, ok := rawdb.ReadShadowStateRoot(chain.db, block.Hash(), block.NumberU64())
 	if !ok {
 		t.Fatalf("caught up to block %d but no shadow root recorded", block.NumberU64())
 	}
@@ -147,7 +147,7 @@ func TestFollowerFollowsReorg(t *testing.T) {
 	if want := convertCanonical(t, chain, tipB.Header(), u); root != want {
 		t.Fatalf("post-reorg shadow root %x, converter says %x", root, want)
 	}
-	if _, ok := rawdb.ReadShadowStateRoot(db, tipA.NumberU64(), tipA.Hash()); !ok {
+	if _, ok := rawdb.ReadShadowStateRoot(db, tipA.Hash(), tipA.NumberU64()); !ok {
 		t.Fatal("the losing branch lost its recorded shadow root")
 	}
 }
@@ -200,7 +200,7 @@ func firstPass(t *testing.T, genesis *Genesis, db ethdb.Database, head *types.He
 	if err := f.follow(head, nil); err != nil {
 		t.Fatalf("first pass: %v", err)
 	}
-	root, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash())
+	root, ok := rawdb.ReadShadowStateRoot(db, head.Hash(), head.Number.Uint64())
 	if !ok {
 		t.Fatal("first pass recorded no head root")
 	}
@@ -223,7 +223,7 @@ func TestFollowerRecoversWithoutJournal(t *testing.T) {
 	if err := second.follow(head, nil); err != nil {
 		t.Fatalf("recovery pass: %v", err)
 	}
-	if got, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash()); !ok || got != want {
+	if got, ok := rawdb.ReadShadowStateRoot(db, head.Hash(), head.Number.Uint64()); !ok || got != want {
 		t.Fatalf("recovered head root %x (ok=%v), want %x", got, ok, want)
 	}
 	if num, _, _ := second.direction(true).cursor(); num != head.Number.Uint64() {
@@ -259,7 +259,7 @@ func TestFollowerRequestsMissingLists(t *testing.T) {
 	if err := f.follow(head, nil); err != nil {
 		t.Fatalf("resume: %v", err)
 	}
-	if _, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash()); !ok {
+	if _, ok := rawdb.ReadShadowStateRoot(db, head.Hash(), head.Number.Uint64()); !ok {
 		t.Fatal("head never recorded after the lists landed")
 	}
 }
@@ -413,7 +413,7 @@ func TestFollowerStopsOnCanonicalDiscontinuity(t *testing.T) {
 	if num, hash, _ := f.direction(true).cursor(); num != 1 || hash != branchA[0].Hash() {
 		t.Fatalf("cursor moved to %d %x across a splice", num, hash)
 	}
-	if _, ok := rawdb.ReadShadowStateRoot(db, 2, branchB[1].Hash()); ok {
+	if _, ok := rawdb.ReadShadowStateRoot(db, branchB[1].Hash(), 2); ok {
 		t.Fatal("a spliced block got a shadow root recorded")
 	}
 }
@@ -430,14 +430,14 @@ func TestFollowerBatchesDeepCatchup(t *testing.T) {
 	if err := batched.follow(head, nil); err != nil {
 		t.Fatalf("batched catch-up: %v", err)
 	}
-	want, ok := rawdb.ReadShadowStateRoot(db, head.Number.Uint64(), head.Hash())
+	want, ok := rawdb.ReadShadowStateRoot(db, head.Hash(), head.Number.Uint64())
 	if !ok {
 		t.Fatal("batched catch-up recorded no head root")
 	}
-	if _, ok := rawdb.ReadShadowStateRoot(db, 50, blocks[49].Hash()); ok {
+	if _, ok := rawdb.ReadShadowStateRoot(db, blocks[49].Hash(), 50); ok {
 		t.Fatal("a folded-over block got a record")
 	}
-	if _, ok := rawdb.ReadShadowStateRoot(db, 128, blocks[127].Hash()); !ok {
+	if _, ok := rawdb.ReadShadowStateRoot(db, blocks[127].Hash(), 128); !ok {
 		t.Fatal("the batch end got no record")
 	}
 
@@ -454,7 +454,7 @@ func TestFollowerBatchesDeepCatchup(t *testing.T) {
 			t.Fatalf("per-block catch-up to %d: %v", n, err)
 		}
 	}
-	if got, ok := rawdb.ReadShadowStateRoot(db2, head.Number.Uint64(), head.Hash()); !ok || got != want {
+	if got, ok := rawdb.ReadShadowStateRoot(db2, head.Hash(), head.Number.Uint64()); !ok || got != want {
 		t.Fatalf("per-block root %x (ok=%v), batched said %x", got, ok, want)
 	}
 }

@@ -171,7 +171,7 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	for _, number := range []uint64{4, 5} {
 		header := chain.GetHeaderByNumber(number)
 		awaitShadowReady(t, chain, header)
-		got, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), number, header.Hash())
+		got, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), header.Hash(), number)
 		if want := convertCanonicalMerkle(t, chain, ethservice.ChainDb(), genesis, header); got != want {
 			t.Fatalf("block %d window root %x, reverse conversion says %x", number, got, want)
 		}
@@ -196,7 +196,7 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	}
 	// Reboot mid-window; the deleted lists make any re-replay a loud stall.
 	head := chain.GetHeaderByNumber(5)
-	want, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), 5, head.Hash())
+	want, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), head.Hash(), 5)
 	for _, number := range []uint64{4, 5} {
 		rawdb.DeleteAccessList(ethservice.ChainDb(), chain.GetHeaderByNumber(number).Hash(), number)
 	}
@@ -428,7 +428,7 @@ func TestShadowRootSidecar(t *testing.T) {
 	}
 	for number, root := range seen {
 		header := chain.GetHeaderByNumber(number)
-		if want, ok := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), number, header.Hash()); !ok || root != want {
+		if want, ok := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), header.Hash(), number); !ok || root != want {
 			t.Fatalf("streamed root %x for block %d, record says %x (ok=%v)", root, number, want, ok)
 		}
 	}
@@ -438,7 +438,7 @@ func TestShadowRootSidecar(t *testing.T) {
 	if err := client.CallContext(ctx, &got, "debug_shadowStateRoot", boundary.Hash()); err != nil {
 		t.Fatalf("getter: %v", err)
 	}
-	if want, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), 3, boundary.Hash()); got == nil || *got != want {
+	if want, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), boundary.Hash(), 3); got == nil || *got != want {
 		t.Fatalf("getter said %v, record says %x", got, want)
 	}
 	var absent *common.Hash

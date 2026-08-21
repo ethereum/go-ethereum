@@ -719,7 +719,7 @@ var knownMetadataKeys = [][]byte{
 	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
 	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
 	filterMapsRangeKey, headStateHistoryIndexKey, headTrienodeHistoryIndexKey, VerkleTransitionStatePrefix,
-	pbtMigrationCursorKey, mptMigrationCursorKey, pbtMigrationDoneKey,
+	pbtAnchorKey, pbtMigrationCursorKey, mptMigrationCursorKey, pbtMigrationDoneKey,
 }
 
 // printChainMetadata prints out chain metadata to stderr.

@@ -28,7 +28,7 @@ import (
 // ReadShadowStateRoot returns the recorded shadow root of the given block: the
 // root of the tree its header does not commit. The empty binary root is the
 // zero hash, so presence is reported separately.
-func ReadShadowStateRoot(db ethdb.KeyValueReader, number uint64, hash common.Hash) (common.Hash, bool) {
+func ReadShadowStateRoot(db ethdb.KeyValueReader, hash common.Hash, number uint64) (common.Hash, bool) {
 	data, _ := db.Get(shadowRootKey(number, hash))
 	if len(data) != common.HashLength {
 		return common.Hash{}, false
@@ -37,7 +37,7 @@ func ReadShadowStateRoot(db ethdb.KeyValueReader, number uint64, hash common.Has
 }
 
 // WriteShadowStateRoot records the shadow root of the given block.
-func WriteShadowStateRoot(db ethdb.KeyValueWriter, number uint64, hash common.Hash, root common.Hash) {
+func WriteShadowStateRoot(db ethdb.KeyValueWriter, hash common.Hash, number uint64, root common.Hash) {
 	if err := db.Put(shadowRootKey(number, hash), root.Bytes()); err != nil {
 		log.Crit("Failed to store shadow state root", "err", err)
 	}

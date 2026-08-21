@@ -45,6 +45,12 @@ var HashDefaults = &Config{
 	HashDB:    hashdb.Defaults,
 }
 
+// PathDefaults represents a config for merkle-patricia state on the
+// path-based scheme with default settings.
+var PathDefaults = &Config{
+	PathDB: pathdb.Defaults,
+}
+
 // PBTDefaults represents a config for holding binary trie data
 // using path-based scheme with default settings.
 var PBTDefaults = &Config{

@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
 
@@ -467,7 +466,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		triedbConfig = triedb.PBTDefaults
 	} else if config.IsPBT() {
 		// A migrating chain only opens on the path scheme; generate there too.
-		triedbConfig = &triedb.Config{PathDB: pathdb.Defaults}
+		triedbConfig = triedb.PathDefaults
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
@@ -534,7 +533,7 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	if genesis.IsPBT() {
 		triedbConfig = triedb.PBTDefaults
 	} else if genesis.Config != nil && genesis.Config.IsPBT() {
-		triedbConfig = &triedb.Config{PathDB: pathdb.Defaults}
+		triedbConfig = triedb.PathDefaults
 	}
 	genesisTriedb := triedb.NewDatabase(db, triedbConfig)
 	block, err := genesis.Commit(db, genesisTriedb, nil)

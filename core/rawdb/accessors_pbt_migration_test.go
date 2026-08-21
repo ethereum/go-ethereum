@@ -29,16 +29,16 @@ func TestShadowStateRootStorage(t *testing.T) {
 		hash = common.Hash{0x01}
 		root = common.Hash{0xaa}
 	)
-	if _, ok := ReadShadowStateRoot(db, 7, hash); ok {
+	if _, ok := ReadShadowStateRoot(db, hash, 7); ok {
 		t.Fatal("unwritten shadow root reported present")
 	}
-	WriteShadowStateRoot(db, 7, hash, root)
-	if got, ok := ReadShadowStateRoot(db, 7, hash); !ok || got != root {
+	WriteShadowStateRoot(db, hash, 7, root)
+	if got, ok := ReadShadowStateRoot(db, hash, 7); !ok || got != root {
 		t.Fatalf("shadow root = %x (ok=%v), want %x", got, ok, root)
 	}
 	// The empty binary root is the zero hash; presence must survive it.
-	WriteShadowStateRoot(db, 9, hash, common.Hash{})
-	if got, ok := ReadShadowStateRoot(db, 9, hash); !ok || got != (common.Hash{}) {
+	WriteShadowStateRoot(db, hash, 9, common.Hash{})
+	if got, ok := ReadShadowStateRoot(db, hash, 9); !ok || got != (common.Hash{}) {
 		t.Fatalf("zero shadow root = %x (ok=%v), want present zero", got, ok)
 	}
 }
@@ -95,7 +95,7 @@ func TestWipeMigrationState(t *testing.T) {
 	WriteMigrationCursor(db, true, MigrationCursor{Number: 5, Hash: common.Hash{0x01}, Root: common.Hash{0x02}})
 	WriteMigrationCursor(db, false, MigrationCursor{Number: 6, Hash: common.Hash{0x03}, Root: common.Hash{0x04}})
 	WritePBTMigrationDone(db)
-	WriteShadowStateRoot(db, 5, common.Hash{0x01}, common.Hash{0x02})
+	WriteShadowStateRoot(db, common.Hash{0x01}, 5, common.Hash{0x02})
 
 	if err := WipeMigrationState(db); err != nil {
 		t.Fatal(err)
@@ -105,7 +105,7 @@ func TestWipeMigrationState(t *testing.T) {
 	if pbtOK || mptOK || pbtErr != nil || mptErr != nil || ReadPBTMigrationDone(db) {
 		t.Fatal("migration keys survived the wipe")
 	}
-	if _, ok := ReadShadowStateRoot(db, 5, common.Hash{0x01}); ok {
+	if _, ok := ReadShadowStateRoot(db, common.Hash{0x01}, 5); ok {
 		t.Fatal("shadow-root record survived the wipe")
 	}
 }

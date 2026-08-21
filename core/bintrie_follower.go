@@ -450,7 +450,7 @@ func (t *followerTree) follow(head *types.Header, stop chan struct{}) error {
 			return fmt.Errorf("replaying block %d %x: %w", n, canonical, err)
 		}
 		root, prev = newRoot, canonical
-		rawdb.WriteShadowStateRoot(f.db, n, canonical, root)
+		rawdb.WriteShadowStateRoot(f.db, canonical, n, root)
 		t.persistCursor(n, canonical, root)
 		t.setCursor(n, canonical, root)
 	}
@@ -539,7 +539,7 @@ func (t *followerTree) replayBatch(from, head uint64, root common.Hash, prev com
 		endNum  = from + end
 		endHash = hashes[end]
 	)
-	rawdb.WriteShadowStateRoot(f.db, endNum, endHash, root)
+	rawdb.WriteShadowStateRoot(f.db, endHash, endNum, root)
 	t.persistCursor(endNum, endHash, root)
 	t.setCursor(endNum, endHash, root)
 	if root != start {
@@ -622,7 +622,7 @@ func (t *followerTree) ensure() error {
 		// then walk down to the deepest live record.
 		for n := cursor.Number + 1; n <= cursor.Number+followBatchBlocks; n++ {
 			ch := rawdb.ReadCanonicalHash(f.db, n)
-			if r, ok := rawdb.ReadShadowStateRoot(f.db, n, ch); ok && t.hasState(r) {
+			if r, ok := rawdb.ReadShadowStateRoot(f.db, ch, n); ok && t.hasState(r) {
 				t.setCursor(n, ch, r)
 				return nil
 			}
@@ -692,7 +692,7 @@ func (t *followerTree) ensure() error {
 	if err != nil {
 		return err
 	}
-	rawdb.WriteShadowStateRoot(f.db, 0, ghash, root)
+	rawdb.WriteShadowStateRoot(f.db, ghash, 0, root)
 	t.persistCursor(0, ghash, root)
 	t.setCursor(0, ghash, root)
 	log.Info("Seeded binary tree shadow from genesis", "root", root)
@@ -703,7 +703,7 @@ func (t *followerTree) ensure() error {
 // holds it: the record, or an own-flavour block's header root.
 func (t *followerTree) replayedRoot(number uint64, hash common.Hash) (common.Hash, bool) {
 	f := t.f
-	if r, ok := rawdb.ReadShadowStateRoot(f.db, number, hash); ok && t.hasState(r) {
+	if r, ok := rawdb.ReadShadowStateRoot(f.db, hash, number); ok && t.hasState(r) {
 		return r, true
 	}
 	if header := rawdb.ReadHeader(f.db, hash, number); header != nil {
@@ -731,7 +731,7 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
 	deadline := time.Now().Add(timeout)
 	for {
-		if _, ok := rawdb.ReadShadowStateRoot(f.db, number, hash); ok {
+		if _, ok := rawdb.ReadShadowStateRoot(f.db, hash, number); ok {
 			return nil
 		}
 		select {

@@ -148,15 +148,11 @@ func NewStateFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.Reset
 	}
 	// The two flavors run side by side during a migration, so each gets its
 	// own metrics namespace; a shared one would merge their meters silently.
-	var name, namespace string
+	name, namespace := MerkleStateFreezerName, "eth/db/state"
 	if verkle {
-		name = filepath.Join(ancientDir, PBTStateFreezerName)
-		namespace = "eth/db/state_pbt"
-	} else {
-		name = filepath.Join(ancientDir, MerkleStateFreezerName)
-		namespace = "eth/db/state"
+		name, namespace = PBTStateFreezerName, "eth/db/state_pbt"
 	}
-	return newResettableFreezer(name, namespace, readOnly, stateHistoryTableSize, stateFreezerTableConfigs)
+	return newResettableFreezer(filepath.Join(ancientDir, name), namespace, readOnly, stateHistoryTableSize, stateFreezerTableConfigs)
 }
 
 // NewTrienodeFreezer initializes the ancient store for trienode history.
@@ -169,13 +165,9 @@ func NewTrienodeFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.Re
 	if ancientDir == "" {
 		return NewMemoryFreezer(readOnly, trienodeFreezerTableConfigs), nil
 	}
-	var name, namespace string
+	name, namespace := MerkleTrienodeFreezerName, "eth/db/trienode"
 	if verkle {
-		name = filepath.Join(ancientDir, PBTTrienodeFreezerName)
-		namespace = "eth/db/trienode_pbt"
-	} else {
-		name = filepath.Join(ancientDir, MerkleTrienodeFreezerName)
-		namespace = "eth/db/trienode"
+		name, namespace = PBTTrienodeFreezerName, "eth/db/trienode_pbt"
 	}
-	return newResettableFreezer(name, namespace, readOnly, stateHistoryTableSize, trienodeFreezerTableConfigs)
+	return newResettableFreezer(filepath.Join(ancientDir, name), namespace, readOnly, stateHistoryTableSize, trienodeFreezerTableConfigs)
 }

@@ -2260,7 +2260,7 @@ func (bc *BlockChain) execParentRoot(parent *types.Header, pbt bool) (common.Has
 	if bc.chainConfig.IsBinaryTrie(parent.Number, parent.Time) == pbt {
 		return parent.Root, nil
 	}
-	root, ok := rawdb.ReadShadowStateRoot(bc.db, parent.Number.Uint64(), parent.Hash())
+	root, ok := rawdb.ReadShadowStateRoot(bc.db, parent.Hash(), parent.Number.Uint64())
 	if !ok {
 		return common.Hash{}, fmt.Errorf("shadow tree not caught up to block %d %x", parent.Number, parent.Hash())
 	}
@@ -2269,7 +2269,7 @@ func (bc *BlockChain) execParentRoot(parent *types.Header, pbt bool) (common.Has
 
 // ShadowReady reports whether the shadow tree recorded the given block.
 func (bc *BlockChain) ShadowReady(hash common.Hash, number uint64) bool {
-	_, ok := rawdb.ReadShadowStateRoot(bc.db, number, hash)
+	_, ok := rawdb.ReadShadowStateRoot(bc.db, hash, number)
 	return ok
 }
 
