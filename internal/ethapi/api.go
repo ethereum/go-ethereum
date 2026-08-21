@@ -1422,7 +1422,12 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		res, err := core.ApplyMessage(evm, msg, nil)
 		evm.Release()
 		if err != nil {
-			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
+			var hash common.Hash
+			tx, err := args.ToTransaction(types.LegacyTxType)
+			if err == nil {
+				hash = tx.Hash()
+			}
+			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", hash, err)
 		}
 		if tracer.Equal(prevTracer) {
 			return accessList, res.UsedGas, res.Err, nil
@@ -1695,7 +1700,10 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
-	tx := args.ToTransaction(types.DynamicFeeTxType)
+	tx, err := args.ToTransaction(types.DynamicFeeTxType)
+	if err != nil {
+		return common.Hash{}, err
+	}
 
 	signed, err := wallet.SignTx(account, tx, api.b.ChainConfig().ChainID)
 	if err != nil {
@@ -1717,7 +1725,10 @@ func (api *TransactionAPI) FillTransaction(ctx context.Context, args Transaction
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
-	tx := args.ToTransaction(types.DynamicFeeTxType)
+	tx, err := args.ToTransaction(types.DynamicFeeTxType)
+	if err != nil {
+		return nil, err
+	}
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -1913,7 +1924,10 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
-	tx := args.ToTransaction(types.DynamicFeeTxType)
+	tx, err := args.ToTransaction(types.DynamicFeeTxType)
+	if err != nil {
+		return nil, err
+	}
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), api.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
@@ -1969,7 +1983,10 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 	if err := sendArgs.setDefaults(ctx, api.b, sidecarConfig{}); err != nil {
 		return common.Hash{}, err
 	}
-	matchTx := sendArgs.ToTransaction(types.DynamicFeeTxType)
+	matchTx, err := sendArgs.ToTransaction(types.DynamicFeeTxType)
+	if err != nil {
+		return common.Hash{}, err
+	}
 
 	// Before replacing the old transaction, ensure the _new_ transaction fee is reasonable.
 	price := matchTx.GasPrice()
@@ -1999,7 +2016,11 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 			if gasLimit != nil && *gasLimit != 0 {
 				sendArgs.Gas = gasLimit
 			}
-			signedTx, err := api.sign(sendArgs.from(), sendArgs.ToTransaction(types.DynamicFeeTxType))
+			tx, err := sendArgs.ToTransaction(types.DynamicFeeTxType)
+			if err != nil {
+				return common.Hash{}, err
+			}
+			signedTx, err := api.sign(sendArgs.from(), tx)
 			if err != nil {
 				return common.Hash{}, err
 			}
