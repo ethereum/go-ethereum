@@ -64,8 +64,13 @@ func (e *gfP2) IsZero() bool {
 	return e.x.Sign() == 0 && e.y.Sign() == 0
 }
 
+// IsOne reports whether e is the canonical representation of one. Values that
+// are congruent to one but not reduced, such as P+1, report false, so call
+// Minimal first where that matters.
 func (e *gfP2) IsOne() bool {
-	if e.x.Sign() != 0 {
+	// Bits reports the magnitude of y and would read -1 as 1, so reject a
+	// negative y before consulting it.
+	if e.x.Sign() != 0 || e.y.Sign() < 0 {
 		return false
 	}
 	words := e.y.Bits()
@@ -202,14 +207,23 @@ func (e *gfP2) Invert(a *gfP2, pool *bnPool) *gfP2 {
 	t.Add(t, t2)
 
 	inv := pool.Get()
-	inv.ModInverse(t, P)
+	if inv.ModInverse(t, P) == nil {
+		// t is the norm x²+y² of a. P ≡ 3 mod 4, so -1 is not a square mod P
+		// and the norm vanishes only for a ≡ 0, which no caller passes.
+		// ModInverse leaves inv holding whatever the pool last put there; the
+		// multiplications below happen to wipe it, since both components of a
+		// are also ≡ 0 whenever the norm is, but say so explicitly rather than
+		// depending on that. Zero is what the cloudflare and gnark backends
+		// return for 0⁻¹, and the three must not disagree.
+		e.SetZero()
+	} else {
+		e.x.Neg(a.x)
+		e.x.Mul(e.x, inv)
+		e.x.Mod(e.x, P)
 
-	e.x.Neg(a.x)
-	e.x.Mul(e.x, inv)
-	e.x.Mod(e.x, P)
-
-	e.y.Mul(a.y, inv)
-	e.y.Mod(e.y, P)
+		e.y.Mul(a.y, inv)
+		e.y.Mod(e.y, P)
+	}
 
 	pool.Put(t)
 	pool.Put(t2)
