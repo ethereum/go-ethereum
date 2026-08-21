@@ -425,7 +425,7 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
 
 	if ctx.Bool(utils.NoCompactionFlag.Name) {
-		return nil
+		return importErr
 	}
 
 	// Compact the entire database to more accurately measure disk io and print the stats
