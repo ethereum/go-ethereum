@@ -576,26 +576,8 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	return t.handle, nil
 }
 
-func (t *followerTree) hasCursor() bool {
-	if t.pbt {
-		return rawdb.HasPBTMigrationCursor(t.f.db)
-	}
-	return rawdb.HasMPTMigrationCursor(t.f.db)
-}
-
-func (t *followerTree) readCursor() (uint64, common.Hash, common.Hash, bool) {
-	if t.pbt {
-		return rawdb.ReadPBTMigrationCursor(t.f.db)
-	}
-	return rawdb.ReadMPTMigrationCursor(t.f.db)
-}
-
 func (t *followerTree) persistCursor(num uint64, hash common.Hash, root common.Hash) {
-	if t.pbt {
-		rawdb.WritePBTMigrationCursor(t.f.db, num, hash, root)
-	} else {
-		rawdb.WriteMPTMigrationCursor(t.f.db, num, hash, root)
-	}
+	rawdb.WriteMigrationCursor(t.f.db, t.pbt, rawdb.MigrationCursor{Number: num, Hash: hash, Root: root})
 }
 
 // ensure opens the tree and resolves the replay position. With a cursor ever
@@ -614,26 +596,26 @@ func (t *followerTree) ensure() error {
 		return err
 	}
 
-	if t.hasCursor() {
-		num, hash, root, ok := t.readCursor()
-		if !ok {
-			return errors.New("migration cursor corrupt: re-anchor")
-		}
-		if t.hasState(root) {
-			t.setCursor(num, hash, root)
+	cursor, ok, err := rawdb.ReadMigrationCursor(f.db, t.pbt)
+	if err != nil {
+		return fmt.Errorf("migration cursor corrupt, re-anchor: %w", err)
+	}
+	if ok {
+		if t.hasState(cursor.Root) {
+			t.setCursor(cursor.Number, cursor.Hash, cursor.Root)
 			return nil
 		}
 		// A batch crashing between its record and the cursor write leaves
 		// the durable root recorded above the hint; scan one batch up first,
 		// then walk down to the deepest live record.
-		for n := num + 1; n <= num+followBatchBlocks; n++ {
+		for n := cursor.Number + 1; n <= cursor.Number+followBatchBlocks; n++ {
 			ch := rawdb.ReadCanonicalHash(f.db, n)
 			if r, ok := rawdb.ReadShadowStateRoot(f.db, n, ch); ok && t.hasState(r) {
 				t.setCursor(n, ch, r)
 				return nil
 			}
 		}
-		for n := int64(num) - 1; n >= 0; n-- {
+		for n := int64(cursor.Number) - 1; n >= 0; n-- {
 			ch := rawdb.ReadCanonicalHash(f.db, uint64(n))
 			if r, ok := t.replayedRoot(uint64(n), ch); ok {
 				t.setCursor(uint64(n), ch, r)

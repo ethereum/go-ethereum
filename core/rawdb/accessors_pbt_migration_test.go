@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // TestShadowStateRootStorage exercises the shadow-root table.
@@ -44,38 +43,34 @@ func TestShadowStateRootStorage(t *testing.T) {
 	}
 }
 
-// TestMigrationCursorStorage pins both directions' cursor roundtrips and
-// the present-but-corrupt probe the resolvers rely on.
+// TestMigrationCursorStorage pins the tri-state both directions rely on:
+// absent is a virgin database, unreadable is a hard error, never the same.
 func TestMigrationCursorStorage(t *testing.T) {
-	cases := []struct {
-		name  string
-		key   []byte
-		has   func(ethdb.KeyValueReader) bool
-		read  func(ethdb.KeyValueReader) (uint64, common.Hash, common.Hash, bool)
-		write func(ethdb.KeyValueWriter, uint64, common.Hash, common.Hash)
-	}{
-		{"pbt", pbtMigrationCursorKey, HasPBTMigrationCursor, ReadPBTMigrationCursor, WritePBTMigrationCursor},
-		{"mpt", mptMigrationCursorKey, HasMPTMigrationCursor, ReadMPTMigrationCursor, WriteMPTMigrationCursor},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, pbt := range []bool{true, false} {
+		name := "mpt"
+		key := mptMigrationCursorKey
+		if pbt {
+			name, key = "pbt", pbtMigrationCursorKey
+		}
+		t.Run(name, func(t *testing.T) {
 			db := NewMemoryDatabase()
-			if _, _, _, ok := tc.read(db); ok || tc.has(db) {
-				t.Fatal("cursor present on an empty database")
+			if _, ok, err := ReadMigrationCursor(db, pbt); ok || err != nil {
+				t.Fatalf("empty database: ok=%v err=%v, want a virgin read", ok, err)
 			}
-			tc.write(db, 42, common.Hash{0x02}, common.Hash{0xbb})
-			num, hash, root, ok := tc.read(db)
-			if !ok || num != 42 || hash != (common.Hash{0x02}) || root != (common.Hash{0xbb}) {
-				t.Fatalf("cursor = %d %x %x %v, want 42, 0x02.., 0xbb.., true", num, hash, root, ok)
+			want := MigrationCursor{Number: 42, Hash: common.Hash{0x02}, Root: common.Hash{0xbb}}
+			WriteMigrationCursor(db, pbt, want)
+			got, ok, err := ReadMigrationCursor(db, pbt)
+			if !ok || err != nil || got != want {
+				t.Fatalf("cursor = %+v (ok=%v err=%v), want %+v", got, ok, err, want)
 			}
-			if err := db.Put(tc.key, []byte{0x01, 0x02}); err != nil {
+			if _, ok, _ := ReadMigrationCursor(db, !pbt); ok {
+				t.Fatal("the other direction read this cursor")
+			}
+			if err := db.Put(key, []byte{0x01, 0x02}); err != nil {
 				t.Fatal(err)
 			}
-			if _, _, _, ok := tc.read(db); ok {
-				t.Fatal("truncated cursor reported present")
-			}
-			if !tc.has(db) {
-				t.Fatal("truncated cursor not detected: the seeding fallbacks would run")
+			if _, ok, err := ReadMigrationCursor(db, pbt); ok || err == nil {
+				t.Fatal("truncated cursor read as virgin: the seeding fallbacks would run")
 			}
 		})
 	}
@@ -97,15 +92,17 @@ func TestPBTMigrationDoneFlag(t *testing.T) {
 // migration key: a stale cursor would shadow the fresh anchor.
 func TestWipeMigrationState(t *testing.T) {
 	db := NewMemoryDatabase()
-	WritePBTMigrationCursor(db, 5, common.Hash{0x01}, common.Hash{0x02})
-	WriteMPTMigrationCursor(db, 6, common.Hash{0x03}, common.Hash{0x04})
+	WriteMigrationCursor(db, true, MigrationCursor{Number: 5, Hash: common.Hash{0x01}, Root: common.Hash{0x02}})
+	WriteMigrationCursor(db, false, MigrationCursor{Number: 6, Hash: common.Hash{0x03}, Root: common.Hash{0x04}})
 	WritePBTMigrationDone(db)
 	WriteShadowStateRoot(db, 5, common.Hash{0x01}, common.Hash{0x02})
 
 	if err := WipeMigrationState(db); err != nil {
 		t.Fatal(err)
 	}
-	if HasPBTMigrationCursor(db) || HasMPTMigrationCursor(db) || ReadPBTMigrationDone(db) {
+	_, pbtOK, pbtErr := ReadMigrationCursor(db, true)
+	_, mptOK, mptErr := ReadMigrationCursor(db, false)
+	if pbtOK || mptOK || pbtErr != nil || mptErr != nil || ReadPBTMigrationDone(db) {
 		t.Fatal("migration keys survived the wipe")
 	}
 	if _, ok := ReadShadowStateRoot(db, 5, common.Hash{0x01}); ok {

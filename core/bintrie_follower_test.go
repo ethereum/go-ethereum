@@ -298,7 +298,7 @@ func TestFollowerStalls(t *testing.T) {
 				pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
 				rawdb.WritePBTFlatState(pbtdb)
 				rawdb.WriteSnapshotRoot(pbtdb, common.Hash{0xd1, 0x5c})
-				rawdb.WritePBTMigrationCursor(db, 2, blocks[1].Hash(), common.Hash{0xde, 0xad})
+				rawdb.WriteMigrationCursor(db, true, rawdb.MigrationCursor{Number: 2, Hash: blocks[1].Hash(), Root: common.Hash{0xde, 0xad}})
 				return genesis, blocks[1].Header()
 			},
 		},
@@ -374,7 +374,7 @@ func TestFollowerResumesFromRecordAboveCursor(t *testing.T) {
 	if err := first.direction(true).handle.Close(); err != nil {
 		t.Fatal(err)
 	}
-	rawdb.WritePBTMigrationCursor(db, 2, blocks[1].Hash(), common.Hash{0xde, 0xad})
+	rawdb.WriteMigrationCursor(db, true, rawdb.MigrationCursor{Number: 2, Hash: blocks[1].Hash(), Root: common.Hash{0xde, 0xad}})
 
 	second := standaloneFollower(genesis, db)
 	if err := second.follow(head, nil); err != nil {

@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -42,59 +43,48 @@ func WriteShadowStateRoot(db ethdb.KeyValueWriter, number uint64, hash common.Ha
 	}
 }
 
-// HasPBTMigrationCursor reports whether a migration cursor was ever written,
-// readable or not. A present-but-corrupt cursor must not be mistaken for a
-// virgin database: the seeding fallbacks are only safe on the latter.
-func HasPBTMigrationCursor(db ethdb.KeyValueReader) bool {
-	has, _ := db.Has(pbtMigrationCursorKey)
-	return has
+// MigrationCursor is a follower direction's persisted replay position.
+type MigrationCursor struct {
+	Number uint64
+	Hash   common.Hash
+	Root   common.Hash
 }
 
-// ReadPBTMigrationCursor returns the follower's last replayed block and shadow
-// root, or ok=false without a readable cursor.
-func ReadPBTMigrationCursor(db ethdb.KeyValueReader) (uint64, common.Hash, common.Hash, bool) {
-	data, _ := db.Get(pbtMigrationCursorKey)
-	if len(data) != 8+2*common.HashLength {
-		return 0, common.Hash{}, common.Hash{}, false
+// ReadMigrationCursor returns the direction's cursor. A never-written cursor
+// is a valid virgin state; a present but unreadable one errors, because
+// mistaking it for virgin would let the seeding fallbacks run.
+func ReadMigrationCursor(db ethdb.KeyValueReader, pbt bool) (MigrationCursor, bool, error) {
+	key := migrationCursorKey(pbt)
+	if has, err := db.Has(key); err != nil || !has {
+		return MigrationCursor{}, false, err
 	}
-	number := binary.BigEndian.Uint64(data)
-	hash := common.BytesToHash(data[8 : 8+common.HashLength])
-	root := common.BytesToHash(data[8+common.HashLength:])
-	return number, hash, root, true
+	data, err := db.Get(key)
+	if err != nil {
+		return MigrationCursor{}, false, err
+	}
+	if len(data) != 8+2*common.HashLength {
+		return MigrationCursor{}, false, fmt.Errorf("migration cursor is %d bytes", len(data))
+	}
+	return MigrationCursor{
+		Number: binary.BigEndian.Uint64(data),
+		Hash:   common.BytesToHash(data[8 : 8+common.HashLength]),
+		Root:   common.BytesToHash(data[8+common.HashLength:]),
+	}, true, nil
 }
 
-// WritePBTMigrationCursor records the shadow follower's replay position.
-func WritePBTMigrationCursor(db ethdb.KeyValueWriter, number uint64, hash common.Hash, root common.Hash) {
-	data := append(append(encodeBlockNumber(number), hash.Bytes()...), root.Bytes()...)
-	if err := db.Put(pbtMigrationCursorKey, data); err != nil {
+// WriteMigrationCursor records the direction's replay position.
+func WriteMigrationCursor(db ethdb.KeyValueWriter, pbt bool, c MigrationCursor) {
+	data := append(append(encodeBlockNumber(c.Number), c.Hash.Bytes()...), c.Root.Bytes()...)
+	if err := db.Put(migrationCursorKey(pbt), data); err != nil {
 		log.Crit("Failed to store migration cursor", "err", err)
 	}
 }
 
-// HasMPTMigrationCursor mirrors HasPBTMigrationCursor for the merkle window.
-func HasMPTMigrationCursor(db ethdb.KeyValueReader) bool {
-	has, _ := db.Has(mptMigrationCursorKey)
-	return has
-}
-
-// ReadMPTMigrationCursor mirrors ReadPBTMigrationCursor for the merkle window.
-func ReadMPTMigrationCursor(db ethdb.KeyValueReader) (uint64, common.Hash, common.Hash, bool) {
-	data, _ := db.Get(mptMigrationCursorKey)
-	if len(data) != 8+2*common.HashLength {
-		return 0, common.Hash{}, common.Hash{}, false
+func migrationCursorKey(pbt bool) []byte {
+	if pbt {
+		return pbtMigrationCursorKey
 	}
-	number := binary.BigEndian.Uint64(data)
-	hash := common.BytesToHash(data[8 : 8+common.HashLength])
-	root := common.BytesToHash(data[8+common.HashLength:])
-	return number, hash, root, true
-}
-
-// WriteMPTMigrationCursor records the merkle window follower's position.
-func WriteMPTMigrationCursor(db ethdb.KeyValueWriter, number uint64, hash common.Hash, root common.Hash) {
-	data := append(append(encodeBlockNumber(number), hash.Bytes()...), root.Bytes()...)
-	if err := db.Put(mptMigrationCursorKey, data); err != nil {
-		log.Crit("Failed to store merkle window cursor", "err", err)
-	}
+	return mptMigrationCursorKey
 }
 
 // ReadPBTMigrationDone reports whether the migration finished.
@@ -110,7 +100,7 @@ func WritePBTMigrationDone(db ethdb.KeyValueWriter) {
 	}
 }
 
-// WipeMigrationState clears the migration bookkeeping - done marker first -
+// WipeMigrationState clears the migration bookkeeping, done marker first,
 // so a crash prefix leaves state the next boot detects, never a stale
 // position a fresh anchor would lose to.
 func WipeMigrationState(db ethdb.KeyValueStore) error {
