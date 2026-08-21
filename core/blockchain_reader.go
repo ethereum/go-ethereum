@@ -384,14 +384,12 @@ func (bc *BlockChain) HasState(hash common.Hash) bool {
 	if _, err := bc.triedb.NodeReader(hash); err == nil {
 		return true
 	}
-	if bc.follower != nil {
-		if tdb, err := bc.follower.tree(!bc.triedb.IsPBT()); err == nil {
-			if _, err := tdb.NodeReader(hash); err == nil {
-				return true
-			}
-		}
+	tdb, err := bc.treeFor(!bc.triedb.IsPBT())
+	if err != nil {
+		return false
 	}
-	return false
+	_, err = tdb.NodeReader(hash)
+	return err == nil
 }
 
 // HasBlockAndState checks if a block and associated state trie is fully present
@@ -430,7 +428,6 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 	return bc.StateAt(bc.CurrentBlock())
 }
 
-// StateAt returns a new mutable state based on a particular point in time.
 // StateAt returns the state database rooted at the given header.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
 	sdb, err := bc.stateDatabaseFor(bc.chainConfig.IsBinaryTrie(header.Number, header.Time))

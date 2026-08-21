@@ -41,6 +41,10 @@ const (
 
 	// followBatchBlocks caps how many blocks one fold coalesces.
 	followBatchBlocks = 128
+
+	// activationWaitTimeout bounds how long a block at the activation
+	// boundary waits for the shadow tree to reach its parent.
+	activationWaitTimeout = 30 * time.Second
 )
 
 // MissingAccessListError names a canonical block whose access list is not

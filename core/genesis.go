@@ -645,7 +645,7 @@ func resolveStateMode(db ethdb.Database, genesis *Genesis) (stateMode, *params.C
 			return modeMPT, nil, nil
 		}
 		if header := rawdb.ReadHeader(db, ghash, 0); header != nil {
-			number, time = header.Number.Uint64(), header.Time
+			time = header.Time
 		}
 	}
 	switch {

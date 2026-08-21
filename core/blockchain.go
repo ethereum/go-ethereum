@@ -421,7 +421,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// that lost the fork (e.g. written when the key was "pbt") would silently
 	// point the node at an empty merkle namespace.
 	if mode == modeMPT && rawdb.HasPBTState(db) {
-		return nil, errors.New("database holds binary tree state but the config does not schedule it (genesis key \"binaryTrieTime\")")
+		return nil, errors.New(`database holds binary tree state but the config does not schedule it (genesis key "binaryTrieTime")`)
 	}
 	isPBT := mode == modePBTNative
 	if mode == modeMigration {
@@ -465,7 +465,6 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		chainConfig:        chainConfig,
 		cfg:                cfg,
 		db:                 db,
-		stateMode:          mode,
 		triedb:             triedb,
 		codedb:             state.NewCodeDB(db),
 		jumpDestCache:      NewJumpDestCache(),
@@ -624,7 +623,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
 	}
 
-	if bc.stateMode == modeMigration && !rawdb.ReadPBTMigrationDone(db) {
+	if mode == modeMigration && !rawdb.ReadPBTMigrationDone(db) {
 		bc.follower = newBintrieFollower(bc)
 	}
 
@@ -1449,13 +1448,15 @@ func (bc *BlockChain) Stop() {
 		// handle's newest root is then its window direction's replay cursor,
 		// with the last own-flavour header as the never-ran fallback.
 		head := bc.CurrentBlock()
-		root := head.Root
-		if bc.follower != nil && bc.chainConfig.IsBinaryTrie(head.Number, head.Time) != bc.triedb.IsPBT() {
-			if r := bc.follower.cursorRoot(bc.triedb.IsPBT()); r != (common.Hash{}) {
+		root, pbt := head.Root, bc.triedb.IsPBT()
+		if bc.follower != nil && bc.chainConfig.IsBinaryTrie(head.Number, head.Time) != pbt {
+			if r := bc.follower.cursorRoot(pbt); r != (common.Hash{}) {
 				root = r
 			} else {
-				for h := head; h != nil; h = bc.GetHeader(h.ParentHash, h.Number.Uint64()-1) {
-					if bc.chainConfig.IsBinaryTrie(h.Number, h.Time) == bc.triedb.IsPBT() {
+				// The head is the wrong flavour by the branch above, so the
+				// walk starts at its parent.
+				for h := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1); h != nil; h = bc.GetHeader(h.ParentHash, h.Number.Uint64()-1) {
+					if bc.chainConfig.IsBinaryTrie(h.Number, h.Time) == pbt {
 						root = h.Root
 						break
 					}
@@ -2091,8 +2092,8 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		}
 		// At the activation boundary the pre-state lives in the shadow tree;
 		// give a lagging follower a bounded moment.
-		if !bc.ActivationReady(block) {
-			if err := bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), 30*time.Second); err != nil {
+		if bc.follower != nil && !bc.ActivationReady(block) {
+			if err := bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), activationWaitTimeout); err != nil {
 				return nil, it.index, fmt.Errorf("activation waits on the shadow tree: %w", err)
 			}
 		}
@@ -2325,10 +2326,8 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 		return nil, noop, err
 	}
 	if parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1); parent != nil {
-		if bc.chainConfig.IsBinaryTrie(parent.Number, parent.Time) != flavor {
-			if parentRoot, err = bc.execParentRoot(parent, flavor); err != nil {
-				return nil, noop, err
-			}
+		if parentRoot, err = bc.execParentRoot(parent, flavor); err != nil {
+			return nil, noop, err
 		}
 	}
 	type prewarmReader interface {
