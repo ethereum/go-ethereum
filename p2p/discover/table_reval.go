@@ -84,7 +84,9 @@ func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mcloc
 			}
 			// Update nextTime regardless if any requests were started because
 			// current value has passed.
+			tab.mutex.Lock()
 			list.schedule(now, &tab.rand)
+			tab.mutex.Unlock()
 		}
 	}
 	reval(&tr.fast)
