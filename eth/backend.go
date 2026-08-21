@@ -366,7 +366,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.dropper = newDropper(eth.p2pServer.MaxDialedConns(), eth.p2pServer.MaxInboundConns())
 
 	// A migrating chain resolves access lists it is missing over eth/71.
-	if eth.blockchain.MigrationProgress().Phase == "running" {
+	if eth.blockchain.Migrating() {
 		eth.balFetcher = newBALFetcher(chainDb, eth.blockchain, eth.handler.peers, eth.handler.removePeer, eth.blockchain.KickMigration)
 		eth.blockchain.SetBALRequester(eth.balFetcher.request)
 	}

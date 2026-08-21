@@ -850,6 +850,11 @@ func (bc *BlockChain) KickMigration() {
 	}
 }
 
+// Migrating reports whether the node is mid-migration between the two trees.
+func (bc *BlockChain) Migrating() bool {
+	return bc.follower != nil && !rawdb.ReadPBTMigrationDone(bc.db)
+}
+
 // MigrationProgress reports where a migrating chain stands, per direction.
 func (bc *BlockChain) MigrationProgress() MigrationProgress {
 	if rawdb.ReadPBTMigrationDone(bc.db) {

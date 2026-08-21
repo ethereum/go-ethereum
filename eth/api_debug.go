@@ -585,8 +585,7 @@ func (api *DebugAPI) ShadowRoots(ctx context.Context) (*rpc.Subscription, error)
 		headSub = api.eth.BlockChain().SubscribeChainHeadEvent(heads)
 		db      = api.eth.ChainDb()
 	)
-	// The head feed blocks on slow receivers, so this loop only queues:
-	// a full queue drops the oldest head rather than ever backpressuring.
+	// The head feed blocks on slow receivers, so this loop only queues.
 	go func() {
 		defer headSub.Unsubscribe()
 		for {
@@ -594,15 +593,7 @@ func (api *DebugAPI) ShadowRoots(ctx context.Context) (*rpc.Subscription, error)
 			case ev := <-heads:
 				select {
 				case pending <- ev.Header:
-				default:
-					select {
-					case <-pending:
-					default:
-					}
-					select {
-					case pending <- ev.Header:
-					default:
-					}
+				default: // the poller is behind; skip rather than block the feed
 				}
 			case <-rpcSub.Err():
 				return

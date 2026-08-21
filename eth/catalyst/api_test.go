@@ -435,8 +435,9 @@ func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block,
 	return startEthServiceAt(t, "", genesis, blocks, mods...)
 }
 
-// startEthServiceAt is startEthService over a real data directory, so a test
-// can stop the node and reboot it on the same chain data.
+// startEthServiceAt runs the service on a real data directory. An ephemeral
+// node cannot be rebooted: its state history freezer is rebuilt empty on each
+// open, and pathdb crits instead of failing the test.
 func startEthServiceAt(t testing.TB, datadir string, genesis *core.Genesis, blocks []*types.Block, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
 	t.Helper()
 

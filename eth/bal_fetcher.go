@@ -138,7 +138,8 @@ func (f *balFetcher) fetchFrom(peer *eth.Peer, pending []core.BALRequest) (int, 
 		metas := res.Meta.([]common.Hash)
 		// Verify everything before storing anything: one forged item voids
 		// the whole response and the peer.
-		var verified []int
+		verified := make([]bool, len(pending))
+		stored := 0
 		for i, meta := range metas {
 			if meta == (common.Hash{}) {
 				continue // not served
@@ -153,21 +154,18 @@ func (f *balFetcher) fetchFrom(peer *eth.Peer, pending []core.BALRequest) (int, 
 				f.drop(peer.ID())
 				return 0, pending
 			}
-			verified = append(verified, i)
+			verified[i], stored = true, stored+1
 		}
-		served := make(map[int]bool, len(verified))
-		for _, i := range verified {
-			rawdb.WriteAccessListRLP(f.db, pending[i].Hash, pending[i].Number, items[i])
-			served[i] = true
-		}
-		res.Done <- nil
 		var rest []core.BALRequest
 		for i, r := range pending {
-			if !served[i] {
+			if verified[i] {
+				rawdb.WriteAccessListRLP(f.db, r.Hash, r.Number, items[i])
+			} else {
 				rest = append(rest, r)
 			}
 		}
-		return len(verified), rest
+		res.Done <- nil
+		return stored, rest
 	case <-timeout.C:
 		return 0, pending
 	case <-f.term:
