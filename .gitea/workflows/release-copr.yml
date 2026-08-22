@@ -14,6 +14,8 @@ jobs:
     - name: Show environment
       run: |
         env
+        echo "github.sha=${{ github.sha }}"
+        echo "github.run_id=${{ github.run_id }}"
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -29,6 +31,6 @@ jobs:
 
     - name: Run ci.go
       run: |
-        go run build/ci.go rpmsrc -upload go-ethereum/go-ethereum -packager "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
+        go run build/ci.go rpmsrc -upload go-ethereum/go-ethereum -packager "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -git-commit ${{ github.sha }} -buildnum ${{ github.run_id }}
       env:
         COPR_API_TOKEN: ${{ secrets.COPR_API_TOKEN }}
