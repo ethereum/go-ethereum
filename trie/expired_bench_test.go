@@ -58,7 +58,7 @@ func BenchmarkResolveExpiredNode(b *testing.B) {
 	b.Cleanup(func() { archive.ArchiveDataDir = oldDir })
 
 	// Expected subtree hash, as the parent reference would provide it.
-	rebuilt, err := archiveRecordsToNode(records)
+	rebuilt, err := archiveRecordsToNode(records, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -71,6 +71,54 @@ func BenchmarkResolveExpiredNode(b *testing.B) {
 	for range b.N {
 		n := &expiredNode{offset: offset, size: size, cachedHash: expected}
 		if _, err := resolveExpiredNodeData(n); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkResolveExpiredNodeForKey measures the key-driven (pruned)
+// resolution path used by get/insert/delete during block processing.
+func BenchmarkResolveExpiredNodeForKey(b *testing.B) {
+	var records []*archive.Record
+	for i := range 16 {
+		for l := range 4 {
+			records = append(records, &archive.Record{
+				Path:  []byte{byte(i), byte(l), 16},
+				Value: bytes.Repeat([]byte(fmt.Sprintf("v%x%x", i, l)), 12),
+			})
+		}
+	}
+	tmpDir := b.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, "geth"), 0755); err != nil {
+		b.Fatal(err)
+	}
+	writer, err := archive.NewArchiveWriter(filepath.Join(tmpDir, "geth", "nodearchive"))
+	if err != nil {
+		b.Fatal(err)
+	}
+	offset, size, err := writer.WriteSubtree(records)
+	if err != nil {
+		b.Fatal(err)
+	}
+	writer.Close()
+	oldDir := archive.ArchiveDataDir
+	archive.ArchiveDataDir = tmpDir
+	b.Cleanup(func() { archive.ArchiveDataDir = oldDir })
+
+	rebuilt, err := archiveRecordsToNode(records, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	h := newHasher(false)
+	expected := hashNode(h.hash(rebuilt, true))
+	returnHasherToPool(h)
+
+	relKey := []byte{0x05, 0x02, 16}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		n := &expiredNode{offset: offset, size: size, cachedHash: expected}
+		if _, err := resolveExpiredNodeForKey(n, relKey); err != nil {
 			b.Fatal(err)
 		}
 	}

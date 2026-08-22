@@ -162,13 +162,22 @@ func decodeNodeUnsafe(hash, buf []byte) (node, error) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	if buf[0] == expiredNodeMarker {
-		if len(buf) != 1+2*archive.OffsetSize {
+		if len(buf) < 1+2*archive.OffsetSize {
 			return nil, fmt.Errorf("invalid expired node length: %d", len(buf))
 		}
 		offset := binary.BigEndian.Uint64(buf[1:])
 		size := binary.BigEndian.Uint64(buf[1+archive.OffsetSize:])
-		log.Debug("Decoded expired node", "offset", offset, "size", size, "hash", common.BytesToHash(hash))
-		return &expiredNode{offset: offset, size: size, cachedHash: hashNode(hash), archiveResolver: archive.ArchivedNodeResolver}, nil
+		subpath := buf[1+2*archive.OffsetSize:]
+		for _, nib := range subpath {
+			if nib > 15 {
+				return nil, fmt.Errorf("invalid nibble %d in expired node subpath", nib)
+			}
+		}
+		if len(subpath) == 0 {
+			subpath = nil
+		}
+		log.Debug("Decoded expired node", "offset", offset, "size", size, "subpath", subpath, "hash", common.BytesToHash(hash))
+		return &expiredNode{offset: offset, size: size, subpath: subpath, cachedHash: hashNode(hash), archiveResolver: archive.ArchivedNodeResolver}, nil
 	}
 	elems, _, err := rlp.SplitList(buf)
 	if err != nil {

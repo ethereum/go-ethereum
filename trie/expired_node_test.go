@@ -120,7 +120,7 @@ func TestExpiredNodeEncodedFormat(t *testing.T) {
 func TestExpiredNodeFstring(t *testing.T) {
 	node := &expiredNode{offset: 12345, size: 6789}
 	s := node.fstring("")
-	if s != "<expired: offset=12345, size=6789> " {
+	if s != "<expired: offset=12345, size=6789, subpath=> " {
 		t.Errorf("fstring mismatch: got %q", s)
 	}
 }
@@ -220,12 +220,12 @@ func TestExpiredNodeCopy(t *testing.T) {
 }
 
 func TestArchiveRecordsToNodeEmpty(t *testing.T) {
-	_, err := archiveRecordsToNode([]*archive.Record{})
+	_, err := archiveRecordsToNode([]*archive.Record{}, nil)
 	if !errors.Is(err, archive.EmptyArchiveRecord) {
 		t.Errorf("expected EmptyArchiveRecord error, got %v", err)
 	}
 
-	_, err = archiveRecordsToNode(nil)
+	_, err = archiveRecordsToNode(nil, nil)
 	if !errors.Is(err, archive.EmptyArchiveRecord) {
 		t.Errorf("expected EmptyArchiveRecord error for nil slice, got %v", err)
 	}
@@ -237,7 +237,7 @@ func TestArchiveRecordsToNodeMultiple(t *testing.T) {
 		{Path: []byte{0x02, 16}, Value: []byte("value2")},
 	}
 
-	node, err := archiveRecordsToNode(records)
+	node, err := archiveRecordsToNode(records, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

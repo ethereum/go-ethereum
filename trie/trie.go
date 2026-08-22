@@ -231,7 +231,7 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 		return value, newnode, true, err
 	case *expiredNode:
 		log.Debug("Resolving expired node in get()", "owner", t.owner, "offset", n.offset, "size", n.size, "pos", pos)
-		newnode, err := resolveExpiredNodeData(n)
+		newnode, err := resolveExpiredNodeForKey(n, key[pos:])
 		if err != nil {
 			return nil, n, false, err
 		}
@@ -504,7 +504,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 
 	case *expiredNode:
 		log.Debug("Resolving expired node in insert()", "owner", t.owner, "offset", n.offset, "size", n.size)
-		rn, err := resolveExpiredNodeData(n)
+		rn, err := resolveExpiredNodeForKey(n, key)
 		if err != nil {
 			return false, nil, err
 		}
@@ -766,7 +766,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 
 	case *expiredNode:
 		log.Debug("Resolving expired node in delete()", "owner", t.owner, "offset", n.offset, "size", n.size)
-		rn, err := resolveExpiredNodeData(n)
+		rn, err := resolveExpiredNodeForKey(n, key)
 		if err != nil {
 			return false, nil, err
 		}
@@ -810,6 +810,7 @@ func copyNode(n node) node {
 		return &expiredNode{
 			offset:          n.offset,
 			size:            n.size,
+			subpath:         common.CopyBytes(n.subpath),
 			cachedHash:      common.CopyBytes(n.cachedHash),
 			archiveResolver: n.archiveResolver,
 		}
@@ -825,6 +826,13 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 		if err != nil {
 			return nil, err
 		}
+		// The stored blob may be an expired-node marker: chain through
+		// the archive so callers that inspect the node's concrete type
+		// (e.g. the fullNode-collapse merge in delete) see the actual
+		// subtree root rather than the opaque marker. Without this, a
+		// collapse next to an expired shortNode-rooted subtree skips
+		// the key merge and produces a non-canonical trie (consensus
+		// failure: wrong state root on block import).
 		if en, ok := rn.(*expiredNode); ok {
 			return resolveExpiredNodeData(en)
 		}

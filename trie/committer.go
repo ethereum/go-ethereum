@@ -49,6 +49,13 @@ func (c *committer) Commit(n node, parallel bool) hashNode {
 
 // commit collapses a node down into a hash node and returns it.
 func (c *committer) commit(path []byte, n node, parallel bool) node {
+	// Expired markers MUST be handled before the clean-node shortcut:
+	// their cache() reports (cachedHash, clean), which would short-circuit
+	// below and skip persisting the marker blob at its path, leaving the
+	// parent with a dangling hash reference.
+	if en, ok := n.(*expiredNode); ok {
+		return c.storeExpired(path, en)
+	}
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
@@ -61,6 +68,11 @@ func (c *committer) commit(path []byte, n node, parallel bool) node {
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
 			cn.Val = c.commit(append(path, cn.Key...), cn.Val, false)
+		} else if en, ok := cn.Val.(*expiredNode); ok {
+			// Extension pointing at an expired sub-marker (e.g. produced
+			// by a branch collapse next to a pruned resurrection): persist
+			// the marker at the child path and reference it by hash.
+			cn.Val = c.storeExpired(append(path, cn.Key...), en)
 		}
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
@@ -80,11 +92,32 @@ func (c *committer) commit(path []byte, n node, parallel bool) node {
 	case hashNode:
 		return cn
 	case *expiredNode:
-		return cn
+		// Persist the expired marker at its own path and hand the parent
+		// a plain hash reference. Markers must NEVER be encoded inline:
+		// their raw bytes are not valid RLP inside a parent node, and the
+		// pathdb reader only bypasses hash verification for marker blobs
+		// stored at their own path.
+		return c.storeExpired(path, cn)
 	default:
 		// nil, valuenode shouldn't be committed
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
 	}
+}
+
+// storeExpired persists an expired-node marker blob at the given path and
+// returns the hash reference the parent must embed. The cached hash is the
+// original subtree hash, which parents already reference; the pathdb reader
+// skips hash verification for marker blobs, keeping reads consistent.
+func (c *committer) storeExpired(path []byte, n *expiredNode) node {
+	if n.cachedHash == nil {
+		// Without the original hash the marker cannot be referenced by its
+		// parent; this cannot happen for markers decoded from the database
+		// or produced by pruning (both carry the parent-referenced hash).
+		panic(fmt.Sprintf("expired node without cached hash at path %x (offset=%d)", path, n.offset))
+	}
+	blob := encodeExpiredNodeBlob(n.offset, n.size, n.subpath)
+	c.nodes.AddNode(path, trienode.NewNodeWithPrev(common.BytesToHash(n.cachedHash), blob, c.tracer.Get(path)))
+	return hashNode(n.cachedHash)
 }
 
 // commitChildren commits the children of the given fullnode

@@ -154,17 +154,93 @@ func TestExpiredWriteDifferential(t *testing.T) {
 			t.Fatalf("seed %d: root mismatch (subtrees=%d nkeys=%d):\n got %x\nwant %x\nops:\n%s",
 				seed, subtrees, nkeys, got, want, desc)
 		}
-		// Commit the mutated trie and check every persisted blob decodes:
-		// this catches committer-level corruption (e.g. oversized nodes
-		// embedded inline) that pure root comparison cannot see.
-		if _, nodes := live.Commit(false); nodes != nil {
-			for _, set := range trienode.NewWithNodeSet(nodes).Sets {
+		// Commit the mutated trie, check every persisted blob decodes
+		// (catches committer-level corruption such as oversized nodes
+		// embedded inline), and persist the update to the disk DB.
+		root2, nodes := live.Commit(false)
+		if nodes != nil {
+			for owner, set := range trienode.NewWithNodeSet(nodes).Sets {
+				for path, n := range set.Nodes {
+					if n.IsDeleted() {
+						rawdb.DeleteAccountTrieNode(diskdb, []byte(path))
+						continue
+					}
+					if _, err := decodeNode(n.Hash[:], n.Blob); err != nil {
+						t.Fatalf("seed %d: committed blob at %x is undecodable: %v", seed, path, err)
+					}
+					rawdb.WriteTrieNode(diskdb, owner, []byte(path), n.Hash, n.Blob, rawdb.PathScheme)
+				}
+			}
+		}
+
+		// Second generation: reopen the trie at the committed root and
+		// apply another random batch. This exercises re-reading and
+		// resolving the expired sub-markers persisted by the partial
+		// resurrection of generation one.
+		values2 := make(map[string][]byte, len(values))
+		for k, v := range values {
+			values2[k] = v
+		}
+		for _, op := range ops {
+			if op.val == nil {
+				delete(values2, string(op.key))
+			} else {
+				values2[string(op.key)] = op.val
+			}
+		}
+		nops2 := 1 + rng.IntN(30)
+		ops2 := make([]writeOp, 0, nops2)
+		for range nops2 {
+			switch rng.IntN(3) {
+			case 0:
+				k := keys[rng.IntN(len(keys))]
+				v := make([]byte, 1+rng.IntN(60))
+				fillBytes(rng, v)
+				ops2 = append(ops2, writeOp{k, v})
+			case 1:
+				k := keys[rng.IntN(len(keys))]
+				ops2 = append(ops2, writeOp{k, nil})
+			case 2:
+				k := append([]byte{}, keys[rng.IntN(len(keys))]...)
+				k[30] ^= byte(1 + rng.IntN(255))
+				v := make([]byte, 1+rng.IntN(60))
+				fillBytes(rng, v)
+				ops2 = append(ops2, writeOp{k, v})
+			}
+		}
+		live2, err := New(TrieID(root2), ndb)
+		if err != nil {
+			t.Fatalf("seed %d: cannot reopen committed trie: %v", seed, err)
+		}
+		for _, op := range ops2 {
+			if _, err := live2.Get(op.key); err != nil {
+				t.Fatalf("seed %d: gen-2 pre-read %x failed: %v", seed, op.key, err)
+			}
+		}
+		for _, op := range ops2 {
+			var err error
+			if op.val == nil {
+				err = live2.Delete(op.key)
+			} else {
+				err = live2.Update(op.key, op.val)
+			}
+			if err != nil {
+				t.Fatalf("seed %d: gen-2 op on %x failed: %v", seed, op.key, err)
+			}
+		}
+		got2 := live2.Hash()
+		want2 := referenceRoot(t, values2, ops2)
+		if got2 != want2 {
+			t.Fatalf("seed %d: generation-2 root mismatch:\n got %x\nwant %x", seed, got2, want2)
+		}
+		if _, nodes2 := live2.Commit(false); nodes2 != nil {
+			for _, set := range trienode.NewWithNodeSet(nodes2).Sets {
 				for path, n := range set.Nodes {
 					if n.IsDeleted() {
 						continue
 					}
 					if _, err := decodeNode(n.Hash[:], n.Blob); err != nil {
-						t.Fatalf("seed %d: committed blob at %x is undecodable: %v", seed, path, err)
+						t.Fatalf("seed %d: gen-2 committed blob at %x is undecodable: %v", seed, path, err)
 					}
 				}
 			}

@@ -537,7 +537,7 @@ func (a *Archiver) archiveSubtree(info *subtreeInfo) error {
 	// check that the hash matches the original subtree root. This
 	// catches any data corruption before we delete the original nodes.
 	if info.rootHash != (common.Hash{}) {
-		reconstructed, err := archiveRecordsToNode(info.leaves)
+		reconstructed, err := archiveRecordsToNode(info.leaves, nil)
 		if err != nil {
 			return fmt.Errorf("archive verification failed: cannot reconstruct trie from records: %w", err)
 		}
@@ -565,7 +565,7 @@ func (a *Archiver) archiveSubtree(info *subtreeInfo) error {
 	}
 
 	// Write expiredNode at subtree root
-	expiredBlob := encodeExpiredNodeBlob(offset, size)
+	expiredBlob := encodeExpiredNodeBlob(offset, size, nil)
 	if info.owner == (common.Hash{}) {
 		rawdb.WriteAccountTrieNode(batch, info.path, expiredBlob)
 	} else {
@@ -602,12 +602,14 @@ func (a *Archiver) maybeCompact() error {
 }
 
 // encodeExpiredNodeBlob creates the raw bytes for an expiredNode.
-// Format: 1-byte marker (0x00) + 8-byte offset + 8-byte size = 17 bytes
-func encodeExpiredNodeBlob(offset, size uint64) []byte {
-	buf := make([]byte, 1+2*archive.OffsetSize) // 17 bytes
-	buf[0] = expiredNodeMarker                  // 0x00
+// Format: 1-byte marker (0x00) + 8-byte offset + 8-byte size + hex-nibble
+// subpath (empty for a whole record group).
+func encodeExpiredNodeBlob(offset, size uint64, subpath []byte) []byte {
+	buf := make([]byte, 1+2*archive.OffsetSize+len(subpath))
+	buf[0] = expiredNodeMarker // 0x00
 	binary.BigEndian.PutUint64(buf[1:], offset)
 	binary.BigEndian.PutUint64(buf[1+archive.OffsetSize:], size)
+	copy(buf[1+2*archive.OffsetSize:], subpath)
 	return buf
 }
 

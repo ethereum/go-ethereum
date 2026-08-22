@@ -310,3 +310,49 @@ func TestExpiredRepeatResolutionCommit(t *testing.T) {
 		}
 	}
 }
+
+// TestPartialResurrectionCommitsMarkers asserts the surgical de-archival
+// behavior: updating a single key inside an archived group must commit the
+// materialized branch plus expired SUB-MARKERS for the sibling branches —
+// not the fully resurrected subtree.
+func TestPartialResurrectionCommitsMarkers(t *testing.T) {
+	root, ndb, values := buildArchivedTrie(t)
+
+	tr, err := New(TrieID(root), ndb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newVal := bytes.Repeat([]byte("Z"), 40)
+	tr.MustUpdate([]byte{0x00, 0x00}, newVal)
+	newRoot, nodes := tr.Commit(false)
+
+	if want := referenceRoot(t, values, []writeOp{{[]byte{0x00, 0x00}, newVal}}); newRoot != want {
+		t.Fatalf("root mismatch: got %x want %x", newRoot, want)
+	}
+	var markers, materialized int
+	for _, set := range trienode.NewWithNodeSet(nodes).Sets {
+		for path, n := range set.Nodes {
+			if n.IsDeleted() {
+				continue
+			}
+			if len(n.Blob) > 0 && n.Blob[0] == expiredNodeMarker {
+				markers++
+				if len(n.Blob) <= 17 {
+					t.Errorf("marker at %x has empty subpath; expected a sub-marker", path)
+				}
+			} else {
+				materialized++
+			}
+		}
+	}
+	if markers == 0 {
+		t.Error("no sub-markers committed: siblings were fully resurrected")
+	}
+	// The archived group at [0,0] holds 16 leaves in 4 branches. Full
+	// resurrection would persist ~21 materialized nodes for the subtree
+	// alone; the partial path should persist far fewer.
+	if materialized > 15 {
+		t.Errorf("too many materialized nodes committed (%d): resurrection not partial", materialized)
+	}
+	t.Logf("committed: %d materialized nodes, %d sub-markers", materialized, markers)
+}

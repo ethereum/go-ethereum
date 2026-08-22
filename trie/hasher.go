@@ -18,7 +18,6 @@ package trie
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -108,11 +107,7 @@ func (h *hasher) hash(n node, force bool) []byte {
 		}
 		// Fallback: hash the marker blob (should not happen in practice
 		// because decodeNodeUnsafe always provides the hash).
-		var buf [1 + 2*8]byte // 17 bytes
-		buf[0] = expiredNodeMarker
-		binary.BigEndian.PutUint64(buf[1:], n.offset)
-		binary.BigEndian.PutUint64(buf[9:], n.size)
-		return h.hashData(buf[:])
+		return h.hashData(encodeExpiredNodeBlob(n.offset, n.size, n.subpath))
 
 	default:
 		panic(fmt.Errorf("unexpected node type, %T", n))
@@ -232,11 +227,7 @@ func (h *hasher) proofHash(original node) []byte {
 	case *fullNode:
 		return bytes.Clone(h.encodeFullNode(n))
 	case *expiredNode:
-		var buf [1 + 2*8]byte
-		buf[0] = expiredNodeMarker
-		binary.BigEndian.PutUint64(buf[1:], n.offset)
-		binary.BigEndian.PutUint64(buf[9:], n.size)
-		return buf[:]
+		return encodeExpiredNodeBlob(n.offset, n.size, n.subpath)
 	default:
 		panic(fmt.Errorf("unexpected node type, %T", original))
 	}
