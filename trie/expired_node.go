@@ -97,7 +97,8 @@ func resolveExpiredNodeData(n *expiredNode) (node, error) {
 	// reconstructed subtree produces the same hash. A mismatch means the
 	// archive is corrupted (e.g. missing leaves due to unresolvable hashNodes
 	// during archival) and any data from it is unreliable. Offsets that have
-	// already been verified against the same expected hash are skipped.
+	// already been verified against the same expected hash skip the
+	// O(subtree) re-hash.
 	if n.cachedHash != nil {
 		expected := common.BytesToHash(n.cachedHash)
 		if prev, ok := verifiedArchiveOffsets.Get(n.offset); !ok || prev != expected {
@@ -109,14 +110,25 @@ func resolveExpiredNodeData(n *expiredNode) (node, error) {
 					n.offset, n.size, []byte(n.cachedHash), gotHash, len(records))
 			}
 			verifiedArchiveOffsets.Add(n.offset, expected)
-		}
-		// Stamp the original hash onto the resolved subtree root so the
-		// hasher returns it directly instead of re-computing.
-		switch nn := resolved.(type) {
-		case *fullNode:
-			nn.flags.hash = n.cachedHash
-		case *shortNode:
-			nn.flags.hash = n.cachedHash
+			// Stamp the original hash onto the resolved subtree root so
+			// the hasher returns it directly instead of re-computing.
+			//
+			// SAFETY: this stamp is only valid because the verification
+			// walk above has just hashed the whole subtree, stamping
+			// flags.hash on every >=32-byte interior node. The committer
+			// relies on that invariant (hash==nil means embedded): with a
+			// stamped root but unhashed interiors, the main hasher would
+			// short-circuit at the root and the committer would embed
+			// oversized interior nodes inline into their parent blobs,
+			// silently corrupting the database. When verification is
+			// skipped, the root MUST stay unstamped so the main trie
+			// hasher descends and establishes the invariant itself.
+			switch nn := resolved.(type) {
+			case *fullNode:
+				nn.flags.hash = n.cachedHash
+			case *shortNode:
+				nn.flags.hash = n.cachedHash
+			}
 		}
 	}
 	// Mark the entire resolved subtree as dirty. This is critical for
