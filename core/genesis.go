@@ -697,9 +697,6 @@ func SystemContractAllocs() types.GenesisAlloc {
 		// EIP-4788 - Beacon block root in the EVM
 		params.BeaconRootsAddress: {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
 
-		// EIP-8304 - Trustless log and transaction index
-		params.IndexContractAddress: {Nonce: 1, Code: params.IndexContractCode, Balance: common.Big0},
-
 		// EIP-2935 - Historical block hashes from state
 		params.HistoryStorageAddress: {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
 
@@ -750,6 +747,9 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 	}
 	// Pre-deploy the system contracts the enabled forks call into
 	maps.Copy(genesis.Alloc, SystemContractAllocs())
+	// EIP-8304: pre-deploy the index contract. Kept out of SystemContractAllocs
+	// so test-chain genesis matches upstream until the fork's own genesis.
+	genesis.Alloc[params.IndexContractAddress] = types.Account{Nonce: 1, Code: params.IndexContractCode, Balance: common.Big0}
 	if faucet != nil {
 		genesis.Alloc[*faucet] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
 	}

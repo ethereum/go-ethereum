@@ -224,10 +224,10 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	}
 
 	// EIP-8304: build log index tables for the system call inside PostExecution.
-	// No-op when the contract is not deployed (non-dev chains); the gate becomes
-	// IsHegota at wiring time.
+	// No-op before the fork activates or when the contract is not deployed
+	// (non-dev chains).
 	var tablesToWrite []core.TableWrite
-	if work.evm.StateDB.GetCodeSize(params.IndexContractAddress) > 0 {
+	if miner.chainConfig.IsAmsterdam(work.header.Number, work.header.Time) && work.evm.StateDB.GetCodeSize(params.IndexContractAddress) > 0 {
 		tablesToWrite = core.BuildLogIndexForBlock(work.header.Number.Uint64(), work.receipts)
 	}
 

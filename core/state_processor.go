@@ -132,10 +132,10 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		blockAccessList.Merge(bal)
 		spanEnd(nil)
 	}
-	// EIP-8304: build the level-0 log index table root. No-op when the contract
-	// is not deployed (non-dev chains), the gate becomes IsHegota at wiring time.
+	// EIP-8304: build the level-0 log index table root. No-op before the fork
+	// activates or when the contract is not deployed (non-dev chains).
 	var tablesToWrite []TableWrite
-	if evm.StateDB.GetCodeSize(params.IndexContractAddress) > 0 {
+	if config.IsAmsterdam(block.Number(), block.Time()) && evm.StateDB.GetCodeSize(params.IndexContractAddress) > 0 {
 		tablesToWrite = BuildLogIndexForBlock(block.Number().Uint64(), receipts)
 	}
 	requests, bal, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, tablesToWrite, evm, uint32(len(block.Transactions())+1))
@@ -218,12 +218,14 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 	}
 
 	// EIP-8304: write log index table roots to the on-chain contract.
-	if len(tablesToWrite) > 0 && blockAccessList == nil {
-		blockAccessList = bal.NewConstructionBlockAccessList()
-	}
-	for _, tw := range tablesToWrite {
-		if err := ProcessLogIndexWrites(tw, rules, evm, blockAccessIndex, blockAccessList); err != nil {
-			return nil, nil, fmt.Errorf("failed to process log index write: %w", err)
+	if config.IsAmsterdam(number, time) {
+		if len(tablesToWrite) > 0 && blockAccessList == nil {
+			blockAccessList = bal.NewConstructionBlockAccessList()
+		}
+		for _, tw := range tablesToWrite {
+			if err := ProcessLogIndexWrites(tw, rules, evm, blockAccessIndex, blockAccessList); err != nil {
+				return nil, nil, fmt.Errorf("failed to process log index write: %w", err)
+			}
 		}
 	}
 	return requests, blockAccessList, nil
@@ -429,7 +431,7 @@ func ProcessLogIndexWrites(tw TableWrite, rules params.Rules, evm *vm.EVM, block
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
-	bal := evm.StateDB.Finalise(true)
+	bal := evm.StateDB.Finalise(evm.GetRules())
 	if err != nil {
 		return fmt.Errorf("EIP-8304 system call failed: %v", err)
 	}
