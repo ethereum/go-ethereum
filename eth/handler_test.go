@@ -17,7 +17,10 @@
 package eth
 
 import (
+	"crypto/ecdsa"
+	"fmt"
 	"maps"
+	"math"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -141,6 +144,15 @@ func (p *testTxPool) Add(txs []*types.Transaction, sync bool) []error {
 	}
 	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
 	return make([]error, len(txs))
+}
+
+func (p *testTxPool) Remove(txs ...*types.Transaction) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	for _, tx := range txs {
+		delete(p.txPool, tx.Hash())
+	}
 }
 
 // Pending returns all the transactions known to the pool
@@ -411,6 +423,307 @@ func benchmarkBroadcastChoice(b *testing.B, npeers int) {
 		set := choice.choosePeers(peers, txsenders[i])
 		if len(set) == 0 {
 			b.Fatal("empty result")
+		}
+	}
+}
+
+func BenchmarkBroadcastTransactions(b *testing.B) {
+	for _, peers := range []int{50, 200, 500} {
+		b.Run(fmt.Sprintf("peers=%d", peers), func(b *testing.B) {
+			for _, batch := range []int{1, 10, 100} {
+				b.Run(fmt.Sprintf("batch=%d", batch), func(b *testing.B) {
+					benchmarkBroadcastTransactions(b, peers, batch)
+				})
+			}
+		})
+	}
+}
+
+const (
+	maxBroadcastEventsPerSample       = 32
+	maxBroadcastTransactionsPerSample = 1600
+)
+
+// broadcastEventsPerSample bounds the source transactions in one sample to
+// keep the asynchronous peer queues bounded while still amortizing scheduling.
+func broadcastEventsPerSample(batch int) int {
+	return min(maxBroadcastEventsPerSample, max(1, maxBroadcastTransactionsPerSample/batch))
+}
+
+type broadcastBenchmarkBatch struct {
+	txs  types.Transactions
+	list []common.Hash
+}
+
+func makeBroadcastBenchmarkBatches(b *testing.B, signer types.Signer, first, count, batch int) []broadcastBenchmarkBatch {
+	// Give each transaction a distinct sender so the batch can produce distinct
+	// direct and announcement queues for each peer.
+	keys := make([]*ecdsa.PrivateKey, batch)
+	for i := range keys {
+		secret := make([]byte, 32)
+		secret[len(secret)-1] = byte(i + 1)
+		var err error
+		keys[i], err = crypto.ToECDSA(secret)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	batches := make([]broadcastBenchmarkBatch, count)
+	for i := range batches {
+		batches[i].txs = make(types.Transactions, batch)
+		batches[i].list = make([]common.Hash, batch)
+		for j := range batches[i].txs {
+			tx := types.NewTransaction(uint64((first+i)*batch+j), common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(1), nil)
+			var err error
+			batches[i].txs[j], err = types.SignTx(tx, signer, keys[j])
+			if err != nil {
+				b.Fatal(err)
+			}
+			batches[i].list[j] = batches[i].txs[j].Hash()
+		}
+	}
+	return batches
+}
+
+// benchmarkBroadcastTransactions measures the complete transaction-event path,
+// including direct transaction and announcement packets. Each sample groups
+// several events to amortize asynchronous peer scheduling and reports ns/op
+// per source event. It builds each group while the timer is stopped instead
+// of retaining inputs for every iteration. Run it with both one and four CPUs:
+// the former gives a repeatable single-P result and the latter exercises
+// concurrent peer writers.
+func benchmarkBroadcastTransactions(b *testing.B, peers, batch int) {
+	eventsPerSample := broadcastEventsPerSample(batch)
+	source := newTestHandler(ethconfig.FullSync)
+	peersToClose := make([]*eth.Peer, 0, peers)
+	writers := make([]*broadcastBenchmarkPeerRW, 0, peers)
+	b.Cleanup(func() {
+		source.close()
+		for _, peer := range peersToClose {
+			peer.Close()
+		}
+	})
+
+	delivered := make(chan struct{}, peers)
+	errs := make(chan error, 1)
+	for i := range peers {
+		id := enode.ID{byte(i), byte(i >> 8)}
+		writer := &broadcastBenchmarkPeerRW{delivered: delivered, errs: errs}
+		peer := eth.NewPeer(eth.ETH69, p2p.NewPeer(id, "", nil), writer, source.txpool, source.blobpool, source.chain.Config())
+		if err := source.handler.peers.registerPeer(peer, nil); err != nil {
+			b.Fatal(err)
+		}
+		peersToClose = append(peersToClose, peer)
+		writers = append(writers, writer)
+	}
+
+	signer := types.LatestSigner(source.chain.Config())
+	b.ResetTimer()
+	for i := range b.N {
+		b.StopTimer()
+		group := makeBroadcastBenchmarkBatches(b, signer, i*eventsPerSample, eventsPerSample, batch)
+		hashes := make(map[common.Hash]struct{}, len(group)*batch)
+		txs := make(types.Transactions, 0, len(group)*batch)
+		for _, event := range group {
+			for _, hash := range event.list {
+				hashes[hash] = struct{}{}
+			}
+			txs = append(txs, event.txs...)
+		}
+		for _, writer := range writers {
+			if err := writer.expect(hashes); err != nil {
+				b.Fatal(err)
+			}
+		}
+		b.StartTimer()
+		for _, event := range group {
+			source.txpool.Add(event.txs, false)
+		}
+		for range peers {
+			select {
+			case err := <-errs:
+				b.Fatal(err)
+			case <-delivered:
+			}
+		}
+		b.StopTimer()
+		var direct int
+		for _, writer := range writers {
+			direct += writer.directCount()
+		}
+		want := len(hashes) * int(math.Ceil(math.Sqrt(float64(peers))))
+		if direct != want {
+			b.Fatalf("got %d direct recipients, want %d", direct, want)
+		}
+		source.txpool.Remove(txs...)
+	}
+	b.ReportMetric(float64(b.Elapsed())/float64(b.N*eventsPerSample), "ns/op")
+}
+
+// broadcastBenchmarkPeerRW consumes the messages issued by the asynchronous
+// peer broadcasters and verifies the transaction hashes they carry.
+type broadcastBenchmarkPeerRW struct {
+	lock      sync.Mutex
+	expected  map[common.Hash]struct{}
+	seen      map[common.Hash]struct{}
+	direct    map[common.Hash]struct{}
+	delivered chan<- struct{}
+	errs      chan<- error
+}
+
+func (rw *broadcastBenchmarkPeerRW) ReadMsg() (p2p.Msg, error) {
+	return p2p.Msg{}, p2p.ErrPipeClosed
+}
+
+func (rw *broadcastBenchmarkPeerRW) expect(hashes map[common.Hash]struct{}) error {
+	rw.lock.Lock()
+	defer rw.lock.Unlock()
+
+	if rw.expected != nil {
+		return fmt.Errorf("previous broadcast is still pending")
+	}
+	rw.expected = hashes
+	rw.seen = make(map[common.Hash]struct{}, len(hashes))
+	rw.direct = make(map[common.Hash]struct{}, len(hashes))
+	return nil
+}
+
+func (rw *broadcastBenchmarkPeerRW) WriteMsg(msg p2p.Msg) error {
+	rw.lock.Lock()
+	defer rw.lock.Unlock()
+
+	if rw.expected == nil {
+		return rw.fail(fmt.Errorf("unexpected broadcast message %d", msg.Code))
+	}
+	switch msg.Code {
+	case eth.TransactionsMsg:
+		var txs types.Transactions
+		if err := msg.Decode(&txs); err != nil {
+			return rw.fail(err)
+		}
+		for _, tx := range txs {
+			if _, ok := rw.expected[tx.Hash()]; !ok {
+				return rw.fail(fmt.Errorf("unexpected broadcast transaction %v", tx.Hash()))
+			}
+			if _, ok := rw.seen[tx.Hash()]; ok {
+				return rw.fail(fmt.Errorf("duplicate broadcast transaction %v", tx.Hash()))
+			}
+			rw.seen[tx.Hash()] = struct{}{}
+			rw.direct[tx.Hash()] = struct{}{}
+		}
+	case eth.NewPooledTransactionHashesMsg:
+		var packet eth.NewPooledTransactionHashesPacket71
+		if err := msg.Decode(&packet); err != nil {
+			return rw.fail(err)
+		}
+		for _, hash := range packet.Hashes {
+			if _, ok := rw.expected[hash]; !ok {
+				return rw.fail(fmt.Errorf("unexpected transaction announcement %v", hash))
+			}
+			if _, ok := rw.seen[hash]; ok {
+				return rw.fail(fmt.Errorf("duplicate transaction announcement %v", hash))
+			}
+			rw.seen[hash] = struct{}{}
+		}
+	default:
+		if err := msg.Discard(); err != nil {
+			return rw.fail(err)
+		}
+		return rw.fail(fmt.Errorf("unexpected message code %d", msg.Code))
+	}
+	if len(rw.seen) == len(rw.expected) {
+		rw.expected = nil
+		rw.delivered <- struct{}{}
+	}
+	return nil
+}
+
+func (rw *broadcastBenchmarkPeerRW) directCount() int {
+	rw.lock.Lock()
+	defer rw.lock.Unlock()
+
+	return len(rw.direct)
+}
+
+func (rw *broadcastBenchmarkPeerRW) fail(err error) error {
+	select {
+	case rw.errs <- err:
+	default:
+	}
+	return err
+}
+
+func TestBroadcastBenchmarkPeerRW(t *testing.T) {
+	tx := types.NewTransaction(1, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(1), nil)
+	hashes := map[common.Hash]struct{}{tx.Hash(): {}}
+	delivered := make(chan struct{}, 1)
+	errs := make(chan error, 1)
+	writer := &broadcastBenchmarkPeerRW{delivered: delivered, errs: errs}
+
+	for _, message := range []struct {
+		code uint64
+		data any
+	}{
+		{eth.TransactionsMsg, types.Transactions{tx}},
+		{eth.NewPooledTransactionHashesMsg, eth.NewPooledTransactionHashesPacket71{
+			Types:  []byte{tx.Type()},
+			Sizes:  []uint32{uint32(tx.Size())},
+			Hashes: []common.Hash{tx.Hash()},
+		}},
+	} {
+		if err := writer.expect(hashes); err != nil {
+			t.Fatal(err)
+		}
+		if message.code == eth.TransactionsMsg {
+			if err := writer.expect(hashes); err == nil {
+				t.Fatal("accepted a new expected broadcast before delivering the previous one")
+			}
+		}
+		if err := p2p.Send(writer, message.code, message.data); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-delivered:
+		case err := <-errs:
+			t.Fatal(err)
+		default:
+			t.Fatal("message was not delivered")
+		}
+		wantDirect := 0
+		if message.code == eth.TransactionsMsg {
+			wantDirect = 1
+		}
+		if got := writer.directCount(); got != wantDirect {
+			t.Errorf("direct count %d, want %d", got, wantDirect)
+		}
+	}
+}
+
+func TestBroadcastBenchmarkPeerRWRejectsDuplicates(t *testing.T) {
+	tx := types.NewTransaction(1, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(1), nil)
+	hashes := map[common.Hash]struct{}{tx.Hash(): {}}
+
+	for _, message := range []struct {
+		code uint64
+		data any
+	}{
+		{eth.TransactionsMsg, types.Transactions{tx, tx}},
+		{eth.NewPooledTransactionHashesMsg, eth.NewPooledTransactionHashesPacket71{
+			Types:  []byte{tx.Type(), tx.Type()},
+			Sizes:  []uint32{uint32(tx.Size()), uint32(tx.Size())},
+			Hashes: []common.Hash{tx.Hash(), tx.Hash()},
+		}},
+	} {
+		writer := &broadcastBenchmarkPeerRW{
+			delivered: make(chan struct{}, 1),
+			errs:      make(chan error, 1),
+		}
+		if err := writer.expect(hashes); err != nil {
+			t.Fatal(err)
+		}
+		if err := p2p.Send(writer, message.code, message.data); err == nil {
+			t.Fatal("accepted duplicate transaction")
 		}
 	}
 }
