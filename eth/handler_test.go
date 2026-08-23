@@ -17,12 +17,14 @@
 package eth
 
 import (
+	"cmp"
 	"crypto/ecdsa"
 	"fmt"
 	"maps"
 	"math"
 	"math/big"
 	"math/rand"
+	"slices"
 	"sort"
 	"sync"
 	"testing"
@@ -390,6 +392,70 @@ func TestBroadcastChoice(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestBroadcastChoiceMatchesSort(t *testing.T) {
+	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
+	rand := rand.New(rand.NewSource(33))
+	peers := createTestPeers(rand, 500)
+	defer closePeers(peers)
+
+	senders := make([]common.Address, 8)
+	for i := range senders {
+		rand.Read(senders[i][:])
+	}
+	for _, count := range []int{0, 1, 2, 3, 49, 50, 200, 500} {
+		for i, sender := range senders {
+			choice := newBroadcastChoice(self, [16]byte{1})
+			got := maps.Clone(choice.choosePeers(peers[:count], sender))
+
+			want := make(map[*ethPeer]struct{})
+			scores := slices.Clone(choice.tmp)
+			sortBroadcastPeersReference(scores)
+			for _, peer := range scores[:int(math.Ceil(math.Sqrt(float64(count))))] {
+				want[peer.p] = struct{}{}
+			}
+			if !maps.Equal(got, want) {
+				t.Errorf("count %d sender %d: choice differs from full sort", count, i)
+			}
+		}
+	}
+}
+
+func TestBroadcastChoiceTiedCutoff(t *testing.T) {
+	scores := []broadcastPeer{
+		{p: new(ethPeer), score: 3},
+		{p: new(ethPeer), score: 5},
+		{p: new(ethPeer), score: 3},
+		{p: new(ethPeer), score: 1},
+	}
+	choice := &broadcastChoice{tmp: slices.Clone(scores)}
+	got := choice.selectPeers(2)
+
+	want := slices.Clone(scores)
+	sortBroadcastPeersReference(want)
+	for i := range want {
+		if choice.tmp[i] != want[i] {
+			t.Fatal("tied cutoff did not use the full-sort order")
+		}
+	}
+	gotSet := make(map[*ethPeer]struct{}, len(got))
+	wantSet := make(map[*ethPeer]struct{}, 2)
+	for _, peer := range got {
+		gotSet[peer.p] = struct{}{}
+	}
+	for _, peer := range want[:2] {
+		wantSet[peer.p] = struct{}{}
+	}
+	if !maps.Equal(gotSet, wantSet) {
+		t.Fatal("tied cutoff selected different peers than full sort")
+	}
+}
+
+func sortBroadcastPeersReference(peers []broadcastPeer) {
+	slices.SortFunc(peers, func(a, b broadcastPeer) int {
+		return cmp.Compare(a.score, b.score)
+	})
 }
 
 func BenchmarkBroadcastChoice(b *testing.B) {
