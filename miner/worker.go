@@ -228,7 +228,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	// (non-dev chains).
 	var tablesToWrite []core.TableWrite
 	if miner.chainConfig.IsAmsterdam(work.header.Number, work.header.Time) && work.evm.StateDB.GetCodeSize(params.IndexContractAddress) > 0 {
-		tablesToWrite = core.BuildLogIndexForBlock(work.header.Number.Uint64(), work.receipts)
+		tablesToWrite = core.BuildLogIndexForBlock(work.header.Number.Uint64(), work.header.ParentHash, work.receipts)
 	}
 
 	// Collect consensus-layer requests if Prague is enabled.

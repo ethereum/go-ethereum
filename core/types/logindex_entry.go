@@ -19,8 +19,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-
-	"github.com/ethereum/go-ethereum/common"
+	"fmt"
 )
 
 // EntryType discriminates the kind of lookup a single index entry provides.
@@ -28,11 +27,14 @@ import (
 // The entry type determines how clients interpret the index value and which
 // position fields are meaningful:
 //
-//   - EntryTypeBlock:       index value is a block hash; tx/log indices are zero.
-//   - EntryTypeTransaction: index value is a tx hash; log index is zero.
+//   - EntryTypeBlock:       index value is a block hash; no position tail.
+//   - EntryTypeTransaction: index value is a tx hash; the trailing position
+//     field holds the cumulative log count of the block before the tx.
 //   - EntryTypeLogAddress:  index value is the log's contract address.
 //   - EntryTypeLogTopic0-3: index value is the log's topic[i].
-type EntryType uint8
+//
+// On the wire the type id is a 2-byte big-endian field.
+type EntryType uint16
 
 const (
 	EntryTypeBlock       EntryType = 0 // block hash lookup
@@ -44,45 +46,136 @@ const (
 	EntryTypeLogTopic3   EntryType = 6 // log topic[3] lookup
 )
 
-// IndexEntrySize is the fixed size of each record in the sorted index table.
-const IndexEntrySize = 64
+// Field sizes of the EIP-8304 entry encodings. All numbers are fixed-size
+// big-endian. The layouts are parameterized here on purpose: if the spec
+// changes a field size, edit this block and the offset arithmetic in
+// EncodeEntry and EntryFields stays correct by construction.
+const (
+	EntryTypeSize     = 2 // type id
+	BlockHashSize     = 32
+	TxHashSize        = 32
+	AddressSize       = 20
+	TopicSize         = 32
+	BlockNumberSize   = 8
+	TxIndexSize       = 4
+	LogIndexSize      = 4 // log index within a transaction
+	CumulativeLogSize = 4 // logs before the transaction in its block
+)
 
-// IndexEntry represents a single 64-byte record in the sorted index table.
+// Total sizes of the four entry kinds, derived at compile time from the field
+// sizes above: type || content || block number || tx index || log index.
+const (
+	BlockEntrySize       = EntryTypeSize + BlockHashSize + BlockNumberSize                                       // 42
+	TransactionEntrySize = EntryTypeSize + TxHashSize + BlockNumberSize + TxIndexSize + CumulativeLogSize        // 50
+	LogAddressEntrySize  = EntryTypeSize + AddressSize + BlockNumberSize + TxIndexSize + LogIndexSize            // 38
+	LogTopicEntrySize    = EntryTypeSize + TopicSize + BlockNumberSize + TxIndexSize + LogIndexSize              // 50
+)
+
+// IndexEntry is a single variable-length record of a sorted EIP-8304 index
+// table.
 //
 // Layout (big-endian):
 //
-//	[0]        entry type (1 byte)
-//	[1:33]     index value (32 bytes)
-//	[33:41]    block number (8 bytes)
-//	[41:45]    transaction index (4 bytes)
-//	[45:49]    log index (4 bytes)
-//	[49:64]    zero-reserved (15 bytes)
+//	type id (2) || content || block number (8) [|| tx index (4) || log index (4)]
 //
-// Sorting is lexicographical on the full 64 bytes, giving ordering:
-// entry_type, index_value, block_number, tx_index, log_index.
-type IndexEntry [IndexEntrySize]byte
+// The content field is 32 bytes for block, transaction and topic entries and
+// 20 bytes for address entries, giving the total sizes BlockEntrySize,
+// TransactionEntrySize, LogAddressEntrySize and LogTopicEntrySize. Block
+// entries stop after the block number; the other entry kinds carry the tx
+// index and log index tail, which for transaction entries is the cumulative
+// log count of the block before the transaction.
+//
+// Sorting is lexicographical on the full encoding, giving the ordering:
+// type id, content, block number, tx index, log index.
+type IndexEntry []byte
 
-// EncodeEntry packs the components into a fixed-size 64-byte index entry.
-// Non-applicable position fields should be passed as zero.
-func EncodeEntry(typ EntryType, value common.Hash, blockNum uint64, txIdx uint32, logIdx uint32) IndexEntry {
-	var e IndexEntry
-	e[0] = byte(typ)
-	copy(e[1:33], value[:])
-	binary.BigEndian.PutUint64(e[33:41], blockNum)
-	binary.BigEndian.PutUint32(e[41:45], txIdx)
-	binary.BigEndian.PutUint32(e[45:49], logIdx)
-	// bytes 49..63 remain zero
+// contentSize returns the encoded length of the searchable content field for
+// the given entry type.
+func contentSize(typ EntryType) int {
+	switch typ {
+	case EntryTypeBlock:
+		return BlockHashSize
+	case EntryTypeTransaction:
+		return TxHashSize
+	case EntryTypeLogAddress:
+		return AddressSize
+	case EntryTypeLogTopic0, EntryTypeLogTopic1, EntryTypeLogTopic2, EntryTypeLogTopic3:
+		return TopicSize
+	default:
+		panic(fmt.Sprintf("types: unknown entry type %d", typ))
+	}
+}
+
+// entrySize returns the total encoded length of an entry of the given type.
+func entrySize(typ EntryType) int {
+	switch typ {
+	case EntryTypeBlock:
+		return BlockEntrySize
+	case EntryTypeTransaction:
+		return TransactionEntrySize
+	case EntryTypeLogAddress:
+		return LogAddressEntrySize
+	case EntryTypeLogTopic0, EntryTypeLogTopic1, EntryTypeLogTopic2, EntryTypeLogTopic3:
+		return LogTopicEntrySize
+	default:
+		panic(fmt.Sprintf("types: unknown entry type %d", typ))
+	}
+}
+
+// EncodeEntry packs the components into a variable-length index entry. content
+// must be exactly AddressSize (20) bytes for EntryTypeLogAddress and 32 bytes
+// otherwise. For EntryTypeTransaction, logIdx is the cumulative log count of
+// the block before the transaction; for all other types it is the log index
+// within the transaction. Block entries have no position tail, so txIdx and
+// logIdx are ignored for them.
+func EncodeEntry(typ EntryType, content []byte, blockNum uint64, txIdx uint32, logIdx uint32) IndexEntry {
+	if want := contentSize(typ); len(content) != want {
+		panic(fmt.Sprintf("types: entry content length %d, want %d for type %d", len(content), want, typ))
+	}
+	e := make(IndexEntry, entrySize(typ))
+	off := 0
+	binary.BigEndian.PutUint16(e[off:off+EntryTypeSize], uint16(typ))
+	off += EntryTypeSize
+	copy(e[off:], content)
+	off += len(content)
+	binary.BigEndian.PutUint64(e[off:off+BlockNumberSize], blockNum)
+	off += BlockNumberSize
+	if typ == EntryTypeBlock {
+		return e
+	}
+	binary.BigEndian.PutUint32(e[off:off+TxIndexSize], txIdx)
+	off += TxIndexSize
+	binary.BigEndian.PutUint32(e[off:off+LogIndexSize], logIdx)
 	return e
 }
 
-// EntryFields decodes an IndexEntry back to its components.
-func EntryFields(entry IndexEntry) (typ EntryType, value common.Hash, blockNum uint64, txIdx uint32, logIdx uint32) {
-	typ = EntryType(entry[0])
-	copy(value[:], entry[1:33])
-	blockNum = binary.BigEndian.Uint64(entry[33:41])
-	txIdx = binary.BigEndian.Uint32(entry[41:45])
-	logIdx = binary.BigEndian.Uint32(entry[45:49])
-	return
+// EntryFields decodes an entry back into its components. content is a fresh
+// copy and does not alias the entry. It returns an error when the entry is
+// shorter than the type id, carries an unknown type id, or its length does not
+// match the type's fixed layout.
+func EntryFields(entry IndexEntry) (typ EntryType, content []byte, blockNum uint64, txIdx uint32, logIdx uint32, err error) {
+	if len(entry) < EntryTypeSize {
+		return 0, nil, 0, 0, 0, fmt.Errorf("types: entry too short: %d bytes", len(entry))
+	}
+	typ = EntryType(binary.BigEndian.Uint16(entry[:EntryTypeSize]))
+	if typ > EntryTypeLogTopic3 {
+		return 0, nil, 0, 0, 0, fmt.Errorf("types: unknown entry type %d", typ)
+	}
+	if len(entry) != entrySize(typ) {
+		return 0, nil, 0, 0, 0, fmt.Errorf("types: entry length %d, want %d for type %d", len(entry), entrySize(typ), typ)
+	}
+	content = make([]byte, contentSize(typ))
+	copy(content, entry[EntryTypeSize:EntryTypeSize+len(content)])
+	off := EntryTypeSize + len(content)
+	blockNum = binary.BigEndian.Uint64(entry[off : off+BlockNumberSize])
+	if typ == EntryTypeBlock {
+		return typ, content, blockNum, 0, 0, nil
+	}
+	off += BlockNumberSize
+	txIdx = binary.BigEndian.Uint32(entry[off : off+TxIndexSize])
+	off += TxIndexSize
+	logIdx = binary.BigEndian.Uint32(entry[off : off+LogIndexSize])
+	return typ, content, blockNum, txIdx, logIdx, nil
 }
 
 // CompareEntries returns the result of a lexicographic byte comparison
@@ -93,8 +186,11 @@ func EntryFields(entry IndexEntry) (typ EntryType, value common.Hash, blockNum u
 //	-1 if a < b
 //	 0 if a == b
 //	+1 if a > b
+//
+// Since every field is fixed-size big-endian, this equals the field-wise
+// ordering: type id, content, block number, tx index, log index.
 func CompareEntries(a, b IndexEntry) int {
-	return bytes.Compare(a[:], b[:])
+	return bytes.Compare(a, b)
 }
 
 // EntryTypeString returns a human-readable name for the entry type,

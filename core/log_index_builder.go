@@ -29,9 +29,11 @@ type TableWrite struct {
 }
 
 // BuildLogIndexForBlock builds the EIP-8304 level-0 log index table for the given
-// block. Interim implementation: fixed-size entries and a flat keccak root
-func BuildLogIndexForBlock(blockNumber uint64, receipts types.Receipts) []TableWrite {
+// block. parentHash is the hash of the parent block, whose block entry is added
+// with the spec's one-block delay (none for the genesis block). Interim
+// implementation: variable-length entries and a flat keccak root.
+func BuildLogIndexForBlock(blockNumber uint64, parentHash common.Hash, receipts types.Receipts) []TableWrite {
 	b0 := types.NewIndexBuilder()
-	b0.AddBlockEntries(blockNumber, receipts)
+	b0.AddBlockEntries(parentHash, blockNumber, receipts)
 	return []TableWrite{{FirstBlock: blockNumber, TableSize: 1, Root: b0.Build()}}
 }
