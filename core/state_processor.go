@@ -136,7 +136,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	// activates or when the contract is not deployed (non-dev chains).
 	var tablesToWrite []TableWrite
 	if config.IsAmsterdam(block.Number(), block.Time()) && evm.StateDB.GetCodeSize(params.IndexContractAddress) > 0 {
-		tablesToWrite = BuildLogIndexForBlock(block.Number().Uint64(), receipts)
+		tablesToWrite = BuildLogIndexForBlock(block.Number().Uint64(), block.ParentHash(), receipts)
 	}
 	requests, bal, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, tablesToWrite, evm, uint32(len(block.Transactions())+1))
 	if err != nil {
