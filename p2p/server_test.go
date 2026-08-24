@@ -38,20 +38,20 @@ import (
 )
 
 type testTransport struct {
-	*rlpxTransport
+	*wireTransport
 	rpub     *ecdsa.PublicKey
 	closeErr error
 }
 
 func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn, dialDest *ecdsa.PublicKey) transport {
-	wrapped := newRLPX(fd, dialDest).(*rlpxTransport)
-	wrapped.conn.InitWithSecrets(rlpx.Secrets{
+	wrapped := newRLPX(fd, dialDest).(*wireTransport)
+	wrapped.conn.(*rlpx.Conn).InitWithSecrets(rlpx.Secrets{
 		AES:        make([]byte, 16),
 		MAC:        make([]byte, 16),
 		EgressMAC:  sha256.New(),
 		IngressMAC: sha256.New(),
 	})
-	return &testTransport{rpub: rpub, rlpxTransport: wrapped}
+	return &testTransport{rpub: rpub, wireTransport: wrapped}
 }
 
 func (c *testTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
@@ -70,12 +70,12 @@ func (c *testTransport) close(err error) {
 
 func startTestServer(t *testing.T, remoteKey *ecdsa.PublicKey, pf func(*Peer)) *Server {
 	config := Config{
-		Name:        "test",
-		MaxPeers:    10,
-		ListenAddr:  "127.0.0.1:0",
-		NoDiscovery: true,
-		PrivateKey:  newkey(),
-		Logger:      testlog.Logger(t, log.LvlTrace),
+		Name:          "test",
+		MaxPeers:      10,
+		ListenTCPAddr: "127.0.0.1:0",
+		NoDiscovery:   true,
+		PrivateKey:    newkey(),
+		Logger:        testlog.Logger(t, log.LvlTrace),
 	}
 	server := &Server{
 		Config:      config,
@@ -104,7 +104,7 @@ func TestServerListen(t *testing.T) {
 	defer srv.Stop()
 
 	// dial the test server
-	conn, err := net.DialTimeout("tcp", srv.ListenAddr, 5*time.Second)
+	conn, err := net.DialTimeout("tcp", srv.ListenTCPAddr, 5*time.Second)
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
@@ -214,19 +214,19 @@ func TestServerRemovePeerDisconnect(t *testing.T) {
 		Logger:      testlog.Logger(t, log.LvlTrace).New("server", "1"),
 	}}
 	srv2 := &Server{Config: Config{
-		PrivateKey:  newkey(),
-		MaxPeers:    1,
-		NoDiscovery: true,
-		NoDial:      true,
-		ListenAddr:  "127.0.0.1:0",
-		Logger:      testlog.Logger(t, log.LvlTrace).New("server", "2"),
+		PrivateKey:    newkey(),
+		MaxPeers:      1,
+		NoDiscovery:   true,
+		NoDial:        true,
+		ListenTCPAddr: "127.0.0.1:0",
+		Logger:        testlog.Logger(t, log.LvlTrace).New("server", "2"),
 	}}
 	srv1.Start()
 	defer srv1.Stop()
 	srv2.Start()
 	defer srv2.Stop()
 
-	s := strings.Split(srv2.ListenAddr, ":")
+	s := strings.Split(srv2.ListenTCPAddr, ":")
 	if len(s) != 2 {
 		t.Fatal("invalid ListenAddr")
 	}
@@ -519,13 +519,13 @@ func TestServerInboundThrottle(t *testing.T) {
 	newTransportCalled := make(chan struct{})
 	srv := &Server{
 		Config: Config{
-			PrivateKey:  newkey(),
-			ListenAddr:  "127.0.0.1:0",
-			MaxPeers:    10,
-			NoDial:      true,
-			NoDiscovery: true,
-			Protocols:   []Protocol{discard},
-			Logger:      testlog.Logger(t, log.LvlTrace),
+			PrivateKey:    newkey(),
+			ListenTCPAddr: "127.0.0.1:0",
+			MaxPeers:      10,
+			NoDial:        true,
+			NoDiscovery:   true,
+			Protocols:     []Protocol{discard},
+			Logger:        testlog.Logger(t, log.LvlTrace),
 		},
 		newTransport: func(fd net.Conn, dialDest *ecdsa.PublicKey) transport {
 			newTransportCalled <- struct{}{}
@@ -542,7 +542,7 @@ func TestServerInboundThrottle(t *testing.T) {
 	defer srv.Stop()
 
 	// Dial the test server.
-	conn, err := net.DialTimeout("tcp", srv.ListenAddr, timeout)
+	conn, err := net.DialTimeout("tcp", srv.ListenTCPAddr, timeout)
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestServerInboundThrottle(t *testing.T) {
 
 	// Dial again. This time the server should close the connection immediately.
 	connClosed := make(chan struct{}, 1)
-	conn, err = net.DialTimeout("tcp", srv.ListenAddr, timeout)
+	conn, err = net.DialTimeout("tcp", srv.ListenTCPAddr, timeout)
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
 	}
@@ -584,7 +584,7 @@ func TestServerDiscoveryV5FailureRollsBackV4(t *testing.T) {
 	srv := &Server{
 		Config: Config{
 			PrivateKey:       newkey(),
-			ListenAddr:       "",
+			ListenTCPAddr:    "",
 			DiscAddr:         "127.0.0.1:0",
 			MaxPeers:         5,
 			DiscoveryV4:      true,

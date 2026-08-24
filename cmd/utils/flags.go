@@ -1301,7 +1301,7 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 // line flags
 func setListenAddress(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.IsSet(ListenPortFlag.Name) {
-		cfg.ListenAddr = fmt.Sprintf(":%d", ctx.Int(ListenPortFlag.Name))
+		cfg.ListenTCPAddr = fmt.Sprintf(":%d", ctx.Int(ListenPortFlag.Name))
 	}
 	if ctx.IsSet(DiscoveryPortFlag.Name) {
 		cfg.DiscAddr = fmt.Sprintf(":%d", ctx.Int(DiscoveryPortFlag.Name))
@@ -1521,7 +1521,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.Bool(DeveloperFlag.Name) {
 		// --dev mode can't use p2p networking.
 		cfg.MaxPeers = 0
-		cfg.ListenAddr = ""
+		cfg.ListenTCPAddr = ""
 		cfg.NoDial = true
 		cfg.NoDiscovery = true
 		cfg.DiscoveryV5 = false
