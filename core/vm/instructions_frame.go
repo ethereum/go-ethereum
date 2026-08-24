@@ -394,7 +394,7 @@ func memorySigParam(stack *Stack) (uint64, bool) {
 // CALLDATACOPY-like costs for the copy variant (param 0x04).
 func gasSigParam(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	if !stack.back(1).Eq(uint256.NewInt(0x04)) {
-		return GasCosts{RegularGas: GasQuickStep}, nil
+		return GasCosts{ExecutionGas: GasQuickStep}, nil
 	}
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
@@ -402,7 +402,7 @@ func gasSigParam(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	}
 	if stack.len() < 5 {
 		// The stack underflow surfaces in the instruction itself.
-		return GasCosts{RegularGas: gas + GasFastestStep}, nil
+		return GasCosts{ExecutionGas: gas + GasFastestStep}, nil
 	}
 	words, overflow := stack.back(2).Uint64WithOverflow()
 	if overflow {
@@ -414,5 +414,5 @@ func gasSigParam(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if gas, overflow = math.SafeAdd(gas, words); overflow {
 		return GasCosts{}, ErrGasUintOverflow
 	}
-	return GasCosts{RegularGas: gas + GasFastestStep}, nil
+	return GasCosts{ExecutionGas: gas + GasFastestStep}, nil
 }

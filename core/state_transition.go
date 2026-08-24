@@ -842,9 +842,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// The budget of a frame transaction was reserved in buyGas; its
 	// intrinsic cost is charged against it here.
 	if isFrameTx {
-		prior, sufficient := st.gasRemaining.Charge(vm.GasCosts{RegularGas: intrinsicGas})
+		prior, sufficient := st.gasRemaining.Charge(vm.GasCosts{ExecutionGas: intrinsicGas})
 		if !sufficient {
-			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, intrinsicGas)
+			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.ExecutionGas, intrinsicGas)
 		}
 		if st.evm.Config.Tracer.HasGasHook() {
 			st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
@@ -1177,7 +1177,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 		}
 		st.state.AddBalance(*fc.Payer, new(uint256.Int).Sub(fc.MaxCost, actualFee), tracing.BalanceIncreaseGasReturn)
 		if st.evm.Config.Tracer.HasGasHook() {
-			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
+			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Execution: gasLeft}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
 		}
 	} else if gasLeft > 0 {
 		refund := new(uint256.Int).Mul(uint256.NewInt(gasLeft), st.msg.GasPrice)
@@ -1358,7 +1358,7 @@ func (st *stateTransition) chargeCallRecipient(budget *vm.GasBudget, to common.A
 		// charges above are always at the cold rate.
 		//
 		// The delegation-target is already warmed before, no double warming here.
-		cost.RegularGas += params.ColdAccountAccessAmsterdam
+		cost.ExecutionGas += params.ColdAccountAccessAmsterdam
 	}
 	if cost == (vm.GasCosts{}) {
 		return true
@@ -1561,8 +1561,8 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		} else {
 			frameStateCredit = uint64(-leftover.UsedStateGas)
 		}
-		frameGasUsed := frame.GasLimit + frameStateCredit - leftover.RegularGas - leftover.StateGas
-		if _, ok := st.gasRemaining.Charge(vm.GasCosts{RegularGas: frameGasUsed - frameStateGas, StateGas: frameStateGas}); !ok {
+		frameGasUsed := frame.GasLimit + frameStateCredit - leftover.ExecutionGas - leftover.StateGas
+		if _, ok := st.gasRemaining.Charge(vm.GasCosts{ExecutionGas: frameGasUsed - frameStateGas, StateGas: frameStateGas}); !ok {
 			return nil, nil, fmt.Errorf("%w: frame gas accounting underflow", ErrIntrinsicGas)
 		}
 
