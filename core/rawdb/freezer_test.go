@@ -564,7 +564,7 @@ func TestTruncateHeadBelowGroupTail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { f.Close() }()
 
 	const items = uint64(100)
 	if _, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
