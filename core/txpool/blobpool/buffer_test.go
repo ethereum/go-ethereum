@@ -61,7 +61,10 @@ func TestSortCells(t *testing.T) {
 		},
 		custody: custody,
 	}
-	sorted, resultCustody := sortCells(entry, blobCount)
+	sorted, resultCustody, err := sortCells(entry, blobCount)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	resultIndices := resultCustody.Indices()
 	if len(resultIndices) != 4 {

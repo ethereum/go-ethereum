@@ -90,6 +90,23 @@ type PeerCellDelivery struct {
 	Indices []uint64       // custody indices provided by this peer
 }
 
+// merge folds a subsequent delivery from the same peer in, keeping the
+// blob-major cell order.
+func (d *PeerCellDelivery) merge(cells []kzg4844.Cell, indices []uint64) {
+	var (
+		n1        = len(d.Indices)
+		n2        = len(indices)
+		blobCount = len(d.Cells) / n1
+		merged    = make([]kzg4844.Cell, 0, len(d.Cells)+len(cells))
+	)
+	for b := range blobCount {
+		merged = append(merged, d.Cells[b*n1:(b+1)*n1]...)
+		merged = append(merged, cells[b*n2:(b+1)*n2]...)
+	}
+	d.Cells = merged
+	d.Indices = append(d.Indices, indices...)
+}
+
 type fetchStatus struct {
 	fetching   types.CustodyBitmap          // To avoid fetching cells which had already been fetched / currently being fetched
 	fetched    []uint64                     // Custody indices that have been fetched (per-blob, same for all blobs)
@@ -192,6 +209,7 @@ func NewBlobFetcher(fn BlobFetcherFunctions, custody types.CustodyBitmap, rand r
 // Notify is called when a Type 3 transaction is observed on the network. (TransactionPacket / NewPooledTransactionHashesPacket)
 func (f *BlobFetcher) Notify(peer string, txs []common.Hash, cells types.CustodyBitmap) error {
 	blobAnnounceInMeter.Mark(int64(len(txs)))
+
 	anns := make([]common.Hash, 0)
 	for _, tx := range txs {
 		if f.fn.HasPayload(tx) {
@@ -199,8 +217,11 @@ func (f *BlobFetcher) Notify(peer string, txs []common.Hash, cells types.Custody
 		}
 		anns = append(anns, tx)
 	}
-
-	blobAnnounce := &blobTxAnnounce{origin: peer, txs: anns, cells: cells}
+	blobAnnounce := &blobTxAnnounce{
+		origin: peer,
+		txs:    anns,
+		cells:  cells,
+	}
 	select {
 	case f.notify <- blobAnnounce:
 		return nil
@@ -522,9 +543,16 @@ func (f *BlobFetcher) loop() {
 				indices := delivery.cellBitmap.Indices()
 				if len(indices) > 0 {
 					status := f.fetches[hash]
-					status.deliveries[delivery.origin] = &PeerCellDelivery{
-						Cells:   delivery.cells[i],
-						Indices: indices,
+
+					// A peer may deliver again after a re-announcement; merge
+					// instead of overwriting
+					if prev, ok := status.deliveries[delivery.origin]; ok {
+						prev.merge(delivery.cells[i], indices)
+					} else {
+						status.deliveries[delivery.origin] = &PeerCellDelivery{
+							Cells:   delivery.cells[i],
+							Indices: indices,
+						}
 					}
 					status.fetched = append(status.fetched, indices...)
 				}
