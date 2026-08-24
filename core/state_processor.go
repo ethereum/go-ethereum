@@ -177,13 +177,13 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 }
 
 // ProcessExpiryVerifierDeploy installs the canonical EIP-8141 expiry verifier
-// runtime code at EXPIRY_VERIFIER with nonce 1 on the Bogota transition
-// block. Networks that activate Bogota at genesis must carry the code in the
+// runtime code at EXPIRY_VERIFIER on the Bogota transition block. Only the
+// code is installed; the account's nonce and balance are left untouched.
+// Networks that activate Bogota at genesis must carry the code in the
 // genesis allocation instead.
 func ProcessExpiryVerifierDeploy(evm *vm.EVM, blockAccessList *bal.ConstructionBlockAccessList) {
-	evm.StateDB.SetNonce(params.FrameTxExpiryVerifier, 1, tracing.NonceChangeUnspecified)
 	evm.StateDB.SetCode(params.FrameTxExpiryVerifier, params.FrameTxExpiryVerifierCode, tracing.CodeChangeUnspecified)
-	blockAccessList.Merge(evm.StateDB.Finalise(true))
+	blockAccessList.Merge(evm.StateDB.Finalise(evm.GetRules()))
 }
 
 // PostExecution processes post-execution system calls when Prague is enabled.
