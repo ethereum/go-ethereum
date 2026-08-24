@@ -543,7 +543,10 @@ func (f *BlobFetcher) loop() {
 				indices := delivery.cellBitmap.Indices()
 				if len(indices) > 0 {
 					status := f.fetches[hash]
-
+    				if len(cells) == 0 || len(cells)%len(indices) != 0 {
+        				f.fn.DropPeer(delivery.origin)
+        				continue
+    				}
 					// A peer may deliver again after a re-announcement; merge
 					// instead of overwriting
 					if prev, ok := status.deliveries[delivery.origin]; ok {
