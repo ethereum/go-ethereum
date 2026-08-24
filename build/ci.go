@@ -160,6 +160,9 @@ var (
 
 	// This is where the tests should be unpacked.
 	executionSpecTestsDir = "tests/spec-tests"
+
+	// This is where the consensus-spec-tests should be unpacked.
+	consensusSpecTestsDir = "tests/consensus-spec-tests"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -398,6 +401,7 @@ func doTest(cmdline []string) {
 	// Get test fixtures.
 	if !*short {
 		downloadSpecTestFixtures(csdb, *cachedir)
+		downloadConsensusSpecTestFixtures(csdb, *cachedir)
 	}
 
 	// Configure the toolchain.
@@ -461,6 +465,19 @@ func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string
 		log.Fatal(err)
 	}
 	return filepath.Join(cachedir, base)
+}
+
+// downloadConsensusSpecTestFixtures downloads and extracts the general test
+// vectors of the consensus-spec-tests.
+func downloadConsensusSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
+	archivePath := filepath.Join(cachedir, "general.tar.gz")
+	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
+		log.Fatal(err)
+	}
+	if err := build.ExtractArchive(archivePath, consensusSpecTestsDir); err != nil {
+		log.Fatal(err)
+	}
+	return consensusSpecTestsDir
 }
 
 // doCheckGenerate ensures that re-generating generated files does not cause
