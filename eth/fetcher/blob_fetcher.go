@@ -17,6 +17,7 @@
 package fetcher
 
 import (
+	"errors"
 	"fmt"
 	"iter"
 	"math/rand"
@@ -563,6 +564,8 @@ func (f *BlobFetcher) loop() {
 				indices := delivery.cellBitmap.Indices()
 				if len(indices) > 0 {
 					status := f.fetches[hash]
+					cells := delivery.cells[i]
+
     				if len(cells) == 0 || len(cells)%len(indices) != 0 {
         				f.fn.DropPeer(delivery.origin)
         				continue
