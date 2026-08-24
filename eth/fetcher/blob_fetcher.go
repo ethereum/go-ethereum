@@ -92,19 +92,39 @@ type PeerCellDelivery struct {
 
 // merge folds a subsequent delivery from the same peer in, keeping the
 // blob-major cell order.
-func (d *PeerCellDelivery) merge(cells []kzg4844.Cell, indices []uint64) {
+func (d *PeerCellDelivery) merge(cells []kzg4844.Cell, indices []uint64) error {
 	var (
-		n1        = len(d.Indices)
-		n2        = len(indices)
-		blobCount = len(d.Cells) / n1
-		merged    = make([]kzg4844.Cell, 0, len(d.Cells)+len(cells))
+		n1            = len(d.Indices)
+		n2            = len(indices)
+		blobCount     = len(d.Cells) / n1
+		merged        = make([]kzg4844.Cell, 0, len(d.Cells)+len(cells))
+		mergedIndices = make([]uint64, 0, len(d.Cells)+len(cells))
 	)
+	if len(cells) != blobCount*n2 {
+		return errors.New("inconsistent cell count across deliveries")
+	}
+
 	for b := range blobCount {
-		merged = append(merged, d.Cells[b*n1:(b+1)*n1]...)
-		merged = append(merged, cells[b*n2:(b+1)*n2]...)
+		i, j := 0, 0
+		for i < n1 || j < n2 {
+			if j == n2 || (i < n1 && d.Indices[i] < indices[j]) {
+				merged = append(merged, d.Cells[b*n1+i])
+				if b == 0 {
+					mergedIndices = append(mergedIndices, d.Indices[i])
+				}
+				i++
+			} else {
+				merged = append(merged, cells[b*n2+j])
+				if b == 0 {
+					mergedIndices = append(mergedIndices, indices[j])
+				}
+				j++
+			}
+		}
 	}
 	d.Cells = merged
-	d.Indices = append(d.Indices, indices...)
+	d.Indices = mergedIndices
+	return nil
 }
 
 type fetchStatus struct {

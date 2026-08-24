@@ -1164,7 +1164,7 @@ func TestPeerCellDeliveryMerge(t *testing.T) {
 	}
 	d.merge([]kzg4844.Cell{cell(0, 2), cell(0, 5), cell(1, 2), cell(1, 5)}, []uint64{2, 5})
 
-	wantIndices := []uint64{1, 3, 2, 5}
+	wantIndices := []uint64{1, 2, 3, 5}
 	if !slices.Equal(d.Indices, wantIndices) {
 		t.Fatalf("indices mismatch: have %v, want %v", d.Indices, wantIndices)
 	}
