@@ -14,26 +14,26 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package lru
+package metrics
 
 import (
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/common/lru"
 )
 
 // MeteredCache is an LRU cache exposing hit metrics.
 // This type is safe for concurrent use.
 type MeteredCache[K comparable, V any] struct {
-	Cache[K, V]
-	hit  *metrics.Meter
-	miss *metrics.Meter
+	lru.Cache[K, V]
+	hit  *Meter
+	miss *Meter
 }
 
 // NewMeteredCache creates a new metered LRU cache.
-func NewMeteredCache[K comparable, V any](capacity int, name string) *MeteredCache[K, V] {
+func NewMeteredCache[K comparable, V any](capacity int, name string, registry Registry) *MeteredCache[K, V] {
 	return &MeteredCache[K, V]{
-		Cache: *NewCache[K, V](capacity),
-		hit:   metrics.NewRegisteredMeter(name+"/hit", nil),
-		miss:  metrics.NewRegisteredMeter(name+"/miss", nil),
+		Cache: *lru.NewCache[K, V](capacity),
+		hit:   NewRegisteredMeter(name+"/hit", registry),
+		miss:  NewRegisteredMeter(name+"/miss", registry),
 	}
 }
 
