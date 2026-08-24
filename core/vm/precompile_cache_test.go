@@ -26,10 +26,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -474,5 +476,41 @@ func TestPrecompileCacheBoundedByKeyBytes(t *testing.T) {
 	}
 	if _, hit := cache.load(scope, firstKey); hit {
 		t.Fatal("cache is unbounded: oldest empty-output entry was never evicted")
+	}
+}
+
+// TestPerEntryOverhead re-derives the cost the budget charges per entry: fill a
+// cache with empty values, take off the key bytes, divide by the entry count.
+// Run it with -v to read the measurements. The cost moves with how full the map
+// is, so it sweeps entry counts and perEntryOverhead takes the top of what they
+// report. The bound is wide on purpose, to catch the constant being wrong by an
+// order of magnitude rather than to pin a number that moves with the Go version.
+func TestPerEntryOverhead(t *testing.T) {
+	const keyLen = 8
+
+	for _, entries := range []int{5_000, 20_000, 60_000} {
+		runtime.GC()
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+
+		// A budget nothing can reach, so every entry added is still held when
+		// the second reading is taken.
+		c := lru.NewSizeConstrainedCacheWithKeySize[string, []byte](1<<40, precompileEntrySize)
+		for i := range entries {
+			var key [keyLen]byte
+			binary.BigEndian.PutUint64(key[:], uint64(i))
+			c.Add(string(key[:]), nil)
+		}
+		runtime.GC()
+		runtime.ReadMemStats(&after)
+		runtime.KeepAlive(c)
+
+		held := int64(after.HeapAlloc) - int64(before.HeapAlloc)
+		got := (held - int64(entries)*keyLen) / int64(entries)
+		if got < perEntryOverhead/3 || got > perEntryOverhead*3 {
+			t.Errorf("%d entries: measured %d bytes each, budget charges %d", entries, got, perEntryOverhead)
+		} else {
+			t.Logf("%d entries: measured %d bytes each", entries, got)
+		}
 	}
 }
