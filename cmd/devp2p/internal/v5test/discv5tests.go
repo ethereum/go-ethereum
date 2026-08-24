@@ -18,14 +18,19 @@ package v5test
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"net"
+	"net/netip"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
@@ -33,7 +38,12 @@ import (
 type Suite struct {
 	Dest             *enode.Node
 	Listen1, Listen2 string // listening addresses
+	ExpectIP         netip.Addr
+	ExpectIP6        netip.Addr
 }
+
+// FindnodeZeroDistanceName is the test name that checks the remote self record.
+const FindnodeZeroDistanceName = "FindnodeZeroDistance"
 
 func (s *Suite) listen1(log logger) (*conn, net.PacketConn) {
 	c := newConn(s.Dest, log)
@@ -54,7 +64,7 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "PingMultiIP", Fn: s.TestPingMultiIP},
 		{Name: "HandshakeResend", Fn: s.TestHandshakeResend},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
-		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
+		{Name: FindnodeZeroDistanceName, Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
 	}
 }
@@ -248,6 +258,178 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	if nodes[0].ID() != conn.remote.ID() {
 		t.Errorf("ID of response node is %v, want %v", nodes[0].ID(), conn.remote.ID())
 	}
+	summary, err := checkSelfRecord(nodes[0], s.ExpectIP, s.ExpectIP6)
+	if err != nil {
+		t.Fatal("self record has invalid endpoint entries:", err)
+	}
+	t.Logf("self record seq=%d endpoints: %s", nodes[0].Seq(), summary)
+}
+
+func checkSelfRecord(n *enode.Node, wantIP4, wantIP6 netip.Addr) (string, error) {
+	entries, err := loadEndpointEntries(n.Record())
+	if err != nil {
+		return "", err
+	}
+	if err := entries.checkDanglingPorts(); err != nil {
+		return "", err
+	}
+	if wantIP4.IsValid() {
+		if !entries.hasIP4 {
+			return "", fmt.Errorf("missing ip entry")
+		}
+		if entries.udp == 0 {
+			return "", fmt.Errorf("missing udp entry")
+		}
+		if entries.ip4 != wantIP4 {
+			return "", fmt.Errorf("ip entry got %s, want %s", entries.ip4, wantIP4)
+		}
+	}
+	if wantIP6.IsValid() {
+		if !entries.hasIP6 {
+			return "", fmt.Errorf("missing ip6 entry")
+		}
+		if entries.ip6 != wantIP6 {
+			return "", fmt.Errorf("ip6 entry got %s, want %s", entries.ip6, wantIP6)
+		}
+		if entries.udp6 == 0 && entries.udp == 0 {
+			return "", fmt.Errorf("missing udp6 entry or udp fallback")
+		}
+	}
+	if _, ok := n.UDPEndpoint(); !ok && !entries.hasUsableDiscoveryEndpoint() {
+		return "", errors.New("record has no usable UDP endpoint")
+	}
+	return entries.summary(), nil
+}
+
+type endpointEntries struct {
+	ip4, ip6             netip.Addr
+	udp, udp6, tcp, tcp6 uint16
+	hasIP4, hasIP6       bool
+	hasUDP, hasUDP6      bool
+	hasTCP, hasTCP6      bool
+}
+
+func loadEndpointEntries(record *enr.Record) (endpointEntries, error) {
+	var entries endpointEntries
+	var ip4 enr.IPv4Addr
+	var ip6 enr.IPv6Addr
+	var udp enr.UDP
+	var udp6 enr.UDP6
+	var tcp enr.TCP
+	var tcp6 enr.TCP6
+
+	loaders := []struct {
+		entry enr.Entry
+		set   func(bool)
+	}{
+		{&ip4, func(ok bool) {
+			entries.hasIP4 = ok
+			entries.ip4 = netip.Addr(ip4)
+		}},
+		{&ip6, func(ok bool) {
+			entries.hasIP6 = ok
+			entries.ip6 = netip.Addr(ip6)
+		}},
+		{&udp, func(ok bool) {
+			entries.hasUDP = ok
+			entries.udp = uint16(udp)
+		}},
+		{&udp6, func(ok bool) {
+			entries.hasUDP6 = ok
+			entries.udp6 = uint16(udp6)
+		}},
+		{&tcp, func(ok bool) {
+			entries.hasTCP = ok
+			entries.tcp = uint16(tcp)
+		}},
+		{&tcp6, func(ok bool) {
+			entries.hasTCP6 = ok
+			entries.tcp6 = uint16(tcp6)
+		}},
+	}
+	for _, loader := range loaders {
+		ok, err := loadEntry(record, loader.entry)
+		if err != nil {
+			return endpointEntries{}, err
+		}
+		loader.set(ok)
+	}
+	return entries, nil
+}
+
+func loadEntry(record *enr.Record, entry enr.Entry) (bool, error) {
+	if err := record.Load(entry); err != nil {
+		if enr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("invalid %s entry: %w", entry.ENRKey(), err)
+	}
+	return true, nil
+}
+
+func (entries endpointEntries) checkDanglingPorts() error {
+	if entries.hasUDP && entries.udp == 0 {
+		return fmt.Errorf("udp entry is zero")
+	}
+	if entries.hasTCP && entries.tcp == 0 {
+		return fmt.Errorf("tcp entry is zero")
+	}
+	if entries.hasUDP6 && entries.udp6 == 0 {
+		return fmt.Errorf("udp6 entry is zero")
+	}
+	if entries.hasTCP6 && entries.tcp6 == 0 {
+		return fmt.Errorf("tcp6 entry is zero")
+	}
+	if entries.hasUDP && !entries.hasIP4 && !entries.hasIP6 {
+		return fmt.Errorf("udp is present without ip or ip6")
+	}
+	if entries.hasTCP && !entries.hasIP4 && !entries.hasIP6 {
+		return fmt.Errorf("tcp is present without ip or ip6")
+	}
+	if entries.hasUDP6 && !entries.hasIP6 {
+		return fmt.Errorf("udp6 is present without ip6")
+	}
+	if entries.hasTCP6 && !entries.hasIP6 {
+		return fmt.Errorf("tcp6 is present without ip6")
+	}
+	return nil
+}
+
+func (entries endpointEntries) hasUsableDiscoveryEndpoint() bool {
+	return entries.hasIP4 && usableIP(entries.ip4) && entries.udp != 0 ||
+		entries.hasIP6 && usableIP(entries.ip6) && (entries.udp6 != 0 || entries.udp != 0)
+}
+
+func usableIP(addr netip.Addr) bool {
+	return addr.IsValid() && !addr.IsUnspecified() && !addr.IsMulticast()
+}
+
+func (entries endpointEntries) summary() string {
+	var endpoints []string
+	if entries.hasIP4 {
+		fields := []string{fmt.Sprintf("ip=%s", entries.ip4)}
+		if entries.hasUDP {
+			fields = append(fields, fmt.Sprintf("udp=%d", entries.udp))
+		}
+		if entries.hasTCP {
+			fields = append(fields, fmt.Sprintf("tcp=%d", entries.tcp))
+		}
+		endpoints = append(endpoints, strings.Join(fields, " "))
+	}
+	if entries.hasIP6 {
+		fields := []string{fmt.Sprintf("ip6=%s", entries.ip6)}
+		switch {
+		case entries.hasUDP6:
+			fields = append(fields, fmt.Sprintf("udp6=%d", entries.udp6))
+		case entries.hasUDP:
+			fields = append(fields, fmt.Sprintf("udp6=%d", entries.udp))
+		}
+		if entries.hasTCP6 {
+			fields = append(fields, fmt.Sprintf("tcp6=%d", entries.tcp6))
+		}
+		endpoints = append(endpoints, strings.Join(fields, " "))
+	}
+	return strings.Join(endpoints, "; ")
 }
 
 func (s *Suite) TestFindnodeResults(t *utesting.T) {
