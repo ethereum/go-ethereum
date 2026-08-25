@@ -122,7 +122,7 @@ func tracedChain(t *testing.T, config *params.ChainConfig) (*BlockChain, *types.
 			Config:  config,
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Alloc: types.GenesisAlloc{
-				addr: {Balance: funds},
+				addr:                             {Balance: funds},
 				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
 				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
 				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
