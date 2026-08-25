@@ -30,6 +30,7 @@ var (
 	precompileCacheMissMeter         = metrics.NewRegisteredMeter("chain/cache/precompile/miss", nil)
 	precompileCachePrefetchHitMeter  = metrics.NewRegisteredMeter("chain/cache/precompile/prefetch/hit", nil)
 	precompileCachePrefetchMissMeter = metrics.NewRegisteredMeter("chain/cache/precompile/prefetch/miss", nil)
+	precompileCacheBytesGauge        = metrics.NewRegisteredGauge("chain/cache/precompile/bytes", nil)
 )
 
 const (
@@ -47,7 +48,21 @@ const (
 	// run from tens of bytes to kilobytes, so a budget in entries would mean
 	// very different memory depending on the mix.
 	maxCacheablePrecompileBytes = 1024 * 1024
+
+	// perEntryOverhead approximates what an entry costs to exist, beyond the key
+	// and value bytes already counted. TestPerEntryOverhead measures it at 115
+	// to 150 bytes, moving with how full the map is, and this takes the top of
+	// that. Erring high holds fewer entries, and caps the count, since nothing
+	// measures less.
+	perEntryOverhead = 150
 )
+
+// precompileEntrySize charges an entry's key plus what it costs to exist. The
+// cache counts the value itself and calls this once per entry, on insertion and
+// again on eviction, so a fixed term here is charged and refunded per entry.
+func precompileEntrySize(key string) uint64 {
+	return uint64(len(key)) + perEntryOverhead
+}
 
 // PrecompileCache is a thread-safe cache of precompile outputs, shared between
 // the state prefetcher and block processing so the serial pass can reuse what
@@ -153,12 +168,14 @@ func (c *PrecompileCache) store(scope precompileCacheScope, key []byte, output [
 			// maxCacheablePrecompileInput against maxCacheablePrecompileOutput),
 			// so it must count towards the budget. Without it an empty output
 			// (e.g. a failed ECRECOVER) would let the cache grow without bound.
-			results = lru.NewSizeConstrainedCacheWithKeySize[string, []byte](maxCacheablePrecompileBytes, func(k string) uint64 { return uint64(len(k)) })
+			results = lru.NewSizeConstrainedCacheWithKeySize[string, []byte](maxCacheablePrecompileBytes, precompileEntrySize)
 			c.data.caches[scope] = results
 		}
 		c.data.mu.Unlock()
 	}
+	before := results.Size()
 	results.Add(string(key), common.CopyBytes(output))
+	precompileCacheBytesGauge.Inc(int64(results.Size()) - int64(before))
 }
 
 // metersFor returns the hit and miss meters of the given precompile address,
