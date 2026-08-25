@@ -277,9 +277,6 @@ loop:
 				resendOp.fail <- err
 				continue loop
 			}
-			// Restart the RTT measurement for the follow-up round, so the
-			// response time doesn't span multiple network round trips.
-			req.Sent = time.Now()
 			resendOp.fail <- nil
 
 		case cancelOp := <-p.reqCancel:
