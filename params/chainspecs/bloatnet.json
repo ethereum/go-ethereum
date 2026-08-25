@@ -1,0 +1,41 @@
+{
+  "chainName": "bloatnet",
+  "chainId": 1,
+  "consensus": "ethash",
+  "homesteadBlock": 1150000,
+  "daoForkBlock": 1920000,
+  "daoForkSupport": true,
+  "eip150Block": 2463000,
+  "eip155Block": 2675000,
+  "eip158Block": 2675000,
+  "byzantiumBlock": 4370000,
+  "constantinopleBlock": 7280000,
+  "petersburgBlock": 7280000,
+  "istanbulBlock": 9069000,
+  "muirGlacierBlock": 9200000,
+  "berlinBlock": 12244000,
+  "londonBlock": 12965000,
+  "arrowGlacierBlock": 13773000,
+  "grayGlacierBlock": 15050000,
+  "terminalTotalDifficulty": 58750000000000000000000,
+  "terminalTotalDifficultyPassed": true,
+  "mergeBlock": 15537394,
+  "shanghaiTime": 1681338455,
+  "cancunTime": 1710338135,
+  "pragueTime": 1746612311,
+  "blobSchedule": {
+    "cancun": {
+      "target": 3,
+      "max": 6,
+      "baseFeeUpdateFraction": 3338477
+    },
+    "prague": {
+      "target": 6,
+      "max": 9,
+      "baseFeeUpdateFraction": 5007716
+    }
+  },
+  "depositContractAddress": "0x00000000219ab540356cBB839Cbe05303d7705Fa",
+  "ethash": {},
+  "defaultBlockGasLimit": 60000000
+}
