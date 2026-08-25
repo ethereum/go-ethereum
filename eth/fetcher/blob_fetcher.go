@@ -93,18 +93,32 @@ type PeerCellDelivery struct {
 
 // merge folds a subsequent delivery from the same peer in, keeping the
 // blob-major cell order.
+//
+// Both index sets must be sorted in ascending order, and must be disjoint: a
+// peer is only ever asked for cells it has not delivered yet.
 func (d *PeerCellDelivery) merge(cells []kzg4844.Cell, indices []uint64) error {
 	var (
-		n1            = len(d.Indices)
-		n2            = len(indices)
-		blobCount     = len(d.Cells) / n1
-		merged        = make([]kzg4844.Cell, 0, len(d.Cells)+len(cells))
-		mergedIndices = make([]uint64, 0, len(d.Cells)+len(cells))
+		n1 = len(d.Indices)
+		n2 = len(indices)
 	)
+	if n1 == 0 || len(d.Cells)%n1 != 0 {
+		return errors.New("corrupted cell delivery")
+	}
+	blobCount := len(d.Cells) / n1
 	if len(cells) != blobCount*n2 {
 		return errors.New("inconsistent cell count across deliveries")
 	}
-
+	// An overlapping index would be retained as a duplicate column, inflating
+	// the fetch accounting of the caller.
+	for _, index := range indices {
+		if _, found := slices.BinarySearch(d.Indices, index); found {
+			return fmt.Errorf("duplicate cell index across deliveries: %d", index)
+		}
+	}
+	var (
+		merged        = make([]kzg4844.Cell, 0, len(d.Cells)+len(cells))
+		mergedIndices = make([]uint64, 0, n1+n2)
+	)
 	for b := range blobCount {
 		i, j := 0, 0
 		for i < n1 || j < n2 {
