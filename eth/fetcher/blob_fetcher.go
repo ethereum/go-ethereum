@@ -564,16 +564,13 @@ func (f *BlobFetcher) loop() {
 				indices := delivery.cellBitmap.Indices()
 				if len(indices) > 0 {
 					status := f.fetches[hash]
-					cells := delivery.cells[i]
-
-    				if len(cells) == 0 || len(cells)%len(indices) != 0 {
-        				f.fn.DropPeer(delivery.origin)
-        				continue
-    				}
 					// A peer may deliver again after a re-announcement; merge
 					// instead of overwriting
 					if prev, ok := status.deliveries[delivery.origin]; ok {
-						prev.merge(delivery.cells[i], indices)
+						if err := prev.merge(delivery.cells[i], indices); err != nil {
+							f.fn.DropPeer(delivery.origin)
+							continue
+						}
 					} else {
 						status.deliveries[delivery.origin] = &PeerCellDelivery{
 							Cells:   delivery.cells[i],
