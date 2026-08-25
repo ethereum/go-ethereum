@@ -2128,20 +2128,11 @@ type ExecuteConfig struct {
 	EnableWitnessStats bool
 }
 
-// vmConfig returns the EVM configuration to execute a block with, honouring the
+// overrideTracerActivation returns the EVM configuration to execute a block with, honoring the
 // caller's tracing intent.
-//
-// The tracer held in bc.cfg.VmConfig is the node-wide live tracer: a single
-// stateful instance shared by the whole node, whose hooks are documented as
-// being invoked serially from the chain-insertion goroutine. Callers that
-// execute blocks outside that goroutine (RPC handlers such as
-// debug_executionWitness) must not fire it: interleaving two hook streams
-// corrupts the tracer's internal state, and any state journal wrapped around it
-// (see tracing.WrapWithJournal), and reports blocks that were never imported.
-// Such callers leave EnableTracer false, which detaches the tracer here.
-func (bc *BlockChain) vmConfig(config ExecuteConfig) vm.Config {
+func (bc *BlockChain) overrideTracerActivation(tracerOn bool) vm.Config {
 	vmConfig := bc.cfg.VmConfig
-	if !config.EnableTracer {
+	if !tracerOn {
 		vmConfig.Tracer = nil
 	}
 	return vmConfig
@@ -2221,7 +2212,7 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 		go func(start time.Time) {
 			// Speculative prefetching is never traced, regardless of the caller's
 			// intent: its execution is discarded and runs on its own goroutine.
-			vmCfg := bc.vmConfig(ExecuteConfig{EnableTracer: false})
+			vmCfg := bc.overrideTracerActivation(false)
 			bc.prefetcher.Prefetch(block, throwaway, bc.jumpDestCache, bc.precompileCache.PrefetchView(), vmCfg, interrupt, execIndex)
 
 			blockPrefetchExecuteTimer.Update(time.Since(start))
@@ -2292,7 +2283,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// bc.cfg.VmConfig is a stateful, node-wide singleton whose hooks are only
 	// safe to drive from the chain-insertion goroutine, so it is attached only
 	// when the caller opts in via EnableTracer.
-	vmConfig := bc.vmConfig(config)
+	vmConfig := bc.overrideTracerActivation(config.EnableTracer)
 
 	// Instrument the blockchain tracing
 	if config.EnableTracer {
