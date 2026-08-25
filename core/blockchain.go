@@ -2102,10 +2102,20 @@ type ExecuteConfig struct {
 	EnableWitnessStats bool
 }
 
+// overrideTracerActivation returns the EVM configuration to execute a block with, honoring the
+// caller's tracing intent.
+func (bc *BlockChain) overrideTracerActivation(tracerOn bool) vm.Config {
+	vmConfig := bc.cfg.VmConfig
+	if !tracerOn {
+		vmConfig.Tracer = nil
+	}
+	return vmConfig
+}
+
 // useBALExecution reports whether the block will be executed through the
 // BAL-driven parallel processor.
-func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool {
-	return supportsParallelExecution(block, bc.chainConfig, wantWitness, bc.cfg.VmConfig.Tracer != nil, bc.cfg.VmConfig.DisableParallelExecution)
+func (bc *BlockChain) useBALExecution(block *types.Block, vmConfig vm.Config, wantWitness bool) bool {
+	return supportsParallelExecution(block, bc.chainConfig, wantWitness, vmConfig.Tracer != nil, vmConfig.DisableParallelExecution)
 }
 
 // setupExecutionState builds the state instance that block execution reads from
@@ -2120,7 +2130,7 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 //     speculative whole-block prefetcher share one cached reader.
 //
 //   - No prefetching: a plain reader, with a no-op cleanup.
-func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.Block, config ExecuteConfig, interrupt *atomic.Bool, execIndex *atomic.Int64) (*state.StateDB, func(*blockProcessingResult), error) {
+func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.Block, vmConfig vm.Config, config ExecuteConfig, interrupt *atomic.Bool, execIndex *atomic.Int64) (*state.StateDB, func(*blockProcessingResult), error) {
 	noop := func(*blockProcessingResult) {}
 
 	var sdb state.Database
@@ -2138,7 +2148,7 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 	wantWitness := config.StatelessSelfValidation || config.MakeWitness
 
 	switch warmer, ok := sdb.(prewarmReader); {
-	case bc.useBALExecution(block, wantWitness):
+	case bc.useBALExecution(block, vmConfig, wantWitness):
 		base, err := sdb.Reader(parentRoot)
 		if err != nil {
 			return nil, nil, err
@@ -2175,7 +2185,7 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 		}
 		go func(start time.Time) {
 			// Disable tracing for prefetcher executions.
-			vmCfg := bc.cfg.VmConfig
+			vmCfg := vmConfig
 			vmCfg.Tracer = nil
 			bc.prefetcher.Prefetch(block, throwaway, bc.jumpDestCache, bc.precompileCache.PrefetchView(), vmCfg, interrupt, execIndex)
 
@@ -2213,9 +2223,18 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	defer interrupt.Store(true) // terminate the prefetch at the end
 	execIndex.Store(-1)         // no transaction executed yet
 
+	// Resolve the EVM config for this execution before any component consults
+	// it. The live tracer stored in bc.cfg.VmConfig is a stateful, node-wide
+	// singleton whose hooks are only safe to drive from the chain-insertion
+	// goroutine, so it is attached only when the caller opts in via
+	// EnableTracer. Both the reader topology (setupExecutionState) and the
+	// execution strategy (StateProcessor.Process) key off this resolved
+	// config, keeping the BAL-parallel/sequential decision consistent.
+	vmConfig := bc.overrideTracerActivation(config.EnableTracer)
+
 	// Set up the state reader feeding execution, along with a cleanup to run once
 	// processing is complete (stop the prefetcher, upload reader statistics).
-	statedb, cleanup, err := bc.setupExecutionState(parentRoot, block, config, &interrupt, &execIndex)
+	statedb, cleanup, err := bc.setupExecutionState(parentRoot, block, vmConfig, config, &interrupt, &execIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -2262,7 +2281,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
 	pctx, _, spanEnd := telemetry.StartSpan(ctx, "bc.processor.Process")
-	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.precompileCache, bc.cfg.VmConfig, &execIndex)
+	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.precompileCache, vmConfig, &execIndex)
 	spanEnd(&err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
@@ -2297,7 +2316,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
 
 		// Run the stateless self-cross-validation
-		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, bc.cfg.VmConfig, task, witness)
+		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, vmConfig, task, witness)
 		if err != nil {
 			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
 		}
