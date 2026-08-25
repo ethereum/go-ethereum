@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -266,6 +267,27 @@ func newAccessListState(db state.Database, parentRoot common.Hash, base state.Re
 	return state.NewWithReader(parentRoot, db, state.NewReaderWithBlockLevelAccessList(base, lookup, index))
 }
 
+type cumulativeGas struct {
+	lock      sync.Mutex
+	execution uint64
+	state     uint64
+}
+
+func (c *cumulativeGas) add(execution, state uint64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.execution += execution
+	c.state += state
+}
+
+func (c *cumulativeGas) load() (uint64, uint64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.execution, c.state
+}
+
 // executeTransactionsParallel applies all transactions to independent,
 // access-list-backed state instances using a pool of workers, and returns
 // the per-transaction results in block order.
@@ -284,9 +306,8 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 		workers = len(txs)
 	}
 	var (
-		cursor     atomic.Int64
-		spentExec  atomic.Uint64 // execution gas of completed transactions
-		spentState atomic.Uint64 // state gas of completed transactions
+		cursor atomic.Int64
+		spent  cumulativeGas
 	)
 	group, gctx := errgroup.WithContext(context.Background())
 	for w := 0; w < workers; w++ {
@@ -309,9 +330,8 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 				}
 				// A valid block keeps both EIP-8037 dimensions under the block gas
 				// limit, so once the completed transactions exceed it the block
-				// cannot be valid. processParallel still runs the authoritative
-				// per-transaction check in block order.
-				execGas, stateGas := spentExec.Load(), spentState.Load()
+				// cannot be valid.
+				execGas, stateGas := spent.load()
 				if execGas > gasLimit || stateGas > gasLimit {
 					return fmt.Errorf("%w: gas limit %d, execution %d, state %d", ErrGasLimitReached, gasLimit, execGas, stateGas)
 				}
@@ -351,8 +371,7 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 					state:      gp.CumulativeState(),
 					preimages:  sdb.Preimages(),
 				}
-				spentExec.Add(gp.CumulativeExecution())
-				spentState.Add(gp.CumulativeState())
+				spent.add(gp.CumulativeExecution(), gp.CumulativeState())
 			}
 		})
 	}
