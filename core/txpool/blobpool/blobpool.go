@@ -1760,7 +1760,9 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	}
 	var ptx BlobTxForPool
 	if err := rlp.DecodeBytes(data, &ptx); err != nil {
+		p.lock.RLock()
 		id, _ := p.lookup.storeidOfTx(hash)
+		p.lock.RUnlock()
 		log.Error("Blobs corrupted for traced transaction", "hash", hash, "id", id, "err", err)
 		return nil
 	}
