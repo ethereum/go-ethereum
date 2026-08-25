@@ -48,6 +48,14 @@ func (r *hookRecorder) mark(name string) {
 	r.counts[name]++
 }
 
+// reset drops every recorded hook, so that a subsequent census only reflects
+// the invocations made after this point.
+func (r *hookRecorder) reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.counts = nil
+}
+
 func (r *hookRecorder) total() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -95,40 +103,30 @@ func (r *hookRecorder) hooks() *tracing.Hooks {
 	}
 }
 
-// TestProcessBlockTracerOptIn asserts that ExecuteConfig.EnableTracer is the
-// single switch governing the node-wide live tracer, at every layer.
-//
-// The tracer held in BlockChainConfig.VmConfig is a stateful singleton shared by
-// the whole node, and its hooks are only safe to drive from the chain-insertion
-// goroutine. Callers that execute blocks elsewhere — debug_executionWitness runs
-// ProcessBlock straight off an RPC goroutine — leave EnableTracer false and must
-// see no hook of any kind fire. Gating only the OnBlockStart/OnBlockEnd envelope
-// is not enough: the tx-level hooks reach the same singleton through the
-// vm.Config handed to the processor, and firing them without an enclosing block
-// is worse than not gating at all.
-func TestProcessBlockTracerOptIn(t *testing.T) {
+// tracedChain builds a chain whose node-wide vm.Config carries a hook-counting
+// live tracer, as `geth --vmtrace` configures it, together with a single block
+// carrying one value transfer, so that both the block-scope and the tx-scope
+// hooks have something to report. The returned recorder starts empty; the
+// hooks fired while the genesis is committed are discarded.
+func tracedChain(t *testing.T, config *params.ChainConfig) (*BlockChain, *types.Block, common.Hash, *hookRecorder) {
+	t.Helper()
+
 	var (
 		engine = beacon.New(ethash.NewFaker())
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
 		to     = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
 		funds  = new(big.Int).Mul(big.NewInt(1000), big.NewInt(params.Ether))
-		config = *params.AllEthashProtocolChanges
+		signer = types.LatestSigner(config)
 		gspec  = &Genesis{
-			Config:  &config,
+			Config:  config,
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Alloc:   types.GenesisAlloc{addr: {Balance: funds}},
 		}
 	)
-	gspec.Config.TerminalTotalDifficulty = common.Big0
-	gspec.Config.ShanghaiTime = u64(0)
-	signer := types.LatestSigner(gspec.Config)
-
-	// A single block carrying one value transfer, so that both the block-scope
-	// and the tx-scope hooks have something to report.
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		tx, err := types.SignNewTx(key, signer, &types.DynamicFeeTx{
-			ChainID:   gspec.Config.ChainID,
+			ChainID:   config.ChainID,
 			Nonce:     0,
 			To:        &to,
 			Gas:       100000,
@@ -144,30 +142,37 @@ func TestProcessBlockTracerOptIn(t *testing.T) {
 	if got := len(blocks[0].Transactions()); got != 1 {
 		t.Fatalf("test block carries %d transactions, want 1", got)
 	}
+	recorder := new(hookRecorder)
+	options := DefaultConfig().WithStateScheme(rawdb.HashScheme)
+	options.VmConfig = vm.Config{Tracer: recorder.hooks()}
 
-	// newChain returns a chain whose node-wide vm.Config carries the live tracer,
-	// as `geth --vmtrace` configures it.
-	newChain := func(t *testing.T) (*BlockChain, *hookRecorder) {
-		t.Helper()
-		recorder := new(hookRecorder)
-		options := DefaultConfig().WithStateScheme(rawdb.HashScheme)
-		options.VmConfig = vm.Config{Tracer: recorder.hooks()}
-
-		chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, options)
-		if err != nil {
-			t.Fatalf("failed to create chain: %v", err)
-		}
-		t.Cleanup(chain.Stop)
-		recorder.counts = nil // discard OnBlockchainInit/OnGenesisBlock
-		return chain, recorder
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, options)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
 	}
+	t.Cleanup(chain.Stop)
+	recorder.reset() // discard OnBlockchainInit/OnGenesisBlock
 
-	parentRoot := gspec.ToBlock().Root()
+	return chain, blocks[0], gspec.ToBlock().Root(), recorder
+}
+
+// TestProcessBlockTracerOptIn asserts that ExecuteConfig.EnableTracer gates every
+// tracing hook that block execution reaches through vm.Config: the
+// OnBlockStart/OnBlockEnd envelope, the transaction and EVM frame hooks, and the
+// state hooks carried by the hooked StateDB.
+func TestProcessBlockTracerOptIn(t *testing.T) {
+	// mergedConfig is the pre-Amsterdam chain the sequential processor runs.
+	mergedConfig := func() *params.ChainConfig {
+		config := *params.AllEthashProtocolChanges
+		config.TerminalTotalDifficulty = common.Big0
+		config.ShanghaiTime = u64(0)
+		return &config
+	}
 
 	t.Run("opted out", func(t *testing.T) {
 		// The exact config debug_executionWitness uses.
-		chain, recorder := newChain(t)
-		_, err := chain.ProcessBlock(context.Background(), parentRoot, blocks[0], ExecuteConfig{
+		chain, block, parentRoot, recorder := tracedChain(t, mergedConfig())
+		_, err := chain.ProcessBlock(context.Background(), parentRoot, block, ExecuteConfig{
 			WriteState:   false,
 			EnableTracer: false,
 			MakeWitness:  true,
@@ -180,10 +185,36 @@ func TestProcessBlockTracerOptIn(t *testing.T) {
 		}
 	})
 
+	t.Run("opted out without witness", func(t *testing.T) {
+		// The opted-out combination debug_executionWitness does not reach: no
+		// witness requested, on an Amsterdam block carrying a block access list.
+		// Detaching the tracer makes the execution eligible for the BAL-driven
+		// parallel processor, which wires no tracing hooks at all, so the gate
+		// must hold on that path too.
+		config := *params.MergedTestChainConfig
+		config.AmsterdamTime = u64(0)
+
+		chain, block, parentRoot, recorder := tracedChain(t, &config)
+		if block.AccessList() == nil {
+			t.Fatal("test block carries no access list, parallel execution unreachable")
+		}
+		_, err := chain.ProcessBlock(context.Background(), parentRoot, block, ExecuteConfig{
+			WriteState:   false,
+			EnableTracer: false,
+			MakeWitness:  false,
+		})
+		if err != nil {
+			t.Fatalf("failed to process block: %v", err)
+		}
+		if n := recorder.total(); n != 0 {
+			t.Errorf("live tracer fired %d hook(s) with EnableTracer=false: %v", n, recorder.fired())
+		}
+	})
+
 	t.Run("opted in", func(t *testing.T) {
 		// Canonical import: the tracer must still see the whole block.
-		chain, recorder := newChain(t)
-		_, err := chain.ProcessBlock(context.Background(), parentRoot, blocks[0], ExecuteConfig{
+		chain, block, parentRoot, recorder := tracedChain(t, mergedConfig())
+		_, err := chain.ProcessBlock(context.Background(), parentRoot, block, ExecuteConfig{
 			WriteState:   true,
 			WriteHead:    true,
 			EnableTracer: true,

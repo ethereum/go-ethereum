@@ -2210,8 +2210,7 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 			return nil, nil, err
 		}
 		go func(start time.Time) {
-			// Speculative prefetching is never traced, regardless of the caller's
-			// intent: its execution is discarded and runs on its own goroutine.
+			// Disable tracing for prefetcher executions.
 			vmCfg := bc.overrideTracerActivation(false)
 			bc.prefetcher.Prefetch(block, throwaway, bc.jumpDestCache, bc.precompileCache.PrefetchView(), vmCfg, interrupt, execIndex)
 
