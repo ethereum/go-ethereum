@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	gomath "math"
 	"math/big"
 	"strings"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -129,8 +131,94 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	return &genesis, nil
 }
 
+func (g *Genesis) constructorBlockContext() vm.BlockContext {
+	difficulty := g.Difficulty
+	if difficulty == nil {
+		difficulty = new(big.Int)
+	}
+	gasLimit := g.GasLimit
+	if gasLimit == 0 {
+		gasLimit = params.GenesisGasLimit
+	}
+	baseFee := g.BaseFee
+	if baseFee == nil && g.Config.IsLondon(new(big.Int).SetUint64(g.Number)) {
+		baseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+	}
+	header := &types.Header{
+		Number:     new(big.Int).SetUint64(g.Number),
+		Nonce:      types.EncodeNonce(g.Nonce),
+		Time:       g.Timestamp,
+		ParentHash: g.ParentHash,
+		Extra:      g.ExtraData,
+		GasLimit:   gasLimit,
+		GasUsed:    g.GasUsed,
+		BaseFee:    baseFee,
+		Difficulty: difficulty,
+		MixDigest:  g.Mixhash,
+		Coinbase:   g.Coinbase,
+		SlotNumber: g.SlotNumber,
+	}
+	return NewEVMBlockContext(header, nil, &g.Coinbase)
+}
+
+func (g *Genesis) runConstructor(statedb *state.StateDB, blockContext vm.BlockContext, addr common.Address, initcode []byte) ([]byte, error) {
+	if initcode[0] == 0xEF {
+		return nil, errors.New("initcode starts with 0xEF")
+	}
+	statedb.SetCode(addr, initcode, tracing.CodeChangeGenesis)
+
+	evm := vm.NewEVM(blockContext, statedb, g.Config, vm.Config{})
+	code, _, err := evm.Call(addr, addr, nil, vm.NewGasBudget(gomath.MaxUint64, gomath.MaxUint64), new(uint256.Int))
+	if err != nil {
+		return nil, err
+	}
+	return code, nil
+}
+
+// applyAlloc writes the genesis allocation into the given state
+func (g *Genesis) applyAlloc(statedb *state.StateDB) error {
+	var blockContext *vm.BlockContext
+	for addr, account := range g.Alloc {
+		if account.Balance != nil {
+			statedb.AddBalance(addr, uint256.MustFromBig(account.Balance), tracing.BalanceIncreaseGenesisBalance)
+		}
+		var (
+			nonce = account.Nonce
+			code  = account.Code
+		)
+		if len(account.Constructor) > 0 {
+			if len(account.Code) > 0 {
+				return fmt.Errorf("genesis account %x specifies both code and constructor", addr)
+			}
+			if g.Config == nil {
+				return errGenesisNoConfig
+			}
+			if blockContext == nil {
+				ctx := g.constructorBlockContext()
+				blockContext = &ctx
+			}
+			ret, err := g.runConstructor(statedb, *blockContext, addr, account.Constructor)
+			if err != nil {
+				return fmt.Errorf("genesis constructor for %x failed: %w", addr, err)
+			}
+			code = ret
+			if nonce == 0 {
+				nonce = 1
+			}
+		}
+		statedb.SetCode(addr, code, tracing.CodeChangeGenesis)
+		statedb.SetNonce(addr, nonce, tracing.NonceChangeGenesis)
+		// Storage from the allocation is applied last, so it takes precedence
+		// over anything the constructor wrote.
+		for key, value := range account.Storage {
+			statedb.SetState(addr, key, value)
+		}
+	}
+	return nil
+}
+
 // hashAlloc computes the state root according to the genesis specification.
-func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
+func hashAlloc(g *Genesis, isUBT bool) (common.Hash, error) {
 	// If a genesis-time verkle trie is requested, create a trie config
 	// with the verkle trie enabled so that the tree can be initialized
 	// as such.
@@ -154,22 +242,15 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	for addr, account := range *ga {
-		if account.Balance != nil {
-			statedb.AddBalance(addr, uint256.MustFromBig(account.Balance), tracing.BalanceIncreaseGenesisBalance)
-		}
-		statedb.SetCode(addr, account.Code, tracing.CodeChangeGenesis)
-		statedb.SetNonce(addr, account.Nonce, tracing.NonceChangeGenesis)
-		for key, value := range account.Storage {
-			statedb.SetState(addr, key, value)
-		}
+	if err := g.applyAlloc(statedb); err != nil {
+		return common.Hash{}, err
 	}
 	return statedb.Commit(params.Rules{}, 0)
 }
 
 // flushAlloc is very similar with hash, but the main difference is all the
 // generated states will be persisted into the given database.
-func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing.Hooks) (common.Hash, error) {
+func flushAlloc(g *Genesis, triedb *triedb.Database, tracer *tracing.Hooks) (common.Hash, error) {
 	emptyRoot := types.EmptyRootHash
 	if triedb.IsUBT() {
 		emptyRoot = types.EmptyBinaryHash
@@ -178,17 +259,8 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing
 	if err != nil {
 		return common.Hash{}, err
 	}
-	for addr, account := range *ga {
-		if account.Balance != nil {
-			// This is not actually logged via tracer because OnGenesisBlock
-			// already captures the allocations.
-			statedb.AddBalance(addr, uint256.MustFromBig(account.Balance), tracing.BalanceIncreaseGenesisBalance)
-		}
-		statedb.SetCode(addr, account.Code, tracing.CodeChangeGenesis)
-		statedb.SetNonce(addr, account.Nonce, tracing.NonceChangeGenesis)
-		for key, value := range account.Storage {
-			statedb.SetState(addr, key, value)
-		}
+	if err := g.applyAlloc(statedb); err != nil {
+		return common.Hash{}, err
 	}
 
 	var root common.Hash
@@ -485,7 +557,7 @@ func (g *Genesis) IsUBT() bool {
 
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := hashAlloc(&g.Alloc, g.IsUBT())
+	root, err := hashAlloc(g, g.IsUBT())
 	if err != nil {
 		panic(err)
 	}
@@ -585,7 +657,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database, tracer *tra
 		return nil, errors.New("can't start clique chain without signers")
 	}
 	// flush the data to disk and compute the state root
-	root, err := flushAlloc(&g.Alloc, triedb, tracer)
+	root, err := flushAlloc(g, triedb, tracer)
 	if err != nil {
 		return nil, err
 	}

@@ -19,15 +19,20 @@ package core
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -228,7 +233,7 @@ func TestReadWriteGenesisAlloc(t *testing.T) {
 			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 			{2}: {Balance: big.NewInt(2), Storage: map[common.Hash]common.Hash{{2}: {2}}},
 		}
-		hash, _ = hashAlloc(alloc, false)
+		hash, _ = hashAlloc(&Genesis{Alloc: *alloc}, false)
 	)
 	blob, _ := json.Marshal(alloc)
 	rawdb.WriteGenesisStateSpec(db, hash, blob)
@@ -334,5 +339,196 @@ func TestBinaryGenesisCommit(t *testing.T) {
 	vdb := rawdb.NewTable(db, string(rawdb.VerklePrefix))
 	if !rawdb.HasAccountTrieNode(vdb, nil) {
 		t.Fatal("could not find node")
+	}
+}
+
+var (
+	testConstructorRuntime = []byte{0xfe}
+	testConstructorInit    = []byte{
+		0x60, 0x42, 0x60, 0x01, 0x55, // SSTORE(1, 0x42)
+		0x60, 0xfe, 0x60, 0x00, 0x53, // MSTORE8(0, 0xfe)
+		0x60, 0x01, 0x60, 0x00, 0xf3, // RETURN(0, 1)
+	}
+)
+
+func TestGenesisAllocConstructor(t *testing.T) {
+	var (
+		addr  = common.HexToAddress("0xc0de")
+		db    = rawdb.NewMemoryDatabase()
+		tdb   = triedb.NewDatabase(db, triedb.HashDefaults)
+		gspec = &Genesis{
+			Config:     params.TestChainConfig,
+			Difficulty: big.NewInt(0),
+			Alloc: types.GenesisAlloc{
+				addr: {Balance: big.NewInt(1), Constructor: testConstructorInit},
+			},
+		}
+	)
+	block, err := gspec.Commit(db, tdb, nil)
+	if err != nil {
+		t.Fatalf("failed to commit genesis: %v", err)
+	}
+	if want := gspec.ToBlock().Root(); block.Root() != want {
+		t.Errorf("state root mismatch: have %x, want %x", block.Root(), want)
+	}
+	statedb, err := state.New(block.Root(), state.NewDatabase(tdb, nil))
+	if err != nil {
+		t.Fatalf("failed to open genesis state: %v", err)
+	}
+	if code := statedb.GetCode(addr); !bytes.Equal(code, testConstructorRuntime) {
+		t.Errorf("deployed code mismatch: have %#x, want %#x", code, testConstructorRuntime)
+	}
+	// Storage written by the constructor must land on the allocated account,
+	// not on some address derived from it.
+	if got, want := statedb.GetState(addr, common.Hash{31: 0x01}), (common.Hash{31: 0x42}); got != want {
+		t.Errorf("constructor storage mismatch: have %x, want %x", got, want)
+	}
+	if got := statedb.GetNonce(addr); got != 1 {
+		t.Errorf("nonce mismatch: have %d, want 1", got)
+	}
+	if got := statedb.GetBalance(addr); got.Uint64() != 1 {
+		t.Errorf("balance mismatch: have %v, want 1", got)
+	}
+	for _, stray := range []common.Address{crypto.CreateAddress(addr, 0), crypto.CreateAddress(addr, 1), {}} {
+		if statedb.Exist(stray) {
+			t.Errorf("unexpected account %x in genesis state", stray)
+		}
+	}
+}
+
+// TestGenesisAllocConstructorOverrides checks that the explicit fields of an
+// allocation take precedence over the constructor's effects.
+func TestGenesisAllocConstructorOverrides(t *testing.T) {
+	var (
+		addr  = common.HexToAddress("0xc0de")
+		db    = rawdb.NewMemoryDatabase()
+		tdb   = triedb.NewDatabase(db, triedb.HashDefaults)
+		gspec = &Genesis{
+			Config:     params.TestChainConfig,
+			Difficulty: big.NewInt(0),
+			Alloc: types.GenesisAlloc{
+				addr: {
+					Balance:     big.NewInt(1),
+					Nonce:       7,
+					Storage:     map[common.Hash]common.Hash{{31: 0x01}: {31: 0x99}},
+					Constructor: testConstructorInit,
+				},
+			},
+		}
+	)
+	block, err := gspec.Commit(db, tdb, nil)
+	if err != nil {
+		t.Fatalf("failed to commit genesis: %v", err)
+	}
+	statedb, err := state.New(block.Root(), state.NewDatabase(tdb, nil))
+	if err != nil {
+		t.Fatalf("failed to open genesis state: %v", err)
+	}
+	if got, want := statedb.GetState(addr, common.Hash{31: 0x01}), (common.Hash{31: 0x99}); got != want {
+		t.Errorf("storage mismatch: have %x, want %x", got, want)
+	}
+	if got := statedb.GetNonce(addr); got != 7 {
+		t.Errorf("nonce mismatch: have %d, want 7", got)
+	}
+	if code := statedb.GetCode(addr); !bytes.Equal(code, testConstructorRuntime) {
+		t.Errorf("deployed code mismatch: have %#x, want %#x", code, testConstructorRuntime)
+	}
+}
+
+// TestGenesisAllocConstructorFailure checks that a constructor which cannot be
+// executed surfaces an error instead of taking the process down, on both the
+// hashing and the flushing path.
+func TestGenesisAllocConstructorFailure(t *testing.T) {
+	addr := common.HexToAddress("0xc0de")
+	tests := []struct {
+		name     string
+		account  types.Account
+		noConfig bool
+		wantErr  string
+	}{
+		{
+			name:    "revert",
+			account: types.Account{Balance: big.NewInt(1), Constructor: []byte{0x60, 0x00, 0x60, 0x00, 0xfd}},
+			wantErr: "execution reverted",
+		},
+		{
+			name:    "invalid opcode",
+			account: types.Account{Balance: big.NewInt(1), Constructor: []byte{0xfe}},
+			wantErr: "invalid opcode",
+		},
+		{
+			name:    "ef prefixed initcode",
+			account: types.Account{Balance: big.NewInt(1), Constructor: []byte{0xef, 0x00}},
+			wantErr: "initcode starts with 0xEF",
+		},
+		{
+			name:    "code and constructor",
+			account: types.Account{Balance: big.NewInt(1), Code: []byte{0x00}, Constructor: testConstructorInit},
+			wantErr: "both code and constructor",
+		},
+		{
+			name:     "no chain config",
+			account:  types.Account{Balance: big.NewInt(1), Constructor: testConstructorInit},
+			noConfig: true,
+			wantErr:  errGenesisNoConfig.Error(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gspec := &Genesis{
+				Config:     params.TestChainConfig,
+				Difficulty: big.NewInt(0),
+				Alloc:      types.GenesisAlloc{addr: tt.account},
+			}
+			if tt.noConfig {
+				gspec.Config = nil
+			}
+			err, panicked := hashAllocResult(gspec)
+			if panicked {
+				t.Errorf("hashAlloc panicked instead of returning an error: %v", err)
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("hashAlloc error = %v, want it to contain %q", err, tt.wantErr)
+			}
+			tdb := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.HashDefaults)
+			if _, err := flushAlloc(gspec, tdb, nil); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("flushAlloc error = %v, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// hashAllocResult runs hashAlloc, reporting whether it aborted through a panic
+// rather than through an error.
+func hashAllocResult(g *Genesis) (err error, panicked bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			err, panicked = fmt.Errorf("%v", r), true
+		}
+	}()
+	_, err = hashAlloc(g, false)
+	return err, false
+}
+
+// TestGenesisAllocConstructorJSON checks that constructors survive the JSON
+// encoding used to persist and load genesis specifications.
+func TestGenesisAllocConstructorJSON(t *testing.T) {
+	alloc := types.GenesisAlloc{
+		{1}: {Balance: big.NewInt(1), Constructor: testConstructorInit},
+		{2}: {Balance: big.NewInt(2), Code: []byte{0x00}},
+	}
+	blob, err := json.Marshal(alloc)
+	if err != nil {
+		t.Fatalf("failed to marshal alloc: %v", err)
+	}
+	if !strings.Contains(string(blob), `"constructor":"`+hexutil.Encode(testConstructorInit)+`"`) {
+		t.Fatalf("constructor missing from encoded alloc: %s", blob)
+	}
+	var reload types.GenesisAlloc
+	if err := reload.UnmarshalJSON(blob); err != nil {
+		t.Fatalf("failed to load genesis state: %v", err)
+	}
+	if !reflect.DeepEqual(reload, alloc) {
+		t.Fatalf("alloc mismatch:\n%s", spew.Sdump(reload))
 	}
 }
