@@ -121,7 +121,15 @@ func tracedChain(t *testing.T, config *params.ChainConfig) (*BlockChain, *types.
 		gspec  = &Genesis{
 			Config:  config,
 			BaseFee: big.NewInt(params.InitialBaseFee),
-			Alloc:   types.GenesisAlloc{addr: {Balance: funds}},
+			Alloc: types.GenesisAlloc{
+				addr: {Balance: funds},
+				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
+				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
+				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
+				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
+				params.BuilderDepositAddress:     {Nonce: 1, Code: params.BuilderDepositCode, Balance: common.Big0},
+				params.BuilderExitAddress:        {Nonce: 1, Code: params.BuilderExitCode, Balance: common.Big0},
+			},
 		}
 	)
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
