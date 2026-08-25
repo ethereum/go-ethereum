@@ -18,6 +18,7 @@ package blobpool
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -37,6 +38,7 @@ var (
 	blobBufferCellsFirstCounter = metrics.NewRegisteredCounter("blobpool/buffer/cellsfirst", nil)
 	blobBufferTotalTx           = metrics.NewRegisteredGauge("blobpool/buffer/txcount", nil)
 	blobBufferTotalCells        = metrics.NewRegisteredGauge("blobpool/buffer/cellcount", nil)
+	blobBufferDupCellsCounter   = metrics.NewRegisteredCounter("blobpool/buffer/dupcells", nil)
 )
 
 const (
@@ -180,8 +182,15 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 		return
 	}
 	blobCount := len(tx.BlobHashes())
-	sorted, custody := sortCells(cells, blobCount)
 
+	sorted, custody, err := sortCells(cells, blobCount)
+	if err != nil {
+		log.Warn("Dropping blob tx with overlapping cell deliveries", "hash", hash, "err", err)
+		blobBufferDupCellsCounter.Inc(1)
+		delete(b.cells, hash)
+		delete(b.txs, hash)
+		return
+	}
 	cellSidecar := types.BlobTxCellSidecar{
 		Version:     sidecar.Version,
 		Commitments: sidecar.Commitments,
@@ -282,7 +291,7 @@ func (b *BlobBuffer) verifyCells(entry *cellEntry, sidecar *types.BlobTxSidecar)
 // peer A: cells = [blob0_cell5, blob0_cell3, blob1_cell5, blob1_cell3]
 // peer B: cells = [blob0_cell1, blob0_cell7, blob1_cell1, blob1_cell7]
 // -> [blob0_cell1, blob0_cell3, blob0_cell5, blob0_cell7, blob1_cell1, blob1_cell3, blob1_cell5, blob1_cell7]
-func sortCells(entry *cellEntry, blobCount int) ([]kzg4844.Cell, types.CustodyBitmap) {
+func sortCells(entry *cellEntry, blobCount int) ([]kzg4844.Cell, types.CustodyBitmap, error) {
 	// indices per delivery
 	var indices []uint64
 
@@ -294,6 +303,12 @@ func sortCells(entry *cellEntry, blobCount int) ([]kzg4844.Cell, types.CustodyBi
 		for b := range blobCount {
 			blob[b] = append(blob[b], d.Cells[b*n:(b+1)*n]...)
 		}
+	}
+	// Defensive operation, rejecting the deliveries with overlapping
+	// custody index.
+	custody := types.NewCustodyBitmap(indices)
+	if custody.OneCount() != len(indices) {
+		return nil, types.CustodyBitmap{}, errors.New("duplicate cell index across deliveries")
 	}
 
 	// 2. sort
@@ -312,7 +327,5 @@ func sortCells(entry *cellEntry, blobCount int) ([]kzg4844.Cell, types.CustodyBi
 			res = append(res, blob[b][p])
 		}
 	}
-
-	custody := types.NewCustodyBitmap(indices)
-	return res, custody
+	return res, custody, nil
 }
