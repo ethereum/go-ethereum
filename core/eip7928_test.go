@@ -1220,7 +1220,7 @@ func TestBALSelfDestructToSelfKeepsBalance(t *testing.T) {
 func TestBALSelfDestructToSelfPrefundedUnchanged(t *testing.T) {
 	// The contract address created by the sender's nonce-0 transaction; it is
 	// pre-funded in genesis (balance only: nonce 0, no code, no storage), which
-	// EIP-7610 permits as a deployment target.
+	// is a permitted deployment target.
 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	created := crypto.CreateAddress(crypto.PubkeyToAddress(key.PublicKey), 0)
 

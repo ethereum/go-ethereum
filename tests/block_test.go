@@ -91,7 +91,8 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	bt.skipLoad(`.*eip7251_consolidations/contract_deployment/system_contract_deployment\.json`)
 	bt.skipLoad(`.*eip7002_el_triggerable_withdrawals/contract_deployment/system_contract_deployment\.json`)
 
-	// Broken tests
+	// EIP-7610 is not implemented: a non-empty storage trie alone does not
+	// reject contract creation.
 	bt.skipLoad(`.*eip7610_create_collision/initcollision/.*`)
 	bt.skipLoad(`.*eip7610_create_collision/revert_in_create/.*`)
 
