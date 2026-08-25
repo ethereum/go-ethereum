@@ -512,7 +512,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 // ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
 func (args *TransactionArgs) ToTransaction(defaultType int) (*types.Transaction, error) {
-	usedType := types.LegacyTxType
+	usedType := uint64(types.LegacyTxType)
 	switch {
 	case args.AuthorizationList != nil || defaultType == types.SetCodeTxType:
 		usedType = types.SetCodeTxType
@@ -527,7 +527,7 @@ func (args *TransactionArgs) ToTransaction(defaultType int) (*types.Transaction,
 	if args.GasPrice != nil {
 		usedType = types.LegacyTxType
 	}
-	if usedType != int(*args.Type) {
+	if args.Type != nil && usedType != uint64(*args.Type) {
 		return nil, fmt.Errorf("wrong tx type used, requested: %v, used: %v", args.Type, usedType)
 	}
 	var data types.TxData
