@@ -506,12 +506,12 @@ func parseArgumentArray(rawArgs json.RawMessage, types []reflect.Type) ([]reflec
 			return
 		}
 		argval := reflect.New(types[i])
-		if err := decodeArgument(elem, argval.Interface()); err != nil {
-			scanErr = fmt.Errorf("invalid argument %d: %v", i, err)
+		if types[i].Kind() != reflect.Pointer && isJSONNull(elem) {
+			scanErr = fmt.Errorf("missing value for required argument %d", i)
 			return
 		}
-		if argval.IsNil() && types[i].Kind() != reflect.Pointer {
-			scanErr = fmt.Errorf("missing value for required argument %d", i)
+		if err := decodeArgument(elem, argval.Interface()); err != nil {
+			scanErr = fmt.Errorf("invalid argument %d: %v", i, err)
 			return
 		}
 		args = append(args, argval.Elem())

@@ -246,17 +246,17 @@ func TestParsePositionalArguments(t *testing.T) {
 		{"object argument", `[{"a":1}]`, []reflect.Type{tMap}, []any{map[string]int{"a": 1}}, ""},
 		{"structural bytes inside a string", `["},{"]`, []reflect.Type{tStr}, []any{`},{`}, ""},
 		{"null into a pointer", `[null]`, []reflect.Type{tPtr}, []any{(*int)(nil)}, ""},
-		{"null into a value", `[null]`, []reflect.Type{tInt}, []any{0}, ""},
 		{"missing optional argument", `[1]`, []reflect.Type{tInt, tPtr}, []any{1, (*int)(nil)}, ""},
 
 		{"too many arguments", `[1,2,3]`, []reflect.Type{tInt}, nil, "too many arguments"},
 		{"missing required argument", `[1]`, []reflect.Type{tInt, tInt}, nil, "missing value for required argument 1"},
 		{"no arguments at all", `[]`, []reflect.Type{tInt}, nil, "missing value for required argument 0"},
+		{"null into a value", `[null]`, []reflect.Type{tInt}, nil, "missing value for required argument 0"},
 		{"wrong type", `["not an int"]`, []reflect.Type{tInt}, nil, "invalid argument 0"},
 
 		// a self decoding type is handed the value directly, except for null
 		{"self decoding", `["0x1234"]`, []reflect.Type{tSelf}, []any{selfDecoding{Text: "0x1234"}}, ""},
-		{"self decoding null", `[null]`, []reflect.Type{tSelf}, nil, "invalid argument 0"},
+		{"self decoding null", `[null]`, []reflect.Type{tSelf}, nil, "missing value for required argument 0"},
 	}
 
 	for _, tc := range tests {
