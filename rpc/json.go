@@ -430,6 +430,13 @@ func fillMessage(input []byte, msg *jsonrpcMessage) {
 	// The raw fields point into input rather than being copied out of it, which
 	// matters because params is nearly all of a large request.
 	forEachJSONField(input, func(key, value []byte) {
+		if bytes.IndexByte(key, '\\') >= 0 {
+			var name string
+			if err := json.Unmarshal([]byte(`"`+string(key)+`"`), &name); err != nil {
+				return
+			}
+			key = []byte(name)
+		}
 		switch string(key) {
 		case "jsonrpc":
 			// The string fields go through encoding/json to unescape them.
