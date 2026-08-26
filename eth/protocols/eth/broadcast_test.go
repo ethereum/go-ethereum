@@ -17,10 +17,15 @@
 package eth
 
 import (
+	"crypto/sha256"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 func TestCanServeTransaction(t *testing.T) {
@@ -48,5 +53,95 @@ func TestCanServeTransaction(t *testing.T) {
 				t.Fatalf("canServeTransaction(%d, %v) = %v, want %v", test.version, test.custody, got, test.want)
 			}
 		})
+	}
+}
+
+func TestLegacyPeerDoesNotReceiveSparseBlobAnnouncement(t *testing.T) {
+	backend := newTestBackendWithGenerator(0, true, true, nil)
+	defer backend.close()
+
+	var blob kzg4844.Blob
+	commitment, err := kzg4844.BlobToCommitment(&blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proofs, err := kzg4844.ComputeCellProofs(&blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cells, err := kzg4844.ComputeCells([]kzg4844.Blob{blob})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobHash := kzg4844.CalcBlobHashV1(sha256.New(), &commitment)
+	makeTx := func(nonce uint64) *types.Transaction {
+		tx, err := types.SignNewTx(testKey, types.NewCancunSigner(params.TestChainConfig.ChainID), &types.BlobTx{
+			ChainID:    uint256.MustFromBig(params.TestChainConfig.ChainID),
+			Nonce:      nonce,
+			GasTipCap:  uint256.NewInt(20_000_000_000),
+			GasFeeCap:  uint256.NewInt(21_000_000_000),
+			Gas:        params.TxGas,
+			To:         testAddr,
+			BlobHashes: []common.Hash{blobHash},
+			BlobFeeCap: uint256.MustFromBig(common.Big1),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tx
+	}
+	sparseTx := makeTx(0)
+	fullTx := makeTx(1)
+	custody := types.NewCustodyBitmap([]uint64{0, 1, 2, 3, 4, 5, 6, 7})
+	sparse := &blobpool.BlobTxForPool{
+		Tx: sparseTx,
+		CellSidecar: &types.BlobTxCellSidecar{
+			Version:     types.BlobSidecarVersion1,
+			Cells:       cells[:custody.OneCount()],
+			Commitments: []kzg4844.Commitment{commitment},
+			Proofs:      proofs,
+			Custody:     custody,
+		},
+	}
+	full := &blobpool.BlobTxForPool{
+		Tx: fullTx,
+		CellSidecar: &types.BlobTxCellSidecar{
+			Version:     types.BlobSidecarVersion1,
+			Cells:       cells,
+			Commitments: []kzg4844.Commitment{commitment},
+			Proofs:      proofs,
+			Custody:     types.CustodyBitmapAll,
+		},
+	}
+	if err := backend.blobpool.AddPooledTx(sparse); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.blobpool.AddPooledTx(full); err != nil {
+		t.Fatal(err)
+	}
+	if encoded := backend.txpool.GetRLP(sparseTx.Hash(), ETH71); encoded != nil {
+		t.Fatalf("legacy encoding unexpectedly succeeded with %d bytes", len(encoded))
+	}
+	if encoded := backend.txpool.GetRLP(fullTx.Hash(), ETH71); encoded == nil {
+		t.Fatal("legacy encoding unexpectedly failed for a reconstructable transaction")
+	}
+
+	peer, _ := newTestPeer("legacy", ETH71, backend)
+	defer peer.close()
+	peer.AsyncSendPooledTransactionHashes([]common.Hash{sparseTx.Hash(), fullTx.Hash()})
+
+	msg, err := peer.app.ReadMsg()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg.Code != NewPooledTransactionHashesMsg {
+		t.Fatalf("message code %d, want %d", msg.Code, NewPooledTransactionHashesMsg)
+	}
+	var announcement NewPooledTransactionHashesPacket71
+	if err := msg.Decode(&announcement); err != nil {
+		t.Fatal(err)
+	}
+	if len(announcement.Hashes) != 1 || announcement.Hashes[0] != fullTx.Hash() {
+		t.Fatalf("announced hashes %v, want only reconstructable transaction %v", announcement.Hashes, fullTx.Hash())
 	}
 }
