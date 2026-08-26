@@ -345,16 +345,22 @@ type testSetup struct {
 	params               Params
 	dbHashes             map[string]common.Hash
 	testDisableSnapshots bool
+	hashScheme           bool
 }
 
 func newTestSetup(t *testing.T) *testSetup {
+	return newTestSetupWithHashScheme(t, false)
+}
+
+func newTestSetupWithHashScheme(t *testing.T, hashScheme bool) *testSetup {
 	params := testParams
 	params.deriveFields()
 	ts := &testSetup{
-		t:        t,
-		db:       rawdb.NewMemoryDatabase(),
-		params:   params,
-		dbHashes: make(map[string]common.Hash),
+		t:          t,
+		db:         rawdb.NewMemoryDatabase(),
+		params:     params,
+		dbHashes:   make(map[string]common.Hash),
+		hashScheme: hashScheme,
 	}
 	ts.chain = ts.newTestChain()
 	return ts
@@ -367,8 +373,9 @@ func (ts *testSetup) setHistory(history uint64, noHistory bool) {
 	head := ts.chain.CurrentBlock()
 	view := NewChainView(ts.chain, head.Number.Uint64(), head.Hash())
 	config := Config{
-		History:  history,
-		Disabled: noHistory,
+		History:    history,
+		Disabled:   noHistory,
+		HashScheme: ts.hashScheme,
 	}
 	ts.fm, _ = NewFilterMaps(ts.db, view, 0, 0, ts.params, config)
 	ts.fm.testDisableSnapshots = ts.testDisableSnapshots
@@ -834,40 +841,71 @@ func TestIndexerRollbackDbIntegrity(t *testing.T) {
 	}
 }
 
-func TestIndexerRollbackCrashRecovery(t *testing.T) {
-	// Proves that interrupting the indexer during a rollback cleanup
-	// cannot leave an unrecoverable or corrupted index state.
-	ts := newTestSetup(t)
+func testIndexerRollbackCrashRecovery(t *testing.T, hashScheme bool, deletePointers bool, deleteRows bool) {
+	ts := newTestSetupWithHashScheme(t, hashScheme)
 	defer ts.close()
 
-	// Index 200 blocks
+	// 1. Build and index a multi-epoch chain of 200 blocks
 	ts.chain.addBlocks(200, 5, 2, 4, true)
 	ts.setHistory(0, false)
 	ts.fm.WaitIdle()
 
-	// Stop indexer to simulate crash before final cleanup completion
+	oldMapsCount := ts.fm.indexedRange.maps.AfterLast()
+	oldBlocksCount := ts.fm.indexedRange.blocks.AfterLast()
+
+	// Determine the stale regions corresponding to rolling back to block 50
+	// Block 50 corresponds to ~map 17 (in epoch 1 for mapsPerEpoch=16)
+	rollbackTargetBlock := uint64(50)
+	lastMapAtTarget := uint32(17)
+	startEpoch := ts.params.mapEpoch(lastMapAtTarget)
+	nextEpochMap := ts.params.firstEpochMap(startEpoch + 1)
+	fullEpochStart := ts.params.mapEpoch(nextEpochMap)
+	fullEpochEnd := ts.params.mapEpoch(oldMapsCount-1) + 1
+
+	firstRow := ts.fm.mapRowIndex(ts.params.firstEpochMap(fullEpochStart), 0)
+	countRows := ts.fm.mapRowIndex(ts.params.firstEpochMap(fullEpochEnd), 0) - firstRow
+
+	// Stop the running indexer loop to simulate an abrupt crash midway through writeFinishedMaps
 	ts.fm.Stop()
 	ts.fm = nil
 
-	// Simulate partial range deletion on the database while old range metadata remains
-	// (e.g. process killed during DeleteFilterMapRows)
-	staleStartMap := uint32(20)
-	staleEndMap := uint32(50)
-	_ = rawdb.DeleteFilterMapLastBlocks(ts.db, common.NewRange(staleStartMap, staleEndMap-staleStartMap), false, nil)
+	if deletePointers {
+		// Delete stale last blocks and block log value pointers (step 1 of stale cleanup in writeFinishedMaps)
+		if oldMapsCount > lastMapAtTarget {
+			if err := rawdb.DeleteFilterMapLastBlocks(ts.db, common.NewRange(lastMapAtTarget, oldMapsCount-lastMapAtTarget), ts.hashScheme, nil); err != nil {
+				t.Fatalf("Failed to delete stale last blocks: %v", err)
+			}
+		}
+		if oldBlocksCount > rollbackTargetBlock+1 {
+			if err := rawdb.DeleteBlockLvPointers(ts.db, common.NewRange(rollbackTargetBlock+1, oldBlocksCount-(rollbackTargetBlock+1)), ts.hashScheme, nil); err != nil {
+				t.Fatalf("Failed to delete stale block lv pointers: %v", err)
+			}
+		}
+	}
 
-	// Re-open FilterMaps on the interrupted database with the chain rolled back to block 50
-	ts.chain.setHead(50)
+	if deleteRows {
+		// Delete whole stale epoch physical filter-map rows directly on disk (DeleteFilterMapRows)
+		if countRows > 0 {
+			if err := rawdb.DeleteFilterMapRows(ts.db, common.NewRange(firstRow, countRows), ts.hashScheme, nil); err != nil {
+				t.Fatalf("Failed to delete stale filter map rows: %v", err)
+			}
+		}
+	}
+
+	// Range metadata on disk intentionally reflects pre-rollback state (old metadata not yet updated).
+	// Re-open FilterMaps on the interrupted database with the chain rolled back to block 50.
+	ts.chain.setHead(int(rollbackTargetBlock))
 	ts.setHistory(0, false)
 	ts.fm.WaitIdle()
 
 	// Verify that the index recovered cleanly and indexed up to block 50
-	if ts.fm.indexedRange.blocks.Last() != 50 {
-		t.Fatalf("Recovered indexer head mismatch: got %d, want 50", ts.fm.indexedRange.blocks.Last())
+	if ts.fm.indexedRange.blocks.Last() != rollbackTargetBlock {
+		t.Fatalf("Recovered indexer head mismatch: got %d, want %d", ts.fm.indexedRange.blocks.Last(), rollbackTargetBlock)
 	}
 
-	// Compare with reference node built cleanly to block 50
+	// Compare with reference node built cleanly to block 50 from scratch
 	targetChain := ts.chain.getCanonicalChain()
-	tsRef := newTestSetup(t)
+	tsRef := newTestSetupWithHashScheme(t, hashScheme)
 	defer tsRef.close()
 	for _, h := range targetChain {
 		tsRef.chain.blocks[h] = ts.chain.blocks[h]
@@ -880,6 +918,25 @@ func TestIndexerRollbackCrashRecovery(t *testing.T) {
 	recoveredHash := ts.fmDbHash()
 	refHash := tsRef.fmDbHash()
 	if recoveredHash != refHash {
-		t.Fatalf("Recovered database hash mismatch against reference:\n  recovered = %x\n  reference = %x", recoveredHash, refHash)
+		t.Fatalf("Recovered database hash mismatch against reference (hashScheme=%v, deletePointers=%v, deleteRows=%v):\n  recovered = %x\n  reference = %x",
+			hashScheme, deletePointers, deleteRows, recoveredHash, refHash)
 	}
+}
+
+func TestIndexerRollbackCrashRecovery(t *testing.T) {
+	// Scenario A: Crash after pointers and physical filter rows are deleted, before range metadata commits.
+	t.Run("ScenarioA_PointersAndRowsDeleted_PathMode", func(t *testing.T) {
+		testIndexerRollbackCrashRecovery(t, false, true, true)
+	})
+	t.Run("ScenarioA_PointersAndRowsDeleted_HashMode", func(t *testing.T) {
+		testIndexerRollbackCrashRecovery(t, true, true, true)
+	})
+
+	// Scenario B: Crash after pointers are deleted, before physical row deletion starts.
+	t.Run("ScenarioB_PointersOnlyDeleted_PathMode", func(t *testing.T) {
+		testIndexerRollbackCrashRecovery(t, false, true, false)
+	})
+	t.Run("ScenarioB_PointersOnlyDeleted_HashMode", func(t *testing.T) {
+		testIndexerRollbackCrashRecovery(t, true, true, false)
+	})
 }
