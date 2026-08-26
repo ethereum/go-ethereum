@@ -26,7 +26,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -405,7 +407,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	var writeCnt int
 	checkWriteCnt := func() {
 		writeCnt++
-		if writeCnt == rowsPerBatch {
+		if writeCnt >= rowsPerBatch || batch.ValueSize() >= ethdb.IdealBatchSize {
 			writeCnt = 0
 			if err := batch.Write(); err != nil {
 				log.Crit("Error writing log index update batch", "error", err)
@@ -424,6 +426,20 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	if tempRange != r.f.indexedRange {
 		r.f.setRange(batch, r.f.indexedView, tempRange, true)
 	}
+
+	var (
+		isHeadUpdate = newRange.maps.AfterLast() == r.finished.AfterLast()
+		staleStart   = r.finished.AfterLast()
+		staleEnd     = oldRange.maps.AfterLast()
+		partialEnd   = staleStart
+	)
+	if isHeadUpdate && staleStart < staleEnd {
+		startEpoch := r.f.mapEpoch(staleStart)
+		if staleStart > r.f.firstEpochMap(startEpoch) {
+			partialEnd = min(r.f.firstEpochMap(startEpoch+1), staleEnd)
+		}
+	}
+
 	// add or update filter rows
 	for rowIndex := uint32(0); rowIndex < r.f.mapHeight; rowIndex++ {
 		var (
@@ -438,8 +454,9 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 			mapIndices = append(mapIndices, mapIndex)
 			rows = append(rows, row)
 		}
-		if newRange.maps.AfterLast() == r.finished.AfterLast() { // head updated; remove future entries
-			for mapIndex := r.finished.AfterLast(); mapIndex < oldRange.maps.AfterLast(); mapIndex++ {
+		// If head is updated and the boundary epoch has stale maps, clear them per-row.
+		if isHeadUpdate && staleStart < partialEnd {
+			for mapIndex := staleStart; mapIndex < partialEnd; mapIndex++ {
 				if fm, _ := r.f.filterMapCache.Get(mapIndex); fm != nil && len(fm[rowIndex]) == 0 {
 					continue
 				}
@@ -452,14 +469,34 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 		}
 		checkWriteCnt()
 	}
+
+	// Range-delete any whole stale epochs.
+	if isHeadUpdate && partialEnd < staleEnd {
+		fullEpochStart := r.f.mapEpoch(partialEnd)
+		fullEpochEnd := r.f.mapEpoch(staleEnd-1) + 1
+		firstRow := r.f.mapRowIndex(r.f.firstEpochMap(fullEpochStart), 0)
+		countRows := r.f.mapRowIndex(r.f.firstEpochMap(fullEpochEnd), 0) - firstRow
+		if err := rawdb.DeleteFilterMapRows(r.f.db, common.NewRange(firstRow, countRows), r.f.hashScheme, func(bool) bool { pauseCb(); return false }); err != nil {
+			return fmt.Errorf("failed to delete stale filter map rows in epochs [%d, %d): %v", fullEpochStart, fullEpochEnd, err)
+		}
+	}
+
 	// update filter map cache
-	if newRange.maps.AfterLast() == r.finished.AfterLast() {
+	if isHeadUpdate {
 		// head updated; cache new head maps and remove future entries
 		for mapIndex := range r.finished.Iter() {
 			r.f.filterMapCache.Add(mapIndex, r.finishedMaps[mapIndex].filterMap)
 		}
-		for mapIndex := r.finished.AfterLast(); mapIndex < oldRange.maps.AfterLast(); mapIndex++ {
-			r.f.filterMapCache.Remove(mapIndex)
+		if staleEnd-staleStart > 1000 {
+			for _, k := range r.f.filterMapCache.Keys() {
+				if k >= staleStart && k < staleEnd {
+					r.f.filterMapCache.Remove(k)
+				}
+			}
+		} else {
+			for mapIndex := staleStart; mapIndex < staleEnd; mapIndex++ {
+				r.f.filterMapCache.Remove(mapIndex)
+			}
 		}
 	} else {
 		// head not updated; do not cache maps during tail rendering because we
@@ -468,6 +505,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 			r.f.filterMapCache.Remove(mapIndex)
 		}
 	}
+
 	var blockNumber uint64
 	if r.finished.First() > 0 {
 		// in order to always ensure continuous block pointers, initialize
@@ -493,16 +531,43 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 			blockNumber++
 		}
 	}
-	if newRange.maps.AfterLast() == r.finished.AfterLast() { // head updated; remove future entries
-		for mapIndex := r.finished.AfterLast(); mapIndex < oldRange.maps.AfterLast(); mapIndex++ {
-			r.f.deleteLastBlockOfMap(batch, mapIndex)
-			checkWriteCnt()
+
+	if isHeadUpdate && staleStart < staleEnd {
+		// Range-delete stale last block entries and evict lastBlockCache.
+		if err := rawdb.DeleteFilterMapLastBlocks(r.f.db, common.NewRange(staleStart, staleEnd-staleStart), r.f.hashScheme, func(bool) bool { pauseCb(); return false }); err != nil {
+			return fmt.Errorf("failed to delete stale filter map last blocks [%d, %d): %v", staleStart, staleEnd, err)
 		}
-		for ; blockNumber < oldRange.blocks.AfterLast(); blockNumber++ {
-			r.f.deleteBlockLvPointer(batch, blockNumber)
-			checkWriteCnt()
+		if staleEnd-staleStart > 1000 {
+			for _, k := range r.f.lastBlockCache.Keys() {
+				if k >= staleStart && k < staleEnd {
+					r.f.lastBlockCache.Remove(k)
+				}
+			}
+		} else {
+			for mapIndex := staleStart; mapIndex < staleEnd; mapIndex++ {
+				r.f.lastBlockCache.Remove(mapIndex)
+			}
+		}
+
+		// Range-delete stale block log value pointers and evict lvPointerCache.
+		if blockNumber < oldRange.blocks.AfterLast() {
+			if err := rawdb.DeleteBlockLvPointers(r.f.db, common.NewRange(blockNumber, oldRange.blocks.AfterLast()-blockNumber), r.f.hashScheme, func(bool) bool { pauseCb(); return false }); err != nil {
+				return fmt.Errorf("failed to delete stale block lv pointers [%d, %d): %v", blockNumber, oldRange.blocks.AfterLast(), err)
+			}
+			if oldRange.blocks.AfterLast()-blockNumber > 1000 {
+				for _, k := range r.f.lvPointerCache.Keys() {
+					if k >= blockNumber && k < oldRange.blocks.AfterLast() {
+						r.f.lvPointerCache.Remove(k)
+					}
+				}
+			} else {
+				for b := blockNumber; b < oldRange.blocks.AfterLast(); b++ {
+					r.f.lvPointerCache.Remove(b)
+				}
+			}
 		}
 	}
+
 	r.finishedMaps = make(map[uint32]*renderedMap)
 	r.finished.SetFirst(r.finished.AfterLast())
 	r.f.setRange(batch, renderedView, newRange, false)
