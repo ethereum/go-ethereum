@@ -20,7 +20,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/metrics"
 )
+
+// Marked once per round per withheld transaction, not once per transaction.
+var sparseAnnounceSkipMeter = metrics.NewRegisteredMeter("eth/protocols/eth/announce/sparseskip", nil)
 
 const (
 	// This is the target size for the packs of transactions or announcements. A
@@ -122,10 +126,8 @@ func (p *Peer) announceTransactions() {
 				if meta := p.txpool.GetMetadata(queue[count]); meta != nil {
 					custody := p.blobpool.GetCustody(queue[count])
 					if !canServeTransaction(p.version, custody) {
-						// Pre-eth/72 peers can only retrieve full blob payloads. Do
-						// not advertise a sparse transaction which this node cannot
-						// reconstruct and consequently cannot serve to them.
-						processed[count] = true
+						// Left in the queue: the fetcher may still complete the set.
+						sparseAnnounceSkipMeter.Mark(1)
 						continue
 					}
 					if custody != nil {

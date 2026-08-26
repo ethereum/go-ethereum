@@ -17,16 +17,169 @@
 package eth
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
+
+// announceTestPool is a TxPool/BlobPool stub with mutable custody, so that a
+// transaction can become reconstructable while it sits in the announce queue.
+type announceTestPool struct {
+	lock    sync.RWMutex
+	custody map[common.Hash]*types.CustodyBitmap
+}
+
+func newAnnounceTestPool() *announceTestPool {
+	return &announceTestPool{custody: make(map[common.Hash]*types.CustodyBitmap)}
+}
+
+func (p *announceTestPool) setCustody(hash common.Hash, indices []uint64) {
+	bitmap := types.NewCustodyBitmap(indices)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	p.custody[hash] = &bitmap
+}
+
+func (p *announceTestPool) GetCustody(hash common.Hash) *types.CustodyBitmap {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	return p.custody[hash]
+}
+
+func (p *announceTestPool) GetBlobHashes(hash common.Hash) []common.Hash { return nil }
+
+func (p *announceTestPool) GetBlobCells([]common.Hash, types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error) {
+	return nil, nil, nil
+}
+
+func (p *announceTestPool) Has(hash common.Hash) bool {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	_, ok := p.custody[hash]
+	return ok
+}
+
+func (p *announceTestPool) Get(hash common.Hash) *types.Transaction { return nil }
+
+func (p *announceTestPool) GetRLP(hash common.Hash, version uint) []byte { return nil }
+
+func (p *announceTestPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	if _, ok := p.custody[hash]; !ok {
+		return nil
+	}
+	return &txpool.TxMetadata{Type: types.BlobTxType, Size: 100}
+}
+
+func fullCustodyIndices() []uint64 {
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	return indices
+}
+
+// TestSparseBlobAnnouncementRetriedAfterCustodyGrows checks that withholding an
+// announcement from a legacy peer is not permanent.
+func TestSparseBlobAnnouncementRetriedAfterCustodyGrows(t *testing.T) {
+	pool := newAnnounceTestPool()
+
+	sparseTx := common.Hash{0x01}
+	servedTx := common.Hash{0x02}
+	unrelatedTx := common.Hash{0x03}
+	pool.setCustody(sparseTx, []uint64{0, 1, 2, 3, 4, 5, 6, 7})
+	pool.setCustody(servedTx, fullCustodyIndices())
+	pool.setCustody(unrelatedTx, fullCustodyIndices())
+
+	app, net := p2p.MsgPipe()
+	defer app.Close()
+
+	var id enode.ID
+	rand.Read(id[:])
+	peer := NewPeer(ETH71, p2p.NewPeer(id, "legacy", nil), net, pool, pool, nil)
+	defer peer.Close()
+
+	announced := announcementStream(app)
+
+	peer.AsyncSendPooledTransactionHashes([]common.Hash{sparseTx, servedTx})
+	hashes := nextAnnouncement(t, announced)
+	if len(hashes) != 1 || hashes[0] != servedTx {
+		t.Fatalf("first announcement = %v, want only the reconstructable transaction %v", hashes, servedTx)
+	}
+	pool.setCustody(sparseTx, fullCustodyIndices())
+
+	// Wake the loop with an unrelated transaction rather than re-announcing
+	// sparseTx, which would pass even if the withheld round had dropped it.
+	peer.AsyncSendPooledTransactionHashes([]common.Hash{unrelatedTx})
+
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatal("transaction was never announced after becoming reconstructable")
+		case hashes, ok := <-announced:
+			if !ok {
+				t.Fatal("announcement stream closed before the transaction was announced")
+			}
+			for _, h := range hashes {
+				if h == sparseTx {
+					return
+				}
+			}
+		}
+	}
+}
+
+// announcementStream drains announcements into a channel, so that a missing one
+// fails on a deadline instead of blocking forever.
+func announcementStream(app *p2p.MsgPipeRW) <-chan []common.Hash {
+	stream := make(chan []common.Hash, 16)
+	go func() {
+		defer close(stream)
+		for {
+			msg, err := app.ReadMsg()
+			if err != nil {
+				return
+			}
+			if msg.Code != NewPooledTransactionHashesMsg {
+				continue
+			}
+			var announcement NewPooledTransactionHashesPacket71
+			if err := msg.Decode(&announcement); err != nil {
+				return
+			}
+			stream <- announcement.Hashes
+		}
+	}()
+	return stream
+}
+
+func nextAnnouncement(t *testing.T, stream <-chan []common.Hash) []common.Hash {
+	t.Helper()
+	select {
+	case hashes, ok := <-stream:
+		if !ok {
+			t.Fatal("announcement stream closed unexpectedly")
+		}
+		return hashes
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for an announcement")
+		return nil
+	}
+}
 
 func TestCanServeTransaction(t *testing.T) {
 	sparse := types.NewCustodyBitmap([]uint64{0, 1, 2, 3, 4, 5, 6, 7})
