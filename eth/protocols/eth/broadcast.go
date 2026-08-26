@@ -19,6 +19,7 @@ package eth
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )
 
 const (
@@ -120,6 +121,13 @@ func (p *Peer) announceTransactions() {
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
 				if meta := p.txpool.GetMetadata(queue[count]); meta != nil {
 					custody := p.blobpool.GetCustody(queue[count])
+					if !canServeTransaction(p.version, custody) {
+						// Pre-eth/72 peers can only retrieve full blob payloads. Do
+						// not advertise a sparse transaction which this node cannot
+						// reconstruct and consequently cannot serve to them.
+						processed[count] = true
+						continue
+					}
 					if custody != nil {
 						// Blob txs should be batched into the same announcement
 						// if they share the same custody.
@@ -192,4 +200,11 @@ func (p *Peer) announceTransactions() {
 			return
 		}
 	}
+}
+
+// canServeTransaction reports whether a transaction with the given custody is
+// retrievable by a peer. eth/72 peers can fetch arbitrary available cells, but
+// older peers require enough cells to reconstruct the full blob payload.
+func canServeTransaction(version uint, custody *types.CustodyBitmap) bool {
+	return version >= ETH72 || custody == nil || custody.OneCount() >= kzg4844.DataPerBlob
 }
