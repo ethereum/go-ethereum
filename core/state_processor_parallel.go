@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -266,6 +267,27 @@ func newAccessListState(db state.Database, parentRoot common.Hash, base state.Re
 	return state.NewWithReader(parentRoot, db, state.NewReaderWithBlockLevelAccessList(base, lookup, index))
 }
 
+type cumulativeGas struct {
+	lock      sync.Mutex
+	execution uint64
+	state     uint64
+}
+
+func (c *cumulativeGas) add(execution, state uint64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.execution += execution
+	c.state += state
+}
+
+func (c *cumulativeGas) load() (uint64, uint64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.execution, c.state
+}
+
 // executeTransactionsParallel applies all transactions to independent,
 // access-list-backed state instances using a pool of workers, and returns
 // the per-transaction results in block order.
@@ -277,12 +299,16 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 		blockNumber = block.Number()
 		txs         = block.Transactions()
 		results     = make([]txExecResult, len(txs))
+		gasLimit    = block.GasLimit()
 	)
 	workers := runtime.GOMAXPROCS(0)
 	if workers > len(txs) {
 		workers = len(txs)
 	}
-	var cursor atomic.Int64
+	var (
+		cursor atomic.Int64
+		spent  cumulativeGas
+	)
 	group, gctx := errgroup.WithContext(context.Background())
 	for w := 0; w < workers; w++ {
 		group.Go(func() error {
@@ -301,6 +327,13 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 				case <-gctx.Done():
 					return gctx.Err()
 				default:
+				}
+				// A valid block keeps both EIP-8037 dimensions under the block gas
+				// limit, so once the completed transactions exceed it the block
+				// cannot be valid.
+				execGas, stateGas := spent.load()
+				if execGas > gasLimit || stateGas > gasLimit {
+					return fmt.Errorf("%w: gas limit %d, execution %d, state %d", ErrGasLimitReached, gasLimit, execGas, stateGas)
 				}
 				i := int(cursor.Add(1)) - 1
 				if i >= len(txs) {
@@ -321,9 +354,9 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 				sdb.SetTxContext(tx.Hash(), i, uint32(i+1))
 				evm.SetStateDB(sdb)
 
-				// A transaction-local gas pool, sized to the transaction's own gas
-				// limit: enough to let the state transition run to completion.
-				gp := NewGasPool(msg.GasLimit)
+				// A transaction-local gas pool, sized to the block gas limit so
+				// that an oversized transaction is rejected before it runs.
+				gp := NewGasPool(gasLimit)
 				receipt, accessList, err := ApplyTransactionWithEVM(msg, gp, sdb, blockNumber, blockHash, context.Time, tx, evm)
 				if err != nil {
 					return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -338,6 +371,7 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 					state:      gp.CumulativeState(),
 					preimages:  sdb.Preimages(),
 				}
+				spent.add(gp.CumulativeExecution(), gp.CumulativeState())
 			}
 		})
 	}
