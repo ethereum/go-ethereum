@@ -587,10 +587,14 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 			}
 		}
 	}
+	// Check that the access list is only present once EIP-2930 is active
+	if msg.AccessList != nil && !rules.IsBerlin {
+		return fmt.Errorf("%w: access list tx (sender %v)", ErrTxTypeNotSupported, msg.From)
+	}
 	// Check the blob version validity
 	if msg.BlobHashes != nil {
 		if !rules.IsCancun {
-			return fmt.Errorf("%w: blob versioned hashes (sender %v)", ErrTxTypeNotSupported, msg.From)
+			return fmt.Errorf("%w: blob tx (sender %v)", ErrTxTypeNotSupported, msg.From)
 		}
 		// The to field of a blob tx type is mandatory, and a `BlobTx` transaction internally
 		// has it as a non-nillable value, so any msg derived from blob transaction has it non-nil.
@@ -628,7 +632,7 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 	// Check that EIP-7702 authorization list signatures are well formed.
 	if msg.SetCodeAuthorizations != nil {
 		if !rules.IsPrague {
-			return fmt.Errorf("%w: EIP-7702 authorization list (sender %v)", ErrTxTypeNotSupported, msg.From)
+			return fmt.Errorf("%w: setcode tx (sender %v)", ErrTxTypeNotSupported, msg.From)
 		}
 		if msg.To == nil {
 			return fmt.Errorf("%w (sender %v)", ErrSetCodeTxCreate, msg.From)
