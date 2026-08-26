@@ -715,7 +715,7 @@ func TestIndexerRollbackBoundedBatch(t *testing.T) {
 	ts.chain = ts.newTestChain()
 	defer ts.close()
 
-	// Generate 200 blocks with logs (creates ~60 maps across ~4 epochs)
+	// Generate 200 blocks with logs to create a multi-epoch indexed state
 	ts.chain.addBlocks(200, 5, 2, 4, false)
 	ts.setHistory(0, false)
 	ts.fm.WaitIdle()
@@ -729,7 +729,7 @@ func TestIndexerRollbackBoundedBatch(t *testing.T) {
 	trackedDb.maxBatchSize = 0
 	trackedDb.lock.Unlock()
 
-	// Rollback chain to block 5 (causing a rollback of ~58 maps across ~4 epochs)
+	// Rollback chain to block 5 to trigger large multi-epoch stale map deletion
 	ts.chain.setHead(5)
 	ts.fm.WaitIdle()
 
@@ -831,5 +831,55 @@ func TestIndexerRollbackDbIntegrity(t *testing.T) {
 
 	if ts1RestoredHash != ts3FreshHash {
 		t.Fatalf("Database hash mismatch after restoring original chain:\n  restored = %x\n  fresh    = %x", ts1RestoredHash, ts3FreshHash)
+	}
+}
+
+func TestIndexerRollbackCrashRecovery(t *testing.T) {
+	// Proves that interrupting the indexer during a rollback cleanup
+	// cannot leave an unrecoverable or corrupted index state.
+	ts := newTestSetup(t)
+	defer ts.close()
+
+	// Index 200 blocks
+	ts.chain.addBlocks(200, 5, 2, 4, true)
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+
+	// Stop indexer to simulate crash before final cleanup completion
+	ts.fm.Stop()
+	ts.fm = nil
+
+	// Simulate partial range deletion on the database while old range metadata remains
+	// (e.g. process killed during DeleteFilterMapRows)
+	staleStartMap := uint32(20)
+	staleEndMap := uint32(50)
+	_ = rawdb.DeleteFilterMapLastBlocks(ts.db, common.NewRange(staleStartMap, staleEndMap-staleStartMap), false, nil)
+
+	// Re-open FilterMaps on the interrupted database with the chain rolled back to block 50
+	ts.chain.setHead(50)
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+
+	// Verify that the index recovered cleanly and indexed up to block 50
+	if ts.fm.indexedRange.blocks.Last() != 50 {
+		t.Fatalf("Recovered indexer head mismatch: got %d, want 50", ts.fm.indexedRange.blocks.Last())
+	}
+
+	// Compare with reference node built cleanly to block 50
+	targetChain := ts.chain.getCanonicalChain()
+	tsRef := newTestSetup(t)
+	defer tsRef.close()
+	for _, h := range targetChain {
+		tsRef.chain.blocks[h] = ts.chain.blocks[h]
+		tsRef.chain.receipts[h] = ts.chain.receipts[h]
+	}
+	tsRef.chain.setCanonicalChain(targetChain)
+	tsRef.setHistory(0, false)
+	tsRef.fm.WaitIdle()
+
+	recoveredHash := ts.fmDbHash()
+	refHash := tsRef.fmDbHash()
+	if recoveredHash != refHash {
+		t.Fatalf("Recovered database hash mismatch against reference:\n  recovered = %x\n  reference = %x", recoveredHash, refHash)
 	}
 }
