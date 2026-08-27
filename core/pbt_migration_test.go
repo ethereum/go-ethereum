@@ -77,7 +77,6 @@ func TestStateModeResolution(t *testing.T) {
 			t.Errorf("%s: mode = %d, want %d", tc.name, mode, tc.want)
 		}
 	}
-
 }
 
 // TestMigrationGenesisIsMerkle pins that the fork does not move the genesis.
