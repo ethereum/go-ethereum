@@ -173,24 +173,19 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 	}
 	switch input {
 	case "earliest":
-		bn := EarliestBlockNumber
-		bnh.BlockNumber = &bn
+		*bnh = BlockNumberOrHashWithNumber(EarliestBlockNumber)
 		return nil
 	case "latest":
-		bn := LatestBlockNumber
-		bnh.BlockNumber = &bn
+		*bnh = BlockNumberOrHashWithNumber(LatestBlockNumber)
 		return nil
 	case "pending":
-		bn := PendingBlockNumber
-		bnh.BlockNumber = &bn
+		*bnh = BlockNumberOrHashWithNumber(PendingBlockNumber)
 		return nil
 	case "finalized":
-		bn := FinalizedBlockNumber
-		bnh.BlockNumber = &bn
+		*bnh = BlockNumberOrHashWithNumber(FinalizedBlockNumber)
 		return nil
 	case "safe":
-		bn := SafeBlockNumber
-		bnh.BlockNumber = &bn
+		*bnh = BlockNumberOrHashWithNumber(SafeBlockNumber)
 		return nil
 	default:
 		if len(input) == 66 {
@@ -199,7 +194,7 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 			if err != nil {
 				return err
 			}
-			bnh.BlockHash = &hash
+			*bnh = BlockNumberOrHashWithHash(hash, false)
 			return nil
 		} else {
 			blckNum, err := hexutil.DecodeUint64(input)
@@ -209,8 +204,7 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 			if blckNum > math.MaxInt64 {
 				return errors.New("blocknumber too high")
 			}
-			bn := BlockNumber(blckNum)
-			bnh.BlockNumber = &bn
+			*bnh = BlockNumberOrHashWithNumber(BlockNumber(blckNum))
 			return nil
 		}
 	}

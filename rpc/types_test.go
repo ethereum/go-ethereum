@@ -136,6 +136,54 @@ func TestBlockNumberOrHash_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestBlockNumberOrHash_UnmarshalJSONReuse(t *testing.T) {
+	t.Parallel()
+
+	hash := common.HexToHash("0x1234")
+	tests := []struct {
+		name    string
+		initial BlockNumberOrHash
+		input   string
+		want    BlockNumberOrHash
+	}{
+		{
+			name:    "tag replaces hash",
+			initial: BlockNumberOrHashWithHash(hash, true),
+			input:   `"latest"`,
+			want:    BlockNumberOrHashWithNumber(LatestBlockNumber),
+		},
+		{
+			name:    "number replaces hash",
+			initial: BlockNumberOrHashWithHash(hash, true),
+			input:   `"0x1"`,
+			want:    BlockNumberOrHashWithNumber(1),
+		},
+		{
+			name:    "hash replaces number",
+			initial: BlockNumberOrHashWithNumber(LatestBlockNumber),
+			input:   `"0x0000000000000000000000000000000000000000000000000000000000001234"`,
+			want:    BlockNumberOrHashWithHash(hash, false),
+		},
+		{
+			name:    "hash replaces canonical hash",
+			initial: BlockNumberOrHashWithHash(common.HexToHash("0xabcd"), true),
+			input:   `"0x0000000000000000000000000000000000000000000000000000000000001234"`,
+			want:    BlockNumberOrHashWithHash(hash, false),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := test.initial
+			if err := json.Unmarshal([]byte(test.input), &got); err != nil {
+				t.Fatal("cannot unmarshal:", err)
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("wrong result: have %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
 	t.Parallel()
 
