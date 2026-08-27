@@ -62,12 +62,9 @@ var (
 	commitStoragesMeter = metrics.NewRegisteredMeter("pathdb/commit/slots", nil)
 	commitBytesMeter    = metrics.NewRegisteredMeter("pathdb/commit/bytes", nil)
 
-	gcTrieNodeMeter      = metrics.NewRegisteredMeter("pathdb/gc/node/count", nil)
 	gcTrieNodeBytesMeter = metrics.NewRegisteredMeter("pathdb/gc/node/bytes", nil)
-	gcAccountMeter       = metrics.NewRegisteredMeter("pathdb/gc/account/count", nil)
-	gcAccountBytesMeter  = metrics.NewRegisteredMeter("pathdb/gc/account/bytes", nil)
-	gcStorageMeter       = metrics.NewRegisteredMeter("pathdb/gc/storage/count", nil)
-	gcStorageBytesMeter  = metrics.NewRegisteredMeter("pathdb/gc/storage/bytes", nil)
+	gcStateBytesMeter    = metrics.NewRegisteredMeter("pathdb/gc/state/bytes", nil)
+	bufferOverwriteGauge = metrics.NewRegisteredGauge("pathdb/buffer/overwrite", nil)
 
 	stateHistoryBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/state/time", nil)
 	stateHistoryDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/state/bytes/data", nil)
