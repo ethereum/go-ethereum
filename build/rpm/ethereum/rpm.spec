@@ -12,9 +12,11 @@ License:        GPL-3.0-or-later AND LGPL-3.0-or-later
 URL:            https://geth.ethereum.org
 Source0:        {{.SourceName}}
 
-# Only used to bootstrap the Go shipped in the source tarball, so the floor is
-# Go's own bootstrap requirement rather than the one in our go.mod.
-BuildRequires:  golang >= 1.22.6
+# Only used to bootstrap the Go shipped in the source tarball. Go 1.27 needs a
+# 1.24.6 bootstrap (src/cmd/dist/notgo124.go), but the floor is pinned to the
+# go.mod minimum instead: it is the stricter of the two, and it keeps the system
+# Go able to build go-ethereum outright should the bundled build ever be dropped.
+BuildRequires:  golang >= 1.25
 BuildRequires:  gcc
 {{range .Executables}}Requires:       {{$.ExeName .}} = %{version}-%{release}
 {{end}}
