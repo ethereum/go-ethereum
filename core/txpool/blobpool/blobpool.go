@@ -370,6 +370,31 @@ func newBlobTxMeta(id uint64, storageSize uint32, ptx *BlobTxForPool) *blobTxMet
 	return meta
 }
 
+// updateBlocked updates the total size of transactions blocked by a partial
+// transaction from the given account. It should be called after every p.index
+// modification.
+func (p *BlobPool) updateBlocked(addr common.Address) {
+	blockIndex := -1
+	for i, m := range p.index[addr] {
+		if m.custody.OneCount() < kzg4844.DataPerBlob {
+			blockIndex = i
+			break
+		}
+	}
+	if blockIndex < 0 {
+		p.blocked -= p.blockedAccount[addr]
+		delete(p.blockedAccount, addr)
+		return
+	}
+	var bytes uint64
+	for _, m := range p.index[addr][blockIndex:] {
+		bytes += uint64(m.storageSize)
+	}
+
+	p.blocked = p.blocked - p.blockedAccount[addr] + bytes
+	p.blockedAccount[addr] = bytes
+}
+
 // BlobPool is the transaction pool dedicated to EIP-4844 blob transactions.
 //
 // Blob transactions are special snowflakes that are designed for a very specific
@@ -561,6 +586,19 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
+	// A partial blob transaction (custody count below DataPerBlob) cannot be included
+	// in a block. Since an account's transactions are included in nonce order, the first
+	// partial transaction blocks all following transactions in one account from
+	// inclusion. That transaction and all transactions after it are called the
+	// account's "blocked" transactions. To prevent DoS, the total size of blocked transactions
+	// is capped by blockedCap separately from the overall data cap. While that cap is
+	// exceeded, eviction prefers blocked accounts regardless of the fees they pay; when
+	// only the overall data cap is exceeded, eviction remains a pure fee market.
+
+	blocked        uint64                    // Data size of blocked transactions across all accounts
+	blockedAccount map[common.Address]uint64 // Per-account blocked transaction bytes
+	blockedCap     uint64                    // Maximum blocked data size (Datacap * BlockedRatio)
+
 	cQueue *conversionQueue
 
 	gapped       map[common.Address][]*BlobTxForPool // Transactions that are currently gapped (nonce too high)
@@ -612,6 +650,8 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
+		blockedAccount: make(map[common.Address]uint64),
+		blockedCap:     uint64(float64(config.Datacap) * config.BlockedRatio),
 		gapped:         make(map[common.Address][]*BlobTxForPool),
 		gappedSource:   make(map[common.Hash]common.Address),
 		rlpCache:       lru.NewSizeConstrainedCache[rlpCacheKey, []byte](getRLPCacheSize),
@@ -718,7 +758,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	if head.ExcessBlobGas != nil {
 		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(p.chain.Config(), head))
 	}
-	p.evict = newPriceHeap(basefee, blobfee, p.index)
+	p.evict = newPriceHeap(basefee, blobfee, p.index, p.blockedAccount)
 
 	// Guess what was announced. This is needed because we don't want to
 	// participate in the diffusion of transactions where inclusion is blocked by
@@ -750,7 +790,8 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 
 	// Since the user might have modified their pool's capacity, evict anything
 	// above the current allowance
-	for p.stored > p.config.Datacap {
+	for p.stored > p.config.Datacap || p.blocked > p.blockedCap {
+		p.evict.setBlockedFirst(p.blocked > p.blockedCap)
 		p.drop()
 	}
 	// Update the metrics and return the constructed pool
@@ -967,6 +1008,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		}
 		delete(p.index, addr)
 		delete(p.spent, addr)
+		p.updateBlocked(addr)
 		if inclusions != nil { // only during reorgs will the heap be initialized
 			heap.Remove(p.evict, p.evict.index[addr])
 		}
@@ -1168,6 +1210,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			}
 		}
 	}
+	p.updateBlocked(addr)
 	// Included cheap transactions might have left the remaining ones better from
 	// an eviction point, fix any potential issues in the heap.
 	if _, ok := p.index[addr]; ok && inclusions != nil {
@@ -1553,11 +1596,13 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 					// Clear out the dropped transactions from the index
 					if i > 0 {
 						p.index[addr] = txs[:i]
+						p.updateBlocked(addr)
 						heap.Fix(p.evict, p.evict.index[addr])
 					} else {
 						delete(p.index, addr)
 						delete(p.spent, addr)
 
+						p.updateBlocked(addr)
 						heap.Remove(p.evict, p.evict.index[addr])
 						p.reserver.Release(addr)
 					}
@@ -2193,6 +2238,8 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 			txs[i].evictionBlobFeeJumps = txs[i].blobfeeJumps
 		}
 	}
+	isBlocked := p.blockedAccount[from] > 0
+	p.updateBlocked(from)
 	// Update the eviction heap with the new information:
 	//   - If the transaction is from a new account, add it to the heap
 	//   - If the account had a singleton tx replaced, update the heap (new price caps)
@@ -2208,13 +2255,14 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 		evictionExecFeeDiff := oldEvictionExecFeeJumps - txs[len(txs)-1].evictionExecFeeJumps
 		evictionBlobFeeDiff := oldEvictionBlobFeeJumps - txs[len(txs)-1].evictionBlobFeeJumps
 
-		if math.Abs(evictionExecFeeDiff) > 0.001 || math.Abs(evictionBlobFeeDiff) > 0.001 { // need math.Abs, can go up and down
+		if math.Abs(evictionExecFeeDiff) > 0.001 || math.Abs(evictionBlobFeeDiff) > 0.001 || isBlocked != (p.blockedAccount[from] > 0) { // need math.Abs, can go up and down
 			heap.Fix(p.evict, p.evict.index[from])
 		}
 	}
 	// If the pool went over the allowed data limit, evict transactions until
 	// we're again below the threshold
-	for p.stored > p.config.Datacap {
+	for p.stored > p.config.Datacap || p.blocked > p.blockedCap {
+		p.evict.setBlockedFirst(p.blocked > p.blockedCap)
 		p.drop()
 	}
 	p.updateStorageMetrics()
@@ -2312,6 +2360,8 @@ func (p *BlobPool) drop() {
 	}
 	p.stored -= uint64(drop.storageSize)
 	p.lookup.untrack(drop)
+	isBlocked := p.blockedAccount[from] > 0
+	p.updateBlocked(from)
 
 	// Remove the transaction from the pool's eviction heap:
 	//   - If the entire account was dropped, pop off the address
@@ -2324,7 +2374,7 @@ func (p *BlobPool) drop() {
 		evictionExecFeeDiff := tail.evictionExecFeeJumps - drop.evictionExecFeeJumps
 		evictionBlobFeeDiff := tail.evictionBlobFeeJumps - drop.evictionBlobFeeJumps
 
-		if evictionExecFeeDiff > 0.001 || evictionBlobFeeDiff > 0.001 { // no need for math.Abs, monotonic decreasing
+		if evictionExecFeeDiff > 0.001 || evictionBlobFeeDiff > 0.001 || isBlocked != (p.blockedAccount[from] > 0) { // no need for math.Abs, monotonic decreasing
 			heap.Fix(p.evict, 0)
 		}
 	}
@@ -2457,6 +2507,7 @@ func (p *BlobPool) updateStorageMetrics() {
 	datausedGauge.Update(int64(dataused))
 	datarealGauge.Update(int64(datareal))
 	slotusedGauge.Update(int64(slotused))
+	blockedGauge.Update(int64(p.blocked))
 
 	oversizedDatausedGauge.Update(int64(oversizedDataused))
 	oversizedDatagapsGauge.Update(int64(oversizedDatagaps))
@@ -2664,9 +2715,11 @@ func (p *BlobPool) Clear() {
 	p.lookup = newLookup()
 	p.index = make(map[common.Address][]*blobTxMeta)
 	p.spent = make(map[common.Address]*uint256.Int)
+	p.blockedAccount = make(map[common.Address]uint64)
 
 	// Reset counters and the gapped buffer
 	p.stored = 0
+	p.blocked = 0
 	p.gapped = make(map[common.Address][]*BlobTxForPool)
 	p.gappedSource = make(map[common.Hash]common.Address)
 
@@ -2674,7 +2727,7 @@ func (p *BlobPool) Clear() {
 		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head.Load()))
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
-	p.evict = newPriceHeap(basefee, blobfee, p.index)
+	p.evict = newPriceHeap(basefee, blobfee, p.index, p.blockedAccount)
 }
 
 // GetCustody returns the custody bitmap for a given transaction hash.
