@@ -115,8 +115,8 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
 		dbschemeConf = []string{rawdb.PathScheme}
 	}
 	if testing.Short() {
-		snapshotConf = []bool{snapshotConf[rand.Int()%2]}
-		dbschemeConf = []string{dbschemeConf[rand.Int()%2]}
+		snapshotConf = []bool{snapshotConf[rand.Int()%len(snapshotConf)]}
+		dbschemeConf = []string{dbschemeConf[rand.Int()%len(dbschemeConf)]}
 	}
 	for _, snapshot := range snapshotConf {
 		for _, dbscheme := range dbschemeConf {
