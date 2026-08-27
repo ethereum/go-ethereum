@@ -522,7 +522,7 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("Receipts: %w", err)
 	}
 
-	err = peer.bufferReceipts(res.RequestId, receiptLists, res.LastBlockIncomplete, backend)
+	err = peer.bufferReceipts(res.RequestId, receiptLists, res.LastBlockIncomplete)
 	if err != nil {
 		return err
 	}

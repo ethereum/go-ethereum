@@ -56,6 +56,8 @@ type Request struct {
 
 	Peer string    // Demultiplexer if cross-peer requests are batched together
 	Sent time.Time // Timestamp when the request was sent
+
+	roundtrips int // Number of network round trips made under this request id
 }
 
 // Close aborts an in-flight request. Although there's no way to notify the
@@ -120,6 +122,8 @@ type Response struct {
 	Meta interface{}   // Metadata generated locally on the receiver thread
 	Time time.Duration // Time it took for the request to be served
 	Done chan error    // Channel to signal message handling to the reader
+
+	Roundtrips int // Number of network round trips the exchange took
 }
 
 // response is a wrapper around a remote Response that has an error channel to
@@ -251,6 +255,7 @@ loop:
 				reqOp.fail <- err
 				continue loop
 			}
+			req.roundtrips = 1
 			pending[req.id] = req
 			reqOp.fail <- nil
 
@@ -277,6 +282,7 @@ loop:
 				resendOp.fail <- err
 				continue loop
 			}
+			req.roundtrips++
 			resendOp.fail <- nil
 
 		case cancelOp := <-p.reqCancel:
@@ -318,6 +324,7 @@ loop:
 				// with the matching request. Signal to the delivery routine that
 				// it can wait for a handler response and dispatch the data.
 				res.Time = res.recv.Sub(res.Req.Sent)
+				res.Roundtrips = res.Req.roundtrips
 				resOp.fail <- nil
 
 				// Stop tracking the request, the response dispatcher will deliver

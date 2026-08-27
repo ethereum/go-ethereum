@@ -533,7 +533,7 @@ func (p *Peer) requestPartialReceipts(id uint64) error {
 
 // bufferReceipts validates a receipt packet and buffer the incomplete packet.
 // If the request is completed, it appends previously collected receipts.
-func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, lastBlockIncomplete bool, backend Backend) error {
+func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, lastBlockIncomplete bool) error {
 	p.receiptBufferLock.Lock()
 	defer p.receiptBufferLock.Unlock()
 
@@ -556,6 +556,11 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, las
 	}
 	// Buffer the last block when the response is incomplete.
 	if lastBlockIncomplete {
+		// Prevent sending a single empty receipt.
+		if len(receiptLists) == 1 && receiptLists[0].items.Len() == 0 {
+			delete(p.receiptBuffer, requestId)
+			return errors.New("no receipt delivered in incomplete receipt response")
+		}
 		lastBlock := len(receiptLists) - 1
 		if len(buffer.list) > 0 {
 			lastBlock += len(buffer.list) - 1
