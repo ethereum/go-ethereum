@@ -28,9 +28,6 @@ var checkpointMainnet string
 //go:embed checkpoint_sepolia.hex
 var checkpointSepolia string
 
-//go:embed checkpoint_holesky.hex
-var checkpointHolesky string
-
 //go:embed checkpoint_hoodi.hex
 var checkpointHoodi string
 
@@ -60,19 +57,6 @@ var (
 		AddFork("DENEB", 132608, common.FromHex("0x90000073")).
 		AddFork("ELECTRA", 222464, common.FromHex("0x90000074")).
 		AddFork("FULU", 272640, common.FromHex("0x90000075"))
-
-	HoleskyLightConfig = (&ChainConfig{
-		GenesisValidatorsRoot: common.HexToHash("0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"),
-		GenesisTime:           1695902400,
-		Checkpoint:            common.HexToHash(checkpointHolesky),
-	}).
-		AddFork("GENESIS", 0, common.FromHex("0x01017000")).
-		AddFork("ALTAIR", 0, common.FromHex("0x02017000")).
-		AddFork("BELLATRIX", 0, common.FromHex("0x03017000")).
-		AddFork("CAPELLA", 256, common.FromHex("0x04017000")).
-		AddFork("DENEB", 29696, common.FromHex("0x05017000")).
-		AddFork("ELECTRA", 115968, common.FromHex("0x06017000")).
-		AddFork("FULU", 165120, common.FromHex("0x07017000"))
 
 	HoodiLightConfig = (&ChainConfig{
 		GenesisValidatorsRoot: common.HexToHash("0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"),

@@ -111,27 +111,6 @@ func TestCreation(t *testing.T) {
 				{1735372, 2000000000, ID{Hash: checksumToBytes(0x268956b6), Next: 0}},          // Future BPO2 block
 			},
 		},
-		// Holesky test cases
-		{
-			params.HoleskyChainConfig,
-			core.DefaultHoleskyGenesisBlock().ToBlock(),
-			[]testcase{
-				{0, 0, ID{Hash: checksumToBytes(0xc61a6098), Next: 1696000704}},            // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople, Petersburg, Istanbul, Berlin, London, Paris block
-				{123, 0, ID{Hash: checksumToBytes(0xc61a6098), Next: 1696000704}},          // First MergeNetsplit block
-				{123, 1696000704, ID{Hash: checksumToBytes(0xfd4f016b), Next: 1707305664}}, // First Shanghai block
-				{123, 1707305663, ID{Hash: checksumToBytes(0xfd4f016b), Next: 1707305664}}, // Last Shanghai block
-				{123, 1707305664, ID{Hash: checksumToBytes(0x9b192ad0), Next: 1740434112}}, // First Cancun block
-				{123, 1740434111, ID{Hash: checksumToBytes(0x9b192ad0), Next: 1740434112}}, // Last Cancun block
-				{123, 1740434112, ID{Hash: checksumToBytes(0xdfbd9bed), Next: 1759308480}}, // First Prague block
-				{123, 1759308479, ID{Hash: checksumToBytes(0xdfbd9bed), Next: 1759308480}}, // Last Prague block
-				{123, 1759308480, ID{Hash: checksumToBytes(0x783def52), Next: 1759800000}}, // First Osaka block
-				{123, 1759799999, ID{Hash: checksumToBytes(0x783def52), Next: 1759800000}}, // Last Osaka block
-				{123, 1759800000, ID{Hash: checksumToBytes(0xa280a45c), Next: 1760389824}}, // First BPO1 block
-				{123, 1760389823, ID{Hash: checksumToBytes(0xa280a45c), Next: 1760389824}}, // Last BPO1 block
-				{123, 1760389824, ID{Hash: checksumToBytes(0x9bc6cb31), Next: 0}},          // First BPO2 block
-				{123, 2000000000, ID{Hash: checksumToBytes(0x9bc6cb31), Next: 0}},          // Future BPO1 block
-			},
-		},
 		// Hoodi test cases
 		{
 			params.HoodiChainConfig,
