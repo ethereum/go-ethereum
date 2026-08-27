@@ -97,7 +97,8 @@ func TestExecutionSpecState(t *testing.T) {
 	}
 	st := new(testMatcher)
 
-	// Broken tests
+	// EIP-7610 is not implemented: a non-empty storage trie alone does not
+	// reject contract creation.
 	st.skipLoad(`.*eip7610_create_collision/initcollision/.*`)
 	st.skipLoad(`.*eip7610_create_collision/revert_in_create/.*`)
 
