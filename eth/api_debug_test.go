@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -337,6 +338,68 @@ func TestGetModifiedAccounts(t *testing.T) {
 			if !slices.Contains(addrs, account.addr) {
 				t.Fatalf("account %s not found in modified accounts", account.addr.Hex())
 			}
+		}
+	})
+}
+
+// TestGetModifiedAccountsDeleted checks that an account which exists in the start
+// state and is gone from the end state is reported as modified. Such an account
+// only lives in the old trie, so a one-directional difference misses it.
+func TestGetModifiedAccountsDeleted(t *testing.T) {
+	t.Parallel()
+
+	accounts := newAccounts(2)
+	victim := common.HexToAddress("0x000000000000000000000000000000000000dEaD")
+
+	// Pre-Shanghai runtime code: PUSH20 <beneficiary>; SELFDESTRUCT.
+	code := append([]byte{byte(vm.PUSH20)}, accounts[1].addr.Bytes()...)
+	code = append(code, byte(vm.SELFDESTRUCT))
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			victim:           {Balance: big.NewInt(12345), Code: code},
+		},
+	}
+	signer := types.HomesteadSigner{}
+	blockChain := newTestBlockChain(t, 1, genesis, func(_ int, b *core.BlockGen) {
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    0,
+			To:       &victim,
+			Value:    big.NewInt(0),
+			Gas:      100000,
+			GasPrice: b.BaseFee(),
+		}), signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+	defer blockChain.Stop()
+
+	start, end := blockChain.GetHeaderByNumber(0), blockChain.GetHeaderByNumber(1)
+	startState, err := blockChain.StateAt(start)
+	assert.NoError(t, err)
+	endState, err := blockChain.StateAt(end)
+	assert.NoError(t, err)
+	if !startState.Exist(victim) || endState.Exist(victim) {
+		t.Fatal("fixture failed to delete the account")
+	}
+	api := NewDebugAPI(&Ethereum{blockchain: blockChain})
+
+	t.Run("GetModifiedAccountsByNumber", func(t *testing.T) {
+		endNum := end.Number.Uint64()
+		addrs, err := api.GetModifiedAccountsByNumber(start.Number.Uint64(), &endNum)
+		assert.NoError(t, err)
+		if !slices.Contains(addrs, victim) {
+			t.Fatalf("deleted account %s not found in modified accounts", victim.Hex())
+		}
+	})
+
+	t.Run("GetModifiedAccountsByHash", func(t *testing.T) {
+		endHash := end.Hash()
+		addrs, err := api.GetModifiedAccountsByHash(start.Hash(), &endHash)
+		assert.NoError(t, err)
+		if !slices.Contains(addrs, victim) {
+			t.Fatalf("deleted account %s not found in modified accounts", victim.Hex())
 		}
 	})
 }

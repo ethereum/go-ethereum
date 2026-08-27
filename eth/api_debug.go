@@ -384,24 +384,44 @@ func (api *DebugAPI) getModifiedAccounts(startHeader, endHeader *types.Header) (
 	if err != nil {
 		return nil, err
 	}
-	oldIt, err := oldTrie.NodeIterator([]byte{})
-	if err != nil {
-		return nil, err
-	}
-	newIt, err := newTrie.NodeIterator([]byte{})
-	if err != nil {
-		return nil, err
-	}
-	diff, _ := trie.NewDifferenceIterator(oldIt, newIt)
-	iter := trie.NewIterator(diff)
-
-	var dirty []common.Address
-	for iter.Next() {
-		key := newTrie.GetKey(iter.Key)
-		if key == nil {
-			return nil, fmt.Errorf("no preimage found for hash %x", iter.Key)
+	// The difference iterator only yields leaves of its second trie, so accounts
+	// deleted between the two blocks are invisible to the old -> new direction and
+	// have to be picked up by the reverse one. Accounts modified in place show up
+	// in both, hence the deduplication.
+	var (
+		dirty []common.Address
+		seen  = make(map[common.Address]struct{})
+	)
+	collect := func(a, b *trie.StateTrie) error {
+		aIt, err := a.NodeIterator([]byte{})
+		if err != nil {
+			return err
 		}
-		dirty = append(dirty, common.BytesToAddress(key))
+		bIt, err := b.NodeIterator([]byte{})
+		if err != nil {
+			return err
+		}
+		diff, _ := trie.NewDifferenceIterator(aIt, bIt)
+		iter := trie.NewIterator(diff)
+		for iter.Next() {
+			key := b.GetKey(iter.Key)
+			if key == nil {
+				return fmt.Errorf("no preimage found for hash %x", iter.Key)
+			}
+			addr := common.BytesToAddress(key)
+			if _, ok := seen[addr]; ok {
+				continue
+			}
+			seen[addr] = struct{}{}
+			dirty = append(dirty, addr)
+		}
+		return nil
+	}
+	if err := collect(oldTrie, newTrie); err != nil {
+		return nil, err
+	}
+	if err := collect(newTrie, oldTrie); err != nil {
+		return nil, err
 	}
 	return dirty, nil
 }
