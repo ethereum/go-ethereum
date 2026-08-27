@@ -133,7 +133,8 @@ func NewPolicy(mode HistoryMode, genesisHash common.Hash) (HistoryPolicy, error)
 		if point == nil {
 			return HistoryPolicy{}, fmt.Errorf("%s history pruning not available for network %s", mode, genesisHash.Hex())
 		}
-		return HistoryPolicy{Mode: mode, Target: point}, nil
+		target := *point
+		return HistoryPolicy{Mode: mode, Target: &target}, nil
 
 	default:
 		return HistoryPolicy{}, fmt.Errorf("invalid history mode: %d", mode)
