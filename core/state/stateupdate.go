@@ -197,8 +197,50 @@ func encodeSlot(value common.Hash) []byte {
 	if value == (common.Hash{}) {
 		return nil
 	}
-	blob, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
+	// The trimmed value is between 1 and 32 bytes, so its RLP is always a short
+	// string. Writing it directly saves a trip through the encoder, which this
+	// is called a few thousand times per block.
+	trimmed := common.TrimLeftZeroes(value[:])
+	if len(trimmed) == 1 && trimmed[0] < 0x80 {
+		return []byte{trimmed[0]}
+	}
+	blob := make([]byte, 1+len(trimmed))
+	blob[0] = 0x80 + byte(len(trimmed))
+	copy(blob[1:], trimmed)
 	return blob
+}
+
+// encodeAccounts encodes the given accounts into their slim RLP form, reusing a
+// single encoder across all of them.
+func encodeAccounts[K comparable](src map[K]*types.StateAccount) map[K][]byte {
+	out := make(map[K][]byte, len(src))
+	if len(src) == 0 {
+		return out
+	}
+	buf := rlp.NewEncoderBuffer(nil)
+	defer buf.Flush()
+
+	for key, account := range src {
+		if account == nil {
+			out[key] = nil
+			continue
+		}
+		out[key] = types.SlimAccountRLPInto(&buf, *account)
+	}
+	return out
+}
+
+// encodeStorages encodes the given storage slots into their trie form.
+func encodeStorages[K comparable](src map[K]map[common.Hash]common.Hash) map[K]map[common.Hash][]byte {
+	out := make(map[K]map[common.Hash][]byte, len(src))
+	for key, slots := range src {
+		subset := make(map[common.Hash][]byte, len(slots))
+		for slot, value := range slots {
+			subset[slot] = encodeSlot(value)
+		}
+		out[key] = subset
+	}
+	return out
 }
 
 // EncodeMPTState encodes all state mutations alongside their original value
@@ -207,41 +249,7 @@ func encodeSlot(value common.Hash) []byte {
 // It transforms account and storage updates into their corresponding MPT-encoded
 // key-value mappings, using the same encoding rules as the Ethereum state trie.
 func (sc *StateUpdate) EncodeMPTState() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte) {
-	var (
-		accounts      = make(map[common.Hash][]byte, len(sc.Accounts))
-		storages      = make(map[common.Hash]map[common.Hash][]byte, len(sc.Storages))
-		accountOrigin = make(map[common.Address][]byte, len(sc.AccountsOrigin))
-		storageOrigin = make(map[common.Address]map[common.Hash][]byte, len(sc.StoragesOrigin))
-	)
-	for addr, prev := range sc.AccountsOrigin {
-		if prev == nil {
-			accountOrigin[addr] = nil
-		} else {
-			accountOrigin[addr] = types.SlimAccountRLP(*prev)
-		}
-	}
-	for addrHash, data := range sc.Accounts {
-		if data == nil {
-			accounts[addrHash] = nil
-		} else {
-			accounts[addrHash] = types.SlimAccountRLP(*data)
-		}
-	}
-	for addr, slots := range sc.StoragesOrigin {
-		subset := make(map[common.Hash][]byte)
-		for key, val := range slots {
-			subset[key] = encodeSlot(val)
-		}
-		storageOrigin[addr] = subset
-	}
-	for addrHash, slots := range sc.Storages {
-		subset := make(map[common.Hash][]byte)
-		for key, val := range slots {
-			subset[key] = encodeSlot(val)
-		}
-		storages[addrHash] = subset
-	}
-	return accounts, accountOrigin, storages, storageOrigin
+	return encodeAccounts(sc.Accounts), encodeAccounts(sc.AccountsOrigin), encodeStorages(sc.Storages), encodeStorages(sc.StoragesOrigin)
 }
 
 // EncodeUBTState encodes all state mutations alongside their original value
@@ -250,41 +258,7 @@ func (sc *StateUpdate) EncodeMPTState() (map[common.Hash][]byte, map[common.Addr
 // It transforms account and storage updates into their corresponding UBT-encoded
 // key-value mappings, using the same encoding rules as the Ethereum state trie.
 func (sc *StateUpdate) EncodeUBTState() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte) {
-	var (
-		accounts      = make(map[common.Hash][]byte, len(sc.Accounts))
-		storages      = make(map[common.Hash]map[common.Hash][]byte, len(sc.Storages))
-		accountOrigin = make(map[common.Address][]byte, len(sc.AccountsOrigin))
-		storageOrigin = make(map[common.Address]map[common.Hash][]byte, len(sc.StoragesOrigin))
-	)
-	for addr, prev := range sc.AccountsOrigin {
-		if prev == nil {
-			accountOrigin[addr] = nil
-		} else {
-			accountOrigin[addr] = types.SlimAccountRLP(*prev)
-		}
-	}
-	for addrHash, data := range sc.Accounts {
-		if data == nil {
-			accounts[addrHash] = nil
-		} else {
-			accounts[addrHash] = types.SlimAccountRLP(*data)
-		}
-	}
-	for addr, slots := range sc.StoragesOrigin {
-		subset := make(map[common.Hash][]byte)
-		for key, val := range slots {
-			subset[key] = encodeSlot(val)
-		}
-		storageOrigin[addr] = subset
-	}
-	for addrHash, slots := range sc.Storages {
-		subset := make(map[common.Hash][]byte)
-		for key, val := range slots {
-			subset[key] = encodeSlot(val)
-		}
-		storages[addrHash] = subset
-	}
-	return accounts, accountOrigin, storages, storageOrigin
+	return encodeAccounts(sc.Accounts), encodeAccounts(sc.AccountsOrigin), encodeStorages(sc.Storages), encodeStorages(sc.StoragesOrigin)
 }
 
 // deriveCodeFields derives the missing fields of contract code changes
