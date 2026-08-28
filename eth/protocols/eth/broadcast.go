@@ -199,9 +199,7 @@ func (p *Peer) announceTransactions() {
 	}
 }
 
-// announceable reports whether a transaction with the given custody can be
-// announced to a peer. eth/72 peers can fetch arbitrary available cells, but
-// older peers require enough cells to reconstruct the full blob payload.
+// announceable reports whether the peer can retrieve the transaction.
 func announceable(version uint, custody *types.CustodyBitmap) bool {
 	return version >= ETH72 || custody == nil || custody.OneCount() >= kzg4844.DataPerBlob
 }
