@@ -83,11 +83,12 @@ type PeerDelivery struct {
 
 type txEntry struct {
 	tx *types.Transaction
+
 	// Technically it is not required to store peer information to drop properly.
 	// This is mainly for per peer size limit check.
-	peer  string
-	added time.Time
-	size  uint64 // Encoded size, as accounted against the buffer limits
+	peer  string    // Peer Identifier
+	added time.Time // Timestamp when the tx is added
+	size  uint64    // Encoded size, as accounted against the buffer limits
 }
 
 type cellEntry struct {
@@ -138,7 +139,6 @@ func (b *BlobBuffer) Flush() ([]common.Hash, []error) {
 	if b.completedCount.Load() == 0 {
 		return nil, nil
 	}
-
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -239,7 +239,7 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 		log.Warn("Dropping blob tx with overlapping cell deliveries", "hash", hash, "err", err)
 		blobBufferDupCellsCounter.Inc(1)
 		delete(b.cells, hash)
-		delete(b.txs, hash)
+		b.removeTx(hash)
 		return
 	}
 	cellSidecar := types.BlobTxCellSidecar{
@@ -270,6 +270,7 @@ func (b *BlobBuffer) HasTx(hash common.Hash) bool {
 func (b *BlobBuffer) HasCells(hash common.Hash) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	_, ok := b.cells[hash]
 	return ok
 }
@@ -294,6 +295,7 @@ func (b *BlobBuffer) removeTx(hash common.Hash) {
 		return
 	}
 	b.txBytes -= entry.size
+
 	if b.peerTxBytes[entry.peer] -= entry.size; b.peerTxBytes[entry.peer] == 0 {
 		delete(b.peerTxBytes, entry.peer)
 	}
