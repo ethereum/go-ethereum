@@ -37,14 +37,6 @@ var HoodiBootnodes = []string{
 	"enode://8ae4a48101b2299597341263da0deb47cc38aa4d3ef4b7430b897d49bfa10eb1ccfe1655679b1ed46928ef177fbf21b86837bd724400196c508427a6f41602cd@134.199.184.23:30303",
 }
 
-// HoleskyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// Holesky test network.
-var HoleskyBootnodes = []string{
-	// EF DevOps
-	"enode://ac906289e4b7f12df423d654c5a962b6ebe5b3a74cc9e06292a85221f9a64a6f1cfdd6b714ed6dacef51578f92b34c60ee91e9ede9c7f8fadc4d347326d95e2b@146.190.13.128:30303",
-	"enode://a3435a0155a3e837c02f5e7f5662a2f1fbc25b48e4dc232016e1c51b544cb5b4510ef633ea3278c0e970fa8ad8141e2d4d0f9f95456c537ff05fdf9b31c15072@178.128.136.233:30303",
-}
-
 // SepoliaBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Sepolia test network.
 var SepoliaBootnodes = []string{
@@ -91,8 +83,6 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 		net = "mainnet"
 	case SepoliaGenesisHash:
 		net = "sepolia"
-	case HoleskyGenesisHash:
-		net = "holesky"
 	case HoodiGenesisHash:
 		net = "hoodi"
 	default:

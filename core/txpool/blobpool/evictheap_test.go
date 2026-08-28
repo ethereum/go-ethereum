@@ -159,7 +159,7 @@ func TestPriceHeapSorting(t *testing.T) {
 			}}
 		}
 		// Create a price heap and check the pop order
-		priceheap := newPriceHeap(uint256.NewInt(tt.basefee), uint256.NewInt(tt.blobfee), index)
+		priceheap := newPriceHeap(uint256.NewInt(tt.basefee), uint256.NewInt(tt.blobfee), index, nil)
 		verifyHeapInternals(t, priceheap)
 
 		for j := 0; j < len(tt.order); j++ {
@@ -170,6 +170,67 @@ func TestPriceHeapSorting(t *testing.T) {
 			}
 			verifyHeapInternals(t, priceheap)
 		}
+	}
+}
+
+// Tests that blocked accounts are only preferred for eviction while the heap
+// is in blocked-first mode, and that fee ordering applies otherwise.
+func TestPriceHeapBlockedFirst(t *testing.T) {
+	// Create three accounts: a cheap and an expensive non-blocked one, plus a
+	// blocked account paying the highest fees of all.
+	var (
+		cheap     = common.Address{0x01}
+		expensive = common.Address{0x02}
+		blocked   = common.Address{0x03}
+
+		index      = make(map[common.Address][]*blobTxMeta)
+		blockedMap = map[common.Address]uint64{blocked: 128 * 1024}
+	)
+	for addr, tip := range map[common.Address]uint64{cheap: 1, expensive: 10, blocked: 100} {
+		var (
+			execTip = uint256.NewInt(tip)
+			execFee = uint256.NewInt(1000 * tip)
+			blobFee = uint256.NewInt(100 * tip)
+
+			basefeeJumps = dynamicFeeJumps(execFee)
+			blobfeeJumps = dynamicBlobFeeJumps(blobFee)
+		)
+		index[addr] = []*blobTxMeta{{
+			id:                   uint64(addr[0]),
+			storageSize:          128 * 1024,
+			nonce:                0,
+			execTipCap:           execTip,
+			execFeeCap:           execFee,
+			blobFeeCap:           blobFee,
+			basefeeJumps:         basefeeJumps,
+			blobfeeJumps:         blobfeeJumps,
+			evictionExecTip:      execTip,
+			evictionExecFeeJumps: basefeeJumps,
+			evictionBlobFeeJumps: blobfeeJumps,
+		}}
+	}
+	// In fee-only mode (the default), the cheapest account is the eviction
+	// candidate, irrespective of its blocked status.
+	priceheap := newPriceHeap(uint256.NewInt(2000), uint256.NewInt(200), index, blockedMap)
+	verifyHeapInternals(t, priceheap)
+
+	if root := priceheap.addrs[0]; root != cheap {
+		t.Errorf("fee-only mode root mismatch: have %v, want %v", root, cheap)
+	}
+	// In blocked-first mode, the blocked account is the eviction candidate,
+	// irrespective of the fees it pays.
+	priceheap.setBlockedFirst(true)
+	verifyHeapInternals(t, priceheap)
+
+	if root := priceheap.addrs[0]; root != blocked {
+		t.Errorf("blocked-first mode root mismatch: have %v, want %v", root, blocked)
+	}
+	// Dropping back to fee-only mode reinstates pure price ordering.
+	priceheap.setBlockedFirst(false)
+	verifyHeapInternals(t, priceheap)
+
+	if root := priceheap.addrs[0]; root != cheap {
+		t.Errorf("fee-only mode root mismatch after flip: have %v, want %v", root, cheap)
 	}
 }
 
@@ -218,7 +279,7 @@ func benchmarkPriceHeapReinit(b *testing.B, datacap uint64) {
 		}}
 	}
 	// Create a price heap and reinit it over and over
-	heap := newPriceHeap(uint256.NewInt(rnd.Uint64()), uint256.NewInt(rnd.Uint64()), index)
+	heap := newPriceHeap(uint256.NewInt(rnd.Uint64()), uint256.NewInt(rnd.Uint64()), index, nil)
 
 	basefees := make([]*uint256.Int, b.N)
 	blobfees := make([]*uint256.Int, b.N)
@@ -294,7 +355,7 @@ func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 		}}
 	}
 	// Create a price heap and overflow it over and over
-	evict := newPriceHeap(uint256.NewInt(rnd.Uint64()), uint256.NewInt(rnd.Uint64()), index)
+	evict := newPriceHeap(uint256.NewInt(rnd.Uint64()), uint256.NewInt(rnd.Uint64()), index, nil)
 	var (
 		addrs = make([]common.Address, b.N)
 		metas = make([]*blobTxMeta, b.N)

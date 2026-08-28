@@ -337,7 +337,14 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			// caused by a timed out request which came through in the end), set it to
 			// idle. If the delivery's stale, the peer should have already been idled.
 			if !errors.Is(err, errStaleDelivery) {
-				queue.updateCapacity(peer, accepted, res.Time)
+				items, elapsed := accepted, res.Time
+				if res.Roundtrips > 1 && items > 0 {
+					// Partial receipt response can be assembled over multiple round trips.
+					// Scale both values down to a single round trip.
+					items = max(1, items/res.Roundtrips)
+					elapsed = res.Time * time.Duration(items) / time.Duration(accepted)
+				}
+				queue.updateCapacity(peer, items, elapsed)
 			}
 			res.Done <- validityErrorOfRequest(err)
 			res.Req.Close()
