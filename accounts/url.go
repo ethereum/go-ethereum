@@ -42,13 +42,13 @@ type URL struct {
 
 // parseURL converts a user supplied URL into the accounts specific structure.
 func parseURL(url string) (URL, error) {
-	parts := strings.Split(url, "://")
-	if len(parts) != 2 || parts[0] == "" {
+	scheme, path, ok := strings.Cut(url, "://")
+	if !ok || scheme == "" {
 		return URL{}, errors.New("protocol scheme missing")
 	}
 	return URL{
-		Scheme: parts[0],
-		Path:   parts[1],
+		Scheme: scheme,
+		Path:   path,
 	}, nil
 }
 

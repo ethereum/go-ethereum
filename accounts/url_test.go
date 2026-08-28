@@ -33,6 +33,17 @@ func TestURLParsing(t *testing.T) {
 		t.Errorf("expected: %v, got: %v", "ethereum.org", url.Path)
 	}
 
+	url, err = parseURL("extapi://http://localhost:8545")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if url.Scheme != "extapi" {
+		t.Errorf("expected: %v, got: %v", "extapi", url.Scheme)
+	}
+	if url.Path != "http://localhost:8545" {
+		t.Errorf("expected: %v, got: %v", "http://localhost:8545", url.Path)
+	}
+
 	for _, u := range []string{"ethereum.org", ""} {
 		if _, err = parseURL(u); err == nil {
 			t.Errorf("input %v, expected err, got: nil", u)
