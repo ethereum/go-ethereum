@@ -312,6 +312,13 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 		next := common.BytesToHash(it.Key)
 		result.NextKey = &next
 	}
+	// Iterator.Next returns false on both exhaustion and error, so a failure to
+	// resolve a trie node mid-range would otherwise be reported as a complete
+	// result (a nil NextKey claims all keys were returned). Surface the error
+	// instead of silently truncating.
+	if it.Err != nil {
+		return StorageRangeResult{}, it.Err
+	}
 	return result, nil
 }
 
