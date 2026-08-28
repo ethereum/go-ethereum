@@ -20,11 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/ethereum/go-ethereum/metrics"
 )
-
-// Marked once per round per withheld transaction, not once per transaction.
-var sparseAnnounceSkipMeter = metrics.NewRegisteredMeter("eth/protocols/eth/announce/sparseskip", nil)
 
 const (
 	// This is the target size for the packs of transactions or announcements. A
@@ -125,9 +121,8 @@ func (p *Peer) announceTransactions() {
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
 				if meta := p.txpool.GetMetadata(queue[count]); meta != nil {
 					custody := p.blobpool.GetCustody(queue[count])
-					if !canServeTransaction(p.version, custody) {
+					if !announceable(p.version, custody) {
 						// Left in the queue: the fetcher may still complete the set.
-						sparseAnnounceSkipMeter.Mark(1)
 						continue
 					}
 					if custody != nil {
@@ -204,9 +199,9 @@ func (p *Peer) announceTransactions() {
 	}
 }
 
-// canServeTransaction reports whether a transaction with the given custody is
-// retrievable by a peer. eth/72 peers can fetch arbitrary available cells, but
+// announceable reports whether a transaction with the given custody can be
+// announced to a peer. eth/72 peers can fetch arbitrary available cells, but
 // older peers require enough cells to reconstruct the full blob payload.
-func canServeTransaction(version uint, custody *types.CustodyBitmap) bool {
+func announceable(version uint, custody *types.CustodyBitmap) bool {
 	return version >= ETH72 || custody == nil || custody.OneCount() >= kzg4844.DataPerBlob
 }
