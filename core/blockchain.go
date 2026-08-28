@@ -358,7 +358,6 @@ type BlockChain struct {
 	jumpDestCache   vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
 	precompileCache *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
 	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
-	stateMode       stateMode                        // How the chain relates to the binary tree
 	follower        *bintrieFollower                 // Shadow tree follower, nil unless migrating
 
 	hc               *HeaderChain
