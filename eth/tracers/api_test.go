@@ -17,6 +17,7 @@
 package tracers
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -286,7 +287,7 @@ func TestStateHooks(t *testing.T) {
 	DefaultDirectory.Register("stateTracer", newStateTracer, false)
 	api := NewAPI(backend)
 	tracer := "stateTracer"
-	res, err := api.TraceCall(context.Background(), ethapi.TransactionArgs{From: &from, To: &to, Value: (*hexutil.Big)(big.NewInt(1000))}, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber), &TraceCallConfig{TraceConfig: TraceConfig{Tracer: &tracer}})
+	res, err := api.TraceCall(context.Background(), ethapi.TransactionArgs{From: &from, To: &to, Value: (*hexutil.Big)(big.NewInt(1000))}, nil, &TraceCallConfig{TraceConfig: TraceConfig{Tracer: &tracer}})
 	if err != nil {
 		t.Fatalf("failed to trace call: %v", err)
 	}
@@ -499,7 +500,7 @@ func TestTraceCall(t *testing.T) {
 		},
 	}
 	for i, testspec := range testSuite {
-		result, err := api.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
+		result, err := api.TraceCall(context.Background(), testspec.call, &rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
 		if testspec.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
@@ -1040,7 +1041,7 @@ func TestTracingWithOverrides(t *testing.T) {
 		},
 	}
 	for i, tc := range testSuite {
-		result, err := api.TraceCall(context.Background(), tc.call, rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, tc.config)
+		result, err := api.TraceCall(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, tc.config)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
@@ -1900,5 +1901,45 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 	_, err := api.StandardTraceBadBlockToFile(context.Background(), common.Hash{42}, nil)
 	if err == nil {
 		t.Fatal("want error for non-existent bad block, have none")
+	}
+}
+
+// TestTraceCallDefaultsToLatest verifies that debug_traceCall defaults the
+// optional block parameter to "latest" over the RPC interface.
+func TestTraceCallDefaultsToLatest(t *testing.T) {
+	t.Parallel()
+
+	accounts := newAccounts(2)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	backend := newTestBackend(t, 2, genesis, func(i int, b *core.BlockGen) {})
+	defer backend.teardown()
+
+	srv := rpc.NewServer()
+	if err := srv.RegisterName("debug", NewAPI(backend)); err != nil {
+		t.Fatal(err)
+	}
+	client := rpc.DialInProc(srv)
+	defer client.Close()
+
+	args := ethapi.TransactionArgs{
+		From:  &accounts[0].addr,
+		To:    &accounts[1].addr,
+		Value: (*hexutil.Big)(big.NewInt(1000)),
+	}
+	var omitted, latest json.RawMessage
+	if err := client.Call(&omitted, "debug_traceCall", args); err != nil {
+		t.Fatalf("traceCall with omitted block: unexpected error: %v", err)
+	}
+	if err := client.Call(&latest, "debug_traceCall", args, "latest"); err != nil {
+		t.Fatalf("traceCall with explicit latest: unexpected error: %v", err)
+	}
+	if !bytes.Equal(omitted, latest) {
+		t.Errorf("omitted-block result %s != latest result %s", omitted, latest)
 	}
 }
