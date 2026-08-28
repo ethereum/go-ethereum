@@ -19,6 +19,7 @@ package eth
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )
 
 const (
@@ -120,6 +121,10 @@ func (p *Peer) announceTransactions() {
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
 				if meta := p.txpool.GetMetadata(queue[count]); meta != nil {
 					custody := p.blobpool.GetCustody(queue[count])
+					if !announceable(p.version, custody) {
+						// Left in the queue: the fetcher may still complete the set.
+						continue
+					}
 					if custody != nil {
 						// Blob txs should be batched into the same announcement
 						// if they share the same custody.
@@ -192,4 +197,9 @@ func (p *Peer) announceTransactions() {
 			return
 		}
 	}
+}
+
+// announceable reports whether the peer can retrieve the transaction.
+func announceable(version uint, custody *types.CustodyBitmap) bool {
+	return version >= ETH72 || custody == nil || custody.OneCount() >= kzg4844.DataPerBlob
 }
