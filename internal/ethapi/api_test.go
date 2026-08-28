@@ -3954,6 +3954,67 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	require.Equal(t, expected, result.Accesslist)
 }
 
+func TestEstimateGasAmsterdam(t *testing.T) {
+	t.Parallel()
+	var (
+		accounts = newAccounts(2)
+		config   = *params.MergedTestChainConfig
+		genesis  = &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	config.AmsterdamTime = new(uint64)
+	api := NewBlockChainAPI(newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil))
+
+	var testSuite = []struct {
+		call TransactionArgs
+		want uint64
+	}{
+		// value transfer to an existing account: EIP-2780 intrinsic gas
+		{
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			want: 21000,
+		},
+		// zero-value call to an existing account: below the legacy 21000 floor
+		{
+			call: TransactionArgs{
+				From: &accounts[0].addr,
+				To:   &accounts[1].addr,
+			},
+			want: 15000,
+		},
+		// self transfer: base cost only
+		{
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[0].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			want: 12000,
+		},
+	}
+	latest := rpc.LatestBlockNumber
+	for i, tc := range testSuite {
+		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &latest}, nil, nil)
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		if uint64(result) != tc.want {
+			t.Errorf("test %d: result mismatch, have %v, want %v", i, uint64(result), tc.want)
+		}
+	}
+}
+
 func TestEstimateGasWithMovePrecompile(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
