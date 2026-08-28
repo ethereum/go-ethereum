@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -501,21 +500,35 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
 
-func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*stateless.ExtWitness, error) {
+// ExecutionWitnessResult is the canonical execution witness format defined by
+// the execution-specs stateless validation interface: RLP-encoded headers, and
+// state/codes sorted lexicographically and deduplicated.
+type ExecutionWitnessResult struct {
+	State   []hexutil.Bytes `json:"state"`
+	Codes   []hexutil.Bytes `json:"codes"`
+	Headers []hexutil.Bytes `json:"headers"`
+}
+
+func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*ExecutionWitnessResult, error) {
+	// The pending tag does not identify an executed block, so it has no witness.
+	if number, ok := bn.Number(); ok && number == rpc.PendingBlockNumber {
+		return nil, errors.New("pending block has no witness")
+	}
 	bc := api.eth.blockchain
 	block, err := api.eth.APIBackend.BlockByNumberOrHash(context.Background(), bn)
 	if err != nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
+		// Preserve backend errors such as history.PrunedHistoryError (code 4444).
+		return nil, err
 	}
 	// BlockByNumberOrHash returns a nil block without an error when the
 	// requested block does not exist (per the RPC spec). Guard against it
 	// to avoid a nil pointer dereference below.
 	if block == nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
+		return nil, fmt.Errorf("block %s not found", bn.String())
 	}
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		return &stateless.ExtWitness{}, fmt.Errorf("block %v found, but parent missing", bn)
+		return nil, fmt.Errorf("block %s found, but parent missing", bn.String())
 	}
 	config := core.ExecuteConfig{
 		WriteState:   false,
@@ -526,7 +539,25 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*stateless.ExtW
 	if err != nil {
 		return nil, err
 	}
-	return result.Witness().ToExtWitness(), nil
+	witness := result.Witness()
+	if witness == nil {
+		// ProcessBlock only builds a witness for post-Byzantium blocks.
+		return nil, fmt.Errorf("no witness available for block %s", bn.String())
+	}
+	ext := witness.ToExtWitness()
+	res := &ExecutionWitnessResult{
+		State:   ext.State,
+		Codes:   ext.Codes,
+		Headers: make([]hexutil.Bytes, 0, len(ext.Headers)),
+	}
+	for _, header := range ext.Headers {
+		enc, err := rlp.EncodeToBytes(header)
+		if err != nil {
+			return nil, err
+		}
+		res.Headers = append(res.Headers, enc)
+	}
+	return res, nil
 }
 
 // ClearTxpool clears all transactions from the transaction pool.

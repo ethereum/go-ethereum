@@ -84,14 +84,18 @@ func main() {
 	fmt.Printf("Fetched block %d (%#x)\n", block.NumberU64(), block.Hash())
 
 	// Fetch the execution witness via the debug namespace.
-	var extWitness stateless.ExtWitness
-	err = client.Client().CallContext(ctx, &extWitness, "debug_executionWitness", rpc.BlockNumber(block.NumberU64()))
+	var witnessResult executionWitnessResult
+	err = client.Client().CallContext(ctx, &witnessResult, "debug_executionWitness", rpc.BlockNumber(block.NumberU64()))
 	if err != nil {
 		fatal("failed to fetch execution witness: %v", err)
 	}
+	extWitness, err := witnessResult.toExtWitness()
+	if err != nil {
+		fatal("failed to decode witness headers: %v", err)
+	}
 
 	witness := new(stateless.Witness)
-	err = witness.FromExtWitness(&extWitness)
+	err = witness.FromExtWitness(extWitness)
 	if err != nil {
 		fatal("failed to convert witness: %v", err)
 	}
@@ -121,7 +125,7 @@ func main() {
 		case "hex":
 			data = []byte(hexutil.Encode(rlpBytes))
 		case "json":
-			data, err = marshalJSONPayload(chainID, block, &extWitness)
+			data, err = marshalJSONPayload(chainID, block, extWitness)
 			if err != nil {
 				fatal("failed to JSON-encode payload: %v", err)
 			}
@@ -153,6 +157,28 @@ func parseBlockNumber(s string) (*big.Int, error) {
 		return nil, fmt.Errorf("invalid decimal number")
 	}
 	return n, nil
+}
+
+// executionWitnessResult mirrors eth.ExecutionWitnessResult.
+type executionWitnessResult struct {
+	State   []hexutil.Bytes `json:"state"`
+	Codes   []hexutil.Bytes `json:"codes"`
+	Headers []hexutil.Bytes `json:"headers"`
+}
+
+func (r *executionWitnessResult) toExtWitness() (*stateless.ExtWitness, error) {
+	ext := &stateless.ExtWitness{
+		State: r.State,
+		Codes: r.Codes,
+	}
+	for _, enc := range r.Headers {
+		header := new(types.Header)
+		if err := rlp.DecodeBytes(enc, header); err != nil {
+			return nil, err
+		}
+		ext.Headers = append(ext.Headers, header)
+	}
+	return ext, nil
 }
 
 // jsonPayload is a JSON-friendly representation of Payload. It uses ExtWitness

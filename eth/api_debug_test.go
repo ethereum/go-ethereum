@@ -19,6 +19,7 @@ package eth
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -41,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
@@ -367,6 +370,36 @@ func TestExecutionWitnessMissingBlock(t *testing.T) {
 	missing := rpc.BlockNumberOrHashWithHash(common.HexToHash("0xdeadbeef"), false)
 	_, err := api.ExecutionWitness(missing)
 	assert.Error(t, err, "expected an error for a missing block, got nil")
+
+	pending := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	_, err = api.ExecutionWitness(pending)
+	assert.Error(t, err, "expected an error for the pending tag, got nil")
+}
+
+// TestExecutionWitnessPreByzantium ensures that debug_executionWitness returns
+// an error, rather than panicking, for a pre-Byzantium block: ProcessBlock only
+// builds a witness once Byzantium is active.
+func TestExecutionWitnessPreByzantium(t *testing.T) {
+	t.Parallel()
+
+	genesis := &core.Genesis{
+		Config: &params.ChainConfig{
+			ChainID:        big.NewInt(1),
+			HomesteadBlock: big.NewInt(0),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(0),
+			EIP158Block:    big.NewInt(0),
+		},
+	}
+	blockChain := newTestBlockChain(t, 1, genesis, func(_ int, _ *core.BlockGen) {})
+	defer blockChain.Stop()
+
+	eth := &Ethereum{blockchain: blockChain}
+	eth.APIBackend = &EthAPIBackend{eth: eth}
+	api := NewDebugAPI(eth)
+
+	_, err := api.ExecutionWitness(rpc.BlockNumberOrHashWithNumber(1))
+	assert.Error(t, err, "expected an error for a pre-Byzantium block, got nil")
 }
 
 func TestDebugAPI_ClearTxpool(t *testing.T) {
@@ -434,4 +467,79 @@ func TestDebugAPI_ClearTxpool(t *testing.T) {
 	}
 
 	t.Log("Successfully cleared transaction pool")
+}
+func TestExecutionWitness(t *testing.T) {
+	t.Parallel()
+
+	accounts := newAccounts(2)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	signer := types.HomesteadSigner{}
+	blockChain := newTestBlockChain(t, 1, genesis, func(_ int, b *core.BlockGen) {
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    0,
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+		}), signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+	defer blockChain.Stop()
+
+	eth := &Ethereum{blockchain: blockChain}
+	eth.APIBackend = &EthAPIBackend{eth: eth}
+
+	srv := rpc.NewServer()
+	if err := srv.RegisterName("debug", NewDebugAPI(eth)); err != nil {
+		t.Fatalf("failed to register debug API: %v", err)
+	}
+	client := rpc.DialInProc(srv)
+	defer client.Close()
+
+	var raw json.RawMessage
+	if err := client.Call(&raw, "debug_executionWitness", "0x1"); err != nil {
+		t.Fatalf("debug_executionWitness failed: %v", err)
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if _, ok := fields["keys"]; ok {
+		t.Errorf("result contains legacy keys field")
+	}
+	for _, field := range []string{"state", "codes", "headers"} {
+		if _, ok := fields[field]; !ok {
+			t.Errorf("result missing %s field", field)
+		}
+	}
+
+	var result ExecutionWitnessResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("failed to unmarshal witness: %v", err)
+	}
+	if len(result.Headers) != 1 {
+		t.Fatalf("expected 1 witness header, got %d", len(result.Headers))
+	}
+	var header types.Header
+	if err := rlp.DecodeBytes(result.Headers[0], &header); err != nil {
+		t.Fatalf("witness header is not valid RLP: %v", err)
+	}
+	if header.Hash() != blockChain.Genesis().Hash() {
+		t.Errorf("witness header hash %v does not match parent %v", header.Hash(), blockChain.Genesis().Hash())
+	}
+
+	if len(result.State) == 0 {
+		t.Error("witness state is empty")
+	}
+	for name, items := range map[string][]hexutil.Bytes{"state": result.State, "codes": result.Codes} {
+		if !slices.IsSortedFunc(items, func(a, b hexutil.Bytes) int { return bytes.Compare(a, b) }) {
+			t.Errorf("witness %s is not sorted", name)
+		}
+	}
 }
