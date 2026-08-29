@@ -298,7 +298,7 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 // tied to chain length directly.
 func (b *BlockGen) OffsetTime(seconds int64) {
 	b.header.Time += uint64(seconds)
-	if b.header.Time <= b.cm.bottom.Header().Time {
+	if b.header.Time <= b.parent.Time() {
 		panic("block time out of range")
 	}
 	b.header.Difficulty = b.engine.CalcDifficulty(b.cm, b.header.Time, b.parent.Header())
