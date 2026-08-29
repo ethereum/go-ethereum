@@ -383,6 +383,109 @@ func TestBatchImportAcrossTheFork(t *testing.T) {
 	}
 }
 
+// TestMigrationBoundaryStraddleReorg is the straddle rehearsal: two branches
+// fork at a shared pre-fork ancestor and each cross the activation boundary
+// independently. The builder rewinds its head across the format swap and
+// re-parks the binary direction on the new branch. A separate victim then
+// receives the winning branch exactly the way the engine delivers a reorg -
+// per-block sidechain inserts (newPayload) followed by one head switch
+// (forkchoiceUpdated) - and must re-park and keep the window running without
+// stalling. The head switch is SetCanonical on a non-canonical block, which
+// takes no maxReorgDepth check (eth/catalyst/api.go, the non-canonical
+// branch of forkchoiceUpdated; the depth limit only guards rewinds to
+// canonical ancestors), so the heal is never depth-refused.
+func TestMigrationBoundaryStraddleReorg(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+
+	// Branch A crosses the fork: blocks 1-3 merkle (t=12..36), 4-5 binary.
+	parent := chain.CurrentBlock()
+	var branchA []*types.Block
+	for i := range 5 {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+		branchA = append(branchA, chain.GetBlockByHash(parent.Hash()))
+	}
+	if p := chain.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "parked" || p.Binary.CursorHash != branchA[2].Hash() {
+		t.Fatalf("binary direction not parked at A's boundary predecessor: %+v", p.Binary)
+	}
+
+	// Branch B forks at block 1 - two blocks below the boundary - crosses
+	// with different blocks and outgrows A by one.
+	forkPoint := chain.GetHeaderByNumber(1)
+	bParent := forkPoint
+	var branchB []*types.Block
+	for i := range 5 {
+		bParent = buildBlock(t, api, bParent, uint64(i+2), common.Hash{0xbb})
+		branchB = append(branchB, chain.GetBlockByHash(bParent.Hash()))
+	}
+	boundaryB := branchB[1] // block 3, B's boundary predecessor
+	awaitShadowReady(t, chain, branchB[4].Header())
+	if p := chain.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "parked" || p.Binary.CursorHash != boundaryB.Hash() {
+		t.Fatalf("builder binary direction did not re-park at B's boundary predecessor: %+v", p.Binary)
+	}
+	if !chain.Migrating() {
+		t.Fatal("builder window closed by the straddle reorg")
+	}
+
+	// The victim follows branch A first, the way full sync would.
+	victim, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer victim.Stop()
+	if _, err := victim.InsertChain(branchA); err != nil {
+		t.Fatalf("victim import of branch A: %v", err)
+	}
+	awaitShadowReady(t, victim, branchA[4].Header())
+	if p := victim.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "parked" || p.Binary.CursorHash != branchA[2].Hash() {
+		t.Fatalf("victim binary direction not parked at A's boundary predecessor: %+v", p.Binary)
+	}
+
+	// The straddle: branch B arrives engine-style - sidechain inserts, then
+	// one forkchoice switch across the swap.
+	for _, block := range branchB {
+		if _, err := victim.InsertBlockWithoutSetHead(context.Background(), block, false); err != nil {
+			t.Fatalf("sidechain insert of B block %d: %v", block.NumberU64(), err)
+		}
+	}
+	if _, err := victim.SetCanonical(branchB[4]); err != nil {
+		t.Fatalf("straddle heal: %v", err)
+	}
+
+	// (a) canonical is branch B end to end, across the format swap.
+	if head := victim.CurrentBlock(); head.Hash() != branchB[4].Hash() {
+		t.Fatalf("victim head %d %x, want B tip %x", head.Number, head.Hash(), branchB[4].Hash())
+	}
+	if got := victim.GetCanonicalHash(1); got != forkPoint.Hash() {
+		t.Fatalf("canonical block 1 = %x, want the shared fork point %x", got, forkPoint.Hash())
+	}
+	for _, block := range branchB {
+		if got := victim.GetCanonicalHash(block.NumberU64()); got != block.Hash() {
+			t.Fatalf("canonical block %d = %x, want B's %x", block.NumberU64(), got, block.Hash())
+		}
+	}
+	// (c) the window is still open and follows B's post-fork blocks.
+	if !victim.Migrating() {
+		t.Fatal("victim window closed by the straddle reorg")
+	}
+	for _, block := range branchB[2:] {
+		awaitShadowReady(t, victim, block.Header())
+	}
+	// (b) the binary direction re-parked at B's boundary predecessor, and
+	// (d) neither direction stalled.
+	p := victim.MigrationProgress()
+	if p.Binary == nil || p.Binary.Phase != "parked" || p.Binary.CursorHash != boundaryB.Hash() {
+		t.Fatalf("victim binary direction did not re-park at B's boundary predecessor: %+v", p.Binary)
+	}
+	if p.Merkle == nil || (p.Merkle.Phase != "synced" && p.Merkle.Phase != "following") || p.Merkle.Error != "" {
+		t.Fatalf("victim merkle window not following B: %+v", p.Merkle)
+	}
+}
+
 // shadowRootEvent mirrors the debug_shadowRoots stream payload.
 type shadowRootEvent struct {
 	BlockHash  common.Hash    `json:"blockHash"`

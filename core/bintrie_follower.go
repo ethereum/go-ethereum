@@ -383,6 +383,15 @@ func (t *followerTree) follow(head *types.Header, stop chan struct{}) error {
 	if err := t.ensure(); err != nil {
 		return err
 	}
+	// A target off the canonical chain - the engine delivering a straddle
+	// reorg block by block, ahead of the forkchoice switch that will make
+	// it canonical - needs this exact block's root. The forward walk below
+	// is bounded by head.Number against the canonical index, so a head at
+	// or below an already-parked cursor is silently treated as done; route
+	// it to a hash-chained replay instead, which never moves the cursor.
+	if rawdb.ReadCanonicalHash(f.db, head.Number.Uint64()) != head.Hash() {
+		return t.followSidechain(head, stop)
+	}
 	num, hash, root := t.cursor()
 
 	// The cursor must sit on the canonical chain; otherwise the canonical
@@ -453,6 +462,75 @@ func (t *followerTree) follow(head *types.Header, stop chan struct{}) error {
 		rawdb.WriteShadowStateRoot(f.db, canonical, n, root)
 		t.persistCursor(n, canonical, root)
 		t.setCursor(n, canonical, root)
+	}
+	return nil
+}
+
+// followSidechain resolves a specific off-canonical block's shadow root
+// without moving the cursor, which still names the canonical replay
+// position: a later reorg onto this branch (or a descendant) drives the
+// ordinary walk above once the canonical index catches up to it.
+func (t *followerTree) followSidechain(head *types.Header, stop chan struct{}) error {
+	f := t.f
+	if _, ok := t.replayedRoot(head.Number.Uint64(), head.Hash()); ok {
+		return nil
+	}
+	// Walk back by parent hash - not the canonical index, head is off it -
+	// to the nearest ancestor this tree has already replayed.
+	var pending []*types.Header // head-to-ancestor order
+	h := head
+	for {
+		pending = append(pending, h)
+		if len(pending) > followTrackWindow {
+			return fmt.Errorf("sidechain block %d %x exceeds the tracking window from its live ancestor", head.Number, head.Hash())
+		}
+		if h.Number.Uint64() == 0 {
+			return errors.New("sidechain replay reached genesis without a live ancestor")
+		}
+		parent := rawdb.ReadHeader(f.db, h.ParentHash, h.Number.Uint64()-1)
+		if parent == nil {
+			return fmt.Errorf("missing sidechain ancestor %d %x", h.Number.Uint64()-1, h.ParentHash)
+		}
+		if root, ok := t.replayedRoot(parent.Number.Uint64(), parent.Hash()); ok {
+			return t.replaySidechain(pending, root, parent.Hash(), stop)
+		}
+		h = parent
+	}
+}
+
+// replaySidechain replays pending headers (head-to-ancestor order) forward
+// from root/prev, recording each block's shadow root by hash - the lookup
+// replayedRoot and waitCaughtUp use - without touching the cursor.
+func (t *followerTree) replaySidechain(pending []*types.Header, root, prev common.Hash, stop chan struct{}) error {
+	f := t.f
+	for i := len(pending) - 1; i >= 0; i-- {
+		if interrupted(stop) {
+			return nil
+		}
+		header := pending[i]
+		if header.ParentHash != prev {
+			return fmt.Errorf("sidechain block %d %x does not chain onto %x", header.Number, header.Hash(), prev)
+		}
+		canonical := header.Hash()
+		if f.config.IsBinaryTrie(header.Number, header.Time) == t.pbt {
+			if t.pbt {
+				return nil // activation: execution commits this tree from here on
+			}
+			// Own flavour already carries live state; replayedRoot's header
+			// fallback resolves it without a record.
+			root, prev = header.Root, canonical
+			continue
+		}
+		list, err := f.readVerifiedList(header)
+		if err != nil {
+			return err
+		}
+		newRoot, err := replayAccessList(t.sdb, f.config, root, header.Number, header.Time, list)
+		if err != nil {
+			return fmt.Errorf("replaying sidechain block %d %x: %w", header.Number, canonical, err)
+		}
+		root, prev = newRoot, canonical
+		rawdb.WriteShadowStateRoot(f.db, canonical, header.Number.Uint64(), root)
 	}
 	return nil
 }
