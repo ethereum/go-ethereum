@@ -95,6 +95,7 @@ type Env struct {
     ParentGasUsed     uint64             `json:"parentGasUsed"`
     ParentGasLimit    uint64             `json:"parentGasLimit"`
     ParentTimestamp   uint64             `json:"parentTimestamp"`
+    ParentHash        *common.Hash       `json:"parentHash"`
     BlockHashes       map[uint64]common.Hash `json:"blockHashes"`
     ParentUncleHash   common.Hash        `json:"parentUncleHash"`
     Ommers            []Ommer            `json:"ommers"`
@@ -415,6 +416,12 @@ In this example, the caller has not provided the required blockhash:
 ERROR(4): getHash(3) invoked, blockhash for that block not provided
 ```
 Error code: 4
+
+Since Prague, the parent block hash is also written into the EIP-2935 history
+contract before the transactions are applied. It is taken from
+`blockHashes[currentNumber - 1]`, falling back to the `parentHash` field if the
+map does not carry it. If neither is supplied, the update is skipped and a
+warning is emitted, since the resulting post-state will be wrong.
 
 #### Chaining
 

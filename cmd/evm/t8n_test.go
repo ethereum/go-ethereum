@@ -304,6 +304,14 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
 		},
+		{ // Prague test, EIP-2935 history update from parentHash
+			base: "./testdata/35",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Prague", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
 	} {
 		args := []string{"t8n"}
 		args = append(args, tc.output.get()...)

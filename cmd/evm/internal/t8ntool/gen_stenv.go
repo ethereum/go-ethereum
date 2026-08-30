@@ -28,6 +28,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 		Number                math.HexOrDecimal64                 `json:"currentNumber"     gencodec:"required"`
 		Timestamp             math.HexOrDecimal64                 `json:"currentTimestamp"  gencodec:"required"`
 		ParentTimestamp       math.HexOrDecimal64                 `json:"parentTimestamp,omitempty"`
+		ParentHash            *common.Hash                        `json:"parentHash,omitempty"`
 		BlockHashes           map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
 		Ommers                []ommer                             `json:"ommers,omitempty"`
 		Withdrawals           []*types.Withdrawal                 `json:"withdrawals,omitempty"`
@@ -51,6 +52,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.Number = math.HexOrDecimal64(s.Number)
 	enc.Timestamp = math.HexOrDecimal64(s.Timestamp)
 	enc.ParentTimestamp = math.HexOrDecimal64(s.ParentTimestamp)
+	enc.ParentHash = s.ParentHash
 	enc.BlockHashes = s.BlockHashes
 	enc.Ommers = s.Ommers
 	enc.Withdrawals = s.Withdrawals
@@ -78,6 +80,7 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 		Number                *math.HexOrDecimal64                `json:"currentNumber"     gencodec:"required"`
 		Timestamp             *math.HexOrDecimal64                `json:"currentTimestamp"  gencodec:"required"`
 		ParentTimestamp       *math.HexOrDecimal64                `json:"parentTimestamp,omitempty"`
+		ParentHash            *common.Hash                        `json:"parentHash,omitempty"`
 		BlockHashes           map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
 		Ommers                []ommer                             `json:"ommers,omitempty"`
 		Withdrawals           []*types.Withdrawal                 `json:"withdrawals,omitempty"`
@@ -129,6 +132,9 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	s.Timestamp = uint64(*dec.Timestamp)
 	if dec.ParentTimestamp != nil {
 		s.ParentTimestamp = uint64(*dec.ParentTimestamp)
+	}
+	if dec.ParentHash != nil {
+		s.ParentHash = dec.ParentHash
 	}
 	if dec.BlockHashes != nil {
 		s.BlockHashes = dec.BlockHashes

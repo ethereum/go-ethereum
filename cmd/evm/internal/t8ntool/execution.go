@@ -103,6 +103,7 @@ type stEnv struct {
 	Number                uint64                              `json:"currentNumber"     gencodec:"required"`
 	Timestamp             uint64                              `json:"currentTimestamp"  gencodec:"required"`
 	ParentTimestamp       uint64                              `json:"parentTimestamp,omitempty"`
+	ParentHash            *common.Hash                        `json:"parentHash,omitempty"`
 	BlockHashes           map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
 	Ommers                []ommer                             `json:"ommers,omitempty"`
 	Withdrawals           []*types.Withdrawal                 `json:"withdrawals,omitempty"`
@@ -132,6 +133,22 @@ type stEnvMarshaling struct {
 	ParentExcessBlobGas *math.HexOrDecimal64
 	ParentBlobGasUsed   *math.HexOrDecimal64
 	SlotNumber          *math.HexOrDecimal64
+}
+
+// parentBlockHash returns the hash of the parent block, as needed for the
+// EIP-2935 history contract update. The hash is taken from the blockHashes map
+// if it holds an entry for the previous block, otherwise the dedicated
+// parentHash field is used, which is what the execution-spec tooling supplies.
+func (s *stEnv) parentBlockHash() (common.Hash, bool) {
+	if s.Number > 0 {
+		if h, ok := s.BlockHashes[math.HexOrDecimal64(s.Number-1)]; ok {
+			return h, true
+		}
+	}
+	if s.ParentHash != nil {
+		return *s.ParentHash, true
+	}
+	return common.Hash{}, false
 }
 
 type rejectedTx struct {
@@ -247,12 +264,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
 	}
-	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
-		var (
-			prevNumber = pre.Env.Number - 1
-			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
-		)
-		core.ProcessParentBlockHash(prevHash, evm, blockAccessList)
+	if chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
+		if prevHash, ok := pre.Env.parentBlockHash(); ok {
+			core.ProcessParentBlockHash(prevHash, evm, blockAccessList)
+		} else {
+			log.Warn("Skipping EIP-2935 history update, post-state may be wrong",
+				"reason", "neither 'blockHashes' nor 'parentHash' in env section supply the parent hash",
+				"number", pre.Env.Number)
+		}
 	}
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()
