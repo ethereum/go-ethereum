@@ -372,6 +372,7 @@ type BlockChain struct {
 
 	lastForkReadyAlert time.Time     // Last time there was a fork readiness print out
 	slowBlockThreshold time.Duration // Block execution time threshold beyond which detailed statistics will be logged
+	ancientUnsynced    int64         // Snap sync bytes written into the ancient store since its last flush
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1205,8 +1206,18 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash, isSnapV2 bool) error {
 		bc.snaps.Rebuild(root, !isSnapV2)
 	}
 
+	// Make the synced segment durable before the chain markers point into it.
+	if err := bc.flushAncient(); err != nil {
+		return err
+	}
 	// If all checks out, manually set the head block.
-	rawdb.WriteHeadBlockHash(bc.db, hash)
+	batch := bc.db.NewBatch()
+	rawdb.WriteHeadHeaderHash(batch, hash)
+	rawdb.WriteHeadFastBlockHash(batch, hash)
+	rawdb.WriteHeadBlockHash(batch, hash)
+	if err := batch.Write(); err != nil {
+		return err
+	}
 	bc.currentBlock.Store(block.Header())
 	headBlockGauge.Update(int64(block.NumberU64()))
 
@@ -1354,6 +1365,21 @@ func (bc *BlockChain) stopWithoutSaving() {
 func (bc *BlockChain) Stop() {
 	bc.stopWithoutSaving()
 
+	// Flush the ancient store and advance the chain markers onto it, so that the
+	// segment written since the last flush is not re-downloaded after the restart.
+	if bc.ancientUnsynced > 0 {
+		if err := bc.flushAncient(); err != nil {
+			log.Error("Failed to flush ancient store", "err", err)
+		} else if head := bc.currentSnapBlock.Load(); head != nil {
+			batch := bc.db.NewBatch()
+			rawdb.WriteHeadHeaderHash(batch, head.Hash())
+			rawdb.WriteHeadFastBlockHash(batch, head.Hash())
+			if err := batch.Write(); err != nil {
+				log.Error("Failed to update chain markers", "err", err)
+			}
+		}
+	}
+
 	// Ensure that the entirety of the state snapshot is journaled to disk.
 	var snapBase common.Hash
 	if bc.snaps != nil {
@@ -1437,6 +1463,27 @@ const (
 	SideStatTy
 )
 
+// ancientSyncThreshold is the amount of data allowed to pile up in the ancient
+// store before it's explicitly fsync'd. Flushing fsyncs every freezer table,
+// so it is amortized across insertions instead of being run on each of them.
+//
+// Data written past the last flush may be discarded by freezer recovery after
+// an unclean shutdown and downloaded again.
+const ancientSyncThreshold = 2 * 1024 * 1024 * 1024
+
+// flushAncient flushes the ancient store, making everything written into it since
+// the last flush durable.
+func (bc *BlockChain) flushAncient() error {
+	if bc.ancientUnsynced == 0 {
+		return nil
+	}
+	if err := bc.db.SyncAncient(); err != nil {
+		return err
+	}
+	bc.ancientUnsynced = 0
+	return nil
+}
+
 // InsertReceiptChain inserts a batch of blocks along with their receipts into
 // the database. Unlike InsertChain, this function does not verify the state root
 // in the blocks. It is used exclusively for snap sync. All the inserted blocks
@@ -1472,14 +1519,17 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		start = time.Now()
 		size  = int64(0)
 	)
-	// updateHead updates the head header and head snap block flags.
-	updateHead := func(header *types.Header) error {
-		batch := bc.db.NewBatch()
-		hash := header.Hash()
-		rawdb.WriteHeadHeaderHash(batch, hash)
-		rawdb.WriteHeadFastBlockHash(batch, hash)
-		if err := batch.Write(); err != nil {
-			return err
+	// updateHead updates the head header and head snap block flags. The markers are
+	// only persisted if the data they point to has already been flushed to disk.
+	updateHead := func(header *types.Header, persist bool) error {
+		if persist {
+			batch := bc.db.NewBatch()
+			hash := header.Hash()
+			rawdb.WriteHeadHeaderHash(batch, hash)
+			rawdb.WriteHeadFastBlockHash(batch, hash)
+			if err := batch.Write(); err != nil {
+				return err
+			}
 		}
 		bc.hc.currentHeader.Store(header)
 		bc.currentSnapBlock.Store(header)
@@ -1501,6 +1551,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 					return 0, err
 				}
 				size += writeSize
+				bc.ancientUnsynced += writeSize
 				log.Info("Wrote genesis to ancients")
 			}
 		}
@@ -1511,10 +1562,15 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return 0, err
 		}
 		size += writeSize
+		bc.ancientUnsynced += writeSize
 
-		// Sync the ancient store explicitly to ensure all data has been flushed to disk.
-		if err := bc.db.SyncAncient(); err != nil {
-			return 0, err
+		// Flush the ancient store once enough data piled up, holding back the head
+		// markers until then; crash recovery discards whatever is past the durable tip.
+		persist := bc.ancientUnsynced >= ancientSyncThreshold
+		if persist {
+			if err := bc.flushAncient(); err != nil {
+				return 0, err
+			}
 		}
 		// Write hash to number mappings
 		batch := bc.db.NewBatch()
@@ -1525,7 +1581,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return 0, err
 		}
 		// Update the current snap block because all block data is now present in DB.
-		if err := updateHead(blockChain[len(blockChain)-1].Header()); err != nil {
+		if err := updateHead(blockChain[len(blockChain)-1].Header(), persist); err != nil {
 			return 0, err
 		}
 		stats.processed += int32(len(blockChain))
@@ -1571,7 +1627,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				return err
 			}
 		}
-		return updateHead(blockChain[len(blockChain)-1].Header())
+		return updateHead(blockChain[len(blockChain)-1].Header(), true)
 	}
 
 	// Split the supplied blocks into two groups, according to the
@@ -1588,6 +1644,11 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		}
 	}
 	if index != len(blockChain) {
+		// The head markers persisted by the live path must not overtake un-synced
+		// ancient data, flush it first.
+		if err := bc.flushAncient(); err != nil {
+			return 0, err
+		}
 		if err := writeLive(blockChain[index:], receiptChain[index:]); err != nil {
 			if err == errInsertionInterrupted {
 				return 0, nil
