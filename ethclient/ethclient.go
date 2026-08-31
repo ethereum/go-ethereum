@@ -317,9 +317,15 @@ func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction, 
 
 // TransactionCount returns the total number of transactions in the given block.
 func (ec *Client) TransactionCount(ctx context.Context, blockHash common.Hash) (uint, error) {
-	var num hexutil.Uint
+	var num *hexutil.Uint
 	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByHash", blockHash)
-	return uint(num), err
+	if err != nil {
+		return 0, err
+	}
+	if num == nil {
+		return 0, ethereum.NotFound
+	}
+	return uint(*num), err
 }
 
 // TransactionInBlock returns a single transaction at index in the given block.
