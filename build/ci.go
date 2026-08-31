@@ -59,10 +59,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cespare/cp"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
+	"github.com/ethereum/go-ethereum/internal/cp"
 	"github.com/ethereum/go-ethereum/internal/download"
 	"github.com/ethereum/go-ethereum/internal/version"
 )

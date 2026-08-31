@@ -14,15 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package memlimit
+//go:build darwin && !ios && !cgo
 
-import "testing"
+package metrics
 
-// TestLimitSmoke asserts that Limit() returns a non-zero value,
-// exercising the real probe and the system-memory fallback.
-func TestLimitSmoke(t *testing.T) {
-	bytes, src := Limit()
-	if bytes == 0 {
-		t.Errorf("Limit() returned 0 bytes (source=%s); expected non-zero on any sane host", src)
-	}
+import "errors"
+
+// readCPUTimes is not implemented on Darwin without cgo, as the CPU counters
+// are only available through the Mach host_statistics API.
+func readCPUTimes() (globalTime, globalWait float64, err error) {
+	return 0, 0, errors.New("cpu times not implemented without cgo")
 }

@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -36,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
-	"golang.org/x/exp/maps"
 )
 
 func updateTrie(db *Database, stateRoot common.Hash, addrHash common.Hash, root common.Hash, entries map[common.Hash][]byte) (common.Hash, *trienode.NodeSet) {
@@ -444,7 +445,7 @@ func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, 
 			if len(deleted) == 0 {
 				continue
 			}
-			addresses := maps.Keys(deleted)
+			addresses := slices.Collect(maps.Keys(deleted))
 			addr := addresses[rand.Intn(len(addresses))]
 			if _, exist := resurrect[addr]; exist {
 				continue

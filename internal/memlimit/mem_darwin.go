@@ -14,15 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build darwin
+
 package memlimit
 
-import "testing"
+import "golang.org/x/sys/unix"
 
-// TestLimitSmoke asserts that Limit() returns a non-zero value,
-// exercising the real probe and the system-memory fallback.
-func TestLimitSmoke(t *testing.T) {
-	bytes, src := Limit()
-	if bytes == 0 {
-		t.Errorf("Limit() returned 0 bytes (source=%s); expected non-zero on any sane host", src)
+// totalSystemMemory returns the total physical memory in bytes.
+func totalSystemMemory() (uint64, bool) {
+	v, err := unix.SysctlUint64("hw.memsize")
+	if err != nil {
+		return 0, false
 	}
+	return v, true
 }

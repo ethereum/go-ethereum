@@ -14,15 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build linux
+
 package memlimit
 
-import "testing"
+import "golang.org/x/sys/unix"
 
-// TestLimitSmoke asserts that Limit() returns a non-zero value,
-// exercising the real probe and the system-memory fallback.
-func TestLimitSmoke(t *testing.T) {
-	bytes, src := Limit()
-	if bytes == 0 {
-		t.Errorf("Limit() returned 0 bytes (source=%s); expected non-zero on any sane host", src)
+// totalSystemMemory returns the total physical memory in bytes.
+func totalSystemMemory() (uint64, bool) {
+	var si unix.Sysinfo_t
+	if err := unix.Sysinfo(&si); err != nil {
+		return 0, false
 	}
+	// The conversions are necessary on 32-bit platforms, where Totalram and Unit are uint32.
+	return uint64(si.Totalram) * uint64(si.Unit), true //nolint:unconvert
 }
