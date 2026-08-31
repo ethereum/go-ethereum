@@ -16,7 +16,11 @@
 
 package ssz
 
-import "crypto/sha256"
+import (
+	"crypto/sha256"
+
+	"github.com/prysmaticlabs/gohashtree"
+)
 
 // hashPair hashes one 64-byte node: H(a ‖ b).
 func hashPair(a, b [32]byte) [32]byte {
@@ -28,15 +32,18 @@ func hashPair(a, b [32]byte) [32]byte {
 
 // hashPairs hashes 2n 32-byte chunks pairwise into n digests:
 // digests[i] = H(chunks[2i] ‖ chunks[2i+1]). The call takes a whole tree
-// level at once rather than one pair, so that a batched backend can hash
-// several nodes in parallel lanes. Digests may overlap the front of chunks,
-// which is how the merkleization loop folds a level onto itself: digest i is
-// written strictly behind the two chunks it reads.
+// level at once rather than one pair, because gohashtree hashes several
+// independent nodes in parallel (SHA-NI or AVX on amd64, SHA2 instructions
+// on arm64) and falls back to a portable implementation elsewhere. Digests
+// may overlap the front of chunks, which is how the merkleization loop folds
+// a level onto itself: digest i is written strictly behind the two chunks it
+// reads.
 func hashPairs(digests, chunks [][32]byte) {
 	if len(chunks)%2 != 0 {
 		panic("ssz: hashPairs called with an odd number of chunks")
 	}
-	for i := range len(chunks) / 2 {
-		digests[i] = hashPair(chunks[2*i], chunks[2*i+1])
+	if err := gohashtree.Hash(digests, chunks); err != nil {
+		// Only reachable through a caller bug (digests too short).
+		panic("ssz: " + err.Error())
 	}
 }
