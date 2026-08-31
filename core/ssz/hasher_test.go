@@ -19,8 +19,17 @@ package ssz
 import (
 	"crypto/sha256"
 	"math/rand"
+	"strconv"
 	"testing"
 )
+
+// hashPairsGeneric is the reference for hashPairs: the same pairwise fold
+// over crypto/sha256, one node at a time.
+func hashPairsGeneric(digests, chunks [][32]byte) {
+	for i := range len(chunks) / 2 {
+		digests[i] = hashPair(chunks[2*i], chunks[2*i+1])
+	}
+}
 
 func randomChunks(rng *rand.Rand, n int) [][32]byte {
 	chunks := make([][32]byte, n)
@@ -46,10 +55,12 @@ func TestHashPairsInPlace(t *testing.T) {
 	for _, n := range []int{1, 2, 3, 7, 64, 333} {
 		chunks := randomChunks(rng, 2*n)
 		want := make([][32]byte, n)
-		hashPairs(want, chunks)
+		hashPairsGeneric(want, chunks)
+		got := make([][32]byte, n)
+		hashPairs(got, chunks)
 		for i := range want {
-			if want[i] != hashPair(chunks[2*i], chunks[2*i+1]) {
-				t.Fatalf("n=%d: digest %d differs from hashPair", n, i)
+			if got[i] != want[i] {
+				t.Fatalf("n=%d: digest %d differs from generic", n, i)
 			}
 		}
 		// Folding a level onto its own front half must give the same result.
@@ -69,4 +80,61 @@ func TestHashPairsOddCountPanics(t *testing.T) {
 		}
 	}()
 	hashPairs(make([][32]byte, 1), make([][32]byte, 3))
+}
+
+func TestHashPairsShortOutputPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("hashPairs with a too-short digests slice did not panic")
+		}
+	}()
+	hashPairs(make([][32]byte, 1), make([][32]byte, 4))
+}
+
+// FuzzHashPairs checks that the batched backend and the generic fold agree
+// bit for bit, both into a separate buffer and in place, for every level
+// shape the fuzzer can produce.
+func FuzzHashPairs(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 64))
+	f.Add(make([]byte, 64*7))
+	f.Add(make([]byte, 64*100))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		chunks := Pack(data)
+		chunks = chunks[:len(chunks)/2*2]
+		n := len(chunks) / 2
+		want := make([][32]byte, n)
+		hashPairsGeneric(want, chunks)
+		got := make([][32]byte, n)
+		hashPairs(got, chunks)
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("%d chunks: digest %d differs", len(chunks), i)
+			}
+		}
+		hashPairs(chunks[:n], chunks)
+		for i := range want {
+			if chunks[i] != want[i] {
+				t.Fatalf("%d chunks: in-place digest %d differs", len(chunks), i)
+			}
+		}
+	})
+}
+
+func BenchmarkHashPairs(b *testing.B) {
+	rng := rand.New(rand.NewSource(4))
+	for _, n := range []int{64, 1024, 65536} {
+		chunks := randomChunks(rng, n)
+		digests := make([][32]byte, n/2)
+		b.Run("generic/chunks="+strconv.Itoa(n), func(b *testing.B) {
+			for b.Loop() {
+				hashPairsGeneric(digests, chunks)
+			}
+		})
+		b.Run("gohashtree/chunks="+strconv.Itoa(n), func(b *testing.B) {
+			for b.Loop() {
+				hashPairs(digests, chunks)
+			}
+		})
+	}
 }
