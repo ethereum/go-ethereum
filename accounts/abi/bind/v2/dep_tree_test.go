@@ -18,13 +18,13 @@ package bind
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"regexp"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"golang.org/x/exp/rand"
 )
 
 type linkTestCase struct {
@@ -158,7 +158,7 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 		overrideAddrs  = make(map[rune]common.Address)
 	)
 	// generate deterministic addresses for the override set.
-	rng := rand.New(rand.NewSource(42))
+	rng := rand.NewChaCha8([32]byte{42})
 	for contract := range tcInput.overrides {
 		var addr common.Address
 		rng.Read(addr[:])
