@@ -19,13 +19,12 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"go/ast"
-	"go/token"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // TestGeneratedDispatchUpToDate asserts that the committed interpreter_gen.go
@@ -77,56 +76,6 @@ func lineAt(lines []string, i int) string {
 	return "<end of file>"
 }
 
-// stackExpansions pins what each *Stack method the dispatch uses becomes in sp/sd
-// form, with x, y and z standing in for the call's assignment targets. The
-// generator derives these from stack.go rather than storing them (see
-// expandStackMethod), so this table is the independent statement of intent: change
-// a stack helper's body and the failure names the method, instead of surfacing
-// later as an interpreter divergence.
-func stackExpansions() map[string]string {
-	ops := map[string]string{
-		"get":       "x := &sd[sp]\nsp++\n",
-		"drop":      "sp--\n",
-		"peek":      "x := &sd[sp-1]\n",
-		"pop1":      "sp--\nx := &sd[sp]\n",
-		"pop2":      "sp -= 2\nx := &sd[sp+1]\ny := &sd[sp]\n",
-		"pop1Peek1": "sp--\nx := &sd[sp]\ny := &sd[sp-1]\n",
-		"pop2Peek1": "sp -= 2\nx := &sd[sp+1]\ny := &sd[sp]\nz := &sd[sp-1]\n",
-		"dup":       "sd[sp] = sd[sp-n]\nsp++\n",
-	}
-	// stack.go spells the swaps out one method per depth, so build the expectation
-	// the same way instead of listing sixteen near-identical lines.
-	for n := 1; n <= 16; n++ {
-		depth := strconv.Itoa(n + 1)
-		ops["swap"+strconv.Itoa(n)] = "sd[sp-" + depth + "], sd[sp-1] = sd[sp-1], sd[sp-" + depth + "]\n"
-	}
-	return ops
-}
-
-func TestStackExpansions(t *testing.T) {
-	g := &generator{source: parseSource(vmDir())}
-	for method, want := range stackExpansions() {
-		if got := expandForTest(g, method); got != want {
-			t.Errorf("(*Stack).%s expands to:\n%s\nwant:\n%s", method, got, want)
-		}
-	}
-}
-
-// expandForTest expands one stack method with placeholder targets, standing in for
-// the handler call site the generator would have matched.
-func expandForTest(g *generator, method string) string {
-	fn := g.stackMethod(method)
-	call := stackCall{method: method, tok: token.DEFINE}
-	for i := range fn.Type.Results.NumFields() {
-		call.lhs = append(call.lhs, ast.NewIdent([]string{"x", "y", "z"}[i]))
-	}
-	// Pass each parameter through by name, so dup's depth stays symbolic.
-	for _, name := range paramNames(fn) {
-		call.args = append(call.args, ast.NewIdent(name))
-	}
-	return g.expandStackMethod(call)
-}
-
 // tripped runs fn and returns the message of the guard it trips, or "" if fn
 // completed. It is the test-side counterpart of generate's recover: a genError means
 // a guard fired, anything else is a real bug and keeps its stack.
@@ -152,7 +101,7 @@ func tripped(t *testing.T, fn func()) string {
 // it cannot express. They are the reason the generated dispatch is safe to trust, so
 // each one needs to fire rather than fall through and emit wrong code.
 func TestGuards(t *testing.T) {
-	g := &generator{source: parseSource(vmDir())}
+	g := &generator{}
 	g.deriveSpecs(genForks())
 
 	for _, tc := range []struct {
@@ -161,79 +110,22 @@ func TestGuards(t *testing.T) {
 		fn   func()
 	}{
 		{
-			// A stack call whose argument is not a constant the dispatch can embed.
-			name: "stack argument that is not a literal or a name",
-			want: "can bind only a literal or a name",
-			fn: func() {
-				plusOne := &ast.BinaryExpr{X: ast.NewIdent("n"), Op: token.ADD, Y: &ast.BasicLit{Kind: token.INT, Value: "1"}}
-				bindStackParams(g.stackMethod("dup"), []ast.Expr{plusOne})
-			},
-		},
-		{
-			// push calls another method, which has no sp/sd form.
-			name: "stack method whose body calls out",
-			want: "(*Stack).push uses a *ast.CallExpr",
-			fn: func() {
-				g.expandStackMethod(stackCall{method: "push", args: []ast.Expr{ast.NewIdent("d")}})
-			},
-		},
-		{
-			// release reads a bare s.bottom, which would silently become sp = 0.
-			name: "stack method reading a field with no sp/sd form",
-			want: "(*Stack).release reads s.bottom",
-			fn: func() {
-				g.expandStackMethod(stackCall{method: "release"})
-			},
-		},
-		{
-			// The number of results picks the rewrite, so a return that disagrees
-			// would be spliced as the wrong kind of step.
-			name: "return with the wrong number of operands",
-			want: "operand count 1, the splice expects 2",
-			fn: func() {
-				g.rewriteReturns("return ErrOutOfGas\n", returnRewrite{results: 2})
-			},
-		},
-		{
-			// A return the parser cannot read, rather than one it silently mis-splits.
-			name: "return the parser cannot read",
-			want: "cannot parse the operands",
-			fn: func() {
-				g.rewriteReturns("return f(a, b, nil\n", returnRewrite{results: 2})
-			},
-		},
-		{
-			name: "handler that is not in the parsed sources",
-			want: `no handler "opNotAThing"`,
-			fn:   func() { g.opHandler("opNotAThing") },
-		},
-		{
-			name: "gas helper that is not in the parsed sources",
-			want: `no gas helper "chargeNothing"`,
-			fn:   func() { g.gasHelper("chargeNothing") },
-		},
-		{
-			// Binds are positional, so more of them than the helper has parameters
-			// means the call site and the helper have drifted apart.
-			name: "more binds than the helper has parameters",
-			want: "2 binds for 1 parameters",
-			fn: func() {
-				g.spliceHelper("ChargeExecutionOnly", helperBinds{params: []string{"1", "2"}})
-			},
-		},
-		{
-			// computeMemorySize is a plain function, so there is no receiver to bind.
-			name: "receiver bound on a helper that has none",
-			want: "no receiver to bind",
-			fn: func() {
-				g.spliceHelper("computeMemorySize", helperBinds{recv: "contract.Gas"})
-			},
-		},
-		{
 			// 0x0c is not an opcode in any fork, so there is no spec to emit from.
-			name: "inlining an opcode no fork defines",
+			name: "own case for an opcode no fork defines",
 			want: "never defined",
-			fn:   func() { g.checkInlineStable(0x0c, genForks()) },
+			fn:   func() { g.checkStaticStable(0x0c, genForks()) },
+		},
+		{
+			name: "dynamic-gas case for an opcode no fork defines",
+			want: "never defined",
+			fn:   func() { g.checkDynamicStable(0x0c, genForks()) },
+		},
+		{
+			// LOG0 comes from makeLog, so FuncForPC gives it a dotted closure name
+			// with nothing callable in it.
+			name: "handler that is a closure with no name to call",
+			want: "no name to call",
+			fn:   func() { g.handlerCall(byte(vm.LOG0)) },
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

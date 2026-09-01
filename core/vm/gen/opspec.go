@@ -28,49 +28,50 @@ import (
 type tier int
 
 const (
-	tierTable  tier = iota // through the active per-fork table, in the default case
-	tierDirect             // handler, gas and memory functions called by name
-	tierInline             // handler body spliced into the loop
+	tierTable   tier = iota // through the active per-fork table, in the default case
+	tierDynamic             // own case, handler called by name, dynamic gas via meterDynamicGas
+	tierStatic              // own case, handler called by name, constant gas only
 )
 
 // opTiers gives an opcode its own case in the switch. Anything absent is
 // tierTable and falls through to the default case, which is where every
 // fork-varying op (CALL, CREATE, SSTORE, LOG, the copy family) belongs.
 //
-// tierInline is for hot, fork-stable ops with no dynamic gas. The handler whose
-// body gets spliced is derived from the per-fork tables (see deriveSpecs), never
-// restated here. Every one of them is a top-level opXxx, since emitInlineOp has
-// no way to reach into a closure.
+// tierStatic is for hot, fork-stable ops whose whole cost is their constant gas.
+// The handler name is derived from the per-fork tables (see deriveSpecs), never
+// restated here. Every one of them must be a top-level opXxx, since a closure has
+// no name to call.
 //
-// tierDirect is for ops with dynamic gas whose handler, gas and memory functions
-// are identical in every fork (checkDirectStable enforces it), so they can be
-// called by name rather than through a table function pointer Go cannot inline.
+// tierDynamic is for ops with dynamic gas whose handler is identical in every fork
+// (checkDynamicStable enforces it). They still reach meterDynamicGas through a
+// table load, so the only thing their own case buys over the default is calling
+// the handler by name and emitting the static gas and stack bounds as constants.
 var opTiers = func() map[vm.OpCode]tier {
 	t := map[vm.OpCode]tier{
-		vm.ADD: tierInline, vm.MUL: tierInline, vm.SUB: tierInline, vm.DIV: tierInline, vm.SDIV: tierInline,
-		vm.MOD: tierInline, vm.SMOD: tierInline, vm.ADDMOD: tierInline, vm.MULMOD: tierInline, vm.SIGNEXTEND: tierInline,
-		vm.LT: tierInline, vm.GT: tierInline, vm.SLT: tierInline, vm.SGT: tierInline, vm.EQ: tierInline, vm.ISZERO: tierInline,
-		vm.AND: tierInline, vm.OR: tierInline, vm.XOR: tierInline, vm.NOT: tierInline, vm.BYTE: tierInline,
-		vm.SHL: tierInline, vm.SHR: tierInline, vm.SAR: tierInline, vm.CLZ: tierInline,
-		vm.POP: tierInline, vm.JUMP: tierInline, vm.JUMPI: tierInline,
-		vm.PC: tierInline, vm.MSIZE: tierInline, vm.JUMPDEST: tierInline,
-		vm.PUSH0: tierInline, vm.PUSH1: tierInline, vm.PUSH2: tierInline,
-		vm.CALLDATALOAD: tierInline,
+		vm.ADD: tierStatic, vm.MUL: tierStatic, vm.SUB: tierStatic, vm.DIV: tierStatic, vm.SDIV: tierStatic,
+		vm.MOD: tierStatic, vm.SMOD: tierStatic, vm.ADDMOD: tierStatic, vm.MULMOD: tierStatic, vm.SIGNEXTEND: tierStatic,
+		vm.LT: tierStatic, vm.GT: tierStatic, vm.SLT: tierStatic, vm.SGT: tierStatic, vm.EQ: tierStatic, vm.ISZERO: tierStatic,
+		vm.AND: tierStatic, vm.OR: tierStatic, vm.XOR: tierStatic, vm.NOT: tierStatic, vm.BYTE: tierStatic,
+		vm.SHL: tierStatic, vm.SHR: tierStatic, vm.SAR: tierStatic, vm.CLZ: tierStatic,
+		vm.POP: tierStatic, vm.JUMP: tierStatic, vm.JUMPI: tierStatic,
+		vm.PC: tierStatic, vm.MSIZE: tierStatic, vm.JUMPDEST: tierStatic,
+		vm.PUSH0: tierStatic, vm.PUSH1: tierStatic, vm.PUSH2: tierStatic,
+		vm.CALLDATALOAD: tierStatic,
 
 		// An aliased gas var derives as the function behind it, so MLOAD's
 		// charge is emitted as pureMemoryGascost, not the gasMLoad var.
-		vm.KECCAK256: tierDirect,
-		vm.MLOAD:     tierDirect,
-		vm.MSTORE:    tierDirect,
+		vm.KECCAK256: tierDynamic,
+		vm.MLOAD:     tierDynamic,
+		vm.MSTORE:    tierDynamic,
 	}
 	for op := vm.PUSH3; op <= vm.PUSH32; op++ {
-		t[op] = tierInline
+		t[op] = tierStatic
 	}
 	for op := vm.DUP1; op <= vm.DUP16; op++ {
-		t[op] = tierInline
+		t[op] = tierStatic
 	}
 	for op := vm.SWAP1; op <= vm.SWAP16; op++ {
-		t[op] = tierInline
+		t[op] = tierStatic
 	}
 	for _, op := range coldOps {
 		delete(t, op)
@@ -88,8 +89,8 @@ var opTiers = func() map[vm.OpCode]tier {
 //
 // Dropping an opcode here only moves it to the table tier, which is the general
 // path and correct for every opcode in every fork, so this cannot affect
-// behaviour. Eligibility is still decided by checkInlineStable and
-// checkDirectStable above, and this list only ever removes.
+// behaviour. Eligibility is still decided by checkStaticStable and
+// checkDynamicStable above, and this list only ever removes.
 //
 // Frequencies are mainnet execution counts over 592,123 blocks, from
 // lab.ethpandaops.io/api/v1/mainnet/fct_opcode_gas_by_opcode_hourly. A thirty
@@ -99,7 +100,7 @@ var coldOps = []vm.OpCode{
 	// arithmetic and misc
 	vm.MSIZE, vm.PC, vm.CLZ, vm.SMOD, vm.MOD, vm.SDIV, vm.BYTE,
 
-	// MSTORE8 was tierDirect. The direct tier saves a fixed cost per execution,
+	// MSTORE8 was tierDynamic. The direct tier saves a fixed cost per execution,
 	// one indirect call plus meterDynamicGas's nil checks, so its value tracks the
 	// count and not how expensive the opcode's work is. At 0.022% that is a few
 	// hundred executions a block, which does not pay for a 53 line arm.
@@ -125,7 +126,7 @@ func tierOf(code byte) tier {
 // and the skip is a no-op today, since LookupInstructionSet has no verkle table yet
 // and hands back Cancun's. It matters once there is one: enable4762 only repoints
 // existing opcodes, which the switch picks up from the active table anyway, and
-// PUSH1-PUSH32 among them would trip checkInlineStable.
+// PUSH1-PUSH32 among them would trip checkStaticStable.
 var skippedForks = map[string]bool{"IsUBT": true}
 
 // genForks returns the fork lanes the generator derives its specs from.
@@ -158,8 +159,8 @@ type opSpec struct {
 // stackGuards returns the bounds emitStackChecks needs, plus which of the two
 // guards are worth emitting. A minStack of 0 cannot underflow, and a maxStack
 // at the stack limit cannot overflow, so those are left out. Emitting both
-// unconditionally would grow execUntraced by 14%, because the compiler cannot
-// track sp's range across a switch this size and emits every compare.
+// unconditionally grew the spliced dispatch by 14%, because the compiler cannot
+// track the stack length across a switch this size and emits every compare.
 func (s opSpec) stackGuards() (minStack, maxStack int, under, over bool) {
 	return s.minStack, s.maxStack, s.minStack > 0, s.maxStack < int(params.StackLimit)
 }
@@ -193,20 +194,20 @@ func (g *generator) deriveSpecs(forks []vm.GenFork) {
 	// constants, so both must be fork-stable. Bail loudly otherwise.
 	for code := range 256 {
 		switch b := byte(code); tierOf(b) {
-		case tierInline:
-			g.checkInlineStable(b, forks)
-		case tierDirect:
-			g.checkDirectStable(b, forks)
+		case tierStatic:
+			g.checkStaticStable(b, forks)
+		case tierDynamic:
+			g.checkDynamicStable(b, forks)
 		}
 	}
 }
 
-// checkInlineStable verifies a tierInline opcode is safe to inline.
-func (g *generator) checkInlineStable(code byte, forks []vm.GenFork) {
+// checkStaticStable verifies a tierStatic opcode is safe to give its own case.
+func (g *generator) checkStaticStable(code byte, forks []vm.GenFork) {
 	// The spec is what gets emitted, so there has to be one.
 	spec := g.specs[code]
 	if !spec.defined {
-		abortf("opcode %#x selected for inlining but never defined", code)
+		abortf("opcode %#x selected for its own case but never defined", code)
 	}
 	for _, fork := range forks {
 		// Nothing to compare in a fork where the opcode does not exist.
@@ -214,21 +215,21 @@ func (g *generator) checkInlineStable(code byte, forks []vm.GenFork) {
 		if !o.Defined {
 			continue
 		}
-		// The handler body, gas and stack bounds all come from the first defining
+		// The handler name, gas and stack bounds all come from the first defining
 		// fork, so a later fork changing any of them would be silently ignored.
-		// Dynamic gas is barred outright: an inlined op charges only its constant.
+		// Dynamic gas is barred outright: a tierStatic op charges only its constant.
 		if o.ExecuteFn != spec.execFn || o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack || o.DynamicGasFn != "" {
-			abortf("opcode %#x (%s) is not fork-stable (fork %s): cannot inline", code, spec.name, fork.Name)
+			abortf("opcode %#x (%s) is not fork-stable (fork %s): cannot give it its own case", code, spec.name, fork.Name)
 		}
 	}
 }
 
-// checkDirectStable verifies a tierDirect opcode is safe to direct-call. Unlike
-// checkInlineStable it allows dynamic gas, which these ops carry by definition.
-func (g *generator) checkDirectStable(code byte, forks []vm.GenFork) {
+// checkDynamicStable verifies a tierDynamic opcode is safe to direct-call. Unlike
+// checkStaticStable it allows dynamic gas, which these ops carry by definition.
+func (g *generator) checkDynamicStable(code byte, forks []vm.GenFork) {
 	spec := g.specs[code]
 	if !spec.defined {
-		abortf("opcode %#x (tierDirect) is never defined", code)
+		abortf("opcode %#x (tierDynamic) is never defined", code)
 	}
 	for _, fork := range forks {
 		o := fork.Ops[code]
@@ -237,12 +238,12 @@ func (g *generator) checkDirectStable(code byte, forks []vm.GenFork) {
 		}
 		// Emitted as constants, so they cannot vary.
 		if o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack {
-			abortf("opcode %#x (%s) is tierDirect but not fork-stable (fork %s): static gas or stack bounds vary, cannot emit as constants", code, spec.name, fork.Name)
+			abortf("opcode %#x (%s) is tierDynamic but not fork-stable (fork %s): static gas or stack bounds vary, cannot emit as constants", code, spec.name, fork.Name)
 		}
 		// Called by the first defining fork's names, so a fork that swapped one
 		// would be run with the wrong function.
 		if o.ExecuteFn != spec.execFn || o.DynamicGasFn != spec.dynFn || o.MemorySizeFn != spec.memFn {
-			abortf("opcode %#x (%s) is tierDirect but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
+			abortf("opcode %#x (%s) is tierDynamic but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
 				code, spec.name, fork.Name, o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, spec.execFn, spec.dynFn, spec.memFn)
 		}
 	}
