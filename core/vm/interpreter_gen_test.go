@@ -407,46 +407,30 @@ func FuzzInterpreterDiff(f *testing.F) {
 	})
 }
 
-// TestGeneratedFastPathHelpersExpanded asserts no *Stack call survives in
-// interpreter_gen.go. The generator rewrites every stack method a handler calls
-// into sp and sd lines (see expandStackMethod in core/vm/gen), so one showing up
-// here means a call route the generator did not recognize printed straight
-// through. Those helpers exceed the compiler's inline budget for a function as
-// large as execUntraced, so the fast path would quietly pay a real call, and a
-// call on the view would read the stale stack the loop locals shadow.
-func TestGeneratedFastPathHelpersExpanded(t *testing.T) {
-	for h, n := range countStackCalls(t, "interpreter_gen.go") {
-		t.Errorf("(*Stack).%s has %d residual call(s) in interpreter_gen.go, expected 0.\n"+
-			"The generator did not expand it. Check expandStackMethod (core/vm/gen).", h, n)
-	}
-}
-
-// countStackCalls parses a generated source file and counts calls to each
-// *Stack helper method, keyed by method name. It matches the fast path's stack
-// local and scope.Stack receivers. Parsing rather than grepping keeps comments
-// and strings from inflating the count.
-func countStackCalls(t *testing.T, file string) map[string]int {
-	t.Helper()
+// TestGeneratedDispatchKeepsOffStackInternals asserts the generated dispatch reaches
+// the stack only through its methods. The dispatch calls handlers rather than
+// splicing their bodies, so it has no loop-local copy of the stack to keep in sync,
+// and any direct read of size, bottom or the arena would be either dead or wrong.
+// This is the guard against half-reintroducing loop locals.
+func TestGeneratedDispatchKeepsOffStackInternals(t *testing.T) {
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, file, nil, 0)
+	f, err := parser.ParseFile(fset, "interpreter_gen.go", nil, 0)
 	if err != nil {
-		t.Fatalf("parsing %s: %v", file, err)
+		t.Fatalf("parsing interpreter_gen.go: %v", err)
 	}
-	counts := map[string]int{}
+	internals := map[string]bool{"size": true, "bottom": true, "inner": true}
 	ast.Inspect(f, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok || !internals[sel.Sel.Name] || !isStackReceiver(sel.X) {
 			return true
 		}
-		if sel, ok := call.Fun.(*ast.SelectorExpr); ok && isStackReceiver(sel.X) {
-			counts[sel.Sel.Name]++
-		}
+		t.Errorf("%s: generated dispatch reads stack.%s directly, expected only method calls",
+			fset.Position(sel.Pos()), sel.Sel.Name)
 		return true
 	})
-	return counts
 }
 
-// isStackReceiver reports whether x is the fast path's stack local or scope.Stack.
+// isStackReceiver reports whether x is the dispatch's stack local or scope.Stack.
 func isStackReceiver(x ast.Expr) bool {
 	switch r := x.(type) {
 	case *ast.Ident:
