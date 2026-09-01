@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/tracing"
 )
 
 // execUntraced is the generated, tracing-free interpreter fast path. Hot,
@@ -17,18 +16,17 @@ import (
 // selects this path when no tracer is configured.
 func (evm *EVM) execUntraced(scope *ScopeContext) (ret []byte, err error) {
 	var (
-		contract  = scope.Contract
-		mem       = scope.Memory
-		stack     = scope.Stack
-		table     = evm.table
-		rules     = evm.chainRules
-		isEIP4762 = rules.IsEIP4762
-		pc        = uint64(0)
-		res       []byte
+		contract = scope.Contract
+		mem      = scope.Memory
+		stack    = scope.Stack
+		table    = evm.table
+		rules    = evm.chainRules
+		pc       = uint64(0)
+		res      []byte
 	)
 	// Which of these the switch uses depends on the tier assignments, so
 	// keep them all live rather than tracking usage while emitting.
-	_, _, _, _ = mem, rules, isEIP4762, table
+	_, _, _ = mem, rules, table
 	// sp and sd shadow stack.size and the stack's window of the arena
 	// as loop locals, so hot opcodes work on registers instead of the
 	// view. They are written back before any call that can see the
@@ -37,16 +35,6 @@ func (evm *EVM) execUntraced(scope *ScopeContext) (ret []byte, err error) {
 	sd := stack.inner.data[stack.bottom:]
 mainLoop:
 	for {
-		if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
-			contractAddr := contract.Address()
-			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.ExecutionGas)
-			contract.chargeExecution(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
-			if consumed < wanted {
-				res, err = nil, ErrOutOfGas
-				break mainLoop
-			}
-		}
-
 		op := contract.GetOp(pc)
 		switch op {
 		case ADD:
@@ -943,18 +931,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			codeLen := uint64(len(contract.Code))
 			elem := &sd[sp]
 			sp++
@@ -979,18 +955,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			codeLen := uint64(len(contract.Code))
 			elem := &sd[sp]
 			sp++
@@ -1017,18 +981,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1061,18 +1013,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1105,18 +1045,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1149,18 +1077,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1193,18 +1109,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1237,18 +1141,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1281,18 +1173,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1325,18 +1205,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1369,18 +1237,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1413,18 +1269,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1457,18 +1301,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1501,18 +1333,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1545,18 +1365,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1589,18 +1397,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1633,18 +1429,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1677,18 +1461,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1721,18 +1493,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1765,18 +1525,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1809,18 +1557,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1853,18 +1589,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1897,18 +1621,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1941,18 +1653,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -1985,18 +1685,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -2029,18 +1717,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -2073,18 +1749,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -2117,18 +1781,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -2161,18 +1813,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -2205,18 +1845,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -2249,18 +1877,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
@@ -2293,18 +1909,6 @@ mainLoop:
 			contract.Gas.ExecutionGas -= 3
 			contract.Gas.UsedExecutionGas += 3
 
-			if isEIP4762 {
-				stack.size = sp
-				stack.inner.top = stack.bottom + sp
-				res, err = table[op].execute(&pc, evm, scope)
-				sp = stack.size
-				sd = stack.inner.data[stack.bottom:]
-				if err != nil {
-					break mainLoop
-				}
-				pc++
-				continue mainLoop
-			}
 			var (
 				codeLen = len(contract.Code)
 				start   = min(codeLen, int(pc+1))
