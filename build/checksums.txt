@@ -1,9 +1,9 @@
 # This file contains sha256 checksums of optional build dependencies.
 
-# version:spec-tests tests@v20.0.0
+# version:spec-tests tests@v20.0.2
 # https://github.com/ethereum/execution-specs/releases
-# https://github.com/ethereum/execution-specs/releases/download/tests%40v20.0.0
-b183702a5b447b465873865357ced9eb342315922e52e31b714e2de115dd0bb4  fixtures.tar.gz
+# https://github.com/ethereum/execution-specs/releases/download/tests%40v20.0.2
+1280540950a4c3470a421416b6f35458a9b635827265c29e5aef1ae839ae1788  fixtures.tar.gz
 
 # version:golang 1.27.0
 # https://go.dev/dl/
