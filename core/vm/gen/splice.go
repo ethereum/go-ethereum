@@ -23,7 +23,6 @@ import (
 	"go/printer"
 	"go/token"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -170,11 +169,6 @@ func methodReceiver(fn *ast.FuncDecl) string {
 	return id.Name
 }
 
-var (
-	pairReturnRe   = regexp.MustCompile(`^(\s*)return\s+([^,]+),\s*(.+)$`) // return <value>, <err>
-	singleReturnRe = regexp.MustCompile(`^(\s*)return\s+(\S.*)$`)          // return <err>
-)
-
 // spliceOpcodeBody returns a named handler's body, rewritten to run in the loop. For
 // opAdd,
 //
@@ -251,28 +245,23 @@ type returnRewrite struct {
 //	return 0, ErrGasUintOverflow -> res, err = nil, ErrGasUintOverflow
 //	                                break mainLoop
 func (g *generator) rewriteReturns(src string, r returnRewrite) string {
-	// A two-result return has to be split on its comma, a one-result one does not.
-	re := singleReturnRe
-	if r.results == 2 {
-		re = pairReturnRe
-	}
 	var out bytes.Buffer
 	for _, line := range strings.Split(src, "\n") {
-		m := re.FindStringSubmatch(line)
-		if m == nil {
+		indent, results, ok := parseReturn(line)
+		if !ok {
 			out.WriteString(line + "\n")
 			continue
 		}
+		// The rewrite is shaped by how many values the spliced body returns, so a
+		// return that disagrees would be turned into the wrong kind of step.
+		if len(results) != r.results {
+			abortf("cannot rewrite %q: operand count %d, the splice expects %d",
+				strings.TrimSpace(line), len(results), r.results)
+		}
 		// A one-result body returns only an error, so it has no value to carry.
-		indent, value, errVal := m[1], "nil", strings.TrimSpace(m[2])
+		value, errVal := "nil", results[0]
 		if r.results == 2 {
-			value, errVal = strings.TrimSpace(m[2]), strings.TrimSpace(m[3])
-			// pairReturnRe stops the value at the first comma, so one nested in
-			// brackets, `return f(a, b), nil`, would cut the value in half. The error
-			// half runs to the end of the line and is always whole.
-			if !bracketsBalanced(value) {
-				abortf("cannot split the return %q: its value holds a comma", strings.TrimSpace(line))
-			}
+			value, errVal = results[0], results[1]
 		}
 		if errVal != "nil" { // failure: leave the loop with the error
 			data := "nil"
@@ -296,24 +285,33 @@ func (g *generator) rewriteReturns(src string, r returnRewrite) string {
 	return out.String()
 }
 
-// bracketsBalanced reports whether every bracket in src is closed. It is how
-// rewriteReturns tells a whole return value from one the comma split cut in half. It
-// does not check that the kinds match, since a truncated expression is all it is
-// looking for.
-func bracketsBalanced(src string) bool {
-	depth := 0
-	for _, r := range src {
-		switch r {
-		case '(', '[', '{':
-			depth++
-		case ')', ']', '}':
-			depth--
-			if depth < 0 {
-				return false
-			}
-		}
+// parseReturn splits a printed return statement into its leading indent and its
+// operands, reporting false for any other line. Wrapping the operands as call
+// arguments hands the split to go/parser, so an operand carrying its own comma, as
+// in return f(a, b), nil, stays whole.
+func parseReturn(line string) (string, []string, bool) {
+	body := strings.TrimLeft(line, " \t")
+	rest, found := strings.CutPrefix(body, "return")
+	// A name that only starts with the word, such as returnData, is not a return.
+	if !found || rest == "" || (rest[0] != ' ' && rest[0] != '\t') {
+		return "", nil, false
 	}
-	return depth == 0
+	src := "_f(" + rest + ")"
+	expr, err := parser.ParseExpr(src)
+	if err != nil {
+		abortf("cannot parse the operands of %q: %v", strings.TrimSpace(line), err)
+	}
+	call, isCall := expr.(*ast.CallExpr)
+	if !isCall {
+		abortf("the operands of %q do not read as a list", strings.TrimSpace(line))
+	}
+	// Slice the originals out by position rather than reprinting, so the operands
+	// reach the generated file exactly as the handler wrote them.
+	var results []string
+	for _, arg := range call.Args {
+		results = append(results, strings.TrimSpace(src[arg.Pos()-1:arg.End()-1]))
+	}
+	return line[:len(line)-len(body)], results, true
 }
 
 // rewriteOpcodeReturns rewrites a printed handler body to run inside the loop: `*pc`
