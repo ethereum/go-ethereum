@@ -135,9 +135,10 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	}()
 
 	// The generated fast path resolves its fork gates at generate time, so it
-	// cannot see table changes made by ExtraEips. Those configs run the table
+	// cannot see table changes made by ExtraEips. The same goes for verkle, which
+	// the generator gets no lane for at all. Those configs run the table
 	// loop, as do tracing and the differential test via forceTableLoop.
-	if evm.forceTableLoop || len(evm.Config.ExtraEips) > 0 || evm.Config.Tracer != nil {
+	if evm.forceTableLoop || evm.chainRules.IsEIP4762 || len(evm.Config.ExtraEips) > 0 || evm.Config.Tracer != nil {
 		return evm.execTraced(scope)
 	}
 	return evm.execUntraced(scope)
