@@ -715,6 +715,14 @@ func TestTracingWithOverrides(t *testing.T) {
 	defer backend.teardown()
 	api := NewAPI(backend)
 	randomAccounts := newAccounts(3)
+
+	// A case below deploys a block hash as contract code, and EIP-3541 rejects code
+	// starting with 0xEF and there is a 1 in 256 chance of this happening. Loop
+	// until we find one that is unusable.
+	deployableBlock := genBlocks
+	for backend.chain.GetHeaderByNumber(uint64(deployableBlock)).Hash()[0] == 0xEF {
+		deployableBlock--
+	}
 	type res struct {
 		Gas         int
 		Failed      bool
@@ -825,7 +833,7 @@ func TestTracingWithOverrides(t *testing.T) {
 			call: ethapi.TransactionArgs{
 				From: &accounts[0].addr,
 				Input: newRPCBytes([]byte{
-					byte(vm.PUSH1), byte(genBlocks),
+					byte(vm.PUSH1), byte(deployableBlock),
 					byte(vm.BLOCKHASH),
 					byte(vm.PUSH1), 0x00,
 					byte(vm.MSTORE),
@@ -837,7 +845,7 @@ func TestTracingWithOverrides(t *testing.T) {
 			config: &TraceCallConfig{
 				BlockOverrides: &override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(int64(genBlocks + 1)))},
 			},
-			want: fmt.Sprintf(`{"gas":59590,"failed":false,"returnValue":"%s"}`, backend.chain.GetHeaderByNumber(uint64(genBlocks)).Hash().Hex()),
+			want: fmt.Sprintf(`{"gas":59590,"failed":false,"returnValue":"%s"}`, backend.chain.GetHeaderByNumber(uint64(deployableBlock)).Hash().Hex()),
 		},
 		/*
 			pragma solidity =0.8.12;
