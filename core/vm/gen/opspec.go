@@ -55,13 +55,13 @@ var opTiers = func() map[vm.OpCode]tier {
 		vm.POP: tierInline, vm.JUMP: tierInline, vm.JUMPI: tierInline,
 		vm.PC: tierInline, vm.MSIZE: tierInline, vm.JUMPDEST: tierInline,
 		vm.PUSH0: tierInline, vm.PUSH1: tierInline, vm.PUSH2: tierInline,
+		vm.CALLDATALOAD: tierInline,
 
 		// An aliased gas var derives as the function behind it, so MLOAD's
 		// charge is emitted as pureMemoryGascost, not the gasMLoad var.
 		vm.KECCAK256: tierDirect,
 		vm.MLOAD:     tierDirect,
 		vm.MSTORE:    tierDirect,
-		vm.MSTORE8:   tierDirect,
 	}
 	for op := vm.PUSH3; op <= vm.PUSH32; op++ {
 		t[op] = tierInline
@@ -72,8 +72,49 @@ var opTiers = func() map[vm.OpCode]tier {
 	for op := vm.SWAP1; op <= vm.SWAP16; op++ {
 		t[op] = tierInline
 	}
+	for _, op := range coldOps {
+		delete(t, op)
+	}
 	return t
 }()
+
+// coldOps are opcodes that qualify for a fast tier but run too rarely to be worth
+// the bytes. An arm costs 16 to 53 lines of the switch, and the switch is one
+// large function against a 32KB L1 instruction cache, so arms that never run
+// still push the hot ones further apart.
+//
+// The cut is 0.05% of mainnet executions. These 41 arms are together under half
+// a percent of all execution.
+//
+// Dropping an opcode here only moves it to the table tier, which is the general
+// path and correct for every opcode in every fork, so this cannot affect
+// behaviour. Eligibility is still decided by checkInlineStable and
+// checkDirectStable above, and this list only ever removes.
+//
+// Frequencies are mainnet execution counts over 592,123 blocks, from
+// lab.ethpandaops.io/api/v1/mainnet/fct_opcode_gas_by_opcode_hourly. A thirty
+// block sample got four of these wrong at the boundary, so re-derive from a wide
+// range if the opcode mix shifts.
+var coldOps = []vm.OpCode{
+	// arithmetic and misc
+	vm.MSIZE, vm.PC, vm.CLZ, vm.SMOD, vm.MOD, vm.SDIV, vm.BYTE,
+
+	// MSTORE8 was tierDirect. The direct tier saves a fixed cost per execution,
+	// one indirect call plus meterDynamicGas's nil checks, so its value tracks the
+	// count and not how expensive the opcode's work is. At 0.022% that is a few
+	// hundred executions a block, which does not pay for a 53 line arm.
+	vm.MSTORE8,
+
+	// the tail of each family. DUP decays gently so only the last two go, SWAP
+	// falls off faster, and PUSH is bimodal: the widths that mean something stay
+	// (1, 2, 3, 4, 8, 16, 20, 32) and the rest are noise.
+	vm.DUP15, vm.DUP16,
+	vm.SWAP10, vm.SWAP11, vm.SWAP12, vm.SWAP13, vm.SWAP14, vm.SWAP15, vm.SWAP16,
+	vm.PUSH5, vm.PUSH6, vm.PUSH7, vm.PUSH9, vm.PUSH10, vm.PUSH11, vm.PUSH12,
+	vm.PUSH13, vm.PUSH14, vm.PUSH15, vm.PUSH17, vm.PUSH18, vm.PUSH19, vm.PUSH21,
+	vm.PUSH22, vm.PUSH23, vm.PUSH24, vm.PUSH25, vm.PUSH26, vm.PUSH27, vm.PUSH28,
+	vm.PUSH29, vm.PUSH30, vm.PUSH31,
+}
 
 // tierOf returns how the dispatch handles an opcode.
 func tierOf(code byte) tier {
