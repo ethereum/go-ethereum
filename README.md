@@ -56,14 +56,14 @@ Minimum:
 
 * CPU with 4+ cores
 * 8GB RAM
-* 1TB free storage space to sync the Mainnet
+* High-performance SSD with at least 2TB of free space
 * 8 MBit/sec download Internet service
 
 Recommended:
 
 * Fast CPU with 8+ cores
 * 16GB+ RAM
-* High-performance SSD with at least 1TB of free space
+* High-performance NVMe SSD with 2TB-4TB of space for long term growth and maintenance headroom
 * 25+ MBit/sec download Internet service
 
 ### Full node on the main Ethereum network
