@@ -22,7 +22,6 @@ import (
 	"go/format"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 )
@@ -98,21 +97,13 @@ func (g *generator) emitStackChecks(minExpr, maxExpr any, under, over bool) {
 //	contract.Gas.ExecutionGas -= 3
 //	contract.Gas.UsedExecutionGas += 3
 func (g *generator) emitStaticGas(amount any) {
-	fn := g.gasHelper("ChargeExecutionOnly")
-
-	// The amount is substituted by parameter name below, so a second parameter would
-	// mean this is rewriting the wrong thing.
-	names := paramNames(fn)
-	if len(names) != 1 {
-		abortf("ChargeExecutionOnly takes %d params, want 1", len(names))
-	}
-	src := g.renderAst(fn.Body.List)
-
-	// g -> contract.Gas, on word boundaries so ExecutionGas is left alone.
-	src = regexp.MustCompile(`\b`+recvName(fn)+`\b`).ReplaceAllString(src, "contract.Gas")
-
-	// r -> 3
-	src = regexp.MustCompile(`\b`+names[0]+`\b`).ReplaceAllString(src, fmt.Sprint(amount))
+	// ChargeExecutionOnly charges its receiver, the budget, the amount in its one
+	// parameter. In the dispatch that budget is the loop's contract and the amount
+	// is this opcode's constant.
+	src := g.spliceHelper("ChargeExecutionOnly", helperBinds{
+		recv:   "contract.Gas",
+		params: []string{fmt.Sprint(amount)},
+	})
 
 	// return ErrOutOfGas -> res, err = nil, ErrOutOfGas plus break, and return nil -> nothing.
 	g.p("%s", g.rewriteGasReturns(src))
@@ -248,7 +239,8 @@ func (g *generator) emitDirectOp(code byte) {
 	//	memSize, overflow := memoryKeccak256(stack)
 	//	...
 	//	memorySize = size
-	g.p("%s", g.rewriteStepReturns(g.spliceGasHelper("computeMemorySize", spec.memFn), "memorySize"))
+	memSize := g.spliceHelper("computeMemorySize", helperBinds{params: []string{spec.memFn}})
+	g.p("%s", g.rewriteStepReturns(memSize, "memorySize"))
 
 	// chargeDynamicGas the same way, except its value is the cost the traced loop
 	// reports, which this path has no use for, so the empty target drops it:
@@ -258,7 +250,8 @@ func (g *generator) emitDirectOp(code byte) {
 	// becomes
 	//
 	//	dynamicCost, gerr := gasKeccak256(evm, contract, stack, mem, memorySize)
-	g.p("%s", g.rewriteStepReturns(g.spliceGasHelper("chargeDynamicGas", spec.dynFn), ""))
+	dynGas := g.spliceHelper("chargeDynamicGas", helperBinds{params: []string{spec.dynFn}})
+	g.p("%s", g.rewriteStepReturns(dynGas, ""))
 
 	// resize memory
 	g.emitResizeMemory()
