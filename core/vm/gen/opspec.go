@@ -39,9 +39,8 @@ const (
 //
 // tierInline is for hot, fork-stable ops with no dynamic gas. The handler whose
 // body gets spliced is derived from the per-fork tables (see deriveSpecs), never
-// restated here. Most are a top-level opXxx; PUSH3-PUSH32 and DUP1-DUP16 come
-// from the makePush / makeDup closures, which emitInlineOp splices with the
-// per-opcode size.
+// restated here. Every one of them is a top-level opXxx, since emitInlineOp has
+// no way to reach into a closure.
 //
 // tierDirect is for ops with dynamic gas whose handler, gas and memory functions
 // are identical in every fork (checkDirectStable enforces it), so they can be

@@ -1789,10 +1789,82 @@ func opPush32(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
 }
 
-// make dup instruction function
-func makeDup(size int) executionFunc {
-	return func(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-		scope.Stack.dup(size)
-		return nil, nil
-	}
+func opDup1(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(1)
+	return nil, nil
+}
+
+func opDup2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(2)
+	return nil, nil
+}
+
+func opDup3(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(3)
+	return nil, nil
+}
+
+func opDup4(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(4)
+	return nil, nil
+}
+
+func opDup5(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(5)
+	return nil, nil
+}
+
+func opDup6(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(6)
+	return nil, nil
+}
+
+func opDup7(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(7)
+	return nil, nil
+}
+
+func opDup8(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(8)
+	return nil, nil
+}
+
+func opDup9(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(9)
+	return nil, nil
+}
+
+func opDup10(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(10)
+	return nil, nil
+}
+
+func opDup11(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(11)
+	return nil, nil
+}
+
+func opDup12(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(12)
+	return nil, nil
+}
+
+func opDup13(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(13)
+	return nil, nil
+}
+
+func opDup14(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(14)
+	return nil, nil
+}
+
+func opDup15(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(15)
+	return nil, nil
+}
+
+func opDup16(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(16)
+	return nil, nil
 }

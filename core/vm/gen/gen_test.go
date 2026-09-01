@@ -124,25 +124,7 @@ func expandForTest(g *generator, method string) string {
 	for _, name := range paramNames(fn) {
 		call.args = append(call.args, ast.NewIdent(name))
 	}
-	return g.expandStackMethod(call, nil)
-}
-
-// TestFactoryName covers the closure-name parsing that decides whether an inlined
-// opcode's handler came from a make* factory, since the anonymous trailing
-// segments vary with nesting depth. The first three are the shapes FuncForPC
-// actually reports for a handler, a makeDup closure and a makePush one. The last is
-// the nested form closureSegRe allows but nothing in the tables produces yet.
-func TestFactoryName(t *testing.T) {
-	for _, tc := range []struct{ fn, want string }{
-		{"opAdd", ""},
-		{"newFrontierInstructionSet.makeDup.func37", "makeDup"},
-		{"newFrontierInstructionSet.makePush.func3", "makePush"},
-		{"newFrontierInstructionSet.makeLog.func49.1", "makeLog"},
-	} {
-		if got := factoryName(tc.fn); got != tc.want {
-			t.Errorf("factoryName(%q) = %q, want %q", tc.fn, got, tc.want)
-		}
-	}
+	return g.expandStackMethod(call)
 }
 
 // tripped runs fn and returns the message of the guard it trips, or "" if fn
@@ -180,11 +162,11 @@ func TestGuards(t *testing.T) {
 	}{
 		{
 			// A stack call whose argument is not a constant the dispatch can embed.
-			name: "stack argument that is not a literal or factory constant",
-			want: "can bind only a literal or a factory constant",
+			name: "stack argument that is not a literal or a name",
+			want: "can bind only a literal or a name",
 			fn: func() {
-				plusOne := &ast.BinaryExpr{X: ast.NewIdent("size"), Op: token.ADD, Y: &ast.BasicLit{Kind: token.INT, Value: "1"}}
-				bindStackParams(g.stackMethod("dup"), []ast.Expr{plusOne}, nil)
+				plusOne := &ast.BinaryExpr{X: ast.NewIdent("n"), Op: token.ADD, Y: &ast.BasicLit{Kind: token.INT, Value: "1"}}
+				bindStackParams(g.stackMethod("dup"), []ast.Expr{plusOne})
 			},
 		},
 		{
@@ -192,7 +174,7 @@ func TestGuards(t *testing.T) {
 			name: "stack method whose body calls out",
 			want: "(*Stack).push uses a *ast.CallExpr",
 			fn: func() {
-				g.expandStackMethod(stackCall{method: "push", args: []ast.Expr{ast.NewIdent("d")}}, nil)
+				g.expandStackMethod(stackCall{method: "push", args: []ast.Expr{ast.NewIdent("d")}})
 			},
 		},
 		{
@@ -200,7 +182,7 @@ func TestGuards(t *testing.T) {
 			name: "stack method reading a field with no sp/sd form",
 			want: "(*Stack).release reads s.bottom",
 			fn: func() {
-				g.expandStackMethod(stackCall{method: "release"}, nil)
+				g.expandStackMethod(stackCall{method: "release"})
 			},
 		},
 		{
