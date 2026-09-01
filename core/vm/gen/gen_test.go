@@ -205,6 +205,13 @@ func TestGuards(t *testing.T) {
 			fn:   func() { g.gasHelper("chargeNothing") },
 		},
 		{
+			// ChargeExecutionOnly's parameter is a gas amount used three times, not
+			// an operation function used once, so binding it would rewrite all three.
+			name: "gas helper whose first parameter is not a single call",
+			want: "uses its r parameter 3 times, want once",
+			fn:   func() { g.spliceGasHelper("ChargeExecutionOnly", "gasKeccak256") },
+		},
+		{
 			// 0x0c is not an opcode in any fork, so there is no spec to emit from.
 			name: "inlining an opcode no fork defines",
 			want: "never defined",
