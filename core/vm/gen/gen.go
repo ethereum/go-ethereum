@@ -199,15 +199,12 @@ func (g *generator) emitInlineOp(code byte) {
 		g.p("}\n")
 	}
 
-	// opcode body
-	switch factory := factoryName(spec.execFn); factory {
-	case "makeDup": // DUP1-DUP16: splice makeDup(n)
-		g.p("%s", g.spliceOpcodeFactoryBody("makeDup", int(code)-0x7f))
-	case "": // the rest: splice the opXxx handler body
-		g.p("%s", g.spliceOpcodeBody(spec.execFn))
-	default:
-		abortf("opcode %#x (%s) is built by factory %q, which the generator cannot inline", code, spec.name, factory)
+	// opcode body. genFnName leaves a closure's enclosing chain in the name, so a
+	// dotted one is a factory-built handler with no body to look up.
+	if strings.Contains(spec.execFn, ".") {
+		abortf("opcode %#x (%s) is built by the closure %q, which the generator cannot inline", code, spec.name, spec.execFn)
 	}
+	g.p("%s", g.spliceOpcodeBody(spec.execFn))
 
 	// Close the fork gate opened above, then the branch taken while the fork is
 	// still inactive.

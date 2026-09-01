@@ -19,7 +19,6 @@ package main
 import (
 	"go/ast"
 	"go/token"
-	"strconv"
 )
 
 // This file holds the *Stack method rewriter. The dispatch keeps the stack in two
@@ -112,14 +111,14 @@ type stackFrame struct {
 //	pos := &sd[sp+1]
 //	cond := &sd[sp]
 //
-// params are the enclosing factory's constants, so makeDup's dup(size) expands with
-// size already resolved to this opcode's depth.
-func (g *generator) expandStackMethod(call stackCall, params map[string]int) string {
+// A parameterized method takes the call's argument in place of its parameter name,
+// so opDup2's dup(2) turns dup's s.inner.data[s.bottom+s.size-n] into sd[sp-2].
+func (g *generator) expandStackMethod(call stackCall) string {
 	fn := g.stackMethod(call.method)
 	f := &stackFrame{
 		method: call.method,
 		recv:   recvName(fn),
-		params: bindStackParams(fn, call.args, params),
+		params: bindStackParams(fn, call.args),
 	}
 
 	var (
@@ -264,32 +263,30 @@ func (f *stackFrame) field(e ast.Expr) string {
 	return ""
 }
 
-// bindStackParams matches a stack method's parameters to the call's arguments, so
-// makeDup's dup(size) expands with n already resolved to 2 for DUP2.
-func bindStackParams(fn *ast.FuncDecl, args []ast.Expr, params map[string]int) map[string]ast.Expr {
+// bindStackParams matches a stack method's parameters to the call's arguments, so the
+// n in dup's body stands for the 2 in opDup2's dup(2). dup is the only parameterized
+// method an inlined handler reaches.
+func bindStackParams(fn *ast.FuncDecl, args []ast.Expr) map[string]ast.Expr {
 	names := paramNames(fn)
 	if len(names) != len(args) {
 		abortf("(*Stack).%s takes %d params, call passes %d", fn.Name.Name, len(names), len(args))
 	}
 	bound := map[string]ast.Expr{}
 	for i, name := range names {
-		arg := args[i]
-		switch a := arg.(type) {
-		case *ast.Ident:
-			// A name the enclosing factory binds becomes that constant, so
-			// makeDup's size arrives here as 2. Any other name is left alone.
-			if v, ok := params[a.Name]; ok {
-				arg = &ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(v)}
-			}
-		case *ast.BasicLit:
-			// Already a constant, embed as written.
+		// Copy each argument so it carries no position. The argument is parsed
+		// from the handler's file while the body it lands in comes from stack.go,
+		// and the printer reads the gap between their positions as a line break.
+		switch a := args[i].(type) {
+		case *ast.BasicLit: // dup(3) embeds the 3
+			bound[name] = &ast.BasicLit{Kind: a.Kind, Value: a.Value}
+		case *ast.Ident: // a name the handler declares, so the splice has it too
+			bound[name] = &ast.Ident{Name: a.Name}
 		default:
-			// Anything else, say dup(size+1), would embed a name the generated
-			// function does not have. Stop here rather than emit broken Go.
-			abortf("(*Stack).%s is passed a %T for %s; the dispatch can bind only a literal or a factory constant",
-				fn.Name.Name, arg, name)
+			// Anything else, say dup(n+1), risks embedding a name the generated
+			// function does not have. Stop rather than emit broken Go.
+			abortf("(*Stack).%s is passed a %T for %s; the dispatch can bind only a literal or a name",
+				fn.Name.Name, args[i], name)
 		}
-		bound[name] = arg
 	}
 	return bound
 }
