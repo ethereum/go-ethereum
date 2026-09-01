@@ -260,10 +260,9 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 
 // computeMemorySize runs an operation's memorySize function and word-aligns the
 // result, guarding overflow. The traced loop and the default case call it, and the
-// direct-call ops splice it, substituting the opcode's memory-size function for
-// operation.memorySize.
-func computeMemorySize(operation *operation, stack *Stack) (uint64, error) {
-	memSize, overflow := operation.memorySize(stack)
+// direct-call ops splice its body with memFn bound to the opcode's own function.
+func computeMemorySize(memFn memorySizeFunc, stack *Stack) (uint64, error) {
+	memSize, overflow := memFn(stack)
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
@@ -278,10 +277,9 @@ func computeMemorySize(operation *operation, stack *Stack) (uint64, error) {
 // chargeDynamicGas runs an operation's dynamicGas function, treats a computation
 // failure as out of gas, and charges the cost. It returns the cost so the traced
 // loop can report it. The traced loop and the default case call it, and the
-// direct-call ops splice it, substituting the opcode's gas function for
-// operation.dynamicGas.
-func (contract *Contract) chargeDynamicGas(operation *operation, evm *EVM, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	dynamicCost, gerr := operation.dynamicGas(evm, contract, stack, mem, memorySize)
+// direct-call ops splice its body with dynFn bound to the opcode's own function.
+func (contract *Contract) chargeDynamicGas(dynFn gasFunc, evm *EVM, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	dynamicCost, gerr := dynFn(evm, contract, stack, mem, memorySize)
 	if gerr != nil {
 		return dynamicCost, fmt.Errorf("%w: %v", ErrOutOfGas, gerr)
 	}
@@ -305,11 +303,11 @@ func (contract *Contract) chargeDynamicGas(operation *operation, evm *EVM, stack
 func (contract *Contract) meterDynamicGas(operation *operation, evm *EVM, stack *Stack, mem *Memory) (memorySize uint64, dynamicCost GasCosts, err error) {
 	if operation.dynamicGas != nil {
 		if operation.memorySize != nil {
-			if memorySize, err = computeMemorySize(operation, stack); err != nil {
+			if memorySize, err = computeMemorySize(operation.memorySize, stack); err != nil {
 				return memorySize, dynamicCost, err
 			}
 		}
-		if dynamicCost, err = contract.chargeDynamicGas(operation, evm, stack, mem, memorySize); err != nil {
+		if dynamicCost, err = contract.chargeDynamicGas(operation.dynamicGas, evm, stack, mem, memorySize); err != nil {
 			return memorySize, dynamicCost, err
 		}
 	}

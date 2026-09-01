@@ -236,10 +236,10 @@ func (g *generator) emitDirectOp(code byte) {
 	// The two spliced bodies below both assign it, so declare it once ahead of them.
 	g.p("\nvar memorySize uint64\n")
 
-	// computeMemorySize, with its one table lookup swapped for this opcode's function
-	// and its result landing in memorySize. For KECCAK256 that turns
+	// computeMemorySize, bound to this opcode's memory-size function, with its result
+	// landing in memorySize. For KECCAK256 that turns
 	//
-	//	memSize, overflow := operation.memorySize(stack)
+	//	memSize, overflow := memFn(stack)
 	//	...
 	//	return size, nil
 	//
@@ -248,21 +248,17 @@ func (g *generator) emitDirectOp(code byte) {
 	//	memSize, overflow := memoryKeccak256(stack)
 	//	...
 	//	memorySize = size
-	memSizeSrc := g.renderAst(g.gasHelper("computeMemorySize").Body.List)
-	memSizeSrc = strings.ReplaceAll(memSizeSrc, "operation.memorySize", spec.memFn)
-	g.p("%s", g.rewriteStepReturns(memSizeSrc, "memorySize"))
+	g.p("%s", g.rewriteStepReturns(g.spliceGasHelper("computeMemorySize", spec.memFn), "memorySize"))
 
 	// chargeDynamicGas the same way, except its value is the cost the traced loop
 	// reports, which this path has no use for, so the empty target drops it:
 	//
-	//	dynamicCost, gerr := operation.dynamicGas(evm, contract, stack, mem, memorySize)
+	//	dynamicCost, gerr := dynFn(evm, contract, stack, mem, memorySize)
 	//
 	// becomes
 	//
 	//	dynamicCost, gerr := gasKeccak256(evm, contract, stack, mem, memorySize)
-	dynGasSrc := g.renderAst(g.gasHelper("chargeDynamicGas").Body.List)
-	dynGasSrc = strings.ReplaceAll(dynGasSrc, "operation.dynamicGas", spec.dynFn)
-	g.p("%s", g.rewriteStepReturns(dynGasSrc, ""))
+	g.p("%s", g.rewriteStepReturns(g.spliceGasHelper("chargeDynamicGas", spec.dynFn), ""))
 
 	// resize memory
 	g.emitResizeMemory()

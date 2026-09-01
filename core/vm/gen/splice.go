@@ -96,6 +96,45 @@ func (s *source) opHandler(name string) *ast.FuncDecl {
 	return fn
 }
 
+// spliceGasHelper renders a shared gas or memory helper's body with its first
+// parameter, the operation's function, bound to fn. The name to rewrite comes from
+// the declaration, so the generator keeps no copy of how the helper reaches its
+// function. Renaming computeMemorySize's memFn to memoryKeccak256 turns:
+//
+//	memSize, overflow := memFn(stack)
+//
+// into
+//
+//	memSize, overflow := memoryKeccak256(stack)
+//
+// The rename is undone before returning, since the same body is spliced once per
+// direct-call op.
+func (g *generator) spliceGasHelper(helper, fn string) string {
+	decl := g.gasHelper(helper)
+	names := paramNames(decl)
+	if len(names) == 0 {
+		abortf("%s takes no parameters, so it has no function to bind", helper)
+	}
+	param := names[0]
+
+	var uses []*ast.Ident
+	ast.Inspect(decl.Body, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok && id.Name == param {
+			uses = append(uses, id)
+		}
+		return true
+	})
+	// The rename hits every mention of the parameter, so a second use would get
+	// rewritten too. A nil check on memFn would become a comparison against a real
+	// function. Stop instead of splicing a body that means something else.
+	if len(uses) != 1 {
+		abortf("%s uses its %s parameter %d times, want once", helper, param, len(uses))
+	}
+	uses[0].Name = fn
+	defer func() { uses[0].Name = param }()
+	return g.renderAst(decl.Body.List)
+}
+
 // gasHelper returns a spliced gas or memory helper by name.
 func (s *source) gasHelper(name string) *ast.FuncDecl {
 	fn := s.gasHelpers[name]
