@@ -58,7 +58,9 @@ var messageCorpus = []string{
 	// keys in other spellings are unknown fields, only the exact names match
 	`{"METHOD":"m","ID":1}`,
 	`{"Method":"m","Id":1,"Jsonrpc":"2.0"}`,
+	// unicode escapes in keys are unescaped before matching (metho\u0064 == method)
 	"{\"metho\\u0064\":\"m\",\"i\\u0064\":7}",
+	// a double-escaped key stays literal metho\u0064 and is not the method field
 	`{"metho\\u0064":"not the method key"}`,
 	// unknown fields are ignored
 	`{"method":"m","id":1,"extra":{"a":[1,2,3]},"more":"x"}`,
@@ -127,10 +129,12 @@ func TestParseMessage(t *testing.T) {
 		{"duplicate key, last wins", `{"method":"first","method":"second","id":1}`, false, []*jsonrpcMessage{msg("", "second", "1", "", "")}},
 
 		// field names have one spelling in the spec, any other spelling is an
-		// unknown key, even where encoding/json would have matched it
+		// unknown key; unicode escapes in keys are unescaped first so they
+		// match the same way encoding/json map keys do
 		{"cased keys ignored", `{"Method":"m","ID":1,"Params":[1]}`, false, []*jsonrpcMessage{zero()}},
 		{"upper case keys ignored", `{"METHOD":"m","JSONRPC":"2.0"}`, false, []*jsonrpcMessage{zero()}},
-		{"escaped keys ignored", "{\"metho\\u0064\":\"m\",\"i\\u0064\":7}", false, []*jsonrpcMessage{zero()}},
+		{"unicode-escaped method key", "{\"metho\\u0064\":\"m\",\"i\\u0064\":7}", false, []*jsonrpcMessage{msg("", "m", "7", "", "")}},
+		{"double-escaped key is not method", `{"metho\\u0064":"not the method key"}`, false, []*jsonrpcMessage{zero()}},
 
 		// a string holding structural bytes must not end the value early
 		{
@@ -435,12 +439,6 @@ func FuzzFillMessage(f *testing.F) {
 	f.Fuzz(func(t *testing.T, input string) {
 		data := []byte(input)
 		if !json.Valid(data) {
-			return
-		}
-		if bytes.IndexByte(data, '\\') >= 0 {
-			// encoding/json unescapes map keys, so an escaped key would match
-			// in the reference but is an unknown key to fillMessage. Escape
-			// handling is pinned by the tests above.
 			return
 		}
 		var want jsonrpcMessage
