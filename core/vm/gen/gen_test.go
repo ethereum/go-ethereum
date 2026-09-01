@@ -213,11 +213,21 @@ func TestGuards(t *testing.T) {
 			fn:   func() { g.gasHelper("chargeNothing") },
 		},
 		{
-			// ChargeExecutionOnly's parameter is a gas amount used three times, not
-			// an operation function used once, so binding it would rewrite all three.
-			name: "gas helper whose first parameter is not a single call",
-			want: "uses its r parameter 3 times, want once",
-			fn:   func() { g.spliceGasHelper("ChargeExecutionOnly", "gasKeccak256") },
+			// Binds are positional, so more of them than the helper has parameters
+			// means the call site and the helper have drifted apart.
+			name: "more binds than the helper has parameters",
+			want: "2 binds for 1 parameters",
+			fn: func() {
+				g.spliceHelper("ChargeExecutionOnly", helperBinds{params: []string{"1", "2"}})
+			},
+		},
+		{
+			// computeMemorySize is a plain function, so there is no receiver to bind.
+			name: "receiver bound on a helper that has none",
+			want: "no receiver to bind",
+			fn: func() {
+				g.spliceHelper("computeMemorySize", helperBinds{recv: "contract.Gas"})
+			},
 		},
 		{
 			// 0x0c is not an opcode in any fork, so there is no spec to emit from.
