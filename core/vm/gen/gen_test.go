@@ -186,12 +186,20 @@ func TestGuards(t *testing.T) {
 			},
 		},
 		{
-			// pairReturnRe splits the value at the first comma, so one nested in
-			// brackets would be cut in half rather than emitted whole.
-			name: "return whose value holds a comma",
-			want: "its value holds a comma",
+			// The number of results picks the rewrite, so a return that disagrees
+			// would be spliced as the wrong kind of step.
+			name: "return with the wrong number of operands",
+			want: "operand count 1, the splice expects 2",
 			fn: func() {
-				g.rewriteReturns("return f(a, b), nil\n", returnRewrite{results: 2})
+				g.rewriteReturns("return ErrOutOfGas\n", returnRewrite{results: 2})
+			},
+		},
+		{
+			// A return the parser cannot read, rather than one it silently mis-splits.
+			name: "return the parser cannot read",
+			want: "cannot parse the operands",
+			fn: func() {
+				g.rewriteReturns("return f(a, b, nil\n", returnRewrite{results: 2})
 			},
 		},
 		{
