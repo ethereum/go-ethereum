@@ -180,16 +180,6 @@ func (g *generator) emitInlineOp(code byte) {
 		g.emitStaticGas(spec.constGas)
 	}
 
-	// PUSH1-PUSH32 swap their execute function under EIP-4762 (verkle) to charge
-	// code-chunk gas on the immediate bytes. Defer to the table handler there.
-	// The constant static gas and stack guard above already match.
-	if code >= 0x60 && code <= 0x7f {
-		g.p("if isEIP4762 {\n")
-		g.emitSyncStackView()
-		g.emitCallHandler("table[op].execute(&pc, evm, scope)")
-		g.p("}\n")
-	}
-
 	// opcode body. genFnName leaves a closure's enclosing chain in the name, so a
 	// dotted one is a factory-built handler with no body to look up.
 	if strings.Contains(spec.execFn, ".") {
@@ -306,7 +296,6 @@ func (g *generator) createFile() {
 			"fmt"
 
 			"github.com/ethereum/go-ethereum/common/math"
-			"github.com/ethereum/go-ethereum/core/tracing"
 		)
 
 	`)
@@ -326,13 +315,12 @@ func (g *generator) createFile() {
 				stack     = scope.Stack
 				table     = evm.table
 				rules     = evm.chainRules
-				isEIP4762 = rules.IsEIP4762
 				pc        = uint64(0)
 				res       []byte
 			)
 			// Which of these the switch uses depends on the tier assignments, so
 			// keep them all live rather than tracking usage while emitting.
-			_, _, _, _ = mem, rules, isEIP4762, table
+			_, _, _ = mem, rules, table
 			// sp and sd shadow stack.size and the stack's window of the arena
 			// as loop locals, so hot opcodes work on registers instead of the
 			// view. They are written back before any call that can see the
@@ -342,9 +330,6 @@ func (g *generator) createFile() {
 		mainLoop:
 			for {
 	`)
-
-	// verkle code-chunk gas, spliced from chargeVerkleCodeChunkGas
-	g.p("%s", g.rewriteGasReturns(g.renderAst(g.gasHelper("chargeVerkleCodeChunkGas").Body.List)))
 
 	// fetch the opcode and open the dispatch switch
 	g.p(`
