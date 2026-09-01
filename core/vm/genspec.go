@@ -62,9 +62,10 @@ type GenFork struct {
 // genFnName returns the FuncForPC name of a jump-table function value with the
 // package path stripped (e.g. "gasKeccak256"), or "" if nil. An aliased var
 // resolves to the underlying function (gasMLoad reports "pureMemoryGascost").
-// A closure keeps its enclosing chain (DUP7's handler reports
-// "newFrontierInstructionSet.makeDup.func37"), so the generator can tell which
-// factory built it and unrelated closures cannot collide on a bare "funcN".
+// A closure keeps its enclosing chain (LOG1's handler reports
+// "newFrontierInstructionSet.makeLog.func19"), so the generator can tell a
+// factory-built handler from a plain one and unrelated closures cannot collide
+// on a bare "funcN".
 func genFnName(fn any) string {
 	v := reflect.ValueOf(fn)
 	if !v.IsValid() || v.IsNil() {

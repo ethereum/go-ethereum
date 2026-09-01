@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/printer"
@@ -157,7 +156,7 @@ var (
 // the result with p.
 func (g *generator) spliceOpcodeBody(handler string) string {
 	fn := g.opHandler(handler)
-	return useContractLocal(g.rewriteOpcodeReturns(g.renderBody(fn.Body.List, nil)))
+	return useContractLocal(g.rewriteOpcodeReturns(g.renderBody(fn.Body.List)))
 }
 
 // useContractLocal points a spliced body at the loop's own contract variable. The
@@ -165,54 +164,6 @@ func (g *generator) spliceOpcodeBody(handler string) string {
 // holds it, so every one of those is a pointer load the switch does not need.
 func useContractLocal(src string) string {
 	return strings.ReplaceAll(src, "scope.Contract", "contract")
-}
-
-// spliceOpcodeFactoryBody splices the executionFunc closure a make* factory returns,
-// binding the factory's parameters to the constants in args, positionally. That derives
-// makePush and makeDup from their one definition instead of restating them. For makeDup
-// with args 2,
-//
-//	scope.Stack.dup(size)
-//	return nil, nil
-//
-// becomes
-//
-//	sd[sp] = sd[sp-2]
-//	sp++
-//	pc++
-//	continue mainLoop
-//
-// The caller emits the result with p.
-func (g *generator) spliceOpcodeFactoryBody(factory string, args ...int) string {
-	fn := g.opHandler(factory)
-	lit := factoryClosure(factory, fn)
-	// Bind the factory parameters to the per-opcode constants, then inline.
-	names := paramNames(fn)
-	if len(names) != len(args) {
-		abortf("factory %q takes %d params, got %d args", factory, len(names), len(args))
-	}
-	params := map[string]int{}
-	for i, nm := range names {
-		params[nm] = args[i]
-	}
-	return useContractLocal(g.rewriteOpcodeReturns(g.renderBody(lit.Body.List, params)))
-}
-
-// factoryClosure returns the executionFunc literal that a make* factory's body
-// is a single `return func(...) {...}` of.
-func factoryClosure(name string, fn *ast.FuncDecl) *ast.FuncLit {
-	if len(fn.Body.List) != 1 {
-		abortf("factory %q body is not a single return", name)
-	}
-	ret, ok := fn.Body.List[0].(*ast.ReturnStmt)
-	if !ok || len(ret.Results) != 1 {
-		abortf("factory %q does not return a single value", name)
-	}
-	lit, ok := ret.Results[0].(*ast.FuncLit)
-	if !ok {
-		abortf("factory %q does not return a func literal", name)
-	}
-	return lit
 }
 
 // renderAst converts AST statements back to source text, the inverse of parsing. It
@@ -356,11 +307,11 @@ func (g *generator) rewriteStepReturns(src, target string) string {
 //	                                     x := &sd[sp]
 //	                                     y := &sd[sp-1]
 //	y.Add(x, y)                      ->  y.Add(x, y)
-func (g *generator) renderBody(stmts []ast.Stmt, params map[string]int) string {
+func (g *generator) renderBody(stmts []ast.Stmt) string {
 	var out strings.Builder
 	for _, stmt := range stmts {
 		if call, ok := g.matchStackCall(stmt); ok {
-			out.WriteString(g.expandStackMethod(call, params))
+			out.WriteString(g.expandStackMethod(call))
 			continue
 		}
 		// Any other route to the stack, such as a call nested in a larger
@@ -372,46 +323,9 @@ func (g *generator) renderBody(stmts []ast.Stmt, params map[string]int) string {
 			}
 			return true
 		})
-		out.WriteString(substFactoryParams(g.renderAst([]ast.Stmt{stmt}), params))
+		out.WriteString(g.renderAst([]ast.Stmt{stmt}))
 	}
 	return out.String()
-}
-
-// substFactoryParams replaces each factory parameter with its constant, so makePush's
-//
-//	end = min(codeLen, start+pushByteSize)
-//
-// spliced for PUSH3 reads
-//
-//	end = min(codeLen, start+3)
-func substFactoryParams(src string, params map[string]int) string {
-	// Printed source, not the AST: makePush's body is one set of nodes spliced once
-	// per PUSH width, so an in-place rewrite would leak PUSH3's size into PUSH4.
-	// Word boundaries are safe only because renderBody's guard keeps the stack out
-	// of these statements, so there is no stack.size to hit.
-	for name, val := range params {
-		src = regexp.MustCompile(`\b`+name+`\b`).ReplaceAllString(src, fmt.Sprint(val))
-	}
-	return src
-}
-
-// closureSegRe matches the anonymous trailing segments of a closure's
-// FuncForPC name, "func31" or a nested "2".
-var closureSegRe = regexp.MustCompile(`^(func\d+|\d+)$`)
-
-// factoryName returns the factory a closure-built handler was created by
-// (e.g. "makeDup" for "newFrontierInstructionSet.makeDup.func37"), or "" for
-// a plain top-level handler name.
-func factoryName(fn string) string {
-	segs := strings.Split(fn, ".")
-	n := len(segs)
-	for n > 0 && closureSegRe.MatchString(segs[n-1]) {
-		n--
-	}
-	if n == len(segs) || n == 0 {
-		return ""
-	}
-	return segs[n-1]
 }
 
 // recvName returns a method's receiver name (e.g. "s").
