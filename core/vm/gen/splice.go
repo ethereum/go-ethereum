@@ -95,42 +95,78 @@ func (s *source) opHandler(name string) *ast.FuncDecl {
 	return fn
 }
 
-// spliceGasHelper renders a shared gas or memory helper's body with its first
-// parameter, the operation's function, bound to fn. The name to rewrite comes from
-// the declaration, so the generator keeps no copy of how the helper reaches its
-// function. Renaming computeMemorySize's memFn to memoryKeccak256 turns:
+// helperBinds says what a spliced helper's receiver and parameters become in the
+// dispatch loop. Binding is by role and positional, so nothing here restates an
+// identifier: the names being replaced come from the helper's own declaration.
 //
-//	memSize, overflow := memFn(stack)
+// A parameter left unbound keeps the name the helper gave it, which is deliberate.
+// computeMemorySize's second parameter is stack and the loop already holds a local
+// called stack, so only the first parameter needs a bind.
+type helperBinds struct {
+	recv   string   // what the receiver becomes, "" to leave it as written
+	params []string // what each parameter becomes, in order, "" or absent to leave it
+}
+
+// spliceHelper renders a shared gas or memory helper's body against the dispatch's
+// own variables, rebinding its receiver and parameters per b. For ChargeExecutionOnly
+// at a PUSH1, recv "contract.Gas" and params {"3"} turn
+//
+//	if g.ExecutionGas < r {
 //
 // into
 //
-//	memSize, overflow := memoryKeccak256(stack)
+//	if contract.Gas.ExecutionGas < 3 {
 //
-// The rename is undone before returning, since the same body is spliced once per
-// direct-call op.
-func (g *generator) spliceGasHelper(helper, fn string) string {
+// The rewrite renames every mention of a bound name, which is what substituting it
+// means. It assumes a helper does not redeclare its own receiver or parameters, and
+// none of them do. One that did would emit an assignment to a function or a constant,
+// so the generated file would fail to compile rather than mean something else.
+//
+// The renames are undone before returning, since the same body is spliced once per
+// opcode that uses it.
+func (g *generator) spliceHelper(helper string, b helperBinds) string {
 	decl := g.gasHelper(helper)
-	names := paramNames(decl)
-	if len(names) == 0 {
-		abortf("%s takes no parameters, so it has no function to bind", helper)
-	}
-	param := names[0]
 
-	var uses []*ast.Ident
+	// Pair each name in the declaration with what the dispatch calls it.
+	rebind := map[string]string{}
+	if b.recv != "" {
+		if decl.Recv == nil {
+			abortf("cannot splice %s: it has no receiver to bind to %s", helper, b.recv)
+		}
+		rebind[recvName(decl)] = b.recv
+	}
+	names := paramNames(decl)
+	if len(b.params) > len(names) {
+		abortf("cannot splice %s: %d binds for %d parameters", helper, len(b.params), len(names))
+	}
+	for i, to := range b.params {
+		if to != "" {
+			rebind[names[i]] = to
+		}
+	}
+
+	// Rename in place, remembering each node so the body is left as parsed.
+	type renamed struct {
+		ident *ast.Ident
+		was   string
+	}
+	var undo []renamed
 	ast.Inspect(decl.Body, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && id.Name == param {
-			uses = append(uses, id)
+		id, isIdent := n.(*ast.Ident)
+		if !isIdent {
+			return true
+		}
+		if to, ok := rebind[id.Name]; ok {
+			undo = append(undo, renamed{id, id.Name})
+			id.Name = to
 		}
 		return true
 	})
-	// The rename hits every mention of the parameter, so a second use would get
-	// rewritten too. A nil check on memFn would become a comparison against a real
-	// function. Stop instead of splicing a body that means something else.
-	if len(uses) != 1 {
-		abortf("%s uses its %s parameter %d times, want once", helper, param, len(uses))
-	}
-	uses[0].Name = fn
-	defer func() { uses[0].Name = param }()
+	defer func() {
+		for _, r := range undo {
+			r.ident.Name = r.was
+		}
+	}()
 	return g.renderAst(decl.Body.List)
 }
 
