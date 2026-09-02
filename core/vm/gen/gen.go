@@ -40,6 +40,17 @@ import (
 // guaranteed: Go's budget is 80 and these bodies cost far more, so they only make
 // it into the loop when a PGO profile marks them hot and raises the budget.
 
+// Names the generator needs in more than one place: the file it writes, the
+// dispatch inside it, and the profile that gets that dispatch's calls inlined.
+const (
+	generatedFile = "interpreter_gen.go"
+	handlerFile   = "instructions.go"
+	dispatchFunc  = "execUntraced"
+	dispatchName  = "(*EVM)." + dispatchFunc
+	vmPkgPath     = "github.com/ethereum/go-ethereum/core/vm"
+	pgoFile       = "cmd/geth/default.pgo"
+)
+
 type generator struct {
 	specs [256]opSpec
 	buf   *bytes.Buffer
