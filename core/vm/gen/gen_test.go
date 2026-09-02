@@ -97,6 +97,48 @@ func tripped(t *testing.T, fn func()) string {
 	return msg
 }
 
+// TestTierFor covers the classifier that decides whether a hotOps entry can take
+// its own case, and which tier it lands in. Getting it wrong either emits a
+// fork-varying value as a constant or writes a call to a name that does not exist.
+func TestTierFor(t *testing.T) {
+	forks := genForks()
+	g := &generator{}
+	g.deriveSpecs(forks)
+
+	for _, tc := range []struct {
+		op   vm.OpCode
+		want tier
+		why  string
+	}{
+		{vm.ADD, tierStatic, "fork-stable, constant gas only"},
+		{vm.DUP1, tierStatic, "same"},
+		{vm.KECCAK256, tierDynamic, "fork-stable but carries dynamic gas"},
+		{vm.MLOAD, tierDynamic, "same"},
+		{vm.SSTORE, tierTable, "gas varies by fork"},
+		{vm.EXP, tierTable, "same"},
+		{vm.BALANCE, tierTable, "same"},
+		{vm.LOG0, tierTable, "handler is built by makeLog, so it has no name to call"},
+		{vm.OpCode(0x0c), tierTable, "not an opcode in any fork"},
+	} {
+		if got, _ := g.tierFor(byte(tc.op), forks); got != tc.want {
+			t.Errorf("tierFor(%s) = %v, want %v (%s)", tc.op, got, tc.want, tc.why)
+		}
+	}
+}
+
+// TestHotOpsAllGetArms checks that every opcode hotOps names actually ends up with
+// its own case. An entry that quietly failed to qualify would cost performance
+// without failing anything.
+func TestHotOpsAllGetArms(t *testing.T) {
+	g := &generator{}
+	g.deriveSpecs(genForks())
+	for _, op := range hotOps {
+		if g.tierOf(byte(op)) == tierTable {
+			t.Errorf("%s is in hotOps but was left on the table tier", op)
+		}
+	}
+}
+
 // TestGuards covers the checks that stop the generator when core/vm changes in a way
 // it cannot express. They are the reason the generated dispatch is safe to trust, so
 // each one needs to fire rather than fall through and emit wrong code.
@@ -110,15 +152,17 @@ func TestGuards(t *testing.T) {
 		fn   func()
 	}{
 		{
-			// 0x0c is not an opcode in any fork, so there is no spec to emit from.
-			name: "own case for an opcode no fork defines",
-			want: "never defined",
-			fn:   func() { g.checkStaticStable(0x0c, genForks()) },
+			// SSTORE's gas varies by fork, so listing it as hot would ask for a case
+			// that cannot be emitted.
+			name: "hotOps entry whose gas varies by fork",
+			want: "cannot take its own case",
+			fn:   func() { g.assignTiers([]vm.OpCode{vm.SSTORE}, genForks()) },
 		},
 		{
-			name: "dynamic-gas case for an opcode no fork defines",
-			want: "never defined",
-			fn:   func() { g.checkDynamicStable(0x0c, genForks()) },
+			// 0x0c is not an opcode in any fork, so there is no spec to emit from.
+			name: "hotOps entry no fork defines",
+			want: "no fork defines it",
+			fn:   func() { g.assignTiers([]vm.OpCode{vm.OpCode(0x0c)}, genForks()) },
 		},
 		{
 			// LOG0 comes from makeLog, so FuncForPC gives it a dotted closure name
