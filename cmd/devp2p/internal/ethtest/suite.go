@@ -46,6 +46,10 @@ type Suite struct {
 	Dest   *enode.Node
 	chain  *Chain
 	engine *EngineClient
+
+	// requireAvailableBALs is enabled only by the in-process geth tests.
+	// External conformance runs must continue accepting unavailable BALs.
+	requireAvailableBALs bool
 }
 
 // NewSuite creates and returns a new eth-test suite that can
