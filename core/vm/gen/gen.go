@@ -96,8 +96,8 @@ func (g *generator) emitStackChecks(minExpr, maxExpr any, under, over bool) {
 // enough that the compiler inlines it without help.
 func (g *generator) emitStaticGas(amount any) {
 	g.p(`
-		if gerr := contract.Gas.ChargeExecutionOnly(%v); gerr != nil {
-			res, err = nil, gerr
+		if !contract.Gas.ChargeExecutionOnly(%v) {
+			res, err = nil, ErrOutOfGas
 			break mainLoop
 		}
 	`, amount)

@@ -43,8 +43,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opAdd(&pc, evm, scope)
@@ -59,8 +59,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(5); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(5) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opMul(&pc, evm, scope)
@@ -75,8 +75,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSub(&pc, evm, scope)
@@ -91,8 +91,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(5); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(5) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDiv(&pc, evm, scope)
@@ -107,8 +107,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(8); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(8) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opAddmod(&pc, evm, scope)
@@ -123,8 +123,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(8); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(8) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opMulmod(&pc, evm, scope)
@@ -139,8 +139,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(5); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(5) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSignExtend(&pc, evm, scope)
@@ -155,8 +155,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opLt(&pc, evm, scope)
@@ -171,8 +171,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opGt(&pc, evm, scope)
@@ -187,8 +187,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSlt(&pc, evm, scope)
@@ -203,8 +203,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSgt(&pc, evm, scope)
@@ -219,8 +219,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opEq(&pc, evm, scope)
@@ -235,8 +235,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opIszero(&pc, evm, scope)
@@ -250,8 +250,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opAnd(&pc, evm, scope)
@@ -266,8 +266,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opOr(&pc, evm, scope)
@@ -282,8 +282,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opXor(&pc, evm, scope)
@@ -298,8 +298,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opNot(&pc, evm, scope)
@@ -314,8 +314,8 @@ mainLoop:
 					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 					break mainLoop
 				}
-				if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-					res, err = nil, gerr
+				if !contract.Gas.ChargeExecutionOnly(3) {
+					res, err = nil, ErrOutOfGas
 					break mainLoop
 				}
 				res, err = opSHL(&pc, evm, scope)
@@ -334,8 +334,8 @@ mainLoop:
 					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 					break mainLoop
 				}
-				if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-					res, err = nil, gerr
+				if !contract.Gas.ChargeExecutionOnly(3) {
+					res, err = nil, ErrOutOfGas
 					break mainLoop
 				}
 				res, err = opSHR(&pc, evm, scope)
@@ -354,8 +354,8 @@ mainLoop:
 					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 					break mainLoop
 				}
-				if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-					res, err = nil, gerr
+				if !contract.Gas.ChargeExecutionOnly(3) {
+					res, err = nil, ErrOutOfGas
 					break mainLoop
 				}
 				res, err = opSAR(&pc, evm, scope)
@@ -373,8 +373,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(30); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(30) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			operation := table[op]
@@ -397,8 +397,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opCallDataLoad(&pc, evm, scope)
@@ -412,8 +412,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(2); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(2) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opPop(&pc, evm, scope)
@@ -428,8 +428,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			operation := table[op]
@@ -451,8 +451,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			operation := table[op]
@@ -475,8 +475,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(8); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(8) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opJump(&pc, evm, scope)
@@ -491,8 +491,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(10); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(10) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opJumpi(&pc, evm, scope)
@@ -503,8 +503,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case JUMPDEST:
-			if gerr := contract.Gas.ChargeExecutionOnly(1); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(1) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opJumpdest(&pc, evm, scope)
@@ -519,8 +519,8 @@ mainLoop:
 					res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 					break mainLoop
 				}
-				if gerr := contract.Gas.ChargeExecutionOnly(2); gerr != nil {
-					res, err = nil, gerr
+				if !contract.Gas.ChargeExecutionOnly(2) {
+					res, err = nil, ErrOutOfGas
 					break mainLoop
 				}
 				res, err = opPush0(&pc, evm, scope)
@@ -538,8 +538,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opPush1(&pc, evm, scope)
@@ -554,8 +554,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opPush2(&pc, evm, scope)
@@ -570,8 +570,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opPush3(&pc, evm, scope)
@@ -586,8 +586,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opPush4(&pc, evm, scope)
@@ -602,8 +602,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opPush8(&pc, evm, scope)
@@ -618,8 +618,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opPush16(&pc, evm, scope)
@@ -634,8 +634,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opPush20(&pc, evm, scope)
@@ -650,8 +650,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opPush32(&pc, evm, scope)
@@ -669,8 +669,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup1(&pc, evm, scope)
@@ -688,8 +688,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup2(&pc, evm, scope)
@@ -707,8 +707,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup3(&pc, evm, scope)
@@ -726,8 +726,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup4(&pc, evm, scope)
@@ -745,8 +745,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup5(&pc, evm, scope)
@@ -764,8 +764,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup6(&pc, evm, scope)
@@ -783,8 +783,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup7(&pc, evm, scope)
@@ -802,8 +802,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup8(&pc, evm, scope)
@@ -821,8 +821,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup9(&pc, evm, scope)
@@ -840,8 +840,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup10(&pc, evm, scope)
@@ -859,8 +859,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup11(&pc, evm, scope)
@@ -878,8 +878,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup12(&pc, evm, scope)
@@ -897,8 +897,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup13(&pc, evm, scope)
@@ -916,8 +916,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opDup14(&pc, evm, scope)
@@ -932,8 +932,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSwap1(&pc, evm, scope)
@@ -947,8 +947,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSwap2(&pc, evm, scope)
@@ -962,8 +962,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 4}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSwap3(&pc, evm, scope)
@@ -977,8 +977,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 5}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSwap4(&pc, evm, scope)
@@ -992,8 +992,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 6}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSwap5(&pc, evm, scope)
@@ -1007,8 +1007,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 7}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSwap6(&pc, evm, scope)
@@ -1022,8 +1022,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 8}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSwap7(&pc, evm, scope)
@@ -1037,8 +1037,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 9}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSwap8(&pc, evm, scope)
@@ -1052,8 +1052,8 @@ mainLoop:
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 10}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			res, err = opSwap9(&pc, evm, scope)
@@ -1071,8 +1071,8 @@ mainLoop:
 				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: operation.maxStack}
 				break mainLoop
 			}
-			if gerr := contract.Gas.ChargeExecutionOnly(operation.constantGas); gerr != nil {
-				res, err = nil, gerr
+			if !contract.Gas.ChargeExecutionOnly(operation.constantGas) {
+				res, err = nil, ErrOutOfGas
 				break mainLoop
 			}
 			var memorySize uint64
