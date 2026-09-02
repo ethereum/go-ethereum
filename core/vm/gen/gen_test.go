@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -47,11 +48,11 @@ func TestGeneratedDispatchUpToDate(t *testing.T) {
 	}
 }
 
-// TestGeneratedProfileUpToDate asserts that the committed PGO profile matches what
-// the generator builds for the committed dispatch. It is the guard the profile most
-// needs: a profile records the line each handler call sits on, so a dispatch change
-// that does not regenerate it leaves a profile matching nothing. The build succeeds,
-// every test passes, and the handlers quietly stop being inlined.
+// TestGeneratedProfileUpToDate asserts that the committed PGO profile describes the
+// same call sites the generator builds for the committed dispatch. It is the guard
+// the profile most needs: a profile records the line each handler call sits on, so a
+// dispatch change that does not regenerate it leaves a profile matching nothing. The
+// build succeeds, every test passes, and the handlers quietly stop being inlined.
 func TestGeneratedProfileUpToDate(t *testing.T) {
 	src, err := generate()
 	if err != nil {
@@ -61,61 +62,73 @@ func TestGeneratedProfileUpToDate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the profile: %v", err)
 	}
-	var got bytes.Buffer
-	if err := prof.Write(&got); err != nil {
+	var buf bytes.Buffer
+	if err := prof.Write(&buf); err != nil {
 		t.Fatalf("serializing the profile: %v", err)
 	}
 	path := filepath.Join(vmDir(), "..", "..", pgoFile)
-	want, err := os.ReadFile(path)
+	committed, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading committed %s: %v", pgoFile, err)
 	}
-	if bytes.Equal(got.Bytes(), want) {
+	want, got := profileEdges(t, "generated", buf.Bytes()), profileEdges(t, "committed", committed)
+	if slices.Equal(want, got) {
 		return
 	}
 	t.Fatalf("%s is out of date; run `go generate ./core/vm/...` and commit the result.\n"+
-		"  committed: %s\n  generated: %s", pgoFile, describeProfile(want), describeProfile(got.Bytes()))
+		"  %d call sites committed, %d generated\n  first difference: committed %q, generated %q",
+		pgoFile, len(got), len(want), firstEdge(got, want), firstEdge(want, got))
 }
 
-// describeProfile summarizes a serialized profile for a failure message, since the
-// bytes themselves say nothing useful.
-func describeProfile(b []byte) string {
+// profileEdges reduces a serialized profile to what the compiler reads out of it:
+// one entry per call site, naming the callee and the site's offset from the first
+// line of the enclosing function, which is how PGO identifies a call site. Comparing
+// these rather than the serialized bytes keeps the test toolchain-independent, since
+// profile.Write gzips and compress/flate does not emit identical bytes across Go
+// releases even though the payload underneath is the same.
+func profileEdges(t *testing.T, which string, b []byte) []string {
+	t.Helper()
 	p, err := profile.Parse(bytes.NewReader(b))
 	if err != nil {
-		return fmt.Sprintf("%d bytes, not a readable profile (%v)", len(b), err)
+		t.Fatalf("%s profile does not parse: %v", which, err)
 	}
 	var caller *profile.Function
-	callees := map[string]bool{}
 	for _, fn := range p.Function {
 		if strings.HasSuffix(fn.Name, dispatchName) {
 			caller = fn
-			continue
+			break
 		}
-		callees[fn.Name] = true
 	}
 	if caller == nil {
-		return fmt.Sprintf("%d samples, %d handlers, no %s frame", len(p.Sample), len(callees), dispatchFunc)
+		t.Fatalf("%s profile has no %s frame, so it names no call site in the dispatch", which, dispatchFunc)
 	}
-	// PGO keys a call site by its offset from the caller's first line, so that is
-	// what a stale profile gets wrong. Report the span, since it moves when the
-	// dispatch does and the start line alone does not.
-	lo, hi := int64(-1), int64(-1)
-	for _, loc := range p.Location {
-		for _, ln := range loc.Line {
-			if ln.Function != caller {
-				continue
-			}
-			off := ln.Line - caller.StartLine
-			if lo < 0 || off < lo {
-				lo = off
-			}
-			if off > hi && off < 1e6 {
-				hi = off
+	var edges []string
+	for _, s := range p.Sample {
+		var callee string
+		offset := int64(-1)
+		for _, loc := range s.Location {
+			for _, ln := range loc.Line {
+				if ln.Function == caller {
+					offset = ln.Line - caller.StartLine
+				} else {
+					callee = ln.Function.Name
+				}
 			}
 		}
+		edges = append(edges, fmt.Sprintf("%s+%d=%d", callee, offset, s.Value[0]))
 	}
-	return fmt.Sprintf("%d samples, %d handlers, call sites at offsets %d..%d from line %d",
-		len(p.Sample), len(callees), lo, hi, caller.StartLine)
+	slices.Sort(edges)
+	return edges
+}
+
+// firstEdge returns a's first entry that b does not have, for the failure message.
+func firstEdge(a, b []string) string {
+	for _, e := range a {
+		if !slices.Contains(b, e) {
+			return e
+		}
+	}
+	return "(none)"
 }
 
 // firstDiff shows where two versions of the generated file start to differ, with a
