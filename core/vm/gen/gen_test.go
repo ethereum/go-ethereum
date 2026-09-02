@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/google/pprof/profile"
 )
 
 // TestGeneratedDispatchUpToDate asserts that the committed interpreter_gen.go
@@ -44,6 +45,77 @@ func TestGeneratedDispatchUpToDate(t *testing.T) {
 		t.Fatalf("interpreter_gen.go is out of date; run `go generate ./core/vm/...` and commit the result.\n"+
 			"First difference (- committed, + generated):\n%s", firstDiff(want, got))
 	}
+}
+
+// TestGeneratedProfileUpToDate asserts that the committed PGO profile matches what
+// the generator builds for the committed dispatch. It is the guard the profile most
+// needs: a profile records the line each handler call sits on, so a dispatch change
+// that does not regenerate it leaves a profile matching nothing. The build succeeds,
+// every test passes, and the handlers quietly stop being inlined.
+func TestGeneratedProfileUpToDate(t *testing.T) {
+	src, err := generate()
+	if err != nil {
+		t.Fatalf("running generator: %v", err)
+	}
+	prof, err := profileFor(src)
+	if err != nil {
+		t.Fatalf("building the profile: %v", err)
+	}
+	var got bytes.Buffer
+	if err := prof.Write(&got); err != nil {
+		t.Fatalf("serializing the profile: %v", err)
+	}
+	path := filepath.Join(vmDir(), "..", "..", pgoFile)
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading committed %s: %v", pgoFile, err)
+	}
+	if bytes.Equal(got.Bytes(), want) {
+		return
+	}
+	t.Fatalf("%s is out of date; run `go generate ./core/vm/...` and commit the result.\n"+
+		"  committed: %s\n  generated: %s", pgoFile, describeProfile(want), describeProfile(got.Bytes()))
+}
+
+// describeProfile summarizes a serialized profile for a failure message, since the
+// bytes themselves say nothing useful.
+func describeProfile(b []byte) string {
+	p, err := profile.Parse(bytes.NewReader(b))
+	if err != nil {
+		return fmt.Sprintf("%d bytes, not a readable profile (%v)", len(b), err)
+	}
+	var caller *profile.Function
+	callees := map[string]bool{}
+	for _, fn := range p.Function {
+		if strings.HasSuffix(fn.Name, dispatchName) {
+			caller = fn
+			continue
+		}
+		callees[fn.Name] = true
+	}
+	if caller == nil {
+		return fmt.Sprintf("%d samples, %d handlers, no %s frame", len(p.Sample), len(callees), dispatchFunc)
+	}
+	// PGO keys a call site by its offset from the caller's first line, so that is
+	// what a stale profile gets wrong. Report the span, since it moves when the
+	// dispatch does and the start line alone does not.
+	lo, hi := int64(-1), int64(-1)
+	for _, loc := range p.Location {
+		for _, ln := range loc.Line {
+			if ln.Function != caller {
+				continue
+			}
+			off := ln.Line - caller.StartLine
+			if lo < 0 || off < lo {
+				lo = off
+			}
+			if off > hi && off < 1e6 {
+				hi = off
+			}
+		}
+	}
+	return fmt.Sprintf("%d samples, %d handlers, call sites at offsets %d..%d from line %d",
+		len(p.Sample), len(callees), lo, hi, caller.StartLine)
 }
 
 // firstDiff shows where two versions of the generated file start to differ, with a
@@ -126,10 +198,10 @@ func TestTierFor(t *testing.T) {
 	}
 }
 
-// TestHotOpsAllGetArms checks that every opcode hotOps names actually ends up with
+// TestHotOpsAllGetCases checks that every opcode hotOps names actually ends up with
 // its own case. An entry that quietly failed to qualify would cost performance
 // without failing anything.
-func TestHotOpsAllGetArms(t *testing.T) {
+func TestHotOpsAllGetCases(t *testing.T) {
 	g := &generator{}
 	g.deriveSpecs(genForks())
 	for _, op := range hotOps {

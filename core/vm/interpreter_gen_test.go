@@ -134,9 +134,9 @@ func asm(parts ...any) []byte {
 	return b
 }
 
-// diffPrograms is a curated set of bytecode snippets covering the inlined hot
-// opcodes, the volatile call-through opcodes, fork-gated opcodes, control flow,
-// and the principal error paths.
+// diffPrograms is a curated set of bytecode snippets covering the opcodes with
+// their own case, the volatile call-through opcodes, fork-gated opcodes, control
+// flow, and the principal error paths.
 var diffPrograms = []struct {
 	name string
 	code []byte
@@ -163,8 +163,8 @@ var diffPrograms = []struct {
 	{"codecopy", asm(PUSH1, 0x10, PUSH1, 0x00, PUSH1, 0x00, CODECOPY, PUSH1, 0x10, PUSH1, 0x00, RETURN), 100000},
 	{"log", asm(PUSH1, 0x11, PUSH1, 0x00, MSTORE, PUSH1, 0x22, PUSH1, 0x33, PUSH1, 0x20, PUSH1, 0x00, LOG2, STOP), 100000},
 	// Fuzz-found regression (the stale-res bug): a res-setting DELEGATECALL
-	// followed by a halting inlined op (JUMPI to an invalid destination). The
-	// buggy build returned the DELEGATECALL output instead of nil.
+	// followed by a halting op with its own case (JUMPI to an invalid
+	// destination). The buggy build returned the DELEGATECALL output instead of nil.
 	{"delegatecall-then-invalid-jumpi", asm(
 		PUSH1, 0x30, PUSH1, 0x30, PUSH1, 0x30, PUSH1, 0x30,
 		PUSH20, diffCalleeAddr.Bytes(),
@@ -308,7 +308,7 @@ func diffBlockCtx(merged bool) BlockContext {
 }
 
 // TestExtraEIPs checks that EIPs enabled via Config.ExtraEips take effect even
-// when they touch opcodes the generated dispatch inlines. PUSH0 (EIP-3855) on
+// when they touch opcodes the generated dispatch gives their own case. PUSH0 (EIP-3855) on
 // a pre-Shanghai config is the canary: the runtime table has it enabled but
 // the generated fork gate does not, so execution must route through the table loop.
 func TestExtraEIPs(t *testing.T) {
@@ -408,10 +408,11 @@ func FuzzInterpreterDiff(f *testing.F) {
 }
 
 // TestGeneratedDispatchKeepsOffStackInternals asserts the generated dispatch reaches
-// the stack only through its methods. The dispatch calls handlers rather than
-// splicing their bodies, so it has no loop-local copy of the stack to keep in sync,
-// and any direct read of size, bottom or the arena would be either dead or wrong.
-// This is the guard against half-reintroducing loop locals.
+// the stack only through its methods. The dispatch keeps its own depth counter in sp,
+// and the tempting way to reconcile that with the real stack is to assign size or
+// bottom directly, which is how the two get to disagree. sp is a mirror the handlers
+// maintain through methods, never a value the loop writes back, so a direct read or
+// write of the internals here is the bug this catches.
 func TestGeneratedDispatchKeepsOffStackInternals(t *testing.T) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "interpreter_gen.go", nil, 0)
