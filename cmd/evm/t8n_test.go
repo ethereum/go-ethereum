@@ -248,6 +248,14 @@ func TestT8n(t *testing.T) {
 			output:      t8nOutput{alloc: false, result: false},
 			expExitCode: 3,
 		},
+		{ // Test London transition where input is missing base fee information
+			base: "./testdata/35",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "London", "",
+			},
+			output:      t8nOutput{alloc: false, result: false},
+			expExitCode: 3,
+		},
 		{ // Test base fee calculation
 			base: "./testdata/25",
 			input: t8nInput{
