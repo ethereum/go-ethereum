@@ -57,30 +57,33 @@ func (g *generator) p(format string, args ...any) {
 // operation.minStack and operation.maxStack in the table path. under and over let a
 // path omit a guard whose bound is trivial.
 //
-// sLen is scoped to the if, so each case declares its own.
+// The bounds are compared against sp, the loop's own depth counter, rather than
+// stack.len(). stack.len() reads size back through a pointer, and the compiler has
+// to reload it after every handler call because a handler can change it, so it was
+// a memory access per opcode.
 func (g *generator) emitStackChecks(minExpr, maxExpr any, under, over bool) {
 	switch {
 	case under && over: // the table path, which knows neither bound statically
 		g.p(`
-			if sLen := stack.len(); sLen < %v {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: %v}
+			if sp < %v {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: %v}
 				break mainLoop
-			} else if sLen > %v {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: %v}
+			} else if sp > %v {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: %v}
 				break mainLoop
 			}
 		`, minExpr, minExpr, maxExpr, maxExpr)
 	case under:
 		g.p(`
-			if sLen := stack.len(); sLen < %v {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: %v}
+			if sp < %v {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: %v}
 				break mainLoop
 			}
 		`, minExpr, minExpr)
 	case over:
 		g.p(`
-			if sLen := stack.len(); sLen > %v {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: %v}
+			if sp > %v {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: %v}
 				break mainLoop
 			}
 		`, maxExpr, maxExpr)
@@ -127,16 +130,37 @@ func (g *generator) emitUndefinedFallback() {
 }
 
 // emitCallHandler calls an opcode handler and does the bookkeeping around it. The
-// handler can fail, so bail on error, then step the pc.
-func (g *generator) emitCallHandler(call string) {
+// handler can fail, so bail on error, then step sp and the pc.
+//
+// step is what the handler did to the stack depth. An opcode's own case knows it as
+// a constant, so it adjusts sp. The table path does not, so it passes an empty step
+// and re-reads the depth instead.
+func (g *generator) emitCallHandler(call, step string) {
 	g.p(`
 		res, err = %s
 		if err != nil {
 			break mainLoop
 		}
+	`, call)
+	if step != "" {
+		g.p("%s\n", step)
+	}
+	g.p(`
 		pc++
 		continue mainLoop
-	`, call)
+	`)
+}
+
+// stackStep returns the statement that moves sp by an opcode's stack delta, or ""
+// when the opcode leaves the depth alone.
+func stackStep(delta int) string {
+	switch {
+	case delta > 0:
+		return fmt.Sprintf("sp += %d", delta)
+	case delta < 0:
+		return fmt.Sprintf("sp -= %d", -delta)
+	}
+	return ""
 }
 
 // emitStaticOp emits a case for an opcode whose whole cost is its constant gas: the
@@ -154,7 +178,7 @@ func (g *generator) emitStaticOp(code byte) {
 	if spec.constGas != 0 {
 		g.emitStaticGas(spec.constGas)
 	}
-	g.emitCallHandler(g.handlerCall(code))
+	g.emitCallHandler(g.handlerCall(code), stackStep(spec.stackDelta()))
 
 	// Close the fork gate opened above, then the branch taken while the fork is
 	// still inactive.
@@ -177,7 +201,7 @@ func (g *generator) emitDynamicOp(code byte) {
 		g.emitStaticGas(spec.constGas)
 	}
 	g.emitDynamicGas()
-	g.emitCallHandler(g.handlerCall(code))
+	g.emitCallHandler(g.handlerCall(code), stackStep(spec.stackDelta()))
 }
 
 // emitTableOp emits the switch's default case, which walks the table exactly as the
@@ -200,7 +224,7 @@ func (g *generator) emitTableOp() {
 				mem.Resize(memorySize)
 			}
 	`)
-	g.emitCallHandler("operation.execute(&pc, evm, scope)")
+	g.emitCallHandler("operation.execute(&pc, evm, scope)", "sp = stack.len()")
 }
 
 // handlerCall returns the call expression for an opcode's handler. The name comes
@@ -257,6 +281,10 @@ func (g *generator) createFile() {
 			// Which of these the switch uses depends on the tier assignments, so
 			// keep them all live rather than tracking usage while emitting.
 			_, _, _ = mem, rules, table
+			// sp shadows the stack depth for the bounds checks. Each case steps it
+			// by its opcode's known delta, and the table case re-reads it because
+			// its delta is not known until run time.
+			sp := stack.len()
 		mainLoop:
 			for {
 	`)
