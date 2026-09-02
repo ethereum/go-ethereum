@@ -30,13 +30,17 @@ func (evm *EVM) execUntraced(scope *ScopeContext) (ret []byte, err error) {
 	// Which of these the switch uses depends on the tier assignments, so
 	// keep them all live rather than tracking usage while emitting.
 	_, _, _ = mem, rules, table
+	// sp shadows the stack depth for the bounds checks. Each case steps it
+	// by its opcode's known delta, and the table case re-reads it because
+	// its delta is not known until run time.
+	sp := stack.len()
 mainLoop:
 	for {
 		op := contract.GetOp(pc)
 		switch op {
 		case ADD:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -47,11 +51,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case MUL:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(5); gerr != nil {
@@ -62,11 +67,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case SUB:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -77,11 +83,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case DIV:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(5); gerr != nil {
@@ -92,11 +99,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case ADDMOD:
-			if sLen := stack.len(); sLen < 3 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
+			if sp < 3 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(8); gerr != nil {
@@ -107,11 +115,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 2
 			pc++
 			continue mainLoop
 		case MULMOD:
-			if sLen := stack.len(); sLen < 3 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
+			if sp < 3 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(8); gerr != nil {
@@ -122,11 +131,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 2
 			pc++
 			continue mainLoop
 		case SIGNEXTEND:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(5); gerr != nil {
@@ -137,11 +147,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case LT:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -152,11 +163,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case GT:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -167,11 +179,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case SLT:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -182,11 +195,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case SGT:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -197,11 +211,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case EQ:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -212,11 +227,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case ISZERO:
-			if sLen := stack.len(); sLen < 1 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -230,8 +246,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case AND:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -242,11 +258,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case OR:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -257,11 +274,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case XOR:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -272,11 +290,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case NOT:
-			if sLen := stack.len(); sLen < 1 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -291,8 +310,8 @@ mainLoop:
 			continue mainLoop
 		case SHL:
 			if rules.IsConstantinople {
-				if sLen := stack.len(); sLen < 2 {
-					res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+				if sp < 2 {
+					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 					break mainLoop
 				}
 				if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -303,6 +322,7 @@ mainLoop:
 				if err != nil {
 					break mainLoop
 				}
+				sp -= 1
 				pc++
 				continue mainLoop
 			}
@@ -310,8 +330,8 @@ mainLoop:
 			break mainLoop
 		case SHR:
 			if rules.IsConstantinople {
-				if sLen := stack.len(); sLen < 2 {
-					res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+				if sp < 2 {
+					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 					break mainLoop
 				}
 				if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -322,6 +342,7 @@ mainLoop:
 				if err != nil {
 					break mainLoop
 				}
+				sp -= 1
 				pc++
 				continue mainLoop
 			}
@@ -329,8 +350,8 @@ mainLoop:
 			break mainLoop
 		case SAR:
 			if rules.IsConstantinople {
-				if sLen := stack.len(); sLen < 2 {
-					res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+				if sp < 2 {
+					res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 					break mainLoop
 				}
 				if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -341,14 +362,15 @@ mainLoop:
 				if err != nil {
 					break mainLoop
 				}
+				sp -= 1
 				pc++
 				continue mainLoop
 			}
 			res, err = opUndefined(&pc, evm, scope)
 			break mainLoop
 		case KECCAK256:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(30); gerr != nil {
@@ -367,11 +389,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case CALLDATALOAD:
-			if sLen := stack.len(); sLen < 1 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -385,8 +408,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case POP:
-			if sLen := stack.len(); sLen < 1 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(2); gerr != nil {
@@ -397,11 +420,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case MLOAD:
-			if sLen := stack.len(); sLen < 1 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -423,8 +447,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case MSTORE:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -443,11 +467,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 2
 			pc++
 			continue mainLoop
 		case JUMP:
-			if sLen := stack.len(); sLen < 1 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(8); gerr != nil {
@@ -458,11 +483,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 1
 			pc++
 			continue mainLoop
 		case JUMPI:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(10); gerr != nil {
@@ -473,6 +499,7 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp -= 2
 			pc++
 			continue mainLoop
 		case JUMPDEST:
@@ -488,8 +515,8 @@ mainLoop:
 			continue mainLoop
 		case PUSH0:
 			if rules.IsShanghai {
-				if sLen := stack.len(); sLen > 1023 {
-					res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+				if sp > 1023 {
+					res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 					break mainLoop
 				}
 				if gerr := contract.Gas.ChargeExecutionOnly(2); gerr != nil {
@@ -500,14 +527,15 @@ mainLoop:
 				if err != nil {
 					break mainLoop
 				}
+				sp += 1
 				pc++
 				continue mainLoop
 			}
 			res, err = opUndefined(&pc, evm, scope)
 			break mainLoop
 		case PUSH1:
-			if sLen := stack.len(); sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -518,11 +546,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case PUSH2:
-			if sLen := stack.len(); sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -533,11 +562,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case PUSH3:
-			if sLen := stack.len(); sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -548,11 +578,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case PUSH4:
-			if sLen := stack.len(); sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -563,11 +594,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case PUSH8:
-			if sLen := stack.len(); sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -578,11 +610,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case PUSH16:
-			if sLen := stack.len(); sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -593,11 +626,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case PUSH20:
-			if sLen := stack.len(); sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -608,11 +642,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case PUSH32:
-			if sLen := stack.len(); sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -623,14 +658,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP1:
-			if sLen := stack.len(); sLen < 1 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 1}
+			if sp < 1 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -641,14 +677,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP2:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -659,14 +696,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP3:
-			if sLen := stack.len(); sLen < 3 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
+			if sp < 3 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -677,14 +715,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP4:
-			if sLen := stack.len(); sLen < 4 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 4}
+			if sp < 4 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 4}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -695,14 +734,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP5:
-			if sLen := stack.len(); sLen < 5 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 5}
+			if sp < 5 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 5}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -713,14 +753,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP6:
-			if sLen := stack.len(); sLen < 6 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 6}
+			if sp < 6 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 6}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -731,14 +772,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP7:
-			if sLen := stack.len(); sLen < 7 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 7}
+			if sp < 7 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 7}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -749,14 +791,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP8:
-			if sLen := stack.len(); sLen < 8 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 8}
+			if sp < 8 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 8}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -767,14 +810,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP9:
-			if sLen := stack.len(); sLen < 9 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 9}
+			if sp < 9 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 9}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -785,14 +829,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP10:
-			if sLen := stack.len(); sLen < 10 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 10}
+			if sp < 10 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 10}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -803,14 +848,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP11:
-			if sLen := stack.len(); sLen < 11 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 11}
+			if sp < 11 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 11}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -821,14 +867,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP12:
-			if sLen := stack.len(); sLen < 12 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 12}
+			if sp < 12 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 12}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -839,14 +886,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP13:
-			if sLen := stack.len(); sLen < 13 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 13}
+			if sp < 13 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 13}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -857,14 +905,15 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case DUP14:
-			if sLen := stack.len(); sLen < 14 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 14}
+			if sp < 14 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 14}
 				break mainLoop
-			} else if sLen > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: 1023}
+			} else if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -875,11 +924,12 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case SWAP1:
-			if sLen := stack.len(); sLen < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 2}
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -893,8 +943,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case SWAP2:
-			if sLen := stack.len(); sLen < 3 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 3}
+			if sp < 3 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -908,8 +958,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case SWAP3:
-			if sLen := stack.len(); sLen < 4 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 4}
+			if sp < 4 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 4}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -923,8 +973,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case SWAP4:
-			if sLen := stack.len(); sLen < 5 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 5}
+			if sp < 5 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 5}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -938,8 +988,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case SWAP5:
-			if sLen := stack.len(); sLen < 6 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 6}
+			if sp < 6 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 6}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -953,8 +1003,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case SWAP6:
-			if sLen := stack.len(); sLen < 7 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 7}
+			if sp < 7 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 7}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -968,8 +1018,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case SWAP7:
-			if sLen := stack.len(); sLen < 8 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 8}
+			if sp < 8 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 8}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -983,8 +1033,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case SWAP8:
-			if sLen := stack.len(); sLen < 9 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 9}
+			if sp < 9 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 9}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -998,8 +1048,8 @@ mainLoop:
 			pc++
 			continue mainLoop
 		case SWAP9:
-			if sLen := stack.len(); sLen < 10 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: 10}
+			if sp < 10 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 10}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(3); gerr != nil {
@@ -1014,11 +1064,11 @@ mainLoop:
 			continue mainLoop
 		default:
 			operation := table[op]
-			if sLen := stack.len(); sLen < operation.minStack {
-				res, err = nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
+			if sp < operation.minStack {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: operation.minStack}
 				break mainLoop
-			} else if sLen > operation.maxStack {
-				res, err = nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
+			} else if sp > operation.maxStack {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: operation.maxStack}
 				break mainLoop
 			}
 			if gerr := contract.Gas.ChargeExecutionOnly(operation.constantGas); gerr != nil {
@@ -1036,6 +1086,7 @@ mainLoop:
 			if err != nil {
 				break mainLoop
 			}
+			sp = stack.len()
 			pc++
 			continue mainLoop
 		}
