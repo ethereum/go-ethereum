@@ -140,20 +140,11 @@ func genForks() []vm.GenFork {
 	return out
 }
 
-// opSpec holds the per-opcode facts the generator emits from: the constants
-// (gas, stack bounds, intro fork) and the FuncForPC names of the opcode's
-// handler, dynamic-gas and memory-size functions, all derived from the
-// per-fork tables.
+// opSpec holds the per-opcode facts the generator emits from: the metadata the
+// first defining fork records for the opcode, plus which fork that was.
 type opSpec struct {
-	defined  bool
-	name     string
-	fork     string
-	constGas uint64
-	minStack int
-	maxStack int
-	execFn   string
-	dynFn    string
-	memFn    string
+	vm.GenOp
+	fork string
 }
 
 // stackGuards returns the bounds emitStackChecks needs, plus which of the two
@@ -162,18 +153,17 @@ type opSpec struct {
 // unconditionally grew the spliced dispatch by 14%, because the compiler cannot
 // track the stack length across a switch this size and emits every compare.
 func (s opSpec) stackGuards() (minStack, maxStack int, under, over bool) {
-	return s.minStack, s.maxStack, s.minStack > 0, s.maxStack < int(params.StackLimit)
+	return s.MinStack, s.MaxStack, s.MinStack > 0, s.MaxStack < int(params.StackLimit)
 }
 
 // stackDelta returns how much an opcode changes the stack depth, which is push
 // minus pop. maxStack is built as StackLimit+pop-push (see stack_table.go), so
 // the difference from the limit is the net effect. ADD's maxStack is 1025, so it
-// is -1. PUSH1's is 1023, so +1. JUMPDEST leaves the stack alone at 0.
-//
-// The dispatch uses this to keep its own depth counter rather than reading
+// is -1. PUSH1's is 1023, so +1. JUMPDEST leaves the stack alone at 0. The
+// dispatch uses this to keep its own depth counter rather than reading
 // stack.size back through a pointer on every opcode.
 func (s opSpec) stackDelta() int {
-	return int(params.StackLimit) - s.maxStack
+	return int(params.StackLimit) - s.MaxStack
 }
 
 // deriveSpecs records each opcode's constants and function names from the first fork
@@ -186,17 +176,7 @@ func (g *generator) deriveSpecs(forks []vm.GenFork) {
 			if !o.Defined {
 				continue
 			}
-			g.specs[code] = opSpec{
-				defined:  true,
-				name:     o.Name,
-				fork:     fork.RuleField,
-				constGas: o.ConstantGas,
-				minStack: o.MinStack,
-				maxStack: o.MaxStack,
-				execFn:   o.ExecuteFn,
-				dynFn:    o.DynamicGasFn,
-				memFn:    o.MemorySizeFn,
-			}
+			g.specs[code] = opSpec{GenOp: o, fork: fork.RuleField}
 			break // first fork that defines it wins (its intro fork)
 		}
 	}
@@ -217,7 +197,7 @@ func (g *generator) deriveSpecs(forks []vm.GenFork) {
 func (g *generator) checkStaticStable(code byte, forks []vm.GenFork) {
 	// The spec is what gets emitted, so there has to be one.
 	spec := g.specs[code]
-	if !spec.defined {
+	if !spec.Defined {
 		abortf("opcode %#x selected for its own case but never defined", code)
 	}
 	for _, fork := range forks {
@@ -229,8 +209,8 @@ func (g *generator) checkStaticStable(code byte, forks []vm.GenFork) {
 		// The handler name, gas and stack bounds all come from the first defining
 		// fork, so a later fork changing any of them would be silently ignored.
 		// Dynamic gas is barred outright: a tierStatic op charges only its constant.
-		if o.ExecuteFn != spec.execFn || o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack || o.DynamicGasFn != "" {
-			abortf("opcode %#x (%s) is not fork-stable (fork %s): cannot give it its own case", code, spec.name, fork.Name)
+		if o != spec.GenOp || o.DynamicGasFn != "" {
+			abortf("opcode %#x (%s) is not fork-stable (fork %s): cannot give it its own case", code, spec.Name, fork.Name)
 		}
 	}
 }
@@ -239,7 +219,7 @@ func (g *generator) checkStaticStable(code byte, forks []vm.GenFork) {
 // checkStaticStable it allows dynamic gas, which these ops carry by definition.
 func (g *generator) checkDynamicStable(code byte, forks []vm.GenFork) {
 	spec := g.specs[code]
-	if !spec.defined {
+	if !spec.Defined {
 		abortf("opcode %#x (tierDynamic) is never defined", code)
 	}
 	for _, fork := range forks {
@@ -248,14 +228,14 @@ func (g *generator) checkDynamicStable(code byte, forks []vm.GenFork) {
 			continue
 		}
 		// Emitted as constants, so they cannot vary.
-		if o.ConstantGas != spec.constGas || o.MinStack != spec.minStack || o.MaxStack != spec.maxStack {
-			abortf("opcode %#x (%s) is tierDynamic but not fork-stable (fork %s): static gas or stack bounds vary, cannot emit as constants", code, spec.name, fork.Name)
+		if o.ConstantGas != spec.ConstantGas || o.MinStack != spec.MinStack || o.MaxStack != spec.MaxStack {
+			abortf("opcode %#x (%s) is tierDynamic but not fork-stable (fork %s): static gas or stack bounds vary, cannot emit as constants", code, spec.Name, fork.Name)
 		}
 		// Called by the first defining fork's names, so a fork that swapped one
 		// would be run with the wrong function.
-		if o.ExecuteFn != spec.execFn || o.DynamicGasFn != spec.dynFn || o.MemorySizeFn != spec.memFn {
+		if o.ExecuteFn != spec.ExecuteFn || o.DynamicGasFn != spec.DynamicGasFn || o.MemorySizeFn != spec.MemorySizeFn {
 			abortf("opcode %#x (%s) is tierDynamic but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
-				code, spec.name, fork.Name, o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, spec.execFn, spec.dynFn, spec.memFn)
+				code, spec.Name, fork.Name, o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, spec.ExecuteFn, spec.DynamicGasFn, spec.MemorySizeFn)
 		}
 	}
 }

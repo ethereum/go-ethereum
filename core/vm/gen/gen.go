@@ -27,18 +27,10 @@ import (
 )
 
 // This file holds the shape of the generated dispatch: the emitters for one
-// opcode case of each tier, and the assembly of the whole file.
-//
-// The generator emits calls, not bodies. An opcode's case charges its gas and
-// checks its stack from constants derived from the per-fork tables, then calls
-// the handler by name. Getting the body into the loop is the compiler's job.
-//
-// That is the whole design, and it is what keeps this file printf. Splicing the
-// bodies instead would mean parsing core/vm, rewriting every return into the
-// loop's control flow, and rewriting every stack call into loop locals, which is
-// roughly 740 lines of AST machinery. The trade is that inlining stops being
-// guaranteed: Go's budget is 80 and these bodies cost far more, so they only make
-// it into the loop when a PGO profile marks them hot and raises the budget.
+// opcode case of each tier, and the assembly of the whole file. The generator
+// emits calls, not bodies. An opcode's case charges its gas and checks its
+// stack from constants derived from the per-fork tables, then calls the
+// handler by name. Getting the body into the loop is the compiler's job.
 
 // Names the generator needs in more than one place: the file it writes, the
 // dispatch inside it, and the profile that gets that dispatch's calls inlined.
@@ -66,12 +58,9 @@ func (g *generator) p(format string, args ...any) {
 // emitStackChecks emits the underflow/overflow guards, in the legacy loop's order of
 // stack before gas. minExpr and maxExpr are constants in an opcode's own case,
 // operation.minStack and operation.maxStack in the table path. under and over let a
-// path omit a guard whose bound is trivial.
-//
-// The bounds are compared against sp, the loop's own depth counter, rather than
-// stack.len(). stack.len() reads size back through a pointer, and the compiler has
-// to reload it after every handler call because a handler can change it, so it was
-// a memory access per opcode.
+// path omit a guard whose bound is trivial. The bounds compare against sp, the
+// loop's own depth counter, because stack.len() reads size back through a pointer
+// and a handler can change it, so the compiler has to reload it after every call.
 func (g *generator) emitStackChecks(minExpr, maxExpr any, under, over bool) {
 	switch {
 	case under && over: // the table path, which knows neither bound statically
@@ -140,38 +129,39 @@ func (g *generator) emitUndefinedFallback() {
 	`)
 }
 
-// emitCallHandler calls an opcode handler and does the bookkeeping around it. The
-// handler can fail, so bail on error, then step sp and the pc.
-//
-// step is what the handler did to the stack depth. An opcode's own case knows it as
-// a constant, so it adjusts sp. The table path does not, so it passes an empty step
-// and re-reads the depth instead.
-func (g *generator) emitCallHandler(call, step string) {
+// emitCallHandler calls an opcode handler and bails if it failed.
+func (g *generator) emitCallHandler(call string) {
 	g.p(`
 		res, err = %s
 		if err != nil {
 			break mainLoop
 		}
 	`, call)
-	if step != "" {
-		g.p("%s\n", step)
+}
+
+// emitStackStep moves sp by an opcode's stack delta, which its own case knows as
+// a constant. An opcode that leaves the depth alone emits nothing.
+func (g *generator) emitStackStep(delta int) {
+	switch {
+	case delta > 0:
+		g.p("sp += %d\n", delta)
+	case delta < 0:
+		g.p("sp -= %d\n", -delta)
 	}
+}
+
+// emitStackReload re-reads the depth from the stack. The table path takes this
+// instead of a step because it does not know the opcode's delta.
+func (g *generator) emitStackReload() {
+	g.p("sp = stack.len()\n")
+}
+
+// emitAdvance moves to the next opcode.
+func (g *generator) emitAdvance() {
 	g.p(`
 		pc++
 		continue mainLoop
 	`)
-}
-
-// stackStep returns the statement that moves sp by an opcode's stack delta, or ""
-// when the opcode leaves the depth alone.
-func stackStep(delta int) string {
-	switch {
-	case delta > 0:
-		return fmt.Sprintf("sp += %d", delta)
-	case delta < 0:
-		return fmt.Sprintf("sp -= %d", -delta)
-	}
-	return ""
 }
 
 // emitStaticOp emits a case for an opcode whose whole cost is its constant gas: the
@@ -180,16 +170,17 @@ func stackStep(delta int) string {
 // active, otherwise the case mirrors the legacy loop's undefined-opcode handling.
 func (g *generator) emitStaticOp(code byte) {
 	spec := g.specs[code]
-	g.p("case %s:\n", spec.name)
+	g.p("case %s:\n", spec.Name)
 	if spec.fork != "" {
 		g.p("if rules.%s {\n", spec.fork)
 	}
-
 	g.emitStackChecks(spec.stackGuards())
-	if spec.constGas != 0 {
-		g.emitStaticGas(spec.constGas)
+	if spec.ConstantGas != 0 {
+		g.emitStaticGas(spec.ConstantGas)
 	}
-	g.emitCallHandler(g.handlerCall(code), stackStep(spec.stackDelta()))
+	g.emitCallHandler(g.handlerCall(code))
+	g.emitStackStep(spec.stackDelta())
+	g.emitAdvance()
 
 	// Close the fork gate opened above, then the branch taken while the fork is
 	// still inactive.
@@ -205,14 +196,15 @@ func (g *generator) emitStaticOp(code byte) {
 // constants.
 func (g *generator) emitDynamicOp(code byte) {
 	spec := g.specs[code]
-	g.p("case %s:\n", spec.name)
-
+	g.p("case %s:\n", spec.Name)
 	g.emitStackChecks(spec.stackGuards())
-	if spec.constGas != 0 {
-		g.emitStaticGas(spec.constGas)
+	if spec.ConstantGas != 0 {
+		g.emitStaticGas(spec.ConstantGas)
 	}
 	g.emitDynamicGas()
-	g.emitCallHandler(g.handlerCall(code), stackStep(spec.stackDelta()))
+	g.emitCallHandler(g.handlerCall(code))
+	g.emitStackStep(spec.stackDelta())
+	g.emitAdvance()
 }
 
 // emitTableOp emits the switch's default case, which walks the table exactly as the
@@ -235,7 +227,9 @@ func (g *generator) emitTableOp() {
 				mem.Resize(memorySize)
 			}
 	`)
-	g.emitCallHandler("operation.execute(&pc, evm, scope)", "sp = stack.len()")
+	g.emitCallHandler("operation.execute(&pc, evm, scope)")
+	g.emitStackReload()
+	g.emitAdvance()
 }
 
 // handlerCall returns the call expression for an opcode's handler. The name comes
@@ -243,11 +237,11 @@ func (g *generator) emitTableOp() {
 // the name, so a dotted one is a factory-built handler with no name to call.
 func (g *generator) handlerCall(code byte) string {
 	spec := g.specs[code]
-	if strings.Contains(spec.execFn, ".") {
+	if strings.Contains(spec.ExecuteFn, ".") {
 		abortf("opcode %#x (%s) is built by the closure %q, which has no name to call. Give it a named handler or leave it on the table tier",
-			code, spec.name, spec.execFn)
+			code, spec.Name, spec.ExecuteFn)
 	}
-	return spec.execFn + "(&pc, evm, scope)"
+	return spec.ExecuteFn + "(&pc, evm, scope)"
 }
 
 // createFile writes the whole generated file into g.buf, in order: header, imports,
