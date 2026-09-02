@@ -17,12 +17,28 @@
 package main
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 // This file holds the generator's opcode model: which tier each opcode is
 // dispatched by, and the per-opcode spec derived from the per-fork jump tables.
+//
+// Two things decide a tier and they are kept apart. tierFor answers what the
+// generator can safely emit: an opcode whose gas or stack bounds vary by fork
+// cannot have them written out as constants, and a handler built by a closure has
+// no name to write a call to. hotOps defines what is worth emitting.
+//
+// A case saves a fixed amount per execution, the indirect call through the table
+// and the metering around it, so what it buys is that saving times the count, as
+// a share of the time the opcode spends. A cheap opcode pays the overhead on top
+// of very little work, so the share is large, while an expensive one absorbs it.
+// Frequent low-gas opcodes are the ones worth a case. Against that, the switch is
+// one large function competing for a 32KB L1 instruction cache, so a case that
+// rarely runs still pushes the hot ones further apart.
 
 // tier is how the dispatch handles one opcode.
 type tier int
@@ -33,100 +49,82 @@ const (
 	tierStatic              // own case, handler called by name, constant gas only
 )
 
-// opTiers gives an opcode its own case in the switch. Anything absent is
-// tierTable and falls through to the default case, which is where every
-// fork-varying op (CALL, CREATE, SSTORE, LOG, the copy family) belongs.
+// hotOps are the opcodes that get their own case in the switch. Everything else
+// is tierTable and goes through the default case, which walks the active per-fork
+// table the way the legacy loop did.
 //
-// tierStatic is for hot, fork-stable ops whose whole cost is their constant gas.
-// The handler name is derived from the per-fork tables (see deriveSpecs), never
-// restated here. Every one of them must be a top-level opXxx, since a closure has
-// no name to call.
+// Entries do not name a tier. tierFor derives it and generation aborts on one
+// that does not qualify, so an opcode listed here either gets a case or stops the
+// build. Leaving one out only moves it to the general path, so nothing here can
+// affect behaviour.
 //
-// tierDynamic is for ops with dynamic gas whose handler is identical in every fork
-// (checkDynamicStable enforces it). They still reach meterDynamicGas through a
-// table load, so the only thing their own case buys over the default is calling
-// the handler by name and emitting the static gas and stack bounds as constants.
-var opTiers = func() map[vm.OpCode]tier {
-	t := map[vm.OpCode]tier{
-		vm.ADD: tierStatic, vm.MUL: tierStatic, vm.SUB: tierStatic, vm.DIV: tierStatic, vm.SDIV: tierStatic,
-		vm.MOD: tierStatic, vm.SMOD: tierStatic, vm.ADDMOD: tierStatic, vm.MULMOD: tierStatic, vm.SIGNEXTEND: tierStatic,
-		vm.LT: tierStatic, vm.GT: tierStatic, vm.SLT: tierStatic, vm.SGT: tierStatic, vm.EQ: tierStatic, vm.ISZERO: tierStatic,
-		vm.AND: tierStatic, vm.OR: tierStatic, vm.XOR: tierStatic, vm.NOT: tierStatic, vm.BYTE: tierStatic,
-		vm.SHL: tierStatic, vm.SHR: tierStatic, vm.SAR: tierStatic, vm.CLZ: tierStatic,
-		vm.POP: tierStatic, vm.JUMP: tierStatic, vm.JUMPI: tierStatic,
-		vm.PC: tierStatic, vm.MSIZE: tierStatic, vm.JUMPDEST: tierStatic,
-		vm.PUSH0: tierStatic, vm.PUSH1: tierStatic, vm.PUSH2: tierStatic,
-		vm.CALLDATALOAD: tierStatic,
+// Counts are mainnet executions over 592,123 blocks, from
+// lab.ethpandaops.io/api/v1/mainnet/fct_opcode_gas_by_opcode_hourly.
+var hotOps = []vm.OpCode{
+	// Arithmetic, comparison and bitwise.
+	vm.ADD, vm.MUL, vm.SUB, vm.DIV, vm.ADDMOD, vm.MULMOD, vm.SIGNEXTEND,
+	vm.LT, vm.GT, vm.SLT, vm.SGT, vm.EQ, vm.ISZERO,
+	vm.AND, vm.OR, vm.XOR, vm.NOT, vm.SHL, vm.SHR, vm.SAR,
 
-		// An aliased gas var derives as the function behind it, so MLOAD's
-		// charge is emitted as pureMemoryGascost, not the gasMLoad var.
-		vm.KECCAK256: tierDynamic,
-		vm.MLOAD:     tierDynamic,
-		vm.MSTORE:    tierDynamic,
-	}
-	for op := vm.PUSH3; op <= vm.PUSH32; op++ {
-		t[op] = tierStatic
-	}
-	for op := vm.DUP1; op <= vm.DUP16; op++ {
-		t[op] = tierStatic
-	}
-	for op := vm.SWAP1; op <= vm.SWAP16; op++ {
-		t[op] = tierStatic
-	}
-	for _, op := range coldOps {
-		delete(t, op)
-	}
-	return t
-}()
+	// Stack, control flow and the one environment read that has a case today.
+	vm.CALLDATALOAD, vm.POP, vm.JUMP, vm.JUMPI, vm.JUMPDEST,
 
-// coldOps are opcodes that qualify for a fast tier but run too rarely to be worth
-// the bytes. An arm costs 16 to 53 lines of the switch, and the switch is one
-// large function against a 32KB L1 instruction cache, so arms that never run
-// still push the hot ones further apart.
-//
-// The cut is 0.05% of mainnet executions. These 41 arms are together under half
-// a percent of all execution.
-//
-// Dropping an opcode here only moves it to the table tier, which is the general
-// path and correct for every opcode in every fork, so this cannot affect
-// behaviour. Eligibility is still decided by checkStaticStable and
-// checkDynamicStable above, and this list only ever removes.
-//
-// Frequencies are mainnet execution counts over 592,123 blocks, from
-// lab.ethpandaops.io/api/v1/mainnet/fct_opcode_gas_by_opcode_hourly. A thirty
-// block sample got four of these wrong at the boundary, so re-derive from a wide
-// range if the opcode mix shifts.
-var coldOps = []vm.OpCode{
-	// arithmetic and misc
-	vm.MSIZE, vm.PC, vm.CLZ, vm.SMOD, vm.MOD, vm.SDIV, vm.BYTE,
+	// Dynamic gas, so these pay a table load either way and their case saves less
+	// than the rest.
+	vm.KECCAK256, vm.MLOAD, vm.MSTORE,
 
-	// MSTORE8 was tierDynamic. The direct tier saves a fixed cost per execution,
-	// one indirect call plus meterDynamicGas's nil checks, so its value tracks the
-	// count and not how expensive the opcode's work is. At 0.022% that is a few
-	// hundred executions a block, which does not pay for a 53 line arm.
-	vm.MSTORE8,
+	// The PUSH widths that carry something: 4 a selector, 20 an address, 32 a
+	// hash or a full-width constant. The others are rare.
+	vm.PUSH0, vm.PUSH1, vm.PUSH2, vm.PUSH3, vm.PUSH4, vm.PUSH8, vm.PUSH16,
+	vm.PUSH20, vm.PUSH32,
 
-	// the tail of each family. DUP decays gently so only the last two go, SWAP
-	// falls off faster, and PUSH is bimodal: the widths that mean something stay
-	// (1, 2, 3, 4, 8, 16, 20, 32) and the rest are noise.
-	vm.DUP15, vm.DUP16,
-	vm.SWAP10, vm.SWAP11, vm.SWAP12, vm.SWAP13, vm.SWAP14, vm.SWAP15, vm.SWAP16,
-	vm.PUSH5, vm.PUSH6, vm.PUSH7, vm.PUSH9, vm.PUSH10, vm.PUSH11, vm.PUSH12,
-	vm.PUSH13, vm.PUSH14, vm.PUSH15, vm.PUSH17, vm.PUSH18, vm.PUSH19, vm.PUSH21,
-	vm.PUSH22, vm.PUSH23, vm.PUSH24, vm.PUSH25, vm.PUSH26, vm.PUSH27, vm.PUSH28,
-	vm.PUSH29, vm.PUSH30, vm.PUSH31,
+	// DUP and SWAP, as deep as the counts hold up.
+	vm.DUP1, vm.DUP2, vm.DUP3, vm.DUP4, vm.DUP5, vm.DUP6, vm.DUP7,
+	vm.DUP8, vm.DUP9, vm.DUP10, vm.DUP11, vm.DUP12, vm.DUP13, vm.DUP14,
+	vm.SWAP1, vm.SWAP2, vm.SWAP3, vm.SWAP4, vm.SWAP5, vm.SWAP6, vm.SWAP7,
+	vm.SWAP8, vm.SWAP9,
+
+	// Eight more eligible opcodes measure above the weakest entry here, SWAP9 at
+	// 0.050% of executions, and are not listed yet: CALLDATASIZE, GAS,
+	// RETURNDATASIZE, CALLER, CALLVALUE, RETURN, CODECOPY and CALLDATACOPY. The
+	// rest fall below it, RETURNDATACOPY and ADDRESS closest at 0.040% and 0.038%.
 }
 
-// tierOf returns how the dispatch handles an opcode.
-func tierOf(code byte) tier {
-	return opTiers[vm.OpCode(code)]
+// tierFor returns the tier an opcode can be dispatched by. tierTable comes back
+// with the reason the opcode cannot take its own case, which is what the abort in
+// deriveSpecs reports. An opcode qualifies when it is defined, every fork that
+// defines it agrees on its metadata, and its handler is a named top-level function.
+// A fork-varying opcode cannot have its gas and stack bounds emitted as constants,
+// and a closure-built handler has no name to write a call to.
+func (g *generator) tierFor(code byte, forks []vm.GenFork) (tier, string) {
+	spec := g.specs[code]
+	if !spec.Defined {
+		return tierTable, "no fork defines it"
+	}
+	if strings.Contains(spec.ExecuteFn, ".") {
+		return tierTable, fmt.Sprintf("its handler is the closure %q, which has no name to call", spec.ExecuteFn)
+	}
+	for _, fork := range forks {
+		if o := fork.Ops[code]; o.Defined && o != spec.GenOp {
+			return tierTable, fmt.Sprintf("fork %s changes its gas, stack bounds or functions, so they cannot be emitted as constants", fork.Name)
+		}
+	}
+	if spec.DynamicGasFn == "" {
+		return tierStatic, ""
+	}
+	return tierDynamic, ""
+}
+
+// tierOf returns how the dispatch handles an opcode. deriveSpecs fills this in.
+func (g *generator) tierOf(code byte) tier {
+	return g.tiers[code]
 }
 
 // skippedForks are forks the switch gets no lane for. Verkle/UBT is the only one,
 // and the skip is a no-op today, since LookupInstructionSet has no verkle table yet
 // and hands back Cancun's. It matters once there is one: enable4762 only repoints
 // existing opcodes, which the switch picks up from the active table anyway, and
-// PUSH1-PUSH32 among them would trip checkStaticStable.
+// PUSH1-PUSH32 among them would stop generation as fork-varying.
 var skippedForks = map[string]bool{"IsUBT": true}
 
 // genForks returns the fork lanes the generator derives its specs from.
@@ -149,9 +147,7 @@ type opSpec struct {
 
 // stackGuards returns the bounds emitStackChecks needs, plus which of the two
 // guards are worth emitting. A minStack of 0 cannot underflow, and a maxStack
-// at the stack limit cannot overflow, so those are left out. Emitting both
-// unconditionally grew the spliced dispatch by 14%, because the compiler cannot
-// track the stack length across a switch this size and emits every compare.
+// at the stack limit cannot overflow, so those are left out.
 func (s opSpec) stackGuards() (minStack, maxStack int, under, over bool) {
 	return s.MinStack, s.MaxStack, s.MinStack > 0, s.MaxStack < int(params.StackLimit)
 }
@@ -166,9 +162,8 @@ func (s opSpec) stackDelta() int {
 	return int(params.StackLimit) - s.MaxStack
 }
 
-// deriveSpecs records each opcode's constants and function names from the first fork
-// that defines it, then checks that everything opTiers gives a case is fork-stable
-// enough to emit that way.
+// deriveSpecs records each opcode's constants and function names from the first
+// fork that defines it, then gives every opcode hotOps names its tier.
 func (g *generator) deriveSpecs(forks []vm.GenFork) {
 	for code := range 256 {
 		for _, fork := range forks {
@@ -181,61 +176,19 @@ func (g *generator) deriveSpecs(forks []vm.GenFork) {
 		}
 	}
 
-	// Both tiers that get their own case emit static gas and stack bounds as
-	// constants, so both must be fork-stable. Bail loudly otherwise.
-	for code := range 256 {
-		switch b := byte(code); tierOf(b) {
-		case tierStatic:
-			g.checkStaticStable(b, forks)
-		case tierDynamic:
-			g.checkDynamicStable(b, forks)
-		}
-	}
+	g.assignTiers(hotOps, forks)
 }
 
-// checkStaticStable verifies a tierStatic opcode is safe to give its own case.
-func (g *generator) checkStaticStable(code byte, forks []vm.GenFork) {
-	// The spec is what gets emitted, so there has to be one.
-	spec := g.specs[code]
-	if !spec.Defined {
-		abortf("opcode %#x selected for its own case but never defined", code)
-	}
-	for _, fork := range forks {
-		// Nothing to compare in a fork where the opcode does not exist.
-		o := fork.Ops[code]
-		if !o.Defined {
-			continue
+// assignTiers gives each listed opcode the tier it qualifies for. Everything else
+// keeps tierTable. An entry that does not qualify would silently get the general
+// path instead of the case it was listed for, so stop rather than emit a switch
+// nobody asked for.
+func (g *generator) assignTiers(ops []vm.OpCode, forks []vm.GenFork) {
+	for _, op := range ops {
+		t, why := g.tierFor(byte(op), forks)
+		if t == tierTable {
+			abortf("opcode %#x (%s) is in hotOps but cannot take its own case: %s", byte(op), op, why)
 		}
-		// The handler name, gas and stack bounds all come from the first defining
-		// fork, so a later fork changing any of them would be silently ignored.
-		// Dynamic gas is barred outright: a tierStatic op charges only its constant.
-		if o != spec.GenOp || o.DynamicGasFn != "" {
-			abortf("opcode %#x (%s) is not fork-stable (fork %s): cannot give it its own case", code, spec.Name, fork.Name)
-		}
-	}
-}
-
-// checkDynamicStable verifies a tierDynamic opcode is safe to direct-call. Unlike
-// checkStaticStable it allows dynamic gas, which these ops carry by definition.
-func (g *generator) checkDynamicStable(code byte, forks []vm.GenFork) {
-	spec := g.specs[code]
-	if !spec.Defined {
-		abortf("opcode %#x (tierDynamic) is never defined", code)
-	}
-	for _, fork := range forks {
-		o := fork.Ops[code]
-		if !o.Defined {
-			continue
-		}
-		// Emitted as constants, so they cannot vary.
-		if o.ConstantGas != spec.ConstantGas || o.MinStack != spec.MinStack || o.MaxStack != spec.MaxStack {
-			abortf("opcode %#x (%s) is tierDynamic but not fork-stable (fork %s): static gas or stack bounds vary, cannot emit as constants", code, spec.Name, fork.Name)
-		}
-		// Called by the first defining fork's names, so a fork that swapped one
-		// would be run with the wrong function.
-		if o.ExecuteFn != spec.ExecuteFn || o.DynamicGasFn != spec.DynamicGasFn || o.MemorySizeFn != spec.MemorySizeFn {
-			abortf("opcode %#x (%s) is tierDynamic but its functions vary by fork (fork %s): got %s/%s/%s, want %s/%s/%s, cannot direct-call",
-				code, spec.Name, fork.Name, o.ExecuteFn, o.DynamicGasFn, o.MemorySizeFn, spec.ExecuteFn, spec.DynamicGasFn, spec.MemorySizeFn)
-		}
+		g.tiers[op] = t
 	}
 }
