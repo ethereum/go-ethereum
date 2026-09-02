@@ -165,6 +165,17 @@ func (s opSpec) stackGuards() (minStack, maxStack int, under, over bool) {
 	return s.minStack, s.maxStack, s.minStack > 0, s.maxStack < int(params.StackLimit)
 }
 
+// stackDelta returns how much an opcode changes the stack depth, which is push
+// minus pop. maxStack is built as StackLimit+pop-push (see stack_table.go), so
+// the difference from the limit is the net effect. ADD's maxStack is 1025, so it
+// is -1. PUSH1's is 1023, so +1. JUMPDEST leaves the stack alone at 0.
+//
+// The dispatch uses this to keep its own depth counter rather than reading
+// stack.size back through a pointer on every opcode.
+func (s opSpec) stackDelta() int {
+	return int(params.StackLimit) - s.maxStack
+}
+
 // deriveSpecs records each opcode's constants and function names from the first fork
 // that defines it, then checks that everything opTiers gives a case is fork-stable
 // enough to emit that way.
