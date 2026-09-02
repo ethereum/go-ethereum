@@ -68,7 +68,7 @@ type ChainReader interface {
 // If TransactionHashes is empty, receipts for all transactions included in new blocks will be delivered.
 // Otherwise, only receipts for the specified transactions will be delivered.
 type TransactionReceiptsQuery struct {
-	TransactionHashes []common.Hash
+	TransactionHashes []common.Hash `json:"transactionHashes,omitempty"`
 }
 
 // TransactionReader provides access to past transactions and their receipts.
