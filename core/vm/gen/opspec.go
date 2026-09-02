@@ -52,14 +52,6 @@ const (
 // hotOps are the opcodes that get their own case in the switch. Everything else
 // is tierTable and goes through the default case, which walks the active per-fork
 // table the way the legacy loop did.
-//
-// Entries do not name a tier. tierFor derives it and generation aborts on one
-// that does not qualify, so an opcode listed here either gets a case or stops the
-// build. Leaving one out only moves it to the general path, so nothing here can
-// affect behaviour.
-//
-// Counts are mainnet executions over 592,123 blocks, from
-// lab.ethpandaops.io/api/v1/mainnet/fct_opcode_gas_by_opcode_hourly.
 var hotOps = []vm.OpCode{
 	// Arithmetic, comparison and bitwise.
 	vm.ADD, vm.MUL, vm.SUB, vm.DIV, vm.ADDMOD, vm.MULMOD, vm.SIGNEXTEND,
@@ -85,9 +77,9 @@ var hotOps = []vm.OpCode{
 	vm.SWAP8, vm.SWAP9,
 
 	// Eight more eligible opcodes measure above the weakest entry here, SWAP9 at
-	// 0.050% of executions, and are not listed yet: CALLDATASIZE, GAS,
+	// 0.050% of executions, and are not listed: CALLDATASIZE, GAS,
 	// RETURNDATASIZE, CALLER, CALLVALUE, RETURN, CODECOPY and CALLDATACOPY. The
-	// rest fall below it, RETURNDATACOPY and ADDRESS closest at 0.040% and 0.038%.
+	// rest fall below it.
 }
 
 // tierFor returns the tier an opcode can be dispatched by. tierTable comes back
