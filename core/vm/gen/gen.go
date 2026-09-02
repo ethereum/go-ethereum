@@ -45,6 +45,7 @@ const (
 
 type generator struct {
 	specs [256]opSpec
+	tiers [256]tier
 	buf   *bytes.Buffer
 }
 
@@ -247,7 +248,7 @@ func (g *generator) handlerCall(code byte) string {
 // createFile writes the whole generated file into g.buf, in order: header, imports,
 // execUntraced's loop locals, the dispatch switch, then the loop's exit. generate
 // formats the buffer and main writes it out. The switch gets a case per opcode
-// opTiers assigns a tier, plus emitTableOp's default.
+// hotOps names, plus emitTableOp's default.
 func (g *generator) createFile() {
 	// file header, package clause, and imports
 	g.p(`
@@ -302,7 +303,7 @@ func (g *generator) createFile() {
 
 	// one case per opcode with its own tier, in opcode order
 	for code := range 256 {
-		switch b := byte(code); tierOf(b) {
+		switch b := byte(code); g.tierOf(b) {
 		case tierStatic:
 			g.emitStaticOp(b)
 		case tierDynamic:
