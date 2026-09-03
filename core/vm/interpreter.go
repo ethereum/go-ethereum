@@ -127,17 +127,18 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
-		pc        = uint64(0) // program counter
-		cost      uint64
-		stateCost uint64 // state dimension of the current opcode's cost, for tracing
+		pc = uint64(0) // program counter
+
+		execCost  uint64 // execution dimension of the current opcode's cost
+		stateCost uint64 // state dimension of the current opcode's cost
+
 		// copies used by tracer
-		pcCopy     uint64    // needed for the deferred EVMLogger
-		gasCopy    GasBudget // for EVMLogger to log the budget remaining before execution
-		budgetCopy GasBudget // budget before the opcode's own charges, for the gas hook
-		logged     bool      // deferred EVMLogger should ignore already logged steps
-		res        []byte    // result of the opcode execution function
-		debug      = evm.Config.Tracer != nil
-		isEIP4762  = evm.chainRules.IsEIP4762
+		pcCopy    uint64    // needed for the deferred EVMLogger
+		gasCopy   GasBudget // budget before the opcode, for the tracer hooks
+		logged    bool      // deferred EVMLogger should ignore already logged steps
+		res       []byte    // result of the opcode execution function
+		debug     = evm.Config.Tracer != nil
+		isEIP4762 = evm.chainRules.IsEIP4762
 	)
 	// Don't move this deferred function, it's placed before the OnOpcode-deferred method,
 	// so that it gets executed _after_: the OnOpcode needs the stacks before
@@ -154,10 +155,10 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 				return
 			}
 			if !logged && evm.Config.Tracer.HasOpcodeHook() {
-				evm.Config.Tracer.EmitOpcode(pcCopy, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: cost, State: stateCost}, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
+				evm.Config.Tracer.EmitOpcode(pcCopy, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: execCost, State: stateCost}, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
 			}
 			if logged && evm.Config.Tracer.HasFaultHook() {
-				evm.Config.Tracer.EmitFault(pcCopy, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: cost, State: stateCost}, callContext, evm.depth, VMErrorFromErr(err))
+				evm.Config.Tracer.EmitFault(pcCopy, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: execCost, State: stateCost}, callContext, evm.depth, VMErrorFromErr(err))
 			}
 		}()
 	}
@@ -187,7 +188,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
 		operation := jumpTable[op]
-		cost, stateCost = operation.constantGas, 0 // For tracing
+		execCost, stateCost = operation.constantGas, 0 // For tracing
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
 			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
@@ -195,10 +196,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if debug {
-			budgetCopy = contract.Gas
-		}
-		if !contract.Gas.ChargeExecutionOnly(cost) {
+		if !contract.Gas.ChargeExecutionOnly(execCost) {
 			return nil, ErrOutOfGas
 		}
 
@@ -224,7 +222,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			// cost is explicitly set so that the capture state defer method can get the proper cost
 			var dynamicCost GasCosts
 			dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
-			cost, stateCost = cost+dynamicCost.ExecutionGas, dynamicCost.StateGas // for tracing
+			execCost, stateCost = execCost+dynamicCost.ExecutionGas, dynamicCost.StateGas
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
@@ -240,14 +238,16 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		// Do tracing before potential memory expansion
 		if debug {
 			if evm.Config.Tracer.HasGasHook() {
+				// TODO(rjl493456442): it's broken with EIP4762, please fix it
+				// when it lands.
 				evm.Config.Tracer.EmitGasChange(
-					budgetCopy.AsTracing(),
+					gasCopy.AsTracing(),
 					contract.Gas.AsTracing(),
 					tracing.GasChangeCallOpCode,
 				)
 			}
 			if evm.Config.Tracer.HasOpcodeHook() {
-				evm.Config.Tracer.EmitOpcode(pc, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: cost, State: stateCost}, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
+				evm.Config.Tracer.EmitOpcode(pc, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: execCost, State: stateCost}, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
 				logged = true
 			}
 		}
