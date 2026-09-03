@@ -565,6 +565,9 @@ const (
 
 	// GasChangeCallStorageColdAccess is the gas charged for a cold storage
 	// access under EIP-2929.
+	//
+	// Deprecated: no longer emitted. Cold accesses are charged while computing an
+	// opcode's dynamic gas and are reported by its GasChangeCallOpCode event.
 	GasChangeCallStorageColdAccess GasChangeReason = 13
 
 	// GasChangeCallFailedExecution is the remaining gas burned when execution
