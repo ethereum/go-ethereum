@@ -8,7 +8,16 @@
     "isPrivate": true,
     "accessGroups": [
       "email"
-    ]
+    ],
+    "logo": {
+      "lightMode": "/assets/1000006330.png",
+      "darkMode": "/assets/1000006330.png"
+    },
+    "layout": {
+      "search": {
+        "position": "header"
+      }
+    }
   },
   "navigation": {
     "routes": {
