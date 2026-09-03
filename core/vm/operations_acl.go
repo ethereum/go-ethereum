@@ -514,7 +514,7 @@ func makeCallVariantGasCallEIP8037(executionFunc executionGasFunc, stateGasFunc 
 			return GasCosts{}, err
 		}
 		if stateGas > 0 {
-			if _, ok := contract.Gas.ChargeState(stateGas); !ok {
+			if !contract.chargeState(stateGas, evm.Config.Tracer, tracing.GasChangeAccountCreation) {
 				return GasCosts{}, ErrOutOfGas
 			}
 		}

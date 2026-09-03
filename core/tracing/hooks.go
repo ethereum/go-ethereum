@@ -505,6 +505,11 @@ const (
 	// new account (EIP-8037).
 	GasChangeAccountCreation GasChangeReason = 22
 
+	// GasChangeRefundRevertedState is the state-gas refilled into a frame's budget
+	// when it reverts, because the state creations it paid for are rolled back
+	// (EIP-8037).
+	GasChangeRefundRevertedState GasChangeReason = 23
+
 	// GasChangeIgnored indicates the gas change should be ignored, as it is
 	// tracked manually by a direct emit of the gas change event.
 	GasChangeIgnored GasChangeReason = 0xFF

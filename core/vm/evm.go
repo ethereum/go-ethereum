@@ -334,12 +334,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		evm.traceFrameExit(gas, exitGas, err)
 	}
 	return ret, exitGas, err
 }
@@ -385,12 +380,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		evm.traceFrameExit(gas, exitGas, err)
 	}
 	return ret, exitGas, err
 }
@@ -429,12 +419,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		evm.traceFrameExit(gas, exitGas, err)
 	}
 	return ret, exitGas, err
 }
@@ -481,13 +466,23 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		evm.traceFrameExit(gas, exitGas, err)
 	}
 	return ret, exitGas, err
+}
+
+// traceFrameExit reports the budget change a failing frame applies on its way out:
+// a halt burns the gas left, a revert refills the state-gas its rolled back state
+// creations had paid for. Pre-EIP-8037 a revert moves nothing and stays silent.
+func (evm *EVM) traceFrameExit(gas, exitGas GasBudget, err error) {
+	if !evm.Config.Tracer.HasGasHook() {
+		return
+	}
+	if err != ErrExecutionReverted {
+		evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
+	} else if gas != exitGas {
+		evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeRefundRevertedState)
+	}
 }
 
 // createFramePreCheck the precondition before executing the contract deployment,
@@ -632,11 +627,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		evm.StateDB.RevertToSnapshot(snapshot)
 
 		exit := contract.Gas.Exit(err)
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(contract.Gas.AsTracing(), exit.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		evm.traceFrameExit(contract.Gas, exit, err)
 		return ret, address, exit, err
 	}
 	// Either success, or pre-Homestead ErrCodeStoreOutOfGas (gas preserved).

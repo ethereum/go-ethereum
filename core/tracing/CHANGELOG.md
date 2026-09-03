@@ -12,6 +12,10 @@ All notable changes to the tracing interface will be documented in this file.
 
 - `OnCodeChangeV2(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason CodeChangeReason)`: This hook is called when a code change occurs. It is a successor to `OnCodeChange` with an additional reason parameter ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
 
+### Modified types
+
+- `GasChangeReason` has a new value `GasChangeRefundRevertedState`, reported when a reverting frame is refilled the state-gas its rolled back state creations had paid for (EIP-8037). Previously a revert emitted no gas change at all, so the refill was invisible to tracers.
+
 ### New types
 
 - `CodeChangeReason` is a new type used to provide a reason for code changes. It includes various reasons such as contract creation, genesis initialization, EIP-7702 authorization, self-destruct, and revert operations ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
