@@ -1336,10 +1336,27 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 	}
 }
 
+func (s *Suite) eth72Supported(t *utesting.T) bool {
+	conn, err := s.dialAndPeer(nil)
+	if err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+	defer conn.Close()
+	if conn.negotiatedProtoVersion < eth.ETH72 {
+		t.Logf("skipping: node negotiated eth/%d, eth/72 required", conn.negotiatedProtoVersion)
+		return false
+	}
+	return true
+}
+
 func (s *Suite) TestBlobTxAvailabilityFailure(t *utesting.T) {
 	t.Log(`This test announces 10 blob txs from a single peer. With fetchProbability 0.15, 
 there will be at least one partial fetch (1-0.15^10). When only 1 peer announced availability, 
 partial fetch GetCells should never arrive. Any GetCells that does arrive must be a full fetch.`)
+
+	if !s.eth72Supported(t) {
+		return
+	}
 
 	custody := types.NewCustodyBitmap([]uint64{7, 19, 33, 52, 68, 90, 111, 126})
 	if err := s.engine.sendForkchoiceUpdated(&custody); err != nil {
@@ -1467,6 +1484,10 @@ func (s *Suite) TestGetCells(t *utesting.T) {
 	t.Log(`This test checks that blob tx announcements trigger GetCells requests,
 and that providing valid cells causes the tx to enter the pool.`)
 
+	if !s.eth72Supported(t) {
+		return
+	}
+
 	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
@@ -1548,6 +1569,10 @@ and that providing valid cells causes the tx to enter the pool.`)
 func (s *Suite) TestBlobTxWithInvalidCells(t *utesting.T) {
 	t.Log(`This test checks that a peer responding to GetCells with invalid cells is disconnected, 
 while the other peer is not.`)
+
+	if !s.eth72Supported(t) {
+		return
+	}
 
 	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
