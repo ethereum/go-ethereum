@@ -22,7 +22,65 @@
             "filepath": "docs/get-started.md"
           }
         }
+      },
+      "/new-section": {
+        "type": "group",
+        "title": "New Section",
+        "children": {}
       }
-    }
+    },
+    "header": [
+      {
+        "type": "link",
+        "title": "Home",
+        "newTab": false,
+        "align": "start",
+        "to": "/"
+      },
+      {
+        "type": "link",
+        "title": "New Section",
+        "newTab": false,
+        "align": "start",
+        "to": "/new-section"
+      },
+      {
+        "type": "link",
+        "title": "New item",
+        "newTab": false,
+        "align": "start",
+        "to": "/"
+      },
+      {
+        "type": "link",
+        "title": "New item",
+        "newTab": false,
+        "align": "start",
+        "to": "/"
+      },
+      {
+        "type": "link",
+        "title": "New item",
+        "newTab": false,
+        "align": "center",
+        "to": "/"
+      },
+      {
+        "type": "version-selector",
+        "align": "center"
+      },
+      {
+        "type": "group",
+        "title": "New group",
+        "align": "center",
+        "children": []
+      },
+      {
+        "type": "link",
+        "title": "New item",
+        "to": "/",
+        "align": "end"
+      }
+    ]
   }
 }
