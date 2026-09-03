@@ -1,0 +1,23 @@
+{
+  "$schema": "https://cdn.scalar.com/schema/scalar-config-next.json",
+  "scalar": "2.0.0",
+  "info": {
+    "title": "Default Team"
+  },
+  "siteConfig": {},
+  "navigation": {
+    "routes": {
+      "/": {
+        "type": "group",
+        "title": "Documentation",
+        "children": {
+          "/": {
+            "type": "page",
+            "title": "Get started",
+            "filepath": "docs/get-started.md"
+          }
+        }
+      }
+    }
+  }
+}
