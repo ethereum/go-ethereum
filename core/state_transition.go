@@ -906,16 +906,17 @@ func (st *stateTransition) traceHaltedTopFrame(typ vm.OpCode, to common.Address,
 	if tracer == nil {
 		return
 	}
-	if tracer.OnEnter != nil {
-		tracer.OnEnter(0, byte(typ), st.msg.From, to, input, entryGas.ExecutionGas, value.ToBig())
-	}
+	tracer.EmitEnter(0, byte(typ), st.msg.From, to, input, entryGas.AsTracing(), value.ToBig())
 	if tracer.HasGasHook() {
 		tracer.EmitGasChange(tracing.Gas{}, entryGas.AsTracing(), tracing.GasChangeCallInitialBalance)
 		tracer.EmitGasChange(entryGas.AsTracing(), endGas.AsTracing(), tracing.GasChangeCallFailedExecution)
+		// A halt zeroes gas_left but keeps the reservoir, which the frame hands
+		// back exactly as a real one does.
+		if !endGas.IsZero() {
+			tracer.EmitGasChange(endGas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallLeftOverReturned)
+		}
 	}
-	if tracer.OnExit != nil {
-		tracer.OnExit(0, nil, entryGas.ExecutionGas, vm.VMErrorFromErr(vm.ErrOutOfGas), true)
-	}
+	tracer.EmitExit(0, nil, entryGas.AsTracing(), endGas.AsTracing(), vm.VMErrorFromErr(vm.ErrOutOfGas), true)
 }
 
 // traceBudgetChange reports a change to the transaction's own gas budget. These

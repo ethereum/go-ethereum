@@ -158,11 +158,33 @@ type (
 	// see [OnSystemCallStartHook] and [OnSystemCallEndHook] for more information.
 	ExitHook = func(depth int, output []byte, gasUsed uint64, err error, reverted bool)
 
+	// EnterHookV2 is the multi-dimensional successor to EnterHook: gas is the
+	// frame's complete entry budget rather than its execution dimension alone.
+	// Pre-Amsterdam the State field is always zero. If both hooks are set, only
+	// V2 is invoked; register at most one.
+	EnterHookV2 = func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas Gas, value *big.Int)
+
+	// ExitHookV2 is the multi-dimensional successor to ExitHook. It reports the
+	// budget the frame leaves behind instead of the gas it used: under EIP-8037 a
+	// frame can be refilled more state-gas than it charged, so its state usage can
+	// be negative and does not fit ExitHook's unsigned difference. Usage is the
+	// difference against the gas reported by the matching EnterHookV2. If both
+	// hooks are set, only V2 is invoked; register at most one.
+	ExitHookV2 = func(depth int, output []byte, gasLeft Gas, err error, reverted bool)
+
 	// OpcodeHook is invoked just prior to the execution of an opcode.
 	OpcodeHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
 
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
+
+	// OpcodeHookV2 is the multi-dimensional successor to OpcodeHook: gas and cost
+	// are vectors. If both hooks are set, only V2 is invoked; register at most one.
+	OpcodeHookV2 = func(pc uint64, op byte, gas, cost Gas, scope OpContext, rData []byte, depth int, err error)
+
+	// FaultHookV2 is the multi-dimensional successor to FaultHook. See OpcodeHookV2
+	// for how the two dimensions relate.
+	FaultHookV2 = func(pc uint64, op byte, gas, cost Gas, scope OpContext, depth int, err error)
 
 	// GasChangeHook reports changes to the execution gas. Tracers
 	// that don't need the EIP-8037 (Amsterdam) state-access dimension can
@@ -264,9 +286,13 @@ type Hooks struct {
 	OnTxStart     TxStartHook
 	OnTxEnd       TxEndHook
 	OnEnter       EnterHook
+	OnEnterV2     EnterHookV2
 	OnExit        ExitHook
+	OnExitV2      ExitHookV2
 	OnOpcode      OpcodeHook
+	OnOpcodeV2    OpcodeHookV2
 	OnFault       FaultHook
+	OnFaultV2     FaultHookV2
 	OnGasChange   GasChangeHook
 	OnGasChangeV2 GasChangeHookV2
 	// Chain events
@@ -318,6 +344,79 @@ func (h *Hooks) EmitGasChange(old, new Gas, reason GasChangeReason) {
 	}
 	if h.OnGasChange != nil {
 		h.OnGasChange(old.Execution, new.Execution, reason)
+	}
+}
+
+// EmitEnter dispatches a frame-entry event, preferring the multi-dimensional
+// hook and falling back to the execution dimension for the single-dimensional one.
+func (h *Hooks) EmitEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas Gas, value *big.Int) {
+	if h == nil {
+		return
+	}
+	if h.OnEnterV2 != nil {
+		h.OnEnterV2(depth, typ, from, to, input, gas, value)
+		return
+	}
+	if h.OnEnter != nil {
+		h.OnEnter(depth, typ, from, to, input, gas.Execution, value)
+	}
+}
+
+// EmitExit dispatches a frame-exit event. The multi-dimensional hook receives the
+// leftover budget; the single-dimensional one keeps receiving the execution gas
+// the frame consumed, derived from the entry budget.
+func (h *Hooks) EmitExit(depth int, output []byte, gas, gasLeft Gas, err error, reverted bool) {
+	if h == nil {
+		return
+	}
+	if h.OnExitV2 != nil {
+		h.OnExitV2(depth, output, gasLeft, err, reverted)
+		return
+	}
+	if h.OnExit != nil {
+		var used uint64
+		if gas.Execution > gasLeft.Execution {
+			used = gas.Execution - gasLeft.Execution
+		}
+		h.OnExit(depth, output, used, err, reverted)
+	}
+}
+
+// HasOpcodeHook reports whether an opcode hook is registered.
+func (h *Hooks) HasOpcodeHook() bool {
+	return h != nil && (h.OnOpcodeV2 != nil || h.OnOpcode != nil)
+}
+
+// EmitOpcode dispatches an opcode event.
+func (h *Hooks) EmitOpcode(pc uint64, op byte, gas, cost Gas, scope OpContext, rData []byte, depth int, err error) {
+	if h == nil {
+		return
+	}
+	if h.OnOpcodeV2 != nil {
+		h.OnOpcodeV2(pc, op, gas, cost, scope, rData, depth, err)
+		return
+	}
+	if h.OnOpcode != nil {
+		h.OnOpcode(pc, op, gas.Execution, cost.Execution, scope, rData, depth, err)
+	}
+}
+
+// HasFaultHook reports whether a fault hook is registered.
+func (h *Hooks) HasFaultHook() bool {
+	return h != nil && (h.OnFaultV2 != nil || h.OnFault != nil)
+}
+
+// EmitFault dispatches an opcode fault event.
+func (h *Hooks) EmitFault(pc uint64, op byte, gas, cost Gas, scope OpContext, depth int, err error) {
+	if h == nil {
+		return
+	}
+	if h.OnFaultV2 != nil {
+		h.OnFaultV2(pc, op, gas, cost, scope, depth, err)
+		return
+	}
+	if h.OnFault != nil {
+		h.OnFault(pc, op, gas.Execution, cost.Execution, scope, depth, err)
 	}
 }
 

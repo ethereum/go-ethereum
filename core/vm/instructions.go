@@ -921,12 +921,8 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	evm.StateDB.SelfDestruct(this)
 
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
-		}
-		if tracer.OnExit != nil {
-			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
-		}
+		tracer.EmitEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, tracing.Gas{}, balance.ToBig())
+		tracer.EmitExit(evm.depth, []byte{}, tracing.Gas{}, tracing.Gas{}, nil, false)
 	}
 	return nil, errStopToken
 }
@@ -970,12 +966,8 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	}
 
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
-		}
-		if tracer.OnExit != nil {
-			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
-		}
+		tracer.EmitEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, tracing.Gas{}, balance.ToBig())
+		tracer.EmitExit(evm.depth, []byte{}, tracing.Gas{}, tracing.Gas{}, nil, false)
 	}
 	return nil, errStopToken
 }

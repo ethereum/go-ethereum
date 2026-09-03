@@ -737,9 +737,7 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) captureBegin(depth int, typ OpCode, from common.Address, to common.Address, input []byte, startGas GasBudget, value *big.Int) {
 	tracer := evm.Config.Tracer
-	if tracer.OnEnter != nil {
-		tracer.OnEnter(depth, byte(typ), from, to, input, startGas.ExecutionGas, value)
-	}
+	tracer.EmitEnter(depth, byte(typ), from, to, input, startGas.AsTracing(), value)
 	if tracer.HasGasHook() {
 		tracer.EmitGasChange(tracing.Gas{}, startGas.AsTracing(), tracing.GasChangeCallInitialBalance)
 	}
@@ -757,9 +755,7 @@ func (evm *EVM) captureEnd(depth int, startGas GasBudget, leftOverGas GasBudget,
 	if !evm.chainRules.IsHomestead && errors.Is(err, ErrCodeStoreOutOfGas) {
 		reverted = false
 	}
-	if tracer.OnExit != nil {
-		tracer.OnExit(depth, ret, startGas.ExecutionGas-leftOverGas.ExecutionGas, VMErrorFromErr(err), reverted)
-	}
+	tracer.EmitExit(depth, ret, startGas.AsTracing(), leftOverGas.AsTracing(), VMErrorFromErr(err), reverted)
 }
 
 // GetVMContext provides context about the block being executed as well as state

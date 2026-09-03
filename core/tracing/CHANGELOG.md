@@ -12,13 +12,24 @@ All notable changes to the tracing interface will be documented in this file.
 
 - `OnCodeChangeV2(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason CodeChangeReason)`: This hook is called when a code change occurs. It is a successor to `OnCodeChange` with an additional reason parameter ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
 
-### Modified types
+EIP-8037 splits gas into an execution and a state dimension, so every hook that carried a `uint64` amount has a `V2` successor carrying the `Gas` vector instead. The V1 hooks are **not** deprecated: they keep reporting the execution dimension and fire unchanged across the fork, which is all a tracer that does not care about state gas needs. Registering both variants of a pair is a mistake — only V2 is invoked.
 
-- `GasChangeReason` has a new value `GasChangeRefundRevertedState`, reported when a reverting frame is refilled the state-gas its rolled back state creations had paid for (EIP-8037). Previously a revert emitted no gas change at all, so the refill was invisible to tracers.
+- `OnGasChangeV2(old, new Gas, reason GasChangeReason)`: successor to `OnGasChange`. The dimension that did not change is passed through unchanged, so consumers always see the complete vector.
+- `OnEnterV2(depth int, typ byte, from common.Address, to common.Address, input []byte, gas Gas, value *big.Int)`: successor to `OnEnter`, reporting the frame's complete entry budget.
+- `OnExitV2(depth int, output []byte, gasLeft Gas, err error, reverted bool)`: successor to `OnExit`. It reports the budget the frame leaves behind rather than the gas it used: a frame can be refilled more state-gas than it charged, so its state usage can be negative and does not fit `OnExit`'s unsigned difference. Usage is the difference against the matching `OnEnterV2`.
+- `OnOpcodeV2(pc uint64, op byte, gas, cost Gas, scope OpContext, rData []byte, depth int, err error)` and `OnFaultV2(pc uint64, op byte, gas, cost Gas, scope OpContext, depth int, err error)`: successors to `OnOpcode` and `OnFault`. Note that `gas.Execution - cost.Execution` is not the balance after the opcode when a state charge exceeds the reservoir and spills into the execution dimension; the sum of both dimensions is conserved instead.
 
 ### New types
 
 - `CodeChangeReason` is a new type used to provide a reason for code changes. It includes various reasons such as contract creation, genesis initialization, EIP-7702 authorization, self-destruct, and revert operations ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
+- `Gas` is the two-dimensional gas vector introduced by EIP-8037, pairing ordinary execution gas with the state-access dimension. The `State` field is always zero before the fork.
+- `GasChangeHookV2`, `EnterHookV2`, `ExitHookV2`, `OpcodeHookV2` and `FaultHookV2` are the hook signatures of the methods above.
+
+### Modified types
+
+- `Hooks` gains the `OnGasChangeV2`, `OnEnterV2`, `OnExitV2`, `OnOpcodeV2` and `OnFaultV2` fields. Within each pair the V2 hook takes precedence; the V1 hook is invoked only when no V2 hook is registered.
+- `GasChangeReason` has a new value `GasChangeRefundRevertedState`, reported when a reverting frame is refilled the state-gas its rolled back state creations had paid for (EIP-8037). Previously a revert emitted no gas change at all, so the refill was invisible to tracers.
+- Gas change reasons form a hierarchy rather than a flat ledger. A charge made while computing an opcode's dynamic gas is reported twice: once under its own fine-grained reason (`GasChangeCallStorageColdAccess`, `GasChangeAccountCreation`, ...) and once inside the enclosing `GasChangeCallOpCode` event, which spans the opcode's whole budget movement. Consumers must pick one level of granularity rather than summing both.
 
 ## [v1.15.4](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.4)
 
