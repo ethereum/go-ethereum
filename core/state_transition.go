@@ -907,24 +907,8 @@ func (st *stateTransition) traceHaltedTopFrame(typ vm.OpCode, to common.Address,
 		return
 	}
 	tracer.EmitEnter(0, byte(typ), st.msg.From, to, input, entryGas.AsTracing(), value.ToBig())
-	if tracer.HasGasHook() {
-		tracer.EmitGasChange(tracing.Gas{}, entryGas.AsTracing(), tracing.GasChangeCallInitialBalance)
-		tracer.EmitGasChange(entryGas.AsTracing(), endGas.AsTracing(), tracing.GasChangeCallFailedExecution)
-
-		// A halt zeroes execution gas but keeps the reservoir, which the frame
-		// hands back exactly as a real one does.
-		if !endGas.IsZero() {
-			tracer.EmitGasChange(endGas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallLeftOverReturned)
-		}
-	}
+	tracer.EmitGasChange(entryGas.AsTracing(), endGas.AsTracing(), tracing.GasChangeCallFailedExecution)
 	tracer.EmitExit(0, nil, entryGas.AsTracing(), endGas.AsTracing(), vm.VMErrorFromErr(vm.ErrOutOfGas), true)
-
-	if tracer.HasGasHook() && !endGas.IsZero() {
-		tracer.EmitGasChange(tracing.Gas{}, endGas.AsTracing(), tracing.GasChangeCallLeftOverRefunded)
-	}
-
-	// The frame handed its leftover back above; record the transaction picking it
-	// up, as absorbing a real frame does.
 }
 
 // traceBudgetChange reports a change to the transaction's own gas budget. These
