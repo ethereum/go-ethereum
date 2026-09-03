@@ -1443,8 +1443,11 @@ func readAnyFrom[T any](conns ...*Conn) (*T, *Conn, error) {
 	ch := make(chan result, len(conns))
 	errCh := make(chan error, len(conns))
 
+	var wg sync.WaitGroup
 	for _, c := range conns {
+		wg.Add(1)
 		go func(c *Conn) {
+			defer wg.Done()
 			pkt, err := readUntil[T](ctx, c)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
@@ -1455,12 +1458,20 @@ func readAnyFrom[T any](conns ...*Conn) (*T, *Conn, error) {
 			ch <- result{pkt, c}
 		}(c)
 	}
+	var (
+		r   result
+		err error
+	)
 	select {
-	case r := <-ch:
-		return r.pkt, r.c, nil
-	case err := <-errCh:
+	case r = <-ch:
+	case err = <-errCh:
+	}
+	cancel()
+	wg.Wait()
+	if err != nil {
 		return nil, nil, err
 	}
+	return r.pkt, r.c, nil
 }
 
 func (s *Suite) TestGetCells(t *utesting.T) {
