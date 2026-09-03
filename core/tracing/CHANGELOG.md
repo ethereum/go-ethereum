@@ -29,8 +29,6 @@ EIP-8037 splits gas into an execution and a state dimension, so every hook that 
 
 - `Hooks` gains the `OnGasChangeV2`, `OnEnterV2`, `OnExitV2`, `OnOpcodeV2` and `OnFaultV2` fields. Within each pair the V2 hook takes precedence; the V1 hook is invoked only when no V2 hook is registered.
 - `GasChangeReason` has a new value `GasChangeRefundRevertedState`, reported when a reverting frame is refilled the state-gas its rolled back state creations had paid for (EIP-8037). Previously a revert emitted no gas change at all, so the refill was invisible to tracers.
-- Every gas movement is now reported by exactly one event, so the stream is a flat ledger a consumer can accumulate. Charges made while computing an opcode's dynamic gas used to be reported twice, once under their own reason and once inside the enclosing `GasChangeCallOpCode` event that spans the opcode's whole budget movement; they now report nothing of their own.
-- `GasChangeCallStorageColdAccess` is no longer emitted as a consequence of the above: EIP-2929 cold accesses are charged while computing an opcode's dynamic gas, so they are covered by that opcode's `GasChangeCallOpCode` event. The constant is kept and marked deprecated. `GasChangeAccountCreation` is likewise no longer emitted for the CALL path, but is still emitted for CREATE/CREATE2, where the charge is made outside the opcode's gas computation.
 
 ## [v1.15.4](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.4)
 

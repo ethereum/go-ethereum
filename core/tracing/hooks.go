@@ -295,6 +295,7 @@ type Hooks struct {
 	OnFaultV2     FaultHookV2
 	OnGasChange   GasChangeHook
 	OnGasChangeV2 GasChangeHookV2
+
 	// Chain events
 	OnBlockchainInit    BlockchainInitHook
 	OnClose             CloseHook
@@ -306,6 +307,7 @@ type Hooks struct {
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
 	OnStateUpdate       StateUpdateHook
+
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
@@ -314,6 +316,7 @@ type Hooks struct {
 	OnCodeChangeV2  CodeChangeHookV2
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
 }
