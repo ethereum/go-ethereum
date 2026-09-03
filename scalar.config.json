@@ -4,7 +4,12 @@
   "info": {
     "title": "Default Team"
   },
-  "siteConfig": {},
+  "siteConfig": {
+    "isPrivate": true,
+    "accessGroups": [
+      "email"
+    ]
+  },
   "navigation": {
     "routes": {
       "/": {
