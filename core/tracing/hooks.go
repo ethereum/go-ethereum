@@ -615,6 +615,11 @@ const (
 	// (EIP-8037).
 	GasChangeRefundRevertedState GasChangeReason = 23
 
+	// GasChangeTxGasForwarded is the transaction's whole budget being handed to its
+	// top-level frame, which reports the receiving side as GasChangeCallInitialBalance.
+	// Deeper frames are funded by their caller's opcode instead.
+	GasChangeTxGasForwarded GasChangeReason = 24
+
 	// GasChangeIgnored indicates the gas change should be ignored, as it is
 	// tracked manually by a direct emit of the gas change event.
 	GasChangeIgnored GasChangeReason = 0xFF

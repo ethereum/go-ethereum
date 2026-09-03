@@ -812,8 +812,12 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 	}
 	// The first frame is entered with the gas remaining after the runtime
 	// charges.
-	ret, _, result, vmerr := st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
 	prior := st.gasRemaining
+	child := st.gasRemaining.ForwardAll()
+	st.traceBudgetChange(prior, tracing.GasChangeTxGasForwarded)
+
+	ret, _, result, vmerr := st.evm.Create(msg.From, msg.Data, child, value)
+	prior = st.gasRemaining
 	st.gasRemaining.Absorb(result)
 	st.traceBudgetChange(prior, tracing.GasChangeCallLeftOverRefunded)
 
@@ -873,8 +877,12 @@ func (st *stateTransition) executeCall(rules params.Rules, value *uint256.Int) (
 			st.state.AddAddressToAccessList(addr)
 		}
 	}
-	ret, result, vmerr := st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
 	prior := st.gasRemaining
+	child := st.gasRemaining.ForwardAll()
+	st.traceBudgetChange(prior, tracing.GasChangeTxGasForwarded)
+
+	ret, result, vmerr := st.evm.Call(msg.From, st.to(), msg.Data, child, value)
+	prior = st.gasRemaining
 	st.gasRemaining.Absorb(result)
 	st.traceBudgetChange(prior, tracing.GasChangeCallLeftOverRefunded)
 
@@ -906,9 +914,23 @@ func (st *stateTransition) traceHaltedTopFrame(typ vm.OpCode, to common.Address,
 	if tracer == nil {
 		return
 	}
+	tracer.EmitGasChange(entryGas.AsTracing(), tracing.Gas{}, tracing.GasChangeTxGasForwarded)
 	tracer.EmitEnter(0, byte(typ), st.msg.From, to, input, entryGas.AsTracing(), value.ToBig())
+	tracer.EmitGasChange(tracing.Gas{}, entryGas.AsTracing(), tracing.GasChangeCallInitialBalance)
 	tracer.EmitGasChange(entryGas.AsTracing(), endGas.AsTracing(), tracing.GasChangeCallFailedExecution)
+
+	// A frame's gas events always end at zero: whatever it did not burn goes back
+	// to the caller, which for the top frame is the transaction itself.
+	handover := !endGas.IsZero()
+	if handover {
+		tracer.EmitGasChange(endGas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallLeftOverReturned)
+	}
 	tracer.EmitExit(0, nil, entryGas.AsTracing(), endGas.AsTracing(), vm.VMErrorFromErr(vm.ErrOutOfGas), true)
+
+	// Handover the remaining gas back to the transaction itself.
+	if handover {
+		tracer.EmitGasChange(tracing.Gas{}, endGas.AsTracing(), tracing.GasChangeCallLeftOverRefunded)
+	}
 }
 
 // traceBudgetChange reports a change to the transaction's own gas budget. These
