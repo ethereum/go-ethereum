@@ -40,34 +40,34 @@ var (
 //
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
-	verkle   bool                   // Flag whether the prefetcher is in verkle mode
+	isUBT    bool                   // Flag whether the prefetcher is in UBT mode
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 	term     chan struct{}          // Channel to signal interruption
 	noreads  bool                   // Whether to ignore state-read-only prefetch requests
 
-	deliveryMissMeter metrics.Meter
+	deliveryMissMeter *metrics.Meter
 
-	accountLoadReadMeter  metrics.Meter
-	accountLoadWriteMeter metrics.Meter
-	accountDupReadMeter   metrics.Meter
-	accountDupWriteMeter  metrics.Meter
-	accountDupCrossMeter  metrics.Meter
-	accountWasteMeter     metrics.Meter
+	accountLoadReadMeter  *metrics.Meter
+	accountLoadWriteMeter *metrics.Meter
+	accountDupReadMeter   *metrics.Meter
+	accountDupWriteMeter  *metrics.Meter
+	accountDupCrossMeter  *metrics.Meter
+	accountWasteMeter     *metrics.Meter
 
-	storageLoadReadMeter  metrics.Meter
-	storageLoadWriteMeter metrics.Meter
-	storageDupReadMeter   metrics.Meter
-	storageDupWriteMeter  metrics.Meter
-	storageDupCrossMeter  metrics.Meter
-	storageWasteMeter     metrics.Meter
+	storageLoadReadMeter  *metrics.Meter
+	storageLoadWriteMeter *metrics.Meter
+	storageDupReadMeter   *metrics.Meter
+	storageDupWriteMeter  *metrics.Meter
+	storageDupCrossMeter  *metrics.Meter
+	storageWasteMeter     *metrics.Meter
 }
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string, noreads bool) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	return &triePrefetcher{
-		verkle:   db.TrieDB().IsVerkle(),
+		isUBT:    db.Type().Is(TypeUBT),
 		db:       db,
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
@@ -111,38 +111,38 @@ func (p *triePrefetcher) terminate(async bool) {
 
 // report aggregates the pre-fetching and usage metrics and reports them.
 func (p *triePrefetcher) report() {
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return
 	}
 	for _, fetcher := range p.fetchers {
 		fetcher.wait() // ensure the fetcher's idle before poking in its internals
 
 		if fetcher.root == p.root {
-			p.accountLoadReadMeter.Mark(int64(len(fetcher.seenRead)))
-			p.accountLoadWriteMeter.Mark(int64(len(fetcher.seenWrite)))
+			p.accountLoadReadMeter.Mark(int64(len(fetcher.seenReadAddr)))
+			p.accountLoadWriteMeter.Mark(int64(len(fetcher.seenWriteAddr)))
 
 			p.accountDupReadMeter.Mark(int64(fetcher.dupsRead))
 			p.accountDupWriteMeter.Mark(int64(fetcher.dupsWrite))
 			p.accountDupCrossMeter.Mark(int64(fetcher.dupsCross))
 
-			for _, key := range fetcher.used {
-				delete(fetcher.seenRead, string(key))
-				delete(fetcher.seenWrite, string(key))
+			for _, key := range fetcher.usedAddr {
+				delete(fetcher.seenReadAddr, key)
+				delete(fetcher.seenWriteAddr, key)
 			}
-			p.accountWasteMeter.Mark(int64(len(fetcher.seenRead) + len(fetcher.seenWrite)))
+			p.accountWasteMeter.Mark(int64(len(fetcher.seenReadAddr) + len(fetcher.seenWriteAddr)))
 		} else {
-			p.storageLoadReadMeter.Mark(int64(len(fetcher.seenRead)))
-			p.storageLoadWriteMeter.Mark(int64(len(fetcher.seenWrite)))
+			p.storageLoadReadMeter.Mark(int64(len(fetcher.seenReadSlot)))
+			p.storageLoadWriteMeter.Mark(int64(len(fetcher.seenWriteSlot)))
 
 			p.storageDupReadMeter.Mark(int64(fetcher.dupsRead))
 			p.storageDupWriteMeter.Mark(int64(fetcher.dupsWrite))
 			p.storageDupCrossMeter.Mark(int64(fetcher.dupsCross))
 
-			for _, key := range fetcher.used {
-				delete(fetcher.seenRead, string(key))
-				delete(fetcher.seenWrite, string(key))
+			for _, key := range fetcher.usedSlot {
+				delete(fetcher.seenReadSlot, key)
+				delete(fetcher.seenWriteSlot, key)
 			}
-			p.storageWasteMeter.Mark(int64(len(fetcher.seenRead) + len(fetcher.seenWrite)))
+			p.storageWasteMeter.Mark(int64(len(fetcher.seenReadSlot) + len(fetcher.seenWriteSlot)))
 		}
 	}
 }
@@ -158,7 +158,7 @@ func (p *triePrefetcher) report() {
 //     upon the same contract, the parameters invoking this method may be
 //     repeated.
 //  2. Finalize of the main account trie. This happens only once per block.
-func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte, read bool) error {
+func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, addrs []common.Address, slots []common.Hash, read bool) error {
 	// If the state item is only being read, but reads are disabled, return
 	if read && p.noreads {
 		return nil
@@ -175,7 +175,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 		fetcher = newSubfetcher(p.db, p.root, owner, root, addr)
 		p.fetchers[id] = fetcher
 	}
-	return fetcher.schedule(keys, read)
+	return fetcher.schedule(addrs, slots, read)
 }
 
 // trie returns the trie matching the root hash, blocking until the fetcher of
@@ -195,17 +195,19 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 
 // used marks a batch of state items used to allow creating statistics as to
 // how useful or wasteful the fetcher is.
-func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte) {
+func (p *triePrefetcher) used(owner common.Hash, root common.Hash, usedAddr []common.Address, usedSlot []common.Hash) {
 	if fetcher := p.fetchers[p.trieID(owner, root)]; fetcher != nil {
 		fetcher.wait() // ensure the fetcher's idle before poking in its internals
-		fetcher.used = append(fetcher.used, used...)
+
+		fetcher.usedAddr = append(fetcher.usedAddr, usedAddr...)
+		fetcher.usedSlot = append(fetcher.usedSlot, usedSlot...)
 	}
 }
 
 // trieID returns an unique trie identifier consists the trie owner and root hash.
 func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
-	// The trie in verkle is only identified by state root
-	if p.verkle {
+	// The trie in ubt is only identified by state root
+	if p.isUBT {
 		return p.root.Hex()
 	}
 	// The trie in merkle is either identified by state root (account trie),
@@ -235,44 +237,50 @@ type subfetcher struct {
 	stop chan struct{} // Channel to interrupt processing
 	term chan struct{} // Channel to signal interruption
 
-	seenRead  map[string]struct{} // Tracks the entries already loaded via read operations
-	seenWrite map[string]struct{} // Tracks the entries already loaded via write operations
+	seenReadAddr  map[common.Address]struct{} // Tracks the accounts already loaded via read operations
+	seenWriteAddr map[common.Address]struct{} // Tracks the accounts already loaded via write operations
+	seenReadSlot  map[common.Hash]struct{}    // Tracks the storage already loaded via read operations
+	seenWriteSlot map[common.Hash]struct{}    // Tracks the storage already loaded via write operations
 
 	dupsRead  int // Number of duplicate preload tasks via reads only
 	dupsWrite int // Number of duplicate preload tasks via writes only
 	dupsCross int // Number of duplicate preload tasks via read-write-crosses
 
-	used [][]byte // Tracks the entries used in the end
+	usedAddr []common.Address // Tracks the accounts used in the end
+	usedSlot []common.Hash    // Tracks the storage used in the end
 }
 
 // subfetcherTask is a trie path to prefetch, tagged with whether it originates
 // from a read or a write request.
 type subfetcherTask struct {
 	read bool
-	key  []byte
+	addr *common.Address
+	slot *common.Hash
 }
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
 func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
-		db:        db,
-		state:     state,
-		owner:     owner,
-		root:      root,
-		addr:      addr,
-		wake:      make(chan struct{}, 1),
-		stop:      make(chan struct{}),
-		term:      make(chan struct{}),
-		seenRead:  make(map[string]struct{}),
-		seenWrite: make(map[string]struct{}),
+		db:            db,
+		state:         state,
+		owner:         owner,
+		root:          root,
+		addr:          addr,
+		wake:          make(chan struct{}, 1),
+		stop:          make(chan struct{}),
+		term:          make(chan struct{}),
+		seenReadAddr:  make(map[common.Address]struct{}),
+		seenWriteAddr: make(map[common.Address]struct{}),
+		seenReadSlot:  make(map[common.Hash]struct{}),
+		seenWriteSlot: make(map[common.Hash]struct{}),
 	}
 	go sf.loop()
 	return sf
 }
 
 // schedule adds a batch of trie keys to the queue to prefetch.
-func (sf *subfetcher) schedule(keys [][]byte, read bool) error {
+func (sf *subfetcher) schedule(addrs []common.Address, slots []common.Hash, read bool) error {
 	// Ensure the subfetcher is still alive
 	select {
 	case <-sf.term:
@@ -281,8 +289,11 @@ func (sf *subfetcher) schedule(keys [][]byte, read bool) error {
 	}
 	// Append the tasks to the current queue
 	sf.lock.Lock()
-	for _, key := range keys {
-		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, key: key})
+	for _, addr := range addrs {
+		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, addr: &addr})
+	}
+	for _, slot := range slots {
+		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, slot: &slot})
 	}
 	sf.lock.Unlock()
 
@@ -329,12 +340,12 @@ func (sf *subfetcher) terminate(async bool) {
 
 // openTrie resolves the target trie from database for prefetching.
 func (sf *subfetcher) openTrie() error {
-	// Open the verkle tree if the sub-fetcher is in verkle mode. Note, there is
-	// only a single fetcher for verkle.
-	if sf.db.TrieDB().IsVerkle() {
+	// Open the ubt tree if the sub-fetcher is in ubt mode. Note, there is
+	// only a single fetcher for ubt.
+	if sf.db.Type().Is(TypeUBT) {
 		tr, err := sf.db.OpenTrie(sf.state)
 		if err != nil {
-			log.Warn("Trie prefetcher failed opening verkle trie", "root", sf.root, "err", err)
+			log.Warn("Trie prefetcher failed opening UBT trie", "root", sf.root, "err", err)
 			return err
 		}
 		sf.trie = tr
@@ -377,36 +388,69 @@ func (sf *subfetcher) loop() {
 			sf.tasks = nil
 			sf.lock.Unlock()
 
+			var (
+				addresses []common.Address
+				slots     [][]byte
+			)
 			for _, task := range tasks {
-				key := string(task.key)
-				if task.read {
-					if _, ok := sf.seenRead[key]; ok {
-						sf.dupsRead++
-						continue
+				if task.addr != nil {
+					key := *task.addr
+					if task.read {
+						if _, ok := sf.seenReadAddr[key]; ok {
+							sf.dupsRead++
+							continue
+						}
+						if _, ok := sf.seenWriteAddr[key]; ok {
+							sf.dupsCross++
+							continue
+						}
+						sf.seenReadAddr[key] = struct{}{}
+					} else {
+						if _, ok := sf.seenReadAddr[key]; ok {
+							sf.dupsCross++
+							continue
+						}
+						if _, ok := sf.seenWriteAddr[key]; ok {
+							sf.dupsWrite++
+							continue
+						}
+						sf.seenWriteAddr[key] = struct{}{}
 					}
-					if _, ok := sf.seenWrite[key]; ok {
-						sf.dupsCross++
-						continue
-					}
+					addresses = append(addresses, *task.addr)
 				} else {
-					if _, ok := sf.seenRead[key]; ok {
-						sf.dupsCross++
-						continue
+					key := *task.slot
+					if task.read {
+						if _, ok := sf.seenReadSlot[key]; ok {
+							sf.dupsRead++
+							continue
+						}
+						if _, ok := sf.seenWriteSlot[key]; ok {
+							sf.dupsCross++
+							continue
+						}
+						sf.seenReadSlot[key] = struct{}{}
+					} else {
+						if _, ok := sf.seenReadSlot[key]; ok {
+							sf.dupsCross++
+							continue
+						}
+						if _, ok := sf.seenWriteSlot[key]; ok {
+							sf.dupsWrite++
+							continue
+						}
+						sf.seenWriteSlot[key] = struct{}{}
 					}
-					if _, ok := sf.seenWrite[key]; ok {
-						sf.dupsWrite++
-						continue
-					}
+					slots = append(slots, key.Bytes())
 				}
-				if len(task.key) == common.AddressLength {
-					sf.trie.GetAccount(common.BytesToAddress(task.key))
-				} else {
-					sf.trie.GetStorage(sf.addr, task.key)
+			}
+			if len(addresses) != 0 {
+				if err := sf.trie.PrefetchAccount(addresses); err != nil {
+					log.Error("Failed to prefetch accounts", "err", err)
 				}
-				if task.read {
-					sf.seenRead[key] = struct{}{}
-				} else {
-					sf.seenWrite[key] = struct{}{}
+			}
+			if len(slots) != 0 {
+				if err := sf.trie.PrefetchStorage(sf.addr, slots); err != nil {
+					log.Error("Failed to prefetch storage", "err", err)
 				}
 			}
 

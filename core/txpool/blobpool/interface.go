@@ -32,6 +32,9 @@ type BlockChain interface {
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
+	// Genesis returns the genesis block of the chain.
+	Genesis() *types.Block
+
 	// CurrentFinalBlock returns the current block below which blobs should not
 	// be maintained anymore for reorg purposes.
 	CurrentFinalBlock() *types.Header
@@ -39,6 +42,6 @@ type BlockChain interface {
 	// GetBlock retrieves a specific block, used during pool resets.
 	GetBlock(hash common.Hash, number uint64) *types.Block
 
-	// StateAt returns a state database for a given root hash (generally the head).
-	StateAt(root common.Hash) (*state.StateDB, error)
+	// StateAt returns a state database for a given chain header (generally the head).
+	StateAt(header *types.Header) (*state.StateDB, error)
 }

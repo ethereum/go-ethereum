@@ -1,0 +1,6 @@
+{"pc":0,"op":96,"gas":"0x2540be400","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1"}
+{"pc":2,"op":0,"gas":"0x2540be3fd","gasCost":"0x0","memSize":0,"stack":["0x40"],"depth":1,"refund":0,"opName":"STOP"}
+{"output":"","gasUsed":"0x3"}
+INFO [12-03|10:38:33.360] Trie dumping started                     root=b44448..bf69f9
+WARN [12-03|10:38:33.361] Dump incomplete due to missing preimages missing=1
+INFO [12-03|10:38:33.361] Trie dumping complete                    accounts=1 elapsed="240.811µs"

@@ -141,6 +141,7 @@ var filterFlags = map[string]nodeFilterC{
 	"-eth-network": {1, ethFilter},
 	"-les-server":  {0, lesFilter},
 	"-snap":        {0, snapFilter},
+	"-dialable":    {0, dialableFilter},
 }
 
 // parseFilters parses nodeFilters from args.
@@ -232,8 +233,8 @@ func ethFilter(args []string) (nodeFilter, error) {
 		filter = forkid.NewStaticFilter(params.MainnetChainConfig, core.DefaultGenesisBlock().ToBlock())
 	case "sepolia":
 		filter = forkid.NewStaticFilter(params.SepoliaChainConfig, core.DefaultSepoliaGenesisBlock().ToBlock())
-	case "holesky":
-		filter = forkid.NewStaticFilter(params.HoleskyChainConfig, core.DefaultHoleskyGenesisBlock().ToBlock())
+	case "hoodi":
+		filter = forkid.NewStaticFilter(params.HoodiChainConfig, core.DefaultHoodiGenesisBlock().ToBlock())
 	default:
 		return nil, fmt.Errorf("unknown network %q", args[0])
 	}
@@ -267,6 +268,18 @@ func snapFilter(args []string) (nodeFilter, error) {
 			Tail []rlp.RawValue `rlp:"tail"`
 		}
 		return n.N.Load(enr.WithEntry("snap", &snap)) == nil
+	}
+	return f, nil
+}
+
+func dialableFilter(args []string) (nodeFilter, error) {
+	f := func(n nodeJSON) bool {
+		var tcp, tcp6, quic, quic6 uint16
+		n.N.Load((*enr.TCP)(&tcp))
+		n.N.Load((*enr.TCP6)(&tcp6))
+		n.N.Load((*enr.QUIC)(&quic))
+		n.N.Load((*enr.QUIC6)(&quic6))
+		return tcp != 0 || tcp6 != 0 || quic != 0 || quic6 != 0
 	}
 	return f, nil
 }

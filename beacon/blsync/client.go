@@ -17,25 +17,24 @@
 package blsync
 
 import (
-	"strings"
-
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/api"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
+	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/urfave/cli/v2"
 )
 
 type Client struct {
 	urls         []string
 	customHeader map[string]string
-	chainConfig  *lightClientConfig
+	config       *params.ClientConfig
 	scheduler    *request.Scheduler
 	blockSync    *beaconBlockSync
 	engineRPC    *rpc.Client
@@ -44,34 +43,24 @@ type Client struct {
 	engineClient *engineClient
 }
 
-func NewClient(ctx *cli.Context) *Client {
-	if !ctx.IsSet(utils.BeaconApiFlag.Name) {
-		utils.Fatalf("Beacon node light client API URL not specified")
-	}
-	var (
-		chainConfig  = makeChainConfig(ctx)
-		customHeader = make(map[string]string)
-	)
-	for _, s := range ctx.StringSlice(utils.BeaconApiHeaderFlag.Name) {
-		kv := strings.Split(s, ":")
-		if len(kv) != 2 {
-			utils.Fatalf("Invalid custom API header entry: %s", s)
-		}
-		customHeader[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
-	}
-
+func NewClient(config params.ClientConfig) *Client {
 	// create data structures
 	var (
 		db             = memorydb.New()
-		threshold      = ctx.Int(utils.BeaconThresholdFlag.Name)
-		committeeChain = light.NewCommitteeChain(db, chainConfig.ChainConfig, threshold, !ctx.Bool(utils.BeaconNoFilterFlag.Name))
-		headTracker    = light.NewHeadTracker(committeeChain, threshold)
+		committeeChain = light.NewCommitteeChain(db, &config.ChainConfig, config.Threshold, !config.NoFilter)
+		headTracker    = light.NewHeadTracker(committeeChain, config.Threshold, func(checkpoint common.Hash) {
+			if saved, err := config.SaveCheckpointToFile(checkpoint); saved {
+				log.Debug("Saved beacon checkpoint", "file", config.CheckpointFile, "checkpoint", checkpoint)
+			} else if err != nil {
+				log.Error("Failed to save beacon checkpoint", "file", config.CheckpointFile, "checkpoint", checkpoint, "error", err)
+			}
+		})
 	)
 	headSync := sync.NewHeadSync(headTracker, committeeChain)
 
 	// set up scheduler and sync modules
 	scheduler := request.NewScheduler()
-	checkpointInit := sync.NewCheckpointInit(committeeChain, chainConfig.Checkpoint)
+	checkpointInit := sync.NewCheckpointInit(committeeChain, config.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
 	beaconBlockSync := newBeaconBlockSync(headTracker)
 	scheduler.RegisterTarget(headTracker)
@@ -83,9 +72,9 @@ func NewClient(ctx *cli.Context) *Client {
 
 	return &Client{
 		scheduler:    scheduler,
-		urls:         ctx.StringSlice(utils.BeaconApiFlag.Name),
-		customHeader: customHeader,
-		chainConfig:  &chainConfig,
+		urls:         config.Apis,
+		customHeader: config.CustomHeader,
+		config:       &config,
 		blockSync:    beaconBlockSync,
 	}
 }
@@ -97,7 +86,7 @@ func (c *Client) SetEngineRPC(engine *rpc.Client) {
 func (c *Client) Start() error {
 	headCh := make(chan types.ChainHeadEvent, 16)
 	c.chainHeadSub = c.blockSync.SubscribeChainHead(headCh)
-	c.engineClient = startEngineClient(c.chainConfig, c.engineRPC, headCh)
+	c.engineClient = startEngineClient(c.config, c.engineRPC, headCh)
 
 	c.scheduler.Start()
 	for _, url := range c.urls {

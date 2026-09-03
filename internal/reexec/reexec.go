@@ -1,5 +1,5 @@
 // This file originates from Docker/Moby,
-// https://github.com/moby/moby/blob/master/pkg/reexec/reexec.go
+// https://github.com/moby/moby/blob/master/pkg/reexec/reexec_deprecated.go
 // Licensed under Apache License 2.0: https://github.com/moby/moby/blob/master/LICENSE
 // Copyright 2013-2018 Docker, Inc.
 //
@@ -7,6 +7,7 @@
 // we require because of the forking limitations of using Go.  Handlers can be
 // registered with a name and the argv 0 of the exec of the binary will be used
 // to find and execute custom init paths.
+
 package reexec
 
 import (

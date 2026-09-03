@@ -17,6 +17,7 @@
 package discover
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
@@ -490,10 +491,183 @@ func quickcfg() *quick.Config {
 	}
 }
 
+func TestSetFallbackNodes_DNSHostname(t *testing.T) {
+	// Create a node with a DNS hostname but no IP, simulating an enode URL
+	// like enode://<key>@localhost:30303.
+	key := newkey()
+	node := enode.NewV4(&key.PublicKey, nil, 30303, 30303).WithHostname("localhost")
+
+	// Verify the node has a hostname but no valid IP.
+	if node.Hostname() != "localhost" {
+		t.Fatal("expected hostname to be set")
+	}
+	if node.IPAddr().IsValid() {
+		t.Fatal("expected no IP address")
+	}
+
+	// Create a table and set the hostname node as a bootnode.
+	// This should resolve the hostname to an IP address.
+	db, _ := enode.OpenDB(t.TempDir() + "/node.db")
+	defer db.Close()
+
+	cfg := Config{Log: testlog.Logger(t, log.LvlTrace)}
+	cfg = cfg.withDefaults()
+	tab := &Table{
+		cfg:             cfg,
+		log:             cfg.Log,
+		refreshReq:      make(chan chan struct{}),
+		revalResponseCh: make(chan revalidationResponse),
+		addNodeCh:       make(chan addNodeOp),
+		addNodeHandled:  make(chan bool),
+		trackRequestCh:  make(chan trackRequestOp),
+		initDone:        make(chan struct{}),
+		closeReq:        make(chan struct{}),
+		closed:          make(chan struct{}),
+		ips:             netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
+	}
+	for i := range tab.buckets {
+		tab.buckets[i] = &bucket{
+			index: i,
+			ips:   netutil.DistinctNetSet{Subnet: bucketSubnet, Limit: bucketIPLimit},
+		}
+	}
+
+	err := tab.setFallbackNodes([]*enode.Node{node})
+	if err != nil {
+		t.Fatalf("setFallbackNodes failed: %v", err)
+	}
+	if len(tab.nursery) != 1 {
+		t.Fatalf("expected 1 nursery node, got %d", len(tab.nursery))
+	}
+
+	// The resolved node should have a valid IP and retain the hostname.
+	resolved := tab.nursery[0]
+	if !resolved.IPAddr().IsValid() {
+		t.Fatal("expected resolved node to have a valid IP")
+	}
+	if resolved.Hostname() != "localhost" {
+		t.Errorf("expected hostname to be preserved, got %q", resolved.Hostname())
+	}
+	t.Logf("resolved localhost to %v", resolved.IPAddr())
+}
+
+// This test checks that waitForNodes does not block addFoundNode.
+// See https://github.com/ethereum/go-ethereum/issues/34881.
+func TestTable_waitForNodesLocking(t *testing.T) {
+	transport := newPingRecorder()
+	tab, db := newTestTable(transport, Config{})
+	defer db.Close()
+	defer tab.close()
+	<-tab.initDone
+
+	// waitForNodes will never reach this count, so it stays subscribed
+	// to nodeFeed and looping for the duration of the test.
+	waitCtx, cancelWait := context.WithCancel(context.Background())
+	defer cancelWait()
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+		tab.waitForNodes(waitCtx, 1<<20)
+	}()
+
+	// Call addFoundNode in loop to send to the feed.
+	addDone := make(chan struct{})
+	go func() {
+		defer close(addDone)
+		for i := range 10000 {
+			d := 240 + (i % 17)
+			n := nodeAtDistance(tab.self().ID(), d, intIP(i))
+			tab.addFoundNode(n, true)
+		}
+	}()
+
+	select {
+	case <-addDone:
+		cancelWait()
+		<-waitDone
+	case <-time.After(10 * time.Second):
+		t.Fatal("deadlock detected: add loop did not finish within 10s")
+	}
+}
+
 func newkey() *ecdsa.PrivateKey {
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		panic("couldn't generate key: " + err.Error())
 	}
 	return key
+}
+
+// BenchmarkTable_findnodeByID exercises findnodeByID across table sizes, result
+// counts, and liveness ratios. The _PreferLive_NoLive cases cover the fallback
+// path where preferLive is requested but no validated-live nodes exist.
+func BenchmarkTable_findnodeByID(b *testing.B) {
+	benchmarks := []struct {
+		name       string
+		tableSize  int
+		nresults   int
+		preferLive bool
+		liveRatio  float64 // fraction of nodes marked validated-live
+	}{
+		{"SmallTable_5Results_NoPreferLive", 50, 5, false, 0.0},
+		{"SmallTable_16Results_NoPreferLive", 50, 16, false, 0.0},
+		{"SmallTable_5Results_PreferLive_AllLive", 50, 5, true, 1.0},
+		{"SmallTable_16Results_PreferLive_AllLive", 50, 16, true, 1.0},
+		{"SmallTable_5Results_PreferLive_HalfLive", 50, 5, true, 0.5},
+		{"SmallTable_16Results_PreferLive_HalfLive", 50, 16, true, 0.5},
+		{"SmallTable_5Results_PreferLive_NoLive", 50, 5, true, 0.0},
+		{"SmallTable_16Results_PreferLive_NoLive", 50, 16, true, 0.0},
+
+		{"MediumTable_5Results_NoPreferLive", 200, 5, false, 0.0},
+		{"MediumTable_16Results_NoPreferLive", 200, 16, false, 0.0},
+		{"MediumTable_5Results_PreferLive_AllLive", 200, 5, true, 1.0},
+		{"MediumTable_16Results_PreferLive_AllLive", 200, 16, true, 1.0},
+		{"MediumTable_5Results_PreferLive_HalfLive", 200, 5, true, 0.5},
+		{"MediumTable_16Results_PreferLive_HalfLive", 200, 16, true, 0.5},
+		{"MediumTable_5Results_PreferLive_NoLive", 200, 5, true, 0.0},
+		{"MediumTable_16Results_PreferLive_NoLive", 200, 16, true, 0.0},
+
+		{"FullTable_5Results_NoPreferLive", nBuckets * bucketSize, 5, false, 0.0},
+		{"FullTable_16Results_NoPreferLive", nBuckets * bucketSize, 16, false, 0.0},
+		{"FullTable_5Results_PreferLive_AllLive", nBuckets * bucketSize, 5, true, 1.0},
+		{"FullTable_16Results_PreferLive_AllLive", nBuckets * bucketSize, 16, true, 1.0},
+		{"FullTable_5Results_PreferLive_HalfLive", nBuckets * bucketSize, 5, true, 0.5},
+		{"FullTable_16Results_PreferLive_HalfLive", nBuckets * bucketSize, 16, true, 0.5},
+		{"FullTable_5Results_PreferLive_NoLive", nBuckets * bucketSize, 5, true, 0.0},
+		{"FullTable_16Results_PreferLive_NoLive", nBuckets * bucketSize, 16, true, 0.0},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			tab, db := newTestTable(newPingRecorder(), Config{})
+			defer db.Close()
+			defer tab.close()
+			<-tab.initDone
+
+			self := tab.self().ID()
+			nodes := make([]*enode.Node, bm.tableSize)
+			for i := range nodes {
+				// Spread across buckets by varying log-distance in the valid range.
+				d := bucketMinDistance + 1 + i%nBuckets
+				nodes[i] = nodeAtDistance(self, d, intIP(i))
+			}
+
+			liveCount := int(float64(len(nodes)) * bm.liveRatio)
+			if liveCount > 0 {
+				fillTable(tab, nodes[:liveCount], true)
+			}
+			if liveCount < len(nodes) {
+				fillTable(tab, nodes[liveCount:], false)
+			}
+
+			var target enode.ID
+			rand.Read(target[:])
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = tab.findnodeByID(target, bm.nresults, bm.preferLive)
+			}
+		})
+	}
 }

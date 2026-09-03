@@ -29,13 +29,25 @@ func TestXOR(t *testing.T) {
 				d2 := make([]byte, 1023+alignD)[alignD:]
 
 				XORBytes(d1, p, q)
-				safeXORBytes(d2, p, q)
+				naiveXOR(d2, p, q)
 				if !bytes.Equal(d1, d2) {
 					t.Error("not equal", d1, d2)
 				}
 			}
 		}
 	}
+}
+
+// naiveXOR xors bytes one by one.
+func naiveXOR(dst, a, b []byte) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	for i := 0; i < n; i++ {
+		dst[i] = a[i] ^ b[i]
+	}
+	return n
 }
 
 // Tests that bitwise AND works for various alignments.
@@ -134,7 +146,7 @@ func benchmarkBaseXOR(b *testing.B, size int) {
 	p, q := make([]byte, size), make([]byte, size)
 
 	for i := 0; i < b.N; i++ {
-		safeXORBytes(p, p, q)
+		naiveXOR(p, p, q)
 	}
 }
 

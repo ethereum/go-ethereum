@@ -35,7 +35,7 @@ function coverbuild {
   sed -i -e 's/TestFuzzCorpus/Test'$function'Corpus/' ./"${function,,}"_test.go
 
 cat << DOG > $OUT/$fuzzer
-#/bin/sh
+#!/bin/sh
 
   cd $OUT/$path
   go test -run Test${function}Corpus -v $tags -coverprofile \$1 -coverpkg $coverpkg
@@ -64,7 +64,7 @@ function compile_fuzzer() {
   go get github.com/holiman/gofuzz-shim/testing
 
 	if [[ $SANITIZER == *coverage* ]]; then
-		coverbuild $path $function $fuzzer $coverpkg
+		coverbuild $path $function $fuzzer
 	else
 	  gofuzz-shim --func $function --package $package -f $file -o $fuzzer.a
 		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
@@ -152,6 +152,14 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
   FuzzPair fuzzBn256Pair \
   $repo/tests/fuzzers/bn256/bn256_test.go
 
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
+  FuzzUnmarshalG1 fuzzBn256UnmarshalG1 \
+  $repo/tests/fuzzers/bn256/bn256_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
+  FuzzUnmarshalG2 fuzzBn256UnmarshalG2 \
+  $repo/tests/fuzzers/bn256/bn256_test.go
+
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/txfetcher \
   Fuzz fuzzTxfetcher \
   $repo/tests/fuzzers/txfetcher/txfetcher_test.go
@@ -161,19 +169,11 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
-  FuzzG1Mul fuzz_g1_mul\
-  $repo/tests/fuzzers/bls12381/bls12381_test.go
-
-compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   FuzzG1MultiExp fuzz_g1_multiexp \
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   FuzzG2Add fuzz_g2_add \
-  $repo/tests/fuzzers/bls12381/bls12381_test.go
-
-compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
-  FuzzG2Mul fuzz_g2_mul\
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
@@ -205,6 +205,10 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+  FuzzCrossG2MultiExp fuzz_cross_g2_multiexp \
+  $repo/tests/fuzzers/bls12381/bls12381_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   FuzzCrossPairing fuzz_cross_pairing\
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
@@ -220,8 +224,8 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/secp256k1 \
   Fuzz fuzzSecp256k1\
   $repo/tests/fuzzers/secp256k1/secp_test.go
 
+compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/eth \
+  FuzzEthProtocolHandlers fuzz_eth_protocol_handlers \
+  $repo/eth/protocols/eth/handler_test.go,$repo/eth/protocols/eth/peer_test.go
 
-#compile_fuzzer tests/fuzzers/vflux      FuzzClientPool fuzzClientPool
-#compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
-#compile_fuzzer tests/fuzzers/les        Fuzz fuzzLes
 

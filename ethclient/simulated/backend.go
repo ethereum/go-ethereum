@@ -18,6 +18,7 @@ package simulated
 
 import (
 	"errors"
+	"maps"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -79,14 +79,22 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 	nodeConf.DataDir = ""
 	nodeConf.P2P = p2p.Config{NoDiscovery: true}
 
+	// The dev chain starts out on every fork, so the system contracts those forks
+	// call into have to be present from genesis. The caller's alloc wins on
+	// conflict, and is copied rather than mutated in place.
+	genesisAlloc := core.SystemContractAllocs()
+	maps.Copy(genesisAlloc, alloc)
+
 	ethConf := ethconfig.Defaults
 	ethConf.Genesis = &core.Genesis{
 		Config:   params.AllDevChainProtocolChanges,
 		GasLimit: ethconfig.Defaults.Miner.GasCeil,
-		Alloc:    alloc,
+		Alloc:    genesisAlloc,
 	}
-	ethConf.SyncMode = downloader.FullSync
+	ethConf.SyncMode = ethconfig.FullSync
 	ethConf.TxPool.NoLocals = true
+	// Disable log indexing to force unindexed log search
+	ethConf.LogNoHistory = true
 
 	for _, option := range options {
 		option(&nodeConf, &ethConf)
@@ -121,7 +129,7 @@ func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backe
 		return nil, err
 	}
 	// Set up the simulated beacon
-	beacon, err := catalyst.NewSimulatedBeacon(blockPeriod, backend)
+	beacon, err := catalyst.NewSimulatedBeacon(blockPeriod, common.Address{}, backend)
 	if err != nil {
 		return nil, err
 	}

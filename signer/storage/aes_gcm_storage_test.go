@@ -48,7 +48,7 @@ func TestEncryption(t *testing.T) {
 	}
 	t.Logf("Plaintext %v\n", string(p))
 	if !bytes.Equal(plaintext, p) {
-		t.Errorf("Failed: expected plaintext recovery, got %v expected %v", string(plaintext), string(p))
+		t.Errorf("Failed: expected plaintext recovery, got %v expected %v", string(p), string(plaintext))
 	}
 }
 

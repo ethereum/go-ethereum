@@ -123,7 +123,7 @@ func FormatSlogValue(v slog.Value, tmp []byte) (result []byte) {
 	var value any
 	defer func() {
 		if err := recover(); err != nil {
-			if v := reflect.ValueOf(value); v.Kind() == reflect.Ptr && v.IsNil() {
+			if v := reflect.ValueOf(value); v.Kind() == reflect.Pointer && v.IsNil() {
 				result = []byte("<nil>")
 			} else {
 				panic(err)

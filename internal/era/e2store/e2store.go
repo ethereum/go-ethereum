@@ -1,18 +1,18 @@
-// Copyright 2023 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2024 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package e2store
 
@@ -218,4 +218,16 @@ func (r *Reader) FindAll(want uint16) ([]*Entry, error) {
 		}
 		off += int64(headerSize + length)
 	}
+}
+
+// SkipN skips `n` entries starting from `offset` and returns the new offset.
+func (r *Reader) SkipN(offset int64, n uint64) (int64, error) {
+	for i := uint64(0); i < n; i++ {
+		length, err := r.LengthAt(offset)
+		if err != nil {
+			return 0, err
+		}
+		offset += length
+	}
+	return offset, nil
 }

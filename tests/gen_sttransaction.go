@@ -20,7 +20,7 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 		GasPrice             *math.HexOrDecimal256 `json:"gasPrice"`
 		MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas"`
 		MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas"`
-		Nonce                math.HexOrDecimal64   `json:"nonce"`
+		Nonce                *math.HexOrDecimal256 `json:"nonce"`
 		To                   string                `json:"to"`
 		Data                 []string              `json:"data"`
 		AccessLists          []*types.AccessList   `json:"accessLists,omitempty"`
@@ -30,12 +30,13 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 		Sender               *common.Address       `json:"sender"`
 		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes,omitempty"`
 		BlobGasFeeCap        *math.HexOrDecimal256 `json:"maxFeePerBlobGas,omitempty"`
+		AuthorizationList    []*stAuthorization    `json:"authorizationList,omitempty"`
 	}
 	var enc stTransaction
 	enc.GasPrice = (*math.HexOrDecimal256)(s.GasPrice)
 	enc.MaxFeePerGas = (*math.HexOrDecimal256)(s.MaxFeePerGas)
 	enc.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(s.MaxPriorityFeePerGas)
-	enc.Nonce = math.HexOrDecimal64(s.Nonce)
+	enc.Nonce = (*math.HexOrDecimal256)(s.Nonce)
 	enc.To = s.To
 	enc.Data = s.Data
 	enc.AccessLists = s.AccessLists
@@ -50,6 +51,7 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 	enc.Sender = s.Sender
 	enc.BlobVersionedHashes = s.BlobVersionedHashes
 	enc.BlobGasFeeCap = (*math.HexOrDecimal256)(s.BlobGasFeeCap)
+	enc.AuthorizationList = s.AuthorizationList
 	return json.Marshal(&enc)
 }
 
@@ -59,7 +61,7 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 		GasPrice             *math.HexOrDecimal256 `json:"gasPrice"`
 		MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas"`
 		MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas"`
-		Nonce                *math.HexOrDecimal64  `json:"nonce"`
+		Nonce                *math.HexOrDecimal256 `json:"nonce"`
 		To                   *string               `json:"to"`
 		Data                 []string              `json:"data"`
 		AccessLists          []*types.AccessList   `json:"accessLists,omitempty"`
@@ -69,6 +71,7 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 		Sender               *common.Address       `json:"sender"`
 		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes,omitempty"`
 		BlobGasFeeCap        *math.HexOrDecimal256 `json:"maxFeePerBlobGas,omitempty"`
+		AuthorizationList    []*stAuthorization    `json:"authorizationList,omitempty"`
 	}
 	var dec stTransaction
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -84,7 +87,7 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 		s.MaxPriorityFeePerGas = (*big.Int)(dec.MaxPriorityFeePerGas)
 	}
 	if dec.Nonce != nil {
-		s.Nonce = uint64(*dec.Nonce)
+		s.Nonce = (*big.Int)(dec.Nonce)
 	}
 	if dec.To != nil {
 		s.To = *dec.To
@@ -115,6 +118,9 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 	}
 	if dec.BlobGasFeeCap != nil {
 		s.BlobGasFeeCap = (*big.Int)(dec.BlobGasFeeCap)
+	}
+	if dec.AuthorizationList != nil {
+		s.AuthorizationList = dec.AuthorizationList
 	}
 	return nil
 }

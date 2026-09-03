@@ -19,6 +19,7 @@ package kzg4844
 
 import (
 	"embed"
+	"encoding/binary"
 	"errors"
 	"hash"
 	"reflect"
@@ -31,13 +32,38 @@ import (
 var content embed.FS
 
 var (
-	blobT       = reflect.TypeOf(Blob{})
-	commitmentT = reflect.TypeOf(Commitment{})
-	proofT      = reflect.TypeOf(Proof{})
+	blobT       = reflect.TypeFor[Blob]()
+	commitmentT = reflect.TypeFor[Commitment]()
+	proofT      = reflect.TypeFor[Proof]()
+	cellT       = reflect.TypeFor[Cell]()
 )
+
+const (
+	CellProofsPerBlob = 128
+	CellsPerBlob      = 128
+	DataPerBlob       = 64
+)
+
+// Cell represents a single cell in a blob.
+type Cell [2048]byte
+
+// UnmarshalJSON parses a cell in hex syntax.
+func (c *Cell) UnmarshalJSON(input []byte) error {
+	return hexutil.UnmarshalFixedJSON(cellT, input, c[:])
+}
+
+// MarshalText returns the hex representation of c.
+func (c *Cell) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(c[:]).MarshalText()
+}
 
 // Blob represents a 4844 data blob.
 type Blob [131072]byte
+
+// A blob is exactly its DataPerBlob data cells, concatenated; the remaining
+// cells (indices DataPerBlob..CellsPerBlob-1) carry redundancy only. Code
+// reassembling blobs from cells relies on this, so assert it at compile time.
+var _ [len(Blob{})]byte = [DataPerBlob * len(Cell{})]byte{}
 
 // UnmarshalJSON parses a blob in hex syntax.
 func (b *Blob) UnmarshalJSON(input []byte) error {
@@ -45,7 +71,7 @@ func (b *Blob) UnmarshalJSON(input []byte) error {
 }
 
 // MarshalText returns the hex representation of b.
-func (b Blob) MarshalText() ([]byte, error) {
+func (b *Blob) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(b[:]).MarshalText()
 }
 
@@ -149,6 +175,27 @@ func VerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	return gokzgVerifyBlobProof(blob, commitment, proof)
 }
 
+// VerifyCellProofs verifies a batch of proofs corresponding to the blobs and commitments.
+// Expects length of blobs and commitments to be equal.
+// Expects length of proofs be 128 * length of blobs.
+func VerifyCellProofs(blobs []Blob, commitments []Commitment, proofs []Proof) error {
+	if useCKZG.Load() {
+		return ckzgVerifyCellProofBatch(blobs, commitments, proofs)
+	}
+	return gokzgVerifyCellProofBatch(blobs, commitments, proofs)
+}
+
+// ComputeCellProofs returns the KZG cell proofs that are used to verify the blob against
+// the commitment.
+//
+// This method does not verify that the commitment is correct with respect to blob.
+func ComputeCellProofs(blob *Blob) ([]Proof, error) {
+	if useCKZG.Load() {
+		return ckzgComputeCellProofs(blob)
+	}
+	return gokzgComputeCellProofs(blob)
+}
+
 // CalcBlobHashV1 calculates the 'versioned blob hash' of a commitment.
 // The given hasher must be a sha256 hash instance, otherwise the result will be invalid!
 func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {
@@ -165,4 +212,217 @@ func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {
 // IsValidVersionedHash checks that h is a structurally-valid versioned blob hash.
 func IsValidVersionedHash(h []byte) bool {
 	return len(h) == 32 && h[0] == 0x01
+}
+
+// VerifyCells verifies a batch of proofs corresponding to the cells and blob commitments.
+//
+// For this function, it is sufficient to only provide some of the cells.
+//
+// The `cellIndices` specify which of the 128 cells of each blob are given.
+// Indices must be given in ascending order.
+//
+// Note the list of indices is shared among all blobs, i.e. for a given list of indices
+// [1, 2, 13], the cells slice must contain cells [1, 2, 13] of each blob.
+// Thus, `len(cells)` must be a multiple of `len(cellIndices)`.
+//
+// One proof must be given for each cell. As such, `len(proofs)` must equal `len(cells)`.
+func VerifyCells(cells []Cell, commitments []Commitment, proofs []Proof, cellIndices []uint64) error {
+	// commitments/proofs/cells validation
+	switch {
+	case len(commitments) == 0:
+		return errors.New("no commitments")
+	case len(proofs)%len(commitments) != 0:
+		return errors.New("len(proofs) must be a multiple of len(commitments)")
+	case len(cells) != len(proofs):
+		return errors.New("mismatched len(cellProofs) and len(cells)")
+	}
+	if err := validateCellIndices(cells, cellIndices); err != nil {
+		return err
+	}
+	if len(cells)/len(cellIndices) != len(commitments) {
+		return errors.New("invalid number of cells for blob count")
+	}
+
+	if useCKZG.Load() {
+		return ckzgVerifyCells(cells, commitments, proofs, cellIndices)
+	}
+	return gokzgVerifyCells(cells, commitments, proofs, cellIndices)
+}
+
+// ComputeCells computes the cells from the given blobs.
+func ComputeCells(blobs []Blob) ([]Cell, error) {
+	if useCKZG.Load() {
+		return ckzgComputeCells(blobs)
+	}
+	return gokzgComputeCells(blobs)
+}
+
+// RecoverBlobs recovers blobs from the given cells and cell indices.
+// In order to successfully recover, at least DataPerBlob (64) cells must be provided.
+//
+// When the data cells (indices 0..DataPerBlob-1) are all present, the blobs are
+// by definition their concatenation, which is returned without any KZG work.
+// That is byte-identical to the erasure recovery for any input whose redundant
+// cells are consistent with the data, which is all a valid sidecar can produce.
+// Where they conflict, the data cells decide, whereas the erasure recovery
+// mixes the conflicting cells in and returns neither faithfully.
+//
+// For the layout of cells and cellIndices, please see [VerifyCells].
+func RecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
+	if err := validateCellIndices(cells, cellIndices); err != nil {
+		return nil, err
+	}
+	if blobs, ok := blobsFromDataCells(cells, cellIndices); ok {
+		return blobs, nil
+	}
+	if useCKZG.Load() {
+		return ckzgRecoverBlobs(cells, cellIndices)
+	}
+	return gokzgRecoverBlobs(cells, cellIndices)
+}
+
+// Field modulus of the BLS12-381 scalar field as big-endian 64-bit limbs,
+// most significant first:
+//
+//	0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
+//
+// TestFieldModulusLimbs pins these against the canonical definition.
+const (
+	bytesPerFieldElement = 32
+
+	frModulusW0 uint64 = 0x73eda753299d7d48
+	frModulusW1 uint64 = 0x3339d80809a1d805
+	frModulusW2 uint64 = 0x53bda402fffe5bfe
+	frModulusW3 uint64 = 0xffffffff00000001
+)
+
+// isCanonicalFieldElement reports whether the big-endian 32-byte scalar is a
+// canonical field element, i.e. strictly below the field modulus. It compares
+// limb by limb, so well-formed data resolves on the first comparison.
+func isCanonicalFieldElement(b []byte) bool {
+	if w := binary.BigEndian.Uint64(b[0:8]); w != frModulusW0 {
+		return w < frModulusW0
+	}
+	if w := binary.BigEndian.Uint64(b[8:16]); w != frModulusW1 {
+		return w < frModulusW1
+	}
+	if w := binary.BigEndian.Uint64(b[16:24]); w != frModulusW2 {
+		return w < frModulusW2
+	}
+	return binary.BigEndian.Uint64(b[24:32]) < frModulusW3
+}
+
+// isCanonicalCell reports whether every field element of the cell is canonical.
+func isCanonicalCell(cell *Cell) bool {
+	for i := 0; i < len(cell); i += bytesPerFieldElement {
+		if !isCanonicalFieldElement(cell[i : i+bytesPerFieldElement]) {
+			return false
+		}
+	}
+	return true
+}
+
+// blobsFromDataCells reconstructs blobs by concatenating their data cells (cell
+// indices 0..DataPerBlob-1, by definition the blob contents), with no KZG
+// involvement. It accepts a strict subset of the inputs the KZG recovery
+// accepts, returning the same bytes whenever the redundant cells are consistent
+// with the data; on ok=false the caller must fall back to that recovery, which
+// is also the authority on rejecting invalid input.
+//
+// Since the KZG library is bypassed, the checks it would perform while
+// deserializing happen here instead: cell indices must be well-formed, and
+// every input cell must hold canonical field elements. Cell contents are not
+// examined further -- nothing is verified against commitments or cell proofs,
+// and the redundancy is not checked for consistency with the data.
+//
+// For the layout of cells and cellIndices, see RecoverBlobs.
+func blobsFromDataCells(cells []Cell, cellIndices []uint64) ([]Blob, bool) {
+	if validateCellIndices(cells, cellIndices) != nil {
+		return nil, false
+	}
+	// The head must be exactly the data cells in canonical order:
+	// cellIndices[i] == i for i < DataPerBlob.
+	if len(cellIndices) < DataPerBlob {
+		return nil, false
+	}
+	for i := range DataPerBlob {
+		if cellIndices[i] != uint64(i) {
+			return nil, false
+		}
+	}
+	// The tail is ignored by the concatenation but must still be well-formed:
+	// the KZG library that would reject it is never reached on this path.
+	for i := DataPerBlob; i < len(cellIndices); i++ {
+		if cellIndices[i] <= cellIndices[i-1] || cellIndices[i] >= CellsPerBlob {
+			return nil, false
+		}
+	}
+	// Likewise for the cell contents: every input cell must be canonical, the
+	// ignored tail cells included, so that declining and recovering through the
+	// KZG library cannot turn a rejection into a success.
+	for i := range cells {
+		if !isCanonicalCell(&cells[i]) {
+			return nil, false
+		}
+	}
+	blobCount := len(cells) / len(cellIndices)
+	blobs := make([]Blob, blobCount)
+	for b := range blobCount {
+		data := cells[b*len(cellIndices):][:DataPerBlob]
+		for i := range data {
+			copy(blobs[b][i*len(data[i]):], data[i][:])
+		}
+	}
+	return blobs, true
+}
+
+// RecoverCells returns all CellsPerBlob cells for every blob represented by the
+// input cells, given a sufficient subset (at least DataPerBlob cells per blob).
+// When the full data domain (indices 0..DataPerBlob-1) is present, all cells
+// follow from a cheap systematic extension of the concatenated blobs
+// (ComputeCells), skipping the KZG erasure solve; otherwise it falls back to
+// full erasure recovery. For input whose redundant cells are consistent with the
+// data the two paths return byte-identical cells, in canonical index order per
+// blob. Cell proofs are never recomputed: callers that need proofs should retain
+// those shipped with the transaction.
+//
+// Both paths reject non-canonical field elements: the erasure path while
+// deserializing the input cells, the systematic path by checking them
+// explicitly. Neither path checks that redundant input cells are consistent
+// with the data: the underlying erasure decode assumes consistency and
+// silently returns wrong cells otherwise. Nothing is verified against
+// commitments or cell proofs -- the authenticity of every input cell must be
+// established by the caller (e.g. VerifyCells at ingest), which also
+// guarantees consistency.
+//
+// For the layout of cells and cellIndices, see RecoverBlobs.
+func RecoverCells(cells []Cell, cellIndices []uint64) ([]Cell, error) {
+	if err := validateCellIndices(cells, cellIndices); err != nil {
+		return nil, err
+	}
+	// Fast path: the data cells are all present, so the blobs are a free
+	// concatenation and all cells follow from a systematic extension.
+	if blobs, ok := blobsFromDataCells(cells, cellIndices); ok {
+		return ComputeCells(blobs)
+	}
+	// Slow path: genuine erasure recovery from a non-data subset.
+	if useCKZG.Load() {
+		return ckzgRecoverCells(cells, cellIndices)
+	}
+	return gokzgRecoverCells(cells, cellIndices)
+}
+
+func validateCellIndices(cells []Cell, cellIndices []uint64) error {
+	switch {
+	case len(cellIndices) == 0:
+		return errors.New("no cellIndices given")
+	case len(cellIndices) > len(cells):
+		return errors.New("less cells than cellIndices")
+	case len(cellIndices) > CellsPerBlob:
+		return errors.New("too many cellIndices")
+	case len(cells)%len(cellIndices) != 0:
+		return errors.New("len(cells) must be a multiple of len(cellIndices)")
+	}
+	// The library checks the canonical ordering of indices, so we don't have to do it here.
+	return nil
 }

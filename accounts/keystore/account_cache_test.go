@@ -68,17 +68,26 @@ func waitWatcherStart(ks *KeyStore) bool {
 
 func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 	var list []accounts.Account
+	haveAccounts := false
+	haveChange := false
 	for t0 := time.Now(); time.Since(t0) < 5*time.Second; time.Sleep(100 * time.Millisecond) {
-		list = ks.Accounts()
-		if reflect.DeepEqual(list, wantAccounts) {
-			// ks should have also received change notifications
+		if !haveAccounts {
+			list = ks.Accounts()
+			haveAccounts = reflect.DeepEqual(list, wantAccounts)
+		}
+		if !haveChange {
 			select {
 			case <-ks.changes:
+				haveChange = true
 			default:
-				return errors.New("wasn't notified of new accounts")
 			}
+		}
+		if haveAccounts && haveChange {
 			return nil
 		}
+	}
+	if haveAccounts {
+		return errors.New("wasn't notified of new accounts")
 	}
 	return fmt.Errorf("\ngot  %v\nwant %v", list, wantAccounts)
 }

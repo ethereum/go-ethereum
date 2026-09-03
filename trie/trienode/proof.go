@@ -69,6 +69,10 @@ func (db *ProofSet) Delete(key []byte) error {
 	return nil
 }
 
+func (db *ProofSet) DeleteRange(start, end []byte) error {
+	panic("not supported")
+}
+
 // Get returns a stored node
 func (db *ProofSet) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()

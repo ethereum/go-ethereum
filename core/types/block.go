@@ -30,8 +30,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-verkle"
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -59,13 +59,6 @@ func (n BlockNonce) MarshalText() ([]byte, error) {
 // UnmarshalText implements encoding.TextUnmarshaler.
 func (n *BlockNonce) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
-}
-
-// ExecutionWitness represents the witness + proof used in a verkle context,
-// to provide the ability to execute a block statelessly.
-type ExecutionWitness struct {
-	StateDiff   verkle.StateDiff    `json:"stateDiff"`
-	VerkleProof *verkle.VerkleProof `json:"verkleProof"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
@@ -105,7 +98,13 @@ type Header struct {
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 
 	// RequestsHash was added by EIP-7685 and is ignored in legacy headers.
-	RequestsHash *common.Hash `json:"requestsRoot" rlp:"optional"`
+	RequestsHash *common.Hash `json:"requestsHash" rlp:"optional"`
+
+	// BlockAccessListHash was added by EIP-7928 and is ignored in legacy headers.
+	BlockAccessListHash *common.Hash `json:"blockAccessListHash" rlp:"optional"`
+
+	// SlotNumber was added by EIP-7843 and is ignored in legacy headers.
+	SlotNumber *uint64 `json:"slotNumber" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -120,6 +119,7 @@ type headerMarshaling struct {
 	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 	BlobGasUsed   *hexutil.Uint64
 	ExcessBlobGas *hexutil.Uint64
+	SlotNumber    *hexutil.Uint64
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -128,7 +128,7 @@ func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
 }
 
-var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
+var headerSize = common.StorageSize(reflect.TypeFor[Header]().Size())
 
 // Size returns the approximate memory used by all internal contents. It is used
 // to approximate and limit the memory consumption of various caches.
@@ -208,11 +208,7 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 	withdrawals  Withdrawals
-
-	// witness is not an encoded part of the block body.
-	// It is held in Block in order for easy relaying to the places
-	// that process it.
-	witness *ExecutionWitness
+	accessList   *bal.BlockAccessList
 
 	// caches
 	hash atomic.Pointer[common.Hash]
@@ -237,7 +233,10 @@ type extblock struct {
 //
 // The body elements and the receipts are used to recompute and overwrite the
 // relevant portions of the header.
-func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher) *Block {
+//
+// The receipt's bloom must already calculated for the block's bloom to be
+// correctly calculated.
+func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher ListHasher) *Block {
 	if body == nil {
 		body = &Body{}
 	}
@@ -260,7 +259,10 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher
 		b.header.ReceiptHash = EmptyReceiptsHash
 	} else {
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
-		b.header.Bloom = CreateBloom(receipts)
+		// Receipts must go through MakeReceipt to calculate the receipt's bloom
+		// already. Merge the receipt's bloom together instead of recalculating
+		// everything.
+		b.header.Bloom = MergeBloom(receipts)
 	}
 
 	if len(uncles) == 0 {
@@ -323,6 +325,14 @@ func CopyHeader(h *Header) *Header {
 		cpy.RequestsHash = new(common.Hash)
 		*cpy.RequestsHash = *h.RequestsHash
 	}
+	if h.BlockAccessListHash != nil {
+		cpy.BlockAccessListHash = new(common.Hash)
+		*cpy.BlockAccessListHash = *h.BlockAccessListHash
+	}
+	if h.SlotNumber != nil {
+		cpy.SlotNumber = new(uint64)
+		*cpy.SlotNumber = *h.SlotNumber
+	}
 	return &cpy
 }
 
@@ -357,9 +367,10 @@ func (b *Block) Body() *Body {
 // Accessors for body data. These do not return a copy because the content
 // of the body slices does not affect the cached hash/size in block.
 
-func (b *Block) Uncles() []*Header          { return b.uncles }
-func (b *Block) Transactions() Transactions { return b.transactions }
-func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
+func (b *Block) Uncles() []*Header                { return b.uncles }
+func (b *Block) Transactions() Transactions       { return b.transactions }
+func (b *Block) Withdrawals() Withdrawals         { return b.withdrawals }
+func (b *Block) AccessList() *bal.BlockAccessList { return b.accessList }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -402,8 +413,9 @@ func (b *Block) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
 }
 
-func (b *Block) BeaconRoot() *common.Hash   { return b.header.ParentBeaconRoot }
-func (b *Block) RequestsHash() *common.Hash { return b.header.RequestsHash }
+func (b *Block) BeaconRoot() *common.Hash          { return b.header.ParentBeaconRoot }
+func (b *Block) RequestsHash() *common.Hash        { return b.header.RequestsHash }
+func (b *Block) BlockAccessListHash() *common.Hash { return b.header.BlockAccessListHash }
 
 func (b *Block) ExcessBlobGas() *uint64 {
 	var excessBlobGas *uint64
@@ -423,8 +435,14 @@ func (b *Block) BlobGasUsed() *uint64 {
 	return blobGasUsed
 }
 
-// ExecutionWitness returns the verkle execution witneess + proof for a block
-func (b *Block) ExecutionWitness() *ExecutionWitness { return b.witness }
+func (b *Block) SlotNumber() *uint64 {
+	var slotNum *uint64
+	if b.header.SlotNumber != nil {
+		slotNum = new(uint64)
+		*slotNum = *b.header.SlotNumber
+	}
+	return slotNum
+}
 
 // Size returns the true RLP encoded storage size of the block, either by encoding
 // and returning it, or returning a previously cached value.
@@ -463,9 +481,11 @@ func CalcRequestsHash(requests [][]byte) common.Hash {
 	h1, h2 := sha256.New(), sha256.New()
 	var buf common.Hash
 	for _, item := range requests {
-		h1.Reset()
-		h1.Write(item)
-		h2.Write(h1.Sum(buf[:0]))
+		if len(item) > 1 { // skip items with only requestType and no data.
+			h1.Reset()
+			h1.Write(item)
+			h2.Write(h1.Sum(buf[:0]))
+		}
 	}
 	h2.Sum(buf[:0])
 	return buf
@@ -486,7 +506,7 @@ func (b *Block) WithSeal(header *Header) *Block {
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
-		witness:      b.witness,
+		accessList:   b.accessList,
 	}
 }
 
@@ -498,7 +518,7 @@ func (b *Block) WithBody(body Body) *Block {
 		transactions: slices.Clone(body.Transactions),
 		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  slices.Clone(body.Withdrawals),
-		witness:      b.witness,
+		accessList:   b.accessList,
 	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])
@@ -506,13 +526,21 @@ func (b *Block) WithBody(body Body) *Block {
 	return block
 }
 
-func (b *Block) WithWitness(witness *ExecutionWitness) *Block {
+// WithAccessList returns a copy of the block with the given access list embedded.
+func (b *Block) WithAccessList(accessList *bal.BlockAccessList) *Block {
+	return b.WithAccessListUnsafe(accessList.Copy())
+}
+
+// WithAccessListUnsafe returns a copy of the block with the given access list
+// embedded. Note that the access list is not deep-copied; use WithAccessList
+// if the provided list may be modified by other actors.
+func (b *Block) WithAccessListUnsafe(accessList *bal.BlockAccessList) *Block {
 	return &Block{
 		header:       b.header,
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
-		witness:      witness,
+		accessList:   accessList,
 	}
 }
 

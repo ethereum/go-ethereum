@@ -28,11 +28,11 @@ import (
 )
 
 var (
-	bytesT  = reflect.TypeOf(Bytes(nil))
-	bigT    = reflect.TypeOf((*Big)(nil))
-	uintT   = reflect.TypeOf(Uint(0))
-	uint64T = reflect.TypeOf(Uint64(0))
-	u256T   = reflect.TypeOf((*uint256.Int)(nil))
+	bytesT  = reflect.TypeFor[Bytes]()
+	bigT    = reflect.TypeFor[*Big]()
+	uintT   = reflect.TypeFor[Uint]()
+	uint64T = reflect.TypeFor[Uint64]()
+	u256T   = reflect.TypeFor[*uint256.Int]()
 )
 
 // Bytes marshals/unmarshals as a JSON string with 0x prefix.
@@ -202,6 +202,10 @@ func (b *Big) UnmarshalText(input []byte) error {
 // ToInt converts b to a big.Int.
 func (b *Big) ToInt() *big.Int {
 	return (*big.Int)(b)
+}
+
+func (b *Big) ToUint256() (*uint256.Int, bool) {
+	return uint256.FromBig((*big.Int)(b))
 }
 
 // String returns the hex encoding of b.

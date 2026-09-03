@@ -17,9 +17,11 @@
 package discover
 
 import (
+	"container/list"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
+	"iter"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -49,8 +51,9 @@ type Config struct {
 	// All remaining settings are optional.
 
 	// Packet handling configuration:
-	NetRestrict *netutil.Netlist  // list of allowed IP networks
-	Unhandled   chan<- ReadPacket // unhandled packets are sent on this channel
+	NetRestrict   *netutil.Netlist  // list of allowed IP networks
+	Unhandled     chan<- ReadPacket // unhandled packets are sent on this channel
+	V5RespTimeout time.Duration     // timeout for v5 queries
 
 	// Node table configuration:
 	Bootnodes               []*enode.Node // list of bootstrap nodes
@@ -72,6 +75,9 @@ func (cfg Config) withDefaults() Config {
 	}
 	if cfg.RefreshInterval == 0 {
 		cfg.RefreshInterval = 30 * time.Minute
+	}
+	if cfg.V5RespTimeout == 0 {
+		cfg.V5RespTimeout = 700 * time.Millisecond
 	}
 
 	// Debug/test settings:
@@ -138,4 +144,17 @@ func (r *reseedingRandom) Shuffle(n int, swap func(i, j int)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.cur.Shuffle(n, swap)
+}
+
+// iterList iterates over the elements of the given list.
+func iterList[T any](l *list.List) iter.Seq2[T, *list.Element] {
+	return func(yield func(T, *list.Element) bool) {
+		for el := l.Front(); el != nil; {
+			next := el.Next()
+			if !yield(el.Value.(T), el) {
+				return
+			}
+			el = next
+		}
+	}
 }

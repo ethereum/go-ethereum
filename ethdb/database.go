@@ -17,7 +17,23 @@
 // Package ethdb defines the interfaces for an Ethereum data store.
 package ethdb
 
-import "io"
+import (
+	"bytes"
+	"errors"
+	"io"
+)
+
+var (
+	// MaximumKey is a special marker representing the largest possible key
+	// in the database.
+	//
+	// All prefixed database entries will be smaller than this marker.
+	// For trie nodes in hash mode, we use a 32-byte slice filled with 0xFF
+	// because there may be shared prefixes starting with multiple 0xFF bytes.
+	// Using 32 bytes ensures that only a hash collision could potentially
+	// match or exceed it.
+	MaximumKey = bytes.Repeat([]byte{0xff}, 32)
+)
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
 type KeyValueReader interface {
@@ -37,10 +53,33 @@ type KeyValueWriter interface {
 	Delete(key []byte) error
 }
 
+var ErrTooManyKeys = errors.New("too many keys in deleted range")
+
+// KeyValueRangeDeleter wraps the DeleteRange method of a backing data store.
+type KeyValueRangeDeleter interface {
+	// DeleteRange deletes all of the keys (and values) in the range [start,end)
+	// (inclusive on start, exclusive on end).
+	//
+	// A nil start is treated as a key before all keys in the data store; a nil
+	// end is treated as a key after all keys in the data store. If both is nil
+	// then the entire data store will be purged.
+	//
+	// Some implementations of DeleteRange may return ErrTooManyKeys after
+	// partially deleting entries in the given range.
+	DeleteRange(start, end []byte) error
+}
+
 // KeyValueStater wraps the Stat method of a backing data store.
 type KeyValueStater interface {
 	// Stat returns the statistic data of the database.
 	Stat() (string, error)
+}
+
+// KeyValueSyncer wraps the SyncKeyValue method of a backing data store.
+type KeyValueSyncer interface {
+	// SyncKeyValue ensures that all pending writes are flushed to disk,
+	// guaranteeing data durability up to the point.
+	SyncKeyValue() error
 }
 
 // Compacter wraps the Compact method of a backing data store.
@@ -61,6 +100,8 @@ type KeyValueStore interface {
 	KeyValueReader
 	KeyValueWriter
 	KeyValueStater
+	KeyValueSyncer
+	KeyValueRangeDeleter
 	Batcher
 	Iteratee
 	Compacter
@@ -69,10 +110,6 @@ type KeyValueStore interface {
 
 // AncientReaderOp contains the methods required to read from immutable ancient data.
 type AncientReaderOp interface {
-	// HasAncient returns an indicator whether the specified data exists in the
-	// ancient store.
-	HasAncient(kind string, number uint64) (bool, error)
-
 	// Ancient retrieves an ancient binary blob from the append-only immutable files.
 	Ancient(kind string, number uint64) ([]byte, error)
 
@@ -84,12 +121,19 @@ type AncientReaderOp interface {
 	//   - if maxBytes is not specified, 'count' items will be returned if they are present
 	AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error)
 
+	// AncientBytes retrieves the value segment of the element specified by the id
+	// and value offsets.
+	AncientBytes(kind string, id, offset, length uint64) ([]byte, error)
+
 	// Ancients returns the ancient item numbers in the ancient store.
 	Ancients() (uint64, error)
 
-	// Tail returns the number of first stored item in the ancient store.
-	// This number can also be interpreted as the total deleted items.
-	Tail() (uint64, error)
+	// Tail returns the lowest accessible item index for the given tail group.
+	// This number can also be interpreted as the total deleted items in the
+	// group. Tables sharing a group are pruned together and therefore agree
+	// on the value. An empty group name refers to non-prunable tables and
+	// always returns 0.
+	Tail(group string) (uint64, error)
 
 	// AncientSize returns the ancient size of the specified category.
 	AncientSize(kind string) (uint64, error)
@@ -111,19 +155,23 @@ type AncientWriter interface {
 	// The integer return value is the total size of the written data.
 	ModifyAncients(func(AncientWriteOp) error) (int64, error)
 
+	// SyncAncient flushes all in-memory ancient store data to disk.
+	SyncAncient() error
+
 	// TruncateHead discards all but the first n ancient data from the ancient store.
 	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
 	TruncateHead(n uint64) (uint64, error)
 
-	// TruncateTail discards the first n ancient data from the ancient store. The already
-	// deleted items are ignored. After the truncation, the earliest item can be accessed
-	// is item_n(start from 0). The deleted items may not be removed from the ancient store
-	// immediately, but only when the accumulated deleted data reach the threshold then
-	// will be removed all together.
-	TruncateTail(n uint64) (uint64, error)
-
-	// Sync flushes all in-memory ancient store data to disk.
-	Sync() error
+	// TruncateTail discards the first n items from every table belonging to
+	// the named tail group. Already-deleted items are ignored. After the
+	// truncation, the earliest accessible item in the group is item_n
+	// (starting from 0). Deleted items may not be removed from disk
+	// immediately, but only once the accumulated deleted data reaches the
+	// threshold, at which point they are removed all together.
+	//
+	// The previous tail of the group is returned. Tables outside the group
+	// (including non-prunable ones) are untouched.
+	TruncateTail(group string, n uint64) (uint64, error)
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.
@@ -154,25 +202,12 @@ type Reader interface {
 	AncientReader
 }
 
-// Writer contains the methods required to write data to both key-value as well as
-// immutable ancient data.
-type Writer interface {
-	KeyValueWriter
-	AncientWriter
-}
-
-// Stater contains the methods required to retrieve states from both key-value as well as
-// immutable ancient data.
-type Stater interface {
-	KeyValueStater
-	AncientStater
-}
-
 // AncientStore contains all the methods required to allow handling different
 // ancient data stores backing immutable data store.
 type AncientStore interface {
 	AncientReader
 	AncientWriter
+	AncientStater
 	io.Closer
 }
 
@@ -187,11 +222,6 @@ type ResettableAncientStore interface {
 // Database contains all the methods required by the high level database to not
 // only access the key-value data store but also the ancient chain store.
 type Database interface {
-	Reader
-	Writer
-	Batcher
-	Iteratee
-	Stater
-	Compacter
-	io.Closer
+	KeyValueStore
+	AncientStore
 }

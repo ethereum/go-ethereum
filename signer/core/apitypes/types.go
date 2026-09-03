@@ -108,6 +108,7 @@ type SendTxArgs struct {
 	BlobHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
 
 	// For BlobTxType transactions with blob sidecar
+	BlobVersion byte                 `json:"blobVersion,omitempty"`
 	Blobs       []kzg4844.Blob       `json:"blobs,omitempty"`
 	Commitments []kzg4844.Commitment `json:"commitments,omitempty"`
 	Proofs      []kzg4844.Proof      `json:"proofs,omitempty"`
@@ -150,6 +151,9 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 		if args.AccessList != nil {
 			al = *args.AccessList
 		}
+		if to == nil {
+			return nil, errors.New("transaction recipient must be set for blob transactions")
+		}
 		data = &types.BlobTx{
 			To:         *to,
 			ChainID:    uint256.MustFromBig((*big.Int)(args.ChainID)),
@@ -164,11 +168,11 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 			BlobFeeCap: uint256.MustFromBig((*big.Int)(args.BlobFeeCap)),
 		}
 		if args.Blobs != nil {
-			data.(*types.BlobTx).Sidecar = &types.BlobTxSidecar{
-				Blobs:       args.Blobs,
-				Commitments: args.Commitments,
-				Proofs:      args.Proofs,
+			version := types.BlobSidecarVersion0
+			if len(args.Proofs) == len(args.Blobs)*kzg4844.CellProofsPerBlob {
+				version = types.BlobSidecarVersion1
 			}
+			data.(*types.BlobTx).Sidecar = types.NewBlobTxSidecar(version, args.Blobs, args.Commitments, args.Proofs)
 		}
 
 	case args.MaxFeePerGas != nil:
@@ -219,7 +223,6 @@ func (args *SendTxArgs) validateTxSidecar() error {
 		return nil
 	}
 
-	n := len(args.Blobs)
 	// Assume user provides either only blobs (w/o hashes), or
 	// blobs together with commitments and proofs.
 	if args.Commitments == nil && args.Proofs != nil {
@@ -229,40 +232,62 @@ func (args *SendTxArgs) validateTxSidecar() error {
 	}
 
 	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
+	n := len(args.Blobs)
 	if args.Commitments != nil && len(args.Commitments) != n {
 		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
-	}
-	if args.Proofs != nil && len(args.Proofs) != n {
-		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), n)
 	}
 	if args.BlobHashes != nil && len(args.BlobHashes) != n {
 		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
 	}
-
+	if args.Proofs != nil {
+		if len(args.Proofs) == n {
+			// v1 transaction
+			for i := range args.Blobs {
+				if err := kzg4844.VerifyBlobProof(&args.Blobs[i], args.Commitments[i], args.Proofs[i]); err != nil {
+					return fmt.Errorf("failed to verify blob proof: %v", err)
+				}
+			}
+		} else if len(args.Proofs) == n*kzg4844.CellProofsPerBlob {
+			// v2 transaction
+			if err := kzg4844.VerifyCellProofs(args.Blobs, args.Commitments, args.Proofs); err != nil {
+				return fmt.Errorf("failed to verify blob proof: %v", err)
+			}
+		} else {
+			return fmt.Errorf("number of proofs and blobs mismatch (have=%d, want=%d or %d)", len(args.Proofs), n, n*kzg4844.CellProofsPerBlob)
+		}
+	}
 	if args.Commitments == nil {
 		// Generate commitment and proof.
 		commitments := make([]kzg4844.Commitment, n)
-		proofs := make([]kzg4844.Proof, n)
-		for i, b := range args.Blobs {
-			c, err := kzg4844.BlobToCommitment(&b)
+		for i := range args.Blobs {
+			c, err := kzg4844.BlobToCommitment(&args.Blobs[i])
 			if err != nil {
 				return fmt.Errorf("blobs[%d]: error computing commitment: %v", i, err)
 			}
 			commitments[i] = c
-			p, err := kzg4844.ComputeBlobProof(&b, c)
-			if err != nil {
-				return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
+		}
+		var proofs []kzg4844.Proof
+		if args.BlobVersion == types.BlobSidecarVersion1 {
+			proofs = make([]kzg4844.Proof, 0, n*kzg4844.CellProofsPerBlob)
+			for i := range args.Blobs {
+				p, err := kzg4844.ComputeCellProofs(&args.Blobs[i])
+				if err != nil {
+					return fmt.Errorf("blobs[%d]: error computing cell proof: %v", i, err)
+				}
+				proofs = append(proofs, p...)
 			}
-			proofs[i] = p
+		} else {
+			proofs = make([]kzg4844.Proof, 0, n)
+			for i := range args.Blobs {
+				p, err := kzg4844.ComputeBlobProof(&args.Blobs[i], commitments[i])
+				if err != nil {
+					return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
+				}
+				proofs = append(proofs, p)
+			}
 		}
 		args.Commitments = commitments
 		args.Proofs = proofs
-	} else {
-		for i, b := range args.Blobs {
-			if err := kzg4844.VerifyBlobProof(&b, args.Commitments[i], args.Proofs[i]); err != nil {
-				return fmt.Errorf("failed to verify blob proof: %v", err)
-			}
-		}
 	}
 
 	hashes := make([]common.Hash, n)
@@ -325,18 +350,17 @@ type Type struct {
 	Type string `json:"type"`
 }
 
+// isArray returns true if the type is a fixed or variable sized array.
+// This method may return false positives, in case the Type is not a valid
+// expression, e.g. "fooo[[[[".
 func (t *Type) isArray() bool {
-	return strings.HasSuffix(t.Type, "[]")
+	return strings.IndexByte(t.Type, '[') > 0
 }
 
-// typeName returns the canonical name of the type. If the type is 'Person[]', then
+// typeName returns the canonical name of the type. If the type is 'Person[]' or 'Person[2]', then
 // this method returns 'Person'
 func (t *Type) typeName() string {
-	if strings.Contains(t.Type, "[") {
-		re := regexp.MustCompile(`\[\d*\]`)
-		return re.ReplaceAllString(t.Type, "")
-	}
-	return t.Type
+	return strings.Split(t.Type, "[")[0]
 }
 
 type Types map[string][]Type
@@ -387,7 +411,7 @@ func (typedData *TypedData) HashStruct(primaryType string, data TypedDataMessage
 
 // Dependencies returns an array of custom types ordered by their hierarchical reference tree
 func (typedData *TypedData) Dependencies(primaryType string, found []string) []string {
-	primaryType = strings.TrimSuffix(primaryType, "[]")
+	primaryType = strings.Split(primaryType, "[")[0]
 
 	if slices.Contains(found, primaryType) {
 		return found
@@ -430,7 +454,9 @@ func (typedData *TypedData) EncodeType(primaryType string) hexutil.Bytes {
 			buffer.WriteString(obj.Name)
 			buffer.WriteString(",")
 		}
-		buffer.Truncate(buffer.Len() - 1)
+		if len(typedData.Types[dep]) > 0 {
+			buffer.Truncate(buffer.Len() - 1)
+		}
 		buffer.WriteString(")")
 	}
 	return buffer.Bytes()
@@ -465,34 +491,11 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 		encType := field.Type
 		encValue := data[field.Name]
 		if encType[len(encType)-1:] == "]" {
-			arrayValue, err := convertDataToSlice(encValue)
+			encodedData, err := typedData.encodeArrayValue(encValue, encType, depth)
 			if err != nil {
-				return nil, dataMismatchError(encType, encValue)
+				return nil, err
 			}
-
-			arrayBuffer := bytes.Buffer{}
-			parsedType := strings.Split(encType, "[")[0]
-			for _, item := range arrayValue {
-				if typedData.Types[parsedType] != nil {
-					mapValue, ok := item.(map[string]interface{})
-					if !ok {
-						return nil, dataMismatchError(parsedType, item)
-					}
-					encodedData, err := typedData.EncodeData(parsedType, mapValue, depth+1)
-					if err != nil {
-						return nil, err
-					}
-					arrayBuffer.Write(crypto.Keccak256(encodedData))
-				} else {
-					bytesValue, err := typedData.EncodePrimitiveValue(parsedType, item, depth)
-					if err != nil {
-						return nil, err
-					}
-					arrayBuffer.Write(bytesValue)
-				}
-			}
-
-			buffer.Write(crypto.Keccak256(arrayBuffer.Bytes()))
+			buffer.Write(encodedData)
 		} else if typedData.Types[field.Type] != nil {
 			mapValue, ok := encValue.(map[string]interface{})
 			if !ok {
@@ -514,12 +517,61 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 	return buffer.Bytes(), nil
 }
 
+func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType string, depth int) (hexutil.Bytes, error) {
+	arrayValue, err := convertDataToSlice(encValue)
+	if err != nil {
+		return nil, dataMismatchError(encType, encValue)
+	}
+
+	arrayBuffer := new(bytes.Buffer)
+	parsedType := strings.Split(encType, "[")[0]
+	for _, item := range arrayValue {
+		if reflect.TypeOf(item).Kind() == reflect.Slice ||
+			reflect.TypeOf(item).Kind() == reflect.Array {
+			var (
+				encodedData hexutil.Bytes
+				err         error
+			)
+			if reflect.TypeOf(item).Elem().Kind() == reflect.Uint8 {
+				// the item type is bytes.  encode the bytes array directly instead of recursing.
+				encodedData, err = typedData.EncodePrimitiveValue(parsedType, item, depth+1)
+			} else {
+				encodedData, err = typedData.encodeArrayValue(item, parsedType, depth+1)
+			}
+			if err != nil {
+				return nil, err
+			}
+			arrayBuffer.Write(encodedData)
+		} else {
+			if typedData.Types[parsedType] != nil {
+				mapValue, ok := item.(map[string]interface{})
+				if !ok {
+					return nil, dataMismatchError(parsedType, item)
+				}
+				encodedData, err := typedData.EncodeData(parsedType, mapValue, depth+1)
+				if err != nil {
+					return nil, err
+				}
+				digest := crypto.Keccak256(encodedData)
+				arrayBuffer.Write(digest)
+			} else {
+				bytesValue, err := typedData.EncodePrimitiveValue(parsedType, item, depth)
+				if err != nil {
+					return nil, err
+				}
+				arrayBuffer.Write(bytesValue)
+			}
+		}
+	}
+	return crypto.Keccak256(arrayBuffer.Bytes()), nil
+}
+
 // Attempt to parse bytes in different formats: byte array, hex string, hexutil.Bytes.
 func parseBytes(encType interface{}) ([]byte, bool) {
 	// Handle array types.
 	val := reflect.ValueOf(encType)
 	if val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 {
-		v := reflect.MakeSlice(reflect.TypeOf([]byte{}), val.Len(), val.Len())
+		v := reflect.ValueOf(make([]byte, val.Len()))
 		reflect.Copy(v, val)
 		return v.Bytes(), true
 	}
@@ -660,7 +712,7 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		if err != nil {
 			return nil, err
 		}
-		return math.U256Bytes(b), nil
+		return math.U256Bytes(new(big.Int).Set(b)), nil
 	}
 	return nil, fmt.Errorf("unrecognized type '%s'", encType)
 }
@@ -871,7 +923,8 @@ func init() {
 
 // Checks if the primitive value is valid
 func isPrimitiveTypeValid(primitiveType string) bool {
-	_, ok := validPrimitiveTypes[primitiveType]
+	input := strings.Split(primitiveType, "[")[0]
+	_, ok := validPrimitiveTypes[input]
 	return ok
 }
 

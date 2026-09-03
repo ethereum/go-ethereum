@@ -317,7 +317,6 @@ var encTests = []encTest{
 	{val: &optionalAndTailField{A: 1}, output: "C101"},
 	{val: &optionalAndTailField{A: 1, B: 2}, output: "C20102"},
 	{val: &optionalAndTailField{A: 1, Tail: []uint{5, 6}}, output: "C401800506"},
-	{val: &optionalAndTailField{A: 1, Tail: []uint{5, 6}}, output: "C401800506"},
 	{val: &optionalBigIntField{A: 1}, output: "C101"},
 	{val: &optionalPtrField{A: 1}, output: "C101"},
 	{val: &optionalPtrFieldNil{A: 1}, output: "C101"},
@@ -506,6 +505,39 @@ func TestEncodeToReaderReturnToPool(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestEncoderBufferSize(t *testing.T) {
+	var output bytes.Buffer
+	eb := NewEncoderBuffer(&output)
+
+	assertSize := func(state string, expectedSize int) {
+		t.Helper()
+		if s := eb.Size(); s != expectedSize {
+			t.Fatalf("wrong size %s: %d", state, s)
+		}
+	}
+
+	assertSize("empty buffer", 0)
+	outerList := eb.List()
+	assertSize("after outer List()", 0)
+	eb.WriteString("abc")
+	assertSize("after string write", 4)
+	innerList := eb.List()
+	assertSize("after inner List()", 4)
+	eb.WriteUint64(1)
+	eb.WriteUint64(2)
+	assertSize("after inner list writes", 6)
+	eb.ListEnd(innerList)
+	assertSize("after end of inner list", 7)
+	eb.ListEnd(outerList)
+	assertSize("after end of outer list", 8)
+	eb.Flush()
+	assertSize("after Flush()", 0)
+
+	if output.Len() != 8 {
+		t.Fatalf("wrong final output size %d", output.Len())
+	}
 }
 
 var sink interface{}

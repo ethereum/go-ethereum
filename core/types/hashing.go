@@ -25,12 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
-// hasherPool holds LegacyKeccak256 hashers for rlpHash.
+// hasherPool holds LegacyKeccak256 buffer for rlpHash.
 var hasherPool = sync.Pool{
-	New: func() interface{} { return sha3.NewLegacyKeccak256() },
+	New: func() interface{} { return crypto.NewKeccakState() },
 }
 
 // encodeBufferPool holds temporary encoder buffers for DeriveSha and TX encoding.
@@ -76,11 +75,17 @@ func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
 	return h
 }
 
-// TrieHasher is the tool used to calculate the hash of derivable list.
-// This is internal, do not use.
-type TrieHasher interface {
+// ListHasher defines the interface for computing the hash of a derivable list.
+type ListHasher interface {
+	// Reset clears the internal state of the hasher, preparing it for reuse.
 	Reset()
-	Update([]byte, []byte) error
+
+	// Update inserts the given key-value pair into the hasher.
+	// The implementation must copy the provided slices, allowing the caller
+	// to safely modify them after the call returns.
+	Update(key []byte, value []byte) error
+
+	// Hash computes and returns the final hash of all inserted key-value pairs.
 	Hash() common.Hash
 }
 
@@ -92,19 +97,20 @@ type DerivableList interface {
 	EncodeIndex(int, *bytes.Buffer)
 }
 
+// encodeForDerive encodes the element in the list at the position i into the buffer.
 func encodeForDerive(list DerivableList, i int, buf *bytes.Buffer) []byte {
 	buf.Reset()
 	list.EncodeIndex(i, buf)
-	// It's really unfortunate that we need to perform this copy.
-	// StackTrie holds onto the values until Hash is called, so the values
-	// written to it must not alias.
-	return common.CopyBytes(buf.Bytes())
+	return buf.Bytes()
 }
 
 // DeriveSha creates the tree hashes of transactions, receipts, and withdrawals in a block header.
-func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
+func DeriveSha(list DerivableList, hasher ListHasher) common.Hash {
 	hasher.Reset()
 
+	// Allocate a buffer for value encoding. As the hasher is claimed that all
+	// supplied key value pairs will be copied by hasher and safe to reuse the
+	// encoding buffer.
 	valueBuf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(valueBuf)
 

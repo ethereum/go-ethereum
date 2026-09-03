@@ -53,7 +53,7 @@ func ConvertType(in interface{}, proto interface{}) interface{} {
 // indirect recursively dereferences the value until it either gets the value
 // or finds a big.Int
 func indirect(v reflect.Value) reflect.Value {
-	if v.Kind() == reflect.Ptr && v.Elem().Type() != reflect.TypeOf(big.Int{}) {
+	if v.Kind() == reflect.Pointer && v.Elem().Type() != reflect.TypeFor[big.Int]() {
 		return indirect(v.Elem())
 	}
 	return v
@@ -65,32 +65,32 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 	if unsigned {
 		switch size {
 		case 8:
-			return reflect.TypeOf(uint8(0))
+			return reflect.TypeFor[uint8]()
 		case 16:
-			return reflect.TypeOf(uint16(0))
+			return reflect.TypeFor[uint16]()
 		case 32:
-			return reflect.TypeOf(uint32(0))
+			return reflect.TypeFor[uint32]()
 		case 64:
-			return reflect.TypeOf(uint64(0))
+			return reflect.TypeFor[uint64]()
 		}
 	}
 	switch size {
 	case 8:
-		return reflect.TypeOf(int8(0))
+		return reflect.TypeFor[int8]()
 	case 16:
-		return reflect.TypeOf(int16(0))
+		return reflect.TypeFor[int16]()
 	case 32:
-		return reflect.TypeOf(int32(0))
+		return reflect.TypeFor[int32]()
 	case 64:
-		return reflect.TypeOf(int64(0))
+		return reflect.TypeFor[int64]()
 	}
-	return reflect.TypeOf(&big.Int{})
+	return reflect.TypeFor[*big.Int]()
 }
 
 // mustArrayToByteSlice creates a new byte slice with the exact same size as value
 // and copies the bytes in value to the new slice.
 func mustArrayToByteSlice(value reflect.Value) reflect.Value {
-	slice := reflect.MakeSlice(reflect.TypeOf([]byte{}), value.Len(), value.Len())
+	slice := reflect.ValueOf(make([]byte, value.Len()))
 	reflect.Copy(slice, value)
 	return slice
 }
@@ -102,9 +102,9 @@ func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 func set(dst, src reflect.Value) error {
 	dstType, srcType := dst.Type(), src.Type()
 	switch {
-	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid() && (dst.Elem().Type().Kind() == reflect.Ptr || dst.Elem().CanSet()):
+	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid() && (dst.Elem().Type().Kind() == reflect.Pointer || dst.Elem().CanSet()):
 		return set(dst.Elem(), src)
-	case dstType.Kind() == reflect.Ptr && dstType.Elem() != reflect.TypeOf(big.Int{}):
+	case dstType.Kind() == reflect.Pointer && dstType.Elem() != reflect.TypeFor[big.Int]():
 		return set(dst.Elem(), src)
 	case srcType.AssignableTo(dstType) && dst.CanSet():
 		dst.Set(src)
@@ -138,7 +138,7 @@ func setSlice(dst, src reflect.Value) error {
 }
 
 func setArray(dst, src reflect.Value) error {
-	if src.Kind() == reflect.Ptr {
+	if src.Kind() == reflect.Pointer {
 		return set(dst, indirect(src))
 	}
 	array := reflect.New(dst.Type()).Elem()

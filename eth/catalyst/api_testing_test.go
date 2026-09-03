@@ -1,0 +1,250 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package catalyst
+
+import (
+	"context"
+	"math/big"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/beacon/engine"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
+)
+
+func TestBuildBlockV1(t *testing.T) {
+	genesis, blocks := generateMergeChain(5, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	parent := ethservice.BlockChain().CurrentBlock()
+	attrs := engine.PayloadAttributes{
+		Timestamp:             parent.Time + 1,
+		Random:                crypto.Keccak256Hash([]byte("test")),
+		SuggestedFeeRecipient: parent.Coinbase,
+		Withdrawals:           nil,
+		BeaconRoot:            nil,
+	}
+
+	currentNonce, _ := ethservice.APIBackend.GetPoolNonce(context.Background(), testAddr)
+	tx, _ := types.SignTx(types.NewTransaction(currentNonce, testAddr, big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+
+	api := &testingAPI{eth: ethservice}
+
+	t.Run("buildOnCurrentHead", func(t *testing.T) {
+		envelope, err := api.BuildBlockV1(parent.Hash(), attrs, nil, nil)
+		if err != nil {
+			t.Fatalf("BuildBlockV1 failed: %v", err)
+		}
+		if envelope == nil || envelope.ExecutionPayload == nil {
+			t.Fatal("expected non-nil envelope and payload")
+		}
+		payload := envelope.ExecutionPayload
+		if payload.ParentHash != parent.Hash() {
+			t.Errorf("parent hash mismatch: got %x want %x", payload.ParentHash, parent.Hash())
+		}
+		if payload.Number != parent.Number.Uint64()+1 {
+			t.Errorf("block number mismatch: got %d want %d", payload.Number, parent.Number.Uint64()+1)
+		}
+		if payload.Timestamp != attrs.Timestamp {
+			t.Errorf("timestamp mismatch: got %d want %d", payload.Timestamp, attrs.Timestamp)
+		}
+		if payload.FeeRecipient != attrs.SuggestedFeeRecipient {
+			t.Errorf("fee recipient mismatch: got %x want %x", payload.FeeRecipient, attrs.SuggestedFeeRecipient)
+		}
+	})
+
+	t.Run("wrongParentHash", func(t *testing.T) {
+		wrongParent := common.Hash{0x01}
+		_, err := api.BuildBlockV1(wrongParent, attrs, nil, nil)
+		if err == nil {
+			t.Fatal("expected error when parentHash is not current head")
+		}
+		if err.Error() != "parentHash is not current head" {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("buildEmptyBlock", func(t *testing.T) {
+		emptyTxs := []hexutil.Bytes{}
+		envelope, err := api.BuildBlockV1(parent.Hash(), attrs, &emptyTxs, nil)
+		if err != nil {
+			t.Fatalf("BuildBlockV1 with empty txs failed: %v", err)
+		}
+		if envelope == nil || envelope.ExecutionPayload == nil {
+			t.Fatal("expected non-nil envelope and payload")
+		}
+		if len(envelope.ExecutionPayload.Transactions) != 0 {
+			t.Errorf("expected empty block, got %d transactions", len(envelope.ExecutionPayload.Transactions))
+		}
+	})
+
+	t.Run("buildBlockWithTransactions", func(t *testing.T) {
+		enc, _ := tx.MarshalBinary()
+		txs := []hexutil.Bytes{enc}
+		envelope, err := api.BuildBlockV1(parent.Hash(), attrs, &txs, nil)
+		if err != nil {
+			t.Fatalf("BuildBlockV1 with transaction failed: %v", err)
+		}
+		if len(envelope.ExecutionPayload.Transactions) != 1 {
+			t.Errorf("expected 1 transaction, got %d", len(envelope.ExecutionPayload.Transactions))
+		}
+	})
+
+	t.Run("buildBlockWithTransactionsFromTxPool", func(t *testing.T) {
+		ethservice.TxPool().Add([]*types.Transaction{tx}, true)
+		envelope, err := api.BuildBlockV1(parent.Hash(), attrs, nil, nil)
+		if err != nil {
+			t.Fatalf("BuildBlockV1 with transaction failed: %v", err)
+		}
+		if len(envelope.ExecutionPayload.Transactions) != 1 {
+			t.Errorf("expected 1 transaction, got %d", len(envelope.ExecutionPayload.Transactions))
+		}
+	})
+}
+
+func TestBuildBlockV1TargetGasLimit(t *testing.T) {
+	genesis, blocks := generateMergeChain(5, true)
+
+	time := blocks[len(blocks)-1].Time() + 5
+	genesis.Config.ShanghaiTime = &time
+	genesis.Config.CancunTime = &time
+	genesis.Config.PragueTime = &time
+	genesis.Config.OsakaTime = &time
+	genesis.Config.AmsterdamTime = &time
+	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	var (
+		api        = &testingAPI{eth: ethservice}
+		parent     = ethservice.BlockChain().CurrentBlock()
+		beaconRoot = common.Hash{42}
+		slot       = uint64(1)
+		// Within the per-block adjustment bound, so the built block
+		// must hit the target exactly.
+		target = parent.GasLimit - 1000
+	)
+	attrs := engine.PayloadAttributes{
+		Timestamp:             parent.Time + 5,
+		Random:                crypto.Keccak256Hash([]byte("test")),
+		SuggestedFeeRecipient: parent.Coinbase,
+		Withdrawals:           make([]*types.Withdrawal, 0),
+		BeaconRoot:            &beaconRoot,
+		SlotNumber:            &slot,
+		TargetGasLimit:        &target,
+	}
+	emptyTxs := []hexutil.Bytes{}
+	envelope, err := api.BuildBlockV1(parent.Hash(), attrs, &emptyTxs, nil)
+	if err != nil {
+		t.Fatalf("BuildBlockV1 failed: %v", err)
+	}
+	if got := envelope.ExecutionPayload.GasLimit; got != target {
+		t.Errorf("gas limit mismatch: got %d want %d", got, target)
+	}
+}
+
+func TestCommitBlockV1(t *testing.T) {
+	genesis, blocks := generateMergeChain(5, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := &testingAPI{eth: ethservice}
+	ctx := context.Background()
+
+	nextAttrs := func() engine.PayloadAttributes {
+		head := ethservice.BlockChain().CurrentBlock()
+		return engine.PayloadAttributes{
+			Timestamp:             head.Time + 1,
+			Random:                crypto.Keccak256Hash([]byte("commit-test")),
+			SuggestedFeeRecipient: head.Coinbase,
+		}
+	}
+
+	t.Run("commitEmptyBlock", func(t *testing.T) {
+		parent := ethservice.BlockChain().CurrentBlock()
+		emptyTxs := []hexutil.Bytes{}
+		hash, err := api.CommitBlockV1(ctx, nextAttrs(), &emptyTxs, nil)
+		if err != nil {
+			t.Fatalf("CommitBlockV1 failed: %v", err)
+		}
+		head := ethservice.BlockChain().CurrentBlock()
+		if head.Hash() != hash {
+			t.Errorf("head hash mismatch: got %x want %x", head.Hash(), hash)
+		}
+		if head.Number.Uint64() != parent.Number.Uint64()+1 {
+			t.Errorf("head number mismatch: got %d want %d", head.Number.Uint64(), parent.Number.Uint64()+1)
+		}
+		block := ethservice.BlockChain().GetBlockByHash(hash)
+		if block == nil {
+			t.Fatal("committed block not found in chain")
+		}
+		if len(block.Transactions()) != 0 {
+			t.Errorf("expected empty block, got %d transactions", len(block.Transactions()))
+		}
+	})
+
+	t.Run("commitBlockWithTransactions", func(t *testing.T) {
+		parent := ethservice.BlockChain().CurrentBlock()
+		nonce, _ := ethservice.APIBackend.GetPoolNonce(ctx, testAddr)
+		tx, _ := types.SignTx(types.NewTransaction(nonce, testAddr, big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+		enc, _ := tx.MarshalBinary()
+		txs := []hexutil.Bytes{enc}
+
+		hash, err := api.CommitBlockV1(ctx, nextAttrs(), &txs, nil)
+		if err != nil {
+			t.Fatalf("CommitBlockV1 failed: %v", err)
+		}
+		head := ethservice.BlockChain().CurrentBlock()
+		if head.Hash() != hash {
+			t.Errorf("head hash mismatch: got %x want %x", head.Hash(), hash)
+		}
+		if head.Number.Uint64() != parent.Number.Uint64()+1 {
+			t.Errorf("head number mismatch: got %d want %d", head.Number.Uint64(), parent.Number.Uint64()+1)
+		}
+		block := ethservice.BlockChain().GetBlockByHash(hash)
+		if block == nil {
+			t.Fatal("committed block not found in chain")
+		}
+		if len(block.Transactions()) != 1 {
+			t.Fatalf("expected 1 transaction, got %d", len(block.Transactions()))
+		}
+		if block.Transactions()[0].Hash() != tx.Hash() {
+			t.Errorf("transaction hash mismatch: got %x want %x", block.Transactions()[0].Hash(), tx.Hash())
+		}
+	})
+
+	t.Run("commitWithExtraData", func(t *testing.T) {
+		extra := hexutil.Bytes([]byte("hello"))
+		emptyTxs := []hexutil.Bytes{}
+		hash, err := api.CommitBlockV1(ctx, nextAttrs(), &emptyTxs, &extra)
+		if err != nil {
+			t.Fatalf("CommitBlockV1 failed: %v", err)
+		}
+		block := ethservice.BlockChain().GetBlockByHash(hash)
+		if block == nil {
+			t.Fatal("committed block not found in chain")
+		}
+		if string(block.Extra()) != "hello" {
+			t.Errorf("extraData mismatch: got %q want %q", block.Extra(), "hello")
+		}
+	})
+}

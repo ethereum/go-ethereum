@@ -22,10 +22,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -47,7 +47,9 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 	// Create an empty state
 	config := &triedb.Config{Preimages: true}
 	if scheme == rawdb.PathScheme {
-		config.PathDB = pathdb.Defaults
+		pconfig := *pathdb.Defaults
+		pconfig.NoAsyncFlush = true
+		config.PathDB = &pconfig
 	} else {
 		config.HashDB = hashdb.Defaults
 	}
@@ -62,7 +64,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 		obj := state.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
 
-		obj.AddBalance(uint256.NewInt(uint64(11*i)), tracing.BalanceChangeUnspecified)
+		obj.AddBalance(uint256.NewInt(uint64(11 * i)))
 		acc.balance = uint256.NewInt(uint64(11 * i))
 
 		obj.SetNonce(uint64(42 * i))
@@ -80,7 +82,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 		}
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit(0, false)
+	root, _ := state.Commit(params.Rules{}, 0)
 
 	// Return the generated state
 	return db, sdb, nodeDb, root, accounts
@@ -211,14 +213,18 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool, s
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
+	cReader, err := srcDb.Reader(srcRoot)
+	if err != nil {
+		t.Fatalf("state is not existent, %#x", srcRoot)
+	}
 	for len(nodeElements)+len(codeElements) > 0 {
 		var (
 			nodeResults = make([]trie.NodeSyncResult, len(nodeElements))
 			codeResults = make([]trie.CodeSyncResult, len(codeElements))
 		)
 		for i, element := range codeElements {
-			data, err := srcDb.ContractCode(common.Address{}, element.code)
-			if err != nil {
+			data := cReader.Code(common.Address{}, element.code)
+			if len(data) == 0 {
 				t.Fatalf("failed to retrieve contract bytecode for hash %x", element.code)
 			}
 			codeResults[i] = trie.CodeSyncResult{Hash: element.code, Data: data}
@@ -330,6 +336,10 @@ func testIterativeDelayedStateSync(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
+	cReader, err := srcDb.Reader(srcRoot)
+	if err != nil {
+		t.Fatalf("state is not existent, %#x", srcRoot)
+	}
 	for len(nodeElements)+len(codeElements) > 0 {
 		// Sync only half of the scheduled nodes
 		var nodeProcessed int
@@ -337,8 +347,8 @@ func testIterativeDelayedStateSync(t *testing.T, scheme string) {
 		if len(codeElements) > 0 {
 			codeResults := make([]trie.CodeSyncResult, len(codeElements)/2+1)
 			for i, element := range codeElements[:len(codeResults)] {
-				data, err := srcDb.ContractCode(common.Address{}, element.code)
-				if err != nil {
+				data := cReader.Code(common.Address{}, element.code)
+				if len(data) == 0 {
 					t.Fatalf("failed to retrieve contract bytecode for %x", element.code)
 				}
 				codeResults[i] = trie.CodeSyncResult{Hash: element.code, Data: data}
@@ -434,13 +444,17 @@ func testIterativeRandomStateSync(t *testing.T, count int, scheme string) {
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
+	cReader, err := srcDb.Reader(srcRoot)
+	if err != nil {
+		t.Fatalf("state is not existent, %#x", srcRoot)
+	}
 	for len(nodeQueue)+len(codeQueue) > 0 {
 		// Fetch all the queued nodes in a random order
 		if len(codeQueue) > 0 {
 			results := make([]trie.CodeSyncResult, 0, len(codeQueue))
 			for hash := range codeQueue {
-				data, err := srcDb.ContractCode(common.Address{}, hash)
-				if err != nil {
+				data := cReader.Code(common.Address{}, hash)
+				if len(data) == 0 {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
 				results = append(results, trie.CodeSyncResult{Hash: hash, Data: data})
@@ -527,6 +541,10 @@ func testIterativeRandomDelayedStateSync(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
+	cReader, err := srcDb.Reader(srcRoot)
+	if err != nil {
+		t.Fatalf("state is not existent, %#x", srcRoot)
+	}
 	for len(nodeQueue)+len(codeQueue) > 0 {
 		// Sync only half of the scheduled nodes, even those in random order
 		if len(codeQueue) > 0 {
@@ -534,8 +552,8 @@ func testIterativeRandomDelayedStateSync(t *testing.T, scheme string) {
 			for hash := range codeQueue {
 				delete(codeQueue, hash)
 
-				data, err := srcDb.ContractCode(common.Address{}, hash)
-				if err != nil {
+				data := cReader.Code(common.Address{}, hash)
+				if len(data) == 0 {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
 				results = append(results, trie.CodeSyncResult{Hash: hash, Data: data})
@@ -632,6 +650,10 @@ func testIncompleteStateSync(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatalf("state is not available %x", srcRoot)
 	}
+	cReader, err := srcDb.Reader(srcRoot)
+	if err != nil {
+		t.Fatalf("state is not existent, %#x", srcRoot)
+	}
 	nodeQueue := make(map[string]stateElement)
 	codeQueue := make(map[common.Hash]struct{})
 	paths, nodes, codes := sched.Missing(1)
@@ -650,8 +672,8 @@ func testIncompleteStateSync(t *testing.T, scheme string) {
 		if len(codeQueue) > 0 {
 			results := make([]trie.CodeSyncResult, 0, len(codeQueue))
 			for hash := range codeQueue {
-				data, err := srcDb.ContractCode(common.Address{}, hash)
-				if err != nil {
+				data := cReader.Code(common.Address{}, hash)
+				if len(data) == 0 {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
 				results = append(results, trie.CodeSyncResult{Hash: hash, Data: data})
@@ -714,6 +736,11 @@ func testIncompleteStateSync(t *testing.T, scheme string) {
 	// Sanity check that removing any node from the database is detected
 	for _, node := range addedCodes {
 		val := rawdb.ReadCode(dstDb, node)
+		if len(val) == 0 {
+			t.Logf("no code: %v", node)
+		} else {
+			t.Logf("has code: %v", node)
+		}
 		rawdb.DeleteCode(dstDb, node)
 		if err := checkStateConsistency(dstDb, ndb.Scheme(), srcRoot); err == nil {
 			t.Errorf("trie inconsistency not caught, missing: %x", node)

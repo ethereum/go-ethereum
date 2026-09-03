@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
 package ethtest
 
 import (
@@ -31,8 +32,12 @@ const (
 // Unexported devp2p protocol lengths from p2p package.
 const (
 	baseProtoLen = 16
-	ethProtoLen  = 17
-	snapProtoLen = 8
+	ethProtoLen  = 22
+	// snapProtoLen accommodates snap/2 (EIP-8189) which extends snap/1 with two
+	// additional message codes (GetBlockAccessLists=0x08, BlockAccessLists=0x09).
+	// Using 10 is safe for snap/1 connections because the extra codes are simply
+	// never used on that protocol version.
+	snapProtoLen = 10
 )
 
 // Unexported handshake structure from p2p/peer.go.

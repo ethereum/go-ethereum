@@ -17,6 +17,8 @@
 package core
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
@@ -36,11 +38,11 @@ import (
 // need the other side to explicitly check.
 //
 // This method is a bit of a sore thumb here, but:
-//   - It cannot be placed in core/stateless, because state.New prodces a circular dep
+//   - It cannot be placed in core/stateless, because state.New produces a circular dep
 //   - It cannot be placed outside of core, because it needs to construct a dud headerchain
 //
 // TODO(karalabe): Would be nice to resolve both issues above somehow and move it.
-func ExecuteStateless(config *params.ChainConfig, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
+func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig vm.Config, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
 	// Sanity check if the supplied block accidentally contains a set root or
 	// receipt hash. If so, be very loud, but still continue.
 	if block.Root() != (common.Hash{}) {
@@ -51,7 +53,7 @@ func ExecuteStateless(config *params.ChainConfig, block *types.Block, witness *s
 	}
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
-	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), nil))
+	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), state.NewCodeDB(memdb)))
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
@@ -62,11 +64,11 @@ func ExecuteStateless(config *params.ChainConfig, block *types.Block, witness *s
 		headerCache: lru.NewCache[common.Hash, *types.Header](256),
 		engine:      beacon.New(ethash.NewFaker()),
 	}
-	processor := NewStateProcessor(config, chain)
+	processor := NewStateProcessor(chain)
 	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
 
 	// Run the stateless blocks processing and self-validate certain fields
-	res, err := processor.Process(block, db, vm.Config{})
+	res, err := processor.Process(ctx, block, db, nil, nil, vmconfig, nil)
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
@@ -75,6 +77,6 @@ func ExecuteStateless(config *params.ChainConfig, block *types.Block, witness *s
 	}
 	// Almost everything validated, but receipt and state root needs to be returned
 	receiptRoot := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
-	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
+	stateRoot := db.IntermediateRoot(config.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time()))
 	return stateRoot, receiptRoot, nil
 }

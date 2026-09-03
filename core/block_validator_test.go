@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -28,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -50,8 +50,12 @@ func testHeaderVerification(t *testing.T, scheme string) {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+	options := DefaultConfig().WithStateScheme(scheme)
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, ethash.NewFaker(), options)
 	defer chain.Stop()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := 0; i < len(blocks); i++ {
 		for j, valid := range []bool{true, false} {
@@ -113,8 +117,12 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		}
 		copy(gspec.ExtraData[32:], addr[:])
 
+		// chain_maker has no blockchain to retrieve the TTD from, setting to nil
+		// is a hack to signal it to generate pre-merge blocks
+		gspec.Config.TerminalTotalDifficulty = nil
 		td := 0
 		genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
+
 		for i, block := range blocks {
 			header := block.Header()
 			if i > 0 {
@@ -145,7 +153,6 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		}
 		preBlocks = blocks
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		t.Logf("Set ttd to %v\n", gspec.Config.TerminalTotalDifficulty)
 		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, func(i int, gen *BlockGen) {
 			gen.SetPoS()
 		})
@@ -160,8 +167,11 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		postHeaders[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil)
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)
 	defer chain.Stop()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify the blocks before the merging
 	for i := 0; i < len(preBlocks); i++ {
@@ -201,7 +211,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			t.Fatalf("post-block %d: unexpected result returned: %v", i, result)
 		case <-time.After(25 * time.Millisecond):
 		}
-		chain.InsertBlockWithoutSetHead(postBlocks[i], false)
+		chain.InsertBlockWithoutSetHead(context.Background(), postBlocks[i], false)
 	}
 
 	// Verify the blocks with pre-merge blocks and post-merge blocks

@@ -9,23 +9,23 @@ import (
 	"time"
 )
 
-// Output each metric in the given registry to syslog periodically using
+// Syslog outputs each metric in the given registry to syslog periodically using
 // the given syslogger.
 func Syslog(r Registry, d time.Duration, w *syslog.Writer) {
 	for range time.Tick(d) {
 		r.Each(func(name string, i interface{}) {
 			switch metric := i.(type) {
-			case Counter:
+			case *Counter:
 				w.Info(fmt.Sprintf("counter %s: count: %d", name, metric.Snapshot().Count()))
-			case CounterFloat64:
+			case *CounterFloat64:
 				w.Info(fmt.Sprintf("counter %s: count: %f", name, metric.Snapshot().Count()))
-			case Gauge:
+			case *Gauge:
 				w.Info(fmt.Sprintf("gauge %s: value: %d", name, metric.Snapshot().Value()))
-			case GaugeFloat64:
+			case *GaugeFloat64:
 				w.Info(fmt.Sprintf("gauge %s: value: %f", name, metric.Snapshot().Value()))
-			case GaugeInfo:
+			case *GaugeInfo:
 				w.Info(fmt.Sprintf("gauge %s: value: %s", name, metric.Snapshot().Value()))
-			case Healthcheck:
+			case *Healthcheck:
 				metric.Check()
 				w.Info(fmt.Sprintf("healthcheck %s: error: %v", name, metric.Error()))
 			case Histogram:
@@ -45,7 +45,7 @@ func Syslog(r Registry, d time.Duration, w *syslog.Writer) {
 					ps[3],
 					ps[4],
 				))
-			case Meter:
+			case *Meter:
 				m := metric.Snapshot()
 				w.Info(fmt.Sprintf(
 					"meter %s: count: %d 1-min: %.2f 5-min: %.2f 15-min: %.2f mean: %.2f",
@@ -56,7 +56,7 @@ func Syslog(r Registry, d time.Duration, w *syslog.Writer) {
 					m.Rate15(),
 					m.RateMean(),
 				))
-			case Timer:
+			case *Timer:
 				t := metric.Snapshot()
 				ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 				w.Info(fmt.Sprintf(

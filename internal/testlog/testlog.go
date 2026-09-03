@@ -22,8 +22,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
-	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -32,12 +32,21 @@ const (
 	termTimeFormat = "01-02|15:04:05.000"
 )
 
+// T wraps methods from testing.T used by the test logger into an interface.
+// It is specified so that unit tests can instantiate the logger with an
+// implementation of T which can capture the output of logging statements
+// from T.Logf, as this cannot be using testing.T.
+type T interface {
+	Logf(format string, args ...any)
+	Helper()
+}
+
 // logger implements log.Logger such that all output goes to the unit test log via
 // t.Logf(). All methods in between logger.Trace, logger.Debug, etc. are marked as test
 // helpers, so the file and line number in unit test output correspond to the call site
 // which emitted the log message.
 type logger struct {
-	t  *testing.T
+	t  T
 	l  log.Logger
 	mu *sync.Mutex
 	h  *bufHandler
@@ -68,7 +77,7 @@ func (h *bufHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	copy(records[:], h.buf[:])
 	return &bufHandler{
 		buf:   records,
-		attrs: append(h.attrs, attrs...),
+		attrs: append(slices.Clone(h.attrs), attrs...),
 		level: h.level,
 	}
 }
@@ -78,7 +87,7 @@ func (h *bufHandler) WithGroup(_ string) slog.Handler {
 }
 
 // Logger returns a logger which logs to the unit test log of t.
-func Logger(t *testing.T, level slog.Level) log.Logger {
+func Logger(t T, level slog.Level) log.Logger {
 	handler := bufHandler{
 		buf:   []slog.Record{},
 		attrs: []slog.Attr{},
@@ -89,17 +98,6 @@ func Logger(t *testing.T, level slog.Level) log.Logger {
 		l:  log.NewLogger(&handler),
 		mu: new(sync.Mutex),
 		h:  &handler,
-	}
-}
-
-// LoggerWithHandler returns
-func LoggerWithHandler(t *testing.T, handler slog.Handler) log.Logger {
-	var bh bufHandler
-	return &logger{
-		t:  t,
-		l:  log.NewLogger(handler),
-		mu: new(sync.Mutex),
-		h:  &bh,
 	}
 }
 
@@ -170,7 +168,8 @@ func (l *logger) Crit(msg string, ctx ...interface{}) {
 }
 
 func (l *logger) With(ctx ...interface{}) log.Logger {
-	return &logger{l.t, l.l.With(ctx...), l.mu, l.h}
+	newLogger := l.l.With(ctx...)
+	return &logger{l.t, newLogger, l.mu, newLogger.Handler().(*bufHandler)}
 }
 
 func (l *logger) New(ctx ...interface{}) log.Logger {
@@ -188,7 +187,7 @@ func (h *bufHandler) terminalFormat(r slog.Record) string {
 		return true
 	})
 
-	attrs = append(h.attrs, attrs...)
+	attrs = append(slices.Clone(h.attrs), attrs...)
 
 	fmt.Fprintf(buf, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Message)
 	if length := len(r.Message); length < 40 {

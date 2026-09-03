@@ -78,17 +78,23 @@ func (q *receiptQueue) request(peer *peerConnection, req *fetchRequest, resCh ch
 	if q.receiptFetchHook != nil {
 		q.receiptFetchHook(req.Headers)
 	}
-	hashes := make([]common.Hash, 0, len(req.Headers))
+	var (
+		gasUsed    = make([]uint64, 0, len(req.Headers))
+		timestamps = make([]uint64, 0, len(req.Headers))
+		hashes     = make([]common.Hash, 0, len(req.Headers))
+	)
 	for _, header := range req.Headers {
 		hashes = append(hashes, header.Hash())
+		gasUsed = append(gasUsed, header.GasUsed)
+		timestamps = append(timestamps, header.Time)
 	}
-	return peer.peer.RequestReceipts(hashes, resCh)
+	return peer.peer.RequestReceipts(hashes, gasUsed, timestamps, resCh)
 }
 
 // deliver is responsible for taking a generic response packet from the concurrent
 // fetcher, unpacking the receipt data and delivering it to the downloader's queue.
 func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int, error) {
-	receipts := *packet.Res.(*eth.ReceiptsResponse)
+	receipts := *packet.Res.(*eth.ReceiptsRLPResponse)
 	hashes := packet.Meta.([]common.Hash) // {receipt hashes}
 
 	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes)

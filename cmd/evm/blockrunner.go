@@ -17,84 +17,133 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"regexp"
-	"sort"
+	"slices"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
 
-var RunFlag = &cli.StringFlag{
-	Name:  "run",
-	Value: ".*",
-	Usage: "Run only those tests matching the regular expression.",
-}
-
 var blockTestCommand = &cli.Command{
 	Action:    blockTestCmd,
 	Name:      "blocktest",
-	Usage:     "Executes the given blockchain tests",
-	ArgsUsage: "<file>",
-	Flags:     []cli.Flag{RunFlag},
+	Usage:     "Executes the given blockchain tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
+	ArgsUsage: "<path>",
+	Flags: slices.Concat([]cli.Flag{
+		DumpFlag,
+		HumanReadableFlag,
+		RunFlag,
+		WitnessCrossCheckFlag,
+		FuzzFlag,
+	}, traceFlags),
 }
 
 func blockTestCmd(ctx *cli.Context) error {
-	if len(ctx.Args().First()) == 0 {
-		return errors.New("path-to-test argument required")
-	}
+	path := ctx.Args().First()
 
-	var tracer *tracing.Hooks
-	// Configure the EVM logger
-	if ctx.Bool(MachineFlag.Name) {
-		tracer = logger.NewJSONLogger(&logger.Config{
-			EnableMemory:     !ctx.Bool(DisableMemoryFlag.Name),
-			DisableStack:     ctx.Bool(DisableStackFlag.Name),
-			DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
-			EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
-		}, os.Stderr)
+	// If path is provided, run the tests at that path.
+	if len(path) != 0 {
+		var (
+			collected = collectFiles(path)
+			results   []testResult
+		)
+		for _, fname := range collected {
+			r, err := runBlockTest(ctx, fname)
+			if err != nil {
+				return err
+			}
+			results = append(results, r...)
+		}
+		report(ctx, results)
+		return nil
 	}
-	// Load the test content from the input file
-	src, err := os.ReadFile(ctx.Args().First())
+	// Otherwise, read filenames from stdin and execute back-to-back.
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		fname := scanner.Text()
+		if len(fname) == 0 {
+			return nil
+		}
+		results, err := runBlockTest(ctx, fname)
+		if err != nil {
+			return err
+		}
+		// During fuzzing, we report the result after every block
+		if !ctx.Bool(FuzzFlag.Name) {
+			report(ctx, results)
+		}
+	}
+	return nil
+}
+
+func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
+	src, err := os.ReadFile(fname)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var tests map[string]tests.BlockTest
+	var tests map[string]*tests.BlockTest
 	if err = json.Unmarshal(src, &tests); err != nil {
-		return err
+		return nil, err
 	}
 	re, err := regexp.Compile(ctx.String(RunFlag.Name))
 	if err != nil {
-		return fmt.Errorf("invalid regex -%s: %v", RunFlag.Name, err)
+		return nil, fmt.Errorf("invalid regex -%s: %v", RunFlag.Name, err)
+	}
+	tracer := tracerFromFlags(ctx)
+
+	// Suppress INFO logs during fuzzing
+	if ctx.Bool(FuzzFlag.Name) {
+		log.SetDefault(log.NewLogger(log.DiscardHandler()))
 	}
 
-	// Run them in order
-	var keys []string
-	for key := range tests {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	// Pull out keys to sort and ensure tests are run in order.
+	keys := slices.Sorted(maps.Keys(tests))
+
+	// Run all the tests.
+	var results []testResult
 	for _, name := range keys {
 		if !re.MatchString(name) {
 			continue
 		}
 		test := tests[name]
-		if err := test.Run(false, rawdb.HashScheme, false, tracer, func(res error, chain *core.BlockChain) {
+		result := &testResult{Name: name, Pass: true}
+		var finalRoot *common.Hash
+		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
-				if state, _ := chain.State(); state != nil {
-					fmt.Println(string(state.Dump(nil)))
+				if s, _ := chain.State(); s != nil {
+					result.State = dump(s)
 				}
 			}
+			// Capture final state root for end marker
+			if chain != nil {
+				root := chain.CurrentBlock().Root
+				finalRoot = &root
+			}
 		}); err != nil {
-			return fmt.Errorf("test %v: %w", name, err)
+			result.Pass, result.Error = false, err.Error()
 		}
+
+		// Always assign fork (regardless of pass/fail or tracer)
+		result.Fork = test.Network()
+		// Assign root if test succeeded
+		if result.Pass && finalRoot != nil {
+			result.Root = finalRoot
+		}
+
+		// When fuzzing, write results after every block
+		if ctx.Bool(FuzzFlag.Name) {
+			report(ctx, []testResult{*result})
+		}
+		results = append(results, *result)
 	}
-	return nil
+	return results, nil
 }

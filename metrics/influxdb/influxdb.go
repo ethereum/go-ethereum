@@ -8,31 +8,31 @@ import (
 
 func readMeter(namespace, name string, i interface{}) (string, map[string]interface{}) {
 	switch metric := i.(type) {
-	case metrics.Counter:
+	case *metrics.Counter:
 		measurement := fmt.Sprintf("%s%s.count", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Count(),
 		}
 		return measurement, fields
-	case metrics.CounterFloat64:
+	case *metrics.CounterFloat64:
 		measurement := fmt.Sprintf("%s%s.count", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Count(),
 		}
 		return measurement, fields
-	case metrics.Gauge:
+	case *metrics.Gauge:
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Value(),
 		}
 		return measurement, fields
-	case metrics.GaugeFloat64:
+	case *metrics.GaugeFloat64:
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Value(),
 		}
 		return measurement, fields
-	case metrics.GaugeInfo:
+	case *metrics.GaugeInfo:
 		ms := metric.Snapshot()
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
 		fields := map[string]interface{}{
@@ -62,7 +62,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"p9999":    ps[6],
 		}
 		return measurement, fields
-	case metrics.Meter:
+	case *metrics.Meter:
 		ms := metric.Snapshot()
 		measurement := fmt.Sprintf("%s%s.meter", namespace, name)
 		fields := map[string]interface{}{
@@ -73,7 +73,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"mean":  ms.RateMean(),
 		}
 		return measurement, fields
-	case metrics.Timer:
+	case *metrics.Timer:
 		ms := metric.Snapshot()
 		ps := ms.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
 
@@ -97,7 +97,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"meanrate": ms.RateMean(),
 		}
 		return measurement, fields
-	case metrics.ResettingTimer:
+	case *metrics.ResettingTimer:
 		ms := metric.Snapshot()
 		if ms.Count() == 0 {
 			break

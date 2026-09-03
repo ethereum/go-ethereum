@@ -27,10 +27,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
+	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
 
@@ -64,12 +67,10 @@ func (r *result) MarshalJSON() ([]byte, error) {
 }
 
 func Transaction(ctx *cli.Context) error {
-	var (
-		err error
-	)
 	// We need to load the transactions. May be either in stdin input or in files.
 	// Check if anything needs to be read from stdin
 	var (
+		err         error
 		txStr       = ctx.String(InputTxsFlag.Name)
 		inputData   = &input{}
 		chainConfig *params.ChainConfig
@@ -82,6 +83,7 @@ func Transaction(ctx *cli.Context) error {
 	}
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
+
 	var body hexutil.Bytes
 	if txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
@@ -107,6 +109,7 @@ func Transaction(ctx *cli.Context) error {
 		}
 	}
 	signer := types.MakeSigner(chainConfig, new(big.Int), 0)
+
 	// We now have the transactions in 'body', which is supposed to be an
 	// rlp list of transactions
 	it, err := rlp.NewListIterator([]byte(body))
@@ -115,9 +118,6 @@ func Transaction(ctx *cli.Context) error {
 	}
 	var results []result
 	for it.Next() {
-		if err := it.Err(); err != nil {
-			return NewError(ErrorIO, err)
-		}
 		var tx types.Transaction
 		err := rlp.DecodeBytes(it.Value(), &tx)
 		if err != nil {
@@ -133,15 +133,35 @@ func Transaction(ctx *cli.Context) error {
 			r.Address = sender
 		}
 		// Check intrinsic gas
-		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
-			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), chainConfig.IsShanghai(new(big.Int), 0)); err != nil {
+		value, overflow := uint256.FromBig(tx.Value())
+		if overflow {
+			// A 256-bit overflow is reported by the field validation below; use a
+			// non-zero placeholder so intrinsic gas is still computed and reported.
+			value = uint256.NewInt(1)
+		}
+		rules := chainConfig.Rules(common.Big0, true, 0)
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), r.Address, tx.To(), value, rules)
+		if err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue
-		} else {
-			r.IntrinsicGas = gas
-			if tx.Gas() < gas {
-				r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)
+		}
+		r.IntrinsicGas = cost
+		if tx.Gas() < cost {
+			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), cost)
+			results = append(results, r)
+			continue
+		}
+		// For Prague txs, validate the floor data gas.
+		if rules.IsPrague {
+			floorDataGas, err := core.FloorDataGas(rules, r.Address, tx.To(), value, tx.Data(), tx.AccessList())
+			if err != nil {
+				r.Error = err
+				results = append(results, r)
+				continue
+			}
+			if tx.Gas() < floorDataGas {
+				r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrFloorDataGas, tx.Gas(), floorDataGas)
 				results = append(results, r)
 				continue
 			}
@@ -166,11 +186,23 @@ func Transaction(ctx *cli.Context) error {
 			r.Error = errors.New("gas * maxFeePerGas exceeds 256 bits")
 		}
 		// Check whether the init code size has been exceeded.
-		if chainConfig.IsShanghai(new(big.Int), 0) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
-			r.Error = errors.New("max initcode size exceeded")
+		if tx.To() == nil {
+			if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(tx.Data()))); err != nil {
+				r.Error = err
+			}
+		}
+
+		isOsaka := chainConfig.IsOsaka(new(big.Int), 0)
+		isAmsterdam := chainConfig.IsAmsterdam(new(big.Int), 0)
+		if isOsaka && !isAmsterdam && tx.Gas() > params.MaxTxGas {
+			r.Error = errors.New("gas limit exceeds maximum")
 		}
 		results = append(results, r)
 	}
+	if err := it.Err(); err != nil {
+		return NewError(ErrorIO, err)
+	}
+
 	out, err := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))
 	return err

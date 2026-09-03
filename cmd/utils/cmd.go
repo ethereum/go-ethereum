@@ -25,6 +25,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/big"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -38,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -47,6 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -54,13 +58,50 @@ const (
 	importBatchSize = 2500
 )
 
+// exportBlock is the on-disk representation used by geth export and import.
+//
+// It intentionally differs from types.Block's network encoding: a block access
+// list is stored as an optional trailing field so that an exported chain retains
+// EIP-7928 data. Older export files, which end at Withdrawals, remain valid.
+type exportBlock struct {
+	Header      *types.Header
+	Txs         []*types.Transaction
+	Uncles      []*types.Header
+	Withdrawals []*types.Withdrawal  `rlp:"optional"`
+	AccessList  *bal.BlockAccessList `rlp:"optional"`
+}
+
+func makeExportBlock(block *types.Block) exportBlock {
+	return exportBlock{
+		Header:      block.Header(),
+		Txs:         block.Transactions(),
+		Uncles:      block.Uncles(),
+		Withdrawals: block.Withdrawals(),
+		AccessList:  block.AccessList(),
+	}
+}
+
+func (b exportBlock) block() *types.Block {
+	block := types.NewBlockWithHeader(b.Header).WithBody(types.Body{
+		Transactions: b.Txs,
+		Uncles:       b.Uncles,
+		Withdrawals:  b.Withdrawals,
+	})
+	return block.WithAccessListUnsafe(b.AccessList)
+}
+
+type EraFileFormat int
+
+// ErrImportInterrupted is returned when the user interrupts the import process.
+var ErrImportInterrupted = errors.New("interrupted")
+
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
 func Fatalf(format string, args ...interface{}) {
 	w := io.MultiWriter(os.Stdout, os.Stderr)
-	if runtime.GOOS == "windows" {
-		// The SameFile check below doesn't work on Windows.
+	if runtime.GOOS == "windows" || runtime.GOOS == "openbsd" {
+		// The SameFile check below doesn't work on Windows neither OpenBSD.
 		// stdout is unlikely to get redirected though, so just print there.
 		w = os.Stdout
 	} else {
@@ -190,22 +231,23 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
 		if checkInterrupt() {
-			return errors.New("interrupted")
+			return ErrImportInterrupted
 		}
 		i := 0
 		for ; i < importBatchSize; i++ {
-			var b types.Block
-			if err := stream.Decode(&b); err == io.EOF {
+			var record exportBlock
+			if err := stream.Decode(&record); err == io.EOF {
 				break
 			} else if err != nil {
 				return fmt.Errorf("at block %d: %v", n, err)
 			}
+			b := record.block()
 			// don't import first block
 			if b.NumberU64() == 0 {
 				i--
 				continue
 			}
-			blocks[i] = &b
+			blocks[i] = b
 			n++
 		}
 		if i == 0 {
@@ -234,16 +276,27 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 }
 
 func readList(filename string) ([]string, error) {
-	b, err := os.ReadFile(filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
-	return strings.Split(string(b), "\n"), nil
+	defer f.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return lines, nil
 }
 
 // ImportHistory imports Era1 files containing historical block information,
-// starting from genesis.
-func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string) error {
+// starting from genesis. The assumption is held that the provided chain
+// segment in Era1 file should all be canonical and verified.
+func ImportHistory(chain *core.BlockChain, dir string, network string, from func(f era.ReadAtSeekCloser) (era.Era, error)) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return errors.New("history import only supported when starting from genesis")
 	}
@@ -256,8 +309,10 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 		return fmt.Errorf("unable to read checksums.txt: %w", err)
 	}
 	if len(checksums) != len(entries) {
-		return fmt.Errorf("expected equal number of checksums and entries, have: %d checksums, %d entries", len(checksums), len(entries))
+		return fmt.Errorf("expected equal number of checksums and entries, have: %d checksums, %d entries",
+			len(checksums), len(entries))
 	}
+
 	var (
 		start    = time.Now()
 		reported = time.Now()
@@ -265,33 +320,64 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 		h        = sha256.New()
 		buf      = bytes.NewBuffer(nil)
 	)
-	for i, filename := range entries {
+
+	for i, file := range entries {
 		err := func() error {
-			f, err := os.Open(filepath.Join(dir, filename))
+			path := filepath.Join(dir, file)
+
+			// Validate against checksum file in directory.
+			f, err := os.Open(path)
 			if err != nil {
-				return fmt.Errorf("unable to open era: %w", err)
+				return fmt.Errorf("open %s: %w", path, err)
 			}
 			defer f.Close()
 
-			// Validate checksum.
 			if _, err := io.Copy(h, f); err != nil {
-				return fmt.Errorf("unable to recalculate checksum: %w", err)
+				return fmt.Errorf("checksum %s: %w", path, err)
 			}
-			if have, want := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex(), checksums[i]; have != want {
-				return fmt.Errorf("checksum mismatch: have %s, want %s", have, want)
-			}
+			got := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex()
 			h.Reset()
 			buf.Reset()
-
+			if got != checksums[i] {
+				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, checksums[i])
+			}
 			// Import all block data from Era1.
-			e, err := era.From(f)
+			e, err := from(f)
 			if err != nil {
 				return fmt.Errorf("error opening era: %w", err)
 			}
-			it, err := era.NewIterator(e)
+			defer e.Close()
+
+			it, err := e.Iterator()
 			if err != nil {
-				return fmt.Errorf("error making era reader: %w", err)
+				return fmt.Errorf("error creating iterator: %w", err)
 			}
+
+			var (
+				blocks       = make([]*types.Block, 0, importBatchSize)
+				receiptsList = make([]types.Receipts, 0, importBatchSize)
+				flush        = func() error {
+					if len(blocks) == 0 {
+						return nil
+					}
+					enc := types.EncodeBlockReceiptLists(receiptsList)
+					if _, err := chain.InsertReceiptChain(blocks, enc, math.MaxUint64); err != nil {
+						return fmt.Errorf("error inserting blocks %d-%d: %w",
+							blocks[0].NumberU64(), blocks[len(blocks)-1].NumberU64(), err)
+					}
+					imported += len(blocks)
+					if time.Since(reported) >= 8*time.Second {
+						head := blocks[len(blocks)-1].NumberU64()
+						log.Info("Importing Era files", "head", head, "imported", imported,
+							"elapsed", common.PrettyDuration(time.Since(start)))
+						imported = 0
+						reported = time.Now()
+					}
+					blocks = blocks[:0]
+					receiptsList = receiptsList[:0]
+					return nil
+				}
+			)
 			for it.Next() {
 				block, err := it.Block()
 				if err != nil {
@@ -304,30 +390,23 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 				if err != nil {
 					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
 				}
-				if status, err := chain.HeaderChain().InsertHeaderChain([]*types.Header{block.Header()}, start); err != nil {
-					return fmt.Errorf("error inserting header %d: %w", it.Number(), err)
-				} else if status != core.CanonStatTy {
-					return fmt.Errorf("error inserting header %d, not canon: %v", it.Number(), status)
-				}
-				if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 2^64-1); err != nil {
-					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
-				}
-				imported += 1
-
-				// Give the user some feedback that something is happening.
-				if time.Since(reported) >= 8*time.Second {
-					log.Info("Importing Era files", "head", it.Number(), "imported", imported, "elapsed", common.PrettyDuration(time.Since(start)))
-					imported = 0
-					reported = time.Now()
+				blocks = append(blocks, block)
+				receiptsList = append(receiptsList, receipts)
+				if len(blocks) == importBatchSize {
+					if err := flush(); err != nil {
+						return err
+					}
 				}
 			}
-			return nil
+			if err := it.Error(); err != nil {
+				return err
+			}
+			return flush()
 		}()
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -366,8 +445,7 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 		writer = gzip.NewWriter(writer)
 		defer writer.(*gzip.Writer).Close()
 	}
-	// Iterate over the blocks and export them
-	if err := blockchain.Export(writer); err != nil {
+	if err := exportChain(blockchain, writer, 0, blockchain.CurrentBlock().Number.Uint64()); err != nil {
 		return err
 	}
 	log.Info("Exported blockchain", "file", fn)
@@ -386,23 +464,42 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		return err
 	}
 	defer fh.Close()
-
 	var writer io.Writer = fh
 	if strings.HasSuffix(fn, ".gz") {
 		writer = gzip.NewWriter(writer)
 		defer writer.(*gzip.Writer).Close()
 	}
-	// Iterate over the blocks and export them
-	if err := blockchain.ExportN(writer, first, last); err != nil {
+	if err := exportChain(blockchain, writer, first, last); err != nil {
 		return err
 	}
 	log.Info("Exported blockchain to", "file", fn)
 	return nil
 }
 
+func exportChain(chain *core.BlockChain, writer io.Writer, first, last uint64) error {
+	if first > last {
+		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
+	}
+	var parentHash common.Hash
+	for number := first; number <= last; number++ {
+		block := chain.GetBlockByNumber(number)
+		if block == nil {
+			return fmt.Errorf("export failed on #%d: not found", number)
+		}
+		if number > first && block.ParentHash() != parentHash {
+			return errors.New("export failed: chain reorg during export")
+		}
+		parentHash = block.Hash()
+		if err := rlp.Encode(writer, makeExportBlock(block)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ExportHistory exports blockchain history into the specified directory,
 // following the Era format.
-func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) error {
+func ExportHistory(bc *core.BlockChain, dir string, first, last uint64, newBuilder func(io.Writer) era.Builder, filename func(network string, epoch int, lastBlockHash common.Hash) string) error {
 	log.Info("Exporting blockchain history", "dir", dir)
 	if head := bc.CurrentBlock().Number.Uint64(); head < last {
 		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
@@ -415,75 +512,100 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		return fmt.Errorf("error creating output directory: %w", err)
 	}
+
 	var (
 		start     = time.Now()
 		reported  = time.Now()
 		h         = sha256.New()
 		buf       = bytes.NewBuffer(nil)
+		td        = new(big.Int)
 		checksums []string
 	)
-	for i := first; i <= last; i += step {
-		err := func() error {
-			filename := filepath.Join(dir, era.Filename(network, int(i/step), common.Hash{}))
-			f, err := os.Create(filename)
+
+	// Compute initial TD by accumulating difficulty from genesis to first-1.
+	// This is necessary because TD is no longer stored in the database. Only
+	// compute if a segment of the export is pre-merge.
+	b := bc.GetBlockByNumber(first)
+	if b == nil {
+		return fmt.Errorf("block #%d not found", first)
+	}
+	if first > 0 && b.Difficulty().Sign() != 0 {
+		log.Info("Computing initial total difficulty", "from", 0, "to", first-1)
+		for i := uint64(0); i < first; i++ {
+			b := bc.GetBlockByNumber(i)
+			if b == nil {
+				return fmt.Errorf("block #%d not found while computing initial TD", i)
+			}
+			td.Add(td, b.Difficulty())
+		}
+		log.Info("Initial total difficulty computed", "td", td)
+	}
+
+	for batch := first; batch <= last; batch += uint64(era.MaxSize) {
+		idx := int(batch / uint64(era.MaxSize))
+		tmpPath := filepath.Join(dir, filename(network, idx, common.Hash{}))
+
+		if err := func() error {
+			f, err := os.Create(tmpPath)
 			if err != nil {
-				return fmt.Errorf("could not create era file: %w", err)
+				return err
 			}
 			defer f.Close()
 
-			w := era.NewBuilder(f)
-			for j := uint64(0); j < step && j <= last-i; j++ {
-				var (
-					n     = i + j
-					block = bc.GetBlockByNumber(n)
-				)
+			builder := newBuilder(f)
+
+			for j := uint64(0); j < uint64(era.MaxSize) && batch+j <= last; j++ {
+				n := batch + j
+				block := bc.GetBlockByNumber(n)
 				if block == nil {
-					return fmt.Errorf("export failed on #%d: not found", n)
+					return fmt.Errorf("block #%d not found", n)
 				}
-				receipts := bc.GetReceiptsByHash(block.Hash())
-				if receipts == nil {
-					return fmt.Errorf("export failed on #%d: receipts not found", n)
+				receipt := bc.GetReceiptsByHash(block.Hash())
+				if receipt == nil {
+					return fmt.Errorf("receipts for #%d missing", n)
 				}
-				td := bc.GetTd(block.Hash(), block.NumberU64())
-				if td == nil {
-					return fmt.Errorf("export failed on #%d: total difficulty not found", n)
+
+				// For pre-merge blocks, pass accumulated TD.
+				// For post-merge blocks (difficulty == 0), pass nil TD.
+				var blockTD *big.Int
+				if block.Difficulty().Sign() != 0 {
+					td.Add(td, block.Difficulty())
+					blockTD = new(big.Int).Set(td)
 				}
-				if err := w.Add(block, receipts, td); err != nil {
+
+				if err := builder.Add(block, receipt, blockTD); err != nil {
 					return err
 				}
 			}
-			root, err := w.Finalize()
+			id, err := builder.Finalize()
 			if err != nil {
-				return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
+				return err
 			}
-			// Set correct filename with root.
-			os.Rename(filename, filepath.Join(dir, era.Filename(network, int(i/step), root)))
-
-			// Compute checksum of entire Era1.
 			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return err
 			}
-			if _, err := io.Copy(h, f); err != nil {
-				return fmt.Errorf("unable to calculate checksum: %w", err)
-			}
-			checksums = append(checksums, common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex())
 			h.Reset()
 			buf.Reset()
-			return nil
-		}()
-		if err != nil {
+			if _, err := io.Copy(h, f); err != nil {
+				return err
+			}
+			checksums = append(checksums, common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex())
+
+			// Close before rename. It's required on Windows.
+			f.Close()
+			final := filepath.Join(dir, filename(network, idx, id))
+			return os.Rename(tmpPath, final)
+		}(); err != nil {
 			return err
 		}
+
 		if time.Since(reported) >= 8*time.Second {
-			log.Info("Exporting blocks", "exported", i, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("export progress", "exported", batch, "elapsed", common.PrettyDuration(time.Since(start)))
 			reported = time.Now()
 		}
 	}
 
-	os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
-
-	log.Info("Exported blockchain to", "dir", dir)
-
+	_ = os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
 	return nil
 }
 
@@ -565,9 +687,64 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	return nil
 }
 
+// StateIterator is a temporary structure for traversing state in order. It serves
+// as an aggregator for both path scheme and hash scheme implementations and should
+// be removed once the hash scheme is fully deprecated.
+type StateIterator struct {
+	scheme    string
+	root      common.Hash
+	triedb    *triedb.Database
+	snapshots *snapshot.Tree
+}
+
+// NewStateIterator constructs the state iterator with the specific root.
+func NewStateIterator(triedb *triedb.Database, db ethdb.Database, root common.Hash) (*StateIterator, error) {
+	if triedb.Scheme() == rawdb.PathScheme {
+		return &StateIterator{
+			scheme: rawdb.PathScheme,
+			root:   root,
+			triedb: triedb,
+		}, nil
+	}
+	config := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snapshots, err := snapshot.New(config, db, triedb, root)
+	if err != nil {
+		return nil, err
+	}
+	return &StateIterator{
+		scheme:    rawdb.HashScheme,
+		root:      root,
+		triedb:    triedb,
+		snapshots: snapshots,
+	}, nil
+}
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (it *StateIterator) AccountIterator(root common.Hash, start common.Hash) (snapshot.AccountIterator, error) {
+	if it.scheme == rawdb.PathScheme {
+		return it.triedb.AccountIterator(root, start)
+	}
+	return it.snapshots.AccountIterator(root, start)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be moved to the specific start position.
+func (it *StateIterator) StorageIterator(root common.Hash, accountHash common.Hash, start common.Hash) (snapshot.StorageIterator, error) {
+	if it.scheme == rawdb.PathScheme {
+		return it.triedb.StorageIterator(root, accountHash, start)
+	}
+	return it.snapshots.StorageIterator(root, accountHash, start)
+}
+
 // ExportSnapshotPreimages exports the preimages corresponding to the enumeration of
 // the snapshot for a given root.
-func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn string, root common.Hash) error {
+func ExportSnapshotPreimages(chaindb ethdb.Database, stateIt *StateIterator, fn string, root common.Hash) error {
 	log.Info("Exporting preimages", "file", fn)
 
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
@@ -600,7 +777,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 	)
 	go func() {
 		defer close(hashCh)
-		accIt, err := snaptree.AccountIterator(root, common.Hash{})
+		accIt, err := stateIt.AccountIterator(root, common.Hash{})
 		if err != nil {
 			log.Error("Failed to create account iterator", "error", err)
 			return
@@ -617,7 +794,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: common.AddressLength}
 
 			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
-				stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
+				stIt, err := stateIt.StorageIterator(root, accIt.Hash(), common.Hash{})
 				if err != nil {
 					log.Error("Failed to create storage iterator", "error", err)
 					return

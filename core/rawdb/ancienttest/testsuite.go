@@ -25,6 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/internal/testrand"
 )
 
+// TailGroup is the tail group used by tables created in this test suite. The
+// store factory passed to TestAncientSuite must wire its tables to this group
+// so that the suite can query the freezer's tail consistently.
+const TailGroup = "test"
+
 // TestAncientSuite runs a suite of tests against an ancient database
 // implementation.
 func TestAncientSuite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
@@ -48,17 +53,21 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	)
 	defer db.Close()
 
-	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+	if _, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i := 0; i < len(data); i++ {
-			op.AppendRaw("a", uint64(i), data[i])
+			if err := op.AppendRaw("a", uint64(i), data[i]); err != nil {
+				return err
+			}
 		}
 		return nil
-	})
-	db.TruncateTail(10)
+	}); err != nil {
+		t.Fatalf("Failed to write ancient data %v", err)
+	}
+	db.TruncateTail(TailGroup, 10)
 	db.TruncateHead(90)
 
 	// Test basic tail and head retrievals
-	tail, err := db.Tail()
+	tail, err := db.Tail(TailGroup)
 	if err != nil || tail != 10 {
 		t.Fatal("Failed to retrieve tail")
 	}
@@ -77,13 +86,6 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	}
 	for _, c := range cases {
 		for i := c.start; i < c.limit; i++ {
-			exist, err := db.HasAncient("a", uint64(i))
-			if err != nil {
-				t.Fatalf("Failed to check presence, %v", err)
-			}
-			if exist {
-				t.Fatalf("Item %d is already truncated", uint64(i))
-			}
 			_, err = db.Ancient("a", uint64(i))
 			if err == nil {
 				t.Fatal("Error is expected for non-existent item")
@@ -93,13 +95,6 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 
 	// Test the items in range should be reachable
 	for i := 10; i < 90; i++ {
-		exist, err := db.HasAncient("a", uint64(i))
-		if err != nil {
-			t.Fatalf("Failed to check presence, %v", err)
-		}
-		if !exist {
-			t.Fatalf("Item %d is missing", uint64(i))
-		}
 		blob, err := db.Ancient("a", uint64(i))
 		if err != nil {
 			t.Fatalf("Failed to retrieve item, %v", err)
@@ -110,13 +105,6 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	}
 
 	// Test the items in unknown table shouldn't be reachable
-	exist, err := db.HasAncient("b", uint64(0))
-	if err != nil {
-		t.Fatalf("Failed to check presence, %v", err)
-	}
-	if exist {
-		t.Fatal("Item in unknown table shouldn't be found")
-	}
 	_, err = db.Ancient("b", uint64(0))
 	if err == nil {
 		t.Fatal("Error is expected for unknown table")
@@ -130,13 +118,17 @@ func batchRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	)
 	defer db.Close()
 
-	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+	if _, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i := 0; i < 100; i++ {
-			op.AppendRaw("a", uint64(i), data[i])
+			if err := op.AppendRaw("a", uint64(i), data[i]); err != nil {
+				return err
+			}
 		}
 		return nil
-	})
-	db.TruncateTail(10)
+	}); err != nil {
+		t.Fatalf("Failed to write ancient data %v", err)
+	}
+	db.TruncateTail(TailGroup, 10)
 	db.TruncateHead(90)
 
 	// Test the items in range should be reachable
@@ -210,7 +202,9 @@ func basicWrite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	// The ancient write to tables should be aligned
 	_, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i := 0; i < 100; i++ {
-			op.AppendRaw("a", uint64(i), dataA[i])
+			if err := op.AppendRaw("a", uint64(i), dataA[i]); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -221,8 +215,12 @@ func basicWrite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	// Test normal ancient write
 	size, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i := 0; i < 100; i++ {
-			op.AppendRaw("a", uint64(i), dataA[i])
-			op.AppendRaw("b", uint64(i), dataB[i])
+			if err := op.AppendRaw("a", uint64(i), dataA[i]); err != nil {
+				return err
+			}
+			if err := op.AppendRaw("b", uint64(i), dataB[i]); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -238,8 +236,12 @@ func basicWrite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	db.TruncateHead(90)
 	_, err = db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i := 90; i < 100; i++ {
-			op.AppendRaw("a", uint64(i), dataA[i])
-			op.AppendRaw("b", uint64(i), dataB[i])
+			if err := op.AppendRaw("a", uint64(i), dataA[i]); err != nil {
+				return err
+			}
+			if err := op.AppendRaw("b", uint64(i), dataB[i]); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -248,16 +250,60 @@ func basicWrite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	}
 
 	// Write should work after truncating everything
-	db.TruncateTail(0)
+	db.TruncateHead(0)
 	_, err = db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i := 0; i < 100; i++ {
-			op.AppendRaw("a", uint64(i), dataA[i])
-			op.AppendRaw("b", uint64(i), dataB[i])
+			if err := op.AppendRaw("a", uint64(i), dataA[i]); err != nil {
+				return err
+			}
+			if err := op.AppendRaw("b", uint64(i), dataB[i]); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("Failed to write ancient data %v", err)
+	}
+
+	// Write should work after truncating from tail but over the head
+	db.TruncateTail(TailGroup, 200)
+	head, err := db.Ancients()
+	if err != nil {
+		t.Fatalf("Failed to retrieve head ancients %v", err)
+	}
+	tail, err := db.Tail(TailGroup)
+	if err != nil {
+		t.Fatalf("Failed to retrieve tail ancients %v", err)
+	}
+	if head != 200 || tail != 200 {
+		t.Fatalf("Ancient head and tail are not expected")
+	}
+	_, err = db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		offset := uint64(200)
+		for i := 0; i < 100; i++ {
+			if err := op.AppendRaw("a", offset+uint64(i), dataA[i]); err != nil {
+				return err
+			}
+			if err := op.AppendRaw("b", offset+uint64(i), dataB[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to write ancient data %v", err)
+	}
+	head, err = db.Ancients()
+	if err != nil {
+		t.Fatalf("Failed to retrieve head ancients %v", err)
+	}
+	tail, err = db.Tail(TailGroup)
+	if err != nil {
+		t.Fatalf("Failed to retrieve tail ancients %v", err)
+	}
+	if head != 300 || tail != 200 {
+		t.Fatalf("Ancient head and tail are not expected")
 	}
 }
 
@@ -266,14 +312,18 @@ func nonMutable(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	defer db.Close()
 
 	// We write 100 zero-bytes to the freezer and immediately mutate the slice
-	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+	if _, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		data := make([]byte, 100)
-		op.AppendRaw("a", uint64(0), data)
+		if err := op.AppendRaw("a", uint64(0), data); err != nil {
+			return err
+		}
 		for i := range data {
 			data[i] = 0xff
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatalf("Failed to write ancient data %v", err)
+	}
 	// Now read it.
 	data, err := db.Ancient("a", uint64(0))
 	if err != nil {
@@ -296,23 +346,31 @@ func TestResettableAncientSuite(t *testing.T, newFn func(kinds []string) ethdb.R
 		)
 		defer db.Close()
 
-		db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		if _, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 			for i := 0; i < 100; i++ {
-				op.AppendRaw("a", uint64(i), data[i])
+				if err := op.AppendRaw("a", uint64(i), data[i]); err != nil {
+					return err
+				}
 			}
 			return nil
-		})
-		db.TruncateTail(10)
+		}); err != nil {
+			t.Fatalf("Failed to write ancient data %v", err)
+		}
+		db.TruncateTail(TailGroup, 10)
 		db.TruncateHead(90)
 
 		// Ancient write should work after resetting
 		db.Reset()
-		db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		if _, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 			for i := 0; i < 100; i++ {
-				op.AppendRaw("a", uint64(i), data[i])
+				if err := op.AppendRaw("a", uint64(i), data[i]); err != nil {
+					return err
+				}
 			}
 			return nil
-		})
+		}); err != nil {
+			t.Fatalf("Failed to write ancient data %v", err)
+		}
 	})
 }
 

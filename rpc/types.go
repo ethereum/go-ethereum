@@ -51,9 +51,10 @@ type ServerCodec interface {
 // jsonWriter can write JSON messages to its underlying connection.
 // Implementations must be safe for concurrent use.
 type jsonWriter interface {
-	// writeJSON writes a message to the connection.
-	writeJSON(ctx context.Context, msg interface{}, isError bool) error
-
+	// writeJSON writes a single JSON-RPC message to the connection.
+	writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error
+	// writeJSONBatch writes a batch of JSON-RPC messages to the connection.
+	writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error
 	// Closed returns a channel which is closed when the connection is closed.
 	closed() <-chan interface{}
 	// RemoteAddr returns the peer address of the connection.
@@ -63,11 +64,11 @@ type jsonWriter interface {
 type BlockNumber int64
 
 const (
+	EarliestBlockNumber  = BlockNumber(-5)
 	SafeBlockNumber      = BlockNumber(-4)
 	FinalizedBlockNumber = BlockNumber(-3)
 	LatestBlockNumber    = BlockNumber(-2)
 	PendingBlockNumber   = BlockNumber(-1)
-	EarliestBlockNumber  = BlockNumber(0)
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
@@ -156,6 +157,9 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 	if err == nil {
 		if e.BlockNumber != nil && e.BlockHash != nil {
 			return errors.New("cannot specify both BlockHash and BlockNumber, choose one or the other")
+		}
+		if e.BlockNumber == nil && e.BlockHash == nil {
+			return errors.New("must specify either BlockHash or BlockNumber")
 		}
 		bnh.BlockNumber = e.BlockNumber
 		bnh.BlockHash = e.BlockHash

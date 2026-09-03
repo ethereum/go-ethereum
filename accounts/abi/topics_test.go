@@ -149,6 +149,23 @@ func TestMakeTopics(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("does not mutate big.Int", func(t *testing.T) {
+		t.Parallel()
+		want := [][]common.Hash{{common.HexToHash("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")}}
+
+		in := big.NewInt(-1)
+		got, err := MakeTopics([]interface{}{in})
+		if err != nil {
+			t.Fatalf("makeTopics() error = %v", err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("makeTopics() = %v, want %v", got, want)
+		}
+		if orig := big.NewInt(-1); in.Cmp(orig) != 0 {
+			t.Fatalf("makeTopics() mutated an input parameter from %v to %v", orig, in)
+		}
+	})
 }
 
 type args struct {

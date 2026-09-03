@@ -21,12 +21,17 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -38,31 +43,37 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/billy"
 	"github.com/holiman/uint256"
 )
 
 var (
-	testBlobs       []*kzg4844.Blob
-	testBlobCommits []kzg4844.Commitment
-	testBlobProofs  []kzg4844.Proof
-	testBlobVHashes [][32]byte
+	testBlobs          []*kzg4844.Blob
+	testBlobCommits    []kzg4844.Commitment
+	testBlobCellProofs [][]kzg4844.Proof
+	testBlobVHashes    [][32]byte
+	testBlobIndices    = make(map[[32]byte]int)
 )
 
+const testMaxBlobsPerBlock = 6
+
 func init() {
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 24; i++ {
 		testBlob := &kzg4844.Blob{byte(i)}
 		testBlobs = append(testBlobs, testBlob)
 
 		testBlobCommit, _ := kzg4844.BlobToCommitment(testBlob)
 		testBlobCommits = append(testBlobCommits, testBlobCommit)
 
-		testBlobProof, _ := kzg4844.ComputeBlobProof(testBlob, testBlobCommit)
-		testBlobProofs = append(testBlobProofs, testBlobProof)
+		testBlobCellProof, _ := kzg4844.ComputeCellProofs(testBlob)
+		testBlobCellProofs = append(testBlobCellProofs, testBlobCellProof)
 
 		testBlobVHash := kzg4844.CalcBlobHashV1(sha256.New(), &testBlobCommit)
+		testBlobIndices[testBlobVHash] = len(testBlobVHashes)
 		testBlobVHashes = append(testBlobVHashes, testBlobVHash)
 	}
 }
@@ -75,6 +86,8 @@ type testBlockChain struct {
 	statedb *state.StateDB
 
 	blocks map[uint64]*types.Block
+
+	blockTime *uint64
 }
 
 func (bc *testBlockChain) Config() *params.ChainConfig {
@@ -92,6 +105,10 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		blockTime   = *bc.config.CancunTime + 1
 		gasLimit    = uint64(30_000_000)
 	)
+	if bc.blockTime != nil {
+		blockTime = *bc.blockTime
+	}
+
 	lo := new(big.Int)
 	hi := new(big.Int).Mul(big.NewInt(5714), new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
 
@@ -121,7 +138,12 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		mid := new(big.Int).Add(lo, hi)
 		mid.Div(mid, big.NewInt(2))
 
-		if eip4844.CalcBlobFee(mid.Uint64()).Cmp(bc.blobfee.ToBig()) > 0 {
+		tmp := mid.Uint64()
+		if eip4844.CalcBlobFee(bc.Config(), &types.Header{
+			Number:        blockNumber,
+			Time:          blockTime,
+			ExcessBlobGas: &tmp,
+		}).Cmp(bc.blobfee.ToBig()) > 0 {
 			hi = mid
 		} else {
 			lo = mid
@@ -135,6 +157,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		GasLimit:      gasLimit,
 		BaseFee:       baseFee,
 		ExcessBlobGas: &excessBlobGas,
+		Difficulty:    common.Big0,
 	}
 }
 
@@ -155,35 +178,50 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 	return bc.blocks[number]
 }
 
-func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+func (bc *testBlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 
-// makeAddressReserver is a utility method to sanity check that accounts are
-// properly reserved by the blobpool (no duplicate reserves or unreserves).
-func makeAddressReserver() txpool.AddressReserver {
-	var (
-		reserved = make(map[common.Address]struct{})
-		lock     sync.Mutex
-	)
-	return func(addr common.Address, reserve bool) error {
-		lock.Lock()
-		defer lock.Unlock()
+func (bc *testBlockChain) Genesis() *types.Block {
+	return types.NewBlock(bc.CurrentBlock(), nil, nil, trie.NewStackTrie(nil))
+}
 
-		_, exists := reserved[addr]
-		if reserve {
-			if exists {
-				panic("already reserved")
-			}
-			reserved[addr] = struct{}{}
-			return nil
-		}
-		if !exists {
-			panic("not reserved")
-		}
-		delete(reserved, addr)
-		return nil
+// reserver is a utility struct to sanity check that accounts are
+// properly reserved by the blobpool (no duplicate reserves or unreserves).
+type reserver struct {
+	accounts map[common.Address]struct{}
+	lock     sync.RWMutex
+}
+
+func newReserver() txpool.Reserver {
+	return &reserver{accounts: make(map[common.Address]struct{})}
+}
+
+func (r *reserver) Hold(addr common.Address) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if _, exists := r.accounts[addr]; exists {
+		panic("already reserved")
 	}
+	r.accounts[addr] = struct{}{}
+	return nil
+}
+
+func (r *reserver) Release(addr common.Address) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if _, exists := r.accounts[addr]; !exists {
+		panic("not reserved")
+	}
+	delete(r.accounts, addr)
+	return nil
+}
+
+func (r *reserver) Has(address common.Address) bool {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+	_, exists := r.accounts[address]
+	return exists
 }
 
 // makeTx is a utility method to construct a random blob transaction and sign it
@@ -194,14 +232,60 @@ func makeTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64,
 	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
 }
 
-// makeUnsignedTx is a utility method to construct a random blob transaction
-// without signing it.
-func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64) *types.BlobTx {
-	return makeUnsignedTxWithTestBlob(nonce, gasTipCap, gasFeeCap, blobFeeCap, rand.Intn(len(testBlobs)))
+// encodeForPool encodes a blob transaction in the blobTxForPool storage format.
+func encodeForPool(tx *types.Transaction) []byte {
+	ptx, _ := newBlobTxForPool(tx)
+	blob, _ := rlp.EncodeToBytes(ptx)
+	return blob
+}
+
+// makeMultiBlobTx is a utility method to construct a random blob tx with
+// certain number of blobs in its sidecar.
+func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, blobCount int, blobOffset int, key *ecdsa.PrivateKey) *types.Transaction {
+	var (
+		blobs       []kzg4844.Blob
+		blobHashes  []common.Hash
+		commitments []kzg4844.Commitment
+		proofs      []kzg4844.Proof
+	)
+	for i := 0; i < blobCount; i++ {
+		blobs = append(blobs, *testBlobs[blobOffset+i])
+		commitments = append(commitments, testBlobCommits[blobOffset+i])
+		cellProofs, _ := kzg4844.ComputeCellProofs(testBlobs[blobOffset+i])
+		proofs = append(proofs, cellProofs...)
+		blobHashes = append(blobHashes, testBlobVHashes[blobOffset+i])
+	}
+	blobtx := &types.BlobTx{
+		ChainID:    uint256.MustFromBig(params.MainnetChainConfig.ChainID),
+		Nonce:      nonce,
+		GasTipCap:  uint256.NewInt(gasTipCap),
+		GasFeeCap:  uint256.NewInt(gasFeeCap),
+		Gas:        21000,
+		BlobFeeCap: uint256.NewInt(blobFeeCap),
+		BlobHashes: blobHashes,
+		Value:      uint256.NewInt(100),
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, proofs),
+	}
+	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
+}
+
+// removeBlobs returns a copy of tx with the blob payload removed from the
+// sidecar, keeping commitments, proofs and cells intact (simulating what
+// ETH/72 peers send).
+func removeBlobs(tx *types.Transaction) *types.Transaction {
+	sidecar := tx.BlobTxSidecar().Copy()
+	sidecar.Blobs = nil
+	return tx.WithBlobTxSidecar(sidecar)
 }
 
 // makeUnsignedTx is a utility method to construct a random blob transaction
 // without signing it.
+func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64) *types.BlobTx {
+	return makeUnsignedTxWithTestBlob(nonce, gasTipCap, gasFeeCap, blobFeeCap, rnd.Intn(len(testBlobs)))
+}
+
+// makeUnsignedTxWithTestBlob is a utility method to construct a random blob transaction
+// with a specific test blob without signing it.
 func makeUnsignedTxWithTestBlob(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, blobIdx int) *types.BlobTx {
 	return &types.BlobTx{
 		ChainID:    uint256.MustFromBig(params.MainnetChainConfig.ChainID),
@@ -212,11 +296,7 @@ func makeUnsignedTxWithTestBlob(nonce uint64, gasTipCap uint64, gasFeeCap uint64
 		BlobFeeCap: uint256.NewInt(blobFeeCap),
 		BlobHashes: []common.Hash{testBlobVHashes[blobIdx]},
 		Value:      uint256.NewInt(100),
-		Sidecar: &types.BlobTxSidecar{
-			Blobs:       []kzg4844.Blob{*testBlobs[blobIdx]},
-			Commitments: []kzg4844.Commitment{testBlobCommits[blobIdx]},
-			Proofs:      []kzg4844.Proof{testBlobProofs[blobIdx]},
-		},
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion1, []kzg4844.Blob{*testBlobs[blobIdx]}, []kzg4844.Commitment{testBlobCommits[blobIdx]}, testBlobCellProofs[blobIdx]),
 	}
 }
 
@@ -334,7 +414,7 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	var stored uint64
 	for _, txs := range pool.index {
 		for _, tx := range txs {
-			stored += uint64(tx.size)
+			stored += uint64(tx.storageSize)
 		}
 	}
 	if pool.stored != stored {
@@ -351,36 +431,30 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 // whatever is in the pool, it can be retrieved correctly.
 func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 	// Collect all the blobs tracked by the pool
-	known := make(map[common.Hash]struct{})
+	var (
+		hashes []common.Hash
+		known  = make(map[common.Hash]struct{})
+	)
 	for _, txs := range pool.index {
 		for _, tx := range txs {
 			for _, vhash := range tx.vhashes {
 				known[vhash] = struct{}{}
 			}
+			hashes = append(hashes, tx.vhashes...)
 		}
 	}
-	// Attempt to retrieve all test blobs
-	hashes := make([]common.Hash, len(testBlobVHashes))
-	for i := range testBlobVHashes {
-		copy(hashes[i][:], testBlobVHashes[i][:])
+	blobs, _, proofs, err := pool.getBlobs(hashes, types.BlobSidecarVersion1)
+	if err != nil {
+		t.Fatal(err)
 	}
-	blobs, proofs := pool.GetBlobs(hashes)
-
-	// Cross validate what we received vs what we wanted
 	if len(blobs) != len(hashes) || len(proofs) != len(hashes) {
-		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), len(hashes))
+		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want blobs %d, want proofs: %d", len(blobs), len(proofs), len(hashes), len(hashes))
 		return
 	}
 	for i, hash := range hashes {
-		// If an item is missing, but shouldn't, error
-		if blobs[i] == nil || proofs[i] == nil {
-			if _, ok := known[hash]; ok {
-				t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
-			}
-			continue
-		}
 		// Item retrieved, make sure it matches the expectation
-		if *blobs[i] != *testBlobs[i] || *proofs[i] != testBlobProofs[i] {
+		index := testBlobIndices[hash]
+		if blobs[i] != nil && (*blobs[i] != *testBlobs[index] || !slices.Equal(proofs[i], testBlobCellProofs[index])) {
 			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}
@@ -408,14 +482,13 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 //   - 8. Fully duplicate transactions (matching hash) must be dropped
 //   - 9. Duplicate nonces from the same account must be dropped
 func TestOpenDrops(t *testing.T) {
-	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 
 	// Insert a malformed transaction to verify that decoding errors (or format
 	// changes) are handled gracefully (case 1)
@@ -436,75 +509,76 @@ func TestOpenDrops(t *testing.T) {
 		S:          new(uint256.Int),
 	})
 	blob, _ := rlp.EncodeToBytes(tx)
-	badsig, _ := store.Put(blob)
+	badsig := tx.Hash()
+	store.Put(blob)
 
 	// Insert a sequence of transactions with a nonce gap in between to verify
 	// that anything gapped will get evicted (case 3).
 	var (
 		gapper, _ = crypto.GenerateKey()
 
-		valids = make(map[uint64]struct{})
-		gapped = make(map[uint64]struct{})
+		valids = make(map[common.Hash]struct{})
+		gapped = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 3, 4, 6, 7} { // first gap at #2, another at #5
 		tx := makeTx(nonce, 1, 1, 1, gapper)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if nonce < 2 {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			gapped[id] = struct{}{}
+			gapped[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a sequence of transactions with a gapped starting nonce to verify
 	// that the entire set will get dropped (case 3).
 	var (
 		dangler, _ = crypto.GenerateKey()
-		dangling   = make(map[uint64]struct{})
+		dangling   = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{1, 2, 3} { // first gap at #0, all set dangling
 		tx := makeTx(nonce, 1, 1, 1, dangler)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
-		id, _ := store.Put(blob)
-		dangling[id] = struct{}{}
+		store.Put(blob)
+		dangling[tx.Hash()] = struct{}{}
 	}
-	// Insert a sequence of transactions with already passed nonces to veirfy
+	// Insert a sequence of transactions with already passed nonces to verify
 	// that the entire set will get dropped (case 4).
 	var (
 		filler, _ = crypto.GenerateKey()
-		filled    = make(map[uint64]struct{})
+		filled    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} { // account nonce at 3, all set filled
 		tx := makeTx(nonce, 1, 1, 1, filler)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
-		id, _ := store.Put(blob)
-		filled[id] = struct{}{}
+		store.Put(blob)
+		filled[tx.Hash()] = struct{}{}
 	}
 	// Insert a sequence of transactions with partially passed nonces to verify
 	// that the included part of the set will get dropped (case 4).
 	var (
 		overlapper, _ = crypto.GenerateKey()
-		overlapped    = make(map[uint64]struct{})
+		overlapped    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2, 3} { // account nonce at 2, half filled
 		tx := makeTx(nonce, 1, 1, 1, overlapper)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if nonce >= 2 {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			overlapped[id] = struct{}{}
+			overlapped[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a sequence of transactions with an underpriced first to verify that
 	// the entire set will get dropped (case 5).
 	var (
 		underpayer, _ = crypto.GenerateKey()
-		underpaid     = make(map[uint64]struct{})
+		underpaid     = make(map[common.Hash]struct{})
 	)
 	for i := 0; i < 5; i++ { // make #0 underpriced
 		var tx *types.Transaction
@@ -513,17 +587,17 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			tx = makeTx(uint64(i), 1, 1, 1, underpayer)
 		}
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
-		id, _ := store.Put(blob)
-		underpaid[id] = struct{}{}
+		store.Put(blob)
+		underpaid[tx.Hash()] = struct{}{}
 	}
 
 	// Insert a sequence of transactions with an underpriced in between to verify
 	// that it and anything newly gapped will get evicted (case 5).
 	var (
 		outpricer, _ = crypto.GenerateKey()
-		outpriced    = make(map[uint64]struct{})
+		outpriced    = make(map[common.Hash]struct{})
 	)
 	for i := 0; i < 5; i++ { // make #2 underpriced
 		var tx *types.Transaction
@@ -532,20 +606,20 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			tx = makeTx(uint64(i), 1, 1, 1, outpricer)
 		}
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if i < 2 {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			outpriced[id] = struct{}{}
+			outpriced[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a sequence of transactions fully overdrafted to verify that the
 	// entire set will get invalidated (case 6).
 	var (
 		exceeder, _ = crypto.GenerateKey()
-		exceeded    = make(map[uint64]struct{})
+		exceeded    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} { // nonce 0 overdrafts the account
 		var tx *types.Transaction
@@ -554,16 +628,16 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			tx = makeTx(nonce, 1, 1, 1, exceeder)
 		}
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
-		id, _ := store.Put(blob)
-		exceeded[id] = struct{}{}
+		store.Put(blob)
+		exceeded[tx.Hash()] = struct{}{}
 	}
 	// Insert a sequence of transactions partially overdrafted to verify that part
 	// of the set will get invalidated (case 6).
 	var (
 		overdrafter, _ = crypto.GenerateKey()
-		overdrafted    = make(map[uint64]struct{})
+		overdrafted    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} { // nonce 1 overdrafts the account
 		var tx *types.Transaction
@@ -572,46 +646,48 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			tx = makeTx(nonce, 1, 1, 1, overdrafter)
 		}
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if nonce < 1 {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			overdrafted[id] = struct{}{}
+			overdrafted[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a sequence of transactions overflowing the account cap to verify
 	// that part of the set will get invalidated (case 7).
 	var (
 		overcapper, _ = crypto.GenerateKey()
-		overcapped    = make(map[uint64]struct{})
+		overcapped    = make(map[common.Hash]struct{})
 	)
 	for nonce := uint64(0); nonce < maxTxsPerAccount+3; nonce++ {
-		blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, 1, 1, overcapper))
+		tx := makeTx(nonce, 1, 1, 1, overcapper)
+		blob := encodeForPool(tx)
 
-		id, _ := store.Put(blob)
+		store.Put(blob)
 		if nonce < maxTxsPerAccount {
-			valids[id] = struct{}{}
+			valids[tx.Hash()] = struct{}{}
 		} else {
-			overcapped[id] = struct{}{}
+			overcapped[tx.Hash()] = struct{}{}
 		}
 	}
 	// Insert a batch of duplicated transactions to verify that only one of each
 	// version will remain (case 8).
 	var (
 		duplicater, _ = crypto.GenerateKey()
-		duplicated    = make(map[uint64]struct{})
+		duplicated    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} {
-		blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, 1, 1, duplicater))
+		tx := makeTx(nonce, 1, 1, 1, duplicater)
+		blob := encodeForPool(tx)
 
 		for i := 0; i < int(nonce)+1; i++ {
-			id, _ := store.Put(blob)
+			store.Put(blob)
 			if i == 0 {
-				valids[id] = struct{}{}
+				valids[tx.Hash()] = struct{}{}
 			} else {
-				duplicated[id] = struct{}{}
+				duplicated[tx.Hash()] = struct{}{}
 			}
 		}
 	}
@@ -619,17 +695,18 @@ func TestOpenDrops(t *testing.T) {
 	// remain (case 9).
 	var (
 		repeater, _ = crypto.GenerateKey()
-		repeated    = make(map[uint64]struct{})
+		repeated    = make(map[common.Hash]struct{})
 	)
 	for _, nonce := range []uint64{0, 1, 2} {
 		for i := 0; i < int(nonce)+1; i++ {
-			blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, uint64(i)+1 /* unique hashes */, 1, repeater))
+			tx := makeTx(nonce, 1, uint64(i)+1 /* unique hashes */, 1, repeater)
+			blob := encodeForPool(tx)
 
-			id, _ := store.Put(blob)
+			store.Put(blob)
 			if i == 0 {
-				valids[id] = struct{}{}
+				valids[tx.Hash()] = struct{}{}
 			} else {
-				repeated[id] = struct{}{}
+				repeated[tx.Hash()] = struct{}{}
 			}
 		}
 	}
@@ -640,9 +717,9 @@ func TestOpenDrops(t *testing.T) {
 	statedb.AddBalance(crypto.PubkeyToAddress(gapper.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(dangler.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(filler.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
-	statedb.SetNonce(crypto.PubkeyToAddress(filler.PublicKey), 3)
+	statedb.SetNonce(crypto.PubkeyToAddress(filler.PublicKey), 3, tracing.NonceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(overlapper.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
-	statedb.SetNonce(crypto.PubkeyToAddress(overlapper.PublicKey), 2)
+	statedb.SetNonce(crypto.PubkeyToAddress(overlapper.PublicKey), 2, tracing.NonceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(underpayer.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(outpricer.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(exceeder.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
@@ -650,7 +727,7 @@ func TestOpenDrops(t *testing.T) {
 	statedb.AddBalance(crypto.PubkeyToAddress(overcapper.PublicKey), uint256.NewInt(10000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(duplicater.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(repeater.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -658,47 +735,49 @@ func TestOpenDrops(t *testing.T) {
 		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
 		statedb: statedb,
 	}
-	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
 
 	// Verify that the malformed (case 1), badly signed (case 2) and gapped (case
 	// 3) txs have been deleted from the pool
-	alive := make(map[uint64]struct{})
+	alive := make(map[common.Hash]struct{})
 	for _, txs := range pool.index {
 		for _, tx := range txs {
 			switch tx.id {
 			case malformed:
 				t.Errorf("malformed RLP transaction remained in storage")
-			case badsig:
-				t.Errorf("invalidly signed transaction remained in storage")
 			default:
-				if _, ok := dangling[tx.id]; ok {
+				if badsig == tx.hash {
+					t.Errorf("invalidly signed transaction remained in storage")
+				}
+				if _, ok := dangling[tx.hash]; ok {
 					t.Errorf("dangling transaction remained in storage: %d", tx.id)
-				} else if _, ok := filled[tx.id]; ok {
+				} else if _, ok := filled[tx.hash]; ok {
 					t.Errorf("filled transaction remained in storage: %d", tx.id)
-				} else if _, ok := overlapped[tx.id]; ok {
+				} else if _, ok := overlapped[tx.hash]; ok {
 					t.Errorf("overlapped transaction remained in storage: %d", tx.id)
-				} else if _, ok := gapped[tx.id]; ok {
+				} else if _, ok := gapped[tx.hash]; ok {
 					t.Errorf("gapped transaction remained in storage: %d", tx.id)
-				} else if _, ok := underpaid[tx.id]; ok {
+				} else if _, ok := underpaid[tx.hash]; ok {
 					t.Errorf("underpaid transaction remained in storage: %d", tx.id)
-				} else if _, ok := outpriced[tx.id]; ok {
+				} else if _, ok := outpriced[tx.hash]; ok {
 					t.Errorf("outpriced transaction remained in storage: %d", tx.id)
-				} else if _, ok := exceeded[tx.id]; ok {
+				} else if _, ok := exceeded[tx.hash]; ok {
 					t.Errorf("fully overdrafted transaction remained in storage: %d", tx.id)
-				} else if _, ok := overdrafted[tx.id]; ok {
+				} else if _, ok := overdrafted[tx.hash]; ok {
 					t.Errorf("partially overdrafted transaction remained in storage: %d", tx.id)
-				} else if _, ok := overcapped[tx.id]; ok {
+				} else if _, ok := overcapped[tx.hash]; ok {
 					t.Errorf("overcapped transaction remained in storage: %d", tx.id)
-				} else if _, ok := duplicated[tx.id]; ok {
-					t.Errorf("duplicated transaction remained in storage: %d", tx.id)
-				} else if _, ok := repeated[tx.id]; ok {
+				} else if _, ok := repeated[tx.hash]; ok {
 					t.Errorf("repeated nonce transaction remained in storage: %d", tx.id)
 				} else {
-					alive[tx.id] = struct{}{}
+					if _, ok := alive[tx.hash]; ok {
+						t.Errorf("duplicated transaction remained in storage: %d", tx.id)
+					}
+					alive[tx.hash] = struct{}{}
 				}
 			}
 		}
@@ -707,14 +786,14 @@ func TestOpenDrops(t *testing.T) {
 	if len(alive) != len(valids) {
 		t.Errorf("valid transaction count mismatch: have %d, want %d", len(alive), len(valids))
 	}
-	for id := range alive {
-		if _, ok := valids[id]; !ok {
-			t.Errorf("extra transaction %d", id)
+	for hash := range alive {
+		if _, ok := valids[hash]; !ok {
+			t.Errorf("extra transaction %s", hash)
 		}
 	}
-	for id := range valids {
-		if _, ok := alive[id]; !ok {
-			t.Errorf("missing transaction %d", id)
+	for hash := range valids {
+		if _, ok := alive[hash]; !ok {
+			t.Errorf("missing transaction %s", hash)
 		}
 	}
 	// Verify all the calculated pool internals. Interestingly, this is **not**
@@ -734,11 +813,10 @@ func TestOpenIndex(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 
 	// Insert a sequence of transactions with varying price points to check that
 	// the cumulative minimum will be maintained.
@@ -754,14 +832,14 @@ func TestOpenIndex(t *testing.T) {
 		//blobfeeJumps = []float64{34.023, 35.570, 36.879, 29.686, 26.243, 20.358} // log 1.125 (blob fee cap)
 
 		evictExecTipCaps  = []uint64{10, 10, 5, 5, 1, 1}
-		evictExecFeeJumps = []float64{39.098, 38.204, 38.204, 19.549, 19.549, 19.549} //  min(log 1.125 (exec fee cap))
-		evictBlobFeeJumps = []float64{34.023, 34.023, 34.023, 29.686, 26.243, 20.358} // min(log 1.125 (blob fee cap))
+		evictExecFeeJumps = []float64{39.098, 38.204, 38.204, 19.549, 19.549, 19.549}                   //  min(log 1.125 (exec fee cap))
+		evictBlobFeeJumps = []float64{25.517256, 25.517256, 25.517256, 22.264502, 19.682646, 15.268934} // min(log 1.17 (blob fee cap))
 
 		totalSpent = uint256.NewInt(21000*(100+90+200+10+80+300) + blobSize*(55+66+77+33+22+11) + 100*6) // 21000 gas x price + 128KB x blobprice + value
 	)
 	for _, i := range []int{5, 3, 4, 2, 0, 1} { // Randomize the tx insertion order to force sorting on load
 		tx := makeTx(uint64(i), txExecTipCaps[i], txExecFeeCaps[i], txBlobFeeCaps[i], key)
-		blob, _ := rlp.EncodeToBytes(tx)
+		blob := encodeForPool(tx)
 		store.Put(blob)
 	}
 	store.Close()
@@ -769,7 +847,7 @@ func TestOpenIndex(t *testing.T) {
 	// Create a blob pool out of the pre-seeded data
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -777,8 +855,8 @@ func TestOpenIndex(t *testing.T) {
 		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
 		statedb: statedb,
 	}
-	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -823,11 +901,10 @@ func TestOpenHeap(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 
 	// Insert a few transactions from a few accounts. To remove randomness from
 	// the heap initialization, use a deterministic account/tx/priority ordering.
@@ -854,9 +931,9 @@ func TestOpenHeap(t *testing.T) {
 		tx2 = makeTx(0, 1, 800, 70, key2)
 		tx3 = makeTx(0, 1, 1500, 110, key3)
 
-		blob1, _ = rlp.EncodeToBytes(tx1)
-		blob2, _ = rlp.EncodeToBytes(tx2)
-		blob3, _ = rlp.EncodeToBytes(tx3)
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
+		blob3 = encodeForPool(tx3)
 
 		heapOrder = []common.Address{addr2, addr1, addr3}
 		heapIndex = map[common.Address]int{addr2: 0, addr1: 1, addr3: 2}
@@ -871,7 +948,7 @@ func TestOpenHeap(t *testing.T) {
 	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -879,8 +956,8 @@ func TestOpenHeap(t *testing.T) {
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,
 	}
-	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -910,11 +987,10 @@ func TestOpenCap(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 
 	// Insert a few transactions from a few accounts
 	var (
@@ -930,13 +1006,16 @@ func TestOpenCap(t *testing.T) {
 		tx2 = makeTx(0, 1, 800, 70, key2)
 		tx3 = makeTx(0, 1, 1500, 110, key3)
 
-		blob1, _ = rlp.EncodeToBytes(tx1)
-		blob2, _ = rlp.EncodeToBytes(tx2)
-		blob3, _ = rlp.EncodeToBytes(tx3)
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
+		blob3 = encodeForPool(tx3)
 
 		keep = []common.Address{addr1, addr3}
 		drop = []common.Address{addr2}
-		size = uint64(2 * (txAvgSize + blobSize))
+		// After migration to pooledBlobTx, cells (128 x 2048 = 2*blobSize) replace blobs.
+		// The actual billy slot size for pooledBlobTx is 2*(blobSize+txBlobOverhead)+txAvgSize.
+		pooledSlotSize uint64 = 2*(blobSize+uint64(txBlobOverhead)) + txAvgSize
+		size                  = 2 * pooledSlotSize
 	)
 	store.Put(blob1)
 	store.Put(blob2)
@@ -945,13 +1024,13 @@ func TestOpenCap(t *testing.T) {
 
 	// Verify pool capping twice: first by reducing the data cap, then restarting
 	// with a high cap to ensure everything was persisted previously
-	for _, datacap := range []uint64{2 * (txAvgSize + blobSize), 100 * (txAvgSize + blobSize)} {
+	for _, datacap := range []uint64{size, 1000 * pooledSlotSize} {
 		// Create a blob pool out of the pre-seeded data, but cap it to 2 blob transaction
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		statedb.Commit(0, true)
+		statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 		chain := &testBlockChain{
 			config:  params.MainnetChainConfig,
@@ -959,8 +1038,8 @@ func TestOpenCap(t *testing.T) {
 			blobfee: uint256.NewInt(105),
 			statedb: statedb,
 		}
-		pool := New(Config{Datadir: storage, Datacap: datacap}, chain)
-		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		pool := New(Config{Datadir: storage, Datacap: datacap}, chain, nil)
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("failed to create blob pool: %v", err)
 		}
 		// Verify that enough transactions have been dropped to get the pool's size
@@ -992,6 +1071,426 @@ func TestOpenCap(t *testing.T) {
 	}
 }
 
+// TestChangingSlotterSize attempts to mimic a scenario where the max blob count
+// of the pool is increased. This would happen during a client release where a
+// new fork is added with a max blob count higher than the previous fork. We
+// want to make sure transactions a persisted between those runs.
+func TestChangingSlotterSize(t *testing.T) {
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
+
+	// Create a temporary folder for the persistent backend
+	storage := t.TempDir()
+
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(6), nil)
+
+	// Create transactions from a few accounts.
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+		key3, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
+
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2)
+		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3)
+
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
+	)
+
+	// Write the two safely sized txs to store. note: although the store is
+	// configured for a blob count of 6, it can also support around ~1mb of call
+	// data - all this to say that we aren't using the the absolute largest shelf
+	// available.
+	store.Put(blob1)
+	store.Put(blob2)
+	store.Close()
+
+	// Mimic a blobpool with max blob count of 6 upgrading to a max blob count of 24.
+	for _, maxBlobs := range []int{6, 24} {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		statedb.Commit(params.Rules{IsEIP158: true}, 0)
+
+		// Make custom chain config where the max blob count changes based on the loop variable.
+		cancunTime := uint64(0)
+		config := &params.ChainConfig{
+			ChainID:     big.NewInt(1),
+			LondonBlock: big.NewInt(0),
+			BerlinBlock: big.NewInt(0),
+			CancunTime:  &cancunTime,
+			BlobScheduleConfig: &params.BlobScheduleConfig{
+				Cancun: &params.BlobConfig{
+					Target:         maxBlobs / 2,
+					Max:            maxBlobs,
+					UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+				},
+			},
+		}
+		chain := &testBlockChain{
+			config:  config,
+			basefee: uint256.NewInt(1050),
+			blobfee: uint256.NewInt(105),
+			statedb: statedb,
+		}
+		pool := New(Config{Datadir: storage}, chain, nil)
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+			t.Fatalf("failed to create blob pool: %v", err)
+		}
+
+		// Try to add the big blob tx. In the initial iteration it should overflow
+		// the pool. On the subsequent iteration it should be accepted.
+		errs := pool.Add([]*types.Transaction{tx3}, true)
+		if _, ok := pool.index[addr3]; ok && maxBlobs == 6 {
+			t.Errorf("expected insert of oversized blob tx to fail: blobs=24, maxBlobs=%d, err=%v", maxBlobs, errs[0])
+		} else if !ok && maxBlobs == 10 {
+			t.Errorf("expected insert of oversized blob tx to succeed: blobs=24, maxBlobs=%d, err=%v", maxBlobs, errs[0])
+		}
+
+		// Verify the regular two txs are always available.
+		if got := pool.Get(tx1.Hash()); got == nil {
+			t.Errorf("expected tx %s from %s in pool", tx1.Hash(), addr1)
+		}
+		if got := pool.Get(tx2.Hash()); got == nil {
+			t.Errorf("expected tx %s from %s in pool", tx2.Hash(), addr2)
+		}
+
+		// Verify all the calculated pool internals. Interestingly, this is **not**
+		// a duplication of the above checks, this actually validates the verifier
+		// using the above already hard coded checks.
+		//
+		// Do not remove this, nor alter the above to be generic.
+		verifyPoolInternals(t, pool)
+
+		pool.Close()
+	}
+}
+
+// TestBillyMigration tests the billy migration from the default slotter to
+// the PeerDAS slotter. This tests both the migration of the slotter
+// as well as increasing the slotter size of the new slotter.
+func TestBillyMigration(t *testing.T) {
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
+
+	// Create a temporary folder for the persistent backend
+	storage := t.TempDir()
+
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, limboedTransactionStore), 0700)
+	// Create the billy with the old slotter
+	oldSlotter := newSlotterEIP7594(6)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, oldSlotter, nil)
+
+	// Create transactions from a few accounts.
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+		key3, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
+
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2)
+		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3)
+
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
+	)
+
+	// Write the two safely sized txs to store. note: although the store is
+	// configured for a blob count of 6, it can also support around ~1mb of call
+	// data - all this to say that we aren't using the the absolute largest shelf
+	// available.
+	store.Put(blob1)
+	store.Put(blob2)
+	store.Close()
+
+	// Mimic a blobpool with max blob count of 6 upgrading to a max blob count of 24.
+	for _, maxBlobs := range []int{6, 24} {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		statedb.Commit(params.Rules{IsEIP158: true}, 0)
+
+		// Make custom chain config where the max blob count changes based on the loop variable.
+		zero := uint64(0)
+		config := &params.ChainConfig{
+			ChainID:     big.NewInt(1),
+			LondonBlock: big.NewInt(0),
+			BerlinBlock: big.NewInt(0),
+			CancunTime:  &zero,
+			OsakaTime:   &zero,
+			BlobScheduleConfig: &params.BlobScheduleConfig{
+				Cancun: &params.BlobConfig{
+					Target:         maxBlobs / 2,
+					Max:            maxBlobs,
+					UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+				},
+			},
+		}
+		chain := &testBlockChain{
+			config:  config,
+			basefee: uint256.NewInt(1050),
+			blobfee: uint256.NewInt(105),
+			statedb: statedb,
+		}
+		pool := New(Config{Datadir: storage}, chain, nil)
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+			t.Fatalf("failed to create blob pool: %v", err)
+		}
+
+		// Try to add the big blob tx. In the initial iteration it should overflow
+		// the pool. On the subsequent iteration it should be accepted.
+		errs := pool.Add([]*types.Transaction{tx3}, true)
+		if _, ok := pool.index[addr3]; ok && maxBlobs == 6 {
+			t.Errorf("expected insert of oversized blob tx to fail: blobs=24, maxBlobs=%d, err=%v", maxBlobs, errs[0])
+		} else if !ok && maxBlobs == 10 {
+			t.Errorf("expected insert of oversized blob tx to succeed: blobs=24, maxBlobs=%d, err=%v", maxBlobs, errs[0])
+		}
+
+		// Verify the regular two txs are always available.
+		if got := pool.Get(tx1.Hash()); got == nil {
+			t.Errorf("expected tx %s from %s in pool", tx1.Hash(), addr1)
+		}
+		if got := pool.Get(tx2.Hash()); got == nil {
+			t.Errorf("expected tx %s from %s in pool", tx2.Hash(), addr2)
+		}
+
+		// Verify all the calculated pool internals. Interestingly, this is **not**
+		// a duplication of the above checks, this actually validates the verifier
+		// using the above already hard coded checks.
+		//
+		// Do not remove this, nor alter the above to be generic.
+		verifyPoolInternals(t, pool)
+
+		pool.Close()
+	}
+}
+
+// TestLegacyTxConversion verifies that on Init, transactions stored in the
+// legacy *types.Transaction RLP format are detected and migrated into the new
+// blobTxForPool storage format, and that they remain retrievable via the pool
+// API after the conversion.
+func TestLegacyTxConversion(t *testing.T) {
+	storage := t.TempDir()
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, limboedTransactionStore), 0700)
+
+	// Initialize the pending store with two blob transactions encoded in the
+	// legacy format.
+	queuedir := filepath.Join(storage, pendingTransactionStore)
+	store, err := billy.Open(billy.Options{Path: queuedir}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
+	if err != nil {
+		t.Fatalf("failed to open billy: %v", err)
+	}
+
+	key1, _ := crypto.GenerateKey()
+	key2, _ := crypto.GenerateKey()
+	addr1 := crypto.PubkeyToAddress(key1.PublicKey)
+	addr2 := crypto.PubkeyToAddress(key2.PublicKey)
+
+	tx1 := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key1)
+	tx2 := makeMultiBlobTx(0, 1, 1000, 100, 2, 2, key2)
+
+	for _, tx := range []*types.Transaction{tx1, tx2} {
+		legacy, err := rlp.EncodeToBytes(tx)
+		if err != nil {
+			t.Fatalf("failed to legacy-encode tx: %v", err)
+		}
+		if _, err := store.Put(legacy); err != nil {
+			t.Fatalf("failed to put legacy blob: %v", err)
+		}
+	}
+	store.Close()
+
+	// Init should migrate the legacy entries into the new storage format.
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
+
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for pool.Get(tx1.Hash()) == nil || pool.Get(tx2.Hash()) == nil {
+		if time.Now().After(deadline) {
+			t.Fatalf("legacy txs were not converted in time")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Both transactions should be retrievable.
+	for _, want := range []*types.Transaction{tx1, tx2} {
+		got := pool.Get(want.Hash())
+		if got == nil {
+			t.Fatalf("migrated tx %s not found in pool", want.Hash())
+		}
+		if got.BlobTxSidecar() == nil {
+			t.Fatalf("migrated tx %s lost its sidecar", want.Hash())
+		}
+		if got.Hash() != want.Hash() {
+			t.Fatalf("migrated tx hash mismatch: have %s, want %s", got.Hash(), want.Hash())
+		}
+	}
+
+	// Legacy formats should not exist on pool.store
+	pool.store.Iterate(func(id uint64, size uint32, blob []byte) {
+		var ptx BlobTxForPool
+		if err := rlp.DecodeBytes(blob, &ptx); err != nil {
+			t.Errorf("entry %d not in new blobTxForPool format: %v", id, err)
+		}
+	})
+
+	verifyPoolInternals(t, pool)
+}
+
+func TestLegacyLimboConversion(t *testing.T) {
+	storage := t.TempDir()
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	limbodir := filepath.Join(storage, limboedTransactionStore)
+	os.MkdirAll(limbodir, 0700)
+
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key)
+
+	store, err := billy.Open(billy.Options{Path: limbodir}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
+	if err != nil {
+		t.Fatalf("failed to open limbo billy: %v", err)
+	}
+	data, err := rlp.EncodeToBytes(&struct {
+		TxHash common.Hash
+		Block  uint64
+		Tx     *types.Transaction
+	}{TxHash: tx.Hash(), Block: 42, Tx: tx})
+	if err != nil {
+		t.Fatalf("failed to legacy-encode limbo entry: %v", err)
+	}
+	if _, err := store.Put(data); err != nil {
+		t.Fatalf("failed to put legacy limbo entry: %v", err)
+	}
+	store.Close()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		pool.lock.RLock()
+		_, ok := pool.limbo.index[tx.Hash()]
+		pool.lock.RUnlock()
+		if ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("legacy limbo entry was not converted in time")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	pool.lock.Lock()
+	ptx, err := pool.limbo.pull(tx.Hash())
+	pool.lock.Unlock()
+	if err != nil {
+		t.Fatalf("failed to pull converted limbo entry: %v", err)
+	}
+	full, err := ptx.toTx()
+	if err != nil {
+		t.Fatalf("failed to reconstruct tx from converted limbo entry: %v", err)
+	}
+	if full.Hash() != tx.Hash() {
+		t.Fatalf("converted limbo tx hash mismatch: have %s, want %s", full.Hash(), tx.Hash())
+	}
+}
+
+// TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
+func TestBlobCountLimit(t *testing.T) {
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+	)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
+
+	// Make Prague-enabled custom chain config.
+	cancunTime := uint64(0)
+	pragueTime := uint64(0)
+	config := &params.ChainConfig{
+		ChainID:     big.NewInt(1),
+		LondonBlock: big.NewInt(0),
+		BerlinBlock: big.NewInt(0),
+		CancunTime:  &cancunTime,
+		PragueTime:  &pragueTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+		},
+	}
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: t.TempDir()}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+
+	// Attempt to add transactions.
+	var (
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 7, 0, key2)
+	)
+	errs := pool.Add([]*types.Transaction{tx1, tx2}, true)
+
+	// Check that first succeeds second fails.
+	if errs[0] != nil {
+		t.Fatalf("expected tx with 7 blobs to succeed, got: %v", errs[0])
+	}
+	if !errors.Is(errs[1], txpool.ErrTxBlobLimitExceeded) {
+		t.Fatalf("expected tx with 8 blobs to fail, got: %v", errs[1])
+	}
+
+	verifyPoolInternals(t, pool)
+	pool.Close()
+}
+
 // Tests that adding transaction will correctly store it in the persistent store
 // and update all the indices.
 //
@@ -1009,9 +1508,10 @@ func TestAdd(t *testing.T) {
 	}
 	// addtx is a helper sender/tx tuple to represent a new tx addition
 	type addtx struct {
-		from string
-		tx   *types.BlobTx
-		err  error
+		from  string
+		tx    *types.BlobTx
+		err   error
+		check func(*BlobPool, *types.Transaction) bool
 	}
 
 	tests := []struct {
@@ -1028,6 +1528,7 @@ func TestAdd(t *testing.T) {
 				"bob":    {balance: 21100 + blobSize, nonce: 1},
 				"claire": {balance: 21100 + blobSize},
 				"dave":   {balance: 21100 + blobSize, nonce: 1},
+				"eve":    {balance: 21100 + blobSize, nonce: 10}, // High nonce to test gapped acceptance
 			},
 			adds: []addtx{
 				{ // New account, no previous txs: accept nonce 0
@@ -1054,6 +1555,14 @@ func TestAdd(t *testing.T) {
 					from: "dave",
 					tx:   makeUnsignedTx(2, 1, 1, 1),
 					err:  core.ErrNonceTooHigh,
+				},
+				{ // Old account, 10 txs in chain: 0 pending: accept nonce 11 as gapped
+					from: "eve",
+					tx:   makeUnsignedTx(11, 1, 1, 1),
+					err:  nil,
+					check: func(pool *BlobPool, tx *types.Transaction) bool {
+						return pool.Status(tx.Hash()) == txpool.TxStatusQueued
+					},
 				},
 			},
 		},
@@ -1334,7 +1843,7 @@ func TestAdd(t *testing.T) {
 				{ // New account, no previous txs, nonce 0, but blob fee cap too low
 					from: "alice",
 					tx:   makeUnsignedTx(0, 1, 1, 0),
-					err:  txpool.ErrUnderpriced,
+					err:  txpool.ErrTxGasPriceTooLow,
 				},
 				{ // Same as above but blob fee cap equals minimum, should be accepted
 					from: "alice",
@@ -1365,11 +1874,10 @@ func TestAdd(t *testing.T) {
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend
-		storage, _ := os.MkdirTemp("", "blobpool-")
-		defer os.RemoveAll(storage) // late defer, still ok
+		storage := filepath.Join(t.TempDir(), fmt.Sprintf("test-%d", i))
 
 		os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
-		store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
+		store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(testMaxBlobsPerBlock), nil)
 
 		// Insert the seed transactions for the pool startup
 		var (
@@ -1384,27 +1892,27 @@ func TestAdd(t *testing.T) {
 
 			// Seed the state database with this account
 			statedb.AddBalance(addrs[acc], new(uint256.Int).SetUint64(seed.balance), tracing.BalanceChangeUnspecified)
-			statedb.SetNonce(addrs[acc], seed.nonce)
+			statedb.SetNonce(addrs[acc], seed.nonce, tracing.NonceChangeUnspecified)
 
 			// Sign the seed transactions and store them in the data store
 			for _, tx := range seed.txs {
 				signed := types.MustSignNewTx(keys[acc], types.LatestSigner(params.MainnetChainConfig), tx)
-				blob, _ := rlp.EncodeToBytes(signed)
+				blob := encodeForPool(signed)
 				store.Put(blob)
 			}
 		}
-		statedb.Commit(0, true)
+		statedb.Commit(params.Rules{IsEIP158: true}, 0)
 		store.Close()
 
 		// Create a blob pool out of the pre-seeded dats
 		chain := &testBlockChain{
 			config:  params.MainnetChainConfig,
-			basefee: uint256.NewInt(1050),
-			blobfee: uint256.NewInt(105),
+			basefee: uint256.NewInt(1),
+			blobfee: uint256.NewInt(1),
 			statedb: statedb,
 		}
-		pool := New(Config{Datadir: storage}, chain)
-		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		pool := New(Config{Datadir: storage}, chain, nil)
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("test %d: failed to create blob pool: %v", i, err)
 		}
 		verifyPoolInternals(t, pool)
@@ -1412,9 +1920,32 @@ func TestAdd(t *testing.T) {
 		// Add each transaction one by one, verifying the pool internals in between
 		for j, add := range tt.adds {
 			signed, _ := types.SignNewTx(keys[add.from], types.LatestSigner(params.MainnetChainConfig), add.tx)
-			if err := pool.add(signed); !errors.Is(err, add.err) {
-				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, err, add.err)
+			if errs := pool.Add([]*types.Transaction{signed}, true); !errors.Is(errs[0], add.err) {
+				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, errs[0], add.err)
 			}
+			if add.err == nil {
+				// first check if tx is in the pool (reorder queue or pending)
+				if !pool.Has(signed.Hash()) {
+					t.Errorf("test %d, tx %d: added transaction not found in pool", i, j)
+				}
+				// if it is pending, check if size matches
+				if pool.Status(signed.Hash()) == txpool.TxStatusPending {
+					size, exist := pool.lookup.sizeOfTx(signed.Hash())
+					if !exist {
+						t.Errorf("test %d, tx %d: failed to lookup transaction's size", i, j)
+					}
+					if size != signed.Size() {
+						t.Errorf("test %d, tx %d: transaction's size mismatches: have %v, want %v",
+							i, j, size, signed.Size())
+					}
+				}
+			}
+			if add.check != nil {
+				if !add.check(pool, signed) {
+					t.Errorf("test %d, tx %d: custom check failed", i, j)
+				}
+			}
+			// Verify the pool internals after each addition
 			verifyPoolInternals(t, pool)
 		}
 		verifyPoolInternals(t, pool)
@@ -1423,8 +1954,9 @@ func TestAdd(t *testing.T) {
 		if tt.block != nil {
 			// Fake a header for the new set of transactions
 			header := &types.Header{
-				Number:  big.NewInt(int64(chain.CurrentBlock().Number.Uint64() + 1)),
-				BaseFee: chain.CurrentBlock().BaseFee, // invalid, but nothing checks it, yolo
+				Number:     big.NewInt(int64(chain.CurrentBlock().Number.Uint64() + 1)),
+				Difficulty: common.Big0,
+				BaseFee:    chain.CurrentBlock().BaseFee, // invalid, but nothing checks it, yolo
 			}
 			// Inject the fake block into the chain
 			txs := make([]*types.Transaction, len(tt.block))
@@ -1439,7 +1971,7 @@ func TestAdd(t *testing.T) {
 			// Apply the nonce updates to the state db
 			for _, tx := range txs {
 				sender, _ := types.Sender(types.LatestSigner(params.MainnetChainConfig), tx)
-				chain.statedb.SetNonce(sender, tx.Nonce()+1)
+				chain.statedb.SetNonce(sender, tx.Nonce()+1, tracing.NonceChangeUnspecified)
 			}
 			pool.Reset(chain.CurrentBlock(), header)
 			verifyPoolInternals(t, pool)
@@ -1449,11 +1981,290 @@ func TestAdd(t *testing.T) {
 	}
 }
 
+func TestGetBlobs(t *testing.T) {
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
+
+	// Create a temporary folder for the persistent backend
+	storage := t.TempDir()
+
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(params.BlobTxMaxBlobs), nil)
+
+	// Create transactions from a few accounts.
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+		key3, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
+
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1) // [0, 6)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 6, key2)   // [6, 12)
+		tx3 = makeMultiBlobTx(0, 1, 800, 110, 6, 12, key3) // [12, 18)
+
+		blob1 = encodeForPool(tx1)
+		blob2 = encodeForPool(tx2)
+		blob3 = encodeForPool(tx3)
+	)
+
+	// Write the two safely sized txs to store. note: although the store is
+	// configured for a blob count of 6, it can also support around ~1mb of call
+	// data - all this to say that we aren't using the the absolute largest shelf
+	// available.
+	store.Put(blob1)
+	store.Put(blob2)
+	store.Put(blob3)
+	store.Close()
+
+	// Mimic a blobpool with max blob count of 6 upgrading to a max blob count of 24.
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
+
+	// Make custom chain config where the max blob count changes based on the loop variable.
+	cancunTime := uint64(0)
+	config := &params.ChainConfig{
+		ChainID:     big.NewInt(1),
+		LondonBlock: big.NewInt(0),
+		BerlinBlock: big.NewInt(0),
+		CancunTime:  &cancunTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: &params.BlobConfig{
+				Target:         12,
+				Max:            24,
+				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+			},
+		},
+	}
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+
+	// Verify the regular three txs are always available.
+	if got := pool.Get(tx1.Hash()); got == nil {
+		t.Errorf("expected tx %s from %s in pool", tx1.Hash(), addr1)
+	}
+	if got := pool.Get(tx2.Hash()); got == nil {
+		t.Errorf("expected tx %s from %s in pool", tx2.Hash(), addr2)
+	}
+	if got := pool.Get(tx3.Hash()); got == nil {
+		t.Errorf("expected tx %s from %s in pool", tx3.Hash(), addr3)
+	}
+
+	cases := []struct {
+		start      int
+		limit      int
+		fillRandom bool // Whether to randomly fill some of the requested blobs with unknowns
+		version    byte // Blob sidecar version to request
+	}{
+		{
+			start: 0, limit: 6,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 6,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 6, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 6, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 9,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 9,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 9, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 9, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 15,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 15,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 15, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 15, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 18,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 18,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 18, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 0, limit: 18, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+	}
+	for i, c := range cases {
+		var (
+			vhashes []common.Hash
+			filled  = make(map[int]struct{})
+		)
+		if c.fillRandom {
+			filled[len(vhashes)] = struct{}{}
+			vhashes = append(vhashes, testrand.Hash())
+		}
+		for j := c.start; j < c.limit; j++ {
+			vhashes = append(vhashes, testBlobVHashes[j])
+			if c.fillRandom && rand.Intn(2) == 0 {
+				filled[len(vhashes)] = struct{}{}
+				vhashes = append(vhashes, testrand.Hash())
+			}
+		}
+		if c.fillRandom {
+			filled[len(vhashes)] = struct{}{}
+			vhashes = append(vhashes, testrand.Hash())
+		}
+		blobs, _, proofs, err := pool.getBlobs(vhashes, c.version)
+		if err != nil {
+			t.Errorf("Unexpected error for case %d, %v", i, err)
+		}
+
+		// Cross validate what we received vs what we wanted
+		length := c.limit - c.start
+		wantLen := length + len(filled)
+		if len(blobs) != wantLen || len(proofs) != wantLen {
+			t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), wantLen)
+			continue
+		}
+
+		var unknown int
+		for j := 0; j < len(blobs); j++ {
+			testBlobIndex := c.start + j - unknown
+			if _, exist := filled[j]; exist {
+				if blobs[j] != nil || proofs[j] != nil {
+					t.Errorf("Unexpected blob and proof, item %d", j)
+				}
+				unknown++
+				continue
+			}
+			// If an item is missing, but shouldn't, error
+			if blobs[j] == nil || proofs[j] == nil {
+				// This is only an error if there was no version mismatch
+				if (c.version == types.BlobSidecarVersion1 && 6 <= testBlobIndex && testBlobIndex < 12) ||
+					(c.version == types.BlobSidecarVersion1 && (testBlobIndex < 6 || 12 <= testBlobIndex)) {
+					t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
+				}
+				continue
+			}
+			// Item retrieved, make sure the blob matches the expectation
+			if *blobs[j] != *testBlobs[testBlobIndex] {
+				t.Errorf("retrieved blob mismatch: item %d, hash %x", j, vhashes[j])
+				continue
+			}
+			// Item retrieved, make sure the proof matches the expectation
+			want, _ := kzg4844.ComputeCellProofs(blobs[j])
+			if !reflect.DeepEqual(want, proofs[j]) {
+				t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
+			}
+		}
+	}
+	pool.Close()
+}
+
+// TestEncodeForNetwork verifies that encodeForNetwork produces the correct wire
+// encoding for each (sidecar version, eth protocol version) combination.
+//   - eth/69, eth/70: blobs recovered from cells, output matches the original tx
+//   - eth/72:         blob payload omitted, output matches removeBlobs(tx)
+func TestEncodeForNetwork(t *testing.T) {
+	cases := []struct {
+		name   string
+		ethVer uint
+	}{
+		{"eth70", 70},
+		{"eth72", 72},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testEncodeForNetwork(t, tc.ethVer)
+		})
+	}
+}
+
+func testEncodeForNetwork(t *testing.T, ethVer uint) {
+	key, _ := crypto.GenerateKey()
+	tx := makeMultiBlobTx(0, 1, 1, 1, 1, 0, key)
+
+	wantTx := tx
+	if ethVer >= 72 {
+		wantTx = removeBlobs(tx)
+	}
+	wantRLP, err := rlp.EncodeToBytes(wantTx)
+	if err != nil {
+		t.Fatalf("failed to encode tx: %v", err)
+	}
+	storedRLP := encodeForPool(tx)
+
+	gotRLP, err := encodeForNetwork(storedRLP, ethVer)
+	if err != nil {
+		t.Fatalf("encodeForNetwork failed: %v", err)
+	}
+	if !bytes.Equal(gotRLP, wantRLP) {
+		t.Fatalf("network encoding mismatch: got %d bytes, want %d bytes", len(gotRLP), len(wantRLP))
+	}
+}
+
+// fakeBilly is a billy.Database implementation which just drops data on the floor.
+type fakeBilly struct {
+	billy.Database
+	count uint64
+}
+
+func (f *fakeBilly) Put(data []byte) (uint64, error) {
+	f.count++
+	return f.count, nil
+}
+
+var _ billy.Database = (*fakeBilly)(nil)
+
 // Benchmarks the time it takes to assemble the lazy pending transaction list
 // from the pool contents.
 func BenchmarkPoolPending100Mb(b *testing.B) { benchmarkPoolPending(b, 100_000_000) }
 func BenchmarkPoolPending1GB(b *testing.B)   { benchmarkPoolPending(b, 1_000_000_000) }
-func BenchmarkPoolPending10GB(b *testing.B)  { benchmarkPoolPending(b, 10_000_000_000) }
+func BenchmarkPoolPending10GB(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
+	benchmarkPoolPending(b, 10_000_000_000)
+}
 
 func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	// Calculate the maximum number of transaction that would fit into the pool
@@ -1471,12 +2282,15 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			blobfee: uint256.NewInt(blobfee),
 			statedb: statedb,
 		}
-		pool = New(Config{Datadir: ""}, chain)
+		pool = New(Config{Datadir: ""}, chain, nil)
 	)
 
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		b.Fatalf("failed to create blob pool: %v", err)
 	}
+	// Make the pool not use disk (just drop everything). This test never reads
+	// back the data, it just iterates over the pool in-memory items
+	pool.store = &fakeBilly{pool.store, 0}
 	// Fill the pool up with one random transaction from each account with the
 	// same price and everything to maximize the worst case scenario
 	for i := 0; i < int(capacity); i++ {
@@ -1490,9 +2304,10 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			b.Fatal(err)
 		}
 		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		pool.add(tx)
+		pooledTx, _ := newBlobTxForPool(tx)
+		pool.AddPooledTx(pooledTx)
 	}
-	statedb.Commit(0, true)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 	defer pool.Close()
 
 	// Benchmark assembling the pending
@@ -1500,13 +2315,190 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		p := pool.Pending(txpool.PendingFilter{
+		p, _ := pool.Pending(txpool.PendingFilter{
 			MinTip:  uint256.NewInt(1),
 			BaseFee: chain.basefee,
 			BlobFee: chain.blobfee,
+			BlobTxs: true,
 		})
 		if len(p) != int(capacity) {
 			b.Fatalf("have %d want %d", len(p), capacity)
 		}
+	}
+}
+
+func TestGetCells(t *testing.T) {
+	storage := t.TempDir()
+
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(params.BlobTxMaxBlobs), nil)
+
+	var (
+		key1, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 3, 0, key1) // blobs [0, 3)
+
+		pooledTx1, _ = newBlobTxForPool(tx1)
+
+		blob1, _ = rlp.EncodeToBytes(pooledTx1)
+	)
+
+	store.Put(blob1)
+	store.Close()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
+
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	tests := []struct {
+		name        string
+		hash        common.Hash
+		mask        types.CustodyBitmap
+		expectedLen int
+		shouldFail  bool
+	}{
+		{
+			name:        "Get cells with single index",
+			hash:        tx1.Hash(),
+			mask:        types.NewCustodyBitmap([]uint64{5}),
+			expectedLen: 3,
+			shouldFail:  false,
+		},
+		{
+			name:        "Get cells with all indices",
+			hash:        tx1.Hash(),
+			mask:        types.CustodyBitmapAll,
+			expectedLen: 384,
+			shouldFail:  false,
+		},
+		{
+			name:        "Get cells with no indices",
+			hash:        tx1.Hash(),
+			mask:        types.CustodyBitmap{},
+			expectedLen: 0,
+			shouldFail:  false,
+		},
+		{
+			name:        "Get cells for non-existent transaction",
+			hash:        common.Hash{0x01, 0x02, 0x03},
+			mask:        types.NewCustodyBitmap([]uint64{0, 1}),
+			expectedLen: 0,
+			shouldFail:  true,
+		},
+		{
+			name:        "Get cells with random indices",
+			hash:        tx1.Hash(),
+			mask:        types.NewRandomCustodyBitmap(8),
+			expectedLen: 24,
+			shouldFail:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vhashes := pool.GetBlobHashes(tt.hash)
+			if tt.shouldFail {
+				if vhashes != nil {
+					t.Errorf("expected nil vhashes for non-existent tx")
+				}
+				return
+			}
+			if vhashes == nil {
+				t.Fatalf("expected vhashes, got nil")
+			}
+			blobCells, _, err := pool.GetBlobCells(vhashes, tt.mask)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// Count total non-nil cells across all blobs
+			totalCells := 0
+			for _, bc := range blobCells {
+				for _, c := range bc {
+					if c != nil {
+						totalCells++
+					}
+				}
+			}
+			if totalCells != tt.expectedLen {
+				t.Errorf("expected %d cells, got %d", tt.expectedLen, totalCells)
+			}
+		})
+	}
+}
+
+// TestGetRLPCache checks that GetRLP memoizes encoded responses, keys full (pre
+// eth/72) and sparse (eth/72+) encodings separately, and does not serve a cached
+// entry once the transaction has left the pool.
+func TestGetRLPCache(t *testing.T) {
+	storage := t.TempDir()
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(params.BlobTxMaxBlobs), nil)
+
+	var (
+		key1, _  = crypto.GenerateKey()
+		addr1    = crypto.PubkeyToAddress(key1.PublicKey)
+		tx1      = makeMultiBlobTx(0, 1, 1000, 100, 1, 0, key1)
+		ptx1, _  = newBlobTxForPool(tx1)
+		blob1, _ = rlp.EncodeToBytes(ptx1)
+	)
+	store.Put(blob1)
+	store.Close()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	// Full (legacy) encoding is memoized and stable across requests.
+	full1 := pool.GetRLP(tx1.Hash(), 71)
+	if len(full1) == 0 {
+		t.Fatalf("expected full encoding, got empty")
+	}
+	full2 := pool.GetRLP(tx1.Hash(), 71)
+	if !bytes.Equal(full1, full2) {
+		t.Fatalf("cached full encoding differs from first request")
+	}
+	// Same backing array proves the repeat response was served from the cache
+	// rather than re-read from disk and re-encoded.
+	if &full1[0] != &full2[0] {
+		t.Fatalf("repeat request was re-encoded instead of served from the cache")
+	}
+	// Sparse (eth/72+) encoding omits blob payloads: smaller and cached separately.
+	sparse := pool.GetRLP(tx1.Hash(), 72)
+	if len(sparse) == 0 || len(sparse) >= len(full1) {
+		t.Fatalf("expected smaller sparse encoding, got %d vs full %d", len(sparse), len(full1))
+	}
+	// Unknown transaction is not served.
+	if got := pool.GetRLP(common.Hash{0xde, 0xad}, 71); got != nil {
+		t.Fatalf("expected nil for unknown tx, got %d bytes", len(got))
+	}
+	// After the tx leaves the pool, a cached entry must not be served.
+	pool.Clear()
+	if got := pool.GetRLP(tx1.Hash(), 71); got != nil {
+		t.Fatalf("expected nil after the tx left the pool, got %d bytes", len(got))
 	}
 }

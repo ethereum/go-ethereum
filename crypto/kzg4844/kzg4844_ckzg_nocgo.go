@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !ckzg || nacl || js || !cgo || gofuzz
+//go:build !ckzg || nacl || js || wasip1 || !cgo || gofuzz
 
 package kzg4844
 
@@ -58,5 +58,34 @@ func ckzgComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 
 // ckzgVerifyBlobProof verifies that the blob data corresponds to the provided commitment.
 func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
+	panic("unsupported platform")
+}
+
+// ckzgVerifyCellProofBatch verifies that the blob data corresponds to the provided commitment.
+func ckzgVerifyCellProofBatch(blobs []Blob, commitments []Commitment, proof []Proof) error {
+	panic("unsupported platform")
+}
+
+// ckzgComputeCellProofs returns the KZG cell proofs that are used to verify the blob against
+// the commitment.
+//
+// This method does not verify that the commitment is correct with respect to blob.
+func ckzgComputeCellProofs(blob *Blob) ([]Proof, error) {
+	panic("unsupported platform")
+}
+
+func ckzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof, cellIndices []uint64) error {
+	panic("unsupported platform")
+}
+
+func ckzgComputeCells(blobs []Blob) ([]Cell, error) {
+	panic("unsupported platform")
+}
+
+func ckzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
+	panic("unsupported platform")
+}
+
+func ckzgRecoverCells(cells []Cell, cellIndices []uint64) ([]Cell, error) {
 	panic("unsupported platform")
 }

@@ -69,7 +69,10 @@ func newCanonicalStore[T any](db ethdb.Iteratee, keyPrefix []byte) (*canonicalSt
 
 // databaseKey returns the database key belonging to the given period.
 func (cs *canonicalStore[T]) databaseKey(period uint64) []byte {
-	return binary.BigEndian.AppendUint64(append([]byte{}, cs.keyPrefix...), period)
+	key := make([]byte, len(cs.keyPrefix)+8)
+	copy(key, cs.keyPrefix)
+	binary.BigEndian.PutUint64(key[len(cs.keyPrefix):], period)
+	return key
 }
 
 // add adds the given item to the database. It also ensures that the range remains

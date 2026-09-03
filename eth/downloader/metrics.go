@@ -25,7 +25,6 @@ import (
 var (
 	headerInMeter      = metrics.NewRegisteredMeter("eth/downloader/headers/in", nil)
 	headerReqTimer     = metrics.NewRegisteredTimer("eth/downloader/headers/req", nil)
-	headerDropMeter    = metrics.NewRegisteredMeter("eth/downloader/headers/drop", nil)
 	headerTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/headers/timeout", nil)
 
 	bodyInMeter      = metrics.NewRegisteredMeter("eth/downloader/bodies/in", nil)
@@ -38,5 +37,14 @@ var (
 	receiptDropMeter    = metrics.NewRegisteredMeter("eth/downloader/receipts/drop", nil)
 	receiptTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/receipts/timeout", nil)
 
+	balInMeter      = metrics.NewRegisteredMeter("eth/downloader/bals/in", nil)
+	balReqTimer     = metrics.NewRegisteredTimer("eth/downloader/bals/req", nil)
+	balDropMeter    = metrics.NewRegisteredMeter("eth/downloader/bals/drop", nil)
+	balTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/bals/timeout", nil)
+
 	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
+
+	// snapPeerSkipMeter tracks snap peers skipped by the state syncer because
+	// they negotiated a version below the one the syncer requires.
+	snapPeerSkipMeter = metrics.NewRegisteredMeter("eth/downloader/snap/peerskip", nil)
 )

@@ -18,14 +18,18 @@ package eth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -80,7 +84,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if header == nil {
 		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+	stateDb, err := api.eth.BlockChain().StateAt(header)
 	if err != nil {
 		return state.Dump{}, err
 	}
@@ -100,20 +104,40 @@ type BadBlockArgs struct {
 	Hash  common.Hash            `json:"hash"`
 	Block map[string]interface{} `json:"block"`
 	RLP   string                 `json:"rlp"`
+
+	// Detail is the RLP-encoded execution detail recorded for blocks that were
+	// built locally and then failed to re-import: the build-time receipts,
+	// tried-and-reverted transactions and the failure reason. It is empty for
+	// ordinary bad blocks reported by peers.
+	//
+	// It is carried as opaque RLP rather than expanded into JSON so that it
+	// round-trips exactly, which is what lets a bad block be moved to another
+	// node and replayed there with debug_replayBadBlock.
+	Detail string `json:"detail,omitempty"`
 }
 
-// GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
-// and returns them as a JSON list of block hashes.
-func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
+// GetBadBlocks returns a list of the last 'bad blocks' that the client has
+// seen on the network and returns them as a JSON list of block hashes.
+//
+// If file is given, the bad block list will be written into the file instead.
+func (api *DebugAPI) GetBadBlocks(ctx context.Context, file *string) ([]*BadBlockArgs, error) {
 	var (
-		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
-		results = make([]*BadBlockArgs, 0, len(blocks))
+		blocks, details = rawdb.ReadAllBadBlocksWithDetails(api.eth.chainDb)
+		results         = make([]*BadBlockArgs, 0, len(blocks))
 	)
-	for _, block := range blocks {
+	for i, block := range blocks {
 		var (
 			blockRlp  string
 			blockJSON map[string]interface{}
+			detailRlp string
 		)
+		if details[i] != nil {
+			if b, err := rlp.EncodeToBytes(details[i]); err != nil {
+				log.Warn("Failed to encode bad block detail", "hash", block.Hash(), "err", err)
+			} else {
+				detailRlp = hexutil.Encode(b)
+			}
+		}
 		if rlpBytes, err := rlp.EncodeToBytes(block); err != nil {
 			blockRlp = err.Error() // Hacky, but hey, it works
 		} else {
@@ -121,12 +145,36 @@ func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) 
 		}
 		blockJSON = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig())
 		results = append(results, &BadBlockArgs{
-			Hash:  block.Hash(),
-			RLP:   blockRlp,
-			Block: blockJSON,
+			Hash:   block.Hash(),
+			RLP:    blockRlp,
+			Block:  blockJSON,
+			Detail: detailRlp,
 		})
 	}
+	if file != nil {
+		err := dumpBadBlocks(*file, results)
+		return nil, err
+	}
 	return results, nil
+}
+
+// dumpBadBlocks writes the bad blocks to path as JSON.
+//
+// It refuses to touch an existing file: the path comes from the caller, so
+// clobbering whatever happens to be there would turn this into an
+// arbitrary-write primitive. The file is created exclusively rather than stat-ed
+// first, so that two concurrent calls cannot both decide the path is free.
+func dumpBadBlocks(path string, results []*BadBlockArgs) error {
+	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
+	if err != nil {
+		if os.IsExist(err) {
+			return errors.New("location would overwrite an existing file")
+		}
+		return err
+	}
+	defer out.Close()
+
+	return json.NewEncoder(out).Encode(results)
 }
 
 // AccountRangeMaxResults is the maximum number of results to be returned per call
@@ -165,7 +213,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			if header == nil {
 				return state.Dump{}, fmt.Errorf("block #%d not found", number)
 			}
-			stateDb, err = api.eth.BlockChain().StateAt(header.Root)
+			stateDb, err = api.eth.BlockChain().StateAt(header)
 			if err != nil {
 				return state.Dump{}, err
 			}
@@ -175,7 +223,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
-		stateDb, err = api.eth.BlockChain().StateAt(block.Root())
+		stateDb, err = api.eth.BlockChain().StateAt(block.Header())
 		if err != nil {
 			return state.Dump{}, err
 		}
@@ -220,7 +268,7 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %v not found", blockNrOrHash)
 	}
-	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex, 0)
+	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
@@ -234,6 +282,8 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
 		return StorageRangeResult{}, nil // empty storage
 	}
+	// TODO(rjl493456442) it's problematic for traversing the state with in-memory
+	// state mutations, specifically txIndex != 0.
 	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
 	tr, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
 	if err != nil {
@@ -262,6 +312,13 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 		next := common.BytesToHash(it.Key)
 		result.NextKey = &next
 	}
+	// Iterator.Next returns false on both exhaustion and error, so a failure to
+	// resolve a trie node mid-range would otherwise be reported as a complete
+	// result (a nil NextKey claims all keys were returned). Surface the error
+	// instead of silently truncating.
+	if it.Err != nil {
+		return StorageRangeResult{}, it.Err
+	}
 	return result, nil
 }
 
@@ -271,26 +328,26 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 //
 // With one parameter, returns the list of accounts modified in the specified block.
 func (api *DebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64) ([]common.Address, error) {
-	var startBlock, endBlock *types.Block
+	var startHeader, endHeader *types.Header
 
-	startBlock = api.eth.blockchain.GetBlockByNumber(startNum)
-	if startBlock == nil {
+	startHeader = api.eth.blockchain.GetHeaderByNumber(startNum)
+	if startHeader == nil {
 		return nil, fmt.Errorf("start block %x not found", startNum)
 	}
 
 	if endNum == nil {
-		endBlock = startBlock
-		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
-		if startBlock == nil {
-			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
+		endHeader = startHeader
+		startHeader = api.eth.blockchain.GetHeaderByHash(startHeader.ParentHash)
+		if startHeader == nil {
+			return nil, fmt.Errorf("block %x has no parent", endHeader.Number)
 		}
 	} else {
-		endBlock = api.eth.blockchain.GetBlockByNumber(*endNum)
-		if endBlock == nil {
+		endHeader = api.eth.blockchain.GetHeaderByNumber(*endNum)
+		if endHeader == nil {
 			return nil, fmt.Errorf("end block %d not found", *endNum)
 		}
 	}
-	return api.getModifiedAccounts(startBlock, endBlock)
+	return api.getModifiedAccounts(startHeader, endHeader)
 }
 
 // GetModifiedAccountsByHash returns all accounts that have changed between the
@@ -299,38 +356,38 @@ func (api *DebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64
 //
 // With one parameter, returns the list of accounts modified in the specified block.
 func (api *DebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *common.Hash) ([]common.Address, error) {
-	var startBlock, endBlock *types.Block
-	startBlock = api.eth.blockchain.GetBlockByHash(startHash)
-	if startBlock == nil {
+	var startHeader, endHeader *types.Header
+	startHeader = api.eth.blockchain.GetHeaderByHash(startHash)
+	if startHeader == nil {
 		return nil, fmt.Errorf("start block %x not found", startHash)
 	}
 
 	if endHash == nil {
-		endBlock = startBlock
-		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
-		if startBlock == nil {
-			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
+		endHeader = startHeader
+		startHeader = api.eth.blockchain.GetHeaderByHash(startHeader.ParentHash)
+		if startHeader == nil {
+			return nil, fmt.Errorf("block %x has no parent", endHeader.Number)
 		}
 	} else {
-		endBlock = api.eth.blockchain.GetBlockByHash(*endHash)
-		if endBlock == nil {
+		endHeader = api.eth.blockchain.GetHeaderByHash(*endHash)
+		if endHeader == nil {
 			return nil, fmt.Errorf("end block %x not found", *endHash)
 		}
 	}
-	return api.getModifiedAccounts(startBlock, endBlock)
+	return api.getModifiedAccounts(startHeader, endHeader)
 }
 
-func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
-	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
-		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
+func (api *DebugAPI) getModifiedAccounts(startHeader, endHeader *types.Header) ([]common.Address, error) {
+	if startHeader.Number.Uint64() >= endHeader.Number.Uint64() {
+		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startHeader.Number.Uint64(), endHeader.Number.Uint64())
 	}
 	triedb := api.eth.BlockChain().TrieDB()
 
-	oldTrie, err := trie.NewStateTrie(trie.StateTrieID(startBlock.Root()), triedb)
+	oldTrie, err := trie.NewStateTrie(trie.StateTrieID(startHeader.Root), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewStateTrie(trie.StateTrieID(endBlock.Root()), triedb)
+	newTrie, err := trie.NewStateTrie(trie.StateTrieID(endHeader.Root), triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -442,4 +499,44 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 		return "", errors.New("trie flush interval is undefined for path-based scheme")
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
+}
+
+func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*stateless.ExtWitness, error) {
+	bc := api.eth.blockchain
+	block, err := api.eth.APIBackend.BlockByNumberOrHash(context.Background(), bn)
+	if err != nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
+	}
+	// BlockByNumberOrHash returns a nil block without an error when the
+	// requested block does not exist (per the RPC spec). Guard against it
+	// to avoid a nil pointer dereference below.
+	if block == nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
+	}
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v found, but parent missing", bn)
+	}
+	config := core.ExecuteConfig{
+		WriteState:   false,
+		EnableTracer: false,
+		MakeWitness:  true,
+	}
+	result, err := bc.ProcessBlock(context.Background(), parent.Root, block, config)
+	if err != nil {
+		return nil, err
+	}
+	return result.Witness().ToExtWitness(), nil
+}
+
+// ClearTxpool clears all transactions from the transaction pool.
+// This method removes all pending and queued transactions from both the
+// legacy transaction pool and the blob transaction pool.
+//
+// Note: This operation invokes Sync() internally and should be used with
+// caution as it can be susceptible to DoS vectors. It's primarily intended
+// for testing and debugging purposes.
+func (api *DebugAPI) ClearTxpool() error {
+	api.eth.TxPool().Clear()
+	return nil
 }

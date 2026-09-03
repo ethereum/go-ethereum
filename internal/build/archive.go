@@ -272,7 +272,7 @@ func extractFile(arpath string, armode os.FileMode, data io.Reader, dest string)
 		return fmt.Errorf("path %q escapes archive destination", target)
 	}
 
-	// Remove the preivously-extracted file if it exists
+	// Remove the previously-extracted file if it exists
 	if err := os.RemoveAll(target); err != nil {
 		return err
 	}

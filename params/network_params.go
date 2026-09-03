@@ -20,14 +20,6 @@ package params
 // aren't necessarily consensus related.
 
 const (
-	// BloomBitsBlocks is the number of blocks a single bloom bit section vector
-	// contains on the server side.
-	BloomBitsBlocks uint64 = 4096
-
-	// BloomConfirms is the number of confirmation blocks before a bloom section is
-	// considered probably final and its rotated bits are calculated.
-	BloomConfirms = 256
-
 	// FullImmutabilityThreshold is the number of blocks after which a chain segment is
 	// considered immutable (i.e. soft finality). It is used by the downloader as a
 	// hard limit against deep ancestors, by the blockchain against deep reorgs, by

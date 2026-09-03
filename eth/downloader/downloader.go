@@ -20,7 +20,7 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"math/big"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,11 +30,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -42,6 +44,7 @@ var (
 	MaxBlockFetch   = 128 // Number of blocks to be fetched per retrieval request
 	MaxHeaderFetch  = 192 // Number of block headers to be fetched per retrieval request
 	MaxReceiptFetch = 256 // Number of transaction receipts to allow fetching per request
+	MaxBALFetch     = 128 // Number of block access lists to allow fetching per request
 
 	maxQueuedHeaders           = 32 * 1024                        // [eth/62] Maximum number of headers to queue for import (DOS protection)
 	maxHeadersProcess          = 2048                             // Number of header download results to import at once into the chain
@@ -63,10 +66,22 @@ var (
 	errInvalidChain            = errors.New("retrieved hash chain is invalid")
 	errInvalidBody             = errors.New("retrieved block body is invalid")
 	errInvalidReceipt          = errors.New("retrieved receipt is invalid")
+	errInvalidBAL              = errors.New("retrieved block access list is invalid")
 	errCancelStateFetch        = errors.New("state data download canceled (requested)")
 	errCancelContentProcessing = errors.New("content processing canceled (requested)")
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errNoPivotHeader           = errors.New("pivot header is not found")
+)
+
+// SyncMode defines the sync method of the downloader.
+// Deprecated: use ethconfig.SyncMode instead
+type SyncMode = ethconfig.SyncMode
+
+const (
+	// Deprecated: use ethconfig.FullSync
+	FullSync = ethconfig.FullSync
+	// Deprecated: use ethconfig.SnapSync
+	SnapSync = ethconfig.SnapSync
 )
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
@@ -84,8 +99,12 @@ type headerTask struct {
 }
 
 type Downloader struct {
-	mode atomic.Uint32  // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
-	mux  *event.TypeMux // Event multiplexer to announce sync operation events
+	mode  atomic.Uint32 // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
+	moder *syncModer    // Sync mode management, deliver the appropriate sync mode choice for each cycle
+
+	// Event feed for downloader events
+	feed  event.FeedOf[SyncEvent]
+	scope event.SubscriptionScope
 
 	queue *queue   // Scheduler for selecting the hashes to download
 	peers *peerSet // Set of active peers from which download can proceed
@@ -109,6 +128,12 @@ type Downloader struct {
 	committed     atomic.Bool
 	ancientLimit  uint64 // The maximum block number which can be regarded as ancient data.
 
+	// The cutoff block number and hash before which chain segments (bodies
+	// and receipts) are skipped during synchronization. 0 means the entire
+	// chain segment is aimed for synchronization.
+	chainCutoffNumber uint64
+	chainCutoffHash   common.Hash
+
 	// Channels
 	headerProcCh chan *headerTask // Channel to feed the header processor new tasks
 
@@ -119,7 +144,7 @@ type Downloader struct {
 	pivotHeader *types.Header // Pivot block header to dynamically push the syncing state root
 	pivotLock   sync.RWMutex  // Lock protecting pivot header reads from updates
 
-	SnapSyncer     *snap.Syncer // TODO(karalabe): make private! hack for now
+	snapSyncer     snap.Syncer // snap/1 or snap/2 state syncer, selected at construction
 	stateSyncStart chan *stateSync
 
 	// Cancellation and termination
@@ -133,6 +158,7 @@ type Downloader struct {
 	// Testing hooks
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
 	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
+	balFetchHook     func([]*types.Header) // Method to call upon starting a block access list fetch
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
 
 	// Progress reporting metrics
@@ -146,17 +172,14 @@ type BlockChain interface {
 	// HasHeader verifies a header's presence in the local chain.
 	HasHeader(common.Hash, uint64) bool
 
+	// HasState checks if state trie is fully present in the database or not.
+	HasState(root common.Hash) bool
+
 	// GetHeaderByHash retrieves a header from the local chain.
 	GetHeaderByHash(common.Hash) *types.Header
 
 	// CurrentHeader retrieves the head header from the local chain.
 	CurrentHeader() *types.Header
-
-	// GetTd returns the total difficulty of a local block.
-	GetTd(common.Hash, uint64) *big.Int
-
-	// InsertHeaderChain inserts a batch of headers into the local chain.
-	InsertHeaderChain([]*types.Header) (int, error)
 
 	// SetHead rewinds the local chain to a new head.
 	SetHead(uint64) error
@@ -167,6 +190,10 @@ type BlockChain interface {
 	// HasFastBlock verifies a snap block's presence in the local chain.
 	HasFastBlock(common.Hash, uint64) bool
 
+	// GetCanonicalHash returns the canonical hash for the block at the given
+	// number, or the zero hash if no canonical block is present at that height.
+	GetCanonicalHash(uint64) common.Hash
+
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
 
@@ -176,14 +203,28 @@ type BlockChain interface {
 	// CurrentSnapBlock retrieves the head snap block from the local chain.
 	CurrentSnapBlock() *types.Header
 
-	// SnapSyncCommitHead directly commits the head block to a certain entity.
-	SnapSyncCommitHead(common.Hash) error
+	// SnapSyncStart explicitly notifies the chain that snap sync is scheduled and
+	// marks chain mutations as disallowed.
+	SnapSyncStart() error
+
+	// SnapSyncComplete directly commits the head block to a certain entity.
+	SnapSyncComplete(hash common.Hash, isSnapV2 bool) error
+
+	// InsertHeadersBeforeCutoff inserts a batch of headers before the configured
+	// chain cutoff into the ancient store.
+	InsertHeadersBeforeCutoff([]*types.Header) (int, error)
 
 	// InsertChain inserts a batch of blocks into the local chain.
 	InsertChain(types.Blocks) (int, error)
 
-	// InsertReceiptChain inserts a batch of receipts into the local chain.
-	InsertReceiptChain(types.Blocks, []types.Receipts, uint64) (int, error)
+	// InterruptInsert disables or enables chain insertion.
+	InterruptInsert(on bool)
+
+	// InsertReceiptChain inserts a batch of blocks along with their receipts
+	// into the local chain. Blocks older than the specified `ancientLimit`
+	// are stored directly in the ancient store, while newer blocks are stored
+	// in the live key-value store.
+	InsertReceiptChain(types.Blocks, []rlp.RawValue, uint64) (int, error)
 
 	// Snapshots returns the blockchain snapshot tree to paused it during sync.
 	Snapshots() *snapshot.Tree
@@ -191,25 +232,37 @@ type BlockChain interface {
 	// TrieDB retrieves the low level trie database used for interacting
 	// with trie nodes.
 	TrieDB() *triedb.Database
+
+	// HistoryPruningCutoff returns the configured history pruning point.
+	// Block bodies along with the receipts will be skipped for synchronization.
+	HistoryPruningCutoff() (uint64, common.Hash)
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, mode ethconfig.SyncMode, chain BlockChain, dropPeer peerDropFn, success func(), snapV2 bool) *Downloader {
+	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
 	dl := &Downloader{
-		stateDB:        stateDb,
-		mux:            mux,
-		queue:          newQueue(blockCacheMaxItems, blockCacheInitialItems),
-		peers:          newPeerSet(),
-		blockchain:     chain,
-		dropPeer:       dropPeer,
-		headerProcCh:   make(chan *headerTask, 1),
-		quitCh:         make(chan struct{}),
-		SnapSyncer:     snap.NewSyncer(stateDb, chain.TrieDB().Scheme()),
-		stateSyncStart: make(chan *stateSync),
-		syncStartBlock: chain.CurrentSnapBlock().Number.Uint64(),
+		stateDB:           stateDb,
+		moder:             newSyncModer(mode, chain, stateDb),
+		queue:             newQueue(blockCacheMaxItems, blockCacheInitialItems),
+		peers:             newPeerSet(),
+		blockchain:        chain,
+		chainCutoffNumber: cutoffNumber,
+		chainCutoffHash:   cutoffHash,
+		dropPeer:          dropPeer,
+		headerProcCh:      make(chan *headerTask, 1),
+		quitCh:            make(chan struct{}),
+		stateSyncStart:    make(chan *stateSync),
+		syncStartBlock:    chain.CurrentSnapBlock().Number.Uint64(),
+	}
+	// Select the snap/1 or snap/2 state syncer based on the feature flag.
+	if snapV2 {
+		dl.snapSyncer = snap.NewV2Syncer(stateDb, chain.TrieDB().Scheme())
+	} else {
+		dl.snapSyncer = snap.NewV1Syncer(stateDb, chain.TrieDB().Scheme())
 	}
 	// Create the post-merge skeleton syncer and start the process
-	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success))
+	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success), chain)
 
 	go dl.stateFetcher()
 	return dl
@@ -230,14 +283,14 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	current := uint64(0)
 	mode := d.getMode()
 	switch mode {
-	case FullSync:
+	case ethconfig.FullSync:
 		current = d.blockchain.CurrentBlock().Number.Uint64()
-	case SnapSync:
+	case ethconfig.SnapSync:
 		current = d.blockchain.CurrentSnapBlock().Number.Uint64()
 	default:
 		log.Error("Unknown downloader mode", "mode", mode)
 	}
-	progress, pending := d.SnapSyncer.Progress()
+	progress := d.snapSyncer.Progress()
 
 	return ethereum.SyncProgress{
 		StartingBlock:       d.syncStatsChainOrigin,
@@ -249,12 +302,19 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 		SyncedBytecodeBytes: uint64(progress.BytecodeBytes),
 		SyncedStorage:       progress.StorageSynced,
 		SyncedStorageBytes:  uint64(progress.StorageBytes),
+
+		// Snap/1 progress fields
 		HealedTrienodes:     progress.TrienodeHealSynced,
 		HealedTrienodeBytes: uint64(progress.TrienodeHealBytes),
 		HealedBytecodes:     progress.BytecodeHealSynced,
 		HealedBytecodeBytes: uint64(progress.BytecodeHealBytes),
-		HealingTrienodes:    pending.TrienodeHeal,
-		HealingBytecode:     pending.BytecodeHeal,
+		HealingTrienodes:    progress.HealingTrienodes,
+		HealingBytecode:     progress.HealingBytecode,
+
+		// Snap/2 progress fields
+		SyncedAccessLists: progress.AccessListSynced,
+		TotalAccessLists:  progress.AccessListTotal,
+		TrieGenProgress:   progress.TrieGenPercent,
 	}
 }
 
@@ -301,12 +361,12 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error {
+func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	// The beacon header syncer is async. It will start this synchronization and
 	// will continue doing other tasks. However, if synchronization needs to be
 	// cancelled, the syncer needs to know if we reached the startup point (and
-	// inited the cancel channel) or not yet. Make sure that we'll signal even in
-	// case of a failure.
+	// registered the fetchers for cancellation) or not yet. Make sure that we'll
+	// signal even in case of a failure.
 	if beaconPing != nil {
 		defer func() {
 			select {
@@ -326,28 +386,32 @@ func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error 
 	if d.notified.CompareAndSwap(false, true) {
 		log.Info("Block synchronisation started")
 	}
-	if mode == SnapSync {
-		// Snap sync will directly modify the persistent state, making the entire
-		// trie database unusable until the state is fully synced. To prevent any
-		// subsequent state reads, explicitly disable the trie database and state
-		// syncer is responsible to address and correct any state missing.
-		if d.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
-			if err := d.blockchain.TrieDB().Disable(); err != nil {
-				return err
+
+	// Obtain the synchronized used in this cycle
+	mode := d.moder.get(true)
+	defer func() {
+		// The snap-sync mode is usually already disabled right after the pivot
+		// commitment; this is the fallback for the cycles terminating without
+		// a pivot block (e.g. a short chain fully imported from genesis).
+		if err == nil && mode == ethconfig.SnapSync {
+			if d.moder.disableSnap() {
+				log.Info("Disabled snap-sync after the initial sync cycle")
 			}
 		}
-		// Snap sync uses the snapshot namespace to store potentially flaky data until
-		// sync completely heals and finishes. Pause snapshot maintenance in the mean-
-		// time to prevent access.
-		if snapshots := d.blockchain.Snapshots(); snapshots != nil { // Only nil in tests
-			snapshots.Disable()
+	}()
+
+	// Disable chain mutations when snap sync is selected, ensuring the
+	// downloader is the sole mutator.
+	if mode == ethconfig.SnapSync {
+		if err := d.blockchain.SnapSyncStart(); err != nil {
+			return err
 		}
 	}
 	// Reset the queue, peer set and wake channels to clean any internal leftover state
 	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
 	d.peers.Reset()
 
-	for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
+	for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh, d.queue.balWakeCh} {
 		select {
 		case <-ch:
 		default:
@@ -369,31 +433,41 @@ func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error 
 
 	// Atomically set the requested sync mode
 	d.mode.Store(uint32(mode))
+	defer d.mode.Store(0)
 
-	if beaconPing != nil {
-		close(beaconPing)
-	}
-	return d.syncToHead()
+	return d.syncToHead(beaconPing)
 }
 
+// getMode returns the sync mode used within current cycle.
 func (d *Downloader) getMode() SyncMode {
 	return SyncMode(d.mode.Load())
 }
 
+// ConfigSyncMode returns the sync mode configured for the node.
+// The actual running sync mode can differ from this.
+func (d *Downloader) ConfigSyncMode() SyncMode {
+	return d.moder.get(false)
+}
+
+// SubscribeSyncEvents creates a subscription for downloader sync events
+func (d *Downloader) SubscribeSyncEvents(ch chan<- SyncEvent) event.Subscription {
+	return d.scope.Track(d.feed.Subscribe(ch))
+}
+
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
-func (d *Downloader) syncToHead() (err error) {
-	d.mux.Post(StartEvent{})
+func (d *Downloader) syncToHead(beaconPing chan struct{}) (err error) {
+	mode := d.getMode()
+	d.feed.Send(SyncEvent{Type: SyncStarted, Mode: mode})
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.mux.Post(FailedEvent{err})
+			d.feed.Send(SyncEvent{Type: SyncFailed, Mode: mode, Err: err})
 		} else {
 			latest := d.blockchain.CurrentHeader()
-			d.mux.Post(DoneEvent{latest})
+			d.feed.Send(SyncEvent{Type: SyncCompleted, Mode: mode, Latest: latest})
 		}
 	}()
-	mode := d.getMode()
 
 	log.Debug("Backfilling with the network", "mode", mode)
 	defer func(start time.Time) {
@@ -434,8 +508,20 @@ func (d *Downloader) syncToHead() (err error) {
 	// threshold (i.e. new chain). In that case we won't really snap sync
 	// anyway, but still need a valid pivot block to avoid some code hitting
 	// nil panics on access.
-	if mode == SnapSync && pivot == nil {
+	if mode == ethconfig.SnapSync && pivot == nil {
 		pivot = d.blockchain.CurrentBlock()
+	}
+	// If the snap syncer froze its pivot in a previous cycle, resume against
+	// the frozen header instead of a fresh one.
+	if mode == ethconfig.SnapSync && pivot != nil {
+		if frozen := d.snapSyncer.FrozenPivot(); frozen != nil {
+			if rawdb.ReadCanonicalHash(d.stateDB, frozen.Number.Uint64()) == frozen.Hash() {
+				log.Info("Resuming snap sync against frozen pivot", "number", frozen.Number, "hash", frozen.Hash())
+				pivot = frozen
+			} else {
+				log.Warn("Frozen pivot is no longer canonical", "number", frozen.Number, "hash", frozen.Hash())
+			}
+		}
 	}
 	height := latest.Number.Uint64()
 
@@ -452,7 +538,7 @@ func (d *Downloader) syncToHead() (err error) {
 	d.syncStatsLock.Unlock()
 
 	// Ensure our origin point is below any snap sync pivot point
-	if mode == SnapSync {
+	if mode == ethconfig.SnapSync {
 		if height <= uint64(fsMinFullBlocks) {
 			origin = 0
 		} else {
@@ -460,16 +546,16 @@ func (d *Downloader) syncToHead() (err error) {
 			if pivotNumber <= origin {
 				origin = pivotNumber - 1
 			}
-			// Write out the pivot into the database so a rollback beyond it will
-			// reenable snap sync
+			// Write out the pivot into the database so a rollback beyond it
+			// can be detected
 			rawdb.WriteLastPivotNumber(d.stateDB, pivotNumber)
 		}
 	}
 	d.committed.Store(true)
-	if mode == SnapSync && pivot.Number.Uint64() != 0 {
+	if mode == ethconfig.SnapSync && pivot.Number.Uint64() != 0 {
 		d.committed.Store(false)
 	}
-	if mode == SnapSync {
+	if mode == ethconfig.SnapSync {
 		// Set the ancient data limitation. If we are running snap sync, all block
 		// data older than ancientLimit will be written to the ancient store. More
 		// recent data will be written to the active database and will wait for the
@@ -483,7 +569,7 @@ func (d *Downloader) syncToHead() (err error) {
 		//
 		// For non-merged networks, if there is a checkpoint available, then calculate
 		// the ancientLimit through that. Otherwise calculate the ancient limit through
-		// the advertised height of the remote peer. This most is mostly a fallback for
+		// the advertised height of the remote peer. This is mostly a fallback for
 		// legacy networks, but should eventually be dropped. TODO(karalabe).
 		//
 		// Beacon sync, use the latest finalized block as the ancient limit
@@ -495,13 +581,25 @@ func (d *Downloader) syncToHead() (err error) {
 		} else {
 			d.ancientLimit = 0
 		}
+		// Extend the ancient chain segment range if the ancient limit is even
+		// below the pre-configured chain cutoff.
+		if d.chainCutoffNumber != 0 && d.chainCutoffNumber > d.ancientLimit {
+			d.ancientLimit = d.chainCutoffNumber
+			log.Info("Extend the ancient range with configured cutoff", "cutoff", d.chainCutoffNumber)
+		}
 		frozen, _ := d.stateDB.Ancients() // Ignore the error here since light client can also hit here.
 
 		// If a part of blockchain data has already been written into active store,
 		// disable the ancient style insertion explicitly.
-		if origin >= frozen && frozen != 0 {
+		if origin >= frozen && origin != 0 {
 			d.ancientLimit = 0
-			log.Info("Disabling direct-ancient mode", "origin", origin, "ancient", frozen-1)
+			var ancient string
+			if frozen == 0 {
+				ancient = "null"
+			} else {
+				ancient = fmt.Sprintf("%d", frozen-1)
+			}
+			log.Info("Disabling direct-ancient mode", "origin", origin, "ancient", ancient)
 		} else if d.ancientLimit > 0 {
 			log.Debug("Enabling direct-ancient mode", "ancient", d.ancientLimit)
 		}
@@ -513,33 +611,50 @@ func (d *Downloader) syncToHead() (err error) {
 			log.Info("Truncated excess ancient chain segment", "oldhead", frozen-1, "newhead", origin)
 		}
 	}
+	// Skip ancient chain segments if Geth is running with a configured chain cutoff.
+	// These segments are not guaranteed to be available in the network.
+	chainOffset := origin + 1
+	if mode == ethconfig.SnapSync && d.chainCutoffNumber != 0 {
+		if chainOffset < d.chainCutoffNumber {
+			chainOffset = d.chainCutoffNumber
+			log.Info("Skip chain segment before cutoff", "origin", origin, "cutoff", d.chainCutoffNumber)
+		}
+	}
 	// Initiate the sync using a concurrent header and content retrieval algorithm
-	d.queue.Prepare(origin+1, mode)
+	d.queue.Prepare(chainOffset, mode)
 
 	// In beacon mode, headers are served by the skeleton syncer
 	fetchers := []func() error{
-		func() error { return d.fetchHeaders(origin + 1) },  // Headers are always retrieved
-		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and snap sync
-		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during snap sync
+		func() error { return d.fetchHeaders(origin + 1) },   // Headers are always retrieved
+		func() error { return d.fetchBodies(chainOffset) },   // Bodies are retrieved during normal and snap sync
+		func() error { return d.fetchReceipts(chainOffset) }, // Receipts are retrieved during snap sync
+		func() error { return d.fetchBALs(chainOffset) },     // Access lists are retrieved best effort for the chain tail
 		func() error { return d.processHeaders(origin + 1) },
 	}
-	if mode == SnapSync {
+	if mode == ethconfig.SnapSync {
 		d.pivotLock.Lock()
 		d.pivotHeader = pivot
 		d.pivotLock.Unlock()
 
 		fetchers = append(fetchers, func() error { return d.processSnapSyncContent() })
-	} else if mode == FullSync {
+	} else if mode == ethconfig.FullSync {
 		fetchers = append(fetchers, func() error { return d.processFullSyncContent() })
 	}
-	return d.spawnSync(fetchers)
+	return d.spawnSync(fetchers, beaconPing)
 }
 
 // spawnSync runs d.process and all given fetcher functions to completion in
 // separate goroutines, returning the first error that appears.
-func (d *Downloader) spawnSync(fetchers []func() error) error {
+func (d *Downloader) spawnSync(fetchers []func() error, beaconPing chan struct{}) error {
 	errc := make(chan error, len(fetchers))
 	d.cancelWg.Add(len(fetchers))
+
+	// Only now that the fetchers are registered on the cancellation WaitGroup
+	// can a concurrent Cancel wait for them instead of racing the registration;
+	// signal the beacon syncer that it's safe to cancel.
+	if beaconPing != nil {
+		close(beaconPing)
+	}
 	for _, fn := range fetchers {
 		go func() { defer d.cancelWg.Done(); errc <- fn() }()
 	}
@@ -585,13 +700,18 @@ func (d *Downloader) cancel() {
 // Cancel aborts all of the operations and waits for all download goroutines to
 // finish before returning.
 func (d *Downloader) Cancel() {
+	d.blockchain.InterruptInsert(true)
 	d.cancel()
 	d.cancelWg.Wait()
+	d.blockchain.InterruptInsert(false)
 }
 
 // Terminate interrupts the downloader, canceling all pending operations.
 // The downloader cannot be reused after calling Terminate.
 func (d *Downloader) Terminate() {
+	// Unsubscribe all subscriptions registered from downloader
+	d.scope.Close()
+
 	// Close the termination channel (make sure double close is allowed)
 	d.quitLock.Lock()
 	select {
@@ -630,6 +750,19 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 	return err
 }
 
+// fetchBALs iteratively downloads the scheduled block access lists, taking any
+// available peers, reserving a chunk of access lists for each, waiting for
+// delivery and also periodically checking for timeouts. Access lists are a
+// best-effort component: blocks are imported without one if it does not arrive
+// by the time all their mandatory components are downloaded.
+func (d *Downloader) fetchBALs(from uint64) error {
+	log.Debug("Downloading block access lists", "origin", from)
+	err := d.concurrentFetch((*balQueue)(d))
+
+	log.Debug("Block access list download terminated", "err", err)
+	return err
+}
+
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
@@ -637,6 +770,8 @@ func (d *Downloader) processHeaders(origin uint64) error {
 	var (
 		mode  = d.getMode()
 		timer = time.NewTimer(time.Second)
+
+		lastBALCutoffUpdate time.Time // Timestamp of the last access list cutoff refresh
 	)
 	defer timer.Stop()
 
@@ -649,7 +784,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 			// Terminate header processing if we synced up
 			if task == nil || len(task.headers) == 0 {
 				// Notify everyone that headers are fully processed
-				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
+				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh, d.queue.balWakeCh} {
 					select {
 					case ch <- false:
 					case <-d.cancelCh:
@@ -657,8 +792,28 @@ func (d *Downloader) processHeaders(origin uint64) error {
 				}
 				return nil
 			}
+			// Restrict block access list retrieval to the immutability window
+			// below the head of the network chain. Access lists further back
+			// are not guaranteed to be retained by the network, so fetching
+			// them is not even attempted.
+			//
+			// Resolving the skeleton bounds hits the database, so only refresh
+			// the cutoff occasionally. Staleness is harmless: the cutoff only
+			// moves up as the head progresses, and an outdated one merely
+			// schedules a few extra blocks at the edge of the window, whose
+			// access lists are attempted and dropped on failure anyway.
+			if time.Since(lastBALCutoffUpdate) > time.Minute {
+				if latest, _, _, err := d.skeleton.Bounds(); err == nil {
+					if head := latest.Number.Uint64(); head > fullMaxForkAncestry {
+						d.queue.SetBALCutoff(head - fullMaxForkAncestry)
+					} else {
+						d.queue.SetBALCutoff(0)
+					}
+				}
+				lastBALCutoffUpdate = time.Now()
+			}
 			// Otherwise split the chunk of headers into batches and process them
-			headers, hashes := task.headers, task.hashes
+			headers, hashes, scheduled := task.headers, task.hashes, false
 
 			for len(headers) > 0 {
 				// Terminate if something failed in between processing chunks
@@ -675,17 +830,21 @@ func (d *Downloader) processHeaders(origin uint64) error {
 				chunkHeaders := headers[:limit]
 				chunkHashes := hashes[:limit]
 
-				// In case of header only syncing, validate the chunk immediately
-				if mode == SnapSync {
-					// Although the received headers might be all valid, a legacy
-					// PoW/PoA sync must not accept post-merge headers. Make sure
-					// that any transition is rejected at this point.
-					if len(chunkHeaders) > 0 {
-						if n, err := d.blockchain.InsertHeaderChain(chunkHeaders); err != nil {
-							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)
-							return fmt.Errorf("%w: %v", errInvalidChain, err)
-						}
+				// Split the headers around the chain cutoff
+				var cutoff int
+				if mode == ethconfig.SnapSync && d.chainCutoffNumber != 0 {
+					cutoff = sort.Search(len(chunkHeaders), func(i int) bool {
+						return chunkHeaders[i].Number.Uint64() >= d.chainCutoffNumber
+					})
+				}
+				// Insert the header chain into the ancient store (with block bodies and
+				// receipts set to nil) if they fall before the cutoff.
+				if mode == ethconfig.SnapSync && cutoff != 0 {
+					if n, err := d.blockchain.InsertHeadersBeforeCutoff(chunkHeaders[:cutoff]); err != nil {
+						log.Warn("Failed to insert ancient header chain", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)
+						return fmt.Errorf("%w: %v", errInvalidChain, err)
 					}
+					log.Debug("Inserted headers before cutoff", "number", chunkHeaders[cutoff-1].Number, "hash", chunkHashes[cutoff-1])
 				}
 				// If we've reached the allowed number of pending headers, stall a bit
 				for d.queue.PendingBodies() >= maxQueuedHeaders || d.queue.PendingReceipts() >= maxQueuedHeaders {
@@ -696,12 +855,21 @@ func (d *Downloader) processHeaders(origin uint64) error {
 					case <-timer.C:
 					}
 				}
-				// Otherwise insert the headers for content retrieval
-				inserts := d.queue.Schedule(chunkHeaders, chunkHashes, origin)
-				if len(inserts) != len(chunkHeaders) {
-					return fmt.Errorf("%w: stale headers", errBadPeer)
+				// Otherwise, schedule the headers for content retrieval (block bodies and
+				// potentially receipts in snap sync).
+				//
+				// Skip the bodies/receipts retrieval scheduling before the cutoff in snap
+				// sync if chain pruning is configured.
+				if mode == ethconfig.SnapSync && cutoff != 0 {
+					chunkHeaders = chunkHeaders[cutoff:]
+					chunkHashes = chunkHashes[cutoff:]
 				}
-
+				if len(chunkHeaders) > 0 {
+					scheduled = true
+					if d.queue.Schedule(chunkHeaders, chunkHashes, origin+uint64(cutoff)) != len(chunkHeaders) {
+						return fmt.Errorf("%w: stale headers", errBadPeer)
+					}
+				}
 				headers = headers[limit:]
 				hashes = hashes[limit:]
 				origin += uint64(limit)
@@ -713,11 +881,13 @@ func (d *Downloader) processHeaders(origin uint64) error {
 			}
 			d.syncStatsLock.Unlock()
 
-			// Signal the content downloaders of the availability of new tasks
-			for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
-				select {
-				case ch <- true:
-				default:
+			// Signal the downloader of the availability of new tasks
+			if scheduled {
+				for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh, d.queue.balWakeCh} {
+					select {
+					case ch <- true:
+					default:
+					}
 				}
 			}
 		}
@@ -759,6 +929,13 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.body())
+
+		// Attach the access list if it was retrieved from the network. The
+		// content hash was already verified against the header on delivery;
+		// blocks lacking one have theirs computed locally during execution.
+		if list := result.BAL(); list != nil {
+			blocks[i] = blocks[i].WithAccessListUnsafe(list)
+		}
 	}
 	// Downloaded blocks are always regarded as trusted after the
 	// transition. Because the downloaded chain is guided by the
@@ -794,7 +971,7 @@ func (d *Downloader) processSnapSyncContent() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
 	d.pivotLock.RLock()
-	sync := d.syncState(d.pivotHeader.Root)
+	sync := d.syncState(d.pivotHeader)
 	d.pivotLock.RUnlock()
 
 	defer func() {
@@ -821,7 +998,9 @@ func (d *Downloader) processSnapSyncContent() error {
 	// the results in the meantime.
 	//
 	// Note, there's no issue with memory piling up since after 64 blocks the
-	// pivot will forcefully move so these accumulators will be dropped.
+	// pivot will forcefully move so these accumulators will be dropped. The
+	// exception is snap/2 trie generation, where the pivot is frozen on
+	// purpose and results accumulate until the generation finishes.
 	var (
 		oldPivot *fetchResult   // Locked in pivot block, might change eventually
 		oldTail  []*fetchResult // Downloaded content after the pivot
@@ -864,50 +1043,29 @@ func (d *Downloader) processSnapSyncContent() error {
 
 		if oldPivot == nil { // no results piling up, we can move the pivot
 			if !d.committed.Load() { // not yet passed the pivot, we can move the pivot
-				if pivot.Root != sync.root { // pivot position changed, we can move the pivot
+				if pivot.Root != sync.pivot.Root { // pivot state root changed, we can move the pivot
 					sync.Cancel()
-					sync = d.syncState(pivot.Root)
-
+					sync = d.syncState(pivot)
 					go closeOnErr(sync)
 				}
 			}
 		} else { // results already piled up, consume before handling pivot move
 			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
 		}
-		// Split around the pivot block and process the two sides via snap/full sync
-		if !d.committed.Load() {
-			latest := results[len(results)-1].Header
-			// If the height is above the pivot block by 2 sets, it means the pivot
-			// become stale in the network, and it was garbage collected, move to a
-			// new pivot.
-			//
-			// Note, we have `reorgProtHeaderDelay` number of blocks withheld, Those
-			// need to be taken into account, otherwise we're detecting the pivot move
-			// late and will drop peers due to unavailable state!!!
-			if height := latest.Number.Uint64(); height >= pivot.Number.Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
-				log.Warn("Pivot became stale, moving", "old", pivot.Number.Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
-				pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
-
-				d.pivotLock.Lock()
-				d.pivotHeader = pivot
-				d.pivotLock.Unlock()
-
-				// Write out the pivot into the database so a rollback beyond it will
-				// reenable snap sync
-				rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number.Uint64())
-			}
-		}
 		P, beforeP, afterP := splitAroundPivot(pivot.Number.Uint64(), results)
 		if err := d.commitSnapSyncData(beforeP, sync); err != nil {
 			return err
 		}
 		if P != nil {
-			// If new pivot block found, cancel old state retrieval and restart
+			// If new pivot block found, cancel old state retrieval and restart.
 			if oldPivot != P {
-				sync.Cancel()
-				sync = d.syncState(P.Header.Root)
-
-				go closeOnErr(sync)
+				// Skip the restart if the running sync already targets the
+				// pivot's root (e.g, no pivot block movement yet).
+				if sync.pivot.Root != P.Header.Root {
+					sync.Cancel()
+					sync = d.syncState(P.Header)
+					go closeOnErr(sync)
+				}
 				oldPivot = P
 			}
 			// Wait for completion, occasionally checking for pivot staleness
@@ -975,13 +1133,19 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 	first, last := results[0].Header, results[len(results)-1].Header
 	log.Debug("Inserting snap-sync blocks", "items", len(results),
 		"firstnum", first.Number, "firsthash", first.Hash(),
-		"lastnumn", last.Number, "lasthash", last.Hash(),
+		"lastnum", last.Number, "lasthash", last.Hash(),
 	)
 	blocks := make([]*types.Block, len(results))
-	receipts := make([]types.Receipts, len(results))
+	receipts := make([]rlp.RawValue, len(results))
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.body())
 		receipts[i] = result.Receipts
+
+		// Attach the access list if it was retrieved from the network, so it
+		// gets persisted alongside the block data.
+		if list := result.BAL(); list != nil {
+			blocks[i] = blocks[i].WithAccessListUnsafe(list)
+		}
 	}
 	if index, err := d.blockchain.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
@@ -992,16 +1156,28 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	block := types.NewBlockWithHeader(result.Header).WithBody(result.body())
+	if list := result.BAL(); list != nil {
+		block = block.WithAccessListUnsafe(list)
+	}
 	log.Debug("Committing snap sync pivot as new head", "number", block.Number(), "hash", block.Hash())
 
 	// Commit the pivot block as the new head, will require full sync from here on
-	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}, d.ancientLimit); err != nil {
+	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []rlp.RawValue{result.Receipts}, d.ancientLimit); err != nil {
 		return err
 	}
-	if err := d.blockchain.SnapSyncCommitHead(block.Hash()); err != nil {
+	if err := d.blockchain.SnapSyncComplete(block.Hash(), d.snapSyncer.Version() == snap.SNAP2); err != nil {
 		return err
 	}
+	d.pivotLock.Lock()
 	d.committed.Store(true)
+	d.pivotLock.Unlock()
+
+	// The chain has obtained a stateful head by committing the pivot block,
+	// the mission of the snap sync is regarded as accomplished and the mode
+	// is flipped to full-sync.
+	if d.moder.disableSnap() {
+		log.Info("Disabled snap-sync after pivot commitment", "number", block.Number(), "hash", block.Hash())
+	}
 	return nil
 }
 
@@ -1014,21 +1190,56 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 		if err != nil {
 			return err
 		}
-		return d.SnapSyncer.OnAccounts(peer, packet.ID, hashes, accounts, packet.Proof)
+		return d.snapSyncer.OnAccounts(peer, packet.ID, hashes, accounts, packet.Proof)
 
 	case *snap.StorageRangesPacket:
 		hashset, slotset := packet.Unpack()
-		return d.SnapSyncer.OnStorage(peer, packet.ID, hashset, slotset, packet.Proof)
+		return d.snapSyncer.OnStorage(peer, packet.ID, hashset, slotset, packet.Proof)
 
 	case *snap.ByteCodesPacket:
-		return d.SnapSyncer.OnByteCodes(peer, packet.ID, packet.Codes)
+		return d.snapSyncer.OnByteCodes(peer, packet.ID, packet.Codes)
 
 	case *snap.TrieNodesPacket:
-		return d.SnapSyncer.OnTrieNodes(peer, packet.ID, packet.Nodes)
+		return d.snapSyncer.OnTrieNodes(peer, packet.ID, packet.Nodes)
+
+	case *snap.AccessListsPacket:
+		return d.snapSyncer.OnAccessLists(peer, packet.ID, packet.AccessLists)
 
 	default:
 		return fmt.Errorf("unexpected snap packet type: %T", packet)
 	}
+}
+
+// RegisterSnapPeer registers a snap peer with the active state syncer. Peers that
+// negotiated a snap version below the syncer's minimum are skipped — e.g. the
+// snap/2 syncer skips snap/1-only peers, which cannot answer its BAL requests.
+func (d *Downloader) RegisterSnapPeer(p *snap.Peer) error {
+	if p.Version() < d.snapSyncer.Version() {
+		// The peer speaks an older snap version than the active syncer needs
+		// (e.g. snap/1 while we sync via snap/2). We still serve it, but it
+		// cannot answer our requests, so it is not registered for syncing.
+		// Surface it so an operator can tell a stalled sync from a quiet one.
+		snapPeerSkipMeter.Mark(1)
+		log.Debug("Skipping snap peer below syncer version", "peer", p.ID(), "version", p.Version(), "required", d.snapSyncer.Version())
+		return nil
+	}
+	return d.snapSyncer.Register(p)
+}
+
+// SnapSyncVersion returns the snap protocol version of the active state syncer.
+// Peers negotiating a lower version cannot serve its requests.
+func (d *Downloader) SnapSyncVersion() uint {
+	return d.snapSyncer.Version()
+}
+
+// UnregisterSnapPeer removes a snap peer from the active state syncer. It mirrors
+// RegisterSnapPeer's version gate: a peer below the active syncer's version was
+// never registered, so there is nothing to remove.
+func (d *Downloader) UnregisterSnapPeer(p *snap.Peer) error {
+	if p.Version() < d.snapSyncer.Version() {
+		return nil
+	}
+	return d.snapSyncer.Unregister(p.ID())
 }
 
 // readHeaderRange returns a list of headers, using the given last header as the base,
@@ -1077,15 +1288,27 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 		header = d.blockchain.CurrentHeader()
 		block  = d.blockchain.CurrentSnapBlock()
 	)
-	syncedBlocks := block.Number.Uint64() - d.syncStartBlock
-	if syncedBlocks == 0 {
+	// Prevent reporting if nothing has been synchronized yet
+	if block.Number.Uint64() <= d.syncStartBlock {
 		return
+	}
+	// Prevent reporting noise if the actual chain synchronization (headers
+	// and bodies) hasn't started yet. Inserting the ancient header chain is
+	// fast enough and would introduce significant bias if included in the count.
+	if d.chainCutoffNumber != 0 && block.Number.Uint64() <= d.chainCutoffNumber {
+		return
+	}
+	fetchedBlocks := block.Number.Uint64() - d.syncStartBlock
+	if d.chainCutoffNumber != 0 && d.chainCutoffNumber > d.syncStartBlock {
+		fetchedBlocks = block.Number.Uint64() - d.chainCutoffNumber
 	}
 	// Retrieve the current chain head and calculate the ETA
 	latest, _, _, err := d.skeleton.Bounds()
 	if err != nil {
 		// We're going to cheat for non-merged networks, but that's fine
+		d.pivotLock.RLock()
 		latest = d.pivotHeader
+		d.pivotLock.RUnlock()
 	}
 	if latest == nil {
 		// This should really never happen, but add some defensive code for now.
@@ -1095,7 +1318,7 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 	}
 	var (
 		left = latest.Number.Uint64() - block.Number.Uint64()
-		eta  = time.Since(d.syncStartTime) / time.Duration(syncedBlocks) * time.Duration(left)
+		eta  = time.Since(d.syncStartTime) / time.Duration(fetchedBlocks) * time.Duration(left)
 
 		progress = fmt.Sprintf("%.2f%%", float64(block.Number.Uint64())*100/float64(latest.Number.Uint64()))
 		headers  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(header.Number.Uint64()), common.StorageSize(headerBytes).TerminalString())

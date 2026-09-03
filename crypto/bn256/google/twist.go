@@ -67,7 +67,7 @@ func (c *twistPoint) Set(a *twistPoint) {
 	c.t.Set(a.t)
 }
 
-// IsOnCurve returns true iff c is on the curve where c must be in affine form.
+// IsOnCurve returns true iff c is on the curve and is in the correct subgroup, where c must be in affine form.
 func (c *twistPoint) IsOnCurve() bool {
 	pool := new(bnPool)
 	yy := newGFp2(pool).Square(c.y, pool)
@@ -80,6 +80,8 @@ func (c *twistPoint) IsOnCurve() bool {
 	if yy.x.Sign() != 0 || yy.y.Sign() != 0 {
 		return false
 	}
+	// Subgroup check: multiply the point by the group order and
+	// verify that it becomes the point at infinity.
 	cneg := newTwistPoint(pool)
 	cneg.Mul(c, Order, pool)
 	return cneg.z.IsZero()

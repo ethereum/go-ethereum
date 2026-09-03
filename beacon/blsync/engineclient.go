@@ -23,22 +23,24 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
+	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ctypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type engineClient struct {
-	config     *lightClientConfig
+	config     *params.ClientConfig
 	rpc        *rpc.Client
 	rootCtx    context.Context
 	cancelRoot context.CancelFunc
 	wg         sync.WaitGroup
 }
 
-func startEngineClient(config *lightClientConfig, rpc *rpc.Client, headCh <-chan types.ChainHeadEvent) *engineClient {
+func startEngineClient(config *params.ClientConfig, rpc *rpc.Client, headCh <-chan types.ChainHeadEvent) *engineClient {
 	ctx, cancel := context.WithCancel(context.Background())
 	ec := &engineClient{
 		config:     config,
@@ -85,6 +87,10 @@ func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
 			if status, err := ec.callForkchoiceUpdated(forkName, event); err == nil {
 				log.Info("Successful ForkchoiceUpdated", "head", event.Block.Hash(), "status", status)
 			} else {
+				if err.Error() == "beacon syncer reorging" {
+					log.Debug("Failed ForkchoiceUpdated", "head", event.Block.Hash(), "error", err)
+					continue // ignore beacon syncer reorging errors, this error can occur if the blsync is skipping a block
+				}
 				log.Error("Failed ForkchoiceUpdated", "head", event.Block.Hash(), "error", err)
 			}
 		}
@@ -99,15 +105,24 @@ func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) 
 		params = []any{execData}
 	)
 	switch fork {
+	case "altair", "bellatrix":
+		method = "engine_newPayloadV1"
+	case "capella":
+		method = "engine_newPayloadV2"
 	case "deneb":
 		method = "engine_newPayloadV3"
 		parentBeaconRoot := event.BeaconHead.ParentRoot
 		blobHashes := collectBlobHashes(event.Block)
 		params = append(params, blobHashes, parentBeaconRoot)
-	case "capella":
-		method = "engine_newPayloadV2"
-	default:
-		method = "engine_newPayloadV1"
+	default: // electra, fulu and above
+		method = "engine_newPayloadV4"
+		parentBeaconRoot := event.BeaconHead.ParentRoot
+		blobHashes := collectBlobHashes(event.Block)
+		hexRequests := make([]hexutil.Bytes, len(event.ExecRequests))
+		for i := range event.ExecRequests {
+			hexRequests[i] = hexutil.Bytes(event.ExecRequests[i])
+		}
+		params = append(params, blobHashes, parentBeaconRoot, hexRequests)
 	}
 
 	ctx, cancel := context.WithTimeout(ec.rootCtx, time.Second*5)
@@ -134,12 +149,12 @@ func (ec *engineClient) callForkchoiceUpdated(fork string, event types.ChainHead
 
 	var method string
 	switch fork {
-	case "deneb":
-		method = "engine_forkchoiceUpdatedV3"
+	case "altair", "bellatrix":
+		method = "engine_forkchoiceUpdatedV1"
 	case "capella":
 		method = "engine_forkchoiceUpdatedV2"
-	default:
-		method = "engine_forkchoiceUpdatedV1"
+	default: // deneb, electra, fulu and above
+		method = "engine_forkchoiceUpdatedV3"
 	}
 
 	ctx, cancel := context.WithTimeout(ec.rootCtx, time.Second*5)

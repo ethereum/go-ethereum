@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -36,28 +35,86 @@ const (
 
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
-	// Send out own handshake in a new thread
+func (p *Peer) Handshake(networkID uint64, chain forkid.Blockchain, rangeMsg BlockRangeUpdatePacket) error {
+	var (
+		genesis    = chain.Genesis()
+		latest     = chain.CurrentHeader()
+		forkID     = forkid.NewID(chain.Config(), genesis, latest.Number.Uint64(), latest.Time)
+		forkFilter = forkid.NewFilter(chain)
+	)
+
 	errc := make(chan error, 2)
-
-	var status StatusPacket // safe to read after two values have been received from errc
-
 	go func() {
-		errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
+		pkt := &StatusPacket{
 			ProtocolVersion: uint32(p.version),
-			NetworkID:       network,
-			TD:              td,
-			Head:            head,
-			Genesis:         genesis,
+			NetworkID:       networkID,
+			Genesis:         genesis.Hash(),
 			ForkID:          forkID,
-		})
+			EarliestBlock:   rangeMsg.EarliestBlock,
+			LatestBlock:     rangeMsg.LatestBlock,
+			LatestBlockHash: rangeMsg.LatestBlockHash,
+		}
+		errc <- p2p.Send(p.rw, StatusMsg, pkt)
 	}()
+	var status StatusPacket // safe to read after two values have been received from errc
 	go func() {
-		errc <- p.readStatus(network, &status, genesis, forkFilter)
+		errc <- p.readStatus(networkID, &status, genesis.Hash(), forkFilter)
 	}()
+
+	return waitForHandshake(errc, p)
+}
+
+func (p *Peer) readStatus(networkID uint64, status *StatusPacket, genesis common.Hash, forkFilter forkid.Filter) error {
+	if err := p.readStatusMsg(status); err != nil {
+		return err
+	}
+	if status.NetworkID != networkID {
+		return fmt.Errorf("%w: %d (!= %d)", errNetworkIDMismatch, status.NetworkID, networkID)
+	}
+	if uint(status.ProtocolVersion) != p.version {
+		return fmt.Errorf("%w: %d (!= %d)", errProtocolVersionMismatch, status.ProtocolVersion, p.version)
+	}
+	if status.Genesis != genesis {
+		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.Genesis, genesis)
+	}
+	if err := forkFilter(status.ForkID); err != nil {
+		return fmt.Errorf("%w: %v", errForkIDRejected, err)
+	}
+	// Handle initial block range.
+	initRange := &BlockRangeUpdatePacket{
+		EarliestBlock:   status.EarliestBlock,
+		LatestBlock:     status.LatestBlock,
+		LatestBlockHash: status.LatestBlockHash,
+	}
+	if err := initRange.Validate(); err != nil {
+		return fmt.Errorf("%w: %v", errInvalidBlockRange, err)
+	}
+	p.lastRange.Store(initRange)
+	return nil
+}
+
+// readStatusMsg reads the first message on the connection.
+func (p *Peer) readStatusMsg(dst any) error {
+	msg, err := p.rw.ReadMsg()
+	if err != nil {
+		return err
+	}
+	if msg.Code != StatusMsg {
+		return fmt.Errorf("%w: first msg has code %x (!= %x)", errNoStatusMsg, msg.Code, StatusMsg)
+	}
+	if msg.Size > maxMessageSize {
+		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
+	}
+	if err := msg.Decode(dst); err != nil {
+		return err
+	}
+	return nil
+}
+
+func waitForHandshake(errc <-chan error, p *Peer) error {
 	timeout := time.NewTimer(handshakeTimeout)
 	defer timeout.Stop()
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case err := <-errc:
 			if err != nil {
@@ -69,65 +126,38 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 			return p2p.DiscReadTimeout
 		}
 	}
-	p.td, p.head = status.TD, status.Head
-
-	// TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
-	// larger, it will still fit within 100 bits
-	if tdlen := p.td.BitLen(); tdlen > 100 {
-		return fmt.Errorf("too large total difficulty: bitlen %d", tdlen)
-	}
-	return nil
-}
-
-// readStatus reads the remote handshake message.
-func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.Hash, forkFilter forkid.Filter) error {
-	msg, err := p.rw.ReadMsg()
-	if err != nil {
-		return err
-	}
-	if msg.Code != StatusMsg {
-		return fmt.Errorf("%w: first msg has code %x (!= %x)", errNoStatusMsg, msg.Code, StatusMsg)
-	}
-	if msg.Size > maxMessageSize {
-		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
-	}
-	// Decode the handshake and make sure everything matches
-	if err := msg.Decode(&status); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	if status.NetworkID != network {
-		return fmt.Errorf("%w: %d (!= %d)", errNetworkIDMismatch, status.NetworkID, network)
-	}
-	if uint(status.ProtocolVersion) != p.version {
-		return fmt.Errorf("%w: %d (!= %d)", errProtocolVersionMismatch, status.ProtocolVersion, p.version)
-	}
-	if status.Genesis != genesis {
-		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.Genesis, genesis)
-	}
-	if err := forkFilter(status.ForkID); err != nil {
-		return fmt.Errorf("%w: %v", errForkIDRejected, err)
-	}
 	return nil
 }
 
 // markError registers the error with the corresponding metric.
 func markError(p *Peer, err error) {
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return
 	}
 	m := meters.get(p.Inbound())
-	switch errors.Unwrap(err) {
-	case errNetworkIDMismatch:
+	switch {
+	case errors.Is(err, errNetworkIDMismatch):
 		m.networkIDMismatch.Mark(1)
-	case errProtocolVersionMismatch:
+	case errors.Is(err, errProtocolVersionMismatch):
 		m.protocolVersionMismatch.Mark(1)
-	case errGenesisMismatch:
+	case errors.Is(err, errGenesisMismatch):
 		m.genesisMismatch.Mark(1)
-	case errForkIDRejected:
+	case errors.Is(err, errForkIDRejected):
 		m.forkidRejected.Mark(1)
-	case p2p.DiscReadTimeout:
+	case errors.Is(err, p2p.DiscReadTimeout):
 		m.timeoutError.Mark(1)
 	default:
 		m.peerError.Mark(1)
 	}
+}
+
+// Validate checks basic validity of a block range announcement.
+func (p *BlockRangeUpdatePacket) Validate() error {
+	if p.EarliestBlock > p.LatestBlock {
+		return errors.New("earliest > latest")
+	}
+	if p.LatestBlockHash == (common.Hash{}) {
+		return errors.New("zero latest hash")
+	}
+	return nil
 }

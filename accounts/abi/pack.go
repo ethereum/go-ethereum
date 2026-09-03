@@ -37,7 +37,16 @@ func packBytesSlice(bytes []byte, l int) []byte {
 // t.
 func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 	switch t.T {
-	case IntTy, UintTy:
+	case UintTy:
+		// make sure to not pack a negative value into a uint type.
+		if reflectValue.Kind() == reflect.Pointer {
+			val := new(big.Int).Set(reflectValue.Interface().(*big.Int))
+			if val.Sign() == -1 {
+				return nil, errInvalidSign
+			}
+		}
+		return packNum(reflectValue), nil
+	case IntTy:
 		return packNum(reflectValue), nil
 	case StringTy:
 		return packBytesSlice([]byte(reflectValue.String()), reflectValue.Len()), nil
@@ -77,7 +86,7 @@ func packNum(value reflect.Value) []byte {
 		return math.U256Bytes(new(big.Int).SetUint64(value.Uint()))
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return math.U256Bytes(big.NewInt(value.Int()))
-	case reflect.Ptr:
+	case reflect.Pointer:
 		return math.U256Bytes(new(big.Int).Set(value.Interface().(*big.Int)))
 	default:
 		panic("abi: fatal error")

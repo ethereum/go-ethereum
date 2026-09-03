@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -87,24 +88,24 @@ func TestEIP2200(t *testing.T) {
 
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.CreateAccount(address)
-		statedb.SetCode(address, hexutil.MustDecode(tt.input))
+		statedb.SetCode(address, hexutil.MustDecode(tt.input), tracing.CodeChangeUnspecified)
 		statedb.SetState(address, common.Hash{}, common.BytesToHash([]byte{tt.original}))
-		statedb.Finalise(true) // Push the state into the "original" slot
+		statedb.Finalise(params.Rules{IsEIP158: true}) // Push the state into the "original" slot
 
 		vmctx := BlockContext{
 			CanTransfer: func(StateDB, common.Address, *uint256.Int) bool { return true },
-			Transfer:    func(StateDB, common.Address, common.Address, *uint256.Int) {},
+			Transfer:    func(StateDB, common.Address, common.Address, *uint256.Int, *params.Rules) {},
 		}
-		vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
-
-		_, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, tt.gaspool, new(uint256.Int))
+		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
+		initialGas := NewGasBudget(tt.gaspool, 0)
+		_, result, err := evm.Call(common.Address{}, address, nil, initialGas, new(uint256.Int))
 		if !errors.Is(err, tt.failure) {
 			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.failure)
 		}
-		if used := tt.gaspool - gas; used != tt.used {
+		if used := result.Used(initialGas); used != tt.used {
 			t.Errorf("test %d: gas used mismatch: have %v, want %v", i, used, tt.used)
 		}
-		if refund := vmenv.StateDB.GetRefund(); refund != tt.refund {
+		if refund := evm.StateDB.GetRefund(); refund != tt.refund {
 			t.Errorf("test %d: gas refund mismatch: have %v, want %v", i, refund, tt.refund)
 		}
 	}
@@ -139,25 +140,29 @@ func TestCreateGas(t *testing.T) {
 			address := common.BytesToAddress([]byte("contract"))
 			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			statedb.CreateAccount(address)
-			statedb.SetCode(address, hexutil.MustDecode(tt.code))
-			statedb.Finalise(true)
+			statedb.SetCode(address, hexutil.MustDecode(tt.code), tracing.CodeChangeUnspecified)
+			statedb.Finalise(params.Rules{IsEIP158: true})
 			vmctx := BlockContext{
 				CanTransfer: func(StateDB, common.Address, *uint256.Int) bool { return true },
-				Transfer:    func(StateDB, common.Address, common.Address, *uint256.Int) {},
+				Transfer:    func(StateDB, common.Address, common.Address, *uint256.Int, *params.Rules) {},
 				BlockNumber: big.NewInt(0),
 			}
 			config := Config{}
+			chainConfig := params.AllEthashProtocolChanges
 			if tt.eip3860 {
 				config.ExtraEips = []int{3860}
+				vmctx.Random = new(common.Hash)
+
+				chainConfig = params.MergedTestChainConfig
 			}
 
-			vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, config)
-			var startGas = uint64(testGas)
-			ret, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(uint256.Int))
+			evm := NewEVM(vmctx, statedb, chainConfig, config)
+			initialGas := NewGasBudget(uint64(testGas), 0)
+			ret, result, err := evm.Call(common.Address{}, address, nil, initialGas, new(uint256.Int))
 			if err != nil {
 				return false
 			}
-			gasUsed = startGas - gas
+			gasUsed = result.Used(initialGas)
 			if len(ret) != 32 {
 				t.Fatalf("test %d: expected 32 bytes returned, have %d", i, len(ret))
 			}

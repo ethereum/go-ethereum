@@ -208,3 +208,10 @@ func WriteSnapshotSyncStatus(db ethdb.KeyValueWriter, status []byte) {
 		log.Crit("Failed to store snapshot sync status", "err", err)
 	}
 }
+
+// DeleteSnapshotSyncStatus removes the serialized sync status from the database.
+func DeleteSnapshotSyncStatus(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotSyncStatusKey); err != nil {
+		log.Crit("Failed to remove snapshot sync status", "err", err)
+	}
+}

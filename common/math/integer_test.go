@@ -17,6 +17,7 @@
 package math
 
 import (
+	"math"
 	"testing"
 )
 
@@ -36,8 +37,8 @@ func TestOverflow(t *testing.T) {
 		op       operation
 	}{
 		// add operations
-		{MaxUint64, 1, true, add},
-		{MaxUint64 - 1, 1, false, add},
+		{math.MaxUint64, 1, true, add},
+		{math.MaxUint64 - 1, 1, false, add},
 
 		// sub operations
 		{0, 1, true, sub},
@@ -46,8 +47,8 @@ func TestOverflow(t *testing.T) {
 		// mul operations
 		{0, 0, false, mul},
 		{10, 10, false, mul},
-		{MaxUint64, 2, true, mul},
-		{MaxUint64, 1, false, mul},
+		{math.MaxUint64, 2, true, mul},
+		{math.MaxUint64, 1, false, mul},
 	} {
 		var overflows bool
 		switch test.op {
@@ -109,7 +110,7 @@ func TestMustParseUint64(t *testing.T) {
 func TestMustParseUint64Panic(t *testing.T) {
 	defer func() {
 		if recover() == nil {
-			t.Error("MustParseBig should've panicked")
+			t.Error("MustParseUint64 should've panicked")
 		}
 	}()
 	MustParseUint64("ggg")

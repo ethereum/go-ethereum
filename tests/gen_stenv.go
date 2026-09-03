@@ -24,6 +24,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 		Timestamp     math.HexOrDecimal64      `json:"currentTimestamp"     gencodec:"required"`
 		BaseFee       *math.HexOrDecimal256    `json:"currentBaseFee"       gencodec:"optional"`
 		ExcessBlobGas *math.HexOrDecimal64     `json:"currentExcessBlobGas" gencodec:"optional"`
+		SlotNumber    *math.HexOrDecimal64     `json:"slotNumber"           gencodec:"optional"`
 	}
 	var enc stEnv
 	enc.Coinbase = common.UnprefixedAddress(s.Coinbase)
@@ -34,6 +35,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.Timestamp = math.HexOrDecimal64(s.Timestamp)
 	enc.BaseFee = (*math.HexOrDecimal256)(s.BaseFee)
 	enc.ExcessBlobGas = (*math.HexOrDecimal64)(s.ExcessBlobGas)
+	enc.SlotNumber = (*math.HexOrDecimal64)(s.SlotNumber)
 	return json.Marshal(&enc)
 }
 
@@ -48,6 +50,7 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 		Timestamp     *math.HexOrDecimal64      `json:"currentTimestamp"     gencodec:"required"`
 		BaseFee       *math.HexOrDecimal256     `json:"currentBaseFee"       gencodec:"optional"`
 		ExcessBlobGas *math.HexOrDecimal64      `json:"currentExcessBlobGas" gencodec:"optional"`
+		SlotNumber    *math.HexOrDecimal64      `json:"slotNumber"           gencodec:"optional"`
 	}
 	var dec stEnv
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -80,6 +83,9 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ExcessBlobGas != nil {
 		s.ExcessBlobGas = (*uint64)(dec.ExcessBlobGas)
+	}
+	if dec.SlotNumber != nil {
+		s.SlotNumber = (*uint64)(dec.SlotNumber)
 	}
 	return nil
 }

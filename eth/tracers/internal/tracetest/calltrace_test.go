@@ -29,12 +29,12 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
@@ -43,6 +43,7 @@ type callLog struct {
 	Address  common.Address `json:"address"`
 	Topics   []common.Hash  `json:"topics"`
 	Data     hexutil.Bytes  `json:"data"`
+	Index    hexutil.Uint   `json:"index"`
 	Position hexutil.Uint   `json:"position"`
 }
 
@@ -65,11 +66,8 @@ type callTrace struct {
 
 // callTracerTest defines a single test to check the call tracer against.
 type callTracerTest struct {
-	Genesis      *core.Genesis   `json:"genesis"`
-	Context      *callContext    `json:"context"`
-	Input        string          `json:"input"`
-	TracerConfig json.RawMessage `json:"tracerConfig"`
-	Result       *callTrace      `json:"result"`
+	tracerTestEnv
+	Result *callTrace `json:"result"`
 }
 
 // Iterates over all the input-output datasets in the tracer test harness and
@@ -116,23 +114,25 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			var (
 				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
 				context = test.Context.toBlockContext(test.Genesis)
-				state   = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+				st      = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
-			state.Close()
+			st.Close()
 
 			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig, test.Genesis.Config)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
-
-			state.StateDB.SetLogger(tracer.Hooks)
+			logState := vm.StateDB(st.StateDB)
+			if tracer.Hooks != nil {
+				logState = state.NewHookedState(st.StateDB, tracer.Hooks)
+			}
 			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			evm := vm.NewEVM(context, logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			vmRet, err := core.ApplyMessage(evm, msg, nil)
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
@@ -199,24 +199,11 @@ func BenchmarkTracers(b *testing.B) {
 func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	// Configure a blockchain with the given prestate
 	tx := new(types.Transaction)
-	if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
+	if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
 		b.Fatalf("failed to parse testcase input: %v", err)
 	}
 	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-	origin, _ := signer.Sender(tx)
-	txContext := vm.TxContext{
-		Origin:   origin,
-		GasPrice: tx.GasPrice(),
-	}
-	context := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		Coinbase:    test.Context.Miner,
-		BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-		Time:        uint64(test.Context.Time),
-		Difficulty:  (*big.Int)(test.Context.Difficulty),
-		GasLimit:    uint64(test.Context.GasLimit),
-	}
+	context := test.Context.toBlockContext(test.Genesis)
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
@@ -225,17 +212,24 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	defer state.Close()
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{})
+	for b.Loop() {
+		snap := state.StateDB.Snapshot()
 		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil, test.Genesis.Config)
 		if err != nil {
 			b.Fatalf("failed to create call tracer: %v", err)
 		}
-		evm := vm.NewEVM(context, txContext, state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
-		snap := state.StateDB.Snapshot()
-		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-		if _, err = st.TransitionDb(); err != nil {
+		evm.Config.Tracer = tracer.Hooks
+		if tracer.OnTxStart != nil {
+			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		}
+		_, err = core.ApplyMessage(evm, msg, nil)
+		if err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
+		}
+		if tracer.OnTxEnd != nil {
+			tracer.OnTxEnd(&types.Receipt{GasUsed: tx.Gas()}, nil)
 		}
 		if _, err = tracer.GetResult(); err != nil {
 			b.Fatal(err)
@@ -307,7 +301,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","position":"0x0"}],"value":"0x0","type":"CALL"}`, originHex),
+			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","index":"0x0","position":"0x0"}],"value":"0x0","type":"CALL"}`, originHex),
 		},
 		{
 			// Leads to OOM on the prestate tracer
@@ -326,7 +320,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("prestateTracer", nil),
-			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
+			want:   fmt.Sprintf(`{"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0","codeHash":"0x27be17a236425a9b513d736c4bb84eca4505a15564cae640e85558cf4d7ff7bb"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
 		},
 		{
 			// CREATE2 which requires padding memory by prestate tracer
@@ -345,11 +339,11 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("prestateTracer", nil),
-			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600160ff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
+			want:   fmt.Sprintf(`{"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600160ff60016000f560ff6000a0","codeHash":"0x5544040a7fd107ba8164108904724a38fb9c664daae88a5cc53580841e648edf"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			state := tests.MakePreState(rawdb.NewMemoryDatabase(),
+			st := tests.MakePreState(rawdb.NewMemoryDatabase(),
 				types.GenesisAlloc{
 					to: types.Account{
 						Code: tc.code,
@@ -358,8 +352,13 @@ func TestInternals(t *testing.T) {
 						Balance: big.NewInt(500000000000000),
 					},
 				}, false, rawdb.HashScheme)
-			defer state.Close()
-			state.StateDB.SetLogger(tc.tracer.Hooks)
+			defer st.Close()
+
+			logState := vm.StateDB(st.StateDB)
+			if hooks := tc.tracer.Hooks; hooks != nil {
+				logState = state.NewHookedState(st.StateDB, hooks)
+			}
+
 			tx, err := types.SignNewTx(key, signer, &types.LegacyTx{
 				To:       &to,
 				Value:    big.NewInt(0),
@@ -369,17 +368,13 @@ func TestInternals(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %v: failed to sign transaction: %v", tc.name, err)
 			}
-			txContext := vm.TxContext{
-				Origin:   origin,
-				GasPrice: tx.GasPrice(),
-			}
-			evm := vm.NewEVM(context, txContext, state.StateDB, config, vm.Config{Tracer: tc.tracer.Hooks})
+			evm := vm.NewEVM(context, logState, config, vm.Config{Tracer: tc.tracer.Hooks})
 			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0))
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
 			}
 			tc.tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			vmRet, err := core.ApplyMessage(evm, msg, nil)
 			if err != nil {
 				t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
 			}

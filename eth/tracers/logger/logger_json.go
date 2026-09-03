@@ -59,19 +59,21 @@ type jsonLogger struct {
 	cfg     *Config
 	env     *tracing.VMContext
 	hooks   *tracing.Hooks
+	written *countingWriter
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream.
 func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
-	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
+	cw := &countingWriter{w: writer}
+	l := &jsonLogger{encoder: json.NewEncoder(cw), cfg: cfg, written: cw}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
 	l.hooks = &tracing.Hooks{
 		OnTxStart:         l.OnTxStart,
 		OnSystemCallStart: l.onSystemCallStart,
-		OnExit:            l.OnEnd,
+		OnExit:            l.OnExit,
 		OnOpcode:          l.OnOpcode,
 		OnFault:           l.OnFault,
 	}
@@ -81,7 +83,8 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 // NewJSONLoggerWithCallFrames creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream. It also includes call frames in the output.
 func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
-	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
+	cw := &countingWriter{w: writer}
+	l := &jsonLogger{encoder: json.NewEncoder(cw), cfg: cfg, written: cw}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
@@ -102,6 +105,9 @@ func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope 
 }
 
 func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	if l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
+		return
+	}
 	memory := scope.MemoryData()
 	stack := scope.StackData()
 
@@ -139,6 +145,9 @@ func (l *jsonLogger) onSystemCallStart() {
 
 // OnEnter is not enabled by default.
 func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	if l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
+		return
+	}
 	frame := callFrame{
 		op:    vm.OpCode(typ),
 		From:  from,
@@ -152,14 +161,10 @@ func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common
 	l.encoder.Encode(frame)
 }
 
-func (l *jsonLogger) OnEnd(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	if depth > 0 {
+func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
 		return
 	}
-	l.OnExit(depth, output, gasUsed, err, false)
-}
-
-func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	type endLog struct {
 		Output  string              `json:"output"`
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`

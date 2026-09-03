@@ -17,6 +17,7 @@
 package t8ntool
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,15 +29,24 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/overlay"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
 
@@ -75,91 +85,49 @@ var (
 )
 
 type input struct {
-	Alloc types.GenesisAlloc `json:"alloc,omitempty"`
-	Env   *stEnv             `json:"env,omitempty"`
-	Txs   []*txWithKey       `json:"txs,omitempty"`
-	TxRlp string             `json:"txsRlp,omitempty"`
+	Alloc types.GenesisAlloc            `json:"alloc,omitempty"`
+	Env   *stEnv                        `json:"env,omitempty"`
+	BT    map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
+	Txs   []*txWithKey                  `json:"txs,omitempty"`
+	TxRlp string                        `json:"txsRlp,omitempty"`
 }
 
 func Transition(ctx *cli.Context) error {
-	var getTracer = func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
-		return nil, nil, nil
-	}
-
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
-	}
-
-	if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
-		// Configure the EVM logger
-		logConfig := &logger.Config{
-			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
-			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
-			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
-			Debug:            true,
-		}
-		getTracer = func(txIndex int, txHash common.Hash, _ *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
-			if err != nil {
-				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-			}
-			var l *tracing.Hooks
-			if ctx.Bool(TraceEnableCallFramesFlag.Name) {
-				l = logger.NewJSONLoggerWithCallFrames(logConfig, traceFile)
-			} else {
-				l = logger.NewJSONLogger(logConfig, traceFile)
-			}
-			tracer := &tracers.Tracer{
-				Hooks: l,
-				// jsonLogger streams out result to file.
-				GetResult: func() (json.RawMessage, error) { return nil, nil },
-				Stop:      func(err error) {},
-			}
-			return tracer, traceFile, nil
-		}
-	} else if ctx.IsSet(TraceTracerFlag.Name) {
-		var config json.RawMessage
-		if ctx.IsSet(TraceTracerConfigFlag.Name) {
-			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
-		}
-		getTracer = func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
-			if err != nil {
-				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-			}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config, chainConfig)
-			if err != nil {
-				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
-			}
-			return tracer, traceFile, nil
-		}
 	}
 	// We need to load three things: alloc, env and transactions. May be either in
 	// stdin input or in files.
 	// Check if anything needs to be read from stdin
 	var (
-		prestate Prestate
-		txIt     txIterator // txs to apply
-		allocStr = ctx.String(InputAllocFlag.Name)
-
+		prestate  Prestate
+		txIt      txIterator // txs to apply
+		allocStr  = ctx.String(InputAllocFlag.Name)
+		btStr     = ctx.String(InputBTFlag.Name)
 		envStr    = ctx.String(InputEnvFlag.Name)
 		txStr     = ctx.String(InputTxsFlag.Name)
 		inputData = &input{}
 	)
 	// Figure out the prestate alloc
-	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
+	if allocStr == stdinSelector || btStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
 		}
 	}
 	if allocStr != stdinSelector {
-		if err := readFile(allocStr, "alloc", &inputData.Alloc); err != nil {
+		prestate.AllocPath = allocStr
+	} else {
+		prestate.Pre = inputData.Alloc
+	}
+
+	if btStr != stdinSelector && btStr != "" {
+		if err := readFile(btStr, "BT", &inputData.BT); err != nil {
 			return err
 		}
 	}
-	prestate.Pre = inputData.Alloc
+	prestate.TreeLeaves = inputData.BT
 
 	// Set the block environment
 	if envStr != stdinSelector {
@@ -180,6 +148,7 @@ func Transition(ctx *cli.Context) error {
 		chainConfig = cConf
 		vmConfig.ExtraEips = extraEips
 	}
+
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
@@ -198,15 +167,155 @@ func Transition(ctx *cli.Context) error {
 	if err := applyCancunChecks(&prestate.Env, chainConfig); err != nil {
 		return err
 	}
+
+	// Configure tracer
+	var tracer *tracers.Tracer
+	if ctx.IsSet(TraceTracerFlag.Name) { // Custom tracing
+		config := json.RawMessage(ctx.String(TraceTracerConfigFlag.Name))
+		innerTracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name),
+			nil, config, chainConfig)
+		if err != nil {
+			return NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %v", err))
+		}
+		tracer = newResultWriter(baseDir, innerTracer)
+	} else if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
+		logConfig := &logger.Config{
+			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
+			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
+			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
+		}
+		if ctx.Bool(TraceEnableCallFramesFlag.Name) {
+			tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+				return logger.NewJSONLoggerWithCallFrames(logConfig, out)
+			})
+		} else {
+			tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+				return logger.NewJSONLogger(logConfig, out)
+			})
+		}
+	}
+	// Configure opcode counter
+	var opcodeTracer *tracers.Tracer
+	if ctx.IsSet(OpcodeCountFlag.Name) && ctx.String(OpcodeCountFlag.Name) != "" {
+		opcodeTracer = native.NewOpcodeCounter()
+		if tracer != nil {
+			// If we have an existing tracer, multiplex with the opcode tracer
+			mux, _ := native.NewMuxTracer([]string{"trace", "opcode"}, []*tracers.Tracer{tracer, opcodeTracer})
+			vmConfig.Tracer = mux.Hooks
+		} else {
+			vmConfig.Tracer = opcodeTracer.Hooks
+		}
+	} else if tracer != nil {
+		vmConfig.Tracer = tracer.Hooks
+	}
 	// Run the test and aggregate the result
-	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name), getTracer)
+	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
 	if err != nil {
 		return err
 	}
-	// Dump the execution result
-	collector := make(Alloc)
-	s.DumpToCollector(collector, nil)
-	return dispatchOutput(ctx, baseDir, result, collector, body)
+	// Write opcode counts if enabled
+	if opcodeTracer != nil {
+		fname := ctx.String(OpcodeCountFlag.Name)
+		result, err := opcodeTracer.GetResult()
+		if err != nil {
+			return NewError(ErrorJson, fmt.Errorf("failed getting opcode counts: %v", err))
+		}
+		if err := saveFile(baseDir, fname, result); err != nil {
+			return err
+		}
+	}
+	// Dump the execution result.
+	var (
+		collector Alloc
+		btleaves  map[common.Hash]hexutil.Bytes
+	)
+	isBinary := chainConfig.IsUBT(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
+	allocOutput := ctx.String(OutputAllocFlag.Name)
+	switch {
+	case !isBinary && allocOutput != "" && allocOutput != "stdout" && allocOutput != "stderr":
+		// Stream directly to the output file to avoid materializing the
+		// whole post-state in memory. dispatchOutput is told to skip alloc
+		// by clearing the output name.
+		if err := writeStreamedAlloc(filepath.Join(baseDir, allocOutput), s); err != nil {
+			return err
+		}
+		allocOutput = ""
+	case !isBinary:
+		collector = make(Alloc)
+		s.DumpToCollector(collector, nil)
+	default:
+		udb, ok := s.Database().(*state.UBTDatabase)
+		if !ok {
+			return NewError(ErrorEVM, errors.New("expected UBTDatabase in binary trie mode"))
+		}
+		rec := udb.AllocRecorder()
+		if rec == nil {
+			return NewError(ErrorEVM, errors.New("UBT alloc recorder was not enabled"))
+		}
+		collector = Alloc(rec.Alloc())
+		if err := mergeUnmigratedBaseAlloc(udb, s.IntermediateRoot(params.Rules{}), collector); err != nil {
+			return NewError(ErrorEVM, fmt.Errorf("failed to merge base MPT alloc: %v", err))
+		}
+	}
+	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body, btleaves)
+}
+
+func mergeUnmigratedBaseAlloc(udb *state.UBTDatabase, currentRoot common.Hash, dst Alloc) error {
+	ts := overlay.LoadTransitionState(udb.TrieDB().Disk(), currentRoot, true)
+	if !ts.InTransition() {
+		return nil
+	}
+	if ts.BaseRoot == (common.Hash{}) || ts.BaseRoot == types.EmptyRootHash {
+		return nil
+	}
+	mptDB := state.NewMPTDatabase(udb.TrieDB(), nil)
+	sdb, err := state.New(ts.BaseRoot, mptDB)
+	if err != nil {
+		return fmt.Errorf("open base MPT at %x: %w", ts.BaseRoot, err)
+	}
+	if _, err := sdb.DumpToCollector(mergeAlloc(dst), nil); err != nil {
+		return fmt.Errorf("walk base MPT at %x: %w", ts.BaseRoot, err)
+	}
+	return nil
+}
+
+type mergeAlloc Alloc
+
+func (m mergeAlloc) OnRoot(common.Hash) {}
+
+func (m mergeAlloc) OnAccount(addr *common.Address, da state.DumpAccount) {
+	if addr == nil {
+		return
+	}
+	if _, exists := m[*addr]; exists {
+		return
+	}
+	m[*addr] = dumpAccountToTypesAccount(da)
+}
+
+// writeStreamedAlloc writes the post-state alloc to path one account at a
+// time, producing the same JSON shape as saveFile on an Alloc map.
+func writeStreamedAlloc(path string, s *state.StateDB) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return NewError(ErrorIO, fmt.Errorf("failed creating alloc output file: %v", err))
+	}
+	bw := bufio.NewWriter(f)
+	sa := newStreamingAlloc(bw)
+	s.DumpToCollector(sa, nil)
+	if err := sa.Close(); err != nil {
+		f.Close()
+		return NewError(ErrorIO, fmt.Errorf("failed writing alloc output: %v", err))
+	}
+	if err := bw.Flush(); err != nil {
+		f.Close()
+		return NewError(ErrorIO, fmt.Errorf("failed flushing alloc output: %v", err))
+	}
+	if err := f.Close(); err != nil {
+		return NewError(ErrorIO, fmt.Errorf("failed closing alloc output file: %v", err))
+	}
+	log.Info("Wrote file", "file", path)
+	return nil
 }
 
 func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
@@ -295,6 +404,10 @@ func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 	if addr == nil {
 		return
 	}
+	g[*addr] = dumpAccountToTypesAccount(dumpAccount)
+}
+
+func dumpAccountToTypesAccount(dumpAccount state.DumpAccount) types.Account {
 	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 0)
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
@@ -303,13 +416,64 @@ func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 			storage[k] = common.HexToHash(v)
 		}
 	}
-	genesisAccount := types.Account{
+	return types.Account{
 		Code:    dumpAccount.Code,
 		Storage: storage,
 		Balance: balance,
 		Nonce:   dumpAccount.Nonce,
 	}
-	g[*addr] = genesisAccount
+}
+
+// streamingAlloc is a DumpCollector that writes each account to w as it is
+// visited, emitting a single JSON object keyed by address. Close must be
+// called to emit the closing brace.
+type streamingAlloc struct {
+	w        io.Writer
+	wroteOne bool
+	err      error
+}
+
+func newStreamingAlloc(w io.Writer) *streamingAlloc {
+	return &streamingAlloc{w: w}
+}
+
+func (s *streamingAlloc) write(b []byte) {
+	if s.err != nil {
+		return
+	}
+	_, s.err = s.w.Write(b)
+}
+
+func (s *streamingAlloc) OnRoot(common.Hash) {
+	s.write([]byte{'{'})
+}
+
+func (s *streamingAlloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
+	if s.err != nil || addr == nil {
+		return
+	}
+	keyJSON, err := json.Marshal(*addr)
+	if err != nil {
+		s.err = err
+		return
+	}
+	valueJSON, err := json.Marshal(dumpAccountToTypesAccount(dumpAccount))
+	if err != nil {
+		s.err = err
+		return
+	}
+	if s.wroteOne {
+		s.write([]byte{','})
+	}
+	s.write(keyJSON)
+	s.write([]byte{':'})
+	s.write(valueJSON)
+	s.wroteOne = true
+}
+
+func (s *streamingAlloc) Close() error {
+	s.write([]byte{'}'})
+	return s.err
 }
 
 // saveFile marshals the object to the given file
@@ -327,8 +491,9 @@ func saveFile(baseDir, filename string, data interface{}) error {
 }
 
 // dispatchOutput writes the output data to either stderr or stdout, or to the specified
-// files
-func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, body hexutil.Bytes) error {
+// files. An empty allocOutput skips the alloc dispatch, which is used when the
+// alloc has already been streamed to disk by the caller.
+func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, allocOutput string, body hexutil.Bytes, bt map[common.Hash]hexutil.Bytes) error {
 	stdOutObject := make(map[string]interface{})
 	stdErrObject := make(map[string]interface{})
 	dispatch := func(baseDir, fName, name string, obj interface{}) error {
@@ -346,7 +511,7 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		}
 		return nil
 	}
-	if err := dispatch(baseDir, ctx.String(OutputAllocFlag.Name), "alloc", alloc); err != nil {
+	if err := dispatch(baseDir, allocOutput, "alloc", alloc); err != nil {
 		return err
 	}
 	if err := dispatch(baseDir, ctx.String(OutputResultFlag.Name), "result", result); err != nil {
@@ -355,6 +520,13 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 	if err := dispatch(baseDir, ctx.String(OutputBodyFlag.Name), "body", body); err != nil {
 		return err
 	}
+	// Only write bt output if we actually have binary trie leaves
+	if bt != nil {
+		if err := dispatch(baseDir, ctx.String(OutputBTFlag.Name), "vkt", bt); err != nil {
+			return err
+		}
+	}
+
 	if len(stdOutObject) > 0 {
 		b, err := json.MarshalIndent(stdOutObject, "", "  ")
 		if err != nil {
@@ -371,5 +543,170 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		os.Stderr.Write(b)
 		os.Stderr.WriteString("\n")
 	}
+	return nil
+}
+
+// BinKey computes the tree key given an address and an optional slot number.
+func BinKey(ctx *cli.Context) error {
+	if ctx.Args().Len() == 0 || ctx.Args().Len() > 2 {
+		return errors.New("invalid number of arguments: expecting an address and an optional slot number")
+	}
+
+	addr, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		return fmt.Errorf("error decoding address: %w", err)
+	}
+
+	if ctx.Args().Len() == 2 {
+		slot, err := hexutil.Decode(ctx.Args().Get(1))
+		if err != nil {
+			return fmt.Errorf("error decoding slot: %w", err)
+		}
+		fmt.Printf("%#x\n", bintrie.GetBinaryTreeKeyStorageSlot(common.BytesToAddress(addr), slot))
+	} else {
+		fmt.Printf("%#x\n", bintrie.GetBinaryTreeKeyBasicData(common.BytesToAddress(addr)))
+	}
+	return nil
+}
+
+// BinKeys computes a set of tree keys given a genesis alloc.
+func BinKeys(ctx *cli.Context) error {
+	var allocStr = ctx.String(InputAllocFlag.Name)
+	var alloc core.GenesisAlloc
+	// Figure out the prestate alloc
+	if allocStr == stdinSelector {
+		decoder := json.NewDecoder(os.Stdin)
+		if err := decoder.Decode(&alloc); err != nil {
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+		}
+	}
+	if allocStr != stdinSelector {
+		if err := readFile(allocStr, "alloc", &alloc); err != nil {
+			return err
+		}
+	}
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.UBTDefaults)
+	defer db.Close()
+
+	bt, err := genBinTrieFromAlloc(alloc, db, triedb.UBTDefaults.BinTrieGroupDepth)
+	if err != nil {
+		return fmt.Errorf("error generating bt: %w", err)
+	}
+
+	collector := make(map[common.Hash]hexutil.Bytes)
+	it, err := bt.NodeIterator(nil)
+	if err != nil {
+		panic(err)
+	}
+	for it.Next(true) {
+		if it.Leaf() {
+			collector[common.BytesToHash(it.LeafKey())] = it.LeafBlob()
+		}
+	}
+
+	output, err := json.MarshalIndent(collector, "", "")
+	if err != nil {
+		return fmt.Errorf("error outputting tree: %w", err)
+	}
+
+	fmt.Println(string(output))
+
+	return nil
+}
+
+// BinTrieRoot computes the root of a Binary Trie from a genesis alloc.
+func BinTrieRoot(ctx *cli.Context) error {
+	var allocStr = ctx.String(InputAllocFlag.Name)
+	var alloc core.GenesisAlloc
+	if allocStr == stdinSelector {
+		decoder := json.NewDecoder(os.Stdin)
+		if err := decoder.Decode(&alloc); err != nil {
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+		}
+	}
+	if allocStr != stdinSelector {
+		if err := readFile(allocStr, "alloc", &alloc); err != nil {
+			return err
+		}
+	}
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.UBTDefaults)
+	defer db.Close()
+
+	bt, err := genBinTrieFromAlloc(alloc, db, triedb.UBTDefaults.BinTrieGroupDepth)
+	if err != nil {
+		return fmt.Errorf("error generating bt: %w", err)
+	}
+	fmt.Println(bt.Hash().Hex())
+
+	return nil
+}
+
+// TODO(@CPerezz): Should this go to `bintrie` module?
+func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase, groupDepth int) (*bintrie.BinaryTrie, error) {
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, db, groupDepth)
+	if err != nil {
+		return nil, err
+	}
+	for addr, acc := range alloc {
+		for slot, value := range acc.Storage {
+			err := bt.UpdateStorage(addr, slot.Bytes(), value.Big().Bytes())
+			if err != nil {
+				return nil, fmt.Errorf("error inserting storage: %w", err)
+			}
+		}
+		account := &types.StateAccount{
+			Balance:  uint256.MustFromBig(acc.Balance),
+			Nonce:    acc.Nonce,
+			CodeHash: crypto.Keccak256Hash(acc.Code).Bytes(),
+			Root:     common.Hash{},
+		}
+		err := bt.UpdateAccount(addr, account, len(acc.Code))
+		if err != nil {
+			return nil, fmt.Errorf("error inserting account: %w", err)
+		}
+		err = bt.UpdateContractCode(addr, common.BytesToHash(account.CodeHash), acc.Code)
+		if err != nil {
+			return nil, fmt.Errorf("error inserting code: %w", err)
+		}
+	}
+	return bt, nil
+}
+
+// BinaryCodeChunkKey computes the tree key of a code-chunk for a given address.
+func BinaryCodeChunkKey(ctx *cli.Context) error {
+	if ctx.Args().Len() == 0 || ctx.Args().Len() > 2 {
+		return errors.New("invalid number of arguments: expecting an address and an code-chunk number")
+	}
+
+	addr, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		return fmt.Errorf("error decoding address: %w", err)
+	}
+	chunkNumberBytes, err := hexutil.Decode(ctx.Args().Get(1))
+	if err != nil {
+		return fmt.Errorf("error decoding chunk number: %w", err)
+	}
+	var chunkNumber uint256.Int
+	chunkNumber.SetBytes(chunkNumberBytes)
+
+	fmt.Printf("%#x\n", bintrie.GetBinaryTreeKeyCodeChunk(common.BytesToAddress(addr), &chunkNumber))
+
+	return nil
+}
+
+// BinaryCodeChunkCode returns the code chunkification for a given code.
+func BinaryCodeChunkCode(ctx *cli.Context) error {
+	if ctx.Args().Len() == 0 || ctx.Args().Len() > 1 {
+		return errors.New("invalid number of arguments: expecting a bytecode")
+	}
+
+	bytecode, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		return fmt.Errorf("error decoding address: %w", err)
+	}
+
+	chunkedCode := bintrie.ChunkifyCode(bytecode)
+	fmt.Printf("%#x\n", chunkedCode)
+
 	return nil
 }

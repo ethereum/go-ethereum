@@ -39,10 +39,6 @@ func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 			return fmt.Errorf("Canon hash chain broken, block %d got %x, expected %x",
 				h.Number, canonHash[:8], exp[:8])
 		}
-		// Verify that we have the TD
-		if td := rawdb.ReadTd(hc.chainDb, canonHash, h.Number.Uint64()); td == nil {
-			return fmt.Errorf("Canon TD missing at block %d", h.Number)
-		}
 		if h.Number.Uint64() == 0 {
 			break
 		}
@@ -73,7 +69,7 @@ func TestHeaderInsertion(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
-	gspec.Commit(db, triedb.NewDatabase(db, nil))
+	gspec.Commit(db, triedb.NewDatabase(db, nil), nil)
 	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)

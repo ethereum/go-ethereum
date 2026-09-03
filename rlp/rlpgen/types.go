@@ -47,7 +47,7 @@ func typeReflectKind(typ types.Type) reflect.Kind {
 	case *types.Map:
 		return reflect.Map
 	case *types.Pointer:
-		return reflect.Ptr
+		return reflect.Pointer
 	case *types.Signature:
 		return reflect.Func
 	case *types.Slice:

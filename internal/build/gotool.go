@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/internal/download"
 )
 
 type GoToolchain struct {
@@ -39,12 +41,19 @@ type GoToolchain struct {
 func (g *GoToolchain) Go(command string, args ...string) *exec.Cmd {
 	tool := g.goTool(command, args...)
 
-	// Configure environment for cross build.
-	if g.GOARCH != "" && g.GOARCH != runtime.GOARCH {
+	// Configure environment for cross build. Force CGO_ENABLED=1 whenever
+	// either GOOS or GOARCH differs from the host: Go's default is
+	// CGO_ENABLED=0 for any cross-compile, but geth's release builds rely
+	// on cgo (c-kzg-4844, secp256k1) regardless of which axis is crossing.
+	crossArch := g.GOARCH != "" && g.GOARCH != runtime.GOARCH
+	crossOS := g.GOOS != "" && g.GOOS != runtime.GOOS
+	if crossArch || crossOS {
 		tool.Env = append(tool.Env, "CGO_ENABLED=1")
+	}
+	if crossArch {
 		tool.Env = append(tool.Env, "GOARCH="+g.GOARCH)
 	}
-	if g.GOOS != "" && g.GOOS != runtime.GOOS {
+	if crossOS {
 		tool.Env = append(tool.Env, "GOOS="+g.GOOS)
 	}
 	// Configure C compiler.
@@ -84,8 +93,8 @@ func (g *GoToolchain) goTool(command string, args ...string) *exec.Cmd {
 
 // DownloadGo downloads the Go binary distribution and unpacks it into a temporary
 // directory. It returns the GOROOT of the unpacked toolchain.
-func DownloadGo(csdb *ChecksumDB) string {
-	version, err := Version(csdb, "golang")
+func DownloadGo(csdb *download.ChecksumDB) string {
+	version, err := csdb.FindVersion("golang")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -129,52 +138,4 @@ func DownloadGo(csdb *ChecksumDB) string {
 		log.Fatal(err)
 	}
 	return goroot
-}
-
-// Version returns the versions defined in the checksumdb.
-func Version(csdb *ChecksumDB, version string) (string, error) {
-	for _, l := range csdb.allChecksums {
-		if !strings.HasPrefix(l, "# version:") {
-			continue
-		}
-		v := strings.Split(l, ":")[1]
-		parts := strings.Split(v, " ")
-		if len(parts) != 2 {
-			log.Print("Erroneous version-string", "v", l)
-			continue
-		}
-		if parts[0] == version {
-			return parts[1], nil
-		}
-	}
-	return "", fmt.Errorf("no version found for '%v'", version)
-}
-
-// DownloadAndVerifyChecksums downloads all files and checks that they match
-// the checksum given in checksums.txt.
-// This task can be used to sanity-check new checksums.
-func DownloadAndVerifyChecksums(csdb *ChecksumDB) {
-	var (
-		base   = ""
-		ucache = os.TempDir()
-	)
-	for _, l := range csdb.allChecksums {
-		if strings.HasPrefix(l, "# https://") {
-			base = l[2:]
-			continue
-		}
-		if strings.HasPrefix(l, "#") {
-			continue
-		}
-		hashFile := strings.Split(l, "  ")
-		if len(hashFile) != 2 {
-			continue
-		}
-		file := hashFile[1]
-		url := base + file
-		dst := filepath.Join(ucache, file)
-		if err := csdb.DownloadFile(url, dst); err != nil {
-			log.Print(err)
-		}
-	}
 }

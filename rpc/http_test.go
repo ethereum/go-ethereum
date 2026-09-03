@@ -17,8 +17,11 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -58,24 +61,34 @@ func confirmRequestValidationCode(t *testing.T, method, contentType, body string
 }
 
 func TestHTTPErrorResponseWithDelete(t *testing.T) {
+	t.Parallel()
+
 	confirmRequestValidationCode(t, http.MethodDelete, contentType, "", http.StatusMethodNotAllowed)
 }
 
 func TestHTTPErrorResponseWithPut(t *testing.T) {
+	t.Parallel()
+
 	confirmRequestValidationCode(t, http.MethodPut, contentType, "", http.StatusMethodNotAllowed)
 }
 
 func TestHTTPErrorResponseWithMaxContentLength(t *testing.T) {
+	t.Parallel()
+
 	body := make([]rune, defaultBodyLimit+1)
 	confirmRequestValidationCode(t,
 		http.MethodPost, contentType, string(body), http.StatusRequestEntityTooLarge)
 }
 
 func TestHTTPErrorResponseWithEmptyContentType(t *testing.T) {
+	t.Parallel()
+
 	confirmRequestValidationCode(t, http.MethodPost, "", "", http.StatusUnsupportedMediaType)
 }
 
 func TestHTTPErrorResponseWithValidRequest(t *testing.T) {
+	t.Parallel()
+
 	confirmRequestValidationCode(t, http.MethodPost, contentType, "", 0)
 }
 
@@ -96,16 +109,20 @@ func confirmHTTPRequestYieldsStatusCode(t *testing.T, method, contentType, body 
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	cleanlyCloseBody(resp.Body)
 	confirmStatusCode(t, resp.StatusCode, expectedStatusCode)
 }
 
 func TestHTTPResponseWithEmptyGet(t *testing.T) {
+	t.Parallel()
+
 	confirmHTTPRequestYieldsStatusCode(t, http.MethodGet, "", "", http.StatusOK)
 }
 
 // This checks that maxRequestContentLength is not applied to the response of a request.
 func TestHTTPRespBodyUnlimited(t *testing.T) {
+	t.Parallel()
+
 	const respLength = defaultBodyLimit * 3
 
 	s := NewServer()
@@ -132,6 +149,8 @@ func TestHTTPRespBodyUnlimited(t *testing.T) {
 // Tests that an HTTP error results in an HTTPError instance
 // being returned with the expected attributes.
 func TestHTTPErrorResponse(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "error has occurred!", http.StatusTeapot)
 	}))
@@ -169,6 +188,8 @@ func TestHTTPErrorResponse(t *testing.T) {
 }
 
 func TestHTTPPeerInfo(t *testing.T) {
+	t.Parallel()
+
 	s := newTestServer()
 	defer s.Stop()
 	ts := httptest.NewServer(s)
@@ -205,6 +226,8 @@ func TestHTTPPeerInfo(t *testing.T) {
 }
 
 func TestNewContextWithHeaders(t *testing.T) {
+	t.Parallel()
+
 	expectedHeaders := 0
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		for i := 0; i < expectedHeaders; i++ {
@@ -241,5 +264,204 @@ func TestNewContextWithHeaders(t *testing.T) {
 	expectedHeaders = 2
 	if err := client.CallContext(ctx2, nil, "test"); err != ErrNoResult {
 		t.Error("call failed:", err)
+	}
+}
+
+// TestHTTPRequestFraming covers what the server answers for the shapes of body
+// that reach it, including the ones that are not valid JSON.
+func TestHTTPRequestFraming(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string // substring the response must contain, empty means no response
+	}{
+		{
+			name: "call",
+			body: `{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}`,
+			want: `"result"`,
+		},
+		{
+			name: "call with surrounding space",
+			body: "  \n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test_echo\",\"params\":[\"x\",3]}\n ",
+			want: `"result"`,
+		},
+		{
+			name: "batch",
+			body: `[{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}]`,
+			want: `"result"`,
+		},
+		{
+			name: "empty body",
+			body: ``,
+			want: ``,
+		},
+		{
+			name: "whitespace only",
+			body: "   \n\t ",
+			want: ``,
+		},
+		{
+			name: "truncated object",
+			body: `{"jsonrpc":"2.0","id":1,"method":"test_echo"`,
+			want: `parse error`,
+		},
+		{
+			name: "not json",
+			body: `hello`,
+			want: `parse error`,
+		},
+		{
+			name: "unbalanced bracket",
+			body: `[{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}`,
+			want: `parse error`,
+		},
+		{
+			name: "control character in string",
+			body: "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test_\x01echo\",\"params\":[]}",
+			want: `parse error`,
+		},
+		{
+			// A body holding more than one value is rejected. The decoder this
+			// replaced stopped after the first value and ignored the rest.
+			name: "trailing second value",
+			body: `{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}{"a":1}`,
+			want: `parse error`,
+		},
+		{
+			name: "trailing garbage",
+			body: `{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]} oops`,
+			want: `parse error`,
+		},
+	}
+
+	srv := newTestServer()
+	defer srv.Stop()
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
+			req.Header.Set("content-type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+
+			body := rec.Body.String()
+			if tc.want == "" {
+				if strings.TrimSpace(body) != "" {
+					t.Fatalf("want no response, got %q", body)
+				}
+				return
+			}
+			if !strings.Contains(body, tc.want) {
+				t.Fatalf("want response containing %q, got %q", tc.want, body)
+			}
+		})
+	}
+}
+
+// TestHTTPRequestFramingChunked checks a body with no content length, which is
+// the case the size hint cannot help with.
+func TestHTTPRequestFramingChunked(t *testing.T) {
+	srv := newTestServer()
+	defer srv.Stop()
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"test_echo","params":["x",3]}`
+	req := httptest.NewRequest(http.MethodPost, "/", io.NopCloser(strings.NewReader(body)))
+	req.Header.Set("content-type", "application/json")
+	req.ContentLength = -1
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	if got := rec.Body.String(); !strings.Contains(got, `"result"`) {
+		t.Fatalf("want a result, got %q", got)
+	}
+}
+
+// TestReadAllBody checks the body reader against io.ReadAll for both a helpful
+// and an unhelpful size hint.
+func TestReadAllBody(t *testing.T) {
+	for _, size := range []int{0, 1, 511, 512, 513, 4096, 100000} {
+		want := bytes.Repeat([]byte("ab"), size/2)
+		for _, hint := range []int{0, 1, size, size + 1, size * 2} {
+			got, err := readAllBody(bytes.NewReader(want), hint)
+			if err != nil {
+				t.Fatalf("size %d hint %d: %v", size, hint, err)
+			}
+			if !bytes.Equal(got, want) {
+				t.Fatalf("size %d hint %d: got %d bytes, want %d", size, hint, len(got), len(want))
+			}
+			// A hint covering the body must be enough, reading to EOF must
+			// not grow the buffer past it.
+			if hint >= len(want) && cap(got) > max(hint+1, 512) {
+				t.Fatalf("size %d hint %d: buffer grew to %d", size, hint, cap(got))
+			}
+		}
+	}
+}
+
+// TestReadAllBodyError checks that a read failure is reported rather than
+// treated as the end of the body.
+func TestReadAllBodyError(t *testing.T) {
+	r := io.MultiReader(strings.NewReader(`{"a":`), &errReader{})
+	if _, err := readAllBody(r, 0); err == nil {
+		t.Fatal("want an error")
+	}
+}
+
+type errReader struct{}
+
+func (*errReader) Read([]byte) (int, error) { return 0, io.ErrClosedPipe }
+
+// TestHTTPBatchRequestFraming checks a batch whose items each carry a sizeable
+// argument. Every message in a batch points into the same buffer, so this would
+// catch one item's arguments bleeding into another's.
+func TestHTTPBatchRequestFraming(t *testing.T) {
+	srv := newTestServer()
+	defer srv.Stop()
+
+	const items = 12
+	var body strings.Builder
+	body.WriteByte('[')
+	for i := 0; i < items; i++ {
+		if i > 0 {
+			body.WriteByte(',')
+		}
+		// A distinct payload per item, large enough to span several reads.
+		pad := strings.Repeat(string(rune('a'+i)), 4096)
+		fmt.Fprintf(&body, `{"jsonrpc":"2.0","id":%d,"method":"test_echo","params":["%s",%d,{"S":"%s"}]}`,
+			i, pad, i, pad)
+	}
+	body.WriteByte(']')
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body.String()))
+	req.Header.Set("content-type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	confirmStatusCode(t, rec.Code, http.StatusOK)
+
+	var resps []struct {
+		ID     int `json:"id"`
+		Result struct {
+			String string
+			Int    int
+			Args   *echoArgs
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resps); err != nil {
+		t.Fatalf("decoding the batch response failed: %v", err)
+	}
+	if len(resps) != items {
+		t.Fatalf("got %d responses, want %d", len(resps), items)
+	}
+	for _, r := range resps {
+		want := strings.Repeat(string(rune('a'+r.ID)), 4096)
+		if r.Result.Int != r.ID {
+			t.Errorf("id %d: Int = %d", r.ID, r.Result.Int)
+		}
+		if r.Result.String != want {
+			t.Errorf("id %d: String is not its own argument", r.ID)
+		}
+		if r.Result.Args == nil || r.Result.Args.S != want {
+			t.Errorf("id %d: Args is not its own argument", r.ID)
+		}
 	}
 }

@@ -49,7 +49,7 @@ type Withdrawals []*Withdrawal
 // Len returns the length of s.
 func (s Withdrawals) Len() int { return len(s) }
 
-var withdrawalSize = int(reflect.TypeOf(Withdrawal{}).Size())
+var withdrawalSize = int(reflect.TypeFor[Withdrawal]().Size())
 
 func (s Withdrawals) Size() int {
 	return withdrawalSize * len(s)

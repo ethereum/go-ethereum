@@ -240,9 +240,9 @@ func (it *nodeIterator) LeafProof() [][]byte {
 
 			for i, item := range it.stack[:len(it.stack)-1] {
 				// Gather nodes that end up as hash nodes (or the root)
-				node, hashed := hasher.proofHash(item.node)
-				if _, ok := hashed.(hashNode); ok || i == 0 {
-					proofs = append(proofs, nodeToBytes(node))
+				enc := hasher.proofHash(item.node)
+				if len(enc) >= 32 || i == 0 {
+					proofs = append(proofs, enc)
 				}
 			}
 			return proofs
@@ -405,7 +405,7 @@ func (it *nodeIterator) resolveHash(hash hashNode, path []byte) (node, error) {
 	// loaded blob will be tracked, while it's not required here since
 	// all loaded nodes won't be linked to trie at all and track nodes
 	// may lead to out-of-memory issue.
-	blob, err := it.trie.reader.node(path, common.BytesToHash(hash))
+	blob, err := it.trie.reader.Node(path, common.BytesToHash(hash))
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +426,7 @@ func (it *nodeIterator) resolveBlob(hash hashNode, path []byte) ([]byte, error) 
 	// loaded blob will be tracked, while it's not required here since
 	// all loaded nodes won't be linked to trie at all and track nodes
 	// may lead to out-of-memory issue.
-	return it.trie.reader.node(path, common.BytesToHash(hash))
+	return it.trie.reader.Node(path, common.BytesToHash(hash))
 }
 
 func (st *nodeIteratorState) resolve(it *nodeIterator, path []byte) error {
@@ -835,4 +835,92 @@ func (it *unionIterator) Error() error {
 		}
 	}
 	return nil
+}
+
+// subTreeIterator wraps nodeIterator to traverse a trie within a predefined
+// start and limit range.
+type subtreeIterator struct {
+	NodeIterator
+
+	stopPath  []byte // Precomputed hex path for stopKey (without terminator), nil means no limit
+	exhausted bool   // Flag whether the iterator has been exhausted
+}
+
+// newSubtreeIterator creates an iterator that only traverses nodes within a subtree
+// defined by the given startKey and stopKey. This supports general range iteration
+// where startKey is inclusive and stopKey is exclusive.
+//
+// The iterator will only visit nodes whose keys k satisfy: startKey <= k < stopKey,
+// where comparisons are performed in lexicographic order of byte keys (internally
+// implemented via hex-nibble path comparisons for efficiency).
+//
+// If startKey is nil, iteration starts from the beginning. If stopKey is nil,
+// iteration continues to the end of the trie.
+func newSubtreeIterator(trie *Trie, startKey, stopKey []byte) (NodeIterator, error) {
+	it, err := trie.NodeIterator(startKey)
+	if err != nil {
+		return nil, err
+	}
+	if startKey == nil && stopKey == nil {
+		return it, nil
+	}
+	// Precompute nibble paths for efficient comparison
+	var stopPath []byte
+	if stopKey != nil {
+		stopPath = keybytesToHex(stopKey)
+		if hasTerm(stopPath) {
+			stopPath = stopPath[:len(stopPath)-1]
+		}
+	}
+	return &subtreeIterator{
+		NodeIterator: it,
+		stopPath:     stopPath,
+	}, nil
+}
+
+// nextKey returns the next possible key after the given prefix.
+// For example, "abc" -> "abd", "ab\xff" -> "ac", etc.
+func nextKey(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	// Make a copy to avoid modifying the original
+	next := make([]byte, len(prefix))
+	copy(next, prefix)
+
+	// Increment the last byte that isn't 0xff
+	for i := len(next) - 1; i >= 0; i-- {
+		if next[i] < 0xff {
+			next[i]++
+			return next
+		}
+		// If it's 0xff, we need to carry over
+		// Trim trailing 0xff bytes
+		next = next[:i]
+	}
+	// If all bytes were 0xff, return nil (no upper bound)
+	return nil
+}
+
+// newPrefixIterator creates an iterator that only traverses nodes with the given prefix.
+// This ensures that only keys starting with the prefix are visited.
+func newPrefixIterator(trie *Trie, prefix []byte) (NodeIterator, error) {
+	return newSubtreeIterator(trie, prefix, nextKey(prefix))
+}
+
+// Next moves the iterator to the next node. If the parameter is false, any child
+// nodes will be skipped.
+func (it *subtreeIterator) Next(descend bool) bool {
+	if it.exhausted {
+		return false
+	}
+	if !it.NodeIterator.Next(descend) {
+		it.exhausted = true
+		return false
+	}
+	if it.stopPath != nil && reachedPath(it.NodeIterator.Path(), it.stopPath) {
+		it.exhausted = true
+		return false
+	}
+	return true
 }

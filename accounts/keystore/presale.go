@@ -81,6 +81,9 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	*/
 	passBytes := []byte(password)
 	derivedKey := pbkdf2.Key(passBytes, passBytes, 2000, 16, sha256.New)
+	if len(cipherText)%aes.BlockSize != 0 {
+		return nil, errors.New("ciphertext must be a multiple of block size")
+	}
 	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
 	if err != nil {
 		return nil, err

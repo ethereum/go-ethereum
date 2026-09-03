@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -105,6 +105,7 @@ func (s *HeadSync) Process(requester request.Requester, events []request.Event) 
 			delete(s.serverHeads, event.Server)
 			delete(s.unvalidatedOptimistic, event.Server)
 			delete(s.unvalidatedFinality, event.Server)
+			delete(s.reqFinalityEpoch, event.Server)
 		}
 	}
 }

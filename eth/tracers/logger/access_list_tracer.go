@@ -18,6 +18,7 @@ package logger
 
 import (
 	"maps"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -84,12 +85,17 @@ func (al accessList) equal(other accessList) bool {
 func (al accessList) accessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
 	for addr, slots := range al {
-		tuple := types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}}
-		for slot := range slots {
-			tuple.StorageKeys = append(tuple.StorageKeys, slot)
+		keys := slices.SortedFunc(maps.Keys(slots), common.Hash.Cmp)
+		// Ensure keys is never nil to avoid JSON serialization issues.
+		// When slots is empty, slices.SortedFunc returns nil, but JSON marshaling
+		// will serialize nil slice as null instead of [], which breaks clients
+		// that expect storageKeys to always be an array.
+		if keys == nil {
+			keys = []common.Hash{}
 		}
-		acl = append(acl, tuple)
+		acl = append(acl, types.AccessTuple{Address: addr, StorageKeys: keys})
 	}
+	slices.SortFunc(acl, func(a, b types.AccessTuple) int { return a.Address.Cmp(b.Address) })
 	return acl
 }
 
@@ -103,24 +109,19 @@ type AccessListTracer struct {
 // NewAccessListTracer creates a new tracer that can generate AccessLists.
 // An optional AccessList can be specified to occupy slots and addresses in
 // the resulting accesslist.
-func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompiles []common.Address) *AccessListTracer {
-	excl := map[common.Address]struct{}{
-		from: {}, to: {},
-	}
-	for _, addr := range precompiles {
-		excl[addr] = struct{}{}
-	}
+func NewAccessListTracer(acl types.AccessList, addressesToExclude map[common.Address]struct{}) *AccessListTracer {
 	list := newAccessList()
 	for _, al := range acl {
-		if _, ok := excl[al.Address]; !ok {
-			list.addAddress(al.Address)
+		if _, ok := addressesToExclude[al.Address]; ok {
+			continue
 		}
+		list.addAddress(al.Address)
 		for _, slot := range al.StorageKeys {
 			list.addSlot(al.Address, slot)
 		}
 	}
 	return &AccessListTracer{
-		excl: excl,
+		excl: addressesToExclude,
 		list: list,
 	}
 }

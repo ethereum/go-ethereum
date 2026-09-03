@@ -32,7 +32,7 @@ type Value [32]byte
 // Values represent a series of merkle tree leaves/nodes.
 type Values []Value
 
-var valueT = reflect.TypeOf(Value{})
+var valueT = reflect.TypeFor[Value]()
 
 // UnmarshalJSON parses a merkle value in hex syntax.
 func (m *Value) UnmarshalJSON(input []byte) error {

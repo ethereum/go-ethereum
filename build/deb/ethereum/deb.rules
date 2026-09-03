@@ -21,7 +21,8 @@ override_dh_auto_build:
 	# requirements opposed to older versions of Go.
 	(mv .goboot-1 ../ && cd ../.goboot-1/src && ./make.bash)
 	(mv .goboot-2 ../ && cd ../.goboot-2/src && GOROOT_BOOTSTRAP=`pwd`/../../.goboot-1 ./make.bash)
-	(mv .go ../ && cd ../.go/src && GOROOT_BOOTSTRAP=`pwd`/../../.goboot-2 ./make.bash)
+	(mv .goboot-3 ../ && cd ../.goboot-3/src && GOROOT_BOOTSTRAP=`pwd`/../../.goboot-2 ./make.bash)
+	(mv .go ../ && cd ../.go/src && GOROOT_BOOTSTRAP=`pwd`/../../.goboot-3 ./make.bash)
 
 	# We can't download external go modules within Launchpad, so we're shipping the
 	# entire dependency source cache with go-ethereum.

@@ -49,6 +49,10 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain) *Bloc
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
+	// check EIP 7934 RLP-encoded block size cap
+	if v.config.IsOsaka(block.Number(), block.Time()) && block.Size() > params.MaxBlockSize {
+		return ErrBlockOversized
+	}
 	// Check whether the block is already imported.
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
@@ -93,7 +97,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 
 		// The individual checks for blob validity (version-check + not empty)
-		// happens in StateTransition.
+		// happens in state transition.
 	}
 
 	// Check blob gas usage.
@@ -105,6 +109,28 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		if blobs > 0 {
 			return errors.New("data blobs present in block body")
 		}
+	}
+
+	// Block access list hash must be present in header after the
+	// Amsterdam hard fork.
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if block.Header().BlockAccessListHash == nil {
+			return errors.New("block access list hash not set in header")
+		}
+		// If the block does not include an access list, compute it locally during
+		// execution and validate it against the access list hash in the header.
+		//
+		// If the block includes an attached access list, validate it directly here.
+		if block.AccessList() != nil {
+			computed := block.AccessList().Hash()
+			if *block.Header().BlockAccessListHash != computed {
+				return fmt.Errorf("access list hash mismatch, computed: %x, remote: %x", computed, *block.Header().BlockAccessListHash)
+			} else if err := block.AccessList().Validate(block.GasLimit(), len(block.Transactions())); err != nil {
+				return fmt.Errorf("invalid block access list: %v", err)
+			}
+		}
+	} else if block.Header().BlockAccessListHash != nil || block.AccessList() != nil {
+		return errors.New("block had access list before Amsterdam")
 	}
 
 	// Ancestor block must be known.
@@ -129,7 +155,11 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
-	rbloom := types.CreateBloom(res.Receipts)
+	//
+	// Receipts must go through MakeReceipt to calculate the receipt's bloom
+	// already. Merge the receipt's bloom together instead of recalculating
+	// everything.
+	rbloom := types.MergeBloom(res.Receipts)
 	if rbloom != header.Bloom {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
@@ -152,9 +182,27 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	} else if res.Requests != nil {
 		return errors.New("block has requests before prague fork")
 	}
+	// Verify Block-level accessList once Amsterdam is enabled
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if res.Bal == nil {
+			return errors.New("block access list is not available in amsterdam")
+		}
+		if block.Header().BlockAccessListHash == nil {
+			return errors.New("block access list hash not set in header")
+		}
+		enc := res.Bal.ToEncodingObj()
+		local, remote := enc.Hash(), *block.Header().BlockAccessListHash
+		if local != remote {
+			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
+		}
+		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
+			return fmt.Errorf("invalid block access list: %v", err)
+		}
+	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+	rules := v.config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
+	if root := statedb.IntermediateRoot(rules); header.Root != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
 	return nil

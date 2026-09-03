@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
+	"sync"
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -59,9 +60,17 @@ func init() {
 	tracers.DefaultDirectory.RegisterJSEval(newJsTracer)
 }
 
-// bigIntProgram is compiled once and the exported function mostly invoked to convert
-// hex strings into big ints.
-var bigIntProgram = goja.MustCompile("bigInt", bigIntegerJS, false)
+var compiledBigInt *goja.Program
+var compileOnce sync.Once
+
+// getBigIntProgram compiles the bigint library, if needed, and returns the compiled
+// goja program.
+func getBigIntProgram() *goja.Program {
+	compileOnce.Do(func() {
+		compiledBigInt = goja.MustCompile("bigInt", bigIntegerJS, false)
+	})
+	return compiledBigInt
+}
 
 type toBigFn = func(vm *goja.Runtime, val string) (goja.Value, error)
 type toBufFn = func(vm *goja.Runtime, val []byte) (goja.Value, error)
@@ -251,7 +260,8 @@ func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 	t.ctx["block"] = t.vm.ToValue(t.env.BlockNumber.Uint64())
 	t.ctx["gas"] = t.vm.ToValue(tx.Gas())
-	gasPriceBig, err := t.toBig(t.vm, env.GasPrice.String())
+	gasTip, _ := tx.EffectiveGasTip(env.BaseFee)
+	gasPriceBig, err := t.toBig(t.vm, gasTip.String())
 	if err != nil {
 		t.err = err
 		return
@@ -470,7 +480,6 @@ func (t *jsTracer) setBuiltinFunctions() {
 		return hexutil.Encode(b)
 	})
 	vm.Set("toWord", func(v goja.Value) goja.Value {
-		// TODO: add test with []byte len < 32 or > 32
 		b, err := t.fromBuf(vm, v, true)
 		if err != nil {
 			vm.Interrupt(err)
@@ -567,7 +576,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 func (t *jsTracer) setTypeConverters() error {
 	// Inject bigint logic.
 	// TODO: To be replaced after goja adds support for native JS bigint.
-	toBigCode, err := t.vm.RunProgram(bigIntProgram)
+	toBigCode, err := t.vm.RunProgram(getBigIntProgram())
 	if err != nil {
 		return err
 	}

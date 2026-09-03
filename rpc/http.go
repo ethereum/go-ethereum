@@ -30,6 +30,10 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/internal/telemetry"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
@@ -48,14 +52,19 @@ type httpConn struct {
 	mu        sync.Mutex // protects headers
 	headers   http.Header
 	auth      HTTPAuth
+	tmprop    propagation.TextMapPropagator
 }
 
 // httpConn implements ServerCodec, but it is treated specially by Client
 // and some methods don't work. The panic() stubs here exist to ensure
 // this special treatment is correct.
 
-func (hc *httpConn) writeJSON(context.Context, interface{}, bool) error {
+func (hc *httpConn) writeJSON(context.Context, *jsonrpcMessage, bool) error {
 	panic("writeJSON called on httpConn")
+}
+
+func (hc *httpConn) writeJSONBatch(context.Context, []*jsonrpcMessage, bool) error {
+	panic("writeJSONBatch called on httpConn")
 }
 
 func (hc *httpConn) peerInfo() PeerInfo {
@@ -160,6 +169,7 @@ func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
 		headers: headers,
 		url:     endpoint,
 		auth:    cfg.httpAuth,
+		tmprop:  cfg.tmprop,
 		closeCh: make(chan interface{}),
 	}
 
@@ -168,13 +178,21 @@ func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
 	}
 }
 
-func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
+// cleanlyCloseBody avoids sending unnecessary RST_STREAM and PING frames by
+// ensuring the whole body is read before being closed.
+// See https://blog.cloudflare.com/go-and-enhance-your-calm/#reading-bodies-in-go-can-be-unintuitive
+func cleanlyCloseBody(body io.ReadCloser) error {
+	io.Copy(io.Discard, body)
+	return body.Close()
+}
+
+func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg *jsonrpcMessage) error {
 	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msg)
+	respBody, err := hc.doRequest(ctx, appendMessage(nil, msg))
 	if err != nil {
 		return err
 	}
-	defer respBody.Close()
+	defer cleanlyCloseBody(respBody)
 
 	var resp jsonrpcMessage
 	batch := [1]*jsonrpcMessage{&resp}
@@ -187,11 +205,11 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 
 func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonrpcMessage) error {
 	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msgs)
+	respBody, err := hc.doRequest(ctx, appendBatch(nil, msgs))
 	if err != nil {
 		return err
 	}
-	defer respBody.Close()
+	defer cleanlyCloseBody(respBody)
 
 	var respmsgs []*jsonrpcMessage
 	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
@@ -201,11 +219,7 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 	return nil
 }
 
-func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadCloser, error) {
-	body, err := json.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
+func (hc *httpConn) doRequest(ctx context.Context, body []byte) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hc.url, io.NopCloser(bytes.NewReader(body)))
 	if err != nil {
 		return nil, err
@@ -218,6 +232,9 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	req.Header = hc.headers.Clone()
 	hc.mu.Unlock()
 	setHeaders(req.Header, headersFromContext(ctx))
+	if hc.tmprop != nil {
+		hc.tmprop.Inject(ctx, propagation.HeaderCarrier(req.Header))
+	}
 
 	if hc.auth != nil {
 		if err := hc.auth(req.Header); err != nil {
@@ -236,7 +253,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 		if _, err := buf.ReadFrom(resp.Body); err == nil {
 			body = buf.Bytes()
 		}
-		resp.Body.Close()
+		cleanlyCloseBody(resp.Body)
 		return nil, HTTPError{
 			Status:     resp.Status,
 			StatusCode: resp.StatusCode,
@@ -257,41 +274,88 @@ func (s *Server) newHTTPServerConn(r *http.Request, w http.ResponseWriter) Serve
 	body := io.LimitReader(r.Body, int64(s.httpBodyLimit))
 	conn := &httpServerConn{Reader: body, Writer: w, r: r}
 
-	encoder := func(v any, isErrorResponse bool) error {
-		if !isErrorResponse {
-			return json.NewEncoder(conn).Encode(v)
-		}
+	var buf []byte
+	encodeMsg := func(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
+		buf = appendMessage(buf[:0], msg)
+		return httpWrite(ctx, w, buf, isError)
+	}
+	encodeBatch := func(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
+		buf = appendBatch(buf[:0], msgs)
+		return httpWrite(ctx, w, buf, isError)
+	}
 
-		// It's an error response and requires special treatment.
-		//
-		// In case of a timeout error, the response must be written before the HTTP
-		// server's write timeout occurs. So we need to flush the response. The
-		// Content-Length header also needs to be set to ensure the client knows
-		// when it has the full response.
-		encdata, err := json.Marshal(v)
+	// The body holds one message, so it can be read in one go and checked once.
+	readFrame := func() ([]byte, error) {
+		hint := 0
+		if r.ContentLength > 0 && r.ContentLength <= int64(s.httpBodyLimit) {
+			hint = int(r.ContentLength)
+		}
+		frame, err := readAllBody(body, hint)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		w.Header().Set("content-length", strconv.Itoa(len(encdata)))
-
-		// If this request is wrapped in a handler that might remove Content-Length (such
-		// as the automatic gzip we do in package node), we need to ensure the HTTP server
-		// doesn't perform chunked encoding. In case WriteTimeout is reached, the chunked
-		// encoding might not be finished correctly, and some clients do not like it when
-		// the final chunk is missing.
-		w.Header().Set("transfer-encoding", "identity")
-
-		_, err = w.Write(encdata)
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
+		if len(bytes.TrimSpace(frame)) == 0 {
+			// An empty body carries no message, which is not an error. The
+			// decoder used to report this as EOF and callers rely on that.
+			return nil, io.EOF
 		}
+		return frame, nil
+	}
+	return newFuncCodec(conn, encodeMsg, encodeBatch, nil, readFrame)
+}
+
+// readAllBody reads r to the end, sizing the buffer from the hint when there is
+// one so that a large body does not have to be grown into.
+func readAllBody(r io.Reader, hint int) ([]byte, error) {
+	// A byte past the hint, so a body of exactly hint bytes sees EOF without
+	// the buffer doubling right at the end.
+	buf := make([]byte, 0, max(hint+1, 512))
+	for {
+		if len(buf) == cap(buf) {
+			buf = append(buf, 0)[:len(buf)]
+		}
+		n, err := r.Read(buf[len(buf):cap(buf)])
+		buf = buf[:len(buf)+n]
+		if err != nil {
+			if err == io.EOF {
+				return buf, nil
+			}
+			return buf, err
+		}
+	}
+}
+
+// httpWrite writes pre-encoded response data over HTTP.
+func httpWrite(ctx context.Context, w http.ResponseWriter, data []byte, isError bool) (err error) {
+	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, telemetry.TracerFromContext(ctx), "rpc.httpWrite")
+	defer spanEnd(&err)
+
+	w.Header().Set("content-length", strconv.Itoa(len(data)))
+
+	if !isError {
+		// Normal path, just send the response and let the HTTP server decide
+		// when to flush.
+		_, err = w.Write(data)
 		return err
 	}
 
-	dec := json.NewDecoder(conn)
-	dec.UseNumber()
-
-	return NewFuncCodec(conn, encoder, dec.Decode)
+	// It's an error response and requires special treatment.
+	//
+	// In case of a timeout error, the response must be written before the HTTP
+	// server's write timeout occurs. So we need to flush the response.
+	//
+	// If this request is wrapped in a handler that might remove Content-Length (such
+	// as the automatic gzip we do in package node), we need to ensure the HTTP server
+	// doesn't perform chunked encoding. In case WriteTimeout is reached, the chunked
+	// encoding might not be finished correctly, and some clients do not like it when
+	// the final chunk is missing. To do this, we set TE = identity, which is a signal
+	// recognized by outer handlers to avoid compression.
+	w.Header().Set("transfer-encoding", "identity")
+	_, err = w.Write(data)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	return err
 }
 
 // Close does nothing and always returns nil.
@@ -325,6 +389,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	connInfo.HTTP.UserAgent = r.Header.Get("User-Agent")
 	ctx := r.Context()
 	ctx = context.WithValue(ctx, peerInfoContextKey{}, connInfo)
+
+	// Extract trace context from incoming headers.
+	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(r.Header))
 
 	// All checks passed, create a codec that reads directly from the request body
 	// until EOF, writes the response to w, and orders the server to process a

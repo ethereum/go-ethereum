@@ -1,5 +1,6 @@
 // Hook go-metrics into expvar
 // on any /debug/metrics request, load all vars from the registry into expvar, and execute regular expvar handler
+
 package exp
 
 import (
@@ -146,7 +147,7 @@ func (exp *exp) publishHistogram(name string, metric metrics.Histogram) {
 	exp.getFloat(name + ".999-percentile").Set(ps[4])
 }
 
-func (exp *exp) publishMeter(name string, metric metrics.Meter) {
+func (exp *exp) publishMeter(name string, metric *metrics.Meter) {
 	m := metric.Snapshot()
 	exp.getInt(name + ".count").Set(m.Count())
 	exp.getFloat(name + ".one-minute").Set(m.Rate1())
@@ -155,7 +156,7 @@ func (exp *exp) publishMeter(name string, metric metrics.Meter) {
 	exp.getFloat(name + ".mean").Set(m.RateMean())
 }
 
-func (exp *exp) publishTimer(name string, metric metrics.Timer) {
+func (exp *exp) publishTimer(name string, metric *metrics.Timer) {
 	t := metric.Snapshot()
 	ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 	exp.getInt(name + ".count").Set(t.Count())
@@ -174,7 +175,7 @@ func (exp *exp) publishTimer(name string, metric metrics.Timer) {
 	exp.getFloat(name + ".mean-rate").Set(t.RateMean())
 }
 
-func (exp *exp) publishResettingTimer(name string, metric metrics.ResettingTimer) {
+func (exp *exp) publishResettingTimer(name string, metric *metrics.ResettingTimer) {
 	t := metric.Snapshot()
 	ps := t.Percentiles([]float64{0.50, 0.75, 0.95, 0.99})
 	exp.getInt(name + ".count").Set(int64(t.Count()))
@@ -188,23 +189,23 @@ func (exp *exp) publishResettingTimer(name string, metric metrics.ResettingTimer
 func (exp *exp) syncToExpvar() {
 	exp.registry.Each(func(name string, i interface{}) {
 		switch i := i.(type) {
-		case metrics.Counter:
+		case *metrics.Counter:
 			exp.publishCounter(name, i.Snapshot())
-		case metrics.CounterFloat64:
+		case *metrics.CounterFloat64:
 			exp.publishCounterFloat64(name, i.Snapshot())
-		case metrics.Gauge:
+		case *metrics.Gauge:
 			exp.publishGauge(name, i.Snapshot())
-		case metrics.GaugeFloat64:
+		case *metrics.GaugeFloat64:
 			exp.publishGaugeFloat64(name, i.Snapshot())
-		case metrics.GaugeInfo:
+		case *metrics.GaugeInfo:
 			exp.publishGaugeInfo(name, i.Snapshot())
 		case metrics.Histogram:
 			exp.publishHistogram(name, i)
-		case metrics.Meter:
+		case *metrics.Meter:
 			exp.publishMeter(name, i)
-		case metrics.Timer:
+		case *metrics.Timer:
 			exp.publishTimer(name, i)
-		case metrics.ResettingTimer:
+		case *metrics.ResettingTimer:
 			exp.publishResettingTimer(name, i)
 		default:
 			panic(fmt.Sprintf("unsupported type for '%s': %T", name, i))

@@ -17,10 +17,12 @@
 package catalyst
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sync"
 	"time"
@@ -32,10 +34,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rpc"
+	"go.opentelemetry.io/otel"
 )
 
 const devEpochLength = 32
@@ -97,8 +102,20 @@ type SimulatedBeacon struct {
 	lastBlockTime      uint64
 }
 
+func payloadVersion(config *params.ChainConfig, time uint64) engine.PayloadVersion {
+	switch config.LatestFork(time) {
+	case forks.Amsterdam:
+		return engine.PayloadV4
+	case forks.Bogota, forks.BPO5, forks.BPO4, forks.BPO3, forks.BPO2, forks.BPO1, forks.Osaka, forks.Prague, forks.Cancun:
+		return engine.PayloadV3
+	case forks.Paris, forks.Shanghai:
+		return engine.PayloadV2
+	}
+	panic("invalid fork, simulated beacon needs to be started post-merge")
+}
+
 // NewSimulatedBeacon constructs a new simulated beacon chain.
-func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, error) {
+func NewSimulatedBeacon(period uint64, feeRecipient common.Address, eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	block := eth.BlockChain().CurrentBlock()
 	current := engine.ForkchoiceStateV1{
 		HeadBlockHash:      block.Hash(),
@@ -109,17 +126,23 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if block.Number.Sign() == 0 {
-		if _, err := engineAPI.ForkchoiceUpdatedV3(current, nil); err != nil {
+		version := payloadVersion(eth.BlockChain().Config(), block.Time)
+		if _, err := engineAPI.forkchoiceUpdated(context.Background(), current, nil, version, false); err != nil {
 			return nil, err
 		}
 	}
+
+	// cap the dev mode period to a reasonable maximum value to avoid
+	// overflowing the time.Duration (int64) that it will occupy
+	const maxPeriod = uint64(math.MaxInt64 / time.Second)
 	return &SimulatedBeacon{
 		eth:                eth,
-		period:             period,
+		period:             min(period, maxPeriod),
 		shutdownCh:         make(chan struct{}),
 		engineAPI:          engineAPI,
 		lastBlockTime:      block.Time,
 		curForkchoiceState: current,
+		feeRecipient:       feeRecipient,
 	}, nil
 }
 
@@ -156,9 +179,10 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	c.feeRecipientLock.Lock()
 	feeRecipient := c.feeRecipient
 	c.feeRecipientLock.Unlock()
+	header := c.eth.BlockChain().CurrentBlock()
 
 	// Reset to CurrentBlock in case of the chain was rewound
-	if header := c.eth.BlockChain().CurrentBlock(); c.curForkchoiceState.HeadBlockHash != header.Hash() {
+	if c.curForkchoiceState.HeadBlockHash != header.Hash() {
 		finalizedHash := c.finalizedBlockHash(header.Number.Uint64())
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
@@ -173,15 +197,33 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return fmt.Errorf("failed to sync txpool: %w", err)
 	}
 
+	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
+	tracer := otel.Tracer("")
+
 	var random [32]byte
 	rand.Read(random[:])
-	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
+
+	attribute := &engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
-	}, engine.PayloadV3, false)
+	}
+	if c.eth.BlockChain().Config().IsAmsterdam(new(big.Int).Add(header.Number, big.NewInt(1)), timestamp) {
+		slotNumber := uint64(0)
+		attribute.SlotNumber = &slotNumber
+	}
+
+	// Create a server span for forkchoiceUpdated with payload attributes,
+	// simulating an incoming engine API request from a real consensus client.
+	fcCtx, fcSpanEnd := telemetry.StartCallServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
+	})
+	fcResponse, err := c.engineAPI.forkchoiceUpdated(fcCtx, c.curForkchoiceState, attribute, version, false)
+	fcSpanEnd(&err)
 	if err != nil {
 		return err
 	}
@@ -189,7 +231,21 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return errors.New("chain rewind prevented invocation of payload creation")
 	}
 
-	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
+	// If the payload was already known, we can skip the rest of the process.
+	// This edge case is possible due to a race condition between seal and debug.setHead.
+	if fcResponse.PayloadStatus.Status == engine.VALID && fcResponse.PayloadID == nil {
+		return nil
+	}
+
+	// Create a server span for getPayload, simulating the consensus client
+	// coming back to retrieve the built payload.
+	_, gpSpanEnd := telemetry.StartCallServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "getPayloadV" + fmt.Sprintf("%d", version),
+	})
+	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true, nil, nil)
+	gpSpanEnd(&err)
 	if err != nil {
 		return err
 	}
@@ -206,28 +262,56 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		}
 	}
 
-	// Independently calculate the blob hashes from sidecars.
-	blobHashes := make([]common.Hash, 0)
-	if envelope.BlobsBundle != nil {
-		hasher := sha256.New()
-		for _, commit := range envelope.BlobsBundle.Commitments {
-			var c kzg4844.Commitment
-			if len(commit) != len(c) {
-				return errors.New("invalid commitment length")
+	var (
+		blobHashes []common.Hash
+		beaconRoot *common.Hash
+		requests   [][]byte
+	)
+	// Compute post-shanghai fields
+	if version > engine.PayloadV2 {
+		// Independently calculate the blob hashes from sidecars.
+		blobHashes = make([]common.Hash, 0)
+		if envelope.BlobsBundle != nil {
+			hasher := sha256.New()
+			for _, commit := range envelope.BlobsBundle.Commitments {
+				var c kzg4844.Commitment
+				if len(commit) != len(c) {
+					return errors.New("invalid commitment length")
+				}
+				copy(c[:], commit)
+				blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
 			}
-			copy(c[:], commit)
-			blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
 		}
+		beaconRoot = &common.Hash{}
+		requests = envelope.Requests
 	}
+
+	// Create a server span for newPayload, simulating the consensus client
+	// sending the execution payload for validation.
+	npCtx, npSpanEnd := telemetry.StartCallServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "newPayloadV" + fmt.Sprintf("%d", version),
+	})
+
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, &common.Hash{}, envelope.Requests, false)
+	_, err = c.engineAPI.newPayload(npCtx, *payload, blobHashes, beaconRoot, requests, false)
+	npSpanEnd(&err)
 	if err != nil {
 		return err
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)
 
-	// Mark the block containing the payload as canonical
-	if _, err = c.engineAPI.ForkchoiceUpdatedV3(c.curForkchoiceState, nil); err != nil {
+	// Create a server span for the final forkchoiceUpdated (no payload attributes),
+	// which sets the new block as the canonical chain head.
+	fcuCtx, fcuSpanEnd := telemetry.StartCallServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+		System:  "jsonrpc",
+		Service: "engine",
+		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
+	})
+	_, err = c.engineAPI.forkchoiceUpdated(fcuCtx, c.curForkchoiceState, nil, version, false)
+	fcuSpanEnd(&err)
+	if err != nil {
 		return err
 	}
 	c.lastBlockTime = payload.Timestamp
@@ -244,9 +328,8 @@ func (c *SimulatedBeacon) loop() {
 		case <-timer.C:
 			if err := c.sealBlock(c.withdrawals.pop(10), uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
-			} else {
-				timer.Reset(time.Second * time.Duration(c.period))
 			}
+			timer.Reset(time.Second * time.Duration(c.period))
 		}
 	}
 }
@@ -287,19 +370,14 @@ func (c *SimulatedBeacon) Commit() common.Hash {
 
 // Rollback un-sends previously added transactions.
 func (c *SimulatedBeacon) Rollback() {
-	// Flush all transactions from the transaction pools
-	maxUint256 := new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
-	c.eth.TxPool().SetGasTip(maxUint256)
-	// Set the gas tip back to accept new transactions
-	// TODO (Marius van der Wijden): set gas tip to parameter passed by config
-	c.eth.TxPool().SetGasTip(big.NewInt(params.GWei))
+	c.eth.TxPool().Clear()
 }
 
 // Fork sets the head to the provided hash.
 func (c *SimulatedBeacon) Fork(parentHash common.Hash) error {
 	// Ensure no pending transactions.
 	c.eth.TxPool().Sync()
-	if len(c.eth.TxPool().Pending(txpool.PendingFilter{})) != 0 {
+	if pending, _ := c.eth.TxPool().Pending(txpool.PendingFilter{}); len(pending) != 0 {
 		return errors.New("pending block dirty")
 	}
 
@@ -313,7 +391,7 @@ func (c *SimulatedBeacon) Fork(parentHash common.Hash) error {
 
 // AdjustTime creates a new block with an adjusted timestamp.
 func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
-	if len(c.eth.TxPool().Pending(txpool.PendingFilter{})) != 0 {
+	if pending, _ := c.eth.TxPool().Pending(txpool.PendingFilter{}); len(pending) != 0 {
 		return errors.New("could not adjust time on non-empty block")
 	}
 	parent := c.eth.BlockChain().CurrentBlock()
@@ -334,5 +412,6 @@ func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
 			Service:   api,
 			Version:   "1.0",
 		},
+		newTestingAPI(sim.eth),
 	})
 }

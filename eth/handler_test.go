@@ -17,22 +17,30 @@
 package eth
 
 import (
+	"maps"
 	"math/big"
+	"math/rand"
 	"sort"
 	"sync"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -48,7 +56,10 @@ var (
 // Its goal is to get around setting up a valid statedb for the balance and nonce
 // checks.
 type testTxPool struct {
-	pool map[common.Hash]*types.Transaction // Hash map of collected transactions
+	txPool   map[common.Hash]*types.Transaction // Hash map of collected transactions
+	cellPool map[common.Hash][]kzg4844.Cell
+
+	custody map[common.Hash]types.CustodyBitmap
 
 	txFeed event.Feed   // Notification feed to allow waiting for inclusion
 	lock   sync.RWMutex // Protects the transaction pool
@@ -57,7 +68,9 @@ type testTxPool struct {
 // newTestTxPool creates a mock transaction pool.
 func newTestTxPool() *testTxPool {
 	return &testTxPool{
-		pool: make(map[common.Hash]*types.Transaction),
+		txPool:   make(map[common.Hash]*types.Transaction),
+		cellPool: make(map[common.Hash][]kzg4844.Cell),
+		custody:  make(map[common.Hash]types.CustodyBitmap),
 	}
 }
 
@@ -67,7 +80,16 @@ func (p *testTxPool) Has(hash common.Hash) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	return p.pool[hash] != nil
+	return p.txPool[hash] != nil
+}
+
+// Has returns an indicator whether txpool has a transaction
+// cached with the given hash.
+func (p *testTxPool) HasPayload(hash common.Hash) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.cellPool[hash] != nil
 }
 
 // Get retrieves the transaction from local txpool with given
@@ -75,29 +97,60 @@ func (p *testTxPool) Has(hash common.Hash) bool {
 func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	return p.pool[hash]
+	return p.txPool[hash]
+}
+
+// Get retrieves the transaction from local txpool with given
+// tx hash.
+func (p *testTxPool) GetRLP(hash common.Hash, _ uint) []byte {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	tx := p.txPool[hash]
+	if tx != nil {
+		blob, _ := rlp.EncodeToBytes(tx)
+		return blob
+	}
+	return nil
+}
+
+// GetMetadata returns the transaction type and transaction size with the given
+// hash.
+func (p *testTxPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	tx := p.txPool[hash]
+	if tx != nil {
+		return &txpool.TxMetadata{
+			Type: tx.Type(),
+			Size: tx.Size(),
+		}
+	}
+	return nil
 }
 
 // Add appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
+func (p *testTxPool) Add(txs []*types.Transaction, sync bool) []error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	for _, tx := range txs {
-		p.pool[tx.Hash()] = tx
+		p.txPool[tx.Hash()] = tx
 	}
 	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
 	return make([]error, len(txs))
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+func (p *testTxPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
+	var count int
 	batches := make(map[common.Address][]*types.Transaction)
-	for _, tx := range p.pool {
+	for _, tx := range p.txPool {
 		from, _ := types.Sender(types.HomesteadSigner{}, tx)
 		batches[from] = append(batches[from], tx)
 	}
@@ -116,9 +169,10 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*
 				Gas:       tx.Gas(),
 				BlobGas:   tx.BlobGas(),
 			})
+			count++
 		}
 	}
-	return pending
+	return pending, count
 }
 
 // SubscribeTransactions should return an event subscription of NewTxsEvent and
@@ -126,32 +180,127 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*
 func (p *testTxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
 	return p.txFeed.Subscribe(ch)
 }
+func (p *testTxPool) GetBlobHashes(hash common.Hash) []common.Hash {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	tx, exists := p.txPool[hash]
+	if !exists {
+		return nil
+	}
+	return tx.BlobHashes()
+}
+
+func (p *testTxPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	requestedIndices := mask.Indices()
+	cells := make([][]*kzg4844.Cell, len(vhashes))
+	proofs := make([][]*kzg4844.Proof, len(vhashes))
+
+	for i, vhash := range vhashes {
+		// Find the tx containing this versioned hash
+		var foundTx *types.Transaction
+		var blobIdx int
+		for _, tx := range p.txPool {
+			for j, bh := range tx.BlobHashes() {
+				if bh == vhash {
+					foundTx = tx
+					blobIdx = j
+					break
+				}
+			}
+			if foundTx != nil {
+				break
+			}
+		}
+		if foundTx == nil {
+			continue
+		}
+		txCells, ok := p.cellPool[foundTx.Hash()]
+		if !ok {
+			continue
+		}
+		_ = blobIdx // cells in the mock are stored flat by cell index
+		blobCells := make([]*kzg4844.Cell, len(requestedIndices))
+		for j, idx := range requestedIndices {
+			if int(idx) < len(txCells) {
+				cell := txCells[idx]
+				blobCells[j] = &cell
+			}
+		}
+		cells[i] = blobCells
+	}
+	return cells, proofs, nil
+}
+
+func (p *testTxPool) GetCustody(hash common.Hash) *types.CustodyBitmap {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	mask, ok := p.custody[hash]
+	if !ok {
+		return nil
+	}
+	return &mask
+}
+
+// AddCells adds cells for a specific transaction hash (for testing)
+func (p *testTxPool) AddCells(hash common.Hash, cells []kzg4844.Cell, mask types.CustodyBitmap) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	p.cellPool[hash] = cells
+	p.custody[hash] = mask
+}
+
+func (p *testTxPool) AddPooledTx(pooledTx *blobpool.BlobTxForPool) error {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	hash := pooledTx.Tx.Hash()
+	p.cellPool[hash] = pooledTx.CellSidecar.Cells
+	p.txPool[hash] = pooledTx.Tx
+	return nil
+}
+
+// FilterType should check whether the pool supports the given type of transactions.
+func (p *testTxPool) FilterType(kind byte) bool {
+	switch kind {
+	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
+		return true
+	}
+	return false
+}
+
+func (p *testTxPool) ValidateTxBasics(_ *types.Transaction) error {
+	return nil
+}
 
 // testHandler is a live implementation of the Ethereum protocol handler, just
 // preinitialized with some sane testing defaults and the transaction pool mocked
 // out.
 type testHandler struct {
-	db      ethdb.Database
-	chain   *core.BlockChain
-	txpool  *testTxPool
-	handler *handler
+	db       ethdb.Database
+	chain    *core.BlockChain
+	txpool   *testTxPool
+	blobpool *testTxPool
+	handler  *handler
 }
 
 // newTestHandler creates a new handler for testing purposes with no blocks.
-func newTestHandler() *testHandler {
-	return newTestHandlerWithBlocks(0)
+func newTestHandler(mode ethconfig.SyncMode) *testHandler {
+	return newTestHandlerWithBlocks(0, mode)
 }
 
 // newTestHandlerWithBlocks creates a new handler for testing purposes, with a
 // given number of initial blocks.
-func newTestHandlerWithBlocks(blocks int) *testHandler {
+func newTestHandlerWithBlocks(blocks int, mode ethconfig.SyncMode) *testHandler {
 	// Create a database pre-initialize with a genesis block
 	db := rawdb.NewMemoryDatabase()
 	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 		Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
 	}
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+	chain, _ := core.NewBlockChain(db, gspec, ethash.NewFaker(), nil)
 
 	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), blocks, nil)
 	if _, err := chain.InsertChain(bs); err != nil {
@@ -163,17 +312,19 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Database:   db,
 		Chain:      chain,
 		TxPool:     txpool,
+		BlobPool:   txpool,
 		Network:    1,
-		Sync:       downloader.SnapSync,
+		Sync:       mode,
 		BloomCache: 1,
 	})
 	handler.Start(1000)
 
 	return &testHandler{
-		db:      db,
-		chain:   chain,
-		txpool:  txpool,
-		handler: handler,
+		db:       db,
+		chain:    chain,
+		txpool:   txpool,
+		blobpool: txpool,
+		handler:  handler,
 	}
 }
 
@@ -181,4 +332,103 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 func (b *testHandler) close() {
 	b.handler.Stop()
 	b.chain.Stop()
+}
+
+func TestBroadcastChoice(t *testing.T) {
+	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
+	choice49 := newBroadcastChoice(self, [16]byte{1})
+	choice50 := newBroadcastChoice(self, [16]byte{1})
+
+	// Create test peers and random tx sender addresses.
+	rand := rand.New(rand.NewSource(33))
+	txsenders := make([]common.Address, 400)
+	for i := range txsenders {
+		rand.Read(txsenders[i][:])
+	}
+	peers := createTestPeers(rand, 50)
+	defer closePeers(peers)
+
+	// Evaluate choice49 first.
+	expectedCount := 7 // sqrt(49)
+	var chosen49 = make([]map[*ethPeer]struct{}, len(txsenders))
+	for i, txSender := range txsenders {
+		set := choice49.choosePeers(peers[:49], txSender)
+		chosen49[i] = maps.Clone(set)
+
+		// Sanity check choices. Here we check that the function selects different peers
+		// for different transaction senders.
+		if len(set) != expectedCount {
+			t.Fatalf("choice49 produced wrong count %d, want %d", len(set), expectedCount)
+		}
+		if i > 0 && maps.Equal(set, chosen49[i-1]) {
+			t.Errorf("choice49 for tx %d is equal to tx %d", i, i-1)
+		}
+	}
+
+	// Evaluate choice50 for the same peers and transactions. It should always yield more
+	// peers than choice49, and the chosen set should be a superset of choice49's.
+	for i, txSender := range txsenders {
+		set := choice50.choosePeers(peers[:50], txSender)
+		if len(set) < len(chosen49[i]) {
+			t.Errorf("for tx %d, choice50 has less peers than choice49", i)
+		}
+		for p := range chosen49[i] {
+			if _, ok := set[p]; !ok {
+				t.Errorf("for tx %d, choice50 did not choose peer %v, but choice49 did", i, p.ID())
+			}
+		}
+	}
+}
+
+func BenchmarkBroadcastChoice(b *testing.B) {
+	b.Run("50", func(b *testing.B) {
+		benchmarkBroadcastChoice(b, 50)
+	})
+	b.Run("200", func(b *testing.B) {
+		benchmarkBroadcastChoice(b, 200)
+	})
+	b.Run("500", func(b *testing.B) {
+		benchmarkBroadcastChoice(b, 500)
+	})
+}
+
+// This measures the overhead of sending one transaction to N peers.
+func benchmarkBroadcastChoice(b *testing.B, npeers int) {
+	rand := rand.New(rand.NewSource(33))
+	peers := createTestPeers(rand, npeers)
+	defer closePeers(peers)
+
+	txsenders := make([]common.Address, b.N)
+	for i := range txsenders {
+		rand.Read(txsenders[i][:])
+	}
+
+	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
+	choice := newBroadcastChoice(self, [16]byte{1})
+
+	b.ResetTimer()
+	for i := range b.N {
+		set := choice.choosePeers(peers, txsenders[i])
+		if len(set) == 0 {
+			b.Fatal("empty result")
+		}
+	}
+}
+
+func createTestPeers(rand *rand.Rand, n int) []*ethPeer {
+	peers := make([]*ethPeer, n)
+	for i := range peers {
+		var id enode.ID
+		rand.Read(id[:])
+		p2pPeer := p2p.NewPeer(id, "test", nil)
+		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil, nil, nil)
+		peers[i] = &ethPeer{Peer: ep}
+	}
+	return peers
+}
+
+func closePeers(peers []*ethPeer) {
+	for _, p := range peers {
+		p.Close()
+	}
 }

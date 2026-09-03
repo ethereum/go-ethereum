@@ -17,11 +17,13 @@
 package trie
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -45,11 +47,28 @@ type (
 	}
 	hashNode  []byte
 	valueNode []byte
-)
 
-// nilValueNode is used when collapsing internal trie nodes for hashing, since
-// unset children need to serialize correctly.
-var nilValueNode = valueNode(nil)
+	// fullnodeEncoder is a type used exclusively for encoding fullNode.
+	// Briefly instantiating a fullnodeEncoder and initializing with
+	// existing slices is less memory intense than using the fullNode type.
+	fullnodeEncoder struct {
+		Children [17][]byte
+	}
+
+	// extNodeEncoder is a type used exclusively for encoding extension node.
+	// Briefly instantiating a extNodeEncoder and initializing with existing
+	// slices is less memory intense than using the shortNode type.
+	extNodeEncoder struct {
+		Key []byte
+		Val []byte
+	}
+
+	// leafNodeEncoder is a type used exclusively for encoding leaf node.
+	leafNodeEncoder struct {
+		Key []byte
+		Val []byte
+	}
+)
 
 // EncodeRLP encodes a full node into the consensus RLP format.
 func (n *fullNode) EncodeRLP(w io.Writer) error {
@@ -58,13 +77,17 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 	return eb.Flush()
 }
 
-func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
-func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
-
 // nodeFlag contains caching-related metadata about a node.
 type nodeFlag struct {
 	hash  hashNode // cached hash of the node (may be nil)
 	dirty bool     // whether the node has changes that must be written to the database
+}
+
+func (n nodeFlag) copy() nodeFlag {
+	return nodeFlag{
+		hash:  common.CopyBytes(n.hash),
+		dirty: n.dirty,
+	}
 }
 
 func (n *fullNode) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirty }
@@ -89,6 +112,7 @@ func (n *fullNode) fstring(ind string) string {
 	}
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
+
 func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
 }
@@ -97,19 +121,6 @@ func (n hashNode) fstring(ind string) string {
 }
 func (n valueNode) fstring(ind string) string {
 	return fmt.Sprintf("%x ", []byte(n))
-}
-
-// rawNode is a simple binary blob used to differentiate between collapsed trie
-// nodes and already encoded RLP binary blobs (while at the same time store them
-// in the same cache fields).
-type rawNode []byte
-
-func (n rawNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
-func (n rawNode) fstring(ind string) string { panic("this should never end up in a live trie") }
-
-func (n rawNode) EncodeRLP(w io.Writer) error {
-	_, err := w.Write(n)
-	return err
 }
 
 // mustDecodeNode is a wrapper of decodeNode and panic if any error is encountered.
@@ -151,11 +162,14 @@ func decodeNodeUnsafe(hash, buf []byte) (node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode error: %v", err)
 	}
-	switch c, _ := rlp.CountValues(elems); c {
-	case 2:
+	c, err := rlp.CountValues(elems)
+	switch {
+	case err != nil:
+		return nil, fmt.Errorf("invalid node list: %v", err)
+	case c == 2:
 		n, err := decodeShort(hash, elems)
 		return n, wrapError(err, "short")
-	case 17:
+	case c == 17:
 		n, err := decodeFull(hash, elems)
 		return n, wrapError(err, "full")
 	default:
@@ -215,11 +229,13 @@ func decodeRef(buf []byte) (node, []byte, error) {
 	case kind == rlp.List:
 		// 'embedded' node reference. The encoding must be smaller
 		// than a hash in order to be valid.
-		if size := len(buf) - len(rest); size > hashLen {
+		if size := len(buf) - len(rest); size >= hashLen {
 			err := fmt.Errorf("oversized embedded node (size is %d bytes, want size < %d)", size, hashLen)
 			return nil, buf, err
 		}
-		n, err := decodeNode(nil, buf)
+		// The buffer content has already been copied or is safe to use;
+		// no additional copy is required.
+		n, err := decodeNodeUnsafe(nil, buf)
 		return n, rest, err
 	case kind == rlp.String && len(val) == 0:
 		// empty node
@@ -229,6 +245,74 @@ func decodeRef(buf []byte) (node, []byte, error) {
 	default:
 		return nil, nil, fmt.Errorf("invalid RLP string size %d (want 0 or 32)", len(val))
 	}
+}
+
+// decodeNodeElements parses the RLP encoding of a trie node and returns all the
+// elements in raw byte format.
+//
+// For full node, it returns a slice of 17 elements;
+// For short node, it returns a slice of 2 elements;
+func decodeNodeElements(buf []byte) ([][]byte, error) {
+	if len(buf) == 0 {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return rlp.SplitListValues(buf)
+}
+
+// encodeNodeElements encodes the provided node elements into a rlp list.
+func encodeNodeElements(elements [][]byte) ([]byte, error) {
+	if len(elements) != 2 && len(elements) != 17 {
+		return nil, fmt.Errorf("invalid number of elements: %d", len(elements))
+	}
+	return rlp.MergeListValues(elements)
+}
+
+// NodeDifference accepts two RLP-encoding nodes and figures out the difference
+// between them.
+//
+// An error is returned if any of the provided blob is nil, or the type of nodes
+// are different.
+func NodeDifference(oldvalue []byte, newvalue []byte) (int, []int, [][]byte, error) {
+	oldElems, err := decodeNodeElements(oldvalue)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	newElems, err := decodeNodeElements(newvalue)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	if len(oldElems) != len(newElems) {
+		return 0, nil, nil, fmt.Errorf("different node type, old elements: %d, new elements: %d", len(oldElems), len(newElems))
+	}
+	var (
+		indices = make([]int, 0, len(oldElems))
+		diff    = make([][]byte, 0, len(oldElems))
+	)
+	for i := 0; i < len(oldElems); i++ {
+		if !bytes.Equal(oldElems[i], newElems[i]) {
+			indices = append(indices, i)
+			diff = append(diff, oldElems[i])
+		}
+	}
+	return len(oldElems), indices, diff, nil
+}
+
+// ReassembleNode accepts a RLP-encoding node along with a set of mutations,
+// applying the modification diffs according to the indices and re-assemble.
+func ReassembleNode(blob []byte, mutations [][][]byte, indices [][]int) ([]byte, error) {
+	if len(mutations) == 0 && len(indices) == 0 {
+		return blob, nil
+	}
+	elements, err := decodeNodeElements(blob)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(mutations); i++ {
+		for j, pos := range indices[i] {
+			elements[pos] = mutations[i][j]
+		}
+	}
+	return encodeNodeElements(elements)
 }
 
 // wraps a decoding error with information about the path to the
@@ -251,4 +335,80 @@ func wrapError(err error, ctx string) error {
 
 func (err *decodeError) Error() string {
 	return fmt.Sprintf("%v (decode path: %s)", err.what, strings.Join(err.stack, "<-"))
+}
+
+// MountPartitionRoot folds the leading nibble n back into the root of a
+// partition subtree that was built with that nibble stripped (see
+// PartialStackTrie). It returns the node, and its hash, that becomes the
+// canonical trie root when partition n turns out to be the only populated
+// partition, so the top-level branch collapses into the subtree itself.
+//
+// The subtree root blob is one of:
+//
+//   - a branch: the canonical root is a freshly constructed extension carrying
+//     the single nibble n and pointing at the branch by hash. The branch stays
+//     at the path the partition already wrote it to ([n]).
+//
+//   - a short node (extension or leaf): its hex key is extended from [k...] to
+//     [n, k...], preserving the leaf terminator if present, and the child/value
+//     element is reused verbatim.
+//
+// isOrphaned reports whether a short node was folded. When true, the node the
+// caller persisted at path [n] is no longer referenced by the returned root and
+// should be deleted. It is false for the branch case, where [n] stays referenced.
+func MountPartitionRoot(blob []byte, n byte) (hash common.Hash, writeBlob []byte, isOrphaned bool, err error) {
+	elems, err := decodeNodeElements(blob)
+	if err != nil {
+		return common.Hash{}, nil, false, fmt.Errorf("decode partition root: %w", err)
+	}
+	switch len(elems) {
+	case 17:
+		// Branch root: wrap it in an extension carrying the single nibble n,
+		// referencing the branch by its 32-byte hash.
+		keyRLP, err := rlp.EncodeToBytes(hexToCompact([]byte{n}))
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode extension key: %w", err)
+		}
+		childRLP, err := rlp.EncodeToBytes(crypto.Keccak256(blob))
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode child ref: %w", err)
+		}
+		writeBlob, err = encodeNodeElements([][]byte{keyRLP, childRLP})
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode extension node: %w", err)
+		}
+		return crypto.Keccak256Hash(writeBlob), writeBlob, false, nil
+
+	case 2:
+		// Short node (extension/leaf): prepend n to its hex key. compactToHex
+		// retains the leaf terminator, so hexToCompact restores the right type.
+		compactKey, _, err := rlp.SplitString(elems[0])
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("parse compact key: %w", err)
+		}
+		hex := append([]byte{n}, compactToHex(compactKey)...)
+		keyRLP, err := rlp.EncodeToBytes(hexToCompact(hex))
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode mounted key: %w", err)
+		}
+		writeBlob, err = encodeNodeElements([][]byte{keyRLP, elems[1]})
+		if err != nil {
+			return common.Hash{}, nil, false, fmt.Errorf("encode mounted node: %w", err)
+		}
+		return crypto.Keccak256Hash(writeBlob), writeBlob, true, nil
+
+	default:
+		return common.Hash{}, nil, false, fmt.Errorf("unexpected partition root element count: %d", len(elems))
+	}
+}
+
+// AssembleBranch constructs a fullNode (17-slot branch) from the given
+// children and returns its RLP encoding and 32-byte hash.
+func AssembleBranch(children [17][]byte) ([]byte, common.Hash, error) {
+	fn := &fullnodeEncoder{Children: children}
+	w := rlp.NewEncoderBuffer(nil)
+	fn.encode(w)
+	blob := w.ToBytes()
+	w.Flush()
+	return blob, crypto.Keccak256Hash(blob), nil
 }

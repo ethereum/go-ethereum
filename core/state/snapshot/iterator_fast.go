@@ -18,6 +18,7 @@ package snapshot
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"slices"
 	"sort"
@@ -45,13 +46,7 @@ func (it *weightedIterator) Cmp(other *weightedIterator) int {
 		return 1
 	}
 	// Same account/storage-slot in multiple layers, split by priority
-	if it.priority < other.priority {
-		return -1
-	}
-	if it.priority > other.priority {
-		return 1
-	}
-	return 0
+	return cmp.Compare(it.priority, other.priority)
 }
 
 // fastIterator is a more optimized multi-layer iterator which maintains a
@@ -90,18 +85,10 @@ func newFastIterator(tree *Tree, root common.Hash, account common.Hash, seek com
 				priority: depth,
 			})
 		} else {
-			// If the whole storage is destructed in this layer, don't
-			// bother deeper layer anymore. But we should still keep
-			// the iterator for this layer, since the iterator can contain
-			// some valid slots which belongs to the re-created account.
-			it, destructed := current.StorageIterator(account, seek)
 			fi.iterators = append(fi.iterators, &weightedIterator{
-				it:       it,
+				it:       current.StorageIterator(account, seek),
 				priority: depth,
 			})
-			if destructed {
-				break
-			}
 		}
 		current = current.Parent()
 	}

@@ -300,6 +300,10 @@ func (s *SecureChannelSession) decryptAPDU(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	if len(data) == 0 || len(data)%aes.BlockSize != 0 {
+		return nil, fmt.Errorf("invalid ciphertext length: %d", len(data))
+	}
+
 	ret := make([]byte, len(data))
 
 	crypter := cipher.NewCBCDecrypter(a, s.iv)

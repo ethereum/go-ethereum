@@ -18,12 +18,13 @@ package eth
 
 import (
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -34,6 +35,10 @@ import (
 const (
 	// softResponseLimit is the target maximum size of replies to data retrievals.
 	softResponseLimit = 2 * 1024 * 1024
+
+	// maxPacketSize is the devp2p message size limit commonly enforced by clients.
+	// Any packet exceeding this limit must be rejected.
+	maxPacketSize = 10 * 1024 * 1024
 
 	// maxHeadersServe is the maximum number of block headers to serve. This number
 	// is there to limit the number of disk lookups.
@@ -49,6 +54,9 @@ const (
 	// containing 200+ transactions nowadays, the practical limit will always
 	// be softResponseLimit.
 	maxReceiptsServe = 1024
+
+	// maxBALsServe is the maximum number of block access lists to serve.
+	maxBALsServe = 1024
 )
 
 // Handler is a callback to invoke from an outside runner after the boilerplate
@@ -63,6 +71,9 @@ type Backend interface {
 
 	// TxPool retrieves the transaction pool object to serve data.
 	TxPool() TxPool
+
+	// BlobPool retrieves the blob pool object to serve cell requests.
+	BlobPool() BlobPool
 
 	// AcceptTxs retrieves whether transaction processing is enabled on the node
 	// or if inbound transactions should simply be dropped.
@@ -83,14 +94,34 @@ type Backend interface {
 	Handle(peer *Peer, packet Packet) error
 }
 
+// BlobPool defines the methods needed by the protocol handler to serve cell requests.
+type BlobPool interface {
+	// GetBlobHashes returns the blob versioned hashes for a given transaction hash.
+	GetBlobHashes(hash common.Hash) []common.Hash
+	// GetBlobCells retrieves cells and proofs for given versioned blob hashes filtered by the custody bitmap.
+	GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error)
+	// GetCustody returns the custody bitmap for a given transaction hash.
+	GetCustody(hash common.Hash) *types.CustodyBitmap
+	// Has returns whether the blob pool contains a transaction with the given hash.
+	Has(hash common.Hash) bool
+}
+
 // TxPool defines the methods needed by the protocol handler to serve transactions.
 type TxPool interface {
 	// Get retrieves the transaction from the local txpool with the given hash.
 	Get(hash common.Hash) *types.Transaction
+
+	// GetRLP retrieves the RLP-encoded transaction from the local txpool with
+	// the given hash.
+	GetRLP(hash common.Hash, version uint) []byte
+
+	// GetMetadata returns the transaction type and transaction size with the
+	// given transaction hash.
+	GetMetadata(hash common.Hash) *txpool.TxMetadata
 }
 
 // MakeProtocols constructs the P2P protocol definitions for `eth`.
-func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2p.Protocol {
+func MakeProtocols(backend Backend, network uint64, disc enode.Iterator) []p2p.Protocol {
 	protocols := make([]p2p.Protocol, 0, len(ProtocolVersions))
 	for _, version := range ProtocolVersions {
 		protocols = append(protocols, p2p.Protocol{
@@ -98,7 +129,7 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 			Version: version,
 			Length:  protocolLengths[version],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-				peer := NewPeer(version, p, rw, backend.TxPool())
+				peer := NewPeer(version, p, rw, backend.TxPool(), backend.BlobPool(), backend.Chain().Config())
 				defer peer.Close()
 
 				return backend.RunPeer(peer, func(peer *Peer) error {
@@ -111,7 +142,8 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 			PeerInfo: func(id enode.ID) interface{} {
 				return backend.PeerInfo(id)
 			},
-			Attributes: []enr.Entry{currentENREntry(backend.Chain())},
+			DialCandidates: disc,
+			Attributes:     []enr.Entry{currentENREntry(backend.Chain())},
 		})
 	}
 	return protocols
@@ -120,11 +152,10 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 // NodeInfo represents a short summary of the `eth` sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // Ethereum network ID (1=Mainnet, Holesky=17000)
-	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
-	Head       common.Hash         `json:"head"`       // Hex hash of the host's best owned block
+	Network uint64              `json:"network"` // Ethereum network ID (1=Mainnet, Sepolia=11155111)
+	Genesis common.Hash         `json:"genesis"` // SHA3 hash of the host's genesis block
+	Config  *params.ChainConfig `json:"config"`  // Chain configuration for the fork rules
+	Head    common.Hash         `json:"head"`    // Hex hash of the host's best owned block
 }
 
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.
@@ -133,11 +164,10 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	hash := head.Hash()
 
 	return &NodeInfo{
-		Network:    network,
-		Difficulty: chain.GetTd(hash, head.Number.Uint64()),
-		Genesis:    chain.Genesis().Hash(),
-		Config:     chain.Config(),
-		Head:       hash,
+		Network: network,
+		Genesis: chain.Genesis().Hash(),
+		Config:  chain.Config(),
+		Head:    hash,
 	}
 }
 
@@ -156,22 +186,68 @@ func Handle(backend Backend, peer *Peer) error {
 type msgHandler func(backend Backend, msg Decoder, peer *Peer) error
 type Decoder interface {
 	Decode(val interface{}) error
-	Time() time.Time
 }
 
-var eth68 = map[uint64]msgHandler{
-	NewBlockHashesMsg:             handleNewBlockhashes,
-	NewBlockMsg:                   handleNewBlock,
+var eth69 = map[uint64]msgHandler{
 	TransactionsMsg:               handleTransactions,
 	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
 	GetBlockHeadersMsg:            handleGetBlockHeaders,
 	BlockHeadersMsg:               handleBlockHeaders,
 	GetBlockBodiesMsg:             handleGetBlockBodies,
 	BlockBodiesMsg:                handleBlockBodies,
-	GetReceiptsMsg:                handleGetReceipts,
-	ReceiptsMsg:                   handleReceipts,
+	GetReceiptsMsg:                handleGetReceipts69,
+	ReceiptsMsg:                   handleReceipts69,
 	GetPooledTransactionsMsg:      handleGetPooledTransactions,
 	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+}
+
+var eth70 = map[uint64]msgHandler{
+	TransactionsMsg:               handleTransactions,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	GetBlockHeadersMsg:            handleGetBlockHeaders,
+	BlockHeadersMsg:               handleBlockHeaders,
+	GetBlockBodiesMsg:             handleGetBlockBodies,
+	BlockBodiesMsg:                handleBlockBodies,
+	GetReceiptsMsg:                handleGetReceipts70,
+	ReceiptsMsg:                   handleReceipts70,
+	GetPooledTransactionsMsg:      handleGetPooledTransactions,
+	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+}
+
+var eth71 = map[uint64]msgHandler{
+	TransactionsMsg:               handleTransactions,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	GetBlockHeadersMsg:            handleGetBlockHeaders,
+	BlockHeadersMsg:               handleBlockHeaders,
+	GetBlockBodiesMsg:             handleGetBlockBodies,
+	BlockBodiesMsg:                handleBlockBodies,
+	GetReceiptsMsg:                handleGetReceipts70,
+	ReceiptsMsg:                   handleReceipts70,
+	GetPooledTransactionsMsg:      handleGetPooledTransactions,
+	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+	GetBlockAccessListsMsg:        handleGetBlockAccessLists,
+	BlockAccessListsMsg:           handleBlockAccessLists,
+}
+
+var eth72 = map[uint64]msgHandler{
+	TransactionsMsg:               handleTransactions,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes72,
+	GetBlockHeadersMsg:            handleGetBlockHeaders,
+	BlockHeadersMsg:               handleBlockHeaders,
+	GetBlockBodiesMsg:             handleGetBlockBodies,
+	BlockBodiesMsg:                handleBlockBodies,
+	GetReceiptsMsg:                handleGetReceipts70,
+	ReceiptsMsg:                   handleReceipts70,
+	GetPooledTransactionsMsg:      handleGetPooledTransactions,
+	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
+	GetBlockAccessListsMsg:        handleGetBlockAccessLists,
+	BlockAccessListsMsg:           handleBlockAccessLists,
+	GetCellsMsg:                   handleGetCells,
+	CellsMsg:                      handleCells,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote
@@ -182,15 +258,27 @@ func handleMessage(backend Backend, peer *Peer) error {
 	if err != nil {
 		return err
 	}
+	defer msg.Discard()
 	if msg.Size > maxMessageSize {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
 	}
-	defer msg.Discard()
 
-	var handlers = eth68
+	var handlers map[uint64]msgHandler
+	switch peer.version {
+	case ETH69:
+		handlers = eth69
+	case ETH70:
+		handlers = eth70
+	case ETH71:
+		handlers = eth71
+	case ETH72:
+		handlers = eth72
+	default:
+		return fmt.Errorf("unknown eth protocol version: %v", peer.version)
+	}
 
 	// Track the amount of time it takes to serve the request and run the handler
-	if metrics.Enabled {
+	if metrics.Enabled() {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, ProtocolName, peer.Version(), msg.Code)
 		defer func(start time.Time) {
 			sampler := func() metrics.Sample {

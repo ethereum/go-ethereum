@@ -62,7 +62,6 @@ const (
 	ssNeedParent             // cp header slot %32 != 0, need parent to check epoch boundary
 	ssParentRequested        // cp parent header requested
 	ssPrintStatus            // has all necessary info, print log message if init still not successful
-	ssDone                   // log message printed, no more action required
 )
 
 type serverState struct {
@@ -99,7 +98,10 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 			case ssDefault:
 				if resp != nil {
 					if checkpoint := resp.(*types.BootstrapData); checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
-						s.chain.CheckpointInit(*checkpoint)
+						err := s.chain.CheckpointInit(*checkpoint)
+						if err != nil {
+							return
+						}
 						s.initialized = true
 						return
 					}
@@ -180,7 +182,8 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 		default:
 			log.Error("blsync: checkpoint not available, but reported as finalized; specified checkpoint hash might be too old", "server", server.Name())
 		}
-		s.serverState[server] = serverState{state: ssDone}
+		s.serverState[server] = serverState{state: ssDefault}
+		requester.Fail(server, "checkpoint init failed")
 	}
 }
 

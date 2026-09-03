@@ -45,7 +45,7 @@ const (
 // current process. Setting ENR entries via the Set method updates the record. A new version
 // of the record is signed on demand when the Node method is called.
 type LocalNode struct {
-	cur atomic.Value // holds a non-nil node pointer while the record is up-to-date
+	cur atomic.Pointer[Node] // holds a non-nil node pointer while the record is up-to-date
 
 	id  ID
 	key *ecdsa.PrivateKey
@@ -82,7 +82,7 @@ func NewLocalNode(db *DB, key *ecdsa.PrivateKey) *LocalNode {
 	}
 	ln.seq = db.localSeq(ln.id)
 	ln.update = time.Now()
-	ln.cur.Store((*Node)(nil))
+	ln.cur.Store(nil)
 	return ln
 }
 
@@ -94,7 +94,7 @@ func (ln *LocalNode) Database() *DB {
 // Node returns the current version of the local node record.
 func (ln *LocalNode) Node() *Node {
 	// If we have a valid record, return that
-	n := ln.cur.Load().(*Node)
+	n := ln.cur.Load()
 	if n != nil {
 		return n
 	}
@@ -105,7 +105,7 @@ func (ln *LocalNode) Node() *Node {
 
 	// Double check the current record, since multiple goroutines might be waiting
 	// on the write mutex.
-	if n = ln.cur.Load().(*Node); n != nil {
+	if n = ln.cur.Load(); n != nil {
 		return n
 	}
 
@@ -121,7 +121,7 @@ func (ln *LocalNode) Node() *Node {
 
 	ln.sign()
 	ln.update = time.Now()
-	return ln.cur.Load().(*Node)
+	return ln.cur.Load()
 }
 
 // Seq returns the current sequence number of the local node record.
@@ -276,11 +276,11 @@ func (e *lnEndpoint) get() (newIP net.IP, newPort uint16) {
 }
 
 func (ln *LocalNode) invalidate() {
-	ln.cur.Store((*Node)(nil))
+	ln.cur.Store(nil)
 }
 
 func (ln *LocalNode) sign() {
-	if n := ln.cur.Load().(*Node); n != nil {
+	if n := ln.cur.Load(); n != nil {
 		return // no changes
 	}
 
@@ -304,13 +304,4 @@ func (ln *LocalNode) sign() {
 func (ln *LocalNode) bumpSeq() {
 	ln.seq++
 	ln.db.storeLocalSeq(ln.id, ln.seq)
-}
-
-// nowMilliseconds gives the current timestamp at millisecond precision.
-func nowMilliseconds() uint64 {
-	ns := time.Now().UnixNano()
-	if ns < 0 {
-		return 0
-	}
-	return uint64(ns / 1000 / 1000)
 }

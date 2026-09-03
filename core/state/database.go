@@ -17,37 +17,46 @@
 package state
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
+	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
+// DatabaseType represents the type of trie backing the state database.
+type DatabaseType int
+
 const (
-	// Number of codehash->size associations to keep.
-	codeSizeCacheSize = 100000
+	// TypeMPT indicates a Merkle Patricia Trie (MPT) backed database.
+	TypeMPT DatabaseType = iota
 
-	// Cache size granted for caching clean code.
-	codeCacheSize = 64 * 1024 * 1024
-
-	// Number of address->curve point associations to keep.
-	pointCacheSize = 4096
+	// TypeUBT indicates a Unified Binary Trie (UBT) backed database.
+	TypeUBT
 )
+
+// Is returns the flag indicating the database type equals to the given one.
+func (typ DatabaseType) Is(t DatabaseType) bool {
+	return typ == t
+}
 
 // Database wraps access to tries and contract code.
 type Database interface {
+	// Type returns the trie type backing this database (MPT or UBT).
+	Type() DatabaseType
+
 	// Reader returns a state reader associated with the specified state root.
 	Reader(root common.Hash) (Reader, error)
+
+	// Iteratee returns a state iteratee associated with the specified state root,
+	// through which the account iterator and storage iterator can be created.
+	Iteratee(root common.Hash) (Iteratee, error)
 
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
@@ -55,20 +64,13 @@ type Database interface {
 	// OpenStorageTrie opens the storage trie of an account.
 	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error)
 
-	// ContractCode retrieves a particular contract's code.
-	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
-
-	// ContractCodeSize retrieves a particular contracts code's size.
-	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
-
-	// PointCache returns the cache holding points used in verkle tree key computation
-	PointCache() *utils.PointCache
-
 	// TrieDB returns the underlying trie database for managing trie nodes.
 	TrieDB() *triedb.Database
 
-	// Snapshot returns the underlying state snapshot.
-	Snapshot() *snapshot.Tree
+	// Commit flushes all pending writes and finalizes the state transition,
+	// committing the changes to the underlying storage. It returns an error
+	// if the commit fails.
+	Commit(update *StateUpdate) error
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -87,21 +89,35 @@ type Trie interface {
 	// be returned.
 	GetAccount(address common.Address) (*types.StateAccount, error)
 
+	// PrefetchAccount attempts to resolve specific accounts from the database
+	// to accelerate subsequent trie operations.
+	PrefetchAccount([]common.Address) error
+
 	// GetStorage returns the value for key stored in the trie. The value bytes
 	// must not be modified by the caller. If a node was not found in the database,
 	// a trie.MissingNodeError is returned.
 	GetStorage(addr common.Address, key []byte) ([]byte, error)
+
+	// PrefetchStorage attempts to resolve specific storage slots from the database
+	// to accelerate subsequent trie operations.
+	PrefetchStorage(addr common.Address, keys [][]byte) error
 
 	// UpdateAccount abstracts an account write to the trie. It encodes the
 	// provided account object with associated algorithm and then updates it
 	// in the trie with provided address.
 	UpdateAccount(address common.Address, account *types.StateAccount, codeLen int) error
 
+	// UpdateAccountBatch attempts to update a list of accounts in the batch manner.
+	UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLengths []int) error
+
 	// UpdateStorage associates key with value in the trie. If value has length zero,
 	// any existing value is deleted from the trie. The value bytes must not be modified
 	// by the caller while they are stored in the trie. If a node was not found in the
 	// database, a trie.MissingNodeError is returned.
 	UpdateStorage(addr common.Address, key, value []byte) error
+
+	// UpdateStorageBatch attempts to update a list of storages in the batch manner.
+	UpdateStorageBatch(_ common.Address, keys [][]byte, values [][]byte) error
 
 	// DeleteAccount abstracts an account deletion from the trie.
 	DeleteAccount(address common.Address) error
@@ -128,7 +144,7 @@ type Trie interface {
 
 	// Witness returns a set containing all trie nodes that have been accessed.
 	// The returned map could be nil if the witness is empty.
-	Witness() map[string]struct{}
+	Witness() map[string][]byte
 
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key. And error will be returned
@@ -144,145 +160,25 @@ type Trie interface {
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 
-	// IsVerkle returns true if the trie is verkle-tree based
-	IsVerkle() bool
-}
-
-// CachingDB is an implementation of Database interface. It leverages both trie and
-// state snapshot to provide functionalities for state access. It's meant to be a
-// long-live object and has a few caches inside for sharing between blocks.
-type CachingDB struct {
-	disk          ethdb.KeyValueStore
-	triedb        *triedb.Database
-	snap          *snapshot.Tree
-	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	codeSizeCache *lru.Cache[common.Hash, int]
-	pointCache    *utils.PointCache
+	// IsUBT returns true if the trie is unified binary trie based.
+	IsUBT() bool
 }
 
 // NewDatabase creates a state database with the provided data sources.
-func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
-	return &CachingDB{
-		disk:          triedb.Disk(),
-		triedb:        triedb,
-		snap:          snap,
-		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
-		pointCache:    utils.NewPointCache(pointCacheSize),
+//
+// Deprecated, please use NewMPTDatabase or NewUBTDatabase directly.
+func NewDatabase(tdb *triedb.Database, codedb *CodeDB) Database {
+	if tdb.IsUBT() {
+		return NewUBTDatabase(tdb, codedb)
 	}
+	return NewMPTDatabase(tdb, codedb)
 }
 
 // NewDatabaseForTesting is similar to NewDatabase, but it initializes the caching
 // db by using an ephemeral memory db with default config for testing.
-func NewDatabaseForTesting() *CachingDB {
-	return NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
-}
-
-// Reader returns a state reader associated with the specified state root.
-func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
-	var readers []Reader
-
-	// Set up the state snapshot reader if available. This feature
-	// is optional and may be partially useful if it's not fully
-	// generated.
-	if db.snap != nil {
-		sr, err := newStateReader(stateRoot, db.snap)
-		if err == nil {
-			readers = append(readers, sr) // snap reader is optional
-		}
-	}
-	// Set up the trie reader, which is expected to always be available
-	// as the gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb, db.pointCache)
-	if err != nil {
-		return nil, err
-	}
-	readers = append(readers, tr)
-
-	return newMultiReader(readers...)
-}
-
-// OpenTrie opens the main account trie at a specific root hash.
-func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	if db.triedb.IsVerkle() {
-		return trie.NewVerkleTrie(root, db.triedb, db.pointCache)
-	}
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
-	if err != nil {
-		return nil, err
-	}
-	return tr, nil
-}
-
-// OpenStorageTrie opens the storage trie of an account.
-func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
-	// In the verkle case, there is only one tree. But the two-tree structure
-	// is hardcoded in the codebase. So we need to return the same trie in this
-	// case.
-	if db.triedb.IsVerkle() {
-		return self, nil
-	}
-	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
-	if err != nil {
-		return nil, err
-	}
-	return tr, nil
-}
-
-// ContractCode retrieves a particular contract's code.
-func (db *CachingDB) ContractCode(address common.Address, codeHash common.Hash) ([]byte, error) {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code, nil
-	}
-	code = rawdb.ReadCode(db.disk, codeHash)
-	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
-		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
-	}
-	return nil, errors.New("not found")
-}
-
-// ContractCodeWithPrefix retrieves a particular contract's code. If the
-// code can't be found in the cache, then check the existence with **new**
-// db scheme.
-func (db *CachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) ([]byte, error) {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code, nil
-	}
-	code = rawdb.ReadCodeWithPrefix(db.disk, codeHash)
-	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
-		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
-	}
-	return nil, errors.New("not found")
-}
-
-// ContractCodeSize retrieves a particular contracts code's size.
-func (db *CachingDB) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
-		return cached, nil
-	}
-	code, err := db.ContractCode(addr, codeHash)
-	return len(code), err
-}
-
-// TrieDB retrieves any intermediate trie-node caching layer.
-func (db *CachingDB) TrieDB() *triedb.Database {
-	return db.triedb
-}
-
-// PointCache returns the cache of evaluated curve points.
-func (db *CachingDB) PointCache() *utils.PointCache {
-	return db.pointCache
-}
-
-// Snapshot returns the underlying state snapshot.
-func (db *CachingDB) Snapshot() *snapshot.Tree {
-	return db.snap
+func NewDatabaseForTesting() Database {
+	db := rawdb.NewMemoryDatabase()
+	return NewDatabase(triedb.NewDatabase(db, nil), NewCodeDB(db))
 }
 
 // mustCopyTrie returns a deep-copied trie.
@@ -290,7 +186,9 @@ func mustCopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
 		return t.Copy()
-	case *trie.VerkleTrie:
+	case *transitiontrie.TransitionTrie:
+		return t.Copy()
+	case *bintrie.BinaryTrie:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))

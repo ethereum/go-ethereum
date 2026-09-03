@@ -47,6 +47,7 @@ func newNoopTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *param
 			OnOpcode:        t.OnOpcode,
 			OnFault:         t.OnFault,
 			OnGasChange:     t.OnGasChange,
+			OnGasChangeV2:   t.OnGasChangeV2,
 			OnBalanceChange: t.OnBalanceChange,
 			OnNonceChange:   t.OnNonceChange,
 			OnCodeChange:    t.OnCodeChange,
@@ -65,6 +66,8 @@ func (t *noopTracer) OnFault(pc uint64, op byte, gas, cost uint64, _ tracing.OpC
 }
 
 func (t *noopTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {}
+
+func (t *noopTracer) OnGasChangeV2(old, new tracing.Gas, reason tracing.GasChangeReason) {}
 
 func (t *noopTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }

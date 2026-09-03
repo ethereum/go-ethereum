@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/big"
 	"testing"
 
@@ -397,4 +398,49 @@ func TestStackTrieErrors(t *testing.T) {
 	assert.Nil(t, s.Update([]byte{0xab}, []byte{0xa}))
 	assert.NotNil(t, s.Update([]byte{0x10}, []byte{0xb}), "out of order insert")
 	assert.NotNil(t, s.Update([]byte{0xaa}, []byte{0xb}), "repeat insert same key")
+}
+
+func BenchmarkInsert100K(b *testing.B) {
+	var num = 100_000
+	var key = make([]byte, 8)
+	var val = make([]byte, 20)
+	var hash common.Hash
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		s := NewStackTrie(nil)
+		var k uint64
+		for j := 0; j < num; j++ {
+			binary.BigEndian.PutUint64(key, k)
+			if err := s.Update(key, val); err != nil {
+				b.Fatal(err)
+			}
+			k += 1024
+		}
+		if hash == (common.Hash{}) {
+			hash = s.Hash()
+		} else {
+			if hash != s.Hash() && false {
+				b.Fatalf("hash wrong, have %x want %x", s.Hash(), hash)
+			}
+		}
+	}
+}
+
+func TestInsert100K(t *testing.T) {
+	var num = 100_000
+	var key = make([]byte, 8)
+	var val = make([]byte, 20)
+	s := NewStackTrie(nil)
+	var k uint64
+	for j := 0; j < num; j++ {
+		binary.BigEndian.PutUint64(key, k)
+		if err := s.Update(key, val); err != nil {
+			t.Fatal(err)
+		}
+		k += 1024
+	}
+	want := common.HexToHash("0xb0071bd257342925d9d8a9f002b9d2b646a35437aa8b089628ab56e428d29a1a")
+	if have := s.Hash(); have != want {
+		t.Fatalf("hash wrong, have %x want %x", have, want)
+	}
 }

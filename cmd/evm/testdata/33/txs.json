@@ -1,0 +1,37 @@
+[
+  {
+    "type": "0x4",
+    "chainId": "0x1",
+    "nonce": "0x0",
+    "to": "0x71562b71999873db5b286df957af199ec94617f7",
+    "gas": "0x7a120",
+    "gasPrice": null,
+    "maxPriorityFeePerGas": "0x2",
+    "maxFeePerGas": "0x12a05f200",
+    "value": "0x0",
+    "input": "0x",
+    "accessList": [],
+    "authorizationList": [
+      {
+        "chainId": "0x1",
+        "address": "0x000000000000000000000000000000000000aaaa",
+        "nonce": "0x1",
+        "yParity": "0x1",
+        "r": "0xf7e3e597fc097e71ed6c26b14b25e5395bc8510d58b9136af439e12715f2d721",
+        "s": "0x6cf7c3d7939bfdb784373effc0ebb0bd7549691a513f395e3cdabf8602724987"
+      },
+      {
+        "chainId": "0x0",
+        "address": "0x000000000000000000000000000000000000bbbb",
+        "nonce": "0x0",
+        "yParity": "0x1",
+        "r": "0x5011890f198f0356a887b0779bde5afa1ed04e6acb1e3f37f8f18c7b6f521b98",
+        "s": "0x56c3fa3456b103f3ef4a0acb4b647b9cab9ec4bc68fbcdf1e10b49fb2bcbcf61"
+      }
+    ],
+    "secretKey": "0xb71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291",
+    "v": "0x0",
+    "r": "0x0",
+    "s": "0x0"
+  }
+]

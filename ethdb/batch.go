@@ -24,6 +24,7 @@ const IdealBatchSize = 100 * 1024
 // when Write is called. A batch cannot be used concurrently.
 type Batch interface {
 	KeyValueWriter
+	KeyValueRangeDeleter
 
 	// ValueSize retrieves the amount of data queued up for writing.
 	ValueSize() int
@@ -36,6 +37,9 @@ type Batch interface {
 
 	// Replay replays the batch contents.
 	Replay(w KeyValueWriter) error
+
+	// Close closes the batch and releases all associated resources.
+	Close()
 }
 
 // Batcher wraps the NewBatch method of a backing data store.
@@ -53,8 +57,9 @@ type Batcher interface {
 type HookedBatch struct {
 	Batch
 
-	OnPut    func(key []byte, value []byte) // Callback if a key is inserted
-	OnDelete func(key []byte)               // Callback if a key is deleted
+	OnPut         func(key []byte, value []byte) // Callback if a key is inserted
+	OnDelete      func(key []byte)               // Callback if a key is deleted
+	OnDeleteRange func(start, end []byte)        // Callback if a range of keys is deleted
 }
 
 // Put inserts the given value into the key-value data store.
@@ -71,4 +76,12 @@ func (b HookedBatch) Delete(key []byte) error {
 		b.OnDelete(key)
 	}
 	return b.Batch.Delete(key)
+}
+
+// DeleteRange removes all keys in the range [start, end) from the key-value data store.
+func (b HookedBatch) DeleteRange(start, end []byte) error {
+	if b.OnDeleteRange != nil {
+		b.OnDeleteRange(start, end)
+	}
+	return b.Batch.DeleteRange(start, end)
 }

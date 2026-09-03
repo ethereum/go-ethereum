@@ -53,15 +53,17 @@ type tracer struct {
 	count          int
 	traceTransfers bool
 	blockNumber    uint64
+	blockTimestamp uint64
 	blockHash      common.Hash
 	txHash         common.Hash
 	txIdx          uint
 }
 
-func newTracer(traceTransfers bool, blockNumber uint64, blockHash, txHash common.Hash, txIndex uint) *tracer {
+func newTracer(traceTransfers bool, blockNumber uint64, blockTimestamp uint64, blockHash, txHash common.Hash, txIndex uint) *tracer {
 	return &tracer{
 		traceTransfers: traceTransfers,
 		blockNumber:    blockNumber,
+		blockTimestamp: blockTimestamp,
 		blockHash:      blockHash,
 		txHash:         txHash,
 		txIdx:          txIndex,
@@ -78,7 +80,7 @@ func (t *tracer) Hooks() *tracing.Hooks {
 
 func (t *tracer) onEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	t.logs = append(t.logs, make([]*types.Log, 0))
-	if vm.OpCode(typ) != vm.DELEGATECALL && value != nil && value.Cmp(common.Big0) > 0 {
+	if vm.OpCode(typ) != vm.DELEGATECALL && vm.OpCode(typ) != vm.CALLCODE && value != nil && value.Cmp(common.Big0) > 0 {
 		t.captureTransfer(from, to, value)
 	}
 }
@@ -115,14 +117,15 @@ func (t *tracer) onLog(log *types.Log) {
 
 func (t *tracer) captureLog(address common.Address, topics []common.Hash, data []byte) {
 	t.logs[len(t.logs)-1] = append(t.logs[len(t.logs)-1], &types.Log{
-		Address:     address,
-		Topics:      topics,
-		Data:        data,
-		BlockNumber: t.blockNumber,
-		BlockHash:   t.blockHash,
-		TxHash:      t.txHash,
-		TxIndex:     t.txIdx,
-		Index:       uint(t.count),
+		Address:        address,
+		Topics:         topics,
+		Data:           data,
+		BlockNumber:    t.blockNumber,
+		BlockTimestamp: t.blockTimestamp,
+		BlockHash:      t.blockHash,
+		TxHash:         t.txHash,
+		TxIndex:        t.txIdx,
+		Index:          uint(t.count),
 	})
 	t.count++
 }

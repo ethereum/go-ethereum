@@ -26,6 +26,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -47,11 +48,14 @@ func init() {
 	}
 }
 
-var tests = []string{"uints", "nil", "rawvalue", "optional", "bigint", "uint256"}
+var tests = []string{"uints", "nil", "rawvalue", "optional", "bigint", "uint256", "pkgclash"}
 
 func TestOutput(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test, func(t *testing.T) {
+			if test == "pkgclash" && runtime.GOOS == "windows" {
+				t.Skip("source-based importer is pathologically slow on Windows/NTFS")
+			}
 			inputFile := filepath.Join("testdata", test+".in.txt")
 			outputFile := filepath.Join("testdata", test+".out.txt")
 			bctx, typ, err := loadTestSource(inputFile, "Test")

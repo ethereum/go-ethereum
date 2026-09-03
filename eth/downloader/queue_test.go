@@ -17,6 +17,7 @@
 package downloader
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -30,19 +31,23 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
-// the returned hash chain is ordered head->parent. In addition, every 3rd block
-// contains a transaction and every 5th an uncle to allow testing correct block
-// reassembly.
+// The returned hash chain is ordered head->parent.
+// If empty is false, every second block (i%2==0) contains one transaction.
+// No uncles are added.
 func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Block, []types.Receipts) {
 	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
-		// Add one tx to every secondblock
+		// Add one tx to every second block
 		if !empty && i%2 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number(), block.Timestamp())
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
@@ -87,8 +92,9 @@ func (chain *chainData) Len() int {
 
 func dummyPeer(id string) *peerConnection {
 	p := &peerConnection{
-		id:      id,
-		lacking: make(map[common.Hash]struct{}),
+		id:         id,
+		lacking:    make(map[common.Hash]struct{}),
+		lackingBAL: make(map[common.Hash]struct{}),
 	}
 	return p
 }
@@ -261,6 +267,114 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
+// TestBlockAccessLists tests the scheduling and delivery of the best-effort
+// block access list component: only blocks above the configured cutoff are
+// scheduled, block delivery is never held back by outstanding access lists,
+// and delivered lists are validated against the header commitment.
+func TestBlockAccessLists(t *testing.T) {
+	// Create an access list along with its header commitment
+	list := bal.BlockAccessList{{Address: common.Address{0x01}}}
+	enc, err := rlp.EncodeToBytes(&list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	balHash := crypto.Keccak256Hash(enc)
+
+	// Assemble a chain of empty-body headers committing to the access list
+	var (
+		headers = make([]*types.Header, 10)
+		hashes  = make([]common.Hash, 10)
+		parent  common.Hash
+	)
+	for i := range headers {
+		headers[i] = &types.Header{
+			ParentHash:          parent,
+			Number:              big.NewInt(int64(i + 1)),
+			Difficulty:          big.NewInt(1),
+			TxHash:              types.EmptyTxsHash,
+			UncleHash:           types.EmptyUncleHash,
+			ReceiptHash:         types.EmptyReceiptsHash,
+			BlockAccessListHash: &balHash,
+		}
+		hashes[i] = headers[i].Hash()
+		parent = hashes[i]
+	}
+	q := newQueue(16, 16)
+	q.Prepare(1, FullSync)
+
+	// Only blocks 6..10 are within the retrieval window
+	q.SetBALCutoff(6)
+	q.Schedule(headers, hashes, 1)
+	if got, exp := q.PendingBALs(), 5; got != exp {
+		t.Errorf("wrong pending access list count, got %d, exp %d", got, exp)
+	}
+	// All the bodies are empty, so reserving them creates the fetch results,
+	// which must complete without waiting for any access lists
+	peer := dummyPeer("peer-1")
+	if req, _, _ := q.ReserveBodies(peer, 10); req != nil {
+		t.Fatal("there should be no body fetch tasks remaining")
+	}
+	if got, exp := q.resultCache.countCompleted(), 10; got != exp {
+		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
+	}
+	// Reserve the first two access lists and deliver one of them, with the
+	// remote peer signalling that it does not possess the other
+	req, _, _ := q.ReserveBALs(peer, 2)
+	if got, exp := len(req.Headers), 2; got != exp {
+		t.Fatalf("expected %d requests, got %d", exp, got)
+	}
+	if got, exp := req.Headers[0].Number.Uint64(), uint64(6); got != exp {
+		t.Fatalf("expected header %d, got %d", exp, got)
+	}
+	accepted, err := q.DeliverBALs(peer.id, []rlp.RawValue{enc, rlp.EmptyString}, []common.Hash{balHash, {}})
+	if accepted != 1 || err != nil {
+		t.Fatalf("unexpected delivery result, accepted %d, err %v", accepted, err)
+	}
+	if got, exp := q.balBytes.Load(), int64(len(enc)); got != exp {
+		t.Errorf("wrong attached access list bytes, got %d, exp %d", got, exp)
+	}
+	// The unavailable entry should be returned to the task queue and the peer
+	// marked as not possessing it
+	if got, exp := q.PendingBALs(), 4; got != exp {
+		t.Errorf("wrong pending access list count, got %d, exp %d", got, exp)
+	}
+	if !peer.LacksBAL(hashes[6]) {
+		t.Errorf("undelivered access list not marked as lacking")
+	}
+	// An access list not matching the header commitment must be rejected and
+	// the task handed back for retrieval from a different peer
+	peer2 := dummyPeer("peer-2")
+	if req, _, _ = q.ReserveBALs(peer2, 1); req == nil {
+		t.Fatal("expected access list fetch task")
+	}
+	badEnc, _ := rlp.EncodeToBytes(&bal.BlockAccessList{{Address: common.Address{0x02}}})
+	accepted, err = q.DeliverBALs(peer2.id, []rlp.RawValue{badEnc}, []common.Hash{crypto.Keccak256Hash(badEnc)})
+	if accepted != 0 || !errors.Is(err, errInvalidBAL) {
+		t.Fatalf("unexpected delivery result, accepted %d, err %v", accepted, err)
+	}
+	if got, exp := q.PendingBALs(), 4; got != exp {
+		t.Errorf("wrong pending access list count, got %d, exp %d", got, exp)
+	}
+	// Retrieve the completed blocks: the delivered access list must be attached
+	// and all remaining tasks pruned as obsolete
+	results := q.Results(false)
+	if got, exp := len(results), 10; got != exp {
+		t.Fatalf("wrong result count, got %d, exp %d", got, exp)
+	}
+	for i, result := range results {
+		if list := result.BAL(); (list != nil) != (i == 5) {
+			t.Errorf("block %d: unexpected access list attachment: %v", i+1, list)
+		}
+	}
+	if got, exp := q.PendingBALs(), 0; got != exp {
+		t.Errorf("wrong pending access list count after delivery, got %d, exp %d", got, exp)
+	}
+	// The access list memory allowance must have drained with the delivery
+	if got, exp := q.balBytes.Load(), int64(0); got != exp {
+		t.Errorf("wrong attached access list bytes after delivery, got %d, exp %d", got, exp)
+	}
+}
+
 // XTestDelivery does some more extensive testing of events that happen,
 // blocks that become known and peers that make reservations and deliveries.
 // disabled since it's not really a unit-test, but can be executed to test
@@ -323,26 +437,31 @@ func XTestDelivery(t *testing.T) {
 					emptyList []*types.Header
 					txset     [][]*types.Transaction
 					uncleset  [][]*types.Header
+					bodies    []eth.BlockBody
 				)
 				numToSkip := rand.Intn(len(f.Headers))
 				for _, hdr := range f.Headers[0 : len(f.Headers)-numToSkip] {
-					txset = append(txset, world.getTransactions(hdr.Number.Uint64()))
+					txs := world.getTransactions(hdr.Number.Uint64())
+					txset = append(txset, txs)
 					uncleset = append(uncleset, emptyList)
+					txsList, _ := rlp.EncodeToRawList(txs)
+					bodies = append(bodies, eth.BlockBody{Transactions: txsList})
 				}
-				var (
-					txsHashes   = make([]common.Hash, len(txset))
-					uncleHashes = make([]common.Hash, len(uncleset))
-				)
+				hashes := eth.BlockBodyHashes{
+					TransactionRoots: make([]common.Hash, len(txset)),
+					UncleHashes:      make([]common.Hash, len(uncleset)),
+					WithdrawalRoots:  make([]common.Hash, len(txset)),
+				}
 				hasher := trie.NewStackTrie(nil)
 				for i, txs := range txset {
-					txsHashes[i] = types.DeriveSha(types.Transactions(txs), hasher)
+					hashes.TransactionRoots[i] = types.DeriveSha(types.Transactions(txs), hasher)
 				}
 				for i, uncles := range uncleset {
-					uncleHashes[i] = types.CalcUncleHash(uncles)
+					hashes.UncleHashes[i] = types.CalcUncleHash(uncles)
 				}
+
 				time.Sleep(100 * time.Millisecond)
-				_, err := q.DeliverBodies(peer.id, txset, txsHashes, uncleset, uncleHashes, nil, nil)
-				if err != nil {
+				if _, err := q.DeliverBodies(peer.id, hashes, bodies); err != nil {
 					fmt.Printf("delivered %d bodies %v\n", len(txset), err)
 				}
 			} else {
@@ -351,6 +470,7 @@ func XTestDelivery(t *testing.T) {
 			}
 		}
 	}()
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		// reserve receiptfetch
@@ -358,16 +478,16 @@ func XTestDelivery(t *testing.T) {
 		for {
 			f, _, _ := q.ReserveReceipts(peer, rand.Intn(50))
 			if f != nil {
-				var rcs [][]*types.Receipt
+				var rcs []types.Receipts
 				for _, hdr := range f.Headers {
 					rcs = append(rcs, world.getReceipts(hdr.Number.Uint64()))
 				}
 				hasher := trie.NewStackTrie(nil)
 				hashes := make([]common.Hash, len(rcs))
 				for i, receipt := range rcs {
-					hashes[i] = types.DeriveSha(types.Receipts(receipt), hasher)
+					hashes[i] = types.DeriveSha(receipt, hasher)
 				}
-				_, err := q.DeliverReceipts(peer.id, rcs, hashes)
+				_, err := q.DeliverReceipts(peer.id, types.EncodeBlockReceiptLists(rcs), hashes)
 				if err != nil {
 					fmt.Printf("delivered %d receipts %v\n", len(rcs), err)
 				}

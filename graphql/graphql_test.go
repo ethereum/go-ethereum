@@ -23,12 +23,12 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -133,7 +133,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			code: 400,
 		},
 		{
-			body: `{"query": "{bleh{number}}","variables": null}"`,
+			body: `{"query": "{bleh{number}}","variables": null}`,
 			want: `{"errors":[{"message":"Cannot query field \"bleh\" on type \"Query\".","locations":[{"line":1,"column":2}]}]}`,
 			code: 400,
 		},
@@ -173,6 +173,35 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		if ctype := resp.Header.Get("Content-Type"); ctype != "application/json" {
 			t.Errorf("testcase %d \nwrong Content-Type, have: %v, want: %v", i, ctype, "application/json")
 		}
+	}
+}
+
+func TestGraphQLHTTPBodyLimit(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "should reject oversized request body if query field exceeds limit",
+			body: `{"query":"` + strings.Repeat("a", maxRequestBodySize) + `"}`,
+		},
+		{
+			name: "should reject oversized request body if trailing data exceeds limit",
+			body: `{"query":"{block{number}}"}` + strings.Repeat(" ", maxRequestBodySize),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(test.body))
+			w := httptest.NewRecorder()
+
+			handler{}.ServeHTTP(w, req)
+
+			if w.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("got status %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
+			}
+		})
 	}
 }
 
@@ -431,6 +460,40 @@ func TestWithdrawals(t *testing.T) {
 	}
 }
 
+// TestGraphQLMaxDepth ensures that queries exceeding the configured maximum depth
+// are rejected to prevent resource exhaustion from deeply nested operations.
+func TestGraphQLMaxDepth(t *testing.T) {
+	stack := createNode(t)
+	defer stack.Close()
+
+	h, err := newHandler(stack, nil, nil, []string{}, []string{})
+	if err != nil {
+		t.Fatalf("could not create graphql service: %v", err)
+	}
+
+	var b strings.Builder
+	for i := 0; i < maxQueryDepth+1; i++ {
+		b.WriteString("ommers{")
+	}
+	b.WriteString("number")
+	for i := 0; i < maxQueryDepth+1; i++ {
+		b.WriteString("}")
+	}
+	query := fmt.Sprintf("{block{%s}}", b.String())
+
+	res := h.Schema.Exec(context.Background(), query, "", nil)
+	var found bool
+	for _, err := range res.Errors {
+		if err.Rule == "MaxDepthExceeded" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected max depth exceeded error, got %v", res.Errors)
+	}
+}
+
 func createNode(t *testing.T) *node.Node {
 	stack, err := node.New(&node.Config{
 		HTTPHost:     "127.0.0.1",
@@ -456,17 +519,16 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 		RPCGasCap:      1000000,
 		StateScheme:    rawdb.HashScheme,
 	}
-	var engine consensus.Engine = ethash.NewFaker()
+	var engine = beacon.New(ethash.NewFaker())
 	if shanghai {
-		engine = beacon.NewFaker()
-		chainCfg := gspec.Config
-		chainCfg.TerminalTotalDifficultyPassed = true
-		chainCfg.TerminalTotalDifficulty = common.Big0
+		gspec.Config.TerminalTotalDifficulty = common.Big0
+		gspec.Config.MergeNetsplitBlock = common.Big0
 		// GenerateChain will increment timestamps by 10.
 		// Shanghai upgrade at block 1.
 		shanghaiTime := uint64(5)
-		chainCfg.ShanghaiTime = &shanghaiTime
+		gspec.Config.ShanghaiTime = &shanghaiTime
 	}
+
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)

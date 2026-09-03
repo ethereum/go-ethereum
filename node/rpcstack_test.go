@@ -60,6 +60,9 @@ func TestVhosts(t *testing.T) {
 	resp := rpcRequest(t, url, testMethod, "host", "test")
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 
+	respUpper := rpcRequest(t, url, testMethod, "host", "TeSt:1234")
+	assert.Equal(t, respUpper.StatusCode, http.StatusOK)
+
 	resp2 := rpcRequest(t, url, testMethod, "host", "bad")
 	assert.Equal(t, resp2.StatusCode, http.StatusForbidden)
 }
@@ -368,6 +371,9 @@ func TestJWT(t *testing.T) {
 				"bar": "baz",
 			}))
 		},
+		func() string {
+			return fmt.Sprintf("bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
 	}
 	for i, tokenFn := range expOk {
 		token := tokenFn()
@@ -417,9 +423,6 @@ func TestJWT(t *testing.T) {
 		},
 		func() string {
 			return fmt.Sprintf("Bearer  %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
-		},
-		func() string {
-			return fmt.Sprintf("bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
 		},
 		func() string {
 			return fmt.Sprintf("Bearer: %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
@@ -570,7 +573,6 @@ func TestHTTPWriteTimeout(t *testing.T) {
 	// Send normal request
 	t.Run("message", func(t *testing.T) {
 		resp := rpcRequest(t, url, "test_sleep")
-		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
@@ -584,7 +586,6 @@ func TestHTTPWriteTimeout(t *testing.T) {
 	t.Run("batch", func(t *testing.T) {
 		want := fmt.Sprintf("[%s,%s,%s]", greetRes, timeoutRes, timeoutRes)
 		resp := batchRpcRequest(t, url, []string{"test_greet", "test_sleep", "test_greet"})
-		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatal(err)
@@ -593,6 +594,38 @@ func TestHTTPWriteTimeout(t *testing.T) {
 			t.Errorf("wrong response. have %s, want %s", string(body), want)
 		}
 	})
+}
+
+func TestHTTP2H2C(t *testing.T) {
+	srv := createAndStartServer(t, &httpConfig{}, false, &wsConfig{}, nil)
+	defer srv.stop()
+
+	// Create an HTTP/2 cleartext client.
+	transport := &http.Transport{}
+	transport.Protocols = new(http.Protocols)
+	transport.Protocols.SetUnencryptedHTTP2(true)
+	client := &http.Client{Transport: transport}
+
+	body := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"rpc_modules","params":[]}`)
+	resp, err := client.Post("http://"+srv.listenAddr(), "application/json", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if resp.Proto != "HTTP/2.0" {
+		t.Fatalf("expected HTTP/2.0, got %s", resp.Proto)
+	}
+	result, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(result), "jsonrpc") {
+		t.Fatalf("unexpected response: %s", result)
+	}
 }
 
 func apis() []rpc.API {

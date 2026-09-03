@@ -29,12 +29,12 @@ import (
 // insertion order.
 type committer struct {
 	nodes       *trienode.NodeSet
-	tracer      *tracer
+	tracer      *PrevalueTracer
 	collectLeaf bool
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool) *committer {
+func newCommitter(nodeset *trienode.NodeSet, tracer *PrevalueTracer, collectLeaf bool) *committer {
 	return &committer{
 		nodes:       nodeset,
 		tracer:      tracer,
@@ -57,32 +57,26 @@ func (c *committer) commit(path []byte, n node, parallel bool) node {
 	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
 	case *shortNode:
-		// Commit child
-		collapsed := cn.copy()
-
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
-			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val, false)
+			cn.Val = c.commit(append(path, cn.Key...), cn.Val, false)
 		}
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
-		collapsed.Key = hexToCompact(cn.Key)
-		hashedNode := c.store(path, collapsed)
+		cn.Key = hexToCompact(cn.Key)
+		hashedNode := c.store(path, cn)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
 		}
-		return collapsed
+		return cn
 	case *fullNode:
-		hashedKids := c.commitChildren(path, cn, parallel)
-		collapsed := cn.copy()
-		collapsed.Children = hashedKids
-
-		hashedNode := c.store(path, collapsed)
+		c.commitChildren(path, cn, parallel)
+		hashedNode := c.store(path, cn)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
 		}
-		return collapsed
+		return cn
 	case hashNode:
 		return cn
 	default:
@@ -92,11 +86,10 @@ func (c *committer) commit(path []byte, n node, parallel bool) node {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]node {
+func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 	var (
-		wg       sync.WaitGroup
-		nodesMu  sync.Mutex
-		children [17]node
+		wg      sync.WaitGroup
+		nodesMu sync.Mutex
 	)
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -106,37 +99,33 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]
 		// If it's the hashed child, save the hash value directly.
 		// Note: it's impossible that the child in range [0, 15]
 		// is a valueNode.
-		if hn, ok := child.(hashNode); ok {
-			children[i] = hn
+		if _, ok := child.(hashNode); ok {
 			continue
 		}
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
 		if !parallel {
-			children[i] = c.commit(append(path, byte(i)), child, false)
+			n.Children[i] = c.commit(append(path, byte(i)), child, false)
 		} else {
 			wg.Add(1)
 			go func(index int) {
+				defer wg.Done()
+
 				p := append(path, byte(index))
 				childSet := trienode.NewNodeSet(c.nodes.Owner)
 				childCommitter := newCommitter(childSet, c.tracer, c.collectLeaf)
-				children[index] = childCommitter.commit(p, child, false)
+				n.Children[index] = childCommitter.commit(p, child, false)
+
 				nodesMu.Lock()
-				c.nodes.MergeSet(childSet)
+				c.nodes.MergeDisjoint(childSet)
 				nodesMu.Unlock()
-				wg.Done()
 			}(i)
 		}
 	}
 	if parallel {
 		wg.Wait()
 	}
-	// For the 17th child, it's possible the type is valuenode.
-	if n.Children[16] != nil {
-		children[16] = n.Children[16]
-	}
-	return children
 }
 
 // store hashes the node n and adds it to the modified nodeset. If leaf collection
@@ -153,15 +142,15 @@ func (c *committer) store(path []byte, n node) node {
 		// The node is embedded in its parent, in other words, this node
 		// will not be stored in the database independently, mark it as
 		// deleted only if the node was existent in database before.
-		_, ok := c.tracer.accessList[string(path)]
-		if ok {
-			c.nodes.AddNode(path, trienode.NewDeleted())
+		origin := c.tracer.Get(path)
+		if len(origin) != 0 {
+			c.nodes.AddNode(path, trienode.NewDeletedWithPrev(origin))
 		}
 		return n
 	}
 	// Collect the dirty node to nodeset for return.
 	nhash := common.BytesToHash(hash)
-	c.nodes.AddNode(path, trienode.New(nhash, nodeToBytes(n)))
+	c.nodes.AddNode(path, trienode.NewNodeWithPrev(nhash, nodeToBytes(n), c.tracer.Get(path)))
 
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
