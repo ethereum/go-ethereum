@@ -249,6 +249,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 		// outside of this function, as part of the dynamic gas, and that will make it
 		// also become correctly reported to tracers.
 		contract.Gas.ExecutionGas += coldCost
+		contract.Gas.UsedExecutionGas -= coldCost
 
 		gas := gasCost.ExecutionGas
 		var overflow bool

@@ -130,12 +130,13 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		pcCopy    uint64 // needed for the deferred EVMLogger
-		gasCopy   uint64 // for EVMLogger to log gas remaining before execution
-		logged    bool   // deferred EVMLogger should ignore already logged steps
-		res       []byte // result of the opcode execution function
-		debug     = evm.Config.Tracer != nil
-		isEIP4762 = evm.chainRules.IsEIP4762
+		pcCopy     uint64    // needed for the deferred EVMLogger
+		gasCopy    uint64    // for EVMLogger to log gas remaining before execution
+		budgetCopy GasBudget // budget before the opcode's own charges, for the gas hook
+		logged     bool      // deferred EVMLogger should ignore already logged steps
+		res        []byte    // result of the opcode execution function
+		debug      = evm.Config.Tracer != nil
+		isEIP4762  = evm.chainRules.IsEIP4762
 	)
 	// Don't move this deferred function, it's placed before the OnOpcode-deferred method,
 	// so that it gets executed _after_: the OnOpcode needs the stacks before
@@ -193,6 +194,9 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
+		if debug {
+			budgetCopy = contract.Gas
+		}
 		if !contract.Gas.ChargeExecutionOnly(cost) {
 			return nil, ErrOutOfGas
 		}
@@ -236,8 +240,8 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		if debug {
 			if evm.Config.Tracer.HasGasHook() {
 				evm.Config.Tracer.EmitGasChange(
-					tracing.Gas{Execution: gasCopy, State: contract.Gas.StateGas},
-					tracing.Gas{Execution: gasCopy - cost, State: contract.Gas.StateGas},
+					budgetCopy.AsTracing(),
+					contract.Gas.AsTracing(),
 					tracing.GasChangeCallOpCode,
 				)
 			}
