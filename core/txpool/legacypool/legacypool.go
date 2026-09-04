@@ -129,9 +129,6 @@ type BlockChain interface {
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
-	// Genesis returns the genesis block of the chain.
-	Genesis() *types.Block
-
 	// GetBlock retrieves a specific block, used during pool resets.
 	GetBlock(hash common.Hash, number uint64) *types.Block
 
@@ -322,7 +319,12 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserver txpool.
 	// fully synced).
 	statedb, err := pool.chain.StateAt(head)
 	if err != nil {
-		statedb, err = pool.chain.StateAt(pool.chain.Genesis().Header())
+		empty := *head
+		empty.Root = types.EmptyRootHash
+		if pool.chainconfig.IsUBT(head.Number, head.Time) {
+			empty.Root = types.EmptyBinaryHash
+		}
+		statedb, err = pool.chain.StateAt(&empty)
 	}
 	if err != nil {
 		return err
