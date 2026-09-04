@@ -72,6 +72,7 @@ func newChainFreezer(datadir string, eraDir string, namespace string, readonly b
 	}
 	edb, err := eradb.New(resolveChainEraDir(datadir, eraDir))
 	if err != nil {
+		freezer.Close()
 		return nil, err
 	}
 	return &chainFreezer{

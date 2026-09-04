@@ -56,7 +56,7 @@ type GasBudget struct {
 
 	// Spilled tracks how much of this frame's execution gas (gas_left)
 	// has been borrowed to cover state-gas charges that exceeded the
-	// reservoir.
+	// reservoir. It is non-zero only while the reservoir is empty.
 	Spilled uint64
 }
 
@@ -278,4 +278,14 @@ func (g *GasBudget) Absorb(child GasBudget) {
 
 	g.UsedExecutionGas -= child.Spilled
 	g.Spilled += child.Spilled
+
+	// Sanitize the state gas counters after merging the child frame. The child may
+	// have refilled a charge this frame funded from its execution gas, in which case
+	// the gas ends up in the child's reservoir and is handed back to the parent. The
+	// parent's state reservoir can then be non-zero while it still has outstanding
+	// debt from the execution gas.
+	d := min(g.StateGas, g.Spilled)
+	g.ExecutionGas += d
+	g.StateGas -= d
+	g.Spilled -= d
 }

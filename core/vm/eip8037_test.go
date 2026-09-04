@@ -103,6 +103,11 @@ func assertBudgetSane(t *testing.T, initial, got GasBudget) {
 		t.Fatalf("scalar mismatch: used=%d, usedR=%d usedS=%d",
 			got.Used(initial), got.UsedExecutionGas, got.UsedStateGas)
 	}
+	// An outstanding spill and a non-empty reservoir cannot coexist: state-gas
+	// owed to gas_left is returned on every refill and every successful merge.
+	if got.Spilled != 0 && got.StateGas != 0 {
+		t.Fatalf("state-gas stranded: reservoir=%d while spilled=%d", got.StateGas, got.Spilled)
+	}
 }
 
 // hugeBudget is a budget that never runs out, with a separate state reservoir.
@@ -231,6 +236,15 @@ func callCode(to common.Address, value byte, tail []byte) []byte {
 	b := []byte{0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, value, 0x73}
 	b = append(b, to.Bytes()...)
 	b = append(b, 0x5a, 0xf1) // GAS; CALL
+	return append(b, tail...)
+}
+
+// delegateCallCode builds bytecode that DELEGATECALLs `to` forwarding all gas,
+// followed by `tail`. The callee runs against this contract's storage.
+func delegateCallCode(to common.Address, tail []byte) []byte {
+	b := []byte{0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x73}
+	b = append(b, to.Bytes()...)
+	b = append(b, 0x5a, 0xf4) // GAS; DELEGATECALL
 	return append(b, tail...)
 }
 
@@ -738,5 +752,86 @@ func TestHaltFrameTerminalStateFuzz(t *testing.T) {
 			t.Fatalf("trial %d: err = %v, want halt", trial, err)
 		}
 		assertHalted(t, initial, res)
+	}
+}
+
+// ================= cross-frame state-gas return on merge ==================
+
+// A child clearing a slot its parent allocated refills into its own reservoir,
+// because Spilled is frame-local while slot original values are measured from the
+// start of the transaction. Merging the child must move that state-gas back to the
+// pool the charge was funded from, whatever the split between the two pools was.
+func TestAbsorbReturnsStateGas(t *testing.T) {
+	setup := func(db *state.StateDB, self common.Address) {
+		db.CreateAccount(childAddr)
+		db.SetCode(childAddr, concat(sstore(0, 0), stop), tracing.CodeChangeUnspecified)
+	}
+	// self allocates the slot, the DELEGATECALL'd child clears it in its own frame.
+	code := concat(sstore(0, 1), delegateCallCode(childAddr, stop))
+
+	// Reference run: the reservoir covers the whole slot creation, so nothing ever
+	// spills into gas_left and the merge has nothing to hand back.
+	_, ref, err := run8037(t, code, NewGasBudget(1_000_000, uint64(stateGasNewSlot)), new(uint256.Int), setup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Reservoirs too small to cover the creation: the remainder spills into gas_left
+	// in this frame, while the refill lands in the child's reservoir.
+	for _, reservoir := range []uint64{0, uint64(stateGasNewSlot) / 3, uint64(stateGasNewSlot) - 1} {
+		_, res, err := run8037(t, code, NewGasBudget(1_000_000, reservoir), new(uint256.Int), setup)
+		if err != nil {
+			t.Fatalf("reservoir %d: %v", reservoir, err)
+		}
+		// After the merge the debt must be settled and the reservoir back at the
+		// value the frame started with.
+		if res.StateGas != reservoir || res.Spilled != 0 || res.UsedStateGas != 0 {
+			t.Fatalf("reservoir %d: got reservoir=%d spilled=%d used=%d, want %d/0/0",
+				reservoir, res.StateGas, res.Spilled, res.UsedStateGas, reservoir)
+		}
+		// A fully refilled state charge must cost no execution gas, so gas_left ends
+		// up exactly where the reference run left it.
+		if res.ExecutionGas != ref.ExecutionGas {
+			t.Fatalf("reservoir %d: gas_left = %d, want %d (%d stranded in the reservoir)",
+				reservoir, res.ExecutionGas, ref.ExecutionGas, ref.ExecutionGas-res.ExecutionGas)
+		}
+	}
+}
+
+// A child that reverts or halts rolls back its own state changes and hands the
+// reservoir back exactly as it received it, so the parent keeps the debt from its
+// own charge. run8037 additionally checks the budget conservation identities.
+func TestAbsorbFailedChildKeepsDebt(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		tail []byte
+	}{
+		{"revert", revertTail},
+		{"halt", invalidTail},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			setup := func(db *state.StateDB, self common.Address) {
+				db.CreateAccount(childAddr)
+				db.SetCode(childAddr, concat(sstore(0, 0), tt.tail), tracing.CodeChangeUnspecified)
+			}
+			// self allocates the slot, the child clears it and then fails.
+			code := concat(sstore(0, 1), delegateCallCode(childAddr, stop))
+
+			for _, reservoir := range []uint64{0, uint64(stateGasNewSlot) / 3} {
+				_, res, err := run8037(t, code, NewGasBudget(1_000_000, reservoir), new(uint256.Int), setup)
+				if err != nil {
+					t.Fatalf("reservoir %d: %v", reservoir, err)
+				}
+				// The clear was rolled back, so the parent's slot creation still stands.
+				if res.UsedStateGas != stateGasNewSlot {
+					t.Fatalf("reservoir %d: used state gas = %d, want %d",
+						reservoir, res.UsedStateGas, stateGasNewSlot)
+				}
+				// Its reservoir is spent and the execution gas it borrowed is still owed.
+				if want := uint64(stateGasNewSlot) - reservoir; res.Spilled != want || res.StateGas != 0 {
+					t.Fatalf("reservoir %d: spilled=%d reservoir=%d, want %d/0",
+						reservoir, res.Spilled, res.StateGas, want)
+				}
+			}
+		})
 	}
 }
