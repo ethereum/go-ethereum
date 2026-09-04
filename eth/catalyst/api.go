@@ -875,9 +875,11 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
 	case params.SlotNumber == nil:
 		return invalidStatus, paramsErr("nil slotnumber post-amsterdam")
-	case len(params.BlockAccessList) == 0:
-		// Post-Amsterdam the access list is always present, an empty block
-		// still carries the RLP encoding of an empty list.
+	case params.BlockAccessList == nil:
+		// Post-Amsterdam the access list field is always present, an empty
+		// block still carries the RLP encoding of an empty list. A field that
+		// is present but does not decode (including the empty byte string) is
+		// not a params error, the payload is rejected as INVALID further down.
 		return invalidStatus, paramsErr("missing block access list post-amsterdam")
 	case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
 		return invalidStatus, unsupportedForkErr("newPayloadV5 must only be called for amsterdam payloads")
@@ -949,9 +951,6 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 			"beaconRoot", beaconRoot,
 			"len(requests)", len(requests),
 			"error", err)
-		if errors.Is(err, engine.ErrMalformedPayload) {
-			return invalidStatus, engine.InvalidParams.With(err)
-		}
 		return api.invalid(err, nil), nil
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
