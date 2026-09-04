@@ -624,6 +624,12 @@ const (
 	// Deeper frames are funded by their caller's opcode instead.
 	GasChangeTxGasForwarded GasChangeReason = 24
 
+	// GasChangeStateGasRepaid is state-gas moved from a frame's reservoir back to
+	// its gas_left when a child merges, repaying execution gas the frame had lent
+	// to state charges that the child then refilled (EIP-8037). Emitted right
+	// after GasChangeCallLeftOverRefunded; not emitted when nothing is owed.
+	GasChangeStateGasRepaid GasChangeReason = 25
+
 	// GasChangeIgnored indicates the gas change should be ignored, as it is
 	// tracked manually by a direct emit of the gas change event.
 	GasChangeIgnored GasChangeReason = 0xFF

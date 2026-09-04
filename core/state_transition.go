@@ -815,9 +815,7 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 	st.traceBudgetChange(prior, tracing.GasChangeTxGasForwarded)
 
 	ret, _, result, vmerr := st.evm.Create(msg.From, msg.Data, child, value)
-	prior = st.gasRemaining
-	st.gasRemaining.Absorb(result)
-	st.traceBudgetChange(prior, tracing.GasChangeCallLeftOverRefunded)
+	st.gasRemaining.Absorb(result, st.evm.Config.Tracer)
 
 	// If the contract creation failed (e.g. the initcode reverted or halted),
 	// refill the account-creation state gas charged at runtime.
@@ -877,9 +875,7 @@ func (st *stateTransition) executeCall(rules params.Rules, value *uint256.Int) (
 	st.traceBudgetChange(prior, tracing.GasChangeTxGasForwarded)
 
 	ret, result, vmerr := st.evm.Call(msg.From, st.to(), msg.Data, child, value)
-	prior = st.gasRemaining
-	st.gasRemaining.Absorb(result)
-	st.traceBudgetChange(prior, tracing.GasChangeCallLeftOverRefunded)
+	st.gasRemaining.Absorb(result, st.evm.Config.Tracer)
 
 	// If the call frame reverts or halts exceptionally, the charged state-gas
 	// is refilled back to the state reservoir in Amsterdam.

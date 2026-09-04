@@ -163,14 +163,8 @@ func (c *Contract) refundState(s uint64, logger *tracing.Hooks, reason tracing.G
 }
 
 // refundGas absorbs a sub-call's leftover GasBudget into this contract's gas state.
-func (c *Contract) refundGas(child GasBudget, logger *tracing.Hooks, reason tracing.GasChangeReason) {
-	prior := c.Gas
-	c.Gas.Absorb(child)
-
-	// A child that burned everything hands nothing back; report no movement.
-	if logger.HasGasHook() && reason != tracing.GasChangeIgnored && prior.AsTracing() != c.Gas.AsTracing() {
-		logger.EmitGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
-	}
+func (c *Contract) refundGas(child GasBudget, logger *tracing.Hooks) {
+	c.Gas.Absorb(child, logger)
 }
 
 // forwardGas drains `execution` gas and the entire state reservoir

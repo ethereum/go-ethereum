@@ -137,6 +137,14 @@ func callStipendOnly(addr common.Address) []byte {
 	return append(b, 0x60, 0x00, 0xf1, 0x50) // PUSH1 0 (gas); CALL; POP
 }
 
+// delegateAll is bytecode that DELEGATECALLs addr with all remaining gas, so
+// the callee runs against this contract's storage.
+func delegateAll(addr common.Address) []byte {
+	b := []byte{0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x73}
+	b = append(b, addr.Bytes()...)
+	return append(b, 0x5a, 0xf4, 0x50) // GAS; DELEGATECALL; POP
+}
+
 func concat(parts ...[]byte) (out []byte) {
 	for _, p := range parts {
 		out = append(out, p...)
@@ -266,6 +274,40 @@ func Example_valueCallStipend() {
 	// d0 CallLeftOverRefunded   <0,0> -> <72977,0>
 	// d0 TxRefunds              <72977,0> -> <72977,0>
 	// d0 TxLeftOverReturned     <72977,0> -> <0,0>
+}
+
+// The caller creates a slot with an empty reservoir, spilling the state charge
+// into its gas_left, and a DELEGATECALL'd child clears that slot. The refill
+// lands in the child's reservoir, since the child owes nothing itself, and is
+// handed back with the leftover. The merge then repays the caller's gas_left
+// from it, as a separate movement.
+func Example_crossFrameRefill() {
+	runTraced(types.GenesisAlloc{
+		traceCallee: {Code: concat(setSlot0, delegateAll(traceChild), opStop)},
+		traceChild:  {Code: concat(clrSlot0, opStop)},
+	}, callTx(0, traceCallee, 0, 400_000, nil))
+	// Output:
+	// d0 TxInitialBalance       <0,0> -> <400000,0>
+	// d0 TxIntrinsicGas         <400000,0> -> <385000,0>
+	// d0 TxGasForwarded         <385000,0> -> <0,0>
+	// d0 enter CALL gas=<385000,0>
+	// d1 CallInitialBalance     <0,0> -> <385000,0>
+	// d1 CallOpCode x10         <385000,0> -> <4249,0>
+	// d1 enter DELEGATECALL gas=<267708,0>
+	// d2 CallInitialBalance     <0,0> -> <267708,0>
+	// d2 CallOpCode x2          <267708,0> -> <267702,0>
+	// d2 CallOpCode             <267702,0> -> <267602,97920>
+	// d2 CallOpCode x1          <267602,97920> -> <267602,97920>
+	// d2 CallLeftOverReturned   <267602,97920> -> <0,0>
+	// d1 exit gasLeft=<267602,97920>
+	// d1 CallLeftOverRefunded   <4249,0> -> <271851,97920>
+	// d1 StateGasRepaid         <271851,97920> -> <369771,0>
+	// d1 CallOpCode x2          <369771,0> -> <369769,0>
+	// d1 CallLeftOverReturned   <369769,0> -> <0,0>
+	// d0 exit gasLeft=<369769,0>
+	// d0 CallLeftOverRefunded   <0,0> -> <369769,0>
+	// d0 TxRefunds              <369769,0> -> <375815,0>
+	// d0 TxLeftOverReturned     <375815,0> -> <0,0>
 }
 
 // A contract creation: the transaction pays the account creation as a runtime

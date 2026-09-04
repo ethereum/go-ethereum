@@ -28,6 +28,7 @@ EIP-8037 splits gas into an execution and a state dimension, so every hook that 
 ### Modified types
 
 - `Hooks` gains the `OnGasChangeV2`, `OnEnterV2`, `OnExitV2`, `OnOpcodeV2` and `OnFaultV2` fields. Within each pair the V2 hook takes precedence; the V1 hook is invoked only when no V2 hook is registered.
+- `GasChangeReason` has a new value `GasChangeStateGasRepaid`, reported after `GasChangeCallLeftOverRefunded` when the merge of a child moves state-gas from the reservoir back to `gas_left`, repaying execution gas the frame had lent to a state charge the child refilled (EIP-8037). Previously that movement was folded into the leftover-refunded event, which then rose by more than the child had actually returned.
 - `GasChangeReason` has a new value `GasChangeTxGasForwarded`, reported when the transaction hands its whole budget to the top-level frame. The receiving side was already reported as `GasChangeCallInitialBalance`, but the giving side was not, leaving a hole in the event stream at the transaction level.
 - `GasChangeReason` has a new value `GasChangeRefundRevertedState`, reported when a reverting frame is refilled the state-gas its rolled back state creations had paid for (EIP-8037). Previously a revert emitted no gas change at all, so the refill was invisible to tracers.
 
