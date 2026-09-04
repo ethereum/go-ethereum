@@ -30,7 +30,7 @@ Sets the minimal accepted gas price when mining transactions. Any transactions t
 
 | Client  | Method invocation                                     |
 | :------ | ----------------------------------------------------- |
-| Go      | `miner.setGasPrice(number *rpc.HexNumber) bool`       |
+| Go      | `miner.SetGasPrice(gasPrice hexutil.Big) bool`        |
 | Console | `miner.setGasPrice(number)`                           |
 | RPC     | `{"method": "miner_setGasPrice", "params": [number]}` |
 
@@ -79,6 +79,6 @@ Sets the gas limit the miner will target when mining. Note: on networks where EI
 
 | Client  | Method invocation                                     |
 | :------ | ----------------------------------------------------- |
-| Go      | `miner.SetGasLimit(number *rpc.HexNumber) bool`       |
+| Go      | `miner.SetGasLimit(gasLimit hexutil.Uint64) bool`       |
 | Console | `miner.SetGasLimit(number)`                           |
 | RPC     | `{"method": "miner_setGasLimit", "params": [number]}` |
