@@ -227,6 +227,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		BaseFee:       t.json.Genesis.BaseFeePerGas,
 		BlobGasUsed:   t.json.Genesis.BlobGasUsed,
 		ExcessBlobGas: t.json.Genesis.ExcessBlobGas,
+		SlotNumber:    t.json.Genesis.SlotNumber,
 	}
 }
 
@@ -330,7 +331,13 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	if h.Timestamp != h2.Time {
 		return fmt.Errorf("timestamp: want: %v have: %v", h.Timestamp, h2.Time)
 	}
-	if !reflect.DeepEqual(h.BaseFeePerGas, h2.BaseFee) {
+	// Optional post-London field: nil means "absent" (pre-London) and must not
+	// Cmp, which panics on a nil receiver. JSON "0x0" and RLP-decoded 0 are
+	// numerically equal but not DeepEqual (abs nil vs non-nil).
+	if (h.BaseFeePerGas == nil) != (h2.BaseFee == nil) {
+		return fmt.Errorf("baseFeePerGas: want: %v have: %v", h.BaseFeePerGas, h2.BaseFee)
+	}
+	if h.BaseFeePerGas != nil && h.BaseFeePerGas.Cmp(h2.BaseFee) != 0 {
 		return fmt.Errorf("baseFeePerGas: want: %v have: %v", h.BaseFeePerGas, h2.BaseFee)
 	}
 	if !reflect.DeepEqual(h.WithdrawalsRoot, h2.WithdrawalsHash) {

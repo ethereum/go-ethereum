@@ -1150,3 +1150,31 @@ func TestMultiBlobDeliveryVerification(t *testing.T) {
 		t.Fatalf("KZG cell verification failed after multi-blob delivery: %v", verifyErr)
 	}
 }
+
+// TestPeerCellDeliveryMerge checks that merging a second delivery from the same
+// peer preserves the blob-major cell layout matching the concatenated indices.
+func TestPeerCellDeliveryMerge(t *testing.T) {
+	// Two blobs; cell contents tagged as blob*16+index for identification.
+	cell := func(blob, index int) kzg4844.Cell {
+		return kzg4844.Cell{byte(blob*16 + index)}
+	}
+	d := &PeerCellDelivery{
+		Cells:   []kzg4844.Cell{cell(0, 1), cell(0, 3), cell(1, 1), cell(1, 3)},
+		Indices: []uint64{1, 3},
+	}
+	d.merge([]kzg4844.Cell{cell(0, 2), cell(0, 5), cell(1, 2), cell(1, 5)}, []uint64{2, 5})
+
+	wantIndices := []uint64{1, 2, 3, 5}
+	if !slices.Equal(d.Indices, wantIndices) {
+		t.Fatalf("indices mismatch: have %v, want %v", d.Indices, wantIndices)
+	}
+	// Blob-major: for each blob, cells follow the merged index order.
+	n := len(wantIndices)
+	for b := range 2 {
+		for k, idx := range wantIndices {
+			if want := cell(b, int(idx)); d.Cells[b*n+k] != want {
+				t.Fatalf("blob %d pos %d: have tag %d, want tag %d", b, k, d.Cells[b*n+k][0], want[0])
+			}
+		}
+	}
+}

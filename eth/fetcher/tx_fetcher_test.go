@@ -56,10 +56,11 @@ type announce struct {
 }
 
 type doTxNotify struct {
-	peer   string
-	hashes []common.Hash
-	types  []byte
-	sizes  []uint32
+	peer    string
+	version uint
+	hashes  []common.Hash
+	types   []byte
+	sizes   []uint32
 }
 type doTxEnqueue struct {
 	peer    string
@@ -1766,15 +1767,17 @@ func TestTransactionFetcherWrongMetadata(t *testing.T) {
 	})
 }
 
-func makeInvalidBlobTx() *types.Transaction {
+func makeBlobTx(validProof bool) *types.Transaction {
 	key, _ := crypto.GenerateKey()
 	blob := &kzg4844.Blob{byte(0xa)}
 	commitment, _ := kzg4844.BlobToCommitment(blob)
 	blobHash := kzg4844.CalcBlobHashV1(sha256.New(), &commitment)
 	cellProof, _ := kzg4844.ComputeCellProofs(blob)
 
-	// Mutate the cell proof
-	cellProof[0][0] = 0x0
+	if !validProof {
+		// Mutate the cell proof
+		cellProof[0][0] = 0x0
+	}
 
 	blobtx := &types.BlobTx{
 		ChainID:    uint256.MustFromBig(params.MainnetChainConfig.ChainID),
@@ -1796,7 +1799,7 @@ func TestTransactionProtocolViolation(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 
 	var (
-		badTx = makeInvalidBlobTx()
+		badTx = makeBlobTx(false)
 		drop  = make(chan struct{}, 1)
 	)
 	testTransactionFetcherParallel(t, txFetcherTest{
@@ -1870,6 +1873,44 @@ func TestTransactionProtocolViolation(t *testing.T) {
 	})
 }
 
+// Tests that announced blob transaction sizes are validated against the form
+// matching each announcer's protocol version: full below eth/72, without
+// blobs on eth/72.
+func TestTransactionFetcherBlobSizeVersions(t *testing.T) {
+	var (
+		tx   = makeBlobTx(true)
+		drop = make(chan string, 4)
+	)
+	size := uint32(tx.Size())
+	sizeWithoutBlob := size - blobPayloadSize(len(tx.BlobTxSidecar().Blobs))
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			f := newTestTxFetcher()
+			f.dropPeer = func(peer string) { drop <- peer }
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", version: eth.ETH72, hashes: []common.Hash{tx.Hash()}, types: []byte{types.BlobTxType}, sizes: []uint32{sizeWithoutBlob}},
+			doTxNotify{peer: "B", version: eth.ETH71, hashes: []common.Hash{tx.Hash()}, types: []byte{types.BlobTxType}, sizes: []uint32{size}},
+			doTxNotify{peer: "C", version: eth.ETH72, hashes: []common.Hash{tx.Hash()}, types: []byte{types.BlobTxType}, sizes: []uint32{size}},
+			doWait{time: 0, step: true}, // zero time, but the blob fetching should be scheduled
+
+			// Only C, announcing the wrong form for its version, may be dropped.
+			doTxEnqueue{peer: "B", version: eth.ETH71, txs: []*types.Transaction{tx}, direct: true},
+			doFunc(func() {
+				if peer := <-drop; peer != "C" {
+					t.Fatalf("dropped wrong peer: have %s, want C", peer)
+				}
+				select {
+				case peer := <-drop:
+					t.Fatalf("unexpected peer drop: %s", peer)
+				case <-time.After(10 * time.Millisecond):
+				}
+			}),
+		},
+	})
+}
+
 func testTransactionFetcherParallel(t *testing.T, tt txFetcherTest) {
 	t.Parallel()
 	testTransactionFetcher(t, tt)
@@ -1903,7 +1944,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 		// Process the original or expanded steps
 		switch step := step.(type) {
 		case doTxNotify:
-			if _, err := fetcher.Notify(step.peer, step.types, step.sizes, step.hashes); err != nil {
+			if _, err := fetcher.Notify(step.peer, step.version, step.types, step.sizes, step.hashes); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
 			<-wait // Fetcher needs to process this, wait until it's done

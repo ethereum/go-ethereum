@@ -29,9 +29,10 @@ import (
 type Config struct {
 	Tracer *tracing.Hooks
 
-	NoBaseFee               bool  // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
-	EnablePreimageRecording bool  // Enables recording of SHA3/keccak preimages
-	ExtraEips               []int // Additional EIPS that are to be enabled
+	NoBaseFee                bool  // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
+	EnablePreimageRecording  bool  // Enables recording of SHA3/keccak preimages
+	ExtraEips                []int // Additional EIPS that are to be enabled
+	DisableParallelExecution bool  // Disable parallel block processing
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -166,15 +167,15 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	for {
 		if debug {
 			// Capture pre-execution values for tracing.
-			logged, pcCopy, gasCopy = false, pc, contract.Gas.RegularGas
+			logged, pcCopy, gasCopy = false, pc, contract.Gas.ExecutionGas
 		}
 
 		if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
 			// if the PC ends up in a new "chunk" of verkleized code, charge the
 			// associated costs.
 			contractAddr := contract.Address()
-			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
-			contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.ExecutionGas)
+			contract.chargeExecution(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -192,7 +193,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if !contract.Gas.ChargeRegularOnly(cost) {
+		if !contract.Gas.ChargeExecutionOnly(cost) {
 			return nil, ErrOutOfGas
 		}
 
@@ -218,12 +219,12 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			// cost is explicitly set so that the capture state defer method can get the proper cost
 			var dynamicCost GasCosts
 			dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
-			cost += dynamicCost.RegularGas // for tracing
+			cost += dynamicCost.ExecutionGas // for tracing
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
 			if dynamicCost.StateGas == 0 {
-				if !contract.Gas.ChargeRegularOnly(dynamicCost.RegularGas) {
+				if !contract.Gas.ChargeExecutionOnly(dynamicCost.ExecutionGas) {
 					return nil, ErrOutOfGas
 				}
 			} else if !contract.Gas.charge(dynamicCost) {
@@ -235,8 +236,8 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		if debug {
 			if evm.Config.Tracer.HasGasHook() {
 				evm.Config.Tracer.EmitGasChange(
-					tracing.Gas{Regular: gasCopy, State: contract.Gas.StateGas},
-					tracing.Gas{Regular: gasCopy - cost, State: contract.Gas.StateGas},
+					tracing.Gas{Execution: gasCopy, State: contract.Gas.StateGas},
+					tracing.Gas{Execution: gasCopy - cost, State: contract.Gas.StateGas},
 					tracing.GasChangeCallOpCode,
 				)
 			}

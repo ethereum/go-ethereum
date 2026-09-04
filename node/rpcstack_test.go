@@ -371,6 +371,9 @@ func TestJWT(t *testing.T) {
 				"bar": "baz",
 			}))
 		},
+		func() string {
+			return fmt.Sprintf("bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
 	}
 	for i, tokenFn := range expOk {
 		token := tokenFn()
@@ -420,9 +423,6 @@ func TestJWT(t *testing.T) {
 		},
 		func() string {
 			return fmt.Sprintf("Bearer  %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
-		},
-		func() string {
-			return fmt.Sprintf("bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
 		},
 		func() string {
 			return fmt.Sprintf("Bearer: %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))

@@ -353,9 +353,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// Update the state with pending changes.
 		var root []byte
 		if sim.chainConfig.IsByzantium(blockContext.BlockNumber) {
-			blockAccessList.Merge(tracingStateDB.Finalise(true))
+			blockAccessList.Merge(tracingStateDB.Finalise(evm.GetRules()))
 		} else {
-			root = sim.state.IntermediateRoot(sim.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
+			root = sim.state.IntermediateRoot(evm.GetRules()).Bytes()
 		}
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, blockContext.Time, tx, gp.CumulativeUsed(), root)
 		blobGasUsed += receipts[i].BlobGasUsed

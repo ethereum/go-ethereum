@@ -113,7 +113,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			db    = rawdb.NewMemoryDatabase()
 			gspec = &Genesis{
 				Config: config,
-				Alloc: types.GenesisAlloc{
+				Alloc: withSystemContracts(types.GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
 						Balance: big.NewInt(1000000000000000000), // 1 ether
 						Nonce:   0,
@@ -122,7 +122,7 @@ func TestStateProcessorErrors(t *testing.T) {
 						Balance: big.NewInt(1000000000000000000), // 1 ether
 						Nonce:   math.MaxUint64,
 					},
-				},
+				}),
 			}
 			blockchain, _  = NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), nil)
 			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
@@ -330,13 +330,13 @@ func TestStateProcessorErrors(t *testing.T) {
 			db    = rawdb.NewMemoryDatabase()
 			gspec = &Genesis{
 				Config: config,
-				Alloc: types.GenesisAlloc{
+				Alloc: withSystemContracts(types.GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
 						Balance: big.NewInt(1000000000000000000), // 1 ether
 						Nonce:   0,
 						Code:    common.FromHex("0xB0B0FACE"),
 					},
-				},
+				}),
 			}
 			blockchain, _ = NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), nil)
 		)

@@ -279,3 +279,33 @@ func ckzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 
 	return blobs, nil
 }
+
+// ckzgRecoverCells recovers all cells for each blob from a sufficient subset via
+// KZG erasure recovery. Unlike ckzgRecoverBlobs it keeps the full extended cell
+// set rather than reducing it to blobs.
+func ckzgRecoverCells(cells []Cell, cellIndices []uint64) ([]Cell, error) {
+	ckzgIniter.Do(ckzgInit)
+
+	blobCount := len(cells) / len(cellIndices)
+	out := make([]Cell, 0, blobCount*CellsPerBlob)
+
+	offset := 0
+	for range blobCount {
+		kzgcells := make([]ckzg4844.Cell, 0, len(cellIndices))
+		for _, cell := range cells[offset : offset+len(cellIndices)] {
+			kzgcells = append(kzgcells, ckzg4844.Cell(cell))
+		}
+
+		extCells, err := ckzg4844.RecoverCells(cellIndices, kzgcells)
+		if err != nil {
+			return nil, err
+		}
+		for _, cell := range extCells {
+			out = append(out, Cell(cell))
+		}
+
+		offset = offset + len(cellIndices)
+	}
+
+	return out, nil
+}

@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,14 +28,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"sort"
 	"syscall"
 	"time"
 
 	pebbleimpl "github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
@@ -206,22 +203,6 @@ block is used.
 				Description: `
 The export-preimages command exports hash preimages to a flat file, in exactly
 the expected order for the overlay tree migration.
-`,
-			},
-			{
-				Name:    "list-eip-7610-accounts",
-				Aliases: []string{"eip7610"},
-				Usage:   "list EIP7610 eligible accounts",
-				Action:  listEIP7610EligibleAccounts,
-				Flags:   slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
-				Description: `
-geth snapshot list-eip-7610-accounts
-traverses the post–EIP-161 state and returns all accounts that are eligible
-under EIP-7610: accounts with zero nonce, empty runtime code, and non-empty
-storage. The traversal will be aborted immediately if the state is prior to
-EIP-161.
-
-The exported accounts are identified by their address.
 `,
 			},
 		},
@@ -516,11 +497,11 @@ func lookupAccount(accountHash common.Hash, tr *trie.Trie) (*types.StateAccount,
 	return &acc, nil
 }
 
-func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool) error {
+func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool) (int, error) {
 	tr, err := trie.NewStateTrie(id, db)
 	if err != nil {
 		log.Error("Failed to open storage trie", "account", id.Owner, "root", id.Root, "err", err)
-		return err
+		return 0, err
 	}
 	var (
 		slots      int
@@ -531,7 +512,7 @@ func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool)
 	it, err := tr.NodeIterator(nil)
 	if err != nil {
 		log.Error("Failed to open storage iterator", "account", id.Owner, "root", id.Root, "err", err)
-		return err
+		return 0, err
 	}
 	logger := log.Debug
 	if report {
@@ -550,14 +531,14 @@ func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool)
 		}
 		if iter.Err != nil {
 			log.Error("Failed to traverse storage trie", "root", id.Root, "err", iter.Err)
-			return iter.Err
+			return 0, iter.Err
 		}
 		logger("Storage is complete", "account", id.Owner, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
 		reader, err := db.NodeReader(id.StateRoot)
 		if err != nil {
 			log.Error("Failed to open state reader", "err", err)
-			return err
+			return 0, err
 		}
 		var (
 			buffer = make([]byte, 32)
@@ -573,14 +554,14 @@ func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool)
 				blob, _ := reader.Node(id.Owner, it.Path(), node)
 				if len(blob) == 0 {
 					log.Error("Missing trie node(storage)", "hash", node)
-					return errors.New("missing storage")
+					return 0, errors.New("missing storage")
 				}
 				hasher.Reset()
 				hasher.Write(blob)
 				hasher.Read(buffer)
 				if !bytes.Equal(buffer, node.Bytes()) {
 					log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
-					return errors.New("invalid storage node")
+					return 0, errors.New("invalid storage node")
 				}
 			}
 			if it.Leaf() {
@@ -593,11 +574,11 @@ func traverseStorage(id *trie.ID, db *triedb.Database, report bool, detail bool)
 		}
 		if err := it.Error(); err != nil {
 			log.Error("Failed to traverse storage trie", "root", id.Root, "err", err)
-			return err
+			return 0, err
 		}
 		logger("Storage is complete", "account", id.Owner, "nodes", nodes, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
-	return nil
+	return slots, nil
 }
 
 // traverseState is a helper function used for pruning verification.
@@ -659,7 +640,8 @@ func traverseState(ctx *cli.Context) error {
 			log.Info("Account has no storage", "hash", accountHash)
 			return nil
 		}
-		return traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, false)
+		_, err = traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, false)
+		return err
 	}
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
@@ -687,10 +669,11 @@ func traverseState(ctx *cli.Context) error {
 			return err
 		}
 		if acc.Root != types.EmptyRootHash {
-			err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root), triedb, false, false)
+			nSlots, err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root), triedb, false, false)
 			if err != nil {
 				return err
 			}
+			slots += nSlots
 		}
 		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
@@ -772,7 +755,8 @@ func traverseRawState(ctx *cli.Context) error {
 			log.Info("Account has no storage", "hash", accountHash)
 			return nil
 		}
-		return traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, true)
+		_, err = traverseStorage(trie.StorageTrieID(root, accountHash, acc.Root), triedb, true, true)
+		return err
 	}
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
@@ -829,10 +813,11 @@ func traverseRawState(ctx *cli.Context) error {
 				return errors.New("invalid account")
 			}
 			if acc.Root != types.EmptyRootHash {
-				err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root), triedb, false, true)
+				nSlots, err := traverseStorage(trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root), triedb, false, true)
 				if err != nil {
 					return err
 				}
+				slots += nSlots
 			}
 			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
@@ -1005,95 +990,5 @@ func checkAccount(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Checked the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
-	return nil
-}
-
-// listEIP7610EligibleAccounts traverses the post–EIP-161 state and returns all
-// accounts that are eligible under EIP-7610: accounts with zero nonce, empty
-// runtime code, and non-empty storage.
-//
-// Such accounts could only have been created before EIP-161, since after that
-// all newly created contracts are initialized with a nonce of one.
-//
-// This helper should be generally applicable to all networks, including the
-// Ethereum mainnet. For most networks where EIP-161 was enabled from genesis,
-// the resulting set is expected to be empty. Otherwise, network operators are
-// responsible for generating the eligible account set themselves.
-//
-// Notably, the exported accounts are identified by their address.
-func listEIP7610EligibleAccounts(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
-	defer stack.Close()
-
-	chaindb := utils.MakeChainDatabase(ctx, stack, true)
-	defer chaindb.Close()
-
-	headBlock := rawdb.ReadHeadBlock(chaindb)
-	if headBlock == nil {
-		log.Error("Failed to load head block")
-		return nil
-	}
-	config, _, err := core.LoadChainConfig(chaindb, utils.MakeGenesis(ctx))
-	if err != nil {
-		log.Error("Failed to load chain config", "err", err)
-		return err
-	}
-	if !config.IsEIP158(headBlock.Number()) {
-		log.Info("Local head is prior to EIP-161", "head", headBlock.Number(), "eip-161", *config.EIP158Block)
-		return nil
-	}
-	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, false, true, false)
-	defer triedb.Close()
-
-	if triedb.Scheme() != rawdb.PathScheme {
-		log.Error("Hash scheme is not supported")
-		return nil
-	}
-	iter, err := triedb.AccountIterator(headBlock.Root(), common.Hash{})
-	if err != nil {
-		log.Error("Failed to get account iterator", "err", err)
-		return err
-	}
-	defer iter.Release()
-	var (
-		start    = time.Now()
-		accounts []common.Address
-	)
-	for iter.Next() {
-		blob := iter.Account()
-		if blob == nil {
-			log.Error("Failed to get account blob")
-			return nil
-		}
-		var account types.SlimAccount
-		if err := rlp.DecodeBytes(blob, &account); err != nil {
-			log.Error("Failed to decode", "err", err)
-			return err
-		}
-		// EIP-7610 account eligibility:
-		// - account.nonce == 0
-		// - account.runtime_code == empty
-		// - account.storage != empty
-		if len(account.CodeHash) == 0 && account.Nonce == 0 && len(account.Root) != 0 {
-			preimage := rawdb.ReadPreimage(chaindb, iter.Hash())
-			if preimage == nil {
-				log.Error("Failed to read preimage", "hash", iter.Hash().Hex())
-				return nil
-			}
-			accounts = append(accounts, common.BytesToAddress(preimage))
-		}
-	}
-	if len(accounts) == 0 {
-		log.Info("Traversed state", "eligible", len(accounts), "elapsed", common.PrettyDuration(time.Since(start)))
-	} else {
-		sort.Slice(accounts, func(i, j int) bool {
-			return accounts[i].Cmp(accounts[j]) < 0
-		})
-		buf := make([]byte, len(accounts)*common.AddressLength)
-		for i, h := range accounts {
-			copy(buf[i*common.AddressLength:], h[:])
-		}
-		log.Info("Traversed state", "eligible", len(accounts), "elapsed", common.PrettyDuration(time.Since(start)), "output", hex.EncodeToString(buf))
-	}
 	return nil
 }

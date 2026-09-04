@@ -18,8 +18,10 @@ package eth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -102,20 +104,40 @@ type BadBlockArgs struct {
 	Hash  common.Hash            `json:"hash"`
 	Block map[string]interface{} `json:"block"`
 	RLP   string                 `json:"rlp"`
+
+	// Detail is the RLP-encoded execution detail recorded for blocks that were
+	// built locally and then failed to re-import: the build-time receipts,
+	// tried-and-reverted transactions and the failure reason. It is empty for
+	// ordinary bad blocks reported by peers.
+	//
+	// It is carried as opaque RLP rather than expanded into JSON so that it
+	// round-trips exactly, which is what lets a bad block be moved to another
+	// node and replayed there with debug_replayBadBlock.
+	Detail string `json:"detail,omitempty"`
 }
 
-// GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
-// and returns them as a JSON list of block hashes.
-func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
+// GetBadBlocks returns a list of the last 'bad blocks' that the client has
+// seen on the network and returns them as a JSON list of block hashes.
+//
+// If file is given, the bad block list will be written into the file instead.
+func (api *DebugAPI) GetBadBlocks(ctx context.Context, file *string) ([]*BadBlockArgs, error) {
 	var (
-		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
-		results = make([]*BadBlockArgs, 0, len(blocks))
+		blocks, details = rawdb.ReadAllBadBlocksWithDetails(api.eth.chainDb)
+		results         = make([]*BadBlockArgs, 0, len(blocks))
 	)
-	for _, block := range blocks {
+	for i, block := range blocks {
 		var (
 			blockRlp  string
 			blockJSON map[string]interface{}
+			detailRlp string
 		)
+		if details[i] != nil {
+			if b, err := rlp.EncodeToBytes(details[i]); err != nil {
+				log.Warn("Failed to encode bad block detail", "hash", block.Hash(), "err", err)
+			} else {
+				detailRlp = hexutil.Encode(b)
+			}
+		}
 		if rlpBytes, err := rlp.EncodeToBytes(block); err != nil {
 			blockRlp = err.Error() // Hacky, but hey, it works
 		} else {
@@ -123,12 +145,36 @@ func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) 
 		}
 		blockJSON = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig())
 		results = append(results, &BadBlockArgs{
-			Hash:  block.Hash(),
-			RLP:   blockRlp,
-			Block: blockJSON,
+			Hash:   block.Hash(),
+			RLP:    blockRlp,
+			Block:  blockJSON,
+			Detail: detailRlp,
 		})
 	}
+	if file != nil {
+		err := dumpBadBlocks(*file, results)
+		return nil, err
+	}
 	return results, nil
+}
+
+// dumpBadBlocks writes the bad blocks to path as JSON.
+//
+// It refuses to touch an existing file: the path comes from the caller, so
+// clobbering whatever happens to be there would turn this into an
+// arbitrary-write primitive. The file is created exclusively rather than stat-ed
+// first, so that two concurrent calls cannot both decide the path is free.
+func dumpBadBlocks(path string, results []*BadBlockArgs) error {
+	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
+	if err != nil {
+		if os.IsExist(err) {
+			return errors.New("location would overwrite an existing file")
+		}
+		return err
+	}
+	defer out.Close()
+
+	return json.NewEncoder(out).Encode(results)
 }
 
 // AccountRangeMaxResults is the maximum number of results to be returned per call
@@ -265,6 +311,13 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 	if it.Next() {
 		next := common.BytesToHash(it.Key)
 		result.NextKey = &next
+	}
+	// Iterator.Next returns false on both exhaustion and error, so a failure to
+	// resolve a trie node mid-range would otherwise be reported as a complete
+	// result (a nil NextKey claims all keys were returned). Surface the error
+	// instead of silently truncating.
+	if it.Err != nil {
+		return StorageRangeResult{}, it.Err
 	}
 	return result, nil
 }
@@ -448,58 +501,16 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
 
-// StateSize returns the current state size statistics from the state size tracker.
-// Returns an error if the state size tracker is not initialized or if stats are not ready.
-func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interface{}, error) {
-	sizer := api.eth.blockchain.StateSizer()
-	if sizer == nil {
-		return nil, errors.New("state size tracker is not enabled")
-	}
-	var (
-		err   error
-		stats *state.SizeStats
-	)
-	if blockHashOrNumber == nil {
-		stats, err = sizer.Query(nil)
-	} else {
-		header, herr := api.eth.APIBackend.HeaderByNumberOrHash(context.Background(), *blockHashOrNumber)
-		if herr != nil || header == nil {
-			return nil, fmt.Errorf("block %s is unknown", blockHashOrNumber)
-		}
-		stats, err = sizer.Query(&header.Root)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if stats == nil {
-		var s string
-		if blockHashOrNumber == nil {
-			s = "chain head"
-		} else {
-			s = blockHashOrNumber.String()
-		}
-		return nil, fmt.Errorf("state size of %s is not available", s)
-	}
-	return map[string]interface{}{
-		"stateRoot":            stats.StateRoot,
-		"blockNumber":          hexutil.Uint64(stats.BlockNumber),
-		"accounts":             hexutil.Uint64(stats.Accounts),
-		"accountBytes":         hexutil.Uint64(stats.AccountBytes),
-		"storages":             hexutil.Uint64(stats.Storages),
-		"storageBytes":         hexutil.Uint64(stats.StorageBytes),
-		"accountTrienodes":     hexutil.Uint64(stats.AccountTrienodes),
-		"accountTrienodeBytes": hexutil.Uint64(stats.AccountTrienodeBytes),
-		"storageTrienodes":     hexutil.Uint64(stats.StorageTrienodes),
-		"storageTrienodeBytes": hexutil.Uint64(stats.StorageTrienodeBytes),
-		"contractCodes":        hexutil.Uint64(stats.ContractCodes),
-		"contractCodeBytes":    hexutil.Uint64(stats.ContractCodeBytes),
-	}, nil
-}
-
 func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumberOrHash) (*stateless.ExtWitness, error) {
 	bc := api.eth.blockchain
 	block, err := api.eth.APIBackend.BlockByNumberOrHash(context.Background(), bn)
 	if err != nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
+	}
+	// BlockByNumberOrHash returns a nil block without an error when the
+	// requested block does not exist (per the RPC spec). Guard against it
+	// to avoid a nil pointer dereference below.
+	if block == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block %v not found", bn)
 	}
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)

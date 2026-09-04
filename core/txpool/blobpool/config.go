@@ -27,6 +27,8 @@ type Config struct {
 	PriceBump uint64 // Minimum price bump percentage to replace an already existing nonce
 
 	FetchProbability uint64 // EIP-8070: full blob fetch probability for sparse blobpool
+
+	BlockedRatio float64 // Maximum fraction of Datacap the blocked (partial-gated) suffix may occupy
 }
 
 // DefaultConfig contains the default configurations for the transaction pool.
@@ -34,6 +36,8 @@ var DefaultConfig = Config{
 	Datadir:   "blobpool",
 	Datacap:   10 * 1024 * 1024 * 1024 / 4, // TODO(karalabe): /4 handicap for rollout, gradually bump back up to 10GB
 	PriceBump: 100,                         // either have patience or be aggressive, no mushy ground
+
+	BlockedRatio: 0.5,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -47,6 +51,10 @@ func (config *Config) sanitize() Config {
 	if conf.PriceBump < 1 {
 		log.Warn("Sanitizing invalid blobpool price bump", "provided", conf.PriceBump, "updated", DefaultConfig.PriceBump)
 		conf.PriceBump = DefaultConfig.PriceBump
+	}
+	if conf.BlockedRatio <= 0 || conf.BlockedRatio > 1 {
+		log.Warn("Sanitizing invalid blobpool blocked cap ratio", "provided", conf.BlockedRatio, "updated", DefaultConfig.BlockedRatio)
+		conf.BlockedRatio = DefaultConfig.BlockedRatio
 	}
 	return conf
 }

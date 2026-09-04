@@ -544,3 +544,126 @@ func TestFreezerSuite(t *testing.T) {
 		return f
 	})
 }
+
+// TestTruncateHeadBelowGroupTail covers rolling the head back past the tail of
+// one tail group but not another. The BAL table is pruned independently of the
+// block-data tables and therefore commonly sits at a higher tail, so a deep
+// enough head truncation lands below it. The table it applies to has nothing
+// left to keep and must end up empty at the new head, with the rest of the
+// freezer truncated consistently rather than left half-applied.
+func TestTruncateHeadBelowGroupTail(t *testing.T) {
+	var (
+		dir     = t.TempDir()
+		payload = bytes.Repeat([]byte{0xab}, 32)
+		tables  = []string{
+			ChainFreezerHashTable, ChainFreezerHeaderTable,
+			ChainFreezerBodiesTable, ChainFreezerReceiptTable, ChainFreezerBALTable,
+		}
+	)
+	f, err := NewFreezer(dir, "", false, 2049, chainFreezerTableConfigs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { f.Close() }()
+
+	const items = uint64(100)
+	if _, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		for i := uint64(0); i < items; i++ {
+			for _, tbl := range tables {
+				if err := op.AppendRaw(tbl, i, payload); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Prune the BAL group far harder than the block-data group.
+	if _, err := f.TruncateTail(ChainFreezerBlockDataGroup, 10); err != nil {
+		t.Fatalf("truncating block data tail: %v", err)
+	}
+	if _, err := f.TruncateTail(ChainFreezerBALGroup, 80); err != nil {
+		t.Fatalf("truncating BAL tail: %v", err)
+	}
+	// Cutting below every group's tail would discard data that no group had
+	// pruned, so it must be refused, and refused without touching anything.
+	if _, err := f.TruncateHead(5); err == nil {
+		t.Fatal("truncating head below every group tail succeeded, want refusal")
+	}
+	if head, _ := f.Ancients(); head != items {
+		t.Fatalf("head after refused truncation = %d, want %d", head, items)
+	}
+	for _, name := range tables {
+		if got := f.tables[name].items.Load(); got != items {
+			t.Fatalf("table %s touched by a refused truncation: items = %d, want %d", name, got, items)
+		}
+	}
+	// Roll the head back below the BAL tail, but above the block-data tail.
+	if _, err := f.TruncateHead(50); err != nil {
+		t.Fatalf("truncating head below the BAL tail: %v", err)
+	}
+	if head, _ := f.Ancients(); head != 50 {
+		t.Fatalf("head = %d, want 50", head)
+	}
+	// The BAL group follows the head down; the block-data group is untouched.
+	if tail, _ := f.Tail(ChainFreezerBALGroup); tail != 50 {
+		t.Fatalf("BAL tail = %d, want 50", tail)
+	}
+	if tail, _ := f.Tail(ChainFreezerBlockDataGroup); tail != 10 {
+		t.Fatalf("block data tail = %d, want 10", tail)
+	}
+	// Every table agrees on the head, so nothing was left half-truncated.
+	for _, name := range tables {
+		if got := f.tables[name].items.Load(); got != 50 {
+			t.Fatalf("table %s: items = %d, want 50", name, got)
+		}
+	}
+	// Block data below the new head is still readable, BAL is empty.
+	if _, err := f.Ancient(ChainFreezerBodiesTable, 49); err != nil {
+		t.Fatalf("reading body 49: %v", err)
+	}
+	if _, err := f.Ancient(ChainFreezerBALTable, 49); err == nil {
+		t.Fatal("reading BAL 49 succeeded, want out of bounds")
+	}
+	// Writing must resume cleanly across every table from the new head.
+	balPayload := []byte("post-truncate-bal")
+	if _, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		for _, tbl := range tables {
+			data := payload
+			if tbl == ChainFreezerBALTable {
+				data = balPayload
+			}
+			if err := op.AppendRaw(tbl, 50, data); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("appending after truncation: %v", err)
+	}
+	got, err := f.Ancient(ChainFreezerBALTable, 50)
+	if err != nil {
+		t.Fatalf("reading BAL 50: %v", err)
+	}
+	if !bytes.Equal(got, balPayload) {
+		t.Fatalf("BAL 50 = %x, want %x", got, balPayload)
+	}
+	// The layout has to survive a reopen.
+	if err := f.Close(); err != nil {
+		t.Fatalf("closing freezer: %v", err)
+	}
+	f, err = NewFreezer(dir, "", false, 2049, chainFreezerTableConfigs)
+	if err != nil {
+		t.Fatalf("reopening freezer: %v", err)
+	}
+	if head, _ := f.Ancients(); head != 51 {
+		t.Fatalf("head after reopen = %d, want 51", head)
+	}
+	if tail, _ := f.Tail(ChainFreezerBALGroup); tail != 50 {
+		t.Fatalf("BAL tail after reopen = %d, want 50", tail)
+	}
+	if tail, _ := f.Tail(ChainFreezerBlockDataGroup); tail != 10 {
+		t.Fatalf("block data tail after reopen = %d, want 10", tail)
+	}
+}

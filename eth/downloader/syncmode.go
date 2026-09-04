@@ -107,9 +107,15 @@ func (m *syncModer) get(report bool) ethconfig.SyncMode {
 	return ethconfig.FullSync
 }
 
-// disableSnap disables the snap sync mode, usually it's called after a successful snap sync.
-func (m *syncModer) disableSnap() {
+// disableSnap disables the snap sync mode and reports whether the mode was
+// actually flipped.
+func (m *syncModer) disableSnap() bool {
 	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if m.mode == ethconfig.FullSync {
+		return false
+	}
 	m.mode = ethconfig.FullSync
-	m.lock.Unlock()
+	return true
 }

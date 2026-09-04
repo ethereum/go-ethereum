@@ -17,6 +17,7 @@
 package fetcher
 
 import (
+	"errors"
 	"fmt"
 	"iter"
 	"math/rand"
@@ -88,6 +89,57 @@ type cellWithSeq struct {
 type PeerCellDelivery struct {
 	Cells   []kzg4844.Cell // blob-major order as received
 	Indices []uint64       // custody indices provided by this peer
+}
+
+// merge folds a subsequent delivery from the same peer in, keeping the
+// blob-major cell order.
+//
+// Both index sets must be sorted in ascending order, and must be disjoint: a
+// peer is only ever asked for cells it has not delivered yet.
+func (d *PeerCellDelivery) merge(cells []kzg4844.Cell, indices []uint64) error {
+	var (
+		n1 = len(d.Indices)
+		n2 = len(indices)
+	)
+	if n1 == 0 || len(d.Cells)%n1 != 0 {
+		return errors.New("corrupted cell delivery")
+	}
+	blobCount := len(d.Cells) / n1
+	if len(cells) != blobCount*n2 {
+		return errors.New("inconsistent cell count across deliveries")
+	}
+	// An overlapping index would be retained as a duplicate column, inflating
+	// the fetch accounting of the caller.
+	for _, index := range indices {
+		if _, found := slices.BinarySearch(d.Indices, index); found {
+			return fmt.Errorf("duplicate cell index across deliveries: %d", index)
+		}
+	}
+	var (
+		merged        = make([]kzg4844.Cell, 0, len(d.Cells)+len(cells))
+		mergedIndices = make([]uint64, 0, n1+n2)
+	)
+	for b := range blobCount {
+		i, j := 0, 0
+		for i < n1 || j < n2 {
+			if j == n2 || (i < n1 && d.Indices[i] < indices[j]) {
+				merged = append(merged, d.Cells[b*n1+i])
+				if b == 0 {
+					mergedIndices = append(mergedIndices, d.Indices[i])
+				}
+				i++
+			} else {
+				merged = append(merged, cells[b*n2+j])
+				if b == 0 {
+					mergedIndices = append(mergedIndices, indices[j])
+				}
+				j++
+			}
+		}
+	}
+	d.Cells = merged
+	d.Indices = mergedIndices
+	return nil
 }
 
 type fetchStatus struct {
@@ -192,6 +244,7 @@ func NewBlobFetcher(fn BlobFetcherFunctions, custody types.CustodyBitmap, rand r
 // Notify is called when a Type 3 transaction is observed on the network. (TransactionPacket / NewPooledTransactionHashesPacket)
 func (f *BlobFetcher) Notify(peer string, txs []common.Hash, cells types.CustodyBitmap) error {
 	blobAnnounceInMeter.Mark(int64(len(txs)))
+
 	anns := make([]common.Hash, 0)
 	for _, tx := range txs {
 		if f.fn.HasPayload(tx) {
@@ -199,8 +252,11 @@ func (f *BlobFetcher) Notify(peer string, txs []common.Hash, cells types.Custody
 		}
 		anns = append(anns, tx)
 	}
-
-	blobAnnounce := &blobTxAnnounce{origin: peer, txs: anns, cells: cells}
+	blobAnnounce := &blobTxAnnounce{
+		origin: peer,
+		txs:    anns,
+		cells:  cells,
+	}
 	select {
 	case f.notify <- blobAnnounce:
 		return nil
@@ -522,9 +578,18 @@ func (f *BlobFetcher) loop() {
 				indices := delivery.cellBitmap.Indices()
 				if len(indices) > 0 {
 					status := f.fetches[hash]
-					status.deliveries[delivery.origin] = &PeerCellDelivery{
-						Cells:   delivery.cells[i],
-						Indices: indices,
+					// A peer may deliver again after a re-announcement; merge
+					// instead of overwriting
+					if prev, ok := status.deliveries[delivery.origin]; ok {
+						if err := prev.merge(delivery.cells[i], indices); err != nil {
+							f.fn.DropPeer(delivery.origin)
+							continue
+						}
+					} else {
+						status.deliveries[delivery.origin] = &PeerCellDelivery{
+							Cells:   delivery.cells[i],
+							Indices: indices,
+						}
 					}
 					status.fetched = append(status.fetched, indices...)
 				}
@@ -615,6 +680,7 @@ func (f *BlobFetcher) loop() {
 					if len(f.waitlist[hash]) == 0 {
 						delete(f.waitlist, hash)
 						delete(f.waittime, hash)
+						delete(f.partial, hash)
 					}
 				}
 				delete(f.waitslots, drop.peer)
@@ -666,7 +732,7 @@ func (f *BlobFetcher) loop() {
 		blobFetcherWaitingPeers.Update(int64(len(f.waitslots)))
 		blobFetcherWaitingHashes.Update(int64(len(f.waitlist)))
 		blobFetcherQueueingPeers.Update(int64(len(f.announces) - len(f.requests)))
-		blobFetcherQueueingHashes.Update(int64(len(f.announces)))
+		blobFetcherQueueingHashes.Update(int64(len(f.full) + len(f.partial) - len(f.fetches) - len(f.waitlist)))
 		blobFetcherFetchingPeers.Update(int64(len(f.requests)))
 		blobFetcherFetchingHashes.Update(int64(len(f.fetches)))
 

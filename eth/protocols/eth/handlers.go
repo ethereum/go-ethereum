@@ -522,7 +522,7 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("Receipts: %w", err)
 	}
 
-	err = peer.bufferReceipts(res.RequestId, receiptLists, res.LastBlockIncomplete, backend)
+	err = peer.bufferReceipts(res.RequestId, receiptLists, res.LastBlockIncomplete)
 	if err != nil {
 		return err
 	}
@@ -694,7 +694,7 @@ func handleGetCells(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return err
 	}
-	hashes, cells, custody := answerGetCells(backend, query.GetCellsRequest)
+	hashes, cells, custody := answerGetCells(backend, GetCellsRequest{Hashes: query.Hashes, Mask: query.Mask})
 	return peer.ReplyCells(query.RequestId, hashes, cells, custody)
 }
 
@@ -754,12 +754,16 @@ func handleCells(backend Backend, msg Decoder, peer *Peer) error {
 	tresp := tracker.Response{
 		ID:      cellsResponse.RequestId,
 		MsgCode: CellsMsg,
-		Size:    cellsResponse.CellsResponse.Cells.Len(),
+		Size:    cellsResponse.Cells.Len(),
 	}
 	if err := peer.tracker.Fulfil(tresp); err != nil {
 		return fmt.Errorf("Cells: %w", err)
 	}
-	return backend.Handle(peer, &cellsResponse.CellsResponse)
+	return backend.Handle(peer, &CellsResponse{
+		Hashes: cellsResponse.Hashes,
+		Cells:  cellsResponse.Cells,
+		Mask:   cellsResponse.Mask,
+	})
 }
 
 // handleGetBlockAccessLists serves a GetBlockAccessLists request.

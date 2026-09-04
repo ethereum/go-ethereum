@@ -207,7 +207,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(ctx context.Context, update engine.
 			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
 		case params.BeaconRoot == nil:
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
-		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
+		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads")
 		}
 	}
@@ -229,9 +229,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
 		case params.SlotNumber == nil:
 			return engine.STATUS_INVALID, attributesErr("missing slot number")
-		case params.TargetGasLimit == nil:
-			return engine.STATUS_INVALID, attributesErr("missing target gas limit")
-		case !api.checkFork(params.Timestamp, forks.Amsterdam):
+		case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
 		}
 	}
@@ -333,12 +331,12 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
 	} else {
-		if finalized := api.eth.BlockChain().CurrentFinalBlock(); finalized != nil && block.NumberU64() <= finalized.Number.Uint64() {
+		if finalized := api.eth.BlockChain().CurrentFinalBlock(); finalized != nil && block.NumberU64() < finalized.Number.Uint64() {
 			log.Info("Skipping beacon update to finalized ancestor", "number", block.NumberU64(), "hash", update.HeadBlockHash)
 			return valid(nil), nil
 		}
 		depth := api.eth.BlockChain().CurrentBlock().Number.Uint64() - block.NumberU64()
-		if api.maxReorgDepth > 0 && depth >= api.maxReorgDepth {
+		if api.maxReorgDepth > 0 && depth > api.maxReorgDepth {
 			log.Warn("Refusing too deep reorg", "depth", depth, "head", update.HeadBlockHash)
 			return engine.STATUS_INVALID, engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds limit %d", depth, api.maxReorgDepth))
 		}
@@ -502,9 +500,6 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 			forks.Osaka,
 			forks.BPO1,
 			forks.BPO2,
-			forks.BPO3,
-			forks.BPO4,
-			forks.BPO5,
 		})
 }
 
@@ -517,6 +512,10 @@ func (api *ConsensusAPI) GetPayloadV6(payloadID engine.PayloadID) (*engine.Execu
 		[]engine.PayloadVersion{engine.PayloadV4},
 		[]forks.Fork{
 			forks.Amsterdam,
+			forks.BPO3,
+			forks.BPO4,
+			forks.BPO5,
+			forks.Bogota,
 		})
 }
 
@@ -845,7 +844,11 @@ func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.Executa
 		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
-	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
+	case params.SlotNumber != nil:
+		return invalidStatus, paramsErr("slotNumber not supported pre-amsterdam")
+	case params.BlockAccessList != nil:
+		return invalidStatus, paramsErr("block access list not supported pre-amsterdam")
+	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2):
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
 	requests := convertRequests(executionRequests)
@@ -872,9 +875,11 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
 	case params.SlotNumber == nil:
 		return invalidStatus, paramsErr("nil slotnumber post-amsterdam")
-	case params.BlockAccessList == nil:
-		return invalidStatus, paramsErr("nil block access list post-amsterdam")
-	case !api.checkFork(params.Timestamp, forks.Amsterdam):
+	case len(params.BlockAccessList) == 0:
+		// Post-Amsterdam the access list is always present, an empty block
+		// still carries the RLP encoding of an empty list.
+		return invalidStatus, paramsErr("missing block access list post-amsterdam")
+	case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
 		return invalidStatus, unsupportedForkErr("newPayloadV5 must only be called for amsterdam payloads")
 	}
 	requests := convertRequests(executionRequests)
@@ -944,6 +949,9 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 			"beaconRoot", beaconRoot,
 			"len(requests)", len(requests),
 			"error", err)
+		if errors.Is(err, engine.ErrMalformedPayload) {
+			return invalidStatus, engine.InvalidParams.With(err)
+		}
 		return api.invalid(err, nil), nil
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
@@ -997,6 +1005,30 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
 
+		// If this block was also built locally, its local build succeeded while
+		// re-import now fails.
+		localBlock, localReceipts, revertedTxs, revertedIdx := api.localBlocks.getWithDetails(block.Root())
+		if localBlock != nil {
+			log.Warn("NewPayload: locally-built block failed to import", "number", localBlock.NumberU64(), "hash", localBlock.Hash(), "root", localBlock.Root())
+
+			reverted := make([]*rawdb.RevertedTx, len(revertedTxs))
+			for i, tx := range revertedTxs {
+				reverted[i] = &rawdb.RevertedTx{
+					Index: revertedIdx[i],
+					Tx:    tx,
+				}
+			}
+			receipts := make([]*types.ReceiptForStorage, len(localReceipts))
+			for i, r := range localReceipts {
+				receipts[i] = (*types.ReceiptForStorage)(r)
+			}
+			rawdb.WriteBadBlockWithDetails(api.eth.ChainDb(), localBlock, &rawdb.ExecutionDetail{
+				AccessList: localBlock.AccessList(),
+				Receipts:   receipts,
+				Reason:     err.Error(),
+				Reverted:   reverted,
+			})
+		}
 		api.invalidLock.Lock()
 		api.invalidBlocksHits[block.Hash()] = 1
 		api.invalidTipsets[block.Hash()] = block.Header()

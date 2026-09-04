@@ -97,32 +97,31 @@ const (
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
 
-	// RegularPerAuthBaseCost is the state-independent per-authorization floor,
+	// ExecutionPerAuthBaseCost is the state-independent per-authorization floor,
 	// defined in EIP-8037 as the sum of:
 	//
 	// - Calldata cost for the authorization tuple
 	// - ECDSA recovery of the authority address
 	// - Cold authority access (COLD_ACCOUNT_ACCESS)
 	// - Warm writes to the authority account
-	RegularPerAuthBaseCost uint64 = 7816
+	ExecutionPerAuthBaseCost uint64 = 7816
 
 	// EIP-2780: resource-based intrinsic transaction gas.
-	TxBaseCost2780      uint64 = 12000
-	TxValueCost2780     uint64 = 4244
-	TransferLogCost2780 uint64 = 1756
+	TxBaseCost2780  uint64 = 12000
+	TxValueCost2780 uint64 = 6000
 
 	// EIP-8038: state-access gas cost update (Amsterdam).
 	ColdAccountAccessAmsterdam         uint64 = 3000  // COLD_ACCOUNT_ACCESS: cold touch of an account
 	WarmAccountAccessAmsterdam         uint64 = 100   // WARM_ACCESS: warm touch of an account
-	AccountWriteAmsterdam              uint64 = 8000  // ACCOUNT_WRITE: surcharge for first-time write to an account
-	CallValueTransferAmsterdam         uint64 = 10300 // CALL_VALUE = ACCOUNT_WRITE + CallStipend (2300)
-	ColdStorageAccessAmsterdam         uint64 = 3000  // COLD_STORAGE_ACCESS: cold touch of a storage slot
+	AccountWriteAmsterdam              uint64 = 9000  // ACCOUNT_WRITE: surcharge for first-time write to an account
+	CallValueTransferAmsterdam         uint64 = 11300 // CALL_VALUE = ACCOUNT_WRITE + CallStipend (2300)
+	ColdStorageAccessAmsterdam         uint64 = 2100  // COLD_STORAGE_ACCESS: cold touch of a storage slot
 	WarmStorageAccessAmsterdam         uint64 = 100   // WARM_STORAGE_ACCESS: warm touch of a storage slot
 	StorageWriteAmsterdam              uint64 = 10000 // STORAGE_WRITE: surcharge for first-time write to a storage slot
-	StorageClearRefundAmsterdam        uint64 = 12480 // STORAGE_CLEAR_REFUND: refund for clearing a storage slot
-	CreateAccessAmsterdam              uint64 = 11000 // CREATE_ACCESS = ACCOUNT_WRITE + COLD_STORAGE_ACCESS
-	TxAccessListAddressGasAmsterdam    uint64 = 3000  // ACCESS_LIST_ADDRESS_COST
-	TxAccessListStorageKeyGasAmsterdam uint64 = 3000  // ACCESS_LIST_STORAGE_KEY_COST
+	StorageClearRefundAmsterdam        uint64 = 11616 // STORAGE_CLEAR_REFUND: refund for clearing a storage slot
+	CreateAccessAmsterdam              uint64 = 12000 // CREATE_ACCESS = ACCOUNT_WRITE + COLD_ACCOUNT_ACCESS
+	TxAccessListAddressGasAmsterdam    uint64 = 2900  // ACCESS_LIST_ADDRESS_COST
+	TxAccessListStorageKeyGasAmsterdam uint64 = 2000  // ACCESS_LIST_STORAGE_KEY_COST
 
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
@@ -277,6 +276,4 @@ var (
 var (
 	// EIP-7708 - System logs emitted for ETH transfer and burn
 	EthTransferLogEvent = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef") // keccak256('Transfer(address,address,uint256)')
-	EthBurnLogEvent     = common.HexToHash("0xcc16f5dbb4873280815c1ee09dbd06736cffcc184412cf7a71a0fdb75d397ca5") // keccak256('Burn(address,uint256)')
-
 )

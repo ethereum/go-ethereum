@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
@@ -82,6 +83,11 @@ const (
 	// Note, transactions resurrected by a reorg are also subject to this limit,
 	// so pushing it down too aggressively might make resurrections non-functional.
 	maxTxsPerAccount = 16
+
+	// getRLPCacheSize is the byte budget of the cache of encoded
+	// GetPooledTransactions responses. It bounds the memory spent on serving
+	// the same blob transactions to multiple (legacy) peers.
+	getRLPCacheSize = 16 * 1024 * 1024
 
 	// pendingTransactionStore is the subfolder containing the currently queued
 	// blob transactions.
@@ -171,8 +177,11 @@ func (ptx *BlobTxForPool) sidecar() (*types.BlobTxSidecar, error) {
 	return types.NewBlobTxSidecar(sidecar.Version, blobs, sidecar.Commitments, sidecar.Proofs), nil
 }
 
-// TxSize returns the transaction size on the network without
-// reconstructing the transaction.
+// txSize returns the network size of the transaction without reconstructing it.
+//
+// The blobpool only holds v1 (cell-proof) sidecars: legacy v0 sidecars are no longer
+// accepted into the pool, nor served over the wire protocol. The size therefore assumes
+// the v1 wire form [tx, version, blobs, commitments, proofs].
 func (ptx *BlobTxForPool) txSize() uint64 {
 	sidecar := ptx.CellSidecar
 
@@ -185,9 +194,17 @@ func (ptx *BlobTxForPool) txSize() uint64 {
 	}
 	var blob kzg4844.Blob
 	blobs := uint64(len(sidecar.Commitments)) * rlp.BytesSize(blob[:])
-	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(blobs)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
+
+	version := uint64(rlp.IntSize(uint64(sidecar.Version)))
+	return ptx.Tx.Size() + rlp.ListSize(version+rlp.ListSize(blobs)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
 }
 
+// txSizeWithoutBlob returns the eth/72 network size, where the blob payload is dropped
+// to an empty list and fetched separately via GetCells.
+//
+// Like txSize, this assumes the v1 wire form: only v1 sidecars live in the pool (v0 is
+// no longer accepted or served), so the version byte is always present, only the blob
+// payload becomes an empty list [tx, version, [], commitments, proofs].
 func (ptx *BlobTxForPool) txSizeWithoutBlob() uint64 {
 	sidecar := ptx.CellSidecar
 
@@ -198,7 +215,8 @@ func (ptx *BlobTxForPool) txSizeWithoutBlob() uint64 {
 	for i := range sidecar.Proofs {
 		proofs += rlp.BytesSize(sidecar.Proofs[i][:])
 	}
-	return ptx.Tx.Size() + rlp.ListSize(rlp.ListSize(0)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
+	version := uint64(rlp.IntSize(uint64(sidecar.Version)))
+	return ptx.Tx.Size() + rlp.ListSize(version+rlp.ListSize(0)+rlp.ListSize(commitments)+rlp.ListSize(proofs))
 }
 
 // ToTx reconstructs a full Transaction with the sidecar attached.
@@ -350,6 +368,31 @@ func newBlobTxMeta(id uint64, storageSize uint32, ptx *BlobTxForPool) *blobTxMet
 	meta.blobfeeJumps = dynamicBlobFeeJumps(meta.blobFeeCap)
 
 	return meta
+}
+
+// updateBlocked updates the total size of transactions blocked by a partial
+// transaction from the given account. It should be called after every p.index
+// modification.
+func (p *BlobPool) updateBlocked(addr common.Address) {
+	blockIndex := -1
+	for i, m := range p.index[addr] {
+		if m.custody.OneCount() < kzg4844.DataPerBlob {
+			blockIndex = i
+			break
+		}
+	}
+	if blockIndex < 0 {
+		p.blocked -= p.blockedAccount[addr]
+		delete(p.blockedAccount, addr)
+		return
+	}
+	var bytes uint64
+	for _, m := range p.index[addr][blockIndex:] {
+		bytes += uint64(m.storageSize)
+	}
+
+	p.blocked = p.blocked - p.blockedAccount[addr] + bytes
+	p.blockedAccount[addr] = bytes
 }
 
 // BlobPool is the transaction pool dedicated to EIP-4844 blob transactions.
@@ -543,6 +586,19 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
+	// A partial blob transaction (custody count below DataPerBlob) cannot be included
+	// in a block. Since an account's transactions are included in nonce order, the first
+	// partial transaction blocks all following transactions in one account from
+	// inclusion. That transaction and all transactions after it are called the
+	// account's "blocked" transactions. To prevent DoS, the total size of blocked transactions
+	// is capped by blockedCap separately from the overall data cap. While that cap is
+	// exceeded, eviction prefers blocked accounts regardless of the fees they pay; when
+	// only the overall data cap is exceeded, eviction remains a pure fee market.
+
+	blocked        uint64                    // Data size of blocked transactions across all accounts
+	blockedAccount map[common.Address]uint64 // Per-account blocked transaction bytes
+	blockedCap     uint64                    // Maximum blocked data size (Datacap * BlockedRatio)
+
 	cQueue *conversionQueue
 
 	gapped       map[common.Address][]*BlobTxForPool // Transactions that are currently gapped (nonce too high)
@@ -563,7 +619,20 @@ type BlobPool struct {
 	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
 	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
 
+	// rlpCache memoizes encoded GetPooledTransactions responses, keyed by
+	// (tx hash, whether full blobs are needed). It is content-addressed: a
+	// pooled tx's encoding is stable, so a cached entry is valid as long as the
+	// tx is still in the pool (checked on lookup before serving a hit).
+	rlpCache *lru.SizeConstrainedCache[rlpCacheKey, []byte]
+
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
+}
+
+// rlpCacheKey keys the encoded-response cache. full is true for pre eth/72
+// requests (which carry full blobs) and false for eth/72+ (blob payload elided).
+type rlpCacheKey struct {
+	hash common.Hash
+	full bool
 }
 
 // New creates a new blob transaction pool to gather, sort and filter inbound
@@ -581,8 +650,11 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
+		blockedAccount: make(map[common.Address]uint64),
+		blockedCap:     uint64(float64(config.Datacap) * config.BlockedRatio),
 		gapped:         make(map[common.Address][]*BlobTxForPool),
 		gappedSource:   make(map[common.Hash]common.Address),
+		rlpCache:       lru.NewSizeConstrainedCache[rlpCacheKey, []byte](getRLPCacheSize),
 	}
 }
 
@@ -686,7 +758,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	if head.ExcessBlobGas != nil {
 		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(p.chain.Config(), head))
 	}
-	p.evict = newPriceHeap(basefee, blobfee, p.index)
+	p.evict = newPriceHeap(basefee, blobfee, p.index, p.blockedAccount)
 
 	// Guess what was announced. This is needed because we don't want to
 	// participate in the diffusion of transactions where inclusion is blocked by
@@ -718,7 +790,8 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 
 	// Since the user might have modified their pool's capacity, evict anything
 	// above the current allowance
-	for p.stored > p.config.Datacap {
+	for p.stored > p.config.Datacap || p.blocked > p.blockedCap {
+		p.evict.setBlockedFirst(p.blocked > p.blockedCap)
 		p.drop()
 	}
 	// Update the metrics and return the constructed pool
@@ -935,6 +1008,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		}
 		delete(p.index, addr)
 		delete(p.spent, addr)
+		p.updateBlocked(addr)
 		if inclusions != nil { // only during reorgs will the heap be initialized
 			heap.Remove(p.evict, p.evict.index[addr])
 		}
@@ -1136,6 +1210,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			}
 		}
 	}
+	p.updateBlocked(addr)
 	// Included cheap transactions might have left the remaining ones better from
 	// an eviction point, fix any potential issues in the heap.
 	if _, ok := p.index[addr]; ok && inclusions != nil {
@@ -1163,7 +1238,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 	}
 	block, ok := inclusions[ptx.Tx.Hash()]
 	if !ok {
-		log.Warn("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
+		log.Info("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
 		return
 	}
 	if err := p.limbo.push(&ptx, block); err != nil {
@@ -1521,11 +1596,13 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 					// Clear out the dropped transactions from the index
 					if i > 0 {
 						p.index[addr] = txs[:i]
+						p.updateBlocked(addr)
 						heap.Fix(p.evict, p.evict.index[addr])
 					} else {
 						delete(p.index, addr)
 						delete(p.spent, addr)
 
+						p.updateBlocked(addr)
 						heap.Remove(p.evict, p.evict.index[addr])
 						p.reserver.Release(addr)
 					}
@@ -1728,7 +1805,9 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	}
 	var ptx BlobTxForPool
 	if err := rlp.DecodeBytes(data, &ptx); err != nil {
+		p.lock.RLock()
 		id, _ := p.lookup.storeidOfTx(hash)
+		p.lock.RUnlock()
 		log.Error("Blobs corrupted for traced transaction", "hash", hash, "id", id, "err", err)
 		return nil
 	}
@@ -1741,17 +1820,39 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 }
 
 // GetRLP returns an RLP-encoded transaction if it is contained in the pool.
+//
+// The encoded response is memoized: legacy (pre eth/72) peers fetch full blobs
+// via GetPooledTransactions, and the same transaction is typically requested
+// by multiple peers. Without the cache, each request re-reads the tx from disk
+// and re-encodes it, recovering the blobs from the stored cells.
 func (p *BlobPool) GetRLP(hash common.Hash, version uint) []byte {
+	key := rlpCacheKey{hash: hash, full: version < 72}
+	if enc, ok := p.rlpCache.Get(key); ok {
+		// The encoding is content-addressed, but only serve it while the tx is
+		// still pooled so a hit cannot resurrect a dropped transaction.
+		p.lock.RLock()
+		_, pooled := p.lookup.storeidOfTx(hash)
+		p.lock.RUnlock()
+		if pooled {
+			getRLPCacheHitMeter.Mark(1)
+			return enc
+		}
+	}
 	data := p.getRLP(hash)
 	if len(data) == 0 {
 		// Not in this pool, do not log.
 		return nil
 	}
+	// Count misses only for transactions the pool actually holds, so the
+	// hit/miss ratio reflects cache effectiveness rather than unknown-tx
+	// requests.
+	getRLPCacheMissMeter.Mark(1)
 	rlp, err := encodeForNetwork(data, version)
 	if err != nil {
 		log.Error("Failed to encode pooled tx into the network type", "hash", hash, "err", err)
 		return nil
 	}
+	p.rlpCache.Add(key, rlp)
 	return rlp
 }
 
@@ -2137,6 +2238,8 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 			txs[i].evictionBlobFeeJumps = txs[i].blobfeeJumps
 		}
 	}
+	isBlocked := p.blockedAccount[from] > 0
+	p.updateBlocked(from)
 	// Update the eviction heap with the new information:
 	//   - If the transaction is from a new account, add it to the heap
 	//   - If the account had a singleton tx replaced, update the heap (new price caps)
@@ -2152,13 +2255,14 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 		evictionExecFeeDiff := oldEvictionExecFeeJumps - txs[len(txs)-1].evictionExecFeeJumps
 		evictionBlobFeeDiff := oldEvictionBlobFeeJumps - txs[len(txs)-1].evictionBlobFeeJumps
 
-		if math.Abs(evictionExecFeeDiff) > 0.001 || math.Abs(evictionBlobFeeDiff) > 0.001 { // need math.Abs, can go up and down
+		if math.Abs(evictionExecFeeDiff) > 0.001 || math.Abs(evictionBlobFeeDiff) > 0.001 || isBlocked != (p.blockedAccount[from] > 0) { // need math.Abs, can go up and down
 			heap.Fix(p.evict, p.evict.index[from])
 		}
 	}
 	// If the pool went over the allowed data limit, evict transactions until
 	// we're again below the threshold
-	for p.stored > p.config.Datacap {
+	for p.stored > p.config.Datacap || p.blocked > p.blockedCap {
+		p.evict.setBlockedFirst(p.blocked > p.blockedCap)
 		p.drop()
 	}
 	p.updateStorageMetrics()
@@ -2256,6 +2360,8 @@ func (p *BlobPool) drop() {
 	}
 	p.stored -= uint64(drop.storageSize)
 	p.lookup.untrack(drop)
+	isBlocked := p.blockedAccount[from] > 0
+	p.updateBlocked(from)
 
 	// Remove the transaction from the pool's eviction heap:
 	//   - If the entire account was dropped, pop off the address
@@ -2268,7 +2374,7 @@ func (p *BlobPool) drop() {
 		evictionExecFeeDiff := tail.evictionExecFeeJumps - drop.evictionExecFeeJumps
 		evictionBlobFeeDiff := tail.evictionBlobFeeJumps - drop.evictionBlobFeeJumps
 
-		if evictionExecFeeDiff > 0.001 || evictionBlobFeeDiff > 0.001 { // no need for math.Abs, monotonic decreasing
+		if evictionExecFeeDiff > 0.001 || evictionBlobFeeDiff > 0.001 || isBlocked != (p.blockedAccount[from] > 0) { // no need for math.Abs, monotonic decreasing
 			heap.Fix(p.evict, 0)
 		}
 	}
@@ -2401,6 +2507,7 @@ func (p *BlobPool) updateStorageMetrics() {
 	datausedGauge.Update(int64(dataused))
 	datarealGauge.Update(int64(datareal))
 	slotusedGauge.Update(int64(slotused))
+	blockedGauge.Update(int64(p.blocked))
 
 	oversizedDatausedGauge.Update(int64(oversizedDataused))
 	oversizedDatagapsGauge.Update(int64(oversizedDatagaps))
@@ -2608,9 +2715,11 @@ func (p *BlobPool) Clear() {
 	p.lookup = newLookup()
 	p.index = make(map[common.Address][]*blobTxMeta)
 	p.spent = make(map[common.Address]*uint256.Int)
+	p.blockedAccount = make(map[common.Address]uint64)
 
 	// Reset counters and the gapped buffer
 	p.stored = 0
+	p.blocked = 0
 	p.gapped = make(map[common.Address][]*BlobTxForPool)
 	p.gappedSource = make(map[common.Hash]common.Address)
 
@@ -2618,7 +2727,7 @@ func (p *BlobPool) Clear() {
 		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head.Load()))
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
-	p.evict = newPriceHeap(basefee, blobfee, p.index)
+	p.evict = newPriceHeap(basefee, blobfee, p.index, p.blockedAccount)
 }
 
 // GetCustody returns the custody bitmap for a given transaction hash.

@@ -18,6 +18,7 @@ package engine
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -257,6 +258,12 @@ func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	return txs, nil
 }
 
+// ErrMalformedPayload is returned when executable data cannot be parsed into a
+// block at all. The engine API requires such payloads to be rejected with an
+// invalid params error, whereas the INVALID payload status is reserved for
+// well-formed payloads that fail block validation.
+var ErrMalformedPayload = errors.New("malformed payload")
+
 // ExecutableDataToBlock constructs a block from executable data.
 // It verifies that the following fields:
 //
@@ -269,20 +276,33 @@ func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in data.
 func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
-	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot, requests)
+	block, err := executableDataToBlock(data, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		return nil, err
 	}
 	if block.Hash() != data.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", data.BlockHash, block.Hash())
 	}
-	return block, nil
+	// The access list body is decoded only once the block hash is confirmed. A
+	// payload which already hashes to the wrong value must be reported as such,
+	// not as a malformed access list.
+	return attachAccessList(block, data)
 }
 
 // ExecutableDataToBlockNoHash is analogous to ExecutableDataToBlock, but is used
 // for stateless execution, so it skips checking if the executable data hashes to
 // the requested hash (stateless has to *compute* the root hash, it's not given).
 func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
+	block, err := executableDataToBlock(data, versionedHashes, beaconRoot, requests)
+	if err != nil {
+		return nil, err
+	}
+	return attachAccessList(block, data)
+}
+
+// executableDataToBlock assembles the block without its access list body and
+// without checking the block hash.
+func executableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
 	txs, err := DecodeTransactions(data.Transactions)
 	if err != nil {
 		return nil, err
@@ -328,9 +348,10 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	// even for empty blocks with no state transitions.
 	//
 	// If Amsterdam is not enabled yet, blockAccessListHash is expected
-	// to be nil.
+	// to be nil. An empty blockAccessList carries no access list: leave
+	// the hash unset so the block hash check catches the mismatch.
 	var blockAccessListHash *common.Hash
-	if data.BlockAccessList != nil {
+	if len(data.BlockAccessList) > 0 {
 		hash := crypto.Keccak256Hash(data.BlockAccessList)
 		blockAccessListHash = &hash
 	}
@@ -359,14 +380,21 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		BlockAccessListHash: blockAccessListHash,
 	}
 	body := types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}
-	if data.BlockAccessList != nil {
-		var accessList bal.BlockAccessList
-		if err := rlp.DecodeBytes(data.BlockAccessList, &accessList); err != nil {
-			return nil, fmt.Errorf("failed to decode BAL: %w", err)
-		}
-		return types.NewBlockWithHeader(header).WithBody(body).WithAccessListUnsafe(&accessList), nil
-	}
 	return types.NewBlockWithHeader(header).WithBody(body), nil
+}
+
+// attachAccessList decodes the block access list carried by the executable data
+// and attaches it to the block. Payloads without an access list are returned
+// unchanged.
+func attachAccessList(block *types.Block, data ExecutableData) (*types.Block, error) {
+	if len(data.BlockAccessList) == 0 {
+		return block, nil
+	}
+	var accessList bal.BlockAccessList
+	if err := rlp.DecodeBytes(data.BlockAccessList, &accessList); err != nil {
+		return nil, fmt.Errorf("%w: failed to decode BAL: %v", ErrMalformedPayload, err)
+	}
+	return block.WithAccessListUnsafe(&accessList), nil
 }
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the

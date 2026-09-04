@@ -258,7 +258,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			// - DATADIR/triedb/merkle.journal
 			// - DATADIR/triedb/verkle.journal
 			TrieJournalDirectory: stack.ResolvePath("triedb"),
-			StateSizeTracking:    config.EnableStateSizeTracking,
 			SlowBlockThreshold:   config.SlowBlockThreshold,
 
 			StatelessSelfValidation: config.StatelessSelfValidation,
@@ -330,12 +329,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		config.BlobPool.Datadir = stack.ResolvePath(config.BlobPool.Datadir)
 	}
 	eth.blobTxPool = blobpool.New(config.BlobPool, eth.blockchain, legacyPool.HasPendingAuth)
-	eth.blobCache = blobpool.NewCache(eth.blobTxPool)
 
 	eth.txPool, err = txpool.New(config.TxPool.PriceLimit, eth.blockchain, []txpool.SubPool{legacyPool, eth.blobTxPool})
 	if err != nil {
 		return nil, err
 	}
+	// Only after txpool.New has run the pool's Init: the cache reads the pool's
+	// lookup and store, which Init builds without holding the pool lock.
+	eth.blobCache = blobpool.NewCache(eth.blobTxPool)
 
 	if !config.TxPool.NoLocals {
 		rejournal := config.TxPool.Rejournal

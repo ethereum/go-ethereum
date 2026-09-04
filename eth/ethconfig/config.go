@@ -182,9 +182,6 @@ type Config struct {
 	// Generate execution witnesses and self-check against them (testing purpose)
 	StatelessSelfValidation bool
 
-	// Enables tracking of state size
-	EnableStateSizeTracking bool
-
 	// SnapV2 enables the experimental snap/2 (EIP-8189, BAL-based) sync protocol:
 	// the node advertises snap/2 on the wire and uses the snap/2 state syncer.
 	// It is not safe to enable on public networks yet.

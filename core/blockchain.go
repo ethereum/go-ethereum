@@ -113,6 +113,7 @@ var (
 	blockPrefetchInterruptMeter  = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 	blockPrefetchTxsInvalidMeter = metrics.NewRegisteredMeter("chain/prefetch/txs/invalid", nil)
 	blockPrefetchTxsValidMeter   = metrics.NewRegisteredMeter("chain/prefetch/txs/valid", nil)
+	blockPrefetchTxsSkippedMeter = metrics.NewRegisteredMeter("chain/prefetch/txs/skipped", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
@@ -213,9 +214,6 @@ type BlockChainConfig struct {
 	// If the value is zero, all transactions of the entire chain will be indexed.
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
-
-	// StateSizeTracking indicates whether the state size tracking is enabled.
-	StateSizeTracking bool
 
 	// SlowBlockThreshold is the block execution time threshold beyond which
 	// detailed statistics will be logged. Negative value means disabled (default),
@@ -322,16 +320,17 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cfg         *BlockChainConfig   // Blockchain configuration
 
-	db            ethdb.Database                   // Low level persistent database to store final content in
-	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
-	triegc        *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
-	gcproc        time.Duration                    // Accumulates canonical block processing for trie dumping
-	lastWrite     uint64                           // Last block when the state was flushed
-	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
-	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
-	codedb        *state.CodeDB                    // The database handler for maintaining contract codes.
-	jumpDestCache vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
-	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
+	db              ethdb.Database                   // Low level persistent database to store final content in
+	snaps           *snapshot.Tree                   // Snapshot tree for fast trie leaf access
+	triegc          *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
+	gcproc          time.Duration                    // Accumulates canonical block processing for trie dumping
+	lastWrite       uint64                           // Last block when the state was flushed
+	flushInterval   atomic.Int64                     // Time interval (processing time) after which to flush a state
+	triedb          *triedb.Database                 // The database handler for maintaining trie nodes.
+	codedb          *state.CodeDB                    // The database handler for maintaining contract codes.
+	jumpDestCache   vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
+	precompileCache *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
+	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -370,7 +369,6 @@ type BlockChain struct {
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
 	logger     *tracing.Hooks
-	stateSizer *state.SizeTracker // State size tracking
 
 	lastForkReadyAlert time.Time     // Last time there was a fork readiness print out
 	slowBlockThreshold time.Duration // Block execution time threshold beyond which detailed statistics will be logged
@@ -414,6 +412,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		triedb:             triedb,
 		codedb:             state.NewCodeDB(db),
 		jumpDestCache:      NewJumpDestCache(),
+		precompileCache:    vm.NewPrecompileCache(),
 		triegc:             prque.New[int64, common.Hash](nil),
 		chainmu:            syncx.NewClosableMutex(),
 		bodyCache:          lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
@@ -566,17 +565,6 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// Start tx indexer if it's enabled.
 	if bc.cfg.TxLookupLimit >= 0 {
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
-	}
-
-	// Start state size tracker
-	if bc.cfg.StateSizeTracking {
-		stateSizer, err := state.NewSizeTracker(bc.db, bc.triedb)
-		if err == nil {
-			bc.stateSizer = stateSizer
-			log.Info("Enabled state size metrics")
-		} else {
-			log.Info("Failed to setup size tracker", "err", err)
-		}
 	}
 	return bc, nil
 }
@@ -1352,10 +1340,6 @@ func (bc *BlockChain) stopWithoutSaving() {
 	// Signal shutdown to all goroutines.
 	bc.InterruptInsert(true)
 
-	// Stop state size tracker
-	if bc.stateSizer != nil {
-		bc.stateSizer.Stop()
-	}
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
 	//
 	// Note: Close waits for the mutex to become available, i.e. any running chain
@@ -1679,31 +1663,24 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	log.Debug("Committed block data", "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(time.Since(start)))
 
 	var (
-		err           error
-		root          common.Hash
-		isEIP158      = bc.chainConfig.IsEIP158(block.Number())
-		isCancun      = bc.chainConfig.IsCancun(block.Number(), block.Time())
-		hasStateHook  = bc.logger != nil && bc.logger.OnStateUpdate != nil
-		hasStateSizer = bc.stateSizer != nil
+		err          error
+		root         common.Hash
+		hasStateHook = bc.logger != nil && bc.logger.OnStateUpdate != nil
+		rules        = bc.chainConfig.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())
 	)
-	if hasStateHook || hasStateSizer {
-		r, update, err := statedb.CommitWithUpdate(block.NumberU64(), isEIP158, isCancun)
+	if hasStateHook {
+		r, update, err := statedb.CommitWithUpdate(rules, block.NumberU64())
 		if err != nil {
 			return err
 		}
-		if hasStateHook {
-			trUpdate, err := update.ToTracingUpdate()
-			if err != nil {
-				return err
-			}
-			bc.logger.OnStateUpdate(trUpdate)
+		trUpdate, err := update.ToTracingUpdate()
+		if err != nil {
+			return err
 		}
-		if hasStateSizer {
-			bc.stateSizer.Notify(update)
-		}
+		bc.logger.OnStateUpdate(trUpdate)
 		root = r
 	} else {
-		root, err = statedb.Commit(block.NumberU64(), isEIP158, isCancun)
+		root, err = statedb.Commit(rules, block.NumberU64())
 		if err != nil {
 			return err
 		}
@@ -2125,6 +2102,114 @@ type ExecuteConfig struct {
 	EnableWitnessStats bool
 }
 
+// overrideTracerActivation returns the EVM configuration to execute a block with, honoring the
+// caller's tracing intent.
+func (bc *BlockChain) overrideTracerActivation(tracerOn bool) vm.Config {
+	vmConfig := bc.cfg.VmConfig
+	if !tracerOn {
+		vmConfig.Tracer = nil
+	}
+	return vmConfig
+}
+
+// useBALExecution reports whether the block will be executed through the
+// BAL-driven parallel processor.
+func (bc *BlockChain) useBALExecution(block *types.Block, vmConfig vm.Config, wantWitness bool) bool {
+	return supportsParallelExecution(block, bc.chainConfig, wantWitness, vmConfig.Tracer != nil, vmConfig.DisableParallelExecution)
+}
+
+// setupExecutionState builds the state instance that block execution reads from
+// and writes to.
+//
+//   - BAL-driven parallel execution (Amsterdam blocks carrying an access list):
+//     a single reader(the underlying state reader wrapped with a shared cache
+//     and an access-list-hint prefetcher) feeds both the canonical state and
+//     every per-transaction state built on top of it.
+//
+//   - Sequential execution with prefetching: the main processor and a
+//     speculative whole-block prefetcher share one cached reader.
+//
+//   - No prefetching: a plain reader, with a no-op cleanup.
+func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.Block, vmConfig vm.Config, config ExecuteConfig, interrupt *atomic.Bool, execIndex *atomic.Int64) (*state.StateDB, func(*blockProcessingResult), error) {
+	noop := func(*blockProcessingResult) {}
+
+	var sdb state.Database
+	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
+		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
+	} else {
+		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+	}
+	type prewarmReader interface {
+		// ReadersWithCacheStats creates a pair of state readers that share the
+		// same underlying state reader and internal state cache, while maintaining
+		// separate statistics respectively.
+		ReadersWithCacheStats(stateRoot common.Hash) (state.Reader, state.Reader, error)
+	}
+	wantWitness := config.StatelessSelfValidation || config.MakeWitness
+
+	switch warmer, ok := sdb.(prewarmReader); {
+	case bc.useBALExecution(block, vmConfig, wantWitness):
+		base, err := sdb.Reader(parentRoot)
+		if err != nil {
+			return nil, nil, err
+		}
+		reader, stop := state.NewBlockExecutionReader(base, prefetchHint(block.AccessList()), runtime.NumCPU())
+		statedb, err := state.NewWithReader(parentRoot, sdb, reader)
+		if err != nil {
+			stop()
+			return nil, nil, err
+		}
+		return statedb, func(*blockProcessingResult) { stop() }, nil
+
+	case bc.cfg.NoPrefetch || !ok:
+		statedb, err := state.New(parentRoot, sdb)
+		if err != nil {
+			return nil, nil, err
+		}
+		return statedb, noop, nil
+
+	default:
+		// The main processor and the speculative prefetcher share the same reader
+		// with a local cache for mitigating the overhead of state access.
+		prefetch, process, err := warmer.ReadersWithCacheStats(parentRoot)
+		if err != nil {
+			return nil, nil, err
+		}
+		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch)
+		if err != nil {
+			return nil, nil, err
+		}
+		statedb, err := state.NewWithReader(parentRoot, sdb, process)
+		if err != nil {
+			return nil, nil, err
+		}
+		go func(start time.Time) {
+			// Disable tracing for prefetcher executions.
+			vmCfg := vmConfig
+			vmCfg.Tracer = nil
+			bc.prefetcher.Prefetch(block, throwaway, bc.jumpDestCache, bc.precompileCache.PrefetchView(), vmCfg, interrupt, execIndex)
+
+			blockPrefetchExecuteTimer.Update(time.Since(start))
+			if interrupt.Load() {
+				blockPrefetchInterruptMeter.Mark(1)
+			}
+		}(time.Now())
+
+		return statedb, func(result *blockProcessingResult) {
+			// Upload the statistics of reader at the end.
+			if result == nil {
+				return
+			}
+			if stater, ok := prefetch.(state.ReaderStater); ok {
+				result.stats.StatePrefetchCacheStats = stater.GetStats()
+			}
+			if stater, ok := process.(state.ReaderStater); ok {
+				result.stats.StateReadCacheStats = stater.GetStats()
+			}
+		}, nil
+	}
+}
+
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
 func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, block *types.Block, config ExecuteConfig) (result *blockProcessingResult, blockEndErr error) {
@@ -2133,74 +2218,27 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		startTime = time.Now()
 		statedb   *state.StateDB
 		interrupt atomic.Bool
-		sdb       state.Database
+		execIndex atomic.Int64
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
+	execIndex.Store(-1)         // no transaction executed yet
 
-	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
-		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
-	} else {
-		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
-	}
-	// If prefetching is enabled, run that against the current state to pre-cache
-	// transactions and probabilistically some of the account/storage trie nodes.
-	//
-	// Note: the main processor and prefetcher share the same reader with a local
-	// cache for mitigating the overhead of state access.
-	type prewarmReader interface {
-		// ReadersWithCacheStats creates a pair of state readers that share the
-		// same underlying state reader and internal state cache, while maintaining
-		// separate statistics respectively.
-		ReadersWithCacheStats(stateRoot common.Hash) (state.Reader, state.Reader, error)
-	}
-	warmer, ok := sdb.(prewarmReader)
+	// Resolve the EVM config for this execution before any component consults
+	// it. The live tracer stored in bc.cfg.VmConfig is a stateful, node-wide
+	// singleton whose hooks are only safe to drive from the chain-insertion
+	// goroutine, so it is attached only when the caller opts in via
+	// EnableTracer. Both the reader topology (setupExecutionState) and the
+	// execution strategy (StateProcessor.Process) key off this resolved
+	// config, keeping the BAL-parallel/sequential decision consistent.
+	vmConfig := bc.overrideTracerActivation(config.EnableTracer)
 
-	if bc.cfg.NoPrefetch || !ok {
-		statedb, err = state.New(parentRoot, sdb)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// If prefetching is enabled, run that against the current state to pre-cache
-		// transactions and probabilistically some of the account/storage trie nodes.
-		//
-		// Note: the main processor and prefetcher share the same reader with a local
-		// cache for mitigating the overhead of state access.
-		prefetch, process, err := warmer.ReadersWithCacheStats(parentRoot)
-		if err != nil {
-			return nil, err
-		}
-		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch)
-		if err != nil {
-			return nil, err
-		}
-		statedb, err = state.NewWithReader(parentRoot, sdb, process)
-		if err != nil {
-			return nil, err
-		}
-		// Upload the statistics of reader at the end
-		defer func() {
-			if result != nil {
-				if stater, ok := prefetch.(state.ReaderStater); ok {
-					result.stats.StatePrefetchCacheStats = stater.GetStats()
-				}
-				if stater, ok := process.(state.ReaderStater); ok {
-					result.stats.StateReadCacheStats = stater.GetStats()
-				}
-			}
-		}()
-		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
-			// Disable tracing for prefetcher executions.
-			vmCfg := bc.cfg.VmConfig
-			vmCfg.Tracer = nil
-			bc.prefetcher.Prefetch(block, throwaway, bc.jumpDestCache, vmCfg, &interrupt)
-
-			blockPrefetchExecuteTimer.Update(time.Since(start))
-			if interrupt.Load() {
-				blockPrefetchInterruptMeter.Mark(1)
-			}
-		}(time.Now(), throwaway, block)
+	// Set up the state reader feeding execution, along with a cleanup to run once
+	// processing is complete (stop the prefetcher, upload reader statistics).
+	statedb, cleanup, err := bc.setupExecutionState(parentRoot, block, vmConfig, config, &interrupt, &execIndex)
+	if err != nil {
+		return nil, err
 	}
+	defer func() { cleanup(result) }()
 
 	// If we are past Byzantium, enable prefetching to pull in trie node paths
 	// while processing transactions. Before Byzantium the prefetcher is mostly
@@ -2215,7 +2253,11 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 			if err != nil {
 				return nil, err
 			}
+			defer witness.ReportMetrics(block.NumberU64())
 		}
+		// The prefetcher warms trie node paths in the background.
+		// - Sequential execution feeds it from the EVM as it touches state;
+		// - BAL-driven parallel execution feeds it from the block access list;
 		statedb.StartPrefetcher("chain", witness)
 		defer statedb.StopPrefetcher()
 	}
@@ -2239,7 +2281,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
 	pctx, _, spanEnd := telemetry.StartSpan(ctx, "bc.processor.Process")
-	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.cfg.VmConfig)
+	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.precompileCache, vmConfig, &execIndex)
 	spanEnd(&err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
@@ -2274,7 +2316,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
 
 		// Run the stateless self-cross-validation
-		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, bc.cfg.VmConfig, task, witness)
+		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(ctx, bc.chainConfig, vmConfig, task, witness)
 		if err != nil {
 			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
 		}
@@ -2341,10 +2383,6 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
 		stats.DatabaseCommit = statedb.DatabaseCommits // Database commits are complete, we can mark them
 		stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.DatabaseCommits
-	}
-	// Report the collected witness statistics
-	if witness != nil {
-		witness.ReportMetrics(block.NumberU64())
 	}
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed
@@ -2885,9 +2923,13 @@ func (bc *BlockChain) logForkReadiness(block *types.Block) {
 func summarizeBadBlock(block *types.Block, receipts []*types.Receipt, config *params.ChainConfig, err error) string {
 	var receiptString string
 	for i, receipt := range receipts {
-		receiptString += fmt.Sprintf("\n  %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x",
+		logStrings := make([]string, 0, len(receipt.Logs))
+		for _, l := range receipt.Logs {
+			logStrings = append(logStrings, fmt.Sprintf("{address: %v, topics: %v, data: %#x}", l.Address, l.Topics, l.Data))
+		}
+		receiptString += fmt.Sprintf("\n  %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: [%s] bloom: %x state: %x",
 			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
-			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
+			receipt.Status, receipt.TxHash.Hex(), strings.Join(logStrings, ", "), receipt.Bloom, receipt.PostState)
 	}
 	version, vcs := version.Info()
 	platform := fmt.Sprintf("%s %s %s %s", version, runtime.Version(), runtime.GOARCH, runtime.GOOS)
@@ -2899,7 +2941,7 @@ func summarizeBadBlock(block *types.Block, receipts []*types.Receipt, config *pa
 Block: %v (%#x)
 Error: %v
 Platform: %v%v
-Chain config: %#v
+Chain config: %v
 Receipts: %v
 ##############################
 `, block.Number(), block.Hash(), err, platform, vcs, config, receiptString)
@@ -3012,9 +3054,4 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 // GetTrieFlushInterval gets the in-memory tries flushAlloc interval
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
-}
-
-// StateSizer returns the state size tracker, or nil if it's not initialized
-func (bc *BlockChain) StateSizer() *state.SizeTracker {
-	return bc.stateSizer
 }

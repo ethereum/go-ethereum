@@ -103,6 +103,7 @@ var (
 		utils.CacheLogSizeFlag,
 		utils.FDLimitFlag,
 		utils.MemoryLimitFlag,
+		utils.GOGCFlag,
 		utils.CryptoKZGFlag,
 		utils.ListenPortFlag,
 		utils.DiscoveryPortFlag,
@@ -208,8 +209,8 @@ var (
 		utils.MetricsInfluxDBTokenFlag,
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
-		utils.StateSizeTrackingFlag,
 		utils.SnapV2Flag,
+		utils.StateSizeTrackingFlag, // deprecated
 	}
 )
 
@@ -296,9 +297,6 @@ func prepare(ctx *cli.Context) {
 	switch {
 	case ctx.Bool(utils.SepoliaFlag.Name):
 		log.Info("Starting Geth on Sepolia testnet...")
-
-	case ctx.Bool(utils.HoleskyFlag.Name):
-		log.Info("Starting Geth on Holesky testnet...")
 
 	case ctx.Bool(utils.HoodiFlag.Name):
 		log.Info("Starting Geth on Hoodi testnet...")

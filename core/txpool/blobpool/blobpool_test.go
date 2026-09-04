@@ -727,7 +727,7 @@ func TestOpenDrops(t *testing.T) {
 	statedb.AddBalance(crypto.PubkeyToAddress(overcapper.PublicKey), uint256.NewInt(10000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(duplicater.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(repeater.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -847,7 +847,7 @@ func TestOpenIndex(t *testing.T) {
 	// Create a blob pool out of the pre-seeded data
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -948,7 +948,7 @@ func TestOpenHeap(t *testing.T) {
 	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -1030,7 +1030,7 @@ func TestOpenCap(t *testing.T) {
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		statedb.Commit(0, true, false)
+		statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 		chain := &testBlockChain{
 			config:  params.MainnetChainConfig,
@@ -1116,7 +1116,7 @@ func TestChangingSlotterSize(t *testing.T) {
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		statedb.Commit(0, true, false)
+		statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 		// Make custom chain config where the max blob count changes based on the loop variable.
 		cancunTime := uint64(0)
@@ -1219,7 +1219,7 @@ func TestBillyMigration(t *testing.T) {
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		statedb.Commit(0, true, false)
+		statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 		// Make custom chain config where the max blob count changes based on the loop variable.
 		zero := uint64(0)
@@ -1316,7 +1316,7 @@ func TestLegacyTxConversion(t *testing.T) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -1390,7 +1390,7 @@ func TestLegacyLimboConversion(t *testing.T) {
 	store.Close()
 
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
 		basefee: uint256.NewInt(params.InitialBaseFee),
@@ -1445,7 +1445,7 @@ func TestBlobCountLimit(t *testing.T) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	// Make Prague-enabled custom chain config.
 	cancunTime := uint64(0)
@@ -1901,7 +1901,7 @@ func TestAdd(t *testing.T) {
 				store.Put(blob)
 			}
 		}
-		statedb.Commit(0, true, false)
+		statedb.Commit(params.Rules{IsEIP158: true}, 0)
 		store.Close()
 
 		// Create a blob pool out of the pre-seeded dats
@@ -2023,7 +2023,7 @@ func TestGetBlobs(t *testing.T) {
 	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	// Make custom chain config where the max blob count changes based on the loop variable.
 	cancunTime := uint64(0)
@@ -2307,7 +2307,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		pooledTx, _ := newBlobTxForPool(tx)
 		pool.AddPooledTx(pooledTx)
 	}
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 	defer pool.Close()
 
 	// Benchmark assembling the pending
@@ -2350,7 +2350,7 @@ func TestGetCells(t *testing.T) {
 
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true, false)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -2437,5 +2437,68 @@ func TestGetCells(t *testing.T) {
 				t.Errorf("expected %d cells, got %d", tt.expectedLen, totalCells)
 			}
 		})
+	}
+}
+
+// TestGetRLPCache checks that GetRLP memoizes encoded responses, keys full (pre
+// eth/72) and sparse (eth/72+) encodings separately, and does not serve a cached
+// entry once the transaction has left the pool.
+func TestGetRLPCache(t *testing.T) {
+	storage := t.TempDir()
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotterEIP7594(params.BlobTxMaxBlobs), nil)
+
+	var (
+		key1, _  = crypto.GenerateKey()
+		addr1    = crypto.PubkeyToAddress(key1.PublicKey)
+		tx1      = makeMultiBlobTx(0, 1, 1000, 100, 1, 0, key1)
+		ptx1, _  = newBlobTxForPool(tx1)
+		blob1, _ = rlp.EncodeToBytes(ptx1)
+	)
+	store.Put(blob1)
+	store.Close()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	// Full (legacy) encoding is memoized and stable across requests.
+	full1 := pool.GetRLP(tx1.Hash(), 71)
+	if len(full1) == 0 {
+		t.Fatalf("expected full encoding, got empty")
+	}
+	full2 := pool.GetRLP(tx1.Hash(), 71)
+	if !bytes.Equal(full1, full2) {
+		t.Fatalf("cached full encoding differs from first request")
+	}
+	// Same backing array proves the repeat response was served from the cache
+	// rather than re-read from disk and re-encoded.
+	if &full1[0] != &full2[0] {
+		t.Fatalf("repeat request was re-encoded instead of served from the cache")
+	}
+	// Sparse (eth/72+) encoding omits blob payloads: smaller and cached separately.
+	sparse := pool.GetRLP(tx1.Hash(), 72)
+	if len(sparse) == 0 || len(sparse) >= len(full1) {
+		t.Fatalf("expected smaller sparse encoding, got %d vs full %d", len(sparse), len(full1))
+	}
+	// Unknown transaction is not served.
+	if got := pool.GetRLP(common.Hash{0xde, 0xad}, 71); got != nil {
+		t.Fatalf("expected nil for unknown tx, got %d bytes", len(got))
+	}
+	// After the tx leaves the pool, a cached entry must not be served.
+	pool.Clear()
+	if got := pool.GetRLP(tx1.Hash(), 71); got != nil {
+		t.Fatalf("expected nil after the tx left the pool, got %d bytes", len(got))
 	}
 }

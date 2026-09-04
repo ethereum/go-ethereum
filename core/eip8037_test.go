@@ -16,11 +16,12 @@
 
 // Transaction- and block-level tests for EIP-8037 (multidimensional state-gas
 // metering). They apply whole transactions and inspect the 2D block gas pool
-// (cumulativeRegular / cumulativeState) and the receipt/peak figures.
+// (cumulativeExecution / cumulativeState) and the receipt/peak figures.
 
 package core
 
 import (
+	"context"
 	"errors"
 	"math/big"
 	"testing"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -69,14 +71,14 @@ func mkState(alloc types.GenesisAlloc) *state.StateDB {
 			sdb.SetState(addr, k, v)
 		}
 	}
-	sdb.Finalise(true)
+	sdb.Finalise(params.Rules{IsEIP158: true})
 	return sdb
 }
 
 // mkCommittedState is mkState with the allocation committed to disk and
 // reloaded. EIP-161-empty accounts carrying only storage do not survive an
 // in-memory Finalise; committing without empty-account deletion reproduces
-// the synthesized prestate an EIP-7610 fixture would load from disk.
+// the synthesized prestate such a fixture would load from disk.
 func mkCommittedState(t *testing.T, alloc types.GenesisAlloc) *state.StateDB {
 	t.Helper()
 	db := state.NewDatabaseForTesting()
@@ -96,7 +98,7 @@ func mkCommittedState(t *testing.T, alloc types.GenesisAlloc) *state.StateDB {
 			sdb.SetState(addr, k, v)
 		}
 	}
-	root, err := sdb.Commit(0, false, false)
+	root, err := sdb.Commit(params.Rules{}, 0)
 	if err != nil {
 		t.Fatalf("commit prestate: %v", err)
 	}
@@ -109,6 +111,11 @@ func mkCommittedState(t *testing.T, alloc types.GenesisAlloc) *state.StateDB {
 
 // amsterdamCoreEVM builds an Amsterdam EVM over statedb with fees disabled.
 func amsterdamCoreEVM(sdb *state.StateDB) *vm.EVM {
+	return amsterdamTracedEVM(sdb, nil)
+}
+
+// amsterdamTracedEVM is amsterdamCoreEVM with tracing hooks attached.
+func amsterdamTracedEVM(sdb *state.StateDB, hooks *tracing.Hooks) *vm.EVM {
 	ctx := vm.BlockContext{
 		CanTransfer:      CanTransfer,
 		Transfer:         Transfer,
@@ -121,7 +128,7 @@ func amsterdamCoreEVM(sdb *state.StateDB) *vm.EVM {
 		GasLimit:         60_000_000,
 		CostPerStateByte: params.CostPerStateByte,
 	}
-	return vm.NewEVM(ctx, sdb, cfg8037, vm.Config{NoBaseFee: true})
+	return vm.NewEVM(ctx, sdb, cfg8037, vm.Config{NoBaseFee: true, Tracer: hooks})
 }
 
 // applyMsg applies one transaction with a fresh block gas pool and returns the
@@ -158,32 +165,32 @@ func applyMsg(t *testing.T, sdb *state.StateDB, tx *types.Transaction) (*Executi
 
 // assertBudgetSane validates the final tx-level GasBudget vector:
 //
-//	regular: RegularGas + UsedRegularGas + Spilled == initial.RegularGas
-//	state:   StateGas + UsedStateGas               == initial.StateGas + Spilled
-//	scalar:  Used(initial)                         == UsedRegularGas + UsedStateGas
+//	execution: ExecutionGas + UsedExecutionGas + Spilled == initial.ExecutionGas
+//	state:     StateGas + UsedStateGas                   == initial.StateGas + Spilled
+//	scalar:    Used(initial)                             == UsedExecutionGas + UsedStateGas
 func assertBudgetSane(t *testing.T, initial, got vm.GasBudget) {
 	t.Helper()
-	if got.RegularGas+got.UsedRegularGas+got.Spilled != initial.RegularGas {
-		t.Fatalf("regular not conserved: R=%d usedR=%d spilled=%d, want sum %d",
-			got.RegularGas, got.UsedRegularGas, got.Spilled, initial.RegularGas)
+	if got.ExecutionGas+got.UsedExecutionGas+got.Spilled != initial.ExecutionGas {
+		t.Fatalf("execution not conserved: R=%d usedR=%d spilled=%d, want sum %d",
+			got.ExecutionGas, got.UsedExecutionGas, got.Spilled, initial.ExecutionGas)
 	}
 	if int64(got.StateGas)+got.UsedStateGas != int64(initial.StateGas)+int64(got.Spilled) {
 		t.Fatalf("state not conserved: S=%d usedS=%d spilled=%d, want %d+spilled",
 			got.StateGas, got.UsedStateGas, got.Spilled, initial.StateGas)
 	}
-	if int64(got.Used(initial)) != int64(got.UsedRegularGas)+got.UsedStateGas {
+	if int64(got.Used(initial)) != int64(got.UsedExecutionGas)+got.UsedStateGas {
 		t.Fatalf("scalar mismatch: used=%d, usedR=%d usedS=%d",
-			got.Used(initial), got.UsedRegularGas, got.UsedStateGas)
+			got.Used(initial), got.UsedExecutionGas, got.UsedStateGas)
 	}
 }
 
 // assertPoolSane validates the whole 2D block-gas-pool vector after a single tx.
 //
 //	receipt:    cumulativeUsed == res.UsedGas <= res.MaxUsedGas
-//	regular:    cumulativeRegular <= max(res.MaxUsedGas - cumulativeState, floor)
-//	            (the calldata floor pads the regular dimension alone, so the
+//	execution:  cumulativeExecution <= max(res.MaxUsedGas - cumulativeState, floor)
+//	            (the calldata floor pads the execution dimension alone, so the
 //	            dimension sum may exceed the pre-refund peak when it binds)
-//	bottleneck: Used() == max(cumulativeRegular, cumulativeState) <= initial
+//	bottleneck: Used() == max(cumulativeExecution, cumulativeState) <= initial
 func assertPoolSane(t *testing.T, res *ExecutionResult, gp *GasPool, floor uint64) {
 	t.Helper()
 	if gp.cumulativeUsed != res.UsedGas {
@@ -192,18 +199,18 @@ func assertPoolSane(t *testing.T, res *ExecutionResult, gp *GasPool, floor uint6
 	if res.UsedGas > res.MaxUsedGas {
 		t.Fatalf("post-refund gas %d exceeds peak %d", res.UsedGas, res.MaxUsedGas)
 	}
-	if gp.cumulativeRegular > res.MaxUsedGas {
-		t.Fatalf("regular %d exceeds peak %d", gp.cumulativeRegular, res.MaxUsedGas)
+	if gp.cumulativeExecution > res.MaxUsedGas {
+		t.Fatalf("execution %d exceeds peak %d", gp.cumulativeExecution, res.MaxUsedGas)
 	}
 	if gp.cumulativeState > res.MaxUsedGas {
 		t.Fatalf("state %d exceeds peak %d", gp.cumulativeState, res.MaxUsedGas)
 	}
-	if cap := max(res.MaxUsedGas-gp.cumulativeState, floor); gp.cumulativeRegular > cap {
-		t.Fatalf("regular %d exceeds pre-refund cap %d (peak %d, state %d, floor %d)",
-			gp.cumulativeRegular, cap, res.MaxUsedGas, gp.cumulativeState, floor)
+	if cap := max(res.MaxUsedGas-gp.cumulativeState, floor); gp.cumulativeExecution > cap {
+		t.Fatalf("execution %d exceeds pre-refund cap %d (peak %d, state %d, floor %d)",
+			gp.cumulativeExecution, cap, res.MaxUsedGas, gp.cumulativeState, floor)
 	}
-	if gp.Used() != max(gp.cumulativeRegular, gp.cumulativeState) {
-		t.Fatalf("block used %d != max(%d,%d)", gp.Used(), gp.cumulativeRegular, gp.cumulativeState)
+	if gp.Used() != max(gp.cumulativeExecution, gp.cumulativeState) {
+		t.Fatalf("block used %d != max(%d,%d)", gp.Used(), gp.cumulativeExecution, gp.cumulativeState)
 	}
 	if gp.Used() > gp.initial {
 		t.Fatalf("block used %d exceeds limit %d", gp.Used(), gp.initial)
@@ -303,9 +310,9 @@ func TestCreateTxCollisionConsumesGasLeft(t *testing.T) {
 		t.Fatalf("state gas = %d, want 0 (never charged)", gp.cumulativeState)
 	}
 	// All forwarded gas_left is burned: the whole gas limit is consumed as
-	// regular gas.
-	if want := uint64(gas); gp.cumulativeRegular != want {
-		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, want)
+	// execution gas.
+	if want := uint64(gas); gp.cumulativeExecution != want {
+		t.Fatalf("execution gas = %d, want %d", gp.cumulativeExecution, want)
 	}
 }
 
@@ -369,7 +376,7 @@ func TestCreate2TransientEmptyDestNoRefill(t *testing.T) {
 	}
 }
 
-// ========== Storage-only (EIP-7610-shaped) deployment destination ===========
+// ============== Storage-only deployment destination =========================
 //
 // A destination carrying storage while having zero nonce, zero balance and
 // empty code is EIP-161-empty, so the account-creation state gas is
@@ -402,8 +409,8 @@ func storageOnlyAlloc(orchestrator common.Address, initCode []byte) (types.Genes
 }
 
 // Deploying onto a storage-only destination pre-charges the account creation.
-// Under the registry-based EIP-7610 check the creation proceeds, so the
-// charge is consumed like any other creation.
+// Storage alone does not constitute an address collision, so the creation
+// proceeds and the charge is consumed like any other creation.
 func TestCreate2StorageOnlyDestCharged(t *testing.T) {
 	orchestrator := common.HexToAddress("0xc0de000000000000000000000000000000000004")
 	alloc, target := storageOnlyAlloc(orchestrator, deploy3)
@@ -427,7 +434,7 @@ func TestCreate2StorageOnlyDestCharged(t *testing.T) {
 }
 
 // If the pre-charge succeeds and the create frame then fails, only the create
-// frame halts: the forwarded regular gas is burnt, the account-creation
+// frame halts: the forwarded execution gas is burnt, the account-creation
 // charge is refilled, and the parent frame continues.
 func TestCreate2StorageOnlyDestRefillOnFrameHalt(t *testing.T) {
 	const gas = 1_000_000
@@ -476,22 +483,80 @@ func TestCreate2StorageOnlyDestPrechargeOOG(t *testing.T) {
 		t.Fatalf("state gas = %d, want 0 (charge never applied)", gp.cumulativeState)
 	}
 	// The parent is the topmost frame, so its halt burns the whole gas limit.
-	if gp.cumulativeRegular != gas {
-		t.Fatalf("regular gas = %d, want %d", gp.cumulativeRegular, gas)
+	if gp.cumulativeExecution != gas {
+		t.Fatalf("execution gas = %d, want %d", gp.cumulativeExecution, gas)
+	}
+}
+
+// A transaction halting on the pre-frame runtime charges never enters the
+// EVM, but tracers assume every receipt-producing transaction emits a
+// depth-zero frame (e.g. callTracer indexes callstack[0] in OnTxEnd). The
+// state transition must synthesize the top-frame enter/exit pair.
+func TestPrechargeOOGEmitsTopFrame(t *testing.T) {
+	// Both gas limits pass intrinsic validation but cannot cover the 183,600
+	// account-creation state charge applied before the top frame is entered.
+	cases := []struct {
+		name string
+		tx   *types.Transaction
+		typ  vm.OpCode
+	}{
+		{"transfer-to-empty", callTx(0, common.HexToAddress("0xc0ffee"), 1, 60_000, nil), vm.CALL},
+		{"create", createTx(0, 100_000, deploy3), vm.CREATE},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			type frame struct {
+				depth int
+				typ   byte
+				err   error
+			}
+			var enters, exits []frame
+			hooks := &tracing.Hooks{
+				OnEnter: func(depth int, typ byte, from, to common.Address, input []byte, gas uint64, value *big.Int) {
+					enters = append(enters, frame{depth: depth, typ: typ})
+				},
+				OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+					exits = append(exits, frame{depth: depth, err: err})
+				},
+			}
+			sdb := mkState(senderAlloc(nil))
+			evm := amsterdamTracedEVM(sdb, hooks)
+			msg, err := TransactionToMessage(tc.tx, signer8037, evm.Context.BaseFee)
+			if err != nil {
+				t.Fatalf("to message: %v", err)
+			}
+			evm.SetTxContext(NewEVMTxContext(msg))
+			res, err := newStateTransition(evm, msg, NewGasPool(evm.Context.GasLimit)).execute()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !res.Failed() || !errors.Is(res.Err, vm.ErrOutOfGas) {
+				t.Fatalf("err = %v, want out of gas before the top frame", res.Err)
+			}
+			if len(enters) != 1 || len(exits) != 1 {
+				t.Fatalf("got %d enter / %d exit events, want exactly one of each", len(enters), len(exits))
+			}
+			if enters[0].depth != 0 || enters[0].typ != byte(tc.typ) {
+				t.Fatalf("enter = depth %d type %#x, want depth 0 type %#x", enters[0].depth, enters[0].typ, byte(tc.typ))
+			}
+			if exits[0].depth != 0 || !errors.Is(exits[0].err, vm.ErrOutOfGas) {
+				t.Fatalf("exit = depth %d err %v, want depth 0 out of gas", exits[0].depth, exits[0].err)
+			}
+		})
 	}
 }
 
 // ======================== Transaction validation =========================
 
-// The regular dimension must have room for min(tx.gas, MaxTxGas).
-func TestValidationRegularGasAvailable(t *testing.T) {
+// The execution dimension must have room for min(tx.gas, MaxTxGas).
+func TestValidationExecutionGasAvailable(t *testing.T) {
 	gp := NewGasPool(30_000_000)
-	gp.cumulativeRegular = 29_000_000
+	gp.cumulativeExecution = 29_000_000
 	if gp.CheckGasAmsterdam(2_000_000, 0) == nil {
-		t.Fatal("expected regular dimension full")
+		t.Fatal("expected execution dimension full")
 	}
 	if err := gp.CheckGasAmsterdam(1_000_000, 0); err != nil {
-		t.Fatalf("regular fits but rejected: %v", err)
+		t.Fatalf("execution fits but rejected: %v", err)
 	}
 }
 
@@ -507,7 +572,7 @@ func TestValidationStateGasAvailable(t *testing.T) {
 	}
 }
 
-// tx.gas may exceed MaxTxGas: regular is capped at MaxTxGas while the state
+// tx.gas may exceed MaxTxGas: execution is capped at MaxTxGas while the state
 // dimension reserves the full tx.gas (the excess lands in the reservoir).
 func TestValidationStateGasOverflowAllowed(t *testing.T) {
 	gas := params.MaxTxGas + 5_000_000
@@ -523,9 +588,9 @@ func TestValidationStateGasOverflowAllowed(t *testing.T) {
 	}
 }
 
-// Intrinsic regular gas above MaxTxGas (EIP-7825 cap) is rejected.
-func TestValidationIntrinsicRegularCap(t *testing.T) {
-	al := make(types.AccessList, 8000) // ~19.2M regular, over the 16.77M cap
+// Intrinsic execution gas above MaxTxGas (EIP-7825 cap) is rejected.
+func TestValidationIntrinsicExecutionCap(t *testing.T) {
+	al := make(types.AccessList, 8000) // ~19.2M execution, over the 16.77M cap
 	for i := range al {
 		al[i].Address = common.BigToAddress(big.NewInt(int64(i + 1)))
 	}
@@ -541,7 +606,7 @@ func TestValidationIntrinsicRegularCap(t *testing.T) {
 			AccessList: al,
 		})
 	if _, _, err := applyMsg(t, mkState(senderAlloc(nil)), tx); err == nil {
-		t.Fatal("expected rejection for intrinsic regular over MaxTxGas")
+		t.Fatal("expected rejection for intrinsic execution over MaxTxGas")
 	}
 }
 
@@ -643,14 +708,14 @@ func TestRefundFloorNegatesRefund(t *testing.T) {
 
 // ========================= Block-level accounting ========================
 
-// The pool tracks regular and state cumulatively in separate counters.
+// The pool tracks execution and state cumulatively in separate counters.
 func TestBlockTracksTwoCounters(t *testing.T) {
 	gp := NewGasPool(60_000_000)
 	if err := gp.ChargeGasAmsterdam(100, 200, 300); err != nil {
 		t.Fatal(err)
 	}
-	if gp.cumulativeRegular != 100 || gp.cumulativeState != 200 {
-		t.Fatalf("counters = (%d,%d), want (100,200)", gp.cumulativeRegular, gp.cumulativeState)
+	if gp.cumulativeExecution != 100 || gp.cumulativeState != 200 {
+		t.Fatalf("counters = (%d,%d), want (100,200)", gp.cumulativeExecution, gp.cumulativeState)
 	}
 }
 
@@ -666,7 +731,7 @@ func TestBlockGasUsedIsMax(t *testing.T) {
 // Block validity is checked against the max dimension, not the sum.
 func TestBlockValidityAgainstMax(t *testing.T) {
 	gp := NewGasPool(150)
-	// regular 100 + state 120: sum 220 > 150 but max 120 <= 150 is valid.
+	// execution 100 + state 120: sum 220 > 150 but max 120 <= 150 is valid.
 	if err := gp.ChargeGasAmsterdam(100, 120, 0); err != nil {
 		t.Fatalf("max within limit but rejected: %v", err)
 	}
@@ -744,9 +809,9 @@ func TestAuthIntrinsicBaseOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The recipient touch and the per-authorization authority access (priced
-	// into RegularPerAuthBaseCost) are both charged at the cold rate
+	// into ExecutionPerAuthBaseCost) are both charged at the cold rate
 	// unconditionally at the intrinsic phase (EIP-2780).
-	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + params.RegularPerAuthBaseCost
+	want := params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam + params.ExecutionPerAuthBaseCost
 	if cost != want {
 		t.Fatalf("intrinsic gas = %d, want %d", cost, want)
 	}
@@ -878,11 +943,11 @@ func TestAuthDuplicateAuthorityOnce(t *testing.T) {
 
 // ===================== System contracts / system calls ===================
 
-// System call gas limit keeps 30M regular plus a state reservoir for new slots.
+// System call gas limit keeps 30M execution plus a state reservoir for new slots.
 func TestSystemCallGasLimit(t *testing.T) {
 	limit, budget := systemCallGasBudget(amsterdamCoreEVM(mkState(nil)))
-	if limit != 30_000_000 || budget.RegularGas != 30_000_000 {
-		t.Fatalf("limit/regular = %d/%d, want 30M/30M", limit, budget.RegularGas)
+	if limit != 30_000_000 || budget.ExecutionGas != 30_000_000 {
+		t.Fatalf("limit/execution = %d/%d, want 30M/30M", limit, budget.ExecutionGas)
 	}
 }
 
@@ -903,5 +968,51 @@ func TestSystemCallNotCountedInBlock(t *testing.T) {
 	_, blocks, _ := GenerateChainWithGenesis(env.gspec, engine, 1, func(_ int, b *BlockGen) {})
 	if blocks[0].GasUsed() != 0 {
 		t.Fatalf("block gas used = %d, want 0 (system calls excluded)", blocks[0].GasUsed())
+	}
+}
+
+func TestParallelReservationOverflowRejected(t *testing.T) {
+	env := newBALTestEnv(nil)
+	env.gspec.GasLimit = 30_000_000
+	engine := beacon.New(ethash.NewFaker())
+
+	// A single self-transfer with a 5,000,000 gas limit but only ~21,000 of
+	// actual usage (recipient exists, no new state).
+	to := env.from
+	_, blocks, _ := GenerateChainWithGenesis(env.gspec, engine, 1, func(_ int, b *BlockGen) {
+		b.AddTx(env.tx(0, &to, big.NewInt(1), 5_000_000, 0, nil))
+	})
+	valid := blocks[0]
+
+	bc, err := NewBlockChain(rawdb.NewMemoryDatabase(), env.gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("new blockchain: %v", err)
+	}
+	defer bc.Stop()
+
+	// The block as built (30M limit, well above the 5M reservation) is accepted:
+	// the reservation check must not over-reject valid blocks.
+	statedb, err := bc.State()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	if _, err := NewStateProcessor(bc).Process(context.Background(), valid, statedb, nil, nil, vm.Config{}, nil); err != nil {
+		t.Fatalf("valid block rejected by parallel processor: %v", err)
+	}
+
+	// Lower the block gas limit below the transaction's worst-case reservation
+	// (5,000,000) while keeping it above the actual usage (~21,000). The
+	// transaction can no longer be admitted, so the block is invalid.
+	hdr := valid.Header()
+	hdr.GasLimit = 100_000
+	invalid := valid.WithSeal(hdr)
+
+	statedb, err = bc.State()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	_, err = NewStateProcessor(bc).Process(context.Background(), invalid, statedb, nil, nil, vm.Config{}, nil)
+	if !errors.Is(err, ErrGasLimitReached) {
+		t.Fatalf("parallel processor accepted a reservation-overflow block (err = %v), want ErrGasLimitReached", err)
 	}
 }

@@ -29,9 +29,15 @@ var (
 	datarealGauge = metrics.NewRegisteredGauge("blobpool/datareal", nil)
 	slotusedGauge = metrics.NewRegisteredGauge("blobpool/slotused", nil)
 
+	blockedGauge = metrics.NewRegisteredGauge("blobpool/blocked", nil)
+
 	limboDatausedGauge = metrics.NewRegisteredGauge("blobpool/limbo/dataused", nil)
 	limboDatarealGauge = metrics.NewRegisteredGauge("blobpool/limbo/datareal", nil)
 	limboSlotusedGauge = metrics.NewRegisteredGauge("blobpool/limbo/slotused", nil)
+
+	// The below metrics track the encoded GetPooledTransactions response cache.
+	getRLPCacheHitMeter  = metrics.NewRegisteredMeter("blobpool/getrlp/hit", nil)
+	getRLPCacheMissMeter = metrics.NewRegisteredMeter("blobpool/getrlp/miss", nil)
 
 	// The below metrics track the per-shelf metrics for the primary blob store
 	// and the temporary limbo store.

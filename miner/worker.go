@@ -45,6 +45,7 @@ var (
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 	errBlockInterruptedByTimeout  = errors.New("timeout while building block")
+	errStateReadFailure           = errors.New("state read failed while building block")
 )
 
 // maxBlobsPerBlock returns the maximum number of blobs per block.
@@ -74,6 +75,12 @@ type environment struct {
 	sidecars []*types.BlobTxSidecar
 	blobs    int
 	bal      *bal.ConstructionBlockAccessList
+
+	// revertedTxs and revertedIdx record transactions that were executed during
+	// block building but then reverted (excluded from the block), together with
+	// the index each was tried at.
+	revertedTxs []*types.Transaction
+	revertedIdx []uint32
 
 	witness *stateless.Witness
 }
@@ -113,6 +120,11 @@ type newPayloadResult struct {
 	receipts []*types.Receipt       // Receipts collected during construction
 	requests [][]byte               // Consensus layer requests collected during block construction
 	witness  *stateless.Witness     // Witness is an optional stateless proof
+
+	// revertedTxs and revertedIdx record the transactions tried-and-reverted
+	// during construction and the index each was assigned.
+	revertedTxs []*types.Transaction
+	revertedIdx []uint32
 }
 
 // generateParams wraps various settings for generating sealing task.
@@ -230,14 +242,21 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	block := core.AssembleBlock(miner.chain, work.header, work.state, &body, work.receipts, work.bal)
 	assembleSpanEnd(nil)
 
+	// Check for db errors. If anything happened during the mining or IntermediateRoot, such as a
+	// weird flush or a trie node missing, we need to bail out and not create a block.
+	if dbErr := work.state.Error(); dbErr != nil {
+		return &newPayloadResult{err: fmt.Errorf("%w: %v", errStateReadFailure, dbErr)}
+	}
 	return &newPayloadResult{
-		block:    block,
-		fees:     totalFees(block, work.receipts),
-		sidecars: work.sidecars,
-		stateDB:  work.state,
-		receipts: work.receipts,
-		requests: requests,
-		witness:  work.witness,
+		block:       block,
+		fees:        totalFees(block, work.receipts),
+		sidecars:    work.sidecars,
+		stateDB:     work.state,
+		receipts:    work.receipts,
+		requests:    requests,
+		witness:     work.witness,
+		revertedTxs: work.revertedTxs,
+		revertedIdx: work.revertedIdx,
 	}
 }
 
@@ -354,6 +373,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	state.StartPrefetcher("miner", bundle)
 	evm := vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{})
 	evm.SetJumpDestCache(miner.chain.JumpDestCache())
+	evm.SetPrecompileCache(miner.chain.PrecompileCache())
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
@@ -426,6 +446,9 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
+
+		env.revertedTxs = append(env.revertedTxs, tx.WithoutBlobTxSidecar())
+		env.revertedIdx = append(env.revertedIdx, uint32(env.tcount))
 		return nil, nil, err
 	}
 	env.header.GasUsed = env.gasPool.Used()
