@@ -542,12 +542,16 @@ const (
 	// gas limit. At most one per call.
 	GasChangeCallInitialBalance GasChangeReason = 5
 
-	// GasChangeCallLeftOverReturned is the gas left over that is returned to the
-	// caller. Always a decrease towards 0; not emitted when no gas is left.
+	// GasChangeCallLeftOverReturned is recorded on the callee: its leftover leaving
+	// it for the caller, always down to 0. Emitted before the callee's OnExit; not
+	// emitted when no gas is left. The caller books the same transfer as
+	// GasChangeCallLeftOverRefunded.
 	GasChangeCallLeftOverReturned GasChangeReason = 6
 
-	// GasChangeCallLeftOverRefunded is the child call's left-over gas given back
-	// to the caller. Always an increase; not emitted when nothing is refunded.
+	// GasChangeCallLeftOverRefunded is recorded on the caller: the callee's
+	// leftover arriving, always an increase. Emitted after the callee's OnExit;
+	// not emitted when nothing is refunded. For the top-level frame the caller is
+	// the transaction itself.
 	GasChangeCallLeftOverRefunded GasChangeReason = 7
 
 	// GasChangeCallContractCreation is the gas burned for a CREATE.

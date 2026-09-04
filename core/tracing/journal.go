@@ -56,13 +56,12 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	wrapped := *hooks
 
 	// Create journal
-	j := &journal{hooks: hooks}
+	j := &journal{
+		hooks: hooks,
+	}
 	// Scope hooks need to be re-implemented.
 	wrapped.OnTxEnd = j.OnTxEnd
-	// Mirror whichever shape the tracer registered so it keeps seeing that shape;
-	// when it registered neither, the vector shim still does the bookkeeping.
-	// A tracer that registered neither gets both shims, so the bookkeeping runs
-	// whichever shape the caller uses.
+
 	bothEnter := hooks.OnEnter == nil && hooks.OnEnterV2 == nil
 	wrapped.OnEnter, wrapped.OnEnterV2 = nil, nil
 	if hooks.OnEnter != nil || bothEnter {
@@ -71,6 +70,7 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks.OnEnterV2 != nil || bothEnter {
 		wrapped.OnEnterV2 = j.OnEnterV2
 	}
+
 	bothExit := hooks.OnExit == nil && hooks.OnExitV2 == nil
 	wrapped.OnExit, wrapped.OnExitV2 = nil, nil
 	if hooks.OnExit != nil || bothExit {
@@ -79,6 +79,7 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks.OnExitV2 != nil || bothExit {
 		wrapped.OnExitV2 = j.OnExitV2
 	}
+
 	// Wrap state change hooks.
 	if hooks.OnBalanceChange != nil {
 		wrapped.OnBalanceChange = j.OnBalanceChange
@@ -87,6 +88,7 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 		// Regardless of which hook version is used in the tracer,
 		// the journal will want to capture the nonce change reason.
 		wrapped.OnNonceChangeV2 = j.OnNonceChangeV2
+
 		// A precaution to ensure EVM doesn't call both hooks.
 		wrapped.OnNonceChange = nil
 	}

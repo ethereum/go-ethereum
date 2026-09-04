@@ -166,7 +166,9 @@ func (c *Contract) refundState(s uint64, logger *tracing.Hooks, reason tracing.G
 func (c *Contract) refundGas(child GasBudget, logger *tracing.Hooks, reason tracing.GasChangeReason) {
 	prior := c.Gas
 	c.Gas.Absorb(child)
-	if logger.HasGasHook() && reason != tracing.GasChangeIgnored {
+
+	// A child that burned everything hands nothing back; report no movement.
+	if logger.HasGasHook() && reason != tracing.GasChangeIgnored && prior.AsTracing() != c.Gas.AsTracing() {
 		logger.EmitGasChange(prior.AsTracing(), c.Gas.AsTracing(), reason)
 	}
 }
