@@ -62,21 +62,21 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	// Scope hooks need to be re-implemented.
 	wrapped.OnTxEnd = j.OnTxEnd
 
-	bothEnter := hooks.OnEnter == nil && hooks.OnEnterV2 == nil
+	noEnterHook := hooks.OnEnter == nil && hooks.OnEnterV2 == nil
 	wrapped.OnEnter, wrapped.OnEnterV2 = nil, nil
-	if hooks.OnEnter != nil || bothEnter {
+	if hooks.OnEnter != nil || noEnterHook {
 		wrapped.OnEnter = j.OnEnter
 	}
-	if hooks.OnEnterV2 != nil || bothEnter {
+	if hooks.OnEnterV2 != nil || noEnterHook {
 		wrapped.OnEnterV2 = j.OnEnterV2
 	}
 
-	bothExit := hooks.OnExit == nil && hooks.OnExitV2 == nil
+	noExitHook := hooks.OnExit == nil && hooks.OnExitV2 == nil
 	wrapped.OnExit, wrapped.OnExitV2 = nil, nil
-	if hooks.OnExit != nil || bothExit {
+	if hooks.OnExit != nil || noExitHook {
 		wrapped.OnExit = j.OnExit
 	}
-	if hooks.OnExitV2 != nil || bothExit {
+	if hooks.OnExitV2 != nil || noExitHook {
 		wrapped.OnExitV2 = j.OnExitV2
 	}
 
