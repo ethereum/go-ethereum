@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -1057,4 +1058,77 @@ func genesisAlloc() types.GenesisAlloc {
 	alloc[testAddr] = types.Account{Balance: testBalance}
 	alloc[revertContractAddr] = types.Account{Code: revertCode}
 	return alloc
+}
+
+type blockAccessListTestService struct {
+	calls chan rpc.BlockNumberOrHash
+}
+
+func (s *blockAccessListTestService) GetBlockAccessList(ctx context.Context, block rpc.BlockNumberOrHash) ([]ethclient.BlockAccessListEntry, error) {
+	s.calls <- block
+	return []ethclient.BlockAccessListEntry{
+		{
+			Address:        common.HexToAddress("0x000f3df6d732807ef1319fb7b8bb8522d0beac02"),
+			BalanceChanges: []ethclient.BalanceChangeEntry{},
+			CodeChanges:    []ethclient.CodeChangeEntry{},
+			NonceChanges:   []ethclient.NonceChangeEntry{},
+			StorageChanges: []ethclient.StorageChangesEntry{
+				{
+					Key: common.HexToHash("0x152f"),
+					Changes: []ethclient.StorageChangeEntry{
+						{Index: 0, Value: common.HexToHash("0x01")},
+					},
+				},
+			},
+			StorageReads: []common.Hash{},
+		},
+		{
+			Address: common.HexToAddress("0x8943545177806ed17b9f23f0a21ee5948ecaa776"),
+			BalanceChanges: []ethclient.BalanceChangeEntry{
+				{Index: 1, Value: (*hexutil.Big)(big.NewInt(1e18))},
+			},
+			CodeChanges:    []ethclient.CodeChangeEntry{},
+			NonceChanges:   []ethclient.NonceChangeEntry{{Index: 1, Value: 1}},
+			StorageChanges: []ethclient.StorageChangesEntry{},
+			StorageReads:   []common.Hash{},
+		},
+	}, nil
+}
+
+func TestGetBlockAccessList(t *testing.T) {
+	srv := rpc.NewServer()
+	service := &blockAccessListTestService{calls: make(chan rpc.BlockNumberOrHash, 1)}
+	if err := srv.RegisterName("eth", service); err != nil {
+		t.Fatalf("failed to register service: %v", err)
+	}
+	defer srv.Stop()
+
+	client := rpc.DialInProc(srv)
+	defer client.Close()
+
+	ec := ethclient.NewClient(client)
+	defer ec.Close()
+
+	hash := common.HexToHash("0x01")
+	ref := rpc.BlockNumberOrHashWithHash(hash, true)
+
+	entries, err := ec.GetBlockAccessList(context.Background(), ref)
+	if err != nil {
+		t.Fatalf("GetBlockAccessList returned error: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].Address != common.HexToAddress("0x000f3df6d732807ef1319fb7b8bb8522d0beac02") {
+		t.Fatalf("unexpected first entry address: %s", entries[0].Address)
+	}
+	if len(entries[0].StorageChanges) != 1 || entries[0].StorageChanges[0].Changes[0].Index != 0 {
+		t.Fatalf("unexpected storage changes: %+v", entries[0].StorageChanges)
+	}
+	if entries[1].BalanceChanges[0].Value.ToInt().Cmp(big.NewInt(1e18)) != 0 {
+		t.Fatalf("unexpected balance change: %v", entries[1].BalanceChanges[0].Value)
+	}
+	if entries[1].NonceChanges[0].Value != 1 {
+		t.Fatalf("unexpected nonce change: %+v", entries[1].NonceChanges)
+	}
 }
