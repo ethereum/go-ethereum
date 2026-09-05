@@ -289,10 +289,6 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 	if l.skip {
 		return
 	}
-	// check if already accumulated the size of the response.
-	if l.cfg.Limit != 0 && l.resultSize > l.cfg.Limit {
-		return
-	}
 	var (
 		op           = vm.OpCode(opcode)
 		memory       = scope.MemoryData()
@@ -342,6 +338,9 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 	// create a log
 	if l.writer == nil {
 		entry := log.toLegacyJSON()
+		if l.cfg.Limit != 0 && l.resultSize+len(entry) > l.cfg.Limit {
+			return
+		}
 		l.resultSize += len(entry)
 		l.logs = append(l.logs, entry)
 		return
