@@ -17,10 +17,11 @@ var _ = (*accountMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (a Account) MarshalJSON() ([]byte, error) {
 	type Account struct {
-		Code    hexutil.Bytes               `json:"code,omitempty"`
-		Storage map[storageJSON]storageJSON `json:"storage,omitempty"`
-		Balance *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
-		Nonce   math.HexOrDecimal64         `json:"nonce,omitempty"`
+		Code        hexutil.Bytes               `json:"code,omitempty"`
+		Storage     map[storageJSON]storageJSON `json:"storage,omitempty"`
+		Balance     *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
+		Nonce       math.HexOrDecimal64         `json:"nonce,omitempty"`
+		Constructor hexutil.Bytes               `json:"constructor,omitempty"`
 	}
 	var enc Account
 	enc.Code = a.Code
@@ -32,16 +33,18 @@ func (a Account) MarshalJSON() ([]byte, error) {
 	}
 	enc.Balance = (*math.HexOrDecimal256)(a.Balance)
 	enc.Nonce = math.HexOrDecimal64(a.Nonce)
+	enc.Constructor = a.Constructor
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (a *Account) UnmarshalJSON(input []byte) error {
 	type Account struct {
-		Code    *hexutil.Bytes              `json:"code,omitempty"`
-		Storage map[storageJSON]storageJSON `json:"storage,omitempty"`
-		Balance *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
-		Nonce   *math.HexOrDecimal64        `json:"nonce,omitempty"`
+		Code        *hexutil.Bytes              `json:"code,omitempty"`
+		Storage     map[storageJSON]storageJSON `json:"storage,omitempty"`
+		Balance     *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
+		Nonce       *math.HexOrDecimal64        `json:"nonce,omitempty"`
+		Constructor *hexutil.Bytes              `json:"constructor,omitempty"`
 	}
 	var dec Account
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -62,6 +65,9 @@ func (a *Account) UnmarshalJSON(input []byte) error {
 	a.Balance = (*big.Int)(dec.Balance)
 	if dec.Nonce != nil {
 		a.Nonce = uint64(*dec.Nonce)
+	}
+	if dec.Constructor != nil {
+		a.Constructor = *dec.Constructor
 	}
 	return nil
 }
