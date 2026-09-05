@@ -90,6 +90,18 @@ func (q *bodyQueue) request(peer *peerConnection, req *fetchRequest, resCh chan 
 func (q *bodyQueue) deliver(peer *peerConnection, packet *eth.Response) (int, error) {
 	resp := packet.Res.(*eth.BlockBodiesResponse)
 	meta := packet.Meta.(eth.BlockBodyHashes)
+
+	var size uint64
+	for i := range *resp {
+		body := &(*resp)[i]
+		size += body.Transactions.Size() + body.Uncles.Size()
+		if body.Withdrawals != nil {
+			size += body.Withdrawals.Size()
+		}
+	}
+	bodyFetchMetrics.items.Update(int64(len(*resp)))
+	bodyFetchMetrics.bytes.Mark(int64(size))
+
 	accepted, err := q.queue.DeliverBodies(peer.id, meta, *resp)
 	switch {
 	case err == nil && len(*resp) == 0:
@@ -100,4 +112,10 @@ func (q *bodyQueue) deliver(peer *peerConnection, packet *eth.Response) (int, er
 		peer.log.Debug("Failed to deliver retrieved bodies", "err", err)
 	}
 	return accepted, err
+}
+
+// metrics returns the collectors the concurrent fetcher reports the scheduling
+// state of body retrievals into.
+func (q *bodyQueue) metrics() *fetchMetrics {
+	return bodyFetchMetrics
 }

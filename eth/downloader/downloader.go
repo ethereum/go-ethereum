@@ -940,6 +940,8 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	// Downloaded blocks are always regarded as trusted after the
 	// transition. Because the downloaded chain is guided by the
 	// consensus-layer.
+	defer importInsertBlocksTimer.UpdateSince(time.Now())
+
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
 		if index < len(results) {
 			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
@@ -1147,6 +1149,8 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 			blocks[i] = blocks[i].WithAccessListUnsafe(list)
 		}
 	}
+	defer importInsertReceiptsTimer.UpdateSince(time.Now())
+
 	if index, err := d.blockchain.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 		return fmt.Errorf("%w: %v", errInvalidChain, err)

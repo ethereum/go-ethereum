@@ -71,6 +71,10 @@ type typedQueue interface {
 	// concurrent fetcher, unpacking the type specific data and delivering
 	// it to the downloader's queue.
 	deliver(peer *peerConnection, packet *eth.Response) (int, error)
+
+	// metrics returns the collectors the concurrent fetcher reports the
+	// scheduling state of this data type into.
+	metrics() *fetchMetrics
 }
 
 // concurrentFetch iteratively downloads scheduled block parts, taking available
@@ -134,14 +138,19 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 		} else {
 			// Send a download request to all idle peers, until throttled
 			var (
-				idles []*peerConnection
-				caps  []int
+				idles    []*peerConnection
+				caps     []int
+				capacity int // Estimated aggregate items/s across all peers
 			)
 			for _, peer := range d.peers.AllPeers() {
 				pending, stale := pending[peer.id], stales[peer.id]
+
+				cap := queue.capacity(peer, time.Second)
+				capacity += cap
+
 				if pending == nil && stale == nil {
 					idles = append(idles, peer)
-					caps = append(caps, queue.capacity(peer, time.Second))
+					caps = append(caps, cap)
 				} else if stale != nil {
 					if waited := time.Since(stale.Sent); waited > timeoutGracePeriod {
 						// Request has been in flight longer than the grace period
@@ -154,7 +163,14 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			}
 			sort.Sort(&peerCapacitySort{idles, caps})
 
-			var throttled bool
+			var (
+				stats     = queue.metrics()
+				targetRTT = d.peers.rates.TargetRoundTrip()
+				assigned  int
+				throttled bool
+			)
+			rttTargetGauge.Update(targetRTT.Milliseconds())
+
 			for _, peer := range idles {
 				// Short circuit if throttling activated or there are no more
 				// queued tasks to be retrieved
@@ -162,15 +178,16 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					break
 				}
 				if queued := queue.pending(); queued == 0 {
+					stats.starved.Mark(1)
 					break
 				}
 				// Reserve a chunk of fetches for a peer. A nil can mean either that
 				// no more headers are available, or that the peer is known not to
 				// have them.
-				request, _, throttle := queue.reserve(peer, queue.capacity(peer, d.peers.rates.TargetRoundTrip()))
+				request, _, throttle := queue.reserve(peer, queue.capacity(peer, targetRTT))
 				if throttle {
 					throttled = true
-					throttleCounter.Inc(1)
+					stats.throttled.Mark(1)
 				}
 				if request == nil {
 					continue
@@ -187,6 +204,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					continue
 				}
 				pending[peer.id] = req
+				assigned++
 
 				ttl := d.peers.rates.TargetTimeout()
 				ordering[req] = timeouts.Size()
@@ -196,6 +214,10 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					timeout.Reset(ttl)
 				}
 			}
+			stats.idlePeers.Update(int64(len(idles) - assigned))
+			stats.busyPeers.Update(int64(len(pending)))
+			stats.stalePeers.Update(int64(len(stales)))
+			stats.capacity.Update(int64(capacity))
 		}
 		// Wait for something to happen
 		select {

@@ -97,6 +97,13 @@ func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int,
 	receipts := *packet.Res.(*eth.ReceiptsRLPResponse)
 	hashes := packet.Meta.([]common.Hash) // {receipt hashes}
 
+	var size int
+	for _, receipt := range receipts {
+		size += len(receipt)
+	}
+	receiptFetchMetrics.items.Update(int64(len(receipts)))
+	receiptFetchMetrics.bytes.Mark(int64(size))
+
 	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes)
 	switch {
 	case err == nil && len(receipts) == 0:
@@ -107,4 +114,10 @@ func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int,
 		peer.log.Debug("Failed to deliver retrieved receipts", "err", err)
 	}
 	return accepted, err
+}
+
+// metrics returns the collectors the concurrent fetcher reports the scheduling
+// state of receipt retrievals into.
+func (q *receiptQueue) metrics() *fetchMetrics {
+	return receiptFetchMetrics
 }

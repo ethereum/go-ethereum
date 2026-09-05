@@ -101,6 +101,13 @@ func (q *balQueue) deliver(peer *peerConnection, packet *eth.Response) (int, err
 	bals := *packet.Res.(*eth.BlockAccessListResponse)
 	hashes := packet.Meta.([]common.Hash) // {keccak256 hash per entry, zero hash if unavailable}
 
+	var size int
+	for _, bal := range bals {
+		size += len(bal)
+	}
+	balFetchMetrics.items.Update(int64(len(bals)))
+	balFetchMetrics.bytes.Mark(int64(size))
+
 	accepted, err := q.queue.DeliverBALs(peer.id, bals, hashes)
 	switch {
 	case err == nil && len(bals) == 0:
@@ -111,4 +118,10 @@ func (q *balQueue) deliver(peer *peerConnection, packet *eth.Response) (int, err
 		peer.log.Debug("Failed to deliver retrieved access lists", "err", err)
 	}
 	return accepted, err
+}
+
+// metrics returns the collectors the concurrent fetcher reports the scheduling
+// state of access list retrievals into.
+func (q *balQueue) metrics() *fetchMetrics {
+	return balFetchMetrics
 }

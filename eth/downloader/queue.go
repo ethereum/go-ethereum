@@ -410,6 +410,11 @@ func (q *queue) Results(block bool) []*fetchResult {
 	if !block && !q.resultCache.HasCompletedItems() {
 		return nil
 	}
+	// Track how long the consumer is kept waiting for the network to complete
+	// the next results. If the download is network bound, this dominates the
+	// consumer's time; if it's locally bound, the results are always ready.
+	defer importWaitTimer.UpdateSince(time.Now())
+
 	closed := false
 	for !closed && !q.resultCache.HasCompletedItems() {
 		// In order to wait on 'active', we need to obtain the lock.
@@ -457,6 +462,10 @@ func (q *queue) Results(block bool) []*fetchResult {
 	// on the result cache
 	throttleThreshold := uint64((common.StorageSize(blockCacheMemory) + q.resultSize - 1) / q.resultSize)
 	throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
+
+	importBatchHistogram.Update(int64(len(results)))
+	queueThrottleGauge.Update(int64(throttleThreshold))
+	queueItemSizeGauge.Update(int64(q.resultSize))
 
 	// With results removed from the cache, wake throttled fetchers
 	for _, ch := range []chan bool{q.blockWakeCh, q.receiptWakeCh, q.balWakeCh} {
