@@ -71,6 +71,7 @@ type KeyStore struct {
 	updating    bool                    // Whether the event notification loop is running
 
 	mu       sync.RWMutex
+	unlockMu sync.Mutex // Serializes unlocks with account deletion
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
 }
 
@@ -232,6 +233,8 @@ func (ks *KeyStore) Accounts() []accounts.Account {
 // Delete deletes the key matched by account if the passphrase is correct.
 // If the account contains no filename, the address must match a unique key.
 func (ks *KeyStore) Delete(a accounts.Account, passphrase string) error {
+	ks.unlockMu.Lock()
+
 	// Decrypting the key isn't really necessary, but we do
 	// it anyway to check the password and zero out the key
 	// immediately afterwards.
@@ -240,6 +243,7 @@ func (ks *KeyStore) Delete(a accounts.Account, passphrase string) error {
 		zeroKey(key.PrivateKey)
 	}
 	if err != nil {
+		ks.unlockMu.Unlock()
 		return err
 	}
 	// The order is crucial here. The key is dropped from the
@@ -248,6 +252,20 @@ func (ks *KeyStore) Delete(a accounts.Account, passphrase string) error {
 	err = os.Remove(a.URL.Path)
 	if err == nil {
 		ks.cache.delete(a)
+
+		// Revoke any in-memory unlock for the deleted account.
+		ks.mu.Lock()
+		if unlocked, ok := ks.unlocked[a.Address]; ok {
+			if unlocked.abort != nil {
+				close(unlocked.abort)
+			}
+			zeroKey(unlocked.PrivateKey)
+			delete(ks.unlocked, a.Address)
+		}
+		ks.mu.Unlock()
+	}
+	ks.unlockMu.Unlock()
+	if err == nil {
 		ks.refreshWallets()
 	}
 	return err
@@ -332,6 +350,9 @@ func (ks *KeyStore) Lock(addr common.Address) error {
 // shortens the active unlock timeout. If the address was previously unlocked
 // indefinitely the timeout is not altered.
 func (ks *KeyStore) TimedUnlock(a accounts.Account, passphrase string, timeout time.Duration) error {
+	ks.unlockMu.Lock()
+	defer ks.unlockMu.Unlock()
+
 	a, key, err := ks.getDecryptedKey(a, passphrase)
 	if err != nil {
 		return err

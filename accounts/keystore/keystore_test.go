@@ -87,6 +87,29 @@ func TestSign(t *testing.T) {
 	}
 }
 
+func TestDeleteRevokesUnlock(t *testing.T) {
+	t.Parallel()
+	_, ks := tmpKeyStore(t)
+
+	account, err := ks.NewAccount("password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ks.Unlock(account, "password"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ks.SignHash(account, testSigData); err != nil {
+		t.Fatalf("signing before deletion failed: %v", err)
+	}
+
+	if err := ks.Delete(account, "password"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ks.SignHash(account, testSigData); err != ErrLocked {
+		t.Fatalf("signing after deletion returned %v, want ErrLocked", err)
+	}
+}
+
 func TestSignWithPassphrase(t *testing.T) {
 	t.Parallel()
 	_, ks := tmpKeyStore(t)
