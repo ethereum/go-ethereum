@@ -61,6 +61,7 @@ func TestEthSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
+	suite.requireAvailableBALs = true
 	for _, test := range suite.EthTests() {
 		t.Run(test.Name, func(t *testing.T) {
 			if test.Slow && testing.Short() {
@@ -114,6 +115,7 @@ func TestSnap2Suite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
+	suite.requireAvailableBALs = true
 	for _, test := range suite.Snap2Tests() {
 		t.Run(test.Name, func(t *testing.T) {
 			result := utesting.RunTests([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
