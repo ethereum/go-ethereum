@@ -54,6 +54,11 @@ type Trie struct {
 	// uncommitted is the number of updates since last commit.
 	uncommitted int
 
+	// cacheBlob makes the hasher cache encoded trie nodes.
+	// Saves re-encoding on commit. Can be turned off for
+	// Trie's that are never committed (e.g. for snap sync).
+	cacheBlob bool
+
 	// reader is the handler trie can retrieve nodes from.
 	reader *Reader
 
@@ -75,6 +80,7 @@ func (t *Trie) Copy() *Trie {
 		committed:      t.committed,
 		unhashed:       t.unhashed,
 		uncommitted:    t.uncommitted,
+		cacheBlob:      t.cacheBlob,
 		reader:         t.reader,
 		opTracer:       t.opTracer.copy(),
 		prevalueTracer: t.prevalueTracer.Copy(),
@@ -860,7 +866,7 @@ func (t *Trie) hashRoot() []byte {
 		return types.EmptyRootHash.Bytes()
 	}
 	// If the number of changes is below 100, we let one thread handle it
-	h := newHasher(t.unhashed >= 100)
+	h := newHasher(t.unhashed >= 100, t.cacheBlob)
 	defer func() {
 		returnHasherToPool(h)
 		t.unhashed = 0
