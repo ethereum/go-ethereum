@@ -103,7 +103,6 @@ var (
 	blockValidationTimer      = metrics.NewRegisteredResettingTimer("chain/validation", nil)
 	blockCrossValidationTimer = metrics.NewRegisteredResettingTimer("chain/crossvalidation", nil)
 	blockExecutionTimer       = metrics.NewRegisteredResettingTimer("chain/execution", nil)
-	blockWriteTimer           = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
@@ -1649,18 +1648,25 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Note all the components of block(hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
 	var (
-		batch = bc.db.NewBatch()
-		start = time.Now()
+		batch      = bc.db.NewBatch()
+		preimages  = statedb.Preimages()
+		blockWrite = make(chan struct{})
 	)
 	defer batch.Close()
 
-	rawdb.WriteBlock(batch, block)
-	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(batch, statedb.Preimages())
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write block into disk", "err", err)
-	}
-	log.Debug("Committed block data", "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(time.Since(start)))
+	go func() {
+		start := time.Now()
+		rawdb.WriteBlock(batch, block)
+		rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+		rawdb.WritePreimages(batch, preimages)
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to write block into disk", "err", err)
+		}
+		elapsed := time.Since(start)
+		log.Debug("Committed block data", "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(elapsed))
+		close(blockWrite)
+	}()
+	defer func() { <-blockWrite }()
 
 	var (
 		err          error
@@ -2368,7 +2374,6 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// Write the block to the chain and get the status.
 	var status WriteStatus
 	if config.WriteState {
-		wstart := time.Now()
 		if !config.WriteHead {
 			// Don't set the head, only insert the block
 			err = bc.writeBlockWithState(block, res.Receipts, statedb)
@@ -2382,7 +2387,6 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		stats.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
 		stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
 		stats.DatabaseCommit = statedb.DatabaseCommits // Database commits are complete, we can mark them
-		stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.DatabaseCommits
 	}
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed
