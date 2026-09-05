@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/holiman/uint256"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
-	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 )
 
 type payloadType interface {
@@ -34,7 +34,7 @@ type payloadType interface {
 }
 
 // convertPayload converts a beacon chain execution payload to types.Block.
-func convertPayload[T payloadType](payload T, parentRoot *zrntcommon.Root, requests [][]byte) (*types.Block, error) {
+func convertPayload[T payloadType](payload T, parentRoot phase0.Root, requests [][]byte) (*types.Block, error) {
 	var (
 		header       types.Header
 		transactions []*types.Transaction
@@ -52,7 +52,7 @@ func convertPayload[T payloadType](payload T, parentRoot *zrntcommon.Root, reque
 		withdrawals = convertWithdrawals(p.Withdrawals, &header)
 		expectedHash = p.BlockHash
 	case *deneb.ExecutionPayload:
-		convertDenebHeader(p, common.Hash(*parentRoot), &header)
+		convertDenebHeader(p, common.Hash(parentRoot), &header)
 		transactions, err = convertTransactions(p.Transactions, &header)
 		if err != nil {
 			return nil, err
@@ -66,7 +66,10 @@ func convertPayload[T payloadType](payload T, parentRoot *zrntcommon.Root, reque
 		reqHash := types.CalcRequestsHash(requests)
 		header.RequestsHash = &reqHash
 	}
-	block := types.NewBlockWithHeader(&header).WithBody(types.Body{Transactions: transactions, Withdrawals: withdrawals})
+	block := types.NewBlockWithHeader(&header).WithBody(types.Body{
+		Transactions: transactions,
+		Withdrawals:  withdrawals,
+	})
 	if hash := block.Hash(); hash != expectedHash {
 		return nil, fmt.Errorf("sanity check failed, payload hash does not match (expected %x, got %x)", expectedHash, hash)
 	}
@@ -82,14 +85,14 @@ func convertCapellaHeader(payload *capella.ExecutionPayload, h *types.Header) {
 	h.ReceiptHash = common.Hash(payload.ReceiptsRoot)
 	h.Bloom = types.Bloom(payload.LogsBloom)
 	h.Difficulty = common.Big0
-	h.Number = new(big.Int).SetUint64(uint64(payload.BlockNumber))
-	h.GasLimit = uint64(payload.GasLimit)
-	h.GasUsed = uint64(payload.GasUsed)
-	h.Time = uint64(payload.Timestamp)
-	h.Extra = []byte(payload.ExtraData)
+	h.Number = new(big.Int).SetUint64(payload.BlockNumber)
+	h.GasLimit = payload.GasLimit
+	h.GasUsed = payload.GasUsed
+	h.Time = payload.Timestamp
+	h.Extra = payload.ExtraData
 	h.MixDigest = common.Hash(payload.PrevRandao)
 	h.Nonce = types.BlockNonce{}
-	h.BaseFee = (*uint256.Int)(&payload.BaseFeePerGas).ToBig()
+	h.BaseFee = convertBaseFee(payload.BaseFeePerGas)
 }
 
 func convertDenebHeader(payload *deneb.ExecutionPayload, parentRoot common.Hash, h *types.Header) {
@@ -101,21 +104,31 @@ func convertDenebHeader(payload *deneb.ExecutionPayload, parentRoot common.Hash,
 	h.ReceiptHash = common.Hash(payload.ReceiptsRoot)
 	h.Bloom = types.Bloom(payload.LogsBloom)
 	h.Difficulty = common.Big0
-	h.Number = new(big.Int).SetUint64(uint64(payload.BlockNumber))
-	h.GasLimit = uint64(payload.GasLimit)
-	h.GasUsed = uint64(payload.GasUsed)
-	h.Time = uint64(payload.Timestamp)
-	h.Extra = []byte(payload.ExtraData)
+	h.Number = new(big.Int).SetUint64(payload.BlockNumber)
+	h.GasLimit = payload.GasLimit
+	h.GasUsed = payload.GasUsed
+	h.Time = payload.Timestamp
+	h.Extra = payload.ExtraData
 	h.MixDigest = common.Hash(payload.PrevRandao)
 	h.Nonce = types.BlockNonce{}
-	h.BaseFee = (*uint256.Int)(&payload.BaseFeePerGas).ToBig()
+	h.BaseFee = payload.BaseFeePerGas.ToBig()
 	// new in deneb
-	h.BlobGasUsed = (*uint64)(&payload.BlobGasUsed)
-	h.ExcessBlobGas = (*uint64)(&payload.ExcessBlobGas)
+	h.BlobGasUsed = &payload.BlobGasUsed
+	h.ExcessBlobGas = &payload.ExcessBlobGas
 	h.ParentBeaconRoot = &parentRoot
 }
 
-func convertTransactions(list zrntcommon.PayloadTransactions, execHeader *types.Header) ([]*types.Transaction, error) {
+// convertBaseFee converts the little-endian SSZ representation of the base fee
+// to a big integer.
+func convertBaseFee(baseFeePerGas [32]byte) *big.Int {
+	var be [32]byte
+	for i := range be {
+		be[i] = baseFeePerGas[31-i]
+	}
+	return new(big.Int).SetBytes(be[:])
+}
+
+func convertTransactions(list []bellatrix.Transaction, execHeader *types.Header) ([]*types.Transaction, error) {
 	txs := make([]*types.Transaction, len(list))
 	for i, opaqueTx := range list {
 		var tx types.Transaction
@@ -128,7 +141,7 @@ func convertTransactions(list zrntcommon.PayloadTransactions, execHeader *types.
 	return txs, nil
 }
 
-func convertWithdrawals(list zrntcommon.Withdrawals, execHeader *types.Header) []*types.Withdrawal {
+func convertWithdrawals(list []*capella.Withdrawal, execHeader *types.Header) []*types.Withdrawal {
 	withdrawals := make([]*types.Withdrawal, len(list))
 	for i, w := range list {
 		withdrawals[i] = &types.Withdrawal{
