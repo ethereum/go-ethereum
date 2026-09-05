@@ -87,10 +87,7 @@ func (c *committer) commit(path []byte, n node, parallel bool) node {
 
 // commitChildren commits the children of the given fullnode
 func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
-	var (
-		wg      sync.WaitGroup
-		nodesMu sync.Mutex
-	)
+	childIndices := make([]int, 0, 16)
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
 		if child == nil {
@@ -102,28 +99,35 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 		if _, ok := child.(hashNode); ok {
 			continue
 		}
+		childIndices = append(childIndices, i)
+	}
+	if !parallel {
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		if !parallel {
-			n.Children[i] = c.commit(append(path, byte(i)), child, false)
-		} else {
-			wg.Add(1)
+		for _, i := range childIndices {
+			n.Children[i] = c.commit(append(path, byte(i)), n.Children[i], false)
+		}
+	} else {
+		var (
+			wg      sync.WaitGroup
+			nodesMu sync.Mutex
+		)
+		wg.Add(len(childIndices))
+		for _, i := range childIndices {
 			go func(index int) {
 				defer wg.Done()
 
 				p := append(path, byte(index))
 				childSet := trienode.NewNodeSet(c.nodes.Owner)
 				childCommitter := newCommitter(childSet, c.tracer, c.collectLeaf)
-				n.Children[index] = childCommitter.commit(p, child, false)
+				n.Children[index] = childCommitter.commit(p, n.Children[index], false)
 
 				nodesMu.Lock()
 				c.nodes.MergeDisjoint(childSet)
 				nodesMu.Unlock()
 			}(i)
 		}
-	}
-	if parallel {
 		wg.Wait()
 	}
 }
