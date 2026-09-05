@@ -43,6 +43,7 @@ profile.cov
 .vscode
 
 tests/spec-tests/
+tests/consensus-spec-tests/
 
 # binaries
 cmd/abidump/abidump
