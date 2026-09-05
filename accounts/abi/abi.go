@@ -78,8 +78,12 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Pack up the method ID too if not a constructor and return
-	return append(method.ID, arguments...), nil
+	// Pack up the method ID too if not a constructor and return. The method ID
+	// is copied into a fresh slice instead of appended to directly: method.ID is
+	// derived from keccak256(sig)[:4], so it has length 4 but capacity 32, and a
+	// no-arg pack would otherwise return that backing array itself, aliasing the
+	// cached selector.
+	return append(append([]byte{}, method.ID...), arguments...), nil
 }
 
 func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
