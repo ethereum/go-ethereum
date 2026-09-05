@@ -2178,7 +2178,7 @@ func NewNetAPI(net *p2p.Server, networkVersion uint64) *NetAPI {
 
 // Listening returns an indication if the node is listening for network connections.
 func (api *NetAPI) Listening() bool {
-	return true // always listening
+	return api.net != nil && api.net.ListenAddr != ""
 }
 
 // PeerCount returns the number of connected peers
