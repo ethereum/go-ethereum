@@ -233,9 +233,10 @@ func (srv *Server) PeerCount() int {
 
 // AddPeer adds the given node to the static node set. When there is room in the peer set,
 // the server will connect to the node. If the connection fails for any reason, the server
-// will attempt to reconnect the peer.
-func (srv *Server) AddPeer(node *enode.Node) {
-	srv.dialsched.addStatic(node)
+// will attempt to reconnect the peer. If the server has been stopped, the node is not
+// accepted for tracking and an error is returned.
+func (srv *Server) AddPeer(node *enode.Node) error {
+	return srv.dialsched.addStatic(node)
 }
 
 // RemovePeer removes a node from the static node set. It also disconnects from the given
@@ -269,11 +270,14 @@ func (srv *Server) RemovePeer(node *enode.Node) {
 }
 
 // AddTrustedPeer adds the given node to a reserved trusted list which allows the
-// node to always connect, even if the slot are full.
-func (srv *Server) AddTrustedPeer(node *enode.Node) {
+// node to always connect, even if the slot are full. If the server has been stopped,
+// the node is not added and an error is returned.
+func (srv *Server) AddTrustedPeer(node *enode.Node) error {
 	select {
 	case srv.addtrusted <- node:
+		return nil
 	case <-srv.quit:
+		return errServerStopped
 	}
 }
 

@@ -69,7 +69,9 @@ func (api *adminAPI) AddPeer(url string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
-	server.AddPeer(node)
+	if err := server.AddPeer(node); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -100,7 +102,9 @@ func (api *adminAPI) AddTrustedPeer(url string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
-	server.AddTrustedPeer(node)
+	if err := server.AddTrustedPeer(node); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 

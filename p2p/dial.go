@@ -202,10 +202,12 @@ func (d *dialScheduler) stop() {
 }
 
 // addStatic adds a static dial candidate.
-func (d *dialScheduler) addStatic(n *enode.Node) {
+func (d *dialScheduler) addStatic(n *enode.Node) error {
 	select {
 	case d.addStaticCh <- n:
+		return nil
 	case <-d.ctx.Done():
+		return d.ctx.Err()
 	}
 }
 
