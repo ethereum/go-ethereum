@@ -667,7 +667,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	// Refund the leftover gas back to current frame
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	// Refill the account-creation charge if the create frame failed (reverted,
 	// halted exceptionally, or collided); a successful creation consumes it.
@@ -714,7 +714,7 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	// Refund the leftover gas back to current frame
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	// Refill the account-creation charge if the create frame failed (reverted,
 	// halted exceptionally, or collided); a successful creation consumes it.
@@ -766,7 +766,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if err == nil || err == ErrExecutionReverted {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	// If the call frame reverts or halts exceptionally, the charged state-gas
 	// is refilled back to the state reservoir in Amsterdam.
@@ -807,7 +807,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	evm.returnData = ret
 	return ret, nil
@@ -839,7 +839,7 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if err == nil || err == ErrExecutionReverted {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	evm.returnData = ret
 	return ret, nil
@@ -872,7 +872,7 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	evm.returnData = ret
 	return ret, nil
@@ -921,12 +921,8 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	evm.StateDB.SelfDestruct(this)
 
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
-		}
-		if tracer.OnExit != nil {
-			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
-		}
+		tracer.EmitEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, tracing.Gas{}, balance.ToBig())
+		tracer.EmitExit(evm.depth, []byte{}, tracing.Gas{}, tracing.Gas{}, nil, false)
 	}
 	return nil, errStopToken
 }
@@ -970,12 +966,8 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	}
 
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
-		}
-		if tracer.OnExit != nil {
-			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
-		}
+		tracer.EmitEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, tracing.Gas{}, balance.ToBig())
+		tracer.EmitExit(evm.depth, []byte{}, tracing.Gas{}, tracing.Gas{}, nil, false)
 	}
 	return nil, errStopToken
 }

@@ -802,9 +802,7 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 				// must still happen for the included transaction.
 				st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeContractCreator)
 
-				entryGas := st.gasRemaining
-				st.gasRemaining = st.gasRemaining.ExitHalt()
-				st.traceHaltedTopFrame(vm.CREATE, addr, msg.Data, entryGas, st.gasRemaining, value)
+				st.haltTopFrame(vm.CREATE, addr, msg.Data, value)
 				return nil, vm.ErrOutOfGas
 			}
 			chargedCreation = true
@@ -812,13 +810,19 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 	}
 	// The first frame is entered with the gas remaining after the runtime
 	// charges.
-	ret, _, result, vmerr := st.evm.Create(msg.From, msg.Data, st.gasRemaining.ForwardAll(), value)
-	st.gasRemaining.Absorb(result)
+	prior := st.gasRemaining
+	child := st.gasRemaining.ForwardAll()
+	st.traceBudgetChange(prior, tracing.GasChangeTxGasForwarded)
+
+	ret, _, result, vmerr := st.evm.Create(msg.From, msg.Data, child, value)
+	st.gasRemaining.Absorb(result, st.evm.Config.Tracer)
 
 	// If the contract creation failed (e.g. the initcode reverted or halted),
 	// refill the account-creation state gas charged at runtime.
 	if rules.IsAmsterdam && chargedCreation && vmerr != nil {
+		prior = st.gasRemaining
 		st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
+		st.traceBudgetChange(prior, tracing.GasChangeRefundAccountCreation)
 	}
 	// If the top-most frame halted, drain the leftover execution gas rather
 	// than returning it to the sender. The frame exit itself already burned
@@ -826,7 +830,9 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 	// originally borrowed, and on a halt that repayment must be burned as
 	// well. The state dimension is left untouched.
 	if rules.IsAmsterdam && vmerr != nil && vmerr != vm.ErrExecutionReverted {
+		prior = st.gasRemaining
 		st.gasRemaining.DrainExecution()
+		st.traceBudgetChange(prior, tracing.GasChangeCallFailedExecution)
 	}
 	return ret, vmerr
 }
@@ -841,17 +847,14 @@ func (st *stateTransition) executeCall(rules params.Rules, value *uint256.Int) (
 
 	if rules.IsAmsterdam {
 		snapshot := st.state.Snapshot()
-		entryGas := st.gasRemaining
 		if !st.applyAuthorizations(rules, st.msg.SetCodeAuthorizations) {
 			st.state.RevertToSnapshot(snapshot)
-			st.gasRemaining = st.gasRemaining.ExitHalt()
-			st.traceHaltedTopFrame(vm.CALL, st.to(), msg.Data, entryGas, st.gasRemaining, value)
+			st.haltTopFrame(vm.CALL, st.to(), msg.Data, value)
 			return nil, vm.ErrOutOfGas
 		}
 		if !st.chargeCallRecipientEIP2780(value) {
 			st.state.RevertToSnapshot(snapshot)
-			st.gasRemaining = st.gasRemaining.ExitHalt()
-			st.traceHaltedTopFrame(vm.CALL, st.to(), msg.Data, entryGas, st.gasRemaining, value)
+			st.haltTopFrame(vm.CALL, st.to(), msg.Data, value)
 			return nil, vm.ErrOutOfGas
 		}
 	} else {
@@ -867,13 +870,19 @@ func (st *stateTransition) executeCall(rules params.Rules, value *uint256.Int) (
 			st.state.AddAddressToAccessList(addr)
 		}
 	}
-	ret, result, vmerr := st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining.ForwardAll(), value)
-	st.gasRemaining.Absorb(result)
+	prior := st.gasRemaining
+	child := st.gasRemaining.ForwardAll()
+	st.traceBudgetChange(prior, tracing.GasChangeTxGasForwarded)
+
+	ret, result, vmerr := st.evm.Call(msg.From, st.to(), msg.Data, child, value)
+	st.gasRemaining.Absorb(result, st.evm.Config.Tracer)
 
 	// If the call frame reverts or halts exceptionally, the charged state-gas
 	// is refilled back to the state reservoir in Amsterdam.
 	if rules.IsAmsterdam && vmerr != nil && !value.IsZero() && st.evm.StateDB.Empty(st.to()) {
+		prior = st.gasRemaining
 		st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
+		st.traceBudgetChange(prior, tracing.GasChangeRefundAccountCreation)
 	}
 	// If the top-most frame halted, drain the leftover execution gas rather
 	// than returning it to the sender. The frame exit itself already burned
@@ -881,28 +890,48 @@ func (st *stateTransition) executeCall(rules params.Rules, value *uint256.Int) (
 	// originally borrowed, and on a halt that repayment must be burned as
 	// well.
 	if rules.IsAmsterdam && vmerr != nil && vmerr != vm.ErrExecutionReverted {
+		prior = st.gasRemaining
 		st.gasRemaining.DrainExecution()
+		st.traceBudgetChange(prior, tracing.GasChangeCallFailedExecution)
 	}
 	return ret, vmerr
 }
 
-// traceHaltedTopFrame calls the Enter and Exit functions on the tracer,
-// in order to produce correct tracing results if the EVM exits early (after Amsterdam).
-// Tracers assume every transaction producing a receipt also produces a depth-zero frame.
-func (st *stateTransition) traceHaltedTopFrame(typ vm.OpCode, to common.Address, input []byte, entryGas vm.GasBudget, endGas vm.GasBudget, value *uint256.Int) {
+// haltTopFrame halts the transaction before its first frame is entered: the
+// execution gas is burned and the reservoir kept, as for any halted frame.
+func (st *stateTransition) haltTopFrame(typ vm.OpCode, to common.Address, input []byte, value *uint256.Int) {
+	entryGas := st.gasRemaining
+	st.gasRemaining = entryGas.ExitHalt()
+	endGas := st.gasRemaining
+
 	tracer := st.evm.Config.Tracer
 	if tracer == nil {
 		return
 	}
-	if tracer.OnEnter != nil {
-		tracer.OnEnter(0, byte(typ), st.msg.From, to, input, entryGas.ExecutionGas, value.ToBig())
+	tracer.EmitGasChange(entryGas.AsTracing(), tracing.Gas{}, tracing.GasChangeTxGasForwarded)
+	tracer.EmitEnter(0, byte(typ), st.msg.From, to, input, entryGas.AsTracing(), value.ToBig())
+	tracer.EmitGasChange(tracing.Gas{}, entryGas.AsTracing(), tracing.GasChangeCallInitialBalance)
+	tracer.EmitGasChange(entryGas.AsTracing(), endGas.AsTracing(), tracing.GasChangeCallFailedExecution)
+
+	// A frame's gas events always end at zero: whatever it did not burn goes back
+	// to the caller, which for the top frame is the transaction itself.
+	handover := !endGas.IsZero()
+	if handover {
+		tracer.EmitGasChange(endGas.AsTracing(), tracing.Gas{}, tracing.GasChangeCallLeftOverReturned)
 	}
-	if tracer.HasGasHook() {
-		tracer.EmitGasChange(tracing.Gas{}, entryGas.AsTracing(), tracing.GasChangeCallInitialBalance)
-		tracer.EmitGasChange(entryGas.AsTracing(), endGas.AsTracing(), tracing.GasChangeCallFailedExecution)
+	tracer.EmitExit(0, nil, entryGas.AsTracing(), endGas.AsTracing(), vm.VMErrorFromErr(vm.ErrOutOfGas), true)
+
+	// Handover the remaining gas back to the transaction itself.
+	if handover {
+		tracer.EmitGasChange(tracing.Gas{}, endGas.AsTracing(), tracing.GasChangeCallLeftOverRefunded)
 	}
-	if tracer.OnExit != nil {
-		tracer.OnExit(0, nil, entryGas.ExecutionGas, vm.VMErrorFromErr(vm.ErrOutOfGas), true)
+}
+
+// traceBudgetChange reports a change to the transaction's own gas budget. These
+// happen outside any EVM frame, which emits no events of its own for them.
+func (st *stateTransition) traceBudgetChange(prior vm.GasBudget, reason tracing.GasChangeReason) {
+	if st.evm.Config.Tracer.HasGasHook() && prior != st.gasRemaining {
+		st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), reason)
 	}
 }
 
@@ -980,6 +1009,10 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	// tx_gas_used_before_refund = tx.gas - tx_output.gas_left - tx_output.state_gas_reservoir
 	// tx_state_gas = tx_output.execution_state_gas_used
 	// tx_execution_gas = max(tx_gas_used_before_refund - tx_state_gas, calldata_floor_gas_cost)
+	//
+	// From here on the two pools are one refundable amount: the refund and the
+	// calldata floor apply to the total, and the sender is paid the total. The
+	// settlement events below therefore carry it in the execution slot alone.
 	gasLeft := st.gasRemaining.ExecutionGas + st.gasRemaining.StateGas
 	gasUsedBeforeRefund := st.msg.GasLimit - gasLeft
 
