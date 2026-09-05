@@ -184,23 +184,6 @@ func (am *Manager) walletsNoLock() []Wallet {
 	return cpy
 }
 
-// Wallet retrieves the wallet associated with a particular URL.
-func (am *Manager) Wallet(url string) (Wallet, error) {
-	am.lock.RLock()
-	defer am.lock.RUnlock()
-
-	parsed, err := parseURL(url)
-	if err != nil {
-		return nil, err
-	}
-	for _, wallet := range am.walletsNoLock() {
-		if wallet.URL() == parsed {
-			return wallet, nil
-		}
-	}
-	return nil, ErrUnknownWallet
-}
-
 // Accounts returns all account addresses of all wallets within the account manager
 func (am *Manager) Accounts() []common.Address {
 	am.lock.RLock()
