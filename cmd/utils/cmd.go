@@ -605,8 +605,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last uint64, newBuild
 		}
 	}
 
-	_ = os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
-	return nil
+	return os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
 }
 
 // ImportPreimages imports a batch of exported hash preimages into the database.
