@@ -95,6 +95,42 @@ var unmarshalLogTests = map[string]struct {
 			Removed: true,
 		},
 	},
+	"null data": {
+		input: `{
+			"address": "0xecf8f87f810ecf450940c9f60066b4a7a501d6a7",
+			"topics": [],
+			"data": null,
+			"transactionHash": "0x3b198bfd5d2907285af009e9ae84a0ecd63677110d89d7e030251acb87f6487e"
+		}`,
+		wantError: errors.New("missing required field 'data' for Log"),
+	},
+	"odd-length data": {
+		input: `{
+			"address": "0xecf8f87f810ecf450940c9f60066b4a7a501d6a7",
+			"topics": [],
+			"data": "0x0",
+			"transactionHash": "0x3b198bfd5d2907285af009e9ae84a0ecd63677110d89d7e030251acb87f6487e"
+		}`,
+		wantError: errors.New("json: cannot unmarshal hex string of odd length into Go struct field Log.data of type hexutil.Bytes"),
+	},
+	"invalid hex data": {
+		input: `{
+			"address": "0xecf8f87f810ecf450940c9f60066b4a7a501d6a7",
+			"topics": [],
+			"data": "0xzz",
+			"transactionHash": "0x3b198bfd5d2907285af009e9ae84a0ecd63677110d89d7e030251acb87f6487e"
+		}`,
+		wantError: errors.New("json: cannot unmarshal invalid hex string into Go struct field Log.data of type hexutil.Bytes"),
+	},
+	"data without prefix": {
+		input: `{
+			"address": "0xecf8f87f810ecf450940c9f60066b4a7a501d6a7",
+			"topics": [],
+			"data": "1234",
+			"transactionHash": "0x3b198bfd5d2907285af009e9ae84a0ecd63677110d89d7e030251acb87f6487e"
+		}`,
+		wantError: errors.New("json: cannot unmarshal hex string without 0x prefix into Go struct field Log.data of type hexutil.Bytes"),
+	},
 	"missing data": {
 		input:     `{"address":"0xecf8f87f810ecf450940c9f60066b4a7a501d6a7","blockHash":"0x656c34545f90a730a19008c0e7a7cd4fb3895064b48d6d69761bd5abad681056","blockNumber":"0x1ecfa4","logIndex":"0x2","topics":["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef","0x00000000000000000000000080b2c9d7cbbf30a1b0fc8983c647d754c6525615","0x000000000000000000000000f9dff387dcb5cc4cca5b91adb07a95f54e9f1bb6"],"transactionHash":"0x3b198bfd5d2907285af009e9ae84a0ecd63677110d89d7e030251acb87f6487e","transactionIndex":"0x3"}`,
 		wantError: errors.New("missing required field 'data' for Log"),
