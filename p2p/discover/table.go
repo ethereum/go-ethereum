@@ -667,6 +667,21 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *tableNode {
 	return rep
 }
 
+// bucketWouldEmptyTable reports whether b currently holds the only node(s) left in the
+// entire table, i.e. removing the sole entry of b would leave the table with no nodes
+// at all. The caller must hold tab.mutex.
+func (tab *Table) bucketWouldEmptyTable(b *bucket) bool {
+	if len(b.entries) != 1 || len(b.replacements) != 0 {
+		return false
+	}
+	for i := range tab.buckets {
+		if tab.buckets[i] != b && len(tab.buckets[i].entries) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // bumpInBucket updates a node record if it exists in the bucket.
 // The second return value reports whether the node's endpoint (IP/port) was updated.
 func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool) (n *tableNode, endpointChanged bool) {
