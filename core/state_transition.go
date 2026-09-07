@@ -1432,6 +1432,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		SigHash:              msg.FrameSigHash,
 		Frames:               msg.Frames,
 		Signatures:           msg.FrameSignatures,
+		ChargeOwners:         make(map[vm.FrameChargeKey]int),
 	}
 	st.evm.TxContext.FrameContext = frameCtx
 
@@ -1505,7 +1506,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 
 		// Checkpoint at frame entry, before any charge: a failing frame's
 		// context — its state gas, plus any edits it made to earlier
-		// receipts — restores to here.
+		// receipts and the ownership map — restores to here.
 		var (
 			entryCtx      = frameCtx.Snapshot()
 			frameSnapshot = st.state.Snapshot()

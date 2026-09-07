@@ -714,6 +714,13 @@ func gasSStore8037And8038(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 	}
 	if original == current { // first change of the slot (2.1)
 		if original == (common.Hash{}) { // create slot (2.1.1)
+			// Within a frame transaction, record the executing frame as the
+			// outstanding charge's owner: a later refill of this slot is
+			// attributed back to it. A failed charge rolls the record back
+			// with the halting call frame's context snapshot.
+			if fc := evm.TxContext.FrameContext; fc != nil {
+				fc.ChargeOwners[FrameChargeKey{Address: contract.Address(), Slot: slot}] = fc.CurrentFrame
+			}
 			return GasCosts{
 				ExecutionGas: access + params.StorageWriteAmsterdam,
 				StateGas:     stateSet,
@@ -733,7 +740,22 @@ func gasSStore8037And8038(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 	}
 	if original == value { // reset to original value (2.2.2)
 		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
-			contract.Gas.RefundState(stateSet)
+			// Refill the earlier creation charge: to the meter's reservoir,
+			// or, within a frame transaction, to the frame that owns the
+			// outstanding charge.
+			if fc := evm.TxContext.FrameContext; fc != nil {
+				key := FrameChargeKey{Address: contract.Address(), Slot: slot}
+				owner, ok := fc.ChargeOwners[key]
+				if !ok {
+					// Unreachable: every frame-transaction creation charge
+					// records its owner. Default to the executing frame.
+					owner = fc.CurrentFrame
+				}
+				delete(fc.ChargeOwners, key)
+				fc.CreditStateRefund(&contract.Gas, owner, stateSet)
+			} else {
+				contract.Gas.RefundState(stateSet)
+			}
 		}
 		evm.StateDB.AddRefund(params.StorageWriteAmsterdam)
 	}

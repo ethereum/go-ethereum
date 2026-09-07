@@ -32,6 +32,13 @@ var (
 	errInvalidTxParam = errors.New("invalid tx parameter")
 )
 
+// FrameChargeKey identifies a storage slot whose state-gas creation charge
+// is outstanding within a frame transaction.
+type FrameChargeKey struct {
+	Address common.Address
+	Slot    common.Hash
+}
+
 // FrameContext holds the transaction-scoped state of an executing EIP-8141
 // frame transaction. It is shared by all frames of the transaction.
 type FrameContext struct {
@@ -48,14 +55,22 @@ type FrameContext struct {
 	CurrentFrame int
 
 	// Receipts holds the live receipts of the completed frames, growing as
-	// frames complete. Entries are not final until the transaction ends: an
-	// atomic batch unroll zeroes the state gas of the unrolled frames'
-	// receipts. Logs are materialized by the frame loop once the
-	// transaction has finished.
+	// frames complete. Entries are not final until the transaction ends: a
+	// later frame's refill of a state charge lowers the owning frame's
+	// state gas, and an atomic batch unroll zeroes the state gas of the
+	// unrolled frames' receipts. Logs are materialized by the frame loop
+	// once the transaction has finished.
 	Receipts []types.FrameReceipt
 
 	SenderApproved bool
 	Payer          *common.Address
+
+	// ChargeOwners records, for each storage slot whose creation charge is
+	// outstanding, the frame that paid it. A refill of the slot lowers the
+	// owner's attributed state gas — the executing frame's pool when the
+	// owner is still executing, its receipt entry otherwise — and clears
+	// the entry either way.
+	ChargeOwners map[FrameChargeKey]int
 }
 
 // CurrentTarget returns the resolved target of the currently executing frame.
@@ -66,12 +81,13 @@ func (fc *FrameContext) CurrentTarget() common.Address {
 // FrameContextSnapshot captures the mutable, transaction-scoped fields of a
 // frame context so they can be restored when the call that changed them
 // fails. The context follows the same journaling scope as state: an approval
-// granted or a receipt edited in a child call is discarded together with
-// that call's state changes.
+// granted, a receipt edited by a cross-frame refill, or an ownership change
+// made in a child call is discarded together with that call's state changes.
 type FrameContextSnapshot struct {
 	senderApproved bool
 	payer          *common.Address
 	receipts       []types.FrameReceipt
+	chargeOwners   map[FrameChargeKey]int
 }
 
 // Snapshot captures the current frame context.
@@ -81,10 +97,18 @@ func (fc *FrameContext) Snapshot() FrameContextSnapshot {
 	}
 	receipts := make([]types.FrameReceipt, len(fc.Receipts))
 	copy(receipts, fc.Receipts)
+	var owners map[FrameChargeKey]int
+	if len(fc.ChargeOwners) > 0 {
+		owners = make(map[FrameChargeKey]int, len(fc.ChargeOwners))
+		for k, v := range fc.ChargeOwners {
+			owners[k] = v
+		}
+	}
 	return FrameContextSnapshot{
 		senderApproved: fc.SenderApproved,
 		payer:          fc.Payer,
 		receipts:       receipts,
+		chargeOwners:   owners,
 	}
 }
 
@@ -96,6 +120,23 @@ func (fc *FrameContext) RestoreSnapshot(s FrameContextSnapshot) {
 	fc.SenderApproved = s.senderApproved
 	fc.Payer = s.payer
 	fc.Receipts = s.receipts
+	fc.ChargeOwners = s.chargeOwners
+	if fc.ChargeOwners == nil {
+		fc.ChargeOwners = make(map[FrameChargeKey]int)
+	}
+}
+
+// CreditStateRefund credits a state-gas refill to the frame that paid the
+// charge. The refill lowers the owner's attributed state gas: back into the
+// executing frame's pool when it is the owner, or out of the owner's receipt
+// otherwise, returning the amount to the payer at settlement without
+// granting the executing frame budget it never declared.
+func (fc *FrameContext) CreditStateRefund(budget *GasBudget, owner int, amount uint64) {
+	if owner == fc.CurrentFrame {
+		budget.RefundState(amount)
+		return
+	}
+	fc.Receipts[owner].StateGasUsed -= amount
 }
 
 // FrameApprove validates and performs an APPROVE of the given scope for the
