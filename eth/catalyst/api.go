@@ -884,6 +884,12 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
 }
 
+// payloadActivationWait bounds how long a new payload at the activation
+// boundary waits for the shadow tree to replay its parent: half the 8s
+// engine-API newPayload timeout mainnet consensus clients use (Lighthouse,
+// Prysm), leaving equal budget for the payload's own insertion.
+const payloadActivationWait = 4 * time.Second
+
 func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (result engine.PayloadStatusV1, err error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
@@ -991,10 +997,13 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
 	// Across the activation boundary the parent's state lives in the shadow
-	// tree; a lagging follower is a sync condition, not an invalid payload.
-	if !api.eth.BlockChain().ActivationReady(block) {
+	// tree. A sidechain parent has no record until the follower replays it,
+	// and the follower replays only when asked - so ask and wait a bounded
+	// moment before delaying, or a competing branch delivered payload by
+	// payload can never be imported.
+	if err := api.eth.BlockChain().WaitActivation(block, payloadActivationWait); err != nil {
 		api.remoteBlocks.put(block.Hash(), block.Header())
-		log.Warn("Shadow tree not caught up, delaying new payload", "parent", block.ParentHash())
+		log.Warn("Shadow tree not caught up, delaying new payload", "parent", block.ParentHash(), "err", err)
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())

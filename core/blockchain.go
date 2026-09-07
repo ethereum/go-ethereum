@@ -2091,10 +2091,8 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		}
 		// At the activation boundary the pre-state lives in the shadow tree;
 		// give a lagging follower a bounded moment.
-		if bc.follower != nil && !bc.ActivationReady(block) {
-			if err := bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), activationWaitTimeout); err != nil {
-				return nil, it.index, fmt.Errorf("activation waits on the shadow tree: %w", err)
-			}
+		if err := bc.WaitActivation(block, activationWaitTimeout); err != nil {
+			return nil, it.index, fmt.Errorf("activation waits on the shadow tree: %w", err)
 		}
 		// The traced section of block import.
 		start := time.Now()
@@ -2287,6 +2285,19 @@ func (bc *BlockChain) ActivationReady(block *types.Block) bool {
 		return true
 	}
 	return bc.ShadowReady(parent.Hash(), parent.Number.Uint64())
+}
+
+// WaitActivation drives the shadow tree to block's parent when block crosses
+// the activation boundary onto a parent the follower has not replayed - a
+// sidechain parent delivered by the engine API - and waits up to timeout for
+// the record. The follower replays off-canonical ancestors only when asked,
+// so a caller that merely reports "not ready" and waits for a retry waits
+// forever.
+func (bc *BlockChain) WaitActivation(block *types.Block, timeout time.Duration) error {
+	if bc.ActivationReady(block) {
+		return nil
+	}
+	return bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), timeout)
 }
 
 // StateForBuilding returns the state to seal a block of the given number and
