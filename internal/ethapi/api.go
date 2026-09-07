@@ -1353,8 +1353,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 	}
 
-	// When all fee fields are omitted, leave them zeroed (as eth_call does) so creation doesn't
-	// fail affordability on fee defaults the sender can't afford; derive them otherwise.
+	// Only use default fee values if the user failed to specify one of the fields.
 	if args.GasPrice != nil || args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.BlobFeeCap != nil {
 		if err = args.setFeeDefaults(ctx, b, header); err != nil {
 			return nil, 0, nil, err
