@@ -930,8 +930,10 @@ func (st *stateTransition) haltTopFrame(typ vm.OpCode, to common.Address, input 
 // traceBudgetChange reports a change to the transaction's own gas budget. These
 // happen outside any EVM frame, which emits no events of its own for them.
 func (st *stateTransition) traceBudgetChange(prior vm.GasBudget, reason tracing.GasChangeReason) {
-	if st.evm.Config.Tracer.HasGasHook() && prior != st.gasRemaining {
-		st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), reason)
+	if st.evm.Config.Tracer.HasGasHook() {
+		if pt, rt := prior.AsTracing(), st.gasRemaining.AsTracing(); pt != rt {
+			st.evm.Config.Tracer.EmitGasChange(pt, rt, reason)
+		}
 	}
 }
 
