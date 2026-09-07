@@ -277,6 +277,9 @@ func opTxParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		pushUint(scope, uint64(fc.CurrentFrame))
 	case 0x0b:
 		pushUint(scope, uint64(len(fc.Signatures)))
+	case 0x0c:
+		// State gas remaining in the executing frame's pool.
+		pushUint(scope, scope.Contract.Gas.StateGas)
 	default:
 		return nil, errInvalidTxParam
 	}
@@ -387,6 +390,20 @@ func opFrameParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 			value.Set(frame.Value)
 		}
 		scope.Stack.push(value)
+	case 0x09:
+		pushUint(scope, frame.GasLimits.State)
+	case 0x0a:
+		receipt, err := completedReceipt()
+		if err != nil {
+			return nil, err
+		}
+		pushUint(scope, receipt.GasUsed)
+	case 0x0b:
+		receipt, err := completedReceipt()
+		if err != nil {
+			return nil, err
+		}
+		pushUint(scope, receipt.StateGasUsed)
 	default:
 		return nil, errInvalidTxParam
 	}
