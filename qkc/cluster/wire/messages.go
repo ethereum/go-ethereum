@@ -88,7 +88,9 @@ package wire
 
 import (
 	"github.com/ethereum/go-ethereum/qkc/account"
+	qkcCommon "github.com/ethereum/go-ethereum/qkc/common"
 	"github.com/ethereum/go-ethereum/qkc/serialize"
+	"github.com/ethereum/go-ethereum/qkc/types"
 )
 
 // =============================================================================
@@ -118,9 +120,9 @@ const UInt128Length = 16
 //	    ("root_tip", Optional(RootBlock)),
 //	]
 type PingRequest struct {
-	ID              []byte    `bytesizeofslicelen:"4"`
-	FullShardIDList []uint32  `bytesizeofslicelen:"4"`
-	RootTip         *RawBytes `ser:"nil"` // TODO: Replace with *RootBlock once core.RootBlock is ported
+	ID              []byte           `bytesizeofslicelen:"4"`
+	FullShardIDList []uint32         `bytesizeofslicelen:"4"`
+	RootTip         *types.RootBlock `ser:"nil"`
 }
 
 // PongResponse (ClusterOp.PONG, 0x82) — slave's reply to PING.
@@ -200,7 +202,7 @@ type MineResponse struct {
 type GenTxRequest struct {
 	NumTxPerShard uint32
 	XShardPercent uint32
-	Tx            *RawBytes // TODO: Replace with *TypedTransaction once core.TypedTransaction is ported
+	Tx            *types.Transaction
 }
 
 // GenTxResponse (ClusterOp.GEN_TX_RESPONSE, 0xAA).
@@ -236,8 +238,7 @@ type DestroyClusterPeerConnectionCommand struct {
 //
 //	FIELDS = [("root_block", RootBlock), ("expect_switch", boolean)]
 type AddRootBlockRequest struct {
-	// TODO: Replace with *RootBlock once core.RootBlock is ported.
-	RootBlock    *RawBytes
+	RootBlock    *types.RootBlock
 	ExpectSwitch bool
 }
 
@@ -289,7 +290,7 @@ type GetNextBlockToMineRequest struct {
 // GetNextBlockToMineResponse (ClusterOp.GET_NEXT_BLOCK_TO_MINE_RESPONSE, 0x8A).
 type GetNextBlockToMineResponse struct {
 	ErrorCode uint32
-	Block     *RawBytes // TODO: Replace with *MinorBlock once core.MinorBlock is ported
+	Block     *types.MinorBlock
 }
 
 // AddMinorBlockRequest (ClusterOp.ADD_MINOR_BLOCK_REQUEST, 0x97) — JRPC-mined blocks.
@@ -306,7 +307,7 @@ type AddMinorBlockResponse struct {
 
 // CheckMinorBlockRequest (ClusterOp.CHECK_MINOR_BLOCK_REQUEST, 0xBD).
 type CheckMinorBlockRequest struct {
-	MinorBlockHeader *RawBytes // TODO: Replace with *MinorBlockHeader once core.MinorBlockHeader is ported
+	MinorBlockHeader *types.MinorBlockHeader
 }
 
 // CheckMinorBlockResponse (ClusterOp.CHECK_MINOR_BLOCK_RESPONSE, 0xBE).
@@ -317,7 +318,7 @@ type CheckMinorBlockResponse struct {
 // HeadersInfo — used by GetUnconfirmedHeadersResponse.
 type HeadersInfo struct {
 	Branch     uint32
-	HeaderList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*MinorBlockHeader once core.MinorBlockHeader is ported
+	HeaderList []*types.MinorBlockHeader `bytesizeofslicelen:"4"`
 }
 
 // GetUnconfirmedHeadersRequest (ClusterOp.GET_UNCONFIRMED_HEADERS_REQUEST, 0x8B) — empty body.
@@ -340,10 +341,9 @@ type GetUnconfirmedHeadersResponse struct {
 //	    ("mined_blocks", uint16),
 //	]
 type AccountBranchData struct {
-	Branch           uint32
-	TransactionCount serialize.Uint256
-	// TODO: Replace with *TokenBalanceMap once core.TokenBalanceMap is ported.
-	TokenBalances      *RawBytes
+	Branch             uint32
+	TransactionCount   serialize.Uint256
+	TokenBalances      *qkcCommon.TokenBalances
 	IsContract         bool
 	PoswMineableBlocks uint16
 	MinedBlocks        uint16
@@ -363,7 +363,7 @@ type GetAccountDataResponse struct {
 
 // AddTransactionRequest (ClusterOp.ADD_TRANSACTION_REQUEST, 0x8F).
 type AddTransactionRequest struct {
-	Tx *RawBytes // TODO: Replace with *TypedTransaction once core.TypedTransaction is ported
+	Tx *types.Transaction
 }
 
 // AddTransactionResponse (ClusterOp.ADD_TRANSACTION_RESPONSE, 0x90).
@@ -410,12 +410,10 @@ type ShardStats struct {
 //	    ("shard_stats", ShardStats),
 //	]
 type AddMinorBlockHeaderRequest struct {
-	// TODO: Replace with *MinorBlockHeader once core.MinorBlockHeader is ported.
-	MinorBlockHeader *RawBytes
-	TxCount          uint32
-	XShardTxCount    uint32
-	// TODO: Replace with *TokenBalanceMap once core.TokenBalanceMap is ported.
-	CoinbaseAmountMap *RawBytes
+	MinorBlockHeader  *types.MinorBlockHeader
+	TxCount           uint32
+	XShardTxCount     uint32
+	CoinbaseAmountMap *qkcCommon.TokenBalances
 	ShardStats        ShardStats
 }
 
@@ -427,8 +425,8 @@ type AddMinorBlockHeaderResponse struct {
 
 // AddMinorBlockHeaderListRequest (ClusterOp.ADD_MINOR_BLOCK_HEADER_LIST_REQUEST, 0xBB) — slave→master.
 type AddMinorBlockHeaderListRequest struct {
-	MinorBlockHeaderList  []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*MinorBlockHeader once core.MinorBlockHeader is ported
-	CoinbaseAmountMapList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*TokenBalanceMap once core.TokenBalanceMap is ported
+	MinorBlockHeaderList  []*types.MinorBlockHeader  `bytesizeofslicelen:"4"`
+	CoinbaseAmountMapList []*qkcCommon.TokenBalances `bytesizeofslicelen:"4"`
 }
 
 // AddMinorBlockHeaderListResponse (ClusterOp.ADD_MINOR_BLOCK_HEADER_LIST_RESPONSE, 0xBC).
@@ -480,9 +478,8 @@ type GetMinorBlockRequest struct {
 
 // GetMinorBlockResponse (ClusterOp.GET_MINOR_BLOCK_RESPONSE, 0x9E).
 type GetMinorBlockResponse struct {
-	ErrorCode uint32
-	// TODO: Replace with *MinorBlock once core.MinorBlock is ported.
-	MinorBlock *RawBytes
+	ErrorCode  uint32
+	MinorBlock *types.MinorBlock
 	ExtraInfo  *MinorBlockExtraInfo `ser:"nil"`
 }
 
@@ -494,16 +491,14 @@ type GetTransactionRequest struct {
 
 // GetTransactionResponse (ClusterOp.GET_TRANSACTION_RESPONSE, 0xA0).
 type GetTransactionResponse struct {
-	ErrorCode uint32
-	// TODO: Replace with *MinorBlock once core.MinorBlock is ported.
-	MinorBlock *RawBytes
+	ErrorCode  uint32
+	MinorBlock *types.MinorBlock
 	Index      uint32
 }
 
 // ExecuteTransactionRequest (ClusterOp.EXECUTE_TRANSACTION_REQUEST, 0xA3).
 type ExecuteTransactionRequest struct {
-	// TODO: Replace with *TypedTransaction once core.TypedTransaction is ported.
-	Tx          *RawBytes
+	Tx          *types.Transaction
 	FromAddress account.Address
 	BlockHeight *uint64 `ser:"nil"`
 }
@@ -522,12 +517,10 @@ type GetTransactionReceiptRequest struct {
 
 // GetTransactionReceiptResponse (ClusterOp.GET_TRANSACTION_RECEIPT_RESPONSE, 0xA6).
 type GetTransactionReceiptResponse struct {
-	ErrorCode uint32
-	// TODO: Replace with *MinorBlock once core.MinorBlock is ported.
-	MinorBlock *RawBytes
+	ErrorCode  uint32
+	MinorBlock *types.MinorBlock
 	Index      uint32
-	// TODO: Replace with *TransactionReceipt once core.TransactionReceipt is ported.
-	Receipt *RawBytes
+	Receipt    *types.ClusterTransactionReceipt
 }
 
 // TransactionDetail — used by GetTransactionListByAddressResponse and
@@ -595,13 +588,12 @@ type GetLogRequest struct {
 // GetLogResponse (ClusterOp.GET_LOG_RESPONSE, 0xAE).
 type GetLogResponse struct {
 	ErrorCode uint32
-	Logs      []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*Log once core.Log is ported
+	Logs      []*types.ClusterLog `bytesizeofslicelen:"4"`
 }
 
 // EstimateGasRequest (ClusterOp.ESTIMATE_GAS_REQUEST, 0xAF).
 type EstimateGasRequest struct {
-	// TODO: Replace with *TypedTransaction once core.TypedTransaction is ported.
-	Tx          *RawBytes
+	Tx          *types.Transaction
 	FromAddress account.Address
 }
 
@@ -719,7 +711,7 @@ type GetTotalBalanceResponse struct {
 type AddXshardTxListRequest struct {
 	Branch         uint32
 	MinorBlockHash [HashLength]byte
-	TxList         *RawBytes // TODO: Replace with *CrossShardTransactionList once core.CrossShardTransactionList is ported
+	TxList         *types.CrossShardTransactionList
 }
 
 // AddXshardTxListResponse (ClusterOp.ADD_XSHARD_TX_LIST_RESPONSE, 0x94).
@@ -754,32 +746,30 @@ type BatchAddXshardTxListResponse struct {
 //	    ("genesis_root_block_hash", hash256),
 //	]
 type HelloCommand struct {
-	Version       uint32
-	NetworkID     uint32
-	PeerID        [HashLength]byte
-	PeerIP        [UInt128Length]byte
-	PeerPort      uint16
-	ChainMaskList []uint32 `bytesizeofslicelen:"4"`
-	// TODO: Replace with *RootBlockHeader once core.RootBlockHeader is ported.
-	RootBlockHeader      *RawBytes
+	Version              uint32
+	NetworkID            uint32
+	PeerID               [HashLength]byte
+	PeerIP               [UInt128Length]byte
+	PeerPort             uint16
+	ChainMaskList        []uint32 `bytesizeofslicelen:"4"`
+	RootBlockHeader      *types.RootBlockHeader
 	GenesisRootBlockHash [HashLength]byte
 }
 
 // NewMinorBlockHeaderListCommand (CommandOp.NEW_MINOR_BLOCK_HEADER_LIST, 0x01).
 type NewMinorBlockHeaderListCommand struct {
-	// TODO: Replace with *RootBlockHeader once core.RootBlockHeader is ported.
-	RootBlockHeader      *RawBytes
-	MinorBlockHeaderList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*MinorBlockHeader once core.MinorBlockHeader is ported
+	RootBlockHeader      *types.RootBlockHeader
+	MinorBlockHeaderList []*types.MinorBlockHeader `bytesizeofslicelen:"4"`
 }
 
 // NewTransactionListCommand (CommandOp.NEW_TRANSACTION_LIST, 0x02).
 type NewTransactionListCommand struct {
-	TransactionList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*TypedTransaction once core.TypedTransaction is ported
+	TransactionList []*types.Transaction `bytesizeofslicelen:"4"`
 }
 
 // NewBlockMinorCommand (CommandOp.NEW_BLOCK_MINOR, 0x0D).
 type NewBlockMinorCommand struct {
-	Block *RawBytes // TODO: Replace with *MinorBlock once core.MinorBlock is ported
+	Block *types.MinorBlock
 }
 
 // PingPongCommand (CommandOp.PING 0x0E, PONG 0x0F).
@@ -789,7 +779,7 @@ type PingPongCommand struct {
 
 // NewRootBlockCommand (CommandOp.NEW_ROOT_BLOCK, 0x12).
 type NewRootBlockCommand struct {
-	Block *RawBytes // TODO: Replace with *RootBlock once core.RootBlock is ported
+	Block *types.RootBlock
 }
 
 // =============================================================================
@@ -821,9 +811,8 @@ type GetRootBlockHeaderListRequest struct {
 
 // GetRootBlockHeaderListResponse (CommandOp.GET_ROOT_BLOCK_HEADER_LIST_RESPONSE, 0x06).
 type GetRootBlockHeaderListResponse struct {
-	// TODO: Replace with *RootBlockHeader once core.RootBlockHeader is ported.
-	RootTip         *RawBytes
-	BlockHeaderList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*RootBlockHeader once core.RootBlockHeader is ported
+	RootTip         *types.RootBlockHeader
+	BlockHeaderList []*types.RootBlockHeader `bytesizeofslicelen:"4"`
 }
 
 // GetRootBlockHeaderListWithSkipRequest (CommandOp.GET_ROOT_BLOCK_HEADER_LIST_WITH_SKIP_REQUEST, 0x10).
@@ -842,7 +831,7 @@ type GetRootBlockListRequest struct {
 
 // GetRootBlockListResponse (CommandOp.GET_ROOT_BLOCK_LIST_RESPONSE, 0x08).
 type GetRootBlockListResponse struct {
-	RootBlockList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*RootBlock once core.RootBlock is ported
+	RootBlockList []*types.RootBlock `bytesizeofslicelen:"4"`
 }
 
 // GetMinorBlockListRequest (CommandOp.GET_MINOR_BLOCK_LIST_REQUEST, 0x09).
@@ -852,7 +841,7 @@ type GetMinorBlockListRequest struct {
 
 // GetMinorBlockListResponse (CommandOp.GET_MINOR_BLOCK_LIST_RESPONSE, 0x0A).
 type GetMinorBlockListResponse struct {
-	MinorBlockList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*MinorBlock once core.MinorBlock is ported
+	MinorBlockList []*types.MinorBlock `bytesizeofslicelen:"4"`
 }
 
 // GetMinorBlockHeaderListRequest (CommandOp.GET_MINOR_BLOCK_HEADER_LIST_REQUEST, 0x0B).
@@ -865,11 +854,9 @@ type GetMinorBlockHeaderListRequest struct {
 
 // GetMinorBlockHeaderListResponse (CommandOp.GET_MINOR_BLOCK_HEADER_LIST_RESPONSE, 0x0C).
 type GetMinorBlockHeaderListResponse struct {
-	// TODO: Replace with *RootBlockHeader once core.RootBlockHeader is ported.
-	RootTip *RawBytes
-	// TODO: Replace with *MinorBlockHeader once core.MinorBlockHeader is ported.
-	ShardTip        *RawBytes
-	BlockHeaderList []*RawBytes `bytesizeofslicelen:"4"` // TODO: Replace with []*MinorBlockHeader once core.MinorBlockHeader is ported
+	RootTip         *types.RootBlockHeader
+	ShardTip        *types.MinorBlockHeader
+	BlockHeaderList []*types.MinorBlockHeader `bytesizeofslicelen:"4"`
 }
 
 // GetMinorBlockHeaderListWithSkipRequest (CommandOp.GET_MINOR_BLOCK_HEADER_LIST_WITH_SKIP_REQUEST, 0x13).

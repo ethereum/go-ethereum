@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/qkc/cluster/wire"
 	"github.com/ethereum/go-ethereum/qkc/serialize"
+	"github.com/ethereum/go-ethereum/qkc/types"
 )
 
 // ── pool test helpers (white-box, same package) ──────────────────────────────
@@ -236,7 +237,7 @@ func TestXshardConn_XshardTxListServedByHandler(t *testing.T) {
 	server.Start()
 	client.Start()
 
-	txList := wire.RawBytes{}
+	txList := types.CrossShardTransactionList{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if err := client.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{
@@ -259,7 +260,7 @@ func TestXshardConn_BatchAddXshardTxListServedByHandler(t *testing.T) {
 	server.Start()
 	client.Start()
 
-	txList := wire.RawBytes{}
+	txList := types.CrossShardTransactionList{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if err := client.SendBatchAddXshardTxList(ctx, &wire.BatchAddXshardTxListRequest{
@@ -721,7 +722,7 @@ func TestXshardPool_SequentialDialLeavesOneLiveRoute(t *testing.T) {
 	// retained (inbound) end back to S0 across the kept connection.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := pool1.Lookup(s0Shards[0])[0].SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{Branch: s0Shards[0], TxList: &wire.RawBytes{}}); err != nil {
+	if err := pool1.Lookup(s0Shards[0])[0].SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{Branch: s0Shards[0], TxList: &types.CrossShardTransactionList{}}); err != nil {
 		t.Fatalf("round-trip over retained route failed: %v", err)
 	}
 }
@@ -874,7 +875,7 @@ func TestXshardConn_SendXshardTxListErrorCode(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			err = client.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{Branch: 1, TxList: &wire.RawBytes{}})
+			err = client.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{Branch: 1, TxList: &types.CrossShardTransactionList{}})
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("expected error for non-zero error_code, got nil")

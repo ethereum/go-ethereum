@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/qkc/cluster/conn"
 	"github.com/ethereum/go-ethereum/qkc/cluster/wire"
 	"github.com/ethereum/go-ethereum/qkc/serialize"
+	"github.com/ethereum/go-ethereum/qkc/types"
 )
 
 // XshardHandler serves inbound xshard requests, implemented by the business
@@ -234,7 +235,7 @@ func (x *XshardConn) sendPing(ctx context.Context) ([]byte, []uint32, error) {
 	req := &wire.PingRequest{
 		ID:              x.localID,
 		FullShardIDList: x.localFullShardIDList,
-		RootTip:         nil, // TODO: RootTip stays nil until the RootBlock wire type is ported.
+		RootTip:         types.NewRootBlockWithHeader(&types.RootBlockHeader{}),
 	}
 	resp, err := x.sendRPC(ctx, byte(wire.ClusterOpPing), req)
 	if err != nil {

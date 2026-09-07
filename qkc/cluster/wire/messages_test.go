@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/qkc/account"
 	"github.com/ethereum/go-ethereum/qkc/serialize"
+	"github.com/ethereum/go-ethereum/qkc/types"
 )
 
 // =============================================================================
@@ -103,14 +104,15 @@ func TestMessageRoundTrip(t *testing.T) {
 		name string
 		msg  any
 	}{
-		{"PingRequest_no_RawBytes", PingRequest{
+		{"PingRequest_no_RootTip", PingRequest{
 			ID:              []byte("slave1"),
 			FullShardIDList: []uint32{0x00010001, 0x00020002},
 		}},
-		{"GenTxRequest_RawBytes_last", GenTxRequest{
+		{"GenTxRequest_Tx_last", GenTxRequest{
 			NumTxPerShard: 10,
 			XShardPercent: 30,
-			Tx:            &RawBytes{0x01, 0x02, 0x03},
+			Tx: types.NewEvmTransaction(1, account.Recipient{}, big.NewInt(100), 21000, big.NewInt(10),
+				0x00010001, 0x00010002, 1, 1, []byte{0xAA}, 1, 1),
 		}},
 	}
 
