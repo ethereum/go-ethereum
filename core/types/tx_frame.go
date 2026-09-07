@@ -71,136 +71,6 @@ const (
 	FrameTxSchemeP256      uint64 = 0x2
 )
 
-// FrameTxGasLimits is the gas budget pair of a frame, one per gas dimension.
-// The two budgets are independent: neither dimension can fund charges of the
-// other, and unused gas in one is not available to the other. It encodes as
-// the nested `limits = [execution, state]` list of the frame payload.
-type FrameTxGasLimits struct {
-	Execution uint64
-	State     uint64
-}
-
-// FrameTxFrame is a single frame in a frame transaction.
-type FrameTxFrame struct {
-	Mode      uint64
-	Flags     uint64
-	Target    *common.Address `rlp:"nil"` // nil resolves to the transaction sender
-	GasLimits FrameTxGasLimits
-	Value     *uint256.Int
-	Data      []byte
-}
-
-// ResolvedTarget returns the frame's target, resolving a nil target to the
-// transaction sender.
-func (f *FrameTxFrame) ResolvedTarget(sender common.Address) common.Address {
-	if f.Target == nil {
-		return sender
-	}
-	return *f.Target
-}
-
-// IsExpiryVerifier reports whether the frame is an expiry verifier frame,
-// i.e. a VERIFY frame targeting the expiry verifier contract.
-func (f *FrameTxFrame) IsExpiryVerifier() bool {
-	return f.Mode == FrameTxModeVerify && f.Target != nil && *f.Target == params.FrameTxExpiryVerifier
-}
-
-// The JSON codec accepts hex numbers with leading zero digits, as emitted by
-// test fixtures, and marshals them canonically.
-type frameTxFrameJSON struct {
-	Mode          math.HexOrDecimal64   `json:"mode"`
-	Flags         math.HexOrDecimal64   `json:"flags"`
-	Target        *common.Address       `json:"target,omitempty"`
-	GasLimit      math.HexOrDecimal64   `json:"gasLimit"`
-	StateGasLimit math.HexOrDecimal64   `json:"stateGasLimit"`
-	Value         *math.HexOrDecimal256 `json:"value"`
-	Data          hexutil.Bytes         `json:"data"`
-}
-
-func (f FrameTxFrame) MarshalJSON() ([]byte, error) {
-	enc := frameTxFrameJSON{
-		Mode:          math.HexOrDecimal64(f.Mode),
-		Flags:         math.HexOrDecimal64(f.Flags),
-		Target:        f.Target,
-		GasLimit:      math.HexOrDecimal64(f.GasLimits.Execution),
-		StateGasLimit: math.HexOrDecimal64(f.GasLimits.State),
-		Data:          f.Data,
-	}
-	if f.Value != nil {
-		enc.Value = (*math.HexOrDecimal256)(f.Value.ToBig())
-	}
-	return json.Marshal(&enc)
-}
-
-func (f *FrameTxFrame) UnmarshalJSON(input []byte) error {
-	var dec frameTxFrameJSON
-	if err := json.Unmarshal(input, &dec); err != nil {
-		return err
-	}
-	f.Mode = uint64(dec.Mode)
-	f.Flags = uint64(dec.Flags)
-	f.Target = dec.Target
-	f.GasLimits = FrameTxGasLimits{
-		Execution: uint64(dec.GasLimit),
-		State:     uint64(dec.StateGasLimit),
-	}
-	f.Value = new(uint256.Int)
-	if dec.Value != nil {
-		value, overflow := uint256.FromBig((*big.Int)(dec.Value))
-		if overflow {
-			return errors.New("frame value exceeds 256 bits")
-		}
-		f.Value = value
-	}
-	f.Data = dec.Data
-	return nil
-}
-
-// FrameTxSignature is a signature entry in a frame transaction.
-type FrameTxSignature struct {
-	Scheme    uint64
-	Signer    []byte // 20-byte address for SECP256K1 and P256, empty for ARBITRARY
-	Msg       []byte // empty (canonical signature hash) or an explicit 32-byte digest
-	Signature []byte
-}
-
-type frameTxSignatureJSON struct {
-	Scheme    math.HexOrDecimal64 `json:"scheme"`
-	Signer    hexutil.Bytes       `json:"signer"`
-	Msg       hexutil.Bytes       `json:"msg"`
-	Signature hexutil.Bytes       `json:"signature"`
-}
-
-func (s FrameTxSignature) MarshalJSON() ([]byte, error) {
-	enc := frameTxSignatureJSON{
-		Scheme:    math.HexOrDecimal64(s.Scheme),
-		Signer:    s.Signer,
-		Msg:       s.Msg,
-		Signature: s.Signature,
-	}
-	return json.Marshal(&enc)
-}
-
-func (s *FrameTxSignature) UnmarshalJSON(input []byte) error {
-	var dec frameTxSignatureJSON
-	if err := json.Unmarshal(input, &dec); err != nil {
-		return err
-	}
-	s.Scheme = uint64(dec.Scheme)
-	s.Signer = dec.Signer
-	s.Msg = dec.Msg
-	s.Signature = dec.Signature
-	return nil
-}
-
-// FrameTxFees groups the fee parameters of a frame transaction, encoded as
-// the nested `fees` list of the transaction payload.
-type FrameTxFees struct {
-	MaxPriorityFeePerGas *uint256.Int
-	MaxFeePerGas         *uint256.Int
-	MaxFeePerBlobGas     *uint256.Int
-}
-
 // FrameTx represents an EIP-8141 frame transaction.
 type FrameTx struct {
 	ChainID             *uint256.Int
@@ -517,6 +387,145 @@ func (tx *FrameTx) sigHash(chainID *big.Int) common.Hash {
 	)
 }
 
+// FrameTxFrame is a single frame in a frame transaction.
+type FrameTxFrame struct {
+	Mode      uint64
+	Flags     uint64
+	Target    *common.Address `rlp:"nil"` // nil resolves to the transaction sender
+	GasLimits FrameTxGasLimits
+	Value     *uint256.Int
+	Data      []byte
+}
+
+// ResolvedTarget returns the frame's target, resolving a nil target to the
+// transaction sender.
+func (f *FrameTxFrame) ResolvedTarget(sender common.Address) common.Address {
+	if f.Target == nil {
+		return sender
+	}
+	return *f.Target
+}
+
+// IsExpiryVerifier reports whether the frame is an expiry verifier frame,
+// i.e. a VERIFY frame targeting the expiry verifier contract.
+func (f *FrameTxFrame) IsExpiryVerifier() bool {
+	return f.Mode == FrameTxModeVerify && f.Target != nil && *f.Target == params.FrameTxExpiryVerifier
+}
+
+// The JSON codec accepts hex numbers with leading zero digits, as emitted by
+// test fixtures, and marshals them canonically.
+type frameTxFrameJSON struct {
+	Mode          math.HexOrDecimal64   `json:"mode"`
+	Flags         math.HexOrDecimal64   `json:"flags"`
+	Target        *common.Address       `json:"target,omitempty"`
+	GasLimit      math.HexOrDecimal64   `json:"gasLimit"`
+	StateGasLimit math.HexOrDecimal64   `json:"stateGasLimit"`
+	Value         *math.HexOrDecimal256 `json:"value"`
+	Data          hexutil.Bytes         `json:"data"`
+}
+
+func (f FrameTxFrame) MarshalJSON() ([]byte, error) {
+	enc := frameTxFrameJSON{
+		Mode:          math.HexOrDecimal64(f.Mode),
+		Flags:         math.HexOrDecimal64(f.Flags),
+		Target:        f.Target,
+		GasLimit:      math.HexOrDecimal64(f.GasLimits.Execution),
+		StateGasLimit: math.HexOrDecimal64(f.GasLimits.State),
+		Data:          f.Data,
+	}
+	if f.Value != nil {
+		enc.Value = (*math.HexOrDecimal256)(f.Value.ToBig())
+	}
+	return json.Marshal(&enc)
+}
+
+func (f *FrameTxFrame) UnmarshalJSON(input []byte) error {
+	var dec frameTxFrameJSON
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	f.Mode = uint64(dec.Mode)
+	f.Flags = uint64(dec.Flags)
+	f.Target = dec.Target
+	f.GasLimits = FrameTxGasLimits{
+		Execution: uint64(dec.GasLimit),
+		State:     uint64(dec.StateGasLimit),
+	}
+	f.Value = new(uint256.Int)
+	if dec.Value != nil {
+		value, overflow := uint256.FromBig((*big.Int)(dec.Value))
+		if overflow {
+			return errors.New("frame value exceeds 256 bits")
+		}
+		f.Value = value
+	}
+	f.Data = dec.Data
+	return nil
+}
+
+// FrameTxGasLimits is the gas budget pair of a frame, one per gas dimension.
+// The two budgets are independent: neither dimension can fund charges of the
+// other, and unused gas in one is not available to the other. It encodes as
+// the nested `limits = [execution, state]` list of the frame payload.
+type FrameTxGasLimits struct {
+	Execution uint64
+	State     uint64
+}
+
+// FrameTxSignature is a signature entry in a frame transaction.
+type FrameTxSignature struct {
+	Scheme    uint64
+	Signer    []byte // 20-byte address for SECP256K1 and P256, empty for ARBITRARY
+	Msg       []byte // empty (canonical signature hash) or an explicit 32-byte digest
+	Signature []byte
+}
+
+type frameTxSignatureJSON struct {
+	Scheme    math.HexOrDecimal64 `json:"scheme"`
+	Signer    hexutil.Bytes       `json:"signer"`
+	Msg       hexutil.Bytes       `json:"msg"`
+	Signature hexutil.Bytes       `json:"signature"`
+}
+
+func (s FrameTxSignature) MarshalJSON() ([]byte, error) {
+	enc := frameTxSignatureJSON{
+		Scheme:    math.HexOrDecimal64(s.Scheme),
+		Signer:    s.Signer,
+		Msg:       s.Msg,
+		Signature: s.Signature,
+	}
+	return json.Marshal(&enc)
+}
+
+func (s *FrameTxSignature) UnmarshalJSON(input []byte) error {
+	var dec frameTxSignatureJSON
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	s.Scheme = uint64(dec.Scheme)
+	s.Signer = dec.Signer
+	s.Msg = dec.Msg
+	s.Signature = dec.Signature
+	return nil
+}
+
+// ResolvedSigner returns the signer address of a protocol-validated
+// signature entry, resolving an empty signer to the transaction sender.
+func (s *FrameTxSignature) ResolvedSigner(sender common.Address) common.Address {
+	if len(s.Signer) == 0 {
+		return sender
+	}
+	return common.BytesToAddress(s.Signer)
+}
+
+// FrameTxFees groups the fee parameters of a frame transaction, encoded as
+// the nested `fees` list of the transaction payload.
+type FrameTxFees struct {
+	MaxPriorityFeePerGas *uint256.Int
+	MaxFeePerGas         *uint256.Int
+	MaxFeePerBlobGas     *uint256.Int
+}
+
 // FrameTxSignatureGas returns the gas charged for the protocol validation of
 // a single signature entry.
 func FrameTxSignatureGas(sig *FrameTxSignature) uint64 {
@@ -664,15 +673,6 @@ func FrameTxMaxGas(frames []FrameTxFrame, sigs []FrameTxSignature, sender common
 
 // ValidateFrameTxSignatures validates all signature entries of a frame
 // transaction against the canonical signature hash, per EIP-8141.
-// ResolvedSigner returns the signer address of a protocol-validated
-// signature entry, resolving an empty signer to the transaction sender.
-func (s *FrameTxSignature) ResolvedSigner(sender common.Address) common.Address {
-	if len(s.Signer) == 0 {
-		return sender
-	}
-	return common.BytesToAddress(s.Signer)
-}
-
 func ValidateFrameTxSignatures(sigs []FrameTxSignature, sender common.Address, sigHash common.Hash) error {
 	for i := range sigs {
 		if !validateFrameTxSignature(&sigs[i], sender, sigHash) {
