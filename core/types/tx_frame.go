@@ -382,9 +382,27 @@ func (tx *FrameTx) ValidateStatic() error {
 			return fmt.Errorf("%w: execution approval flag outside sender target", ErrFrameTxInvalidFormat)
 		}
 
-		// An atomic batch must be terminated by a subsequent frame.
-		if frame.Flags&FrameTxAtomicBatchFlag != 0 && i+1 >= len(tx.Frames) {
-			return fmt.Errorf("%w: atomic batch flag set on last frame", ErrFrameTxInvalidFormat)
+		// An atomic batch must be terminated by a subsequent non-VERIFY
+		// frame and can never contain a VERIFY frame.
+		if frame.Flags&FrameTxAtomicBatchFlag != 0 {
+			if frame.Mode == FrameTxModeVerify {
+				return fmt.Errorf("%w: atomic batches cannot contain verify frames", ErrFrameTxInvalidFormat)
+			}
+			if i+1 >= len(tx.Frames) {
+				return fmt.Errorf("%w: atomic batch flag set on last frame", ErrFrameTxInvalidFormat)
+			}
+			if tx.Frames[i+1].Mode == FrameTxModeVerify {
+				return fmt.Errorf("%w: atomic batches cannot contain verify frames", ErrFrameTxInvalidFormat)
+			}
+		}
+
+		// Approval scope is disallowed on every frame of an atomic batch,
+		// including its terminating frame. A frame belongs to a batch when
+		// it or its predecessor carries the flag.
+		inBatch := frame.Flags&FrameTxAtomicBatchFlag != 0 ||
+			(i > 0 && tx.Frames[i-1].Flags&FrameTxAtomicBatchFlag != 0)
+		if inBatch && frame.Flags&FrameTxApproveScopeMask != 0 {
+			return fmt.Errorf("%w: atomic batch frames cannot carry approval scope", ErrFrameTxInvalidFormat)
 		}
 
 		if frame.IsExpiryVerifier() {
