@@ -4189,6 +4189,76 @@ func TestEIP7702(t *testing.T) {
 	}
 }
 
+// TestEIP8141TransitionInstall checks that the Bogota transition block installs
+// the expiry verifier code only, records the install in the block access list
+// at the pre-execution index, and that a block carrying that access list
+// imports through the BAL-driven processor with the same state root the
+// builder computed.
+func TestEIP8141TransitionInstall(t *testing.T) {
+	var (
+		config = *params.MergedTestChainConfig
+		engine = beacon.New(ethash.NewFaker())
+		zero   = uint64(0)
+		bogota = uint64(20) // the chain maker spaces blocks 10s apart: block 2
+	)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &bogota
+	gspec := &Genesis{Config: &config, Alloc: SystemContractAllocs()}
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 3, func(i int, b *BlockGen) {
+		b.SetParentBeaconRoot(common.Hash{})
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	installs := func(block *types.Block) int {
+		count := 0
+		for _, access := range *block.AccessList() {
+			if access.Address != params.FrameTxExpiryVerifier {
+				continue
+			}
+			for _, change := range access.CodeChanges {
+				if change.BlockAccessIndex != 0 {
+					t.Fatalf("block %d: verifier code change at index %d, want 0", block.NumberU64(), change.BlockAccessIndex)
+				}
+				if !bytes.Equal(change.NewCode, params.FrameTxExpiryVerifierCode) {
+					t.Fatalf("block %d: verifier code change carries unexpected code", block.NumberU64())
+				}
+				count++
+			}
+			if len(access.NonceChanges) != 0 || len(access.BalanceChanges) != 0 {
+				t.Fatalf("block %d: install touched the verifier's nonce or balance", block.NumberU64())
+			}
+		}
+		return count
+	}
+	for i, want := range []int{0, 1, 0} {
+		if got := installs(blocks[i]); got != want {
+			t.Fatalf("block %d: %d verifier code changes in the access list, want %d", i+1, got, want)
+		}
+	}
+	pre, err := chain.StateAt(blocks[0].Header())
+	if err != nil {
+		t.Fatalf("failed to open pre-transition state: %v", err)
+	}
+	if code := pre.GetCode(params.FrameTxExpiryVerifier); len(code) != 0 {
+		t.Fatalf("verifier code present before the transition")
+	}
+	post, _ := chain.State()
+	if code := post.GetCode(params.FrameTxExpiryVerifier); !bytes.Equal(code, params.FrameTxExpiryVerifierCode) {
+		t.Fatalf("verifier code not installed after the transition")
+	}
+	if nonce := post.GetNonce(params.FrameTxExpiryVerifier); nonce != 0 {
+		t.Fatalf("verifier nonce wrong: expected 0, got %d", nonce)
+	}
+}
+
 // TestEIP8141 inserts a block with an EIP-8141 frame transaction: a VERIFY
 // frame authorizes execution and payment through the default code using the
 // sender's signature entry, and a SENDER frame calls a storage-writing

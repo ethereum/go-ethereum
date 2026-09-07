@@ -181,7 +181,14 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 // code is installed; the account's nonce and balance are left untouched.
 // Networks that activate Bogota at genesis must carry the code in the
 // genesis allocation instead.
+//
+// Like the other pre-execution system operations, the install runs at block
+// access index 0 so the code change lands in the block-level access list;
+// the preceding system call's Finalise has already detached the state's
+// access list, so without a fresh Prepare the change would be dropped.
 func ProcessExpiryVerifierDeploy(evm *vm.EVM, blockAccessList *bal.ConstructionBlockAccessList) {
+	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
+	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.SetCode(params.FrameTxExpiryVerifier, params.FrameTxExpiryVerifierCode, tracing.CodeChangeUnspecified)
 	blockAccessList.Merge(evm.StateDB.Finalise(evm.GetRules()))
 }
