@@ -753,7 +753,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table (see makeCallVariantGasCallEIP*); only the state reservoir
 	// needs to be handed off to the child here.
-	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
+	childBudget := scope.Contract.Gas.CallBudget(gas)
 	ret, result, err := evm.Call(scope.Contract.Address(), toAddr, args, childBudget, &value)
 
 	if err != nil {
@@ -795,7 +795,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table, only the state reservoir needs to be handed off to the
 	// child here.
-	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
+	childBudget := scope.Contract.Gas.CallBudget(gas)
 	ret, result, err := evm.CallCode(scope.Contract.Address(), toAddr, args, childBudget, &value)
 	if err != nil {
 		temp.Clear()
@@ -828,7 +828,7 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table, only the state reservoir needs to be handed off to the
 	// child here.
-	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
+	childBudget := scope.Contract.Gas.CallBudget(gas)
 	ret, result, err := evm.DelegateCall(scope.Contract.Caller(), scope.Contract.Address(), toAddr, args, childBudget, scope.Contract.value)
 	if err != nil {
 		temp.Clear()
@@ -860,7 +860,7 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table, only the state reservoir needs to be handed off to the
 	// child here.
-	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
+	childBudget := scope.Contract.Gas.CallBudget(gas)
 	ret, result, err := evm.StaticCall(scope.Contract.Address(), toAddr, args, childBudget)
 	if err != nil {
 		temp.Clear()

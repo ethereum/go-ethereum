@@ -93,11 +93,14 @@ type receiptMarshaling struct {
 }
 
 // FrameReceipt is the per-frame execution result stored in frame
-// transaction receipts (EIP-8141).
+// transaction receipts (EIP-8141). GasUsed carries the execution dimension
+// and StateGasUsed the state dimension; the consensus encoding nests them
+// as the `gas_used = [execution, state]` list.
 type FrameReceipt struct {
-	Status  uint64 `json:"status"`
-	GasUsed uint64 `json:"gasUsed"`
-	Logs    []*Log `json:"logs"`
+	Status       uint64 `json:"status"`
+	GasUsed      uint64 `json:"gasUsed"`
+	StateGasUsed uint64 `json:"stateGasUsed"`
+	Logs         []*Log `json:"logs"`
 }
 
 // receiptRLP is the consensus encoding of a receipt.
@@ -108,10 +111,17 @@ type receiptRLP struct {
 	Logs              []*Log
 }
 
+// frameReceiptGasUsedRLP is the consensus encoding of a frame's gas usage:
+// the nested [execution, state] pair.
+type frameReceiptGasUsedRLP struct {
+	Execution uint64
+	State     uint64
+}
+
 // frameReceiptRLP is the consensus encoding of a single frame receipt.
 type frameReceiptRLP struct {
 	Status  uint64
-	GasUsed uint64
+	GasUsed frameReceiptGasUsedRLP
 	Logs    []*Log
 }
 
@@ -176,7 +186,11 @@ func (r *Receipt) consensusPayload() any {
 			if logs == nil {
 				logs = []*Log{}
 			}
-			payload.FrameReceipts[i] = frameReceiptRLP{Status: fr.Status, GasUsed: fr.GasUsed, Logs: logs}
+			payload.FrameReceipts[i] = frameReceiptRLP{
+				Status:  fr.Status,
+				GasUsed: frameReceiptGasUsedRLP{Execution: fr.GasUsed, State: fr.StateGasUsed},
+				Logs:    logs,
+			}
 		}
 		return payload
 	}
@@ -282,7 +296,12 @@ func (r *Receipt) setFromFrameRLP(data frameTxReceiptRLP) error {
 	r.FrameReceipts = make([]FrameReceipt, len(data.FrameReceipts))
 	r.Logs = nil
 	for i, fr := range data.FrameReceipts {
-		r.FrameReceipts[i] = FrameReceipt{Status: fr.Status, GasUsed: fr.GasUsed, Logs: fr.Logs}
+		r.FrameReceipts[i] = FrameReceipt{
+			Status:       fr.Status,
+			GasUsed:      fr.GasUsed.Execution,
+			StateGasUsed: fr.GasUsed.State,
+			Logs:         fr.Logs,
+		}
 		r.Logs = append(r.Logs, fr.Logs...)
 	}
 	r.Bloom = CreateBloom(r)

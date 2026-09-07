@@ -465,7 +465,7 @@ func (tx *Transaction) BlobGasFeeCap() *big.Int {
 		return blobtx.BlobFeeCap.ToBig()
 	}
 	if frametx, ok := tx.inner.(*FrameTx); ok {
-		return frametx.MaxFeePerBlobGas.ToBig()
+		return frametx.Fees.MaxFeePerBlobGas.ToBig()
 	}
 	return nil
 }

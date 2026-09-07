@@ -88,7 +88,7 @@ func (tt *TransactionTest) Run() error {
 		}
 		var cost uint64
 		if tx.Type() == types.FrameTxType {
-			cost, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures())
+			cost, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures(), sender)
 		} else {
 			cost, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), sender, tx.To(), value, rules)
 		}

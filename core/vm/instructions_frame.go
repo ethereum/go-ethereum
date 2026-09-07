@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -44,8 +45,14 @@ type FrameContext struct {
 	Frames               []types.FrameTxFrame
 	Signatures           []types.FrameTxSignature
 
-	CurrentFrame  int
-	FrameStatuses []uint64
+	CurrentFrame int
+
+	// Receipts holds the live receipts of the completed frames, growing as
+	// frames complete. Entries are not final until the transaction ends: an
+	// atomic batch unroll zeroes the state gas of the unrolled frames'
+	// receipts. Logs are materialized by the frame loop once the
+	// transaction has finished.
+	Receipts []types.FrameReceipt
 
 	SenderApproved bool
 	Payer          *common.Address
@@ -56,39 +63,49 @@ func (fc *FrameContext) CurrentTarget() common.Address {
 	return fc.Frames[fc.CurrentFrame].ResolvedTarget(fc.Sender)
 }
 
-// FrameApprove validates and performs an APPROVE of the given scope for the
-// currently executing frame, per EIP-8141. On payment approval the sender's
-// nonce is incremented and the transaction's maximum cost is collected from
-// the frame's resolved target. ErrExecutionReverted is returned when the
-// request is not allowed.
-// frameApprovalSnapshot captures the transaction-scoped approval context so
-// it can be restored when the call that granted an approval reverts. The
-// approval context follows the same journaling scope as state: an approval
-// granted in a child call is discarded together with that call's state
-// changes.
-type frameApprovalSnapshot struct {
+// FrameContextSnapshot captures the mutable, transaction-scoped fields of a
+// frame context so they can be restored when the call that changed them
+// fails. The context follows the same journaling scope as state: an approval
+// granted or a receipt edited in a child call is discarded together with
+// that call's state changes.
+type FrameContextSnapshot struct {
 	senderApproved bool
 	payer          *common.Address
+	receipts       []types.FrameReceipt
 }
 
-// ApprovalSnapshot captures the current approval context.
-func (fc *FrameContext) ApprovalSnapshot() frameApprovalSnapshot {
+// Snapshot captures the current frame context.
+func (fc *FrameContext) Snapshot() FrameContextSnapshot {
 	if fc == nil {
-		return frameApprovalSnapshot{}
+		return FrameContextSnapshot{}
 	}
-	return frameApprovalSnapshot{senderApproved: fc.SenderApproved, payer: fc.Payer}
+	receipts := make([]types.FrameReceipt, len(fc.Receipts))
+	copy(receipts, fc.Receipts)
+	return FrameContextSnapshot{
+		senderApproved: fc.SenderApproved,
+		payer:          fc.Payer,
+		receipts:       receipts,
+	}
 }
 
-// RestoreApprovals restores a previously captured approval context.
-func (fc *FrameContext) RestoreApprovals(s frameApprovalSnapshot) {
+// RestoreSnapshot restores a previously captured frame context.
+func (fc *FrameContext) RestoreSnapshot(s FrameContextSnapshot) {
 	if fc == nil {
 		return
 	}
 	fc.SenderApproved = s.senderApproved
 	fc.Payer = s.payer
+	fc.Receipts = s.receipts
 }
 
-func FrameApprove(statedb StateDB, fc *FrameContext, scope uint64) error {
+// FrameApprove validates and performs an APPROVE of the given scope for the
+// currently executing frame, per EIP-8141. On payment approval the sender's
+// nonce is incremented and the transaction's maximum cost is collected from
+// the frame's resolved target; a sender account created by the nonce
+// increment is charged from the executing frame's state gas pool through
+// budget. ErrExecutionReverted is returned when the request is not allowed,
+// ErrOutOfGas when the pool cannot cover the sender-creation charge.
+func FrameApprove(statedb StateDB, fc *FrameContext, budget *GasBudget, scope uint64) error {
 	frame := &fc.Frames[fc.CurrentFrame]
 	target := frame.ResolvedTarget(fc.Sender)
 	allowed := frame.Flags & types.FrameTxApproveScopeMask
@@ -107,26 +124,38 @@ func FrameApprove(statedb StateDB, fc *FrameContext, scope uint64) error {
 		if fc.Payer != nil {
 			return ErrExecutionReverted
 		}
+		if scope&types.FrameTxApproveExecution == 0 && !fc.SenderApproved {
+			return ErrExecutionReverted
+		}
 		if statedb.GetBalance(target).Cmp(fc.MaxCost) < 0 {
 			return ErrExecutionReverted
 		}
-		if scope&types.FrameTxApproveExecution == 0 && !fc.SenderApproved {
-			return ErrExecutionReverted
+	}
+	if scope&types.FrameTxApproveExecution != 0 {
+		fc.SenderApproved = true
+	}
+	if scope&types.FrameTxApprovePayment != 0 {
+		// Incrementing the nonce of a non-existent sender creates the
+		// account: charge the creation from the frame's state gas pool
+		// immediately before the increment. A pool that cannot cover the
+		// charge halts the current call frame, discarding every approval
+		// effect with the halt's rollback.
+		if statedb.Empty(fc.Sender) {
+			if _, ok := budget.Charge(GasCosts{StateGas: params.AccountCreationSize * params.CostPerStateByte}); !ok {
+				return ErrOutOfGas
+			}
 		}
 		statedb.SetNonce(fc.Sender, statedb.GetNonce(fc.Sender)+1, tracing.NonceChangeEoACall)
 		statedb.SubBalance(target, fc.MaxCost, tracing.BalanceDecreaseGasBuy)
 		payer := target
 		fc.Payer = &payer
 	}
-	if scope&types.FrameTxApproveExecution != 0 {
-		fc.SenderApproved = true
-	}
 	return nil
 }
 
 // opApprove implements the APPROVE instruction (EIP-8141). It exits the
 // current call frame successfully, like RETURN, while updating the
-// transaction-scoped approval context.
+// transaction-scoped approval context. Only the memory expansion is charged.
 func opApprove(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	fc := evm.TxContext.FrameContext
 	if fc == nil {
@@ -143,7 +172,7 @@ func opApprove(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if overflow {
 		return nil, ErrExecutionReverted
 	}
-	if err := FrameApprove(evm.StateDB, fc, scopeVal); err != nil {
+	if err := FrameApprove(evm.StateDB, fc, &scope.Contract.Gas, scopeVal); err != nil {
 		return nil, err
 	}
 	ret := scope.Memory.GetCopy(offset.Uint64(), length.Uint64())
@@ -261,7 +290,10 @@ func opFrameDataCopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) 
 }
 
 // opFrameParam implements the FRAMEPARAM instruction (EIP-8141), giving
-// access to frame-scoped information.
+// access to frame-scoped information. A frame's status and gas usage are
+// read from its live receipt, which exists only once the frame has
+// completed: requesting them for the current or a future frame results in
+// an exceptional halt.
 func opFrameParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	fc := evm.TxContext.FrameContext
 	if fc == nil {
@@ -274,6 +306,15 @@ func opFrameParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// completedReceipt returns the receipt of a completed frame, or an
+	// exceptional halt for the current or a future frame.
+	completedReceipt := func() (*types.FrameReceipt, error) {
+		index := frameIndex.Uint64()
+		if index >= uint64(fc.CurrentFrame) || index >= uint64(len(fc.Receipts)) {
+			return nil, errInvalidTxParam
+		}
+		return &fc.Receipts[index], nil
+	}
 	selector, overflow := param.Uint64WithOverflow()
 	if overflow {
 		return nil, errInvalidTxParam
@@ -282,7 +323,7 @@ func opFrameParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	case 0x00:
 		pushAddress(scope, frame.ResolvedTarget(fc.Sender))
 	case 0x01:
-		pushUint(scope, frame.GasLimit)
+		pushUint(scope, frame.GasLimits.Execution)
 	case 0x02:
 		pushUint(scope, frame.Mode)
 	case 0x03:
@@ -290,13 +331,11 @@ func opFrameParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	case 0x04:
 		pushUint(scope, uint64(len(frame.Data)))
 	case 0x05:
-		// Accessing the status of the current frame or a future frame
-		// results in an exceptional halt.
-		index := frameIndex.Uint64()
-		if index >= uint64(fc.CurrentFrame) || index >= uint64(len(fc.FrameStatuses)) {
-			return nil, errInvalidTxParam
+		receipt, err := completedReceipt()
+		if err != nil {
+			return nil, err
 		}
-		pushUint(scope, fc.FrameStatuses[index])
+		pushUint(scope, receipt.Status)
 	case 0x06:
 		pushUint(scope, frame.Flags&types.FrameTxApproveScopeMask)
 	case 0x07:

@@ -58,12 +58,31 @@ type GasBudget struct {
 	// has been borrowed to cover state-gas charges that exceeded the
 	// reservoir. It is non-zero only while the reservoir is empty.
 	Spilled uint64
+
+	// NoSpill marks the budget of an EIP-8141 frame: the state pool is the
+	// only source of state gas, execution gas can never fund state charges,
+	// and a state charge exceeding the pool is an out-of-gas failure.
+	NoSpill bool
 }
 
 // NewGasBudget initializes a fresh GasBudget for execution / forwarding,
 // with both usage accumulators set to zero.
 func NewGasBudget(execution, state uint64) GasBudget {
 	return GasBudget{ExecutionGas: execution, StateGas: state}
+}
+
+// NewFrameGasBudget initializes the GasBudget of an EIP-8141 frame with its
+// declared per-dimension budgets. The state pool never spills into
+// execution gas.
+func NewFrameGasBudget(execution, state uint64) GasBudget {
+	return GasBudget{ExecutionGas: execution, StateGas: state, NoSpill: true}
+}
+
+// CallBudget returns the initial budget of a child call frame holding the
+// given execution gas and the parent's state reservoir. The reservoir rides
+// along in full; the caller absorbs the leftover on return.
+func (g GasBudget) CallBudget(execution uint64) GasBudget {
+	return GasBudget{ExecutionGas: execution, StateGas: g.StateGas, NoSpill: g.NoSpill}
 }
 
 // Used returns the total scalar gas consumed relative to an initial budget.
@@ -103,6 +122,9 @@ func (g GasBudget) CanAfford(cost GasCosts) bool {
 	}
 	execution := g.ExecutionGas - cost.ExecutionGas
 	if cost.StateGas > g.StateGas {
+		if g.NoSpill {
+			return false
+		}
 		return cost.StateGas-g.StateGas <= execution
 	}
 	return true
@@ -118,6 +140,9 @@ func (g *GasBudget) charge(cost GasCosts) bool {
 	spilled := g.Spilled
 
 	if cost.StateGas > state {
+		if g.NoSpill {
+			return false
+		}
 		spillover := cost.StateGas - state
 		if spillover > execution {
 			return false
@@ -182,6 +207,7 @@ func (g *GasBudget) Forward(execution uint64) GasBudget {
 	child := GasBudget{
 		ExecutionGas: execution,
 		StateGas:     g.StateGas,
+		NoSpill:      g.NoSpill,
 	}
 	g.StateGas = 0
 	return child
@@ -218,6 +244,7 @@ func (g GasBudget) ExitRevert() GasBudget {
 		log.Warn("Negative reservoir at revert", "remaining", g.StateGas, "used", g.UsedStateGas, "borrowed", g.Spilled)
 	}
 	return GasBudget{
+		NoSpill:          g.NoSpill,
 		ExecutionGas:     g.ExecutionGas + g.Spilled,
 		StateGas:         uint64(reservoir),
 		UsedExecutionGas: g.UsedExecutionGas,
@@ -241,6 +268,7 @@ func (g GasBudget) ExitHalt() GasBudget {
 		log.Warn("Negative reservoir at halt", "remaining", g.StateGas, "used", g.UsedStateGas, "borrowed", g.Spilled)
 	}
 	return GasBudget{
+		NoSpill:          g.NoSpill,
 		ExecutionGas:     0,
 		StateGas:         uint64(reservoir),
 		UsedExecutionGas: g.UsedExecutionGas + g.ExecutionGas + g.Spilled,

@@ -4205,16 +4205,19 @@ func TestEIP8141(t *testing.T) {
 	)
 	config.AmsterdamTime = &zero
 	config.BogotaTime = &zero
+	alloc := SystemContractAllocs()
+	alloc[addr1] = types.Account{Balance: funds}
+	alloc[aa] = types.Account{ // The address 0xAAAA sstores 42 into slot 42.
+		Code:    program.New().Sstore(0x42, 0x42).Bytes(),
+		Nonce:   0,
+		Balance: big.NewInt(0),
+	}
+	// Genesis-activated Bogota networks carry the expiry verifier code in
+	// the genesis allocation.
+	alloc[params.FrameTxExpiryVerifier] = types.Account{Code: params.FrameTxExpiryVerifierCode, Balance: big.NewInt(0)}
 	gspec := &Genesis{
 		Config: &config,
-		Alloc: types.GenesisAlloc{
-			addr1: {Balance: funds},
-			aa: { // The address 0xAAAA sstores 42 into slot 42.
-				Code:    program.New().Sstore(0x42, 0x42).Bytes(),
-				Nonce:   0,
-				Balance: big.NewInt(0),
-			},
-		},
+		Alloc:  alloc,
 	}
 	signer := types.LatestSigner(&config)
 
@@ -4224,25 +4227,27 @@ func TestEIP8141(t *testing.T) {
 		Sender:  addr1,
 		Frames: []types.FrameTxFrame{
 			{
-				Mode:     types.FrameTxModeVerify,
-				Flags:    types.FrameTxApproveExecutionAndPayment,
-				GasLimit: 100_000,
-				Value:    uint256.NewInt(0),
+				Mode:      types.FrameTxModeVerify,
+				Flags:     types.FrameTxApproveExecutionAndPayment,
+				GasLimits: types.FrameTxGasLimits{Execution: 100_000},
+				Value:     uint256.NewInt(0),
 			},
 			{
-				Mode:     types.FrameTxModeSender,
-				Target:   &aa,
-				GasLimit: 300_000,
-				Value:    uint256.NewInt(0),
+				Mode:      types.FrameTxModeSender,
+				Target:    &aa,
+				GasLimits: types.FrameTxGasLimits{Execution: 300_000, State: 200_000},
+				Value:     uint256.NewInt(0),
 			},
 		},
 		Signatures: []types.FrameTxSignature{{
 			Scheme: types.FrameTxSchemeSecp256k1,
 			Signer: addr1.Bytes(),
 		}},
-		MaxPriorityFeePerGas: uint256.NewInt(2),
-		MaxFeePerGas:         uint256.MustFromBig(newGwei(5)),
-		MaxFeePerBlobGas:     uint256.NewInt(0),
+		Fees: types.FrameTxFees{
+			MaxPriorityFeePerGas: uint256.NewInt(2),
+			MaxFeePerGas:         uint256.MustFromBig(newGwei(5)),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
 	}
 	// Sign the canonical signature hash with the sender key and fill in the
 	// signature entry as v || r || s.

@@ -22,11 +22,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
+	gomath "math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256r1"
 	"github.com/ethereum/go-ethereum/params"
@@ -70,14 +71,23 @@ const (
 	FrameTxSchemeP256      uint64 = 0x2
 )
 
+// FrameTxGasLimits is the gas budget pair of a frame, one per gas dimension.
+// The two budgets are independent: neither dimension can fund charges of the
+// other, and unused gas in one is not available to the other. It encodes as
+// the nested `limits = [execution, state]` list of the frame payload.
+type FrameTxGasLimits struct {
+	Execution uint64
+	State     uint64
+}
+
 // FrameTxFrame is a single frame in a frame transaction.
 type FrameTxFrame struct {
-	Mode     uint64
-	Flags    uint64
-	Target   *common.Address `rlp:"nil"` // nil resolves to the transaction sender
-	GasLimit uint64
-	Value    *uint256.Int
-	Data     []byte
+	Mode      uint64
+	Flags     uint64
+	Target    *common.Address `rlp:"nil"` // nil resolves to the transaction sender
+	GasLimits FrameTxGasLimits
+	Value     *uint256.Int
+	Data      []byte
 }
 
 // ResolvedTarget returns the frame's target, resolving a nil target to the
@@ -95,23 +105,29 @@ func (f *FrameTxFrame) IsExpiryVerifier() bool {
 	return f.Mode == FrameTxModeVerify && f.Target != nil && *f.Target == params.FrameTxExpiryVerifier
 }
 
+// The JSON codec accepts hex numbers with leading zero digits, as emitted by
+// test fixtures, and marshals them canonically.
 type frameTxFrameJSON struct {
-	Mode     hexutil.Uint64  `json:"mode"`
-	Flags    hexutil.Uint64  `json:"flags"`
-	Target   *common.Address `json:"target,omitempty"`
-	GasLimit hexutil.Uint64  `json:"gasLimit"`
-	Value    *hexutil.U256   `json:"value"`
-	Data     hexutil.Bytes   `json:"data"`
+	Mode          math.HexOrDecimal64   `json:"mode"`
+	Flags         math.HexOrDecimal64   `json:"flags"`
+	Target        *common.Address       `json:"target,omitempty"`
+	GasLimit      math.HexOrDecimal64   `json:"gasLimit"`
+	StateGasLimit math.HexOrDecimal64   `json:"stateGasLimit"`
+	Value         *math.HexOrDecimal256 `json:"value"`
+	Data          hexutil.Bytes         `json:"data"`
 }
 
 func (f FrameTxFrame) MarshalJSON() ([]byte, error) {
 	enc := frameTxFrameJSON{
-		Mode:     hexutil.Uint64(f.Mode),
-		Flags:    hexutil.Uint64(f.Flags),
-		Target:   f.Target,
-		GasLimit: hexutil.Uint64(f.GasLimit),
-		Value:    (*hexutil.U256)(f.Value),
-		Data:     f.Data,
+		Mode:          math.HexOrDecimal64(f.Mode),
+		Flags:         math.HexOrDecimal64(f.Flags),
+		Target:        f.Target,
+		GasLimit:      math.HexOrDecimal64(f.GasLimits.Execution),
+		StateGasLimit: math.HexOrDecimal64(f.GasLimits.State),
+		Data:          f.Data,
+	}
+	if f.Value != nil {
+		enc.Value = (*math.HexOrDecimal256)(f.Value.ToBig())
 	}
 	return json.Marshal(&enc)
 }
@@ -124,10 +140,17 @@ func (f *FrameTxFrame) UnmarshalJSON(input []byte) error {
 	f.Mode = uint64(dec.Mode)
 	f.Flags = uint64(dec.Flags)
 	f.Target = dec.Target
-	f.GasLimit = uint64(dec.GasLimit)
+	f.GasLimits = FrameTxGasLimits{
+		Execution: uint64(dec.GasLimit),
+		State:     uint64(dec.StateGasLimit),
+	}
 	f.Value = new(uint256.Int)
 	if dec.Value != nil {
-		f.Value = (*uint256.Int)(dec.Value)
+		value, overflow := uint256.FromBig((*big.Int)(dec.Value))
+		if overflow {
+			return errors.New("frame value exceeds 256 bits")
+		}
+		f.Value = value
 	}
 	f.Data = dec.Data
 	return nil
@@ -142,15 +165,15 @@ type FrameTxSignature struct {
 }
 
 type frameTxSignatureJSON struct {
-	Scheme    hexutil.Uint64 `json:"scheme"`
-	Signer    hexutil.Bytes  `json:"signer"`
-	Msg       hexutil.Bytes  `json:"msg"`
-	Signature hexutil.Bytes  `json:"signature"`
+	Scheme    math.HexOrDecimal64 `json:"scheme"`
+	Signer    hexutil.Bytes       `json:"signer"`
+	Msg       hexutil.Bytes       `json:"msg"`
+	Signature hexutil.Bytes       `json:"signature"`
 }
 
 func (s FrameTxSignature) MarshalJSON() ([]byte, error) {
 	enc := frameTxSignatureJSON{
-		Scheme:    hexutil.Uint64(s.Scheme),
+		Scheme:    math.HexOrDecimal64(s.Scheme),
 		Signer:    s.Signer,
 		Msg:       s.Msg,
 		Signature: s.Signature,
@@ -170,18 +193,23 @@ func (s *FrameTxSignature) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// FrameTx represents an EIP-8141 frame transaction.
-type FrameTx struct {
-	ChainID    *uint256.Int
-	Nonce      uint64
-	Sender     common.Address
-	Frames     []FrameTxFrame
-	Signatures []FrameTxSignature
-
+// FrameTxFees groups the fee parameters of a frame transaction, encoded as
+// the nested `fees` list of the transaction payload.
+type FrameTxFees struct {
 	MaxPriorityFeePerGas *uint256.Int
 	MaxFeePerGas         *uint256.Int
 	MaxFeePerBlobGas     *uint256.Int
-	BlobVersionedHashes  []common.Hash
+}
+
+// FrameTx represents an EIP-8141 frame transaction.
+type FrameTx struct {
+	ChainID             *uint256.Int
+	Nonce               uint64
+	Sender              common.Address
+	Frames              []FrameTxFrame
+	Signatures          []FrameTxSignature
+	Fees                FrameTxFees
+	BlobVersionedHashes []common.Hash
 }
 
 func (tx *FrameTx) copy() TxData {
@@ -192,10 +220,12 @@ func (tx *FrameTx) copy() TxData {
 		Signatures:          make([]FrameTxSignature, len(tx.Signatures)),
 		BlobVersionedHashes: make([]common.Hash, len(tx.BlobVersionedHashes)),
 
-		ChainID:              new(uint256.Int),
-		MaxPriorityFeePerGas: new(uint256.Int),
-		MaxFeePerGas:         new(uint256.Int),
-		MaxFeePerBlobGas:     new(uint256.Int),
+		ChainID: new(uint256.Int),
+		Fees: FrameTxFees{
+			MaxPriorityFeePerGas: new(uint256.Int),
+			MaxFeePerGas:         new(uint256.Int),
+			MaxFeePerBlobGas:     new(uint256.Int),
+		},
 	}
 	for i, frame := range tx.Frames {
 		var target *common.Address
@@ -208,12 +238,12 @@ func (tx *FrameTx) copy() TxData {
 			value.Set(frame.Value)
 		}
 		cpy.Frames[i] = FrameTxFrame{
-			Mode:     frame.Mode,
-			Flags:    frame.Flags,
-			Target:   target,
-			GasLimit: frame.GasLimit,
-			Value:    value,
-			Data:     common.CopyBytes(frame.Data),
+			Mode:      frame.Mode,
+			Flags:     frame.Flags,
+			Target:    target,
+			GasLimits: frame.GasLimits,
+			Value:     value,
+			Data:      common.CopyBytes(frame.Data),
 		}
 	}
 	for i, sig := range tx.Signatures {
@@ -228,14 +258,14 @@ func (tx *FrameTx) copy() TxData {
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
 	}
-	if tx.MaxPriorityFeePerGas != nil {
-		cpy.MaxPriorityFeePerGas.Set(tx.MaxPriorityFeePerGas)
+	if tx.Fees.MaxPriorityFeePerGas != nil {
+		cpy.Fees.MaxPriorityFeePerGas.Set(tx.Fees.MaxPriorityFeePerGas)
 	}
-	if tx.MaxFeePerGas != nil {
-		cpy.MaxFeePerGas.Set(tx.MaxFeePerGas)
+	if tx.Fees.MaxFeePerGas != nil {
+		cpy.Fees.MaxFeePerGas.Set(tx.Fees.MaxFeePerGas)
 	}
-	if tx.MaxFeePerBlobGas != nil {
-		cpy.MaxFeePerBlobGas.Set(tx.MaxFeePerBlobGas)
+	if tx.Fees.MaxFeePerBlobGas != nil {
+		cpy.Fees.MaxFeePerBlobGas.Set(tx.Fees.MaxFeePerBlobGas)
 	}
 	return cpy
 }
@@ -253,27 +283,28 @@ func (tx *FrameTx) value() *big.Int        { return common.Big0 }
 func (tx *FrameTx) data() []byte           { return nil }
 func (tx *FrameTx) accessList() AccessList { return nil }
 func (tx *FrameTx) gasFeeCap() *big.Int {
-	if tx.MaxFeePerGas == nil {
+	if tx.Fees.MaxFeePerGas == nil {
 		return new(big.Int)
 	}
-	return tx.MaxFeePerGas.ToBig()
+	return tx.Fees.MaxFeePerGas.ToBig()
 }
 func (tx *FrameTx) gasTipCap() *big.Int {
-	if tx.MaxPriorityFeePerGas == nil {
+	if tx.Fees.MaxPriorityFeePerGas == nil {
 		return new(big.Int)
 	}
-	return tx.MaxPriorityFeePerGas.ToBig()
+	return tx.Fees.MaxPriorityFeePerGas.ToBig()
 }
 func (tx *FrameTx) gasPrice() *big.Int {
-	if tx.MaxFeePerGas == nil {
+	if tx.Fees.MaxFeePerGas == nil {
 		return new(big.Int)
 	}
-	return tx.MaxFeePerGas.ToBig()
+	return tx.Fees.MaxFeePerGas.ToBig()
 }
 
-// gas returns the derived total gas limit of the frame transaction.
+// gas returns the inclusion-facing derived gas limit of the frame
+// transaction: its max_gas anchor.
 func (tx *FrameTx) gas() uint64 {
-	total, err := FrameTxGas(tx.Frames, tx.Signatures)
+	total, err := FrameTxMaxGas(tx.Frames, tx.Signatures, tx.Sender)
 	if err != nil {
 		return 0
 	}
@@ -305,7 +336,7 @@ func (tx *FrameTx) decode(input []byte) error {
 	if err := rlp.DecodeBytes(input, tx); err != nil {
 		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
 	}
-	if tx.ChainID == nil || tx.MaxPriorityFeePerGas == nil || tx.MaxFeePerGas == nil || tx.MaxFeePerBlobGas == nil {
+	if tx.ChainID == nil || tx.Fees.MaxPriorityFeePerGas == nil || tx.Fees.MaxFeePerGas == nil || tx.Fees.MaxFeePerBlobGas == nil {
 		return ErrFrameTxInvalidFormat
 	}
 	return nil
@@ -325,7 +356,7 @@ func (tx *Transaction) FrameTxValidateStatic() error {
 // at decode time, so a structurally well-formed but statically invalid
 // frame transaction decodes successfully and is rejected when applied.
 func (tx *FrameTx) ValidateStatic() error {
-	if tx.ChainID == nil || tx.MaxPriorityFeePerGas == nil || tx.MaxFeePerGas == nil || tx.MaxFeePerBlobGas == nil {
+	if tx.ChainID == nil || tx.Fees.MaxPriorityFeePerGas == nil || tx.Fees.MaxFeePerGas == nil || tx.Fees.MaxFeePerBlobGas == nil {
 		return ErrFrameTxInvalidFormat
 	}
 	if len(tx.Frames) == 0 || len(tx.Frames) > params.FrameTxMaxFrames {
@@ -371,10 +402,16 @@ func (tx *FrameTx) ValidateStatic() error {
 		if frame.Mode != FrameTxModeSender && !frame.Value.IsZero() {
 			return fmt.Errorf("%w: non-zero value outside SENDER mode", ErrFrameTxInvalidFormat)
 		}
-		if math.MaxUint64-totalFrameGas < frame.GasLimit {
+		// The frames' total gas budget, over both dimensions, must fit the
+		// encoding limit.
+		if gomath.MaxUint64-totalFrameGas < frame.GasLimits.Execution {
 			return fmt.Errorf("%w: total frame gas too high", ErrFrameTxInvalidFormat)
 		}
-		totalFrameGas += frame.GasLimit
+		totalFrameGas += frame.GasLimits.Execution
+		if gomath.MaxUint64-totalFrameGas < frame.GasLimits.State {
+			return fmt.Errorf("%w: total frame gas too high", ErrFrameTxInvalidFormat)
+		}
+		totalFrameGas += frame.GasLimits.State
 
 		// Execution approval is only allowed for frames that resolve to
 		// the transaction sender.
@@ -410,6 +447,12 @@ func (tx *FrameTx) ValidateStatic() error {
 			if frame.Flags != 0 {
 				return fmt.Errorf("%w: expiry verifier frame flags must be zero", ErrFrameTxInvalidFormat)
 			}
+			if !frame.Value.IsZero() {
+				return fmt.Errorf("%w: expiry verifier frame with value", ErrFrameTxInvalidFormat)
+			}
+			if frame.GasLimits.State != 0 {
+				return fmt.Errorf("%w: expiry verifier frame with state gas", ErrFrameTxInvalidFormat)
+			}
 			if len(frame.Data) != params.FrameTxExpiryDataLen {
 				return fmt.Errorf("%w: expiry verifier frame data must be 8 bytes", ErrFrameTxInvalidFormat)
 			}
@@ -418,22 +461,31 @@ func (tx *FrameTx) ValidateStatic() error {
 	if expiryVerifierFrames > 1 {
 		return fmt.Errorf("%w: multiple expiry verifier frames", ErrFrameTxInvalidFormat)
 	}
-	if len(tx.BlobVersionedHashes) == 0 && !tx.MaxFeePerBlobGas.IsZero() {
+	if len(tx.BlobVersionedHashes) == 0 && !tx.Fees.MaxFeePerBlobGas.IsZero() {
 		return fmt.Errorf("%w: max fee per blob gas must be zero without blobs", ErrFrameTxInvalidFormat)
 	}
-	if tx.Nonce == math.MaxUint64 {
+	if tx.Nonce == gomath.MaxUint64 {
 		return fmt.Errorf("%w: nonce overflow", ErrFrameTxInvalidFormat)
 	}
-	if _, err := FrameTxGas(tx.Frames, tx.Signatures); err != nil {
-		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
-	}
-	totalGas, _ := FrameTxGas(tx.Frames, tx.Signatures)
-	floorGas, err := FrameTxFloorGas(tx.Frames, tx.Signatures)
+	// The per-transaction gas cap of EIP-7825 bounds the execution
+	// dimension alone: the intrinsic cost plus the frames' execution
+	// budgets, with the calldata floor checked against the same cap. State
+	// gas is bounded only by the encoding limit and the block's state gas
+	// capacity.
+	intrinsicGas, err := FrameTxIntrinsicGas(tx.Frames, tx.Signatures, tx.Sender)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
 	}
-	if floorGas > totalGas {
-		return fmt.Errorf("%w: insufficient calldata floor: have %d, want %d", ErrFrameTxInvalidFormat, totalGas, floorGas)
+	floorGas, err := FrameTxFloorGas(tx.Frames, tx.Signatures, tx.Sender)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
+	}
+	executionGas, _ := FrameTxBudgetTotals(tx.Frames)
+	if gomath.MaxUint64-intrinsicGas < executionGas {
+		return fmt.Errorf("%w: total frame gas too high", ErrFrameTxInvalidFormat)
+	}
+	if max(intrinsicGas+executionGas, floorGas) > params.MaxTxGas {
+		return fmt.Errorf("%w: derived execution gas limit exceeds the transaction gas cap", ErrFrameTxInvalidFormat)
 	}
 	return nil
 }
@@ -459,9 +511,7 @@ func (tx *FrameTx) sigHash(chainID *big.Int) common.Hash {
 			tx.Sender,
 			tx.Frames,
 			sigs,
-			tx.MaxPriorityFeePerGas,
-			tx.MaxFeePerGas,
-			tx.MaxFeePerBlobGas,
+			tx.Fees,
 			tx.BlobVersionedHashes,
 		},
 	)
@@ -495,70 +545,121 @@ func FrameTxChargedData(frames []FrameTxFrame, sigs []FrameTxSignature) [][]byte
 	return charged
 }
 
-// FrameTxGas calculates the derived total gas limit of a frame transaction
-// as specified by EIP-8141: the frame transaction intrinsic cost, the
-// per-frame cost, the calldata cost of the frame and signature byte fields,
-// the signature verification cost, and the gas limits of all frames.
-func FrameTxGas(frames []FrameTxFrame, sigs []FrameTxSignature) (uint64, error) {
-	chargedData := FrameTxChargedData(frames, sigs)
-	total := params.FrameTxIntrinsicGas
-	total += uint64(len(frames)) * params.FrameTxPerFrameGas
-	for _, data := range chargedData {
-		z := uint64(bytes.Count(data, []byte{0}))
-		nz := uint64(len(data)) - z
-		total += z*params.TxDataZeroGas + nz*params.TxDataNonZeroGasEIP2028
+// FrameTxBudgetTotals returns the frames' total declared gas budget in each
+// dimension. Overflow is guarded by ValidateStatic, which bounds the sum of
+// both dimensions.
+func FrameTxBudgetTotals(frames []FrameTxFrame) (execution, state uint64) {
+	for i := range frames {
+		execution += frames[i].GasLimits.Execution
+		state += frames[i].GasLimits.State
 	}
+	return execution, state
+}
+
+// frameTxMandatoryGas computes the costs a frame transaction always pays
+// regardless of execution: the base cost, the per-frame cost, the signature
+// verification cost, and the value transfer cost of each value-bearing frame
+// with an explicit target other than the sender.
+func frameTxMandatoryGas(frames []FrameTxFrame, sigs []FrameTxSignature, sender common.Address) uint64 {
+	gas := params.FrameTxIntrinsicGas + uint64(len(frames))*params.FrameTxPerFrameGas
 	for i := range sigs {
-		total += FrameTxSignatureGas(&sigs[i])
+		gas += FrameTxSignatureGas(&sigs[i])
 	}
-	for _, frame := range frames {
-		if math.MaxUint64-total < frame.GasLimit {
+	for i := range frames {
+		frame := &frames[i]
+		if frame.Value != nil && !frame.Value.IsZero() && frame.Target != nil && *frame.Target != sender {
+			gas += params.TxValueCost2780
+		}
+	}
+	return gas
+}
+
+// FrameTxIntrinsicGas computes the intrinsic execution gas of an EIP-8141
+// frame transaction: the mandatory costs plus the standard calldata cost of
+// the frame and signature byte fields. Unlike other transaction types there
+// is no recipient component: target access is paid during frame execution
+// from each frame's own execution gas budget.
+func FrameTxIntrinsicGas(frames []FrameTxFrame, sigs []FrameTxSignature, sender common.Address) (uint64, error) {
+	gas := frameTxMandatoryGas(frames, sigs, sender)
+	var dataLen, z uint64
+	for _, d := range FrameTxChargedData(frames, sigs) {
+		dataLen += uint64(len(d))
+		z += uint64(bytes.Count(d, []byte{0}))
+	}
+	if dataLen > 0 {
+		nz := dataLen - z
+		// Frame transactions exist only post-Istanbul.
+		nonZeroGas := params.TxDataNonZeroGasEIP2028
+		if (gomath.MaxUint64-gas)/nonZeroGas < nz {
 			return 0, errors.New("gas uint64 overflow")
 		}
-		total += frame.GasLimit
+		gas += nz * nonZeroGas
+		if (gomath.MaxUint64-gas)/params.TxDataZeroGas < z {
+			return 0, errors.New("gas uint64 overflow")
+		}
+		gas += z * params.TxDataZeroGas
+	}
+	return gas, nil
+}
+
+// FrameTxFloorGas computes the calldata floor of a frame transaction per
+// EIP-7623 and EIP-7976: every charged byte counts as a standard token
+// priced at the floor token cost, uniformly and independently of its value.
+// The floor is anchored on the mandatory costs, so it never undercuts the
+// transaction's own intrinsic base.
+func FrameTxFloorGas(frames []FrameTxFrame, sigs []FrameTxSignature, sender common.Address) (uint64, error) {
+	var dataLen uint64
+	for _, data := range FrameTxChargedData(frames, sigs) {
+		dataLen += uint64(len(data))
+	}
+	if gomath.MaxUint64/(params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976) < dataLen {
+		return 0, errors.New("gas uint64 overflow")
+	}
+	floorGas := frameTxMandatoryGas(frames, sigs, sender)
+	dataGas := dataLen * params.TxTokenPerNonZeroByte * params.TxCostFloorPerToken7976
+	if gomath.MaxUint64-floorGas < dataGas {
+		return 0, errors.New("gas uint64 overflow")
+	}
+	return floorGas + dataGas, nil
+}
+
+// FrameTxStandardGasLimit computes the settlement anchor of a frame
+// transaction: its intrinsic execution gas plus the sum of the frames' gas
+// budgets in both dimensions.
+func FrameTxStandardGasLimit(frames []FrameTxFrame, sigs []FrameTxSignature, sender common.Address) (uint64, error) {
+	intrinsicGas, err := FrameTxIntrinsicGas(frames, sigs, sender)
+	if err != nil {
+		return 0, err
+	}
+	executionGas, stateGas := FrameTxBudgetTotals(frames)
+	total := intrinsicGas
+	for _, budget := range []uint64{executionGas, stateGas} {
+		if gomath.MaxUint64-total < budget {
+			return 0, errors.New("gas uint64 overflow")
+		}
+		total += budget
 	}
 	return total, nil
 }
 
-// FrameTxFloorGas computes the minimum gas cost of a frame transaction based
-// on the size of the frame and signature byte fields, per EIP-7623 and
-// EIP-7976: every charged byte counts as a standard token priced at the
-// floor token cost. Mirroring EIP-7623, the mandatory costs — intrinsic,
-// per-frame, and signature verification — are always charged on top of the
-// floored calldata cost.
-func FrameTxFloorGas(frames []FrameTxFrame, sigs []FrameTxSignature) (uint64, error) {
-	chargedData := FrameTxChargedData(frames, sigs)
-	var dataLen uint64
-	for _, data := range chargedData {
-		dataLen += uint64(len(data))
+// FrameTxMaxGas computes the inclusion anchor of a frame transaction: the
+// larger of its standard gas limit and its calldata floor plus the frames'
+// total state gas budget. The maximum transaction cost escrowed from the
+// payer prices this anchor at the fee cap.
+func FrameTxMaxGas(frames []FrameTxFrame, sigs []FrameTxSignature, sender common.Address) (uint64, error) {
+	standard, err := FrameTxStandardGasLimit(frames, sigs, sender)
+	if err != nil {
+		return 0, err
 	}
-	if math.MaxUint64/(params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976) < dataLen {
+	floorGas, err := FrameTxFloorGas(frames, sigs, sender)
+	if err != nil {
+		return 0, err
+	}
+	_, stateGas := FrameTxBudgetTotals(frames)
+	if gomath.MaxUint64-floorGas < stateGas {
 		return 0, errors.New("gas uint64 overflow")
 	}
-	floorGas := params.FrameTxIntrinsicGas + uint64(len(frames))*params.FrameTxPerFrameGas
-	for i := range sigs {
-		floorGas += FrameTxSignatureGas(&sigs[i])
-	}
-	return floorGas + dataLen*params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976, nil
-}
-
-// FrameTxMaxCost returns the maximum cost of the frame transaction that is
-// collected from the payer upon payment approval: the total gas limit priced
-// at the max fee per gas plus the blob fees priced at the max fee per blob
-// gas.
-func (tx *FrameTx) FrameTxMaxCost() *uint256.Int {
-	total, err := FrameTxGas(tx.Frames, tx.Signatures)
-	if err != nil {
-		return new(uint256.Int)
-	}
-	cost := new(uint256.Int).SetUint64(total)
-	cost.Mul(cost, tx.MaxFeePerGas)
-	if n := len(tx.BlobVersionedHashes); n > 0 {
-		blobFee := new(uint256.Int).SetUint64(uint64(n) * params.BlobTxBlobGasPerBlob)
-		blobFee.Mul(blobFee, tx.MaxFeePerBlobGas)
-		cost.Add(cost, blobFee)
-	}
-	return cost
+	return max(standard, floorGas+stateGas), nil
 }
 
 // ValidateFrameTxSignatures validates all signature entries of a frame

@@ -180,9 +180,9 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Sender = &sender
 		enc.Frames = itx.Frames
 		enc.Signatures = itx.Signatures
-		enc.MaxFeePerGas = (*hexutil.Big)(itx.MaxFeePerGas.ToBig())
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.MaxPriorityFeePerGas.ToBig())
-		enc.MaxFeePerBlobGas = (*hexutil.Big)(itx.MaxFeePerBlobGas.ToBig())
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.Fees.MaxFeePerGas.ToBig())
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.Fees.MaxPriorityFeePerGas.ToBig())
+		enc.MaxFeePerBlobGas = (*hexutil.Big)(itx.Fees.MaxFeePerBlobGas.ToBig())
 		enc.BlobVersionedHashes = itx.BlobVersionedHashes
 	}
 	return json.Marshal(&enc)
@@ -554,14 +554,14 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.MaxPriorityFeePerGas == nil {
 			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
 		}
-		itx.MaxPriorityFeePerGas = uint256.MustFromBig((*big.Int)(dec.MaxPriorityFeePerGas))
+		itx.Fees.MaxPriorityFeePerGas = uint256.MustFromBig((*big.Int)(dec.MaxPriorityFeePerGas))
 		if dec.MaxFeePerGas == nil {
 			return errors.New("missing required field 'maxFeePerGas' for txdata")
 		}
-		itx.MaxFeePerGas = uint256.MustFromBig((*big.Int)(dec.MaxFeePerGas))
-		itx.MaxFeePerBlobGas = new(uint256.Int)
+		itx.Fees.MaxFeePerGas = uint256.MustFromBig((*big.Int)(dec.MaxFeePerGas))
+		itx.Fees.MaxFeePerBlobGas = new(uint256.Int)
 		if dec.MaxFeePerBlobGas != nil {
-			itx.MaxFeePerBlobGas = uint256.MustFromBig((*big.Int)(dec.MaxFeePerBlobGas))
+			itx.Fees.MaxFeePerBlobGas = uint256.MustFromBig((*big.Int)(dec.MaxFeePerBlobGas))
 		}
 		itx.BlobVersionedHashes = dec.BlobVersionedHashes
 		if itx.BlobVersionedHashes == nil {

@@ -142,7 +142,7 @@ func Transaction(ctx *cli.Context) error {
 		rules := chainConfig.Rules(common.Big0, true, 0)
 		var cost uint64
 		if tx.Type() == types.FrameTxType {
-			cost, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures())
+			cost, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures(), r.Address)
 		} else {
 			cost, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), r.Address, tx.To(), value, rules)
 		}
