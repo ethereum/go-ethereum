@@ -30,7 +30,7 @@ const (
 
 	MaxTxGas uint64 = 1 << 24 // Maximum transaction gas limit after eip-7825 (16,777,216).
 
-	FrameTxIntrinsicGas    uint64 = 15000 // Base intrinsic cost of an EIP-8141 frame transaction.
+	FrameTxIntrinsicGas    uint64 = 12000 // Base intrinsic cost of an EIP-8141 frame transaction (EIP-2780 TX_BASE_COST).
 	FrameTxPerFrameGas     uint64 = 475   // Fixed cost per frame in an EIP-8141 frame transaction.
 	FrameTxMaxFrames              = 64    // Maximum number of frames in an EIP-8141 frame transaction.
 	FrameTxSecp256k1SigGas uint64 = 2800  // Gas charged for validating a secp256k1 signature entry (EIP-8141).
