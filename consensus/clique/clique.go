@@ -600,7 +600,7 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 func (c *Clique) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
 	snap, err := c.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
 	if err != nil {
-		return nil
+		return new(big.Int).Set(diffNoTurn)
 	}
 	c.lock.RLock()
 	signer := c.signer
