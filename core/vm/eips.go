@@ -652,10 +652,16 @@ func enable8141(jt *JumpTable) {
 	}
 	jt[SIGPARAM] = &operation{
 		execute:     opSigParam,
-		constantGas: 0,
-		dynamicGas:  gasSigParam,
+		constantGas: GasQuickStep,
 		minStack:    minStack(2, 1),
 		maxStack:    maxStack(2, 1),
-		memorySize:  memorySigParam,
+	}
+	jt[SIGDATACOPY] = &operation{
+		execute:     opSigDataCopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  gasFrameDataCopy,
+		minStack:    minStack(4, 0),
+		maxStack:    maxStack(4, 0),
+		memorySize:  memoryFrameDataCopy,
 	}
 }

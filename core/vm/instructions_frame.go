@@ -21,10 +21,8 @@ import (
 	stdmath "math"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -315,10 +313,20 @@ func opFrameParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
 }
 
+func sigByIndex(fc *FrameContext, index *uint256.Int) (*types.FrameTxSignature, error) {
+	i, overflow := index.Uint64WithOverflow()
+	if overflow || i >= uint64(len(fc.Signatures)) {
+		return nil, errInvalidTxParam
+	}
+	return &fc.Signatures[i], nil
+}
+
 // opSigParam implements the SIGPARAM instruction (EIP-8141), giving access
-// to signature-scoped metadata. For param 0x04 it copies the raw bytes of an
-// ARBITRARY signature entry into memory with CALLDATACOPY semantics; the raw
-// bytes of protocol-validated schemes are not accessible.
+// to signature-scoped metadata. Each scheme family withholds the metadata
+// the protocol does not define for it: the resolved signer is available only
+// for protocol-validated entries, and the signature byte length only for
+// ARBITRARY entries — the raw signature bytes of protocol-validated schemes,
+// including their length, are not introspectable.
 func opSigParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	fc := evm.TxContext.FrameContext
 	if fc == nil {
@@ -327,11 +335,10 @@ func opSigParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	sigIndex := scope.Stack.pop()
 	param := scope.Stack.pop()
 
-	i, overflow := sigIndex.Uint64WithOverflow()
-	if overflow || i >= uint64(len(fc.Signatures)) {
-		return nil, errInvalidTxParam
+	sig, err := sigByIndex(fc, &sigIndex)
+	if err != nil {
+		return nil, err
 	}
-	sig := &fc.Signatures[i]
 	selector, overflow := param.Uint64WithOverflow()
 	if overflow {
 		return nil, errInvalidTxParam
@@ -348,25 +355,42 @@ func opSigParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	case 0x02:
 		pushWord(scope, sig.Msg)
 	case 0x03:
-		pushUint(scope, uint64(len(sig.Signature)))
-	case 0x04:
 		if sig.Scheme != types.FrameTxSchemeArbitrary {
 			return nil, errInvalidTxParam
 		}
-		if scope.Stack.len() < 3 {
-			return nil, &ErrStackUnderflow{stackLen: scope.Stack.len(), required: 3}
-		}
-		length := scope.Stack.pop()
-		dataOffset := scope.Stack.pop()
-		memOffset := scope.Stack.pop()
-		off, overflow := dataOffset.Uint64WithOverflow()
-		if overflow {
-			off = stdmath.MaxUint64
-		}
-		scope.Memory.Set(memOffset.Uint64(), length.Uint64(), getData(sig.Signature, off, length.Uint64()))
+		pushUint(scope, uint64(len(sig.Signature)))
 	default:
 		return nil, errInvalidTxParam
 	}
+	return nil, nil
+}
+
+// opSigDataCopy implements the SIGDATACOPY instruction (EIP-8141), copying
+// the raw bytes of an ARBITRARY signature entry into memory with
+// CALLDATACOPY semantics. The raw bytes of protocol-validated schemes are
+// not accessible.
+func opSigDataCopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	fc := evm.TxContext.FrameContext
+	if fc == nil {
+		return nil, errNoFrameContext
+	}
+	memOffset := scope.Stack.pop()
+	dataOffset := scope.Stack.pop()
+	length := scope.Stack.pop()
+	sigIndex := scope.Stack.pop()
+
+	sig, err := sigByIndex(fc, &sigIndex)
+	if err != nil {
+		return nil, err
+	}
+	if sig.Scheme != types.FrameTxSchemeArbitrary {
+		return nil, errInvalidTxParam
+	}
+	off, overflow := dataOffset.Uint64WithOverflow()
+	if overflow {
+		off = stdmath.MaxUint64
+	}
+	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), getData(sig.Signature, off, length.Uint64()))
 	return nil, nil
 }
 
@@ -375,44 +399,8 @@ func memoryApprove(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.back(0), stack.back(1))
 }
 
-// memoryFrameDataCopy returns the memory size required by FRAMEDATACOPY.
+// memoryFrameDataCopy returns the memory size required by FRAMEDATACOPY and
+// SIGDATACOPY.
 func memoryFrameDataCopy(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.back(0), stack.back(2))
-}
-
-// memorySigParam returns the memory size required by SIGPARAM. Only the copy
-// variant (param 0x04) touches memory; its memory operand sits below the
-// selector operands.
-func memorySigParam(stack *Stack) (uint64, bool) {
-	if !stack.back(1).Eq(uint256.NewInt(0x04)) || stack.len() < 5 {
-		return 0, false
-	}
-	return calcMemSize64(stack.back(4), stack.back(2))
-}
-
-// gasSigParam charges GasQuickStep for the metadata variants of SIGPARAM and
-// CALLDATACOPY-like costs for the copy variant (param 0x04).
-func gasSigParam(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
-	if !stack.back(1).Eq(uint256.NewInt(0x04)) {
-		return GasCosts{ExecutionGas: GasQuickStep}, nil
-	}
-	gas, err := memoryGasCost(mem, memorySize)
-	if err != nil {
-		return GasCosts{}, err
-	}
-	if stack.len() < 5 {
-		// The stack underflow surfaces in the instruction itself.
-		return GasCosts{ExecutionGas: gas + GasFastestStep}, nil
-	}
-	words, overflow := stack.back(2).Uint64WithOverflow()
-	if overflow {
-		return GasCosts{}, ErrGasUintOverflow
-	}
-	if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
-		return GasCosts{}, ErrGasUintOverflow
-	}
-	if gas, overflow = math.SafeAdd(gas, words); overflow {
-		return GasCosts{}, ErrGasUintOverflow
-	}
-	return GasCosts{ExecutionGas: gas + GasFastestStep}, nil
 }

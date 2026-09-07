@@ -221,6 +221,7 @@ const (
 	FRAMEDATACOPY OpCode = 0xb2
 	FRAMEPARAM    OpCode = 0xb3
 	SIGPARAM      OpCode = 0xb4
+	SIGDATACOPY   OpCode = 0xb5
 )
 
 // 0xd0 range - eof operations.
@@ -435,6 +436,7 @@ var opCodeToString = [256]string{
 	FRAMEDATACOPY: "FRAMEDATACOPY",
 	FRAMEPARAM:    "FRAMEPARAM",
 	SIGPARAM:      "SIGPARAM",
+	SIGDATACOPY:   "SIGDATACOPY",
 
 	// 0xd range - eof ops.
 	DATALOAD:  "DATALOAD",
@@ -631,6 +633,7 @@ var stringToOp = map[string]OpCode{
 	"FRAMEDATACOPY":   FRAMEDATACOPY,
 	"FRAMEPARAM":      FRAMEPARAM,
 	"SIGPARAM":        SIGPARAM,
+	"SIGDATACOPY":     SIGDATACOPY,
 	"DATALOAD":        DATALOAD,
 	"DATALOADN":       DATALOADN,
 	"DATASIZE":        DATASIZE,
