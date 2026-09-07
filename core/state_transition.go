@@ -169,7 +169,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 // verification, and value transfer — plus the standard calldata cost of the
 // frame and signature byte fields. Frame transactions carry no intrinsic
 // state gas; state charges draw from the per-frame state budgets at runtime.
-func FrameTxIntrinsicGas(frames []types.FrameTxFrame, frameSigs []types.FrameTxSignature, sender common.Address) (uint64, error) {
+func FrameTxIntrinsicGas(frames []types.Frame, frameSigs types.SignatureList, sender common.Address) (uint64, error) {
 	gas, err := types.FrameTxIntrinsicGas(frames, frameSigs, sender)
 	if err != nil {
 		return 0, ErrGasUintOverflow
@@ -298,8 +298,8 @@ type Message struct {
 	TxHash        common.Hash
 
 	// Frame transaction fields (EIP-8141).
-	Frames                []types.FrameTxFrame
-	FrameSignatures       []types.FrameTxSignature
+	Frames                []types.Frame
+	FrameSignatures       types.SignatureList
 	FrameSigHash          common.Hash
 	BlobHashes            []common.Hash
 	SetCodeAuthorizations []types.SetCodeAuthorization
@@ -1464,7 +1464,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 	for i := range msg.Frames {
 		frame := &msg.Frames[i]
 		frameCtx.CurrentFrame = i
-		hasBatchFlag := frame.Flags&types.FrameTxAtomicBatchFlag != 0
+		hasBatchFlag := frame.Flags&types.AtomicBatchFlag != 0
 
 		// A frame with the atomic batch flag opens a batch that runs up to
 		// and including the next frame without the flag.
@@ -1491,7 +1491,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		}
 
 		var caller common.Address
-		if frame.Mode == types.FrameTxModeSender {
+		if frame.Mode == types.ModeSender {
 			if !frameCtx.SenderApproved {
 				return nil, nil, fmt.Errorf("%w: SENDER frame before execution approval", ErrFrameTxInvalidExecution)
 			}
@@ -1520,7 +1520,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 			frameCtx.RestoreSnapshot(entryCtx)
 			// A failing VERIFY frame — reverting or halting exceptionally —
 			// invalidates the whole transaction.
-			if frame.Mode == types.FrameTxModeVerify {
+			if frame.Mode == types.ModeVerify {
 				return nil, nil, fmt.Errorf("%w: VERIFY frame failed", ErrFrameTxInvalidExecution)
 			}
 		}
@@ -1592,7 +1592,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 //
 // A failing frame reports zero state gas; the caller extends the rollback
 // over the frame-entry charges by restoring the entry snapshots.
-func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.FrameTxFrame, caller common.Address, precompiles map[common.Address]struct{}) (types.FrameReceipt, error) {
+func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.Frame, caller common.Address, precompiles map[common.Address]struct{}) (types.FrameReceipt, error) {
 	var (
 		target = frame.ResolvedTarget(frameCtx.Sender)
 		budget = vm.NewFrameGasBudget(frame.GasLimits.Execution, frame.GasLimits.State)
@@ -1617,7 +1617,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 	// Codeless, non-precompile targets of VERIFY frames execute the
 	// protocol default code, which draws no execution gas of its own.
 	_, isPrecompile := precompiles[target]
-	if frame.Mode == types.FrameTxModeVerify && !isPrecompile && len(code) == 0 {
+	if frame.Mode == types.ModeVerify && !isPrecompile && len(code) == 0 {
 		vmerr := st.runDefaultVerifyFrame(frameCtx, frame, target, &budget)
 		if vmerr != nil && vmerr != vm.ErrExecutionReverted {
 			// The APPROVE could not cover the sender-creation state
@@ -1675,7 +1675,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 		leftover vm.GasBudget
 		vmerr    error
 	)
-	if frame.Mode == types.FrameTxModeVerify {
+	if frame.Mode == types.ModeVerify {
 		// VERIFY frames execute as static calls: only APPROVE may mutate.
 		_, leftover, vmerr = st.evm.StaticCall(caller, target, frame.Data, budget)
 	} else {
@@ -1702,13 +1702,13 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 // at index 1. The default code draws no execution gas of its own; it can
 // consume state gas through APPROVE, when incrementing the nonce creates
 // the sender account.
-func (st *stateTransition) runDefaultVerifyFrame(frameCtx *vm.FrameContext, frame *types.FrameTxFrame, target common.Address, budget *vm.GasBudget) error {
-	allowedScope := frame.Flags & types.FrameTxApproveScopeMask
-	if allowedScope == types.FrameTxApproveNone {
+func (st *stateTransition) runDefaultVerifyFrame(frameCtx *vm.FrameContext, frame *types.Frame, target common.Address, budget *vm.GasBudget) error {
+	allowedScope := frame.Flags & types.ApproveScopeMask
+	if allowedScope == types.ApproveNone {
 		return vm.ErrExecutionReverted
 	}
 	sigIndex := 1
-	if allowedScope&types.FrameTxApproveExecution != 0 {
+	if allowedScope&types.ApproveExecution != 0 {
 		sigIndex = 0
 	}
 	hasSignature := false

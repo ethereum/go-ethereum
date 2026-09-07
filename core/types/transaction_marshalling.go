@@ -34,8 +34,8 @@ type txJSON struct {
 	ChainID              *hexutil.Big           `json:"chainId,omitempty"`
 	Nonce                *hexutil.Uint64        `json:"nonce"`
 	Sender               *common.Address        `json:"sender,omitempty"`
-	Frames               []FrameTxFrame         `json:"frames,omitempty"`
-	Signatures           []FrameTxSignature     `json:"signatures,omitempty"`
+	Frames               []Frame                `json:"frames,omitempty"`
+	Signatures           SignatureList          `json:"signatures,omitempty"`
 	To                   *common.Address        `json:"to"`
 	Gas                  *hexutil.Uint64        `json:"gas"`
 	GasPrice             *hexutil.Big           `json:"gasPrice"`
@@ -549,7 +549,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		itx.Frames = dec.Frames
 		itx.Signatures = dec.Signatures
 		if itx.Signatures == nil {
-			itx.Signatures = []FrameTxSignature{}
+			itx.Signatures = SignatureList{}
 		}
 		if dec.MaxPriorityFeePerGas == nil {
 			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")

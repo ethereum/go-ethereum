@@ -183,16 +183,16 @@ type stFrame struct {
 
 // gasLimits converts the frame's arbitrary-precision gas budgets, rejecting
 // values that do not fit their 64-bit encoding.
-func (f *stFrame) gasLimits() (types.FrameTxGasLimits, error) {
+func (f *stFrame) gasLimits() (types.Limits, error) {
 	execution, err := stUint64(f.GasLimit, "gas limit")
 	if err != nil {
-		return types.FrameTxGasLimits{}, err
+		return types.Limits{}, err
 	}
 	state, err := stUint64(f.StateGasLimit, "state gas limit")
 	if err != nil {
-		return types.FrameTxGasLimits{}, err
+		return types.Limits{}, err
 	}
-	return types.FrameTxGasLimits{Execution: execution, State: state}, nil
+	return types.Limits{Execution: execution, State: state}, nil
 }
 
 func stUint64(v *math.HexOrDecimal256, name string) (uint64, error) {
@@ -529,7 +529,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, signer type
 		if err != nil {
 			return nil, err
 		}
-		frames := make([]types.FrameTxFrame, len(tx.Frames))
+		frames := make([]types.Frame, len(tx.Frames))
 		for i, frame := range tx.Frames {
 			limits, err := frame.gasLimits()
 			if err != nil {
@@ -542,7 +542,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, signer type
 					return nil, fmt.Errorf("frame %d: value exceeds 256 bits", i)
 				}
 			}
-			frames[i] = types.FrameTxFrame{
+			frames[i] = types.Frame{
 				Mode:      uint64(frame.Mode),
 				Flags:     uint64(frame.Flags),
 				Target:    frame.Target,
@@ -551,9 +551,9 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, signer type
 				Data:      frame.Data,
 			}
 		}
-		signatures := make([]types.FrameTxSignature, len(tx.Signatures))
+		signatures := make(types.SignatureList, len(tx.Signatures))
 		for i, sig := range tx.Signatures {
-			signatures[i] = types.FrameTxSignature{
+			signatures[i] = types.SignatureEntry{
 				Scheme:    uint64(sig.Scheme),
 				Signer:    sig.Signer,
 				Msg:       sig.Msg,
@@ -570,7 +570,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, signer type
 			Sender:     from,
 			Frames:     frames,
 			Signatures: signatures,
-			Fees: types.FrameTxFees{
+			Fees: types.Fees{
 				MaxPriorityFeePerGas: tip,
 				MaxFeePerGas:         feeCap,
 				MaxFeePerBlobGas:     blobFeeCap,

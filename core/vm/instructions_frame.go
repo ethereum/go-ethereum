@@ -49,8 +49,8 @@ type FrameContext struct {
 	MaxFeePerBlobGas     *uint256.Int
 	MaxCost              *uint256.Int
 	SigHash              common.Hash
-	Frames               []types.FrameTxFrame
-	Signatures           []types.FrameTxSignature
+	Frames               []types.Frame
+	Signatures           types.SignatureList
 
 	CurrentFrame int
 
@@ -149,11 +149,11 @@ func (fc *FrameContext) CreditStateRefund(budget *GasBudget, owner int, amount u
 func FrameApprove(statedb StateDB, fc *FrameContext, budget *GasBudget, scope uint64) error {
 	frame := &fc.Frames[fc.CurrentFrame]
 	target := frame.ResolvedTarget(fc.Sender)
-	allowed := frame.Flags & types.FrameTxApproveScopeMask
+	allowed := frame.Flags & types.ApproveScopeMask
 	if scope == 0 || scope&^allowed != 0 {
 		return ErrExecutionReverted
 	}
-	if scope&types.FrameTxApproveExecution != 0 {
+	if scope&types.ApproveExecution != 0 {
 		if fc.SenderApproved {
 			return ErrExecutionReverted
 		}
@@ -161,21 +161,21 @@ func FrameApprove(statedb StateDB, fc *FrameContext, budget *GasBudget, scope ui
 			return ErrExecutionReverted
 		}
 	}
-	if scope&types.FrameTxApprovePayment != 0 {
+	if scope&types.ApprovePayment != 0 {
 		if fc.Payer != nil {
 			return ErrExecutionReverted
 		}
-		if scope&types.FrameTxApproveExecution == 0 && !fc.SenderApproved {
+		if scope&types.ApproveExecution == 0 && !fc.SenderApproved {
 			return ErrExecutionReverted
 		}
 		if statedb.GetBalance(target).Cmp(fc.MaxCost) < 0 {
 			return ErrExecutionReverted
 		}
 	}
-	if scope&types.FrameTxApproveExecution != 0 {
+	if scope&types.ApproveExecution != 0 {
 		fc.SenderApproved = true
 	}
-	if scope&types.FrameTxApprovePayment != 0 {
+	if scope&types.ApprovePayment != 0 {
 		// Incrementing the nonce of a non-existent sender creates the
 		// account: charge the creation from the frame's state gas pool
 		// immediately before the increment. A pool that cannot cover the
@@ -220,7 +220,7 @@ func opApprove(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	return ret, errStopToken
 }
 
-func frameByIndex(fc *FrameContext, index *uint256.Int) (*types.FrameTxFrame, error) {
+func frameByIndex(fc *FrameContext, index *uint256.Int) (*types.Frame, error) {
 	i, overflow := index.Uint64WithOverflow()
 	if overflow || i >= uint64(len(fc.Frames)) {
 		return nil, errInvalidTxParam
@@ -381,9 +381,9 @@ func opFrameParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		}
 		pushUint(scope, receipt.Status)
 	case 0x06:
-		pushUint(scope, frame.Flags&types.FrameTxApproveScopeMask)
+		pushUint(scope, frame.Flags&types.ApproveScopeMask)
 	case 0x07:
-		pushUint(scope, (frame.Flags&types.FrameTxAtomicBatchFlag)>>2)
+		pushUint(scope, (frame.Flags&types.AtomicBatchFlag)>>2)
 	case 0x08:
 		value := new(uint256.Int)
 		if frame.Value != nil {
@@ -410,7 +410,7 @@ func opFrameParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
 }
 
-func sigByIndex(fc *FrameContext, index *uint256.Int) (*types.FrameTxSignature, error) {
+func sigByIndex(fc *FrameContext, index *uint256.Int) (*types.SignatureEntry, error) {
 	i, overflow := index.Uint64WithOverflow()
 	if overflow || i >= uint64(len(fc.Signatures)) {
 		return nil, errInvalidTxParam

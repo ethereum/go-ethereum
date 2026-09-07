@@ -553,7 +553,7 @@ func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
 }
 
 // Frames returns the frames of a frame transaction, nil otherwise.
-func (tx *Transaction) Frames() []FrameTxFrame {
+func (tx *Transaction) Frames() []Frame {
 	frametx, ok := tx.inner.(*FrameTx)
 	if !ok {
 		return nil
@@ -563,7 +563,7 @@ func (tx *Transaction) Frames() []FrameTxFrame {
 
 // FrameSignatures returns the signature entries of a frame transaction,
 // nil otherwise.
-func (tx *Transaction) FrameSignatures() []FrameTxSignature {
+func (tx *Transaction) FrameSignatures() SignatureList {
 	frametx, ok := tx.inner.(*FrameTx)
 	if !ok {
 		return nil

@@ -4295,25 +4295,25 @@ func TestEIP8141(t *testing.T) {
 		ChainID: uint256.MustFromBig(config.ChainID),
 		Nonce:   0,
 		Sender:  addr1,
-		Frames: []types.FrameTxFrame{
+		Frames: []types.Frame{
 			{
-				Mode:      types.FrameTxModeVerify,
-				Flags:     types.FrameTxApproveExecutionAndPayment,
-				GasLimits: types.FrameTxGasLimits{Execution: 100_000},
+				Mode:      types.ModeVerify,
+				Flags:     types.ApproveExecutionAndPayment,
+				GasLimits: types.Limits{Execution: 100_000},
 				Value:     uint256.NewInt(0),
 			},
 			{
-				Mode:      types.FrameTxModeSender,
+				Mode:      types.ModeSender,
 				Target:    &aa,
-				GasLimits: types.FrameTxGasLimits{Execution: 300_000, State: 200_000},
+				GasLimits: types.Limits{Execution: 300_000, State: 200_000},
 				Value:     uint256.NewInt(0),
 			},
 		},
-		Signatures: []types.FrameTxSignature{{
+		Signatures: types.SignatureList{{
 			Scheme: types.FrameTxSchemeSecp256k1,
 			Signer: addr1.Bytes(),
 		}},
-		Fees: types.FrameTxFees{
+		Fees: types.Fees{
 			MaxPriorityFeePerGas: uint256.NewInt(2),
 			MaxFeePerGas:         uint256.MustFromBig(newGwei(5)),
 			MaxFeePerBlobGas:     uint256.NewInt(0),
