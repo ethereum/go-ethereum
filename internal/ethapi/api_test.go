@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -2754,6 +2755,104 @@ func TestSimulateV1WithdrawalsByFork(t *testing.T) {
 	t.Run("post-shanghai", func(t *testing.T) {
 		// MergedTestChainConfig has every fork active from genesis.
 		run(t, params.MergedTestChainConfig, nil, true)
+	})
+}
+
+// TestSimulateV1Amsterdam checks the identity of simulated blocks after
+// Amsterdam: the slot number follows the parent, the block access list
+// includes the coinbase and the EIP-7708 logs replace the traceTransfers logs.
+func TestSimulateV1Amsterdam(t *testing.T) {
+	t.Parallel()
+
+	run := func(t *testing.T, amsterdamTime uint64, blocks []simBlock) (*types.Header, []*simBlockResult) {
+		t.Helper()
+		accounts := newAccounts(2)
+		config := *params.MergedTestChainConfig
+		config.AmsterdamTime = &amsterdamTime
+		gspec := &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+		backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+		ctx := context.Background()
+		stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		require.NoError(t, err)
+		sim := &simulator{
+			b:              backend,
+			state:          stateDB,
+			base:           baseHeader,
+			chainConfig:    backend.ChainConfig(),
+			budget:         newGasBudget(0),
+			traceTransfers: true,
+		}
+		for i := range blocks {
+			blocks[i].Calls = []TransactionArgs{{
+				From:  &accounts[0].addr,
+				To:    &accounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			}}
+		}
+		results, err := sim.execute(ctx, blocks)
+		require.NoError(t, err)
+		require.Len(t, results, len(blocks))
+		return baseHeader, results
+	}
+	findAccount := func(list *bal.BlockAccessList, addr common.Address) *bal.AccountAccess {
+		for i := range *list {
+			if (*list)[i].Address == addr {
+				return &(*list)[i]
+			}
+		}
+		return nil
+	}
+	transferLogs := func(t *testing.T, res *simBlockResult, want common.Address) {
+		t.Helper()
+		require.Len(t, res.Calls, 1)
+		require.Len(t, res.Calls[0].Logs, 1, "expected exactly one transfer log")
+		require.Equal(t, want, res.Calls[0].Logs[0].Address)
+	}
+
+	t.Run("amsterdam-parent", func(t *testing.T) {
+		base, results := run(t, 0, make([]simBlock, 2))
+		require.NotNil(t, base.SlotNumber)
+		for i, res := range results {
+			header := res.Block.Header()
+			require.NotNil(t, header.SlotNumber, "block %d: slot number missing", i)
+			require.Equal(t, *base.SlotNumber+1+uint64(i), *header.SlotNumber, "block %d: slot number", i)
+			require.NotNil(t, header.BlockAccessListHash, "block %d: block access list hash missing", i)
+			transferLogs(t, res, params.SystemAddress)
+		}
+		list := results[0].Block.AccessList()
+		require.NotNil(t, list)
+		coinbase := findAccount(list, results[0].Block.Coinbase())
+		require.NotNil(t, coinbase, "coinbase missing from block access list:\n%s", list.PrettyPrint())
+		require.Empty(t, coinbase.BalanceChanges, "coinbase balance must not change with zero fees")
+		sender := findAccount(list, results[0].senders[results[0].Block.Transactions()[0].Hash()])
+		require.NotNil(t, sender)
+		require.Len(t, sender.NonceChanges, 1, "sender nonce increment must be recorded")
+	})
+
+	t.Run("fork-crossing", func(t *testing.T) {
+		// The base block is pre-Amsterdam, the second simulated block crosses the fork.
+		forkTime := hexutil.Uint64(1000)
+		blocks := make([]simBlock, 2)
+		blocks[1].BlockOverrides = &override.BlockOverrides{Time: &forkTime}
+		base, results := run(t, uint64(forkTime), blocks)
+		require.Nil(t, base.SlotNumber)
+
+		pre := results[0].Block.Header()
+		require.Nil(t, pre.SlotNumber)
+		require.Nil(t, pre.BlockAccessListHash)
+		transferLogs(t, results[0], transferAddress)
+
+		post := results[1].Block.Header()
+		require.Nil(t, post.SlotNumber, "slot number must be omitted when the parent has none")
+		require.NotNil(t, post.BlockAccessListHash)
+		transferLogs(t, results[1], params.SystemAddress)
 	})
 }
 
