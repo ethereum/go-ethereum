@@ -703,7 +703,16 @@ func TestStraddleHealThroughEnginePayloads(t *testing.T) {
 	defer victimNode.Close()
 	vapi := NewConsensusAPI(victim)
 	vchain := victim.BlockChain()
-	for _, block := range branchA {
+	for _, block := range branchA[:3] {
+		if s := deliverPayload(t, vapi, block, true); s.Status != engine.VALID {
+			t.Fatalf("victim rejected A block %d: %v", block.NumberU64(), s.Status)
+		}
+	}
+	// Wait for the merkle parent's shadow record before crossing so the
+	// canonical follower-lag race (a separate, unrelated timing window)
+	// cannot mask the sidechain bug this test targets.
+	awaitShadowReady(t, vchain, branchA[2].Header())
+	for _, block := range branchA[3:] {
 		if s := deliverPayload(t, vapi, block, true); s.Status != engine.VALID {
 			t.Fatalf("victim rejected A block %d: %v", block.NumberU64(), s.Status)
 		}
@@ -711,8 +720,8 @@ func TestStraddleHealThroughEnginePayloads(t *testing.T) {
 	awaitShadowReady(t, vchain, branchA[4].Header())
 
 	// The heal: B's blocks arrive as sidechain payloads, no forkchoice yet.
-	// The crossing block (B's 4th, on B's own merkle parent) is the one the
-	// precheck used to delay forever.
+	// The crossing block (B's 3rd, block 4, on B's own merkle parent block 3)
+	// is the one the precheck used to delay forever.
 	for i, block := range branchB {
 		s := deliverPayload(t, vapi, block, false)
 		if s.Status != engine.VALID {

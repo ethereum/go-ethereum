@@ -2091,10 +2091,8 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		}
 		// At the activation boundary the pre-state lives in the shadow tree;
 		// give a lagging follower a bounded moment.
-		if bc.follower != nil && !bc.ActivationReady(block) {
-			if err := bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), activationWaitTimeout); err != nil {
-				return nil, it.index, fmt.Errorf("activation waits on the shadow tree: %w", err)
-			}
+		if err := bc.WaitActivation(block, activationWaitTimeout); err != nil {
+			return nil, it.index, fmt.Errorf("activation waits on the shadow tree: %w", err)
 		}
 		// The traced section of block import.
 		start := time.Now()

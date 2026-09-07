@@ -885,9 +885,9 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 }
 
 // payloadActivationWait bounds how long a new payload at the activation
-// boundary waits for the shadow tree to replay its parent: long enough for a
-// straddle-sized sidechain, short enough to answer inside the CL's engine
-// timeout.
+// boundary waits for the shadow tree to replay its parent: half the 8s
+// engine-API newPayload timeout mainnet consensus clients use (Lighthouse,
+// Prysm), leaving equal budget for the payload's own insertion.
 const payloadActivationWait = 4 * time.Second
 
 func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (result engine.PayloadStatusV1, err error) {
