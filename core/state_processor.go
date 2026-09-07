@@ -283,7 +283,7 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 	// in the Amsterdam fork.
 	receipt.GasUsed = result.UsedGas
 
-	if tx.Type() == types.BlobTxType {
+	if tx.Type() == types.BlobTxType || (tx.Type() == types.FrameTxType && len(tx.BlobHashes()) > 0) {
 		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
 		receipt.BlobGasPrice = evm.Context.BlobBaseFee
 	}
