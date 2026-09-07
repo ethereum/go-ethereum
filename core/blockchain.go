@@ -2289,6 +2289,19 @@ func (bc *BlockChain) ActivationReady(block *types.Block) bool {
 	return bc.ShadowReady(parent.Hash(), parent.Number.Uint64())
 }
 
+// WaitActivation drives the shadow tree to block's parent when block crosses
+// the activation boundary onto a parent the follower has not replayed - a
+// sidechain parent delivered by the engine API - and waits up to timeout for
+// the record. The follower replays off-canonical ancestors only when asked,
+// so a caller that merely reports "not ready" and waits for a retry waits
+// forever.
+func (bc *BlockChain) WaitActivation(block *types.Block, timeout time.Duration) error {
+	if bc.ActivationReady(block) {
+		return nil
+	}
+	return bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), timeout)
+}
+
 // StateForBuilding returns the state to seal a block of the given number and
 // time on the parent, crossing the activation boundary when they differ.
 func (bc *BlockChain) StateForBuilding(parent *types.Header, number *big.Int, time uint64) (*state.StateDB, error) {

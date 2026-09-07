@@ -651,3 +651,86 @@ func convertCanonicalMerkle(t *testing.T, chain *core.BlockChain, db ethdb.Datab
 	}
 	return root
 }
+
+// deliverPayload feeds an already-built block to a node the way a consensus
+// client does: newPayload, then a forkchoice update when asked to make it
+// head.
+func deliverPayload(t *testing.T, api *ConsensusAPI, block *types.Block, setHead bool) engine.PayloadStatusV1 {
+	t.Helper()
+	data := engine.BlockToExecutableData(block, nil, nil, nil).ExecutionPayload
+	status, err := api.NewPayloadV5(context.Background(), *data, []common.Hash{}, &common.Hash{}, []hexutil.Bytes{})
+	if err != nil {
+		t.Fatalf("newPayload %d: %v", block.NumberU64(), err)
+	}
+	if setHead {
+		if _, err := api.ForkchoiceUpdatedV4(context.Background(), engine.ForkchoiceStateV1{HeadBlockHash: block.Hash()}, nil, nil); err != nil {
+			t.Fatalf("forkchoice to %d: %v", block.NumberU64(), err)
+		}
+	}
+	return status
+}
+
+// TestStraddleHealThroughEnginePayloads is the straddle heal as a consensus
+// client drives it: the competing branch arrives one newPayload at a time,
+// and its activation block lands on a sidechain parent whose shadow root
+// only a replay can produce. The engine path must ask for that replay;
+// answering ACCEPTED and waiting for a retry deadlocked live nodes, because
+// nothing else ever replays a sidechain parent.
+func TestStraddleHealThroughEnginePayloads(t *testing.T) {
+	genesis := migrationTestGenesis()
+	builderNode, builder := startEthService(t, genesis, nil)
+	defer builderNode.Close()
+	bapi := NewConsensusAPI(builder)
+	bchain := builder.BlockChain()
+
+	// Branch A crosses the fork (1-3 merkle, 4-5 binary); branch B forks at
+	// block 1 and crosses on its own blocks.
+	parent := bchain.CurrentBlock()
+	var branchA []*types.Block
+	for i := range 5 {
+		parent = buildBlock(t, bapi, parent, uint64(i+1), common.Hash{})
+		branchA = append(branchA, bchain.GetBlockByHash(parent.Hash()))
+	}
+	bParent := bchain.GetHeaderByNumber(1)
+	var branchB []*types.Block
+	for i := range 5 {
+		bParent = buildBlock(t, bapi, bParent, uint64(i+2), common.Hash{0xbb})
+		branchB = append(branchB, bchain.GetBlockByHash(bParent.Hash()))
+	}
+
+	// The victim is a second node fed only through its engine API.
+	victimNode, victim := startEthService(t, genesis, nil)
+	defer victimNode.Close()
+	vapi := NewConsensusAPI(victim)
+	vchain := victim.BlockChain()
+	for _, block := range branchA {
+		if s := deliverPayload(t, vapi, block, true); s.Status != engine.VALID {
+			t.Fatalf("victim rejected A block %d: %v", block.NumberU64(), s.Status)
+		}
+	}
+	awaitShadowReady(t, vchain, branchA[4].Header())
+
+	// The heal: B's blocks arrive as sidechain payloads, no forkchoice yet.
+	// The crossing block (B's 4th, on B's own merkle parent) is the one the
+	// precheck used to delay forever.
+	for i, block := range branchB {
+		s := deliverPayload(t, vapi, block, false)
+		if s.Status != engine.VALID {
+			t.Fatalf("victim did not validate sidechain B block %d (index %d): %v (%s)", block.NumberU64(), i, s.Status, derefErr(s.ValidationError))
+		}
+	}
+	deliverPayload(t, vapi, branchB[4], true)
+	if head := vchain.CurrentBlock(); head.Hash() != branchB[4].Hash() {
+		t.Fatalf("victim head %x, want B tip %x", head.Hash(), branchB[4].Hash())
+	}
+	if !vchain.Migrating() {
+		t.Fatal("victim window closed by the straddle heal")
+	}
+	for _, block := range branchB[2:] {
+		awaitShadowReady(t, vchain, block.Header())
+	}
+	p := vchain.MigrationProgress()
+	if p.Binary == nil || p.Binary.Phase != "parked" || p.Binary.CursorHash != branchB[1].Hash() {
+		t.Fatalf("victim binary direction did not re-park at B's boundary predecessor: %+v", p.Binary)
+	}
+}
