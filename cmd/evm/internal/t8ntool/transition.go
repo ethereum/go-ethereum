@@ -209,7 +209,7 @@ func Transition(ctx *cli.Context) error {
 		vmConfig.Tracer = tracer.Hooks
 	}
 	// Run the test and aggregate the result
-	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
+	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name), ctx.Bool(StateTestFlag.Name))
 	if err != nil {
 		return err
 	}
