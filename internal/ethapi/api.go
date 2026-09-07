@@ -1353,7 +1353,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 	}
 
-	// Only use default fee values if the user failed to specify one of the fields.
+	// Leave fees at zero when all fee fields are omitted so simulation does not require funds for gas.
 	if args.GasPrice != nil || args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.BlobFeeCap != nil {
 		if err = args.setFeeDefaults(ctx, b, header); err != nil {
 			return nil, 0, nil, err
