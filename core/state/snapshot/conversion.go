@@ -336,6 +336,12 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 			logged, processed = time.Now(), 0
 		}
 	}
+	// The iterator may have terminated early because of a database error or
+	// the underlying snapshot layer becoming stale. Surface that instead of
+	// hashing a truncated leaf stream and reporting a bogus root.
+	if err := it.Error(); err != nil {
+		return stop(err)
+	}
 	// Commit the last part statistic.
 	if processed > 0 && stats != nil {
 		if account == (common.Hash{}) {
