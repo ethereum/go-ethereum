@@ -794,8 +794,6 @@ var Forks = map[string]*params.ChainConfig{
 		OsakaTime:               u64(0),
 		BPO1Time:                u64(0),
 		BPO2Time:                u64(0),
-		BPO3Time:                u64(0),
-		BPO4Time:                u64(0),
 		AmsterdamTime:           u64(0),
 		BogotaTime:              u64(0),
 		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
@@ -804,8 +802,6 @@ var Forks = map[string]*params.ChainConfig{
 			Prague: params.DefaultPragueBlobConfig,
 			BPO1:   params.DefaultBPO1BlobConfig,
 			BPO2:   params.DefaultBPO2BlobConfig,
-			BPO3:   params.DefaultBPO3BlobConfig,
-			BPO4:   params.DefaultBPO4BlobConfig,
 		},
 	},
 	"Verkle": {
