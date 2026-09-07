@@ -18,7 +18,6 @@ package engine
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -258,12 +257,6 @@ func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	return txs, nil
 }
 
-// ErrMalformedPayload is returned when executable data cannot be parsed into a
-// block at all. The engine API requires such payloads to be rejected with an
-// invalid params error, whereas the INVALID payload status is reserved for
-// well-formed payloads that fail block validation.
-var ErrMalformedPayload = errors.New("malformed payload")
-
 // ExecutableDataToBlock constructs a block from executable data.
 // It verifies that the following fields:
 //
@@ -280,13 +273,19 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 	if err != nil {
 		return nil, err
 	}
+	// The access list body is decoded before the block hash is checked. The
+	// header commits to the hash of the raw access list bytes, so a payload
+	// carrying an undecodable access list would otherwise be reported as a
+	// block hash mismatch whenever the header commits to a different encoding,
+	// hiding the actual defect.
+	block, err = attachAccessList(block, data)
+	if err != nil {
+		return nil, err
+	}
 	if block.Hash() != data.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", data.BlockHash, block.Hash())
 	}
-	// The access list body is decoded only once the block hash is confirmed. A
-	// payload which already hashes to the wrong value must be reported as such,
-	// not as a malformed access list.
-	return attachAccessList(block, data)
+	return block, nil
 }
 
 // ExecutableDataToBlockNoHash is analogous to ExecutableDataToBlock, but is used
@@ -386,13 +385,18 @@ func executableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // attachAccessList decodes the block access list carried by the executable data
 // and attaches it to the block. Payloads without an access list are returned
 // unchanged.
+//
+// A present but empty access list field is not a valid RLP encoding (an empty
+// list encodes as 0xc0) and is rejected like any other undecodable payload:
+// the engine API requires such payloads to be answered with the INVALID status
+// rather than an invalid params error.
 func attachAccessList(block *types.Block, data ExecutableData) (*types.Block, error) {
-	if len(data.BlockAccessList) == 0 {
+	if data.BlockAccessList == nil {
 		return block, nil
 	}
 	var accessList bal.BlockAccessList
 	if err := rlp.DecodeBytes(data.BlockAccessList, &accessList); err != nil {
-		return nil, fmt.Errorf("%w: failed to decode BAL: %v", ErrMalformedPayload, err)
+		return nil, fmt.Errorf("failed to decode BAL: %w", err)
 	}
 	return block.WithAccessListUnsafe(&accessList), nil
 }
