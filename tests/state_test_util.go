@@ -127,16 +127,91 @@ type stTransaction struct {
 	BlobVersionedHashes  []common.Hash       `json:"blobVersionedHashes,omitempty"`
 	BlobGasFeeCap        *big.Int            `json:"maxFeePerBlobGas,omitempty"`
 	AuthorizationList    []*stAuthorization  `json:"authorizationList,omitempty"`
+
+	// Frame transaction fields (EIP-8141).
+	ChainID    *big.Int           `json:"chainId,omitempty"`
+	Frames     []stFrame          `json:"frames,omitempty"`
+	Signatures []stFrameSignature `json:"signatures,omitempty"`
 }
 
 type stTransactionMarshaling struct {
 	GasPrice             *math.HexOrDecimal256
-	MaxFeePerGas         *math.HexOrDecimal256
-	MaxPriorityFeePerGas *math.HexOrDecimal256
+	MaxFeePerGas         *stBig
+	MaxPriorityFeePerGas *stBig
 	Nonce                *math.HexOrDecimal256
 	GasLimit             []math.HexOrDecimal64
 	PrivateKey           hexutil.Bytes
-	BlobGasFeeCap        *math.HexOrDecimal256
+	BlobGasFeeCap        *stBig
+	ChainID              *math.HexOrDecimal256
+}
+
+// stBig is an arbitrary-precision hex or decimal integer. Unlike
+// math.HexOrDecimal256 it accepts values beyond 256 bits, which fixtures use
+// to probe field bounds; range checks happen where the value is used.
+type stBig big.Int
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (i *stBig) UnmarshalText(input []byte) error {
+	v, ok := new(big.Int).SetString(strings.TrimPrefix(string(input), "0x"), 16)
+	if !ok {
+		if v, ok = new(big.Int).SetString(string(input), 10); !ok {
+			return fmt.Errorf("invalid hex or decimal integer %q", input)
+		}
+	}
+	*i = (stBig)(*v)
+	return nil
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (i *stBig) MarshalText() ([]byte, error) {
+	return (*math.HexOrDecimal256)(i).MarshalText()
+}
+
+// stFrame is a single frame of an EIP-8141 frame transaction. The numeric
+// fields are parsed with arbitrary precision so that fixtures probing the
+// field bounds can be loaded; such a transaction can never be RLP-decoded
+// and is rejected when the message is built.
+type stFrame struct {
+	Mode          math.HexOrDecimal64   `json:"mode"`
+	Flags         math.HexOrDecimal64   `json:"flags"`
+	Target        *common.Address       `json:"target,omitempty"`
+	GasLimit      *math.HexOrDecimal256 `json:"gasLimit"`
+	StateGasLimit *math.HexOrDecimal256 `json:"stateGasLimit"`
+	Value         *math.HexOrDecimal256 `json:"value"`
+	Data          hexutil.Bytes         `json:"data"`
+}
+
+// gasLimits converts the frame's arbitrary-precision gas budgets, rejecting
+// values that do not fit their 64-bit encoding.
+func (f *stFrame) gasLimits() (types.FrameTxGasLimits, error) {
+	execution, err := stUint64(f.GasLimit, "gas limit")
+	if err != nil {
+		return types.FrameTxGasLimits{}, err
+	}
+	state, err := stUint64(f.StateGasLimit, "state gas limit")
+	if err != nil {
+		return types.FrameTxGasLimits{}, err
+	}
+	return types.FrameTxGasLimits{Execution: execution, State: state}, nil
+}
+
+func stUint64(v *math.HexOrDecimal256, name string) (uint64, error) {
+	if v == nil {
+		return 0, nil
+	}
+	b := (*big.Int)(v)
+	if !b.IsUint64() {
+		return 0, fmt.Errorf("%s exceeds 64 bits", name)
+	}
+	return b.Uint64(), nil
+}
+
+// stFrameSignature is a signature entry of an EIP-8141 frame transaction.
+type stFrameSignature struct {
+	Scheme    math.HexOrDecimal64 `json:"scheme"`
+	Signer    hexutil.Bytes       `json:"signer"`
+	Msg       hexutil.Bytes       `json:"msg"`
+	Signature hexutil.Bytes       `json:"signature"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type stAuthorization -field-override stAuthorizationMarshaling -out gen_stauthorization.go
@@ -293,7 +368,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		}
 	}
 	post := t.json.Post[subtest.Fork][subtest.Index]
-	msg, err := t.json.Tx.toMessage(post, baseFee)
+	msg, err := t.json.Tx.toMessage(post, baseFee, types.LatestSigner(config))
 	if err != nil {
 		return st, common.Hash{}, 0, err
 	}
@@ -397,7 +472,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return genesis
 }
 
-func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Message, error) {
+func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, signer types.Signer) (*core.Message, error) {
 	// The nonce is parsed as an arbitrary-precision integer so that fixtures
 	// probing the EIP-2681 limit can be loaded; such a transaction can never
 	// be RLP-decoded and must be rejected here.
@@ -420,6 +495,91 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		}
 		from = crypto.PubkeyToAddress(key.PublicKey)
 	}
+	// EIP-8141 frame transactions carry their whole payload explicitly;
+	// build the transaction and derive the message through the regular
+	// conversion, which enforces the static constraints and the derived
+	// gas anchors.
+	if tx.Frames != nil {
+		chainID := uint256.NewInt(1)
+		if tx.ChainID != nil {
+			var overflow bool
+			if chainID, overflow = uint256.FromBig(tx.ChainID); overflow {
+				return nil, errors.New("chainId exceeds 256 bits")
+			}
+		}
+		toU256 := func(v *big.Int) (*uint256.Int, error) {
+			if v == nil {
+				return new(uint256.Int), nil
+			}
+			out, overflow := uint256.FromBig(v)
+			if overflow {
+				return nil, errors.New("fee field exceeds 256 bits")
+			}
+			return out, nil
+		}
+		tip, err := toU256(tx.MaxPriorityFeePerGas)
+		if err != nil {
+			return nil, err
+		}
+		feeCap, err := toU256(tx.MaxFeePerGas)
+		if err != nil {
+			return nil, err
+		}
+		blobFeeCap, err := toU256(tx.BlobGasFeeCap)
+		if err != nil {
+			return nil, err
+		}
+		frames := make([]types.FrameTxFrame, len(tx.Frames))
+		for i, frame := range tx.Frames {
+			limits, err := frame.gasLimits()
+			if err != nil {
+				return nil, fmt.Errorf("frame %d: %v", i, err)
+			}
+			value := new(uint256.Int)
+			if frame.Value != nil {
+				var overflow bool
+				if value, overflow = uint256.FromBig((*big.Int)(frame.Value)); overflow {
+					return nil, fmt.Errorf("frame %d: value exceeds 256 bits", i)
+				}
+			}
+			frames[i] = types.FrameTxFrame{
+				Mode:      uint64(frame.Mode),
+				Flags:     uint64(frame.Flags),
+				Target:    frame.Target,
+				GasLimits: limits,
+				Value:     value,
+				Data:      frame.Data,
+			}
+		}
+		signatures := make([]types.FrameTxSignature, len(tx.Signatures))
+		for i, sig := range tx.Signatures {
+			signatures[i] = types.FrameTxSignature{
+				Scheme:    uint64(sig.Scheme),
+				Signer:    sig.Signer,
+				Msg:       sig.Msg,
+				Signature: sig.Signature,
+			}
+		}
+		blobHashes := tx.BlobVersionedHashes
+		if blobHashes == nil {
+			blobHashes = []common.Hash{}
+		}
+		ftx := &types.FrameTx{
+			ChainID:    chainID,
+			Nonce:      nonce,
+			Sender:     from,
+			Frames:     frames,
+			Signatures: signatures,
+			Fees: types.FrameTxFees{
+				MaxPriorityFeePerGas: tip,
+				MaxFeePerGas:         feeCap,
+				MaxFeePerBlobGas:     blobFeeCap,
+			},
+			BlobVersionedHashes: blobHashes,
+		}
+		return core.TransactionToMessage(types.NewTx(ftx), signer, baseFee)
+	}
+
 	// Parse recipient if present.
 	var to *common.Address
 	if tx.To != "" {

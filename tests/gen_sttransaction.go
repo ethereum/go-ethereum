@@ -18,8 +18,8 @@ var _ = (*stTransactionMarshaling)(nil)
 func (s stTransaction) MarshalJSON() ([]byte, error) {
 	type stTransaction struct {
 		GasPrice             *math.HexOrDecimal256 `json:"gasPrice"`
-		MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas"`
-		MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas"`
+		MaxFeePerGas         *stBig                `json:"maxFeePerGas"`
+		MaxPriorityFeePerGas *stBig                `json:"maxPriorityFeePerGas"`
 		Nonce                *math.HexOrDecimal256 `json:"nonce"`
 		To                   string                `json:"to"`
 		Data                 []string              `json:"data"`
@@ -29,13 +29,16 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 		PrivateKey           hexutil.Bytes         `json:"secretKey"`
 		Sender               *common.Address       `json:"sender"`
 		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes,omitempty"`
-		BlobGasFeeCap        *math.HexOrDecimal256 `json:"maxFeePerBlobGas,omitempty"`
+		BlobGasFeeCap        *stBig                `json:"maxFeePerBlobGas,omitempty"`
 		AuthorizationList    []*stAuthorization    `json:"authorizationList,omitempty"`
+		ChainID              *math.HexOrDecimal256 `json:"chainId,omitempty"`
+		Frames               []stFrame             `json:"frames,omitempty"`
+		Signatures           []stFrameSignature    `json:"signatures,omitempty"`
 	}
 	var enc stTransaction
 	enc.GasPrice = (*math.HexOrDecimal256)(s.GasPrice)
-	enc.MaxFeePerGas = (*math.HexOrDecimal256)(s.MaxFeePerGas)
-	enc.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(s.MaxPriorityFeePerGas)
+	enc.MaxFeePerGas = (*stBig)(s.MaxFeePerGas)
+	enc.MaxPriorityFeePerGas = (*stBig)(s.MaxPriorityFeePerGas)
 	enc.Nonce = (*math.HexOrDecimal256)(s.Nonce)
 	enc.To = s.To
 	enc.Data = s.Data
@@ -50,8 +53,11 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 	enc.PrivateKey = s.PrivateKey
 	enc.Sender = s.Sender
 	enc.BlobVersionedHashes = s.BlobVersionedHashes
-	enc.BlobGasFeeCap = (*math.HexOrDecimal256)(s.BlobGasFeeCap)
+	enc.BlobGasFeeCap = (*stBig)(s.BlobGasFeeCap)
 	enc.AuthorizationList = s.AuthorizationList
+	enc.ChainID = (*math.HexOrDecimal256)(s.ChainID)
+	enc.Frames = s.Frames
+	enc.Signatures = s.Signatures
 	return json.Marshal(&enc)
 }
 
@@ -59,8 +65,8 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 func (s *stTransaction) UnmarshalJSON(input []byte) error {
 	type stTransaction struct {
 		GasPrice             *math.HexOrDecimal256 `json:"gasPrice"`
-		MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas"`
-		MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas"`
+		MaxFeePerGas         *stBig                `json:"maxFeePerGas"`
+		MaxPriorityFeePerGas *stBig                `json:"maxPriorityFeePerGas"`
 		Nonce                *math.HexOrDecimal256 `json:"nonce"`
 		To                   *string               `json:"to"`
 		Data                 []string              `json:"data"`
@@ -70,8 +76,11 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 		PrivateKey           *hexutil.Bytes        `json:"secretKey"`
 		Sender               *common.Address       `json:"sender"`
 		BlobVersionedHashes  []common.Hash         `json:"blobVersionedHashes,omitempty"`
-		BlobGasFeeCap        *math.HexOrDecimal256 `json:"maxFeePerBlobGas,omitempty"`
+		BlobGasFeeCap        *stBig                `json:"maxFeePerBlobGas,omitempty"`
 		AuthorizationList    []*stAuthorization    `json:"authorizationList,omitempty"`
+		ChainID              *math.HexOrDecimal256 `json:"chainId,omitempty"`
+		Frames               []stFrame             `json:"frames,omitempty"`
+		Signatures           []stFrameSignature    `json:"signatures,omitempty"`
 	}
 	var dec stTransaction
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -121,6 +130,15 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 	}
 	if dec.AuthorizationList != nil {
 		s.AuthorizationList = dec.AuthorizationList
+	}
+	if dec.ChainID != nil {
+		s.ChainID = (*big.Int)(dec.ChainID)
+	}
+	if dec.Frames != nil {
+		s.Frames = dec.Frames
+	}
+	if dec.Signatures != nil {
+		s.Signatures = dec.Signatures
 	}
 	return nil
 }
