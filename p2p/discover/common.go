@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"iter"
 	"math/rand"
 	"net"
@@ -103,6 +104,30 @@ func ListenUDP(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 type ReadPacket struct {
 	Data []byte
 	Addr netip.AddrPort
+}
+
+// SharedUDPConn implements a shared connection. Write sends messages to the underlying
+// connection while read returns messages that were found unprocessable and sent to the
+// Unhandled channel by the primary listener.
+type SharedUDPConn struct {
+	*net.UDPConn
+	Unhandled chan ReadPacket
+}
+
+// ReadFromUDPAddrPort implements UDPConn.
+func (s *SharedUDPConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
+	packet, ok := <-s.Unhandled
+	if !ok {
+		return 0, netip.AddrPort{}, errors.New("connection was closed")
+	}
+	l := min(len(packet.Data), len(b))
+	copy(b[:l], packet.Data[:l])
+	return l, packet.Addr, nil
+}
+
+// Close implements UDPConn. It does not close the underlying connection.
+func (s *SharedUDPConn) Close() error {
+	return nil
 }
 
 type randomSource interface {

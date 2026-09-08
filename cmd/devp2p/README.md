@@ -80,6 +80,13 @@ Run `devp2p discv5 listen` to run a Discovery v5 node.
 Run `devp2p discv5 crawl <nodes.json path>` to create or update a JSON node set containing
 discv5 nodes.
 
+### Combined Discovery
+
+Run `devp2p discovery listen` to run a node speaking all supported discovery protocol
+versions (currently discv4 and discv5) on a single UDP port. For a single-protocol node, use
+`devp2p discv4 listen` or `devp2p discv5 listen`. Add `--rpc <addr>` to expose the
+per-protocol HTTP API (`discv4_*`, `discv5_*`).
+
 ### Discovery Test Suites
 
 The devp2p command also contains interactive test suites for Discovery v4 and Discovery

@@ -18,11 +18,14 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -49,6 +52,7 @@ func init() {
 		keyCommand,
 		discv4Command,
 		discv5Command,
+		discoveryCommand,
 		dnsCommand,
 		nodesetCommand,
 		rlpxCommand,
@@ -90,6 +94,25 @@ func getNodeArg(ctx *cli.Context) *enode.Node {
 		exit(err)
 	}
 	return n
+}
+
+// maxLookupResults bounds the result-set allocation for a caller-controlled lookupRandom count.
+const maxLookupResults = 256
+
+// runRPCServer serves the given RPC APIs on httpAddr; if httpAddr is empty, it blocks forever without serving.
+func runRPCServer(httpAddr string, apis map[string]any) error {
+	if httpAddr == "" {
+		select {}
+	}
+	srv := rpc.NewServer()
+	for name, api := range apis {
+		if err := srv.RegisterName(name, api); err != nil {
+			return err
+		}
+	}
+	log.Info("Starting RPC API server", "addr", httpAddr)
+	httpsrv := http.Server{Addr: httpAddr, Handler: srv}
+	return httpsrv.ListenAndServe()
 }
 
 func exit(err interface{}) {
