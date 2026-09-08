@@ -38,6 +38,21 @@ const (
 	jumpDestBucketSize = 8 * 1024 * 1024
 )
 
+// perEntryOverhead approximates what an entry costs to exist, beyond the key
+// and value bytes already counted. TestJumpDestCacheEntryOverhead measures it
+// at 115 to 170 bytes for small bitmaps, moving with how full the map is, and
+// this takes the top of that. Erring high holds fewer entries, and caps the
+// count, since nothing measures less.
+const perEntryOverhead = 150
+
+// jumpDestEntrySize charges an entry's key plus what it costs to exist. The
+// cache counts the bitmap value itself and calls this once per entry, on
+// insertion and again on eviction, so a fixed term here is charged and
+// refunded per entry.
+func jumpDestEntrySize(key common.Hash) uint64 {
+	return uint64(len(key)) + perEntryOverhead
+}
+
 // shardedJumpDestCache is a thread-safe, byte-bounded LRU of JUMPDEST analysis
 // bitmaps, sharded into independent buckets to reduce lock contention. It is
 // owned by BlockChain and shared across block processing and prefetching,
@@ -52,7 +67,7 @@ type shardedJumpDestCache struct {
 func NewJumpDestCache() vm.JumpDestCache {
 	c := new(shardedJumpDestCache)
 	for i := range c.buckets {
-		c.buckets[i].dest = lru.NewSizeConstrainedCache[common.Hash, vm.BitVec](jumpDestBucketSize)
+		c.buckets[i].dest = lru.NewSizeConstrainedCacheWithKeySize[common.Hash, vm.BitVec](jumpDestBucketSize, jumpDestEntrySize)
 	}
 	return c
 }
