@@ -53,28 +53,29 @@ func getPooledBuffer(size uint64) ([]byte, *bytes.Buffer, error) {
 	return b, buf, nil
 }
 
-// rlpHash encodes x and hashes the encoded bytes.
-func rlpHash(x interface{}) common.Hash {
-	return rlpHashWithPrefix(nil, x)
-}
-
 // rlpHashWithPrefix optionally writes a type prefix before encoding x.
 func rlpHashWithPrefix(prefix *byte, x interface{}) (h common.Hash) {
-	sha := hasherPool.Get().(crypto.KeccakState)
-	defer hasherPool.Put(sha)
-	sha.Reset()
-	if prefix != nil {
-		sha.Write([]byte{*prefix})
-	}
-	rlp.Encode(sha, x)
-	sha.Read(h[:])
-	return h
+    sha := hasherPool.Get().(crypto.KeccakState)
+    defer hasherPool.Put(sha)
+
+    sha.Reset()
+    if prefix != nil {
+        sha.Write([]byte{*prefix})
+    }
+    rlp.Encode(sha, x)
+    sha.Read(h[:])
+    return h
 }
 
-// prefixedRlpHash writes the prefix into the hasher before rlp-encoding x.
+// rlpHash encodes x and hashes the encoded bytes.
+func rlpHash(x interface{}) common.Hash {
+    return rlpHashWithPrefix(nil, x)
+}
+
+// prefixedRlpHash writes the prefix before RLP-encoding x.
 // It's used for typed transactions.
 func prefixedRlpHash(prefix byte, x interface{}) common.Hash {
-	return rlpHashWithPrefix(&prefix, x)
+    return rlpHashWithPrefix(&prefix, x)
 }
 
 // ListHasher defines the interface for computing the hash of a derivable list.
