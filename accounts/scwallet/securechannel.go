@@ -258,7 +258,10 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 	}
 
 	rapdu := &responseAPDU{}
-	rapdu.deserialize(plainData)
+	err = rapdu.deserialize(plainData)
+	if err != nil {
+		return nil, err
+	}
 
 	if rapdu.Sw1 != sw1Ok {
 		return nil, fmt.Errorf("unexpected response status Cla=%#x, Ins=%#x, Sw=%#x%x", cla, ins, rapdu.Sw1, rapdu.Sw2)
