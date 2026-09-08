@@ -102,22 +102,6 @@ mainLoop:
 			sp -= 1
 			pc++
 			continue mainLoop
-		case ADDMOD:
-			if sp < 3 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
-				break mainLoop
-			}
-			if !contract.Gas.ChargeExecutionOnly(8) {
-				res, err = nil, ErrOutOfGas
-				break mainLoop
-			}
-			res, err = opAddmod(&pc, evm, scope)
-			if err != nil {
-				break mainLoop
-			}
-			sp -= 2
-			pc++
-			continue mainLoop
 		case MULMOD:
 			if sp < 3 {
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
@@ -277,22 +261,6 @@ mainLoop:
 			sp -= 1
 			pc++
 			continue mainLoop
-		case XOR:
-			if sp < 2 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
-				break mainLoop
-			}
-			if !contract.Gas.ChargeExecutionOnly(3) {
-				res, err = nil, ErrOutOfGas
-				break mainLoop
-			}
-			res, err = opXor(&pc, evm, scope)
-			if err != nil {
-				break mainLoop
-			}
-			sp -= 1
-			pc++
-			continue mainLoop
 		case NOT:
 			if sp < 1 {
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
@@ -392,6 +360,38 @@ mainLoop:
 			sp -= 1
 			pc++
 			continue mainLoop
+		case CALLER:
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
+			}
+			if !contract.Gas.ChargeExecutionOnly(2) {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
+			}
+			res, err = opCaller(&pc, evm, scope)
+			if err != nil {
+				break mainLoop
+			}
+			sp += 1
+			pc++
+			continue mainLoop
+		case CALLVALUE:
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
+			}
+			if !contract.Gas.ChargeExecutionOnly(2) {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
+			}
+			res, err = opCallValue(&pc, evm, scope)
+			if err != nil {
+				break mainLoop
+			}
+			sp += 1
+			pc++
+			continue mainLoop
 		case CALLDATALOAD:
 			if sp < 1 {
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
@@ -407,6 +407,66 @@ mainLoop:
 			}
 			pc++
 			continue mainLoop
+		case CALLDATASIZE:
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
+			}
+			if !contract.Gas.ChargeExecutionOnly(2) {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
+			}
+			res, err = opCallDataSize(&pc, evm, scope)
+			if err != nil {
+				break mainLoop
+			}
+			sp += 1
+			pc++
+			continue mainLoop
+		case CODECOPY:
+			if sp < 3 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 3}
+				break mainLoop
+			}
+			if !contract.Gas.ChargeExecutionOnly(3) {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
+			}
+			operation := table[op]
+			var memorySize uint64
+			if memorySize, _, err = contract.meterDynamicGas(operation, evm, stack, mem); err != nil {
+				return nil, err
+			}
+			if memorySize > 0 {
+				mem.Resize(memorySize)
+			}
+			res, err = opCodeCopy(&pc, evm, scope)
+			if err != nil {
+				break mainLoop
+			}
+			sp -= 3
+			pc++
+			continue mainLoop
+		case RETURNDATASIZE:
+			if rules.IsByzantium {
+				if sp > 1023 {
+					res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+					break mainLoop
+				}
+				if !contract.Gas.ChargeExecutionOnly(2) {
+					res, err = nil, ErrOutOfGas
+					break mainLoop
+				}
+				res, err = opReturnDataSize(&pc, evm, scope)
+				if err != nil {
+					break mainLoop
+				}
+				sp += 1
+				pc++
+				continue mainLoop
+			}
+			res, err = opUndefined(&pc, evm, scope)
+			break mainLoop
 		case POP:
 			if sp < 1 {
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 1}
@@ -500,6 +560,22 @@ mainLoop:
 				break mainLoop
 			}
 			sp -= 2
+			pc++
+			continue mainLoop
+		case GAS:
+			if sp > 1023 {
+				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
+				break mainLoop
+			}
+			if !contract.Gas.ChargeExecutionOnly(2) {
+				res, err = nil, ErrOutOfGas
+				break mainLoop
+			}
+			res, err = opGas(&pc, evm, scope)
+			if err != nil {
+				break mainLoop
+			}
+			sp += 1
 			pc++
 			continue mainLoop
 		case JUMPDEST:
@@ -607,22 +683,6 @@ mainLoop:
 				break mainLoop
 			}
 			res, err = opPush8(&pc, evm, scope)
-			if err != nil {
-				break mainLoop
-			}
-			sp += 1
-			pc++
-			continue mainLoop
-		case PUSH16:
-			if sp > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
-				break mainLoop
-			}
-			if !contract.Gas.ChargeExecutionOnly(3) {
-				res, err = nil, ErrOutOfGas
-				break mainLoop
-			}
-			res, err = opPush16(&pc, evm, scope)
 			if err != nil {
 				break mainLoop
 			}
@@ -889,44 +949,6 @@ mainLoop:
 			sp += 1
 			pc++
 			continue mainLoop
-		case DUP13:
-			if sp < 13 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 13}
-				break mainLoop
-			} else if sp > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
-				break mainLoop
-			}
-			if !contract.Gas.ChargeExecutionOnly(3) {
-				res, err = nil, ErrOutOfGas
-				break mainLoop
-			}
-			res, err = opDup13(&pc, evm, scope)
-			if err != nil {
-				break mainLoop
-			}
-			sp += 1
-			pc++
-			continue mainLoop
-		case DUP14:
-			if sp < 14 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 14}
-				break mainLoop
-			} else if sp > 1023 {
-				res, err = nil, &ErrStackOverflow{stackLen: sp, limit: 1023}
-				break mainLoop
-			}
-			if !contract.Gas.ChargeExecutionOnly(3) {
-				res, err = nil, ErrOutOfGas
-				break mainLoop
-			}
-			res, err = opDup14(&pc, evm, scope)
-			if err != nil {
-				break mainLoop
-			}
-			sp += 1
-			pc++
-			continue mainLoop
 		case SWAP1:
 			if sp < 2 {
 				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
@@ -1032,34 +1054,24 @@ mainLoop:
 			}
 			pc++
 			continue mainLoop
-		case SWAP8:
-			if sp < 9 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 9}
+		case RETURN:
+			if sp < 2 {
+				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 2}
 				break mainLoop
 			}
-			if !contract.Gas.ChargeExecutionOnly(3) {
-				res, err = nil, ErrOutOfGas
-				break mainLoop
+			operation := table[op]
+			var memorySize uint64
+			if memorySize, _, err = contract.meterDynamicGas(operation, evm, stack, mem); err != nil {
+				return nil, err
 			}
-			res, err = opSwap8(&pc, evm, scope)
+			if memorySize > 0 {
+				mem.Resize(memorySize)
+			}
+			res, err = opReturn(&pc, evm, scope)
 			if err != nil {
 				break mainLoop
 			}
-			pc++
-			continue mainLoop
-		case SWAP9:
-			if sp < 10 {
-				res, err = nil, &ErrStackUnderflow{stackLen: sp, required: 10}
-				break mainLoop
-			}
-			if !contract.Gas.ChargeExecutionOnly(3) {
-				res, err = nil, ErrOutOfGas
-				break mainLoop
-			}
-			res, err = opSwap9(&pc, evm, scope)
-			if err != nil {
-				break mainLoop
-			}
+			sp -= 2
 			pc++
 			continue mainLoop
 		default:
