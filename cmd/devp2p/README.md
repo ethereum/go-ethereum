@@ -87,6 +87,12 @@ versions (currently discv4 and discv5) on a single UDP port. For a single-protoc
 `devp2p discv4 listen` or `devp2p discv5 listen`. Add `--rpc <addr>` to expose the
 per-protocol HTTP API (`discv4_*`, `discv5_*`).
 
+Add the global `--metrics` flag to any listen command to collect metrics. They are served
+at `/debug/metrics/prometheus` (and `/debug/metrics` as expvar JSON) on
+`--metrics.addr`:`--metrics.port`, default `127.0.0.1:6060`. The `discover/*` series
+report table size per bucket, bytes in and out, received packets per message type, and
+dropped packets per protocol version.
+
 ### Discovery Test Suites
 
 The devp2p command also contains interactive test suites for Discovery v4 and Discovery

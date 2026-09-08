@@ -556,6 +556,7 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 			return
 		}
 		if err := t.handlePacket(from, buf[:nbytes]); err != nil && unhandled == nil {
+			v4BadPacketMeter.Mark(1)
 			t.log.Debug("Bad discv4 packet", "addr", from, "err", err)
 		} else if err != nil && unhandled != nil {
 			p := ReadPacket{bytes.Clone(buf[:nbytes]), from}
@@ -578,6 +579,7 @@ func (t *UDPv4) handlePacket(from netip.AddrPort, buf []byte) error {
 		return err
 	}
 	packet := t.wrapPacket(rawpacket)
+	markInbound(packet.Name())
 	fromID := fromKey.ID()
 	if packet.preverify != nil {
 		err = packet.preverify(packet, from, fromID, fromKey)
