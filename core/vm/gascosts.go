@@ -270,7 +270,8 @@ func (g GasBudget) Exit(err error) GasBudget {
 // budget. Additionally, it does an EIP-8037 spillover correction:
 // state-gas that spilled into the execution pool inside the child frame is
 // excluded from the UsedExecutionGas.
-func (g *GasBudget) Absorb(child GasBudget) {
+func (g *GasBudget) Absorb(child GasBudget, logger *tracing.Hooks) {
+	prior := *g
 	g.UsedExecutionGas -= child.ExecutionGas
 	g.ExecutionGas += child.ExecutionGas
 	g.StateGas = child.StateGas
@@ -284,8 +285,19 @@ func (g *GasBudget) Absorb(child GasBudget) {
 	// the gas ends up in the child's reservoir and is handed back to the parent. The
 	// parent's state reservoir can then be non-zero while it still has outstanding
 	// debt from the execution gas.
+	merged := *g
 	d := min(g.StateGas, g.Spilled)
 	g.ExecutionGas += d
 	g.StateGas -= d
 	g.Spilled -= d
+
+	if !logger.HasGasHook() {
+		return
+	}
+	if prior.AsTracing() != merged.AsTracing() {
+		logger.EmitGasChange(prior.AsTracing(), merged.AsTracing(), tracing.GasChangeCallLeftOverRefunded)
+	}
+	if merged.AsTracing() != g.AsTracing() {
+		logger.EmitGasChange(merged.AsTracing(), g.AsTracing(), tracing.GasChangeStateGasRepaid)
+	}
 }
