@@ -79,6 +79,10 @@ type TxContext struct {
 	GasPrice     *uint256.Int        // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
 	BlobHashes   []common.Hash       // Provides information for BLOBHASH
 	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
+
+	// FrameContext is the transaction-scoped context of an executing
+	// EIP-8141 frame transaction. Nil for all other transactions.
+	FrameContext *FrameContext
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -283,6 +287,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
+	approvals := evm.TxContext.FrameContext.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP4762 && !isSystemCall(caller) {
@@ -296,6 +301,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			wgas := evm.AccessEvents.CodeHashGas(addr, true, gas.ExecutionGas, false)
 			if _, ok := gas.ChargeExecution(wgas); !ok {
 				evm.StateDB.RevertToSnapshot(snapshot)
+				evm.TxContext.FrameContext.RestoreSnapshot(approvals)
 				return nil, gas.ExitHalt(), ErrOutOfGas
 			}
 		}
@@ -309,8 +315,13 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	// Perform the value transfer only in non-syscall mode.
 	// Calling this is required even for zero-value transfers,
 	// to ensure the state clearing mechanism is applied.
+	//
+	// Zero-value top-level frame calls (EIP-8141) skip the transfer so
+	// that the entry point is not touched into the block access list.
 	if !syscall {
-		evm.Context.Transfer(evm.StateDB, caller, addr, value, &evm.chainRules)
+		if evm.TxContext.FrameContext == nil || evm.depth > 0 || !value.IsZero() {
+			evm.Context.Transfer(evm.StateDB, caller, addr, value, &evm.chainRules)
+		}
 	}
 
 	if isPrecompile {
@@ -334,6 +345,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.TxContext.FrameContext.RestoreSnapshot(approvals)
 
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
@@ -368,6 +380,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
+	approvals := evm.TxContext.FrameContext.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -385,6 +398,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.TxContext.FrameContext.RestoreSnapshot(approvals)
 
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
@@ -414,6 +428,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		return nil, gas, ErrDepth
 	}
 	snapshot := evm.StateDB.Snapshot()
+	approvals := evm.TxContext.FrameContext.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -429,6 +444,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.TxContext.FrameContext.RestoreSnapshot(approvals)
 
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
@@ -461,6 +477,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
 	snapshot := evm.StateDB.Snapshot()
+	approvals := evm.TxContext.FrameContext.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -481,6 +498,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.TxContext.FrameContext.RestoreSnapshot(approvals)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer.HasGasHook() {
 				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
@@ -590,6 +608,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	// It might be possible the contract code is deployed to a pre-existent
 	// account with non-zero balance.
 	snapshot := evm.StateDB.Snapshot()
+	approvals := evm.TxContext.FrameContext.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
 	}
@@ -630,6 +649,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	// state and gas is preserved (i.e., treated as success).
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.TxContext.FrameContext.RestoreSnapshot(approvals)
 
 		exit := contract.Gas.Exit(err)
 		if err != ErrExecutionReverted {

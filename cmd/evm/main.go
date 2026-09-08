@@ -162,6 +162,7 @@ var (
 			t8ntool.ForknameFlag,
 			t8ntool.ChainIDFlag,
 			t8ntool.RewardFlag,
+			t8ntool.StateTestFlag,
 			t8ntool.OpcodeCountFlag,
 		},
 	}

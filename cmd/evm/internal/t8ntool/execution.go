@@ -139,8 +139,10 @@ type rejectedTx struct {
 	Err   string `json:"error"`
 }
 
-// Apply applies a set of transactions to a pre-state
-func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, txIt txIterator, miningReward int64) (*state.StateDB, *ExecutionResult, []byte, error) {
+// Apply applies a set of transactions to a pre-state. In state-test mode the
+// transactions are applied without any block-level system operations,
+// mirroring the reference state-test runner.
+func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, txIt txIterator, miningReward int64, stateTest bool) (*state.StateDB, *ExecutionResult, []byte, error) {
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
@@ -244,10 +246,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		misc.ApplyDAOHardFork(statedb)
 	}
 	evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
-	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
+	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil && !stateTest {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
 	}
-	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
+	if !stateTest && pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
 		var (
 			prevNumber = pre.Env.Number - 1
 			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
@@ -261,7 +263,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			continue
 		}
-		if tx.Type() == types.BlobTxType && vmContext.BlobBaseFee == nil {
+		if tx.BlobGas() > 0 && vmContext.BlobBaseFee == nil {
 			errMsg := "blob tx used but field env.ExcessBlobGas missing"
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", errMsg)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
@@ -273,9 +275,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			continue
 		}
-		txBlobGas := uint64(0)
-		if tx.Type() == types.BlobTxType {
-			txBlobGas = uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
+		// Blob-carrying transactions (blob and frame txs) contribute their
+		// blob gas to the block's allowance.
+		txBlobGas := tx.BlobGas()
+		if txBlobGas > 0 {
 			max := eip4844.MaxBlobGasPerBlock(chainConfig, pre.Env.Timestamp)
 			if used := blobGasUsed + txBlobGas; used > max {
 				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", used, max)
@@ -358,16 +361,21 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 	}
 
-	// Gather the execution-layer triggered requests.
-	var allLogs []*types.Log
-	for _, receipt := range receipts {
-		allLogs = append(allLogs, receipt.Logs...)
+	// Gather the execution-layer triggered requests. A state-test
+	// invocation performs no system operations.
+	var requests [][]byte
+	if !stateTest {
+		var allLogs []*types.Log
+		for _, receipt := range receipts {
+			allLogs = append(allLogs, receipt.Logs...)
+		}
+		reqs, bal, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm, uint32(len(receipts)+1))
+		if err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
+		}
+		requests = reqs
+		blockAccessList.Merge(bal)
 	}
-	requests, bal, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm, uint32(len(receipts)+1))
-	if err != nil {
-		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
-	}
-	blockAccessList.Merge(bal)
 
 	// Commit block
 	root, err := statedb.Commit(rules, vmContext.BlockNumber.Uint64())

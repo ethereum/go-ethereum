@@ -37,8 +37,13 @@ import (
 type ExecutionResult struct {
 	UsedGas    uint64 // Total used gas, refunded gas is deducted
 	MaxUsedGas uint64 // Maximum gas consumed during execution, excluding gas refunds.
-	Err        error  // Any error encountered during the execution(listed in core/vm/errors.go)
-	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
+
+	// Frame transaction outputs (EIP-8141): the account that paid for the
+	// transaction and the per-frame receipt entries.
+	FramePayer    *common.Address
+	FrameReceipts []types.FrameReceipt
+	Err           error  // Any error encountered during the execution(listed in core/vm/errors.go)
+	ReturnData    []byte // Returned data from evm(function result or data supplied with revert opcode)
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -159,6 +164,19 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	return gas, nil
 }
 
+// FrameTxIntrinsicGas computes the intrinsic execution gas of an EIP-8141
+// frame transaction: the mandatory costs — base, per-frame, signature
+// verification, and value transfer — plus the standard calldata cost of the
+// frame and signature byte fields. Frame transactions carry no intrinsic
+// state gas; state charges draw from the per-frame state budgets at runtime.
+func FrameTxIntrinsicGas(frames []types.Frame, frameSigs types.SignatureList, sender common.Address) (uint64, error) {
+	gas, err := types.FrameTxIntrinsicGas(frames, frameSigs, sender)
+	if err != nil {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
 // intrinsicBaseGasEIP2780 computes the intrinsic base cost of the transaction.
 func intrinsicBaseGasEIP2780(from common.Address, to *common.Address, value *uint256.Int) uint64 {
 	var (
@@ -266,17 +284,23 @@ func toWordSize(size uint64) uint64 {
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
 type Message struct {
-	To                    *common.Address
-	From                  common.Address
-	Nonce                 uint64
-	Value                 *uint256.Int
-	GasLimit              uint64
-	GasPrice              *uint256.Int
-	GasFeeCap             *uint256.Int
-	GasTipCap             *uint256.Int
-	Data                  []byte
-	AccessList            types.AccessList
-	BlobGasFeeCap         *uint256.Int
+	To            *common.Address
+	From          common.Address
+	Nonce         uint64
+	Value         *uint256.Int
+	GasLimit      uint64
+	GasPrice      *uint256.Int
+	GasFeeCap     *uint256.Int
+	GasTipCap     *uint256.Int
+	Data          []byte
+	AccessList    types.AccessList
+	BlobGasFeeCap *uint256.Int
+	TxHash        common.Hash
+
+	// Frame transaction fields (EIP-8141).
+	Frames                []types.Frame
+	FrameSignatures       types.SignatureList
+	FrameSigHash          common.Hash
 	BlobHashes            []common.Hash
 	SetCodeAuthorizations []types.SetCodeAuthorization
 
@@ -343,6 +367,21 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		SkipTransactionChecks: false,
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         blobGasFeeCap,
+		TxHash:                tx.Hash(),
+	}
+	if tx.Type() == types.FrameTxType {
+		// EIP-8141 static constraints are enforced at validation time, not
+		// decode time, mirroring the reference implementation.
+		if err := tx.FrameTxValidateStatic(); err != nil {
+			return nil, err
+		}
+		msg.Frames = tx.Frames()
+		msg.FrameSignatures = tx.FrameSignatures()
+		msg.FrameSigHash = s.Hash(tx)
+		msg.To = nil
+		msg.Value = new(uint256.Int)
+		msg.Data = nil
+		msg.AccessList = nil
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -433,6 +472,23 @@ func (st *stateTransition) to() common.Address {
 // (plus `blobGas × blobBaseFee` under Cancun), the cap-vs-tip differential
 // is settled at tx end.
 func (st *stateTransition) buyGas() error {
+	if st.msg.Frames != nil {
+		// Frame transactions have no upfront gas purchase: the payer is
+		// charged during execution via APPROVE. Only reserve room in the
+		// block gas pool, exactly per dimension: the execution reservation
+		// carries the calldata floor, which binds the execution dimension,
+		// and the state reservation is the frames' declared state budget.
+		intrinsicGas, err := types.FrameTxIntrinsicGas(st.msg.Frames, st.msg.FrameSignatures, st.msg.From)
+		if err != nil {
+			return ErrGasUintOverflow
+		}
+		floorGas, err := types.FrameTxFloorGas(st.msg.Frames, st.msg.FrameSignatures, st.msg.From)
+		if err != nil {
+			return ErrGasUintOverflow
+		}
+		executionGrant, stateGrant := types.FrameTxBudgetTotals(st.msg.Frames)
+		return st.gp.CheckGasAmsterdam(max(intrinsicGas+executionGrant, floorGas), stateGrant)
+	}
 	mgval := new(uint256.Int).SetUint64(st.msg.GasLimit)
 	_, overflow := mgval.MulOverflow(mgval, st.msg.GasPrice)
 	if overflow {
@@ -559,15 +615,20 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 		}
 	}
 	if !msg.SkipTransactionChecks {
-		// Verify tx gas limit does not exceed EIP-7825 cap.
+		// Verify tx gas limit does not exceed EIP-7825 cap. Unlike other
+		// transactions, the derived gas limit of a frame transaction is
+		// capped in its entirety.
 		if !rules.IsAmsterdam && rules.IsOsaka && msg.GasLimit > params.MaxTxGas {
 			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
 		}
-		// Make sure the sender is an EOA
-		code := st.state.GetCode(msg.From)
-		_, delegated := types.ParseDelegation(code)
-		if len(code) > 0 && !delegated {
-			return fmt.Errorf("%w: address %v, len(code): %d", ErrSenderNoEOA, msg.From.Hex(), len(code))
+		// Make sure the sender is an EOA. Frame transaction senders are
+		// exempt from EIP-3607: smart accounts are the point.
+		if msg.Frames == nil {
+			code := st.state.GetCode(msg.From)
+			_, delegated := types.ParseDelegation(code)
+			if len(code) > 0 && !delegated {
+				return fmt.Errorf("%w: address %v, len(code): %d", ErrSenderNoEOA, msg.From.Hex(), len(code))
+			}
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
@@ -599,10 +660,12 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 		// The to field of a blob tx type is mandatory, and a `BlobTx` transaction internally
 		// has it as a non-nillable value, so any msg derived from blob transaction has it non-nil.
 		// However, messages created through RPC (eth_call) don't have this restriction.
-		if msg.To == nil {
+		// Frame transactions have no top-level destination and may carry an
+		// empty blob hash list.
+		if msg.To == nil && msg.Frames == nil {
 			return ErrBlobTxCreate
 		}
-		if len(msg.BlobHashes) == 0 {
+		if len(msg.BlobHashes) == 0 && msg.Frames == nil {
 			return ErrMissingBlobHashes
 		}
 		if rules.IsOsaka && len(msg.BlobHashes) > params.BlobTxMaxBlobs {
@@ -649,7 +712,10 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 	}
 	// Reserve the gas budget in the block gas pool
 	var err error
-	if rules.IsAmsterdam {
+	if st.msg.Frames != nil {
+		// Frame transactions reserve their block gas per dimension in
+		// buyGas.
+	} else if rules.IsAmsterdam {
 		err = st.gp.CheckGasAmsterdam(min(st.msg.GasLimit, params.MaxTxGas), st.msg.GasLimit)
 	} else {
 		err = st.gp.CheckGasLegacy(st.msg.GasLimit)
@@ -675,16 +741,32 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	var (
 		msg              = st.msg
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
-		contractCreation = msg.To == nil
+		isFrameTx        = msg.Frames != nil
+		contractCreation = msg.To == nil && !isFrameTx
 		floorDataGas     uint64
 	)
 	// Validate the message and pre-pay gas.
 	if err := st.preCheck(rules); err != nil {
 		return nil, err
 	}
+	if isFrameTx {
+		// The protocol signature entries are validated against the
+		// canonical signature hash before any frame executes.
+		if err := types.ValidateFrameTxSignatures(msg.FrameSignatures, msg.From, msg.FrameSigHash); err != nil {
+			return nil, err
+		}
+	}
 	// Calculate the intrinsic gas of this transaction and make sure the gas limit
 	// is sufficient to cover that.
-	intrinsicGas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules)
+	var (
+		intrinsicGas uint64
+		err          error
+	)
+	if isFrameTx {
+		intrinsicGas, err = FrameTxIntrinsicGas(msg.Frames, msg.FrameSignatures, msg.From)
+	} else {
+		intrinsicGas, err = IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -694,7 +776,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Validate the EIP-7623 calldata floor against the gas limit. The floor inflates
 	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
 	if rules.IsPrague {
-		floorDataGas, err = FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
+		if isFrameTx {
+			floorDataGas, err = types.FrameTxFloorGas(msg.Frames, msg.FrameSignatures, msg.From)
+		} else {
+			floorDataGas, err = FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -737,21 +823,49 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	// Initialize the running gas budget with the post-intrinsic remainder.
-	st.initRuntimeGasBudget(rules, intrinsicGas)
+	// Frame transactions carry no transaction-level budget: each frame runs
+	// against its own declared per-dimension budgets and settlement derives
+	// from the frame receipts.
+	if !isFrameTx {
+		st.initRuntimeGasBudget(rules, intrinsicGas)
+	}
 
-	// Execute the top-most frame
+	// Execute the top-most frame, or the frame sequence of an EIP-8141
+	// frame transaction.
 	var (
 		ret   []byte
 		vmerr error // vm errors do not effect consensus
+
+		framePayer    *common.Address
+		frameReceipts []types.FrameReceipt
 	)
-	if contractCreation {
+	switch {
+	case isFrameTx:
+		// The frame context stays installed through gas settlement, which
+		// refunds the payer.
+		prevOrigin := st.evm.TxContext.Origin
+		prevFrameContext := st.evm.TxContext.FrameContext
+		defer func() {
+			st.evm.TxContext.Origin = prevOrigin
+			st.evm.TxContext.FrameContext = prevFrameContext
+		}()
+		framePayer, frameReceipts, err = st.applyFrames(rules)
+		if err != nil {
+			return nil, err
+		}
+	case contractCreation:
 		ret, vmerr = st.executeCreate(rules, value)
-	} else {
+	default:
 		ret, vmerr = st.executeCall(rules, value)
 	}
 
 	// Settle down the gas usage and refund the ETH back if any remaining
-	gasUsed, peakUsed, err := st.settleGas(rules, floorDataGas)
+	var gasUsed, peakUsed uint64
+	if isFrameTx {
+		gasUsed, peakUsed, err = st.settleFrameGas(frameReceipts, floorDataGas)
+	} else {
+		gasUsed, peakUsed, err = st.settleGas(rules, floorDataGas)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -781,10 +895,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	return &ExecutionResult{
-		UsedGas:    gasUsed,
-		MaxUsedGas: peakUsed,
-		Err:        vmerr,
-		ReturnData: ret,
+		UsedGas:       gasUsed,
+		MaxUsedGas:    peakUsed,
+		Err:           vmerr,
+		ReturnData:    ret,
+		FramePayer:    framePayer,
+		FrameReceipts: frameReceipts,
 	}, nil
 }
 
@@ -1019,7 +1135,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 		}
 	}
 
-	// Refund leftover gas to the sender
+	// Refund leftover gas as ETH to the sender.
 	if gasLeft > 0 {
 		refund := new(uint256.Int).Mul(uint256.NewInt(gasLeft), st.msg.GasPrice)
 		st.state.AddBalance(st.msg.From, refund, tracing.BalanceIncreaseGasReturn)
@@ -1027,6 +1143,85 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 		if st.evm.Config.Tracer.HasGasHook() {
 			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Execution: gasLeft}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
 		}
+	}
+	return gasUsed, peakUsed, nil
+}
+
+// settleFrameGas finalizes the gas accounting of an EIP-8141 frame
+// transaction after all frames have executed. Both gas dimensions settle
+// from the final receipts: each frame's unused gas is its budget less its
+// receipt's usage, so gas a rollback or a later frame's refill removed from
+// a receipt counts as unused without further accounting. The payer, who
+// escrowed the transaction's maximum cost at APPROVE, receives back
+// everything beyond the actual fee.
+func (st *stateTransition) settleFrameGas(receipts []types.FrameReceipt, floorDataGas uint64) (gasUsed, peakUsed uint64, err error) {
+	msg := st.msg
+	standardGasLimit, err := types.FrameTxStandardGasLimit(msg.Frames, msg.FrameSignatures, msg.From)
+	if err != nil {
+		return 0, 0, ErrGasUintOverflow
+	}
+	var unusedGas, txStateGas uint64
+	for i := range receipts {
+		limits := &msg.Frames[i].GasLimits
+		if receipts[i].GasUsed > limits.Execution || receipts[i].StateGasUsed > limits.State {
+			return 0, 0, fmt.Errorf("frame %d gas usage exceeds its budget", i)
+		}
+		unusedGas += limits.Execution - receipts[i].GasUsed
+		unusedGas += limits.State - receipts[i].StateGasUsed
+		txStateGas += receipts[i].StateGasUsed
+	}
+	// The settlement anchor less the gas not charged at settlement, then
+	// the EIP-3529 refund capped at a fifth of the pre-refund usage.
+	gasUsedBeforeRefund := standardGasLimit - unusedGas
+	refund := st.calcRefund(gasUsedBeforeRefund)
+	gasUsedAfterRefund := gasUsedBeforeRefund - refund
+
+	// The EIP-7623 calldata floor binds the execution dimension alone: the
+	// payer pays the post-refund usage less the final attributed state
+	// gas, held to the floor, while the block accounts the pre-refund
+	// usage under the same floor — storage refunds reduce what the payer
+	// pays without reducing block execution gas (EIP-7778). A
+	// state-dominated refund can drive the payer-facing subtraction
+	// negative, which the floor clamps.
+	payerExecutionGas := floorDataGas
+	if gasUsedAfterRefund > txStateGas && gasUsedAfterRefund-txStateGas > floorDataGas {
+		payerExecutionGas = gasUsedAfterRefund - txStateGas
+	}
+	blockExecutionGas := max(gasUsedBeforeRefund-txStateGas, floorDataGas)
+	// The payer pays for exactly the capacity the transaction occupies
+	// across both dimensions.
+	gasUsed = payerExecutionGas + txStateGas
+	peakUsed = max(gasUsedBeforeRefund, gasUsed)
+
+	// Settle the final consumption in the block-level pool, per dimension.
+	if err = st.gp.ChargeGasAmsterdam(blockExecutionGas, txStateGas, gasUsed); err != nil {
+		return 0, 0, err
+	}
+
+	// Refund the payer's unspent escrow: the maximum cost collected at
+	// APPROVE less the charged fee — the gas used priced at the effective
+	// gas price, plus the blob fee.
+	fc := st.evm.TxContext.FrameContext
+	if fc.Payer == nil {
+		return 0, 0, fmt.Errorf("%w: no frame approved gas payment", ErrFrameTxInvalidExecution)
+	}
+	actualFee := new(uint256.Int).SetUint64(gasUsed)
+	actualFee.Mul(actualFee, msg.GasPrice)
+	if blobGas := st.blobGasUsed(); blobGas > 0 {
+		blobBaseFee, overflow := uint256.FromBig(st.evm.Context.BlobBaseFee)
+		if overflow {
+			return 0, 0, fmt.Errorf("invalid blobBaseFee: %v", st.evm.Context.BlobBaseFee)
+		}
+		blobFee := new(uint256.Int).SetUint64(blobGas)
+		blobFee.Mul(blobFee, blobBaseFee)
+		actualFee.Add(actualFee, blobFee)
+	}
+	if actualFee.Cmp(fc.MaxCost) > 0 {
+		return 0, 0, fmt.Errorf("frame transaction fee exceeds collected maximum: %v > %v", actualFee, fc.MaxCost)
+	}
+	st.state.AddBalance(*fc.Payer, new(uint256.Int).Sub(fc.MaxCost, actualFee), tracing.BalanceIncreaseGasReturn)
+	if st.evm.Config.Tracer.HasGasHook() {
+		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Execution: unusedGas + refund}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
 	}
 	return gasUsed, peakUsed, nil
 }
@@ -1174,3 +1369,359 @@ func (st *stateTransition) calcRefund(gasUsedBeforeRefund uint64) uint64 {
 func (st *stateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }
+
+// Frame receipt status codes (EIP-8141).
+const (
+	frameStatusFailed  uint64 = 0
+	frameStatusSuccess uint64 = 1
+	frameStatusSkipped uint64 = 2
+)
+
+// frameLogRange records a frame's slice of the transaction's log journal.
+// Log positions are indexes into the transaction's log list so that atomic
+// batch rollbacks, which truncate the log journal, keep the recorded ranges
+// consistent.
+type frameLogRange struct {
+	start, end int
+}
+
+// applyFrames executes the frame sequence of an EIP-8141 frame transaction
+// as the execution stage of the state transition.
+//
+// Each frame executes in order as a top-level call against fresh gas pools
+// holding its declared per-dimension budgets; unused gas is not available to
+// later frames. Approvals granted by the APPROVE instruction accumulate in
+// the transaction-scoped frame context: execution approval unlocks SENDER
+// frames and payment approval collects the maximum transaction cost from
+// the payer. After all frames have run a payer must have been set; gas
+// settlement then refunds the payer everything beyond the actual fee.
+//
+// The frame context is left installed on the EVM for settlement; the caller
+// is responsible for restoring it.
+func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []types.FrameReceipt, error) {
+	msg := st.msg
+
+	// The maximum cost collected from the payer upon payment approval: the
+	// max_gas anchor priced at the fee cap, plus the blob fee at the blob
+	// base fee. A cost that does not fit 256 bits invalidates the
+	// transaction at admission.
+	maxCost := new(uint256.Int).SetUint64(msg.GasLimit)
+	if _, overflow := maxCost.MulOverflow(maxCost, msg.GasFeeCap); overflow {
+		return nil, nil, fmt.Errorf("%w: maximum transaction cost exceeds 256 bits", ErrFrameTxInvalidExecution)
+	}
+	if blobGas := st.blobGasUsed(); blobGas > 0 {
+		blobBaseFee, overflow := uint256.FromBig(st.evm.Context.BlobBaseFee)
+		if overflow {
+			return nil, nil, fmt.Errorf("invalid blobBaseFee: %v", st.evm.Context.BlobBaseFee)
+		}
+		blobFee := new(uint256.Int).SetUint64(blobGas)
+		if _, overflow := blobFee.MulOverflow(blobFee, blobBaseFee); overflow {
+			return nil, nil, fmt.Errorf("%w: maximum transaction cost exceeds 256 bits", ErrFrameTxInvalidExecution)
+		}
+		if _, overflow := maxCost.AddOverflow(maxCost, blobFee); overflow {
+			return nil, nil, fmt.Errorf("%w: maximum transaction cost exceeds 256 bits", ErrFrameTxInvalidExecution)
+		}
+	}
+	frameCtx := &vm.FrameContext{
+		Sender:               msg.From,
+		Nonce:                msg.Nonce,
+		MaxPriorityFeePerGas: msg.GasTipCap,
+		MaxFeePerGas:         msg.GasFeeCap,
+		MaxFeePerBlobGas:     msg.BlobGasFeeCap,
+		MaxCost:              maxCost,
+		SigHash:              msg.FrameSigHash,
+		Frames:               msg.Frames,
+		Signatures:           msg.FrameSignatures,
+		ChargeOwners:         make(map[vm.FrameChargeKey]int),
+	}
+	st.evm.TxContext.FrameContext = frameCtx
+
+	precompiles := make(map[common.Address]struct{})
+	for _, addr := range vm.ActivePrecompiles(rules) {
+		precompiles[addr] = struct{}{}
+	}
+
+	logProvider, _ := st.state.(interface {
+		GetLogs(common.Hash, uint64, common.Hash, uint64) []*types.Log
+	})
+	countLogs := func() int {
+		if logProvider == nil {
+			return 0
+		}
+		return len(logProvider.GetLogs(msg.TxHash, 0, common.Hash{}, 0))
+	}
+
+	var (
+		logRanges = make([]frameLogRange, 0, len(msg.Frames))
+
+		inBatch       bool
+		skipBatch     bool
+		batchStart    int
+		batchSnapshot int
+		batchCtx      vm.FrameContextSnapshot
+		batchLogCount int
+	)
+	for i := range msg.Frames {
+		frame := &msg.Frames[i]
+		frameCtx.CurrentFrame = i
+		hasBatchFlag := frame.Flags&types.AtomicBatchFlag != 0
+
+		// A frame with the atomic batch flag opens a batch that runs up to
+		// and including the next frame without the flag.
+		if hasBatchFlag && !inBatch {
+			inBatch = true
+			batchStart = i
+			batchSnapshot = st.state.Snapshot()
+			batchCtx = frameCtx.Snapshot()
+			batchLogCount = countLogs()
+		}
+		terminatesBatch := inBatch && !hasBatchFlag
+
+		if skipBatch {
+			// A frame of a failed atomic batch never executes; its
+			// zero-usage receipt makes its allotted gas — in both
+			// dimensions — count as unused.
+			logCount := countLogs()
+			frameCtx.Receipts = append(frameCtx.Receipts, types.FrameReceipt{Status: frameStatusSkipped})
+			logRanges = append(logRanges, frameLogRange{logCount, logCount})
+			if terminatesBatch {
+				inBatch, skipBatch = false, false
+			}
+			continue
+		}
+
+		var caller common.Address
+		if frame.Mode == types.ModeSender {
+			if !frameCtx.SenderApproved {
+				return nil, nil, fmt.Errorf("%w: SENDER frame before execution approval", ErrFrameTxInvalidExecution)
+			}
+			caller = msg.From
+		} else {
+			caller = params.FrameTxEntryPoint
+		}
+		// The ORIGIN opcode returns the frame caller throughout all call
+		// depths, and transient storage is discarded between frames.
+		st.evm.TxContext.Origin = caller
+		st.state.ClearTransientStorage()
+
+		// Checkpoint at frame entry, before any charge: a failing frame's
+		// context — its state gas, plus any edits it made to earlier
+		// receipts and the ownership map — restores to here.
+		var (
+			entryCtx      = frameCtx.Snapshot()
+			frameSnapshot = st.state.Snapshot()
+			logStart      = countLogs()
+		)
+		receipt, vmerr := st.executeFrame(frameCtx, frame, caller, precompiles)
+		if vmerr != nil {
+			// Discard the frame's effects, including the pre-warming of the
+			// frame's resolved target, and roll back the frame context.
+			st.state.RevertToSnapshot(frameSnapshot)
+			frameCtx.RestoreSnapshot(entryCtx)
+			// A failing VERIFY frame — reverting or halting exceptionally —
+			// invalidates the whole transaction.
+			if frame.Mode == types.ModeVerify {
+				return nil, nil, fmt.Errorf("%w: VERIFY frame failed", ErrFrameTxInvalidExecution)
+			}
+		}
+		frameCtx.Receipts = append(frameCtx.Receipts, receipt)
+		logRanges = append(logRanges, frameLogRange{logStart, countLogs()})
+
+		if receipt.Status == frameStatusFailed && inBatch {
+			// Unroll the atomic batch: restore the state and the frame
+			// context to the condition immediately before the batch began —
+			// undoing, with the batch's state changes, the refills its
+			// frames applied to pre-batch receipts — and re-append the
+			// receipts of the executed batch frames keeping their status
+			// and execution gas, with their logs emptied and their state
+			// gas zeroed. The gas the batch frames consumed remains
+			// charged, since their receipts keep it.
+			st.state.RevertToSnapshot(batchSnapshot)
+			executed := append([]types.FrameReceipt{}, frameCtx.Receipts[batchStart:]...)
+			frameCtx.RestoreSnapshot(batchCtx)
+			for j, r := range executed {
+				frameCtx.Receipts = append(frameCtx.Receipts, types.FrameReceipt{
+					Status:  r.Status,
+					GasUsed: r.GasUsed,
+				})
+				logRanges[batchStart+j] = frameLogRange{batchLogCount, batchLogCount}
+			}
+			if terminatesBatch {
+				inBatch = false
+			} else {
+				skipBatch = true
+			}
+		} else if terminatesBatch {
+			inBatch = false
+		}
+	}
+
+	if frameCtx.Payer == nil {
+		return nil, nil, fmt.Errorf("%w: no frame approved gas payment", ErrFrameTxInvalidExecution)
+	}
+
+	// Materialize the per-frame logs from the final log journal.
+	var logs []*types.Log
+	if logProvider != nil {
+		logs = logProvider.GetLogs(msg.TxHash, 0, common.Hash{}, 0)
+	}
+	for i := range frameCtx.Receipts {
+		frameLogs := []*types.Log{}
+		if r := logRanges[i]; r.end > r.start && r.end <= len(logs) {
+			frameLogs = logs[r.start:r.end]
+		}
+		frameCtx.Receipts[i].Logs = frameLogs
+	}
+	return frameCtx.Payer, frameCtx.Receipts, nil
+}
+
+// executeFrame runs a single frame as a top-level call and reduces its
+// outcome to a receipt.
+//
+// Every frame is charged its resolved target's warm or cold access at frame
+// entry, from its own execution gas budget, before anything else: resolving
+// the target's code is how the protocol dispatches the frame. A VERIFY frame
+// whose resolved target has no code then runs the protocol default code
+// instead of an EVM, unless that target is a precompile, which dispatches in
+// every mode. As with an ordinary CALL, a caller that cannot cover the
+// transferred value fails the frame, consuming the gas charged so far; the
+// remaining entry charges — the state gas of a value transfer reviving a
+// dead account and the access for resolving an EIP-7702 delegation — halt
+// the frame exceptionally when a budget cannot cover them, consuming the
+// execution budget whole.
+//
+// A failing frame reports zero state gas; the caller extends the rollback
+// over the frame-entry charges by restoring the entry snapshots.
+func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.Frame, caller common.Address, precompiles map[common.Address]struct{}) (types.FrameReceipt, error) {
+	var (
+		target = frame.ResolvedTarget(frameCtx.Sender)
+		budget = vm.NewFrameGasBudget(frame.GasLimits.Execution, frame.GasLimits.State)
+	)
+	// Charge the resolved target's access before it is warmed: under
+	// EIP-7928 every account load is recorded in the block access list, so
+	// an access the budget cannot cover must not happen at all.
+	accessCost := params.ColdAccountAccessAmsterdam
+	if st.state.AddressInAccessList(target) {
+		accessCost = params.WarmAccountAccessAmsterdam
+	}
+	if !budget.ChargeExecutionOnly(accessCost) {
+		return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas
+	}
+	st.state.AddAddressToAccessList(target)
+
+	// Resolving the target's code is how the protocol dispatches the frame;
+	// the account read lands in the block access list even when a later
+	// entry check fails the frame.
+	code := st.state.GetCode(target)
+
+	// Codeless, non-precompile targets of VERIFY frames execute the
+	// protocol default code, which draws no execution gas of its own.
+	_, isPrecompile := precompiles[target]
+	if frame.Mode == types.ModeVerify && !isPrecompile && len(code) == 0 {
+		vmerr := st.runDefaultVerifyFrame(frameCtx, frame, target, &budget)
+		if vmerr != nil && vmerr != vm.ErrExecutionReverted {
+			// The APPROVE could not cover the sender-creation state
+			// charge: the frame halts exceptionally, consuming its
+			// execution budget.
+			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vmerr
+		}
+		receipt := types.FrameReceipt{
+			Status:       frameStatusSuccess,
+			GasUsed:      frame.GasLimits.Execution - budget.ExecutionGas,
+			StateGasUsed: frame.GasLimits.State - budget.StateGas,
+		}
+		if vmerr != nil {
+			receipt.Status = frameStatusFailed
+			receipt.StateGasUsed = 0
+		}
+		return receipt, vmerr
+	}
+
+	// As with an ordinary CALL, a caller that cannot cover the transferred
+	// value fails the frame, consuming the gas charged so far.
+	value := frame.Value
+	if value == nil {
+		value = new(uint256.Int)
+	}
+	if !value.IsZero() && st.state.GetBalance(caller).Cmp(value) < 0 {
+		return types.FrameReceipt{
+			Status:  frameStatusFailed,
+			GasUsed: frame.GasLimits.Execution - budget.ExecutionGas,
+		}, vm.ErrInsufficientBalance
+	}
+	// A value transfer reviving a dead account is permanent state growth,
+	// charged from the frame's state gas pool before its code executes.
+	if !value.IsZero() && st.state.Empty(target) {
+		if _, ok := budget.Charge(vm.GasCosts{StateGas: params.AccountCreationSize * st.evm.Context.CostPerStateByte}); !ok {
+			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas
+		}
+	}
+	// Resolving an EIP-7702 delegation loads the delegated code: a warm or
+	// cold account access from the frame's execution budget.
+	if addr, ok := types.ParseDelegation(code); ok {
+		delegationCost := params.ColdAccountAccessAmsterdam
+		if st.state.AddressInAccessList(addr) {
+			delegationCost = params.WarmAccountAccessAmsterdam
+		}
+		if !budget.ChargeExecutionOnly(delegationCost) {
+			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas
+		}
+		st.state.AddAddressToAccessList(addr)
+		// Record the delegated code load in the block level access list.
+		st.state.GetCode(addr)
+	}
+
+	var (
+		leftover vm.GasBudget
+		vmerr    error
+	)
+	if frame.Mode == types.ModeVerify {
+		// VERIFY frames execute as static calls: only APPROVE may mutate.
+		_, leftover, vmerr = st.evm.StaticCall(caller, target, frame.Data, budget)
+	} else {
+		_, leftover, vmerr = st.evm.Call(caller, target, frame.Data, budget, value)
+	}
+	receipt := types.FrameReceipt{
+		Status:       frameStatusSuccess,
+		GasUsed:      frame.GasLimits.Execution - leftover.ExecutionGas,
+		StateGasUsed: frame.GasLimits.State - leftover.StateGas,
+	}
+	if vmerr != nil {
+		receipt.Status = frameStatusFailed
+		receipt.StateGasUsed = 0
+	}
+	return receipt, vmerr
+}
+
+// runDefaultVerifyFrame executes the EIP-8141 default code for a VERIFY
+// frame whose resolved target has no code: the frame approves the scope
+// allowed by its flags, provided the scope's signature entry is a secp256k1
+// signature over the canonical signature hash whose resolved signer is the
+// frame's resolved target. Frames allowed to approve execution authorize
+// with the entry at index 0; payment-only frames authorize with the entry
+// at index 1. The default code draws no execution gas of its own; it can
+// consume state gas through APPROVE, when incrementing the nonce creates
+// the sender account.
+func (st *stateTransition) runDefaultVerifyFrame(frameCtx *vm.FrameContext, frame *types.Frame, target common.Address, budget *vm.GasBudget) error {
+	allowedScope := frame.Flags & types.ApproveScopeMask
+	if allowedScope == types.ApproveNone {
+		return vm.ErrExecutionReverted
+	}
+	sigIndex := 1
+	if allowedScope&types.ApproveExecution != 0 {
+		sigIndex = 0
+	}
+	hasSignature := false
+	if len(frameCtx.Signatures) > sigIndex {
+		sig := &frameCtx.Signatures[sigIndex]
+		hasSignature = sig.Scheme == types.FrameTxSchemeSecp256k1 &&
+			len(sig.Msg) == 0 &&
+			sig.ResolvedSigner(frameCtx.Sender) == target
+	}
+	if !hasSignature {
+		return vm.ErrExecutionReverted
+	}
+	return vm.FrameApprove(st.state, frameCtx, budget, allowedScope)
+}
+
+// validateAuthorization validates an EIP-7702 authorization against the state.

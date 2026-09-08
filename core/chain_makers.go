@@ -391,6 +391,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
 			ProcessParentBlockHash(b.header.ParentHash, evm, b.bal)
 		}
+		if config.BogotaTime != nil && b.header.Time >= *config.BogotaTime && parent.Time() < *config.BogotaTime {
+			// EIP-8141: install the expiry verifier at the Bogota transition.
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			blockContext.Random = &common.Hash{} // enable post-merge instruction set
+			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+			ProcessExpiryVerifierDeploy(evm, b.bal)
+		}
 
 		// Execute any user modifications to the block
 		if gen != nil {

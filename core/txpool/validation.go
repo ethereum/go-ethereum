@@ -84,6 +84,9 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if !rules.IsPrague && tx.Type() == types.SetCodeTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in Prague", core.ErrTxTypeNotSupported, tx.Type())
 	}
+	if !rules.IsBogota && tx.Type() == types.FrameTxType {
+		return fmt.Errorf("%w: type %d rejected, pool not yet in Bogota", core.ErrTxTypeNotSupported, tx.Type())
+	}
 	// Check whether the init code size has been exceeded
 	if tx.To() == nil {
 		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(tx.Data()))); err != nil {
@@ -129,7 +132,12 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
 	// the transaction metadata
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), value, rules)
+	var intrGas uint64
+	if tx.Type() == types.FrameTxType {
+		intrGas, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures(), from)
+	} else {
+		intrGas, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), value, rules)
+	}
 	if err != nil {
 		return err
 	}

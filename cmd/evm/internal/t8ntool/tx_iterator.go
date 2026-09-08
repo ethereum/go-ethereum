@@ -88,6 +88,15 @@ func (t *txWithKey) UnmarshalJSON(input []byte) error {
 func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Transactions, error) {
 	var signedTxs []*types.Transaction
 	for i, tx := range txs {
+		if tx.tx.Type() == types.FrameTxType {
+			// EIP-8141 frame transactions carry an explicit sender and a
+			// signature entry list instead of an ECDSA signature.
+			if tx.key != nil {
+				return nil, NewError(ErrorJson, fmt.Errorf("tx %d: frame transaction cannot be signed with secretKey", i))
+			}
+			signedTxs = append(signedTxs, tx.tx)
+			continue
+		}
 		var (
 			v, r, s = tx.tx.RawSignatureValues()
 			signed  *types.Transaction

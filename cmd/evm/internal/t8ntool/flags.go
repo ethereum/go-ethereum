@@ -145,6 +145,11 @@ var (
 		Usage: "Mining reward. Set to -1 to disable",
 		Value: 0,
 	}
+	StateTestFlag = &cli.BoolFlag{
+		Name: "state.test",
+		Usage: "Run in state-test mode: apply the transactions to the pre-state " +
+			"without performing any block-level system operations.",
+	}
 	ChainIDFlag = &cli.Int64Flag{
 		Name:  "state.chainid",
 		Usage: "ChainID to use",

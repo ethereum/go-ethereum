@@ -575,6 +575,12 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 	return s.transientStorage.Get(addr, key)
 }
 
+// ClearTransientStorage clears the transient storage between the frames of
+// an EIP-8141 frame transaction.
+func (s *StateDB) ClearTransientStorage() {
+	s.transientStorage = newTransientStorage()
+}
+
 //
 // Setting, updating & deleting state object methods.
 //

@@ -140,7 +140,12 @@ func Transaction(ctx *cli.Context) error {
 			value = uint256.NewInt(1)
 		}
 		rules := chainConfig.Rules(common.Big0, true, 0)
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), r.Address, tx.To(), value, rules)
+		var cost uint64
+		if tx.Type() == types.FrameTxType {
+			cost, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures(), r.Address)
+		} else {
+			cost, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), r.Address, tx.To(), value, rules)
+		}
 		if err != nil {
 			r.Error = err
 			results = append(results, r)
