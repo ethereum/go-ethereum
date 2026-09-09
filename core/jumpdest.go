@@ -39,10 +39,11 @@ const (
 )
 
 // perEntryOverhead approximates what an entry costs to exist, beyond the key
-// and value bytes already counted. TestJumpDestCacheEntryOverhead measures it
-// at 115 to 170 bytes for small bitmaps, moving with how full the map is, and
-// this takes the top of that. Erring high holds fewer entries, and caps the
-// count, since nothing measures less.
+// and value bytes already counted. It is the same cost model and value as the
+// identically named constant in core/vm's precompile cache, whose
+// TestPerEntryOverhead measures it by sweeping how full the map is; the value
+// is repeated here because that constant is unexported. Erring high holds
+// fewer entries, and caps the count, since nothing measures less.
 const perEntryOverhead = 150
 
 // jumpDestEntrySize charges an entry's key plus what it costs to exist. The

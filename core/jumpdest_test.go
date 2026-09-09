@@ -29,8 +29,9 @@ import (
 // what an entry actually costs to hold. The cache bills the bitmap value
 // itself and the key plus the fixed per-entry cost, so a budget filled with
 // small bitmaps (the common case: contracts are mostly a few hundred bytes,
-// and 100 bytes of code produce a 12-byte bitmap) must not silently hold many
-// times its stated size. The bound is wide on purpose: it catches the
+// and codeBitmap of 100 bytes of code is a 17-byte bitmap: len/8+1, plus 4
+// bytes of padding for trailing PUSH data) must not silently hold many times
+// its stated size. The bound is wide on purpose: it catches the
 // per-entry charge being wrong by an order of magnitude rather than pinning a
 // number that moves with the Go version.
 func TestJumpDestCacheEntryOverhead(t *testing.T) {
@@ -53,7 +54,7 @@ func TestJumpDestCacheEntryOverhead(t *testing.T) {
 		// cache and the billed size of that one bucket covers all entries.
 		hash[1] = byte(i >> 8)
 		hash[2] = byte(i)
-		c.Store(hash, make(vm.BitVec, 100/8))
+		c.Store(hash, make(vm.BitVec, 100/8+1+4))
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&after)
