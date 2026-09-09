@@ -101,13 +101,6 @@ func (q *balQueue) deliver(peer *peerConnection, packet *eth.Response) (int, err
 	bals := *packet.Res.(*eth.BlockAccessListResponse)
 	hashes := packet.Meta.([]common.Hash) // {keccak256 hash per entry, zero hash if unavailable}
 
-	var size int
-	for _, bal := range bals {
-		size += len(bal)
-	}
-	balFetchMetrics.items.Update(int64(len(bals)))
-	balFetchMetrics.bytes.Mark(int64(size))
-
 	accepted, err := q.queue.DeliverBALs(peer.id, bals, hashes)
 	switch {
 	case err == nil && len(bals) == 0:
@@ -118,6 +111,12 @@ func (q *balQueue) deliver(peer *peerConnection, packet *eth.Response) (int, err
 		peer.log.Debug("Failed to deliver retrieved access lists", "err", err)
 	}
 	return accepted, err
+}
+
+// stalled is a no-op for access lists: they are a best-effort component that
+// never holds back the delivery of a block, so they cannot block the consumer.
+func (q *balQueue) stalled(threshold time.Duration) string {
+	return ""
 }
 
 // metrics returns the collectors the concurrent fetcher reports the scheduling

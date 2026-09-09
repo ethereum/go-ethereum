@@ -33,6 +33,25 @@ import (
 // to each request. Failing to do so is considered a protocol violation.
 var timeoutGracePeriod = 2 * time.Minute
 
+// slashedProbeInterval is the minimum time between two requests handed to a
+// peer whose capacity got slashed to zero by a failed delivery (empty response
+// or timeout). Every request takes the oldest pending items out of the queue
+// for a round trip; if the peer keeps coming back empty, those items bounce
+// between the failing peers while the capable ones are starved of them, and
+// the head of the result cache stalls. Probing sparingly keeps such peers out
+// of the rotation while still letting them recover.
+var slashedProbeInterval = 10 * time.Second
+
+// headStallFactor is the multiplier applied to the target round trip time to
+// obtain the threshold beyond which a request holding the head of the result
+// cache is considered lagging and is expired early, so that an idle peer can
+// retrieve the items instead.
+const headStallFactor = 2
+
+// headStallCheckInterval is the frequency at which the request holding the
+// head of the result cache is checked for lagging.
+const headStallCheckInterval = 200 * time.Millisecond
+
 // typedQueue is an interface defining the adaptor needed to translate the type
 // specific downloader/queue schedulers into the type-agnostic general concurrent
 // fetcher algorithm calls.
@@ -72,6 +91,11 @@ type typedQueue interface {
 	// it to the downloader's queue.
 	deliver(peer *peerConnection, packet *eth.Response) (int, error)
 
+	// stalled returns the peer whose request holds the head of the result cache
+	// and has been outstanding for longer than the given threshold, blocking
+	// the consumer. An empty string is returned if nothing is blocked.
+	stalled(threshold time.Duration) string
+
 	// metrics returns the collectors the concurrent fetcher reports the
 	// scheduling state of this data type into.
 	metrics() *fetchMetrics
@@ -105,12 +129,41 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 	}
 	defer timeout.Stop()
 
+	// untrack removes a request from the timeout heap, rescheduling the timer
+	// if the request was the next one to expire.
+	untrack := func(req *eth.Request) {
+		index, live := ordering[req]
+		if !live {
+			return
+		}
+		timeouts.Remove(index)
+		if index == 0 {
+			if !timeout.Stop() {
+				<-timeout.C
+			}
+			if timeouts.Size() > 0 {
+				_, exp := timeouts.Peek()
+				timeout.Reset(time.Until(time.Unix(0, -exp)))
+			}
+		}
+		delete(ordering, req)
+	}
+	// Periodically check whether the request holding the head of the result
+	// cache is lagging behind the rest of the peers
+	headStall := time.NewTicker(headStallCheckInterval)
+	defer headStall.Stop()
+
 	// Track the timed-out but not-yet-answered requests separately. We want to
 	// keep tracking which peers are busy (potentially overloaded), so removing
 	// all trace of a timed out request is not good. We also can't just cancel
 	// the pending request altogether as that would prevent a late response from
 	// being delivered, thus never unblocking the peer.
 	stales := make(map[string]*eth.Request)
+
+	// Track when each peer was last handed a request, to rate limit the probing
+	// of peers with a slashed capacity.
+	probes := make(map[string]time.Time)
+
 	defer func() {
 		// Abort all requests on sync cycle cancellation. The requests may still
 		// be fulfilled by the remote side, but the dispatcher will not wait to
@@ -141,16 +194,25 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				idles    []*peerConnection
 				caps     []int
 				capacity int // Estimated aggregate items/s across all peers
+				slashed  int // Peers with a capacity slashed to zero by a failed delivery
 			)
 			for _, peer := range d.peers.AllPeers() {
 				pending, stale := pending[peer.id], stales[peer.id]
 
-				cap := queue.capacity(peer, time.Second)
-				capacity += cap
+				items := queue.capacity(peer, time.Second)
+				capacity += items
 
 				if pending == nil && stale == nil {
+					// A capacity of 1 is the overestimated zero left behind by a
+					// failed delivery, only probe such peers every now and again
+					if items <= 1 {
+						slashed++
+						if last, ok := probes[peer.id]; ok && time.Since(last) < slashedProbeInterval {
+							continue
+						}
+					}
 					idles = append(idles, peer)
-					caps = append(caps, cap)
+					caps = append(caps, items)
 				} else if stale != nil {
 					if waited := time.Since(stale.Sent); waited > timeoutGracePeriod {
 						// Request has been in flight longer than the grace period
@@ -204,6 +266,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					continue
 				}
 				pending[peer.id] = req
+				probes[peer.id] = time.Now()
 				assigned++
 
 				ttl := d.peers.rates.TargetTimeout()
@@ -217,6 +280,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			stats.idlePeers.Update(int64(len(idles) - assigned))
 			stats.busyPeers.Update(int64(len(pending)))
 			stats.stalePeers.Update(int64(len(stales)))
+			stats.slashedPeers.Update(int64(slashed))
 			stats.capacity.Update(int64(capacity))
 		}
 		// Wait for something to happen
@@ -249,25 +313,13 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				queue.unreserve(peerid) // TODO(karalabe): This needs a non-expiration method
 				delete(pending, peerid)
 				req.Close()
-
-				if index, live := ordering[req]; live {
-					timeouts.Remove(index)
-					if index == 0 {
-						if !timeout.Stop() {
-							<-timeout.C
-						}
-						if timeouts.Size() > 0 {
-							_, exp := timeouts.Peek()
-							timeout.Reset(time.Until(time.Unix(0, -exp)))
-						}
-					}
-					delete(ordering, req)
-				}
+				untrack(req)
 			}
 			if req, ok := stales[peerid]; ok {
 				delete(stales, peerid)
 				req.Close()
 			}
+			delete(probes, peerid)
 
 		case <-timeout.C:
 			// Retrieve the next request which should have timed out. The check
@@ -323,24 +375,36 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				d.dropPeer(peer.id)
 			}
 
+		case <-headStall.C:
+			// If the consumer is blocked on a request that has been outstanding
+			// for a lot longer than what the other peers need, expire it early
+			// and hand its items to an idle peer. The lagging peer is kept busy
+			// until it answers, but not penalized otherwise: its measured round
+			// trip already shrinks the requests it will be handed later.
+			id := queue.stalled(headStallFactor * d.peers.rates.TargetRoundTrip())
+			if id == "" {
+				continue
+			}
+			req, ok := pending[id]
+			if !ok {
+				continue
+			}
+			untrack(req)
+			delete(pending, id)
+			stales[id] = req
+
+			queue.unreserve(id)
+			queue.metrics().headExpiries.Mark(1)
+
+			if peer := d.peers.Peer(id); peer != nil {
+				peer.log.Debug("Expired request blocking the result cache head", "waited", common.PrettyDuration(time.Since(req.Sent)))
+			}
+
 		case res := <-responses:
 			// Response arrived, it may be for an existing or an already timed
 			// out request. If the former, update the timeout heap and perhaps
 			// reschedule the timeout timer.
-			index, live := ordering[res.Req]
-			if live {
-				timeouts.Remove(index)
-				if index == 0 {
-					if !timeout.Stop() {
-						<-timeout.C
-					}
-					if timeouts.Size() > 0 {
-						_, exp := timeouts.Peek()
-						timeout.Reset(time.Until(time.Unix(0, -exp)))
-					}
-				}
-				delete(ordering, res.Req)
-			}
+			untrack(res.Req)
 			// Delete the pending request (if it still exists) and mark the peer idle
 			delete(pending, res.Req.Peer)
 			delete(stales, res.Req.Peer)
