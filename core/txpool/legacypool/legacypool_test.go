@@ -2718,3 +2718,27 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 		pool.addRemotesSync([]*types.Transaction{tx})
 	}
 }
+
+func TestLegacyPoolFilterType(t *testing.T) {
+	tests := []struct {
+		name string
+		kind byte
+		want bool
+	}{
+		{name: "legacy", kind: types.LegacyTxType, want: true},
+		{name: "access-list", kind: types.AccessListTxType, want: true},
+		{name: "dynamic-fee", kind: types.DynamicFeeTxType, want: true},
+		{name: "set-code", kind: types.SetCodeTxType, want: true},
+		{name: "blob", kind: types.BlobTxType, want: false},
+		{name: "unknown", kind: 0xff, want: false},
+	}
+
+	pool := new(LegacyPool)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := pool.FilterType(tt.kind); got != tt.want {
+				t.Fatalf("FilterType(%#x) = %t, want %t", tt.kind, got, tt.want)
+			}
+		})
+	}
+}

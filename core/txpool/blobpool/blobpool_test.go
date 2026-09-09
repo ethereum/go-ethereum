@@ -2502,3 +2502,27 @@ func TestGetRLPCache(t *testing.T) {
 		t.Fatalf("expected nil after the tx left the pool, got %d bytes", len(got))
 	}
 }
+
+func TestBlobPoolFilterType(t *testing.T) {
+	tests := []struct {
+		name string
+		kind byte
+		want bool
+	}{
+		{name: "blob", kind: types.BlobTxType, want: true},
+		{name: "legacy", kind: types.LegacyTxType, want: false},
+		{name: "access-list", kind: types.AccessListTxType, want: false},
+		{name: "dynamic-fee", kind: types.DynamicFeeTxType, want: false},
+		{name: "set-code", kind: types.SetCodeTxType, want: false},
+		{name: "unknown", kind: 0xff, want: false},
+	}
+
+	pool := new(BlobPool)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := pool.FilterType(tt.kind); got != tt.want {
+				t.Fatalf("FilterType(%#x) = %t, want %t", tt.kind, got, tt.want)
+			}
+		})
+	}
+}
