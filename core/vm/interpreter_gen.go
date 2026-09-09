@@ -30,6 +30,7 @@ func (evm *EVM) execUntraced(scope *ScopeContext) (ret []byte, err error) {
 		rules    = evm.chainRules
 		pc       = uint64(0)
 		res      []byte
+		op       OpCode
 	)
 	// Which of these the switch uses depends on the tier assignments, so
 	// keep them all live rather than tracking usage while emitting.
@@ -38,9 +39,11 @@ func (evm *EVM) execUntraced(scope *ScopeContext) (ret []byte, err error) {
 	// by its opcode's known delta, and the table case re-reads it because
 	// its delta is not known until run time.
 	sp := stack.len()
+	// Each case fetches the opcode that follows it, see emitAdvance, so
+	// the loop only ever dispatches on one already in hand.
+	op = contract.GetOp(pc)
 mainLoop:
 	for {
-		op := contract.GetOp(pc)
 		switch op {
 		case ADD:
 			if sp < 2 {
@@ -57,6 +60,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case MUL:
 			if sp < 2 {
@@ -73,6 +77,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case SUB:
 			if sp < 2 {
@@ -89,6 +94,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case DIV:
 			if sp < 2 {
@@ -105,6 +111,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case MULMOD:
 			if sp < 3 {
@@ -121,6 +128,7 @@ mainLoop:
 			}
 			sp -= 2
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case SIGNEXTEND:
 			if sp < 2 {
@@ -137,6 +145,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case LT:
 			if sp < 2 {
@@ -153,6 +162,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case GT:
 			if sp < 2 {
@@ -169,6 +179,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case SLT:
 			if sp < 2 {
@@ -185,6 +196,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case SGT:
 			if sp < 2 {
@@ -201,6 +213,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case EQ:
 			if sp < 2 {
@@ -217,6 +230,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case ISZERO:
 			if sp < 1 {
@@ -232,6 +246,7 @@ mainLoop:
 				break mainLoop
 			}
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case AND:
 			if sp < 2 {
@@ -248,6 +263,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case OR:
 			if sp < 2 {
@@ -264,6 +280,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case NOT:
 			if sp < 1 {
@@ -279,6 +296,7 @@ mainLoop:
 				break mainLoop
 			}
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case SHL:
 			if rules.IsConstantinople {
@@ -296,6 +314,7 @@ mainLoop:
 				}
 				sp -= 1
 				pc++
+				op = contract.GetOp(pc)
 				continue mainLoop
 			}
 			res, err = opUndefined(&pc, evm, scope)
@@ -316,6 +335,7 @@ mainLoop:
 				}
 				sp -= 1
 				pc++
+				op = contract.GetOp(pc)
 				continue mainLoop
 			}
 			res, err = opUndefined(&pc, evm, scope)
@@ -336,6 +356,7 @@ mainLoop:
 				}
 				sp -= 1
 				pc++
+				op = contract.GetOp(pc)
 				continue mainLoop
 			}
 			res, err = opUndefined(&pc, evm, scope)
@@ -363,6 +384,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case CALLER:
 			if sp > 1023 {
@@ -379,6 +401,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case CALLVALUE:
 			if sp > 1023 {
@@ -395,6 +418,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case CALLDATALOAD:
 			if sp < 1 {
@@ -410,6 +434,7 @@ mainLoop:
 				break mainLoop
 			}
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case CALLDATASIZE:
 			if sp > 1023 {
@@ -426,6 +451,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case CODECOPY:
 			if sp < 3 {
@@ -450,6 +476,7 @@ mainLoop:
 			}
 			sp -= 3
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case RETURNDATASIZE:
 			if rules.IsByzantium {
@@ -467,6 +494,7 @@ mainLoop:
 				}
 				sp += 1
 				pc++
+				op = contract.GetOp(pc)
 				continue mainLoop
 			}
 			res, err = opUndefined(&pc, evm, scope)
@@ -486,6 +514,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case MLOAD:
 			if sp < 1 {
@@ -509,6 +538,7 @@ mainLoop:
 				break mainLoop
 			}
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case MSTORE:
 			if sp < 2 {
@@ -533,6 +563,7 @@ mainLoop:
 			}
 			sp -= 2
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case JUMP:
 			if sp < 1 {
@@ -549,6 +580,7 @@ mainLoop:
 			}
 			sp -= 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case JUMPI:
 			if sp < 2 {
@@ -565,6 +597,7 @@ mainLoop:
 			}
 			sp -= 2
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case GAS:
 			if sp > 1023 {
@@ -581,6 +614,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case JUMPDEST:
 			if !contract.Gas.ChargeExecutionOnly(1) {
@@ -592,6 +626,7 @@ mainLoop:
 				break mainLoop
 			}
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case PUSH0:
 			if rules.IsShanghai {
@@ -609,6 +644,7 @@ mainLoop:
 				}
 				sp += 1
 				pc++
+				op = contract.GetOp(pc)
 				continue mainLoop
 			}
 			res, err = opUndefined(&pc, evm, scope)
@@ -628,6 +664,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case PUSH2:
 			if sp > 1023 {
@@ -644,6 +681,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case PUSH3:
 			if sp > 1023 {
@@ -660,6 +698,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case PUSH4:
 			if sp > 1023 {
@@ -676,6 +715,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case PUSH8:
 			if sp > 1023 {
@@ -692,6 +732,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case PUSH20:
 			if sp > 1023 {
@@ -708,6 +749,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case PUSH32:
 			if sp > 1023 {
@@ -724,6 +766,7 @@ mainLoop:
 			}
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 			n := int(op-DUP1) + 1
@@ -741,6 +784,7 @@ mainLoop:
 			stack.dup(n)
 			sp += 1
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 			n := int(op-SWAP1) + 1
@@ -754,6 +798,7 @@ mainLoop:
 			}
 			stack.swap(n)
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		case RETURN:
 			if sp < 2 {
@@ -774,6 +819,7 @@ mainLoop:
 			}
 			sp -= 2
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		default:
 			operation := table[op]
@@ -801,6 +847,7 @@ mainLoop:
 			}
 			sp = stack.len()
 			pc++
+			op = contract.GetOp(pc)
 			continue mainLoop
 		}
 	}
