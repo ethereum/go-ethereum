@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // This file holds the shape of the generated dispatch: the emitters for one
@@ -41,6 +43,8 @@ const (
 	dispatchName  = "(*EVM)." + dispatchFunc
 	vmPkgPath     = "github.com/ethereum/go-ethereum/core/vm"
 	pgoFile       = "cmd/geth/default.pgo"
+	stackFile     = "stack.go"
+	stackLocal    = "stack" // the dispatch's stack, which a family's body calls into
 )
 
 type generator struct {
@@ -218,6 +222,42 @@ func (g *generator) emitDynamicOp(code byte) {
 	}
 }
 
+// emitFamily emits one parametric case for the members of a family that have the
+// fast path. It recovers n from the opcode byte and is otherwise emitStaticOp with
+// the underflow bound written in terms of n and the body written inline, because a
+// family has no single handler name to call. A family none of whose members is in
+// hotOps emits nothing.
+//
+// The body assigns nothing to res, where a per-member case set it to nil through
+// its handler's return. That is not a change: every path that leaves the loop
+// assigns res and err in the same statement, so a stale res is never returned.
+func (g *generator) emitFamily(f opFamily) {
+	last, ok := g.familyRun(f)
+	if !ok {
+		return
+	}
+	minOffset, maxStack, gas, delta := g.familyFacts(f, last)
+
+	names := make([]string, 0, int(last-byte(f.base))+1)
+	for code := byte(f.base); code <= last; code++ {
+		names = append(names, g.specs[code].Name)
+	}
+	g.p("case %s:\n", strings.Join(names, ", "))
+	g.p("n := int(op-%s) + 1\n", g.specs[byte(f.base)].Name)
+
+	minExpr := "n"
+	if minOffset != 0 {
+		minExpr = fmt.Sprintf("n+%d", minOffset)
+	}
+	g.emitStackChecks(minExpr, maxStack, true, maxStack < int(params.StackLimit))
+	if gas != 0 {
+		g.emitStaticGas(gas)
+	}
+	g.p("%s\n", f.body)
+	g.emitStackStep(delta)
+	g.emitAdvance()
+}
+
 // emitTableOp emits the switch's default case, which walks the table exactly as the
 // legacy loop did. Every fork-varying op lands here, along with the undefined ones,
 // so their volatile logic stays shared rather than restated.
@@ -270,8 +310,12 @@ func (g *generator) createFile() {
 	// execUntraced: doc comment, loop-local declarations, and the dispatch loop
 	g.p(`
 		// execUntraced is the generated, tracing-free interpreter fast path. It is a
-		// switch over the opcode byte, which Go lowers to a jump table, replacing the
-		// legacy loop's indirect call through the per-fork JumpTable.
+		// switch over the opcode byte, replacing the legacy loop's indirect call
+		// through the per-fork JumpTable. Go lowers it to a binary search over
+		// compares rather than a jump table, because the case values span more than
+		// four times the clause count, and that is the faster shape for this
+		// workload: one indirect jump on an opcode stream is close to unpredictable,
+		// while the compares are biased by the opcode distribution.
 		//
 		// Hot, fork-stable opcodes get their own case, with static gas and stack bounds
 		// emitted as constants and the handler called by name. Everything fork-varying
@@ -311,9 +355,17 @@ func (g *generator) createFile() {
 				switch op {
 	`)
 
-	// one case per opcode with its own tier, in opcode order
+	// one case per opcode with its own tier, in opcode order, except that a
+	// family writes one case at its base and its other members write nothing
 	for code := range 256 {
-		switch b := byte(code); g.tierOf(b) {
+		b := byte(code)
+		if f, ok := familyOf(b); ok {
+			if b == byte(f.base) {
+				g.emitFamily(f)
+			}
+			continue
+		}
+		switch g.tierOf(b) {
 		case tierStatic:
 			g.emitStaticOp(b)
 		case tierDynamic:
