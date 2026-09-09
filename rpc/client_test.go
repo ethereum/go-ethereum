@@ -348,6 +348,7 @@ func testClientCancel(transport string, t *testing.T) {
 	fl := &flakeyListener{
 		maxAcceptDelay: 1 * time.Second,
 		maxKillTimeout: 600 * time.Millisecond,
+		clientReady:    make(chan struct{}),
 	}
 
 	var client *Client
@@ -363,6 +364,7 @@ func testClientCancel(transport string, t *testing.T) {
 	default:
 		panic("unknown transport: " + transport)
 	}
+	close(fl.clientReady)
 	defer client.Close()
 
 	// The actual test starts here.
@@ -965,6 +967,7 @@ type flakeyListener struct {
 	net.Listener
 	maxKillTimeout time.Duration
 	maxAcceptDelay time.Duration
+	clientReady    chan struct{}
 }
 
 func (l *flakeyListener) Accept() (net.Conn, error) {
@@ -974,10 +977,13 @@ func (l *flakeyListener) Accept() (net.Conn, error) {
 	c, err := l.Listener.Accept()
 	if err == nil {
 		timeout := max(time.Millisecond*10, time.Duration(rand.Int63n(int64(l.maxKillTimeout))))
-		time.AfterFunc(timeout, func() {
+		go func() {
+			// The initial transport handshake must finish before fault injection begins.
+			<-l.clientReady
+			time.Sleep(timeout)
 			log.Debug(fmt.Sprintf("killing conn %v after %v", c.LocalAddr(), timeout))
 			c.Close()
-		})
+		}()
 	}
 	return c, err
 }
