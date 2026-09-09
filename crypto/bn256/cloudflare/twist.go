@@ -202,5 +202,5 @@ func (c *twistPoint) Neg(a *twistPoint) {
 	c.x.Set(&a.x)
 	c.y.Neg(&a.y)
 	c.z.Set(&a.z)
-	c.t.SetZero()
+	c.t.Set(&a.t)
 }
