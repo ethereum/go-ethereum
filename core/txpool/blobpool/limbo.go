@@ -251,13 +251,13 @@ func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
 	if err = rlp.DecodeBytes(data, item); err != nil {
 		return nil, err
 	}
+	if err := l.store.Delete(id); err != nil {
+		return nil, err
+	}
 	delete(l.index, item.TxHash)
 	delete(l.groups[item.Block], id)
 	if len(l.groups[item.Block]) == 0 {
 		delete(l.groups, item.Block)
-	}
-	if err := l.store.Delete(id); err != nil {
-		return nil, err
 	}
 	return item, nil
 }
