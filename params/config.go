@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params/forks"
 )
 
@@ -944,7 +945,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "daoForkBlock", block: c.DAOForkBlock, optional: true},
 		{name: "eip150Block", block: c.EIP150Block},
 		{name: "eip155Block", block: c.EIP155Block},
-		{name: "eip170Block", block: c.EIP170Block, timestamp: c.EIP170Time},
+		{name: "eip170Block", block: c.EIP170Block, timestamp: c.EIP170Time, optional: true},
 		{name: "byzantiumBlock", block: c.ByzantiumBlock},
 		{name: "constantinopleBlock", block: c.ConstantinopleBlock},
 		{name: "petersburgBlock", block: c.PetersburgBlock},
@@ -1004,6 +1005,9 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}
 	if c.EIP170Block != nil && c.EIP170Time != nil {
 		return fmt.Errorf("unsupported fork configuration: eip170Block %v and eip170Time %v are mutually exclusive", c.EIP170Block, *c.EIP170Time)
+	}
+	if c.EIP170Block == nil && c.EIP170Time == nil && c.EIP158Block != nil {
+		log.Warn("Chain config does not set eip170Block/eip170Time; EIP-170 activation implicitly follows eip158Block. This fallback is deprecated, please set eip170Block/eip170Time explicitly")
 	}
 
 	// Check that all forks with blobs explicitly define the blob schedule configuration.
