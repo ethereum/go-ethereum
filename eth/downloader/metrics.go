@@ -42,9 +42,53 @@ var (
 	balDropMeter    = metrics.NewRegisteredMeter("eth/downloader/bals/drop", nil)
 	balTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/bals/timeout", nil)
 
-	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
+	bodyFetchMetrics    = newFetchMetrics("bodies")
+	receiptFetchMetrics = newFetchMetrics("receipts")
+	balFetchMetrics     = newFetchMetrics("bals")
+
+	// rttTargetGauge is the round trip time (in milliseconds) requests are
+	// currently sized for, derived from the median of the peer estimates.
+	rttTargetGauge = metrics.NewRegisteredGauge("eth/downloader/rtt/target", nil)
+
+	importWaitTimer           = metrics.NewRegisteredTimer("eth/downloader/import/wait", nil)
+	importInsertBlocksTimer   = metrics.NewRegisteredTimer("eth/downloader/import/blocks", nil)
+	importInsertReceiptsTimer = metrics.NewRegisteredTimer("eth/downloader/import/receipts", nil)
+	importBatchHistogram      = metrics.NewRegisteredHistogram("eth/downloader/import/batch", nil, metrics.NewExpDecaySample(1028, 0.015))
+
+	// Result cache metrics, reported every time a batch is drained.
+	queueThrottleGauge = metrics.NewRegisteredGauge("eth/downloader/queue/throttle/threshold", nil)
+	queueItemSizeGauge = metrics.NewRegisteredGauge("eth/downloader/queue/itemsize", nil)
 
 	// snapPeerSkipMeter tracks snap peers skipped by the state syncer because
 	// they negotiated a version below the one the syncer requires.
 	snapPeerSkipMeter = metrics.NewRegisteredMeter("eth/downloader/snap/peerskip", nil)
 )
+
+// fetchMetrics groups the collectors the concurrent fetcher reports into for a
+// single data type (bodies, receipts, access lists).
+type fetchMetrics struct {
+	idlePeers  *metrics.Gauge    // Peers left without a request after an assignment round
+	busyPeers  *metrics.Gauge    // Peers with a request in flight
+	stalePeers *metrics.Gauge    // Peers with a timed out but not yet answered request
+	capacity   *metrics.Gauge    // Estimated aggregate items per second across all peers
+	starved    *metrics.Meter    // Assignment rounds cut short because nothing was pending
+	throttled  *metrics.Meter    // Assignment rounds cut short by result cache throttling
+	items      metrics.Histogram // Items contained in each response
+	bytes      *metrics.Meter    // Payload bytes contained in each response
+}
+
+// newFetchMetrics registers the scheduling collectors for a data type under
+// eth/downloader/<kind>/...
+func newFetchMetrics(kind string) *fetchMetrics {
+	prefix := "eth/downloader/" + kind
+	return &fetchMetrics{
+		idlePeers:  metrics.NewRegisteredGauge(prefix+"/peers/idle", nil),
+		busyPeers:  metrics.NewRegisteredGauge(prefix+"/peers/busy", nil),
+		stalePeers: metrics.NewRegisteredGauge(prefix+"/peers/stale", nil),
+		capacity:   metrics.NewRegisteredGauge(prefix+"/capacity", nil),
+		starved:    metrics.NewRegisteredMeter(prefix+"/starved", nil),
+		throttled:  metrics.NewRegisteredMeter(prefix+"/throttled", nil),
+		items:      metrics.NewRegisteredHistogram(prefix+"/items", nil, metrics.NewExpDecaySample(1028, 0.015)),
+		bytes:      metrics.NewRegisteredMeter(prefix+"/bytes", nil),
+	}
+}
