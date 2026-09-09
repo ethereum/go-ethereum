@@ -82,9 +82,100 @@ var hotOps = []vm.OpCode{
 	vm.CALLER, vm.SGT, vm.DUP11, vm.PUSH3, vm.SAR,
 	vm.SWAP7, vm.DUP12, vm.CALLVALUE, vm.RETURN, vm.CODECOPY,
 
-	// Rank 61 is ADDMOD at 0.095%, then PUSH16, DUP13, SWAP8, XOR, CALLDATACOPY,
-	// DUP14 and SWAP9. Nothing below the cut reaches a tenth of a percent, and the
-	// 74 eligible opcodes left out are 1.26% of executions between them.
+	// The rest of DUP and SWAP. Each family is one parametric case, see families,
+	// so widening its range to these costs no code and no clause, and the
+	// frequency cut above does not apply to them. Together they are 0.39% of
+	// executions, DUP13 at 0.079% down to SWAP16 at 0.001%.
+	vm.DUP13, vm.DUP14, vm.DUP15, vm.DUP16,
+	vm.SWAP8, vm.SWAP9, vm.SWAP10, vm.SWAP11, vm.SWAP12, vm.SWAP13, vm.SWAP14, vm.SWAP15, vm.SWAP16,
+
+	// Rank 61 is ADDMOD at 0.095%, then PUSH16, XOR and CALLDATACOPY. Nothing
+	// below the cut reaches a tenth of a percent, and the 61 eligible opcodes
+	// left out are 0.87% of executions between them.
+}
+
+// opFamily is a run of opcodes the dispatch collapses into one parametric case.
+// The members differ only in one constant, n, which the case recovers from the
+// opcode byte, so a case each would cost bytes in the dispatch and buy nothing.
+// DUP and SWAP are the whole of it: both charge one constant gas, both have an
+// underflow bound that is n plus a fixed offset, and both have a body that is one
+// stack method taking n.
+//
+// A family changes how its members are emitted, not which of them get the fast
+// path. That is still hotOps, and the case covers exactly the members listed
+// there. They have to form a run starting at base, because the case recovers n
+// from the distance to it.
+type opFamily struct {
+	base vm.OpCode // the member with n == 1
+	body string    // the parametric body, with n in scope
+}
+
+// families are the runs the dispatch collapses.
+var families = []opFamily{
+	{base: vm.DUP1, body: "stack.dup(n)"},
+	{base: vm.SWAP1, body: "stack.swap(n)"},
+}
+
+// familyOf returns the family an opcode belongs to, if any. Membership runs
+// from the base to the last member the opcode table defines with the same
+// mnemonic stem, which for DUP and SWAP is sixteen values.
+func familyOf(code byte) (opFamily, bool) {
+	for _, f := range families {
+		if code >= byte(f.base) && code < byte(f.base)+familyWidth {
+			return f, true
+		}
+	}
+	return opFamily{}, false
+}
+
+// familyWidth is how many members DUP and SWAP each have.
+const familyWidth = 16
+
+// familyRun returns the members of a family that hotOps gives the fast path, as
+// the highest one, or ok false when none has it. They have to be a run from the
+// base: a member with a case cannot sit past one without, because the case is
+// one range and n is recovered from the byte. Stop rather than leave a listed
+// member without the case it was listed for.
+func (g *generator) familyRun(f opFamily) (last byte, ok bool) {
+	base := byte(f.base)
+	for code := base; code < base+familyWidth; code++ {
+		if g.tierOf(code) == tierTable {
+			for rest := code + 1; rest < base+familyWidth; rest++ {
+				if g.tierOf(rest) != tierTable {
+					abortf("opcode %#x (%s) is in hotOps but %s is not, and the %s family is emitted as one run from %s",
+						rest, g.specs[rest].Name, g.specs[code].Name, g.specs[base].Name, g.specs[base].Name)
+				}
+			}
+			return code - 1, code > base
+		}
+	}
+	return base + familyWidth - 1, true
+}
+
+// familyFacts returns what a family's case emits as constants, after checking
+// every member up to last agrees on them. The underflow bound is the one thing
+// allowed to vary, and minOffset is how far it sits above n: 0 for DUP, whose
+// DUPn needs n items, 1 for SWAP, whose SWAPn needs n+1. Anything else
+// differing across members would make the shared case wrong for some of them,
+// so stop rather than emit it.
+func (g *generator) familyFacts(f opFamily, last byte) (minOffset, maxStack int, gas uint64, delta int) {
+	base := g.specs[byte(f.base)]
+	minOffset, maxStack, gas, delta = base.MinStack-1, base.MaxStack, base.ConstantGas, base.stackDelta()
+	for code := byte(f.base); code <= last; code++ {
+		spec, n := g.specs[code], int(code-byte(f.base))+1
+		switch {
+		case g.tierOf(code) != tierStatic:
+			abortf("opcode %#x (%s) is in the %s family but is not on the static tier, so the family case cannot emit its gas",
+				code, spec.Name, base.Name)
+		case spec.MinStack != n+minOffset:
+			abortf("opcode %#x (%s) needs %d stack items, but the %s family case would check for %d",
+				code, spec.Name, spec.MinStack, base.Name, n+minOffset)
+		case spec.MaxStack != maxStack || spec.ConstantGas != gas || spec.stackDelta() != delta:
+			abortf("opcode %#x (%s) disagrees with %s on gas, overflow bound or stack delta, so they cannot share a case",
+				code, spec.Name, base.Name)
+		}
+	}
+	return minOffset, maxStack, gas, delta
 }
 
 // tierFor returns the tier an opcode can be dispatched by. tierTable comes back

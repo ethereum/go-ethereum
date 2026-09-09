@@ -91,7 +91,7 @@ func (g *generator) buildProfile(src []byte) *profile.Profile {
 	var first *profile.Location
 	for _, s := range sites {
 		name := vmPkgPath + "." + s.callee
-		callee := &profile.Function{ID: id, Name: name, SystemName: name, Filename: handlerFile, StartLine: 1}
+		callee := &profile.Function{ID: id, Name: name, SystemName: name, Filename: s.file, StartLine: 1}
 		id++
 		p.Function = append(p.Function, callee)
 
@@ -126,16 +126,26 @@ func (g *generator) buildProfile(src []byte) *profile.Profile {
 	return p
 }
 
-// handlerSite is one handler call in the dispatch.
+// handlerSite is one call in the dispatch that the profile marks hot.
 type handlerSite struct {
-	callee string
-	line   int
+	callee string // as FuncForPC would render it, without the package path
+	file   string // where the callee is defined
+	line   int    // the line the call sits on, in the generated dispatch
 }
 
 // callSites parses the formatted dispatch and returns the line the dispatch
-// function starts on plus every handler it calls by name. Handlers are called
-// as bare identifiers, so anything selected off a value is a method or a table
-// pointer and is not something the profile can name.
+// function starts on plus every call in it the profile should mark hot.
+//
+// Two shapes count. An opcode with its own case calls its handler as a bare
+// identifier. A collapsed family has no single handler to name, so its case
+// calls a method on the dispatch's stack local instead, and that arrives as a
+// selector. Those method bodies are small enough that the compiler would inline
+// them unprompted, but leaving it at that makes the inlining an accident of
+// their size, and a body that grew later would quietly stop being inlined with
+// nothing to say so. Naming them here states the intent.
+//
+// Anything else selected off a value is a table pointer or a call through an
+// interface, which the profile has no name for.
 func (g *generator) callSites(src []byte) (startLine int, sites []handlerSite) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, generatedFile, src, 0)
@@ -153,11 +163,19 @@ func (g *generator) callSites(src []byte) (startLine int, sites []handlerSite) {
 			if !ok {
 				return true
 			}
-			id, ok := call.Fun.(*ast.Ident)
-			if !ok || !strings.HasPrefix(id.Name, "op") {
-				return true
+			line := fset.Position(call.Lparen).Line
+			switch fun := call.Fun.(type) {
+			case *ast.Ident:
+				if strings.HasPrefix(fun.Name, "op") {
+					sites = append(sites, handlerSite{callee: fun.Name, file: handlerFile, line: line})
+				}
+			case *ast.SelectorExpr:
+				// Only the dispatch's own stack. Every other selector call in
+				// here reaches something the profile cannot name.
+				if recv, ok := fun.X.(*ast.Ident); ok && recv.Name == stackLocal {
+					sites = append(sites, handlerSite{callee: "(*Stack)." + fun.Sel.Name, file: stackFile, line: line})
+				}
 			}
-			sites = append(sites, handlerSite{callee: id.Name, line: fset.Position(call.Lparen).Line})
 			return true
 		})
 	}
