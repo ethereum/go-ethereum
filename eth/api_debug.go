@@ -410,6 +410,12 @@ func (api *DebugAPI) getModifiedAccounts(startHeader, endHeader *types.Header) (
 		}
 		dirty = append(dirty, common.BytesToAddress(key))
 	}
+	// Iterator.Next returns false on both exhaustion and error, so a failure to
+	// resolve a trie node mid-traversal would otherwise be reported as a complete
+	// set of modified accounts. Surface the error instead of silently truncating.
+	if iter.Err != nil {
+		return nil, iter.Err
+	}
 	return dirty, nil
 }
 
