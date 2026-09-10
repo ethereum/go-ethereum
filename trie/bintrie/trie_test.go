@@ -271,6 +271,28 @@ func makeAccount(nonce uint64, balance uint64, codeHash common.Hash) *types.Stat
 	}
 }
 
+func TestUpdateAccountTruncatesBalanceToLow128Bits(t *testing.T) {
+	tr := newEmptyTestTrie(t)
+	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	balanceBytes := common.Hex2Bytes("0102030405060708090a0b0c0d0e0f1011")
+	account := &types.StateAccount{
+		Balance:  new(uint256.Int).SetBytes(balanceBytes),
+		CodeHash: types.EmptyCodeHash[:],
+	}
+
+	if err := tr.UpdateAccount(addr, account, 0); err != nil {
+		t.Fatalf("UpdateAccount: %v", err)
+	}
+	got, err := tr.GetAccount(addr)
+	if err != nil {
+		t.Fatalf("GetAccount: %v", err)
+	}
+	want := new(uint256.Int).SetBytes(balanceBytes[1:])
+	if got.Balance.Cmp(want) != 0 {
+		t.Fatalf("Balance: got %s, want %s", got.Balance, want)
+	}
+}
+
 // TestDeleteAccountRoundTrip verifies the basic delete path: create an
 // account, read it back, delete it, confirm subsequent reads return nil.
 // Regression test for the no-op DeleteAccount bug where the deletion was
