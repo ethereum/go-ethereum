@@ -144,7 +144,7 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 		}
 		statedb.SetTxContext(tx.Hash(), tcount, uint32(tcount+1))
 		snap, gpSnap := statedb.Snapshot(), gp.Snapshot()
-		_, _, err = core.ApplyTransactionWithEVM(msg, gp, statedb, header.Number, blockHash, header.Time, tx, evm)
+		_, _, err = core.ApplyTransactionWithEVM(ctx, msg, gp, statedb, header.Number, blockHash, header.Time, tx, evm)
 		if err == nil {
 			txRLP, _ := rlp.EncodeToBytes(tx)
 			log.Warn("Expect the transaction to be failed", "index", tcount, "hash", tx.Hash(), "rlp", txRLP)
@@ -166,7 +166,7 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 			return nil, nil, 0, common.Hash{}, fmt.Errorf("could not convert tx %d [%v]: %w", k, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), tcount, uint32(tcount+1))
-		receipt, txBal, err := core.ApplyTransactionWithEVM(msg, gp, statedb, header.Number, blockHash, header.Time, tx, evm)
+		receipt, txBal, err := core.ApplyTransactionWithEVM(ctx, msg, gp, statedb, header.Number, blockHash, header.Time, tx, evm)
 		if err != nil {
 			return nil, nil, 0, common.Hash{}, fmt.Errorf("could not apply committed tx %d [%v]: %w", k, tx.Hash().Hex(), err)
 		}
