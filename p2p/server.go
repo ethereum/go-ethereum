@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"cmp"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -542,7 +541,7 @@ func (srv *Server) setupDialScheduler() {
 	}
 	if config.dialer == nil {
 		tcp := tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
-		if srv.quicListener != nil {
+		if srv.quicListener != nil { //todo remove this
 			config.dialer = &quicDialer{tcp: tcp, ln: srv.quicListener}
 		} else {
 			config.dialer = tcp
@@ -615,11 +614,11 @@ func (srv *Server) setupTCP() error {
 }
 
 func (srv *Server) setupQUIC() error {
-	tlsConf, err := generateQUICTLSConfig()
+	rot, err := newQUICCertRotator()
 	if err != nil {
 		return err
 	}
-	listener, err := newQUICListener(srv.ListenQUICAddr, tlsConf)
+	listener, err := newQUICListener(srv.ListenQUICAddr, newQUICTLSConfig(rot))
 	if err != nil {
 		return err
 	}
@@ -629,13 +628,36 @@ func (srv *Server) setupQUIC() error {
 	if udp, ok := listener.Addr().(*net.UDPAddr); ok {
 		srv.localnode.Set(enr.QUIC(udp.Port))
 	}
-	srv.localnode.Set(quicCertHash(sha256.Sum256(tlsConf.Certificates[0].Certificate[0])))
+	srv.localnode.Set(rot.qh())
 
 	//todo: port mapping
 
 	srv.loopWG.Add(1)
+	go srv.quicCertLoop(rot)
+	srv.loopWG.Add(1)
 	go srv.listenLoop(listener)
 	return nil
+}
+
+// quicCertLoop rotates the QUIC TLS certificate and re-announces the hashes
+// before the current certificate expires.
+func (srv *Server) quicCertLoop(rot *quicCertRotator) {
+	defer srv.loopWG.Done()
+	timer := srv.clock.NewTimer(quicCertRotation)
+	defer timer.Stop()
+	for {
+		select {
+		case <-timer.C():
+			if err := rot.rotate(); err != nil {
+				srv.log.Error("Failed to rotate QUIC certificate", "err", err)
+			} else {
+				srv.localnode.Set(rot.qh())
+			}
+			timer.Reset(quicCertRotation)
+		case <-srv.quit:
+			return
+		}
+	}
 }
 
 func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
@@ -932,7 +954,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		dialPub = dialDest.Pubkey()
 	}
 	if qc := unwrapQUICConn(fd); qc != nil {
-		c.transport = newQUICTransport(fd, qc.qc, dialPub)
+		c.transport = newQUICTransport(fd, qc.session, qc.nonce, dialPub)
 	} else {
 		c.transport = srv.newTransport(fd, dialPub)
 	}

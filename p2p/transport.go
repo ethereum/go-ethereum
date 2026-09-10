@@ -162,6 +162,12 @@ func (t *wireTransport) doProtoHandshake(our *protoHandshake) (their *protoHands
 	// If the protocol version supports Snappy encoding, upgrade immediately
 	t.conn.SetSnappy(their.Version >= snappyProtocolVersion)
 
+	//todo after node to node conn
+	if o, ok := t.conn.(interface{ overrideID() []byte }); ok {
+		if id := o.overrideID(); id != nil {
+			their.ID = id
+		}
+	}
 	return their, nil
 }
 

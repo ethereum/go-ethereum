@@ -28,26 +28,28 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/golang/snappy"
-	"github.com/quic-go/quic-go"
+	"github.com/quic-go/webtransport-go"
 )
 
 const (
 	quicMaxMsgSize = (1 << 24) - 1
-	quicProofLabel = "ENR key binding v1"
+	quicProofLabel = "ENR-key-proof-v1"
+	quicNonceLen   = 32
 )
 
-var (
-	errQUICMsgTooLarge = errors.New("quic: message too large")
-	errQUICBadProof    = errors.New("quic: invalid id-proof")
-)
+var errQUICMsgTooLarge = errors.New("quic: message too large")
 
 // quicWire is a wireConn carried by a single bidirectional QUIC stream.
 // Encryption is provided by TLS, so messages are framed in plaintext as
 // [2B code (BE)] [3B len (BE)] [payload].
 type quicWire struct {
 	fd       net.Conn
-	qc       *quic.Conn
+	session  *webtransport.Session
 	dialDest *ecdsa.PublicKey
+	nonce    []byte // nonce from CONNECT
+
+	// nodeID is a random identity minted for an unverified inbound peer.
+	nodeID []byte
 
 	// These are the buffers for snappy compression.
 	// Compression is enabled if they are non-nil.
@@ -57,29 +59,33 @@ type quicWire struct {
 
 var _ wireConn = (*quicWire)(nil)
 
-func newQUICTransport(fd net.Conn, qc *quic.Conn, dialDest *ecdsa.PublicKey) transport {
-	return &wireTransport{conn: &quicWire{fd: fd, qc: qc, dialDest: dialDest}}
+func newQUICTransport(fd net.Conn, session *webtransport.Session, nonce []byte, dialDest *ecdsa.PublicKey) transport {
+	return &wireTransport{conn: &quicWire{fd: fd, session: session, nonce: nonce, dialDest: dialDest}}
 }
 
-// Handshake establishes the peer's node identity through an id-proof
-// exchange, since the TLS certificates are ephemeral and prove nothing.
+// overrideID replaces the peer's self-reported protocol handshake ID with the
+// random identity minted for an unverified inbound peer.
+func (w *quicWire) overrideID() []byte { return w.nodeID }
+
+// Handshake establishes node identity. The dialer sends a nonce in the CONNECT
+// request; the server proves ownership of its node key by signing that nonce,
+// which the dialer verifies against the ENR it dialed. Mutual authentication is
+// not yet implemented, so the server does not verify the dialer and instead
+// assigns it a random identity rather than trusting a self-reported one.
 func (w *quicWire) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 	if w.dialDest == nil {
-		// inbound connection
-		remote, err := w.readProof()
-		if err != nil {
-			return nil, err
-		}
+		// inbound: prove our identity, then assign the peer a random one.
 		if err := w.writeProof(prv); err != nil {
 			return nil, err
 		}
-		return remote, nil
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			return nil, err
+		}
+		w.nodeID = crypto.FromECDSAPub(&key.PublicKey)[1:]
+		return &key.PublicKey, nil
 	}
-
-	// dialed connection
-	if err := w.writeProof(prv); err != nil {
-		return nil, err
-	}
+	// dialed: verify the server's proof over the nonce we sent.
 	remote, err := w.readProof()
 	if err != nil {
 		return nil, err
@@ -90,40 +96,25 @@ func (w *quicWire) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 	return remote, nil
 }
 
-// proofDigest returns the message signed by an id-proof: key material
-// exported from this TLS session, so a proof is only valid for the session
-// it was created in.
-func (w *quicWire) proofDigest() ([]byte, error) {
-	cs := w.qc.ConnectionState().TLS
-	return cs.ExportKeyingMaterial(quicProofLabel, nil, 32)
+func (w *quicWire) proofDigest() []byte {
+	return crypto.Keccak256([]byte(quicProofLabel), w.nonce)
 }
 
 func (w *quicWire) writeProof(prv *ecdsa.PrivateKey) error {
-	digest, err := w.proofDigest()
+	sig, err := crypto.Sign(w.proofDigest(), prv)
 	if err != nil {
 		return err
 	}
-	sig, err := crypto.Sign(digest, prv)
-	if err != nil {
-		return err
-	}
-	_, err = w.fd.Write(append([]byte(quicProofLabel), sig...))
+	_, err = w.fd.Write(sig)
 	return err
 }
 
 func (w *quicWire) readProof() (*ecdsa.PublicKey, error) {
-	proof := make([]byte, len(quicProofLabel)+crypto.SignatureLength)
-	if _, err := io.ReadFull(w.fd, proof); err != nil {
+	sig := make([]byte, crypto.SignatureLength)
+	if _, err := io.ReadFull(w.fd, sig); err != nil {
 		return nil, err
 	}
-	if string(proof[:len(quicProofLabel)]) != quicProofLabel {
-		return nil, errQUICBadProof
-	}
-	digest, err := w.proofDigest()
-	if err != nil {
-		return nil, err
-	}
-	return crypto.SigToPub(digest, proof[len(quicProofLabel):])
+	return crypto.SigToPub(w.proofDigest(), sig)
 }
 
 func (w *quicWire) Read() (uint64, []byte, int, error) {
@@ -210,7 +201,7 @@ func (w *quicWire) SetDeadline(t time.Time) error {
 }
 
 func (w *quicWire) Close() error {
-	return w.qc.CloseWithError(0, "")
+	return w.session.CloseWithError(0, "")
 }
 
 // todo below code is copied from buffer.go

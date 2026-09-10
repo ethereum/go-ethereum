@@ -18,40 +18,30 @@ package p2p
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
+	"encoding/hex"
 	"errors"
-	"math/big"
+	"fmt"
 	"net"
-	"time"
+	"net/http"
 
+	"github.com/dunglas/httpsfv"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
+	"github.com/quic-go/webtransport-go"
 )
 
-const ALPN = "devp2p" //todo
+// quicWTPath is the HTTP path browsers and nodes use to open a WebTransport
+// session to a devp2p node.
+const quicWTPath = "/devp2p"
 
-// quicCertHash is the "qh" ENR entry, holding the sha256 hash of the node's
-// TLS certificate.
-type quicCertHash [sha256.Size]byte
-
-func (quicCertHash) ENRKey() string { return "qh" }
-
-// quicClientTLSConfig sets the tls.Config to dial a node whose ENR advertises
-// the hash of provided certificate.
-func quicClientTLSConfig(base *tls.Config, certHash quicCertHash) *tls.Config {
-	conf := base.Clone()
-	conf.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-		if sha256.Sum256(rawCerts[0]) != certHash {
-			return errors.New("quic: certificate does not match qh in node record")
-		}
-		return nil
-	}
-	return conf
+// quicConfig is the QUIC config shared by the listener and dialer.
+// Both are required by WebTransport.
+var quicConfig = &quic.Config{
+	EnableDatagrams:                  true,
+	EnableStreamResetPartialDelivery: true,
 }
 
 // quicListener is a QUIC listener which implements net.Listener
@@ -59,6 +49,7 @@ type quicListener struct {
 	conn    *net.UDPConn
 	tr      *quic.Transport
 	ln      *quic.Listener
+	wt      *webtransport.Server
 	tlsConf *tls.Config
 
 	conns  chan *quicConn
@@ -76,7 +67,7 @@ func newQUICListener(addr string, tlsConf *tls.Config) (*quicListener, error) {
 		return nil, err
 	}
 	tr := &quic.Transport{Conn: udp}
-	ln, err := tr.Listen(tlsConf, nil)
+	ln, err := tr.Listen(tlsConf, quicConfig)
 	if err != nil {
 		tr.Close()
 		udp.Close()
@@ -84,41 +75,78 @@ func newQUICListener(addr string, tlsConf *tls.Config) (*quicListener, error) {
 	}
 	l := &quicListener{conn: udp, tr: tr, ln: ln, tlsConf: tlsConf, conns: make(chan *quicConn)}
 	l.ctx, l.cancel = context.WithCancel(context.Background())
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(quicWTPath, l.handleSession)
+	h3 := &http3.Server{TLSConfig: tlsConf, QUICConfig: quicConfig, Handler: mux}
+
+	webtransport.ConfigureHTTP3Server(h3)
+	l.wt = &webtransport.Server{
+		H3:          h3,
+		CheckOrigin: func(*http.Request) bool { return true },
+	}
+
 	go l.acceptLoop()
 	return l, nil
 }
 
-// acceptLoop waits for the message stream of each accepted connection in its
-// own goroutine, so a dialer that never opens the stream cannot block other
-// accepts. The number of pending connections is bounded by the semaphore.
 func (l *quicListener) acceptLoop() {
-	sem := make(chan struct{}, defaultMaxPendingPeers)
 	for {
-		select {
-		case sem <- struct{}{}:
-		case <-l.ctx.Done():
-			return
-		}
 		qc, err := l.ln.Accept(l.ctx)
 		if err != nil {
 			return
 		}
-		go func() {
-			defer func() { <-sem }()
-			ctx, cancel := context.WithTimeout(l.ctx, handshakeTimeout)
-			defer cancel()
-			str, err := qc.AcceptStream(ctx)
-			if err != nil {
-				qc.CloseWithError(0, "")
-				return
-			}
-			select {
-			case l.conns <- newQUICConn(qc, str):
-			case <-l.ctx.Done():
-				qc.CloseWithError(0, "")
-			}
-		}()
+		go l.wt.ServeQUICConn(qc)
 	}
+}
+
+// handleSession upgrades an HTTP/3 request to a WebTransport session and opens
+// the message stream.
+func (l *quicListener) handleSession(w http.ResponseWriter, r *http.Request) {
+	nonce, err := readNonce(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	sess, err := l.wt.Upgrade(w, r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(l.ctx, handshakeTimeout)
+	defer cancel()
+	str, err := sess.OpenStreamSync(ctx)
+	if err != nil {
+		sess.CloseWithError(0, "")
+		return
+	}
+	select {
+	case l.conns <- newQUICConn(sess, str, nonce):
+	case <-ctx.Done():
+		sess.CloseWithError(0, "")
+	}
+}
+
+// readNonce extracts the dialer's hex-encoded nonce from the WT-Available-Protocols
+// header of the CONNECT request.
+func readNonce(r *http.Request) ([]byte, error) {
+	list, err := httpsfv.UnmarshalList(r.Header.Values("WT-Available-Protocols"))
+	if err != nil || len(list) == 0 {
+		return nil, errors.New("quic: missing nonce")
+	}
+	item, ok := list[0].(httpsfv.Item)
+	if !ok {
+		return nil, errors.New("quic: invalid nonce")
+	}
+	s, ok := item.Value.(string)
+	if !ok {
+		return nil, errors.New("quic: invalid nonce")
+	}
+	nonce, err := hex.DecodeString(s)
+	if err != nil || len(nonce) != quicNonceLen {
+		return nil, errors.New("quic: invalid nonce")
+	}
+	return nonce, nil
 }
 
 func (l *quicListener) Accept() (net.Conn, error) {
@@ -136,6 +164,7 @@ func (l *quicListener) Addr() net.Addr {
 
 func (l *quicListener) Close() error {
 	l.cancel()
+	l.wt.Close()
 	l.ln.Close()
 	l.tr.Close()
 	return l.conn.Close()
@@ -151,21 +180,35 @@ type quicDialer struct {
 func (d *quicDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, error) {
 	ep, ok := dest.QUICEndpoint()
 	var qh quicCertHash
-	if !ok || dest.Load(&qh) != nil {
+	if !ok || dest.Load(&qh) != nil || !qh.valid() {
 		return d.tcp.Dial(ctx, dest)
 	}
 	ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
 	defer cancel()
-	qc, err := d.ln.tr.Dial(ctx, net.UDPAddrFromAddrPort(ep), quicClientTLSConfig(d.ln.tlsConf, qh), nil)
+
+	nonce := make([]byte, quicNonceLen)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	wd := &webtransport.Dialer{
+		TLSClientConfig:      quicClientTLSConfig(d.ln.tlsConf, qh),
+		QUICConfig:           quicConfig,
+		ApplicationProtocols: []string{hex.EncodeToString(nonce)},
+		DialAddr: func(ctx context.Context, _ string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+			return d.ln.tr.Dial(ctx, net.UDPAddrFromAddrPort(ep), tlsCfg, cfg)
+		},
+	}
+	url := fmt.Sprintf("https://%s%s", ep.String(), quicWTPath)
+	_, sess, err := wd.Dial(ctx, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	str, err := qc.OpenStreamSync(ctx)
+	str, err := sess.AcceptStream(ctx)
 	if err != nil {
-		qc.CloseWithError(0, "")
+		sess.CloseWithError(0, "")
 		return nil, err
 	}
-	return newQUICConn(qc, str), nil
+	return newQUICConn(sess, str, nonce), nil
 }
 
 // unwrapQUICConn returns the quicConn carried by fd, reaching through the
@@ -181,48 +224,25 @@ func unwrapQUICConn(fd net.Conn) *quicConn {
 // quicConn is a net.Conn view of a QUIC connection and its single
 // bidirectional stream.
 type quicConn struct {
-	*quic.Stream
-	qc *quic.Conn
+	*webtransport.Stream
+	session *webtransport.Session
+	nonce   []byte
 }
 
 var _ net.Conn = (*quicConn)(nil)
 
-func newQUICConn(qc *quic.Conn, str *quic.Stream) *quicConn {
-	return &quicConn{Stream: str, qc: qc}
+func newQUICConn(session *webtransport.Session, str *webtransport.Stream, nonce []byte) *quicConn {
+	return &quicConn{Stream: str, session: session, nonce: nonce}
 }
 
 func (c *quicConn) Close() error {
-	return c.qc.CloseWithError(0, "")
+	return c.session.CloseWithError(0, "")
 }
 
 func (c *quicConn) LocalAddr() net.Addr {
-	return c.qc.LocalAddr()
+	return c.session.LocalAddr()
 }
 
 func (c *quicConn) RemoteAddr() net.Addr {
-	return c.qc.RemoteAddr()
-}
-
-// todo: create Certificate rotater, replace the current one
-func generateQUICTLSConfig() (*tls.Config, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(10 * 365 * 24 * time.Hour),
-	}
-	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
-	if err != nil {
-		return nil, err
-	}
-	return &tls.Config{
-		MinVersion:         tls.VersionTLS13,
-		Certificates:       []tls.Certificate{{Certificate: [][]byte{cert}, PrivateKey: key}},
-		InsecureSkipVerify: true,
-		ClientAuth:         tls.RequireAnyClientCert,
-		NextProtos:         []string{ALPN},
-	}, nil
+	return c.session.RemoteAddr()
 }
