@@ -17,8 +17,11 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"net"
 	"testing"
@@ -28,24 +31,45 @@ import (
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/quic-go/quic-go"
+	"github.com/quic-go/webtransport-go"
 )
 
-func dialQUIC(ctx context.Context, addr string) (*quic.Conn, error) {
-	tlsConf, err := generateQUICTLSConfig()
+// dialQUIC opens a WebTransport session to ln and returns its message stream as
+// a quicConn, mirroring what quicDialer does for real dials (nonce in the
+// CONNECT request, server opens the stream).
+func dialQUIC(ctx context.Context, ln *quicListener) (*quicConn, error) {
+	rot, err := newQUICCertRotator()
 	if err != nil {
 		return nil, err
 	}
-	return quic.DialAddr(ctx, addr, tlsConf, nil)
+	nonce := make([]byte, quicNonceLen)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	wd := &webtransport.Dialer{
+		TLSClientConfig:      newQUICTLSConfig(rot),
+		QUICConfig:           quicConfig,
+		ApplicationProtocols: []string{hex.EncodeToString(nonce)},
+	}
+	_, sess, err := wd.Dial(ctx, "https://"+ln.Addr().String()+quicWTPath, nil)
+	if err != nil {
+		return nil, err
+	}
+	str, err := sess.AcceptStream(ctx)
+	if err != nil {
+		sess.CloseWithError(0, "")
+		return nil, err
+	}
+	return newQUICConn(sess, str, nonce), nil
 }
 
 func newTestQUICListener(t *testing.T) *quicListener {
 	t.Helper()
-	tlsConf, err := generateQUICTLSConfig()
+	rot, err := newQUICCertRotator()
 	if err != nil {
 		t.Fatal(err)
 	}
-	ln, err := newQUICListener("127.0.0.1:0", tlsConf)
+	ln, err := newQUICListener("127.0.0.1:0", newQUICTLSConfig(rot))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,18 +83,23 @@ func TestQUICListenerAccept(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// The server opens the stream and writes first; the dialer reads.
+	readCh := make(chan string, 1)
 	go func() {
-		qc, err := dialQUIC(ctx, ln.Addr().String())
-		if err == nil {
-			var str *quic.Stream
-			if str, err = qc.OpenStreamSync(ctx); err == nil {
-				_, err = str.Write([]byte("hello"))
-			}
-		}
+		conn, err := dialQUIC(ctx, ln)
 		if err != nil {
 			t.Error(err)
 			ln.Close()
+			return
 		}
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		buf := make([]byte, 5)
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			t.Error(err)
+			ln.Close()
+			return
+		}
+		readCh <- string(buf)
 	}()
 
 	conn, err := ln.Accept()
@@ -82,14 +111,17 @@ func TestQUICListenerAccept(t *testing.T) {
 	if _, ok := conn.RemoteAddr().(*net.UDPAddr); !ok {
 		t.Fatalf("remote addr is %T, want *net.UDPAddr", conn.RemoteAddr())
 	}
-
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	buf := make([]byte, 5)
-	if _, err := io.ReadFull(conn, buf); err != nil {
+	if _, err := conn.Write([]byte("hello")); err != nil {
 		t.Fatal(err)
 	}
-	if string(buf) != "hello" {
-		t.Fatalf("read %q, want %q", buf, "hello")
+
+	select {
+	case got := <-readCh:
+		if got != "hello" {
+			t.Fatalf("read %q, want %q", got, "hello")
+		}
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for dialer to read")
 	}
 }
 
@@ -123,6 +155,9 @@ func TestServerQUICListen(t *testing.T) {
 	if err := srv.LocalNode().Node().Load(&qh); err != nil {
 		t.Fatal(err)
 	}
+	if len(qh) != 2*sha256.Size {
+		t.Fatalf("qh length %d, want %d", len(qh), 2*sha256.Size)
+	}
 }
 
 func TestQUICTransport(t *testing.T) {
@@ -132,7 +167,7 @@ func TestQUICTransport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	clientKey, serverKey := newkey(), newkey()
+	serverKey := newkey()
 
 	testHandshake := func(name string) *protoHandshake {
 		pub := crypto.FromECDSAPub(&newkey().PublicKey)
@@ -146,18 +181,13 @@ func TestQUICTransport(t *testing.T) {
 	}
 	dialCh := make(chan dialResult, 1)
 	go func() {
-		qc, err := dialQUIC(ctx, ln.Addr().String())
+		conn, err := dialQUIC(ctx, ln)
 		if err != nil {
 			dialCh <- dialResult{err: err}
 			return
 		}
-		str, err := qc.OpenStreamSync(ctx)
-		if err != nil {
-			dialCh <- dialResult{err: err}
-			return
-		}
-		tr := newQUICTransport(newQUICConn(qc, str), qc, &serverKey.PublicKey)
-		if _, err := tr.doEncHandshake(clientKey); err != nil {
+		tr := newQUICTransport(conn, conn.session, conn.nonce, &serverKey.PublicKey)
+		if _, err := tr.doEncHandshake(newkey()); err != nil {
 			dialCh <- dialResult{err: err}
 			return
 		}
@@ -169,13 +199,15 @@ func TestQUICTransport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lt := newQUICTransport(conn, conn.(*quicConn).qc, nil)
+	qc := conn.(*quicConn)
+	lt := newQUICTransport(conn, qc.session, qc.nonce, nil)
 	remote, err := lt.doEncHandshake(serverKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !remote.Equal(&clientKey.PublicKey) {
-		t.Fatal("server sees wrong client identity")
+	// The server assigns the unverified dialer a random identity.
+	if remote == nil || remote.Equal(&serverKey.PublicKey) {
+		t.Fatal("server did not assign a random identity")
 	}
 	their, err := lt.doProtoHandshake(testHandshake("listener"))
 	if err != nil {
@@ -183,6 +215,10 @@ func TestQUICTransport(t *testing.T) {
 	}
 	if their.Name != "dialer" {
 		t.Fatalf("got handshake name %q, want %q", their.Name, "dialer")
+	}
+	// The assigned identity replaces the dialer's self-reported one.
+	if !bytes.Equal(their.ID, crypto.FromECDSAPub(remote)[1:]) {
+		t.Fatal("proto handshake ID not overridden with assigned identity")
 	}
 	res := <-dialCh
 	if res.err != nil {
@@ -226,18 +262,13 @@ func TestQUICTransportIdentityMismatch(t *testing.T) {
 
 	dialErr := make(chan error, 1)
 	go func() {
-		qc, err := dialQUIC(ctx, ln.Addr().String())
-		if err != nil {
-			dialErr <- err
-			return
-		}
-		str, err := qc.OpenStreamSync(ctx)
+		conn, err := dialQUIC(ctx, ln)
 		if err != nil {
 			dialErr <- err
 			return
 		}
 		wrong := newkey()
-		tr := newQUICTransport(newQUICConn(qc, str), qc, &wrong.PublicKey)
+		tr := newQUICTransport(conn, conn.session, conn.nonce, &wrong.PublicKey)
 		_, err = tr.doEncHandshake(newkey())
 		dialErr <- err
 	}()
@@ -246,44 +277,13 @@ func TestQUICTransportIdentityMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lt := newQUICTransport(conn, conn.(*quicConn).qc, nil)
+	qc := conn.(*quicConn)
+	lt := newQUICTransport(conn, qc.session, qc.nonce, nil)
 	if _, err := lt.doEncHandshake(newkey()); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-dialErr; err == nil {
 		t.Fatal("dial handshake succeeded with wrong dialDest, want identity mismatch")
-	}
-}
-
-func TestQUICCertHash(t *testing.T) {
-	serverConf, err := generateQUICTLSConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ln, err := newQUICListener("127.0.0.1:0", serverConf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	base, err := generateQUICTLSConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	certHash := sha256.Sum256(serverConf.Certificates[0].Certificate[0])
-
-	qc, err := quic.DialAddr(ctx, ln.Addr().String(), quicClientTLSConfig(base, certHash), nil)
-	if err != nil {
-		t.Fatalf("dial with correct qh failed: %v", err)
-	}
-	qc.CloseWithError(0, "")
-
-	var wrong quicCertHash
-	if _, err := quic.DialAddr(ctx, ln.Addr().String(), quicClientTLSConfig(base, wrong), nil); err == nil {
-		t.Fatal("dial with wrong qh succeeded")
 	}
 }
 
