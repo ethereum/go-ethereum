@@ -220,7 +220,8 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if precompileCache != nil {
 		postEVM.SetPrecompileCache(precompileCache)
 	}
-	requests, postBAL, err := PostExecution(ctx, config, header.Number, header.Time, allLogs, postEVM, postIndex)
+	// EIP-8304: log index tables are not built on the parallel path, wired in a later PR
+	requests, postBAL, err := PostExecution(ctx, config, header.Number, header.Time, allLogs, nil, postEVM, postIndex)
 	postEVM.Release()
 	if err != nil {
 		return nil, err
