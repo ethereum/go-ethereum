@@ -2,13 +2,7 @@
 
 package vm
 
-// execUntraced is the generated, tracing-free interpreter fast path. It is a
-// switch over the opcode byte, replacing the legacy loop's indirect call
-// through the per-fork JumpTable. Go lowers it to a binary search over
-// compares rather than a jump table, because the case values span more than
-// four times the clause count, and that is the faster shape for this
-// workload: one indirect jump on an opcode stream is close to unpredictable,
-// while the compares are biased by the opcode distribution.
+// execUntraced is the generated, tracing-free interpreter fast path.
 //
 // Hot, fork-stable opcodes get their own case, with static gas and stack bounds
 // emitted as constants and the handler called by name. Everything fork-varying

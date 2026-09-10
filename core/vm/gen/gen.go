@@ -162,15 +162,6 @@ func (g *generator) emitStackReload() {
 }
 
 // emitAdvance moves to the next opcode and fetches it, then goes round the loop.
-//
-// The fetch is here, at the end of every case, rather than once at the top of
-// the loop, and the difference is measurable. pc is address-taken, because every
-// handler is passed &pc, so it lives in memory and the increment is a load, an
-// add and a store. With the fetch at the loop head, the compiler has to read pc
-// back from memory in the head block, so the code byte load waits on a store to
-// load round trip. In the same block as the increment it indexes the code with
-// the register it just computed. Measured on 100 mainnet blocks on an M4 Max
-// this move alone was worth 4.2% of execution time.
 func (g *generator) emitAdvance() {
 	g.p(`
 		pc++
@@ -232,21 +223,18 @@ func (g *generator) emitDynamicOp(code byte) {
 	}
 }
 
-// emitFamily emits one parametric case for the members of a family that have the
-// fast path. It recovers n from the opcode byte and is otherwise emitStaticOp with
-// the underflow bound written in terms of n and the body written inline, because a
-// family has no single handler name to call. A family none of whose members is in
-// hotOps emits nothing.
-//
-// The body assigns nothing to res, where a per-member case set it to nil through
-// its handler's return. That is not a change: every path that leaves the loop
-// assigns res and err in the same statement, so a stale res is never returned.
+// emitFamily emits one shared case for the hot members of a family like DUP or
+// SWAP, and nothing if none of them are hot. It works like emitStaticOp, except it
+// gets n from the opcode, checks the stack against n, and writes the body inline
+// since a family has no single handler to call. A handler call overwrites res but
+// the inline body doesn't, so res can still hold an earlier CALL's output. That's
+// harmless because every exit from the loop sets res and err together.
 func (g *generator) emitFamily(f opFamily) {
-	last, ok := g.familyRun(f)
+	last, ok := g.lastHotFamilyMember(f)
 	if !ok {
 		return
 	}
-	minOffset, maxStack, gas, delta := g.familyFacts(f, last)
+	minOffset, maxStack, gas, delta := g.familyConstants(f, last)
 
 	names := make([]string, 0, int(last-byte(f.base))+1)
 	for code := byte(f.base); code <= last; code++ {
@@ -319,13 +307,7 @@ func (g *generator) createFile() {
 
 	// execUntraced: doc comment, loop-local declarations, and the dispatch loop
 	g.p(`
-		// execUntraced is the generated, tracing-free interpreter fast path. It is a
-		// switch over the opcode byte, replacing the legacy loop's indirect call
-		// through the per-fork JumpTable. Go lowers it to a binary search over
-		// compares rather than a jump table, because the case values span more than
-		// four times the clause count, and that is the faster shape for this
-		// workload: one indirect jump on an opcode stream is close to unpredictable,
-		// while the compares are biased by the opcode distribution.
+		// execUntraced is the generated, tracing-free interpreter fast path.
 		//
 		// Hot, fork-stable opcodes get their own case, with static gas and stack bounds
 		// emitted as constants and the handler called by name. Everything fork-varying
