@@ -678,7 +678,23 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	if err := batch.Write(); err != nil {
 		return err
 	}
+	// Mirror the live generation progress into the metrics while it runs
+	stop := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				genProgressGauge.Update(int64(s.genProgress.Load()))
+			case <-stop:
+				return
+			}
+		}
+	}()
 	_, genErr := triedb.GenerateTrieWithProgress(s.db, s.scheme, root, cancel, &s.genProgress)
+	close(stop)
+	genProgressGauge.Update(int64(s.genProgress.Load()))
 	if genErr != nil {
 		return genErr
 	}
@@ -1057,6 +1073,8 @@ func (s *syncerV2) fetchAccessLists(hashes []common.Hash, headers map[common.Has
 		s.accessListSynced += uint64(len(fetched) - lastFetched)
 		lastFetched = len(fetched)
 		s.refreshProgressLocked()
+		balFetchedGauge.Update(int64(s.accessListSynced))
+		balTotalGauge.Update(int64(s.accessListTotal))
 		s.lock.Unlock()
 	}
 	// Assemble results in input order
@@ -2941,6 +2959,13 @@ func (s *syncerV2) reportSyncProgressV2(force bool) {
 		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageSynced), s.storageBytes.TerminalString())
 		bytecode = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.bytecodeSynced), s.bytecodeBytes.TerminalString())
 	)
+	syncProgressGauge.Update(float64(synced) / estBytes)
+	syncBytesGauge.Update(int64(synced))
+	syncEstimateGauge.Update(int64(estBytes))
+	syncAccountsGauge.Update(int64(s.accountSynced))
+	syncSlotsGauge.Update(int64(s.storageSynced))
+	syncCodesGauge.Update(int64(s.bytecodeSynced))
+
 	log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
 		"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
 }

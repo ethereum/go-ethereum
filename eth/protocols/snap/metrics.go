@@ -27,6 +27,26 @@ var (
 	IngressRegistrationErrorMeter = metrics.NewRegisteredMeter(ingressRegistrationErrorName, nil)
 	EgressRegistrationErrorMeter  = metrics.NewRegisteredMeter(egressRegistrationErrorName, nil)
 
+	// Progress of the state download, reported alongside the progress log
+	syncProgressGauge = metrics.NewRegisteredGaugeFloat64("eth/protocols/snap/sync/progress", nil)
+	syncBytesGauge    = metrics.NewRegisteredGauge("eth/protocols/snap/sync/bytes", nil)
+	syncEstimateGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/estimate", nil)
+	syncAccountsGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/accounts", nil)
+	syncSlotsGauge    = metrics.NewRegisteredGauge("eth/protocols/snap/sync/slots", nil)
+	syncCodesGauge    = metrics.NewRegisteredGauge("eth/protocols/snap/sync/codes", nil)
+
+	// Progress of the state healing, reported alongside the progress log
+	healAccountsGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/heal/trie/accounts", nil)
+	healSlotsGauge    = metrics.NewRegisteredGauge("eth/protocols/snap/sync/heal/trie/slots", nil)
+	healCodesGauge    = metrics.NewRegisteredGauge("eth/protocols/snap/sync/heal/trie/codes", nil)
+	healNodesGauge    = metrics.NewRegisteredGauge("eth/protocols/snap/sync/heal/trie/nodes", nil)
+	healPendingGauge  = metrics.NewRegisteredGauge("eth/protocols/snap/sync/heal/trie/pending", nil)
+
+	// Progress of the phases specific to snap/2
+	genProgressGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/generation", nil)
+	balFetchedGauge  = metrics.NewRegisteredGauge("eth/protocols/snap/sync/heal/bal/fetched", nil)
+	balTotalGauge    = metrics.NewRegisteredGauge("eth/protocols/snap/sync/heal/bal/total", nil)
+
 	// accountInnerDeleteGauge is the metric to track how many dangling trie nodes
 	// covered by extension node in account trie are deleted during the sync.
 	accountInnerDeleteGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/delete/account/inner", nil)
