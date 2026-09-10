@@ -311,7 +311,7 @@ func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction, 
 	// It was not found in cache, ask the server.
 	var meta struct {
 		Hash common.Hash
-		From common.Address
+		From *common.Address
 	}
 	if err = ec.c.CallContext(ctx, &meta, "eth_getTransactionByBlockHashAndIndex", block, hexutil.Uint64(index)); err != nil {
 		return common.Address{}, err
@@ -319,7 +319,10 @@ func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction, 
 	if meta.Hash == (common.Hash{}) || meta.Hash != tx.Hash() {
 		return common.Address{}, errors.New("wrong inclusion block/index")
 	}
-	return meta.From, nil
+	if meta.From == nil {
+		return common.Address{}, errors.New("missing transaction sender")
+	}
+	return *meta.From, nil
 }
 
 // TransactionCount returns the total number of transactions in the given block.
