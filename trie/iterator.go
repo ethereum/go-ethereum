@@ -234,7 +234,7 @@ func (it *nodeIterator) LeafBlob() []byte {
 func (it *nodeIterator) LeafProof() [][]byte {
 	if len(it.stack) > 0 {
 		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
-			hasher := newHasher(false)
+			hasher := newHasher(false, false)
 			defer returnHasherToPool(hasher)
 			proofs := make([][]byte, 0, len(it.stack))
 
