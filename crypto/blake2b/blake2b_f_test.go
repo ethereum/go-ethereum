@@ -2,8 +2,11 @@ package blake2b
 
 import (
 	"fmt"
+	"math/rand"
 	"reflect"
+	"runtime"
 	"testing"
+	"time"
 )
 
 func TestF(t *testing.T) {
@@ -31,6 +34,93 @@ type testVector struct {
 }
 
 // https://tools.ietf.org/html/rfc7693#appendix-A
+func randomF(r *rand.Rand) (h [8]uint64, m [16]uint64, c [2]uint64, final bool) {
+	for i := range h {
+		h[i] = r.Uint64()
+	}
+	for i := range m {
+		m[i] = r.Uint64()
+	}
+	c[0], c[1] = r.Uint64(), r.Uint64()
+	return h, m, c, r.Intn(2) == 0
+}
+
+func TestFChunkedMatchesGeneric(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	rounds := []uint32{
+		maxAsmRounds - 1, maxAsmRounds, maxAsmRounds + 1,
+		2*maxAsmRounds - 1, 2 * maxAsmRounds, 2*maxAsmRounds + 1,
+		3*maxAsmRounds + 7, 100003,
+	}
+	for _, n := range rounds {
+		for trial := range 4 {
+			h, m, c, final := randomF(r)
+			var flag uint64
+			if final {
+				flag = 0xFFFFFFFFFFFFFFFF
+			}
+			want := h
+			fGeneric(&want, &m, c[0], c[1], flag, uint64(n))
+
+			got := h
+			F(&got, m, c, final, n)
+
+			if got != want {
+				t.Fatalf("rounds=%d trial=%d: got %#x, want %#x", n, trial, got, want)
+			}
+		}
+	}
+}
+
+// gcWait reports the longest a GC had to wait while work ran in another
+// goroutine. Work the runtime cannot preempt shows up here directly.
+func gcWait(work func()) time.Duration {
+	done := make(chan struct{})
+	go func() { defer close(done); work() }()
+	var worst time.Duration
+	for {
+		select {
+		case <-done:
+			return worst
+		default:
+		}
+		start := time.Now()
+		runtime.GC()
+		worst = max(worst, time.Since(start))
+	}
+}
+
+// The rounds argument of the F precompile comes from calldata and is priced at
+// one gas per round, so a single transaction can ask for tens of millions of
+// rounds. Assembly is never preemptible, so an unchunked call blocks every
+// stop-the-world for as long as it runs.
+//
+// The budget is relative to fGeneric, which computes the same thing in Go and is
+// always preemptible: a slow or loaded runner moves both numbers together and
+// only a real regression separates them.
+func TestFLongRoundsIsPreemptible(t *testing.T) {
+	if testing.Short() || runtime.GOMAXPROCS(0) < 2 {
+		t.Skip("runs millions of rounds, and needs GOMAXPROCS >= 2 to see a stalled GC")
+	}
+	if !useAVX2 && !useAVX && !useSSE4 {
+		t.Skip("no assembly on this machine, so the round loop is already preemptible Go")
+	}
+
+	var h [8]uint64
+	var m [16]uint64
+	var c [2]uint64
+	const rounds = 8_000_000
+
+	floor := gcWait(func() { fGeneric(&h, &m, c[0], c[1], 0, rounds) })
+	got := gcWait(func() { F(&h, m, c, false, rounds) })
+
+	t.Logf("worst GC wait: F %v, pure-Go fGeneric %v", got, floor)
+	if got > 5*time.Millisecond && got > 4*floor {
+		t.Fatalf("a GC waited %v on F against %v on the pure-Go path: "+
+			"the assembly round loop is running unbounded", got, floor)
+	}
+}
+
 var testVectorsF = []testVector{
 	{
 		hIn: [8]uint64{
