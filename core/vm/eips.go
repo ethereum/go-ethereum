@@ -569,6 +569,12 @@ func enable7702(jt *JumpTable) {
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
 }
 
+// enable7709 makes BLOCKHASH read from the EIP-2935 history storage contract.
+func enable7709(jt *JumpTable) {
+	jt[BLOCKHASH].execute = opBlockhashEIP7709
+	jt[BLOCKHASH].dynamicGas = gasBlockhashEIP7709
+}
+
 // opSlotNum enables the SLOTNUM opcode
 func opSlotNum(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.get().SetUint64(evm.Context.SlotNum)
