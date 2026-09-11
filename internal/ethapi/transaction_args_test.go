@@ -264,6 +264,91 @@ func TestSetFeeDefaults(t *testing.T) {
 	}
 }
 
+// TestCallDefaults tests that CallDefaults rejects transaction types that
+// cannot be represented without a recipient, instead of letting ToTransaction
+// dereference the nil "to" field later on.
+func TestCallDefaults(t *testing.T) {
+	t.Parallel()
+
+	var (
+		addr    = common.Address{0x42}
+		baseFee = big.NewInt(params.InitialBaseFee)
+		chainID = big.NewInt(1)
+	)
+	tests := []struct {
+		name string
+		args TransactionArgs
+		err  error
+	}{
+		{
+			name: "authorization list without to",
+			args: TransactionArgs{AuthorizationList: []types.SetCodeAuthorization{{Address: addr}}},
+			err:  core.ErrSetCodeTxCreate,
+		},
+		{
+			name: "empty authorization list without to",
+			args: TransactionArgs{AuthorizationList: []types.SetCodeAuthorization{}},
+			err:  core.ErrSetCodeTxCreate,
+		},
+		{
+			name: "blob hashes without to",
+			args: TransactionArgs{BlobHashes: []common.Hash{{0x01}}},
+			err:  core.ErrBlobTxCreate,
+		},
+		{
+			name: "plain contract creation",
+			args: TransactionArgs{},
+		},
+		{
+			name: "authorization list with to",
+			args: TransactionArgs{To: &addr, AuthorizationList: []types.SetCodeAuthorization{{Address: addr}}},
+		},
+		{
+			name: "blob hashes with to",
+			args: TransactionArgs{To: &addr, BlobHashes: []common.Hash{{0x01}}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.args.CallDefaults(0, baseFee, chainID)
+			if tt.err == nil {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				// Sanitized args must be representable as a transaction, as
+				// eth_simulateV1 and debug_traceCall convert them after this.
+				tt.args.ToTransaction(types.DynamicFeeTxType)
+			} else if !errors.Is(err, tt.err) {
+				t.Fatalf("error mismatch, want %q, have %v", tt.err, err)
+			}
+		})
+	}
+}
+
+// TestSetDefaultsEmptyAuthList tests that setDefaults rejects an authorization
+// list on a contract creation even when the list is empty, as ToTransaction
+// cannot represent it.
+func TestSetDefaultsEmptyAuthList(t *testing.T) {
+	t.Parallel()
+
+	var (
+		b    = newBackendMock()
+		gas  = hexutil.Uint64(100000)
+		data = hexutil.Bytes{0x01}
+	)
+	args := &TransactionArgs{
+		MaxFeePerGas:         (*hexutil.Big)(big.NewInt(42)),
+		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(42)),
+		Gas:                  &gas,
+		Data:                 &data,
+		AuthorizationList:    []types.SetCodeAuthorization{},
+	}
+	want := `authorizationList provided for contract creation, but "to" field is missing`
+	if err := args.setDefaults(context.Background(), b, sidecarConfig{}); err == nil || err.Error() != want {
+		t.Fatalf("error mismatch, want %q, have %v", want, err)
+	}
+}
+
 type backendMock struct {
 	current *types.Header
 	config  *params.ChainConfig
