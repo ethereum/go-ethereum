@@ -29,46 +29,55 @@ const (
 )
 
 const (
-	StateIndexGenesisTime              = 32
-	StateIndexGenesisValidators        = 33
-	StateIndexForkVersion              = 141
-	StateIndexLatestHeader             = 36
-	StateIndexBlockRoots               = 37
-	StateIndexStateRoots               = 38
-	StateIndexHistoricRoots            = 39
-	StateIndexFinalBlockOld            = 105
-	StateIndexFinalBlockElectra        = 169
-	StateIndexSyncCommitteeOld         = 54
-	StateIndexSyncCommitteeElectra     = 86
-	StateIndexNextSyncCommitteeOld     = 55
-	StateIndexNextSyncCommitteeElectra = 87
-	StateIndexExecPayload              = 56
-	StateIndexExecHead                 = 908
+	StateIndexFinalBlockLegacy  = 105
+	StateIndexFinalBlockElectra = 169
+	StateIndexFinalBlockGloas   = 735
 
-	BodyIndexExecPayload = 25
+	StateIndexSyncCommitteeLegacy  = 54
+	StateIndexSyncCommitteeElectra = 86
+	StateIndexSyncCommitteeGloas   = 2945
+
+	StateIndexNextSyncCommitteeLegacy  = 55
+	StateIndexNextSyncCommitteeElectra = 87
+	StateIndexNextSyncCommitteeGloas   = 2946
+
+	BodyIndexExecPayload        = 25
+	BodyIndexExecBlockHashGloas = 2856
 )
 
 func StateIndexFinalBlock(forkName string) uint64 {
 	switch forkName {
 	case "bellatrix", "capella", "deneb":
-		return StateIndexFinalBlockOld
-	default:
+		return StateIndexFinalBlockLegacy
+	case "electra", "fulu":
 		return StateIndexFinalBlockElectra
+	case "gloas":
+		return StateIndexFinalBlockGloas
+	default:
+		return 0 // unknown fork
 	}
 }
 func StateIndexSyncCommittee(forkName string) uint64 {
 	switch forkName {
 	case "bellatrix", "capella", "deneb":
-		return StateIndexSyncCommitteeOld
-	default:
+		return StateIndexSyncCommitteeLegacy
+	case "electra", "fulu":
 		return StateIndexSyncCommitteeElectra
+	case "gloas":
+		return StateIndexSyncCommitteeGloas
+	default:
+		return 0 // unknown fork
 	}
 }
 func StateIndexNextSyncCommittee(forkName string) uint64 {
 	switch forkName {
 	case "bellatrix", "capella", "deneb":
-		return StateIndexNextSyncCommitteeOld
-	default:
+		return StateIndexNextSyncCommitteeLegacy
+	case "electra", "fulu":
 		return StateIndexNextSyncCommitteeElectra
+	case "gloas":
+		return StateIndexNextSyncCommitteeGloas
+	default:
+		return 0 // unknown fork
 	}
 }

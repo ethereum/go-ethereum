@@ -144,17 +144,64 @@ func (u UpdateScore) BetterThan(w UpdateScore) bool {
 	return u.SignerCount > w.SignerCount
 }
 
-// HeaderWithExecProof contains a beacon header and proves the belonging execution
-// payload header with a Merkle proof.
-type HeaderWithExecProof struct {
-	Header
-	PayloadHeader *ExecutionHeader
-	PayloadBranch merkle.Values
+// ExecutionProof proves the execution block hash committed in a beacon block
+// body. Its concrete form is fork-specific.
+type ExecutionProof interface {
+	BlockHash() common.Hash
+	Validate(common.Hash) error
 }
 
-// Validate verifies the Merkle proof of the execution payload header.
+// LegacyHeaderProof is the pre-Gloas proof format. It commits to the complete
+// execution payload header at the execution_payload body field.
+type LegacyHeaderProof struct {
+	PayloadHeader *ExecutionHeader
+	Branch        merkle.Values
+}
+
+func (p *LegacyHeaderProof) BlockHash() common.Hash {
+	return p.PayloadHeader.BlockHash()
+}
+
+func (p *LegacyHeaderProof) Validate(bodyRoot common.Hash) error {
+	return merkle.VerifyProof(bodyRoot, params.BodyIndexExecPayload, p.Branch, p.PayloadHeader.PayloadRoot())
+}
+
+// GloasExecutionProof is the Gloas proof format. It commits to the parent
+// execution block hash in signed_execution_payload_bid.message.
+type GloasExecutionProof struct {
+	ExecutionBlockHash common.Hash
+	Branch             merkle.Values
+}
+
+func (p *GloasExecutionProof) BlockHash() common.Hash {
+	return p.ExecutionBlockHash
+}
+
+func (p *GloasExecutionProof) Validate(bodyRoot common.Hash) error {
+	return merkle.VerifyProof(bodyRoot, params.BodyIndexExecBlockHashGloas, p.Branch, merkle.Value(p.ExecutionBlockHash))
+}
+
+// HeaderWithExecProof contains a beacon header and its fork-specific execution
+// proof.
+type HeaderWithExecProof struct {
+	Header
+	Proof ExecutionProof
+}
+
+// BlockHash returns the execution hash committed by the header proof.
+func (h *HeaderWithExecProof) BlockHash() common.Hash {
+	if h.Proof == nil {
+		return common.Hash{}
+	}
+	return h.Proof.BlockHash()
+}
+
+// Validate verifies the fork-specific execution proof.
 func (h *HeaderWithExecProof) Validate() error {
-	return merkle.VerifyProof(h.BodyRoot, params.BodyIndexExecPayload, h.PayloadBranch, h.PayloadHeader.PayloadRoot())
+	if h.Proof == nil {
+		return errors.New("missing execution proof")
+	}
+	return h.Proof.Validate(h.BodyRoot)
 }
 
 // OptimisticUpdate proves sync committee commitment on the attested beacon header.
@@ -164,8 +211,10 @@ func (h *HeaderWithExecProof) Validate() error {
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
 type OptimisticUpdate struct {
 	Attested HeaderWithExecProof
+
 	// Sync committee BLS signature aggregate
 	Signature SyncAggregate
+
 	// Slot in which the signature has been created (newer than Header.Slot,
 	// determines the signing sync committee)
 	SignatureSlot uint64
