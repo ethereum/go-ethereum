@@ -1021,6 +1021,13 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex, uint32(txctx.TxIndex+1))
 
 	_, _, err = core.ApplyTransactionWithEVM(message, core.NewGasPool(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, vmctx.Time, tx, evm)
+	// If an internal state error occurred, let that have precedence. A failed
+	// state read doesn't abort execution, the EVM keeps running on zero values,
+	// so the trace would otherwise be silently wrong, or the fault would
+	// masquerade as e.g. "insufficient funds".
+	if dbErr := statedb.Error(); dbErr != nil {
+		return nil, fmt.Errorf("tracing failed: %w", dbErr)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
