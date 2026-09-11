@@ -263,16 +263,19 @@ func validatePrefix(what, path string) error {
 	return nil
 }
 
-// stop shuts down the HTTP server.
-func (h *httpServer) stop() {
+// stop shuts down the HTTP server. It returns true if the server was running
+// and has been stopped, false if it was already stopped.
+func (h *httpServer) stop() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.doStop()
+	return h.doStop()
 }
 
-func (h *httpServer) doStop() {
+// doStop shuts down the HTTP server. It returns true if the server was running
+// and has been stopped, false if it was already stopped. The caller must hold h.mu.
+func (h *httpServer) doStop() bool {
 	if h.listener == nil {
-		return // not running
+		return false // not running
 	}
 
 	// Shut down the server.
@@ -301,6 +304,7 @@ func (h *httpServer) doStop() {
 	// Clear out everything to allow re-configuring it later.
 	h.host, h.port, h.endpoint = "", 0, ""
 	h.server, h.listener = nil, nil
+	return true
 }
 
 // enableRPC turns on JSON-RPC over HTTP on the server.
@@ -366,16 +370,20 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	return nil
 }
 
-// stopWS disables JSON-RPC over WebSocket and also stops the server if it only serves WebSocket.
-func (h *httpServer) stopWS() {
+// stopWS disables JSON-RPC over WebSocket and also stops the server if it only
+// serves WebSocket. It returns true if the WebSocket handler was disabled (i.e.
+// a WebSocket endpoint was actually closed), false if WebSocket was not enabled.
+func (h *httpServer) stopWS() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.disableWS() {
-		if !h.rpcAllowed() {
-			h.doStop()
-		}
+	if !h.disableWS() {
+		return false
 	}
+	if !h.rpcAllowed() {
+		h.doStop()
+	}
+	return true
 }
 
 // disableWS disables the WebSocket handler. This is internal, the caller must hold h.mu.
