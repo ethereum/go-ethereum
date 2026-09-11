@@ -141,7 +141,6 @@ func (d *state) Read(out []byte) (n int, err error) {
 	}
 
 	n = len(out)
-
 	// Now, do the squeezing.
 	for len(out) > 0 {
 		// Apply the permutation if we've squeezed the sponge dry.
@@ -155,6 +154,16 @@ func (d *state) Read(out []byte) (n int, err error) {
 	}
 
 	return
+}
+
+// Sum256 finalizes the hash and returns the 256-bit digest.
+// Returns the result by value to avoid heap allocation.
+func (d *state) Sum256() (out [32]byte) {
+	if d.state == spongeAbsorbing {
+		d.padAndPermute()
+	}
+	copy(out[:], d.a[:32])
+	return out
 }
 
 // Sum applies padding to the hash state and then squeezes out the desired
