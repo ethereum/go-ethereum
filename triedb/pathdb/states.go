@@ -28,27 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
-// counter helps in tracking items and their corresponding sizes.
-type counter struct {
-	n    int
-	size int
-}
-
-// add size to the counter and increase the item counter.
-func (c *counter) add(size int) {
-	c.n++
-	c.size += size
-}
-
-// report uploads the cached statistics to meters.
-func (c *counter) report(count, size *metrics.Meter) {
-	count.Mark(int64(c.n))
-	size.Mark(int64(c.size))
-}
 
 // stateSet represents a collection of state modifications associated with a
 // transition (e.g., a block execution) or multiple aggregated transitions.
@@ -90,7 +71,7 @@ func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[com
 		rawStorageKey:     rawStorageKey,
 		storageListSorted: make(map[common.Hash][]common.Hash),
 	}
-	s.size = s.check()
+	s.size = s.exactSize()
 	return s
 }
 
@@ -139,9 +120,9 @@ func (s *stateSet) mustStorage(accountHash, storageHash common.Hash) ([]byte, er
 	return nil, fmt.Errorf("storage slot is not found, %x %x", accountHash, storageHash)
 }
 
-// check sanitizes accounts and storage slots to ensure the data validity.
+// exactSize sanitizes accounts and storage slots to ensure the data validity.
 // Additionally, it computes the total memory size occupied by the maps.
-func (s *stateSet) check() uint64 {
+func (s *stateSet) exactSize() uint64 {
 	var size int
 	for _, blob := range s.accountData {
 		size += common.HashLength + len(blob)
@@ -228,54 +209,23 @@ func (s *stateSet) clearLists() {
 // The stateSet supplied as parameter set will not be mutated by this operation,
 // as it may still be referenced by other layers.
 func (s *stateSet) merge(other *stateSet) {
-	var (
-		delta             int
-		accountOverwrites counter
-		storageOverwrites counter
-	)
-	// Apply the updated account data
-	for accountHash, data := range other.accountData {
-		if origin, ok := s.accountData[accountHash]; ok {
-			delta += len(data) - len(origin)
-			accountOverwrites.add(common.HashLength + len(origin))
-		} else {
-			delta += common.HashLength + len(data)
-		}
-		s.accountData[accountHash] = data
-	}
-	// Apply all the updated storage slots (individually)
+	maps.Copy(s.accountData, other.accountData)
+
 	for accountHash, storage := range other.storageData {
-		// If storage didn't exist in the set, overwrite blindly
-		if _, ok := s.storageData[accountHash]; !ok {
+		slots, exist := s.storageData[accountHash]
+		if !exist {
 			// To prevent potential concurrent map read/write issues, allocate a
 			// new map for the storage instead of claiming it directly from the
 			// passed external set. Even after merging, the slots belonging to the
 			// external state set remain accessible, so ownership of the map should
 			// not be taken, and any mutation on it should be avoided.
-			slots := make(map[common.Hash][]byte, len(storage))
-			for storageHash, data := range storage {
-				slots[storageHash] = data
-				delta += 2*common.HashLength + len(data)
-			}
-			s.storageData[accountHash] = slots
+			s.storageData[accountHash] = maps.Clone(storage)
 			continue
 		}
-		// Storage exists in both local and external set, merge the slots
-		slots := s.storageData[accountHash]
-		for storageHash, data := range storage {
-			if origin, ok := slots[storageHash]; ok {
-				delta += len(data) - len(origin)
-				storageOverwrites.add(2*common.HashLength + len(origin))
-			} else {
-				delta += 2*common.HashLength + len(data)
-			}
-			slots[storageHash] = data
-		}
+		maps.Copy(slots, storage)
 	}
-	accountOverwrites.report(gcAccountMeter, gcAccountBytesMeter)
-	storageOverwrites.report(gcStorageMeter, gcStorageBytesMeter)
 	s.clearLists()
-	s.updateSize(delta)
+	s.updateSize(int(other.size))
 }
 
 // revertTo takes the original value of accounts and storages as input and reverts
@@ -287,7 +237,7 @@ func (s *stateSet) merge(other *stateSet) {
 // with its storage slots was deleted in the transition w, reverting w will retain
 // a list of additional storage slots with their original value.
 func (s *stateSet) revertTo(accountOrigin map[common.Hash][]byte, storageOrigin map[common.Hash]map[common.Hash][]byte) {
-	var delta int // size tracking
+	var delta int
 	for addrHash, blob := range accountOrigin {
 		data, ok := s.accountData[addrHash]
 		if !ok {
@@ -296,8 +246,8 @@ func (s *stateSet) revertTo(accountOrigin map[common.Hash][]byte, storageOrigin 
 		if len(data) == 0 && len(blob) == 0 {
 			panic(fmt.Sprintf("invalid account mutation (null to null), %x", addrHash))
 		}
-		delta += len(blob) - len(data)
 		s.accountData[addrHash] = blob
+		delta += common.HashLength + len(blob)
 	}
 	// Overwrite the storage data with original value blindly
 	for addrHash, storage := range storageOrigin {
@@ -313,12 +263,12 @@ func (s *stateSet) revertTo(accountOrigin map[common.Hash][]byte, storageOrigin 
 			if len(blob) == 0 && len(data) == 0 {
 				panic(fmt.Sprintf("invalid storage slot mutation (null to null), %x-%x", addrHash, storageHash))
 			}
-			delta += len(blob) - len(data)
 			slots[storageHash] = blob
+			delta += 2*common.HashLength + len(blob)
 		}
 	}
 	s.clearLists()
-	s.updateSize(delta)
+	s.updateSize(-delta)
 }
 
 // updateSize updates the total cache size by the given delta.
@@ -328,7 +278,7 @@ func (s *stateSet) updateSize(delta int) {
 		s.size = uint64(size)
 		return
 	}
-	log.Error("Stateset size underflow", "prev", common.StorageSize(s.size), "delta", common.StorageSize(delta))
+	log.Debug("Stateset size underflow", "prev", common.StorageSize(s.size), "delta", common.StorageSize(delta))
 	s.size = 0
 }
 
@@ -419,7 +369,7 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	s.storageData = storageSet
 	s.storageListSorted = make(map[common.Hash][]common.Hash)
 
-	s.size = s.check()
+	s.size = s.exactSize()
 	return nil
 }
 
