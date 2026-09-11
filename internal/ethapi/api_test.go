@@ -4488,7 +4488,7 @@ func TestCreateAccessListAuthorizationGas(t *testing.T) {
 			if tc.amsterdam {
 				// Make sure the scenario actually sits between the two
 				// per-authorization prices, otherwise the guard is not exercised.
-				require.Less(t, uint64(estimated), uint64(numAuths*params.CallNewAccountGas))
+				require.Less(t, uint64(estimated), numAuths*params.CallNewAccountGas)
 			}
 
 			// The estimate must be accepted as-is.
