@@ -1793,6 +1793,71 @@ func makeBlobTx(validProof bool) *types.Transaction {
 	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
 }
 
+func TestTransactionFetcherWakesForCompletedBlob(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	blob := &kzg4844.Blob{byte(0xa)}
+	commitment, _ := kzg4844.BlobToCommitment(blob)
+	blobHash := kzg4844.CalcBlobHashV1(sha256.New(), &commitment)
+	cellProofs, _ := kzg4844.ComputeCellProofs(blob)
+
+	blobtx := &types.BlobTx{
+		ChainID:    uint256.MustFromBig(params.MainnetChainConfig.ChainID),
+		GasTipCap:  uint256.NewInt(100),
+		GasFeeCap:  uint256.NewInt(200),
+		Gas:        21000,
+		BlobFeeCap: uint256.NewInt(200),
+		BlobHashes: []common.Hash{blobHash},
+		Value:      uint256.NewInt(100),
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion1, nil, []kzg4844.Commitment{commitment}, cellProofs),
+	}
+	tx := types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
+
+	added := make(chan common.Hash, 1)
+	buffer := blobpool.NewBlobBuffer(blobpool.BlobBufferFunctions{
+		ValidateTx: func(*types.Transaction) error { return nil },
+		AddToPool: func(ptx *blobpool.BlobTxForPool) error {
+			added <- ptx.Tx.Hash()
+			return nil
+		},
+		DropPeer: func(string) {},
+	})
+	fetcher := NewTxFetcher(
+		nil,
+		func(common.Hash, byte) error { return nil },
+		func(txs []*types.Transaction) []error { return make([]error, len(txs)) },
+		func(string, []common.Hash) error { return nil },
+		func(string) {},
+		nil,
+		buffer,
+	)
+	fetcher.idle = make(chan struct{}, 1)
+	fetcher.Start()
+	defer fetcher.Stop()
+
+	// Wait until the fetcher has completed its initial empty flush and entered
+	// the select loop before completing the buffer from the blob fetcher path.
+	<-fetcher.idle
+	if err := buffer.AddTx([]*types.Transaction{tx}, "tx-peer")[0]; err != nil {
+		t.Fatal(err)
+	}
+	cells, err := kzg4844.ComputeCells([]kzg4844.Blob{*blob})
+	if err != nil {
+		t.Fatal(err)
+	}
+	buffer.AddCells(tx.Hash(), map[string]*blobpool.PeerDelivery{
+		"cell-peer": {Cells: cells, Indices: types.CustodyBitmapAll.Indices()},
+	}, types.CustodyBitmapAll)
+
+	select {
+	case hash := <-added:
+		if hash != tx.Hash() {
+			t.Fatalf("unexpected transaction added: got %s, want %s", hash, tx.Hash())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("completed blob transaction was not flushed")
+	}
+}
+
 // This test ensures that the peer will be disconnected for protocol violation
 // and all its internal traces should be removed properly.
 func TestTransactionProtocolViolation(t *testing.T) {
