@@ -429,6 +429,11 @@ func (c *Console) Interactive() {
 				prompt, indents, input = c.prompt, 0, ""
 				continue
 			}
+			if errors.Is(err, io.EOF) {
+				fmt.Fprintln(c.printer, "Cannot start interactive console: input closed or not a terminal.")
+				fmt.Fprintln(c.printer, "Hint: use 'geth attach --exec \"eth.blockNumber\" <endpoint>' for non-interactive use,")
+				fmt.Fprintln(c.printer, "or run attach inside a TTY (e.g. screen -dmS name bash -lc 'geth attach ...').")
+			}
 			return
 
 		case line := <-inputLine:

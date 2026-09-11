@@ -119,7 +119,8 @@ func TestAttachWelcome(t *testing.T) {
 }
 
 func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {
-	// Attach to a running geth node and terminate immediately
+	// Attach to a running geth node with stdin closed, as happens when
+	// launched without a TTY (e.g. via GNU screen -X screen).
 	attach := runGeth(t, "attach", endpoint)
 	defer attach.ExpectExit()
 	attach.CloseStdin()
@@ -136,7 +137,7 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {
 	attach.SetTemplateFunc("datadir", func() string { return geth.Datadir })
 	attach.SetTemplateFunc("apis", func() string { return apis })
 
-	// Verify the actual welcome message to the required template
+	// Verify the welcome message and non-TTY hint are printed.
 	attach.Expect(`
 Welcome to the Geth JavaScript console!
 
@@ -146,9 +147,11 @@ at block: 0 ({{niltime}}){{if ipc}}
  modules: {{apis}}
 
 To exit, press ctrl-d or type exit
-> {{.InputLine "exit" }}
+> 
+Cannot start interactive console: input closed or not a terminal.
+Hint: use 'geth attach --exec "eth.blockNumber" <endpoint>' for non-interactive use,
+or run attach inside a TTY (e.g. screen -dmS name bash -lc 'geth attach ...').
 `)
-	attach.ExpectExit()
 }
 
 // trulyRandInt generates a crypto random integer used by the console tests to
