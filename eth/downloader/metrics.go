@@ -46,6 +46,9 @@ var (
 	receiptFetchMetrics = newFetchMetrics("receipts")
 	balFetchMetrics     = newFetchMetrics("bals")
 
+	// Chain download progress, reported alongside the progress log
+	chainProgressGauge = metrics.NewRegisteredGaugeFloat64("eth/downloader/chain/progress", nil)
+
 	// rttTargetGauge is the round trip time (in milliseconds) requests are
 	// currently sized for, derived from the median of the peer estimates.
 	rttTargetGauge = metrics.NewRegisteredGauge("eth/downloader/rtt/target", nil)
