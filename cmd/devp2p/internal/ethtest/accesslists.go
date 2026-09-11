@@ -65,6 +65,9 @@ func (s *Suite) validateAccessListsResponse(t *utesting.T, tc *accessListsTest, 
 		// Empty entry: per spec, indicates BAL is unavailable for that block.
 		if bytes.Equal(raw, rlp.EmptyString) {
 			if block != nil && block.Header().BlockAccessListHash != nil {
+				if s.requireAvailableBALs {
+					return fmt.Errorf("entry %d: local geth returned no BAL for known post-Amsterdam block %x", idx, tc.hashes[idx])
+				}
 				// Not a failure — the server is allowed to legitimately not
 				// have the BAL. But we log it so the test output is diagnosable.
 				t.Logf("    entry %d: server returned empty for known post-Amsterdam block %x", idx, tc.hashes[idx])

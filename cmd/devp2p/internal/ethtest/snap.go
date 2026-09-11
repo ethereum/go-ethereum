@@ -81,25 +81,25 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 	)
 
 	tests := []accRangeTest{
-		// Tests decreasing the number of bytes
+		// Tests the full range and decreasing response byte limits.
 		{
 			nBytes:       4000,
 			root:         root,
 			startingHash: zero,
 			limitHash:    ffHash,
-			expAccounts:  68,
+			expAccounts:  48,
 			expFirst:     firstKey,
-			expLast:      common.HexToHash("0x59312f89c13e9e24c1cb8b103aa39a9b2800348d97a92c2c9e2a78fa02b70025"),
-			desc:         "In this test, we request the entire state range, but limit the response to 4000 bytes.",
+			expLast:      common.HexToHash("0xec3e92967d10ac66eff64a5697258b8acf87e661962b2938a0edcd78788f360d"),
+			desc:         "In this test, we request the entire state range with a response limit large enough to return it all.",
 		},
 		{
 			nBytes:       3000,
 			root:         root,
 			startingHash: zero,
 			limitHash:    ffHash,
-			expAccounts:  50,
+			expAccounts:  46,
 			expFirst:     firstKey,
-			expLast:      common.HexToHash("0x4615e5f5df5b25349a00ad313c6cd0436b6c08ee5826e33a018661997f85ebaa"),
+			expLast:      common.HexToHash("0xe3b0b0cbc04ac35bd85edc0e674ce3caa7aeeeb6a0d0c93326947cfcd53d5610"),
 			desc:         "In this test, we request the entire state range, but limit the response to 3000 bytes.",
 		},
 		{
@@ -107,9 +107,9 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 			root:         root,
 			startingHash: zero,
 			limitHash:    ffHash,
-			expAccounts:  35,
+			expAccounts:  32,
 			expFirst:     firstKey,
-			expLast:      common.HexToHash("0x2de4bdbddcfbb9c3e195dae6b45f9c38daff897e926764bf34887fb0db5c3284"),
+			expLast:      common.HexToHash("0xa9233a729f0468c9c309c48b82934c99ba1fd18447947b3bc0621adb7a5fc643"),
 			desc:         "In this test, we request the entire state range, but limit the response to 2000 bytes.",
 		},
 		{
@@ -178,9 +178,9 @@ The server should return the first available account.`,
 			root:         root,
 			startingHash: firstKey,
 			limitHash:    ffHash,
-			expAccounts:  68,
+			expAccounts:  48,
 			expFirst:     firstKey,
-			expLast:      common.HexToHash("0x59312f89c13e9e24c1cb8b103aa39a9b2800348d97a92c2c9e2a78fa02b70025"),
+			expLast:      common.HexToHash("0xec3e92967d10ac66eff64a5697258b8acf87e661962b2938a0edcd78788f360d"),
 			desc: `In this test, startingHash is exactly the first available account key.
 The server should return the first available account of the state as the first item.`,
 		},
@@ -189,9 +189,9 @@ The server should return the first available account of the state as the first i
 			root:         root,
 			startingHash: hashAdd(firstKey, 1),
 			limitHash:    ffHash,
-			expAccounts:  68,
+			expAccounts:  47,
 			expFirst:     secondKey,
-			expLast:      common.HexToHash("0x59a7c8818f1c16b298a054020dc7c3f403a970d1d1db33f9478b1c36e3a2e509"),
+			expLast:      common.HexToHash("0xec3e92967d10ac66eff64a5697258b8acf87e661962b2938a0edcd78788f360d"),
 			desc: `In this test, startingHash is after the first available key.
 The server should return the second account of the state as the first item.`,
 		},
@@ -227,9 +227,9 @@ server to return no data because genesis is older than 127 blocks.`,
 			root:         s.chain.RootAt(int(s.chain.Head().Number().Uint64()) - 127),
 			startingHash: zero,
 			limitHash:    ffHash,
-			expAccounts:  68,
+			expAccounts:  48,
 			expFirst:     firstKey,
-			expLast:      common.HexToHash("0x683b6c03cc32afe5db8cb96050f711fdaff8f8ff44c7587a9a848f921d02815e"),
+			expLast:      common.HexToHash("0xec3e92967d10ac66eff64a5697258b8acf87e661962b2938a0edcd78788f360d"),
 			desc: `This test requests data at a state root that is 127 blocks old.
 We expect the server to have this state available.`,
 		},
@@ -518,7 +518,7 @@ func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 		// Request the same hash multiple times.
 		{
 			desc:      `This test requests the same code hash multiple times. The server should deliver it multiple times.`,
-			nBytes:    1000,
+			nBytes:    10000,
 			hashes:    []common.Hash{allHashes[0], allHashes[0], allHashes[0], allHashes[0]},
 			expHashes: 4,
 		},
@@ -595,8 +595,8 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		// This is the known address of the snap storage testing contract.
 		storageAcct     = common.HexToAddress("0x8bebc8ba651aee624937e7d897853ac30c95a067")
 		storageAcctHash = common.BytesToHash(s.chain.state[storageAcct].AddressHash)
-		// This is the known address of an existing account.
-		key      = common.FromHex("0xa87387b50b481431c6ccdb9ae99a54d4dcdd4a3eff75d7b17b4818f7bbfc21e9")
+		// Use the first account in hash order as a known state-trie path.
+		key      = s.chain.AccountsInHashOrder()[0].AddressHash
 		empty    = types.EmptyCodeHash
 		accPaths []snap.TrieNodePathSet
 	)
@@ -658,8 +658,8 @@ The server should reject the request.`,
 				// It's a bit unfortunate these are hard-coded, but the result depends on
 				// a lot of aspects of the state trie and can't be guessed in a simple
 				// way. So you'll have to update this when the test chain is changed.
-				common.HexToHash("0x4bdecec09691ad38113eebee2df94fadefdff5841c0f182bae1be3c8a6d60bf3"),
-				common.HexToHash("0x4178696465d4514ff5924ef8c28ce64d41a669634b63184c2c093e252d6b4bc4"),
+				common.HexToHash("0x77aab88291160758db7601d30f1527f8c757c038942d68653c66c5e085c718c3"),
+				common.HexToHash("0xb7c16b351c07133620589b3d997c54803b30f7e3da75bfddae6f8ef59c15132a"),
 				empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty,
 				empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty,
 				empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty,
@@ -679,8 +679,8 @@ The server should reject the request.`,
 			// be updated when the test chain is changed.
 			expHashes: []common.Hash{
 				empty,
-				common.HexToHash("0x4178696465d4514ff5924ef8c28ce64d41a669634b63184c2c093e252d6b4bc4"),
-				common.HexToHash("0x4bdecec09691ad38113eebee2df94fadefdff5841c0f182bae1be3c8a6d60bf3"),
+				common.HexToHash("0xb7c16b351c07133620589b3d997c54803b30f7e3da75bfddae6f8ef59c15132a"),
+				common.HexToHash("0x77aab88291160758db7601d30f1527f8c757c038942d68653c66c5e085c718c3"),
 			},
 		},
 
