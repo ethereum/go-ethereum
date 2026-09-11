@@ -98,26 +98,9 @@ func newFlatReader(reader database.StateReader) *flatReader {
 //
 // The returned account might be nil if it's not existent.
 func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
-	account, err := r.reader.Account(crypto.Keccak256Hash(addr[:]))
-	if err != nil {
-		return nil, err
-	}
-	if account == nil {
-		return nil, nil
-	}
-	acct := &types.StateAccount{
-		Nonce:    account.Nonce,
-		Balance:  account.Balance,
-		CodeHash: account.CodeHash,
-		Root:     common.BytesToHash(account.Root),
-	}
-	if len(acct.CodeHash) == 0 {
-		acct.CodeHash = types.EmptyCodeHash.Bytes()
-	}
-	if acct.Root == (common.Hash{}) {
-		acct.Root = types.EmptyRootHash
-	}
-	return acct, nil
+	// The backing reader already returns accounts in the consensus (full)
+	// format, so no slim->full conversion is required here.
+	return r.reader.Account(crypto.Keccak256Hash(addr[:]))
 }
 
 // Storage implements StateReader, retrieving the storage slot specified by the

@@ -24,6 +24,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -64,8 +65,10 @@ func newBuffer(limit int, nodes *nodeSet, states *stateSet, layers uint64) *buff
 	}
 }
 
-// account retrieves the account blob with account address hash.
-func (b *buffer) account(hash common.Hash) ([]byte, bool) {
+// account retrieves the decoded account with account address hash, in the
+// consensus (full) format. A nil account with found=true denotes a
+// known-deleted account.
+func (b *buffer) account(hash common.Hash) (*types.StateAccount, bool) {
 	return b.states.account(hash)
 }
 
