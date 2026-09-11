@@ -1806,6 +1806,9 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		defaultTimeout = api.b.RPCTxSyncDefaultTimeout()
 		timeout        = defaultTimeout
 	)
+	if timeout > maxTimeout {
+		timeout = maxTimeout
+	}
 	if timeoutMs != nil && *timeoutMs > 0 {
 		req := time.Duration(*timeoutMs) * time.Millisecond
 		if req > maxTimeout {
