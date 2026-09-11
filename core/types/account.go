@@ -38,13 +38,19 @@ type Account struct {
 	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
 	Balance *big.Int                    `json:"balance" gencodec:"required"`
 	Nonce   uint64                      `json:"nonce,omitempty"`
+
+	// Constructor is initcode executed while building the genesis state. The
+	// bytes it returns become the account code, and any storage it writes lands
+	// on this account. It is mutually exclusive with Code.
+	Constructor []byte `json:"constructor,omitempty"`
 }
 
 type accountMarshaling struct {
-	Code    hexutil.Bytes
-	Balance *math.HexOrDecimal256
-	Nonce   math.HexOrDecimal64
-	Storage map[storageJSON]storageJSON
+	Code        hexutil.Bytes
+	Balance     *math.HexOrDecimal256
+	Nonce       math.HexOrDecimal64
+	Storage     map[storageJSON]storageJSON
+	Constructor hexutil.Bytes
 }
 
 // storageJSON represents a 256 bit byte array, but allows less than 256 bits when
