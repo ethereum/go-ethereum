@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -420,12 +421,20 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 
 	// Subscribe to Transactions
 	ch1 := make(chan common.Hash)
-	ec.SubscribePendingTransactions(context.Background(), ch1)
+	sub1, err := ec.SubscribePendingTransactions(context.Background(), ch1)
+	if err != nil {
+		t.Fatalf("Failed to subscribe to pending transactions: %v", err)
+	}
+	defer sub1.Unsubscribe()
 
 	// Subscribe to Transactions
 	ch2 := make(chan *types.Transaction)
-	ec.SubscribeFullPendingTransactions(context.Background(), ch2)
-
+	sub2, err := ec.SubscribeFullPendingTransactions(context.Background(), ch2)
+	if err != nil {
+		t.Fatalf("Failed to subscribe to full pending transactions: %v", err)
+	}
+	defer sub2.Unsubscribe()
+	time.Sleep(100 * time.Millisecond)
 	// Send a transaction
 	chainID, err := ethcl.ChainID(context.Background())
 	if err != nil {
@@ -452,14 +461,26 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 		t.Fatal(err)
 	}
 	// Check that the transaction was sent over the channel
-	hash := <-ch1
-	if hash != signedTx.Hash() {
-		t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+	select {
+	case hash := <-ch1:
+		if hash != signedTx.Hash() {
+			t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+		}
+	case err := <-sub1.Err():
+		t.Fatalf("Subscription error: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timeout waiting for pending transaction hash")
 	}
 	// Check that the transaction was sent over the channel
-	tx = <-ch2
-	if tx.Hash() != signedTx.Hash() {
-		t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
+	select {
+	case tx = <-ch2:
+		if tx.Hash() != signedTx.Hash() {
+			t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
+		}
+	case err := <-sub2.Err():
+		t.Fatalf("Subscription error: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timeout waiting for full pending transaction")
 	}
 }
 
