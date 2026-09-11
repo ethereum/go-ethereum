@@ -71,6 +71,12 @@ func (q *bodyQueue) unreserve(peer string) int {
 	return fails
 }
 
+// requeue is responsible for placing the current body retrieval allocation of a
+// specific peer back into the pool for some other peer to retrieve as well.
+func (q *bodyQueue) requeue(peer string) {
+	q.queue.RequeueBodies(peer)
+}
+
 // request is responsible for converting a generic fetch request into a body
 // one and sending it to the remote peer for fulfillment.
 func (q *bodyQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error) {
@@ -90,18 +96,6 @@ func (q *bodyQueue) request(peer *peerConnection, req *fetchRequest, resCh chan 
 func (q *bodyQueue) deliver(peer *peerConnection, packet *eth.Response) (int, error) {
 	resp := packet.Res.(*eth.BlockBodiesResponse)
 	meta := packet.Meta.(eth.BlockBodyHashes)
-
-	var size uint64
-	for i := range *resp {
-		body := &(*resp)[i]
-		size += body.Transactions.Size() + body.Uncles.Size()
-		if body.Withdrawals != nil {
-			size += body.Withdrawals.Size()
-		}
-	}
-	bodyFetchMetrics.items.Update(int64(len(*resp)))
-	bodyFetchMetrics.bytes.Mark(int64(size))
-
 	accepted, err := q.queue.DeliverBodies(peer.id, meta, *resp)
 	switch {
 	case err == nil && len(*resp) == 0:
@@ -112,6 +106,12 @@ func (q *bodyQueue) deliver(peer *peerConnection, packet *eth.Response) (int, er
 		peer.log.Debug("Failed to deliver retrieved bodies", "err", err)
 	}
 	return accepted, err
+}
+
+// stalled returns the peer whose body request holds the head of the result
+// cache for longer than the given threshold, blocking the consumer.
+func (q *bodyQueue) stalled(threshold time.Duration) string {
+	return q.queue.StalledBodies(threshold)
 }
 
 // metrics returns the collectors the concurrent fetcher reports the scheduling

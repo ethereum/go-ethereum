@@ -124,6 +124,19 @@ func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, in
 	return item, index, stale, throttle, nil
 }
 
+// HeadPending returns the number of the first undelivered block and whether
+// the given component is still missing for it. A missing head component is
+// what the consumer is currently waiting on.
+func (r *resultStore) HeadPending(kind uint) (uint64, bool) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	if len(r.items) == 0 || r.items[0] == nil {
+		return r.resultOffset, false
+	}
+	return r.resultOffset, r.items[0].pending.Load()&(1<<kind) != 0
+}
+
 // HasCompletedItems returns true if there are processable items available
 // this method is cheaper than countCompleted
 func (r *resultStore) HasCompletedItems() bool {
