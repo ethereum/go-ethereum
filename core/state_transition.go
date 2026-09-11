@@ -293,6 +293,11 @@ type Message struct {
 	// - From is not verified to be an EOA
 	// - GasLimit is not checked against the protocol defined tx gaslimit
 	SkipTransactionChecks bool
+
+	// When set together with transaction checks enabled, the sender EOA check is
+	// skipped. This is used by eth_simulateV1 validation mode, which validates
+	// transaction gas limits but permits contract senders.
+	SkipFromEOACheck bool
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -563,6 +568,8 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 		if !rules.IsAmsterdam && rules.IsOsaka && msg.GasLimit > params.MaxTxGas {
 			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
 		}
+	}
+	if !msg.SkipTransactionChecks && !msg.SkipFromEOACheck {
 		// Make sure the sender is an EOA
 		code := st.state.GetCode(msg.From)
 		_, delegated := types.ParseDelegation(code)
