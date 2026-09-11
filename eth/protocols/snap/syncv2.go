@@ -681,7 +681,7 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	// Mirror the live generation progress into the metrics while it runs
 	stop := make(chan struct{})
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(time.Second * 30)
 		defer ticker.Stop()
 		for {
 			select {

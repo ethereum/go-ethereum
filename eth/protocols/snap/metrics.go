@@ -44,8 +44,8 @@ var (
 
 	// Progress of the phases specific to snap/2
 	genProgressGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/generation", nil)
-	balFetchedGauge  = metrics.NewRegisteredGauge("eth/protocols/snap/sync/heal/bal/fetched", nil)
-	balTotalGauge    = metrics.NewRegisteredGauge("eth/protocols/snap/sync/heal/bal/total", nil)
+	balFetchedGauge  = metrics.NewRegisteredGauge("eth/protocols/snap/sync/catchup/bal/fetched", nil)
+	balTotalGauge    = metrics.NewRegisteredGauge("eth/protocols/snap/sync/catchup/bal/total", nil)
 
 	// accountInnerDeleteGauge is the metric to track how many dangling trie nodes
 	// covered by extension node in account trie are deleted during the sync.
