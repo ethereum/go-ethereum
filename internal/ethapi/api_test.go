@@ -2757,6 +2757,85 @@ func TestSimulateV1WithdrawalsByFork(t *testing.T) {
 	})
 }
 
+// TestSimulateV1TransferLogs verifies that traceTransfers reports each ether
+// transfer exactly once across the Amsterdam boundary: before the fork the
+// tracer synthesizes an ERC-20 style log from the ERC-7528 sentinel address,
+// after it only the protocol-emitted EIP-7708 log remains.
+func TestSimulateV1TransferLogs(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts  = newAccounts(2)
+		sender    = accounts[0].addr
+		recipient = accounts[1].addr
+		value     = big.NewInt(1000)
+	)
+	run := func(t *testing.T, cfg *params.ChainConfig, wantAddr common.Address) {
+		t.Helper()
+		gspec := &core.Genesis{
+			Config: cfg,
+			Alloc:  types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}},
+		}
+		backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+
+		ctx := context.Background()
+		stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		if err != nil {
+			t.Fatalf("failed to get state and header: %v", err)
+		}
+		sim := &simulator{
+			b:              backend,
+			state:          stateDB,
+			base:           baseHeader,
+			chainConfig:    backend.ChainConfig(),
+			budget:         newGasBudget(0),
+			traceTransfers: true,
+		}
+		results, err := sim.execute(ctx, []simBlock{{Calls: []TransactionArgs{{
+			From:  &sender,
+			To:    &recipient,
+			Value: (*hexutil.Big)(value),
+		}}}})
+		if err != nil {
+			t.Fatalf("simulation execution failed: %v", err)
+		}
+		require.Len(t, results, 1)
+		require.Len(t, results[0].Calls, 1)
+
+		logs := results[0].Calls[0].Logs
+		if len(logs) != 1 {
+			addrs := make([]common.Address, len(logs))
+			for i, log := range logs {
+				addrs[i] = log.Address
+			}
+			t.Fatalf("transfer logged %d times, want exactly once (emitters: %v)", len(logs), addrs)
+		}
+		if logs[0].Address != wantAddr {
+			t.Errorf("log address = %v, want %v", logs[0].Address, wantAddr)
+		}
+		wantTopics := []common.Hash{
+			transferTopic,
+			common.BytesToHash(sender.Bytes()),
+			common.BytesToHash(recipient.Bytes()),
+		}
+		if !slices.Equal(logs[0].Topics, wantTopics) {
+			t.Errorf("log topics = %v, want %v", logs[0].Topics, wantTopics)
+		}
+		if !bytes.Equal(logs[0].Data, common.BigToHash(value).Bytes()) {
+			t.Errorf("log data = %x, want %x", logs[0].Data, common.BigToHash(value).Bytes())
+		}
+	}
+
+	t.Run("pre-amsterdam", func(t *testing.T) {
+		run(t, params.MergedTestChainConfig, transferAddress)
+	})
+	t.Run("post-amsterdam", func(t *testing.T) {
+		cfg := *params.MergedTestChainConfig
+		cfg.AmsterdamTime = new(uint64)
+		run(t, &cfg, params.SystemAddress)
+	})
+}
+
 func TestSignTransaction(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
