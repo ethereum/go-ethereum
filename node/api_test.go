@@ -241,6 +241,36 @@ func TestStartRPC(t *testing.T) {
 			wantRPC:       true,
 			wantWS:        true,
 		},
+		{
+			name: "ws single endpoint across servers",
+			cfg:  Config{HTTPHost: "127.0.0.1"},
+			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				// Enable WebSocket on the HTTP server, sharing its port.
+				wsport := n.http.port
+				_, err := api.StartWS(sp("127.0.0.1"), ip(wsport), nil, nil)
+				assert.NoError(t, err)
+
+				// Pick a different port to open a second WebSocket endpoint on.
+				listener, err := net.Listen("tcp", "127.0.0.1:0")
+				if err != nil {
+					t.Fatal("can't listen:", err)
+				}
+				other := listener.Addr().(*net.TCPAddr).Port
+				listener.Close()
+
+				// Only one WebSocket endpoint may be active at a time. Starting
+				// one on a second port must be rejected even though it selects
+				// a different internal server.
+				_, err = api.StartWS(sp("127.0.0.1"), ip(other), nil, nil)
+				if err == nil || !strings.Contains(err.Error(), "JSON-RPC over WebSocket is already enabled") {
+					t.Fatalf("StartWS on second port: want 'already enabled' error, got %v", err)
+				}
+			},
+			wantReachable: true,
+			wantHandlers:  true,
+			wantRPC:       true,
+			wantWS:        true,
+		},
 	}
 
 	for _, test := range tests {
