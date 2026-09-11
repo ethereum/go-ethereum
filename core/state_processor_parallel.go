@@ -173,7 +173,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	// own ephemeral state instance, whose reads are served from the block-level
 	// access list overlaid on the parent state.
 	txStart := time.Now()
-	results, err := p.executeTransactionsParallel(block, parentRoot, db, base, lookup, signer, jumpDestCache, precompileCache, cfg)
+	results, err := p.executeTransactionsParallel(ctx, block, parentRoot, db, base, lookup, signer, jumpDestCache, precompileCache, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +291,7 @@ func (c *cumulativeGas) load() (uint64, uint64) {
 // executeTransactionsParallel applies all transactions to independent,
 // access-list-backed state instances using a pool of workers, and returns
 // the per-transaction results in block order.
-func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, signer types.Signer, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) ([]txExecResult, error) {
+func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, signer types.Signer, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) ([]txExecResult, error) {
 	var (
 		config      = p.chainConfig()
 		header      = block.Header()
@@ -357,7 +357,7 @@ func (p *StateProcessor) executeTransactionsParallel(block *types.Block, parentR
 				// A transaction-local gas pool, sized to the block gas limit so
 				// that an oversized transaction is rejected before it runs.
 				gp := NewGasPool(gasLimit)
-				receipt, accessList, err := ApplyTransactionWithEVM(msg, gp, sdb, blockNumber, blockHash, context.Time, tx, evm)
+				receipt, accessList, err := ApplyTransactionWithEVM(ctx, msg, gp, sdb, blockNumber, blockHash, context.Time, tx, evm)
 				if err != nil {
 					return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 				}
