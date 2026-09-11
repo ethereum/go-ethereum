@@ -32,9 +32,6 @@ type BlockChain interface {
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
-	// Genesis returns the genesis block of the chain.
-	Genesis() *types.Block
-
 	// CurrentFinalBlock returns the current block below which blobs should not
 	// be maintained anymore for reorg purposes.
 	CurrentFinalBlock() *types.Header
