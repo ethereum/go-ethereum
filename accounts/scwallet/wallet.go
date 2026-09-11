@@ -357,7 +357,7 @@ func (w *Wallet) Open(passphrase string) error {
 		// If a previous pairing exists, only ever try to use that
 		if pairing := w.Hub.pairing(w); pairing != nil {
 			if err := w.session.authenticate(*pairing); err != nil {
-				return fmt.Errorf("failed to authenticate card %x: %s", w.PublicKey[:4], err)
+				return fmt.Errorf("failed to authenticate card %x: %s", w.PublicKey[1:5], err)
 			}
 			// Pairing still ok, fall through to PIN checks
 		} else {
@@ -601,7 +601,7 @@ func (w *Wallet) makeAccount(address common.Address, path accounts.DerivationPat
 		Address: address,
 		URL: accounts.URL{
 			Scheme: w.Hub.scheme,
-			Path:   fmt.Sprintf("%x/%s", w.PublicKey[1:3], path.String()),
+			Path:   fmt.Sprintf("%x/%s", w.PublicKey[1:5], path.String()),
 		},
 	}
 }
@@ -794,7 +794,7 @@ func (w *Wallet) findAccountPath(account accounts.Account) (accounts.DerivationP
 		return nil, fmt.Errorf("invalid URL format: %s", account.URL)
 	}
 
-	if url != fmt.Sprintf("%x", w.PublicKey[1:3]) {
+	if url != fmt.Sprintf("%x", w.PublicKey[1:5]) {
 		return nil, fmt.Errorf("URL %s is not for this wallet", account.URL)
 	}
 
