@@ -343,9 +343,10 @@ func (f *BlobFetcher) loop() {
 			}
 
 			var (
-				idleWait   = len(f.waittime) == 0
-				_, oldPeer = f.announces[ann.origin]
-				nextSeq    = func() uint64 {
+				idleWait     = len(f.waittime) == 0
+				waitPromoted = false // Whether a transaction left the waitlist
+				_, oldPeer   = f.announces[ann.origin]
+				nextSeq      = func() uint64 {
 					seq := f.txSeq
 					f.txSeq++
 					return seq
@@ -434,6 +435,7 @@ func (f *BlobFetcher) loop() {
 							}
 							delete(f.waitlist, hash)
 							delete(f.waittime, hash)
+							waitPromoted = true
 						}
 						continue
 					}
@@ -453,8 +455,12 @@ func (f *BlobFetcher) loop() {
 				}
 			}
 
-			// If a new item was added to the waitlist, schedule its timeout
-			if idleWait && len(f.waittime) > 0 {
+			// Reschedule the availability timer if the waitlist membership
+			// changed in a way that can move its earliest deadline: a new item
+			// added to an idle waitlist, or an item promoted out of it. Items
+			// appended to a non-empty waitlist are always the latest, so they
+			// cannot advance the deadline.
+			if (idleWait && len(f.waittime) > 0) || waitPromoted {
 				f.rescheduleWait(waitTimer, waitTrigger)
 			}
 
@@ -499,10 +505,9 @@ func (f *BlobFetcher) loop() {
 			if len(reschedule) > 0 {
 				f.scheduleFetches(timeoutTimer, timeoutTrigger, reschedule)
 			}
-			// If transactions are still waiting for availability, reschedule the wait timer
-			if len(f.waittime) > 0 {
-				f.rescheduleWait(waitTimer, waitTrigger)
-			}
+			// Reschedule the wait timer for the transactions still waiting
+			// for availability, or disarm it if none are left.
+			f.rescheduleWait(waitTimer, waitTrigger)
 
 		case <-timeoutTrigger:
 			// Clean up any expired retrievals and avoid re-requesting them from the
@@ -684,9 +689,7 @@ func (f *BlobFetcher) loop() {
 					}
 				}
 				delete(f.waitslots, drop.peer)
-				if len(f.waitlist) > 0 {
-					f.rescheduleWait(waitTimer, waitTrigger)
-				}
+				f.rescheduleWait(waitTimer, waitTrigger)
 			}
 			// Clean up general announcement tracking
 			if _, ok := f.announces[drop.peer]; ok {
@@ -743,9 +746,16 @@ func (f *BlobFetcher) loop() {
 	}
 }
 
+// rescheduleWait arms the availability timer for the earliest transaction in
+// the waitlist. If the waitlist is empty, the timer is left disarmed instead
+// of being re-armed on a stale deadline.
 func (f *BlobFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{}) {
 	if *timer != nil {
 		(*timer).Stop()
+		*timer = nil
+	}
+	if len(f.waittime) == 0 {
+		return
 	}
 	now := f.clock.Now()
 
@@ -763,7 +773,12 @@ func (f *BlobFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{})
 	})
 }
 
-// Exactly same as the one in TxFetcher
+// rescheduleTimeout arms the fetch timeout timer for the earliest request in
+// flight. Like its TxFetcher counterpart, the timer is deliberately kept armed
+// even when no request is in flight: every fire runs scheduleFetches, which is
+// what retries announces that could not be dispatched earlier (e.g. because
+// the peer's cell request tokens were exhausted). Disarming on an idle fetcher
+// would leave such announces stranded until an unrelated event.
 func (f *BlobFetcher) rescheduleTimeout(timer *mclock.Timer, trigger chan struct{}) {
 	if *timer != nil {
 		(*timer).Stop()
