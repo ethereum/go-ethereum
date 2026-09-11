@@ -1377,8 +1377,9 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce))
 	}
 	isPostMerge := header.Difficulty.Sign() == 0
+	rules := b.ChainConfig().Rules(header.Number, isPostMerge, header.Time)
 	// Retrieve the precompiles since they don't need to be added to the access list
-	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge, header.Time))
+	precompiles := vm.ActivePrecompiles(rules)
 
 	// addressesToExclude contains sender, receiver, precompiles and valid authorizations
 	addressesToExclude := map[common.Address]struct{}{args.from(): {}, to: {}}
@@ -1386,8 +1387,13 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		addressesToExclude[addr] = struct{}{}
 	}
 
-	// Prevent redundant operations if args contain more authorizations than EVM may handle
-	maxAuthorizations := uint64(*args.Gas) / params.CallNewAccountGas
+	// Prevent redundant operations if args contain more authorizations than EVM
+	// may handle. The per-authorization cost must match core.IntrinsicGas.
+	perAuthGas := params.CallNewAccountGas
+	if rules.IsAmsterdam {
+		perAuthGas = params.ExecutionPerAuthBaseCost
+	}
+	maxAuthorizations := uint64(*args.Gas) / perAuthGas
 	if uint64(len(args.AuthorizationList)) > maxAuthorizations {
 		return nil, 0, nil, errors.New("insufficient gas to process all authorizations")
 	}
