@@ -722,6 +722,7 @@ type broadcastChoice struct {
 	key    [16]byte
 	buffer map[*ethPeer]struct{}
 	tmp    []broadcastPeer
+	heap   []broadcastPeer
 }
 
 type broadcastPeer struct {
@@ -756,16 +757,78 @@ func (bc *broadcastChoice) choosePeers(peers []*ethPeer, txSender common.Address
 		bc.tmp[i] = broadcastPeer{peer, hash.Sum64()}
 	}
 
-	// Sort by score.
-	slices.SortFunc(bc.tmp, func(a, b broadcastPeer) int {
-		return cmp.Compare(a.score, b.score)
-	})
-
 	// Take top n.
 	clear(bc.buffer)
 	n := int(math.Ceil(math.Sqrt(float64(len(bc.tmp)))))
-	for i := range n {
-		bc.buffer[bc.tmp[i].p] = struct{}{}
+	for _, peer := range bc.selectPeers(n) {
+		bc.buffer[peer.p] = struct{}{}
 	}
 	return bc.buffer
+}
+
+// selectPeers returns the n lowest-scoring peers. It leaves tmp in its original
+// order unless a score tie at the selection boundary requires a full sort to
+// preserve the existing tie behavior.
+func (bc *broadcastChoice) selectPeers(n int) []broadcastPeer {
+	if n == 0 || n == len(bc.tmp) {
+		return bc.tmp
+	}
+	bc.heap = slices.Grow(bc.heap[:0], n)[:n]
+	copy(bc.heap, bc.tmp)
+	heapifyBroadcastPeers(bc.heap)
+
+	for _, peer := range bc.tmp[n:] {
+		if peer.score < bc.heap[0].score {
+			bc.heap[0] = peer
+			siftDownBroadcastPeer(bc.heap, 0)
+		}
+	}
+	if hasTiedBroadcastCutoff(bc.tmp, bc.heap[0].score, n) {
+		sortBroadcastPeers(bc.tmp)
+		return bc.tmp[:n]
+	}
+	return bc.heap
+}
+
+func hasTiedBroadcastCutoff(peers []broadcastPeer, cutoff uint64, n int) bool {
+	var less, equal int
+	for _, peer := range peers {
+		switch {
+		case peer.score < cutoff:
+			less++
+		case peer.score == cutoff:
+			equal++
+		}
+	}
+	return equal > n-less
+}
+
+func heapifyBroadcastPeers(peers []broadcastPeer) {
+	for i := len(peers) / 2; i > 0; {
+		i--
+		siftDownBroadcastPeer(peers, i)
+	}
+}
+
+func siftDownBroadcastPeer(peers []broadcastPeer, root int) {
+	for {
+		child := 2*root + 1
+		if child >= len(peers) {
+			return
+		}
+		if right := child + 1; right < len(peers) && peers[right].score > peers[child].score {
+			child = right
+		}
+		if peers[root].score >= peers[child].score {
+			return
+		}
+		peers[root], peers[child] = peers[child], peers[root]
+		root = child
+	}
+}
+
+func sortBroadcastPeers(peers []broadcastPeer) {
+	slices.SortFunc(peers, func(a, b broadcastPeer) int {
+		return cmp.Compare(a.score, b.score)
+	})
 }
