@@ -441,6 +441,15 @@ func TestEth2DeepReorg(t *testing.T) {
 // startEthService creates a full node instance for testing. The default test
 // configuration can be adjusted through optional modifier functions.
 func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
+	return startEthServiceWithSync(t, genesis, blocks, true, mods...)
+}
+
+// startEthServiceUnsynced creates a full node without marking it as synced.
+func startEthServiceUnsynced(t testing.TB, genesis *core.Genesis, blocks []*types.Block, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
+	return startEthServiceWithSync(t, genesis, blocks, false, mods...)
+}
+
+func startEthServiceWithSync(t testing.TB, genesis *core.Genesis, blocks []*types.Block, synced bool, mods ...func(*ethconfig.Config)) (*node.Node, *eth.Ethereum) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{
@@ -479,7 +488,9 @@ func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block,
 		t.Fatal("failed to sync txpool after initial blockchain import:", err)
 	}
 
-	ethservice.SetSynced()
+	if synced {
+		ethservice.SetSynced()
+	}
 	return n, ethservice
 }
 
@@ -529,6 +540,65 @@ func TestForkchoiceUpdatedReorgDepthLimit(t *testing.T) {
 			t.Fatalf("chain head not rewound to genesis: have %d, want 0", head)
 		}
 	})
+}
+
+// TestForkchoiceUpdatedBelowFinalized verifies that forkchoiceUpdated ignores
+// an update to a block older than the currently finalized block.
+func TestForkchoiceUpdatedBelowFinalized(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+	finalized := engine.ForkchoiceStateV1{
+		HeadBlockHash:      blocks[9].Hash(),
+		FinalizedBlockHash: blocks[8].Hash(),
+	}
+	if _, err := api.ForkchoiceUpdatedV1(context.Background(), finalized, nil); err != nil {
+		t.Fatalf("failed to set finalized block: %v", err)
+	}
+
+	update := engine.ForkchoiceStateV1{HeadBlockHash: blocks[7].Hash()}
+	resp, err := api.ForkchoiceUpdatedV1(context.Background(), update, nil)
+	if err != nil {
+		t.Fatalf("forkchoice update below finalized block failed: %v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("unexpected status: have %s, want %s", resp.PayloadStatus.Status, engine.VALID)
+	}
+	if resp.PayloadID != nil {
+		t.Fatal("unexpected payload ID for forkchoice update without payload attributes")
+	}
+	if head := ethservice.BlockChain().CurrentBlock().Hash(); head != blocks[9].Hash() {
+		t.Fatalf("chain head rewound below finalized block: have %s, want %s", head, blocks[9].Hash())
+	}
+}
+
+// TestForkchoiceUpdatedOldHeadWhileSyncing verifies that an unsynced node
+// ignores an update to an older head.
+func TestForkchoiceUpdatedOldHeadWhileSyncing(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthServiceUnsynced(t, genesis, blocks)
+	defer n.Close()
+
+	if ethservice.Synced() {
+		t.Fatal("test node unexpectedly marked as synced")
+	}
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+	update := engine.ForkchoiceStateV1{HeadBlockHash: blocks[7].Hash()}
+	resp, err := api.ForkchoiceUpdatedV1(context.Background(), update, nil)
+	if err != nil {
+		t.Fatalf("forkchoice update while syncing failed: %v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("unexpected status: have %s, want %s", resp.PayloadStatus.Status, engine.VALID)
+	}
+	if resp.PayloadID != nil {
+		t.Fatal("unexpected payload ID for forkchoice update without payload attributes")
+	}
+	if head := ethservice.BlockChain().CurrentBlock().Hash(); head != blocks[9].Hash() {
+		t.Fatalf("chain head changed while syncing: have %s, want %s", head, blocks[9].Hash())
+	}
 }
 
 func TestFullAPI(t *testing.T) {
