@@ -695,7 +695,6 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	if err != nil {
 		return err
 	}
-	p.head.Store(head)
 	p.state = state
 
 	// Create new slotter for pre-Osaka blob configuration.
@@ -794,6 +793,11 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Update the metrics and return the constructed pool
 	datacapGauge.Update(int64(p.config.Datacap))
 	p.updateStorageMetrics()
+
+	// Publish the head only after the store is assigned and the pool is fully
+	// indexed, as the blob cache treats a non-nil head as the pool being ready
+	// to query.
+	p.head.Store(head)
 
 	if len(convertTxs) > 0 {
 		p.cQueue.launchConversion(func() { p.convertLegacyTxs(convertTxs) })
