@@ -377,8 +377,11 @@ func unindexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, in
 	unindexTransactions(db, from, to, interrupt, hook, false)
 }
 
-// PruneTransactionIndex removes all tx index entries below a certain block number.
-func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
+// PruneTransactionIndex removes all tx index entries below a certain block number
+// and returns the approximate number of bytes freed (sum of key + value lengths
+// for each deleted entry). The figure is logical (uncompacted) but is the only
+// per-prefix size signal the KV store exposes without forcing a full compaction.
+func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) (removedBytes uint64) {
 	tail := ReadTxIndexTail(db)
 	if tail == nil || *tail > pruneBlock {
 		return // no index, or index ends above pruneBlock
@@ -386,6 +389,7 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 	// There are blocks below pruneBlock in the index. Iterate the entire index to remove
 	// their entries. Note if this fails, the index is messed up, but tail still points to
 	// the old tail.
+	keyLen := uint64(len(txLookupPrefix) + common.HashLength)
 	var count, removed int
 	DeleteAllTxLookupEntries(db, func(txhash common.Hash, v []byte) bool {
 		count++
@@ -399,11 +403,13 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		bn := decodeNumber(v)
 		if bn < pruneBlock {
 			removed++
+			removedBytes += keyLen + uint64(len(v))
 			return true
 		}
 		return false
 	})
 	WriteTxIndexTail(db, pruneBlock)
+	return
 }
 
 func decodeNumber(b []byte) uint64 {
