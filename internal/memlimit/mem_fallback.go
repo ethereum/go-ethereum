@@ -14,15 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build !linux && !darwin && !windows
+
 package memlimit
 
-import "testing"
-
-// TestLimitSmoke asserts that Limit() returns a non-zero value,
-// exercising the real probe and the system-memory fallback.
-func TestLimitSmoke(t *testing.T) {
-	bytes, src := Limit()
-	if bytes == 0 {
-		t.Errorf("Limit() returned 0 bytes (source=%s); expected non-zero on any sane host", src)
-	}
+// totalSystemMemory reports no value on unsupported platforms.
+func totalSystemMemory() (uint64, bool) {
+	return 0, false
 }
