@@ -82,6 +82,11 @@ type typedQueue interface {
 	// reassigning to some other peer.
 	unreserve(peer string) int
 
+	// requeue is responsible for placing the current retrieval allocation of a
+	// specific peer back into the pool for some other peer to retrieve as well,
+	// without removing the allocation, so a late delivery is still accepted.
+	requeue(peer string)
+
 	// request is responsible for converting a generic fetch request into a typed
 	// one and sending it to the remote peer for fulfillment.
 	request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error)
@@ -377,10 +382,11 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 
 		case <-headStall.C:
 			// If the consumer is blocked on a request that has been outstanding
-			// for a lot longer than what the other peers need, expire it early
-			// and hand its items to an idle peer. The lagging peer is kept busy
-			// until it answers, but not penalized otherwise: its measured round
-			// trip already shrinks the requests it will be handed later.
+			// for a lot longer than what the other peers need, hand its items to
+			// an idle peer as well, keeping the original reservation: whichever
+			// reply arrives first fills the result cache, the other is dropped
+			// as stale. The lagging peer is not assigned anything else until it
+			// answers, but not penalized otherwise.
 			id := queue.stalled(headStallFactor * d.peers.rates.TargetRoundTrip())
 			if id == "" {
 				continue
@@ -393,11 +399,11 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			delete(pending, id)
 			stales[id] = req
 
-			queue.unreserve(id)
+			queue.requeue(id)
 			queue.metrics().headExpiries.Mark(1)
 
 			if peer := d.peers.Peer(id); peer != nil {
-				peer.log.Debug("Expired request blocking the result cache head", "waited", common.PrettyDuration(time.Since(req.Sent)))
+				peer.log.Debug("Requeued request blocking the result cache head", "waited", common.PrettyDuration(time.Since(req.Sent)))
 			}
 
 		case res := <-responses:

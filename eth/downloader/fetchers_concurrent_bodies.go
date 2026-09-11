@@ -71,6 +71,12 @@ func (q *bodyQueue) unreserve(peer string) int {
 	return fails
 }
 
+// requeue is responsible for placing the current body retrieval allocation of a
+// specific peer back into the pool for some other peer to retrieve as well.
+func (q *bodyQueue) requeue(peer string) {
+	q.queue.RequeueBodies(peer)
+}
+
 // request is responsible for converting a generic fetch request into a body
 // one and sending it to the remote peer for fulfillment.
 func (q *bodyQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error) {

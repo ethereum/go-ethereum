@@ -71,6 +71,12 @@ func (q *receiptQueue) unreserve(peer string) int {
 	return fails
 }
 
+// requeue is responsible for placing the current receipt retrieval allocation of
+// a specific peer back into the pool for some other peer to retrieve as well.
+func (q *receiptQueue) requeue(peer string) {
+	q.queue.RequeueReceipts(peer)
+}
+
 // request is responsible for converting a generic fetch request into a receipt
 // one and sending it to the remote peer for fulfillment.
 func (q *receiptQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error) {

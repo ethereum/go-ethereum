@@ -80,6 +80,10 @@ func (q *balQueue) unreserve(peer string) int {
 	return fails
 }
 
+// requeue is a no-op for access lists: they never block the consumer, so their
+// retrievals are never requeued.
+func (q *balQueue) requeue(peer string) {}
+
 // request is responsible for converting a generic fetch request into an access
 // list one and sending it to the remote peer for fulfillment.
 func (q *balQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error) {

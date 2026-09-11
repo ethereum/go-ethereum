@@ -783,6 +783,43 @@ func (q *queue) Revoke(peerID string) {
 	}
 }
 
+// RequeueBodies returns the bodies reserved by the given peer to the task queue
+// for another peer to retrieve as well, keeping the reservation so that a late
+// delivery is still accepted. See the requeue method for details.
+func (q *queue) RequeueBodies(peer string) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	q.requeue(peer, q.blockPendPool, q.blockTaskQueue)
+}
+
+// RequeueReceipts returns the receipts reserved by the given peer to the task
+// queue for another peer to retrieve as well, keeping the reservation so that
+// a late delivery is still accepted. See the requeue method for details.
+func (q *queue) RequeueReceipts(peer string) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	q.requeue(peer, q.receiptPendPool, q.receiptTaskQueue)
+}
+
+// requeue pushes the items of a pending request back into the task queue without
+// cancelling the request, so that another peer retrieves them concurrently and
+// whichever reply arrives first fills the result cache. The other reply is
+// dropped as stale on delivery, and items already delivered are skipped when
+// reserved again.
+//
+// Note, this method expects the queue lock to be already held.
+func (q *queue) requeue(peer string, pendPool map[string]*fetchRequest, taskQueue *prque.Prque[int64, *types.Header]) {
+	req := pendPool[peer]
+	if req == nil {
+		return
+	}
+	for _, header := range req.Headers {
+		taskQueue.Push(header, -int64(header.Number.Uint64()))
+	}
+}
+
 // ExpireBodies checks for in flight block body requests that exceeded a timeout
 // allowance, canceling them and returning the responsible peers for penalisation.
 func (q *queue) ExpireBodies(peer string) int {
@@ -1091,10 +1128,9 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 			reconstruct(k, res)
 			accepted++
 		} else {
-			// Between here and above, some other peer filled this result,
-			// or it was indeed a no-op. This should not happen, but if it does it's
-			// not something to panic about
-			log.Error("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)
+			// Some other peer filled this result in the meantime, which is the
+			// expected outcome of a requeued retrieval, or it was indeed a no-op.
+			log.Debug("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)
 			foundStale = true
 		}
 		// Clean up a successful fetch
