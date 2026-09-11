@@ -270,13 +270,35 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			{FilterPolicy: bloom.FilterPolicy(10)},
 			{FilterPolicy: bloom.FilterPolicy(10)},
 
-			// Pebble doesn't use the Bloom filter at level6 for read efficiency.
-			{},
+			// No bloom filter on the bottommost level: a point lookup only
+			// reaches it after every level above has missed, so its filter is
+			// the largest and the least useful, and every compaction into it
+			// would otherwise pay to rebuild one.
+			//
+			// This has to be explicit. In pebble v2 an empty LevelOptions for
+			// L1 and below inherits the level above it (EnsureL1PlusDefaults),
+			// so the empty literal used before this kept L5's bloom filter on
+			// L6 and the comment claiming otherwise was wrong.
+			{FilterPolicy: pebble.NoFilterPolicy},
 		},
-		// Per-level target file sizes (replaces LevelOptions.TargetFileSize in v2).
+		// Per-level target file sizes, indexed relative to the base level:
+		// [0] is L0, [1] the base level, [2] the level below it, and so on.
+		//
+		// The L0 target is larger than the ladder below it on purpose. A flush
+		// is cut into files of this size, and every file costs an fsync of
+		// 20-30ms on NVMe regardless of its size, so a memtable flush of a few
+		// hundred MB into 2MB files was hundreds of fsyncs and took ~10s. A
+		// flush cannot run faster than file size / fsync latency, about 80MB/s
+		// at 2MB, and once a sustained write burst exceeds that the queue of
+		// memtables awaiting flush fills and pebble stops writes at the
+		// memtable limit while the disk sits half idle. At 16MB the same flush
+		// is a few dozen files and ~2.5s, and the stall moves to the L0 limit,
+		// which is the disk's compaction bandwidth itself.
+		//
+		// FlushSplitBytes is left at pebble's default of twice this value.
 		TargetFileSizes: [7]int64{
-			2 * 1024 * 1024,
-			4 * 1024 * 1024,
+			16 * 1024 * 1024, // L0
+			4 * 1024 * 1024,  // base level
 			8 * 1024 * 1024,
 			16 * 1024 * 1024,
 			32 * 1024 * 1024,
