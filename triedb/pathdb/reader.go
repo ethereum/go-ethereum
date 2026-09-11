@@ -69,7 +69,7 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 		return nil, err
 	}
 	// Error out if the local one is inconsistent with the target.
-	if !r.noHashCheck && got != hash {
+	if !r.noHashCheck && (len(blob) > 0 && blob[0] != 0) && got != hash {
 		// Location is always available even if the node
 		// is not found.
 		switch loc.loc {

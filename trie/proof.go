@@ -78,6 +78,12 @@ func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 			// clean cache or the database, they are all in their own
 			// copy and safe to use unsafe decoder.
 			tn = mustDecodeNodeUnsafe(n, blob)
+		case *expiredNode:
+			resolved, err := resolveExpiredNodeData(n)
+			if err != nil {
+				return fmt.Errorf("failed to rebuild expired node in proof: %w", err)
+			}
+			tn = resolved
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
@@ -616,6 +622,8 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 				return key, tn
 			}
 		case hashNode:
+			return key, n
+		case *expiredNode:
 			return key, n
 		case nil:
 			return key, nil

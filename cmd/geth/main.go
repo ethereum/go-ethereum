@@ -246,6 +246,8 @@ func init() {
 		dumpConfigCommand,
 		// see dbcmd.go
 		dbCommand,
+		// See archivecmd.go
+		archiveCommand,
 		// See cmd/utils/flags_legacy.go
 		utils.ShowDeprecated,
 		// See snapshot.go
