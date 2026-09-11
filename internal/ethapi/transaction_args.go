@@ -201,6 +201,9 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 	if args.GasPrice != nil && args.AuthorizationList != nil {
 		return errors.New("both gasPrice and authorizationList specified")
 	}
+	if args.GasPrice != nil && args.BlobHashes != nil {
+		return errors.New("both gasPrice and blobVersionedHashes specified")
+	}
 	// If the tx has completely specified a fee mechanism, no default is needed.
 	// This allows users who are not yet synced past London to get defaults for
 	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
