@@ -33,6 +33,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/internal"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -78,6 +81,7 @@ type StructLog struct {
 	Stack         []uint256.Int               `json:"stack"`
 	ReturnData    []byte                      `json:"returnData,omitempty"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
+	CreateAddr    *common.Address             `json:"createAddr,omitempty"`
 	Depth         int                         `json:"depth"`
 	RefundCounter uint64                      `json:"refund"`
 	Err           error                       `json:"-"`
@@ -112,6 +116,9 @@ func (s *StructLog) Write(writer io.Writer) {
 	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", s.Op, s.Pc, s.Gas, s.GasCost)
 	if s.Err != nil {
 		fmt.Fprintf(writer, " ERROR: %v", s.Err)
+	}
+	if s.CreateAddr != nil {
+		fmt.Fprintf(writer, " createAddr=%v", s.CreateAddr)
 	}
 	fmt.Fprintln(writer)
 
@@ -166,6 +173,7 @@ type structLogLegacy struct {
 	ReturnData    string             `json:"returnData,omitempty"`
 	Memory        *[]string          `json:"memory,omitempty"`
 	Storage       *map[string]string `json:"storage,omitempty"`
+	CreateAddr    *common.Address    `json:"createAddr,omitempty"`
 	RefundCounter uint64             `json:"refund,omitempty"`
 }
 
@@ -187,6 +195,7 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 		GasCost:       s.GasCost,
 		Depth:         s.Depth,
 		Error:         s.ErrorString(),
+		CreateAddr:    s.CreateAddr,
 		RefundCounter: s.RefundCounter,
 	}
 	if s.Stack != nil {
@@ -219,6 +228,43 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 	}
 	element, _ := json.Marshal(msg)
 	return element
+}
+
+func projectedCreateAddress(op vm.OpCode, scope tracing.OpContext, state tracing.StateDB) *common.Address {
+	stack := scope.StackData()
+	switch op {
+	case vm.CREATE:
+		addr := crypto.CreateAddress(scope.Address(), state.GetNonce(scope.Address()))
+		return &addr
+	case vm.CREATE2:
+		if len(stack) < 4 {
+			return nil
+		}
+		size, sizeOverflow := stack[len(stack)-3].Uint64WithOverflow()
+		const maxInt64 = uint64(1<<63 - 1)
+		if sizeOverflow || size > maxInt64 {
+			log.Warn("failed to copy CREATE2 input", "err", "offset or size overflow", "offset", stack[len(stack)-2], "size", stack[len(stack)-3])
+			return nil
+		}
+		var input []byte
+		if size > 0 {
+			offset, overflow := stack[len(stack)-2].Uint64WithOverflow()
+			if overflow || offset > maxInt64-size {
+				log.Warn("failed to copy CREATE2 input", "err", "offset or size overflow", "offset", stack[len(stack)-2], "size", size)
+				return nil
+			}
+			var err error
+			input, err = internal.GetMemoryCopyPadded(scope.MemoryData(), int64(offset), int64(size))
+			if err != nil {
+				log.Warn("failed to copy CREATE2 input", "err", err, "offset", offset, "size", size)
+				return nil
+			}
+		}
+		addr := crypto.CreateAddress2(scope.Address(), stack[len(stack)-4].Bytes32(), crypto.Keccak256(input))
+		return &addr
+	default:
+		return nil
+	}
 }
 
 // StructLogger is an EVM state logger and implements EVMLogger.
@@ -300,7 +346,17 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		stack        = scope.StackData()
 		stackLen     = len(stack)
 	)
-	log := StructLog{pc, op, gas, cost, nil, len(memory), nil, nil, nil, depth, l.env.StateDB.GetRefund(), err}
+	log := StructLog{
+		Pc:            pc,
+		Op:            op,
+		Gas:           gas,
+		GasCost:       cost,
+		MemorySize:    len(memory),
+		CreateAddr:    projectedCreateAddress(op, scope, l.env.StateDB),
+		Depth:         depth,
+		RefundCounter: l.env.StateDB.GetRefund(),
+		Err:           err,
+	}
 	if l.cfg.EnableMemory {
 		log.Memory = memory
 	}
