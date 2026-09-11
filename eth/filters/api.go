@@ -557,48 +557,53 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 // (pending)Log filters return []Log.
 func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	api.filtersMu.Lock()
-	defer api.filtersMu.Unlock()
-
-	chainConfig := api.sys.backend.ChainConfig()
-	latest := api.sys.backend.CurrentHeader()
-
-	if f, found := api.filters[id]; found {
-		if !f.deadline.Stop() {
-			// timer expired but filter is not yet removed in timeout loop
-			// receive timer value and reset timer
-			<-f.deadline.C
-		}
-		f.deadline.Reset(api.timeout)
-
-		switch f.typ {
-		case BlocksSubscription:
-			hashes := f.hashes
-			f.hashes = nil
-			return returnHashes(hashes), nil
-		case PendingTransactionsSubscription:
-			if f.fullTx {
-				txs := make([]*ethapi.RPCTransaction, 0, len(f.txs))
-				for _, tx := range f.txs {
-					txs = append(txs, ethapi.NewRPCPendingTransaction(tx, latest, chainConfig))
-				}
-				f.txs = nil
-				return txs, nil
-			} else {
-				hashes := make([]common.Hash, 0, len(f.txs))
-				for _, tx := range f.txs {
-					hashes = append(hashes, tx.Hash())
-				}
-				f.txs = nil
-				return hashes, nil
-			}
-		case LogsSubscription:
-			logs := f.logs
-			f.logs = nil
-			return returnLogs(logs), nil
-		}
+	f, found := api.filters[id]
+	if !found {
+		api.filtersMu.Unlock()
+		return []interface{}{}, errFilterNotFound
 	}
+	if !f.deadline.Stop() {
+		// timer expired but filter is not yet removed in timeout loop
+		// receive timer value and reset timer
+		<-f.deadline.C
+	}
+	f.deadline.Reset(api.timeout)
 
-	return []interface{}{}, errFilterNotFound
+	// Snapshot the accumulated state and nil the slices so that new
+	// events keep collecting while we format the response outside the lock.
+	typ := f.typ
+	fullTx := f.fullTx
+	hashes := f.hashes
+	txs := f.txs
+	logs := f.logs
+	f.hashes = nil
+	f.txs = nil
+	f.logs = nil
+	api.filtersMu.Unlock()
+
+	switch typ {
+	case BlocksSubscription:
+		return returnHashes(hashes), nil
+	case PendingTransactionsSubscription:
+		if fullTx {
+			chainConfig := api.sys.backend.ChainConfig()
+			latest := api.sys.backend.CurrentHeader()
+			result := make([]*ethapi.RPCTransaction, 0, len(txs))
+			for _, tx := range txs {
+				result = append(result, ethapi.NewRPCPendingTransaction(tx, latest, chainConfig))
+			}
+			return result, nil
+		}
+		result := make([]common.Hash, 0, len(txs))
+		for _, tx := range txs {
+			result = append(result, tx.Hash())
+		}
+		return result, nil
+	case LogsSubscription:
+		return returnLogs(logs), nil
+	default:
+		return []interface{}{}, errFilterNotFound
+	}
 }
 
 // returnHashes is a helper that will return an empty hash array case the given hash array is nil,
