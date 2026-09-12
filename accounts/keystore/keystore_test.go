@@ -457,6 +457,51 @@ func checkEvents(t *testing.T, want []walletEvent, have []walletEvent) {
 	}
 }
 
+func TestKeyStoreClose(t *testing.T) {
+	t.Parallel()
+	_, ks := tmpKeyStore(t)
+
+	// Create a new account
+	a, err := ks.NewAccount("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Unlock the account with a timeout
+	err = ks.TimedUnlock(a, "foo", 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the account is unlocked
+	ks.mu.RLock()
+	unlocked := len(ks.unlocked)
+	ks.mu.RUnlock()
+	if unlocked != 1 {
+		t.Errorf("expected 1 unlocked account, got %d", unlocked)
+	}
+
+	// Close the keystore
+	err = ks.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify all accounts are locked after close
+	ks.mu.RLock()
+	unlocked = len(ks.unlocked)
+	ks.mu.RUnlock()
+	if unlocked != 0 {
+		t.Errorf("expected 0 unlocked accounts after close, got %d", unlocked)
+	}
+
+	// Verify that the account cache is closed
+	if ks.cache != nil {
+		// The cache should be closed, but we can't easily test this without
+		// exposing internal state. The finalizer will handle the cleanup.
+	}
+}
+
 func tmpKeyStore(t *testing.T) (string, *KeyStore) {
 	d := t.TempDir()
 	return d, NewKeyStore(d, veryLightScryptN, veryLightScryptP)
