@@ -459,6 +459,10 @@ var (
 						// New log arrived, parse the event and forward to the user
 						event := new({{$contract.Type}}{{.Normalized.Name}})
 						if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
+							// If the signature doesn't match, skip this log.
+							if errors.Is(err, bind.ErrEventSignatureMismatch) {
+								continue
+							}
 							return err
 						}
 						event.Raw = log
