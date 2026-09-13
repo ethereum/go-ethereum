@@ -119,8 +119,9 @@ var eip8304TestKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae1
 //     init-code/runtime consistency, which has regressed before)
 //   - set: only the system address may write; the root lands at
 //     table_size*1024 + (first_block/table_size)%1024
-//   - get: 64-byte calldata returns the stored root; reverts on wrong size or
-//     a first_block that is not a multiple of table_size
+//   - get: 64-byte calldata returns the stored root; reverts on wrong size, a
+//     first_block that is not a multiple of table_size, or a read outside the
+//     freshness window
 func TestEIP8304IndexContract(t *testing.T) {
 	t.Run("deployment", func(t *testing.T) {
 		statedb := newEIP8304ContractState(t)
@@ -166,18 +167,24 @@ func TestEIP8304IndexContract(t *testing.T) {
 	t.Run("get", func(t *testing.T) {
 		root := common.HexToHash("0x00000000000000000000000000000000000000000000000000000000cafebabe")
 		sender := crypto.PubkeyToAddress(eip8304TestKey.PublicKey)
-		// The get path's freshness check is one-sided: table (fb, ts) remains
-		// readable while num < fb + 1025*ts + ts/4 (the ring-buffer overwrite
-		// window plus the table_size/4 publication delay, with truncating
-		// division). There is no lower age bound. Write at block 1, then read
-		// at the boundaries.
+		// The get path's freshness check is two-sided: table (fb, ts) is
+		// readable while fb + ts + ts/4 <= num < fb + 1025*ts + ts/4
+		// (truncating division), matching the guard chain in the spec
+		// bytecode. The lower bound is the publication delay: under the
+		// consensus schedule a table is set at block fb + ts + ts/4 - 1, so
+		// it becomes readable exactly one block after being set. Write at
+		// block 1, then read at both window boundaries.
 		for _, c := range []struct {
 			fb, ts, num uint64
 			wantErr     bool
 		}{
-			{fb: 2, ts: 1, num: 100, wantErr: false},  // no lower age bound
+			{fb: 2, ts: 1, num: 2, wantErr: true},     // publication lag: not yet readable
+			{fb: 2, ts: 1, num: 3, wantErr: false},    // first readable block
+			{fb: 2, ts: 1, num: 100, wantErr: false},  // within the window
 			{fb: 2, ts: 1, num: 1026, wantErr: false}, // last readable block
 			{fb: 2, ts: 1, num: 1027, wantErr: true},  // ring window expired
+			{fb: 8, ts: 4, num: 12, wantErr: true},    // before publication delay
+			{fb: 8, ts: 4, num: 13, wantErr: false},   // first readable block
 			{fb: 8, ts: 4, num: 4108, wantErr: false}, // ts=4 window
 			{fb: 8, ts: 4, num: 4109, wantErr: true},
 		} {
