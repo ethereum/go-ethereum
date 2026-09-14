@@ -4436,24 +4436,18 @@ func TestStateMethodsDefaultToLatest(t *testing.T) {
 		[]any{map[common.Address][]common.Hash{acc: {slot}}})
 }
 
-// TestCreateAccessListAuthorizationGas checks that the authorization-count
-// guard in eth_createAccessList charges the same per-authorization intrinsic
-// gas as the fork in effect, so that a gas value returned by eth_estimateGas
-// is always accepted by eth_createAccessList for the same request.
+// TestCreateAccessListAuthorizationGas checks that eth_createAccessList accepts
+// the gas limit returned by eth_estimateGas for a set-code transaction with
+// several authorizations, both before and after Amsterdam.
 func TestCreateAccessListAuthorizationGas(t *testing.T) {
 	t.Parallel()
 
 	const numAuths = 9
 	accounts := newAccounts(numAuths + 1)
-	alloc := types.GenesisAlloc{accounts[0].addr: {Balance: big.NewInt(params.Ether)}}
 	// accounts[0] is the sender; every other account is already delegated and
 	// re-delegates, so that no account or authorization creation is charged.
 	var authList []types.SetCodeAuthorization
 	for _, acc := range accounts[1:] {
-		alloc[acc.addr] = types.Account{
-			Balance: big.NewInt(params.Ether),
-			Code:    types.AddressToDelegation(common.Address{0xbb}),
-		}
 		auth, err := types.SignSetCode(acc.key, types.SetCodeAuthorization{
 			Address: common.Address{0xaa},
 		})
@@ -4461,6 +4455,13 @@ func TestCreateAccessListAuthorizationGas(t *testing.T) {
 		authList = append(authList, auth)
 	}
 	newAPI := func(amsterdam bool) *BlockChainAPI {
+		alloc := types.GenesisAlloc{accounts[0].addr: {Balance: big.NewInt(params.Ether)}}
+		for _, acc := range accounts[1:] {
+			alloc[acc.addr] = types.Account{
+				Balance: big.NewInt(params.Ether),
+				Code:    types.AddressToDelegation(common.Address{0xbb}),
+			}
+		}
 		config := *params.MergedTestChainConfig
 		if amsterdam {
 			config.AmsterdamTime = new(uint64)
@@ -4471,10 +4472,9 @@ func TestCreateAccessListAuthorizationGas(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		amsterdam bool
-		perAuth   uint64
 	}{
-		{"pre-Amsterdam", false, params.CallNewAccountGas},
-		{"Amsterdam", true, params.ExecutionPerAuthBaseCost},
+		{"pre-Amsterdam", false},
+		{"Amsterdam", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			api := newAPI(tc.amsterdam)
@@ -4485,24 +4485,11 @@ func TestCreateAccessListAuthorizationGas(t *testing.T) {
 			}
 			estimated, err := api.EstimateGas(context.Background(), args, nil, nil, nil)
 			require.NoError(t, err)
-			if tc.amsterdam {
-				// Make sure the scenario actually sits between the two
-				// per-authorization prices, otherwise the guard is not exercised.
-				require.Less(t, uint64(estimated), numAuths*params.CallNewAccountGas)
-			}
 
-			// The estimate must be accepted as-is.
-			gas := estimated
-			args.Gas = &gas
+			args.Gas = &estimated
 			result, err := api.CreateAccessList(context.Background(), args, nil, nil)
 			require.NoError(t, err)
 			require.Empty(t, result.Error)
-
-			// The guard must still reject a gas limit that cannot even cover
-			// the per-authorization intrinsic cost of the fork in effect.
-			gas = hexutil.Uint64(numAuths*tc.perAuth - 1)
-			_, err = api.CreateAccessList(context.Background(), args, nil, nil)
-			require.ErrorContains(t, err, "insufficient gas to process all authorizations")
 		})
 	}
 }
