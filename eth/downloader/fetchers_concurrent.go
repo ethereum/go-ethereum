@@ -93,7 +93,8 @@ type typedQueue interface {
 
 	// deliver is responsible for taking a generic response packet from the
 	// concurrent fetcher, unpacking the type specific data and delivering
-	// it to the downloader's queue.
+	// it to the downloader's queue. It returns the number of items that
+	// validated, whether or not they were still needed on arrival.
 	deliver(peer *peerConnection, packet *eth.Response) (int, error)
 
 	// stalled returns the peer whose request holds the head of the result cache
@@ -351,34 +352,14 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			}
 			delete(ordering, req)
 
-			// New timeout potentially set if there are more requests pending,
-			// reschedule the failed one to a free peer
-			fails := queue.unreserve(req.Peer)
-
-			// Finally, update the peer's retrieval capacity, or if it's already
-			// below the minimum allowance, drop the peer. If a lot of retrieval
-			// elements expired, we might have overestimated the remote peer or
-			// perhaps ourselves. Only reset to minimal throughput but don't drop
-			// just yet.
-			//
-			// The reason the minimum threshold is 2 is that the downloader tries
-			// to estimate the bandwidth and latency of a peer separately, which
-			// requires pushing the measured capacity a bit and seeing how response
-			// times reacts, to it always requests one more than the minimum (i.e.
-			// min 2).
-			peer := d.peers.Peer(req.Peer)
-			if peer == nil {
-				// If the peer got disconnected in between, we should really have
-				// short-circuited it already. Just in case there's some strange
-				// codepath, leave this check in not to crash.
-				log.Error("Delivery timeout from unknown peer", "peer", req.Peer)
-				continue
-			}
-			if fails > 2 {
-				queue.updateCapacity(peer, 0, 0)
-			} else {
-				d.dropPeer(peer.id)
-			}
+			// Timing out is not a protocol violation in itself: the timeout is
+			// derived from the round trip of the peer set as a whole, so a peer
+			// merely slower than the rest runs into it while still making
+			// progress. Re-schedule the task to other peers and the peer will
+			// enter the "staleness" management. If the response can be delivered,
+			// the capacity will be updated accordingly; otherwise the peer will
+			// be dropped after timeoutGracePeriod.
+			queue.requeue(req.Peer)
 
 		case <-headStall.C:
 			// If the consumer is blocked on a request that has been outstanding
@@ -424,20 +405,22 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				continue
 			}
 			// Deliver the received chunk of data and check chain validity
-			accepted, err := queue.deliver(peer, res)
-			// Unless a peer delivered something completely else than requested (usually
-			// caused by a timed out request which came through in the end), set it to
-			// idle. If the delivery's stale, the peer should have already been idled.
-			if !errors.Is(err, errStaleDelivery) {
-				items, elapsed := accepted, res.Time
-				if res.Roundtrips > 1 && items > 0 {
-					// Partial receipt response can be assembled over multiple round trips.
-					// Scale both values down to a single round trip.
-					items = max(1, items/res.Roundtrips)
-					elapsed = res.Time * time.Duration(items) / time.Duration(accepted)
-				}
-				queue.updateCapacity(peer, items, elapsed)
+			delivered, err := queue.deliver(peer, res)
+
+			// Measure the peer on what it served, whether or not the items were
+			// still needed: a reply outliving its request arrives after they
+			// were requeued and likely fetched elsewhere, but the rate it was
+			// served at is just as real, and a slow one is what sizes down the
+			// requests the peer is handed next.
+			items, elapsed := delivered, res.Time
+			if res.Roundtrips > 1 && items > 0 {
+				// Partial receipt response can be assembled over multiple round trips.
+				// Scale both values down to a single round trip.
+				items = max(1, items/res.Roundtrips)
+				elapsed = res.Time * time.Duration(items) / time.Duration(delivered)
 			}
+			queue.updateCapacity(peer, items, elapsed)
+
 			res.Done <- validityErrorOfRequest(err)
 			res.Req.Close()
 
