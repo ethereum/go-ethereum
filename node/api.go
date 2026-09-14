@@ -221,10 +221,12 @@ func (api *adminAPI) StartRPC(host *string, port *int, cors *string, apis *strin
 	return api.StartHTTP(host, port, cors, apis, vhosts)
 }
 
-// StopHTTP shuts down the HTTP server.
+// StopHTTP shuts down the HTTP server. It reports whether an HTTP RPC
+// endpoint was running and has been closed.
 func (api *adminAPI) StopHTTP() (bool, error) {
+	closed := api.node.http.rpcAllowed()
 	api.node.http.stop()
-	return true, nil
+	return closed, nil
 }
 
 // StopRPC shuts down the HTTP server.

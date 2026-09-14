@@ -121,11 +121,26 @@ func TestStartRPC(t *testing.T) {
 			name: "rpc stopped twice",
 			cfg:  Config{HTTPHost: "127.0.0.1"},
 			fn: func(t *testing.T, n *Node, api *adminAPI) {
-				_, err := api.StopHTTP()
+				stopped, err := api.StopHTTP()
 				assert.NoError(t, err)
+				assert.True(t, stopped, "first StopHTTP should report a closed endpoint")
 
-				_, err = api.StopHTTP()
+				stopped, err = api.StopHTTP()
 				assert.NoError(t, err)
+				assert.False(t, stopped, "second StopHTTP should report nothing closed")
+			},
+			wantReachable: false,
+			wantHandlers:  false,
+			wantRPC:       false,
+			wantWS:        false,
+		},
+		{
+			name: "rpc not running, StopHTTP reports nothing closed",
+			cfg:  Config{},
+			fn: func(t *testing.T, n *Node, api *adminAPI) {
+				stopped, err := api.StopHTTP()
+				assert.NoError(t, err)
+				assert.False(t, stopped, "StopHTTP should report nothing closed when no endpoint is running")
 			},
 			wantReachable: false,
 			wantHandlers:  false,
