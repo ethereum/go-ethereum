@@ -930,7 +930,9 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 		if params.SlotNumber != nil {
 			slotNum = strconv.Itoa(int(*params.SlotNumber))
 		}
+		fork := api.config().LatestFork(params.Timestamp)
 		log.Warn("Invalid NewPayload params",
+			"fork", fork,
 			"params.Number", params.Number,
 			"params.ParentHash", params.ParentHash,
 			"params.BlockHash", params.BlockHash,
