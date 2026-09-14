@@ -46,6 +46,11 @@ const (
 	insUnpair               = 0x13
 
 	pairingSalt = "Keycard Pairing Password Salt"
+
+	// pbkdf2Iterations is the number of PBKDF2 iterations used to derive the
+	// pairing secret. This follows the OWASP 2023 minimum recommendation for
+	// PBKDF2-SHA256 to resist brute-force attacks on the pairing password.
+	pbkdf2Iterations = 600000
 )
 
 // SecureChannelSession enables secure communication with a hardware wallet.
@@ -81,7 +86,7 @@ func NewSecureChannelSession(card *pcsc.Card, keyData []byte) (*SecureChannelSes
 
 // Pair establishes a new pairing with the smartcard.
 func (s *SecureChannelSession) Pair(pairingPassword []byte) error {
-	secretHash := pbkdf2.Key(norm.NFKD.Bytes(pairingPassword), norm.NFKD.Bytes([]byte(pairingSalt)), 50000, 32, sha256.New)
+	secretHash := pbkdf2.Key(norm.NFKD.Bytes(pairingPassword), norm.NFKD.Bytes([]byte(pairingSalt)), pbkdf2Iterations, 32, sha256.New)
 
 	challenge := make([]byte, 32)
 	if _, err := rand.Read(challenge); err != nil {
