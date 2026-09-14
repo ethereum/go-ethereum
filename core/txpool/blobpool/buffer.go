@@ -197,16 +197,24 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 	}
 	// Provider extension: if the collected cells suffice to reconstruct the
 	// blobs but don't cover the full extended set, complete it locally. This
-	// trades a few ms of compute for not downloading the remaining cells, and
-	// lets the node announce -- and serve -- full availability, as the provider
-	// role requires. The reconstructed cells are determined by the already-
-	// verified input, but the shipped proofs of the non-custodied indices have
-	// not been verified yet, so check them before adopting: a transaction whose
-	// own proofs don't match its data is invalid and is discarded.
+	// trades some tens of ms of compute per blob (recovery plus verifying the
+	// produced cells) for not downloading the remaining cells, and lets the
+	// node announce -- and serve -- full availability, as the provider role
+	// requires. The reconstructed cells are determined by the already-verified
+	// input, but the shipped proofs of the non-custodied indices have not been
+	// verified yet, so check them before adopting: a transaction whose own
+	// proofs don't match its data is invalid and is discarded.
+	//
+	// TODO: this runs with b.mu held and on the caller's goroutine, so it
+	// stalls the blob fetcher loop, Flush, and every AddTx for its duration.
+	// Take the entry out under the lock, extend unlocked, and re-lock only to
+	// append the result.
 	if n := custody.OneCount(); n >= kzg4844.DataPerBlob && n < kzg4844.CellsPerBlob {
 		extended, err := extendCells(sidecar, sorted, custody)
 		if err != nil {
-			log.Warn("Dropping blob tx with unverifiable extension proofs", "hash", hash, "err", err)
+			// Reachable by a peer with a corrupt proof set; not worth a warning
+			// per occurrence. The counter tracks the rate.
+			log.Debug("Dropping blob tx with unverifiable extension proofs", "hash", hash, "err", err)
 			blobBufferExtendFailCounter.Inc(1)
 			delete(b.cells, hash)
 			delete(b.txs, hash)
