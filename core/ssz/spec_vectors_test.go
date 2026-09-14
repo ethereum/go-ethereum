@@ -18,11 +18,17 @@ package ssz_test
 
 // Conformance harness for the ssz_generic suite of consensus-spec-tests.
 //
-// Only the handlers whose root needs no decoder are checked here. For a
-// basic value, a bitvector or a vector of basic values, hash_tree_root is
-// Merkleize(Pack(serialized), limit) with the limit fixed by the type, so the
-// serialized bytes can be fed to the merkleizer directly. The remaining
-// handlers, and every invalid case, exercise the decoder and arrive with it.
+// Every valid case is checked three ways per tests/formats/ssz_generic/
+// README.md: the value from value.yaml must serialize to serialized.ssz_snappy,
+// those bytes must decode and re-serialize to themselves, and both objects
+// must hash to the root in meta.yaml. Every invalid case must be rejected with
+// an error wrapping a named sentinel of the package, and where the case name
+// pins down the failure, with that specific sentinel.
+//
+// The six classic handlers are covered. The progressive handlers, and the
+// ProgressiveTestStruct and ProgressiveBitsStruct cases inside the containers
+// handler, need the progressive merkleization of EIP-7916 and are skipped
+// until it lands.
 //
 // The vectors are not committed. CI downloads them through build/ci.go into
 // tests/consensus-spec-tests, pinned and checksummed in build/checksums.txt.
@@ -30,7 +36,9 @@ package ssz_test
 // elsewhere. The test is skipped when neither location exists.
 
 import (
+	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,43 +55,168 @@ import (
 // against.
 const specTestVersion = "v1.7.0-alpha.12"
 
-// rootOnlyHandlers are the ssz_generic handlers whose valid cases can be
-// checked without a decoder.
-var rootOnlyHandlers = []string{"boolean", "uints", "bitvector", "basic_vector"}
+// classicHandlers are the ssz_generic handlers without progressive types.
+var classicHandlers = []string{"boolean", "uints", "bitvector", "basic_vector", "bitlist", "containers"}
 
-// basicSizes maps the basic type names used in case names to their
-// serialized size in bytes.
-var basicSizes = map[string]uint64{
-	"bool": 1, "uint8": 1, "uint16": 2, "uint32": 4, "uint64": 8, "uint128": 16, "uint256": 32,
+// sentinels is the complete rejection contract of the package: every decode
+// error wraps exactly one of these.
+var sentinels = []error{
+	ssz.ErrSize, ssz.ErrOffset, ssz.ErrTrailing, ssz.ErrBadBoolean,
+	ssz.ErrBadBitlist, ssz.ErrExcessBits, ssz.ErrTooBig,
 }
 
-// chunkLimit derives the merkleization limit of a case from its handler and
-// name, following the naming scheme of tests/formats/ssz_generic/README.md.
-func chunkLimit(handler, name string) (uint64, error) {
-	parts := strings.Split(name, "_")
+// makeSpecObject constructs the zero value of the SSZ type a case name
+// declares, per the naming scheme of tests/formats/ssz_generic/README.md.
+func makeSpecObject(handler, name string) (specObject, error) {
+	tokens := strings.Split(name, "_")
 	switch handler {
-	case "boolean", "uints":
-		return 1, nil
-	case "bitvector":
-		// bitvec_<N>_<variant>
-		n, err := strconv.ParseUint(parts[1], 10, 64)
-		if err != nil {
-			return 0, err
+	case "boolean":
+		return &testBasic{kind: kindBool}, nil
+
+	case "uints":
+		// uint_<size>_<variant>
+		if len(tokens) < 2 {
+			return nil, fmt.Errorf("bad uints case %q", name)
 		}
-		return (n + 255) / 256, nil
+		kind, err := parseBasicKind("uint" + tokens[1])
+		if err != nil {
+			return nil, err
+		}
+		return &testBasic{kind: kind}, nil
+
 	case "basic_vector":
 		// vec_<type>_<N>_<variant>
-		size, ok := basicSizes[parts[1]]
-		if !ok {
-			return 0, fmt.Errorf("unknown basic type %q", parts[1])
+		if len(tokens) < 3 {
+			return nil, fmt.Errorf("bad basic_vector case %q", name)
 		}
-		n, err := strconv.ParseUint(parts[2], 10, 64)
+		kind, err := parseBasicKind(tokens[1])
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
-		return (n*size + 31) / 32, nil
+		length, err := strconv.Atoi(tokens[2])
+		if err != nil {
+			return nil, fmt.Errorf("bad vector length in %q: %v", name, err)
+		}
+		return &testBasicVector{kind: kind, length: length}, nil
+
+	case "bitvector":
+		// bitvec_<N>_<variant>
+		if len(tokens) < 2 {
+			return nil, fmt.Errorf("bad bitvector case %q", name)
+		}
+		nbits, err := strconv.ParseUint(tokens[1], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("bad bitvector length in %q: %v", name, err)
+		}
+		return &testBitvector{nbits: nbits}, nil
+
+	case "bitlist":
+		// bitlist_<limit>_<variant>
+		if len(tokens) < 2 {
+			return nil, fmt.Errorf("bad bitlist case %q", name)
+		}
+		limit, err := strconv.ParseUint(tokens[1], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("bad bitlist limit in %q: %v", name, err)
+		}
+		return &testBitlist{limit: limit}, nil
+
+	case "containers":
+		// <StructName>_<variant>
+		switch tokens[0] {
+		case "SingleFieldTestStruct":
+			return new(singleFieldTestStruct), nil
+		case "SmallTestStruct":
+			return new(smallTestStruct), nil
+		case "FixedTestStruct":
+			return new(fixedTestStruct), nil
+		case "VarTestStruct":
+			return new(varTestStruct), nil
+		case "ComplexTestStruct":
+			return new(complexTestStruct), nil
+		case "BitsStruct":
+			return new(bitsStruct), nil
+		}
+		return nil, fmt.Errorf("unknown container in case %q", name)
 	}
-	return 0, fmt.Errorf("unknown handler %q", handler)
+	return nil, fmt.Errorf("unknown handler %q", handler)
+}
+
+// expectedError names the sentinel an invalid case must produce, derived from
+// how tests/generators/ssz_generic builds the case. It returns nil when the
+// name does not pin the failure down: a corrupted container offset is caught
+// either at the offset table or inside the section it misaligns, and which
+// one depends on the field type.
+func expectedError(handler, name string) (error, error) {
+	tokens := strings.Split(name, "_")
+	switch handler {
+	case "boolean":
+		// byte_<value>: a byte other than 0x00 or 0x01.
+		return ssz.ErrBadBoolean, nil
+
+	case "uints":
+		// uint_<size>_one_byte_shorter | one_byte_longer | one_too_high,
+		// the last serialized at the wider width the value needs.
+		if strings.HasSuffix(name, "one_byte_shorter") {
+			return ssz.ErrSize, nil
+		}
+		return ssz.ErrTrailing, nil
+
+	case "bitvector":
+		// bitvec_0 (illegal type), or bitvec_<N>_<mode>_<M>: a Bitvector[N]
+		// given M bits with bit N set.
+		if name == "bitvec_0" {
+			return ssz.ErrSize, nil
+		}
+		if len(tokens) < 4 {
+			return nil, fmt.Errorf("bad bitvector case %q", name)
+		}
+		n, err := strconv.ParseUint(tokens[1], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		m, err := strconv.ParseUint(tokens[3], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		if ssz.BitvectorSize(n) != ssz.BitvectorSize(m) {
+			return ssz.ErrSize, nil
+		}
+		return ssz.ErrExcessBits, nil
+
+	case "bitlist":
+		// bitlist_<limit>_but_<M> (M bits over the limit), or
+		// bitlist_<limit>_no_delimiter_<empty|zero_byte|zeroes>.
+		if strings.Contains(name, "no_delimiter") {
+			return ssz.ErrBadBitlist, nil
+		}
+		return ssz.ErrTooBig, nil
+
+	case "basic_vector":
+		// vec_<T>_0 (illegal type), vec_bool_<N>_<mode>_<byte> (a byte that
+		// is not a boolean), or vec_<T>_<N>_<mode>_one_<byte|element>_<less|more>.
+		for _, bad := range []string{"_0x80", "_0xff", "_2", "_rev_nibble"} {
+			if strings.HasSuffix(name, bad) {
+				return ssz.ErrBadBoolean, nil
+			}
+		}
+		return ssz.ErrSize, nil
+
+	case "containers":
+		if !strings.HasSuffix(name, "_extra_byte") {
+			return nil, nil // offset mutation
+		}
+		// One zero byte appended to the serialization.
+		switch tokens[0] {
+		case "SingleFieldTestStruct", "SmallTestStruct", "FixedTestStruct":
+			return ssz.ErrTrailing, nil // no variable part to absorb it
+		case "VarTestStruct", "ComplexTestStruct":
+			return ssz.ErrSize, nil // lands in the last uint16 list, an odd byte count
+		case "BitsStruct":
+			return ssz.ErrBadBitlist, nil // lands in the last bitlist, whose last byte is now zero
+		}
+	}
+	return nil, fmt.Errorf("no expectation for %s/%s", handler, name)
 }
 
 func readSerialized(t *testing.T, dir string) []byte {
@@ -118,6 +251,21 @@ func readMetaRoot(t *testing.T, dir string) [32]byte {
 	return root
 }
 
+func readValueNode(t *testing.T, dir string) *yaml.Node {
+	blob, err := os.ReadFile(filepath.Join(dir, "value.yaml"))
+	if err != nil {
+		t.Fatalf("reading value.yaml: %v", err)
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(blob, &doc); err != nil {
+		t.Fatalf("parsing value.yaml: %v", err)
+	}
+	if len(doc.Content) != 1 {
+		t.Fatalf("value.yaml has %d documents", len(doc.Content))
+	}
+	return doc.Content[0]
+}
+
 // vectorsDir locates the extracted ssz_generic directory or skips the test.
 func vectorsDir(t *testing.T) string {
 	if dir := os.Getenv("GETH_SSZ_SPEC_TESTS"); dir != "" {
@@ -131,31 +279,116 @@ func vectorsDir(t *testing.T) string {
 	return dir
 }
 
+// runValidCase checks encoding, decoding and hash-tree-root.
+func runValidCase(t *testing.T, handler, name, dir string) {
+	obj, err := makeSpecObject(handler, name)
+	if err != nil {
+		t.Fatalf("type construction: %v", err)
+	}
+	serialized := readSerialized(t, dir)
+
+	// Encoding: value.yaml -> object -> bytes must equal serialized.
+	if err := obj.fromYAML(readValueNode(t, dir)); err != nil {
+		t.Fatalf("loading value.yaml: %v", err)
+	}
+	if size := obj.SizeSSZ(); size != len(serialized) {
+		t.Errorf("SizeSSZ = %d, serialized length %d", size, len(serialized))
+	}
+	encoded, err := ssz.Encode(obj)
+	if err != nil {
+		t.Fatalf("encoding: %v", err)
+	}
+	if !bytes.Equal(encoded, serialized) {
+		t.Errorf("encoding mismatch:\n  got  %x\n  want %x", encoded, serialized)
+	}
+
+	// Decoding: serialized -> object -> bytes must round-trip.
+	decoded, _ := makeSpecObject(handler, name)
+	if err := ssz.Decode(serialized, decoded); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	reencoded, err := ssz.Encode(decoded)
+	if err != nil {
+		t.Fatalf("re-encoding: %v", err)
+	}
+	if !bytes.Equal(reencoded, serialized) {
+		t.Errorf("decode round-trip mismatch:\n  got  %x\n  want %x", reencoded, serialized)
+	}
+
+	// Hash-tree-root of both the YAML-built and the decoded object.
+	wantRoot := readMetaRoot(t, dir)
+	if got := obj.HashTreeRoot(); got != wantRoot {
+		t.Errorf("root (from yaml) = %x, want %x", got, wantRoot)
+	}
+	if got := decoded.HashTreeRoot(); got != wantRoot {
+		t.Errorf("root (from decode) = %x, want %x", got, wantRoot)
+	}
+}
+
+// runInvalidCase requires a clean rejection: never a panic, never success,
+// and an error wrapping the expected sentinel.
+func runInvalidCase(t *testing.T, handler, name, dir string) {
+	obj, err := makeSpecObject(handler, name)
+	if err != nil {
+		t.Fatalf("type construction: %v", err)
+	}
+	want, err := expectedError(handler, name)
+	if err != nil {
+		t.Fatalf("expectation: %v", err)
+	}
+	serialized := readSerialized(t, dir)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("decoder panicked on invalid input: %v", r)
+		}
+	}()
+	err = ssz.Decode(serialized, obj)
+	if err == nil {
+		t.Fatalf("invalid input of %d bytes decoded without error", len(serialized))
+	}
+	if want != nil {
+		if !errors.Is(err, want) {
+			t.Errorf("error %q does not wrap %q", err, want)
+		}
+		return
+	}
+	for _, s := range sentinels {
+		if errors.Is(err, s) {
+			return
+		}
+	}
+	t.Errorf("error %q wraps no named sentinel", err)
+}
+
 func TestSpecVectors(t *testing.T) {
 	root := vectorsDir(t)
-	for _, handler := range rootOnlyHandlers {
+	for _, handler := range classicHandlers {
 		t.Run(handler, func(t *testing.T) {
-			cases, err := os.ReadDir(filepath.Join(root, handler, "valid"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(cases) == 0 {
-				t.Fatal("no valid cases found")
-			}
-			for _, c := range cases {
-				if !c.IsDir() {
-					continue
-				}
-				name := c.Name()
-				t.Run(name, func(t *testing.T) {
-					dir := filepath.Join(root, handler, "valid", name)
-					limit, err := chunkLimit(handler, name)
+			for _, suite := range []string{"valid", "invalid"} {
+				t.Run(suite, func(t *testing.T) {
+					cases, err := os.ReadDir(filepath.Join(root, handler, suite))
 					if err != nil {
-						t.Fatalf("deriving limit: %v", err)
+						t.Fatal(err)
 					}
-					got := ssz.Merkleize(ssz.Pack(readSerialized(t, dir)), limit)
-					if want := readMetaRoot(t, dir); got != want {
-						t.Errorf("root %x, want %x", got, want)
+					if len(cases) == 0 {
+						t.Fatalf("no %s cases found", suite)
+					}
+					for _, c := range cases {
+						if !c.IsDir() {
+							continue
+						}
+						name := c.Name()
+						dir := filepath.Join(root, handler, suite, name)
+						t.Run(name, func(t *testing.T) {
+							if strings.HasPrefix(name, "Progressive") {
+								t.Skip("needs EIP-7916 progressive merkleization")
+							}
+							if suite == "valid" {
+								runValidCase(t, handler, name, dir)
+							} else {
+								runInvalidCase(t, handler, name, dir)
+							}
+						})
 					}
 				})
 			}
