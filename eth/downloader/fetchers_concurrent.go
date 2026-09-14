@@ -77,14 +77,10 @@ type typedQueue interface {
 	// from the download queue to the specified peer.
 	reserve(peer *peerConnection, items int) (*fetchRequest, bool, bool)
 
-	// unreserve is responsible for removing the current retrieval allocation
-	// assigned to a specific peer and placing it back into the pool to allow
-	// reassigning to some other peer.
-	unreserve(peer string) int
-
 	// requeue is responsible for placing the current retrieval allocation of a
-	// specific peer back into the pool for some other peer to retrieve as well,
-	// without removing the allocation, so a late delivery is still accepted.
+	// specific peer back into the pool for some other peer to retrieve as well.
+	// The allocation itself is kept, so a late delivery is still accepted; it
+	// is dropped along with the peer when that disconnects.
 	requeue(peer string)
 
 	// request is responsible for converting a generic fetch request into a typed
@@ -267,8 +263,12 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					// was disconnected in between assignment and network send.
 					// Although all peer removal operations return allocated tasks
 					// to the queue, that is async, and we can do better here by
-					// immediately pushing the unfulfilled requests.
-					queue.unreserve(peer.id) // TODO(karalabe): This needs a non-expiration method
+					// immediately pushing the unfulfilled requests. Drop the peer
+					// too: the reservation is only released by its removal, and
+					// a send that fails for any other reason than the connection
+					// going away is not worth keeping the peer around for.
+					queue.requeue(peer.id)
+					d.dropPeer(peer.id)
 					continue
 				}
 				pending[peer.id] = req
@@ -316,7 +316,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			// A peer left, any existing requests need to be untracked, pending
 			// tasks returned and possible reassignment checked
 			if req, ok := pending[peerid]; ok {
-				queue.unreserve(peerid) // TODO(karalabe): This needs a non-expiration method
+				queue.requeue(peerid)
 				delete(pending, peerid)
 				req.Close()
 				untrack(req)

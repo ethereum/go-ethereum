@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // bodyQueue implements typedQueue and is a type adapter between the generic
@@ -56,19 +55,6 @@ func (q *bodyQueue) updateCapacity(peer *peerConnection, items int, span time.Du
 // from the download queue to the specified peer.
 func (q *bodyQueue) reserve(peer *peerConnection, items int) (*fetchRequest, bool, bool) {
 	return q.queue.ReserveBodies(peer, items)
-}
-
-// unreserve is responsible for removing the current body retrieval allocation
-// assigned to a specific peer and placing it back into the pool to allow
-// reassigning to some other peer.
-func (q *bodyQueue) unreserve(peer string) int {
-	fails := q.queue.ExpireBodies(peer)
-	if fails > 2 {
-		log.Trace("Body delivery timed out", "peer", peer)
-	} else {
-		log.Debug("Body delivery stalling", "peer", peer)
-	}
-	return fails
 }
 
 // requeue is responsible for placing the current body retrieval allocation of a

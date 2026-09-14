@@ -797,6 +797,17 @@ func (q *queue) RequeueReceipts(peer string) {
 	q.requeue(peer, q.receiptPendPool, q.receiptTaskQueue)
 }
 
+// RequeueBALs returns the access lists reserved by the given peer to the task
+// queue for another peer to retrieve as well, keeping the reservation so that
+// a late delivery is still accepted. See the requeue method for details.
+func (q *queue) RequeueBALs(peer string) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	balTimeoutMeter.Mark(1)
+	q.requeue(peer, q.balPendPool, q.balTaskQueue)
+}
+
 // requeue pushes the items of a pending request back into the task queue without
 // cancelling the request, so that another peer retrieves them concurrently and
 // whichever reply arrives first fills the result cache. The other reply is
@@ -807,6 +818,7 @@ func (q *queue) RequeueReceipts(peer string) {
 // the data, and the round trip it took is the measurement that grows the peer's
 // timeout allowance. Cancelling the request instead would have the reply count
 // as a failed delivery, slashing the peer a second time and discarding both.
+// The request is only ever cancelled by Revoke, once the peer is gone.
 //
 // Note, this method expects the queue lock to be already held.
 func (q *queue) requeue(peer string, pendPool map[string]*fetchRequest, taskQueue *prque.Prque[int64, *types.Header]) {
@@ -817,65 +829,6 @@ func (q *queue) requeue(peer string, pendPool map[string]*fetchRequest, taskQueu
 	for _, header := range req.Headers {
 		taskQueue.Push(header, -int64(header.Number.Uint64()))
 	}
-}
-
-// ExpireBodies checks for in flight block body requests that exceeded a timeout
-// allowance, canceling them and returning the responsible peers for penalisation.
-func (q *queue) ExpireBodies(peer string) int {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	bodyTimeoutMeter.Mark(1)
-	return q.expire(peer, q.blockPendPool, q.blockTaskQueue)
-}
-
-// ExpireReceipts checks for in flight receipt requests that exceeded a timeout
-// allowance, canceling them and returning the responsible peers for penalisation.
-func (q *queue) ExpireReceipts(peer string) int {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	receiptTimeoutMeter.Mark(1)
-	return q.expire(peer, q.receiptPendPool, q.receiptTaskQueue)
-}
-
-// ExpireBALs checks for in flight block access list requests that exceeded a
-// timeout allowance, canceling them and returning the responsible peers for
-// penalisation.
-func (q *queue) ExpireBALs(peer string) int {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	balTimeoutMeter.Mark(1)
-	return q.expire(peer, q.balPendPool, q.balTaskQueue)
-}
-
-// expire is the generic check that moves a specific expired task from a pending
-// pool back into a task pool. The syntax on the passed taskQueue is a bit weird
-// as we would need a generic expire method to handle both types, but that is not
-// supported at the moment at least (Go 1.19).
-//
-// Note, this method expects the queue lock to be already held. The reason the
-// lock is not obtained in here is that the parameters already need to access
-// the queue, so they already need a lock anyway.
-func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue interface{}) int {
-	// Retrieve the request being expired and log an error if it's non-existent,
-	// as there's no order of events that should lead to such expirations.
-	req := pendPool[peer]
-	if req == nil {
-		log.Error("Expired request does not exist", "peer", peer)
-		return 0
-	}
-	delete(pendPool, peer)
-
-	// Return any non-satisfied requests to the pool
-	if req.From > 0 {
-		taskQueue.(*prque.Prque[int64, uint64]).Push(req.From, -int64(req.From))
-	}
-	for _, header := range req.Headers {
-		taskQueue.(*prque.Prque[int64, *types.Header]).Push(header, -int64(header.Number.Uint64()))
-	}
-	return len(req.Headers)
 }
 
 // DeliverBodies injects a block body retrieval response into the results queue.

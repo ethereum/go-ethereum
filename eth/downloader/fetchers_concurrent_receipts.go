@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // receiptQueue implements typedQueue and is a type adapter between the generic
@@ -56,19 +55,6 @@ func (q *receiptQueue) updateCapacity(peer *peerConnection, items int, span time
 // from the download queue to the specified peer.
 func (q *receiptQueue) reserve(peer *peerConnection, items int) (*fetchRequest, bool, bool) {
 	return q.queue.ReserveReceipts(peer, items)
-}
-
-// unreserve is responsible for removing the current receipt retrieval allocation
-// assigned to a specific peer and placing it back into the pool to allow
-// reassigning to some other peer.
-func (q *receiptQueue) unreserve(peer string) int {
-	fails := q.queue.ExpireReceipts(peer)
-	if fails > 2 {
-		log.Trace("Receipt delivery timed out", "peer", peer)
-	} else {
-		log.Debug("Receipt delivery stalling", "peer", peer)
-	}
-	return fails
 }
 
 // requeue is responsible for placing the current receipt retrieval allocation of

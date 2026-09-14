@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // balQueue implements typedQueue and is a type adapter between the generic
@@ -67,22 +66,12 @@ func (q *balQueue) reserve(peer *peerConnection, items int) (*fetchRequest, bool
 	return q.queue.ReserveBALs(peer, items)
 }
 
-// unreserve is responsible for removing the current access list retrieval
-// allocation assigned to a specific peer and placing it back into the pool to
-// allow reassigning to some other peer.
-func (q *balQueue) unreserve(peer string) int {
-	fails := q.queue.ExpireBALs(peer)
-	if fails > 2 {
-		log.Trace("Access list delivery timed out", "peer", peer)
-	} else {
-		log.Debug("Access list delivery stalling", "peer", peer)
-	}
-	return fails
+// requeue is responsible for placing the current access list retrieval
+// allocation of a specific peer back into the pool for some other peer to
+// retrieve as well.
+func (q *balQueue) requeue(peer string) {
+	q.queue.RequeueBALs(peer)
 }
-
-// requeue is a no-op for access lists: they never block the consumer, so their
-// retrievals are never requeued.
-func (q *balQueue) requeue(peer string) {}
 
 // request is responsible for converting a generic fetch request into an access
 // list one and sending it to the remote peer for fulfillment.
