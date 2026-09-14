@@ -54,6 +54,7 @@ type testPeerV2 struct {
 	test          *testing.T
 	remote        *syncerV2
 	logger        log.Logger
+	trieLock      sync.Mutex
 	accountTrie   *trie.Trie
 	accountValues []*kv
 	storageTries  map[common.Hash]*trie.Trie
@@ -139,6 +140,9 @@ func (t *testPeerV2) RequestAccessLists(id uint64, hashes []common.Hash, bytes i
 }
 
 func createAccountRequestResponseV2(t *testPeerV2, root common.Hash, origin common.Hash, limit common.Hash, cap int) (keys []common.Hash, vals [][]byte, proofs [][]byte) {
+	t.trieLock.Lock()
+	defer t.trieLock.Unlock()
+
 	var size int
 	if limit == (common.Hash{}) {
 		limit = common.MaxHash
@@ -170,6 +174,9 @@ func createAccountRequestResponseV2(t *testPeerV2, root common.Hash, origin comm
 }
 
 func createStorageRequestResponseV2(t *testPeerV2, root common.Hash, accounts []common.Hash, origin, limit []byte, max int) (hashes [][]common.Hash, slots [][][]byte, proofs [][]byte) {
+	t.trieLock.Lock()
+	defer t.trieLock.Unlock()
+
 	var size int
 	for _, account := range accounts {
 		var originHash common.Hash
@@ -225,6 +232,9 @@ func createStorageRequestResponseV2(t *testPeerV2, root common.Hash, accounts []
 }
 
 func createStorageRequestResponseAlwaysProveV2(t *testPeerV2, root common.Hash, accounts []common.Hash, bOrigin, bLimit []byte, max int) (hashes [][]common.Hash, slots [][][]byte, proofs [][]byte) {
+	t.trieLock.Lock()
+	defer t.trieLock.Unlock()
+
 	var size int
 	max = max * 3 / 4
 
