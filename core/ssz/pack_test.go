@@ -18,6 +18,7 @@ package ssz
 
 import (
 	"math/rand"
+	"reflect"
 	"testing"
 )
 
@@ -47,5 +48,12 @@ func TestPack(t *testing.T) {
 				t.Errorf("size %d: chunk %d differs", size, i)
 			}
 		}
+	}
+}
+
+func TestPackBits(t *testing.T) {
+	bits := []byte{0xff, 0x01, 0x80}
+	if got, want := PackBits(bits), Pack(bits); !reflect.DeepEqual(got, want) {
+		t.Errorf("PackBits = %x, Pack = %x", got, want)
 	}
 }
