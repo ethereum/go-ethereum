@@ -290,11 +290,13 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 	return true, nil
 }
 
-// StopWS terminates all WebSocket servers.
+// StopWS terminates all WebSocket servers. It reports whether a WebSocket
+// endpoint was running and has been closed.
 func (api *adminAPI) StopWS() (bool, error) {
+	closed := api.node.http.wsAllowed() || api.node.ws.wsAllowed()
 	api.node.http.stopWS()
 	api.node.ws.stop()
-	return true, nil
+	return closed, nil
 }
 
 // Peers retrieves all the information we know about each individual peer at the
