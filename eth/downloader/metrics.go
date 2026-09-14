@@ -73,7 +73,6 @@ type fetchMetrics struct {
 	idlePeers    *metrics.Gauge    // Peers left without a request after an assignment round
 	busyPeers    *metrics.Gauge    // Peers with a request in flight
 	stalePeers   *metrics.Gauge    // Peers with a timed out but not yet answered request
-	slashedPeers *metrics.Gauge    // Peers with a capacity slashed to zero by a failed delivery
 	capacity     *metrics.Gauge    // Estimated aggregate items per second across all peers
 	starved      *metrics.Meter    // Assignment rounds cut short because nothing was pending
 	throttled    *metrics.Meter    // Assignment rounds cut short by result cache throttling
@@ -90,7 +89,6 @@ func newFetchMetrics(kind string) *fetchMetrics {
 		idlePeers:    metrics.NewRegisteredGauge(prefix+"/peers/idle", nil),
 		busyPeers:    metrics.NewRegisteredGauge(prefix+"/peers/busy", nil),
 		stalePeers:   metrics.NewRegisteredGauge(prefix+"/peers/stale", nil),
-		slashedPeers: metrics.NewRegisteredGauge(prefix+"/peers/slashed", nil),
 		capacity:     metrics.NewRegisteredGauge(prefix+"/capacity", nil),
 		starved:      metrics.NewRegisteredMeter(prefix+"/starved", nil),
 		throttled:    metrics.NewRegisteredMeter(prefix+"/throttled", nil),
