@@ -31,3 +31,11 @@ func Pack(data []byte) [][32]byte {
 	}
 	return chunks
 }
+
+// PackBits is the pack_bits() helper of the SSZ spec: it chunks the packed
+// bytes of a bitfield. bits must already exclude the delimiter bit of a
+// bitlist (DecodeBitlist strips it); for a bitvector the serialized bytes are
+// passed unchanged.
+func PackBits(bits []byte) [][32]byte {
+	return Pack(bits)
+}

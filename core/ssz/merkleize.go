@@ -14,13 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package ssz implements the Simple Serialize (SSZ) specification of the
-// Ethereum consensus layer, following consensus-specs ssz/simple-serialize.md.
-//
-// The package currently covers merkleization: packing serialized basic values
-// into 32-byte chunks and folding those chunks into a hash_tree_root. Types
-// build their roots from the primitives here through hand-written code; there
-// is no reflection and no code generation.
 package ssz
 
 import (
