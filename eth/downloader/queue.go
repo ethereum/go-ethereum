@@ -79,10 +79,11 @@ var (
 
 // fetchRequest is a currently running data retrieval operation.
 type fetchRequest struct {
-	Peer    *peerConnection // Peer to which the request was sent
-	From    uint64          // Requested chain element index (used for skeleton fills only)
-	Headers []*types.Header // Requested headers, sorted by request order
-	Time    time.Time       // Time when the request was made
+	Peer     *peerConnection // Peer to which the request was sent
+	From     uint64          // Requested chain element index (used for skeleton fills only)
+	Headers  []*types.Header // Requested headers, sorted by request order
+	Time     time.Time       // Time when the request was made
+	Requeued bool            // Whether the headers were already handed back to the task queue
 }
 
 // fetchResult is a struct collecting partial results from data fetchers until
@@ -587,17 +588,17 @@ func (q *queue) stalledHead(pendPool map[string]*fetchRequest, kind uint, thresh
 		return ""
 	}
 	for id, request := range pendPool {
-		if len(request.Headers) == 0 {
+		if request.Requeued {
 			continue
 		}
-		// Requested headers are sorted by number, check if the head is within
-		if request.Headers[0].Number.Uint64() > head || request.Headers[len(request.Headers)-1].Number.Uint64() < head {
-			continue
+		for _, header := range request.Headers {
+			if header.Number.Uint64() == head {
+				if time.Since(request.Time) > threshold {
+					return id
+				}
+				return ""
+			}
 		}
-		if time.Since(request.Time) > threshold {
-			return id
-		}
-		return ""
 	}
 	return ""
 }
@@ -685,22 +686,16 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		stale, throttle, item := q.resultCache.AddFetch(header, q.mode == ethconfig.SnapSync, q.balEligible(header))
 		if stale {
 			// Don't put back in the task queue, this item has already been
-			// delivered upstream
+			// delivered upstream. A task outliving the delivery of its block
+			// is expected: it is left behind whenever a request is requeued
+			// and its original reply wins the race, or for access lists, which
+			// block delivery never waits on, whenever a request in flight
+			// across the delivery is handed back afterwards.
 			taskQueue.PopItem()
 			progress = true
 			delete(taskPool, header.Hash())
 
-			// Access lists are a best-effort component that block delivery
-			// never waits on, so a retrieval task outliving the delivery of
-			// its block is expected rather than a sign of queue corruption.
-			// It happens whenever a request in flight across the delivery is
-			// handed back afterwards, be it by the peer not possessing the
-			// list, by a timeout or by a disconnect.
-			if kind == balType {
-				log.Debug("Access list reservation already delivered", "number", header.Number.Uint64())
-			} else {
-				log.Error("Fetch reservation already delivered", "number", header.Number.Uint64())
-			}
+			log.Debug("Fetch reservation already delivered", "number", header.Number.Uint64())
 			continue
 		}
 		if throttle {
@@ -755,24 +750,23 @@ func (q *queue) Revoke(peerID string) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	if request, ok := q.blockPendPool[peerID]; ok {
-		for _, header := range request.Headers {
-			q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
+	// A request requeued on timeout, or on the drop that leads here, has already
+	// handed its headers back; pushing them again would have them fetched twice.
+	revoke := func(pendPool map[string]*fetchRequest, taskQueue *prque.Prque[int64, *types.Header]) {
+		request, ok := pendPool[peerID]
+		if !ok {
+			return
 		}
-		delete(q.blockPendPool, peerID)
-	}
-	if request, ok := q.receiptPendPool[peerID]; ok {
-		for _, header := range request.Headers {
-			q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
+		if !request.Requeued {
+			for _, header := range request.Headers {
+				taskQueue.Push(header, -int64(header.Number.Uint64()))
+			}
 		}
-		delete(q.receiptPendPool, peerID)
+		delete(pendPool, peerID)
 	}
-	if request, ok := q.balPendPool[peerID]; ok {
-		for _, header := range request.Headers {
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
-		}
-		delete(q.balPendPool, peerID)
-	}
+	revoke(q.blockPendPool, q.blockTaskQueue)
+	revoke(q.receiptPendPool, q.receiptTaskQueue)
+	revoke(q.balPendPool, q.balTaskQueue)
 }
 
 // RequeueBodies returns the bodies reserved by the given peer to the task queue
@@ -823,9 +817,10 @@ func (q *queue) RequeueBALs(peer string) {
 // Note, this method expects the queue lock to be already held.
 func (q *queue) requeue(peer string, pendPool map[string]*fetchRequest, taskQueue *prque.Prque[int64, *types.Header]) {
 	req := pendPool[peer]
-	if req == nil {
+	if req == nil || req.Requeued {
 		return
 	}
+	req.Requeued = true
 	for _, header := range req.Headers {
 		taskQueue.Push(header, -int64(header.Number.Uint64()))
 	}
@@ -985,11 +980,18 @@ func (q *queue) DeliverBALs(id string, bals []rlp.RawValue, hashes []common.Hash
 		delivered int // Lists that validated, whether or not still needed
 		failure   error
 	)
+	// retry hands a task back to the queue for other peers, unless the request
+	// was requeued in the meantime and it is back in there already
+	retry := func(header *types.Header) {
+		if !request.Requeued {
+			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+		}
+	}
 	for i, header := range request.Headers {
 		// Should the response be invalid at some point, return all the
 		// remaining tasks to the queue for retrieval from other peers
 		if failure != nil || i >= len(bals) {
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			retry(header)
 			continue
 		}
 		hash := header.Hash()
@@ -999,20 +1001,20 @@ func (q *queue) DeliverBALs(id string, bals []rlp.RawValue, hashes []common.Hash
 		// queued for other peers to have a go at it.
 		if bytes.Equal(bals[i], rlp.EmptyString) {
 			request.Peer.MarkLackingBAL(hash)
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			retry(header)
 			continue
 		}
 		// Validate the content against the hash committed in the header and
 		// decode it. Anything invalid is a protocol violation.
 		if header.BlockAccessListHash == nil || hashes[i] != *header.BlockAccessListHash {
 			failure = errInvalidBAL
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			retry(header)
 			continue
 		}
 		list := new(bal.BlockAccessList)
 		if err := rlp.DecodeBytes(bals[i], list); err != nil {
 			failure = fmt.Errorf("%w: %v", errInvalidBAL, err)
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			retry(header)
 			continue
 		}
 		delivered++
@@ -1090,9 +1092,12 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	}
 	resDropMeter.Mark(int64(results - accepted))
 
-	// Return all failed or missing fetches to the queue
-	for _, header := range request.Headers[validated:] {
-		taskQueue.Push(header, -int64(header.Number.Uint64()))
+	// Return all failed or missing fetches to the queue, unless the request
+	// was requeued in the meantime and they are back in there already
+	if !request.Requeued {
+		for _, header := range request.Headers[validated:] {
+			taskQueue.Push(header, -int64(header.Number.Uint64()))
+		}
 	}
 	// Wake up Results
 	if accepted > 0 {
