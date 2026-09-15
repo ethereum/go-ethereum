@@ -19,49 +19,10 @@ package ethapi
 import (
 	"context"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/rpc"
 )
-
-// The result types below mirror the execution-apis block access list schema:
-// each change entry pairs a 32-bit block-access index with the post-state
-// value, storage slots pair a 32-byte key with per-index writes, balance
-// values are 256-bit quantities and storage/read values are 32-byte ones.
-
-type storageChangeResult struct {
-	Index hexutil.Uint64 `json:"index"`
-	Value common.Hash    `json:"value"`
-}
-
-type slotChangesResult struct {
-	Key     common.Hash           `json:"key"`
-	Changes []storageChangeResult `json:"changes"`
-}
-
-type balanceChangeResult struct {
-	Index hexutil.Uint64 `json:"index"`
-	Value *hexutil.Big   `json:"value"`
-}
-
-type nonceChangeResult struct {
-	Index hexutil.Uint64 `json:"index"`
-	Value hexutil.Uint64 `json:"value"`
-}
-
-type codeChangeResult struct {
-	Index hexutil.Uint64 `json:"index"`
-	Code  hexutil.Bytes  `json:"code"`
-}
-
-type accountAccessResult struct {
-	Address        common.Address        `json:"address"`
-	BalanceChanges []balanceChangeResult `json:"balanceChanges"`
-	CodeChanges    []codeChangeResult    `json:"codeChanges"`
-	NonceChanges   []nonceChangeResult   `json:"nonceChanges"`
-	StorageChanges []slotChangesResult   `json:"storageChanges"`
-	StorageReads   []common.Hash         `json:"storageReads"`
-}
 
 // GetBlockAccessList returns the block access list for the given block.
 //
@@ -73,68 +34,20 @@ type accountAccessResult struct {
 // Blocks predating the fork carrying the block access list (or otherwise
 // lacking one) return an empty list. A null result means the block does not
 // exist.
-func (api *BlockChainAPI) GetBlockAccessList(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]accountAccessResult, error) {
-	block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-	if block == nil || err != nil {
+func (api *BlockChainAPI) GetBlockAccessList(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*bal.BlockAccessList, error) {
+	header, err := api.b.HeaderByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		if !blockNrOrHash.RequireCanonical {
+			return nil, nil
+		}
 		return nil, err
 	}
-	al := block.AccessList()
-	if al == nil {
-		return []accountAccessResult{}, nil
+	if header == nil {
+		return nil, nil
 	}
-	out := make([]accountAccessResult, 0, len(*al))
-	for _, acc := range *al {
-		// The spec requires all change arrays to be present (possibly empty).
-		res := accountAccessResult{
-			Address:        acc.Address,
-			BalanceChanges: make([]balanceChangeResult, 0, len(acc.BalanceChanges)),
-			NonceChanges:   make([]nonceChangeResult, 0, len(acc.NonceChanges)),
-			CodeChanges:    make([]codeChangeResult, 0, len(acc.CodeChanges)),
-			StorageChanges: make([]slotChangesResult, 0, len(acc.StorageChanges)),
-			StorageReads:   make([]common.Hash, 0, len(acc.StorageReads)),
-		}
-
-		for _, change := range acc.BalanceChanges {
-			res.BalanceChanges = append(res.BalanceChanges, balanceChangeResult{
-				Index: hexutil.Uint64(change.BlockAccessIndex),
-				Value: (*hexutil.Big)(change.PostBalance.ToBig()),
-			})
-		}
-		for _, change := range acc.NonceChanges {
-			res.NonceChanges = append(res.NonceChanges, nonceChangeResult{
-				Index: hexutil.Uint64(change.BlockAccessIndex),
-				Value: hexutil.Uint64(change.PostNonce),
-			})
-		}
-		for _, change := range acc.CodeChanges {
-			res.CodeChanges = append(res.CodeChanges, codeChangeResult{
-				Index: hexutil.Uint64(change.BlockAccessIndex),
-				Code:  hexutil.Bytes(change.NewCode),
-			})
-		}
-		for _, slot := range acc.StorageChanges {
-			changes := make([]storageChangeResult, 0, len(slot.SlotChanges))
-			for _, write := range slot.SlotChanges {
-				var value [32]byte
-				write.PostValue.WriteToSlice(value[:])
-				changes = append(changes, storageChangeResult{
-					Index: hexutil.Uint64(write.BlockAccessIndex),
-					Value: common.Hash(value),
-				})
-			}
-			var key [32]byte
-			slot.Slot.WriteToSlice(key[:])
-			res.StorageChanges = append(res.StorageChanges, slotChangesResult{
-				Key:     common.Hash(key),
-				Changes: changes,
-			})
-		}
-		for _, read := range acc.StorageReads {
-			var key [32]byte
-			read.WriteToSlice(key[:])
-			res.StorageReads = append(res.StorageReads, common.Hash(key))
-		}
-		out = append(out, res)
+	accessList := rawdb.ReadAccessList(api.b.ChainDb(), header.Hash(), header.Number.Uint64())
+	if accessList == nil {
+		return &bal.BlockAccessList{}, nil
 	}
-	return out, nil
+	return accessList, nil
 }

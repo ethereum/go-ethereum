@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
 )
 
 // Verify that Client implements the ethereum interfaces.
@@ -1066,6 +1067,9 @@ type blockAccessListTestService struct {
 
 func (s *blockAccessListTestService) GetBlockAccessList(ctx context.Context, block rpc.BlockNumberOrHash) ([]ethclient.BlockAccessListEntry, error) {
 	s.calls <- block
+	slot := hexutil.U256(*uint256.NewInt(0x152f))
+	value := hexutil.U256(*uint256.NewInt(1))
+	balance := hexutil.U256(*uint256.NewInt(1000000000000000000))
 	return []ethclient.BlockAccessListEntry{
 		{
 			Address:        common.HexToAddress("0x000f3df6d732807ef1319fb7b8bb8522d0beac02"),
@@ -1074,23 +1078,23 @@ func (s *blockAccessListTestService) GetBlockAccessList(ctx context.Context, blo
 			NonceChanges:   []ethclient.NonceChangeEntry{},
 			StorageChanges: []ethclient.StorageChangesEntry{
 				{
-					Key: common.HexToHash("0x152f"),
-					Changes: []ethclient.StorageChangeEntry{
-						{Index: 0, Value: common.HexToHash("0x01")},
+					Slot: &slot,
+					SlotChanges: []ethclient.StorageChangeEntry{
+						{BlockAccessIndex: 0, PostValue: &value},
 					},
 				},
 			},
-			StorageReads: []common.Hash{},
+			StorageReads: []hexutil.U256{},
 		},
 		{
 			Address: common.HexToAddress("0x8943545177806ed17b9f23f0a21ee5948ecaa776"),
 			BalanceChanges: []ethclient.BalanceChangeEntry{
-				{Index: 1, Value: (*hexutil.Big)(big.NewInt(1e18))},
+				{BlockAccessIndex: 1, PostBalance: &balance},
 			},
 			CodeChanges:    []ethclient.CodeChangeEntry{},
-			NonceChanges:   []ethclient.NonceChangeEntry{{Index: 1, Value: 1}},
+			NonceChanges:   []ethclient.NonceChangeEntry{{BlockAccessIndex: 1, PostNonce: 1}},
 			StorageChanges: []ethclient.StorageChangesEntry{},
-			StorageReads:   []common.Hash{},
+			StorageReads:   []hexutil.U256{},
 		},
 	}, nil
 }
@@ -1122,13 +1126,18 @@ func TestGetBlockAccessList(t *testing.T) {
 	if entries[0].Address != common.HexToAddress("0x000f3df6d732807ef1319fb7b8bb8522d0beac02") {
 		t.Fatalf("unexpected first entry address: %s", entries[0].Address)
 	}
-	if len(entries[0].StorageChanges) != 1 || entries[0].StorageChanges[0].Changes[0].Index != 0 {
+	storage := entries[0].StorageChanges
+	if len(storage) != 1 || storage[0].Slot == nil || (*uint256.Int)(storage[0].Slot).CmpUint64(0x152f) != 0 {
 		t.Fatalf("unexpected storage changes: %+v", entries[0].StorageChanges)
 	}
-	if entries[1].BalanceChanges[0].Value.ToInt().Cmp(big.NewInt(1e18)) != 0 {
-		t.Fatalf("unexpected balance change: %v", entries[1].BalanceChanges[0].Value)
+	if len(storage[0].SlotChanges) != 1 || storage[0].SlotChanges[0].BlockAccessIndex != 0 {
+		t.Fatalf("unexpected slot changes: %+v", storage[0].SlotChanges)
 	}
-	if entries[1].NonceChanges[0].Value != 1 {
+	balance := entries[1].BalanceChanges[0].PostBalance
+	if balance == nil || (*uint256.Int)(balance).CmpUint64(1000000000000000000) != 0 {
+		t.Fatalf("unexpected balance change: %v", entries[1].BalanceChanges[0].PostBalance)
+	}
+	if entries[1].NonceChanges[0].PostNonce != 1 {
 		t.Fatalf("unexpected nonce change: %+v", entries[1].NonceChanges)
 	}
 }

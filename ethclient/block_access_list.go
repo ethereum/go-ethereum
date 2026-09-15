@@ -29,45 +29,45 @@ import (
 // a block access list, keyed by the transaction that caused them.
 type BlockAccessListEntry struct {
 	Address        common.Address        `json:"address"`
-	BalanceChanges []BalanceChangeEntry  `json:"balanceChanges"`
-	CodeChanges    []CodeChangeEntry     `json:"codeChanges"`
-	NonceChanges   []NonceChangeEntry    `json:"nonceChanges"`
 	StorageChanges []StorageChangesEntry `json:"storageChanges"`
-	StorageReads   []common.Hash         `json:"storageReads"`
+	StorageReads   []hexutil.U256        `json:"storageReads"`
+	BalanceChanges []BalanceChangeEntry  `json:"balanceChanges"`
+	NonceChanges   []NonceChangeEntry    `json:"nonceChanges"`
+	CodeChanges    []CodeChangeEntry     `json:"codeChanges"`
 }
 
 // BalanceChangeEntry records the post-state balance of an account at a block
 // access index.
 type BalanceChangeEntry struct {
-	Index hexutil.Uint64 `json:"index"`
-	Value *hexutil.Big   `json:"value"`
+	BlockAccessIndex hexutil.Uint64 `json:"blockAccessIndex"`
+	PostBalance      *hexutil.U256  `json:"postBalance"`
 }
 
 // CodeChangeEntry records the code deployed to an account at a block access
 // index.
 type CodeChangeEntry struct {
-	Index hexutil.Uint64 `json:"index"`
-	Code  hexutil.Bytes  `json:"code"`
+	BlockAccessIndex hexutil.Uint64 `json:"blockAccessIndex"`
+	NewCode          hexutil.Bytes  `json:"newCode"`
 }
 
 // NonceChangeEntry records the post-state nonce of an account at a block
 // access index.
 type NonceChangeEntry struct {
-	Index hexutil.Uint64 `json:"index"`
-	Value hexutil.Uint64 `json:"value"`
+	BlockAccessIndex hexutil.Uint64 `json:"blockAccessIndex"`
+	PostNonce        hexutil.Uint64 `json:"postNonce"`
 }
 
 // StorageChangeEntry records the post-state value of a storage slot at a
 // block access index.
 type StorageChangeEntry struct {
-	Index hexutil.Uint64 `json:"index"`
-	Value common.Hash    `json:"value"`
+	BlockAccessIndex hexutil.Uint64 `json:"blockAccessIndex"`
+	PostValue        *hexutil.U256  `json:"postValue"`
 }
 
 // StorageChangesEntry pairs a storage key with the writes performed on it.
 type StorageChangesEntry struct {
-	Key     common.Hash          `json:"key"`
-	Changes []StorageChangeEntry `json:"changes"`
+	Slot        *hexutil.U256        `json:"slot"`
+	SlotChanges []StorageChangeEntry `json:"slotChanges"`
 }
 
 // GetBlockAccessList returns the block access list of the given block.

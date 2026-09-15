@@ -35,7 +35,7 @@ import (
 // TestGetBlockAccessList exercises eth_getBlockAccessList against a chain
 // with the Amsterdam fork active, asserting that the stored block access list
 // is returned for number, tag and hash lookups, and that the JSON encoding
-// follows the execution-apis spec field names.
+// matches the core/types/bal package output.
 func TestGetBlockAccessList(t *testing.T) {
 	t.Parallel()
 	accounts := newAccounts(2)
@@ -83,16 +83,16 @@ func TestGetBlockAccessList(t *testing.T) {
 			if al == nil {
 				t.Fatal("expected a non-nil access list")
 			}
-			if len(al) == 0 {
+			if len(*al) == 0 {
 				t.Fatal("expected a non-empty access list for a block with transactions")
 			}
 			// The list is sorted lexicographically by address; the coinbase
 			// (fee recipient) and both transfer accounts must be present.
 			var found [3]bool
 			want := []common.Address{{}, accounts[0].addr, accounts[1].addr}
-			for i, entry := range al {
-				if i > 0 && bytes.Compare(al[i-1].Address[:], entry.Address[:]) >= 0 {
-					t.Fatalf("access list not sorted at index %d: %s >= %s", i, al[i-1].Address, entry.Address)
+			for i, entry := range *al {
+				if i > 0 && bytes.Compare((*al)[i-1].Address[:], entry.Address[:]) >= 0 {
+					t.Fatalf("access list not sorted at index %d: %s >= %s", i, (*al)[i-1].Address, entry.Address)
 				}
 				for j, addr := range want {
 					if entry.Address == addr {
@@ -108,7 +108,7 @@ func TestGetBlockAccessList(t *testing.T) {
 		})
 	}
 
-	// The JSON encoding must follow the execution-apis spec field names.
+	// The JSON encoding must match the core/types/bal package output.
 	al, err := api.GetBlockAccessList(context.Background(), latest)
 	if err != nil {
 		t.Fatalf("GetBlockAccessList error: %v", err)
@@ -138,9 +138,8 @@ func TestGetBlockAccessList(t *testing.T) {
 	}
 }
 
-// hasSpecInnerFields checks that the change array uses the execution-apis
-// index/value (or key/changes for storage) naming rather than the internal
-// encoding naming.
+// hasSpecInnerFields checks that the change array uses the core/types/bal
+// blockAccessIndex (or slot/slotChanges for storage) field naming.
 func hasSpecInnerFields(v any) bool {
 	entries, ok := v.([]any)
 	if !ok || len(entries) == 0 {
@@ -150,11 +149,11 @@ func hasSpecInnerFields(v any) bool {
 	if !ok {
 		return false
 	}
-	if _, ok := entry["index"]; ok {
+	if _, ok := entry["blockAccessIndex"]; ok {
 		return true
 	}
-	if _, ok := entry["key"]; ok {
-		if _, ok := entry["changes"]; ok {
+	if _, ok := entry["slot"]; ok {
+		if _, ok := entry["slotChanges"]; ok {
 			return true
 		}
 	}
