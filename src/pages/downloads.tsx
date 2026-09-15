@@ -68,42 +68,40 @@ export const getStaticProps: GetStaticProps = async () => {
   // 1) fetch XML data
   try {
     const [
-      ALL_LINUX_RELEASES_XML_DATA,
-      ALL_LINUX_ARM64_RELEASES_XML_DATA,
-      ALL_LINUX_ALL_TOOLS_RELEASES_XML_DATA,
-      ALL_WINDOWS_RELEASES_XML_DATA,
-      ALL_WINDOWS_ALL_TOOLS_RELEASES_XML_DATA,
-      ALL_ANDROID_RELEASES_XML_DATA,
-      ALL_IOS_RELEASES_XML_DATA
+      ALL_LINUX_RELEASES_XML_PAGES,
+      ALL_LINUX_ARM64_RELEASES_XML_PAGES,
+      ALL_LINUX_ALL_TOOLS_RELEASES_XML_PAGES,
+      ALL_WINDOWS_RELEASES_XML_PAGES,
+      ALL_WINDOWS_ALL_TOOLS_RELEASES_XML_PAGES,
+      ALL_ANDROID_RELEASES_XML_PAGES,
+      ALL_IOS_RELEASES_XML_PAGES
     ] = await fetchXMLData();
 
     // 2) XML data parsing
     const parser = new XMLParser();
+    const parseBlobs = (pages: string[]) =>
+      pages.flatMap(page => {
+        const blobs = parser.parse(page).EnumerationResults.Blobs?.Blob;
+        if (!blobs) return [];
+        return Array.isArray(blobs) ? blobs : [blobs];
+      });
 
     // linux
-    const linuxJson = parser.parse(ALL_LINUX_RELEASES_XML_DATA);
-    const ALL_LINUX_BLOBS_JSON_DATA = linuxJson.EnumerationResults.Blobs.Blob;
-
-    const linuxArm64Json = parser.parse(ALL_LINUX_ARM64_RELEASES_XML_DATA);
-    const ALL_LINUX_ARM64_BLOBS_JSON_DATA = linuxArm64Json.EnumerationResults.Blobs.Blob;
-
-    const linuxAllToolsJson = parser.parse(ALL_LINUX_ALL_TOOLS_RELEASES_XML_DATA);
-    const ALL_LINUX_ALL_TOOLS_BLOBS_JSON_DATA = linuxAllToolsJson.EnumerationResults.Blobs.Blob;
+    const ALL_LINUX_BLOBS_JSON_DATA = parseBlobs(ALL_LINUX_RELEASES_XML_PAGES);
+    const ALL_LINUX_ARM64_BLOBS_JSON_DATA = parseBlobs(ALL_LINUX_ARM64_RELEASES_XML_PAGES);
+    const ALL_LINUX_ALL_TOOLS_BLOBS_JSON_DATA = parseBlobs(ALL_LINUX_ALL_TOOLS_RELEASES_XML_PAGES);
 
     // windows
-    const windowsJson = parser.parse(ALL_WINDOWS_RELEASES_XML_DATA);
-    const ALL_WINDOWS_BLOBS_JSON_DATA = windowsJson.EnumerationResults.Blobs.Blob;
-
-    const windowsAllToolsJson = parser.parse(ALL_WINDOWS_ALL_TOOLS_RELEASES_XML_DATA);
-    const ALL_WINDOWS_ALL_TOOLS_BLOBS_JSON_DATA = windowsAllToolsJson.EnumerationResults.Blobs.Blob;
+    const ALL_WINDOWS_BLOBS_JSON_DATA = parseBlobs(ALL_WINDOWS_RELEASES_XML_PAGES);
+    const ALL_WINDOWS_ALL_TOOLS_BLOBS_JSON_DATA = parseBlobs(
+      ALL_WINDOWS_ALL_TOOLS_RELEASES_XML_PAGES
+    );
 
     // android
-    const androidJson = parser.parse(ALL_ANDROID_RELEASES_XML_DATA);
-    const ALL_ANDROID_BLOBS_JSON_DATA = androidJson.EnumerationResults.Blobs.Blob;
+    const ALL_ANDROID_BLOBS_JSON_DATA = parseBlobs(ALL_ANDROID_RELEASES_XML_PAGES);
 
     // iOS
-    const iOSJson = parser.parse(ALL_IOS_RELEASES_XML_DATA);
-    const ALL_IOS_BLOBS_JSON_DATA = iOSJson.EnumerationResults.Blobs.Blob;
+    const ALL_IOS_BLOBS_JSON_DATA = parseBlobs(ALL_IOS_RELEASES_XML_PAGES);
 
     // 3) get blobs
     // linux
