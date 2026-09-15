@@ -291,12 +291,13 @@ func TestServerQUICPeer(t *testing.T) {
 	newServer := func(name string) *Server {
 		srv := &Server{
 			Config: Config{
-				Name:           name,
-				PrivateKey:     newkey(),
-				MaxPeers:       10,
-				NoDiscovery:    true,
-				ListenQUICAddr: "127.0.0.1:0",
-				Logger:         testlog.Logger(t, log.LvlTrace),
+				Name:            name,
+				PrivateKey:      newkey(),
+				MaxPeers:        10,
+				MaxBrowserPeers: 10,
+				NoDiscovery:     true,
+				ListenQUICAddr:  "127.0.0.1:0",
+				Logger:          testlog.Logger(t, log.LvlTrace),
 			},
 		}
 		if err := srv.Start(); err != nil {

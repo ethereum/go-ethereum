@@ -224,6 +224,12 @@ func (p *Peer) Inbound() bool {
 	return p.rw.is(inboundConn)
 }
 
+// IsBrowser returns true if the peer is an unverified inbound peer connected
+// over QUIC, budgeted separately from other peers.
+func (p *Peer) IsBrowser() bool {
+	return p.rw.browser
+}
+
 // Trusted returns true if the peer is configured as trusted.
 // Trusted peers are accepted in above the MaxInboundConns limit.
 // The peer can be either inbound or dialed.

@@ -138,11 +138,12 @@ const (
 type conn struct {
 	fd net.Conn
 	transport
-	node  *enode.Node
-	flags connFlag
-	cont  chan error // The run loop uses cont to signal errors to SetupConn.
-	caps  []Cap      // valid after the protocol handshake
-	name  string     // valid after the protocol handshake
+	node    *enode.Node
+	flags   connFlag
+	browser bool       // true for unverified inbound peers (currently all inbound QUIC)
+	cont    chan error // The run loop uses cont to signal errors to SetupConn.
+	caps    []Cap      // valid after the protocol handshake
+	name    string     // valid after the protocol handshake
 }
 
 type transport interface {
@@ -627,10 +628,15 @@ func (srv *Server) setupQUIC() error {
 
 	if udp, ok := listener.Addr().(*net.UDPAddr); ok {
 		srv.localnode.Set(enr.QUIC(udp.Port))
+		if !udp.IP.IsLoopback() && !udp.IP.IsPrivate() {
+			srv.portMappingRegister <- &portMapping{
+				protocol: "UDP",
+				name:     "ethereum quic",
+				port:     udp.Port,
+			}
+		}
 	}
 	srv.localnode.Set(rot.qh())
-
-	//todo: port mapping
 
 	srv.loopWG.Add(1)
 	go srv.quicCertLoop(rot)
@@ -710,6 +716,7 @@ func (srv *Server) run() {
 	var (
 		peers        = make(map[enode.ID]*Peer)
 		inboundCount = 0
+		browserCount = 0
 		trusted      = make(map[enode.ID]bool, len(srv.TrustedNodes))
 	)
 	// Put trusted nodes into a map to speed up checks.
@@ -755,7 +762,7 @@ running:
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
 			}
-			err := srv.postHandshakeChecks(peers, inboundCount, c)
+			err := srv.postHandshakeChecks(peers, inboundCount, browserCount, c)
 			if err == nil && c.flags&inboundConn != 0 {
 				srv.dialsched.inboundPending(c.node.ID())
 			}
@@ -764,7 +771,7 @@ running:
 		case c := <-srv.checkpointAddPeer:
 			// At this point the connection is past the protocol handshake.
 			// Its capabilities are known and the remote identity is verified.
-			err := srv.addPeerChecks(peers, inboundCount, c)
+			err := srv.addPeerChecks(peers, inboundCount, browserCount, c)
 			if err == nil {
 				// The handshakes are done and it passed all checks.
 				p := srv.launchPeer(c)
@@ -772,7 +779,11 @@ running:
 				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(), "conn", c.flags, "addr", p.RemoteAddr(), "name", p.Name())
 				srv.dialsched.peerAdded(c)
 				if p.Inbound() {
-					inboundCount++
+					if c.browser {
+						browserCount++
+					} else {
+						inboundCount++
+					}
 					serveSuccessMeter.Mark(1)
 					activeInboundPeerGauge.Inc(1)
 				} else {
@@ -790,7 +801,11 @@ running:
 			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
 			if pd.Inbound() {
-				inboundCount--
+				if pd.rw.browser {
+					browserCount--
+				} else {
+					inboundCount--
+				}
 				activeInboundPeerGauge.Dec(1)
 			} else {
 				activeOutboundPeerGauge.Dec(1)
@@ -822,11 +837,15 @@ running:
 	}
 }
 
-func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount, browserCount int, c *conn) error {
+	// Browsers are limited by a separate MaxBrowserPeers budget and do not count
+	// against MaxPeers or MaxInboundConns.
 	switch {
-	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers:
+	case c.browser && browserCount >= srv.MaxBrowserPeers:
 		return DiscTooManyPeers
-	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.MaxInboundConns():
+	case !c.browser && !c.is(trustedConn) && len(peers)-browserCount >= srv.MaxPeers:
+		return DiscTooManyPeers
+	case !c.browser && !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.MaxInboundConns():
 		return DiscTooManyPeers
 	case peers[c.node.ID()] != nil:
 		return DiscAlreadyConnected
@@ -837,14 +856,14 @@ func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount in
 	}
 }
 
-func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount, browserCount int, c *conn) error {
 	// Drop connections with no matching protocols.
 	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
 		return DiscUselessPeer
 	}
 	// Repeat the post-handshake checks because the
 	// peer set might have changed since those checks were performed.
-	return srv.postHandshakeChecks(peers, inboundCount, c)
+	return srv.postHandshakeChecks(peers, inboundCount, browserCount, c)
 }
 
 // listenLoop runs in its own goroutine and accepts
@@ -954,6 +973,8 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		dialPub = dialDest.Pubkey()
 	}
 	if qc := unwrapQUICConn(fd); qc != nil {
+		// We currently assume every inbound QUIC connection is a browser.
+		c.browser = c.is(inboundConn)
 		c.transport = newQUICTransport(fd, qc.session, qc.nonce, dialPub)
 	} else {
 		c.transport = srv.newTransport(fd, dialPub)

@@ -70,11 +70,12 @@ var DefaultConfig = Config{
 	HTTPBodyLimit:        5 * 1024 * 1024,
 	GraphQLVirtualHosts:  []string{"localhost"},
 	P2P: p2p.Config{
-		ListenTCPAddr: ":30303",
-		MaxPeers:      50,
-		NAT:           nat.Any(),
-		DiscoveryV4:   true,
-		DiscoveryV5:   true,
+		ListenTCPAddr:   ":30303",
+		MaxPeers:        50,
+		MaxBrowserPeers: 100,
+		NAT:             nat.Any(),
+		DiscoveryV4:     true,
+		DiscoveryV5:     true,
 	},
 	DBEngine: "", // Use whatever exists, will default to Pebble if non-existent and supported
 	OpenTelemetry: OpenTelemetryConfig{

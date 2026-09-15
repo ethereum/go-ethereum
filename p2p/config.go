@@ -102,6 +102,10 @@ type Config struct {
 	ListenTCPAddr  string
 	ListenQUICAddr string
 
+	// MaxBrowserPeers is the maximum number of browser peers, connected over
+	// QUIC. They are budgeted separately from MaxPeers. Zero disables them.
+	MaxBrowserPeers int `toml:",omitempty"`
+
 	// If DiscAddr is set to a non-nil value, the server will use ListenAddr
 	// for TCP and DiscAddr for the UDP discovery protocol.
 	DiscAddr string

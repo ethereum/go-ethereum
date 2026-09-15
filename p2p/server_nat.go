@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -48,11 +49,11 @@ type portMapping struct {
 // setupPortMapping starts the port mapping loop if necessary.
 // Note: this needs to be called after the LocalNode instance has been set on the server.
 func (srv *Server) setupPortMapping() {
-	// portMappingRegister will receive up to two values: one for the TCP port if
-	// listening is enabled, and one more for enabling UDP port mapping if discovery is
-	// enabled. We make it buffered to avoid blocking setup while a mapping request is in
+	// portMappingRegister will receive up to three values: one for the TCP port if
+	// listening is enabled, one for the discovery UDP port, and one for the QUIC UDP
+	// port. We make it buffered to avoid blocking setup while a mapping request is in
 	// progress.
-	srv.portMappingRegister = make(chan *portMapping, 2)
+	srv.portMappingRegister = make(chan *portMapping, 3)
 
 	switch srv.NAT.(type) {
 	case nil:
@@ -93,7 +94,7 @@ func (srv *Server) portMappingLoop() {
 	}
 
 	var (
-		mappings  = make(map[string]*portMapping, 2)
+		mappings  = make(map[string]*portMapping, 3)
 		refresh   = mclock.NewAlarm(srv.clock)
 		extip     = mclock.NewAlarm(srv.clock)
 		lastExtIP net.IP
@@ -143,7 +144,9 @@ func (srv *Server) portMappingLoop() {
 			if m.protocol != "TCP" && m.protocol != "UDP" {
 				panic("unknown NAT protocol name: " + m.protocol)
 			}
-			mappings[m.protocol] = m
+			// Key by protocol and port so multiple UDP mappings (discovery and QUIC)
+			// can coexist.
+			mappings[m.protocol+":"+strconv.Itoa(m.port)] = m
 			m.nextTime = srv.clock.Now()
 
 		case <-refresh.C():
