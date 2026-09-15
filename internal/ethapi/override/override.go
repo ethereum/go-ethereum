@@ -190,7 +190,8 @@ func (o *BlockOverrides) MakeHeader(header *types.Header) *types.Header {
 	if o.Number != nil {
 		h.Number = o.Number.ToInt()
 	}
-	if o.Difficulty != nil {
+	// Difficulty is a no-op on post-merge (zero-difficulty) headers.
+	if o.Difficulty != nil && (h.Difficulty == nil || h.Difficulty.Sign() != 0) {
 		h.Difficulty = o.Difficulty.ToInt()
 	}
 	if o.Time != nil {
