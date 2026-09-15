@@ -392,3 +392,68 @@ func TestEventUnpackEmptyTopics(t *testing.T) {
 		}
 	}
 }
+
+func TestWatchEventsIgnoreMismatch(t *testing.T) {
+	backend, err := testSetup()
+	if err != nil {
+		t.Fatalf("error setting up testing env: %v", err)
+	}
+	defer backend.Backend.Close()
+
+	deploymentParams := &bind.DeploymentParams{
+		Contracts: []*bind.MetaData{&events.CMetaData},
+	}
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(backend))
+	if err != nil {
+		t.Fatalf("error deploying contract for testing: %v", err)
+	}
+	backend.Commit()
+
+	c := events.NewC()
+	instance := c.Instance(backend, res.Addresses[events.CMetaData.ID])
+
+	newCBasic1Ch := make(chan *events.CBasic1, 10)
+	watchOpts := &bind.WatchOpts{Context: context.Background()}
+
+	mismatchSimulated := false
+	unpackWithMismatch := func(log *types.Log) (*events.CBasic1, error) {
+		if !mismatchSimulated {
+			mismatchSimulated = true
+			return nil, bind.ErrEventSignatureMismatch
+		}
+		return c.UnpackBasic1Event(log)
+	}
+
+	sub, err := bind.WatchEvents(instance, watchOpts, unpackWithMismatch, newCBasic1Ch)
+	if err != nil {
+		t.Fatalf("WatchEvents returned error: %v", err)
+	}
+	defer sub.Unsubscribe()
+
+	packedInput := c.PackEmitMulti()
+	tx, err := bind.Transact(instance, defaultTxAuth(), packedInput)
+	if err != nil {
+		t.Fatalf("failed to send transaction: %v", err)
+	}
+	backend.Commit()
+	if _, err := bind.WaitMined(context.Background(), backend, tx.Hash()); err != nil {
+		t.Fatalf("error waiting for tx to be mined: %v", err)
+	}
+
+	timeout := time.NewTimer(5 * time.Second)
+	e1Count := 0
+
+	for {
+		select {
+		case <-newCBasic1Ch:
+			e1Count++
+			if e1Count == 1 {
+				return
+			}
+		case err := <-sub.Err():
+			t.Fatalf("subscription failed unexpectedly with error: %v", err)
+		case <-timeout.C:
+			t.Fatalf("timeout waiting for events, only got %d", e1Count)
+		}
+	}
+}
