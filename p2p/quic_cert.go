@@ -161,7 +161,7 @@ func newQUICTLSConfig(rot *quicCertRotator) *tls.Config {
 			return rot.getCert(), nil
 		},
 		InsecureSkipVerify: true,
-		ClientAuth:         tls.RequireAnyClientCert,
+		ClientAuth:         tls.NoClientCert,
 		NextProtos:         []string{ALPN},
 	}
 }
