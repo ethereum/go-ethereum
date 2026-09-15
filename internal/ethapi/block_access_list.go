@@ -31,13 +31,19 @@ import (
 // storage writes) and the storage reads performed on the account during
 // block execution.
 //
-// Blocks predating the fork carrying the block access list (or otherwise
-// lacking one) return an empty list. A null result means the block does not
-// exist.
+// A null result means the block does not exist or the pending tag was
+// requested. Blocks predating the fork carrying the block access list (or
+// otherwise lacking one) return an empty list. Note the access list remains
+// retrievable even when the block's body and receipts have been pruned.
 func (api *BlockChainAPI) GetBlockAccessList(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*bal.BlockAccessList, error) {
+	if number, ok := blockNrOrHash.Number(); ok && number == rpc.PendingBlockNumber {
+		return nil, nil // the pending block's access list is not durable
+	}
 	header, err := api.b.HeaderByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
-		if !blockNrOrHash.RequireCanonical {
+		// The header lookup reports unknown hashes as an error; those surface
+		// as null per the RPC spec. All other failures pass through.
+		if _, byHash := blockNrOrHash.Hash(); byHash && !blockNrOrHash.RequireCanonical {
 			return nil, nil
 		}
 		return nil, err
@@ -46,8 +52,9 @@ func (api *BlockChainAPI) GetBlockAccessList(ctx context.Context, blockNrOrHash 
 		return nil, nil
 	}
 	accessList := rawdb.ReadAccessList(api.b.ChainDb(), header.Hash(), header.Number.Uint64())
-	if accessList == nil {
+	if accessList == nil || len(*accessList) == 0 {
 		return &bal.BlockAccessList{}, nil
 	}
+	accessList.NormalizeJSON()
 	return accessList, nil
 }

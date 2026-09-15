@@ -29,11 +29,11 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -1061,47 +1061,37 @@ func genesisAlloc() types.GenesisAlloc {
 	return alloc
 }
 
+// blockAccessListTestService serves a core/types/bal block access list, the
+// exact type the real eth_getBlockAccessList endpoint marshals, so the
+// client's decoding is verified against the server-side JSON tags.
 type blockAccessListTestService struct {
-	calls chan rpc.BlockNumberOrHash
+	response *bal.BlockAccessList
 }
 
-func (s *blockAccessListTestService) GetBlockAccessList(ctx context.Context, block rpc.BlockNumberOrHash) ([]ethclient.BlockAccessListEntry, error) {
-	s.calls <- block
-	slot := hexutil.U256(*uint256.NewInt(0x152f))
-	value := hexutil.U256(*uint256.NewInt(1))
-	balance := hexutil.U256(*uint256.NewInt(1000000000000000000))
-	return []ethclient.BlockAccessListEntry{
-		{
-			Address:        common.HexToAddress("0x000f3df6d732807ef1319fb7b8bb8522d0beac02"),
-			BalanceChanges: []ethclient.BalanceChangeEntry{},
-			CodeChanges:    []ethclient.CodeChangeEntry{},
-			NonceChanges:   []ethclient.NonceChangeEntry{},
-			StorageChanges: []ethclient.StorageChangesEntry{
-				{
-					Slot: &slot,
-					SlotChanges: []ethclient.StorageChangeEntry{
-						{BlockAccessIndex: 0, PostValue: &value},
-					},
-				},
-			},
-			StorageReads: []hexutil.U256{},
-		},
-		{
-			Address: common.HexToAddress("0x8943545177806ed17b9f23f0a21ee5948ecaa776"),
-			BalanceChanges: []ethclient.BalanceChangeEntry{
-				{BlockAccessIndex: 1, PostBalance: &balance},
-			},
-			CodeChanges:    []ethclient.CodeChangeEntry{},
-			NonceChanges:   []ethclient.NonceChangeEntry{{BlockAccessIndex: 1, PostNonce: 1}},
-			StorageChanges: []ethclient.StorageChangesEntry{},
-			StorageReads:   []hexutil.U256{},
-		},
-	}, nil
+func (s *blockAccessListTestService) GetBlockAccessList(ctx context.Context, block rpc.BlockNumberOrHash) (*bal.BlockAccessList, error) {
+	return s.response, nil
+}
+
+// testBlockAccessList builds the fixture through the construction API the
+// block builder uses, then normalizes it the way the RPC endpoint serves it.
+func testBlockAccessList() *bal.BlockAccessList {
+	addr1 := common.HexToAddress("0x000f3df6d732807ef1319fb7b8bb8522d0beac02")
+	addr2 := common.HexToAddress("0x8943545177806ed17b9f23f0a21ee5948ecaa776")
+	b := bal.NewConstructionBlockAccessList()
+	b.StorageWrite(0, addr1, common.HexToHash("0x152f"), common.HexToHash("0x01"))
+	b.StorageRead(addr1, common.HexToHash("0x02"))
+	b.BalanceChange(1, addr2, uint256.NewInt(1000000000000000000))
+	b.NonceChange(addr2, 1, 1)
+	out := b.ToEncodingObj()
+	out.NormalizeJSON()
+	return out
 }
 
 func TestGetBlockAccessList(t *testing.T) {
 	srv := rpc.NewServer()
-	service := &blockAccessListTestService{calls: make(chan rpc.BlockNumberOrHash, 1)}
+	service := &blockAccessListTestService{
+		response: testBlockAccessList(),
+	}
 	if err := srv.RegisterName("eth", service); err != nil {
 		t.Fatalf("failed to register service: %v", err)
 	}
@@ -1123,8 +1113,10 @@ func TestGetBlockAccessList(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
-	if entries[0].Address != common.HexToAddress("0x000f3df6d732807ef1319fb7b8bb8522d0beac02") {
-		t.Fatalf("unexpected first entry address: %s", entries[0].Address)
+	addr1 := common.HexToAddress("0x000f3df6d732807ef1319fb7b8bb8522d0beac02")
+	addr2 := common.HexToAddress("0x8943545177806ed17b9f23f0a21ee5948ecaa776")
+	if entries[0].Address != addr1 || entries[1].Address != addr2 {
+		t.Fatalf("unexpected entry addresses: %s, %s", entries[0].Address, entries[1].Address)
 	}
 	storage := entries[0].StorageChanges
 	if len(storage) != 1 || storage[0].Slot == nil || (*uint256.Int)(storage[0].Slot).CmpUint64(0x152f) != 0 {
@@ -1133,11 +1125,30 @@ func TestGetBlockAccessList(t *testing.T) {
 	if len(storage[0].SlotChanges) != 1 || storage[0].SlotChanges[0].BlockAccessIndex != 0 {
 		t.Fatalf("unexpected slot changes: %+v", storage[0].SlotChanges)
 	}
+	if pv := storage[0].SlotChanges[0].PostValue; pv == nil || (*uint256.Int)(pv).CmpUint64(1) != 0 {
+		t.Fatalf("unexpected post value: %v", storage[0].SlotChanges[0].PostValue)
+	}
+	if len(entries[0].StorageReads) != 1 || (*uint256.Int)(&entries[0].StorageReads[0]).CmpUint64(2) != 0 {
+		t.Fatalf("unexpected storage reads: %+v", entries[0].StorageReads)
+	}
 	balance := entries[1].BalanceChanges[0].PostBalance
 	if balance == nil || (*uint256.Int)(balance).CmpUint64(1000000000000000000) != 0 {
 		t.Fatalf("unexpected balance change: %v", entries[1].BalanceChanges[0].PostBalance)
 	}
 	if entries[1].NonceChanges[0].PostNonce != 1 {
 		t.Fatalf("unexpected nonce change: %+v", entries[1].NonceChanges)
+	}
+
+	// A null result maps to ethereum.NotFound, an empty result decodes to an
+	// empty list.
+	service.response = nil
+	if _, err := ec.GetBlockAccessList(context.Background(), ref); !errors.Is(err, ethereum.NotFound) {
+		t.Fatalf("expected ethereum.NotFound for null result, got %v", err)
+	}
+	empty := bal.BlockAccessList{}
+	service.response = &empty
+	got, err := ec.GetBlockAccessList(context.Background(), ref)
+	if err != nil || got == nil || len(got) != 0 {
+		t.Fatalf("expected empty list, got %v err=%v", got, err)
 	}
 }

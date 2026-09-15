@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -87,7 +88,8 @@ func TestGetBlockAccessList(t *testing.T) {
 				t.Fatal("expected a non-empty access list for a block with transactions")
 			}
 			// The list is sorted lexicographically by address; the coinbase
-			// (fee recipient) and both transfer accounts must be present.
+			// (recorded even when untouched) and both transfer accounts must
+			// be present.
 			var found [3]bool
 			want := []common.Address{{}, accounts[0].addr, accounts[1].addr}
 			for i, entry := range *al {
@@ -108,7 +110,9 @@ func TestGetBlockAccessList(t *testing.T) {
 		})
 	}
 
-	// The JSON encoding must match the core/types/bal package output.
+	// The JSON encoding must match the core/types/bal package output: all
+	// change lists are arrays (never null) and the inner objects carry the
+	// bal package's field names.
 	al, err := api.GetBlockAccessList(context.Background(), latest)
 	if err != nil {
 		t.Fatalf("GetBlockAccessList error: %v", err)
@@ -117,47 +121,107 @@ func TestGetBlockAccessList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
+	if bytes.Contains(blob, []byte("null")) {
+		t.Fatalf("marshaled access list contains null: %s", blob)
+	}
 	var decoded []map[string]any
 	if err := json.Unmarshal(blob, &decoded); err != nil {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}
-	for _, want := range []string{"address", "balanceChanges", "nonceChanges", "codeChanges", "storageChanges", "storageReads"} {
-		if _, ok := decoded[0][want]; !ok {
-			t.Fatalf("access list entry missing spec field %q: %s", want, blob)
+	for _, entry := range decoded {
+		for _, want := range []string{"address", "balanceChanges", "nonceChanges", "codeChanges", "storageChanges", "storageReads"} {
+			if _, ok := entry[want]; !ok {
+				t.Fatalf("access list entry missing field %q: %s", want, blob)
+			}
 		}
+		assertChangeKeys(t, entry["storageChanges"], false, "slot", "slotChanges")
+		if slots, ok := entry["storageChanges"].([]any); ok {
+			for _, slot := range slots {
+				assertChangeKeys(t, slot.(map[string]any)["slotChanges"], false, "blockAccessIndex", "postValue")
+			}
+		}
+		assertChangeKeys(t, entry["codeChanges"], false, "blockAccessIndex", "newCode")
 	}
-	for _, field := range []string{"balanceChanges", "nonceChanges", "codeChanges", "storageChanges"} {
-		if !hasSpecInnerFields(decoded[0][field]) {
-			t.Fatalf("spec field %q has wrong inner shape: %s", field, blob)
-		}
+	// The sender has balance and nonce changes in every block; pin their
+	// exact key sets.
+	sender := findEntry(t, decoded, accounts[0].addr)
+	assertChangeKeys(t, sender["balanceChanges"], true, "blockAccessIndex", "postBalance")
+	assertChangeKeys(t, sender["nonceChanges"], true, "blockAccessIndex", "postNonce")
+
+	// The pending tag serves null: the pending block's access list is not
+	// durable.
+	if al, err := api.GetBlockAccessList(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)); al != nil || err != nil {
+		t.Fatalf("expected null for pending block, got list=%v err=%v", al, err)
 	}
 
-	// Unknown blocks must yield null, not an error.
+	// Unknown blocks must yield null, not an error -- by number and by hash.
 	if al, err := api.GetBlockAccessList(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(genBlocks+100))); al != nil || err != nil {
 		t.Fatalf("expected null for unknown block, got list=%v err=%v", al, err)
 	}
+	if al, err := api.GetBlockAccessList(context.Background(), rpc.BlockNumberOrHashWithHash(common.Hash{0xaa}, false)); al != nil || err != nil {
+		t.Fatalf("expected null for unknown hash, got list=%v err=%v", al, err)
+	}
+
+	// Header lookup failures pass through, except the unknown-hash case which
+	// the RPC spec requires to be null.
+	errAPI := NewBlockChainAPI(errHeaderBackend{api.b})
+	if al, err := errAPI.GetBlockAccessList(context.Background(), rpc.BlockNumberOrHashWithHash(block.Hash(), false)); al != nil || err != nil {
+		t.Fatalf("expected null for unknown hash, got list=%v err=%v", al, err)
+	}
+	if _, err := errAPI.GetBlockAccessList(context.Background(), rpc.BlockNumberOrHashWithHash(block.Hash(), true)); err == nil {
+		t.Fatal("expected requireCanonical to propagate the header error")
+	}
+	if _, err := errAPI.GetBlockAccessList(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(1))); err == nil {
+		t.Fatal("expected number-path error to propagate")
+	}
 }
 
-// hasSpecInnerFields checks that the change array uses the core/types/bal
-// blockAccessIndex (or slot/slotChanges for storage) field naming.
-func hasSpecInnerFields(v any) bool {
-	entries, ok := v.([]any)
-	if !ok || len(entries) == 0 {
-		return true // empty arrays are fine
+// assertChangeKeys verifies the exact key set of the first element of a
+// marshaled change array, catching both renames and added fields. With
+// nonEmpty it fails on empty arrays instead of skipping them.
+func assertChangeKeys(t *testing.T, v any, nonEmpty bool, keys ...string) {
+	t.Helper()
+	arr, ok := v.([]any)
+	if !ok || len(arr) == 0 {
+		if nonEmpty {
+			t.Fatalf("expected non-empty change array, got %v", v)
+		}
+		return
 	}
-	entry, ok := entries[0].(map[string]any)
+	entry, ok := arr[0].(map[string]any)
 	if !ok {
-		return false
+		t.Fatalf("expected object entries, got %v", arr[0])
 	}
-	if _, ok := entry["blockAccessIndex"]; ok {
-		return true
+	if len(entry) != len(keys) {
+		t.Fatalf("entry has keys %v, want exactly %v", entry, keys)
 	}
-	if _, ok := entry["slot"]; ok {
-		if _, ok := entry["slotChanges"]; ok {
-			return true
+	for _, key := range keys {
+		if _, ok := entry[key]; !ok {
+			t.Fatalf("entry missing key %q", key)
 		}
 	}
-	return false
+}
+
+// findEntry returns the access list entry of the given account.
+func findEntry(t *testing.T, decoded []map[string]any, addr common.Address) map[string]any {
+	t.Helper()
+	for _, entry := range decoded {
+		if common.HexToAddress(entry["address"].(string)) == addr {
+			return entry
+		}
+	}
+	t.Fatalf("no access list entry for %s", addr)
+	return nil
+}
+
+// errHeaderBackend wraps a backend, failing every header lookup like the real
+// one does for unknown hashes and canonicality violations.
+type errHeaderBackend struct {
+	Backend
+}
+
+func (b errHeaderBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+	return nil, errors.New("header for hash not found")
 }
 
 func uint64Ptr(v uint64) *uint64 { return &v }
