@@ -180,7 +180,6 @@ Here's an simple `eth_simulateV1` call that sets blocks `baseFeePerGas` to `9`, 
             "size": "0x298",
             "stateRoot": "0xbb0740745211507e2a2a6cdb627dfa171ef5050ad2a01e5401c2e3df4be5b919",
             "timestamp": "0x66ec2853",
-            "totalDifficulty": "0xc70d815d562d3cfa955",
             "transactions": [
                 "0xe7217784e0c3f7b35d39303b1165046e9b7e8af9b9cf80d5d5f96c3163de8f51",
                 "0xf0182201606ec03701ba3a07d965fabdb4b7d06b424f226ea7ec3581802fc6fa"
@@ -204,15 +203,15 @@ Executes a new message call immediately, without creating a transaction on the b
 
 **Parameters:**
 
-The method takes 4 parameters: an unsigned transaction object to execute in read-only mode; the block number to execute the call against; an optional state override-set to allow executing the call against a modified chain state; and an optional set of overrides for the block context.
+The method takes up to 4 parameters: an unsigned transaction object to execute in read-only mode; an optional block selector; an optional state override set to allow executing the call against a modified chain state; and an optional set of overrides for the block context.
 
 1. `Object` - Transaction call object
 
    The _transaction call object_ is mandatory. Please see [here](/docs/interacting-with-geth/rpc/objects) for details.
 
-2. `Quantity | Tag` - Block number or the string `latest` or `pending`
+2. `Quantity | Tag | Object` - Block number, block tag, or block hash selector
 
-   The _block number_ is mandatory and defines the context (state) against which the specified transaction should be executed. It is not possible to execute calls against reorged blocks; or blocks older than 128 (unless the node is an archive node).
+   The _block selector_ is optional and defines the context (state) against which the specified transaction should be executed. It defaults to `latest` when omitted. It is not possible to execute calls against reorged blocks or blocks older than 128 (unless the node is an archive node).
 
 3. `Object` - State override set
 
@@ -302,14 +301,14 @@ Just for the sake of completeness, decoded the response is: `2`.
 
 ### eth_createAccessList {#eth-createaccesslist}
 
-This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles. This method uses the same `transaction` call [Transaction Call Object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
+This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains the storage slots and addresses read and written by the transaction, excluding the sender, the recipient or derived contract-creation address, precompiles, and valid EIP-7702 authorization authorities. This method uses the same [Transaction Call Object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) and block selector as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 
 **Parameters:**
 
-| Field              | Type     | Description                                    |
-| :----------------- | :------- | :--------------------------------------------- |
-| `transaction`      | `Object` | `TransactionCall` object                       |
-| `blockNumberOrTag` | `Object` | Optional, blocknumber or `latest` or `pending` |
+| Field               | Type                        | Description                                                         |
+| :------------------ | :-------------------------- | :------------------------------------------------------------------ |
+| `transaction`       | `Object`                    | `TransactionCall` object                                            |
+| `blockNumberOrHash` | `Quantity \| Tag \| Object` | Optional block number, block tag, or EIP-1898 block selector object |
 
 **Usage:**
 
@@ -345,9 +344,9 @@ Returns a block header.
 
 **Parameters:**
 
-| Field         | Type       | Description  |
-| :------------ | :--------- | :----------- |
-| `blockNumber` | `Quantity` | Block number |
+| Field         | Type              | Description                                                             |
+| :------------ | :---------------- | :---------------------------------------------------------------------- |
+| `blockNumber` | `Quantity \| Tag` | Block number or `earliest`, `latest`, `pending`, `safe`, or `finalized` |
 
 **Usage:**
 
@@ -373,10 +372,8 @@ curl localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"
   "parentHash": "0x956846b5012b1df4f4c928b85db2f6456b2faed2c0ca136e89c928a87ceec69c",
   "receiptsRoot": "0x89b73c221ca0d721f8805edbecbf55524b0556dc5111680bac1c4dd02a286457",
   "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
-  "size": "0x25e",
   "stateRoot": "0xe38ef58ddfbf00b03f7bd431fca306e5fcaecc138f4208501d2588657a65a0f3",
   "timestamp": "0x646a982b",
-  "totalDifficulty": "0xc70d815d562d3cfa955",
   "transactionsRoot": "0xe44699ea734cee851a852db4d257617c8369b8a7e68bd54b6de829377234017b",
   "withdrawalsRoot": "0x917f5a8e4d652233a80b0973ff20bde517ed2a6a93defe7e99c5263089453e17"
 }
@@ -416,10 +413,8 @@ curl localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"
   "parentHash": "0x956846b5012b1df4f4c928b85db2f6456b2faed2c0ca136e89c928a87ceec69c",
   "receiptsRoot": "0x89b73c221ca0d721f8805edbecbf55524b0556dc5111680bac1c4dd02a286457",
   "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
-  "size": "0x25e",
   "stateRoot": "0xe38ef58ddfbf00b03f7bd431fca306e5fcaecc138f4208501d2588657a65a0f3",
   "timestamp": "0x646a982b",
-  "totalDifficulty": "0xc70d815d562d3cfa955",
   "transactionsRoot": "0xe44699ea734cee851a852db4d257617c8369b8a7e68bd54b6de829377234017b",
   "withdrawalsRoot": "0x917f5a8e4d652233a80b0973ff20bde517ed2a6a93defe7e99c5263089453e17"
 }
