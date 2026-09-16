@@ -422,6 +422,10 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		beaconRoot := common.HexToHash("0xbeac00")
 		header.ParentBeaconRoot = &beaconRoot
 	}
+	if config.IsPrague(header.Number, header.Time) {
+		reqHash := types.CalcRequestsHash(nil)
+		header.RequestsHash = &reqHash
+	}
 	if config.IsAmsterdam(header.Number, header.Time) {
 		header.SlotNumber = new(uint64)
 	}

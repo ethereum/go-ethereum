@@ -272,6 +272,15 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		}
 	}
 
+	// Verify existence / non-existence of requestsHash.
+	prague := chain.Config().IsPrague(header.Number, header.Time)
+	if prague && header.RequestsHash == nil {
+		return errors.New("missing requestsHash")
+	}
+	if !prague && header.RequestsHash != nil {
+		return fmt.Errorf("invalid requestsHash: have %x, expected nil", *header.RequestsHash)
+	}
+
 	// Verify the existence / non-existence of Amsterdam-specific header fields
 	amsterdam := chain.Config().IsAmsterdam(header.Number, header.Time)
 	if amsterdam {
