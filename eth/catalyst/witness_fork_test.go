@@ -252,6 +252,63 @@ func assertStatelessRoots(t *testing.T, api *ConsensusAPI, fork witnessFork, env
 	}
 }
 
+// TestForkchoiceUpdatedWithWitnessForkGate checks that the witness variants of
+// forkchoiceUpdated gate payload attributes on exactly the same forks as their
+// non-witness counterparts (ForkchoiceUpdatedV3/V4 in api.go). V3 must stop
+// serving once a BPO3 payload comes along, handing off to V4, which is where
+// BPO3 through Bogota belong.
+func TestForkchoiceUpdatedWithWitnessForkGate(t *testing.T) {
+	genesis, blocks := forkTestChain(t, 10)
+
+	// Activate every fork through BPO2 well before the payload under test, then
+	// place BPO3's own activation exactly at that payload's timestamp. Amsterdam,
+	// BPO4, BPO5 and Bogota are left unset, so LatestFork at that timestamp
+	// resolves to exactly forks.BPO3.
+	base := blocks[len(blocks)-2].Time() + 5
+	cfg := genesis.Config
+	cfg.ShanghaiTime, cfg.CancunTime, cfg.PragueTime = &base, &base, &base
+	cfg.OsakaTime, cfg.BPO1Time, cfg.BPO2Time = &base, &base, &base
+	bpo3Time := base + 5
+	cfg.BPO3Time = &bpo3Time
+	cfg.BlobScheduleConfig = &params.BlobScheduleConfig{
+		Cancun: params.DefaultCancunBlobConfig,
+		Prague: params.DefaultPragueBlobConfig,
+		BPO1:   params.DefaultBPO1BlobConfig,
+		BPO2:   params.DefaultBPO2BlobConfig,
+		BPO3:   params.DefaultBPO3BlobConfig,
+	}
+
+	n, ethservice := startEthService(t, genesis, blocks[:9])
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+	state := engine.ForkchoiceStateV1{HeadBlockHash: blocks[8].Hash()}
+	attrs := &engine.PayloadAttributes{
+		Timestamp:      bpo3Time,
+		Withdrawals:    make([]*types.Withdrawal, 0),
+		BeaconRoot:     &witnessBeaconRoot,
+		SlotNumber:     &witnessSlotNumber,
+		TargetGasLimit: &witnessGasTarget,
+	}
+
+	// ForkchoiceUpdatedWithWitnessV3 must reject a BPO3 payload, exactly like
+	// ForkchoiceUpdatedV3 does: BPO3 is served by V4, not V3.
+	if _, err := api.ForkchoiceUpdatedWithWitnessV3(context.Background(), state, attrs); err == nil {
+		t.Fatal("ForkchoiceUpdatedWithWitnessV3 accepted a BPO3 payload, want unsupported-fork error")
+	}
+
+	// ForkchoiceUpdatedWithWitnessV4 must accept a BPO3 payload, exactly like
+	// ForkchoiceUpdatedV4 does.
+	resp, err := api.ForkchoiceUpdatedWithWitnessV4(context.Background(), state, attrs, nil)
+	if err != nil {
+		t.Fatalf("ForkchoiceUpdatedWithWitnessV4 rejected a BPO3 payload: %v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("ForkchoiceUpdatedWithWitnessV4 status %q, want %q", resp.PayloadStatus.Status, engine.VALID)
+	}
+}
+
 // forkTestChain builds a merged chain of n blocks, each carrying one transaction
 // so that the payloads under test are not empty. The genesis comes from
 // generateMergeChain, which pre-deploys the system contracts every post-shanghai
