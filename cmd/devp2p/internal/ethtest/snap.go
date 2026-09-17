@@ -807,9 +807,11 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	for i, node := range proof {
 		nodes[i] = node
 	}
-	proofdb := nodes.Set()
-
-	_, err = trie.VerifyRangeProof(tc.root, tc.startingHash[:], keys, accounts, proofdb)
+	if len(nodes) == 0 && tc.startingHash == (common.Hash{}) {
+		_, err = trie.VerifyRangeProof(tc.root, nil, keys, accounts, nil)
+		return err
+	}
+	_, err = trie.VerifyRangeProof(tc.root, tc.startingHash[:], keys, accounts, nodes.Set())
 	return err
 }
 

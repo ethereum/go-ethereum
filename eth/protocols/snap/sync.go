@@ -2573,7 +2573,11 @@ func (s *syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 	for i, node := range proof {
 		nodes[i] = node
 	}
-	cont, err := trie.VerifyRangeProof(root, req.origin[:], keys, accounts, nodes.Set())
+	firstKey, proofdb := req.origin[:], ethdb.KeyValueReader(nodes.Set())
+	if len(nodes) == 0 && req.origin == (common.Hash{}) {
+		firstKey, proofdb = nil, nil
+	}
+	cont, err := trie.VerifyRangeProof(root, firstKey, keys, accounts, proofdb)
 	if err != nil {
 		logger.Warn("Account range failed proof", "err", err)
 		// Signal this request as failed, and ready for rescheduling
