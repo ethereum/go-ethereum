@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // receiptQueue implements typedQueue and is a type adapter between the generic
@@ -58,17 +57,10 @@ func (q *receiptQueue) reserve(peer *peerConnection, items int) (*fetchRequest, 
 	return q.queue.ReserveReceipts(peer, items)
 }
 
-// unreserve is responsible for removing the current receipt retrieval allocation
-// assigned to a specific peer and placing it back into the pool to allow
-// reassigning to some other peer.
-func (q *receiptQueue) unreserve(peer string) int {
-	fails := q.queue.ExpireReceipts(peer)
-	if fails > 2 {
-		log.Trace("Receipt delivery timed out", "peer", peer)
-	} else {
-		log.Debug("Receipt delivery stalling", "peer", peer)
-	}
-	return fails
+// requeue is responsible for placing the current receipt retrieval allocation of
+// a specific peer back into the pool for some other peer to retrieve as well.
+func (q *receiptQueue) requeue(peer string) {
+	q.queue.RequeueReceipts(peer)
 }
 
 // request is responsible for converting a generic fetch request into a receipt
@@ -97,13 +89,6 @@ func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int,
 	receipts := *packet.Res.(*eth.ReceiptsRLPResponse)
 	hashes := packet.Meta.([]common.Hash) // {receipt hashes}
 
-	var size int
-	for _, receipt := range receipts {
-		size += len(receipt)
-	}
-	receiptFetchMetrics.items.Update(int64(len(receipts)))
-	receiptFetchMetrics.bytes.Mark(int64(size))
-
 	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes)
 	switch {
 	case err == nil && len(receipts) == 0:
@@ -114,6 +99,12 @@ func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int,
 		peer.log.Debug("Failed to deliver retrieved receipts", "err", err)
 	}
 	return accepted, err
+}
+
+// stalled returns the peer whose receipt request holds the head of the result
+// cache for longer than the given threshold, blocking the consumer.
+func (q *receiptQueue) stalled(threshold time.Duration) string {
+	return q.queue.StalledReceipts(threshold)
 }
 
 // metrics returns the collectors the concurrent fetcher reports the scheduling

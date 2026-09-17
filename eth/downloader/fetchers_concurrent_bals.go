@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // balQueue implements typedQueue and is a type adapter between the generic
@@ -67,17 +66,11 @@ func (q *balQueue) reserve(peer *peerConnection, items int) (*fetchRequest, bool
 	return q.queue.ReserveBALs(peer, items)
 }
 
-// unreserve is responsible for removing the current access list retrieval
-// allocation assigned to a specific peer and placing it back into the pool to
-// allow reassigning to some other peer.
-func (q *balQueue) unreserve(peer string) int {
-	fails := q.queue.ExpireBALs(peer)
-	if fails > 2 {
-		log.Trace("Access list delivery timed out", "peer", peer)
-	} else {
-		log.Debug("Access list delivery stalling", "peer", peer)
-	}
-	return fails
+// requeue is responsible for placing the current access list retrieval
+// allocation of a specific peer back into the pool for some other peer to
+// retrieve as well.
+func (q *balQueue) requeue(peer string) {
+	q.queue.RequeueBALs(peer)
 }
 
 // request is responsible for converting a generic fetch request into an access
@@ -101,13 +94,6 @@ func (q *balQueue) deliver(peer *peerConnection, packet *eth.Response) (int, err
 	bals := *packet.Res.(*eth.BlockAccessListResponse)
 	hashes := packet.Meta.([]common.Hash) // {keccak256 hash per entry, zero hash if unavailable}
 
-	var size int
-	for _, bal := range bals {
-		size += len(bal)
-	}
-	balFetchMetrics.items.Update(int64(len(bals)))
-	balFetchMetrics.bytes.Mark(int64(size))
-
 	accepted, err := q.queue.DeliverBALs(peer.id, bals, hashes)
 	switch {
 	case err == nil && len(bals) == 0:
@@ -118,6 +104,12 @@ func (q *balQueue) deliver(peer *peerConnection, packet *eth.Response) (int, err
 		peer.log.Debug("Failed to deliver retrieved access lists", "err", err)
 	}
 	return accepted, err
+}
+
+// stalled is a no-op for access lists: they are a best-effort component that
+// never holds back the delivery of a block, so they cannot block the consumer.
+func (q *balQueue) stalled(threshold time.Duration) string {
+	return ""
 }
 
 // metrics returns the collectors the concurrent fetcher reports the scheduling

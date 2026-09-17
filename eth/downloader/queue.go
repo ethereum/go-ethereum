@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -45,10 +46,10 @@ const (
 )
 
 var (
-	blockCacheMaxItems     = 8192              // Maximum number of blocks to cache before throttling the download
-	blockCacheInitialItems = 2048              // Initial number of blocks to start fetching, before we know the sizes of the blocks
-	blockCacheMemory       = 256 * 1024 * 1024 // Maximum amount of memory to use for block caching
-	blockCacheSizeWeight   = 0.1               // Multiplier to approximate the average block size based on past ones
+	blockCacheMaxItems     = 8192               // Maximum number of blocks to cache before throttling the download
+	blockCacheInitialItems = 2048               // Initial number of blocks to start fetching, before we know the sizes of the blocks
+	blockCacheMemory       = 1024 * 1024 * 1024 // Maximum amount of memory to use for block caching
+	blockCacheSizeWeight   = 0.1                // Multiplier to approximate the average block size based on past ones
 
 	// balCacheMemory is the memory allowance for block access lists attached
 	// to cached results, budgeted separately from blockCacheMemory: access
@@ -59,19 +60,30 @@ var (
 	// are tracked, and once over the allowance the *access list* retrieval
 	// throttles itself while block throughput stays untouched.
 	balCacheMemory = 256 * 1024 * 1024
+
+	// softResponseLimit is the target maximum size of replies remote peers
+	// send to data retrievals, mirroring the serving side limit in the eth
+	// protocol package. Items not fitting into it are silently dropped by the
+	// remote, so requests are sized to it.
+	softResponseLimit = 2 * 1024 * 1024
+
+	// requestOverfetch is the factor by which a retrieval request overshoots the
+	// number of items the average item size predicts to fit into a reply, so
+	// that a run of smaller-than-average items still fills the reply.
+	requestOverfetch = 1.5
 )
 
 var (
 	errNoFetchesPending = errors.New("no fetches pending")
-	errStaleDelivery    = errors.New("stale delivery")
 )
 
 // fetchRequest is a currently running data retrieval operation.
 type fetchRequest struct {
-	Peer    *peerConnection // Peer to which the request was sent
-	From    uint64          // Requested chain element index (used for skeleton fills only)
-	Headers []*types.Header // Requested headers, sorted by request order
-	Time    time.Time       // Time when the request was made
+	Peer     *peerConnection // Peer to which the request was sent
+	From     uint64          // Requested chain element index (used for skeleton fills only)
+	Headers  []*types.Header // Requested headers, sorted by request order
+	Time     time.Time       // Time when the request was made
+	Requeued bool            // Whether the headers were already handed back to the task queue
 }
 
 // fetchResult is a struct collecting partial results from data fetchers until
@@ -208,6 +220,8 @@ type queue struct {
 
 	resultCache *resultStore       // Downloaded but not yet delivered fetch results
 	resultSize  common.StorageSize // Approximate size of a block (exponential moving average)
+	bodySize    common.StorageSize // Approximate encoded size of a block body (exponential moving average)
+	receiptSize common.StorageSize // Approximate encoded size of a block's receipts (exponential moving average)
 	balBytes    atomic.Int64       // Exact encoded bytes of access lists attached to cached results
 
 	lock   *sync.RWMutex
@@ -498,6 +512,8 @@ func (q *queue) stats() []interface{} {
 		"blockTasks", q.blockTaskQueue.Size(),
 		"balTasks", q.balTaskQueue.Size(),
 		"itemSize", q.resultSize,
+		"bodySize", q.bodySize,
+		"receiptSize", q.receiptSize,
 	}
 }
 
@@ -525,6 +541,7 @@ func (q *queue) ReserveBodies(p *peerConnection, count int) (*fetchRequest, bool
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
+	count = requestLimit(count, q.bodySize)
 	return q.reserveHeaders(p, count, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool, bodyType)
 }
 
@@ -535,7 +552,78 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
+	count = requestLimit(count, q.receiptSize)
 	return q.reserveHeaders(p, count, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool, receiptType)
+}
+
+// StalledBodies returns the peer whose body request holds the head of the
+// result cache, if the request has been outstanding for longer than the given
+// threshold. See stalledHead for details.
+func (q *queue) StalledBodies(threshold time.Duration) string {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	return q.stalledHead(q.blockPendPool, bodyType, threshold)
+}
+
+// StalledReceipts returns the peer whose receipt request holds the head of the
+// result cache, if the request has been outstanding for longer than the given
+// threshold. See stalledHead for details.
+func (q *queue) StalledReceipts(threshold time.Duration) string {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	return q.stalledHead(q.receiptPendPool, receiptType, threshold)
+}
+
+// stalledHead checks whether the consumer is blocked on a component of the
+// first undelivered block that is currently being retrieved, and if so, whether
+// that retrieval has been outstanding for longer than the given threshold. If
+// both hold, the peer serving the request is returned.
+//
+// Note, this method expects the queue lock to be already held.
+func (q *queue) stalledHead(pendPool map[string]*fetchRequest, kind uint, threshold time.Duration) string {
+	head, missing := q.resultCache.HeadPending(kind)
+	if !missing {
+		return ""
+	}
+	for id, request := range pendPool {
+		if request.Requeued {
+			continue
+		}
+		for _, header := range request.Headers {
+			if header.Number.Uint64() == head {
+				if time.Since(request.Time) > threshold {
+					return id
+				}
+				return ""
+			}
+		}
+	}
+	return ""
+}
+
+// requestLimit caps the number of items to request in a single retrieval to
+// what is expected to fit into a reply, given the average item size seen so
+// far. Remote peers cap their replies at softResponseLimit bytes and drop
+// the surplus, which then gets re-queued locally. That wastes nothing on the
+// wire, but every reserved item occupies a slot of the result cache until its
+// (partial) delivery, so a handful of oversized requests can exhaust the cache
+// and leave every other peer without work.
+func requestLimit(count int, size common.StorageSize) int {
+	if size == 0 {
+		return count
+	}
+	limit := int(math.Ceil(requestOverfetch * float64(softResponseLimit) / float64(size)))
+	return min(count, max(2, limit))
+}
+
+// updateSizeEstimate folds a new average item size into the running estimate.
+func updateSizeEstimate(estimate, sample common.StorageSize) common.StorageSize {
+	if estimate == 0 {
+		return sample
+	}
+	return common.StorageSize(blockCacheSizeWeight)*sample + (1-common.StorageSize(blockCacheSizeWeight))*estimate
 }
 
 // ReserveBALs reserves a set of block access list fetches for the given peer,
@@ -595,26 +683,19 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 
 		// we can ask the resultcache if this header is within the
 		// "prioritized" segment of blocks. If it is not, we need to throttle
-
-		stale, throttle, item, err := q.resultCache.AddFetch(header, q.mode == ethconfig.SnapSync, q.balEligible(header))
+		stale, throttle, item := q.resultCache.AddFetch(header, q.mode == ethconfig.SnapSync, q.balEligible(header))
 		if stale {
 			// Don't put back in the task queue, this item has already been
-			// delivered upstream
+			// delivered upstream. A task outliving the delivery of its block
+			// is expected: it is left behind whenever a request is requeued
+			// and its original reply wins the race, or for access lists, which
+			// block delivery never waits on, whenever a request in flight
+			// across the delivery is handed back afterwards.
 			taskQueue.PopItem()
 			progress = true
 			delete(taskPool, header.Hash())
 
-			// Access lists are a best-effort component that block delivery
-			// never waits on, so a retrieval task outliving the delivery of
-			// its block is expected rather than a sign of queue corruption.
-			// It happens whenever a request in flight across the delivery is
-			// handed back afterwards, be it by the peer not possessing the
-			// list, by a timeout or by a disconnect.
-			if kind == balType {
-				log.Debug("Access list reservation already delivered", "number", header.Number.Uint64())
-			} else {
-				log.Error("Fetch reservation already delivered", "number", header.Number.Uint64())
-			}
+			log.Debug("Fetch reservation already delivered", "number", header.Number.Uint64())
 			continue
 		}
 		if throttle {
@@ -623,12 +704,6 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 			// the caller to throttle, since we still want some other
 			// peer to fetch those for us
 			throttled = len(skip) == 0
-			break
-		}
-		if err != nil {
-			// this most definitely should _not_ happen
-			log.Warn("Failed to reserve headers", "err", err)
-			// There are no resultslots available. Leave it in the task queue
 			break
 		}
 		if item.Done(kind) {
@@ -675,83 +750,80 @@ func (q *queue) Revoke(peerID string) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	if request, ok := q.blockPendPool[peerID]; ok {
-		for _, header := range request.Headers {
-			q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
+	// A request requeued on timeout, or on the drop that leads here, has already
+	// handed its headers back; pushing them again would have them fetched twice.
+	revoke := func(pendPool map[string]*fetchRequest, taskQueue *prque.Prque[int64, *types.Header]) {
+		request, ok := pendPool[peerID]
+		if !ok {
+			return
 		}
-		delete(q.blockPendPool, peerID)
-	}
-	if request, ok := q.receiptPendPool[peerID]; ok {
-		for _, header := range request.Headers {
-			q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
+		if !request.Requeued {
+			for _, header := range request.Headers {
+				taskQueue.Push(header, -int64(header.Number.Uint64()))
+			}
 		}
-		delete(q.receiptPendPool, peerID)
+		delete(pendPool, peerID)
 	}
-	if request, ok := q.balPendPool[peerID]; ok {
-		for _, header := range request.Headers {
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
-		}
-		delete(q.balPendPool, peerID)
-	}
+	revoke(q.blockPendPool, q.blockTaskQueue)
+	revoke(q.receiptPendPool, q.receiptTaskQueue)
+	revoke(q.balPendPool, q.balTaskQueue)
 }
 
-// ExpireBodies checks for in flight block body requests that exceeded a timeout
-// allowance, canceling them and returning the responsible peers for penalisation.
-func (q *queue) ExpireBodies(peer string) int {
+// RequeueBodies returns the bodies reserved by the given peer to the task queue
+// for another peer to retrieve as well, keeping the reservation so that a late
+// delivery is still accepted. See the requeue method for details.
+func (q *queue) RequeueBodies(peer string) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	bodyTimeoutMeter.Mark(1)
-	return q.expire(peer, q.blockPendPool, q.blockTaskQueue)
+	q.requeue(peer, q.blockPendPool, q.blockTaskQueue)
 }
 
-// ExpireReceipts checks for in flight receipt requests that exceeded a timeout
-// allowance, canceling them and returning the responsible peers for penalisation.
-func (q *queue) ExpireReceipts(peer string) int {
+// RequeueReceipts returns the receipts reserved by the given peer to the task
+// queue for another peer to retrieve as well, keeping the reservation so that
+// a late delivery is still accepted. See the requeue method for details.
+func (q *queue) RequeueReceipts(peer string) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	receiptTimeoutMeter.Mark(1)
-	return q.expire(peer, q.receiptPendPool, q.receiptTaskQueue)
+	q.requeue(peer, q.receiptPendPool, q.receiptTaskQueue)
 }
 
-// ExpireBALs checks for in flight block access list requests that exceeded a
-// timeout allowance, canceling them and returning the responsible peers for
-// penalisation.
-func (q *queue) ExpireBALs(peer string) int {
+// RequeueBALs returns the access lists reserved by the given peer to the task
+// queue for another peer to retrieve as well, keeping the reservation so that
+// a late delivery is still accepted. See the requeue method for details.
+func (q *queue) RequeueBALs(peer string) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	balTimeoutMeter.Mark(1)
-	return q.expire(peer, q.balPendPool, q.balTaskQueue)
+	q.requeue(peer, q.balPendPool, q.balTaskQueue)
 }
 
-// expire is the generic check that moves a specific expired task from a pending
-// pool back into a task pool. The syntax on the passed taskQueue is a bit weird
-// as we would need a generic expire method to handle both types, but that is not
-// supported at the moment at least (Go 1.19).
+// requeue pushes the items of a pending request back into the task queue without
+// cancelling the request, so that another peer retrieves them concurrently and
+// whichever reply arrives first fills the result cache. The other reply is
+// dropped as stale on delivery, and items already delivered are skipped when
+// reserved again.
 //
-// Note, this method expects the queue lock to be already held. The reason the
-// lock is not obtained in here is that the parameters already need to access
-// the queue, so they already need a lock anyway.
-func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue interface{}) int {
-	// Retrieve the request being expired and log an error if it's non-existent,
-	// as there's no order of events that should lead to such expirations.
+// Keeping the request alive is what makes a late reply useful: it still carries
+// the data, and the round trip it took is the measurement that grows the peer's
+// timeout allowance. Cancelling the request instead would have the reply count
+// as a failed delivery, slashing the peer a second time and discarding both.
+// The request is only ever cancelled by Revoke, once the peer is gone.
+//
+// Note, this method expects the queue lock to be already held.
+func (q *queue) requeue(peer string, pendPool map[string]*fetchRequest, taskQueue *prque.Prque[int64, *types.Header]) {
 	req := pendPool[peer]
-	if req == nil {
-		log.Error("Expired request does not exist", "peer", peer)
-		return 0
+	if req == nil || req.Requeued {
+		return
 	}
-	delete(pendPool, peer)
-
-	// Return any non-satisfied requests to the pool
-	if req.From > 0 {
-		taskQueue.(*prque.Prque[int64, uint64]).Push(req.From, -int64(req.From))
-	}
+	req.Requeued = true
 	for _, header := range req.Headers {
-		taskQueue.(*prque.Prque[int64, *types.Header]).Push(header, -int64(header.Number.Uint64()))
+		taskQueue.Push(header, -int64(header.Number.Uint64()))
 	}
-	return len(req.Headers)
 }
 
 // DeliverBodies injects a block body retrieval response into the results queue.
@@ -760,6 +832,21 @@ func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue
 func (q *queue) DeliverBodies(id string, hashes eth.BlockBodyHashes, bodies []eth.BlockBody) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
+
+	// Track the reply size to calibrate the request sizes against the reply
+	// limit of remote peers
+	if len(bodies) > 0 {
+		var size uint64
+		for i := range bodies {
+			size += bodies[i].Transactions.Size() + bodies[i].Uncles.Size()
+			if bodies[i].Withdrawals != nil {
+				size += bodies[i].Withdrawals.Size()
+			}
+		}
+		q.bodySize = updateSizeEstimate(q.bodySize, common.StorageSize(size)/common.StorageSize(len(bodies)))
+		bodyFetchMetrics.bytes.Mark(int64(size))
+	}
+	bodyFetchMetrics.items.Update(int64(len(bodies)))
 
 	var txLists [][]*types.Transaction
 	var uncleLists [][]*types.Header
@@ -827,6 +914,18 @@ func (q *queue) DeliverReceipts(id string, receiptList []rlp.RawValue, receiptLi
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
+	// Track the reply size to calibrate the request sizes against the reply
+	// limit of remote peers
+	if len(receiptList) > 0 {
+		var size int
+		for _, receipts := range receiptList {
+			size += len(receipts)
+		}
+		q.receiptSize = updateSizeEstimate(q.receiptSize, common.StorageSize(size)/common.StorageSize(len(receiptList)))
+		receiptFetchMetrics.bytes.Mark(int64(size))
+	}
+	receiptFetchMetrics.items.Update(int64(len(receiptList)))
+
 	validate := func(index int, header *types.Header) error {
 		if receiptListHashes[index] != header.ReceiptHash {
 			return errInvalidReceipt
@@ -852,6 +951,13 @@ func (q *queue) DeliverBALs(id string, bals []rlp.RawValue, hashes []common.Hash
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
+	var size int
+	for _, bal := range bals {
+		size += len(bal)
+	}
+	balFetchMetrics.items.Update(int64(len(bals)))
+	balFetchMetrics.bytes.Mark(int64(size))
+
 	request := q.balPendPool[id]
 	if request == nil {
 		balDropMeter.Mark(int64(len(bals)))
@@ -870,14 +976,22 @@ func (q *queue) DeliverBALs(id string, bals []rlp.RawValue, hashes []common.Hash
 		}
 	}
 	var (
-		accepted int
-		failure  error
+		accepted  int // Lists attached to a result still awaiting delivery
+		delivered int // Lists that validated, whether or not still needed
+		failure   error
 	)
+	// retry hands a task back to the queue for other peers, unless the request
+	// was requeued in the meantime and it is back in there already
+	retry := func(header *types.Header) {
+		if !request.Requeued {
+			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+		}
+	}
 	for i, header := range request.Headers {
 		// Should the response be invalid at some point, return all the
 		// remaining tasks to the queue for retrieval from other peers
 		if failure != nil || i >= len(bals) {
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			retry(header)
 			continue
 		}
 		hash := header.Hash()
@@ -887,22 +1001,24 @@ func (q *queue) DeliverBALs(id string, bals []rlp.RawValue, hashes []common.Hash
 		// queued for other peers to have a go at it.
 		if bytes.Equal(bals[i], rlp.EmptyString) {
 			request.Peer.MarkLackingBAL(hash)
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			retry(header)
 			continue
 		}
 		// Validate the content against the hash committed in the header and
 		// decode it. Anything invalid is a protocol violation.
 		if header.BlockAccessListHash == nil || hashes[i] != *header.BlockAccessListHash {
 			failure = errInvalidBAL
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			retry(header)
 			continue
 		}
 		list := new(bal.BlockAccessList)
 		if err := rlp.DecodeBytes(bals[i], list); err != nil {
 			failure = fmt.Errorf("%w: %v", errInvalidBAL, err)
-			q.balTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			retry(header)
 			continue
 		}
+		delivered++
+
 		// Attach the access list to the fetch result if the block was not yet
 		// delivered upstream; late arrivals are simply dropped.
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale && res != nil {
@@ -914,7 +1030,7 @@ func (q *queue) DeliverBALs(id string, bals []rlp.RawValue, hashes []common.Hash
 		delete(q.balTaskPool, hash)
 	}
 	balDropMeter.Mark(int64(len(bals) - accepted))
-	return accepted, failure
+	return delivered, failure
 }
 
 // deliver injects a data retrieval response into the results queue.
@@ -946,56 +1062,52 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	}
 	// Assemble each of the results with their headers and retrieved data parts
 	var (
-		accepted   int
-		failure    error
-		i          int
-		foundStale bool
+		accepted  int
+		failure   error
+		validated int
 	)
 	for _, header := range request.Headers {
 		// Short circuit assembly if no more fetch results are found
-		if i >= results {
+		if validated >= results {
 			break
 		}
 		// Validate the fields
-		if err := validate(i, header); err != nil {
+		if err := validate(validated, header); err != nil {
 			failure = err
 			break
 		}
-		i++
+		validated++
 	}
-
-	for k, header := range request.Headers[:i] {
+	for k, header := range request.Headers[:validated] {
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
 			reconstruct(k, res)
 			accepted++
 		} else {
-			// Between here and above, some other peer filled this result,
-			// or it was indeed a no-op. This should not happen, but if it does it's
-			// not something to panic about
-			log.Error("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)
-			foundStale = true
+			// Some other peer filled this result in the meantime, which is the
+			// expected outcome of a requeued retrieval, or it was indeed a no-op.
+			log.Debug("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)
 		}
 		// Clean up a successful fetch
 		delete(taskPool, header.Hash())
 	}
 	resDropMeter.Mark(int64(results - accepted))
 
-	// Return all failed or missing fetches to the queue
-	for _, header := range request.Headers[i:] {
-		taskQueue.Push(header, -int64(header.Number.Uint64()))
+	// Return all failed or missing fetches to the queue, unless the request
+	// was requeued in the meantime and they are back in there already
+	if !request.Requeued {
+		for _, header := range request.Headers[validated:] {
+			taskQueue.Push(header, -int64(header.Number.Uint64()))
+		}
 	}
 	// Wake up Results
 	if accepted > 0 {
 		q.active.Signal()
 	}
+	// Report the number of items that validated
 	if failure != nil {
-		return accepted, failure
+		return validated, failure
 	}
-	// If none of the data was good, it's a stale delivery
-	if foundStale {
-		return accepted, errStaleDelivery
-	}
-	return accepted, nil
+	return validated, nil
 }
 
 // Prepare configures the result cache to allow accepting and caching inbound

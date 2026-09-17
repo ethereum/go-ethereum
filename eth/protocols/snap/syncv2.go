@@ -438,7 +438,7 @@ func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
 		peers:    make(map[string]SyncPeerV2),
 		peerJoin: new(event.Feed),
 		peerDrop: new(event.Feed),
-		rates:    msgrate.NewTrackers(log.New("proto", "snap")),
+		rates:    msgrate.NewTrackers(log.New("proto", "snap"), 0),
 		update:   make(chan struct{}, 1),
 
 		statelessPeers:   make(map[string]struct{}),

@@ -75,53 +75,61 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 //	stale     - if true, this item is already passed, and should not be requested again
 //	throttled - if true, the store is at capacity, this particular header is not prio now
 //	item      - the result to store data into
-//	err       - any error that occurred
-func (r *resultStore) AddFetch(header *types.Header, snapSync bool, fetchBAL bool) (stale, throttled bool, item *fetchResult, err error) {
+func (r *resultStore) AddFetch(header *types.Header, snapSync bool, fetchBAL bool) (stale, throttled bool, item *fetchResult) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	var index int
-	item, index, stale, throttled, err = r.getFetchResult(header.Number.Uint64())
-	if err != nil || stale || throttled {
-		return stale, throttled, item, err
+	item, index := r.getFetchResult(header.Number.Uint64())
+	stale, throttled = index < 0, index >= int(r.throttleThreshold)
+	if stale || throttled {
+		// r.throttleThreshold never exceeds the number of slots, it's infeasible
+		// the item is not throttled but beyond the result store.
+		return stale, throttled, nil
 	}
 	if item == nil {
 		item = newFetchResult(header, snapSync, fetchBAL)
 		r.items[index] = item
 	}
-	return stale, throttled, item, err
+	return false, false, item
 }
 
 // GetDeliverySlot returns the fetchResult for the given header. If the 'stale' flag
-// is true, that means the header has already been delivered 'upstream'. This method
-// does not bubble up the 'throttle' flag, since it's moot at the point in time when
-// the item is downloaded and ready for delivery
+// is true, that means the header has already been delivered 'upstream'.
 func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, error) {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
 
-	res, _, stale, _, err := r.getFetchResult(headerNumber)
-	return res, stale, err
+	item, index := r.getFetchResult(headerNumber)
+	if index >= len(r.items) {
+		return nil, false, fmt.Errorf("%w: block %d beyond the result store (offset %d, size %d)", errInvalidChain, headerNumber, r.resultOffset, len(r.items))
+	}
+	return item, index < 0, nil
 }
 
-// getFetchResult returns the fetchResult corresponding to the given item, and
-// the index where the result is stored.
-func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, index int, stale, throttle bool, err error) {
-	index = int(int64(headerNumber) - int64(r.resultOffset))
-	throttle = index >= int(r.throttleThreshold)
-	stale = index < 0
+// getFetchResult returns the slot of the given block in the result store and
+// the fetch result cached in it, nil if none was allocated yet.
+//
+// A negative slot means the block was already delivered upstream, one past the
+// end that it is beyond the store's capacity.
+func (r *resultStore) getFetchResult(number uint64) (*fetchResult, int) {
+	index := int(int64(number) - int64(r.resultOffset))
+	if index < 0 || index >= len(r.items) {
+		return nil, index
+	}
+	return r.items[index], index
+}
 
-	if index >= len(r.items) {
-		err = fmt.Errorf("%w: index allocation went beyond available resultStore space "+
-			"(index [%d] = header [%d] - resultOffset [%d], len(resultStore) = %d", errInvalidChain,
-			index, headerNumber, r.resultOffset, len(r.items))
-		return nil, index, stale, throttle, err
+// HeadPending returns the number of the first undelivered block and whether
+// the given component is still missing for it. A missing head component is
+// what the consumer is currently waiting on.
+func (r *resultStore) HeadPending(kind uint) (uint64, bool) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	if len(r.items) == 0 || r.items[0] == nil {
+		return r.resultOffset, false
 	}
-	if stale {
-		return nil, index, stale, throttle, nil
-	}
-	item = r.items[index]
-	return item, index, stale, throttle, nil
+	return r.resultOffset, r.items[0].pending.Load()&(1<<kind) != 0
 }
 
 // HasCompletedItems returns true if there are processable items available

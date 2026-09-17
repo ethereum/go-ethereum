@@ -222,10 +222,15 @@ type peerSet struct {
 }
 
 // newPeerSet creates a new peer set top track the active download sources.
+// minRoundTrip is the floor applied to the round trip estimate of the chain
+// download requests. Their replies are capped in size by the remote, making
+// them cheap to serve, so the real latency is a few hundred milliseconds.
+const minRoundTrip = 500 * time.Millisecond
+
 func newPeerSet() *peerSet {
 	return &peerSet{
 		peers: make(map[string]*peerConnection),
-		rates: msgrate.NewTrackers(log.New("proto", "eth")),
+		rates: msgrate.NewTrackers(log.New("proto", "eth"), minRoundTrip),
 	}
 }
 
