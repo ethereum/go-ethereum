@@ -41,6 +41,12 @@ func (q *balQueue) pending() int {
 	return q.queue.PendingBALs()
 }
 
+// next returns the number of the block at the head of the access list retrieval
+// queue, false if none is pending.
+func (q *balQueue) next() (uint64, bool) {
+	return q.queue.NextBAL()
+}
+
 // capacity is responsible for calculating how many access lists a particular
 // peer is estimated to be able to retrieve within the allotted round trip time.
 func (q *balQueue) capacity(peer *peerConnection, rtt time.Duration) int {
