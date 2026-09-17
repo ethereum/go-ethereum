@@ -126,10 +126,8 @@ func (overload *Overload) UnpackBarEvent(log *types.Log) (*OverloadBar, error) {
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(OverloadBar)
-	if len(log.Data) > 0 {
-		if err := overload.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := overload.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range overload.abi.Events[event].Inputs {
@@ -171,10 +169,8 @@ func (overload *Overload) UnpackBar0Event(log *types.Log) (*OverloadBar0, error)
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(OverloadBar0)
-	if len(log.Data) > 0 {
-		if err := overload.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := overload.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range overload.abi.Events[event].Inputs {
