@@ -19,6 +19,7 @@ package ethclient_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -684,6 +686,86 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 	if sender2 != testAddr {
 		t.Fatal("wrong sender:", sender2)
 	}
+}
+
+func TestBlockByHashUncleHashes(t *testing.T) {
+	uncles := []*types.Header{
+		{Number: big.NewInt(1), Difficulty: big.NewInt(1)},
+		{Number: big.NewInt(2), Difficulty: big.NewInt(1)},
+	}
+	header := &types.Header{
+		Number: big.NewInt(3), Difficulty: big.NewInt(1),
+		UncleHash: types.CalcUncleHash(uncles), TxHash: types.EmptyTxsHash,
+	}
+	encoded, err := json.Marshal(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var block map[string]interface{}
+	if err := json.Unmarshal(encoded, &block); err != nil {
+		t.Fatal(err)
+	}
+	block["uncles"] = []common.Hash{uncles[0].Hash(), uncles[1].Hash()}
+	block["transactions"] = []interface{}{}
+	wrongUncle := types.CopyHeader(uncles[1])
+	wrongUncle.Extra = []byte("different uncle")
+
+	for _, test := range []struct {
+		name    string
+		second  *types.Header
+		wantErr string
+	}{
+		{name: "matching", second: uncles[1]},
+		{name: "mismatching", second: wrongUncle, wantErr: fmt.Sprintf("uncle 1 hash mismatch: have %s, want %s", wrongUncle.Hash(), uncles[1].Hash())},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			srv := rpc.NewServer()
+			defer srv.Stop()
+			service := &uncleHashTestService{block: block, uncles: []*types.Header{uncles[0], test.second}}
+			if err := srv.RegisterName("eth", service); err != nil {
+				t.Fatal(err)
+			}
+			ec := ethclient.NewClient(rpc.DialInProc(srv))
+			defer ec.Close()
+			got, err := ec.BlockByHash(context.Background(), header.Hash())
+			if test.wantErr != "" {
+				if err == nil || err.Error() != test.wantErr {
+					t.Fatalf("error mismatch: have %v, want %s", err, test.wantErr)
+				}
+				if got != nil {
+					t.Fatal("returned a block with a mismatching uncle")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Uncles()) != len(uncles) {
+				t.Fatalf("uncle count: have %d, want %d", len(got.Uncles()), len(uncles))
+			}
+			for i, uncle := range got.Uncles() {
+				if uncle.Hash() != uncles[i].Hash() {
+					t.Fatalf("incorrect uncle at index %d", i)
+				}
+			}
+		})
+	}
+}
+
+type uncleHashTestService struct {
+	block  map[string]interface{}
+	uncles []*types.Header
+}
+
+func (s *uncleHashTestService) GetBlockByHash(common.Hash, bool) map[string]interface{} {
+	return s.block
+}
+
+func (s *uncleHashTestService) GetUncleByBlockHashAndIndex(_ common.Hash, index hexutil.Uint64) (*types.Header, error) {
+	if uint64(index) >= uint64(len(s.uncles)) {
+		return nil, errors.New("uncle index out of range")
+	}
+	return s.uncles[index], nil
 }
 
 func TestBlockReceiptsPreservesCanonicalFlag(t *testing.T) {

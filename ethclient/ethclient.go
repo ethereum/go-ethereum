@@ -207,6 +207,9 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 			if uncles[i] == nil {
 				return nil, fmt.Errorf("got null header for uncle %d of block %x", i, body.Hash[:])
 			}
+			if hash := uncles[i].Hash(); hash != body.UncleHashes[i] {
+				return nil, fmt.Errorf("uncle %d hash mismatch: have %s, want %s", i, hash, body.UncleHashes[i])
+			}
 		}
 	}
 	// Fill the sender cache of transactions in the block.
