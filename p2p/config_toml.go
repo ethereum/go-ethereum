@@ -35,6 +35,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		DiscAddr         string
 		NAT              nat.Interface `toml:",omitempty"`
 		Dialer           NodeDialer    `toml:"-"`
+		SocksProxy       string        `toml:",omitempty"`
 		NoDial           bool          `toml:",omitempty"`
 		EnableMsgEvents  bool
 		Logger           log.Logger `toml:"-"`
@@ -59,6 +60,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.DiscAddr = c.DiscAddr
 	enc.NAT = c.NAT
 	enc.Dialer = c.Dialer
+	enc.SocksProxy = c.SocksProxy
 	enc.NoDial = c.NoDial
 	enc.EnableMsgEvents = c.EnableMsgEvents
 	enc.Logger = c.Logger
@@ -87,6 +89,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DiscAddr         *string
 		NAT              *configNAT `toml:",omitempty"`
 		Dialer           NodeDialer `toml:"-"`
+		SocksProxy       *string    `toml:",omitempty"`
 		NoDial           *bool      `toml:",omitempty"`
 		EnableMsgEvents  *bool
 		Logger           log.Logger `toml:"-"`
@@ -151,6 +154,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.Dialer != nil {
 		c.Dialer = dec.Dialer
+	}
+	if dec.SocksProxy != nil {
+		c.SocksProxy = *dec.SocksProxy
 	}
 	if dec.NoDial != nil {
 		c.NoDial = *dec.NoDial

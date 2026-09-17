@@ -114,6 +114,17 @@ type Config struct {
 	// is used to dial outbound peer connections.
 	Dialer NodeDialer `toml:"-"`
 
+	// If SocksProxy is set to a non-empty value, outbound peer connections are
+	// tunneled through the given SOCKS5 proxy, e.g. "socks5://127.0.0.1:9050".
+	// Credentials may be included for username/password authentication.
+	//
+	// Node discovery runs over UDP and is not carried by the proxy, so NoDiscovery
+	// must also be set. Inbound connections are likewise not proxied; set
+	// ListenAddr to the empty string to make this node dial-only.
+	//
+	// SocksProxy and Dialer are mutually exclusive.
+	SocksProxy string `toml:",omitempty"`
+
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool `toml:",omitempty"`
 

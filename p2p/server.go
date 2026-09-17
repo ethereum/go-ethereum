@@ -90,6 +90,8 @@ type Server struct {
 	peerFeed     event.Feed
 	log          log.Logger
 
+	nodeDialer NodeDialer // resolved from Config.Dialer/Config.SocksProxy on Start
+
 	nodedb    *enode.DB
 	localnode *enode.LocalNode
 	discv4    *discover.UDPv4
@@ -369,6 +371,9 @@ func (srv *Server) Start() (err error) {
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 
+	if err := srv.setupDialer(); err != nil {
+		return err
+	}
 	if err := srv.setupLocalNode(); err != nil {
 		return err
 	}
@@ -497,6 +502,34 @@ func (srv *Server) setupDiscovery() error {
 	return nil
 }
 
+// setupDialer resolves the NodeDialer used for outbound connections from the
+// configuration, and validates that the rest of the configuration is consistent
+// with it.
+func (srv *Server) setupDialer() error {
+	if srv.SocksProxy == "" {
+		srv.nodeDialer = srv.Dialer
+		return nil
+	}
+	if srv.Dialer != nil {
+		return errors.New("p2p: Config.Dialer and Config.SocksProxy are mutually exclusive")
+	}
+	// Discovery is UDP-only and is not carried by the proxy. Running it anyway would
+	// announce the real endpoint of this node to the whole network, so refuse to start
+	// rather than leak it.
+	if !srv.NoDiscovery {
+		return errDiscoveryNotProxied
+	}
+	dialer, err := newSocksDialer(srv.SocksProxy, &net.Dialer{Timeout: defaultDialTimeout})
+	if err != nil {
+		return err
+	}
+	if srv.ListenAddr != "" {
+		srv.log.Warn("Inbound connections are not proxied", "proxy", srv.SocksProxy, "addr", srv.ListenAddr)
+	}
+	srv.nodeDialer = dialer
+	return nil
+}
+
 func (srv *Server) setupDialScheduler() {
 	config := dialConfig{
 		self:           srv.localnode.ID(),
@@ -504,7 +537,7 @@ func (srv *Server) setupDialScheduler() {
 		maxActiveDials: srv.MaxPendingPeers,
 		log:            srv.Logger,
 		netRestrict:    srv.NetRestrict,
-		dialer:         srv.Dialer,
+		dialer:         srv.nodeDialer,
 		clock:          srv.clock,
 	}
 	if srv.discv4 != nil {
