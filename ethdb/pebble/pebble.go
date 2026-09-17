@@ -270,16 +270,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			{FilterPolicy: bloom.FilterPolicy(10)},
 			{FilterPolicy: bloom.FilterPolicy(10)},
 
-			// No bloom filter on the bottommost level: a point lookup only
-			// reaches it after every level above has missed, so its filter is
-			// the largest and the least useful, and every compaction into it
-			// would otherwise pay to rebuild one.
-			//
-			// This has to be explicit. In pebble v2 an empty LevelOptions for
-			// L1 and below inherits the level above it (EnsureL1PlusDefaults),
-			// so the empty literal used before this kept L5's bloom filter on
-			// L6 and the comment claiming otherwise was wrong.
-			{FilterPolicy: pebble.NoFilterPolicy},
+			// Pebble doesn't use the Bloom filter at level6 for read efficiency.
+			{},
 		},
 		// Per-level target file sizes, indexed relative to the base level:
 		// [0] is L0, [1] the base level, [2] the level below it, and so on.
