@@ -4435,3 +4435,61 @@ func TestStateMethodsDefaultToLatest(t *testing.T) {
 		[]any{map[common.Address][]common.Hash{acc: {slot}}, "latest"},
 		[]any{map[common.Address][]common.Hash{acc: {slot}}})
 }
+
+// TestCreateAccessListAuthorizationGas checks that eth_createAccessList accepts
+// the gas limit returned by eth_estimateGas for a set-code transaction with
+// several authorizations, both before and after Amsterdam.
+func TestCreateAccessListAuthorizationGas(t *testing.T) {
+	t.Parallel()
+
+	const numAuths = 9
+	accounts := newAccounts(numAuths + 1)
+	// accounts[0] is the sender; every other account is already delegated and
+	// re-delegates, so that no account or authorization creation is charged.
+	var authList []types.SetCodeAuthorization
+	for _, acc := range accounts[1:] {
+		auth, err := types.SignSetCode(acc.key, types.SetCodeAuthorization{
+			Address: common.Address{0xaa},
+		})
+		require.NoError(t, err)
+		authList = append(authList, auth)
+	}
+	newAPI := func(amsterdam bool) *BlockChainAPI {
+		alloc := types.GenesisAlloc{accounts[0].addr: {Balance: big.NewInt(params.Ether)}}
+		for _, acc := range accounts[1:] {
+			alloc[acc.addr] = types.Account{
+				Balance: big.NewInt(params.Ether),
+				Code:    types.AddressToDelegation(common.Address{0xbb}),
+			}
+		}
+		config := *params.MergedTestChainConfig
+		if amsterdam {
+			config.AmsterdamTime = new(uint64)
+		}
+		genesis := &core.Genesis{Config: &config, Difficulty: common.Big0, Alloc: alloc}
+		return NewBlockChainAPI(newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil))
+	}
+	for _, tc := range []struct {
+		name      string
+		amsterdam bool
+	}{
+		{"pre-Amsterdam", false},
+		{"Amsterdam", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := newAPI(tc.amsterdam)
+			args := TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[0].addr,
+				AuthorizationList: authList,
+			}
+			estimated, err := api.EstimateGas(context.Background(), args, nil, nil, nil)
+			require.NoError(t, err)
+
+			args.Gas = &estimated
+			result, err := api.CreateAccessList(context.Background(), args, nil, nil)
+			require.NoError(t, err)
+			require.Empty(t, result.Error)
+		})
+	}
+}
