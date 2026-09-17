@@ -52,12 +52,13 @@ type quicListener struct {
 	wt      *webtransport.Server
 	tlsConf *tls.Config
 
+	sem    chan struct{} // bounds concurrently served connections
 	conns  chan *quicConn
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
-func newQUICListener(addr string, tlsConf *tls.Config) (*quicListener, error) {
+func newQUICListener(addr string, tlsConf *tls.Config, maxConns int) (*quicListener, error) {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return nil, err
@@ -73,7 +74,7 @@ func newQUICListener(addr string, tlsConf *tls.Config) (*quicListener, error) {
 		udp.Close()
 		return nil, err
 	}
-	l := &quicListener{conn: udp, tr: tr, ln: ln, tlsConf: tlsConf, conns: make(chan *quicConn)}
+	l := &quicListener{conn: udp, tr: tr, ln: ln, tlsConf: tlsConf, conns: make(chan *quicConn), sem: make(chan struct{}, maxConns)}
 	l.ctx, l.cancel = context.WithCancel(context.Background())
 
 	mux := http.NewServeMux()
@@ -92,11 +93,23 @@ func newQUICListener(addr string, tlsConf *tls.Config) (*quicListener, error) {
 
 func (l *quicListener) acceptLoop() {
 	for {
-		qc, err := l.ln.Accept(l.ctx)
-		if err != nil {
+		// Acquire a slot before accepting so the number of connections we serve
+		// is bounded. When full, we stop accepting and QUIC refuses new
+		// connections, throttling handshakes before they reach the peer checks.
+		select {
+		case l.sem <- struct{}{}:
+		case <-l.ctx.Done():
 			return
 		}
-		go l.wt.ServeQUICConn(qc)
+		qc, err := l.ln.Accept(l.ctx)
+		if err != nil {
+			<-l.sem
+			return
+		}
+		go func() {
+			defer func() { <-l.sem }()
+			l.wt.ServeQUICConn(qc)
+		}()
 	}
 }
 

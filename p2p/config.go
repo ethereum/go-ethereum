@@ -106,6 +106,11 @@ type Config struct {
 	// QUIC. They are budgeted separately from MaxPeers. Zero disables them.
 	MaxBrowserPeers int `toml:",omitempty"`
 
+	// MaxBrowserPeersPerIP limits how many browser peers a single remote IP may
+	// hold, so one source cannot fill the browser budget. Zero means no limit.
+	// LAN and loopback addresses are exempt.
+	MaxBrowserPeersPerIP int `toml:",omitempty"`
+
 	// If DiscAddr is set to a non-nil value, the server will use ListenAddr
 	// for TCP and DiscAddr for the UDP discovery protocol.
 	DiscAddr string

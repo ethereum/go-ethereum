@@ -69,7 +69,7 @@ func newTestQUICListener(t *testing.T) *quicListener {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ln, err := newQUICListener("127.0.0.1:0", newQUICTLSConfig(rot))
+	ln, err := newQUICListener("127.0.0.1:0", newQUICTLSConfig(rot), 64)
 	if err != nil {
 		t.Fatal(err)
 	}

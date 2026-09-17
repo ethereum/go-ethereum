@@ -619,7 +619,15 @@ func (srv *Server) setupQUIC() error {
 	if err != nil {
 		return err
 	}
-	listener, err := newQUICListener(srv.ListenQUICAddr, newQUICTLSConfig(rot))
+	// Bound concurrently served connections to the peers we could accept plus
+	// pending handshake headroom, so a flood cannot exhaust resources before the
+	// peer checks run.
+	pending := srv.MaxPendingPeers
+	if pending <= 0 {
+		pending = defaultMaxPendingPeers
+	}
+	maxConns := srv.MaxBrowserPeers + srv.MaxInboundConns() + pending
+	listener, err := newQUICListener(srv.ListenQUICAddr, newQUICTLSConfig(rot), maxConns)
 	if err != nil {
 		return err
 	}
@@ -717,6 +725,7 @@ func (srv *Server) run() {
 		peers        = make(map[enode.ID]*Peer)
 		inboundCount = 0
 		browserCount = 0
+		browserIPs   = make(map[netip.Addr]int)
 		trusted      = make(map[enode.ID]bool, len(srv.TrustedNodes))
 	)
 	// Put trusted nodes into a map to speed up checks.
@@ -762,7 +771,7 @@ running:
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
 			}
-			err := srv.postHandshakeChecks(peers, inboundCount, browserCount, c)
+			err := srv.postHandshakeChecks(peers, inboundCount, browserCount, browserIPs, c)
 			if err == nil && c.flags&inboundConn != 0 {
 				srv.dialsched.inboundPending(c.node.ID())
 			}
@@ -771,7 +780,7 @@ running:
 		case c := <-srv.checkpointAddPeer:
 			// At this point the connection is past the protocol handshake.
 			// Its capabilities are known and the remote identity is verified.
-			err := srv.addPeerChecks(peers, inboundCount, browserCount, c)
+			err := srv.addPeerChecks(peers, inboundCount, browserCount, browserIPs, c)
 			if err == nil {
 				// The handshakes are done and it passed all checks.
 				p := srv.launchPeer(c)
@@ -781,6 +790,9 @@ running:
 				if p.Inbound() {
 					if c.browser {
 						browserCount++
+						if ip := connIP(c); !netutil.AddrIsLAN(ip) {
+							browserIPs[ip]++
+						}
 					} else {
 						inboundCount++
 					}
@@ -803,6 +815,11 @@ running:
 			if pd.Inbound() {
 				if pd.rw.browser {
 					browserCount--
+					if ip := connIP(pd.rw); !netutil.AddrIsLAN(ip) {
+						if browserIPs[ip]--; browserIPs[ip] <= 0 {
+							delete(browserIPs, ip)
+						}
+					}
 				} else {
 					inboundCount--
 				}
@@ -837,11 +854,18 @@ running:
 	}
 }
 
-func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount, browserCount int, c *conn) error {
+// connIP returns the remote IP of a connection.
+func connIP(c *conn) netip.Addr {
+	return netutil.AddrAddr(c.fd.RemoteAddr())
+}
+
+func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount, browserCount int, browserIPs map[netip.Addr]int, c *conn) error {
 	// Browsers are limited by a separate MaxBrowserPeers budget and do not count
 	// against MaxPeers or MaxInboundConns.
 	switch {
 	case c.browser && browserCount >= srv.MaxBrowserPeers:
+		return DiscTooManyPeers
+	case c.browser && srv.MaxBrowserPeersPerIP > 0 && perIPBrowserExceeded(c, browserIPs, srv.MaxBrowserPeersPerIP):
 		return DiscTooManyPeers
 	case !c.browser && !c.is(trustedConn) && len(peers)-browserCount >= srv.MaxPeers:
 		return DiscTooManyPeers
@@ -856,14 +880,21 @@ func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount, b
 	}
 }
 
-func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount, browserCount int, c *conn) error {
+// perIPBrowserExceeded reports whether the connection's IP already holds the
+// maximum number of browser peers. LAN and loopback addresses are exempt.
+func perIPBrowserExceeded(c *conn, browserIPs map[netip.Addr]int, limit int) bool {
+	ip := connIP(c)
+	return !netutil.AddrIsLAN(ip) && browserIPs[ip] >= limit
+}
+
+func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount, browserCount int, browserIPs map[netip.Addr]int, c *conn) error {
 	// Drop connections with no matching protocols.
 	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
 		return DiscUselessPeer
 	}
 	// Repeat the post-handshake checks because the
 	// peer set might have changed since those checks were performed.
-	return srv.postHandshakeChecks(peers, inboundCount, browserCount, c)
+	return srv.postHandshakeChecks(peers, inboundCount, browserCount, browserIPs, c)
 }
 
 // listenLoop runs in its own goroutine and accepts
