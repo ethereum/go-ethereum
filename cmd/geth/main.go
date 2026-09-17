@@ -120,6 +120,7 @@ var (
 		utils.DiscoveryV4Flag,
 		utils.DiscoveryV5Flag,
 		utils.NetrestrictFlag,
+		utils.SocksProxyFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.DNSDiscoveryFlag,

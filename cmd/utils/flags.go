@@ -946,6 +946,11 @@ var (
 		Usage:    "Restricts network communication to the given IP networks (CIDR masks)",
 		Category: flags.NetworkingCategory,
 	}
+	SocksProxyFlag = &cli.StringFlag{
+		Name:     "socks5proxy",
+		Usage:    "Tunnels outbound peer connections through the given SOCKS5 proxy (e.g. socks5://127.0.0.1:9050). Requires --nodiscover",
+		Category: flags.NetworkingCategory,
+	}
 	DNSDiscoveryFlag = &cli.StringFlag{
 		Name:     "discovery.dns",
 		Usage:    "Sets DNS discovery entry points (use \"\" to disable DNS)",
@@ -1497,6 +1502,10 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	}
 	if ctx.IsSet(DiscoveryV5Flag.Name) {
 		cfg.DiscoveryV5 = ctx.Bool(DiscoveryV5Flag.Name)
+	}
+
+	if ctx.IsSet(SocksProxyFlag.Name) {
+		cfg.SocksProxy = ctx.String(SocksProxyFlag.Name)
 	}
 
 	if netrestrict := ctx.String(NetrestrictFlag.Name); netrestrict != "" {
