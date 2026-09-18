@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
@@ -601,3 +603,116 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 }
 
 // raw-namespace cursors and records must not outlive the state they name.
+
+// TestConvertDetectsLostRecords pins the only check that ties a conversion's
+// output back to its input: the scanned records must re-derive the state root
+// they were read from. Neither the tree walk nor the flat-state pass can see
+// a lossy scan, because both are built out of the same records and therefore
+// agree with each other about state nobody has.
+func TestConvertDetectsLostRecords(t *testing.T) {
+	alloc := artifactAlloc()
+
+	chaindb := rawdb.NewMemoryDatabase()
+	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
+		Preimages: true,
+		PathDB:    pathdb.Defaults,
+	})
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Alloc:   alloc,
+	}
+	root := gspec.MustCommit(chaindb, srcTriedb).Root()
+	srcTriedb.Close()
+
+	// scan rebuilds the records deriveLeaves emits, minus whatever drop
+	// rejects: the account row for (addr, nil), a storage row for (addr,
+	// &key). A nil drop keeps everything.
+	scan := func(t *testing.T, drop func(addr common.Address, slot *common.Hash) bool) (*bintrie.RecordSorter, *bintrie.RecordSorter) {
+		t.Helper()
+		accounts := bintrie.NewRecordSorter(t.TempDir(), 0, nil)
+		slots := bintrie.NewRecordSorter(t.TempDir(), 0, nil)
+		t.Cleanup(func() {
+			accounts.Close()
+			slots.Close()
+		})
+		for addr, account := range alloc {
+			addrHash := crypto.Keccak256Hash(addr.Bytes())
+			if drop == nil || !drop(addr, nil) {
+				codeHash := types.EmptyCodeHash
+				if len(account.Code) != 0 {
+					codeHash = crypto.Keccak256Hash(account.Code)
+				}
+				balance := new(uint256.Int)
+				if account.Balance != nil {
+					balance = uint256.MustFromBig(account.Balance)
+				}
+				if err := accounts.Add(addrHash.Bytes(), merkleAccountRecord(account.Nonce, balance, codeHash)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for key, value := range account.Storage {
+				if drop != nil && drop(addr, &key) {
+					continue
+				}
+				enc, err := rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := slots.Add(append(addrHash.Bytes(), crypto.Keccak256(key[:])...), enc); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		return accounts, slots
+	}
+
+	// The account holding storage, so both loss cases land on it.
+	var (
+		victim   = common.HexToAddress("0x2000000000000000000000000000000000000002")
+		slotOne  = common.BigToHash(big.NewInt(1))
+		mismatch = "re-derives merkle root"
+	)
+	if _, ok := alloc[victim]; !ok {
+		t.Fatalf("fixture no longer holds %x", victim)
+	}
+
+	t.Run("complete set", func(t *testing.T) {
+		accounts, slots := scan(t, nil)
+		if err := verifySourceRoot(accounts, slots, root, time.Now()); err != nil {
+			t.Fatalf("the complete record set failed the source-root check: %v", err)
+		}
+	})
+
+	t.Run("lost account", func(t *testing.T) {
+		accounts, slots := scan(t, func(addr common.Address, _ *common.Hash) bool {
+			return addr == victim
+		})
+		err := verifySourceRoot(accounts, slots, root, time.Now())
+		if err == nil || !strings.Contains(err.Error(), mismatch) {
+			t.Fatalf("a dropped account survived the source-root check; err = %v", err)
+		}
+	})
+
+	t.Run("lost slot", func(t *testing.T) {
+		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
+			return addr == victim && slot != nil && *slot == slotOne
+		})
+		err := verifySourceRoot(accounts, slots, root, time.Now())
+		if err == nil || !strings.Contains(err.Error(), mismatch) {
+			t.Fatalf("a dropped storage slot survived the source-root check; err = %v", err)
+		}
+	})
+
+	// Storage whose account went missing is corruption, not a gap: it must
+	// name itself rather than fold into a root mismatch.
+	t.Run("orphaned storage", func(t *testing.T) {
+		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
+			return addr == victim && slot == nil
+		})
+		err := verifySourceRoot(accounts, slots, root, time.Now())
+		if err == nil || !strings.Contains(err.Error(), "which holds no account") {
+			t.Fatalf("orphaned storage survived the source-root check; err = %v", err)
+		}
+	})
+}

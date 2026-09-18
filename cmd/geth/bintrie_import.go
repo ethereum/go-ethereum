@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
@@ -172,34 +171,6 @@ func importBinaryTrie(ctx *cli.Context) error {
 // it: a code_size field costs an attacker four bytes and would otherwise
 // cost the verifier gigabytes.
 const maxImportCodeSize = 1 << 20
-
-// heldStream wraps a sorted record stream with one record of lookahead, the
-// shape a merge-join needs.
-type heldStream struct {
-	stream     *bintrie.RecordStream
-	key, value []byte
-	done       bool
-}
-
-// current returns the held record, loading the next one if none is held.
-func (h *heldStream) current() ([]byte, []byte, error) {
-	if h.done || h.key != nil {
-		return h.key, h.value, nil
-	}
-	key, value, err := h.stream.Next()
-	if err == io.EOF {
-		h.done = true
-		return nil, nil, nil
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	h.key, h.value = key, value
-	return key, value, nil
-}
-
-// advance drops the held record.
-func (h *heldStream) advance() { h.key, h.value = nil, nil }
 
 // preimageWriter batches preimage-store writes, or discards them when nil.
 type preimageWriter struct {
@@ -506,11 +477,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		preims.add(accountHash, g.addr.Bytes())
 		stats.accounts++
 
-		value := make([]byte, 0, 72)
-		value = binary.BigEndian.AppendUint64(value, nonce)
-		balance32 := balance.Bytes32()
-		value = append(value, balance32[:]...)
-		value = append(value, codeHash.Bytes()...)
+		value := merkleAccountRecord(nonce, balance, codeHash)
 		if err := acctSorter.Add(accountHash.Bytes(), value); err != nil {
 			return err
 		}
@@ -799,72 +766,11 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err != nil {
 		return common.Hash{}, err
 	}
-	var (
-		slotHeld    = &heldStream{stream: slotStream}
-		accountTrie = trie.NewStackTrie(nil)
-		storageTrie = trie.NewStackTrie(nil)
-		rederived   uint64
-	)
-	for {
-		akey, avalue, err := acctStream.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return common.Hash{}, err
-		}
-		storageTrie.Reset()
-		storageRoot := types.EmptyRootHash
-		hasStorage := false
-		for {
-			skey, svalue, err := slotHeld.current()
-			if err != nil {
-				return common.Hash{}, err
-			}
-			if skey == nil {
-				break
-			}
-			switch bytes.Compare(skey[:32], akey) {
-			case -1:
-				return common.Hash{}, fmt.Errorf("storage under account hash %x, which holds no account", skey[:32])
-			case 1:
-			default:
-				if err := storageTrie.Update(skey[32:], svalue); err != nil {
-					return common.Hash{}, err
-				}
-				hasStorage = true
-				slotHeld.advance()
-				continue
-			}
-			break
-		}
-		if hasStorage {
-			storageRoot = storageTrie.Hash()
-		}
-		full, err := rlp.EncodeToBytes(&types.StateAccount{
-			Nonce:    binary.BigEndian.Uint64(avalue[:8]),
-			Balance:  new(uint256.Int).SetBytes(avalue[8:40]),
-			Root:     storageRoot,
-			CodeHash: common.CopyBytes(avalue[40:72]),
-		})
-		if err != nil {
-			return common.Hash{}, err
-		}
-		if err := accountTrie.Update(akey, full); err != nil {
-			return common.Hash{}, err
-		}
-		rederived++
-		if rederived%100_000 == 0 {
-			log.Info("Re-deriving merkle state", "accounts", rederived,
-				"elapsed", common.PrettyDuration(time.Since(stats.start)))
-		}
-	}
-	if skey, _, err := slotHeld.current(); err != nil {
+	got, err := rederiveMerkleRoot(acctStream, slotStream, stats.start)
+	if err != nil {
 		return common.Hash{}, err
-	} else if skey != nil {
-		return common.Hash{}, fmt.Errorf("storage under account hash %x, which holds no account", skey[:32])
 	}
-	if got := accountTrie.Hash(); got != anchorRoot {
+	if got != anchorRoot {
 		return common.Hash{}, fmt.Errorf("the leaves re-derive merkle root %x, the anchor commits %x", got, anchorRoot)
 	}
 	log.Info("Verified consensus anchoring", "stateRoot", anchorRoot, "accounts", stats.accounts, "slots", stats.slots)
