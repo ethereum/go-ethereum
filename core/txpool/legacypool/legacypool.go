@@ -1248,6 +1248,10 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 				delete(events, addr)
 			}
 		}
+		// Restore pending nonce overrides before promoting queued transactions.
+		for addr, list := range pool.pending {
+			pool.pendingNonces.set(addr, max(pool.pendingNonces.get(addr), list.LastElement().Nonce()+1))
+		}
 		// Reset needs promote for all addresses
 		promoteAddrs = pool.queue.addresses()
 	}
