@@ -766,18 +766,18 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		effectiveTip = new(uint256.Int).Sub(msg.GasPrice, baseFee)
 	}
 	if st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0 {
-		// Skip fee payment when NoBaseFee is set and the fee fields
-		// are 0. This avoids a negative effectiveTip being applied to
-		// the coinbase when simulating calls.
-	} else {
-		fee := new(uint256.Int).SetUint64(gasUsed)
-		fee.Mul(fee, effectiveTip)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
+		// Zero the tip when NoBaseFee is set and the fee fields are 0. This avoids
+		// a negative effectiveTip when simulating calls, while the coinbase is
+		// still accessed like in a real block.
+		effectiveTip = new(uint256.Int)
+	}
+	fee := new(uint256.Int).SetUint64(gasUsed)
+	fee.Mul(fee, effectiveTip)
+	st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 
-		// add the coinbase to the witness iff the fee is greater than 0
-		if rules.IsEIP4762 && fee.Sign() != 0 {
-			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
-		}
+	// add the coinbase to the witness iff the fee is greater than 0
+	if rules.IsEIP4762 && fee.Sign() != 0 {
+		st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
 	}
 
 	return &ExecutionResult{
