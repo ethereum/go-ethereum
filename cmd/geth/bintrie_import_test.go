@@ -109,7 +109,7 @@ func TestImportRoundTrip(t *testing.T) {
 	impDB := rawdb.NewMemoryDatabase()
 	anchor := &types.Header{Number: big.NewInt(7), Root: root}
 	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
-		anchor: anchor, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
+		anchor: anchor, keepPreimages: true, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 	if err != nil {
 		t.Fatalf("import failed: %v", err)
 	}
