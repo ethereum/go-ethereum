@@ -345,16 +345,22 @@ type testSetup struct {
 	params               Params
 	dbHashes             map[string]common.Hash
 	testDisableSnapshots bool
+	hashScheme           bool
 }
 
 func newTestSetup(t *testing.T) *testSetup {
+	return newTestSetupWithHashScheme(t, false)
+}
+
+func newTestSetupWithHashScheme(t *testing.T, hashScheme bool) *testSetup {
 	params := testParams
 	params.deriveFields()
 	ts := &testSetup{
-		t:        t,
-		db:       rawdb.NewMemoryDatabase(),
-		params:   params,
-		dbHashes: make(map[string]common.Hash),
+		t:          t,
+		db:         rawdb.NewMemoryDatabase(),
+		params:     params,
+		dbHashes:   make(map[string]common.Hash),
+		hashScheme: hashScheme,
 	}
 	ts.chain = ts.newTestChain()
 	return ts
@@ -367,8 +373,9 @@ func (ts *testSetup) setHistory(history uint64, noHistory bool) {
 	head := ts.chain.CurrentBlock()
 	view := NewChainView(ts.chain, head.Number.Uint64(), head.Hash())
 	config := Config{
-		History:  history,
-		Disabled: noHistory,
+		History:    history,
+		Disabled:   noHistory,
+		HashScheme: ts.hashScheme,
 	}
 	ts.fm, _ = NewFilterMaps(ts.db, view, 0, 0, ts.params, config)
 	ts.fm.testDisableSnapshots = ts.testDisableSnapshots
@@ -459,8 +466,12 @@ func (ts *testSetup) close() {
 	if ts.fm != nil {
 		ts.fm.Stop()
 	}
-	ts.db.Close()
-	ts.chain.db.Close()
+	if ts.db != nil {
+		ts.db.Close()
+	}
+	if ts.chain != nil && ts.chain.db != nil {
+		ts.chain.db.Close()
+	}
 }
 
 type testChain struct {
@@ -634,4 +645,298 @@ func (tc *testChain) setCanonicalChain(cc []common.Hash) {
 	copy(tc.canonical, cc)
 	tc.lock.Unlock()
 	tc.setTargetHead()
+}
+
+// batchTrackingDb wraps an ethdb.Database to track the max batch operations and sizes.
+type batchTrackingDb struct {
+	ethdb.Database
+	maxBatchOps  int
+	maxBatchSize int
+	lock         sync.Mutex
+}
+
+func newBatchTrackingDb(db ethdb.Database) *batchTrackingDb {
+	return &batchTrackingDb{Database: db}
+}
+
+func (b *batchTrackingDb) NewBatch() ethdb.Batch {
+	return &trackedBatch{
+		Batch: b.Database.NewBatch(),
+		db:    b,
+	}
+}
+
+func (b *batchTrackingDb) NewBatchWithSize(size int) ethdb.Batch {
+	return &trackedBatch{
+		Batch: b.Database.NewBatchWithSize(size),
+		db:    b,
+	}
+}
+
+type trackedBatch struct {
+	ethdb.Batch
+	db   *batchTrackingDb
+	ops  int
+	size int
+}
+
+func (tb *trackedBatch) Put(key, value []byte) error {
+	tb.ops++
+	tb.size += len(key) + len(value)
+	tb.db.lock.Lock()
+	if tb.ops > tb.db.maxBatchOps {
+		tb.db.maxBatchOps = tb.ops
+	}
+	if tb.size > tb.db.maxBatchSize {
+		tb.db.maxBatchSize = tb.size
+	}
+	tb.db.lock.Unlock()
+	return tb.Batch.Put(key, value)
+}
+
+func (tb *trackedBatch) Delete(key []byte) error {
+	tb.ops++
+	tb.size += len(key)
+	tb.db.lock.Lock()
+	if tb.ops > tb.db.maxBatchOps {
+		tb.db.maxBatchOps = tb.ops
+	}
+	if tb.size > tb.db.maxBatchSize {
+		tb.db.maxBatchSize = tb.size
+	}
+	tb.db.lock.Unlock()
+	return tb.Batch.Delete(key)
+}
+
+func TestIndexerRollbackBoundedBatch(t *testing.T) {
+	params := testParams
+	params.deriveFields()
+
+	trackedDb := newBatchTrackingDb(rawdb.NewMemoryDatabase())
+	ts := &testSetup{
+		t:        t,
+		db:       trackedDb,
+		params:   params,
+		dbHashes: make(map[string]common.Hash),
+	}
+	ts.chain = ts.newTestChain()
+	defer ts.close()
+
+	// Generate 200 blocks with logs to create a multi-epoch indexed state
+	ts.chain.addBlocks(200, 5, 2, 4, false)
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+
+	t.Logf("Initial indexing: maxBatchOps = %d, maxBatchSize = %d bytes, maps = %d, blocks = %d",
+		trackedDb.maxBatchOps, trackedDb.maxBatchSize, ts.fm.indexedRange.maps.Count(), ts.fm.indexedRange.blocks.Count())
+
+	// Reset tracked stats
+	trackedDb.lock.Lock()
+	trackedDb.maxBatchOps = 0
+	trackedDb.maxBatchSize = 0
+	trackedDb.lock.Unlock()
+
+	// Rollback chain to block 5 to trigger large multi-epoch stale map deletion
+	ts.chain.setHead(5)
+	ts.fm.WaitIdle()
+
+	t.Logf("After rollback to block 5: maxBatchOps = %d, maxBatchSize = %d bytes, maps = %d, blocks = %d",
+		trackedDb.maxBatchOps, trackedDb.maxBatchSize, ts.fm.indexedRange.maps.Count(), ts.fm.indexedRange.blocks.Count())
+
+	if trackedDb.maxBatchOps > 80 {
+		t.Fatalf("Batch operations during rollback too large: got %d, want <= 80", trackedDb.maxBatchOps)
+	}
+}
+
+func TestIndexerRollbackScenarios(t *testing.T) {
+	// Tests multiple rollback shapes (small, mid-epoch, multi-epoch, full resync)
+	// and verifies bit-exact database hash equality against a fresh reference build.
+	ts := newTestSetup(t)
+	defer ts.close()
+
+	// Generate 300 blocks on chain 1
+	ts.chain.addBlocks(300, 5, 2, 4, true)
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("chain1_300")
+
+	// 1. Short rollback (same epoch, a few blocks)
+	ts.chain.setHead(280)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("chain1_280")
+
+	// 2. Medium rollback (across base-row groups within epoch)
+	ts.chain.setHead(250)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("chain1_250")
+
+	// 3. Large multi-epoch rollback (from block 250 back to block 50)
+	ts.chain.setHead(50)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("chain1_50")
+
+	// 4. Full rollback to genesis block 0
+	ts.chain.setHead(0)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("chain1_0")
+}
+
+func TestIndexerRollbackDbIntegrity(t *testing.T) {
+	// Verify that after rollback and reorg, database hash matches a freshly built index on the same chain.
+	ts1 := newTestSetup(t)
+	defer ts1.close()
+
+	ts1.chain.addBlocks(200, 5, 2, 4, true)
+	ts1.setHistory(0, false)
+	ts1.fm.WaitIdle()
+	chainFull := ts1.chain.getCanonicalChain()
+
+	// Roll back to block 50 and add 100 different blocks (fork)
+	ts1.chain.setHead(50)
+	ts1.chain.addBlocks(100, 5, 2, 4, true)
+	ts1.fm.WaitIdle()
+	reorgDbHash := ts1.fmDbHash()
+
+	// Now build a fresh node directly from scratch on the reorged chain
+	reorgChain := ts1.chain.getCanonicalChain()
+	ts2 := newTestSetup(t)
+	defer ts2.close()
+
+	// Seed ts2 with the identical blocks from ts1
+	for _, h := range reorgChain {
+		ts2.chain.blocks[h] = ts1.chain.blocks[h]
+		ts2.chain.receipts[h] = ts1.chain.receipts[h]
+	}
+	ts2.chain.setCanonicalChain(reorgChain)
+	ts2.setHistory(0, false)
+	ts2.fm.WaitIdle()
+	freshDbHash := ts2.fmDbHash()
+
+	if reorgDbHash != freshDbHash {
+		t.Fatalf("Database hash mismatch after rollback + reorg:\n  reorg = %x\n  fresh = %x", reorgDbHash, freshDbHash)
+	}
+
+	// Now switch ts1 back to the original chainFull and compare with fresh node on chainFull
+	for _, h := range chainFull {
+		ts2.chain.blocks[h] = ts1.chain.blocks[h]
+		ts2.chain.receipts[h] = ts1.chain.receipts[h]
+	}
+	ts1.chain.setCanonicalChain(chainFull)
+	ts1.fm.WaitIdle()
+	ts1RestoredHash := ts1.fmDbHash()
+
+	ts3 := newTestSetup(t)
+	defer ts3.close()
+	for _, h := range chainFull {
+		ts3.chain.blocks[h] = ts1.chain.blocks[h]
+		ts3.chain.receipts[h] = ts1.chain.receipts[h]
+	}
+	ts3.chain.setCanonicalChain(chainFull)
+	ts3.setHistory(0, false)
+	ts3.fm.WaitIdle()
+	ts3FreshHash := ts3.fmDbHash()
+
+	if ts1RestoredHash != ts3FreshHash {
+		t.Fatalf("Database hash mismatch after restoring original chain:\n  restored = %x\n  fresh    = %x", ts1RestoredHash, ts3FreshHash)
+	}
+}
+
+func testIndexerRollbackCrashRecovery(t *testing.T, hashScheme bool, deletePointers bool, deleteRows bool) {
+	ts := newTestSetupWithHashScheme(t, hashScheme)
+	defer ts.close()
+
+	// 1. Build and index a multi-epoch chain of 200 blocks
+	ts.chain.addBlocks(200, 5, 2, 4, true)
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+
+	oldMapsCount := ts.fm.indexedRange.maps.AfterLast()
+	oldBlocksCount := ts.fm.indexedRange.blocks.AfterLast()
+
+	// Determine the stale regions corresponding to rolling back to block 50
+	// Block 50 corresponds to ~map 17 (in epoch 1 for mapsPerEpoch=16)
+	rollbackTargetBlock := uint64(50)
+	lastMapAtTarget := uint32(17)
+	startEpoch := ts.params.mapEpoch(lastMapAtTarget)
+	nextEpochMap := ts.params.firstEpochMap(startEpoch + 1)
+	fullEpochStart := ts.params.mapEpoch(nextEpochMap)
+	fullEpochEnd := ts.params.mapEpoch(oldMapsCount-1) + 1
+
+	firstRow := ts.fm.mapRowIndex(ts.params.firstEpochMap(fullEpochStart), 0)
+	countRows := ts.fm.mapRowIndex(ts.params.firstEpochMap(fullEpochEnd), 0) - firstRow
+
+	// Stop the running indexer loop to simulate an abrupt crash midway through writeFinishedMaps
+	ts.fm.Stop()
+	ts.fm = nil
+
+	if deletePointers {
+		// Delete stale last blocks and block log value pointers (step 1 of stale cleanup in writeFinishedMaps)
+		if oldMapsCount > lastMapAtTarget {
+			if err := rawdb.DeleteFilterMapLastBlocks(ts.db, common.NewRange(lastMapAtTarget, oldMapsCount-lastMapAtTarget), ts.hashScheme, nil); err != nil {
+				t.Fatalf("Failed to delete stale last blocks: %v", err)
+			}
+		}
+		if oldBlocksCount > rollbackTargetBlock+1 {
+			if err := rawdb.DeleteBlockLvPointers(ts.db, common.NewRange(rollbackTargetBlock+1, oldBlocksCount-(rollbackTargetBlock+1)), ts.hashScheme, nil); err != nil {
+				t.Fatalf("Failed to delete stale block lv pointers: %v", err)
+			}
+		}
+	}
+
+	if deleteRows {
+		// Delete whole stale epoch physical filter-map rows directly on disk (DeleteFilterMapRows)
+		if countRows > 0 {
+			if err := rawdb.DeleteFilterMapRows(ts.db, common.NewRange(firstRow, countRows), ts.hashScheme, nil); err != nil {
+				t.Fatalf("Failed to delete stale filter map rows: %v", err)
+			}
+		}
+	}
+
+	// Range metadata on disk intentionally reflects pre-rollback state (old metadata not yet updated).
+	// Re-open FilterMaps on the interrupted database with the chain rolled back to block 50.
+	ts.chain.setHead(int(rollbackTargetBlock))
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+
+	// Verify that the index recovered cleanly and indexed up to block 50
+	if ts.fm.indexedRange.blocks.Last() != rollbackTargetBlock {
+		t.Fatalf("Recovered indexer head mismatch: got %d, want %d", ts.fm.indexedRange.blocks.Last(), rollbackTargetBlock)
+	}
+
+	// Compare with reference node built cleanly to block 50 from scratch
+	targetChain := ts.chain.getCanonicalChain()
+	tsRef := newTestSetupWithHashScheme(t, hashScheme)
+	defer tsRef.close()
+	for _, h := range targetChain {
+		tsRef.chain.blocks[h] = ts.chain.blocks[h]
+		tsRef.chain.receipts[h] = ts.chain.receipts[h]
+	}
+	tsRef.chain.setCanonicalChain(targetChain)
+	tsRef.setHistory(0, false)
+	tsRef.fm.WaitIdle()
+
+	recoveredHash := ts.fmDbHash()
+	refHash := tsRef.fmDbHash()
+	if recoveredHash != refHash {
+		t.Fatalf("Recovered database hash mismatch against reference (hashScheme=%v, deletePointers=%v, deleteRows=%v):\n  recovered = %x\n  reference = %x",
+			hashScheme, deletePointers, deleteRows, recoveredHash, refHash)
+	}
+}
+
+func TestIndexerRollbackCrashRecovery(t *testing.T) {
+	// Scenario A: Crash after pointers and physical filter rows are deleted, before range metadata commits.
+	t.Run("ScenarioA_PointersAndRowsDeleted_PathMode", func(t *testing.T) {
+		testIndexerRollbackCrashRecovery(t, false, true, true)
+	})
+	t.Run("ScenarioA_PointersAndRowsDeleted_HashMode", func(t *testing.T) {
+		testIndexerRollbackCrashRecovery(t, true, true, true)
+	})
+
+	// Scenario B: Crash after pointers are deleted, before physical row deletion starts.
+	t.Run("ScenarioB_PointersOnlyDeleted_PathMode", func(t *testing.T) {
+		testIndexerRollbackCrashRecovery(t, false, true, false)
+	})
+	t.Run("ScenarioB_PointersOnlyDeleted_HashMode", func(t *testing.T) {
+		testIndexerRollbackCrashRecovery(t, true, true, false)
+	})
 }
