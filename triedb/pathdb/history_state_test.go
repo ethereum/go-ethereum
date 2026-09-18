@@ -244,8 +244,8 @@ func TestTruncateOutOfRange(t *testing.T) {
 		target uint64
 		expErr error
 	}{
-		{0, head, nil}, // nothing to delete
-		{0, head + 1, errHeadTruncationOutOfRange},
+		{0, head, nil},     // nothing to delete
+		{0, head + 1, nil}, // gracefully handled after unclean shutdown
 		{0, tail - 1, errHeadTruncationOutOfRange},
 		{1, tail, nil}, // nothing to delete
 		{1, head + 1, errTailTruncationOutOfRange},
