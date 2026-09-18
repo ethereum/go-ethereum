@@ -139,6 +139,31 @@ func TestIndexBuilderSpecWorkedExample(t *testing.T) {
 				c.index, typ, content, block, tx, log, c.typ, c.value, c.block, c.tx, c.log)
 		}
 	}
+
+	// The four per-block table roots, computed independently of this repo
+	// and cross-checked here against the naive full-width padding oracle.
+	tables := []struct {
+		block    uint64
+		parent   common.Hash
+		receipts Receipts
+		root     string
+	}{
+		{40, specHash39, nil, "0x61ef85cd7cf63bd608fd3058a846a0cd1210403230d78e3f09be777814d80409"},
+		{41, specHash40, nil, "0x2ade7388df4db22883b1605dc365eddd40779298398888c1637b7f6f7fad7545"},
+		{42, specHash41, receipts42, "0xcc8a8e5c4cb0026d1f4b862a89b1f65a1aed4b51eb2caa1694d94b9cb2a202c3"},
+		{43, specHash42, receipts43, "0x22e882d3adc154cc328f73fd1b6ec8a6db1a294a12bf3c49cdf0fa10af677914"},
+	}
+	for _, tt := range tables {
+		tb := NewIndexBuilder()
+		tb.AddBlockEntries(tt.parent, tt.block, tt.receipts)
+		want := common.HexToHash(tt.root)
+		if got := tb.Build(); got != want {
+			t.Errorf("block %d: table root %x, want %s", tt.block, got, tt.root)
+		}
+		if oracle := naiveTableRoot(tb.Entries()); oracle != want {
+			t.Errorf("block %d: naive oracle root %x, want %s", tt.block, oracle, tt.root)
+		}
+	}
 }
 
 // TestIndexBuilderPerTableCounts pins the entry distribution across the four
@@ -200,9 +225,9 @@ func TestAddBlockEntriesGenesis(t *testing.T) {
 		t.Errorf("block 1 entry: decoded (type %d, %x, %d, %d, %d), want block entry of block 0", typ, content, block, tx, log)
 	}
 
-	// An empty builder still hashes (the genesis block never gets a table).
-	if root := NewIndexBuilder().Build(); root == (common.Hash{}) {
-		t.Errorf("empty builder root should be the keccak of an empty table")
+	// An empty table has no entries to hash and no root: the zero hash is
+	// returned (the genesis block never gets a table).
+	if root := NewIndexBuilder().Build(); root != (common.Hash{}) {
+		t.Errorf("empty builder root = %x, want the zero hash", root)
 	}
 }
-
