@@ -117,19 +117,13 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i, uint32(i+1))
-		_, _, spanEnd := telemetry.StartSpan(ctx, "core.ApplyTransactionWithEVM",
-			telemetry.StringAttribute("tx.hash", tx.Hash().Hex()),
-			telemetry.IntAttribute("tx.index", i),
-		)
-		receipt, bal, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, evm)
+		receipt, bal, err := ApplyTransactionWithEVM(ctx, msg, gp, statedb, blockNumber, blockHash, context.Time, tx, evm)
 		if err != nil {
-			spanEnd(&err)
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 		blockAccessList.Merge(bal)
-		spanEnd(nil)
 	}
 	requests, bal, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, evm, uint32(len(block.Transactions())+1))
 	if err != nil {
@@ -215,7 +209,13 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
-func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, evm *vm.EVM) (receipt *types.Receipt, bal *bal.ConstructionBlockAccessList, err error) {
+func ApplyTransactionWithEVM(ctx context.Context, msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, evm *vm.EVM) (receipt *types.Receipt, bal *bal.ConstructionBlockAccessList, err error) {
+	_, _, spanEnd := telemetry.StartSpan(ctx, "core.ApplyTransactionWithEVM",
+		telemetry.StringAttribute("tx.hash", tx.Hash().Hex()),
+		telemetry.IntAttribute("tx.index", statedb.TxIndex()),
+	)
+	defer spanEnd(&err)
+
 	if hooks := evm.Config.Tracer; hooks != nil {
 		if hooks.OnTxStart != nil {
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
@@ -286,13 +286,13 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction) (*types.Receipt, *bal.ConstructionBlockAccessList, error) {
+func ApplyTransaction(ctx context.Context, evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction) (*types.Receipt, *bal.ConstructionBlockAccessList, error) {
 	msg, err := TransactionToMessage(tx, types.MakeSigner(evm.ChainConfig(), header.Number, header.Time), header.BaseFee)
 	if err != nil {
 		return nil, nil, err
 	}
 	// Create a new context to be used in the EVM environment
-	return ApplyTransactionWithEVM(msg, gp, statedb, header.Number, header.Hash(), header.Time, tx, evm)
+	return ApplyTransactionWithEVM(ctx, msg, gp, statedb, header.Number, header.Hash(), header.Time, tx, evm)
 }
 
 // systemCallGasBudget returns the gas budget for system calls.
