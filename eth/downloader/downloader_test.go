@@ -290,6 +290,17 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 	return req, nil
 }
 
+// BlockRange returns the range of blocks the peer serves the bodies and receipts
+// of: everything from its configured earliest block up to its chain head.
+func (dlp *downloadTesterPeer) BlockRange() *eth.BlockRangeUpdatePacket {
+	head := dlp.chain.CurrentBlock()
+	return &eth.BlockRangeUpdatePacket{
+		EarliestBlock:   0,
+		LatestBlock:     head.Number.Uint64(),
+		LatestBlockHash: head.Hash(),
+	}
+}
+
 // RequestBodies constructs a getBlockBodies method associated with a particular
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block bodies from the particularly requested peer.

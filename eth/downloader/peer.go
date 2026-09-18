@@ -63,6 +63,13 @@ type Peer interface {
 	RequestBodies([]common.Hash, chan *eth.Response) (*eth.Request, error)
 	RequestReceipts([]common.Hash, []uint64, []uint64, chan *eth.Response) (*eth.Request, error)
 	RequestBALs([]common.Hash, chan *eth.Response) (*eth.Request, error)
+
+	// BlockRange returns the range of blocks the peer announced to serve
+	// (bodies and receipts), nil if it never announced one.
+	//
+	// Headers are always assumed to be available for the full range of
+	// blocks from genesis.
+	BlockRange() *eth.BlockRangeUpdatePacket
 }
 
 // newPeerConnection creates a new downloader peer.
@@ -148,6 +155,14 @@ func (p *peerConnection) BALCapacity(targetRTT time.Duration) int {
 		cap = MaxBALFetch
 	}
 	return cap
+}
+
+// serves returns whether the peer announced to have the bodies and receipts of
+// the given block. Headers are always assumed available and not subject to the
+// announced range.
+func (p *peerConnection) serves(number uint64) bool {
+	r := p.peer.BlockRange()
+	return r == nil || (r.EarliestBlock <= number && number <= r.LatestBlock)
 }
 
 // MarkLacking appends a new entity to the set of items (blocks, receipts, states)
