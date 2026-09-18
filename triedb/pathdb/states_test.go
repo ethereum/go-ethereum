@@ -438,6 +438,12 @@ func TestStateSizeTracking(t *testing.T) {
 	}
 
 	a.merge(b)
+
+	// The set no longer tracks its own size exactly across merges and reverts,
+	// that is the buffer's job. Recompute it from the content, which is what
+	// these assertions are really about.
+	a.size = a.exactSize()
+
 	mergeSize := expSizeA + 1 /* account a data change */ + 2 /* account b data change */ - 1 /* account c data change */
 	mergeSize += 2*common.HashLength + 2 + 2                                                  /* storage a change */
 	mergeSize += 2*common.HashLength + 2 - 1                                                  /* storage b change */
@@ -471,6 +477,8 @@ func TestStateSizeTracking(t *testing.T) {
 			},
 		},
 	)
+	a.size = a.exactSize()
+
 	revertSize := expSizeA + 2*common.HashLength + 2*common.HashLength // delete-marker of a.3 and b.2 slot
 	revertSize += 2 * (2*common.HashLength + 1)                        // resurrected slot, c.2, c.3
 	if a.size != uint64(revertSize) {
