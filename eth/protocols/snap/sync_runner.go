@@ -53,9 +53,12 @@ type storageJob struct {
 	finish     bool // subtask completed by this feed
 }
 
-// syncRunner runs sync jobs on a bounded worker pool.
+// syncRunner runs sync jobs on a bounded worker pool. It is shared by the
+// snap/1 and snap/2 syncers.
 type syncRunner struct {
-	s      *syncer
+	profile *syncProfile  // Statistics sink for the submission waits
+	update  chan struct{} // Runloop wakeup, signalled when the runner drains
+
 	lock   sync.Mutex
 	queues map[any][]func()
 	wg     sync.WaitGroup
@@ -63,12 +66,13 @@ type syncRunner struct {
 	tasks  chan struct{}
 }
 
-func newSyncRunner(s *syncer) *syncRunner {
+func newSyncRunner(profile *syncProfile, update chan struct{}) *syncRunner {
 	return &syncRunner{
-		s:      s,
-		queues: make(map[any][]func()),
-		tokens: make(chan struct{}, runtime.GOMAXPROCS(0)),
-		tasks:  make(chan struct{}, syncTaskThreshold),
+		profile: profile,
+		update:  update,
+		queues:  make(map[any][]func()),
+		tokens:  make(chan struct{}, runtime.GOMAXPROCS(0)),
+		tasks:   make(chan struct{}, syncTaskThreshold),
 	}
 }
 
@@ -77,7 +81,7 @@ func newSyncRunner(s *syncer) *syncRunner {
 func (e *syncRunner) submit(kind int, key any, run func()) {
 	waitStart := time.Now()
 	e.tasks <- struct{}{}
-	e.s.profile.submitWait[kind].observe(time.Since(waitStart))
+	e.profile.submitWait[kind].observe(time.Since(waitStart))
 
 	e.lock.Lock()
 	e.queues[key] = append(e.queues[key], run)
@@ -118,7 +122,7 @@ func (e *syncRunner) drain(key any) {
 		// Wake the runloop when the runner drains fully
 		if idle {
 			select {
-			case e.s.update <- struct{}{}:
+			case e.update <- struct{}{}:
 			default:
 			}
 		}
@@ -191,7 +195,7 @@ func (s *syncer) executeStorageJob(job *storageJob) {
 			if err := job.subTask.genBatch.Write(); err != nil {
 				log.Error("Failed to persist stack slots", "err", err)
 			}
-			commits += s.observeCommit(profStorage, gbStart)
+			commits += s.profile.observeCommit(profStorage, gbStart)
 			job.subTask.genBatch.Reset()
 
 			// The chunk came out complete in full: the account used to have
@@ -207,7 +211,7 @@ func (s *syncer) executeStorageJob(job *storageJob) {
 			if err := job.subTask.genBatch.Write(); err != nil {
 				log.Error("Failed to persist stack slots", "err", err)
 			}
-			commits += s.observeCommit(profStorage, gbStart)
+			commits += s.profile.observeCommit(profStorage, gbStart)
 			job.subTask.genBatch.Reset()
 		}
 	}
@@ -216,7 +220,7 @@ func (s *syncer) executeStorageJob(job *storageJob) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist storage slots", "err", err)
 	}
-	commits += s.observeCommit(profStorage, commitStart)
+	commits += s.profile.observeCommit(profStorage, commitStart)
 	s.profile.exec[profStorage].observe(time.Since(start) - commits)
 }
 
@@ -268,7 +272,7 @@ func (s *syncer) executeAccountJob(job *accountJob) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist accounts", "err", err)
 	}
-	commits += s.observeCommit(profAccount, commitStart)
+	commits += s.profile.observeCommit(profAccount, commitStart)
 
 	// Stack trie could have generated trie nodes, push them to disk. It's fine
 	// even if we crash and lose this write as it will only cause more data to
@@ -279,7 +283,7 @@ func (s *syncer) executeAccountJob(job *accountJob) {
 		if err := job.task.genBatch.Write(); err != nil {
 			log.Error("Failed to persist stack account", "err", err)
 		}
-		commits += s.observeCommit(profAccount, gbStart)
+		commits += s.profile.observeCommit(profAccount, gbStart)
 		job.task.genBatch.Reset()
 	} else if job.task.genBatch.ValueSize() > batchSizeThreshold {
 		job.task.genTrie.commit(false)
@@ -287,7 +291,7 @@ func (s *syncer) executeAccountJob(job *accountJob) {
 		if err := job.task.genBatch.Write(); err != nil {
 			log.Error("Failed to persist stack account", "err", err)
 		}
-		commits += s.observeCommit(profAccount, gbStart)
+		commits += s.profile.observeCommit(profAccount, gbStart)
 		job.task.genBatch.Reset()
 	}
 	s.profile.exec[profAccount].observe(time.Since(start) - commits)
@@ -313,6 +317,6 @@ func (s *syncer) executeBytecodeJob(job *bytecodeJob) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist bytecodes", "err", err)
 	}
-	commits := s.observeCommit(profBytecode, commitStart)
+	commits := s.profile.observeCommit(profBytecode, commitStart)
 	s.profile.exec[profBytecode].observe(time.Since(start) - commits)
 }

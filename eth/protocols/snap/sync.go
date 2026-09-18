@@ -546,7 +546,7 @@ func newSyncer(db ethdb.KeyValueStore, scheme string) *syncer {
 
 		extProgress: new(syncProgress),
 	}
-	s.syncRunner = newSyncRunner(s)
+	s.syncRunner = newSyncRunner(&s.profile, s.update)
 	return s
 }
 
@@ -717,7 +717,7 @@ func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			s.syncTimeOnce.Do(func() {
 				stateSyncTimeGauge.Update(int64(time.Since(s.startTime)))
 				log.Info("State sync phase is completed", "elapsed", common.PrettyDuration(time.Since(s.startTime)))
-				s.reportProfile()
+				s.profile.report("skippableheals", s.skippableHeals.Load())
 			})
 			if s.healStartTime.IsZero() {
 				s.healStartTime = time.Now()
