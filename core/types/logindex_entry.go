@@ -65,10 +65,10 @@ const (
 // Total sizes of the four entry kinds, derived at compile time from the field
 // sizes above: type || content || block number || tx index || log index.
 const (
-	BlockEntrySize       = EntryTypeSize + BlockHashSize + BlockNumberSize                                       // 42
-	TransactionEntrySize = EntryTypeSize + TxHashSize + BlockNumberSize + TxIndexSize + CumulativeLogSize        // 50
-	LogAddressEntrySize  = EntryTypeSize + AddressSize + BlockNumberSize + TxIndexSize + LogIndexSize            // 38
-	LogTopicEntrySize    = EntryTypeSize + TopicSize + BlockNumberSize + TxIndexSize + LogIndexSize              // 50
+	BlockEntrySize       = EntryTypeSize + BlockHashSize + BlockNumberSize                                // 42
+	TransactionEntrySize = EntryTypeSize + TxHashSize + BlockNumberSize + TxIndexSize + CumulativeLogSize // 50
+	LogAddressEntrySize  = EntryTypeSize + AddressSize + BlockNumberSize + TxIndexSize + LogIndexSize     // 38
+	LogTopicEntrySize    = EntryTypeSize + TopicSize + BlockNumberSize + TxIndexSize + LogIndexSize       // 50
 )
 
 // IndexEntry is a single variable-length record of a sorted EIP-8304 index
