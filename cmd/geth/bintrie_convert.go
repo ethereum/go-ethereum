@@ -164,6 +164,15 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	// Probe before MakeTrieDatabase: its guard fatals on a completed
 	// conversion and cannot see interrupted debris.
 	if ctx.Bool(forceConvertFlag.Name) {
+		// The wipe destroys the tree so the conversion can rebuild it from
+		// the merkle state. With that state gone there is nothing to rebuild
+		// from, and the datadir is left with neither tree.
+		if rawdb.ReadPBTMerkleDisposed(chaindb) {
+			return errors.New("refusing --force: the merkle state was disposed of after the migration, so wiping the binary tree would leave no state at all")
+		}
+		if len(rawdb.ReadAccountTrieNode(chaindb, nil)) == 0 && len(rawdb.ReadLegacyTrieNode(chaindb, root)) == 0 {
+			return errors.New("refusing --force: no merkle state to convert from, so wiping the binary tree would leave no state at all")
+		}
 		if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
 			return fmt.Errorf("failed to wipe binary tree state: %w", err)
 		}
