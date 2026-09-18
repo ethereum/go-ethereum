@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,9 +70,36 @@ type jsonBeaconHeader struct {
 }
 
 type jsonHeaderWithExecProof struct {
-	Beacon          types.Header    `json:"beacon"`
-	Execution       json.RawMessage `json:"execution"`
-	ExecutionBranch merkle.Values   `json:"execution_branch"`
+	Beacon             types.Header    `json:"beacon"`
+	Execution          json.RawMessage `json:"execution"`
+	ExecutionBlockHash common.Hash     `json:"execution_block_hash"`
+	ExecutionBranch    merkle.Values   `json:"execution_branch"`
+}
+
+// decodeHeaderWithExecProof decodes the fork-specific execution portion of a
+// light-client header. Gloas replaces the execution payload header with the
+// execution block hash committed in the signed execution payload bid.
+func decodeHeaderWithExecProof(version string, enc jsonHeaderWithExecProof) (types.HeaderWithExecProof, error) {
+	if strings.EqualFold(version, "gloas") {
+		return types.HeaderWithExecProof{
+			Header: enc.Beacon,
+			Proof: &types.GloasExecutionProof{
+				ExecutionBlockHash: enc.ExecutionBlockHash,
+				Branch:             enc.ExecutionBranch,
+			},
+		}, nil
+	}
+	payloadHeader, err := types.ExecutionHeaderFromJSON(version, enc.Execution)
+	if err != nil {
+		return types.HeaderWithExecProof{}, err
+	}
+	return types.HeaderWithExecProof{
+		Header: enc.Beacon,
+		Proof: &types.LegacyHeaderProof{
+			PayloadHeader: payloadHeader,
+			Branch:        enc.ExecutionBranch,
+		},
+	}, nil
 }
 
 // UnmarshalJSON unmarshals from JSON.
@@ -215,16 +243,16 @@ func decodeOptimisticUpdate(enc []byte) (types.OptimisticUpdate, error) {
 	if err := json.Unmarshal(enc, &data); err != nil {
 		return types.OptimisticUpdate{}, err
 	}
-	// Decode the execution payload headers.
-	attestedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Attested.Execution)
-	if err != nil {
-		return types.OptimisticUpdate{}, fmt.Errorf("invalid attested header: %v", err)
-	}
 	if data.Data.Attested.Beacon.StateRoot == (common.Hash{}) {
 		// workaround for different event encoding format in Lodestar
 		if err := json.Unmarshal(enc, &data.Data); err != nil {
 			return types.OptimisticUpdate{}, err
 		}
+	}
+	// Decode the fork-specific execution proof.
+	attested, err := decodeHeaderWithExecProof(data.Version, data.Data.Attested)
+	if err != nil {
+		return types.OptimisticUpdate{}, fmt.Errorf("invalid attested header: %v", err)
 	}
 
 	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
@@ -234,11 +262,7 @@ func decodeOptimisticUpdate(enc []byte) (types.OptimisticUpdate, error) {
 		return types.OptimisticUpdate{}, errors.New("invalid sync_committee_signature length")
 	}
 	return types.OptimisticUpdate{
-		Attested: types.HeaderWithExecProof{
-			Header:        data.Data.Attested.Beacon,
-			PayloadHeader: attestedExecHeader,
-			PayloadBranch: data.Data.Attested.ExecutionBranch,
-		},
+		Attested:      attested,
 		Signature:     data.Data.Aggregate,
 		SignatureSlot: uint64(data.Data.SignatureSlot),
 	}, nil
@@ -270,12 +294,12 @@ func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	if err := json.Unmarshal(enc, &data); err != nil {
 		return types.FinalityUpdate{}, err
 	}
-	// Decode the execution payload headers.
-	attestedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Attested.Execution)
+	// Decode the fork-specific execution proofs.
+	attested, err := decodeHeaderWithExecProof(data.Version, data.Data.Attested)
 	if err != nil {
 		return types.FinalityUpdate{}, fmt.Errorf("invalid attested header: %v", err)
 	}
-	finalizedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Finalized.Execution)
+	finalized, err := decodeHeaderWithExecProof(data.Version, data.Data.Finalized)
 	if err != nil {
 		return types.FinalityUpdate{}, fmt.Errorf("invalid finalized header: %v", err)
 	}
@@ -288,17 +312,9 @@ func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	}
 
 	return types.FinalityUpdate{
-		Version: data.Version,
-		Attested: types.HeaderWithExecProof{
-			Header:        data.Data.Attested.Beacon,
-			PayloadHeader: attestedExecHeader,
-			PayloadBranch: data.Data.Attested.ExecutionBranch,
-		},
-		Finalized: types.HeaderWithExecProof{
-			Header:        data.Data.Finalized.Beacon,
-			PayloadHeader: finalizedExecHeader,
-			PayloadBranch: data.Data.Finalized.ExecutionBranch,
-		},
+		Version:        data.Version,
+		Attested:       attested,
+		Finalized:      finalized,
 		FinalityBranch: data.Data.FinalityBranch,
 		Signature:      data.Data.Aggregate,
 		SignatureSlot:  uint64(data.Data.SignatureSlot),
@@ -408,6 +424,44 @@ func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconB
 	block, err := types.BlockFromJSON(beaconBlockMessage.Version, beaconBlockMessage.Data.Message)
 	if err != nil {
 		return nil, err
+	}
+	if strings.EqualFold(beaconBlockMessage.Version, "gloas") {
+		resp, err := api.httpGet(fmt.Sprintf("/eth/v1/beacon/headers/0x%x", blockRoot), nil)
+		if err != nil {
+			return nil, err
+		}
+		var header struct {
+			Data struct {
+				Root   common.Hash `json:"root"`
+				Header struct {
+					Message types.Header `json:"message"`
+				} `json:"header"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(resp, &header); err != nil {
+			return nil, fmt.Errorf("invalid Gloas beacon header: %v", err)
+		}
+		if header.Data.Root != blockRoot {
+			return nil, fmt.Errorf("Gloas beacon header root mismatch (expected: %x, got: %x)", blockRoot, header.Data.Root)
+		}
+		if err := block.SetGloasHeader(blockRoot, header.Data.Header.Message); err != nil {
+			return nil, err
+		}
+		resp, err = api.httpGet(fmt.Sprintf("/eth/v1/beacon/execution_payload_envelopes/0x%x", blockRoot), nil)
+		if err != nil {
+			return nil, err
+		}
+		var envelope struct {
+			Data struct {
+				Message json.RawMessage `json:"message"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(resp, &envelope); err != nil {
+			return nil, fmt.Errorf("invalid Gloas execution payload envelope: %v", err)
+		}
+		if err := block.SetGloasPayloadEnvelope(blockRoot, envelope.Data.Message); err != nil {
+			return nil, err
+		}
 	}
 	computedRoot := block.Root()
 	if computedRoot != blockRoot {
