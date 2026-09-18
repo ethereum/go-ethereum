@@ -693,7 +693,12 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// fully synced).
 	state, err := p.chain.StateAt(head)
 	if err != nil {
-		state, err = p.chain.StateAt(p.chain.Genesis().Header())
+		empty := *head
+		empty.Root = types.EmptyRootHash
+		if p.chain.Config().IsUBT(head.Number, head.Time) {
+			empty.Root = types.EmptyBinaryHash
+		}
+		state, err = p.chain.StateAt(&empty)
 	}
 	if err != nil {
 		return err
