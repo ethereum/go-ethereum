@@ -30,8 +30,9 @@ type TableWrite struct {
 
 // BuildLogIndexForBlock builds the EIP-8304 level-0 log index table for the given
 // block. parentHash is the hash of the parent block, whose block entry is added
-// with the spec's one-block delay (none for the genesis block). Interim
-// implementation: variable-length entries and a flat keccak root.
+// with the spec's one-block delay (none for the genesis block). The table root
+// is the SHA2-256 binary tree hash of the sorted entries with the entry count
+// mixed in (see core/types/logindex_merkle.go).
 func BuildLogIndexForBlock(blockNumber uint64, parentHash common.Hash, receipts types.Receipts) []TableWrite {
 	b0 := types.NewIndexBuilder()
 	b0.AddBlockEntries(parentHash, blockNumber, receipts)

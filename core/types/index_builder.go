@@ -20,7 +20,6 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // IndexBuilder accumulates IndexEntry values and computes a Merkle root.
@@ -67,15 +66,14 @@ func (b *IndexBuilder) Entries() []IndexEntry {
 	return b.entries
 }
 
-// Build sorts entries and returns a simple hash.
+// Build sorts the entries lexicographically in place and returns the table
+// root: the SHA2-256 hashes of the binary encoded entries merkleized as a
+// binary tree of depth ceil(log2(n)) right-padded with zero subtrees, mixed
+// with the little-endian entry count. See merkleizeEntries in
+// logindex_merkle.go for the exact construction.
 func (b *IndexBuilder) Build() common.Hash {
 	sort.Slice(b.entries, func(i, j int) bool {
 		return CompareEntries(b.entries[i], b.entries[j]) < 0
 	})
-	// Simple hash: Keccak256 of all concatenated entries
-	var buf []byte
-	for _, e := range b.entries {
-		buf = append(buf, e...)
-	}
-	return crypto.Keccak256Hash(buf)
+	return merkleizeEntries(b.entries)
 }
