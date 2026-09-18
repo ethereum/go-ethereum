@@ -66,7 +66,7 @@ func (db *MPTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
 	if db.TrieDB().Scheme() == rawdb.HashScheme && db.snap != nil {
 		snap := db.snap.Snapshot(stateRoot)
 		if snap != nil {
-			readers = append(readers, newFlatReader(snap))
+			readers = append(readers, newFlatReader(snapshot.NewStateReader(snap)))
 		}
 	}
 	// Configure the state reader using the path database in path mode.

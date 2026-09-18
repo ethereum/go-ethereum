@@ -120,25 +120,34 @@ func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 }
 
 // Account directly retrieves the account associated with a particular hash in
-// the slim data format. An error will be returned if the read operation exits
-// abnormally. Specifically, if the layer is already stale.
+// the consensus (full) data format. An error will be returned if the read
+// operation exits abnormally. Specifically, if the layer is already stale.
 //
 // Note:
 // - the returned account object is safe to modify
 // - no error will be returned if the requested account is not found in database
-func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
-	blob, err := r.AccountRLP(hash)
+func (r *reader) Account(hash common.Hash) (*types.StateAccount, error) {
+	l, err := r.db.tree.lookupAccount(hash, r.state)
 	if err != nil {
 		return nil, err
 	}
-	if len(blob) == 0 {
+	// If the located layer is stale, fall back to the slow path to retrieve
+	// the account. See AccountRLP for the rationale of this fallback.
+	account, err := l.accountObject(hash, 0)
+	if errors.Is(err, errSnapshotStale) {
+		account, err = r.layer.accountObject(hash, 0)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if account == nil {
 		return nil, nil
 	}
-	account := new(types.SlimAccount)
-	if err := rlp.DecodeBytes(blob, account); err != nil {
-		panic(err)
-	}
-	return account, nil
+	// The diff layers retain the account in decoded form and the returned
+	// object is documented as safe to modify, so hand back a shallow copy to
+	// protect the cached instance from caller mutation.
+	cpy := *account
+	return &cpy, nil
 }
 
 // Storage directly retrieves the storage data associated with a particular hash,
