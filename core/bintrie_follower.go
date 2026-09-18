@@ -204,6 +204,9 @@ func (f *bintrieFollower) loop() {
 					<-done
 				}
 				rawdb.WritePBTMigrationDone(f.db)
+				if f.chain != nil {
+					f.chain.disposeMerkle()
+				}
 				log.Info("State migration finished", "closed", closer.Number)
 				return
 			}
@@ -868,6 +871,21 @@ func (t *followerTree) journal(head *types.Header) {
 	}
 	if err := handle.Close(); err != nil {
 		log.Error("Failed to close shadow trie", "err", err)
+	}
+}
+
+// close releases the tree's handle without journaling it: the caller is
+// about to delete the state a journal would describe.
+func (t *followerTree) close() {
+	t.f.mu.Lock()
+	handle, owned := t.handle, t.owned
+	t.handle, t.sdb = nil, nil
+	t.f.mu.Unlock()
+	if handle == nil || !owned {
+		return
+	}
+	if err := handle.Close(); err != nil {
+		log.Error("Failed to close the merkle tree handle", "err", err)
 	}
 }
 

@@ -951,63 +951,23 @@ func wipeMerkleHistory(chaindb ethdb.Database, triedbDir string) error {
 	return nil
 }
 
-// deleteMPTData removes the merkle state the conversion superseded: the
-// snapshot markers first, then the flat state they bless, then the trie
-// nodes. Markers first mirrors the write path: flat state is authoritative
-// where it is blessed, so a half-deleted store with its markers intact
-// answers "no such account" rather than failing.
+// deleteMPTData removes the merkle state the conversion superseded. The key
+// families and the snapshot markers that bless them are rawdb's to delete,
+// markers first, and the online disposal at the end of the migration window
+// deletes exactly the same set from the same list.
+//
+// The walk that follows is the hash scheme's alone: there, nodes are keyed by
+// their own hash, so nothing but a traversal can name them. On the path
+// scheme the family scan already took them.
 func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash) error {
-	isPathDB := srcTriedb.Scheme() == rawdb.PathScheme
-
-	batch := chaindb.NewBatch()
-	rawdb.DeleteSnapshotRoot(batch)
-	rawdb.DeleteSnapshotJournal(batch)
-	rawdb.DeleteSnapshotGenerator(batch)
-	rawdb.DeleteSnapshotRecoveryNumber(batch)
-	rawdb.DeleteSnapshotSyncStatus(batch)
-	rawdb.DeleteSnapshotDisabled(batch)
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("failed to delete the snapshot markers: %w", err)
+	records, _, err := rawdb.DeleteMerkleState(chaindb, nil)
+	if err != nil {
+		return fmt.Errorf("failed to delete the merkle state: %w", err)
 	}
-	batch.Reset()
-
-	// Fixed key lengths, so the scans cannot stray into a neighbouring
-	// family that shares a prefix byte.
-	flat := 0
-	for _, family := range []struct {
-		prefix []byte
-		length int
-	}{
-		{rawdb.SnapshotAccountPrefix, len(rawdb.SnapshotAccountPrefix) + common.HashLength},
-		{rawdb.SnapshotStoragePrefix, len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength},
-	} {
-		it := rawdb.NewKeyLengthIterator(chaindb.NewIterator(family.prefix, nil), family.length)
-		for it.Next() {
-			if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
-				it.Release()
-				return err
-			}
-			flat++
-			if batch.ValueSize() >= ethdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					it.Release()
-					return err
-				}
-				batch.Reset()
-			}
-		}
-		err := it.Error()
-		it.Release()
-		if err != nil {
-			return err
-		}
+	log.Info("Deleted merkle state", "records", records)
+	if srcTriedb.Scheme() != rawdb.HashScheme {
+		return nil
 	}
-	if err := batch.Write(); err != nil {
-		return err
-	}
-	batch.Reset()
-	log.Info("Deleted merkle flat state", "records", flat)
-
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
 		return fmt.Errorf("failed to open source trie for deletion: %w", err)
@@ -1016,16 +976,12 @@ func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root comm
 	if err != nil {
 		return fmt.Errorf("failed to create account iterator for deletion: %w", err)
 	}
+	batch := chaindb.NewBatch()
 	deleted := 0
 
 	for acctIt.Next(true) {
-		if isPathDB {
-			rawdb.DeleteAccountTrieNode(batch, acctIt.Path())
-		} else {
-			node := acctIt.Hash()
-			if node != (common.Hash{}) {
-				rawdb.DeleteLegacyTrieNode(batch, node)
-			}
+		if node := acctIt.Hash(); node != (common.Hash{}) {
+			rawdb.DeleteLegacyTrieNode(batch, node)
 		}
 		deleted++
 
@@ -1045,13 +1001,8 @@ func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root comm
 					return fmt.Errorf("failed to create storage iterator for deletion: %w", err)
 				}
 				for storageIt.Next(true) {
-					if isPathDB {
-						rawdb.DeleteStorageTrieNode(batch, addrHash, storageIt.Path())
-					} else {
-						node := storageIt.Hash()
-						if node != (common.Hash{}) {
-							rawdb.DeleteLegacyTrieNode(batch, node)
-						}
+					if node := storageIt.Hash(); node != (common.Hash{}) {
+						rawdb.DeleteLegacyTrieNode(batch, node)
 					}
 					deleted++
 					if batch.ValueSize() >= ethdb.IdealBatchSize {

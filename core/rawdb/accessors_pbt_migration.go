@@ -100,6 +100,118 @@ func WritePBTMigrationDone(db ethdb.KeyValueWriter) {
 	}
 }
 
+// ReadPBTMerkleDisposed reports whether the merkle state has been disposed
+// of after the migration. It is written before the deletion starts, so it
+// means "gone or going", never "intact".
+func ReadPBTMerkleDisposed(db ethdb.KeyValueReader) bool {
+	data, _ := db.Get(pbtMerkleDisposedKey)
+	return len(data) == 1 && data[0] == 1
+}
+
+// WritePBTMerkleDisposed marks the merkle state as disposable and gone. It
+// must land before the first key is deleted: a partially deleted state that
+// still looks intact is the one shape a reader cannot tell from a complete
+// one.
+func WritePBTMerkleDisposed(db ethdb.KeyValueWriter) {
+	if err := db.Put(pbtMerkleDisposedKey, []byte{1}); err != nil {
+		log.Crit("Failed to store merkle disposal marker", "err", err)
+	}
+}
+
+// DeleteMerkleState removes the merkle-patricia state: the snapshot markers
+// first, then every key family holding the state they bless. It reports how
+// many records it deleted and whether it got to the end; interrupt stops it
+// between batches, which is safe because the caller's marker makes the job
+// resumable.
+//
+// Markers first is the write path mirrored. Flat state is authoritative
+// where its markers say it is complete, so a half-deleted store with the
+// markers intact answers "this account does not exist" rather than failing,
+// and caches it. The history freezers and the journal file are the trie
+// database's own handles and belong to the caller, which knows the paths and
+// whether anything still holds them open.
+func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) (int, bool, error) {
+	batch := db.NewBatch()
+	DeleteSnapshotRoot(batch)
+	DeleteSnapshotJournal(batch)
+	DeleteSnapshotGenerator(batch)
+	DeleteSnapshotRecoveryNumber(batch)
+	DeleteSnapshotSyncStatus(batch)
+	DeleteSnapshotDisabled(batch)
+	if err := batch.Write(); err != nil {
+		return 0, false, err
+	}
+	batch.Reset()
+
+	stopped := func() bool {
+		select {
+		case <-interrupt:
+			return true
+		default:
+			return false
+		}
+	}
+	deleted := 0
+	for _, family := range MerkleKeyFamilies {
+		it := db.NewIterator(family, nil)
+		for it.Next() {
+			if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
+				it.Release()
+				return deleted, false, err
+			}
+			deleted++
+			if batch.ValueSize() < ethdb.IdealBatchSize {
+				continue
+			}
+			if err := batch.Write(); err != nil {
+				it.Release()
+				return deleted, false, err
+			}
+			batch.Reset()
+			if stopped() {
+				it.Release()
+				return deleted, false, nil
+			}
+		}
+		err := it.Error()
+		it.Release()
+		if err != nil {
+			return deleted, false, err
+		}
+	}
+	// The state ids, which no prefix scan may take: their leading byte is
+	// shared with every "Last..." chain head pointer, so they are matched by
+	// their exact length, and the persistent id by its own key.
+	ids := NewKeyLengthIterator(db.NewIterator(stateIDPrefix, nil), len(stateIDPrefix)+common.HashLength)
+	for ids.Next() {
+		if err := batch.Delete(common.CopyBytes(ids.Key())); err != nil {
+			ids.Release()
+			return deleted, false, err
+		}
+		deleted++
+		if batch.ValueSize() < ethdb.IdealBatchSize {
+			continue
+		}
+		if err := batch.Write(); err != nil {
+			ids.Release()
+			return deleted, false, err
+		}
+		batch.Reset()
+	}
+	err := ids.Error()
+	ids.Release()
+	if err != nil {
+		return deleted, false, err
+	}
+	if err := batch.Delete(persistentStateIDKey); err != nil {
+		return deleted, false, err
+	}
+	if err := batch.Write(); err != nil {
+		return deleted, false, err
+	}
+	return deleted, true, nil
+}
+
 // WipeMigrationState clears the migration bookkeeping, done marker first,
 // so a crash prefix leaves state the next boot detects, never a stale
 // position a fresh anchor would lose to.
