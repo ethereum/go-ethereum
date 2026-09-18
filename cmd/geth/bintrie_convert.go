@@ -215,10 +215,9 @@ func (s *conversionStats) report(force bool) {
 // convertState converts the MPT state at root into the binary tree namespace
 // per EIP-8347: one scan derives every leaf and streams flat state, an
 // external sort orders the leaves in tree-key order, and the tree builds
-// bottom-up in one pass. Both stores are verified before the artifacts
-// finalize, and the flat-state attestation lands last: a run that dies or
-// fails verification leaves a namespace that refuses to open, and a re-run
-// needs --force.
+// bottom-up in one pass. Three checks gate the result: the scan against the
+// source state root, the tree and the flat store against the converted one.
+// The attestation lands last, so an interrupted run refuses to open.
 func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 
@@ -230,13 +229,22 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	stats := newStats("Converting state")
 
-	// The budget is a total: halved when the preimage sorter runs alongside.
-	leafBudget := opts.sortBudget
+	// Four sorters can be alive at once, and a sealed one keeps its buffer
+	// while its stream drains, so the budget is split rather than reused.
+	parts := 3
 	if opts.preimagePath != "" {
-		leafBudget = opts.sortBudget / 2
+		parts = 4
 	}
-	sorter := bintrie.NewLeafSorter(opts.tmpDir, leafBudget)
+	share := opts.sortBudget / parts
+
+	sorter := bintrie.NewLeafSorter(opts.tmpDir, share)
 	defer sorter.Close()
+
+	// The re-derivation limbs, keyed by account hash and by account‖slot.
+	accounts := bintrie.NewRecordSorter(opts.tmpDir, share, nil)
+	defer accounts.Close()
+	slots := bintrie.NewRecordSorter(opts.tmpDir, share, nil)
+	defer slots.Close()
 
 	var (
 		snapshot  *snapshotWriter
@@ -255,11 +263,11 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}()
 	}
 	if opts.preimagePath != "" {
-		preimages = newPreimageFile(opts.tmpDir, opts.sortBudget-leafBudget)
+		preimages = newPreimageFile(opts.tmpDir, share)
 		defer preimages.close()
 	}
 	// Phase 1: scan, deriving leaves and streaming flat state.
-	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, preimages, stats); err != nil {
+	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, accounts, slots, preimages, stats); err != nil {
 		return common.Hash{}, err
 	}
 	stats.report(true)
@@ -268,6 +276,14 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	if stats.leaves == 0 {
 		return common.Hash{}, errors.New("refusing to convert an empty state")
 	}
+
+	// Check 1, before the build: the other two checks are fed by this same
+	// record set, so only this one ties the output to the source state.
+	if err := verifySourceRoot(accounts, slots, root, stats.start); err != nil {
+		return common.Hash{}, err
+	}
+	accounts.Close()
+	slots.Close()
 
 	// Phase 2+3: sort and build, streaming records to disk.
 	stream, err := sorter.Sort()
@@ -354,8 +370,9 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 }
 
 // deriveLeaves walks the merkle state at root, deriving every tree leaf into
-// the sorter and writing flat state alongside.
-func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, sorter *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats) error {
+// the sorter, writing flat state alongside, and recording the merkle
+// re-derivation limbs the source-root check folds back up.
+func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, sorter, accounts, slots *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats) error {
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
 		return fmt.Errorf("failed to open source trie: %w", err)
@@ -405,6 +422,9 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		slim := acc
 		slim.Root = types.EmptyRootHash
 		rawdb.WriteAccountSnapshot(flatBatch, accountHash, types.SlimAccountRLP(slim))
+		if err := accounts.Add(accountHash.Bytes(), merkleAccountRecord(acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash))); err != nil {
+			return err
+		}
 
 		if acc.Root != types.EmptyRootHash {
 			storageTrie, err := trie.NewStateTrie(trie.StorageTrieID(root, accountHash, acc.Root), srcTriedb)
@@ -440,6 +460,9 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 					return err
 				}
 				rawdb.WriteStorageSnapshot(flatBatch, accountHash, common.BytesToHash(storageIter.Key), common.CopyBytes(storageIter.Value))
+				if err := slots.Add(append(accountHash.Bytes(), storageIter.Key...), storageIter.Value); err != nil {
+					return err
+				}
 				stats.slots++
 
 				if flatBatch.ValueSize() >= ethdb.IdealBatchSize {
@@ -631,6 +654,29 @@ func (r rawBinaryNodes) NodeReader(common.Hash) (database.NodeReader, error) {
 // from the leaves, which subsumes per-node hash checks.
 func (r rawBinaryNodes) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
 	return rawdb.ReadAccountTrieNode(r.pbtdb, path), nil
+}
+
+// verifySourceRoot demands that the scanned records re-derive the state root
+// they were read from, the converter's counterpart to the importer's anchor
+// check.
+func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, start time.Time) error {
+	acctStream, err := accounts.Sort()
+	if err != nil {
+		return err
+	}
+	slotStream, err := slots.Sort()
+	if err != nil {
+		return err
+	}
+	got, err := rederiveMerkleRoot(acctStream, slotStream, start)
+	if err != nil {
+		return err
+	}
+	if got != want {
+		return fmt.Errorf("the scanned state re-derives merkle root %x, the source commits %x", got, want)
+	}
+	log.Info("Verified the scan against the source state root", "stateRoot", want)
+	return nil
 }
 
 // verifyConvertedState refolds every persisted leaf and requires the rebuilt
