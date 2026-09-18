@@ -715,3 +715,73 @@ done:
 
 	MOVQ BP, SP
 	RET
+
+// func fAVX2Rounds(v *[16]uint64, m *[16]uint64, rounds uint64)
+//
+// Runs rounds rounds on the working vector v, which is loaded from and stored
+// back to memory rather than derived from h and folded into it. That lets the
+// caller split a long F into chunks. rounds must be a multiple of 10 except in
+// the last chunk, so that the message schedule realigns.
+TEXT ·fAVX2Rounds(SB), NOSPLIT, $0-24
+	MOVQ v+0(FP), AX
+	MOVQ m+8(FP), SI
+	MOVQ rounds+16(FP), BX
+
+	VMOVDQU ·AVX2_c40<>(SB), Y4
+	VMOVDQU ·AVX2_c48<>(SB), Y5
+
+	VMOVDQU 0(AX), Y0
+	VMOVDQU 32(AX), Y1
+	VMOVDQU 64(AX), Y2
+	VMOVDQU 96(AX), Y3
+
+rloop:
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_0_2_4_6_1_3_5_7_8_10_12_14_9_11_13_15()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_14_4_9_13_10_8_15_6_1_0_11_5_12_2_7_3()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_11_12_5_15_8_0_2_13_10_3_7_9_14_6_1_4()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_7_3_13_11_9_1_12_14_2_5_4_15_6_10_0_8()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_9_5_2_10_0_7_4_15_14_11_6_3_1_12_8_13()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_2_6_0_8_12_10_11_3_4_7_15_1_13_5_14_9()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_12_1_14_4_5_15_13_10_0_6_9_8_7_3_2_11()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_13_7_12_3_11_14_1_9_5_15_8_2_0_4_6_10()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_6_14_11_0_15_9_3_8_12_13_1_10_2_7_4_5()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	SUBQ $1, BX; JCS rdone
+	LOAD_MSG_AVX2_10_8_7_1_2_4_6_5_15_9_3_13_11_14_12_0()
+	ROUND_AVX2(Y12, Y13, Y14, Y15, Y10, Y4, Y5)
+
+	JMP rloop
+
+rdone:
+	VMOVDQU Y0, 0(AX)
+	VMOVDQU Y1, 32(AX)
+	VMOVDQU Y2, 64(AX)
+	VMOVDQU Y3, 96(AX)
+	VZEROUPPER
+	RET
