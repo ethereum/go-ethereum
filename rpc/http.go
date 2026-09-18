@@ -199,6 +199,9 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg *jsonrpcMessag
 	if err := json.NewDecoder(respBody).Decode(&resp); err != nil {
 		return err
 	}
+	if !bytes.Equal(resp.ID, msg.ID) {
+		return fmt.Errorf("response id mismatch: got %s, want %s", resp.ID, msg.ID)
+	}
 	op.resp <- batch[:]
 	return nil
 }
