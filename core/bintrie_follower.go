@@ -204,7 +204,7 @@ func (f *bintrieFollower) loop() {
 					<-done
 				}
 				if m := f.peek(false); m == nil {
-					log.Warn("Merkle window closing without ever running", "closed", closer.Number)
+					log.Info("Merkle window closing, never needed", "closed", closer.Number)
 				} else if num, _, _ := m.cursor(); num < closer.Number.Uint64() {
 					log.Warn("Merkle window closing behind", "cursor", num, "closed", closer.Number)
 				}
@@ -275,8 +275,16 @@ func (f *bintrieFollower) close() {
 // sync runs every live direction once, ensuring the one the head calls for
 // exists: the direction opposite the head's flavour does the replay work,
 // its sibling only parks or rewinds. Outcomes latch; the next head retries.
+//
+// Past activation the merkle tree is left frozen where the fork found it: no
+// canonical block asks for a merkle root again. It is armed on demand by
+// waitCaughtUp, never speculatively.
 func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
-	f.direction(!f.config.IsBinaryTrie(head.Number, head.Time))
+	owed := !f.config.IsBinaryTrie(head.Number, head.Time)
+	if !owed && f.peek(false) == nil {
+		return
+	}
+	f.direction(owed)
 	for _, t := range f.live() {
 		err := t.follow(head, stop)
 		f.mu.Lock()
@@ -802,11 +810,12 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 	if header == nil {
 		return fmt.Errorf("missing header for block %d %x", number, hash)
 	}
+	// The block's flavour fixes which direction owes it. Arming it here is
+	// what thaws a frozen merkle tree.
+	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
+	t := f.direction(pbt)
 	f.kick(header)
 
-	// The block's flavour fixes which direction owes it, so only the
-	// direction lookup repeats - the header read must not.
-	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
 	deadline := time.Now().Add(timeout)
 	for {
 		if _, ok := rawdb.ReadShadowStateRoot(f.db, hash, number); ok {
@@ -817,13 +826,11 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 			return errors.New("migration follower stopped")
 		default:
 		}
-		if t := f.peek(pbt); t != nil {
-			f.mu.Lock()
-			stall := t.stall
-			f.mu.Unlock()
-			if stall != nil {
-				return stall
-			}
+		f.mu.Lock()
+		stall := t.stall
+		f.mu.Unlock()
+		if stall != nil {
+			return stall
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("shadow has not reached block %d %x", number, hash)

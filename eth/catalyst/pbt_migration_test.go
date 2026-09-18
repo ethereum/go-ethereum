@@ -29,14 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // migrationTestGenesis schedules the fork at t=48: the fourth twelve-second
@@ -163,17 +159,14 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	for i := 2; i < 5; i++ {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
 	}
-	// The boundary parent's record fed the swap; the window records merkle
-	// roots for the binary blocks, proven against a reverse conversion.
+	// The boundary parent's record fed the swap and is the last one written.
 	if !chain.ShadowReady(chain.GetHeaderByNumber(3).Hash(), 3) {
 		t.Fatal("the boundary parent has no recorded shadow root")
 	}
 	for _, number := range []uint64{4, 5} {
 		header := chain.GetHeaderByNumber(number)
-		awaitShadowReady(t, chain, header)
-		got, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), header.Hash(), number)
-		if want := convertCanonicalMerkle(t, chain, ethservice.ChainDb(), genesis, header); got != want {
-			t.Fatalf("block %d window root %x, reverse conversion says %x", number, got, want)
+		if _, ok := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), header.Hash(), number); ok {
+			t.Fatalf("block %d recorded a merkle root; the merkle tree is frozen past activation", number)
 		}
 	}
 	if rawdb.ReadPBTMigrationDone(ethservice.ChainDb()) {
@@ -190,13 +183,11 @@ func TestFullMigrationLifecycle(t *testing.T) {
 			t.Fatalf("recipient balance at block %d = %d, want 1000", number, got)
 		}
 	}
-	if p := chain.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "parked" ||
-		p.Merkle == nil || (p.Merkle.Phase != "following" && p.Merkle.Phase != "synced") {
-		t.Fatalf("post-fork progress %+v, want binary parked and the window working", p)
+	if p := chain.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "parked" || p.Merkle != nil {
+		t.Fatalf("post-fork progress %+v, want the binary direction parked and no merkle direction", p)
 	}
-	// Reboot mid-window; the deleted lists make any re-replay a loud stall.
-	head := chain.GetHeaderByNumber(5)
-	want, _ := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), head.Hash(), 5)
+	// Reboot past the boundary, with the binary blocks' access lists deleted
+	// so a merkle tree that resumed replaying would stall loudly.
 	for _, number := range []uint64{4, 5} {
 		rawdb.DeleteAccessList(ethservice.ChainDb(), chain.GetHeaderByNumber(number).Hash(), number)
 	}
@@ -218,21 +209,26 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	if !chain2.TrieDB().IsPBT() {
 		t.Fatal("rebooted node did not open on the binary tree")
 	}
-	waitFor(t, 10*time.Second, "window never resumed from its cursor", func() bool {
-		m := chain2.MigrationProgress().Merkle
-		if m != nil && m.Phase == "stalled" {
-			t.Fatalf("window re-replayed instead of resuming: %s", m.Error)
-		}
-		return m != nil && m.Phase == "synced" && m.ShadowRoot == want
-	})
-	// The window replays a transaction-bearing binary block after the reboot.
+	// Reading the frozen state opens its handle, so the claim is not that the
+	// direction is absent but that nothing advances it.
+	if st, err := chain2.StateAt(chain2.GetHeaderByNumber(2)); err != nil {
+		t.Fatalf("frozen merkle state unreadable after the reboot: %v", err)
+	} else if got := st.GetBalance(recipient).Uint64(); got != 1000 {
+		t.Fatalf("recipient balance in the frozen merkle state = %d, want 1000", got)
+	}
+	if p := chain2.MigrationProgress(); p.Merkle != nil && p.Merkle.Phase == "stalled" {
+		t.Fatalf("the frozen merkle tree stalled instead of standing still: %s", p.Merkle.Error)
+	}
+	// A transaction-bearing binary block still imports after the reboot.
 	pay(eth2.TxPool(), 1)
 	newHead := buildBlock(t, api2, chain2.CurrentBlock(), 6, common.Hash{})
-	awaitShadowReady(t, chain2, newHead)
 	if st, err := chain2.StateAt(newHead); err != nil {
 		t.Fatalf("state at the new head: %v", err)
 	} else if got := st.GetBalance(recipient).Uint64(); got != 2000 {
 		t.Fatalf("recipient balance after the boundary transfer = %d, want 2000", got)
+	}
+	if _, ok := rawdb.ReadShadowStateRoot(eth2.ChainDb(), newHead.Hash(), newHead.Number.Uint64()); ok {
+		t.Fatal("a post-reboot binary block recorded a merkle root; the tree is meant to stay frozen")
 	}
 	if p := chain2.MigrationProgress(); p.Binary != nil {
 		t.Fatalf("binary direction revived without a pre-fork head: %+v", p.Binary)
@@ -340,7 +336,10 @@ func TestMigrationSurvivesRestartPreFork(t *testing.T) {
 	for i := 2; i < 5; i++ {
 		parent = buildBlock(t, api2, parent, uint64(i+1), common.Hash{})
 	}
-	awaitShadowReady(t, chain2, chain2.CurrentBlock())
+	// The resumed shadow reached the boundary parent, which the swap consumed.
+	if !chain2.ShadowReady(chain2.GetHeaderByNumber(3).Hash(), 3) {
+		t.Fatal("the resumed shadow never recorded the boundary parent")
+	}
 
 	head := chain2.CurrentBlock()
 	fin := engine.ForkchoiceStateV1{HeadBlockHash: head.Hash(), SafeBlockHash: head.Hash(), FinalizedBlockHash: head.Hash()}
@@ -423,7 +422,7 @@ func TestMigrationBoundaryStraddleReorg(t *testing.T) {
 		branchB = append(branchB, chain.GetBlockByHash(bParent.Hash()))
 	}
 	boundaryB := branchB[1] // block 3, B's boundary predecessor
-	awaitShadowReady(t, chain, branchB[4].Header())
+	awaitShadowReady(t, chain, boundaryB.Header())
 	if p := chain.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "parked" || p.Binary.CursorHash != boundaryB.Hash() {
 		t.Fatalf("builder binary direction did not re-park at B's boundary predecessor: %+v", p.Binary)
 	}
@@ -440,7 +439,7 @@ func TestMigrationBoundaryStraddleReorg(t *testing.T) {
 	if _, err := victim.InsertChain(branchA); err != nil {
 		t.Fatalf("victim import of branch A: %v", err)
 	}
-	awaitShadowReady(t, victim, branchA[4].Header())
+	awaitShadowReady(t, victim, branchA[2].Header())
 	if p := victim.MigrationProgress(); p.Binary == nil || p.Binary.Phase != "parked" || p.Binary.CursorHash != branchA[2].Hash() {
 		t.Fatalf("victim binary direction not parked at A's boundary predecessor: %+v", p.Binary)
 	}
@@ -468,21 +467,20 @@ func TestMigrationBoundaryStraddleReorg(t *testing.T) {
 			t.Fatalf("canonical block %d = %x, want B's %x", block.NumberU64(), got, block.Hash())
 		}
 	}
-	// (c) the window is still open and follows B's post-fork blocks.
+	// (c) the window is gone and B's activation block still got its record.
 	if !victim.Migrating() {
 		t.Fatal("victim window closed by the straddle reorg")
 	}
-	for _, block := range branchB[2:] {
-		awaitShadowReady(t, victim, block.Header())
-	}
-	// (b) the binary direction re-parked at B's boundary predecessor, and
-	// (d) neither direction stalled.
+	awaitShadowReady(t, victim, boundaryB.Header())
+	// (b) parked rather than stalled. The cursor may still name A's branch:
+	// past activation nothing replays, and follow rewinds a non-canonical
+	// cursor when the direction next runs.
 	p := victim.MigrationProgress()
-	if p.Binary == nil || p.Binary.Phase != "parked" || p.Binary.CursorHash != boundaryB.Hash() {
-		t.Fatalf("victim binary direction did not re-park at B's boundary predecessor: %+v", p.Binary)
+	if p.Binary == nil || p.Binary.Phase != "parked" {
+		t.Fatalf("victim binary direction not parked: %+v", p.Binary)
 	}
-	if p.Merkle == nil || (p.Merkle.Phase != "synced" && p.Merkle.Phase != "following") || p.Merkle.Error != "" {
-		t.Fatalf("victim merkle window not following B: %+v", p.Merkle)
+	if p.Merkle != nil && p.Merkle.Phase == "stalled" {
+		t.Fatalf("victim merkle tree stalled past activation: %s", p.Merkle.Error)
 	}
 }
 
@@ -517,22 +515,33 @@ func TestShadowRootSidecar(t *testing.T) {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
 	}
 
+	// Blocks 1-3 are pre-fork and record one root each; past activation none
+	// follow, which the stream reports by skipping those heads.
 	seen := make(map[uint64]common.Hash)
 	timeout := time.After(15 * time.Second)
-	for len(seen) < 5 {
+	for len(seen) < 3 {
 		select {
 		case ev := <-events:
 			seen[uint64(ev.Number)] = ev.ShadowRoot
 		case err := <-sub.Err():
 			t.Fatalf("subscription died: %v", err)
 		case <-timeout:
-			t.Fatalf("only %d of 5 shadow roots streamed", len(seen))
+			t.Fatalf("only %d of 3 pre-fork shadow roots streamed", len(seen))
 		}
 	}
 	for number, root := range seen {
+		if number > 3 {
+			t.Fatalf("block %d streamed a shadow root past activation", number)
+		}
 		header := chain.GetHeaderByNumber(number)
 		if want, ok := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), header.Hash(), number); !ok || root != want {
 			t.Fatalf("streamed root %x for block %d, record says %x (ok=%v)", root, number, want, ok)
+		}
+	}
+	for _, number := range []uint64{4, 5} {
+		header := chain.GetHeaderByNumber(number)
+		if _, ok := rawdb.ReadShadowStateRoot(ethservice.ChainDb(), header.Hash(), number); ok {
+			t.Fatalf("block %d recorded a shadow root past activation", number)
 		}
 	}
 
@@ -588,68 +597,6 @@ func TestShadowRootStreamNeverBlocksImport(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 20*time.Second {
 		t.Fatalf("70 recordless heads took %v: the stream backpressures imports", elapsed)
 	}
-}
-
-// convertCanonicalMerkle rebuilds a merkle trie from the canonical binary
-// state at the given header - the reverse of the offline conversion. The
-// universe is the genesis allocation plus every account and slot a stored
-// access list ever wrote.
-func convertCanonicalMerkle(t *testing.T, chain *core.BlockChain, db ethdb.Database, genesis *core.Genesis, header *types.Header) common.Hash {
-	t.Helper()
-	src, err := chain.StateAt(header)
-	if err != nil {
-		t.Fatal(err)
-	}
-	universe := make(map[common.Address]map[common.Hash]bool)
-	touch := func(addr common.Address) map[common.Hash]bool {
-		if universe[addr] == nil {
-			universe[addr] = make(map[common.Hash]bool)
-		}
-		return universe[addr]
-	}
-	for addr, account := range genesis.Alloc {
-		slots := touch(addr)
-		for key := range account.Storage {
-			slots[key] = true
-		}
-	}
-	for n := uint64(1); n <= header.Number.Uint64(); n++ {
-		hash := rawdb.ReadCanonicalHash(db, n)
-		list := rawdb.ReadAccessList(db, hash, n)
-		if list == nil {
-			t.Fatalf("no stored access list for block %d", n)
-		}
-		for _, acc := range *list {
-			slots := touch(acc.Address)
-			for _, sw := range acc.StorageChanges {
-				slots[common.Hash(sw.Slot.Bytes32())] = true
-			}
-		}
-	}
-	tdb := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.HashDefaults)
-	defer tdb.Close()
-	dst, err := state.New(types.EmptyRootHash, state.NewDatabase(tdb, nil))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for addr, slots := range universe {
-		if !src.Exist(addr) {
-			continue
-		}
-		dst.AddBalance(addr, src.GetBalance(addr), tracing.BalanceIncreaseGenesisBalance)
-		dst.SetCode(addr, src.GetCode(addr), tracing.CodeChangeGenesis)
-		dst.SetNonce(addr, src.GetNonce(addr), tracing.NonceChangeGenesis)
-		for slot := range slots {
-			if value := src.GetState(addr, slot); value != (common.Hash{}) {
-				dst.SetState(addr, slot, value)
-			}
-		}
-	}
-	root, err := dst.Commit(0, false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return root
 }
 
 // deliverPayload feeds an already-built block to a node the way a consensus
@@ -717,7 +664,6 @@ func TestStraddleHealThroughEnginePayloads(t *testing.T) {
 			t.Fatalf("victim rejected A block %d: %v", block.NumberU64(), s.Status)
 		}
 	}
-	awaitShadowReady(t, vchain, branchA[4].Header())
 
 	// The heal: B's blocks arrive as sidechain payloads, no forkchoice yet.
 	// The crossing block (B's 3rd, block 4, on B's own merkle parent block 3)
@@ -735,11 +681,9 @@ func TestStraddleHealThroughEnginePayloads(t *testing.T) {
 	if !vchain.Migrating() {
 		t.Fatal("victim window closed by the straddle heal")
 	}
-	for _, block := range branchB[2:] {
-		awaitShadowReady(t, vchain, block.Header())
-	}
+	awaitShadowReady(t, vchain, branchB[1].Header())
 	p := vchain.MigrationProgress()
-	if p.Binary == nil || p.Binary.Phase != "parked" || p.Binary.CursorHash != branchB[1].Hash() {
-		t.Fatalf("victim binary direction did not re-park at B's boundary predecessor: %+v", p.Binary)
+	if p.Binary == nil || p.Binary.Phase != "parked" {
+		t.Fatalf("victim binary direction not parked after the heal: %+v", p.Binary)
 	}
 }
