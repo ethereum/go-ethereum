@@ -18,6 +18,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -276,6 +277,18 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 
 	// Enable WebSocket on the server.
 	server := api.node.wsServerForPort(*port, false)
+	// Only one WebSocket endpoint may be active at a time. The duplicate check
+	// in enableWS is local to the selected server, so also reject the call when
+	// the other server already has a WebSocket endpoint enabled.
+	var other *httpServer
+	if server == api.node.http {
+		other = api.node.ws
+	} else {
+		other = api.node.http
+	}
+	if other.wsAllowed() {
+		return false, errors.New("JSON-RPC over WebSocket is already enabled")
+	}
 	if err := server.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
