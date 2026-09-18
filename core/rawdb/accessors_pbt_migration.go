@@ -101,17 +101,15 @@ func WritePBTMigrationDone(db ethdb.KeyValueWriter) {
 }
 
 // ReadPBTMerkleDisposed reports whether the merkle state has been disposed
-// of after the migration. It is written before the deletion starts, so it
-// means "gone or going", never "intact".
+// of. Written before the deletion starts, so it means "gone or going".
 func ReadPBTMerkleDisposed(db ethdb.KeyValueReader) bool {
 	data, _ := db.Get(pbtMerkleDisposedKey)
 	return len(data) == 1 && data[0] == 1
 }
 
-// WritePBTMerkleDisposed marks the merkle state as disposable and gone. It
-// must land before the first key is deleted: a partially deleted state that
-// still looks intact is the one shape a reader cannot tell from a complete
-// one.
+// WritePBTMerkleDisposed marks the merkle state as condemned. It must land
+// before the first key goes: a half-deleted state that still looks intact is
+// the one shape a reader cannot tell from a complete one.
 func WritePBTMerkleDisposed(db ethdb.KeyValueWriter) {
 	if err := db.Put(pbtMerkleDisposedKey, []byte{1}); err != nil {
 		log.Crit("Failed to store merkle disposal marker", "err", err)
@@ -119,17 +117,14 @@ func WritePBTMerkleDisposed(db ethdb.KeyValueWriter) {
 }
 
 // DeleteMerkleState removes the merkle-patricia state: the snapshot markers
-// first, then every key family holding the state they bless. It reports how
-// many records it deleted and whether it got to the end; interrupt stops it
-// between batches, which is safe because the caller's marker makes the job
-// resumable.
+// first, then every key family holding the state they bless. It reports the
+// record count and whether it reached the end; interrupt stops it between
+// batches, which the caller's marker makes safe.
 //
-// Markers first is the write path mirrored. Flat state is authoritative
-// where its markers say it is complete, so a half-deleted store with the
-// markers intact answers "this account does not exist" rather than failing,
-// and caches it. The history freezers and the journal file are the trie
-// database's own handles and belong to the caller, which knows the paths and
-// whether anything still holds them open.
+// Markers first mirrors the write path: flat state is authoritative where
+// its markers say it is complete, so a half-deleted store with them intact
+// answers "no such account" rather than failing. The history freezers and
+// journal are the trie database's handles and belong to the caller.
 func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) (int, bool, error) {
 	batch := db.NewBatch()
 	DeleteSnapshotRoot(batch)
@@ -138,6 +133,15 @@ func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) (int, 
 	DeleteSnapshotRecoveryNumber(batch)
 	DeleteSnapshotSyncStatus(batch)
 	DeleteSnapshotDisabled(batch)
+	// The merkle pathdb's singletons: the history heads, which would claim
+	// history over a freezer this empties, and the in-key-value journal
+	// pathdb uses when no journal directory is set. PBTKeyFamilies sweeps
+	// their PBT counterparts; this side has no namespace to scan.
+	DeleteStateHistoryIndexMetadata(batch)
+	DeleteTrienodeHistoryIndexMetadata(batch)
+	if err := batch.Delete(trieJournalKey); err != nil {
+		return 0, false, err
+	}
 	if err := batch.Write(); err != nil {
 		return 0, false, err
 	}
@@ -197,6 +201,10 @@ func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) (int, 
 			return deleted, false, err
 		}
 		batch.Reset()
+		if stopped() {
+			ids.Release()
+			return deleted, false, nil
+		}
 	}
 	err := ids.Error()
 	ids.Release()

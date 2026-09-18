@@ -359,7 +359,7 @@ type BlockChain struct {
 	precompileCache *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
 	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
 	follower        *bintrieFollower                 // Shadow tree follower, nil unless migrating
-	disposer        *merkleDisposer                  // Merkle state disposal, nil unless retiring it
+	disposer        atomic.Pointer[merkleDisposer]   // Merkle state disposal, nil unless retiring it
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -437,6 +437,12 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		// during sync the header chain runs ahead of the state the node owns.
 		if head := rawdb.ReadHeadBlock(db); head != nil && resolvedConfig.IsBinaryTrie(head.Number(), head.Time()) {
 			isPBT = true
+		}
+		// The merkle state is gone or going, so a run that would execute on
+		// it - a head back under the boundary - has to stop here rather than
+		// read deletions as empty accounts. Re-anchor or resync.
+		if !isPBT && rawdb.ReadPBTMerkleDisposed(db) {
+			return nil, errors.New("merkle state was disposed of after the migration; this datadir cannot follow a pre-fork chain")
 		}
 	}
 	tdbConfig, err := cfg.triedbConfig(isPBT)
@@ -623,12 +629,16 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
 	}
 
-	if mode == modeMigration && !rawdb.ReadPBTMigrationDone(db) {
+	// Resume before the follower exists: a disposal the previous run began
+	// has to finish, or the datadir keeps state nothing is allowed to read.
+	bc.resumeMerkleDisposal()
+
+	// The follower outlives the migration on an archive node: it owns the
+	// only route to a merkle handle, which is the service that node provides.
+	// Its loop costs nothing once the head is past activation.
+	if mode == modeMigration && (!rawdb.ReadPBTMigrationDone(db) || cfg.ArchiveMode) {
 		bc.follower = newBintrieFollower(bc)
 	}
-	// A disposal the previous run began has to finish, or the datadir keeps
-	// state nothing is allowed to read.
-	bc.resumeMerkleDisposal()
 
 	// Start state size tracker
 	if bc.cfg.StateSizeTracking {
@@ -1414,7 +1424,7 @@ func (bc *BlockChain) stopWithoutSaving() {
 		bc.follower.close()
 	}
 	// The disposal holds the database the node is about to close.
-	bc.disposer.stop()
+	bc.disposer.Load().stop()
 	// Unsubscribe all subscriptions registered from blockchain.
 	bc.scope.Close()
 
@@ -2228,13 +2238,13 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 
 // treeFor returns the trie database holding the given flavour.
 func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
+	// Refused before the fast path: on a node that crossed the fork in-run
+	// the merkle tree IS bc.triedb, and the state under it is gone or going.
+	if !pbt && rawdb.ReadPBTMerkleDisposed(bc.db) {
+		return nil, errors.New("merkle trie disposed of after the migration")
+	}
 	if bc.triedb.IsPBT() == pbt {
 		return bc.triedb, nil
-	}
-	if !pbt && rawdb.ReadPBTMerkleDisposed(bc.db) {
-		// Disposed of after the migration: the state is gone or going, and a
-		// handle over it would read absence as answers.
-		return nil, errors.New("merkle trie disposed of after the migration")
 	}
 	if bc.follower == nil {
 		if pbt {

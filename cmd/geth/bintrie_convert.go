@@ -951,23 +951,33 @@ func wipeMerkleHistory(chaindb ethdb.Database, triedbDir string) error {
 	return nil
 }
 
-// deleteMPTData removes the merkle state the conversion superseded. The key
-// families and the snapshot markers that bless them are rawdb's to delete,
-// markers first, and the online disposal at the end of the migration window
-// deletes exactly the same set from the same list.
+// deleteMPTData removes the merkle state the conversion superseded, through
+// the same rawdb list the online disposal uses. The marker goes first: it is
+// what makes a killed deletion resumable and stops the next start opening a
+// handle over the half that survived.
 //
-// The walk that follows is the hash scheme's alone: there, nodes are keyed by
-// their own hash, so nothing but a traversal can name them. On the path
-// scheme the family scan already took them.
+// On the hash scheme the traversal runs before the family scan: nodes there
+// are keyed by their own hash, so some begin with a family byte and sweeping
+// first would delete the nodes the traversal needs to find the rest.
 func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash) error {
+	rawdb.WritePBTMerkleDisposed(chaindb)
+
+	if srcTriedb.Scheme() == rawdb.HashScheme {
+		if err := deleteLegacyMPTNodes(chaindb, srcTriedb, root); err != nil {
+			return err
+		}
+	}
 	records, _, err := rawdb.DeleteMerkleState(chaindb, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete the merkle state: %w", err)
 	}
 	log.Info("Deleted merkle state", "records", records)
-	if srcTriedb.Scheme() != rawdb.HashScheme {
-		return nil
-	}
+	return nil
+}
+
+// deleteLegacyMPTNodes walks the hash-scheme state and deletes every node it
+// names, which is the only way to name them.
+func deleteLegacyMPTNodes(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash) error {
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
 		return fmt.Errorf("failed to open source trie for deletion: %w", err)

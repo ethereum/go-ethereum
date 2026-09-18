@@ -905,6 +905,10 @@ func (t *followerTree) hasState(root common.Hash) bool {
 	t.f.mu.Lock()
 	handle := t.handle
 	t.f.mu.Unlock()
+	// Released by a disposal, or never opened: no state either way.
+	if handle == nil {
+		return false
+	}
 	_, err := handle.NodeReader(root)
 	return err == nil
 }

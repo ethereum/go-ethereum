@@ -189,16 +189,13 @@ var (
 	}
 
 	// MerkleKeyFamilies lists the prefix-scannable key families holding
-	// merkle-patricia state. These prefixes are single bytes, unique per data
-	// type in the root namespace, so this list is the only description on
-	// disk of what "the merkle state" is, and the online and offline
-	// disposals delete exactly it.
+	// merkle-patricia state, the one description on disk of what both
+	// disposals delete.
 	//
-	// State ids are deliberately absent. Their prefix byte is shared with
-	// every chain head pointer - headHeaderKey, headBlockKey and the rest all
-	// begin "Last" - so a prefix scan over them takes the chain's head with
-	// it and leaves a database with no head header. DeleteMerkleState takes
-	// them by exact key length instead.
+	// State ids are deliberately absent: their prefix byte is shared with
+	// every chain head pointer (headHeaderKey, headBlockKey and the rest all
+	// begin "Last"), so a prefix scan over them leaves a database with no
+	// head. DeleteMerkleState takes them by exact key length instead.
 	MerkleKeyFamilies = [][]byte{
 		TrieNodeAccountPrefix,   // path-scheme account trie nodes
 		TrieNodeStoragePrefix,   // path-scheme storage trie nodes

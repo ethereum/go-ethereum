@@ -25,24 +25,15 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// The merkle trie's retirement. EIP-8347 calls it disposable once the
-// migration window has closed, and a full node agrees: execution commits the
-// binary tree, and the frozen merkle state served nothing but pre-fork state
-// queries. An archive node is the exception - pre-fork history is the service
-// it exists to provide - so it keeps both the state and the queries.
-
 // merkleDisposer deletes the retired merkle state in the background. The
-// deletion is interruptible rather than awaited to completion: a mainnet
-// state is hundreds of millions of keys, and the disposal marker makes an
-// unfinished run resumable, so shutdown stops it between batches instead of
-// waiting for it.
+// deletion is interrupted at shutdown rather than awaited: a mainnet state is
+// hundreds of millions of keys, and the marker makes it resumable.
 type merkleDisposer struct {
 	quit chan struct{}
 	done chan struct{}
 }
 
-// stop interrupts the disposal and waits for it to let go of the database,
-// which the node is about to close underneath it.
+// stop interrupts the disposal and waits for it to let go of the database.
 func (d *merkleDisposer) stop() {
 	if d == nil {
 		return
@@ -51,13 +42,10 @@ func (d *merkleDisposer) stop() {
 	<-d.done
 }
 
-// disposeMerkle retires the merkle state now that the migration window has
-// closed. Archive nodes keep it.
-//
-// The marker lands before the first deletion and is never cleared, so it
-// means "gone or going", never "intact". That is what makes the job
-// resumable, and what lets treeFor refuse a handle over state that is only
-// half there - a reader with such a handle would take absence for answers.
+// disposeMerkle retires the merkle state now that the window has closed;
+// archive nodes keep it. The marker lands before the first deletion and is
+// never cleared, so it means "gone or going", which is what makes the job
+// resumable and lets treeFor refuse a handle over half-deleted state.
 func (bc *BlockChain) disposeMerkle() {
 	if bc.cfg.ArchiveMode {
 		log.Info("Keeping the merkle state: archive node")
@@ -65,10 +53,16 @@ func (bc *BlockChain) disposeMerkle() {
 	}
 	rawdb.WritePBTMerkleDisposed(bc.db)
 
-	// Release the tree before deleting what it reads. Past activation the
-	// merkle handle is the follower's own - the node's canonical one is the
-	// binary tree - and pathdb owns freezers that cannot be reset underneath
-	// it. Nothing reopens it: treeFor refuses once the marker is set.
+	// A node that crossed the fork in-run holds the merkle tree as its own
+	// canonical handle: the flavour is resolved once, at startup. Deleting
+	// under a live pathdb would have its disk layer serve every miss as a
+	// cached "no such account". Defer to a start where it is not canonical.
+	if !bc.triedb.IsPBT() {
+		log.Info("Merkle state marked for disposal, deferred to the next start")
+		return
+	}
+	// Release the tree before deleting what it reads; treeFor refuses to
+	// reopen it once the marker is set.
 	if bc.follower != nil {
 		if t := bc.follower.peek(false); t != nil {
 			t.close()
@@ -77,30 +71,38 @@ func (bc *BlockChain) disposeMerkle() {
 	bc.startMerkleDisposal()
 }
 
-// resumeMerkleDisposal finishes a disposal that a crash or a shutdown
-// interrupted. A finished one costs one empty scan per key family, which is
-// cheaper than a second marker to tell the two states apart.
+// resumeMerkleDisposal re-decides the disposal at every start: window close
+// is a one-shot on the follower's last act, and the follower is never created
+// again once the migration is done, so a crash between the two markers - or a
+// node that ran as archive then - would keep the state forever.
 func (bc *BlockChain) resumeMerkleDisposal() {
-	if bc.cfg.ArchiveMode || !rawdb.ReadPBTMerkleDisposed(bc.db) {
+	// Already begun: finish it, archive or not. Switching gcmode does not
+	// bring back the half that is gone.
+	if rawdb.ReadPBTMerkleDisposed(bc.db) {
+		bc.startMerkleDisposal()
 		return
 	}
-	bc.startMerkleDisposal()
+	if rawdb.ReadPBTMigrationDone(bc.db) {
+		bc.disposeMerkle()
+	}
 }
 
+// startMerkleDisposal launches the deletion once. The disposer is published
+// atomically: the window closes on the follower's goroutine, startup and
+// shutdown read it from their own.
 func (bc *BlockChain) startMerkleDisposal() {
-	if bc.disposer != nil {
+	d := &merkleDisposer{quit: make(chan struct{}), done: make(chan struct{})}
+	if !bc.disposer.CompareAndSwap(nil, d) {
 		return
 	}
-	bc.disposer = &merkleDisposer{quit: make(chan struct{}), done: make(chan struct{})}
 	go func() {
-		defer close(bc.disposer.done)
-		disposeMerkleState(bc.db, bc.cfg.TrieJournalDirectory, bc.disposer.quit)
+		defer close(d.done)
+		disposeMerkleState(bc.db, bc.cfg.TrieJournalDirectory, d.quit)
 	}()
 }
 
-// disposeMerkleState deletes the merkle state, then the history freezers and
-// journal file that describe it. Every step is a deletion, which is what lets
-// an interrupted run simply start again.
+// disposeMerkleState deletes the merkle state, then the history and journal
+// that describe it. Every step is a deletion, so a partial run just restarts.
 func disposeMerkleState(db ethdb.Database, journalDir string, interrupt <-chan struct{}) {
 	deleted, done, err := rawdb.DeleteMerkleState(db, interrupt)
 	if err != nil {
@@ -111,9 +113,7 @@ func disposeMerkleState(db ethdb.Database, journalDir string, interrupt <-chan s
 		log.Info("Merkle disposal interrupted, resumes on the next start", "records", deleted)
 		return
 	}
-	// The history is only reset once the state it indexes is gone, so an
-	// interrupted run leaves history for state that still exists rather than
-	// the other way round.
+	// History only goes once the state it indexes has, never the reverse.
 	if ancient, err := db.AncientDatadir(); err == nil {
 		for _, open := range []func(string, bool, bool) (ethdb.ResettableAncientStore, error){
 			rawdb.NewStateFreezer,
