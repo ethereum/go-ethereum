@@ -683,7 +683,7 @@ func (b *testBackend) GetCanonicalReceipt(tx *types.Transaction, blockHash commo
 func (b testBackend) TxIndexDone() bool {
 	return true
 }
-func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { panic("implement me") }
+func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { return nil, nil }
 func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction { return nil }
 func (b testBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return 0, nil
