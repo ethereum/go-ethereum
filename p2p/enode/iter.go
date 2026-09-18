@@ -477,6 +477,7 @@ func (m *FairMix) deleteSource(s *mixSource) {
 func (m *FairMix) runSource(closed chan struct{}, s *mixSource) {
 	defer m.wg.Done()
 	defer close(s.next)
+	defer s.it.Close()
 	for s.it.Next() {
 		item := iteratorItem{s.it.Node(), s.it.NodeSource()}
 		select {
