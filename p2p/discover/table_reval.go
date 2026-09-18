@@ -159,12 +159,18 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 
 	if !resp.didRespond {
 		n.livenessChecks /= 3
-		if n.livenessChecks <= 0 {
+		if n.livenessChecks <= 0 && !tab.bucketWouldEmptyTable(b) {
 			tab.deleteInBucket(b, n.ID())
-		} else {
-			tab.log.Debug("Node revalidation failed", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "q", n.revalList.name)
-			tr.moveToList(&tr.fast, n, now, &tab.rand)
+			return
 		}
+		// Either the node still has checks left, or removing it would leave the
+		// table completely empty. In the latter case, the node is kept and
+		// retried at the fast interval: this matters most right after startup,
+		// when the table may contain only a bootnode. If that bootnode happens
+		// to be unreachable initially, it must not be forgotten, or discovery
+		// would be stuck until the next scheduled table refresh.
+		tab.log.Debug("Node revalidation failed", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "q", n.revalList.name)
+		tr.moveToList(&tr.fast, n, now, &tab.rand)
 		return
 	}
 

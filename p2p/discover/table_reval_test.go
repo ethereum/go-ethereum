@@ -71,6 +71,95 @@ func TestRevalidation_nodeRemoved(t *testing.T) {
 	}
 }
 
+// This test checks that a node is not removed from the table by a failed revalidation
+// if doing so would leave the table completely empty. This matters most right after
+// startup, when the table may initially contain only a bootnode: if that bootnode is
+// briefly unreachable, it must stay in the table and keep being retried, or discovery
+// could get stuck until the next scheduled table refresh (up to RefreshInterval later).
+func TestRevalidation_lastNodeKept(t *testing.T) {
+	var (
+		clock     mclock.Simulated
+		transport = newPingRecorder()
+		tab, db   = newInactiveTestTable(transport, Config{Clock: &clock})
+		tr        = &tab.revalidation
+	)
+	defer db.Close()
+
+	// Add a single, unreachable node to the table.
+	node := nodeAtDistance(tab.self().ID(), 255, net.IP{77, 88, 99, 1})
+	tab.handleAddNode(addNodeOp{node: node})
+	transport.dead[node.ID()] = true
+
+	// Run several revalidation rounds. The node must survive every one of them,
+	// since it is the only node in the table.
+	for i := 0; i < 5; i++ {
+		next := tr.run(tab, clock.Now())
+		clock.Run(time.Duration(next + 1))
+		tr.run(tab, clock.Now())
+
+		var resp revalidationResponse
+		select {
+		case resp = <-tab.revalResponseCh:
+		case <-time.After(1 * time.Second):
+			t.Fatal("timed out waiting for revalidation")
+		}
+		tr.handleResponse(tab, resp)
+
+		if tab.getNode(node.ID()) == nil {
+			t.Fatalf("round %d: sole node was removed from table", i)
+		}
+		if !tr.fast.contains(node.ID()) {
+			t.Fatalf("round %d: sole node is not scheduled for another revalidation", i)
+		}
+	}
+}
+
+// This test checks that a dead node is still removed as usual when other nodes remain
+// in the table, i.e. the fix for TestRevalidation_lastNodeKept does not prevent normal
+// eviction of unreachable nodes.
+func TestRevalidation_deadNodeRemovedWhenNotAlone(t *testing.T) {
+	var (
+		clock     mclock.Simulated
+		transport = newPingRecorder()
+		tab, db   = newInactiveTestTable(transport, Config{Clock: &clock})
+		tr        = &tab.revalidation
+	)
+	defer db.Close()
+
+	// Add two nodes in different buckets: one dead, one alive.
+	deadNode := nodeAtDistance(tab.self().ID(), 255, net.IP{77, 88, 99, 1})
+	aliveNode := nodeAtDistance(tab.self().ID(), 200, net.IP{77, 88, 99, 2})
+	tab.handleAddNode(addNodeOp{node: deadNode})
+	tab.handleAddNode(addNodeOp{node: aliveNode})
+	transport.dead[deadNode.ID()] = true
+
+	// Run revalidation rounds until the dead node is pinged and removed.
+	removed := false
+	for i := 0; i < 10 && !removed; i++ {
+		next := tr.run(tab, clock.Now())
+		clock.Run(time.Duration(next + 1))
+		tr.run(tab, clock.Now())
+
+		var resp revalidationResponse
+		select {
+		case resp = <-tab.revalResponseCh:
+		case <-time.After(1 * time.Second):
+			t.Fatal("timed out waiting for revalidation")
+		}
+		tr.handleResponse(tab, resp)
+
+		if resp.n.ID() == deadNode.ID() && tab.getNode(deadNode.ID()) == nil {
+			removed = true
+		}
+	}
+	if !removed {
+		t.Fatal("dead node was never removed even though another node remains in the table")
+	}
+	if tab.getNode(aliveNode.ID()) == nil {
+		t.Fatal("alive node was unexpectedly removed")
+	}
+}
+
 // This test checks that nodes with an updated endpoint remain in the fast revalidation list.
 func TestRevalidation_endpointUpdate(t *testing.T) {
 	var (
