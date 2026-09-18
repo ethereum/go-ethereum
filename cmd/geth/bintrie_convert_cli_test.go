@@ -104,12 +104,6 @@ func TestBintrieConvertCLI(t *testing.T) {
 	// --force wipes and reconverts; on a real datadir this is the one path
 	// where the wipe resets the PBT freezers and removes the journal file.
 	runCmd(false, "bintrie", "convert", "--force")
-
-	// And once more, dropping the source afterwards.
-	out = runCmd(false, "bintrie", "convert", "--force", "--delete-source")
-	if !strings.Contains(out, "Source MPT data deleted") {
-		t.Fatalf("deletion did not report completion:\n%s", out)
-	}
 }
 
 // TestBintrieImportCLI drives the consumer story end to end through the real

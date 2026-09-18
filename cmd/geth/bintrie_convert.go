@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -45,7 +46,7 @@ import (
 var (
 	deleteSourceFlag = &cli.BoolFlag{
 		Name:  "delete-source",
-		Usage: "Delete MPT trie nodes after the conversion verifies",
+		Usage: "Delete the merkle state after the conversion verifies",
 	}
 	memoryLimitFlag = &cli.Uint64Flag{
 		Name:  "memory-limit",
@@ -130,6 +131,18 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	} else {
 		root = headBlock.Root()
 	}
+	// --delete-source is settled before anything is wiped or converted: it
+	// disposes of state the chain may still be running on, and learning that
+	// only after a full conversion would be a long wait for a refusal.
+	if ctx.Bool(deleteSourceFlag.Name) {
+		if !rawdb.ReadPBTMigrationDone(chaindb) {
+			return errors.New("refusing --delete-source: the migration window has not closed, so the merkle trie is still the chain's own state")
+		}
+		stored := rawdb.ReadChainConfig(chaindb, rawdb.ReadCanonicalHash(chaindb, 0))
+		if stored == nil || !stored.IsBinaryTrie(headBlock.Number(), headBlock.Time()) {
+			return errors.New("refusing --delete-source: the head block commits the merkle trie, which the node still executes on")
+		}
+	}
 	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
 
 	snapshotPath, preimagePath := ctx.String(snapshotOutFlag.Name), ctx.String(preimagesOutFlag.Name)
@@ -156,7 +169,10 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		return errors.New("database already holds binary tree state, complete or from an interrupted conversion; re-run with --force to wipe and reconvert")
 	}
 	srcTriedb := utils.MakeTrieDatabase(ctx, stack, chaindb, true, true, false)
-	defer srcTriedb.Close()
+	// Closed once, by whichever path gets there first: --delete-source has to
+	// close it early to reset the freezers it holds open.
+	closeSource := sync.OnceValue(srcTriedb.Close)
+	defer closeSource()
 
 	binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{
 		sortBudget:   int(budgetMB << 20),
@@ -173,6 +189,14 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		log.Info("Deleting source MPT data")
 		if err := deleteMPTData(chaindb, srcTriedb, root); err != nil {
 			return fmt.Errorf("MPT deletion failed: %w", err)
+		}
+		// The history freezers and the journal file are the trie database's
+		// own handles; it has to let go of them before they can be reset.
+		if err := closeSource(); err != nil {
+			return fmt.Errorf("failed to close the source trie database: %w", err)
+		}
+		if err := wipeMerkleHistory(chaindb, stack.ResolvePath("triedb")); err != nil {
+			return fmt.Errorf("MPT history deletion failed: %w", err)
 		}
 		log.Info("Source MPT data deleted")
 	}
@@ -855,8 +879,90 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 	return nil
 }
 
+// wipeMerkleHistory resets the merkle history freezers and removes the merkle
+// journal file. Both are the trie database's own handles, so it must already
+// be closed.
+func wipeMerkleHistory(chaindb ethdb.Database, triedbDir string) error {
+	if ancient, err := chaindb.AncientDatadir(); err == nil {
+		for _, open := range []func(string, bool, bool) (ethdb.ResettableAncientStore, error){
+			rawdb.NewStateFreezer,
+			rawdb.NewTrienodeFreezer,
+		} {
+			store, err := open(ancient, false, false)
+			if err != nil {
+				return err
+			}
+			err = store.Reset()
+			store.Close()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if triedbDir != "" {
+		if err := os.Remove(filepath.Join(triedbDir, "merkle.journal")); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+// deleteMPTData removes the merkle state the conversion superseded: the
+// snapshot markers first, then the flat state they bless, then the trie
+// nodes. Markers first mirrors the write path: flat state is authoritative
+// where it is blessed, so a half-deleted store with its markers intact
+// answers "no such account" rather than failing.
 func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash) error {
 	isPathDB := srcTriedb.Scheme() == rawdb.PathScheme
+
+	batch := chaindb.NewBatch()
+	rawdb.DeleteSnapshotRoot(batch)
+	rawdb.DeleteSnapshotJournal(batch)
+	rawdb.DeleteSnapshotGenerator(batch)
+	rawdb.DeleteSnapshotRecoveryNumber(batch)
+	rawdb.DeleteSnapshotSyncStatus(batch)
+	rawdb.DeleteSnapshotDisabled(batch)
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("failed to delete the snapshot markers: %w", err)
+	}
+	batch.Reset()
+
+	// Fixed key lengths, so the scans cannot stray into a neighbouring
+	// family that shares a prefix byte.
+	flat := 0
+	for _, family := range []struct {
+		prefix []byte
+		length int
+	}{
+		{rawdb.SnapshotAccountPrefix, len(rawdb.SnapshotAccountPrefix) + common.HashLength},
+		{rawdb.SnapshotStoragePrefix, len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength},
+	} {
+		it := rawdb.NewKeyLengthIterator(chaindb.NewIterator(family.prefix, nil), family.length)
+		for it.Next() {
+			if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
+				it.Release()
+				return err
+			}
+			flat++
+			if batch.ValueSize() >= ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					it.Release()
+					return err
+				}
+				batch.Reset()
+			}
+		}
+		err := it.Error()
+		it.Release()
+		if err != nil {
+			return err
+		}
+	}
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	batch.Reset()
+	log.Info("Deleted merkle flat state", "records", flat)
 
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
@@ -866,7 +972,6 @@ func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root comm
 	if err != nil {
 		return fmt.Errorf("failed to create account iterator for deletion: %w", err)
 	}
-	batch := chaindb.NewBatch()
 	deleted := 0
 
 	for acctIt.Next(true) {
