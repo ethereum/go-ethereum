@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -149,6 +150,81 @@ func txValidationError(err error) *invalidTxError {
 		Message: err.Error(),
 		Code:    errCodeInternalError,
 	}
+}
+
+// Standardized JSON-RPC error codes for transaction submission, shared across
+// EVM clients via the execution-apis error-code catalog (src/error-groups):
+// ExecutionErrors (1-199), GasErrors (800-999) and TxPoolErrors (1000-1199).
+// See https://github.com/ethereum/execution-apis/tree/master/src/error-groups.
+const (
+	errCodeStdNonceTooLow          = 1
+	errCodeStdNonceTooHigh         = 2
+	errCodeStdIntrinsicGas         = 800
+	errCodeStdGasPriceTooLow       = 802
+	errCodeStdGasExceedsBlockLimit = 803
+	errCodeStdTipAboveFeeCap       = 804
+	errCodeStdGasUintOverflow      = 805
+	errCodeStdFeeCapTooLow         = 806
+	errCodeStdTipVeryHigh          = 807
+	errCodeStdFeeCapVeryHigh       = 808
+	errCodeStdInsufficientFunds    = 809
+	errCodeStdAlreadyKnown         = 1000
+	errCodeStdInvalidSender        = 1001
+	errCodeStdReplaceUnderpriced   = 1002
+)
+
+// txSubmitError maps an error returned while submitting a transaction to the
+// pool (eth_sendTransaction / eth_sendRawTransaction) to its standardized
+// execution-apis JSON-RPC error code, preserving the original error message.
+// Errors without a catalog code are returned unchanged, so they keep geth's
+// default behavior (the generic -32000 code).
+func txSubmitError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if code, ok := txSubmitErrorCode(err); ok {
+		return &invalidTxError{Message: err.Error(), Code: code}
+	}
+	return err
+}
+
+// txSubmitErrorCode returns the standardized error code for a transaction
+// submission error, and whether a code is defined for it.
+func txSubmitErrorCode(err error) (int, bool) {
+	switch {
+	// TxPoolErrors (1000-1199)
+	case errors.Is(err, txpool.ErrAlreadyKnown):
+		return errCodeStdAlreadyKnown, true
+	case errors.Is(err, txpool.ErrInvalidSender):
+		return errCodeStdInvalidSender, true
+	case errors.Is(err, txpool.ErrReplaceUnderpriced):
+		return errCodeStdReplaceUnderpriced, true
+	// GasErrors (800-999)
+	case errors.Is(err, core.ErrIntrinsicGas):
+		return errCodeStdIntrinsicGas, true
+	case errors.Is(err, txpool.ErrTxGasPriceTooLow):
+		return errCodeStdGasPriceTooLow, true
+	case errors.Is(err, txpool.ErrGasLimit):
+		return errCodeStdGasExceedsBlockLimit, true
+	case errors.Is(err, core.ErrTipAboveFeeCap):
+		return errCodeStdTipAboveFeeCap, true
+	case errors.Is(err, core.ErrGasUintOverflow):
+		return errCodeStdGasUintOverflow, true
+	case errors.Is(err, core.ErrFeeCapTooLow):
+		return errCodeStdFeeCapTooLow, true
+	case errors.Is(err, core.ErrTipVeryHigh):
+		return errCodeStdTipVeryHigh, true
+	case errors.Is(err, core.ErrFeeCapVeryHigh):
+		return errCodeStdFeeCapVeryHigh, true
+	case errors.Is(err, core.ErrInsufficientFunds), errors.Is(err, core.ErrInsufficientFundsForTransfer):
+		return errCodeStdInsufficientFunds, true
+	// ExecutionErrors (1-199)
+	case errors.Is(err, core.ErrNonceTooLow):
+		return errCodeStdNonceTooLow, true
+	case errors.Is(err, core.ErrNonceTooHigh):
+		return errCodeStdNonceTooHigh, true
+	}
+	return 0, false
 }
 
 type invalidParamsError struct{ message string }
