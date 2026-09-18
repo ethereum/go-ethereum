@@ -357,6 +357,10 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 			writeSpanEnd(&err)
 		})
 	}
+	// Ensure we synchronize with the timer goroutine before reading responseError
+	// in the deferred serverSpanEnd. This prevents a data race when the timer
+	// fires and writes responseError while the main goroutine is about to return.
+	responded.Do(func() {})
 
 	// Enable notification sending of subscriptions, since the response with
 	// subscription ID has now been sent.
