@@ -136,6 +136,48 @@ type txMetadataWithSeq struct {
 	seq uint64
 }
 
+type txAnnounceEntry struct {
+	hash common.Hash
+	meta *txMetadataWithSeq
+}
+
+// txAnnounceHeap keeps the newest selected announcement at its root.
+type txAnnounceHeap []txAnnounceEntry
+
+func (h *txAnnounceHeap) push(entry txAnnounceEntry) {
+	items := append(*h, entry)
+	i := len(items) - 1
+	for i > 0 {
+		parent := (i - 1) / 2
+		if items[parent].meta.seq >= entry.meta.seq {
+			break
+		}
+		items[i] = items[parent]
+		i = parent
+	}
+	items[i] = entry
+	*h = items
+}
+
+func (h txAnnounceHeap) replaceTop(entry txAnnounceEntry) {
+	i := 0
+	for {
+		child := 2*i + 1
+		if child >= len(h) {
+			break
+		}
+		if right := child + 1; right < len(h) && h[right].meta.seq > h[child].meta.seq {
+			child = right
+		}
+		if h[child].meta.seq <= entry.meta.seq {
+			break
+		}
+		h[i] = h[child]
+		i = child
+	}
+	h[i] = entry
+}
+
 // txRequest represents an in-flight transaction retrieval request destined to
 // a specific peers.
 type txRequest struct {
@@ -1178,21 +1220,48 @@ func (f *TxFetcher) forEachPeer(peers map[string]struct{}, do func(peer string))
 // ordering to minimize the chances of transaction nonce-gaps, which result in
 // transactions being rejected by the txpool.
 func (f *TxFetcher) forEachAnnounce(announces map[common.Hash]*txMetadataWithSeq, do func(hash common.Hash, meta txMetadata) bool) {
-	type announcement struct {
-		hash common.Hash
-		meta txMetadata
-		seq  uint64
+	if len(announces) <= maxTxRetrievals {
+		type announcement struct {
+			hash common.Hash
+			meta txMetadata
+			seq  uint64
+		}
+		// Process announcements by their arrival order.
+		list := make([]announcement, 0, len(announces))
+		for hash, entry := range announces {
+			list = append(list, announcement{hash: hash, meta: entry.txMetadata, seq: entry.seq})
+		}
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].seq < list[j].seq
+		})
+		for i := range list {
+			if !do(list[i].hash, list[i].meta) {
+				return
+			}
+		}
+		return
 	}
-	// Process announcements by their arrival order
-	list := make([]announcement, 0, len(announces))
+	// Retain only the oldest announcements that can fit in this request.
+	list := make(txAnnounceHeap, 0, maxTxRetrievals)
 	for hash, entry := range announces {
-		list = append(list, announcement{hash: hash, meta: entry.txMetadata, seq: entry.seq})
+		if _, ok := f.fetching[hash]; ok {
+			// Fetching entries would be skipped by the callback below.
+			continue
+		}
+		announcement := txAnnounceEntry{hash: hash, meta: entry}
+		if len(list) < maxTxRetrievals {
+			list.push(announcement)
+			continue
+		}
+		if announcement.meta.seq < list[0].meta.seq {
+			list.replaceTop(announcement)
+		}
 	}
 	sort.Slice(list, func(i, j int) bool {
-		return list[i].seq < list[j].seq
+		return list[i].meta.seq < list[j].meta.seq
 	})
 	for i := range list {
-		if !do(list[i].hash, list[i].meta) {
+		if !do(list[i].hash, list[i].meta.txMetadata) {
 			return
 		}
 	}
