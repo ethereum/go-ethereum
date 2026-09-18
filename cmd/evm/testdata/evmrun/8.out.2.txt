@@ -239,7 +239,7 @@
 {"pc":2597,"op":97,"gas":"0xae7b2","gasCost":"0x3","memSize":2240,"stack":[],"depth":1,"refund":0,"opName":"PUSH2"}
 {"pc":2600,"op":96,"gas":"0xae7af","gasCost":"0x3","memSize":2240,"stack":["0x8a6"],"depth":1,"refund":0,"opName":"PUSH1"}
 {"pc":2602,"op":96,"gas":"0xae7ac","gasCost":"0x3","memSize":2240,"stack":["0x8a6","0x0"],"depth":1,"refund":0,"opName":"PUSH1"}
-{"pc":2604,"op":240,"gas":"0xae7a9","gasCost":"0x7d00","memSize":2240,"stack":["0x8a6","0x0","0x0"],"depth":1,"refund":0,"opName":"CREATE"}
+{"pc":2604,"op":240,"gas":"0xae7a9","gasCost":"0x7d00","memSize":2240,"stack":["0x8a6","0x0","0x0"],"createAddr":"0x7dce2faf43218578e3fcf2ad22df9918a89e2fba","depth":1,"refund":0,"opName":"CREATE"}
 {"pc":0,"op":96,"gas":"0xa40ff","gasCost":"0x3","memSize":0,"stack":[],"depth":2,"refund":0,"opName":"PUSH1"}
 {"pc":2,"op":84,"gas":"0xa40fc","gasCost":"0x834","memSize":0,"stack":["0x2"],"depth":2,"refund":0,"opName":"SLOAD"}
 {"pc":3,"op":80,"gas":"0xa38c8","gasCost":"0x2","memSize":0,"stack":["0x0"],"depth":2,"refund":0,"opName":"POP"}
@@ -703,7 +703,7 @@
 {"pc":1765,"op":97,"gas":"0x47e06","gasCost":"0x3","memSize":1472,"stack":["0x0"],"depth":2,"refund":0,"opName":"PUSH2"}
 {"pc":1768,"op":96,"gas":"0x47e03","gasCost":"0x3","memSize":1472,"stack":["0x0","0x5b2"],"depth":2,"refund":0,"opName":"PUSH1"}
 {"pc":1770,"op":96,"gas":"0x47e00","gasCost":"0x3","memSize":1472,"stack":["0x0","0x5b2","0x0"],"depth":2,"refund":0,"opName":"PUSH1"}
-{"pc":1772,"op":245,"gas":"0x47dfd","gasCost":"0x7e14","memSize":1472,"stack":["0x0","0x5b2","0x0","0x0"],"depth":2,"refund":0,"opName":"CREATE2"}
+{"pc":1772,"op":245,"gas":"0x47dfd","gasCost":"0x7e14","memSize":1472,"stack":["0x0","0x5b2","0x0","0x0"],"createAddr":"0x94a843a7335fc63be036fbdecc40b1365f3c5f26","depth":2,"refund":0,"opName":"CREATE2"}
 {"pc":0,"op":96,"gas":"0x3efea","gasCost":"0x3","memSize":0,"stack":[],"depth":3,"refund":0,"opName":"PUSH1"}
 {"pc":2,"op":84,"gas":"0x3efe7","gasCost":"0x834","memSize":0,"stack":["0x8"],"depth":3,"refund":0,"opName":"SLOAD"}
 {"pc":3,"op":80,"gas":"0x3e7b3","gasCost":"0x2","memSize":0,"stack":["0x0"],"depth":3,"refund":0,"opName":"POP"}
