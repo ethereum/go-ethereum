@@ -183,7 +183,8 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 	for _, r := range receipts {
 		allLogs = append(allLogs, r.Logs...)
 	}
-	_, postBal, err := core.PostExecution(ctx, config, header.Number, header.Time, allLogs, evm, uint32(tcount+1))
+	// EIP-8304: log index tables are not built for replay, wired in a later PR
+	_, postBal, err := core.PostExecution(ctx, config, header.Number, header.Time, allLogs, nil, evm, uint32(tcount+1))
 	if err != nil {
 		return nil, nil, 0, common.Hash{}, err
 	}
