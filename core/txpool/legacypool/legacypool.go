@@ -154,6 +154,8 @@ type Config struct {
 	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
+	MaxInflightDelegatedSlots uint64 // Maximum number of in-flight transaction slots per delegated or pending delegated account
+
 	Lifetime time.Duration // Maximum amount of time an account can remain stale in the non-executable pool
 }
 
@@ -169,6 +171,8 @@ var DefaultConfig = Config{
 	GlobalSlots:  4096 + 1024, // urgent + floating queue capacity with 4:1 ratio
 	AccountQueue: 64,
 	GlobalQueue:  1024,
+
+	MaxInflightDelegatedSlots: 1,
 
 	Lifetime: 3 * time.Hour,
 }
@@ -197,6 +201,10 @@ func (config *Config) sanitize() Config {
 		log.Warn("Sanitizing invalid txpool account queue", "provided", conf.AccountQueue, "updated", DefaultConfig.AccountQueue)
 		conf.AccountQueue = DefaultConfig.AccountQueue
 	}
+	if conf.MaxInflightDelegatedSlots < 1 {
+		log.Warn("Sanitizing invalid txpool max inflight delegated slots", "provided", conf.MaxInflightDelegatedSlots, "updated", DefaultConfig.MaxInflightDelegatedSlots)
+		conf.MaxInflightDelegatedSlots = DefaultConfig.MaxInflightDelegatedSlots
+	}
 	if conf.GlobalQueue < 1 {
 		log.Warn("Sanitizing invalid txpool global queue", "provided", conf.GlobalQueue, "updated", DefaultConfig.GlobalQueue)
 		conf.GlobalQueue = DefaultConfig.GlobalQueue
@@ -219,9 +227,10 @@ func (config *Config) sanitize() Config {
 // In addition to tracking transactions, the pool also tracks a set of pending SetCode
 // authorizations (EIP7702). This helps minimize number of transactions that can be
 // trivially churned in the pool. As a standard rule, any account with a deployed
-// delegation or an in-flight authorization to deploy a delegation will only be allowed a
-// single transaction slot instead of the standard number. This is due to the possibility
-// of the account being sweeped by an unrelated account.
+// delegation or an in-flight authorization to deploy a delegation will only be allowed
+// MaxInflightDelegatedSlots transaction slots, one by default, instead of the standard
+// number. This is due to the possibility of the account being sweeped by an unrelated
+// account.
 //
 // Because SetCode transactions can have many authorizations included, we avoid explicitly
 // checking their validity to save the state lookup. So long as the encompassing
@@ -596,10 +605,29 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 	return pool.validateAuth(tx)
 }
 
-// checkDelegationLimit determines if the tx sender is delegated or has a
-// pending delegation, and if so, ensures they have at most one in-flight
-// **executable** transaction, e.g. disallow stacked and gapped transactions
-// from the account.
+// reachableInflightCount returns how many of the account's transactions can still
+// execute: the pending list plus the queued run continuing from the next pending
+// nonce.
+//
+// Note, this method assumes the pool lock is held!
+func (pool *LegacyPool) reachableInflightCount(addr common.Address) int {
+	var count int
+	if pending := pool.pending[addr]; pending != nil {
+		count += pending.Len()
+	}
+	queue, ok := pool.queue.get(addr)
+	if !ok {
+		return count
+	}
+	for next := pool.pendingNonces.get(addr); queue.Contains(next); next++ {
+		count++
+	}
+	return count
+}
+
+// checkDelegationLimit determines if the tx sender is delegated or has a pending
+// delegation, and if so, ensures they have at most MaxInflightDelegatedSlots
+// executable transactions in flight and no nonce gap.
 func (pool *LegacyPool) checkDelegationLimit(tx *types.Transaction) error {
 	from, _ := types.Sender(pool.signer, tx) // validated
 
@@ -607,31 +635,39 @@ func (pool *LegacyPool) checkDelegationLimit(tx *types.Transaction) error {
 	if pool.currentState.GetCodeHash(from) == types.EmptyCodeHash && !pool.all.hasAuth(from) {
 		return nil
 	}
-	pending := pool.pending[from]
-	if pending == nil {
-		// Transaction with gapped nonce is not supported for delegated accounts
-		if pool.pendingNonces.get(from) != tx.Nonce() {
-			return ErrOutOfOrderTxFromDelegated
-		}
+	// Transaction replacement is supported and doesn't count against the limit.
+	// The queue is checked too, a transaction sits there until it's promoted.
+	if pending := pool.pending[from]; pending != nil && pending.Contains(tx.Nonce()) {
 		return nil
 	}
-	// Transaction replacement is supported
-	if pending.Contains(tx.Nonce()) {
+	if queue, ok := pool.queue.get(from); ok && queue.Contains(tx.Nonce()) {
 		return nil
 	}
-	return txpool.ErrInflightTxLimitReached
+	// Enforce the in-flight limit, counting only what can still execute. If we
+	// counted a transaction stuck behind a missing nonce, it would take up a slot
+	// needed to send that nonce; at the default limit of one, a single stuck
+	// transaction would lock the account out until it expires.
+	if uint64(pool.reachableInflightCount(from)) >= pool.config.MaxInflightDelegatedSlots {
+		return txpool.ErrInflightTxLimitReached
+	}
+	// Transaction with gapped nonce is not supported for delegated accounts.
+	if pool.isGapped(from, tx) {
+		return ErrOutOfOrderTxFromDelegated
+	}
+	return nil
 }
 
 // validateAuth verifies that the transaction complies with code authorization
 // restrictions brought by SetCode transaction type.
 func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
-	// Allow at most one in-flight tx for delegated accounts or those with a
+	// Limit the in-flight transactions of delegated accounts or those with a
 	// pending authorization.
 	if err := pool.checkDelegationLimit(tx); err != nil {
 		return err
 	}
-	// For symmetry, allow at most one in-flight tx for any authority with a
-	// pending transaction.
+	// Apply the same limit to any authority named by the transaction, otherwise an
+	// account could stack transactions while still a plain EOA and be delegated
+	// afterwards. Stranded transactions count here: a sweep invalidates those too.
 	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
 		for _, auth := range auths {
 			var count int
@@ -641,7 +677,7 @@ func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
 			if queue, ok := pool.queue.get(auth); ok {
 				count += queue.Len()
 			}
-			if count > 1 {
+			if uint64(count) > pool.config.MaxInflightDelegatedSlots {
 				return ErrAuthorityReserved
 			}
 			// Because there is no exclusive lock held between different subpools
