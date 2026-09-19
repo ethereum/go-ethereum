@@ -155,11 +155,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
-	//
-	// Receipts must go through MakeReceipt to calculate the receipt's bloom
-	// already. Merge the receipt's bloom together instead of recalculating
-	// everything.
-	rbloom := types.MergeBloom(res.Receipts)
+	rbloom := res.blockBloom()
 	if rbloom != header.Bloom {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
@@ -169,7 +165,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		return nil
 	}
 	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
-	receiptSha := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
+	receiptSha := res.receiptRoot()
 	if receiptSha != header.ReceiptHash {
 		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
 	}
