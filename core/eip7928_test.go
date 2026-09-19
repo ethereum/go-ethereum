@@ -181,6 +181,20 @@ func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, 
 	if p, s := types.CalcRequestsHash(parRes.Requests), types.CalcRequestsHash(seqRes.Requests); p != s {
 		t.Fatalf("requests hash: parallel %x != sequential %x", p, s)
 	}
+
+	// Both processors digest their receipts alongside execution. What the
+	// validator is handed has to match the receipts that came out.
+	for _, res := range []*ProcessResult{parRes, seqRes} {
+		if res.digest == nil {
+			t.Fatalf("process result carries no receipt digest")
+		}
+		if want := types.MergeBloom(res.Receipts); res.digest.bloom != want {
+			t.Fatalf("digested bloom %x != merged %x", res.digest.bloom, want)
+		}
+		if want := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil)); res.digest.root != want {
+			t.Fatalf("digested receipt root %x != derived %x", res.digest.root, want)
+		}
+	}
 }
 
 // --- assertion helpers ---
