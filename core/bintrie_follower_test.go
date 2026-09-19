@@ -523,3 +523,41 @@ func TestFollowerSharesCanonicalHandle(t *testing.T) {
 		t.Fatal("the binary direction must own its handle")
 	}
 }
+
+// TestNamespaceMustNameItsBlock: the genesis seed records an anchor, so state
+// without one is a converted namespace whose block is unknowable - which the
+// follower used to take for a genesis seed.
+func TestNamespaceMustNameItsBlock(t *testing.T) {
+	t.Run("genesis seed anchors itself", func(t *testing.T) {
+		genesis, db, blocks, _ := generateMigrationChain(t, 1)
+		writeChainShape(db, blocks)
+
+		f := standaloneFollower(genesis, db)
+		if err := f.direction(true).ensure(); err != nil {
+			t.Fatalf("seeding from genesis: %v", err)
+		}
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		num, hash, ok := rawdb.ReadPBTAnchor(pbtdb)
+		if !ok {
+			t.Fatal("the genesis seed left the namespace without an anchor")
+		}
+		if num != 0 || hash != rawdb.ReadCanonicalHash(db, 0) {
+			t.Fatalf("anchored at %d %x, want the genesis block", num, hash)
+		}
+	})
+
+	t.Run("anchorless state is refused", func(t *testing.T) {
+		genesis, db, blocks, _ := generateMigrationChain(t, 2)
+		writeChainShape(db, blocks)
+		// A namespace as an older converter left it: no anchor.
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		rawdb.WritePBTFlatState(pbtdb)
+		rawdb.WriteSnapshotRoot(pbtdb, common.Hash{0xaa})
+
+		f := standaloneFollower(genesis, db)
+		err := f.direction(true).ensure()
+		if err == nil || !strings.Contains(err.Error(), "no anchor") {
+			t.Fatalf("anchorless namespace resolved with err = %v, want a refusal", err)
+		}
+	})
+}

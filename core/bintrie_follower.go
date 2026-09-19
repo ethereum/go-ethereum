@@ -757,10 +757,11 @@ func (t *followerTree) ensure() error {
 	}
 	ghash := rawdb.ReadCanonicalHash(f.db, 0)
 	if root := rawdb.ReadSnapshotRoot(pbtdb); root != (common.Hash{}) {
-		// Seeded, then crashed before the first record: only the genesis
-		// seed writes the namespace with no cursor ever recorded.
-		t.setCursor(0, ghash, root)
-		return nil
+		// The genesis seed and the importer both write an anchor, so state
+		// without one comes from a converter that recorded none: the block
+		// it commits is unknowable, and assuming genesis would replay the
+		// whole chain on top of head state.
+		return errors.New("binary tree state has no anchor: re-convert or re-import")
 	}
 	// Fresh namespace: seed from the genesis allocation.
 	genesis := rawdb.ReadHeader(f.db, ghash, 0)
@@ -781,6 +782,9 @@ func (t *followerTree) ensure() error {
 	if err != nil {
 		return err
 	}
+	// Anchored at genesis, so a later start knows this namespace stands at
+	// block zero rather than having to assume it.
+	rawdb.WritePBTAnchor(pbtdb, 0, ghash)
 	rawdb.WriteShadowStateRoot(f.db, ghash, 0, root)
 	t.persistCursor(0, ghash, root)
 	t.setCursor(0, ghash, root)
