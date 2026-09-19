@@ -2262,6 +2262,18 @@ func TestSlotCount(t *testing.T) {
 	}
 }
 
+// TestSanitizeMaxInflightDelegatedSlots tests that a zero in-flight limit falls
+// back to the default instead of locking delegated accounts out entirely.
+func TestSanitizeMaxInflightDelegatedSlots(t *testing.T) {
+	t.Parallel()
+
+	conf := DefaultConfig
+	conf.MaxInflightDelegatedSlots = 0
+	if got := conf.sanitize().MaxInflightDelegatedSlots; got != DefaultConfig.MaxInflightDelegatedSlots {
+		t.Fatalf("sanitized limit mismatch: have %d, want %d", got, DefaultConfig.MaxInflightDelegatedSlots)
+	}
+}
+
 // TestSetCodeTransactions tests a few scenarios regarding the EIP-7702
 // SetCodeTx.
 func TestSetCodeTransactions(t *testing.T) {
@@ -2717,4 +2729,276 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	for _, tx := range batches {
 		pool.addRemotesSync([]*types.Transaction{tx})
 	}
+}
+
+// newDelegatedTestPool returns a pool with the given in-flight limit and a
+// single funded account carrying an EIP-7702 delegation.
+func newDelegatedTestPool(t *testing.T, limit uint64) (*LegacyPool, *state.StateDB, *ecdsa.PrivateKey, common.Address) {
+	t.Helper()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	blockchain := newTestBlockChain(params.MergedTestChainConfig, 1000000, statedb, new(event.Feed))
+
+	config := testTxPoolConfig
+	config.MaxInflightDelegatedSlots = limit
+
+	pool := New(config, blockchain)
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
+	t.Cleanup(func() { pool.Close() })
+
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, addr, big.NewInt(params.Ether))
+
+	target := common.Address{0xaa, 0xaa}
+	statedb.SetCode(addr, append(types.DelegationPrefix, target.Bytes()...), tracing.CodeChangeUnspecified)
+
+	return pool, statedb, key, addr
+}
+
+// TestDelegatedInflightLimit tests that a delegated account is admitted exactly
+// MaxInflightDelegatedSlots consecutive transactions, and gets a slot back as
+// the account is mined forward.
+func TestDelegatedInflightLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, limit := range []uint64{1, 2, 4} {
+		t.Run(fmt.Sprintf("limit-%d", limit), func(t *testing.T) {
+			t.Parallel()
+
+			pool, _, key, addr := newDelegatedTestPool(t, limit)
+
+			// N consecutive nonces fit.
+			for i := uint64(0); i < limit; i++ {
+				if err := pool.addRemoteSync(pricedTransaction(i, 100000, big.NewInt(1), key)); err != nil {
+					t.Fatalf("tx %d rejected below the limit: %v", i, err)
+				}
+			}
+			if pending, queued := pool.Stats(); uint64(pending) != limit || queued != 0 {
+				t.Fatalf("pool status mismatch: pending %d queued %d, want pending %d queued 0", pending, queued, limit)
+			}
+			// Nothing else fits, and the limit outranks the gap check.
+			err := pool.addRemoteSync(pricedTransaction(limit, 100000, big.NewInt(1), key))
+			if !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+				t.Fatalf("error mismatch beyond the limit: want %v, have %v", txpool.ErrInflightTxLimitReached, err)
+			}
+			err = pool.addRemoteSync(pricedTransaction(limit+5, 100000, big.NewInt(1), key))
+			if !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+				t.Fatalf("error mismatch for gapped nonce beyond the limit: want %v, have %v", txpool.ErrInflightTxLimitReached, err)
+			}
+			// Mine the account forward by one, freeing exactly one slot.
+			testSetNonce(pool, addr, 1)
+			<-pool.requestReset(nil, nil)
+
+			if err := pool.addRemoteSync(pricedTransaction(limit, 100000, big.NewInt(1), key)); err != nil {
+				t.Fatalf("tx rejected after a slot was freed: %v", err)
+			}
+		})
+	}
+}
+
+// TestDelegatedReplacement tests that a delegated account sitting at its
+// in-flight limit can still replace a transaction, whether it was promoted into
+// pending or is still waiting in the queue.
+func TestDelegatedReplacement(t *testing.T) {
+	t.Parallel()
+
+	t.Run("pending", func(t *testing.T) {
+		t.Parallel()
+
+		pool, _, key, _ := newDelegatedTestPool(t, 1)
+
+		if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(100), key)); err != nil {
+			t.Fatalf("initial transaction rejected: %v", err)
+		}
+		if pending, _ := pool.Stats(); pending != 1 {
+			t.Fatalf("transaction did not reach pending: pending = %d", pending)
+		}
+		// Too small a bump is an underpriced replacement, not a limit breach.
+		err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(101), key))
+		if !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+			t.Fatalf("error mismatch: want %v, have %v", txpool.ErrReplaceUnderpriced, err)
+		}
+		// A sufficient bump replaces the transaction even though the account is full.
+		if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), key)); err != nil {
+			t.Fatalf("replacement rejected: %v", err)
+		}
+		if pending, queued := pool.Stats(); pending != 1 || queued != 0 {
+			t.Fatalf("pool status mismatch: pending %d queued %d, want 1 and 0", pending, queued)
+		}
+	})
+
+	t.Run("queued", func(t *testing.T) {
+		t.Parallel()
+
+		pool, _, key, addr := newDelegatedTestPool(t, 1)
+
+		// A single batch is processed under one lock acquisition, so the reorg
+		// cannot promote the first transaction before the replacements are
+		// validated against the queue.
+		errs := pool.Add([]*types.Transaction{
+			pricedTransaction(0, 100000, big.NewInt(100), key),
+			pricedTransaction(0, 100000, big.NewInt(101), key),  // too small a bump
+			pricedTransaction(0, 100000, big.NewInt(1000), key), // sufficient bump
+		}, false)
+
+		if errs[0] != nil {
+			t.Fatalf("initial transaction rejected: %v", errs[0])
+		}
+		// Too small a bump is an underpriced replacement, not a limit breach.
+		if !errors.Is(errs[1], txpool.ErrReplaceUnderpriced) {
+			t.Fatalf("error mismatch: want %v, have %v", txpool.ErrReplaceUnderpriced, errs[1])
+		}
+		// A sufficient bump replaces the transaction even though the account is full.
+		if errs[2] != nil {
+			t.Fatalf("replacement rejected: %v", errs[2])
+		}
+		<-pool.requestReset(nil, nil)
+
+		if pending, queued := pool.Stats(); pending != 1 || queued != 0 {
+			t.Fatalf("pool status mismatch: pending %d queued %d, want 1 and 0", pending, queued)
+		}
+		if list := pool.pending[addr]; list == nil || list.LastElement().GasTipCap().Cmp(big.NewInt(1000)) != 0 {
+			t.Fatal("replacement did not survive into pending")
+		}
+	})
+}
+
+// TestAuthorityInflightLimit tests that the authority reservation rule follows
+// MaxInflightDelegatedSlots: an authority holding exactly the limit does not
+// block a SetCode transaction, one holding more does.
+func TestAuthorityInflightLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, limit := range []uint64{1, 3} {
+		t.Run(fmt.Sprintf("limit-%d", limit), func(t *testing.T) {
+			t.Parallel()
+
+			for _, tc := range []struct {
+				name     string
+				inflight uint64
+				wantErr  error
+			}{
+				{"at-limit", limit, nil},
+				{"above-limit", limit + 1, ErrAuthorityReserved},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+					blockchain := newTestBlockChain(params.MergedTestChainConfig, 1000000, statedb, new(event.Feed))
+
+					config := testTxPoolConfig
+					config.MaxInflightDelegatedSlots = limit
+
+					pool := New(config, blockchain)
+					pool.Init(config.PriceLimit, blockchain.CurrentBlock(), newReserver())
+					defer pool.Close()
+
+					var (
+						keyA, _ = crypto.GenerateKey() // sender of the SetCode transaction
+						keyB, _ = crypto.GenerateKey() // the authority
+					)
+					testAddBalance(pool, crypto.PubkeyToAddress(keyA.PublicKey), big.NewInt(params.Ether))
+					testAddBalance(pool, crypto.PubkeyToAddress(keyB.PublicKey), big.NewInt(params.Ether))
+
+					// B is still a plain EOA, so it may stack freely.
+					for i := uint64(0); i < tc.inflight; i++ {
+						if err := pool.addRemoteSync(pricedTransaction(i, 100000, big.NewInt(1), keyB)); err != nil {
+							t.Fatalf("tx %d from authority rejected: %v", i, err)
+						}
+					}
+					err := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{0, keyB}}))
+					if !errors.Is(err, tc.wantErr) {
+						t.Fatalf("error mismatch: want %v, have %v", tc.wantErr, err)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestAuthorityInflightLimitStranded tests that the authority reservation rule
+// counts the account's whole inventory, stranded queued transactions included.
+func TestAuthorityInflightLimitStranded(t *testing.T) {
+	t.Parallel()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	blockchain := newTestBlockChain(params.MergedTestChainConfig, 1000000, statedb, new(event.Feed))
+
+	pool := New(testTxPoolConfig, blockchain) // default limit of one
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
+	defer pool.Close()
+
+	var (
+		keyA, _ = crypto.GenerateKey() // sender of the SetCode transaction
+		keyB, _ = crypto.GenerateKey() // the authority
+	)
+	testAddBalance(pool, crypto.PubkeyToAddress(keyA.PublicKey), big.NewInt(params.Ether))
+	testAddBalance(pool, crypto.PubkeyToAddress(keyB.PublicKey), big.NewInt(params.Ether))
+
+	// Gapped, so none of these can execute: the reachable count stays zero while
+	// the account's actual inventory is three.
+	for _, nonce := range []uint64{5, 6, 7} {
+		if err := pool.addRemoteSync(pricedTransaction(nonce, 100000, big.NewInt(1), keyB)); err != nil {
+			t.Fatalf("gapped transaction %d rejected: %v", nonce, err)
+		}
+	}
+	err := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{0, keyB}}))
+	if !errors.Is(err, ErrAuthorityReserved) {
+		t.Fatalf("error mismatch: want %v, have %v", ErrAuthorityReserved, err)
+	}
+}
+
+// TestDelegatedInflightLimitQueued tests which queued transactions count against
+// the in-flight limit of a delegated account: those continuing the pending nonce
+// run do, those stranded behind a nonce gap do not.
+func TestDelegatedInflightLimitQueued(t *testing.T) {
+	t.Parallel()
+
+	t.Run("stranded", func(t *testing.T) {
+		t.Parallel()
+
+		// At the default limit of one, the account has a single slot and a
+		// stranded transaction must not be the one holding it.
+		pool, statedb, key, addr := newDelegatedTestPool(t, 1)
+		statedb.SetCode(addr, nil, tracing.CodeChangeUnspecified) // plain for now
+
+		// Gapped, so it lands in the queue and stays there.
+		if err := pool.addRemoteSync(pricedTransaction(3, 100000, big.NewInt(1), key)); err != nil {
+			t.Fatalf("gapped transaction from plain account rejected: %v", err)
+		}
+		target := common.Address{0xaa, 0xaa}
+		statedb.SetCode(addr, append(types.DelegationPrefix, target.Bytes()...), tracing.CodeChangeUnspecified)
+
+		// The account's next executable nonce must still be accepted.
+		if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), key)); err != nil {
+			t.Fatalf("next executable nonce rejected while a stranded transaction was queued: %v", err)
+		}
+		// And having used its one slot, the following nonce is refused.
+		err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), key))
+		if !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+			t.Fatalf("error mismatch: want %v, have %v", txpool.ErrInflightTxLimitReached, err)
+		}
+	})
+
+	t.Run("reachable", func(t *testing.T) {
+		t.Parallel()
+
+		// Submitted through the asynchronous path, so nothing is promoted in
+		// between and every transaction is still sitting in the queue.
+		pool, _, key, _ := newDelegatedTestPool(t, 4)
+
+		txs := make([]*types.Transaction, 0, 20)
+		for i := uint64(0); i < 20; i++ {
+			txs = append(txs, pricedTransaction(i, 100000, big.NewInt(1), key))
+		}
+		accepted := 0
+		for _, err := range pool.Add(txs, false) {
+			if err == nil {
+				accepted++
+			}
+		}
+		if accepted != 4 {
+			t.Fatalf("limit not enforced against queued transactions: accepted %d, want 4", accepted)
+		}
+	})
 }
