@@ -28,7 +28,7 @@ The `eth_simulate` payload structure:
    | `stateOverrides` | `StateOverrides`           | State overrides can be used to replace existing blockchain state with new state.                             |
    | `calls`          | `GenericCallTransaction[]` | An aray of transaction call objects. Please see [Transaction Call Object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) for details. |
 
-The optional `BlockOverrides` object modifies the context in which the transactions of that given block are executed. Refer to [Block overrides](/docs/interacting-with-geth/rpc/objects#block-overrides) for a list of modifiable fields. When overriding multiple blocks, block numbers must increment. Skipping numbers is allowed and skipped blocks are included in the response. When overriding time across multiple blocks, time need to be increasing. If time is not specified, it's incremented by one for each block.
+The optional `BlockOverrides` object modifies the context in which the transactions of that given block are executed. Refer to [Block overrides](/docs/interacting-with-geth/rpc/objects#block-overrides) for a list of modifiable fields. When overriding multiple blocks, block numbers must increment. Skipping numbers is allowed and skipped blocks are included in the response. When overriding time across multiple blocks, time need to be increasing. If time is not specified, it's incremented by 12 seconds for each block (matching the post-merge slot time).
 
 The StateOverrides is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing each block. Please see [State Override Set](/docs/interacting-with-geth/rpc/objects#state-override-set) for details.
 
@@ -36,12 +36,12 @@ The StateOverrides is an optional address-to-state mapping, where each entry spe
 On a succesfull `eth_simulateV1` call, an array of generated full blocks is returned (the same object that you would get with `eth_getBlockByHash`, except with an added `calls` field), otherwise an error is returned. The blocks contain `calls` field that is defined as follows:
 
 On failure:
-   | Field        | Type                                             | Description                                   |
-   | :----------- | :----------------------------------------------- | :-------------------------------------------- |
-   | `status`     | `"0x0"`                                          | Status indicating that the transaction failed |
-   | `returnData` | `bytes`                                          | Transactions return data                      |
-   | `gasUsed`    | `uint64`                                         | Gas used by the transaction                   |
-   | `error`      | `{ code: uint64, message: string, data: bytes }` | Error code, data and message                  |
+   | Field        | Type                                           | Description                                                                                                                           |
+   | :----------- | :--------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+   | `status`     | `"0x0"`                                        | Status indicating that the transaction failed                                                                                         |
+   | `returnData` | `bytes`                                        | Transaction return data (empty `0x` on failure; for reverted calls, revert data is returned in `error.data`)                          |
+   | `gasUsed`    | `uint64`                                       | Gas used by the transaction                                                                                                           |
+   | `error`      | `{ code: int, message: string, data?: bytes }` | Error code, message, and optional revert data. `data` contains the revert payload on execution reverts, and is omitted for other EVM errors. |
 
 On success:
    | Field        | Type              | Description                                                                            |
