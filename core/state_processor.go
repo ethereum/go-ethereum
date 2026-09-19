@@ -76,7 +76,16 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		blockNumber = block.Number()
 		allLogs     []*types.Log
 		gp          = NewGasPool(block.GasLimit())
+
+		// The receipts are digested on a pipeline of their own, fed as the
+		// transactions finish, so the block bloom and the receipt root are
+		// ready when the validator asks. With a tracer attached the blooms
+		// stay in the loop, it is handed every receipt through OnTxEnd.
+		eagerBloom = cfg.Tracer != nil
+		pipeline   = newReceiptPipeline(len(block.Transactions()), eagerBloom)
 	)
+	// Stop the pipeline on the paths that abandon the block half way through.
+	defer pipeline.close()
 	var tracingStateDB = vm.StateDB(statedb)
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)
@@ -117,14 +126,18 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i, uint32(i+1))
-		receipt, bal, err := ApplyTransactionWithEVM(ctx, msg, gp, statedb, blockNumber, blockHash, context.Time, tx, evm)
+		receipt, bal, err := applyTransactionWithEVM(ctx, msg, gp, statedb, blockNumber, blockHash, context.Time, tx, evm, eagerBloom)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		receipts = append(receipts, receipt)
+		pipeline.add(receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 		blockAccessList.Merge(bal)
 	}
+	// The receipt trie is complete, let the pipeline finish it off while the
+	// block is wrapped up.
+	pipeline.close()
 	requests, bal, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, evm, uint32(len(block.Transactions())+1))
 	if err != nil {
 		return nil, err
@@ -137,12 +150,17 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	// TODO(rjl493456442) integrate it into the PostExecution.
 	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body(), uint32(len(block.Transactions())+1), blockAccessList)
 
+	// Join the pipeline. The receipts are only complete, and safe to hand back,
+	// once it has filled in their blooms.
+	digest := pipeline.join()
+
 	return &ProcessResult{
 		Receipts: receipts,
 		Requests: requests,
 		Logs:     allLogs,
 		GasUsed:  gp.Used(),
 		Bal:      blockAccessList,
+		digest:   &digest,
 	}, nil
 }
 
@@ -209,7 +227,14 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
-func ApplyTransactionWithEVM(ctx context.Context, msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, evm *vm.EVM) (receipt *types.Receipt, bal *bal.ConstructionBlockAccessList, err error) {
+func ApplyTransactionWithEVM(ctx context.Context, msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, evm *vm.EVM) (*types.Receipt, *bal.ConstructionBlockAccessList, error) {
+	return applyTransactionWithEVM(ctx, msg, gp, statedb, blockNumber, blockHash, blockTime, tx, evm, true)
+}
+
+// applyTransactionWithEVM is ApplyTransactionWithEVM with the receipt bloom
+// filter optional. The block processor leaves it out and lets its receipt
+// pipeline hash the logs instead.
+func applyTransactionWithEVM(ctx context.Context, msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, evm *vm.EVM, withBloom bool) (receipt *types.Receipt, bal *bal.ConstructionBlockAccessList, err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.ApplyTransactionWithEVM",
 		telemetry.StringAttribute("tx.hash", tx.Hash().Hex()),
 		telemetry.IntAttribute("tx.index", statedb.TxIndex()),
@@ -241,11 +266,23 @@ func ApplyTransactionWithEVM(ctx context.Context, msg *Message, gp *GasPool, sta
 	if statedb.Database().Type().Is(state.TypeUBT) {
 		statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
-	return MakeReceipt(evm, result, statedb, blockNumber, blockHash, blockTime, tx, gp.CumulativeUsed(), root), bal, nil
+	receipt = makeReceipt(evm, result, statedb, blockNumber, blockHash, blockTime, tx, gp.CumulativeUsed(), root)
+	if withBloom {
+		receipt.Bloom = types.CreateBloom(receipt)
+	}
+	return receipt, bal, nil
 }
 
 // MakeReceipt generates the receipt object for a transaction given its execution result.
 func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, cumulativeGas uint64, root []byte) *types.Receipt {
+	receipt := makeReceipt(evm, result, statedb, blockNumber, blockHash, blockTime, tx, cumulativeGas, root)
+	receipt.Bloom = types.CreateBloom(receipt)
+	return receipt
+}
+
+// makeReceipt generates the receipt object without its bloom filter, which the
+// caller either computes itself or leaves to the receipt pipeline.
+func makeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, cumulativeGas uint64, root []byte) *types.Receipt {
 	// Create a new receipt for the transaction, storing the intermediate root
 	// and gas used by the tx.
 	//
@@ -273,9 +310,8 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
-	// Set the receipt logs and create the bloom filter.
+	// Set the receipt logs.
 	receipt.Logs = statedb.GetLogs(tx.Hash(), blockNumber.Uint64(), blockHash, blockTime)
-	receipt.Bloom = types.CreateBloom(receipt)
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
