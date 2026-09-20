@@ -423,9 +423,6 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 	if err := eg.Wait(); err != nil {
 		return GenerateStats{}, err
 	}
-	if prog != nil {
-		prog.Store(100)
-	}
 	// Assemble the top-level root from the partition blobs and verify it
 	// matches the expected root.
 	got, err := assembleRoot(db, scheme, partitionBlobs)
@@ -441,6 +438,10 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 		"account-nodebytes", common.StorageSize(c.accountTrieBytes.Load()), "storage-nodebytes", common.StorageSize(c.storageTrieBytes.Load()),
 		"updated-accounts", c.accountUpdated.Load(), "dangling-slots", c.storageDeleted.Load(),
 		"elapsed", common.PrettyDuration(time.Since(start)))
+
+	if prog != nil {
+		prog.Store(100)
+	}
 
 	return GenerateStats{
 		Scanned: c.accounts.Load(),
