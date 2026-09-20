@@ -297,10 +297,14 @@ const (
 
 	// phaseGenerate covers the local trie generation after the download
 	// has completed. It targets the exact pivot root it was started with,
-	// so pivot updates are refused from here on.
+	// so pivot updates are refused for its duration (see FrozenPivot).
 	phaseGenerate
 
-	// phaseComplete means the sync ran to completion for the pivot.
+	// phaseComplete means the flat state and the tries are both complete
+	// for the pivot. The pivot may move again from here on: every move is
+	// rolled forward purely locally through the BAL catch-up, which keeps
+	// the flat state and the tries in lockstep and commits each block as
+	// one atomic transition, so the sync stays complete at every step.
 	phaseComplete
 )
 
@@ -565,28 +569,6 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 		return nil
 	}
 
-	// If the pivot of a completed sync was already committed, full sync has
-	// been mutating the flat state since. Nothing here can be resumed or
-	// rolled forward, snap sync was re-enabled, so wipe and start fresh.
-	// FrozenPivot refuses to freeze such a pivot, so the downloader resumes
-	// against a fresh target and lands here to do the cleanup. Same-pivot
-	// retries return through the skip above on purpose, a cycle that dies
-	// right after the commit just needs to recommit.
-	if prevPivot != nil && s.getPhase() == phaseComplete && isPivotCommitted(s.db, prevPivot) {
-		log.Warn("Reenabled snap sync over a completed one, restarting from scratch", "oldpivot", prevPivot.Number, "target", target.Number)
-		s.resetSyncState()
-		prevPivot = nil
-		isPivotChanged = false
-	}
-
-	// We're committing to running this sync. Demote a completed phase so a
-	// mid-run save (on cancel or error) doesn't persist a stale complete
-	// status from a prior pivot. The download remains done, only the trie
-	// generation must be redone against the new pivot.
-	if s.getPhase() == phaseComplete {
-		s.setPhase(phaseGenerate)
-	}
-
 	defer func() {
 		// Whether sync completed or not, disregard any future packets
 		log.Debug("Terminating snapshot sync cycle", "root", root)
@@ -610,6 +592,8 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 
 	log.Debug("Starting snapshot sync cycle", "root", root)
 
+	// Either a fresh sync with no prior progress, or a resume against the
+	// same pivot the journal was written for.
 	if !isPivotChanged {
 		if prevPivot != nil {
 			// Resumed against the same pivot. An unclean shutdown may have left
@@ -647,11 +631,17 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 			// cycles against the frozen header itself. Reaching this branch
 			// frozen indicates a bug on the downloader side; roll the flat
 			// state forward defensively and regenerate.
-			if s.getPhase() >= phaseGenerate {
+			if s.getPhase() == phaseGenerate {
 				log.Warn("Frozen pivot moved unexpectedly, rolling forward", "frozen", prevPivot.Number, "new", target.Number)
 			}
 			if err := s.catchUp(target, cancel); err != nil {
 				return err
+			}
+			// A completed sync is rolled forward in full by the catch-up. There is
+			// nothing left to download or generate.
+			if s.getPhase() == phaseComplete {
+				log.Info("Snap sync rolled forward to new pivot", "number", target.Number, "root", root)
+				return nil
 			}
 		}
 	}
@@ -669,14 +659,16 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 		s.profile.report() // skip on resumes that had nothing left to download
 	}
 	// Entering the generation phase makes the downloader stop moving the
-	// pivot (see FrozenPivot) until the pivot block is committed. The phase
-	// is persisted right away so the freeze also holds across a restart,
-	// before the generation has had a chance to finish.
+	// pivot until the generation completes.
+	//
+	// The phase is persisted right away so the freeze also holds across a
+	// restart, before the generation has had a chance to finish.
 	if s.getPhase() < phaseGenerate {
 		s.setPhase(phaseGenerate)
 		s.saveSyncStatus()
 	}
 
+	// Launch the trie generation only if the snap sync is not yet completed
 	log.Info("Starting trie generation", "root", root)
 	batch := s.db.NewBatch()
 	s.resetTrienodes(batch)
@@ -712,23 +704,19 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 }
 
 // FrozenPivot returns the pivot header the sync is bound to, or nil while
-// the pivot may still move freely. The pivot freezes once the state
-// download completes. The remaining work (trie generation) and the pivot
-// commit is purely local and targets the exact pivot root the download
-// finished with, so from that point on the downloader must neither move the
-// pivot nor start a new cycle against a different one.
+// the pivot may move freely.
+//
+// The pivot is frozen only for the trie generation phase, in which it targets
+// the exact pivot root the download finished with, so for its duration the
+// downloader must neither move the pivot nor start a new cycle against a
+// different one. Once the tries are complete, a pivot move is rolled forward
+// locally by the BAL catch-up again.
 func (s *syncerV2) FrozenPivot() *types.Header {
-	if s.getPhase() < phaseGenerate {
+	if s.getPhase() != phaseGenerate {
 		return nil
 	}
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	// A committed pivot from a completed sync is a dead leftover, not a
-	// freeze. Handing it back would pin a re-enabled sync to the old pivot,
-	// so report it as unfrozen and let the next Sync wipe the journal.
-	if s.getPhase() == phaseComplete && s.pivot != nil && isPivotCommitted(s.db, s.pivot) {
-		return nil
-	}
 	return s.pivot
 }
 
@@ -857,27 +845,6 @@ func catchUpExceedsRetention(prev, curr *types.Header) bool {
 	return gap.Cmp(big.NewInt(maxCatchUpBlocks)) > 0
 }
 
-// isPivotCommitted reports whether the head block has caught up to the
-// pivot. That only happens when a completed sync committed the pivot block
-// as the new chain head.
-func isPivotCommitted(db ethdb.Database, pivot *types.Header) bool {
-	// A reorg across the pivot means the committed sync was undone, not
-	// advanced past, so the pivot must still be canonical.
-	if rawdb.ReadCanonicalHash(db, pivot.Number.Uint64()) != pivot.Hash() {
-		return false
-	}
-	head := rawdb.ReadHeadBlockHash(db)
-	if head == (common.Hash{}) {
-		return false
-	}
-	number, ok := rawdb.ReadHeaderNumber(db, head)
-	if !ok {
-		return false
-	}
-	// A genesis head is just an empty chain.
-	return number > 0 && number >= pivot.Number.Uint64()
-}
-
 // catchUp runs the BAL catch-up. When the pivot has moved, it fetches BALs
 // for the gap blocks, verifies them against block headers, and applies the
 // diffs to roll flat state forward.
@@ -887,10 +854,12 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 	s.lock.RUnlock()
 
 	var (
-		from = prev.Number.Uint64() + 1
-		to   = target.Number.Uint64()
+		from     = prev.Number.Uint64() + 1
+		to       = target.Number.Uint64()
+		withTrie = s.getPhase() == phaseComplete
+		parent   = prev // Last block rolled forward, tries are opened at its root
 	)
-	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1)
+	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1, "tries", withTrie)
 
 	// Resolve the hash chain of the whole gap upfront by walking the parent
 	// hashes backward from the trusted target header.
@@ -951,20 +920,34 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 
 			// Decode the raw RLP into a BAL.
 			var (
-				b     bal.BlockAccessList
-				batch = s.db.NewBatch()
+				b         bal.BlockAccessList
+				batch     = s.db.NewBatch()
+				nextPivot = headers[hash]
+				tries     *stateTrie
 			)
 			if err := rlp.DecodeBytes(raw, &b); err != nil {
 				return fmt.Errorf("failed to decode BAL for block %d: %v", num, err)
 			}
-			if err := s.applyAccessList(&b, batch); err != nil {
+			if withTrie {
+				tries, err = s.openStateTrie(parent.Root, batch)
+				if err != nil {
+					return err
+				}
+			}
+			root, err := s.applyAccessList(&b, batch, tries)
+			if err != nil {
 				return fmt.Errorf("BAL application failed for block %d: %v", num, err)
+			}
+			// With the tries maintained, the post-block root must reproduce
+			// the header's. Nothing of a mismatching block is persisted, the
+			// sync stays complete and consistent for the previous block.
+			if withTrie && root != nextPivot.Root {
+				return fmt.Errorf("state root mismatch after applying BAL for block %d: have %x, want %x", num, root, nextPivot.Root)
 			}
 
 			// Persist incremental progress so a crash mid-catchUp can resume
 			// from the next unapplied block. Serialize the next pivot without
 			// advancing the in-memory pivot until the batch has committed.
-			nextPivot := headers[hash]
 			s.saveSyncStatusWith(batch, nextPivot)
 
 			// Commit the state transition alongside the sync progress atomically.
@@ -974,6 +957,7 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 			s.lock.Lock()
 			s.pivot = nextPivot
 			s.lock.Unlock()
+			parent = nextPivot
 		}
 		log.Info("BAL catch-up progress", "applied", end, "target", to, "remaining", to-end)
 	}

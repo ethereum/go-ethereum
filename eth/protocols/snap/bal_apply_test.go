@@ -51,7 +51,7 @@ func buildTestBAL(t *testing.T, cb *bal.ConstructionBlockAccessList) *bal.BlockA
 func applyBAL(t *testing.T, s *syncerV2, b *bal.BlockAccessList) {
 	t.Helper()
 	batch := s.db.NewBatch()
-	if err := s.applyAccessList(b, batch); err != nil {
+	if _, err := s.applyAccessList(b, batch, nil); err != nil {
 		t.Fatalf("applyAccessList failed: %v", err)
 	}
 	if err := batch.Write(); err != nil {
