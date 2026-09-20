@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -434,3 +435,15 @@ func BenchmarkPrecompiledP256Verify(bench *testing.B) {
 }
 
 func TestPrecompiledP256Verify(t *testing.T) { testJson("p256Verify", "0b", t) }
+
+// TestActivePrecompilesAmsterdam checks that Amsterdam activates the Osaka
+// precompiles, as the two forks are optional and gate independent rules.
+func TestActivePrecompilesAmsterdam(t *testing.T) {
+	rules := params.Rules{IsAmsterdam: true}
+	if set := activePrecompiledContracts(rules); set != &PrecompiledContractsOsaka {
+		t.Error("amsterdam does not activate the osaka precompile set")
+	}
+	if addrs := ActivePrecompiles(rules); !slices.Equal(addrs, PrecompiledAddressesOsaka) {
+		t.Error("amsterdam does not warm the osaka precompile addresses")
+	}
+}
