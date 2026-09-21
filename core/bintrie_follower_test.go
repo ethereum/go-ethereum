@@ -473,6 +473,10 @@ func TestFollowerRefusesTreesDuringSnapSync(t *testing.T) {
 	if _, err := chain.follower.tree(true); err == nil {
 		t.Fatal("tree opened during snap sync")
 	}
+	// The loop's own sync would race the resolution driven by hand below -
+	// two seeds of one namespace - and the guard under test sits in open,
+	// not in the loop. Stop it before the flag clears.
+	chain.follower.close()
 	rawdb.WriteSnapSyncStatusFlag(db, rawdb.StateSyncFinished)
 	if _, err := chain.follower.tree(true); err != nil {
 		t.Fatalf("tree still refused after snap sync: %v", err)
