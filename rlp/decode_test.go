@@ -259,6 +259,27 @@ func TestStreamList(t *testing.T) {
 	}
 }
 
+func TestStreamListDepthLimit(t *testing.T) {
+	nested := func(depth int) []byte {
+		var v any = []any{}
+		for i := 1; i < depth; i++ {
+			v = []any{v}
+		}
+		b, err := EncodeToBytes(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	var out any
+	if err := DecodeBytes(nested(maxListDepth), &out); err != nil {
+		t.Fatalf("depth %d: unexpected error %v", maxListDepth, err)
+	}
+	if err := DecodeBytes(nested(maxListDepth+1), &out); err != ErrListTooDeep {
+		t.Fatalf("depth %d: got error %v, want %v", maxListDepth+1, err, ErrListTooDeep)
+	}
+}
+
 func TestStreamRaw(t *testing.T) {
 	tests := []struct {
 		input  string

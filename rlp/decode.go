@@ -46,6 +46,7 @@ var (
 	ErrElemTooLarge     = errors.New("rlp: element is larger than containing list")
 	ErrValueTooLarge    = errors.New("rlp: value size exceeds available input length")
 	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
+	ErrListTooDeep      = errors.New("rlp: list nesting too deep")
 
 	// internal errors
 	errNotInList     = errors.New("rlp: call of ListEnd outside of any list")
@@ -571,6 +572,11 @@ type ByteReader interface {
 	io.ByteReader
 }
 
+// maxListDepth bounds the nesting of lists in a Stream. Decoding recurses once
+// per level, so without a bound a few bytes of input per level could exhaust
+// the stack. No RLP structure used by the protocol comes anywhere near it.
+const maxListDepth = 1024
+
 // Stream can be used for piecemeal decoding of an input stream. This
 // is useful if the input is very large or if the decoding rules for a
 // type depend on the input structure. Stream does not keep an
@@ -800,6 +806,9 @@ func (s *Stream) List() (size uint64, err error) {
 	}
 	if kind != List {
 		return 0, ErrExpectedList
+	}
+	if len(s.stack) >= maxListDepth {
+		return 0, ErrListTooDeep
 	}
 
 	// Remove size of inner list from outer list before pushing the new size
