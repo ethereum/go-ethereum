@@ -874,19 +874,20 @@ func (t *followerTree) journal(head *types.Header) {
 	}
 }
 
-// close releases the tree's handle without journaling it: the caller is
-// about to delete the state a journal would describe.
-func (t *followerTree) close() {
+// release drops the tree's handle without journaling it - the caller is
+// about to delete the state a journal would describe - and returns it only
+// when the follower owns it. A shared handle is the chain's own; its owner
+// retires it.
+func (t *followerTree) release() *triedb.Database {
 	t.f.mu.Lock()
+	defer t.f.mu.Unlock()
+
 	handle, owned := t.handle, t.owned
 	t.handle, t.sdb = nil, nil
-	t.f.mu.Unlock()
-	if handle == nil || !owned {
-		return
+	if !owned {
+		return nil
 	}
-	if err := handle.Close(); err != nil {
-		log.Error("Failed to close the merkle tree handle", "err", err)
-	}
+	return handle
 }
 
 func (t *followerTree) cursor() (uint64, common.Hash, common.Hash) {

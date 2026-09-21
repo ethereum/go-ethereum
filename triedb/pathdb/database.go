@@ -404,13 +404,39 @@ func (db *Database) Disable() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
+	if err := db.deactivate(); err != nil {
+		return err
+	}
+	// Write the initial sync flag to persist it across restarts.
+	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
+	log.Info("Disabled trie database due to state sync")
+	return nil
+}
+
+// Retire deactivates the database for good: the state under it is being
+// deleted. It records nothing, unlike Disable - no sync is coming to restore
+// what goes - and there is no counterpart to Enable.
+func (db *Database) Retire() error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if err := db.deactivate(); err != nil {
+		return err
+	}
+	log.Info("Retired trie database, the state under it is being deleted")
+	return nil
+}
+
+// deactivate invalidates every state layer as stale, so no reader can reach
+// the persistent state, and stops the writers that would put more of it on
+// disk. The caller holds the lock.
+func (db *Database) deactivate() error {
 	// Short circuit if the database is in read only mode.
 	if db.readOnly {
 		return errDatabaseReadOnly
 	}
-	// Prevent duplicated disable operation.
+	// Already deactivated; markStale below panics if it runs twice.
 	if db.waitSync {
-		log.Error("Reject duplicated disable operation")
 		return nil
 	}
 	db.waitSync = true
@@ -422,10 +448,6 @@ func (db *Database) Disable() error {
 		return err
 	}
 	disk.markStale()
-
-	// Write the initial sync flag to persist it across restarts.
-	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
-	log.Info("Disabled trie database due to state sync")
 	return nil
 }
 

@@ -144,11 +144,11 @@ func TestMerkleDisposalRespectsArchiveMode(t *testing.T) {
 	}
 }
 
-// TestMerkleDisposalDefersUnderALiveTree: a node that crossed the fork in-run
-// keeps the merkle tree as its canonical handle, so the window closing must
-// mark the state and delete nothing. Deleting under a live pathdb has its
-// disk layer report every missing record as an absent account.
-func TestMerkleDisposalDefersUnderALiveTree(t *testing.T) {
+// TestMerkleDisposalDeletesUnderALiveNode: a node that crossed the fork
+// in-run holds the merkle tree as its canonical handle, and still reclaims
+// the state without being restarted - the handle is retired first, so the
+// deletion cannot be read as absent accounts.
+func TestMerkleDisposalDeletesUnderALiveNode(t *testing.T) {
 	genesis := migrationGenesis(t)
 	db, addrHash := merkleStateFixture(t, genesis)
 
@@ -161,20 +161,20 @@ func TestMerkleDisposalDefersUnderALiveTree(t *testing.T) {
 	if chain.TrieDB().IsPBT() {
 		t.Fatal("a migration chain at a pre-fork head opened on the binary tree")
 	}
+	// The window closes on the follower's loop, with no sync in flight.
+	chain.follower.close()
 
 	chain.disposeMerkle()
 	if !rawdb.ReadPBTMerkleDisposed(db) {
 		t.Fatal("the disposal was neither performed nor recorded")
 	}
-	if rawdb.ReadAccountSnapshot(db, addrHash) == nil {
-		t.Fatal("the disposal deleted flat state under the node's own live handle")
+	<-chain.disposer.Load().done
+	if rawdb.ReadAccountSnapshot(db, addrHash) != nil {
+		t.Fatal("the running node kept its merkle flat state, so the space is only reclaimed by a restart")
 	}
-	if !rawdb.HasSnapshotRoot(db) {
-		t.Fatal("the disposal deleted the marker of a store it left in place")
-	}
-	// Condemned from here on, even though this run still holds the handle.
+	assertMerkleStateGone(t, db)
 	if _, err := chain.treeFor(false); err == nil {
-		t.Fatal("a merkle handle was served after the state was marked disposed")
+		t.Fatal("a merkle handle was served after the state was disposed of")
 	}
 }
 

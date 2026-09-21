@@ -265,6 +265,18 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	if _, err := chain2.StateAt(chain2.GetHeaderByNumber(2)); err == nil {
 		t.Fatal("pre-fork state served after the merkle trie was disposed of")
 	}
+	// The running node finishes the job: no restart reclaims the space.
+	waitFor(t, 10*time.Second, "the running node never deleted the merkle state", func() bool {
+		for _, family := range rawdb.MerkleKeyFamilies {
+			it := eth2.ChainDb().NewIterator(family, nil)
+			left := it.Next()
+			it.Release()
+			if left {
+				return false
+			}
+		}
+		return true
+	})
 	n2.Close()
 	closed2 = true
 
@@ -276,18 +288,6 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	if _, err := eth3.BlockChain().State(); err != nil {
 		t.Fatalf("finished node cannot open its state: %v", err)
 	}
-	// The disposal finishes, across the reboot if it has to.
-	waitFor(t, 10*time.Second, "the merkle state was never fully deleted", func() bool {
-		for _, family := range rawdb.MerkleKeyFamilies {
-			it := eth3.ChainDb().NewIterator(family, nil)
-			left := it.Next()
-			it.Release()
-			if left {
-				return false
-			}
-		}
-		return true
-	})
 }
 
 // TestFullMigrationLifecycleBlocksKnob is the same rehearsal closed by the

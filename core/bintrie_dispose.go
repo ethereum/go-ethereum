@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // merkleDisposer deletes the retired merkle state in the background. The
@@ -53,22 +54,48 @@ func (bc *BlockChain) disposeMerkle() {
 	}
 	rawdb.WritePBTMerkleDisposed(bc.db)
 
-	// A node that crossed the fork in-run holds the merkle tree as its own
-	// canonical handle: the flavour is resolved once, at startup. Deleting
-	// under a live pathdb would have its disk layer serve every miss as a
-	// cached "no such account". Defer to a start where it is not canonical.
-	if !bc.triedb.IsPBT() {
-		log.Info("Merkle state marked for disposal, deferred to the next start")
+	// Stop the live merkle tree before deleting what it reads: a pathdb that
+	// keeps serving answers every deleted record as an absent account.
+	// Retiring marks its layers stale, so reads fail loudly instead, and
+	// closing it lets go of the history freezers the deletion resets.
+	if err := bc.retireMerkleTree(); err != nil {
+		log.Error("Failed to retire the merkle tree, its deletion waits for the next start", "err", err)
 		return
 	}
-	// Release the tree before deleting what it reads; treeFor refuses to
-	// reopen it once the marker is set.
+	bc.startMerkleDisposal()
+}
+
+// retireMerkleTree stops whichever handle holds the merkle namespace in this
+// run. At most one can: the chain's own when the node crossed the fork
+// in-run - the flavour is resolved once, at open - and a follower-owned one
+// otherwise, since followerTree.open shares the chain's handle when the
+// flavours match.
+func (bc *BlockChain) retireMerkleTree() error {
+	var handle *triedb.Database
 	if bc.follower != nil {
 		if t := bc.follower.peek(false); t != nil {
-			t.close()
+			handle = t.release()
 		}
 	}
-	bc.startMerkleDisposal()
+	if !bc.triedb.IsPBT() {
+		handle = bc.triedb
+	}
+	if handle == nil {
+		return nil
+	}
+	if err := handle.Retire(); err != nil {
+		return err
+	}
+	return handle.Close()
+}
+
+// merkleRetired reports whether bc.triedb is the merkle handle this run
+// retired and closed. Shutdown must not journal or close it again: its
+// layers are stale and the state a journal would describe is gone. A node
+// cannot start in this state - NewBlockChain refuses a merkle head once the
+// marker is set - so the marker plus a merkle handle means "retired here".
+func (bc *BlockChain) merkleRetired() bool {
+	return !bc.triedb.IsPBT() && rawdb.ReadPBTMerkleDisposed(bc.db)
 }
 
 // resumeMerkleDisposal re-decides the disposal at every start: window close

@@ -700,6 +700,32 @@ func TestRecoverableDisabled(t *testing.T) {
 	}
 }
 
+// TestRetireStopsReads: a retired database is one whose state is being
+// deleted, so a reader obtained before it was retired must fail rather than
+// answer out of a store that is half gone - and no sync marker may be left
+// behind, the one difference from Disable.
+func TestRetireStopsReads(t *testing.T) {
+	tester := newTester(t, &testerConfig{layers: 8})
+	defer tester.release()
+
+	reader, err := tester.db.StateReader(tester.roots[len(tester.roots)-1])
+	if err != nil {
+		t.Fatalf("failed to open a state reader: %v", err)
+	}
+	if _, err := reader.Account(common.Hash{0x01}); err != nil {
+		t.Fatalf("the reader failed before the retirement: %v", err)
+	}
+	if err := tester.db.Retire(); err != nil {
+		t.Fatalf("failed to retire the database: %v", err)
+	}
+	if _, err := reader.Account(common.Hash{0x01}); !errors.Is(err, errSnapshotStale) {
+		t.Fatalf("a reader held across the retirement answered with %v, want %v", err, errSnapshotStale)
+	}
+	if flag := rawdb.ReadSnapSyncStatusFlag(tester.db.diskdb); flag == rawdb.StateSyncRunning {
+		t.Fatal("retiring left a snap-sync marker, so the next start would resume a sync that is not happening")
+	}
+}
+
 // TestProofOnlyRefusesUpdate pins that a proof-only database cannot be written
 // to - the trie skips deletion bookkeeping on such a database, which is sound
 // exactly because no commit can follow.
