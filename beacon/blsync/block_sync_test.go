@@ -19,12 +19,13 @@ package blsync
 import (
 	"testing"
 
+	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
-	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
-	"github.com/protolambda/zrnt/eth2/beacon/deneb"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -33,29 +34,33 @@ var (
 
 	testBlock1 = types.NewBeaconBlock(&deneb.BeaconBlock{
 		Slot: 127,
-		Body: deneb.BeaconBlockBody{
-			ExecutionPayload: deneb.ExecutionPayload{
-				BlockNumber: 456,
-				BlockHash:   zrntcommon.Hash32(common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")),
+		Body: &deneb.BeaconBlockBody{
+			ExecutionPayload: &deneb.ExecutionPayload{
+				BlockNumber:   456,
+				BlockHash:     phase0.Hash32(common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")),
+				BaseFeePerGas: uint256.NewInt(0),
 			},
 		},
 	})
 	testBlock2 = types.NewBeaconBlock(&deneb.BeaconBlock{
 		Slot: 128,
-		Body: deneb.BeaconBlockBody{
-			ExecutionPayload: deneb.ExecutionPayload{
-				BlockNumber: 457,
-				BlockHash:   zrntcommon.Hash32(common.HexToHash("011703f39c664efc1c6cf5f49ca09b595581eec572d4dfddd3d6179a9e63e655")),
+		Body: &deneb.BeaconBlockBody{
+			ExecutionPayload: &deneb.ExecutionPayload{
+				BlockNumber:   457,
+				BlockHash:     phase0.Hash32(common.HexToHash("011703f39c664efc1c6cf5f49ca09b595581eec572d4dfddd3d6179a9e63e655")),
+				BaseFeePerGas: uint256.NewInt(0),
 			},
 		},
 	})
 	testFinal1 = types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
-		BlockNumber: 395,
-		BlockHash:   zrntcommon.Hash32(common.HexToHash("abbe7625624bf8ddd84723709e2758956289465dd23475f02387e0854942666")),
+		BlockNumber:   395,
+		BlockHash:     phase0.Hash32(common.HexToHash("abbe7625624bf8ddd84723709e2758956289465dd23475f02387e0854942666")),
+		BaseFeePerGas: uint256.NewInt(0),
 	})
 	testFinal2 = types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
-		BlockNumber: 420,
-		BlockHash:   zrntcommon.Hash32(common.HexToHash("9182a6ef8723654de174283750932ccc092378549836bf4873657eeec474598")),
+		BlockNumber:   420,
+		BlockHash:     phase0.Hash32(common.HexToHash("9182a6ef8723654de174283750932ccc092378549836bf4873657eeec474598")),
+		BaseFeePerGas: uint256.NewInt(0),
 	})
 )
 
@@ -182,8 +187,10 @@ func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 		return types.FinalityUpdate{}, false
 	}
 	return types.FinalityUpdate{
-		Attested:      types.HeaderWithExecProof{Header: h.finalized},
-		Finalized:     types.HeaderWithExecProof{Header: h.finalized, PayloadHeader: h.finalizedPayload},
+		Attested: types.HeaderWithExecProof{Header: h.finalized},
+		Finalized: types.HeaderWithExecProof{Header: h.finalized, Proof: &types.LegacyHeaderProof{
+			PayloadHeader: h.finalizedPayload,
+		}},
 		Signature:     h.validated.Signature,
 		SignatureSlot: h.validated.SignatureSlot,
 	}, true
