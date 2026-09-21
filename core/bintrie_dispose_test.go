@@ -211,7 +211,7 @@ func TestMerkleDisposalResumes(t *testing.T) {
 	interrupt := make(chan struct{})
 	close(interrupt)
 
-	deleted, done, err := rawdb.DeleteMerkleState(db, interrupt)
+	deleted, done, err := rawdb.DeleteMerkleState(db, rawdb.PathScheme, interrupt)
 	if err != nil {
 		t.Fatalf("interrupted deletion failed: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestMerkleDisposalResumes(t *testing.T) {
 	}
 
 	// The next start, with nothing to interrupt it.
-	rest, done, err := rawdb.DeleteMerkleState(db, nil)
+	rest, done, err := rawdb.DeleteMerkleState(db, rawdb.PathScheme, nil)
 	if err != nil {
 		t.Fatalf("resumed deletion failed: %v", err)
 	}

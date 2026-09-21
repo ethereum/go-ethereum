@@ -116,16 +116,22 @@ func WritePBTMerkleDisposed(db ethdb.KeyValueWriter) {
 	}
 }
 
-// DeleteMerkleState removes the merkle-patricia state: the snapshot markers
-// first, then every key family holding the state they bless. It reports the
-// record count and whether it reached the end; interrupt stops it between
-// batches, which the caller's marker makes safe.
+// DeleteMerkleState removes the merkle-patricia state kept under the given
+// scheme: the snapshot markers first, then every key family holding the
+// state they bless. It reports the record count and whether it reached the
+// end; interrupt stops it between batches, which the caller's marker makes
+// safe.
 //
 // Markers first mirrors the write path: flat state is authoritative where
 // its markers say it is complete, so a half-deleted store with them intact
 // answers "no such account" rather than failing. The history freezers and
 // journal are the trie database's handles and belong to the caller.
-func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) (int, bool, error) {
+//
+// On the hash scheme only the flat state is scanned, and by exact key
+// length: trie nodes and legacy contract code are keyed by their bare hash,
+// so any of them may begin with a family byte, and the nodes are only
+// reachable by traversal, which is the caller's.
+func DeleteMerkleState(db ethdb.KeyValueStore, scheme string, interrupt <-chan struct{}) (int, bool, error) {
 	batch := db.NewBatch()
 	DeleteSnapshotRoot(batch)
 	DeleteSnapshotJournal(batch)
@@ -156,8 +162,11 @@ func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) (int, 
 		}
 	}
 	deleted := 0
-	for _, family := range MerkleKeyFamilies {
-		it := db.NewIterator(family, nil)
+	for _, family := range merkleKeyFamilies(scheme) {
+		it := db.NewIterator(family.prefix, nil)
+		if family.length != 0 {
+			it = NewKeyLengthIterator(it, family.length)
+		}
 		for it.Next() {
 			if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
 				it.Release()
@@ -218,6 +227,28 @@ func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) (int, 
 		return deleted, false, err
 	}
 	return deleted, true, nil
+}
+
+// merkleKeyFamily is one prefix scan of DeleteMerkleState, bounded to a key
+// length where the prefix byte is shared with keys that are not its own.
+type merkleKeyFamily struct {
+	prefix []byte
+	length int // 0 takes every length
+}
+
+// merkleKeyFamilies lists what DeleteMerkleState scans under each scheme.
+func merkleKeyFamilies(scheme string) []merkleKeyFamily {
+	if scheme == HashScheme {
+		return []merkleKeyFamily{
+			{SnapshotAccountPrefix, len(SnapshotAccountPrefix) + common.HashLength},
+			{SnapshotStoragePrefix, len(SnapshotStoragePrefix) + 2*common.HashLength},
+		}
+	}
+	families := make([]merkleKeyFamily, 0, len(MerkleKeyFamilies))
+	for _, prefix := range MerkleKeyFamilies {
+		families = append(families, merkleKeyFamily{prefix: prefix})
+	}
+	return families
 }
 
 // WipeMigrationState clears the migration bookkeeping, done marker first,

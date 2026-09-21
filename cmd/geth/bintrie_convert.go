@@ -977,9 +977,10 @@ func wipeMerkleHistory(chaindb ethdb.Database, triedbDir string) error {
 // what makes a killed deletion resumable and stops the next start opening a
 // handle over the half that survived.
 //
-// On the hash scheme the traversal runs before the family scan: nodes there
-// are keyed by their own hash, so some begin with a family byte and sweeping
-// first would delete the nodes the traversal needs to find the rest.
+// On the hash scheme the nodes are keyed by their own hash, so only the
+// traversal can name them, and the family scans that follow are bounded to
+// the flat state: a bare-hash key - a node, or legacy contract code - may
+// begin with any family byte.
 func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash) error {
 	rawdb.WritePBTMerkleDisposed(chaindb)
 
@@ -988,7 +989,7 @@ func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root comm
 			return err
 		}
 	}
-	records, _, err := rawdb.DeleteMerkleState(chaindb, nil)
+	records, _, err := rawdb.DeleteMerkleState(chaindb, srcTriedb.Scheme(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete the merkle state: %w", err)
 	}

@@ -148,7 +148,7 @@ func (bc *BlockChain) startMerkleDisposal() {
 // disposeMerkleState deletes the merkle state, then the history and journal
 // that describe it. Every step is a deletion, so a partial run just restarts.
 func disposeMerkleState(db ethdb.Database, journalDir string, interrupt <-chan struct{}) {
-	deleted, done, err := rawdb.DeleteMerkleState(db, interrupt)
+	deleted, done, err := rawdb.DeleteMerkleState(db, rawdb.PathScheme, interrupt)
 	if err != nil {
 		log.Error("Failed to dispose of the merkle state", "records", deleted, "err", err)
 		return

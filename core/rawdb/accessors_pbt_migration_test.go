@@ -109,3 +109,39 @@ func TestWipeMigrationState(t *testing.T) {
 		t.Fatal("shadow-root record survived the wipe")
 	}
 }
+
+// TestDeleteMerkleStateHashSchemeKeepsBareHashKeys: a hash-scheme datadir
+// keys legacy contract code by its bare hash, and one in five of those
+// begins with a merkle family byte, so an unbounded family scan would delete
+// code the converted node still executes. Only the flat state is scanned
+// there, by exact key length.
+func TestDeleteMerkleStateHashSchemeKeepsBareHashKeys(t *testing.T) {
+	db := NewMemoryDatabase()
+	var (
+		code    = common.Hash{SnapshotAccountPrefix[0], 0x01} // legacy code, or a stale node
+		account = common.Hash{0x02}
+		slot    = common.Hash{0x03}
+	)
+	if err := db.Put(code.Bytes(), []byte{0x60, 0x00}); err != nil {
+		t.Fatal(err)
+	}
+	WriteAccountSnapshot(db, account, []byte{0x01})
+	WriteStorageSnapshot(db, account, slot, []byte{0x02})
+
+	if _, done, err := DeleteMerkleState(db, HashScheme, nil); err != nil || !done {
+		t.Fatalf("hash-scheme deletion: done=%v err=%v", done, err)
+	}
+	if ReadAccountSnapshot(db, account) != nil || ReadStorageSnapshot(db, account, slot) != nil {
+		t.Fatal("the flat state survived the hash-scheme deletion")
+	}
+	if ReadCode(db, code) == nil {
+		t.Fatal("a bare-hash key under a family byte was swept away with the flat state")
+	}
+	// The path scheme owns its family bytes outright and sweeps them whole.
+	if _, done, err := DeleteMerkleState(db, PathScheme, nil); err != nil || !done {
+		t.Fatalf("path-scheme deletion: done=%v err=%v", done, err)
+	}
+	if ReadCode(db, code) != nil {
+		t.Fatal("the path-scheme deletion left a key under a merkle family byte")
+	}
+}
