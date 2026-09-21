@@ -89,10 +89,19 @@ func (a *TraceCallArgs) UnmarshalJSON(input []byte) error {
 		}
 	}
 	if raw, ok := fields["type"]; ok {
-		var kind hexutil.Uint64
-		if err := json.Unmarshal(raw, &kind); err != nil {
+		var encoded string
+		if err := json.Unmarshal(raw, &encoded); err != nil {
 			return err
 		}
+		// The profile uses a hex byte, allowing both 0x2 and 0x02.
+		if len(encoded) == 3 && encoded[:2] == "0x" {
+			encoded = "0x0" + encoded[2:]
+		}
+		decoded, err := hexutil.Decode(encoded)
+		if err != nil || len(decoded) != 1 {
+			return fmt.Errorf("type must be a hex-encoded byte")
+		}
+		kind := hexutil.Uint64(decoded[0])
 		if kind > 2 {
 			return fmt.Errorf("unsigned trace calls support transaction types 0, 1 and 2")
 		}
