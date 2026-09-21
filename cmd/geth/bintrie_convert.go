@@ -155,6 +155,13 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		if stored == nil || !stored.IsBinaryTrie(headBlock.Number(), headBlock.Time()) {
 			return errors.New("refusing --delete-source: the head block commits the merkle trie, which the node still executes on")
 		}
+		// Past the window the head root is binary, so the source can only
+		// be read at an explicitly named older root - one the chain cannot
+		// map back to its block. The namespace that leaves is not bootable,
+		// and the merkle state would have been its only way back.
+		if anchor == nil {
+			return errors.New("refusing --delete-source: this root cannot be anchored, so the namespace it leaves is not bootable and the merkle state would be its only copy")
+		}
 	}
 	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
 

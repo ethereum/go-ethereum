@@ -697,6 +697,7 @@ func (t *followerTree) ensure() error {
 		return err
 	}
 
+	pbtdb := rawdb.NewTable(f.db, string(rawdb.PBTPrefix))
 	cursor, ok, err := rawdb.ReadMigrationCursor(f.db, t.pbt)
 	if err != nil {
 		return fmt.Errorf("migration cursor corrupt, re-anchor: %w", err)
@@ -723,7 +724,13 @@ func (t *followerTree) ensure() error {
 				return nil
 			}
 		}
-		return errors.New("shadow position unresolvable: re-anchor")
+		// A binary namespace nothing was ever flushed to has nothing a
+		// cursor can name: the seed's cursor lands before pathdb's
+		// asynchronous flush of the seed, so a crash there leaves exactly
+		// this. It resolves as virgin below, where a genesis anchor re-seeds.
+		if !t.pbt || rawdb.HasSnapshotRoot(pbtdb) {
+			return errors.New("shadow position unresolvable: re-anchor")
+		}
 	}
 	if !t.pbt {
 		// The merkle window has no artifacts: its floor is the newest block
@@ -741,7 +748,6 @@ func (t *followerTree) ensure() error {
 		}
 		return errors.New("merkle window position unresolvable: no live merkle state")
 	}
-	pbtdb := rawdb.NewTable(f.db, string(rawdb.PBTPrefix))
 	if num, hash, ok := rawdb.ReadPBTAnchor(pbtdb); ok {
 		// Virgin import: the follower never ran, so the disk root is the
 		// anchor's state, and both are proven before use.
