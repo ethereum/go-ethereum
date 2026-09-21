@@ -210,14 +210,12 @@ func TestFullMigrationLifecycle(t *testing.T) {
 		t.Fatal("rebooted node did not open on the binary tree")
 	}
 	// Reading the frozen state opens its handle, so the claim is not that the
-	// direction is absent but that nothing advances it.
+	// direction is absent but that nothing advances it: the head below is
+	// what would run it, and the deleted lists make any replay stall loudly.
 	if st, err := chain2.StateAt(chain2.GetHeaderByNumber(2)); err != nil {
 		t.Fatalf("frozen merkle state unreadable after the reboot: %v", err)
 	} else if got := st.GetBalance(recipient).Uint64(); got != 1000 {
 		t.Fatalf("recipient balance in the frozen merkle state = %d, want 1000", got)
-	}
-	if p := chain2.MigrationProgress(); p.Merkle != nil && p.Merkle.Phase == "stalled" {
-		t.Fatalf("the frozen merkle tree stalled instead of standing still: %s", p.Merkle.Error)
 	}
 	// A transaction-bearing binary block still imports after the reboot.
 	pay(eth2.TxPool(), 1)
@@ -226,6 +224,11 @@ func TestFullMigrationLifecycle(t *testing.T) {
 		t.Fatalf("state at the new head: %v", err)
 	} else if got := st.GetBalance(recipient).Uint64(); got != 2000 {
 		t.Fatalf("recipient balance after the boundary transfer = %d, want 2000", got)
+	}
+	for settle := time.Now().Add(500 * time.Millisecond); time.Now().Before(settle); time.Sleep(10 * time.Millisecond) {
+		if p := chain2.MigrationProgress(); p.Merkle != nil && p.Merkle.Phase == "stalled" {
+			t.Fatalf("the frozen merkle tree resumed replaying at the new head: %s", p.Merkle.Error)
+		}
 	}
 	if _, ok := rawdb.ReadShadowStateRoot(eth2.ChainDb(), newHead.Hash(), newHead.Number.Uint64()); ok {
 		t.Fatal("a post-reboot binary block recorded a merkle root; the tree is meant to stay frozen")
@@ -472,14 +475,14 @@ func TestMigrationBoundaryStraddleReorg(t *testing.T) {
 		t.Fatal("victim window closed by the straddle reorg")
 	}
 	awaitShadowReady(t, victim, boundaryB.Header())
-	// (b) parked rather than stalled. The cursor may still name A's branch:
-	// past activation nothing replays, and follow rewinds a non-canonical
-	// cursor when the direction next runs.
-	p := victim.MigrationProgress()
-	if p.Binary == nil || p.Binary.Phase != "parked" {
-		t.Fatalf("victim binary direction not parked: %+v", p.Binary)
-	}
-	if p.Merkle != nil && p.Merkle.Phase == "stalled" {
+	// (b) the binary direction re-parked at B's boundary predecessor: it
+	// still runs at every head past activation, rewinding a cursor the reorg
+	// left on A's branch, and (d) neither direction stalled.
+	waitFor(t, 5*time.Second, "victim binary direction did not re-park at B's boundary predecessor", func() bool {
+		p := victim.MigrationProgress()
+		return p.Binary != nil && p.Binary.Phase == "parked" && p.Binary.CursorHash == boundaryB.Hash()
+	})
+	if p := victim.MigrationProgress(); p.Merkle != nil && p.Merkle.Phase == "stalled" {
 		t.Fatalf("victim merkle tree stalled past activation: %s", p.Merkle.Error)
 	}
 }
@@ -682,8 +685,8 @@ func TestStraddleHealThroughEnginePayloads(t *testing.T) {
 		t.Fatal("victim window closed by the straddle heal")
 	}
 	awaitShadowReady(t, vchain, branchB[1].Header())
-	p := vchain.MigrationProgress()
-	if p.Binary == nil || p.Binary.Phase != "parked" {
-		t.Fatalf("victim binary direction not parked after the heal: %+v", p.Binary)
-	}
+	waitFor(t, 5*time.Second, "victim binary direction did not re-park at B's boundary predecessor after the heal", func() bool {
+		p := vchain.MigrationProgress()
+		return p.Binary != nil && p.Binary.Phase == "parked" && p.Binary.CursorHash == branchB[1].Hash()
+	})
 }
