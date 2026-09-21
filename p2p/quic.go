@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/dunglas/httpsfv"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -36,6 +37,10 @@ import (
 // quicWTPath is the HTTP path browsers and nodes use to open a WebTransport
 // session to a devp2p node.
 const quicWTPath = "/devp2p"
+
+// quicNonceProto is the WT-Available-Protocols entry the dialer sends to carry
+// its hex-encoded nonce for the id-proof, formatted as "ENR-key-proof=<hex>".
+const quicNonceProto = "ENR-key-proof="
 
 // quicConfig is the QUIC config shared by the listener and dialer.
 // Both are required by WebTransport.
@@ -140,8 +145,8 @@ func (l *quicListener) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// readNonce extracts the dialer's hex-encoded nonce from the WT-Available-Protocols
-// header of the CONNECT request.
+// readNonce extracts the dialer's nonce from the "ENR-key-proof=<hex>" entry in
+// the WT-Available-Protocols header of the CONNECT request.
 func readNonce(r *http.Request) ([]byte, error) {
 	list, err := httpsfv.UnmarshalList(r.Header.Values("WT-Available-Protocols"))
 	if err != nil || len(list) == 0 {
@@ -155,7 +160,11 @@ func readNonce(r *http.Request) ([]byte, error) {
 	if !ok {
 		return nil, errors.New("quic: invalid nonce")
 	}
-	nonce, err := hex.DecodeString(s)
+	hexNonce, ok := strings.CutPrefix(s, quicNonceProto)
+	if !ok {
+		return nil, errors.New("quic: invalid nonce")
+	}
+	nonce, err := hex.DecodeString(hexNonce)
 	if err != nil || len(nonce) != quicNonceLen {
 		return nil, errors.New("quic: invalid nonce")
 	}
@@ -206,7 +215,7 @@ func (d *quicDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, erro
 	wd := &webtransport.Dialer{
 		TLSClientConfig:      quicClientTLSConfig(d.ln.tlsConf, qh),
 		QUICConfig:           quicConfig,
-		ApplicationProtocols: []string{hex.EncodeToString(nonce)},
+		ApplicationProtocols: []string{quicNonceProto + hex.EncodeToString(nonce)},
 		DialAddr: func(ctx context.Context, _ string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
 			return d.ln.tr.Dial(ctx, net.UDPAddrFromAddrPort(ep), tlsCfg, cfg)
 		},

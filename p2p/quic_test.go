@@ -49,7 +49,7 @@ func dialQUIC(ctx context.Context, ln *quicListener) (*quicConn, error) {
 	wd := &webtransport.Dialer{
 		TLSClientConfig:      newQUICTLSConfig(rot),
 		QUICConfig:           quicConfig,
-		ApplicationProtocols: []string{hex.EncodeToString(nonce)},
+		ApplicationProtocols: []string{quicNonceProto + hex.EncodeToString(nonce)},
 	}
 	_, sess, err := wd.Dial(ctx, "https://"+ln.Addr().String()+quicWTPath, nil)
 	if err != nil {
