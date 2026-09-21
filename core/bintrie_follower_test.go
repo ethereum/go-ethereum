@@ -560,4 +560,24 @@ func TestNamespaceMustNameItsBlock(t *testing.T) {
 			t.Fatalf("anchorless namespace resolved with err = %v, want a refusal", err)
 		}
 	})
+
+	t.Run("unfinished genesis seed re-seeds", func(t *testing.T) {
+		genesis, db, blocks, _ := generateMigrationChain(t, 1)
+		writeChainShape(db, blocks)
+		// What a crash mid-seed leaves behind: pathdb attested the empty
+		// namespace when the handle was opened, the anchor landed next, and
+		// the state it names never did.
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		rawdb.WritePBTFlatState(pbtdb)
+		rawdb.WritePBTAnchor(pbtdb, 0, rawdb.ReadCanonicalHash(db, 0))
+
+		f := standaloneFollower(genesis, db)
+		if err := f.direction(true).ensure(); err != nil {
+			t.Fatalf("an unfinished seed did not re-seed: %v", err)
+		}
+		num, hash, root := f.direction(true).cursor()
+		if num != 0 || hash != rawdb.ReadCanonicalHash(db, 0) || root == (common.Hash{}) {
+			t.Fatalf("cursor at %d %x root %x, want the seeded genesis", num, hash, root)
+		}
+	})
 }

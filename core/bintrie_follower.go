@@ -749,20 +749,24 @@ func (t *followerTree) ensure() error {
 			return errors.New("imported anchor not canonical: re-import")
 		}
 		root := rawdb.ReadSnapshotRoot(pbtdb)
-		if !t.hasState(root) {
+		if rawdb.HasSnapshotRoot(pbtdb) && t.hasState(root) {
+			t.setCursor(num, hash, root)
+			return nil
+		}
+		// A genesis anchor over no state is a seed that did not finish, and
+		// the seed is deterministic, so fall through and redo it. Any other
+		// anchor names state only an import can restore.
+		if num != 0 {
 			return errors.New("imported anchor state gone: re-import")
 		}
-		t.setCursor(num, hash, root)
-		return nil
-	}
-	ghash := rawdb.ReadCanonicalHash(f.db, 0)
-	if root := rawdb.ReadSnapshotRoot(pbtdb); root != (common.Hash{}) {
+	} else if rawdb.HasSnapshotRoot(pbtdb) {
 		// The genesis seed and the importer both write an anchor, so state
 		// without one comes from a converter that recorded none: the block
 		// it commits is unknowable, and assuming genesis would replay the
 		// whole chain on top of head state.
 		return errors.New("binary tree state has no anchor: re-convert or re-import")
 	}
+	ghash := rawdb.ReadCanonicalHash(f.db, 0)
 	// Fresh namespace: seed from the genesis allocation.
 	genesis := rawdb.ReadHeader(f.db, ghash, 0)
 	if genesis == nil {
@@ -778,13 +782,14 @@ func (t *followerTree) ensure() error {
 	if alloc == nil {
 		return errors.New("genesis allocation unavailable")
 	}
+	// Anchored before the state it names: pathdb writes the namespace root
+	// from its own buffer flush, so anchoring afterwards leaves a crash
+	// window with state no anchor explains. A crash this way round re-seeds.
+	rawdb.WritePBTAnchor(pbtdb, 0, ghash)
 	root, err := flushAlloc(&alloc, handle, nil)
 	if err != nil {
 		return err
 	}
-	// Anchored at genesis, so a later start knows this namespace stands at
-	// block zero rather than having to assume it.
-	rawdb.WritePBTAnchor(pbtdb, 0, ghash)
 	rawdb.WriteShadowStateRoot(f.db, ghash, 0, root)
 	t.persistCursor(0, ghash, root)
 	t.setCursor(0, ghash, root)
