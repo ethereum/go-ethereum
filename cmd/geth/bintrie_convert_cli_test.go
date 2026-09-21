@@ -120,6 +120,10 @@ func TestBintrieConvertCLI(t *testing.T) {
 	if !strings.Contains(out, "refusing --force") {
 		t.Fatalf("--force wiped the binary tree with no merkle state to rebuild it from:\n%s", out)
 	}
+	out = runCmd(true, "bintrie", "convert")
+	if !strings.Contains(out, "re-import rather than reconvert") {
+		t.Fatalf("the refusal still recommends --force with no merkle state left:\n%s", out)
+	}
 	after := mustOpenChainDB(t, datadir)
 	defer after.Close()
 	if !rawdb.ReadPBTFlatState(rawdb.NewTable(rawdb.NewDatabase(after), string(rawdb.PBTPrefix))) {

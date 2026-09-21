@@ -165,12 +165,9 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	// conversion and cannot see interrupted debris.
 	if ctx.Bool(forceConvertFlag.Name) {
 		// The wipe destroys the tree so the conversion can rebuild it from
-		// the merkle state. With that state gone there is nothing to rebuild
-		// from, and the datadir is left with neither tree.
-		if rawdb.ReadPBTMerkleDisposed(chaindb) {
-			return errors.New("refusing --force: the merkle state was disposed of after the migration, so wiping the binary tree would leave no state at all")
-		}
-		if len(rawdb.ReadAccountTrieNode(chaindb, nil)) == 0 && len(rawdb.ReadLegacyTrieNode(chaindb, root)) == 0 {
+		// the merkle state. With no such state the datadir is left with
+		// neither tree.
+		if !hasMerkleSource(chaindb, root) {
 			return errors.New("refusing --force: no merkle state to convert from, so wiping the binary tree would leave no state at all")
 		}
 		if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
@@ -179,6 +176,9 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	} else if dirty, err := hasBinaryTrieState(chaindb); err != nil {
 		return fmt.Errorf("failed to probe the binary tree namespace: %w", err)
 	} else if dirty {
+		if !hasMerkleSource(chaindb, root) {
+			return errors.New("database already holds binary tree state and the merkle state it was built from is gone; re-import rather than reconvert")
+		}
 		return errors.New("database already holds binary tree state, complete or from an interrupted conversion; re-run with --force to wipe and reconvert")
 	}
 	srcTriedb := utils.MakeTrieDatabase(ctx, stack, chaindb, true, true, false)
@@ -621,6 +621,18 @@ func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// hasMerkleSource reports whether the state a conversion reads is on disk.
+// Two facts, because either alone is wrong: a disposal that has begun but
+// not finished still leaves nodes behind, and a datadir built by "bintrie
+// import" never had merkle state and carries no disposal marker.
+func hasMerkleSource(chaindb ethdb.Database, root common.Hash) bool {
+	if rawdb.ReadPBTMerkleDisposed(chaindb) {
+		return false
+	}
+	return len(rawdb.ReadAccountTrieNode(chaindb, nil)) > 0 ||
+		len(rawdb.ReadLegacyTrieNode(chaindb, root)) > 0
 }
 
 // wipeBinaryTrieState clears the binary tree state: the key families (the
