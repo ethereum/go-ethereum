@@ -52,8 +52,6 @@ type receiptPipeline struct {
 // uses it rather than hashing the logs again.
 func newReceiptPipeline(txs int, bloomed bool) *receiptPipeline {
 	p := &receiptPipeline{
-		// The feed takes the whole block, so that handing over a receipt never
-		// blocks the execution of the next transaction.
 		feed:    make(chan *types.Receipt, txs),
 		done:    make(chan struct{}),
 		bloomed: bloomed,

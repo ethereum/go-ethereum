@@ -236,12 +236,14 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	)
 	// Stop the pipeline on the paths that abandon the block half way through.
 	defer pipeline.close()
+
 	for i := range txs {
 		res, err := exec.result(i)
 		if err != nil {
 			return nil, err
 		}
 		receipt := res.receipt
+
 		gasLimit := txs[i].Gas()
 		if err := gp.CheckGasAmsterdam(min(gasLimit, params.MaxTxGas), gasLimit); err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
@@ -271,6 +273,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	// The gather overlaps the workers, so this covers both.
 	txExec = time.Since(txStart)
 	reportParallelReadStats(block, base)
+
 	// Post-execution system calls against an ephemeral access-list state at
 	// index n+1.
 	postStart := time.Now()
@@ -310,6 +313,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		statedb.AddPreimages(exec.results[i].preimages)
 	}
 	statedb.AddPreimages(postState.Preimages())
+
 	parallelSystemExecTimer.Update(systemExec)
 	parallelTxExecTimer.Update(txExec)
 	parallelStateHashTimer.Update(stateHash)
@@ -387,8 +391,10 @@ func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block 
 	// Execution is deliberately not tied to the caller's context, half a block
 	// is no use to anyone. The cancel lets the gather stop the workers when it
 	// gives up on the block.
-	root, cancel := context.WithCancel(context.Background())
-	group, gctx := errgroup.WithContext(root)
+	var (
+		root, cancel = context.WithCancel(context.Background())
+		group, gctx  = errgroup.WithContext(root)
+	)
 	for w := 0; w < workers; w++ {
 		group.Go(func() error {
 			context := NewEVMBlockContext(header, p.chain, nil)
