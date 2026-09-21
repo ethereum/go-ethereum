@@ -141,8 +141,7 @@ type Downloader struct {
 	skeleton *skeleton // Header skeleton to backfill the chain with (eth2 mode)
 
 	// State sync
-	pivotHeader *types.Header // Pivot block header to dynamically push the syncing state root
-	pivotLock   sync.RWMutex  // Lock protecting pivot header reads from updates
+	pivotHeader *types.Header
 
 	snapSyncer     snap.Syncer // snap/1 or snap/2 state syncer, selected at construction
 	stateSyncStart chan *stateSync
@@ -633,10 +632,7 @@ func (d *Downloader) syncToHead(beaconPing chan struct{}) (err error) {
 		func() error { return d.processHeaders(origin + 1) },
 	}
 	if mode == ethconfig.SnapSync {
-		d.pivotLock.Lock()
 		d.pivotHeader = pivot
-		d.pivotLock.Unlock()
-
 		fetchers = append(fetchers, func() error { return d.processSnapSyncContent() })
 	} else if mode == ethconfig.FullSync {
 		fetchers = append(fetchers, func() error { return d.processFullSyncContent() })
@@ -973,9 +969,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 func (d *Downloader) processSnapSyncContent() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
-	d.pivotLock.RLock()
 	sync := d.syncState(d.pivotHeader)
-	d.pivotLock.RUnlock()
 
 	defer func() {
 		// The `sync` object is replaced every time the pivot moves. We need to
@@ -1044,23 +1038,19 @@ func (d *Downloader) processSnapSyncContent() error {
 				return err
 			}
 		}
-		d.pivotLock.RLock()
-		pivot := d.pivotHeader
-		d.pivotLock.RUnlock()
-
 		// Results piled up behind the pivot, consume them below
 		if oldPivot != nil {
 			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
 		}
 		// The pivot moved, retarget the state sync
-		if !d.committed.Load() && pivot.Root != sync.pivot.Root {
+		if !d.committed.Load() && d.pivotHeader.Root != sync.pivot.Root {
 			oldPivot, oldTail = nil, nil
 
 			sync.Cancel()
-			sync = d.syncState(pivot)
+			sync = d.syncState(d.pivotHeader)
 			go closeOnErr(sync)
 		}
-		P, beforeP, afterP := splitAroundPivot(pivot.Number.Uint64(), results)
+		P, beforeP, afterP := splitAroundPivot(d.pivotHeader.Number.Uint64(), results)
 		if err := d.commitSnapSyncData(beforeP, sync); err != nil {
 			return err
 		}
@@ -1094,22 +1084,18 @@ func (d *Downloader) processSnapSyncContent() error {
 // movePivotIfStale advances the pivot to HEAD-64 once it fell behind the
 // skeleton head.
 func (d *Downloader) movePivotIfStale() error {
-	d.pivotLock.RLock()
-	pivot := d.pivotHeader
-	d.pivotLock.RUnlock()
-
-	if pivot == nil || d.snapSyncer.FrozenPivot() != nil {
+	if d.pivotHeader == nil || d.snapSyncer.FrozenPivot() != nil {
 		return nil
 	}
 	head, tail, _, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
 	}
-	if head.Number.Uint64() <= pivot.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
+	if head.Number.Uint64() <= d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
 		return nil
 	}
 	number := head.Number.Uint64() - uint64(fsMinFullBlocks)
-	log.Warn("Pivot seemingly stale, moving", "old", pivot.Number, "new", number)
+	log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
 
 	// Retrieve the next pivot header, either from the skeleton chain or, for
 	// the short stretch below the skeleton tail, from the local chain.
@@ -1131,10 +1117,7 @@ func (d *Downloader) movePivotIfStale() error {
 	// Write out the pivot into the database so a rollback beyond it can be
 	// detected, and update the state root the state syncer will be targeting.
 	rawdb.WriteLastPivotNumber(d.stateDB, number)
-
-	d.pivotLock.Lock()
 	d.pivotHeader = header
-	d.pivotLock.Unlock()
 	return nil
 }
 
@@ -1216,9 +1199,7 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	if err := d.blockchain.SnapSyncComplete(block.Hash(), d.snapSyncer.Version() == snap.SNAP2); err != nil {
 		return err
 	}
-	d.pivotLock.Lock()
 	d.committed.Store(true)
-	d.pivotLock.Unlock()
 
 	// The chain has obtained a stateful head by committing the pivot block,
 	// the mission of the snap sync is regarded as accomplished and the mode
@@ -1354,9 +1335,7 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 	latest, _, _, err := d.skeleton.Bounds()
 	if err != nil {
 		// We're going to cheat for non-merged networks, but that's fine
-		d.pivotLock.RLock()
 		latest = d.pivotHeader
-		d.pivotLock.RUnlock()
 	}
 	if latest == nil {
 		// This should really never happen, but add some defensive code for now.
