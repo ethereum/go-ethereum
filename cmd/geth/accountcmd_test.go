@@ -22,7 +22,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/cespare/cp"
+	"github.com/ethereum/go-ethereum/internal/cp"
 )
 
 // These tests are 'smoke tests' for the account related
