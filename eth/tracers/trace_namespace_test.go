@@ -315,6 +315,15 @@ func TestTraceNamespaceExplicitCallType(t *testing.T) {
 			t.Fatalf("type %d: %v", kind, err)
 		}
 	}
+	for _, input := range []string{`{"type":"0x00"}`, `{"type":"0x01"}`, `{"type":"0x02"}`} {
+		var args TraceCallArgs
+		if err := json.Unmarshal([]byte(input), &args); err != nil {
+			t.Fatalf("valid byte encoding %s: %v", input, err)
+		}
+		if args.Type == nil || *args.Type > 2 {
+			t.Fatalf("invalid decoded type: %v", args.Type)
+		}
+	}
 	for _, input := range []string{`{"type":"garbage"}`, `{"type":"0x100"}`, `{"type":"0x3"}`, `{"type":true}`} {
 		var args TraceCallArgs
 		if err := json.Unmarshal([]byte(input), &args); err == nil {
