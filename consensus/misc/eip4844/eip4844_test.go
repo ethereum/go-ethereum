@@ -91,6 +91,45 @@ func TestCalcBlobFee(t *testing.T) {
 	}
 }
 
+func TestCalcBlobFeeUnsupportedFork(t *testing.T) {
+	zero, cancun := uint64(0), uint64(100)
+	tests := []struct {
+		name     string
+		time     uint64
+		schedule *params.BlobScheduleConfig
+		want     string
+	}{
+		{
+			name:     "before Cancun",
+			time:     99,
+			schedule: params.DefaultBlobSchedule,
+			want:     "calculating blob fee on unsupported fork: fork=Shanghai timestamp=99: no blob config",
+		},
+		{
+			name: "missing blob schedule",
+			time: 100,
+			want: "calculating blob fee on unsupported fork: fork=Cancun timestamp=100: no blob config",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &params.ChainConfig{
+				LondonBlock:        big.NewInt(0),
+				ShanghaiTime:       &zero,
+				CancunTime:         &cancun,
+				BlobScheduleConfig: tt.schedule,
+			}
+			header := &types.Header{Time: tt.time, ExcessBlobGas: &zero}
+			defer func() {
+				if got := recover(); got != tt.want {
+					t.Errorf("panic mismatch: have %v, want %q", got, tt.want)
+				}
+			}()
+			CalcBlobFee(config, header)
+		})
+	}
+}
+
 func TestCalcBlobFeePostOsaka(t *testing.T) {
 	zero := uint64(0)
 	bpo1 := uint64(1754836608)

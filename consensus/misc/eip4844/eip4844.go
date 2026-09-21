@@ -172,7 +172,7 @@ func calcExcessBlobGas(isOsaka bool, bcfg BlobConfig, parent *types.Header) uint
 func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
 	blobConfig, err := latestBlobConfig(config, header.Time)
 	if err != nil {
-		panic("calculating blob fee on unsupported fork")
+		panic(fmt.Sprintf("calculating blob fee on unsupported fork: fork=%s timestamp=%d: %v", config.LatestFork(header.Time), header.Time, err))
 	}
 	return blobConfig.blobBaseFee(*header.ExcessBlobGas)
 }
