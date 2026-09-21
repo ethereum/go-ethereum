@@ -650,6 +650,14 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// The marker is written before release nils the handle under this lock,
+	// so an open that runs after the release sees it, and one that runs
+	// before hands out the handle the release then retires: a reader that
+	// passed treeFor's unlocked marker check just before the window closed
+	// cannot reopen the namespace under the deletion.
+	if !t.pbt && rawdb.ReadPBTMerkleDisposed(f.db) {
+		return nil, errors.New("merkle trie disposed of after the migration")
+	}
 	if t.handle != nil {
 		return t.handle, nil
 	}

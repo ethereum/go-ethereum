@@ -251,7 +251,7 @@ func TestMerkleDisposalResumes(t *testing.T) {
 
 // TestArchiveKeepsTheMerkleHandle: the follower owns the only route to a
 // merkle handle, so an archive node past the window kept the state and lost
-// every way to read it.
+// every way to read it - and the live node's decision keeps it too.
 func TestArchiveKeepsTheMerkleHandle(t *testing.T) {
 	genesis := migrationGenesis(t)
 	db, _ := merkleStateFixture(t, genesis)
@@ -264,6 +264,9 @@ func TestArchiveKeepsTheMerkleHandle(t *testing.T) {
 	}
 	defer chain.Stop()
 
+	if err := chain.SettleMerkleDisposal(); err != nil {
+		t.Fatalf("an archive node refused its own start: %v", err)
+	}
 	if _, err := chain.treeFor(false); err != nil {
 		t.Fatalf("an archive node cannot reach the merkle state it kept: %v", err)
 	}
@@ -272,23 +275,32 @@ func TestArchiveKeepsTheMerkleHandle(t *testing.T) {
 	}
 }
 
-// TestDisposalIsRedecidedAtStart: a full node that missed the window closing
-// must still dispose, since nothing else will trigger it again.
-func TestDisposalIsRedecidedAtStart(t *testing.T) {
+// TestOfflineStartLeavesTheDecision: NewBlockChain runs for every geth
+// command, with whatever gcmode that command defaults to, so it must not
+// decide the disposal - an archive node's state would go from an unrelated
+// invocation. The live node decides, and a full node whose head is still
+// under the boundary is refused rather than left running on a retired handle.
+func TestOfflineStartLeavesTheDecision(t *testing.T) {
 	genesis := migrationGenesis(t)
-	db, _ := merkleStateFixture(t, genesis)
+	db, addrHash := merkleStateFixture(t, genesis)
 	rawdb.WritePBTMigrationDone(db)
-	if rawdb.ReadPBTMerkleDisposed(db) {
-		t.Fatal("the fixture is already condemned")
-	}
+
 	chain, err := NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()),
 		DefaultConfig().WithStateScheme(rawdb.PathScheme))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer chain.Stop()
-
-	if !rawdb.ReadPBTMerkleDisposed(db) {
-		t.Fatal("a full node started on a finished migration without deciding the disposal")
+	if rawdb.ReadPBTMerkleDisposed(db) {
+		t.Fatal("opening the chain condemned the merkle state; an offline command would do the same to an archive node")
+	}
+	if err := chain.SettleMerkleDisposal(); err == nil {
+		t.Fatal("a full node at a pre-fork head settled the disposal instead of refusing")
+	}
+	if rawdb.ReadPBTMerkleDisposed(db) {
+		t.Fatal("the refusal condemned the state")
+	}
+	if rawdb.ReadAccountSnapshot(db, addrHash) == nil {
+		t.Fatal("the refusal deleted the state")
 	}
 }

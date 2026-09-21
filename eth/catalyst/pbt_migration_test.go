@@ -277,6 +277,15 @@ func TestFullMigrationLifecycle(t *testing.T) {
 		}
 		return true
 	})
+	// A crash between the two markers leaves the window closed but the
+	// disposal undecided; the live node decides it at start, and a full
+	// node condemns. Simulated by dropping the marker the running node wrote.
+	if err := eth2.ChainDb().Delete([]byte("PBTMerkleDisposed")); err != nil {
+		t.Fatal(err)
+	}
+	if rawdb.ReadPBTMerkleDisposed(eth2.ChainDb()) {
+		t.Fatal("the disposal marker survived its deletion; the key literal has drifted")
+	}
 	n2.Close()
 	closed2 = true
 
@@ -287,6 +296,9 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	}
 	if _, err := eth3.BlockChain().State(); err != nil {
 		t.Fatalf("finished node cannot open its state: %v", err)
+	}
+	if !rawdb.ReadPBTMerkleDisposed(eth3.ChainDb()) {
+		t.Fatal("a full node started on a closed but undecided window without condemning the merkle state")
 	}
 }
 
@@ -310,6 +322,36 @@ func TestFullMigrationLifecycleBlocksKnob(t *testing.T) {
 	})
 	if p := chain.MigrationProgress(); p.Phase != "done" {
 		t.Fatalf("progress %q, want done", p.Phase)
+	}
+	// This node crossed the fork in-run, so the merkle tree is its own
+	// canonical handle, retired and closed by the disposal while the process
+	// keeps executing on the binary tree.
+	waitFor(t, 10*time.Second, "the running node never deleted the merkle state", func() bool {
+		if !rawdb.ReadPBTMerkleDisposed(ethservice.ChainDb()) {
+			return false
+		}
+		for _, family := range rawdb.MerkleKeyFamilies {
+			it := ethservice.ChainDb().NewIterator(family, nil)
+			left := it.Next()
+			it.Release()
+			if left {
+				return false
+			}
+		}
+		return true
+	})
+	if chain.TrieDB().IsPBT() {
+		t.Fatal("a node that crossed the fork in-run opened on the binary tree")
+	}
+	if chain.HasState(chain.GetHeaderByNumber(1).Root) {
+		t.Fatal("the retired handle still vouches for a pre-fork root, so a rewind guard would let the head back onto deleted state")
+	}
+	head := buildBlock(t, api, parent, 7, common.Hash{})
+	if _, err := chain.StateAt(head); err != nil {
+		t.Fatalf("state at the head built after the disposal: %v", err)
+	}
+	if _, err := chain.StateAt(chain.GetHeaderByNumber(1)); err == nil {
+		t.Fatal("pre-fork state served after the merkle trie was disposed of")
 	}
 }
 

@@ -442,11 +442,14 @@ func (db *Database) deactivate() error {
 	db.waitSync = true
 
 	// Terminate the state generator if it's active and mark the disk layer
-	// as stale to prevent access to persistent state.
+	// as stale to prevent access to persistent state. The clean caches go
+	// first: a stale layer disowns them, and every successor builds its
+	// own, so once stale they would stay mapped for the life of the process.
 	disk := db.tree.bottom()
 	if err := disk.terminate(); err != nil {
 		return err
 	}
+	disk.resetCache()
 	disk.markStale()
 	return nil
 }

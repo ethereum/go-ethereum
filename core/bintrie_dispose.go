@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -98,20 +99,36 @@ func (bc *BlockChain) merkleRetired() bool {
 	return !bc.triedb.IsPBT() && rawdb.ReadPBTMerkleDisposed(bc.db)
 }
 
-// resumeMerkleDisposal re-decides the disposal at every start: window close
-// is a one-shot on the follower's last act, and the follower is never created
-// again once the migration is done, so a crash between the two markers - or a
-// node that ran as archive then - would keep the state forever.
+// resumeMerkleDisposal finishes a deletion a previous run began. It runs in
+// every NewBlockChain, offline commands included, and reads the marker
+// alone: a deletion under way is safe to continue from anywhere, archive or
+// not, since switching gcmode does not bring back the half that is gone.
 func (bc *BlockChain) resumeMerkleDisposal() {
-	// Already begun: finish it, archive or not. Switching gcmode does not
-	// bring back the half that is gone.
 	if rawdb.ReadPBTMerkleDisposed(bc.db) {
 		bc.startMerkleDisposal()
-		return
 	}
-	if rawdb.ReadPBTMigrationDone(bc.db) {
-		bc.disposeMerkle()
+}
+
+// SettleMerkleDisposal decides the disposal for a migration that finished
+// without one: window close is a one-shot on the follower's last act, so a
+// crash between the two markers - or a node that ran as archive then - would
+// keep the state forever. Only the live node calls it. Whether this is an
+// archive node is a fact of its configuration, not of the datadir, and the
+// default an offline command runs with would condemn an archive node's
+// state from an unrelated geth invocation.
+func (bc *BlockChain) SettleMerkleDisposal() error {
+	if rawdb.ReadPBTMerkleDisposed(bc.db) || !rawdb.ReadPBTMigrationDone(bc.db) {
+		return nil
 	}
+	// A full node whose head is back under the boundary executes on the
+	// merkle trie, and gets no follower to cross the fork again once the
+	// window has closed: condemning it here would retire the handle it
+	// runs on. Refuse instead, the way a start on a condemned datadir is.
+	if !bc.cfg.ArchiveMode && !bc.triedb.IsPBT() {
+		return errors.New("migration window closed but the head commits the merkle trie; this datadir cannot follow a pre-fork chain")
+	}
+	bc.disposeMerkle()
+	return nil
 }
 
 // startMerkleDisposal launches the deletion once. The disposer is published
