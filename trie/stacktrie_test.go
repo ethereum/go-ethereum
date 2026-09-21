@@ -391,6 +391,10 @@ func TestStackTrieErrors(t *testing.T) {
 	if err := s.Update([]byte{0xa}, []byte{}); err == nil {
 		t.Fatal("expected error")
 	}
+	// Empty key with a real value (used to panic in writeHexKey)
+	if err := s.Update([]byte{}, []byte{0xa}); err == nil {
+		t.Fatal("expected error")
+	}
 	// Non-ascending keys (going backwards or repeating)
 	assert.Nil(t, s.Update([]byte{0xaa}, []byte{0xa}))
 	assert.NotNil(t, s.Update([]byte{0xaa}, []byte{0xa}), "repeat insert same key")

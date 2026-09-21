@@ -501,7 +501,9 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 	if proof == nil {
 		tr := NewStackTrie(nil)
 		for index, key := range keys {
-			tr.Update(key, values[index])
+			if err := tr.Update(key, values[index]); err != nil {
+				return false, err
+			}
 		}
 		if have, want := tr.Hash(), rootHash; have != want {
 			return false, fmt.Errorf("invalid proof, want hash %x, got %x", want, have)

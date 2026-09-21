@@ -411,6 +411,16 @@ func TestAllElementsProof(t *testing.T) {
 	}
 }
 
+// TestRangeProofEmptyKey checks that an empty key in a proof-less range is
+// rejected with an error rather than panicking inside the stack trie.
+func TestRangeProofEmptyKey(t *testing.T) {
+	trie, _ := randomTrie(16)
+	_, err := VerifyRangeProof(trie.Hash(), nil, [][]byte{{}}, [][]byte{{0x1}}, nil)
+	if err == nil {
+		t.Fatal("expected error for empty key")
+	}
+}
+
 // TestSingleSideRangeProof tests the range starts from zero.
 func TestSingleSideRangeProof(t *testing.T) {
 	for i := 0; i < 64; i++ {

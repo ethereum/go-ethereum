@@ -71,6 +71,9 @@ func NewPartialStackTrie(nibble byte, onTrieNode OnTrieNode) *PartialStackTrie {
 // Update inserts a (key, value) pair, stripping the key's leading nibble, which
 // is implied by the partition. The key must begin with the partition nibble.
 func (p *PartialStackTrie) Update(key, value []byte) error {
+	if len(key) == 0 {
+		return errors.New("trying to insert empty key")
+	}
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
 	}

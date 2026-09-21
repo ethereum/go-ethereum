@@ -206,6 +206,15 @@ func TestPartialStackTrieWrongNibble(t *testing.T) {
 	}
 }
 
+// TestPartialStackTrieEmptyKey checks that an empty key is rejected instead
+// of being indexed as a zero-length hex key.
+func TestPartialStackTrieEmptyKey(t *testing.T) {
+	pst := NewPartialStackTrie(3, nil)
+	if err := pst.Update([]byte{}, []byte{0x01}); err == nil {
+		t.Fatal("expected error for empty key, got nil")
+	}
+}
+
 // TestMountPartitionRoot checks that folding the leading nibble back into a
 // single partition's subtree root reproduces the canonical trie root, for every
 // root shape (leaf, extension, branch). The branch case is the one not reachable

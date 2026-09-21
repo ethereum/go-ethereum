@@ -80,6 +80,9 @@ func (t *StackTrie) grow(key []byte) {
 // Note the supplied key value pair is copied and managed internally,
 // they are safe to be modified after this method returns.
 func (t *StackTrie) Update(key, value []byte) error {
+	if len(key) == 0 {
+		return errors.New("trying to insert empty key")
+	}
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
 	}
