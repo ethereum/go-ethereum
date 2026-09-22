@@ -463,3 +463,33 @@ func TestBadCell(t *testing.T) {
 		t.Fatal("buffer should be empty after bad cell drop")
 	}
 }
+
+// TestCompletionBeatsEviction checks that cells completing a buffered
+// transaction are consumed even when the buffer is full: making room for them
+// must not evict the very transaction they complete.
+func TestCompletionBeatsEviction(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+
+	tx := makeV1Tx(t, 0, 1, 0, key)
+	if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
+		t.Fatal(err)
+	}
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	delivery := makePeerDelivery(t, 0, 1, indices)
+
+	// The cells do not fit next to the transaction they complete.
+	buf.maxBytes = tx.Size() + cellsSize(delivery) - 1
+
+	buf.AddCells(tx.Hash(), map[string]*PeerDelivery{"peerB": delivery}, types.NewCustodyBitmap(indices))
+
+	if got := buf.completedCount.Load(); got != 1 {
+		t.Fatalf("completed %d transactions, want 1", got)
+	}
+	if buf.buffered() != 0 || len(buf.peerBytes) != 0 {
+		t.Fatalf("after completion: %d bytes and %d peers still accounted", buf.buffered(), len(buf.peerBytes))
+	}
+}
