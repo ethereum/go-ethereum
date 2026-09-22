@@ -414,8 +414,7 @@ func (db *Database) Disable() error {
 }
 
 // Retire deactivates the database for good: the state under it is being
-// deleted. It records nothing, unlike Disable - no sync is coming to restore
-// what goes - and there is no counterpart to Enable.
+// deleted. Unlike Disable it records nothing, and has no counterpart.
 func (db *Database) Retire() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -427,9 +426,8 @@ func (db *Database) Retire() error {
 	return nil
 }
 
-// deactivate invalidates every state layer as stale, so no reader can reach
-// the persistent state, and stops the writers that would put more of it on
-// disk. The caller holds the lock.
+// deactivate marks every layer stale, so no reader reaches the persistent
+// state, and stops the writers that would add to it. Lock held by caller.
 func (db *Database) deactivate() error {
 	// Short circuit if the database is in read only mode.
 	if db.readOnly {
@@ -441,10 +439,8 @@ func (db *Database) deactivate() error {
 	}
 	db.waitSync = true
 
-	// Terminate the state generator if it's active and mark the disk layer
-	// as stale to prevent access to persistent state. The clean caches go
-	// first: a stale layer disowns them, and every successor builds its
-	// own, so once stale they would stay mapped for the life of the process.
+	// Release the clean caches first: a stale layer disowns them, and every
+	// successor builds its own.
 	disk := db.tree.bottom()
 	if err := disk.terminate(); err != nil {
 		return err

@@ -438,9 +438,8 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		if head := rawdb.ReadHeadBlock(db); head != nil && resolvedConfig.IsBinaryTrie(head.Number(), head.Time()) {
 			isPBT = true
 		}
-		// The merkle state is gone or going, so a run that would execute on
-		// it - a head back under the boundary - has to stop here rather than
-		// read deletions as empty accounts. Re-anchor or resync.
+		// A head back under the boundary would read deletions as empty
+		// accounts. Re-anchor or resync.
 		if !isPBT && rawdb.ReadPBTMerkleDisposed(db) {
 			return nil, errors.New("merkle state was disposed of after the migration; this datadir cannot follow a pre-fork chain")
 		}
@@ -629,13 +628,11 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
 	}
 
-	// Resume before the follower exists: a disposal the previous run began
-	// has to finish, or the datadir keeps state nothing is allowed to read.
+	// Resume a deletion a previous run began before the follower exists.
 	bc.resumeMerkleDisposal()
 
 	// The follower outlives the migration on an archive node: it owns the
-	// only route to a merkle handle, which is the service that node provides.
-	// Its loop costs nothing once the head is past activation.
+	// only route to a merkle handle.
 	if mode == modeMigration && !rawdb.ReadPBTMerkleDisposed(db) && (!rawdb.ReadPBTMigrationDone(db) || cfg.ArchiveMode) {
 		bc.follower = newBintrieFollower(bc)
 	}
@@ -1478,8 +1475,7 @@ func (bc *BlockChain) Stop() {
 				}
 			}
 		}
-		// The disposal retired and closed this handle; there is no state
-		// left for a journal to describe.
+		// Retired by the disposal: no state left for a journal to describe.
 		if !bc.merkleRetired() {
 			if err := bc.triedb.Journal(root); err != nil {
 				log.Info("Failed to journal in-memory trie nodes", "err", err)
@@ -1525,8 +1521,8 @@ func (bc *BlockChain) Stop() {
 	if bc.logger != nil && bc.logger.OnClose != nil {
 		bc.logger.OnClose()
 	}
-	// Close the trie database, release all the held resources as the last
-	// step. A retired merkle handle was already closed by the disposal.
+	// Close the trie database as the last step. A retired merkle handle was
+	// already closed by the disposal.
 	if !bc.merkleRetired() {
 		if err := bc.triedb.Close(); err != nil {
 			log.Error("Failed to close trie database", "err", err)
@@ -2246,7 +2242,7 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 // treeFor returns the trie database holding the given flavour.
 func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
 	// Refused before the fast path: on a node that crossed the fork in-run
-	// the merkle tree IS bc.triedb, and the state under it is gone or going.
+	// the merkle tree IS bc.triedb.
 	if !pbt && rawdb.ReadPBTMerkleDisposed(bc.db) {
 		return nil, errors.New("merkle trie disposed of after the migration")
 	}

@@ -297,8 +297,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Only the live node decides whether a finished migration's merkle state
-	// goes: archive mode is this node's configuration, not the datadir's.
+	// Only the live node decides this: archive mode is its configuration,
+	// not a fact of the datadir.
 	if err := eth.blockchain.SettleMerkleDisposal(); err != nil {
 		return nil, err
 	}

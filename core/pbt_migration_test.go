@@ -18,12 +18,16 @@ package core
 
 import (
 	"crypto/ecdsa"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // migrationForkTime is past every generated block.
@@ -153,5 +157,147 @@ func TestMigrationDoneSkipsFollower(t *testing.T) {
 	}
 	if p := chain.MigrationProgress(); p.Phase != "done" {
 		t.Fatalf("progress phase %q, want done", p.Phase)
+	}
+}
+
+// merkleStateFixture commits genesis on the merkle trie and plants a binary
+// tree record beside it, returning the database and a flat-state account.
+func merkleStateFixture(t *testing.T, genesis *Genesis) (ethdb.Database, common.Hash) {
+	t.Helper()
+	db := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(db, triedb.PathDefaults)
+	genesis.MustCommit(db, tdb)
+	if err := tdb.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var addrHash common.Hash
+	for addr := range genesis.Alloc {
+		addrHash = crypto.Keccak256Hash(addr.Bytes())
+		break
+	}
+	if rawdb.ReadAccountSnapshot(db, addrHash) == nil {
+		t.Fatal("fixture wrote no merkle flat state, so deleting it would prove nothing")
+	}
+	// The binary namespace shares the database and must survive untouched.
+	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+	rawdb.WritePBTFlatState(pbtdb)
+	rawdb.WriteAccountTrieNode(pbtdb, nil, []byte{0x01, 0x02})
+	return db, addrHash
+}
+
+// TestMerkleDisposalDeletesUnderALiveNode: a node that crossed the fork
+// in-run holds the merkle tree as its canonical handle, and reclaims the
+// state without a restart.
+func TestMerkleDisposalDeletesUnderALiveNode(t *testing.T) {
+	genesis := migrationGenesis(t)
+	db, addrHash := merkleStateFixture(t, genesis)
+
+	chain, err := NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()),
+		DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+	if chain.TrieDB().IsPBT() {
+		t.Fatal("a migration chain at a pre-fork head opened on the binary tree")
+	}
+	// The window closes on the follower's loop, with no sync in flight.
+	chain.follower.close()
+
+	chain.disposeMerkle()
+	<-chain.disposer.Load().done
+
+	if rawdb.ReadAccountSnapshot(db, addrHash) != nil {
+		t.Fatal("the running node kept its merkle flat state, so only a restart reclaims the space")
+	}
+	for _, family := range rawdb.MerkleKeyFamilies {
+		it := db.NewIterator(family, nil)
+		left := it.Next()
+		it.Release()
+		if left {
+			t.Fatalf("merkle family %q survived the disposal", family)
+		}
+	}
+	if rawdb.HasSnapshotRoot(db) {
+		t.Fatal("the merkle snapshot root outlived the state it blesses")
+	}
+	// Head pointers begin "Last", the state-id prefix byte.
+	if rawdb.ReadHeadBlockHash(db) == (common.Hash{}) || rawdb.ReadHeadHeaderHash(db) == (common.Hash{}) {
+		t.Fatal("the disposal deleted the chain head pointers")
+	}
+	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+	if !rawdb.ReadPBTFlatState(pbtdb) || len(rawdb.ReadAccountTrieNode(pbtdb, nil)) == 0 {
+		t.Fatal("the disposal reached into the binary tree's namespace")
+	}
+	if _, err := chain.treeFor(false); err == nil {
+		t.Fatal("a merkle handle was served after the state was disposed of")
+	}
+}
+
+// TestArchiveKeepsTheMerkleState: serving pre-fork history is what an archive
+// node is for, so it neither condemns the state nor loses its way to read it.
+func TestArchiveKeepsTheMerkleState(t *testing.T) {
+	genesis := migrationGenesis(t)
+	db, addrHash := merkleStateFixture(t, genesis)
+	rawdb.WritePBTMigrationDone(db)
+
+	chain, err := NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()),
+		DefaultConfig().WithStateScheme(rawdb.PathScheme).WithArchive(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+
+	if err := chain.SettleMerkleDisposal(); err != nil {
+		t.Fatalf("an archive node refused its own start: %v", err)
+	}
+	if rawdb.ReadPBTMerkleDisposed(db) {
+		t.Fatal("an archive node condemned the state it is meant to keep")
+	}
+	if rawdb.ReadAccountSnapshot(db, addrHash) == nil {
+		t.Fatal("an archive node deleted its merkle flat state")
+	}
+	if _, err := chain.treeFor(false); err != nil {
+		t.Fatalf("an archive node cannot reach the merkle state it kept: %v", err)
+	}
+}
+
+// TestOfflineStartLeavesTheDecision: NewBlockChain runs for every geth
+// command, at whatever gcmode it defaults to, so it must not decide the
+// disposal. The live node does, and refuses a full node still under the
+// boundary rather than retiring the handle it runs on.
+func TestOfflineStartLeavesTheDecision(t *testing.T) {
+	genesis := migrationGenesis(t)
+	db, addrHash := merkleStateFixture(t, genesis)
+	rawdb.WritePBTMigrationDone(db)
+
+	chain, err := NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()),
+		DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+	if rawdb.ReadPBTMerkleDisposed(db) {
+		t.Fatal("opening the chain condemned the merkle state; an offline command would do the same to an archive node")
+	}
+	if err := chain.SettleMerkleDisposal(); err == nil {
+		t.Fatal("a full node at a pre-fork head settled the disposal instead of refusing")
+	}
+	if rawdb.ReadAccountSnapshot(db, addrHash) == nil {
+		t.Fatal("the refusal deleted the state anyway")
+	}
+}
+
+// TestDisposedDatadirRefusesAMerkleHead: a head back under the boundary
+// would execute on condemned state, so opening fails loudly.
+func TestDisposedDatadirRefusesAMerkleHead(t *testing.T) {
+	genesis := migrationGenesis(t)
+	db, _ := merkleStateFixture(t, genesis)
+	rawdb.WritePBTMerkleDisposed(db)
+
+	_, err := NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()),
+		DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err == nil || !strings.Contains(err.Error(), "disposed of") {
+		t.Fatalf("opened with %v, want the disposal refusal", err)
 	}
 }

@@ -650,11 +650,8 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	// The marker is written before release nils the handle under this lock,
-	// so an open that runs after the release sees it, and one that runs
-	// before hands out the handle the release then retires: a reader that
-	// passed treeFor's unlocked marker check just before the window closed
-	// cannot reopen the namespace under the deletion.
+	// The marker lands before release nils the handle, both under this lock,
+	// so no open can hand out a handle over a namespace being deleted.
 	if !t.pbt && rawdb.ReadPBTMerkleDisposed(f.db) {
 		return nil, errors.New("merkle trie disposed of after the migration")
 	}
@@ -882,10 +879,9 @@ func (t *followerTree) journal(head *types.Header) {
 	}
 }
 
-// release drops the tree's handle without journaling it - the caller is
-// about to delete the state a journal would describe - and returns it only
-// when the follower owns it. A shared handle is the chain's own; its owner
-// retires it.
+// release hands the tree's handle over without journaling it - the caller is
+// about to delete the state a journal would describe - and only when the
+// follower owns it. A shared handle is the chain's own; its owner retires it.
 func (t *followerTree) release() *triedb.Database {
 	t.f.mu.Lock()
 	defer t.f.mu.Unlock()

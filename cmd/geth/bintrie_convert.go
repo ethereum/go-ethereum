@@ -973,14 +973,9 @@ func wipeMerkleHistory(chaindb ethdb.Database, triedbDir string) error {
 }
 
 // deleteMPTData removes the merkle state the conversion superseded, through
-// the same rawdb list the online disposal uses. The marker goes first: it is
-// what makes a killed deletion resumable and stops the next start opening a
-// handle over the half that survived.
-//
-// On the hash scheme the nodes are keyed by their own hash, so only the
-// traversal can name them, and the family scans that follow are bounded to
-// the flat state: a bare-hash key - a node, or legacy contract code - may
-// begin with any family byte.
+// the same rawdb list the online disposal uses. The marker goes first, so a
+// killed deletion cannot pass for an intact store. On the hash scheme the
+// nodes are only nameable by traversal, hence the walk.
 func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash) error {
 	rawdb.WritePBTMerkleDisposed(chaindb)
 
@@ -989,11 +984,10 @@ func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root comm
 			return err
 		}
 	}
-	records, _, err := rawdb.DeleteMerkleState(chaindb, srcTriedb.Scheme(), nil)
-	if err != nil {
+	if err := rawdb.DeleteMerkleState(chaindb, srcTriedb.Scheme(), nil); err != nil {
 		return fmt.Errorf("failed to delete the merkle state: %w", err)
 	}
-	log.Info("Deleted merkle state", "records", records)
+	log.Info("Deleted merkle state")
 	return nil
 }
 

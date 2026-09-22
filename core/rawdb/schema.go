@@ -188,17 +188,10 @@ var (
 		StateHistoryIndexPrefix, // history index metadata
 	}
 
-	// MerkleKeyFamilies lists the prefix-scannable key families holding
-	// merkle-patricia state on the path scheme, the one description on disk
-	// of what both disposals delete. The hash scheme keys trie nodes and
-	// legacy contract code by their bare hash, which may begin with any of
-	// these bytes, so there DeleteMerkleState scans the flat state only, by
-	// exact key length.
-	//
-	// State ids are deliberately absent: their prefix byte is shared with
-	// every chain head pointer (headHeaderKey, headBlockKey and the rest all
-	// begin "Last"), so a prefix scan over them leaves a database with no
-	// head. DeleteMerkleState takes them by exact key length instead.
+	// MerkleKeyFamilies lists the key families holding merkle-patricia state,
+	// the one description on disk of what both disposals delete. State ids
+	// are absent on purpose: their prefix byte is shared with every "Last..."
+	// chain head pointer, so DeleteMerkleState takes them by key length.
 	MerkleKeyFamilies = [][]byte{
 		TrieNodeAccountPrefix,   // path-scheme account trie nodes
 		TrieNodeStoragePrefix,   // path-scheme storage trie nodes
