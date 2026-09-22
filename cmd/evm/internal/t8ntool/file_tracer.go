@@ -110,11 +110,13 @@ func (l *fileWritingTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if l.inner != nil && l.inner.OnTxEnd != nil {
 		l.inner.OnTxEnd(receipt, err)
 	}
-	if l.getResult != nil && l.destination != nil {
-		if result, err := l.getResult(); result != nil {
-			json.NewEncoder(l.destination).Encode(result)
-		} else {
-			log.Warn("Error obtaining tracer result", "err", err)
+	if l.destination != nil {
+		if l.getResult != nil {
+			if result, err := l.getResult(); result != nil {
+				_ = json.NewEncoder(l.destination).Encode(result)
+			} else {
+				log.Warn("Error obtaining tracer result", "err", err)
+			}
 		}
 		l.destination.Close()
 		l.destination = nil
