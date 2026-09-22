@@ -165,6 +165,7 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 	}
 	if txe, ok := b.txs[hash]; ok {
 		b.storeCompleted(hash, txe.tx, b.cells[hash])
+		return
 	}
 	blobBufferCellsFirstCounter.Inc(1)
 }
