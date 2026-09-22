@@ -234,18 +234,20 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 	for _, delivery := range deliveries {
 		entry.size += cellsSize(delivery)
 	}
-	// Make room for the cells at the expense of the peers holding the largest
-	// share of the buffer. Unlike a transaction these are not refused when the
-	// peer is over its allowance: the cells have already been fetched, so
-	// turning them away now would waste the retrieval without saving the
-	// bandwidth it cost.
+
+	// Check if this delivery completes the entry
+	if txe, ok := b.txs[hash]; ok {
+		b.storeCompleted(hash, txe.tx, entry)
+		return
+	}
+
+	// If not, make room for the cells before inserting them. Unlike
+	// transactions, these do not lead to errPeerBufferFull because they have
+	// already been fetched.
 	for b.buffered()+entry.size > b.maxBytes && b.evictOne() {
 	}
 	b.insertCells(hash, entry)
 
-	if txe, ok := b.txs[hash]; ok {
-		b.storeCompleted(hash, txe.tx, entry)
-	}
 	blobBufferCellsFirstCounter.Inc(1)
 }
 
