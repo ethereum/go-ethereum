@@ -267,15 +267,10 @@ func (f *bintrieFollower) close() {
 	}
 }
 
-// sync runs the live directions once, ensuring the one a merkle-flavoured
-// head calls for exists: the binary direction does the replay work while the
-// head commits the merkle trie, and parks or rewinds once it does not.
+// sync runs the live directions once, creating the binary one while the head
+// still commits the merkle trie. Past activation the merkle direction never
+// follows, whatever opened it: the tree stays frozen where the fork found it.
 // Outcomes latch; the next head retries.
-//
-// Past activation the merkle tree is left frozen where the fork found it: no
-// canonical block asks for a merkle root again, so its direction - opened by
-// whatever reads pre-fork state - never follows a binary head. Guarding the
-// follow rather than the creation is what keeps a read from thawing it.
 func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
 	owed := !f.config.IsBinaryTrie(head.Number, head.Time)
 	if owed {
@@ -809,10 +804,8 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 	if header == nil {
 		return fmt.Errorf("missing header for block %d %x", number, hash)
 	}
-	// The block's flavour fixes which direction owes it. In practice that is
-	// the binary one: a block's flavour follows its timestamp, so the only
-	// crossing is a binary block on a merkle parent, and this is where a
-	// straddle heal arms the direction that must record that parent.
+	// The block's flavour fixes which direction owes it - the binary one, in
+	// practice: the only crossing is a binary block on a merkle parent.
 	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
 	t := f.direction(pbt)
 	f.kick(header)
