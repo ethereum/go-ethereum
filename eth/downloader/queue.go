@@ -715,10 +715,9 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 	if kind == balType {
 		lacks = p.LacksBAL
 	}
-	var earliest, latest uint64 = 0, math.MaxUint64
-	if r := p.peer.BlockRange(); r != nil {
-		earliest, latest = r.EarliestBlock, r.LatestBlock
-	}
+	// Only hand out blocks within the range the peer announced to serve. The
+	// range is loose at the top, see peerConnection.servedRange.
+	earliest, latest := p.servedRange()
 	for len(send) < count && !taskQueue.Empty() {
 		// the task queue will pop items in order, so the highest prio block
 		// is also the lowest block number.

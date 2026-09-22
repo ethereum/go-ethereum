@@ -18,6 +18,7 @@ package downloader
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -150,6 +151,7 @@ type downloadTesterPeer struct {
 	withholdBodies map[common.Hash]struct{}
 	corruptBodies  bool     // if set, the peer serves incorrect blocks
 	balGate        *balGate // if set, body deliveries wait for the access lists
+	announceLag    uint64   // blocks the announced latest trails the real head by
 	id             string
 	chain          *core.BlockChain
 
@@ -291,13 +293,21 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 }
 
 // BlockRange returns the range of blocks the peer serves the bodies and receipts
-// of: everything from its configured earliest block up to its chain head.
+// of: everything from its configured earliest block up to its chain head. With
+// announceLag set the announced latest trails the head, as a real peer's does
+// between two range updates.
 func (dlp *downloadTesterPeer) BlockRange() *eth.BlockRangeUpdatePacket {
 	head := dlp.chain.CurrentBlock()
+	latest := head.Number.Uint64()
+	if latest > dlp.announceLag {
+		latest -= dlp.announceLag
+	} else {
+		latest = 0
+	}
 	return &eth.BlockRangeUpdatePacket{
 		EarliestBlock:   0,
-		LatestBlock:     head.Number.Uint64(),
-		LatestBlockHash: head.Hash(),
+		LatestBlock:     latest,
+		LatestBlockHash: dlp.chain.GetCanonicalHash(latest),
 	}
 }
 
@@ -596,6 +606,79 @@ func testCanonSync(t *testing.T, protocol uint, mode SyncMode, snapV2 bool) {
 		assertOwnChain(t, tester, len(chain.blocks))
 	case <-time.NewTimer(time.Second * 3).C:
 		t.Fatalf("Failed to sync chain in three seconds")
+	}
+}
+
+// rangedPeer is a request-less Peer stub announcing a fixed block range.
+type rangedPeer struct {
+	Peer
+	r *eth.BlockRangeUpdatePacket
+}
+
+func (p rangedPeer) BlockRange() *eth.BlockRangeUpdatePacket { return p.r }
+
+// TestPeerServes checks the block range filter: exact at the announced
+// earliest, loose by rangeUpdateSlack past the announced latest, and absent
+// for a peer that never announced.
+func TestPeerServes(t *testing.T) {
+	t.Parallel()
+
+	p := rangedPeer{
+		r: &eth.BlockRangeUpdatePacket{
+			EarliestBlock: 100,
+			LatestBlock:   1000,
+		},
+	}
+	ranged := newPeerConnection("ranged", eth.ETH69, p, log.Root())
+
+	for _, tt := range []struct {
+		number uint64
+		serves bool
+	}{
+		{0, false},
+		{99, false},
+		{100, true},
+		{1000, true},
+		{1000 + rangeUpdateSlack, true},
+		{1000 + rangeUpdateSlack + 1, false},
+	} {
+		if have := ranged.serves(tt.number); have != tt.serves {
+			t.Errorf("block %d: serves = %v, want %v", tt.number, have, tt.serves)
+		}
+	}
+	unranged := newPeerConnection("unranged", eth.ETH69, rangedPeer{}, log.Root())
+	for _, number := range []uint64{0, 1000, 1 << 40} {
+		if !unranged.serves(number) {
+			t.Errorf("block %d: peer without an announced range not served", number)
+		}
+	}
+}
+
+// TestStaleRangeAnnouncement syncs from peers whose announced latest block
+// trails their real head, as every peer's does between two range updates. The
+// blocks past the announced latest must still be fetched, or the tail of the
+// chain would stall until the next announcement.
+func TestStaleRangeAnnouncement(t *testing.T) {
+	for _, lag := range []uint64{1, 32, rangeUpdateSlack} {
+		t.Run(fmt.Sprintf("lag-%d", lag), func(t *testing.T) {
+			success := make(chan struct{})
+			tester := newTesterWithNotification(t, FullSync, func() { close(success) })
+			defer tester.terminate()
+
+			chain := testChainBase.shorten(blockCacheMaxItems - 15)
+			peer := tester.newPeer("peer", eth.ETH69, chain.blocks[1:])
+			peer.announceLag = lag
+
+			if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+				t.Fatalf("failed to beacon-sync chain: %v", err)
+			}
+			select {
+			case <-success:
+				assertOwnChain(t, tester, len(chain.blocks))
+			case <-time.NewTimer(time.Second * 3).C:
+				t.Fatalf("Failed to sync chain in three seconds")
+			}
+		})
 	}
 }
 

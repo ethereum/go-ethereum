@@ -21,6 +21,7 @@ package downloader
 
 import (
 	"errors"
+	"math"
 	"sync"
 	"time"
 
@@ -33,6 +34,12 @@ import (
 
 const (
 	maxLackingHashes = 4096 // Maximum number of entries allowed on the list or lacking items
+
+	// rangeUpdateSlack is how far past a peer's announced latest block it is
+	// still asked for bodies and receipts. Peers only announce their range
+	// every few dozen blocks, so the announced latest trails the real head
+	// most of the time. Only a peer that is clearly behind is skipped.
+	rangeUpdateSlack = 64
 )
 
 var (
@@ -157,12 +164,31 @@ func (p *peerConnection) BALCapacity(targetRTT time.Duration) int {
 	return cap
 }
 
-// serves returns whether the peer announced to have the bodies and receipts of
-// the given block. Headers are always assumed available and not subject to the
-// announced range.
-func (p *peerConnection) serves(number uint64) bool {
+// servedRange returns the range of blocks the peer is asked bodies and receipts
+// for, everything if it never announced a range. Headers are always assumed
+// available and not subject to the announced range.
+//
+// The lower bound is exact, a peer never has blocks below its earliest. The
+// upper bound is loose by rangeUpdateSlack: an announcement is a snapshot that
+// trails the peer's real head until the next one, so a peer merely late with
+// its announcement is still asked, and a miss is handled by the usual lacking
+// bookkeeping like any other empty reply.
+func (p *peerConnection) servedRange() (earliest, latest uint64) {
 	r := p.peer.BlockRange()
-	return r == nil || (r.EarliestBlock <= number && number <= r.LatestBlock)
+	if r == nil {
+		return 0, math.MaxUint64
+	}
+	latest = r.LatestBlock + rangeUpdateSlack
+	if latest < r.LatestBlock {
+		latest = math.MaxUint64 // announced latest close to the type limit
+	}
+	return r.EarliestBlock, latest
+}
+
+// serves returns whether the given block is within the peer's served range.
+func (p *peerConnection) serves(number uint64) bool {
+	earliest, latest := p.servedRange()
+	return earliest <= number && number <= latest
 }
 
 // MarkLacking appends a new entity to the set of items (blocks, receipts, states)
