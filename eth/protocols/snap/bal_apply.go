@@ -289,11 +289,11 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch, tr
 				if err := tr.account.Delete(accountHash[:]); err != nil {
 					return common.Hash{}, fmt.Errorf("failed to delete account %v: %w", addr, err)
 				}
-			}
-			// The storage wiping shouldn't occur since the EIP-6780. Panic
-			// loudly if it happens.
-			if account.Root != types.EmptyRootHash {
-				panic(fmt.Sprintf("Unexpected storage wipe, address: %s", access.Address.Hex()))
+				// The storage wiping shouldn't occur since the EIP-6780. Panic
+				// loudly if it happens.
+				if account.Root != types.EmptyRootHash {
+					panic(fmt.Sprintf("Unexpected storage wipe, address: %s", access.Address.Hex()))
+				}
 			}
 		default:
 			// Write the updated account. Without the tries the storage root is
