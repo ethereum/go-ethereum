@@ -29,10 +29,14 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // migrationTestGenesis schedules the fork at t=48: the fourth twelve-second
@@ -159,9 +163,19 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	for i := 2; i < 5; i++ {
 		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
 	}
-	// The boundary parent's record is the last one written.
-	if !chain.ShadowReady(chain.GetHeaderByNumber(3).Hash(), 3) {
+	// The boundary parent is the last block both trees describe: the binary
+	// shadow that fed the swap must reverse-convert to the merkle root its
+	// header commits.
+	boundary, first := chain.GetHeaderByNumber(3), chain.GetHeaderByNumber(4)
+	if !chain.ShadowReady(boundary.Hash(), 3) {
 		t.Fatal("the boundary parent has no recorded shadow root")
+	}
+	shadow, err := chain.StateForBuilding(boundary, first.Number, first.Time)
+	if err != nil {
+		t.Fatalf("binary state at the boundary parent: %v", err)
+	}
+	if got := reverseConvert(t, shadow, ethservice.ChainDb(), genesis, boundary); got != boundary.Root {
+		t.Fatalf("boundary parent reverse conversion %x, header commits %x", got, boundary.Root)
 	}
 	for _, number := range []uint64{4, 5} {
 		header := chain.GetHeaderByNumber(number)
@@ -593,6 +607,64 @@ func TestShadowRootStreamNeverBlocksImport(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 20*time.Second {
 		t.Fatalf("70 recordless heads took %v: the stream backpressures imports", elapsed)
 	}
+}
+
+// reverseConvert rebuilds a merkle trie from a binary state - the reverse of
+// the offline conversion - and returns its root. The universe is the genesis
+// allocation plus every account and slot a stored access list wrote up to
+// the given header.
+func reverseConvert(t *testing.T, src *state.StateDB, db ethdb.Database, genesis *core.Genesis, header *types.Header) common.Hash {
+	t.Helper()
+	universe := make(map[common.Address]map[common.Hash]bool)
+	touch := func(addr common.Address) map[common.Hash]bool {
+		if universe[addr] == nil {
+			universe[addr] = make(map[common.Hash]bool)
+		}
+		return universe[addr]
+	}
+	for addr, account := range genesis.Alloc {
+		slots := touch(addr)
+		for key := range account.Storage {
+			slots[key] = true
+		}
+	}
+	for n := uint64(1); n <= header.Number.Uint64(); n++ {
+		hash := rawdb.ReadCanonicalHash(db, n)
+		list := rawdb.ReadAccessList(db, hash, n)
+		if list == nil {
+			t.Fatalf("no stored access list for block %d", n)
+		}
+		for _, acc := range *list {
+			slots := touch(acc.Address)
+			for _, sw := range acc.StorageChanges {
+				slots[common.Hash(sw.Slot.Bytes32())] = true
+			}
+		}
+	}
+	tdb := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.HashDefaults)
+	defer tdb.Close()
+	dst, err := state.New(types.EmptyRootHash, state.NewDatabase(tdb, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for addr, slots := range universe {
+		if !src.Exist(addr) {
+			continue
+		}
+		dst.AddBalance(addr, src.GetBalance(addr), tracing.BalanceIncreaseGenesisBalance)
+		dst.SetCode(addr, src.GetCode(addr), tracing.CodeChangeGenesis)
+		dst.SetNonce(addr, src.GetNonce(addr), tracing.NonceChangeGenesis)
+		for slot := range slots {
+			if value := src.GetState(addr, slot); value != (common.Hash{}) {
+				dst.SetState(addr, slot, value)
+			}
+		}
+	}
+	root, err := dst.Commit(0, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
 }
 
 // deliverPayload feeds an already-built block to a node the way a consensus
