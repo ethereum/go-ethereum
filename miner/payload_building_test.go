@@ -272,3 +272,106 @@ func TestPayloadId(t *testing.T) {
 		ids[id] = i
 	}
 }
+
+func TestBuildPayloadAmsterdamTwoDimensionalGas(t *testing.T) {
+	var (
+		db          = rawdb.NewMemoryDatabase()
+		recipient   = common.HexToAddress("0xdeadbeef")
+		loopAddr    = common.HexToAddress("0x1000000000000000000000000000000000000000")
+		loopCode    = []byte{0x5b, 0x60, 0x00, 0x56} // JUMPDEST PUSH1 0x00 JUMP (infinite loop)
+		chainConfig = *params.MergedTestChainConfig
+		zero        = uint64(0)
+		slotNum     = uint64(1)
+		targetGas   = uint64(60_000_000)
+		beaconRoot  = common.Hash{}
+	)
+	chainConfig.AmsterdamTime = &zero
+
+	alloc := types.GenesisAlloc{
+		testBankAddress: {Balance: testBankFunds},
+		loopAddr:        {Code: loopCode},
+	}
+	for addr, account := range core.SystemContractAllocs() {
+		alloc[addr] = account
+	}
+	gspec := &core.Genesis{
+		Config:   &chainConfig,
+		GasLimit: 60_000_000,
+		BaseFee:  big.NewInt(params.InitialBaseFee),
+		Alloc:    alloc,
+	}
+	consensusEngine := beacon.New(ethash.NewFaker())
+	chain, err := core.NewBlockChain(db, gspec, consensusEngine, &core.BlockChainConfig{ArchiveMode: true})
+	if err != nil {
+		t.Fatalf("core.NewBlockChain failed: %v", err)
+	}
+	pool := legacypool.New(testTxPoolConfig, chain)
+	txpool, _ := txpool.New(testTxPoolConfig.PriceLimit, chain, []txpool.SubPool{pool})
+	backend := &testWorkerBackend{
+		db:      db,
+		chain:   chain,
+		txPool:  txpool,
+		genesis: gspec,
+	}
+
+	signer := types.LatestSigner(&chainConfig)
+	// Tx 0 and Tx 1 call the loop contract with 16M gas each, consuming 32M execution gas
+	// and leaving 28M execution gas remaining (out of 60M).
+	tx0 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
+		Nonce:    0,
+		To:       &loopAddr,
+		Value:    big.NewInt(0),
+		Gas:      16_000_000,
+		GasPrice: big.NewInt(params.InitialBaseFee + 1),
+	})
+	tx1 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
+		Nonce:    1,
+		To:       &loopAddr,
+		Value:    big.NewInt(0),
+		Gas:      16_000_000,
+		GasPrice: big.NewInt(params.InitialBaseFee + 1),
+	})
+	// Tx 2 has 30M gas limit (> 28M remaining execution gas, but <= 28M capped execution reservation
+	// min(30M, 16.77M) and <= 60M remaining state gas). Under EIP-8037 this transaction fits.
+	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
+		Nonce:    2,
+		To:       &recipient,
+		Value:    big.NewInt(1000),
+		Gas:      30_000_000,
+		GasPrice: big.NewInt(params.InitialBaseFee + 1),
+	})
+	// Tx 3 is a nonce follower.
+	tx3 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
+		Nonce:    3,
+		To:       &recipient,
+		Value:    big.NewInt(1000),
+		Gas:      100_000,
+		GasPrice: big.NewInt(params.InitialBaseFee + 1),
+	})
+
+	backend.txPool.Add([]*types.Transaction{tx0, tx1, tx2, tx3}, true)
+
+	cfg := testConfig
+	cfg.GasCeil = 60_000_000
+	w := New(backend, cfg, consensusEngine)
+
+	args := &BuildPayloadArgs{
+		Parent:         chain.CurrentBlock().Hash(),
+		Timestamp:      chain.CurrentBlock().Time + 1,
+		Random:         common.Hash{},
+		FeeRecipient:   recipient,
+		Withdrawals:    types.Withdrawals{},
+		BeaconRoot:     &beaconRoot,
+		SlotNum:        &slotNum,
+		TargetGasLimit: &targetGas,
+		Version:        engine.PayloadV4,
+	}
+	payload, err := w.buildPayload(context.Background(), args, false)
+	if err != nil {
+		t.Fatalf("Failed to build payload: %v", err)
+	}
+	full := payload.ResolveFull()
+	if len(full.ExecutionPayload.Transactions) != 4 {
+		t.Fatalf("Expected 4 transactions in payload, got %d", len(full.ExecutionPayload.Transactions))
+	}
+}
