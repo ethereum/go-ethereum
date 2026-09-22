@@ -69,6 +69,10 @@ var (
 		Name:  "preimages-out",
 		Usage: "File to write the address-sorted preimage file to",
 	}
+	dropPreimagesFlag = &cli.BoolFlag{
+		Name:  "drop-preimages",
+		Usage: "Delete the preimage store after the conversion verifies",
+	}
 
 	bintrieCommand = &cli.Command{
 		Name:        "bintrie",
@@ -88,17 +92,17 @@ var (
 					forceConvertFlag,
 					snapshotOutFlag,
 					preimagesOutFlag,
+					dropPreimagesFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth bintrie convert [flags] [state-root]
 
-Converts the MPT state into the EIP-8297 binary tree, offline, per the
-EIP-8347 pipeline: derive every leaf, sort in tree-key order, build
-bottom-up, with flat state written alongside. Both stores are verified and
-the completion marker lands last, so an interrupted run refuses to open.
-Defaults to the head root; the source must hold preimages
-(--cache.preimages), each verified against its hash. --snapshot-out and
---preimages-out emit the byte-canonical EIP-8347 distribution artifacts.
+Converts the MPT state into the EIP-8297 binary tree offline, following the
+EIP-8347 pipeline, and verifies the result before marking it complete.
+Defaults to the head root. The source must hold preimages
+(--cache.preimages). --snapshot-out and --preimages-out emit the EIP-8347
+distribution artifacts. --drop-preimages deletes the preimage store
+afterwards, which also rules out a re-conversion.
 `,
 			},
 		},
@@ -199,6 +203,15 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 			return fmt.Errorf("MPT history deletion failed: %w", err)
 		}
 		log.Info("Source MPT data deleted")
+	}
+	if ctx.Bool(dropPreimagesFlag.Name) {
+		// The trie database flushes on close; wipe once it has let go.
+		if err := closeSource(); err != nil {
+			return fmt.Errorf("failed to close the source trie database: %w", err)
+		}
+		if err := wipePreimages(chaindb); err != nil {
+			return fmt.Errorf("preimage deletion failed: %w", err)
+		}
 	}
 	return nil
 }
@@ -876,6 +889,37 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 		return fmt.Errorf("flat state re-derives to %x, converted root is %x", got, root)
 	}
 	log.Info("Verified converted flat state", "leaves", leaves, "root", root)
+	return nil
+}
+
+// wipePreimages deletes the preimage store, which a binary tree never
+// consults. The whole key family goes, --vmdebug's SHA3 preimages included:
+// they share the key space, and a 32-byte one looks like a slot key.
+func wipePreimages(chaindb ethdb.Database) error {
+	it := rawdb.NewKeyLengthIterator(chaindb.NewIterator(rawdb.PreimagePrefix, nil), len(rawdb.PreimagePrefix)+common.HashLength)
+	defer it.Release()
+
+	batch := chaindb.NewBatch()
+	wiped := 0
+	for it.Next() {
+		if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
+			return err
+		}
+		wiped++
+		if batch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			batch.Reset()
+		}
+	}
+	if err := it.Error(); err != nil {
+		return err
+	}
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	log.Warn("Deleted the preimage store", "records", wiped)
 	return nil
 }
 
