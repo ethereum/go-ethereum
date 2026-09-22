@@ -81,7 +81,7 @@ const (
 )
 
 // errPeerBufferFull is returned when a peer is already holding as much of the
-// buffer as the buffer allows. It wraps ErrOutOfCapacity so the fetcher can tell
+// buffer as its share allows. It wraps ErrOutOfCapacity so the fetcher can tell
 // it apart from a bad delivery.
 var errPeerBufferFull = fmt.Errorf("%w: peer blob buffer allowance exhausted", txpool.ErrOutOfCapacity)
 
@@ -243,8 +243,9 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 	}
 
 	// If not, make room for the cells before inserting them. Unlike
-	// transactions, these do not lead to errPeerBufferFull because they have
-	// already been fetched.
+	// transactions, these are accepted from a peer over its share and never
+	// lead to errPeerBufferFull: they have already been fetched, so turning
+	// them away would waste the retrieval without saving what it cost.
 	for b.buffered()+entry.size > b.maxBytes && b.evictOne() {
 	}
 	b.insertCells(hash, entry)
