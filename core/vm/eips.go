@@ -19,6 +19,7 @@ package vm
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -284,7 +285,11 @@ func opBlobHash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 // opBlobBaseFee implements BLOBBASEFEE opcode
 func opBlobBaseFee(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.get().SetFromBig(evm.Context.BlobBaseFee)
+	fee := evm.Context.BlobBaseFee
+	if fee == nil {
+		fee = new(big.Int)
+	}
+	scope.Stack.get().SetFromBig(fee)
 	return nil, nil
 }
 
