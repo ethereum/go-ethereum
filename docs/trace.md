@@ -39,8 +39,10 @@ markers; storage entries describe touched slots, not an enumeration of the old t
 deltas, recursively nested for executed child bytecode. Precompile calls have no
 child bytecode trace.
 
-Filter address matching is OR within each list and AND between lists. Omitted or
-empty lists are unrestricted. Creation recipients are successful created addresses;
+Filter address matching is OR within each list and AND between lists, as `eth_getLogs`
+composes topic positions. Omitted, null or empty lists are unrestricted. Optional
+`mode` accepts `intersection` (the default) and `union`, which matches either populated
+list; other values are invalid parameters. Creation recipients are successful created addresses;
 selfdestruct uses the destroyed address and beneficiary; rewards have only a
 recipient. Post-Merge blocks do not receive synthetic issuance rewards.
 

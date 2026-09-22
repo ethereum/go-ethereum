@@ -115,6 +115,28 @@ func TestTraceNamespaceMinedPathsReplayAndFilter(t *testing.T) {
 	if err != nil || len(frames) != 0 {
 		t.Fatalf("filters must intersect: %+v %v", frames, err)
 	}
+	intersection := len(frames)
+	filter.Mode = TraceFilterUnion
+	frames, err = api.Filter(ctx, filter)
+	if err != nil || len(frames) <= intersection {
+		t.Fatalf("union must widen the intersection: %+v %v", frames, err)
+	}
+	for _, frame := range frames {
+		if !traceMatches(frame, TraceFilter{FromAddress: filter.FromAddress}) && !traceMatches(frame, TraceFilter{ToAddress: filter.ToAddress}) {
+			t.Fatalf("union returned a frame matching neither list: %+v", frame)
+		}
+	}
+	// A one-sided union selects the same frames as the default.
+	oneSided := TraceFilter{FromBlock: &from, ToBlock: &to, FromAddress: filter.FromAddress}
+	plain, err := api.Filter(ctx, oneSided)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oneSided.Mode = TraceFilterUnion
+	if union, err := api.Filter(ctx, oneSided); err != nil || len(union) != len(plain) || len(plain) == 0 {
+		t.Fatalf("one-sided union: %d vs %d %v", len(union), len(plain), err)
+	}
+	filter.Mode = ""
 	filter.FromAddress = []common.Address{traceTestTarget}
 	after, count := uint64(1), uint64(1)
 	filter.After = &after

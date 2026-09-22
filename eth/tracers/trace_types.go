@@ -158,8 +158,30 @@ type TraceFilter struct {
 	ToBlock     *rpc.BlockNumber `json:"toBlock"`
 	FromAddress []common.Address `json:"fromAddress"`
 	ToAddress   []common.Address `json:"toAddress"`
+	Mode        TraceFilterMode  `json:"mode"`
 	After       *uint64          `json:"after"`
 	Count       *uint64          `json:"count"`
+}
+
+// TraceFilterMode selects how populated address lists combine. The zero value is intersection.
+type TraceFilterMode string
+
+const (
+	TraceFilterIntersection TraceFilterMode = "intersection"
+	TraceFilterUnion        TraceFilterMode = "union"
+)
+
+func (m *TraceFilterMode) UnmarshalJSON(input []byte) error {
+	var value string
+	if err := json.Unmarshal(input, &value); err != nil {
+		return fmt.Errorf("mode must be a string")
+	}
+	switch mode := TraceFilterMode(value); mode {
+	case TraceFilterIntersection, TraceFilterUnion:
+		*m = mode
+		return nil
+	}
+	return fmt.Errorf("unknown filter mode %q", value)
 }
 
 func (f *TraceFilter) UnmarshalJSON(input []byte) error {
@@ -170,8 +192,9 @@ func (f *TraceFilter) UnmarshalJSON(input []byte) error {
 	if fields == nil {
 		return fmt.Errorf("filter must be an object")
 	}
+	// Null address lists are unrestricted, like omitted or empty lists.
 	for key, value := range fields {
-		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		if key != "fromAddress" && key != "toAddress" && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 			return fmt.Errorf("%s must not be null", key)
 		}
 	}

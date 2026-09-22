@@ -269,10 +269,16 @@ func TestTraceNamespaceRPCValidation(t *testing.T) {
 			t.Fatalf("%s: %v", params, err)
 		}
 	}
-	for _, params := range []string{`{"fromAddress":null}`, `{"mode":"union"}`, `{"count":-1}`} {
+	for _, params := range []string{`{"mode":"garbage"}`, `{"mode":null}`, `{"mode":1}`, `{"count":-1}`, `{"after":null}`} {
 		var result json.RawMessage
 		err := client.Call(&result, "trace_filter", json.RawMessage(params))
 		if e, ok := err.(rpc.Error); !ok || e.ErrorCode() != -32602 {
+			t.Fatalf("filter %s: %v", params, err)
+		}
+	}
+	for _, params := range []string{`{"fromAddress":null,"toAddress":null}`, `{"mode":"intersection"}`, `{"mode":"union"}`} {
+		var filter TraceFilter
+		if err := json.Unmarshal([]byte(params), &filter); err != nil {
 			t.Fatalf("filter %s: %v", params, err)
 		}
 	}
