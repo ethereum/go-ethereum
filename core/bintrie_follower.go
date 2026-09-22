@@ -203,11 +203,6 @@ func (f *bintrieFollower) loop() {
 					close(stop)
 					<-done
 				}
-				if m := f.peek(false); m == nil {
-					log.Warn("Merkle window closing without ever running", "closed", closer.Number)
-				} else if num, _, _ := m.cursor(); num < closer.Number.Uint64() {
-					log.Warn("Merkle window closing behind", "cursor", num, "closed", closer.Number)
-				}
 				rawdb.WritePBTMigrationDone(f.db)
 				log.Info("State migration finished", "closed", closer.Number)
 				return
@@ -272,12 +267,19 @@ func (f *bintrieFollower) close() {
 	}
 }
 
-// sync runs every live direction once, ensuring the one the head calls for
-// exists: the direction opposite the head's flavour does the replay work,
-// its sibling only parks or rewinds. Outcomes latch; the next head retries.
+// sync runs the live directions once, creating the binary one while the head
+// still commits the merkle trie. Past activation the merkle direction never
+// follows, whatever opened it: the tree stays frozen where the fork found it.
+// Outcomes latch; the next head retries.
 func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
-	f.direction(!f.config.IsBinaryTrie(head.Number, head.Time))
+	owed := !f.config.IsBinaryTrie(head.Number, head.Time)
+	if owed {
+		f.direction(true)
+	}
 	for _, t := range f.live() {
+		if !t.pbt && !owed {
+			continue
+		}
 		err := t.follow(head, stop)
 		f.mu.Lock()
 		t.stall = err
@@ -802,11 +804,12 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 	if header == nil {
 		return fmt.Errorf("missing header for block %d %x", number, hash)
 	}
+	// The block's flavour fixes which direction owes it - the binary one, in
+	// practice: the only crossing is a binary block on a merkle parent.
+	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
+	t := f.direction(pbt)
 	f.kick(header)
 
-	// The block's flavour fixes which direction owes it, so only the
-	// direction lookup repeats - the header read must not.
-	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
 	deadline := time.Now().Add(timeout)
 	for {
 		if _, ok := rawdb.ReadShadowStateRoot(f.db, hash, number); ok {
@@ -817,13 +820,11 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 			return errors.New("migration follower stopped")
 		default:
 		}
-		if t := f.peek(pbt); t != nil {
-			f.mu.Lock()
-			stall := t.stall
-			f.mu.Unlock()
-			if stall != nil {
-				return stall
-			}
+		f.mu.Lock()
+		stall := t.stall
+		f.mu.Unlock()
+		if stall != nil {
+			return stall
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("shadow has not reached block %d %x", number, hash)
