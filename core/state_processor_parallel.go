@@ -86,6 +86,48 @@ type txExecResult struct {
 	preimages map[common.Hash][]byte
 }
 
+// parallelExecution is a block's transactions executing across a pool of
+// workers. The results are filled in as the workers finish, in whatever order
+// that turns out to be, and result hands them over one at a time in block
+// order while the rest are still running.
+type parallelExecution struct {
+	results []txExecResult
+	done    []chan struct{} // closed by the worker once results[i] is written
+
+	group  *errgroup.Group
+	gctx   context.Context
+	cancel context.CancelFunc
+}
+
+// result waits for the transaction at index i to finish and hands back its
+// outcome. It fails once the execution has been aborted, carrying whichever
+// error stopped it.
+func (e *parallelExecution) result(i int) (*txExecResult, error) {
+	select {
+	case <-e.done[i]:
+		return &e.results[i], nil
+	case <-e.gctx.Done():
+		if err := e.group.Wait(); err != nil {
+			return nil, err
+		}
+		return nil, e.gctx.Err()
+	}
+}
+
+// wait blocks until every worker has stopped and returns the first error any
+// of them hit.
+func (e *parallelExecution) wait() error {
+	return e.group.Wait()
+}
+
+// abort stops the workers and waits for them to return, so nothing is still
+// writing into the results once the block is abandoned. Every path out of
+// processParallel goes through it.
+func (e *parallelExecution) abort() {
+	e.cancel()
+	_ = e.group.Wait()
+}
+
 // processParallel executes the block's transactions concurrently using the
 // block-level access list.
 func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) (*ProcessResult, error) {
@@ -173,27 +215,40 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	// own ephemeral state instance, whose reads are served from the block-level
 	// access list overlaid on the parent state.
 	txStart := time.Now()
-	results, err := p.executeTransactionsParallel(ctx, block, parentRoot, db, base, lookup, signer, jumpDestCache, precompileCache, cfg)
-	if err != nil {
-		return nil, err
-	}
-	txExec = time.Since(txStart)
+	exec := p.executeTransactionsParallel(ctx, block, parentRoot, db, base, lookup, signer, jumpDestCache, precompileCache, cfg)
+	defer exec.abort()
 
 	// Gather the per-transaction results in block order and charge their gas into
-	// a single block-level gas pool, exactly as sequential execution does.
+	// a single block-level gas pool, exactly as sequential execution does. This
+	// runs alongside the workers, picking each transaction up as the ones before
+	// it finish, because a receipt cannot be encoded until its cumulative gas is
+	// known.
 	var (
 		receipts = make(types.Receipts, 0, len(txs))
 		allLogs  []*types.Log
 		gp       = NewGasPool(block.GasLimit())
 		logIndex uint
+
+		// The receipts are digested on a pipeline of their own, fed by the
+		// gather as each transaction's turn comes up. Their blooms are hashed
+		// already, the workers do that as they execute.
+		pipeline = newReceiptPipeline(len(txs), true)
 	)
+	// Stop the pipeline on the paths that abandon the block half way through.
+	defer pipeline.close()
+
 	for i := range txs {
-		receipt := results[i].receipt
+		res, err := exec.result(i)
+		if err != nil {
+			return nil, err
+		}
+		receipt := res.receipt
+
 		gasLimit := txs[i].Gas()
 		if err := gp.CheckGasAmsterdam(min(gasLimit, params.MaxTxGas), gasLimit); err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
 		}
-		if err := gp.ChargeGasAmsterdam(results[i].execution, results[i].state, receipt.GasUsed); err != nil {
+		if err := gp.ChargeGasAmsterdam(res.execution, res.state, receipt.GasUsed); err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
 		}
 		// Correct the receipt object with block-level fields
@@ -203,9 +258,22 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 			logIndex++
 		}
 		receipts = append(receipts, receipt)
+		pipeline.add(receipt)
 		allLogs = append(allLogs, receipt.Logs...)
-		blockAccessList.Merge(results[i].accessList)
+		blockAccessList.Merge(res.accessList)
 	}
+	// The receipt trie is complete, let the pipeline finish it off while the
+	// block is wrapped up.
+	pipeline.close()
+
+	// Every transaction has been gathered, join the workers for their errors.
+	if err := exec.wait(); err != nil {
+		return nil, err
+	}
+	// The gather overlaps the workers, so this covers both.
+	txExec = time.Since(txStart)
+	reportParallelReadStats(block, base)
+
 	// Post-execution system calls against an ephemeral access-list state at
 	// index n+1.
 	postStart := time.Now()
@@ -236,11 +304,16 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
+	// Join the receipt pipeline. It has had the whole of execution to work in,
+	// so there should be nothing left to wait for.
+	digest := pipeline.join()
+
 	statedb.AddPreimages(preState.Preimages())
-	for i := range results {
-		statedb.AddPreimages(results[i].preimages)
+	for i := range exec.results {
+		statedb.AddPreimages(exec.results[i].preimages)
 	}
 	statedb.AddPreimages(postState.Preimages())
+
 	parallelSystemExecTimer.Update(systemExec)
 	parallelTxExecTimer.Update(txExec)
 	parallelStateHashTimer.Update(stateHash)
@@ -257,6 +330,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		Logs:     allLogs,
 		GasUsed:  gp.Used(),
 		Bal:      blockAccessList,
+		digest:   &digest,
 	}, nil
 }
 
@@ -288,10 +362,11 @@ func (c *cumulativeGas) load() (uint64, uint64) {
 	return c.execution, c.state
 }
 
-// executeTransactionsParallel applies all transactions to independent,
-// access-list-backed state instances using a pool of workers, and returns
-// the per-transaction results in block order.
-func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, signer types.Signer, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) ([]txExecResult, error) {
+// executeTransactionsParallel starts applying all transactions to independent,
+// access-list-backed state instances using a pool of workers. It returns once
+// the workers are running, the caller picks the results up in block order as
+// they land.
+func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block *types.Block, parentRoot common.Hash, db state.Database, base state.Reader, lookup *bal.Lookup, signer types.Signer, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) *parallelExecution {
 	var (
 		config      = p.chainConfig()
 		header      = block.Header()
@@ -299,8 +374,12 @@ func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block 
 		blockNumber = block.Number()
 		txs         = block.Transactions()
 		results     = make([]txExecResult, len(txs))
+		done        = make([]chan struct{}, len(txs))
 		gasLimit    = block.GasLimit()
 	)
+	for i := range done {
+		done[i] = make(chan struct{})
+	}
 	workers := runtime.GOMAXPROCS(0)
 	if workers > len(txs) {
 		workers = len(txs)
@@ -309,7 +388,13 @@ func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block 
 		cursor atomic.Int64
 		spent  cumulativeGas
 	)
-	group, gctx := errgroup.WithContext(context.Background())
+	// Execution is deliberately not tied to the caller's context, half a block
+	// is no use to anyone. The cancel lets the gather stop the workers when it
+	// gives up on the block.
+	var (
+		root, cancel = context.WithCancel(context.Background())
+		group, gctx  = errgroup.WithContext(root)
+	)
 	for w := 0; w < workers; w++ {
 		group.Go(func() error {
 			context := NewEVMBlockContext(header, p.chain, nil)
@@ -371,15 +456,19 @@ func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block 
 					state:      gp.CumulativeState(),
 					preimages:  sdb.Preimages(),
 				}
+				// Release the result, the gather may be waiting on it.
+				close(done[i])
 				spent.add(gp.CumulativeExecution(), gp.CumulativeState())
 			}
 		})
 	}
-	if err := group.Wait(); err != nil {
-		return nil, err
+	return &parallelExecution{
+		results: results,
+		done:    done,
+		group:   group,
+		gctx:    gctx,
+		cancel:  cancel,
 	}
-	reportParallelReadStats(block, base)
-	return results, nil
 }
 
 // reportParallelReadStats reports the state read statistics. TODO(rjl) integrate

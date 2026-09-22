@@ -63,4 +63,9 @@ type ProcessResult struct {
 	// BAL is only meaningful for post-Amsterdam blocks. Please ensure
 	// fork validation is performed before accessing it.
 	Bal *bal.ConstructionBlockAccessList
+
+	// digest carries the block bloom and the receipt root, hashed alongside
+	// execution by the receipt pipeline. It is nil for a result assembled
+	// elsewhere, and the validator hashes the receipts itself in that case.
+	digest *receiptDigest
 }

@@ -25,6 +25,7 @@ import (
 	"errors"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
@@ -1014,5 +1015,63 @@ func TestParallelReservationOverflowRejected(t *testing.T) {
 	_, err = NewStateProcessor(bc).Process(context.Background(), invalid, statedb, nil, nil, vm.Config{}, nil)
 	if !errors.Is(err, ErrGasLimitReached) {
 		t.Fatalf("parallel processor accepted a reservation-overflow block (err = %v), want ErrGasLimitReached", err)
+	}
+}
+
+// TestParallelAbortsOnWorkerFailure checks that the processor gives up on a
+// block holding a transaction that cannot be applied, rather than waiting on a
+// receipt no worker will ever produce.
+func TestParallelAbortsOnWorkerFailure(t *testing.T) {
+	env := newBALTestEnv(nil)
+	engine := beacon.New(ethash.NewFaker())
+
+	to := env.from
+	_, blocks, _ := GenerateChainWithGenesis(env.gspec, engine, 1, func(_ int, b *BlockGen) {
+		b.AddTx(env.tx(0, &to, big.NewInt(1), 100_000, 0, nil))
+		b.AddTx(env.tx(1, &to, big.NewInt(1), 100_000, 0, nil))
+	})
+	// Append a transaction whose signature cannot be recovered. The worker that
+	// picks it up fails before it writes a result, so index 2 never completes.
+	bad := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   env.cfg.ChainID,
+		Nonce:     2,
+		To:        &to,
+		Value:     big.NewInt(0),
+		Gas:       21000,
+		GasFeeCap: newGwei(10),
+		GasTipCap: big.NewInt(0),
+		V:         big.NewInt(0),
+		R:         big.NewInt(0),
+		S:         big.NewInt(0),
+	})
+	body := blocks[0].Body()
+	body.Transactions = append(body.Transactions, bad)
+	block := blocks[0].WithBody(*body)
+	if block.AccessList() == nil {
+		t.Fatal("test block has no access list, the parallel processor would not run")
+	}
+
+	bc, err := NewBlockChain(rawdb.NewMemoryDatabase(), env.gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("new blockchain: %v", err)
+	}
+	defer bc.Stop()
+
+	statedb, err := bc.State()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	failed := make(chan error, 1)
+	go func() {
+		_, err := NewStateProcessor(bc).Process(context.Background(), block, statedb, nil, nil, vm.Config{}, nil)
+		failed <- err
+	}()
+	select {
+	case err := <-failed:
+		if err == nil {
+			t.Fatal("parallel processor accepted a block with an unsignable transaction")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("block processing hung waiting for a transaction that never executed")
 	}
 }
