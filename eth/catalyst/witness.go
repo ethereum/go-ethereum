@@ -178,6 +178,10 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV4(ctx context.Context, params eng
 		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
+	case params.SlotNumber != nil:
+		return invalidStatus, paramsErr("slotNumber not supported pre-amsterdam")
+	case params.BlockAccessList != nil:
+		return invalidStatus, paramsErr("block access list not supported pre-amsterdam")
 	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2):
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
@@ -285,6 +289,10 @@ func (api *ConsensusAPI) ExecuteStatelessPayloadV4(params engine.ExecutableData,
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, paramsErr("nil executionRequests post-prague")
+	case params.SlotNumber != nil:
+		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, paramsErr("slotNumber not supported pre-amsterdam")
+	case params.BlockAccessList != nil:
+		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, paramsErr("block access list not supported pre-amsterdam")
 	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2):
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
@@ -316,7 +324,7 @@ func (api *ConsensusAPI) ExecuteStatelessPayloadV5(params engine.ExecutableData,
 	case params.BlockAccessList == nil:
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, paramsErr("nil block access list post-amsterdam")
 	case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
-		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
+		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, unsupportedForkErr("newPayloadV5 must only be called for amsterdam payloads")
 	}
 	requests := convertRequests(executionRequests)
 	if err := validateRequests(requests); err != nil {

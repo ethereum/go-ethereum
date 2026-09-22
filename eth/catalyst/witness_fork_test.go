@@ -274,3 +274,44 @@ func forkTestChain(t *testing.T, n int) (*core.Genesis, []*types.Block) {
 	})
 	return genesis, blocks
 }
+
+// TestWitnessV4RejectsPreAmsterdamFields asserts that NewPayloadWithWitnessV4 and
+// ExecuteStatelessPayloadV4 reject slotNumber and blockAccessList.
+func TestWitnessV4RejectsPreAmsterdamFields(t *testing.T) {
+	genesis, blocks := forkTestChain(t, 10)
+	n, ethservice := startEthService(t, genesis, blocks[:9])
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+	slot := uint64(42)
+	payload := engine.ExecutableData{
+		Withdrawals:   make([]*types.Withdrawal, 0),
+		ExcessBlobGas: new(uint64),
+		BlobGasUsed:   new(uint64),
+		SlotNumber:    &slot,
+	}
+
+	status, err := api.NewPayloadWithWitnessV4(context.Background(), payload, []common.Hash{}, &witnessBeaconRoot, []hexutil.Bytes{})
+	if err == nil || status.Status != engine.INVALID {
+		t.Fatalf("expected error for slotNumber on NewPayloadWithWitnessV4, got status=%v err=%v", status, err)
+	}
+
+	statelessStatus, err := api.ExecuteStatelessPayloadV4(payload, []common.Hash{}, &witnessBeaconRoot, []hexutil.Bytes{}, nil)
+	if err == nil || statelessStatus.Status != engine.INVALID {
+		t.Fatalf("expected error for slotNumber on ExecuteStatelessPayloadV4, got status=%v err=%v", statelessStatus, err)
+	}
+
+	payload.SlotNumber = nil
+	payload.BlockAccessList = []byte{0x01}
+
+	status, err = api.NewPayloadWithWitnessV4(context.Background(), payload, []common.Hash{}, &witnessBeaconRoot, []hexutil.Bytes{})
+	if err == nil || status.Status != engine.INVALID {
+		t.Fatalf("expected error for blockAccessList on NewPayloadWithWitnessV4, got status=%v err=%v", status, err)
+	}
+
+	statelessStatus, err = api.ExecuteStatelessPayloadV4(payload, []common.Hash{}, &witnessBeaconRoot, []hexutil.Bytes{}, nil)
+	if err == nil || statelessStatus.Status != engine.INVALID {
+		t.Fatalf("expected error for blockAccessList on ExecuteStatelessPayloadV4, got status=%v err=%v", statelessStatus, err)
+	}
+}
+
