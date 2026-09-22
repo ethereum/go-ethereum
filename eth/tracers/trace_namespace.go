@@ -545,9 +545,6 @@ func traceMatches(frame *TraceFrame, filter TraceFilter) bool {
 		to = &action.Author
 	}
 	contains := func(list []common.Address, address *common.Address) bool {
-		if len(list) == 0 {
-			return true
-		}
 		if address == nil {
 			return false
 		}
@@ -558,7 +555,13 @@ func traceMatches(frame *TraceFrame, filter TraceFilter) bool {
 		}
 		return false
 	}
-	return contains(filter.FromAddress, from) && contains(filter.ToAddress, to)
+	// Empty lists are unrestricted; union matches either populated list.
+	fromSet, toSet := len(filter.FromAddress) > 0, len(filter.ToAddress) > 0
+	fromOK, toOK := !fromSet || contains(filter.FromAddress, from), !toSet || contains(filter.ToAddress, to)
+	if filter.Mode == TraceFilterUnion && fromSet && toSet {
+		return contains(filter.FromAddress, from) || contains(filter.ToAddress, to)
+	}
+	return fromOK && toOK
 }
 
 func traceStateError(err error) error {
