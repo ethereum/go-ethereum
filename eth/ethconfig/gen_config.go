@@ -25,7 +25,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		SnapDiscoveryURLs       []string
 		NoPruning               bool
 		NoPrefetch              bool
-		NoPrecompile            bool
+		NoPrecompileCache       bool
 		TxLookupLimit           uint64 `toml:",omitempty"`
 		TransactionHistory      uint64 `toml:",omitempty"`
 		LogHistory              uint64 `toml:",omitempty"`
@@ -82,7 +82,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.SnapDiscoveryURLs = c.SnapDiscoveryURLs
 	enc.NoPruning = c.NoPruning
 	enc.NoPrefetch = c.NoPrefetch
-	enc.NoPrecompile = c.NoPrecompile
+	enc.NoPrecompileCache = c.NoPrecompileCache
 	enc.TxLookupLimit = c.TxLookupLimit
 	enc.TransactionHistory = c.TransactionHistory
 	enc.LogHistory = c.LogHistory
@@ -143,7 +143,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		SnapDiscoveryURLs       []string
 		NoPruning               *bool
 		NoPrefetch              *bool
-		NoPrecompile            *bool
+		NoPrecompileCache       *bool
 		TxLookupLimit           *uint64 `toml:",omitempty"`
 		TransactionHistory      *uint64 `toml:",omitempty"`
 		LogHistory              *uint64 `toml:",omitempty"`
@@ -219,8 +219,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.NoPrefetch != nil {
 		c.NoPrefetch = *dec.NoPrefetch
 	}
-	if dec.NoPrecompile != nil {
-		c.NoPrecompile = *dec.NoPrecompile
+	if dec.NoPrecompileCache != nil {
+		c.NoPrecompileCache = *dec.NoPrecompileCache
 	}
 	if dec.TxLookupLimit != nil {
 		c.TxLookupLimit = *dec.TxLookupLimit

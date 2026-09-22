@@ -209,10 +209,10 @@ type BlockChainConfig struct {
 	HistoryPolicy history.HistoryPolicy
 
 	// Misc options
-	NoPrefetch   bool            // Whether to disable heuristic state prefetching when processing blocks
-	NoPrecompile bool            // Whether to disable precompile result caching when processing blocks
-	Overrides    *ChainOverrides // Optional chain config overrides
-	VmConfig     vm.Config       // Config options for the EVM Interpreter
+	NoPrefetch        bool            // Whether to disable heuristic state prefetching when processing blocks
+	NoPrecompileCache bool            // Whether to disable precompile result caching when processing blocks
+	Overrides         *ChainOverrides // Optional chain config overrides
+	VmConfig          vm.Config       // Config options for the EVM Interpreter
 
 	// TxLookupLimit specifies the maximum number of blocks from head for which
 	// transaction hashes will be indexed.
@@ -412,7 +412,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	log.Info("")
 
 	var pcache *vm.PrecompileCache
-	if !cfg.NoPrecompile {
+	if !cfg.NoPrecompileCache {
 		pcache = vm.NewPrecompileCache()
 	}
 
