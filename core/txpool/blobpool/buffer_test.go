@@ -54,14 +54,17 @@ func newTestBuffer(t *testing.T) *BlobBuffer {
 func TestBufferByteCap(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	buf := newTestBuffer(t)
-
-	// Size the buffer so that it fits exactly three transactions.
-	probe := makeV1Tx(t, 0, 1, 0, key)
-	buf.maxBytes = 3 * probe.Size()
+	var txsize uint64
+	txs := make([]*types.Transaction, 6)
+	for i := range txs {
+		txs[i] = makeV1Tx(t, uint64(i), 1, 0, key)
+		txsize = max(txsize, txs[i].Size())
+	}
+	// Room for exactly three of them, whichever three they turn out to be.
+	buf.maxBytes = 3 * txsize
 
 	var hashes []common.Hash
-	for nonce := uint64(0); nonce < 6; nonce++ {
-		tx := makeV1Tx(t, nonce, 1, 0, key)
+	for nonce, tx := range txs {
 		hashes = append(hashes, tx.Hash())
 		if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
 			t.Fatalf("tx %d: %v", nonce, err)
@@ -90,23 +93,27 @@ func TestBufferFairEviction(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	buf := newTestBuffer(t)
 
-	// Size the buffer so that it fits exactly three transactions.
-	probe := makeV1Tx(t, 0, 1, 0, key)
-	buf.maxBytes = 3 * probe.Size()
+	quiet := makeV1Tx(t, 0, 1, 0, key)
+	txsize := quiet.Size()
+	flood := make([]*types.Transaction, 4)
+	for i := range flood {
+		flood[i] = makeV1Tx(t, uint64(i+1), 1, 0, key)
+		txsize = max(txsize, flood[i].Size())
+	}
+	// Room for exactly three of them, whichever three they turn out to be.
+	buf.maxBytes = 3 * txsize
 
 	// The quiet peer delivers first, so it also holds the oldest entry.
-	quiet := makeV1Tx(t, 0, 1, 0, key)
 	if err := buf.AddTx([]*types.Transaction{quiet}, "peerB")[0]; err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(time.Millisecond)
 
 	var greedy []common.Hash
-	for nonce := uint64(1); nonce < 5; nonce++ {
-		tx := makeV1Tx(t, nonce, 1, 0, key)
+	for i, tx := range flood {
 		greedy = append(greedy, tx.Hash())
 		if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
-			t.Fatalf("tx %d: %v", nonce, err)
+			t.Fatalf("tx %d: %v", i+1, err)
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -130,12 +137,16 @@ func TestBufferPeerCap(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	buf := newTestBuffer(t)
 
+	var txsize uint64
+	txs := make([]*types.Transaction, 6)
+	for i := range txs {
+		txs[i] = makeV1Tx(t, uint64(i), 1, 0, key)
+		txsize = max(txsize, txs[i].Size())
+	}
 	// Allow each peer two transactions, with room in the buffer for many more.
-	probe := makeV1Tx(t, 0, 1, 0, key)
-	buf.maxPeerBytes = 2 * probe.Size()
+	buf.maxPeerBytes = 2 * txsize
 
-	for nonce := uint64(0); nonce < 4; nonce++ {
-		tx := makeV1Tx(t, nonce, 1, 0, key)
+	for nonce, tx := range txs[:4] {
 		err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]
 		if want := nonce >= 2; (err != nil) != want {
 			t.Fatalf("tx %d: err %v, want rejection %v", nonce, err, want)
@@ -147,8 +158,7 @@ func TestBufferPeerCap(t *testing.T) {
 		t.Errorf("expected peer to hold 2 txs, got %d", len(buf.txs))
 	}
 	// A second peer is unaffected by the first one's exhausted allowance.
-	tx := makeV1Tx(t, 4, 1, 0, key)
-	if err := buf.AddTx([]*types.Transaction{tx}, "peerB")[0]; err != nil {
+	if err := buf.AddTx([]*types.Transaction{txs[4]}, "peerB")[0]; err != nil {
 		t.Fatalf("second peer rejected: %v", err)
 	}
 
@@ -157,12 +167,11 @@ func TestBufferPeerCap(t *testing.T) {
 	for i := range indices {
 		indices[i] = uint64(i)
 	}
-	done := makeV1Tx(t, 0, 1, 0, key)
-	buf.AddCells(done.Hash(), map[string]*PeerDelivery{
+	buf.AddCells(txs[0].Hash(), map[string]*PeerDelivery{
 		"peerC": makePeerDelivery(t, 0, 1, indices),
 	}, types.NewCustodyBitmap(indices))
 
-	if err := buf.AddTx([]*types.Transaction{makeV1Tx(t, 5, 1, 0, key)}, "peerA")[0]; err != nil {
+	if err := buf.AddTx([]*types.Transaction{txs[5]}, "peerA")[0]; err != nil {
 		t.Fatalf("peer allowance not released on completion: %v", err)
 	}
 }
