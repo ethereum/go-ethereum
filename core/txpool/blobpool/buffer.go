@@ -327,7 +327,7 @@ func (b *BlobBuffer) removeTx(hash common.Hash) {
 	if !ok {
 		return
 	}
-	b.txBytes -= entry.size
+	b.txBytes -= min(b.txBytes, entry.size)
 	b.releasePeer(entry.peer, entry.size)
 	delete(b.txs, hash)
 }
@@ -352,7 +352,7 @@ func (b *BlobBuffer) removeCells(hash common.Hash) {
 	if !ok {
 		return
 	}
-	b.cellBytes -= entry.size
+	b.cellBytes -= min(b.cellBytes, entry.size)
 	for peer, delivery := range entry.deliveries {
 		b.releasePeer(peer, cellsSize(delivery))
 	}
@@ -361,9 +361,11 @@ func (b *BlobBuffer) removeCells(hash common.Hash) {
 
 // releasePeer gives a peer back the space it was charged for.
 func (b *BlobBuffer) releasePeer(peer string, size uint64) {
-	if b.peerBytes[peer] -= size; b.peerBytes[peer] == 0 {
+	if b.peerBytes[peer] <= size {
 		delete(b.peerBytes, peer)
+		return
 	}
+	b.peerBytes[peer] -= size
 }
 
 // buffered returns everything the buffer is holding, of either kind.
