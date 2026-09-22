@@ -455,11 +455,9 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 		if f.onAccepted != nil && len(accepted) > 0 {
 			f.onAccepted(peer, accepted)
 		}
-		// If more than 25% of a batch was refused, sleep a bit to slow the peer
-		// down. Refusals for want of room are counted towards that, since the
-		// backpressure is the point of them, but they are reported apart: they
-		// say this node is full, not that the peer is misbehaving, and the peer
-		// would have been served the same delivery a moment earlier.
+		// If more than 25% of a batch was refused, slow the peer down.
+		// Refusals for want of room are counted towards that, since the
+		// backpressure is the point of them, but they are reported apart.
 		if refused := otherreject + nocapacity; refused > int64((len(hashes)+3)/4) {
 			if nocapacity > otherreject {
 				log.Debug("Peer delivering transactions faster than there is room for", "refused", nocapacity)
@@ -501,10 +499,9 @@ func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics del
 			f.underpriced.Add(txs[i], f.realTime())
 			underpriced++
 
-		// Refused for want of room. Not the peer's doing, and not a reason to
-		// remember the transaction as unwanted: it is not added to the
-		// underpriced set, so it will be fetched again when it is announced
-		// again and there is room for it.
+		// Refused for want of room. Since it is not added to the underpriced set,
+		// it is expected to be fetched again when it is announced again, and there
+		// would be room for it.
 		case errors.Is(err, txpool.ErrOutOfCapacity):
 			nocapacity++
 

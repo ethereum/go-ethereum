@@ -154,10 +154,7 @@ func TestBufferPeerCap(t *testing.T) {
 		} else if want && !errors.Is(err, errPeerBufferFull) {
 			t.Fatalf("tx %d: err %v, want %v", nonce, err, errPeerBufferFull)
 		} else if want && !errors.Is(err, txpool.ErrOutOfCapacity) {
-			// Whoever handles the delivery has to be able to tell "no room"
-			// from "bad delivery": nothing is wrong with the transaction or
-			// the peer, and it should be fetched again when there is room.
-			t.Fatalf("tx %d: refusal for want of room reported as %v", nonce, err)
+			t.Fatalf("tx %d: refusal for want of room not reported as a capacity error: %v", nonce, err)
 		}
 	}
 	if len(buf.txs) != 2 {

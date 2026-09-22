@@ -25,11 +25,9 @@ var (
 	// within the pool.
 	ErrAlreadyKnown = errors.New("already known")
 
-	// ErrOutOfCapacity is returned when a transaction is refused for want of
-	// room rather than for anything wrong with it or with the peer that sent
-	// it. It is separate from the rejections that say a delivery was bad
-	// because it says nothing about the sender: the same transaction from the
-	// same peer would have been taken a moment earlier.
+	// ErrOutOfCapacity is returned if a transaction is refused because there is
+	// no room for it, rather than for anything wrong with it or with the peer
+	// that sent it.
 	ErrOutOfCapacity = errors.New("out of capacity")
 
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
