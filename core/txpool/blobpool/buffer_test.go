@@ -493,3 +493,35 @@ func TestCompletionBeatsEviction(t *testing.T) {
 		t.Fatalf("after completion: %d bytes and %d peers still accounted", buf.buffered(), len(buf.peerBytes))
 	}
 }
+
+// TestOverlappingDeliveryReleasesAccounting checks that dropping a transaction
+// because two peers delivered the same cell index releases everything that was
+// accounted for it.
+func TestOverlappingDeliveryReleasesAccounting(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+
+	tx := makeV1Tx(t, 0, 1, 0, key)
+	if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
+		t.Fatal(err)
+	}
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	// Both halves verify on their own; they overlap on indices 20..39.
+	buf.AddCells(tx.Hash(), map[string]*PeerDelivery{
+		"peerB": makePeerDelivery(t, 0, 1, indices[:40]),
+		"peerC": makePeerDelivery(t, 0, 1, indices[20:]),
+	}, types.NewCustodyBitmap(indices))
+
+	if got := buf.completedCount.Load(); got != 0 {
+		t.Fatalf("completed %d transactions, want 0", got)
+	}
+	if _, ok := buf.txs[tx.Hash()]; ok {
+		t.Fatal("dropped transaction still buffered")
+	}
+	if buf.buffered() != 0 || len(buf.peerBytes) != 0 {
+		t.Fatalf("after drop: %d bytes and %d peers still accounted", buf.buffered(), len(buf.peerBytes))
+	}
+}
