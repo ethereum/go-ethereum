@@ -47,42 +47,21 @@ var (
 const (
 	bufferLifetime = 2 * time.Minute
 
-	// maxBufferedBytes caps everything the buffer holds while transactions and
-	// their cells wait for each other: both halves, counted together.
-	//
-	// Counting both matters because the cells are the larger half. A
-	// transaction arrives over eth/72 without its blobs, so it is its
-	// commitments and proofs, some 37KB at the maximum blob count. The cells
-	// fetched for it are 2KB each, which is around 98KB for the custody of one
-	// node and 786KB when the whole payload is pulled: between three and
-	// twenty times the transaction they belong to.
-	//
-	// Only the transaction half used to be bounded here, the cells being left
-	// to the blob fetcher's per peer request budget, which works out at about
-	// 16MB of cells per peer and so several hundred megabytes across a peer
-	// set. That is an argument spanning two components and living in a comment
-	// in the other one, which is a poor way to bound memory.
+	// maxBufferedBytes caps the total bytes of transactions and cells held in
+	// the buffer. Cells are the larger part: a blobless eth/72 transaction is
+	// ~37KB at the maximum blob count, while its cells range from ~98KB (one
+	// node's custody) to ~786KB (full payload).
 	maxBufferedBytes = 128 * 1024 * 1024
 
-	// maxBufferedPeerBytes bounds how much of the buffer a single peer can be
-	// holding, in transactions it delivered and cells it contributed.
-	//
-	// It is well below maxBufferedBytes, so that a peer whose deliveries never
-	// complete stalls against its own allowance rather than pushing everyone
-	// else's out. No judgement on the peer's intent is needed for that: a peer
-	// serving useful transactions gets its allowance back as they complete,
-	// usually within seconds, while one that only ever adds to the pile stops
-	// being able to add to it.
-	//
-	// The figure is the one the blob fetcher's request budget was already sized
-	// around, so a peer serving cells as fast as we will ask for them fits
-	// inside it.
+	// maxBufferedPeerBytes caps the bytes a single peer can hold in the buffer,
+	// so a peer whose deliveries never complete stalls on its own allowance
+	// instead of evicting everyone else. It matches the blob fetcher's per-peer
+	// request budget, so a peer serving cells as fast as requested fits in it.
 	maxBufferedPeerBytes = 16 * 1024 * 1024
 )
 
-// errPeerBufferFull is returned when a peer is already holding as much of the
-// buffer as its share allows. It wraps ErrOutOfCapacity so the fetcher can tell
-// it apart from a bad delivery.
+// errPeerBufferFull is returned when a peer has exhausted its buffer allowance.
+// It wraps ErrOutOfCapacity so the fetcher can tell it apart from a bad delivery.
 var errPeerBufferFull = fmt.Errorf("%w: peer blob buffer allowance exhausted", txpool.ErrOutOfCapacity)
 
 // PeerDelivery holds cells delivered by a single peer, in blob-major order.
@@ -108,8 +87,7 @@ type cellEntry struct {
 	size       uint64 // Total cell bytes, as accounted against the buffer limits
 }
 
-// cellsSize returns what a peer's cell delivery occupies. A cell is a fixed
-// size array, so this is exact rather than an estimate.
+// cellsSize returns the bytes occupied by a peer's cell delivery.
 func cellsSize(delivery *PeerDelivery) uint64 {
 	const cellSize = uint64(len(kzg4844.Cell{}))
 	return uint64(len(delivery.Cells))*cellSize + uint64(len(delivery.Indices))*8
@@ -200,15 +178,13 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 			b.storeCompleted(hash, tx, entry)
 			continue
 		}
-		// Refuse the transaction if the peer already holds its share of the
-		// buffer. Its earlier deliveries have to complete or expire first.
+		// Refuse the transaction if the peer has exhausted its allowance.
 		size := tx.Size()
 		if b.peerBytes[peer]+size > b.maxPeerBytes {
 			errs[i] = errPeerBufferFull
 			continue
 		}
-		// Make room for the transaction, at the expense of the peers holding
-		// the largest share of the buffer.
+		// Make room by evicting from the peers holding the most.
 		for b.buffered()+size > b.maxBytes && b.evictOne() {
 		}
 		blobBufferTxFirstCounter.Inc(1)
@@ -242,10 +218,9 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 		return
 	}
 
-	// If not, make room for the cells before inserting them. Unlike
-	// transactions, these are accepted from a peer over its share and never
-	// lead to errPeerBufferFull: they have already been fetched, so turning
-	// them away would waste the retrieval without saving what it cost.
+	// Otherwise make room and buffer the cells. Unlike transactions, cells
+	// are not refused over the peer allowance: they have already been fetched,
+	// so turning them away would only waste the retrieval.
 	for b.buffered()+entry.size > b.maxBytes && b.evictOne() {
 	}
 	b.insertCells(hash, entry)
@@ -308,9 +283,8 @@ func (b *BlobBuffer) HasCells(hash common.Hash) bool {
 	return ok
 }
 
-// insertTx buffers a transaction and accounts for the space it takes up. Any
-// previous entry for the same hash is removed first, keeping the accounting
-// exact when a transaction is delivered more than once.
+// insertTx buffers a transaction and accounts for its size. Any previous entry
+// for the same hash is removed first.
 func (b *BlobBuffer) insertTx(hash common.Hash, tx *types.Transaction, peer string) {
 	b.removeTx(hash)
 
@@ -320,8 +294,7 @@ func (b *BlobBuffer) insertTx(hash common.Hash, tx *types.Transaction, peer stri
 	b.peerBytes[peer] += size
 }
 
-// removeTx drops a buffered transaction and releases the space it occupied,
-// both globally and from the allowance of the peer that delivered it.
+// removeTx drops a buffered transaction and releases its accounted size.
 func (b *BlobBuffer) removeTx(hash common.Hash) {
 	entry, ok := b.txs[hash]
 	if !ok {
@@ -332,9 +305,9 @@ func (b *BlobBuffer) removeTx(hash common.Hash) {
 	delete(b.txs, hash)
 }
 
-// insertCells buffers a set of cell deliveries and accounts for the space they
-// take up, charging each contributing peer its own share. Any previous entry
-// for the same transaction is removed first, keeping the accounting exact.
+// insertCells buffers a set of cell deliveries and accounts for their size,
+// charging each peer for its own delivery. Any previous entry for the same
+// hash is removed first.
 func (b *BlobBuffer) insertCells(hash common.Hash, entry *cellEntry) {
 	b.removeCells(hash)
 
@@ -345,8 +318,7 @@ func (b *BlobBuffer) insertCells(hash common.Hash, entry *cellEntry) {
 	}
 }
 
-// removeCells drops buffered cells and releases the space they occupied from
-// every peer that contributed to them.
+// removeCells drops buffered cells and releases their accounted size.
 func (b *BlobBuffer) removeCells(hash common.Hash) {
 	entry, ok := b.cells[hash]
 	if !ok {
@@ -359,7 +331,7 @@ func (b *BlobBuffer) removeCells(hash common.Hash) {
 	delete(b.cells, hash)
 }
 
-// releasePeer gives a peer back the space it was charged for.
+// releasePeer refunds a peer's allowance.
 func (b *BlobBuffer) releasePeer(peer string, size uint64) {
 	if b.peerBytes[peer] <= size {
 		delete(b.peerBytes, peer)
@@ -368,24 +340,16 @@ func (b *BlobBuffer) releasePeer(peer string, size uint64) {
 	b.peerBytes[peer] -= size
 }
 
-// buffered returns everything the buffer is holding, of either kind.
+// buffered returns the total accounted bytes of transactions and cells.
 func (b *BlobBuffer) buffered() uint64 {
 	return b.txBytes + b.cellBytes
 }
 
-// evictOne drops a single buffered item to make room for an incoming delivery,
-// reporting whether it found one to drop.
-//
-// The victim is the oldest thing held on behalf of the peer using the largest
-// share of the buffer. Evicting the globally oldest item instead would let a
-// handful of peers that fill the buffer push out everyone else's, turning the
-// cap itself into a way of denying service. Charging the eviction to the
-// largest holder keeps the pressure on whoever is causing it.
-//
-// Transactions are given up before cells. Both are needed to complete a
-// transaction, but a transaction can be requested again from anyone announcing
-// it, while cells are the product of a retrieval that would have to be made
-// over again.
+// evictOne drops the oldest entry of the peer holding the most bytes and
+// reports whether anything was dropped. Evicting from the largest holder
+// rather than the globally oldest entry keeps a few flooding peers from
+// pushing out everyone else. Transactions are evicted before cells, as
+// cells are more expensive to retrieve again.
 func (b *BlobBuffer) evictOne() bool {
 	var (
 		worst string
@@ -413,7 +377,7 @@ func (b *BlobBuffer) evictOne() bool {
 		b.removeTx(oldest)
 		return true
 	}
-	// Nothing of the peer's left but cells.
+	// No transactions left for the peer, fall back to its cells.
 	for hash, entry := range b.cells {
 		if _, ok := entry.deliveries[worst]; !ok {
 			continue
