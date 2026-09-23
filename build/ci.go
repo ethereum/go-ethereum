@@ -1069,7 +1069,7 @@ func downloadGoBootstrapSources(cachedir string) []string {
 	csdb := download.MustLoadChecksums("build/checksums.txt")
 
 	var bundles []string
-	for _, booter := range []string{"ppa-builder-1.19", "ppa-builder-1.21", "ppa-builder-1.23"} {
+	for _, booter := range []string{"ppa-builder-1.19", "ppa-builder-1.21", "ppa-builder-1.23", "ppa-builder-1.25"} {
 		gobootVersion, err := csdb.FindVersion(booter)
 		if err != nil {
 			log.Fatal(err)
