@@ -296,6 +296,7 @@ loop:
 			// Stop tracking the request and release any protocol-specific
 			// state tied to it.
 			delete(pending, cancelOp.id)
+			p.tracker.Untrack(cancelOp.id)
 			if req.cleanup != nil {
 				req.cleanup()
 			}
