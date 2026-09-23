@@ -2,8 +2,12 @@ package blobpool
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -44,6 +48,258 @@ func newTestBuffer(t *testing.T) *BlobBuffer {
 		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
 		DropPeer:   func(peer string) {},
 	})
+}
+
+// TestBufferByteCap checks that transactions whose cells never arrive cannot
+// grow the buffer past its byte limit, and that the oldest ones give way.
+func TestBufferByteCap(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+	var txsize uint64
+	txs := make([]*types.Transaction, 6)
+	for i := range txs {
+		txs[i] = makeV1Tx(t, uint64(i), 1, 0, key)
+		txsize = max(txsize, txs[i].Size())
+	}
+	// Room for exactly three of them, whichever three they turn out to be.
+	buf.maxBytes = 3 * txsize
+
+	var hashes []common.Hash
+	for nonce, tx := range txs {
+		hashes = append(hashes, tx.Hash())
+		if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
+			t.Fatalf("tx %d: %v", nonce, err)
+		}
+		// Entries are stamped with wall clock time, so make sure consecutive
+		// transactions are distinguishable by age.
+		time.Sleep(time.Millisecond)
+	}
+	if buf.txBytes > buf.maxBytes {
+		t.Errorf("buffer over its limit: %d > %d", buf.txBytes, buf.maxBytes)
+	}
+	if len(buf.txs) != 3 {
+		t.Errorf("expected 3 buffered txs, got %d", len(buf.txs))
+	}
+	// The three most recent transactions should have displaced the earlier ones.
+	for i, hash := range hashes {
+		if want := i >= 3; buf.HasTx(hash) != want {
+			t.Errorf("tx %d: buffered %v, want %v", i, buf.HasTx(hash), want)
+		}
+	}
+}
+
+// TestBufferFairEviction checks that a peer filling the buffer displaces its
+// own transactions rather than those of quieter peers.
+func TestBufferFairEviction(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+
+	quiet := makeV1Tx(t, 0, 1, 0, key)
+	txsize := quiet.Size()
+	flood := make([]*types.Transaction, 4)
+	for i := range flood {
+		flood[i] = makeV1Tx(t, uint64(i+1), 1, 0, key)
+		txsize = max(txsize, flood[i].Size())
+	}
+	// Room for exactly three of them, whichever three they turn out to be.
+	buf.maxBytes = 3 * txsize
+
+	// The quiet peer delivers first, so it also holds the oldest entry.
+	if err := buf.AddTx([]*types.Transaction{quiet}, "peerB")[0]; err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+
+	var greedy []common.Hash
+	for i, tx := range flood {
+		greedy = append(greedy, tx.Hash())
+		if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
+			t.Fatalf("tx %d: %v", i+1, err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !buf.HasTx(quiet.Hash()) {
+		t.Error("oldest entry of the quiet peer was evicted")
+	}
+	if len(buf.txs) != 3 {
+		t.Fatalf("expected 3 buffered txs, got %d", len(buf.txs))
+	}
+	// The greedy peer keeps only its two most recent transactions.
+	for i, hash := range greedy {
+		if want := i >= 2; buf.HasTx(hash) != want {
+			t.Errorf("greedy tx %d: buffered %v, want %v", i, buf.HasTx(hash), want)
+		}
+	}
+}
+
+// TestBufferPeerCap checks that a peer whose deliveries never complete stalls
+// against its own allowance instead of consuming the whole buffer.
+func TestBufferPeerCap(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+
+	var txsize uint64
+	txs := make([]*types.Transaction, 6)
+	for i := range txs {
+		txs[i] = makeV1Tx(t, uint64(i), 1, 0, key)
+		txsize = max(txsize, txs[i].Size())
+	}
+	// Allow each peer two transactions, with room in the buffer for many more.
+	buf.maxPeerBytes = 2 * txsize
+
+	for nonce, tx := range txs[:4] {
+		err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]
+		if want := nonce >= 2; (err != nil) != want {
+			t.Fatalf("tx %d: err %v, want rejection %v", nonce, err, want)
+		} else if want && !errors.Is(err, errPeerBufferFull) {
+			t.Fatalf("tx %d: err %v, want %v", nonce, err, errPeerBufferFull)
+		} else if want && !errors.Is(err, txpool.ErrOutOfCapacity) {
+			t.Fatalf("tx %d: refusal for want of room not reported as a capacity error: %v", nonce, err)
+		}
+	}
+	if len(buf.txs) != 2 {
+		t.Errorf("expected peer to hold 2 txs, got %d", len(buf.txs))
+	}
+	// A second peer is unaffected by the first one's exhausted allowance.
+	if err := buf.AddTx([]*types.Transaction{txs[4]}, "peerB")[0]; err != nil {
+		t.Fatalf("second peer rejected: %v", err)
+	}
+
+	// Completing a transaction gives the allowance back.
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	buf.AddCells(txs[0].Hash(), map[string]*PeerDelivery{
+		"peerC": makePeerDelivery(t, 0, 1, indices),
+	}, types.NewCustodyBitmap(indices))
+
+	if err := buf.AddTx([]*types.Transaction{txs[5]}, "peerA")[0]; err != nil {
+		t.Fatalf("peer allowance not released on completion: %v", err)
+	}
+}
+
+// TestBufferCellAccounting checks that buffered cells are counted, charged to
+// the peers that delivered them, and released again.
+//
+// The cells are the larger half of what the buffer holds, and were for a while
+// the half nothing counted.
+func TestBufferCellAccounting(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	blobCount := 1
+	buf := newTestBuffer(t)
+
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	var (
+		tx      = makeV1Tx(t, 0, blobCount, 0, key)
+		hash    = tx.Hash()
+		custody = types.NewCustodyBitmap(indices)
+		first   = makePeerDelivery(t, 0, blobCount, indices[:len(indices)/2])
+		second  = makePeerDelivery(t, 0, blobCount, indices[len(indices)/2:])
+	)
+	buf.AddCells(hash, map[string]*PeerDelivery{"peerA": first, "peerB": second}, custody)
+
+	want := cellsSize(first) + cellsSize(second)
+	if buf.cellBytes != want {
+		t.Fatalf("accounted %d cell bytes, want %d", buf.cellBytes, want)
+	}
+	if buf.cellBytes == 0 {
+		t.Fatal("cells accounted as occupying nothing")
+	}
+	// Each peer is charged for what it delivered, not for the whole entry.
+	if got := buf.peerBytes["peerA"]; got != cellsSize(first) {
+		t.Errorf("peerA charged %d, want %d", got, cellsSize(first))
+	}
+	if got := buf.peerBytes["peerB"]; got != cellsSize(second) {
+		t.Errorf("peerB charged %d, want %d", got, cellsSize(second))
+	}
+	// The transaction completes the entry, which releases all of it.
+	if err := buf.AddTx([]*types.Transaction{tx}, "peerC")[0]; err != nil {
+		t.Fatal(err)
+	}
+	if buf.buffered() != 0 {
+		t.Fatalf("after completion: %d bytes still accounted", buf.buffered())
+	}
+	if len(buf.peerBytes) != 0 {
+		t.Fatalf("after completion: %d peers still charged", len(buf.peerBytes))
+	}
+}
+
+// TestBufferCellsExpire checks that cells nobody ever claims are released with
+// their entry when it times out.
+func TestBufferCellsExpire(t *testing.T) {
+	buf := newTestBuffer(t)
+
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	var hash common.Hash
+	hash[0] = 0xaa
+	buf.AddCells(hash, map[string]*PeerDelivery{
+		"peerA": makePeerDelivery(t, 0, 1, indices),
+	}, types.NewCustodyBitmap(indices))
+
+	if buf.cellBytes == 0 {
+		t.Fatal("cells accounted as occupying nothing")
+	}
+	for _, entry := range buf.cells {
+		entry.added = time.Now().Add(-2 * bufferLifetime)
+	}
+	// Any operation sweeps the expired entries.
+	buf.AddCells(common.Hash{0xbb}, map[string]*PeerDelivery{
+		"peerB": makePeerDelivery(t, 0, 1, indices[:1]),
+	}, types.NewCustodyBitmap(indices[:1]))
+
+	if _, ok := buf.cells[hash]; ok {
+		t.Fatal("expired cells still buffered")
+	}
+	if _, ok := buf.peerBytes["peerA"]; ok {
+		t.Fatal("peerA still charged for expired cells")
+	}
+}
+
+// TestBufferByteAccounting checks that the accounted size tracks the buffer
+// content across every path that adds or removes an entry.
+func TestBufferByteAccounting(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	blobCount := 1
+	buf := newTestBuffer(t)
+
+	tx := makeV1Tx(t, 0, blobCount, 0, key)
+	hash := tx.Hash()
+
+	// A repeated delivery must not be counted twice.
+	buf.AddTx([]*types.Transaction{tx}, "peerA")
+	buf.AddTx([]*types.Transaction{tx}, "peerB")
+	if buf.txBytes != tx.Size() {
+		t.Fatalf("after duplicate delivery: accounted %d, want %d", buf.txBytes, tx.Size())
+	}
+
+	// Completing the transaction must release its space.
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	buf.AddCells(hash, map[string]*PeerDelivery{
+		"peerC": makePeerDelivery(t, 0, blobCount, indices),
+	}, types.NewCustodyBitmap(indices))
+	if buf.txBytes != 0 {
+		t.Fatalf("after completion: accounted %d, want 0", buf.txBytes)
+	}
+
+	// So must expiry.
+	buf.AddTx([]*types.Transaction{makeV1Tx(t, 1, blobCount, 0, key)}, "peerA")
+	for _, entry := range buf.txs {
+		entry.added = time.Now().Add(-2 * bufferLifetime)
+	}
+	buf.AddTx([]*types.Transaction{makeV1Tx(t, 2, blobCount, 0, key)}, "peerA")
+	if want := makeV1Tx(t, 2, blobCount, 0, key).Size(); buf.txBytes != want {
+		t.Fatalf("after expiry: accounted %d, want %d", buf.txBytes, want)
+	}
 }
 
 func TestSortCells(t *testing.T) {
@@ -205,5 +461,67 @@ func TestBadCell(t *testing.T) {
 	}
 	if buf.HasTx(hash) || buf.HasCells(hash) {
 		t.Fatal("buffer should be empty after bad cell drop")
+	}
+}
+
+// TestCompletionBeatsEviction checks that cells completing a buffered
+// transaction are consumed even when the buffer is full: making room for them
+// must not evict the very transaction they complete.
+func TestCompletionBeatsEviction(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+
+	tx := makeV1Tx(t, 0, 1, 0, key)
+	if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
+		t.Fatal(err)
+	}
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	delivery := makePeerDelivery(t, 0, 1, indices)
+
+	// The cells do not fit next to the transaction they complete.
+	buf.maxBytes = tx.Size() + cellsSize(delivery) - 1
+
+	buf.AddCells(tx.Hash(), map[string]*PeerDelivery{"peerB": delivery}, types.NewCustodyBitmap(indices))
+
+	if got := buf.completedCount.Load(); got != 1 {
+		t.Fatalf("completed %d transactions, want 1", got)
+	}
+	if buf.buffered() != 0 || len(buf.peerBytes) != 0 {
+		t.Fatalf("after completion: %d bytes and %d peers still accounted", buf.buffered(), len(buf.peerBytes))
+	}
+}
+
+// TestOverlappingDeliveryReleasesAccounting checks that dropping a transaction
+// because two peers delivered the same cell index releases everything that was
+// accounted for it.
+func TestOverlappingDeliveryReleasesAccounting(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	buf := newTestBuffer(t)
+
+	tx := makeV1Tx(t, 0, 1, 0, key)
+	if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
+		t.Fatal(err)
+	}
+	indices := make([]uint64, kzg4844.DataPerBlob)
+	for i := range indices {
+		indices[i] = uint64(i)
+	}
+	// Both halves verify on their own; they overlap on indices 20..39.
+	buf.AddCells(tx.Hash(), map[string]*PeerDelivery{
+		"peerB": makePeerDelivery(t, 0, 1, indices[:40]),
+		"peerC": makePeerDelivery(t, 0, 1, indices[20:]),
+	}, types.NewCustodyBitmap(indices))
+
+	if got := buf.completedCount.Load(); got != 0 {
+		t.Fatalf("completed %d transactions, want 0", got)
+	}
+	if _, ok := buf.txs[tx.Hash()]; ok {
+		t.Fatal("dropped transaction still buffered")
+	}
+	if buf.buffered() != 0 || len(buf.peerBytes) != 0 {
+		t.Fatalf("after drop: %d bytes and %d peers still accounted", buf.buffered(), len(buf.peerBytes))
 	}
 }
