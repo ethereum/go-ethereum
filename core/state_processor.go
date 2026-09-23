@@ -82,10 +82,11 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		// ready when the validator asks. With a tracer attached the blooms
 		// stay in the loop, it is handed every receipt through OnTxEnd.
 		eagerBloom = cfg.Tracer != nil
-		pipeline   = newReceiptPipeline(len(block.Transactions()), eagerBloom)
+		pipeline   = newDigestPipeline(len(block.Transactions()), eagerBloom)
 	)
-	// Stop the pipeline on the paths that abandon the block half way through.
-	defer pipeline.close()
+	// Run out the pipeline on the paths that abandon the block half way through.
+	defer pipeline.abandon()
+
 	var tracingStateDB = vm.StateDB(statedb)
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)
@@ -131,13 +132,10 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		receipts = append(receipts, receipt)
-		pipeline.add(receipt)
+		pipeline.feedReceipt(receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 		blockAccessList.Merge(bal)
 	}
-	// The receipt trie is complete, let the pipeline finish it off while the
-	// block is wrapped up.
-	pipeline.close()
 	requests, bal, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, evm, uint32(len(block.Transactions())+1))
 	if err != nil {
 		return nil, err
@@ -150,17 +148,20 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	// TODO(rjl493456442) integrate it into the PostExecution.
 	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body(), uint32(len(block.Transactions())+1), blockAccessList)
 
-	// Join the pipeline. The receipts are only complete, and safe to hand back,
-	// once it has filled in their blooms.
-	digest := pipeline.join()
+	// The access list is final, let the pipeline encode it while the block is
+	// validated.
+	pipeline.feedBAL(blockAccessList)
+
+	// Join the receipts. They are only complete, and safe to hand back, once
+	// the pipeline has filled in their blooms.
+	pipeline.joinReceipts()
 
 	return &ProcessResult{
 		Receipts: receipts,
 		Requests: requests,
 		Logs:     allLogs,
 		GasUsed:  gp.Used(),
-		Bal:      blockAccessList,
-		digest:   &digest,
+		pipeline: pipeline,
 	}, nil
 }
 

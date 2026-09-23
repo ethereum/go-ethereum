@@ -180,15 +180,14 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Verify Block-level accessList once Amsterdam is enabled
 	if v.config.IsAmsterdam(block.Number(), block.Time()) {
-		if res.Bal == nil {
+		enc, local := res.encodedAccessList()
+		if enc == nil {
 			return errors.New("block access list is not available in amsterdam")
 		}
-		if block.Header().BlockAccessListHash == nil {
+		if header.BlockAccessListHash == nil {
 			return errors.New("block access list hash not set in header")
 		}
-		enc := res.Bal.ToEncodingObj()
-		local, remote := enc.Hash(), *block.Header().BlockAccessListHash
-		if local != remote {
+		if remote := *header.BlockAccessListHash; local != remote {
 			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
 		}
 		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {

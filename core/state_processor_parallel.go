@@ -232,10 +232,10 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		// The receipts are digested on a pipeline of their own, fed by the
 		// gather as each transaction's turn comes up. Their blooms are hashed
 		// already, the workers do that as they execute.
-		pipeline = newReceiptPipeline(len(txs), true)
+		pipeline = newDigestPipeline(len(txs), true)
 	)
-	// Stop the pipeline on the paths that abandon the block half way through.
-	defer pipeline.close()
+	// Run out the pipeline on the paths that abandon the block half way through.
+	defer pipeline.abandon()
 
 	for i := range txs {
 		res, err := exec.result(i)
@@ -258,13 +258,10 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 			logIndex++
 		}
 		receipts = append(receipts, receipt)
-		pipeline.add(receipt)
+		pipeline.feedReceipt(receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 		blockAccessList.Merge(res.accessList)
 	}
-	// The receipt trie is complete, let the pipeline finish it off while the
-	// block is wrapped up.
-	pipeline.close()
 
 	// Every transaction has been gathered, join the workers for their errors.
 	if err := exec.wait(); err != nil {
@@ -300,13 +297,17 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	}
 	systemExec += time.Since(postStart)
 
+	// The access list is final, let the pipeline encode it while the root
+	// computation is joined.
+	pipeline.feedBAL(blockAccessList)
+
 	// Join the concurrent root computation.
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
-	// Join the receipt pipeline. It has had the whole of execution to work in,
-	// so there should be nothing left to wait for.
-	digest := pipeline.join()
+	// Join the receipts. The pipeline has had the whole of execution to work
+	// on them, so there should be nothing left to wait for.
+	pipeline.joinReceipts()
 
 	statedb.AddPreimages(preState.Preimages())
 	for i := range exec.results {
@@ -329,8 +330,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		Requests: requests,
 		Logs:     allLogs,
 		GasUsed:  gp.Used(),
-		Bal:      blockAccessList,
-		digest:   &digest,
+		pipeline: pipeline,
 	}, nil
 }
 
