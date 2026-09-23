@@ -263,7 +263,7 @@ func (ps *peerSet) Register(p *peerConnection) error {
 		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
-	p.rates = msgrate.NewTracker(ps.rates.MeanCapacities(), ps.rates.MedianRoundTrip())
+	p.rates = msgrate.NewTracker(ps.rates.MeanCapacities(), ps.rates.OptimisticRoundTrip())
 	if err := ps.rates.Track(p.id, p.rates); err != nil {
 		ps.lock.Unlock()
 		return err

@@ -490,7 +490,7 @@ func (s *syncerV2) Register(peer SyncPeerV2) error {
 		return errors.New("already registered")
 	}
 	s.peers[id] = peer
-	s.rates.Track(id, msgrate.NewTracker(s.rates.MeanCapacities(), s.rates.MedianRoundTrip()))
+	s.rates.Track(id, msgrate.NewTracker(s.rates.MeanCapacities(), s.rates.OptimisticRoundTrip()))
 
 	// Mark the peer as idle, even if no sync is running
 	s.accountIdlers[id] = struct{}{}

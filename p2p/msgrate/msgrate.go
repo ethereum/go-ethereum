@@ -70,7 +70,7 @@ const rttMinConfidence = 0.1
 // will fluctuate around the estimated roundtrip, but depending in their load at
 // request time, it might be higher than anticipated. This scaling factor ensures
 // that we allow remote connections some slack but at the same time do enforce a
-// behavior similar to our median peers.
+// behavior similar to our faster peers.
 const ttlScaling = 3
 
 // ttlLimit is the maximum timeout allowance to prevent reaching crazy numbers
@@ -137,7 +137,7 @@ type Tracker struct {
 
 // NewTracker creates a new message rate tracker for a specific peer. An initial
 // RTT is needed to avoid a peer getting marked as an outlier compared to others
-// right after joining. It's suggested to use the median rtt across all peers to
+// right after joining. It's suggested to use Trackers.OptimisticRoundTrip to
 // init a new peer tracker.
 func NewTracker(caps map[uint64]float64, rtt time.Duration) *Tracker {
 	if caps == nil {
@@ -280,20 +280,21 @@ func (t *Trackers) Untrack(id string) error {
 	return nil
 }
 
-// MedianRoundTrip returns the median RTT across all known trackers. The purpose
-// of the median RTT is to initialize a new peer with sane statistics that it will
-// hopefully outperform. If it seriously underperforms, there's a risk of dropping
-// the peer, but that is ok as we're aiming for a strong median.
-func (t *Trackers) MedianRoundTrip() time.Duration {
+// OptimisticRoundTrip returns an RTT estimate biased toward faster peers. After
+// sorting known RTTs ascending, it selects the √n-th entry (not the true median).
+// The purpose is to initialize a new peer with optimistic but attainable stats
+// that it will hopefully outperform. If it seriously underperforms, there's a
+// risk of dropping the peer, but that is ok as we're aiming for faster peers.
+func (t *Trackers) OptimisticRoundTrip() time.Duration {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	return t.medianRoundTrip()
+	return t.optimisticRoundTrip()
 }
 
-// medianRoundTrip is the internal lockless version of MedianRoundTrip to be used
-// by the QoS tuner.
-func (t *Trackers) medianRoundTrip() time.Duration {
+// optimisticRoundTrip is the internal lockless version of OptimisticRoundTrip
+// to be used by the QoS tuner.
+func (t *Trackers) optimisticRoundTrip() time.Duration {
 	// Gather all the currently measured round trip times
 	rtts := make([]float64, 0, len(t.trackers))
 	for _, tt := range t.trackers {
@@ -303,24 +304,25 @@ func (t *Trackers) medianRoundTrip() time.Duration {
 	}
 	sort.Float64s(rtts)
 
-	var median time.Duration
+	var rtt time.Duration
 	switch len(rtts) {
 	case 0:
-		median = rttMaxEstimate
+		rtt = rttMaxEstimate
 	case 1:
-		median = time.Duration(rtts[0])
+		rtt = time.Duration(rtts[0])
 	default:
+		// √n-th fastest peer: deliberately optimistic vs a true median.
 		idx := int(math.Sqrt(float64(len(rtts))))
-		median = time.Duration(rtts[idx])
+		rtt = time.Duration(rtts[idx])
 	}
 	// Restrict the RTT into some QoS defaults, irrelevant of true RTT
-	if median < t.minRoundTrip {
-		median = t.minRoundTrip
+	if rtt < t.minRoundTrip {
+		rtt = t.minRoundTrip
 	}
-	if median > rttMaxEstimate {
-		median = rttMaxEstimate
+	if rtt > rttMaxEstimate {
+		rtt = rttMaxEstimate
 	}
-	return median
+	return rtt
 }
 
 // MeanCapacities returns the capacities averaged across all the added trackers.
@@ -413,7 +415,7 @@ func (t *Trackers) tune() {
 		return // A concurrent request beat us to the tuning
 	}
 	// First thread reaching the tuning point, update the estimates and return
-	t.roundtrip = time.Duration((1-tuningImpact)*float64(t.roundtrip) + tuningImpact*float64(t.medianRoundTrip()))
+	t.roundtrip = time.Duration((1-tuningImpact)*float64(t.roundtrip) + tuningImpact*float64(t.optimisticRoundTrip()))
 	t.confidence = t.confidence + (1-t.confidence)/2
 
 	t.tuned = time.Now()
