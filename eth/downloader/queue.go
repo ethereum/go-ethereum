@@ -308,6 +308,45 @@ func (q *queue) PendingBALs() int {
 	return q.balTaskQueue.Size()
 }
 
+// NextBody returns the number of the next block whose body is to be handed out
+// for retrieval, false if none is pending.
+func (q *queue) NextBody() (uint64, bool) {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	return q.next(q.blockTaskQueue)
+}
+
+// NextReceipt returns the number of the next block whose receipts are to be
+// handed out for retrieval, false if none is pending.
+func (q *queue) NextReceipt() (uint64, bool) {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	return q.next(q.receiptTaskQueue)
+}
+
+// NextBAL returns the number of the next block whose access list is to be
+// handed out for retrieval, false if none is pending.
+func (q *queue) NextBAL() (uint64, bool) {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	return q.next(q.balTaskQueue)
+}
+
+// next returns the number of the block at the head of a task queue, which is
+// the lowest one queued, since tasks are prioritized by block number.
+//
+// Note, this method expects the queue lock to be already held.
+func (q *queue) next(taskQueue *prque.Prque[int64, *types.Header]) (uint64, bool) {
+	if taskQueue.Empty() {
+		return 0, false
+	}
+	header, _ := taskQueue.Peek()
+	return header.Number.Uint64(), true
+}
+
 // SetBALCutoff updates the minimum block number for which block access lists
 // are attempted to be downloaded. Access lists further below the head of the
 // network chain are not guaranteed to be retained by the network, so fetching
@@ -676,6 +715,9 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 	if kind == balType {
 		lacks = p.LacksBAL
 	}
+	// Only hand out blocks within the range the peer announced to serve. The
+	// range is loose at the top, see peerConnection.servedRange.
+	earliest, latest := p.servedRange()
 	for len(send) < count && !taskQueue.Empty() {
 		// the task queue will pop items in order, so the highest prio block
 		// is also the lowest block number.
@@ -713,10 +755,14 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 			progress = true
 			continue
 		}
+		if header.Number.Uint64() > latest {
+			break
+		}
 		// Remove it from the task queue
 		taskQueue.PopItem()
+
 		// Otherwise unless the peer is known not to have the data, add to the retrieve list
-		if lacks(header.Hash()) {
+		if header.Number.Uint64() < earliest || lacks(header.Hash()) {
 			skip = append(skip, header)
 		} else {
 			send = append(send, header)

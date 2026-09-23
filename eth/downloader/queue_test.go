@@ -90,9 +90,16 @@ func (chain *chainData) Len() int {
 	return len(chain.blocks)
 }
 
+// unrangedPeer is a request-less Peer stub for exercising the queue directly;
+// it announces no block range, so it is handed anything.
+type unrangedPeer struct{ Peer }
+
+func (unrangedPeer) BlockRange() *eth.BlockRangeUpdatePacket { return nil }
+
 func dummyPeer(id string) *peerConnection {
 	p := &peerConnection{
 		id:         id,
+		peer:       unrangedPeer{},
 		lacking:    make(map[common.Hash]struct{}),
 		lackingBAL: make(map[common.Hash]struct{}),
 	}

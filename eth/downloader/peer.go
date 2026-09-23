@@ -21,6 +21,7 @@ package downloader
 
 import (
 	"errors"
+	"math"
 	"sync"
 	"time"
 
@@ -33,6 +34,12 @@ import (
 
 const (
 	maxLackingHashes = 4096 // Maximum number of entries allowed on the list or lacking items
+
+	// rangeUpdateSlack is how far past a peer's announced latest block it is
+	// still asked for bodies and receipts. Peers only announce their range
+	// every few dozen blocks, so the announced latest trails the real head
+	// most of the time. Only a peer that is clearly behind is skipped.
+	rangeUpdateSlack = 64
 )
 
 var (
@@ -63,6 +70,13 @@ type Peer interface {
 	RequestBodies([]common.Hash, chan *eth.Response) (*eth.Request, error)
 	RequestReceipts([]common.Hash, []uint64, []uint64, chan *eth.Response) (*eth.Request, error)
 	RequestBALs([]common.Hash, chan *eth.Response) (*eth.Request, error)
+
+	// BlockRange returns the range of blocks the peer announced to serve
+	// (bodies and receipts), nil if it never announced one.
+	//
+	// Headers are always assumed to be available for the full range of
+	// blocks from genesis.
+	BlockRange() *eth.BlockRangeUpdatePacket
 }
 
 // newPeerConnection creates a new downloader peer.
@@ -148,6 +162,33 @@ func (p *peerConnection) BALCapacity(targetRTT time.Duration) int {
 		cap = MaxBALFetch
 	}
 	return cap
+}
+
+// servedRange returns the range of blocks the peer is asked bodies and receipts
+// for, everything if it never announced a range. Headers are always assumed
+// available and not subject to the announced range.
+//
+// The lower bound is exact, a peer never has blocks below its earliest. The
+// upper bound is loose by rangeUpdateSlack: an announcement is a snapshot that
+// trails the peer's real head until the next one, so a peer merely late with
+// its announcement is still asked, and a miss is handled by the usual lacking
+// bookkeeping like any other empty reply.
+func (p *peerConnection) servedRange() (earliest, latest uint64) {
+	r := p.peer.BlockRange()
+	if r == nil {
+		return 0, math.MaxUint64
+	}
+	latest = r.LatestBlock + rangeUpdateSlack
+	if latest < r.LatestBlock {
+		latest = math.MaxUint64 // announced latest close to the type limit
+	}
+	return r.EarliestBlock, latest
+}
+
+// serves returns whether the given block is within the peer's served range.
+func (p *peerConnection) serves(number uint64) bool {
+	earliest, latest := p.servedRange()
+	return earliest <= number && number <= latest
 }
 
 // MarkLacking appends a new entity to the set of items (blocks, receipts, states)
