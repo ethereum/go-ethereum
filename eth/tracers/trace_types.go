@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -64,7 +65,7 @@ func (t TraceTypes) has(name string) bool {
 	return false
 }
 
-// TraceCallArgs is the unsigned-call profile, with strict field validation.
+// TraceCallArgs validates known unsigned-call fields and ignores extensions.
 type TraceCallArgs struct {
 	ethapi.TransactionArgs
 	Type *hexutil.Uint64 `json:"type,omitempty"`
@@ -78,11 +79,13 @@ func (a *TraceCallArgs) UnmarshalJSON(input []byte) error {
 	if fields == nil {
 		return fmt.Errorf("call must be an object")
 	}
+	*a = TraceCallArgs{}
 	for key, value := range fields {
 		switch key {
-		case "from", "to", "gas", "gasPrice", "maxFeePerGas", "maxPriorityFeePerGas", "value", "data", "input", "nonce", "type", "accessList":
+		case "from", "to", "gas", "gasPrice", "maxFeePerGas", "maxPriorityFeePerGas", "value", "data", "input", "nonce", "type", "accessList", "chainId", "maxFeePerBlobGas", "blobVersionedHashes", "authorizationList":
 		default:
-			return fmt.Errorf("unknown call field %q", key)
+			delete(fields, key)
+			continue
 		}
 		if key != "to" && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 			return fmt.Errorf("%s must not be null", key)
@@ -102,12 +105,18 @@ func (a *TraceCallArgs) UnmarshalJSON(input []byte) error {
 			return fmt.Errorf("type must be a hex-encoded byte")
 		}
 		kind := hexutil.Uint64(decoded[0])
-		if kind > 2 {
-			return fmt.Errorf("unsigned trace calls support transaction types 0, 1 and 2")
+		if kind > types.SetCodeTxType {
+			return fmt.Errorf("unsigned trace calls support transaction types 0 through 4")
 		}
 		a.Type = &kind
 	}
-	return json.Unmarshal(input, &a.TransactionArgs)
+	// Filter before decoding so fields outside the profile cannot accidentally
+	// acquire meaning from TransactionArgs (for example, blob sidecars).
+	filtered, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(filtered, &a.TransactionArgs)
 }
 
 // TraceCallManyEntry is exactly one [call, traceTypes] pair.

@@ -256,7 +256,7 @@ func TestTraceNamespaceRPCValidation(t *testing.T) {
 	client := rpc.DialInProc(server)
 	defer client.Close()
 	for _, params := range []string{
-		`[null,[]]`, `[{},null]`, `[{},["unknown"]]`, `[{},["trace","trace"]]`, `[{"bogus":1},[]]`,
+		`[null,[]]`, `[{},null]`, `[{},["unknown"]]`, `[{},["trace","trace"]]`,
 	} {
 		var args []json.RawMessage
 		if err := json.Unmarshal([]byte(params), &args); err != nil {
@@ -330,7 +330,7 @@ func TestTraceNamespaceExplicitCallType(t *testing.T) {
 			t.Fatalf("invalid decoded type: %v", args.Type)
 		}
 	}
-	for _, input := range []string{`{"type":"garbage"}`, `{"type":"0x100"}`, `{"type":"0x3"}`, `{"type":true}`} {
+	for _, input := range []string{`{"type":"garbage"}`, `{"type":"0x100"}`, `{"type":"0x5"}`, `{"type":true}`} {
 		var args TraceCallArgs
 		if err := json.Unmarshal([]byte(input), &args); err == nil {
 			t.Fatalf("accepted %s", input)
