@@ -23,9 +23,13 @@ their behavior. No database migration or additional index is required.
 `types` selects any combination of `trace`, `stateDiff`, and `vmTrace`. An empty
 selection still executes and returns output. Unrequested trace is `[]`; other
 unrequested families are `null`. Unknown transactions and paths return `null`.
-Pending-block tracing and extra arguments are rejected. Calls accept the draft's
-unsigned transaction fields; blob and authorization overrides are outside that
-call profile. Signed raw and mined transactions use the chain's applicable rules.
+Pending-block tracing and extra arguments are rejected. Calls accept the standard
+unsigned transaction fields, including chain ID, blob context and authorization
+lists under the selected fork's rules. Unknown call fields are ignored; known
+fields and conflicting transaction types are validated. Signed raw and mined
+transactions use the chain's applicable rules. Malformed parameters return
+`-32602`, unknown selected blocks `-32001`, and rejected transactions `-32003`.
+Valid transactions that revert or halt in the EVM return execution results.
 
 Call trees omit nested zero-value precompile frames, retaining root precompiles
 and nested frames with nonzero transferred or inherited value. Paths and child
@@ -45,6 +49,10 @@ composes topic positions. Omitted, null or empty lists are unrestricted. Optiona
 list; other values are invalid parameters. Creation recipients are successful created addresses;
 selfdestruct uses the destroyed address and beneficiary; rewards have only a
 recipient. Post-Merge blocks do not receive synthetic issuance rewards.
+Omitted filter bounds mean genesis through latest. The `earliest` tag always
+means genesis in this namespace, including on a node with pruned history.
+Calls and callMany default to latest; available safe and finalized tags select
+their corresponding blocks.
 
 ## Limits and history
 
@@ -59,6 +67,8 @@ recipient. Post-Merge blocks do not receive synthetic issuance rewards.
   Limit and cancellation failures return an error, not a partial trace.
 - Historical methods require retained or reconstructible state and transaction
   lookup data. Recognized unavailable-state errors use the proposed code `4444`.
+  Missing transaction hashes also return `4444` when lookup pruning prevents a
+  definitive absence check; they return `null` with complete lookup history.
   The namespace does not enable archive retention or add an address index.
 
 ## Validation

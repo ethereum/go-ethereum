@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -112,7 +113,7 @@ func (api *TraceAPI) RawTransaction(ctx context.Context, input hexutil.Bytes, ki
 	}
 	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.api.backend.ChainConfig(), block.Number(), block.Time()), block.BaseFee())
 	if err != nil {
-		return nil, traceInvalid("invalid signed transaction: %v", err)
+		return nil, &traceRPCError{-32003, fmt.Sprintf("invalid signed transaction: %v", err)}
 	}
 	vmctx := core.NewEVMBlockContext(block.Header(), api.api.chainContext(ctx), nil)
 	return api.execute(ctx, tx, msg, kinds, vmctx, st, common.Hash{}, 0, false)
@@ -198,12 +199,15 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 		if n == rpc.LatestBlockNumber {
 			return current, nil
 		}
+		if n == rpc.EarliestBlockNumber {
+			n = 0
+		}
 		h, err := api.api.backend.HeaderByNumber(ctx, n)
 		if err != nil {
-			return nil, err
+			return nil, traceBlockError(n, err)
 		}
 		if h == nil {
-			return nil, fmt.Errorf("block %s not found", n)
+			return nil, &traceRPCError{-32001, fmt.Sprintf("block %s not found", n)}
 		}
 		return h, nil
 	}
@@ -283,7 +287,28 @@ func (api *TraceAPI) block(ctx context.Context, number rpc.BlockNumber) (*types.
 	if number == rpc.PendingBlockNumber {
 		return nil, traceInvalid("pending tracing is not supported")
 	}
-	return api.api.blockByNumber(ctx, number)
+	// The trace profile uses genesis even when eth_* resolves earliest to the
+	// node's history retention boundary.
+	if number == rpc.EarliestBlockNumber {
+		number = 0
+	}
+	block, err := api.api.backend.BlockByNumber(ctx, number)
+	if err != nil {
+		return nil, traceBlockError(number, err)
+	}
+	if block == nil {
+		return nil, &traceRPCError{-32001, fmt.Sprintf("block %s not found", number)}
+	}
+	return block, nil
+}
+
+func traceBlockError(number rpc.BlockNumber, err error) error {
+	// These tags report absence as errors rather than nil headers in the backend.
+	// Preserve other backend failures, including the typed pruned-history error.
+	if (number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber) && err.Error() == number.String()+" block not found" {
+		return &traceRPCError{-32001, err.Error()}
+	}
+	return err
 }
 
 func (api *TraceAPI) callState(ctx context.Context, number *rpc.BlockNumber) (*types.Block, *state.StateDB, StateReleaseFunc, error) {
@@ -304,18 +329,36 @@ func (api *TraceAPI) callState(ctx context.Context, number *rpc.BlockNumber) (*t
 
 func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceTypes, block *types.Block, st *state.StateDB, index int) (*TraceExecution, error) {
 	args := input.TransactionArgs
+	if args.AuthorizationList != nil && args.IsEIP4844() {
+		return nil, traceInvalid("authorizationList conflicts with blob fields")
+	}
+	if args.GasPrice != nil && (args.AuthorizationList != nil || args.IsEIP4844()) {
+		return nil, traceInvalid("gasPrice conflicts with blob or authorization fields")
+	}
 	if input.Type != nil {
-		if *input.Type > types.DynamicFeeTxType {
+		if *input.Type > types.SetCodeTxType {
 			return nil, traceInvalid("unsupported unsigned transaction type")
 		}
 		if *input.Type < types.DynamicFeeTxType && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-			return nil, traceInvalid("dynamic fee fields require transaction type 2")
+			return nil, traceInvalid("dynamic fee fields require transaction type 2 or later")
 		}
-		if *input.Type == types.DynamicFeeTxType && args.GasPrice != nil {
-			return nil, traceInvalid("gasPrice conflicts with transaction type 2")
+		if *input.Type >= types.DynamicFeeTxType && args.GasPrice != nil {
+			return nil, traceInvalid("gasPrice conflicts with transaction type %d", *input.Type)
 		}
 		if *input.Type == types.LegacyTxType && args.AccessList != nil {
 			return nil, traceInvalid("accessList conflicts with transaction type 0")
+		}
+		if args.IsEIP4844() && *input.Type != types.BlobTxType {
+			return nil, traceInvalid("blob fields require transaction type 3")
+		}
+		if args.AuthorizationList != nil && *input.Type != types.SetCodeTxType {
+			return nil, traceInvalid("authorizationList requires transaction type 4")
+		}
+		if *input.Type == types.BlobTxType && args.BlobHashes == nil {
+			return nil, traceInvalid("transaction type 3 requires blobVersionedHashes")
+		}
+		if *input.Type == types.SetCodeTxType && args.AuthorizationList == nil {
+			return nil, traceInvalid("transaction type 4 requires authorizationList")
 		}
 	}
 	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
@@ -354,6 +397,11 @@ func (api *TraceAPI) transaction(ctx context.Context, hash common.Hash, kinds Tr
 	if !found {
 		if !api.api.backend.TxIndexDone() {
 			return nil, nil, 0, ethapi.NewTxIndexingError()
+		}
+		// Genesis has no transactions. If any later block lacks lookup history,
+		// a missing hash cannot establish absence from the canonical chain.
+		if tail := rawdb.ReadTxIndexTail(api.api.backend.ChainDb()); tail != nil && *tail > 1 {
+			return nil, nil, 0, &traceRPCError{4444, "transaction lookup history unavailable"}
 		}
 		return nil, nil, 0, nil
 	}
@@ -467,11 +515,14 @@ func (api *TraceAPI) execute(ctx context.Context, tx *types.Transaction, msg *co
 	if capture.err != nil {
 		return nil, capture.err
 	}
-	if err != nil {
-		return nil, err
-	}
 	if err := st.Error(); err != nil {
 		return nil, traceStateError(err)
+	}
+	if err != nil {
+		// EVM reverts and exceptional halts are execution results. Errors from
+		// ApplyTransactionWithEVM reject the message before execution; a failed
+		// state read must take precedence over any resulting validation error.
+		return nil, &traceRPCError{-32003, err.Error()}
 	}
 	result := capture.result()
 	if err := st.Error(); err != nil {
