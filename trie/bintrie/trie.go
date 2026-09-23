@@ -403,7 +403,7 @@ func (t *BinaryTrie) Copy() *BinaryTrie {
 		reader:     t.reader,
 		tracer:     t.tracer.Copy(),
 		groupDepth: t.groupDepth,
-		recorder:   t.recorder,
+		recorder:   t.recorder.Copy(),
 	}
 }
 
