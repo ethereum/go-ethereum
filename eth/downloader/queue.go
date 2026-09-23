@@ -71,6 +71,13 @@ var (
 	// number of items the average item size predicts to fit into a reply, so
 	// that a run of smaller-than-average items still fills the reply.
 	requestOverfetch = 1.5
+
+	// balLookahead is the maximum distance ahead of the first undelivered
+	// result for which access lists are retrieved. Without it, lists for
+	// blocks far ahead of the import head could exhaust balCacheMemory and
+	// stall the retrieval of the ones about to be imported until the chain
+	// catches up with them, which may take hours without parallel execution.
+	balLookahead = uint64(4 * MaxBALFetch)
 )
 
 var (
@@ -712,8 +719,10 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 	// components: a peer missing a block's access list may well have its
 	// body and receipts.
 	lacks := p.Lacks
+	var balLimit uint64
 	if kind == balType {
 		lacks = p.LacksBAL
+		balLimit = q.resultCache.Offset() + balLookahead
 	}
 	// Only hand out blocks within the range the peer announced to serve. The
 	// range is loose at the top, see peerConnection.servedRange.
@@ -722,6 +731,14 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		// the task queue will pop items in order, so the highest prio block
 		// is also the lowest block number.
 		header, _ := taskQueue.Peek()
+
+		// Access lists are only retrieved within a window ahead of the import
+		// head, so that the attached lists are consumed shortly and cannot
+		// starve the retrieval of lower ones.
+		if kind == balType && header.Number.Uint64() >= balLimit {
+			throttled = len(skip) == 0
+			break
+		}
 
 		// we can ask the resultcache if this header is within the
 		// "prioritized" segment of blocks. If it is not, we need to throttle

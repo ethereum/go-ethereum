@@ -382,6 +382,94 @@ func TestBlockAccessLists(t *testing.T) {
 	}
 }
 
+// TestBlockAccessListLookahead tests that access lists are only retrieved within
+// a window ahead of the import head, so that lists attached to blocks far ahead
+// cannot exhaust the memory allowance and starve the retrieval of lists for the
+// blocks about to be imported.
+func TestBlockAccessListLookahead(t *testing.T) {
+	list := bal.BlockAccessList{{Address: common.Address{0x01}}}
+	enc, err := rlp.EncodeToBytes(&list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	balHash := crypto.Keccak256Hash(enc)
+
+	// Restrict the window to 4 blocks and the allowance to less than 2 lists
+	defer func(lookahead uint64, memory int) {
+		balLookahead, balCacheMemory = lookahead, memory
+	}(balLookahead, balCacheMemory)
+	balLookahead, balCacheMemory = 4, 2*len(enc)-1
+
+	// Assemble a chain of non-empty headers committing to the access list, so
+	// that results are only delivered once explicitly marked complete
+	var (
+		headers = make([]*types.Header, 16)
+		hashes  = make([]common.Hash, 16)
+		parent  common.Hash
+	)
+	for i := range headers {
+		headers[i] = &types.Header{
+			ParentHash:          parent,
+			Number:              big.NewInt(int64(i + 1)),
+			Difficulty:          big.NewInt(1),
+			TxHash:              common.Hash{0x01},
+			UncleHash:           types.EmptyUncleHash,
+			ReceiptHash:         types.EmptyReceiptsHash,
+			BlockAccessListHash: &balHash,
+		}
+		hashes[i] = headers[i].Hash()
+		parent = hashes[i]
+	}
+	q := newQueue(16, 16)
+	q.Prepare(1, FullSync)
+	q.Schedule(headers, hashes, 1)
+
+	// Only the access lists within the window should be handed out
+	peer := dummyPeer("peer-1")
+	req, _, throttle := q.ReserveBALs(peer, 16)
+	if got, exp := len(req.Headers), 4; got != exp {
+		t.Fatalf("expected %d requests, got %d", exp, got)
+	}
+	if got, exp := req.Headers[3].Number.Uint64(), uint64(4); got != exp {
+		t.Fatalf("expected last header %d, got %d", exp, got)
+	}
+	if !throttle {
+		t.Fatal("expected throttling beyond the lookahead window")
+	}
+	// Deliver a partial response exceeding the memory allowance: the remainder
+	// goes back to the queue, but no more retrievals are handed out
+	if accepted, err := q.DeliverBALs(peer.id, []rlp.RawValue{enc, enc}, []common.Hash{balHash, balHash}); accepted != 2 || err != nil {
+		t.Fatalf("unexpected delivery result, accepted %d, err %v", accepted, err)
+	}
+	if req, _, throttle = q.ReserveBALs(peer, 16); req != nil || !throttle {
+		t.Fatalf("expected memory throttling, got request %v, throttle %v", req, throttle)
+	}
+	// Import the blocks with the attached lists, which must release both the
+	// memory allowance and the window for the next blocks
+	for _, item := range q.resultCache.items[:2] {
+		item.SetBodyDone()
+	}
+	results := q.Results(false)
+	if got, exp := len(results), 2; got != exp {
+		t.Fatalf("wrong result count, got %d, exp %d", got, exp)
+	}
+	for i, result := range results {
+		if result.BAL() == nil {
+			t.Errorf("block %d: missing access list", i+1)
+		}
+	}
+	req, _, _ = q.ReserveBALs(peer, 16)
+	if req == nil {
+		t.Fatal("expected access list retrieval to resume")
+	}
+	if got, exp := len(req.Headers), 4; got != exp {
+		t.Fatalf("expected %d requests, got %d", exp, got)
+	}
+	if first, last := req.Headers[0].Number.Uint64(), req.Headers[3].Number.Uint64(); first != 3 || last != 6 {
+		t.Fatalf("wrong retrieval range, got %d-%d, exp 3-6", first, last)
+	}
+}
+
 // XTestDelivery does some more extensive testing of events that happen,
 // blocks that become known and peers that make reservations and deliveries.
 // disabled since it's not really a unit-test, but can be executed to test
