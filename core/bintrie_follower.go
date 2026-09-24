@@ -203,8 +203,12 @@ func (f *bintrieFollower) loop() {
 					close(stop)
 					<-done
 				}
-				rawdb.WritePBTMigrationDone(f.db)
-				log.Info("State migration finished", "closed", closer.Number)
+				// An archive node keeps its follower past the close; decide once.
+				if !rawdb.ReadPBTMigrationDone(f.db) {
+					rawdb.WritePBTMigrationDone(f.db)
+					f.chain.disposeMerkle()
+					log.Info("State migration finished", "closed", closer.Number)
+				}
 				return
 			}
 			latest = ev.Header
@@ -647,6 +651,11 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// The marker is written before release takes this lock, so a handle
+	// handed out here is retired by the same disposal.
+	if !t.pbt && rawdb.ReadPBTMerkleDisposed(f.db) {
+		return nil, errors.New("merkle trie disposed")
+	}
 	if t.handle != nil {
 		return t.handle, nil
 	}
@@ -863,12 +872,29 @@ func (t *followerTree) journal(head *types.Header) {
 	if head != nil && t.f.config.IsBinaryTrie(head.Number, head.Time) == t.pbt {
 		root = head.Root
 	}
-	if err := handle.Journal(root); err != nil {
-		log.Warn("Failed to journal shadow trie", "err", err)
+	// Never resolved: a merkle handle an archive node opened only for reads.
+	if root != (common.Hash{}) {
+		if err := handle.Journal(root); err != nil {
+			log.Warn("Failed to journal shadow trie", "err", err)
+		}
 	}
 	if err := handle.Close(); err != nil {
 		log.Error("Failed to close shadow trie", "err", err)
 	}
+}
+
+// release drops the tree's handle, unjournaled, and returns it if the follower
+// owns it; a shared handle is bc.triedb, retired by its owner.
+func (t *followerTree) release() *triedb.Database {
+	t.f.mu.Lock()
+	defer t.f.mu.Unlock()
+
+	handle, owned := t.handle, t.owned
+	t.handle, t.sdb = nil, nil
+	if !owned {
+		return nil
+	}
+	return handle
 }
 
 func (t *followerTree) cursor() (uint64, common.Hash, common.Hash) {
@@ -887,6 +913,9 @@ func (t *followerTree) hasState(root common.Hash) bool {
 	t.f.mu.Lock()
 	handle := t.handle
 	t.f.mu.Unlock()
+	if handle == nil {
+		return false
+	}
 	_, err := handle.NodeReader(root)
 	return err == nil
 }

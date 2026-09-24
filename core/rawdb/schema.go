@@ -82,6 +82,10 @@ var (
 	// pbtMigrationDoneKey marks a finished migration.
 	pbtMigrationDoneKey = []byte("PBTMigrationDone")
 
+	// pbtMerkleDisposedKey marks the merkle state gone or going: written
+	// before the first deletion, never cleared.
+	pbtMerkleDisposedKey = []byte("PBTMerkleDisposed")
+
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
 
@@ -181,6 +185,16 @@ var (
 		trieJournalKey[:1],      // TrieJournal
 		pbtFlatStateKey[:1],     // PBTFlatState attestation, PBTAnchor
 		StateHistoryIndexPrefix, // history index metadata
+	}
+
+	// MerkleKeyFamilies lists the merkle state's key families. State ids share
+	// their byte with the Last* head keys and are deleted by key length.
+	MerkleKeyFamilies = [][]byte{
+		TrieNodeAccountPrefix,   // path-scheme account trie nodes
+		TrieNodeStoragePrefix,   // path-scheme storage trie nodes
+		SnapshotAccountPrefix,   // flat accounts
+		SnapshotStoragePrefix,   // flat storage slots
+		StateHistoryIndexPrefix, // history index data and metadata
 	}
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage

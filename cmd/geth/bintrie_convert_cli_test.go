@@ -21,6 +21,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 )
 
 // bintrieCLIGenesis funds one EOA and one contract with code and storage on
@@ -104,6 +108,36 @@ func TestBintrieConvertCLI(t *testing.T) {
 	// --force wipes and reconverts; on a real datadir this is the one path
 	// where the wipe resets the PBT freezers and removes the journal file.
 	runCmd(false, "bintrie", "convert", "--force")
+
+	// With the merkle state gone, --force would leave neither tree.
+	chaindb := mustOpenChainDB(t, datadir)
+	rawdb.WritePBTMerkleDisposed(chaindb)
+	if err := chaindb.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out = runCmd(true, "bintrie", "convert", "--force")
+	if !strings.Contains(out, "refusing --force") {
+		t.Fatalf("no --force refusal without merkle state:\n%s", out)
+	}
+	out = runCmd(true, "bintrie", "convert")
+	if !strings.Contains(out, "re-import rather than reconvert") {
+		t.Fatalf("refusal lacks the re-import hint:\n%s", out)
+	}
+	after := mustOpenChainDB(t, datadir)
+	defer after.Close()
+	if !rawdb.ReadPBTFlatState(rawdb.NewTable(rawdb.NewDatabase(after), string(rawdb.PBTPrefix))) {
+		t.Fatal("refused --force wiped the namespace")
+	}
+}
+
+// mustOpenChainDB opens chaindata directly; the CLI cannot write the marker.
+func mustOpenChainDB(t *testing.T, datadir string) ethdb.KeyValueStore {
+	t.Helper()
+	db, err := pebble.New(filepath.Join(datadir, "geth", "chaindata"), 0, 0, "", false)
+	if err != nil {
+		t.Fatalf("failed to open chaindata: %v", err)
+	}
+	return db
 }
 
 // TestBintrieImportCLI drives the consumer story end to end through the real

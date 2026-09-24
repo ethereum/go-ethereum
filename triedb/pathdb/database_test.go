@@ -700,6 +700,30 @@ func TestRecoverableDisabled(t *testing.T) {
 	}
 }
 
+// TestRetireStopsReads: a reader taken before Retire fails afterwards, and no
+// snap-sync marker is left behind.
+func TestRetireStopsReads(t *testing.T) {
+	tester := newTester(t, &testerConfig{layers: 8})
+	defer tester.release()
+
+	reader, err := tester.db.StateReader(tester.roots[len(tester.roots)-1])
+	if err != nil {
+		t.Fatalf("open reader: %v", err)
+	}
+	if _, err := reader.Account(common.Hash{0x01}); err != nil {
+		t.Fatalf("read before retire: %v", err)
+	}
+	if err := tester.db.Retire(); err != nil {
+		t.Fatalf("retire: %v", err)
+	}
+	if _, err := reader.Account(common.Hash{0x01}); !errors.Is(err, errSnapshotStale) {
+		t.Fatalf("read after retire: got %v, want %v", err, errSnapshotStale)
+	}
+	if flag := rawdb.ReadSnapSyncStatusFlag(tester.db.diskdb); flag == rawdb.StateSyncRunning {
+		t.Fatal("retire left the snap-sync marker")
+	}
+}
+
 // TestProofOnlyRefusesUpdate pins that a proof-only database cannot be written
 // to - the trie skips deletion bookkeeping on such a database, which is sound
 // exactly because no commit can follow.

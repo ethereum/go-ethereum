@@ -333,6 +333,17 @@ func (db *Database) Disable() error {
 	return pdb.Disable()
 }
 
+// Retire deactivates the database because the state under it is being
+// deleted. It's only supported by path-based database and will return an
+// error for others.
+func (db *Database) Retire() error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Retire()
+}
+
 // Enable activates database and resets the state tree with the provided persistent
 // state root once the state sync is finished.
 func (db *Database) Enable(root common.Hash) error {

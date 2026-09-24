@@ -429,6 +429,30 @@ func (db *Database) Disable() error {
 	return nil
 }
 
+// Retire deactivates the database for good because the state under it is
+// being deleted. Unlike Disable it leaves no sync marker behind.
+func (db *Database) Retire() error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if db.readOnly {
+		return errDatabaseReadOnly
+	}
+	if db.waitSync {
+		return nil
+	}
+	db.waitSync = true
+
+	disk := db.tree.bottom()
+	if err := disk.terminate(); err != nil {
+		return err
+	}
+	disk.resetCache() // a stale layer refuses to release its caches
+	disk.markStale()
+	log.Info("Retired trie database")
+	return nil
+}
+
 // resetForReactivation performs the pathdb-side bookkeeping shared by both
 // Enable and AdoptSyncedState.
 func (db *Database) resetForReactivation(root common.Hash) error {

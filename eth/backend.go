@@ -297,6 +297,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := eth.blockchain.SettleMerkleDisposal(); err != nil {
+		return nil, err
+	}
 
 	// Initialize filtermaps log index.
 	fmConfig := filtermaps.Config{

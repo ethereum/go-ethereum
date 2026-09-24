@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 
@@ -98,6 +99,88 @@ func WritePBTMigrationDone(db ethdb.KeyValueWriter) {
 	if err := db.Put(pbtMigrationDoneKey, []byte{1}); err != nil {
 		log.Crit("Failed to store migration done marker", "err", err)
 	}
+}
+
+// ReadPBTMerkleDisposed reports whether the merkle state is gone or going.
+func ReadPBTMerkleDisposed(db ethdb.KeyValueReader) bool {
+	data, _ := db.Get(pbtMerkleDisposedKey)
+	return len(data) == 1 && data[0] == 1
+}
+
+// WritePBTMerkleDisposed condemns the merkle state; write it before the first
+// deletion.
+func WritePBTMerkleDisposed(db ethdb.KeyValueWriter) {
+	if err := db.Put(pbtMerkleDisposedKey, []byte{1}); err != nil {
+		log.Crit("Failed to store merkle disposal marker", "err", err)
+	}
+}
+
+// DeleteMerkleState deletes the merkle state from the key-value store: the
+// snapshot and pathdb singletons, MerkleKeyFamilies, then the state ids. Path
+// scheme only: on the hash scheme the families also hold bare-hash code.
+// Interrupt stops it between batches; a rerun finishes the job.
+func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) error {
+	batch := db.NewBatch()
+	DeleteSnapshotRoot(batch)
+	DeleteSnapshotJournal(batch)
+	DeleteSnapshotGenerator(batch)
+	DeleteSnapshotRecoveryNumber(batch)
+	DeleteSnapshotSyncStatus(batch)
+	DeleteSnapshotDisabled(batch)
+	// The merkle pathdb's singletons: history heads and the in-kv journal.
+	DeleteStateHistoryIndexMetadata(batch)
+	DeleteTrienodeHistoryIndexMetadata(batch)
+	if err := batch.Delete(trieJournalKey); err != nil {
+		return err
+	}
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	stop := func(bool) bool {
+		select {
+		case <-interrupt:
+			return true
+		default:
+			return false
+		}
+	}
+	for _, prefix := range MerkleKeyFamilies {
+		if err := SafeDeleteRange(db, prefix, increaseKey(bytes.Clone(prefix)), false, stop); err != nil {
+			return err
+		}
+	}
+	return deleteStateIDs(db, stop)
+}
+
+// deleteStateIDs removes the root-to-id mappings and LastStateID by key
+// length; see MerkleKeyFamilies.
+func deleteStateIDs(db ethdb.KeyValueStore, stop func(bool) bool) error {
+	it := NewKeyLengthIterator(db.NewIterator(stateIDPrefix, nil), len(stateIDPrefix)+common.HashLength)
+	defer it.Release()
+
+	batch := db.NewBatch()
+	for it.Next() {
+		if err := batch.Delete(it.Key()); err != nil {
+			return err
+		}
+		if batch.ValueSize() < ethdb.IdealBatchSize {
+			continue
+		}
+		if err := batch.Write(); err != nil {
+			return err
+		}
+		batch.Reset()
+		if stop(true) {
+			return ErrDeleteRangeInterrupted
+		}
+	}
+	if err := it.Error(); err != nil {
+		return err
+	}
+	if err := batch.Delete(persistentStateIDKey); err != nil {
+		return err
+	}
+	return batch.Write()
 }
 
 // WipeMigrationState clears the migration bookkeeping, done marker first,
