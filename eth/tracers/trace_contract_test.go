@@ -166,6 +166,100 @@ func TestTraceNamespaceCallRejectionCodes(t *testing.T) {
 	}
 }
 
+func TestTraceNamespaceCallBlockHashAndOverrides(t *testing.T) {
+	// Return NUMBER, BASEFEE and GASPRICE.
+	code := common.FromHex("43600052486020523a60405260606000f3")
+	api, backend := traceTestAPI(t, code, nil)
+	client := traceContractClient(t, api)
+	genesis := backend.chain.Genesis().Hash()
+	args := map[string]any{"from": traceTestSender, "to": traceTestTarget}
+	words := func(values ...int64) []byte {
+		var out []byte
+		for _, v := range values {
+			out = append(out, common.LeftPadBytes(big.NewInt(v).Bytes(), 32)...)
+		}
+		return out
+	}
+	// EIP-1898 block selectors, for trace_call and trace_callMany.
+	for _, selector := range []any{genesis, map[string]any{"blockHash": genesis}, map[string]any{"blockHash": genesis, "requireCanonical": true}} {
+		var result TraceExecution
+		if err := client.Call(&result, "trace_call", args, TraceTypes{}, selector); err != nil || !bytes.Equal(result.Output, words(0, 0, 0)) {
+			t.Fatalf("trace_call %v: %x %v", selector, []byte(result.Output), err)
+		}
+		var many []TraceExecution
+		if err := client.Call(&many, "trace_callMany", []any{[]any{args, TraceTypes{}}}, selector); err != nil || len(many) != 1 {
+			t.Fatalf("trace_callMany %v: %v %v", selector, many, err)
+		}
+	}
+	var result json.RawMessage
+	requireTraceCode(t, client.Call(&result, "trace_call", args, TraceTypes{}, common.Hash{1}), -32001)
+	requireTraceCode(t, client.Call(&result, "trace_callMany", []any{}, map[string]any{"blockHash": common.Hash{1}}), -32001)
+
+	// Null overrides are accepted.
+	var plain TraceExecution
+	if err := client.Call(&plain, "trace_call", args, TraceTypes{}, "latest", nil, nil); err != nil || !bytes.Equal(plain.Output, words(0, 0, 0)) {
+		t.Fatalf("null overrides: %x %v", []byte(plain.Output), err)
+	}
+	// State overrides apply before execution, and stateDiff is relative to them.
+	unfunded := common.HexToAddress("0xcafe0009")
+	state := map[common.Address]any{
+		traceTestTarget: map[string]any{"code": hexutil.Bytes(common.FromHex("602a60005260206000f3")), "stateDiff": map[common.Hash]common.Hash{{}: {31: 1}}},
+		unfunded:        map[string]any{"balance": "0x1"},
+	}
+	var overridden TraceExecution
+	transfer := map[string]any{"from": unfunded, "to": traceTestTarget, "value": "0x1"}
+	if err := client.Call(&overridden, "trace_call", transfer, TraceTypes{"stateDiff"}, "latest", state); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(overridden.Output, words(42)) {
+		t.Fatalf("code override: %x", []byte(overridden.Output))
+	}
+	if diff := overridden.StateDiff[unfunded]; diff == nil || diff.Balance.(map[string]any)["*"].(map[string]any)["from"] != "0x1" {
+		t.Fatalf("stateDiff must start from the overridden state: %+v", overridden.StateDiff)
+	}
+	var many []TraceExecution
+	if err := client.Call(&many, "trace_callMany", []any{[]any{transfer, TraceTypes{}}, []any{args, TraceTypes{}}}, "latest", state); err != nil || len(many) != 2 || !bytes.Equal(many[1].Output, words(42)) {
+		t.Fatalf("callMany state override: %+v %v", many, err)
+	}
+	// Block overrides replace the environment, and the zero-fee rule uses the
+	// overridden base fee.
+	block := map[string]any{"number": "0x10", "baseFeePerGas": "0x7"}
+	for fees, want := range map[string][]byte{
+		`{}`:                      words(16, 0, 0),
+		`{"maxFeePerGas":"0x64"}`: words(16, 7, 7),
+		`{"gasPrice":"0x9"}`:      words(16, 7, 9),
+		`{"maxFeePerGas":"0x6"}`:  nil,
+		`{"gasPrice":"0x0"}`:      words(16, 0, 0),
+		`{"maxPriorityFeePerGas":"0x1","maxFeePerGas":"0x64"}`: words(16, 7, 8),
+	} {
+		call := map[string]any{"from": traceTestSender, "to": traceTestTarget}
+		if err := json.Unmarshal([]byte(fees), &call); err != nil {
+			t.Fatal(err)
+		}
+		var result TraceExecution
+		err := client.Call(&result, "trace_call", call, TraceTypes{}, "latest", nil, block)
+		if want == nil {
+			requireTraceCode(t, err, -38012)
+			continue
+		}
+		if err != nil || !bytes.Equal(result.Output, want) {
+			t.Fatalf("block override %s: %x %v", fees, []byte(result.Output), err)
+		}
+		var many []TraceExecution
+		if err := client.Call(&many, "trace_callMany", []any{[]any{call, TraceTypes{}}}, "latest", nil, block); err != nil || !bytes.Equal(many[0].Output, want) {
+			t.Fatalf("callMany block override %s: %v %v", fees, many, err)
+		}
+	}
+	// Invalid overrides are invalid parameters.
+	for _, params := range [][]any{
+		{args, TraceTypes{}, "latest", map[common.Address]any{traceTestTarget: map[string]any{"state": map[string]any{}, "stateDiff": map[string]any{}}}},
+		{args, TraceTypes{}, "latest", nil, map[string]any{"beaconRoot": common.Hash{}}},
+		{args, TraceTypes{}, "latest", nil, nil, nil},
+	} {
+		requireTraceCode(t, client.Call(&result, "trace_call", params...), -32602)
+	}
+}
+
 func TestTraceNamespaceCallFields(t *testing.T) {
 	api, backend := traceTestAPI(t, common.FromHex("602a60005260206000f3"), nil)
 	client := traceContractClient(t, api)
@@ -248,6 +342,7 @@ func TestTraceNamespaceConflictingCallFields(t *testing.T) {
 		{"gasPrice": "0x0", "authorizationList": []types.SetCodeAuthorization{}},
 		{"blobVersionedHashes": []common.Hash{}, "authorizationList": []types.SetCodeAuthorization{}},
 		{"chainId": "0xffff"},
+		{"data": "0x01", "input": "0x02"},
 	} {
 		fields["to"] = traceTestTarget
 		var result json.RawMessage

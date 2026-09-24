@@ -171,7 +171,7 @@ func TestTraceNamespaceSelfDestructForkRules(t *testing.T) {
 			traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)}, traceTestTarget: {Balance: big.NewInt(7), Code: code},
 		}}, nil)
 		api := NewTraceAPI(backend)
-		result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "stateDiff", "vmTrace"}, nil)
+		result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "stateDiff", "vmTrace"}, nil, nil, nil)
 		backend.teardown()
 		if err != nil {
 			t.Fatal(err)

@@ -66,7 +66,7 @@ func TestTraceNamespaceVMEffects(t *testing.T) {
 	// Store 42, MCOPY it to offset 32, return the copied word.
 	code := common.FromHex("602a6000526020600060205e60206020f3")
 	api, _ := traceTestAPI(t, code, nil)
-	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace", "stateDiff"}, nil)
+	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace", "stateDiff"}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestTraceNamespaceBaseFeeAndEmptySelection(t *testing.T) {
 	} {
 		args := traceTestArgs(&traceTestTarget, nil)
 		tc.modify(&args)
-		result, err := api.Call(context.Background(), args, TraceTypes{}, nil)
+		result, err := api.Call(context.Background(), args, TraceTypes{}, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
@@ -131,7 +131,7 @@ func TestTraceNamespaceBaseFeeAndEmptySelection(t *testing.T) {
 		}
 	}
 	for _, kinds := range []TraceTypes{{}, {"stateDiff"}, {"vmTrace"}} {
-		result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), kinds, nil)
+		result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), kinds, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -147,7 +147,7 @@ func TestTraceNamespaceIgnoresSuppliedNonce(t *testing.T) {
 		args := traceTestArgs(nil, common.FromHex("600160005360016000f3"))
 		supplied := hexutil.Uint64(nonce)
 		args.Nonce = &supplied
-		result, err := api.Call(context.Background(), args, TraceTypes{"trace", "stateDiff"}, nil)
+		result, err := api.Call(context.Background(), args, TraceTypes{"trace", "stateDiff"}, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("nonce %d: %v", nonce, err)
 		}
@@ -171,7 +171,7 @@ func TestTraceNamespaceSequentialRollback(t *testing.T) {
 	for _, n := range []byte{1, 2, 0} {
 		calls = append(calls, TraceCallManyEntry{traceTestArgs(&traceTestTarget, common.LeftPadBytes([]byte{n}, 32)), TraceTypes{"trace", "stateDiff"}})
 	}
-	result, err := api.CallMany(context.Background(), calls, nil)
+	result, err := api.CallMany(context.Background(), calls, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestTraceNamespaceSequentialRollback(t *testing.T) {
 	if diff := result[1].StateDiff[traceTestTarget]; diff != nil && len(diff.Storage) != 0 {
 		t.Fatalf("reverted storage survived: %+v", diff)
 	}
-	independent, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{}, nil)
+	independent, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{}, nil, nil, nil)
 	if err != nil || new(big.Int).SetBytes(independent.Output).Sign() != 0 {
 		t.Fatalf("simulation leaked: %+v %v", independent, err)
 	}
@@ -196,7 +196,7 @@ func TestTraceNamespaceNestedPrecompile(t *testing.T) {
 		code := common.FromHex("602a60005360016020600160006000600461fffff15060016020f3")
 		code[14] = value
 		api, _ := traceTestAPI(t, code, nil)
-		result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace"}, nil)
+		result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace"}, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -217,7 +217,7 @@ func TestTraceNamespaceNestedPrecompile(t *testing.T) {
 	}
 	api, _ := traceTestAPI(t, nil, nil)
 	identity := common.HexToAddress("0x4")
-	root, err := api.Call(context.Background(), traceTestArgs(&identity, []byte{42}), TraceTypes{"trace"}, nil)
+	root, err := api.Call(context.Background(), traceTestArgs(&identity, []byte{42}), TraceTypes{"trace"}, nil, nil, nil)
 	if err != nil || len(root.Trace) != 1 || !bytes.Equal(root.Output, []byte{42}) {
 		t.Fatalf("root precompile omitted: %v %v", root, err)
 	}
@@ -231,7 +231,7 @@ func TestTraceNamespaceConstructorAndDelegation(t *testing.T) {
 	authority := crypto.PubkeyToAddress(key.PublicKey)
 	code := common.FromHex("602a60005260206000f3")
 	api, _ := traceTestAPI(t, code, types.GenesisAlloc{authority: {Balance: big.NewInt(1), Code: types.AddressToDelegation(traceTestTarget)}})
-	delegated, err := api.Call(context.Background(), traceTestArgs(&authority, nil), TraceTypes{"vmTrace"}, nil)
+	delegated, err := api.Call(context.Background(), traceTestArgs(&authority, nil), TraceTypes{"vmTrace"}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestTraceNamespaceConstructorAndDelegation(t *testing.T) {
 		t.Fatal("delegation marker substituted for executing code")
 	}
 	init := common.FromHex("600160005360016000f3")
-	created, err := api.Call(context.Background(), traceTestArgs(nil, init), TraceTypes{"trace", "vmTrace", "stateDiff"}, nil)
+	created, err := api.Call(context.Background(), traceTestArgs(nil, init), TraceTypes{"trace", "vmTrace", "stateDiff"}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,14 +354,14 @@ func TestTraceNamespaceCancellation(t *testing.T) {
 		// Omitted gas runs up to the RPC gas cap.
 		args := traceTestArgs(&traceTestTarget, nil)
 		args.Gas = nil
-		_, err := api.Call(ctx, args, TraceTypes{"vmTrace"}, nil)
+		_, err := api.Call(ctx, args, TraceTypes{"vmTrace"}, nil, nil, nil)
 		cancel()
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("cancelled execution: %v", err)
 		}
 		// A subsequent request can reuse the EVM pool without inheriting cancellation.
 		empty := common.HexToAddress("0xcafe0003")
-		if _, err := api.Call(context.Background(), traceTestArgs(&empty, nil), TraceTypes{"trace"}, nil); err != nil {
+		if _, err := api.Call(context.Background(), traceTestArgs(&empty, nil), TraceTypes{"trace"}, nil, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -372,7 +372,7 @@ func TestTraceNamespaceExplicitCallType(t *testing.T) {
 	for _, kind := range []hexutil.Uint64{0, 1, 2} {
 		args := traceTestArgs(&traceTestTarget, nil)
 		args.Type = &kind
-		if _, err := api.Call(context.Background(), args, TraceTypes{"trace"}, nil); err != nil {
+		if _, err := api.Call(context.Background(), args, TraceTypes{"trace"}, nil, nil, nil); err != nil {
 			t.Fatalf("type %d: %v", kind, err)
 		}
 	}
@@ -396,7 +396,7 @@ func TestTraceNamespaceExplicitCallType(t *testing.T) {
 		if err := json.Unmarshal([]byte(input), &args); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := api.Call(context.Background(), args, TraceTypes{}, nil); err == nil {
+		if _, err := api.Call(context.Background(), args, TraceTypes{}, nil, nil, nil); err == nil {
 			t.Fatalf("accepted conflicting fields %s", input)
 		}
 	}
@@ -407,7 +407,7 @@ func TestTraceNamespaceStorageMarkers(t *testing.T) {
 	code := common.FromHex("602a6000556000600155")
 	slot0, slot1 := common.Hash{}, common.Hash{31: 1}
 	api, _ := traceTestAPI(t, code, types.GenesisAlloc{traceTestTarget: {Code: code, Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{slot1: {31: 7}}}})
-	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"stateDiff"}, nil)
+	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"stateDiff"}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +420,7 @@ func TestTraceNamespaceStorageMarkers(t *testing.T) {
 		t.Fatalf("surviving account storage:\nhave %s\nwant %s", have, want)
 	}
 	// A born account's storage carries the creation marker.
-	created, err := api.Call(context.Background(), traceTestArgs(nil, common.FromHex("602a60005500")), TraceTypes{"trace", "stateDiff"}, nil)
+	created, err := api.Call(context.Background(), traceTestArgs(nil, common.FromHex("602a60005500")), TraceTypes{"trace", "stateDiff"}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +445,7 @@ func TestTraceNamespaceEmptyVMFrames(t *testing.T) {
 	code := append(append(append(call(empty, 0), call(common.HexToAddress("0x4"), 0)...), call(empty, 2)...), 0x00)
 	api, _ := traceTestAPI(t, code, nil)
 	for _, to := range []common.Address{empty, common.HexToAddress("0x4")} {
-		result, err := api.Call(context.Background(), traceTestArgs(&to, nil), TraceTypes{"vmTrace"}, nil)
+		result, err := api.Call(context.Background(), traceTestArgs(&to, nil), TraceTypes{"vmTrace"}, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -453,7 +453,7 @@ func TestTraceNamespaceEmptyVMFrames(t *testing.T) {
 			t.Fatalf("root vmTrace for %x: %s", to, have)
 		}
 	}
-	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"vmTrace"}, nil)
+	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"vmTrace"}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +480,7 @@ func TestTraceNamespaceCreateCost(t *testing.T) {
 		traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)}, traceTestTarget: {Code: code},
 	}}, nil)
 	t.Cleanup(backend.teardown)
-	result, err := NewTraceAPI(backend).Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace"}, nil)
+	result, err := NewTraceAPI(backend).Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace"}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
