@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -374,5 +375,42 @@ func TestTraceNamespaceStorageMarkers(t *testing.T) {
 	want, _ = json.Marshal(map[common.Hash]any{slot0: map[string]any{"+": common.Hash{31: 42}}})
 	if !bytes.Equal(have, want) {
 		t.Fatalf("born account storage:\nhave %s\nwant %s", have, want)
+	}
+}
+
+func TestTraceNamespaceEmptyVMFrames(t *testing.T) {
+	empty := common.HexToAddress("0xcafe0003")
+	call := func(to common.Address, value byte) []byte {
+		code := common.FromHex("60006000600060006000")
+		code[9] = value
+		code = append(append(append(code, 0x73), to.Bytes()...), common.FromHex("61fffff150")...)
+		return code
+	}
+	// Enter an empty-code account and a precompile, then fail a value transfer
+	// precondition: the target only holds one wei.
+	code := append(append(append(call(empty, 0), call(common.HexToAddress("0x4"), 0)...), call(empty, 2)...), 0x00)
+	api, _ := traceTestAPI(t, code, nil)
+	for _, to := range []common.Address{empty, common.HexToAddress("0x4")} {
+		result, err := api.Call(context.Background(), traceTestArgs(&to, nil), TraceTypes{"vmTrace"}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if have, _ := json.Marshal(result.VMTrace); string(have) != `{"code":"0x","ops":[]}` {
+			t.Fatalf("root vmTrace for %x: %s", to, have)
+		}
+	}
+	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"vmTrace"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var subs []string
+	for _, op := range result.VMTrace.Ops {
+		if op.Op == "CALL" {
+			sub, _ := json.Marshal(op.Sub)
+			subs = append(subs, string(sub))
+		}
+	}
+	if want := []string{`{"code":"0x","ops":[]}`, `{"code":"0x","ops":[]}`, `null`}; !slices.Equal(subs, want) {
+		t.Fatalf("CALL subs: have %v, want %v", subs, want)
 	}
 }
