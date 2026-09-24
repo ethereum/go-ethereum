@@ -542,6 +542,37 @@ func TestTraceNamespaceEmptyVMFrames(t *testing.T) {
 	}
 }
 
+func TestTraceNamespacePrecheckFailuresEmitNoFrame(t *testing.T) {
+	empty := common.HexToAddress("0xcafe0003")
+	call := func(value string) string {
+		return "60006000600060006" + value + "73" + common.Bytes2Hex(empty.Bytes()) + "61fffff150"
+	}
+	// The target holds one wei: a CALL and a CREATE transferring two wei fail
+	// their balance precheck, then a zero-value CALL succeeds.
+	code := common.FromHex(call("002") + "600060006002f050" + call("000") + "00")
+	api, _ := traceTestAPI(t, code, nil)
+	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace"}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Trace) != 2 || result.Trace[0].Subtraces != 1 {
+		t.Fatalf("precheck failures must not emit frames: %+v", result.Trace)
+	}
+	child := result.Trace[1]
+	if !slices.Equal(child.TraceAddress, []uint64{0}) || child.Error != "" || child.Action.(traceCallAction).To != empty {
+		t.Fatalf("child path: %+v", child)
+	}
+	var subs []bool
+	for _, op := range result.VMTrace.Ops {
+		if op.Op == "CALL" || op.Op == "CREATE" {
+			subs = append(subs, op.Sub != nil)
+		}
+	}
+	if !slices.Equal(subs, []bool{false, false, true}) {
+		t.Fatalf("VM subs: %v", subs)
+	}
+}
+
 func TestTraceNamespaceCreateCost(t *testing.T) {
 	// Store initcode PUSH1 42 PUSH1 0 SSTORE STOP at memory offset 26, then run
 	// it through CREATE and CREATE2 (salt 0).

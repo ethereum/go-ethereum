@@ -190,10 +190,13 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 		return
 	}
 	scope := c.scopes[len(c.scopes)-1]
+	// Geth reports calls and creates that fail their depth or balance
+	// precheck as frames, but they start no execution: they have neither a
+	// call frame nor a VM trace.
+	precheck := errors.Is(err, vm.ErrDepth) || errors.Is(err, vm.ErrInsufficientBalance)
 	// Every entered frame has a VM trace, even when no instruction ran (empty
-	// code or a precompile). Selfdestruct and failed call preconditions do not
-	// enter a frame.
-	if c.kinds.has("vmTrace") && scope.vm == nil && scope.frame.Type != "suicide" && !errors.Is(err, vm.ErrDepth) && !errors.Is(err, vm.ErrInsufficientBalance) {
+	// code or a precompile). Selfdestruct does not enter a frame.
+	if c.kinds.has("vmTrace") && scope.vm == nil && scope.frame.Type != "suicide" && !precheck {
 		c.openVM(nil)
 	}
 	c.scopes = c.scopes[:len(c.scopes)-1]
@@ -211,6 +214,13 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 		return
 	}
 	frame := scope.frame
+	if precheck {
+		// The frame never executed, so it is the last one recorded; release
+		// its child ordinal for the next sibling.
+		c.frames = c.frames[:len(c.frames)-1]
+		c.scopes[len(c.scopes)-1].frame.Subtraces--
+		return
+	}
 	if err != nil && reverted {
 		_, precompile := c.precompiles[scope.target]
 		frame.Error = traceErrorLabel(err, precompile && frame.Type == "call")

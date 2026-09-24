@@ -51,8 +51,10 @@ Valid transactions that revert or halt in the EVM return execution results.
 Call trees omit nested zero-value precompile frames, retaining root precompiles
 and nested frames with nonzero transferred or inherited value. Paths and child
 counts describe the emitted tree. VM return-memory effects remain available even
-when the child frame is omitted. Trees retain revert bytes, failed children, creation
-results and selfdestruct actions. Their gas fields describe frame execution, not
+when the child frame is omitted. Calls and creates that fail their depth or
+balance precheck start no execution and emit no frame; a create whose address
+collides keeps its frame with `Contract address collision`. Trees retain revert
+bytes, failed children, creation results and selfdestruct actions. Their gas fields describe frame execution, not
 transaction intrinsic gas. Failed frames carry the profile's labels rather than
 Geth error text: `Reverted`, `Out of gas`, `Bad instruction`, `Bad jump
 destination`, `Stack underflow`, `Out of stack`, `Mutable Call In Static Context`,
