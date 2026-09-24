@@ -618,10 +618,8 @@ func (dAO *DAO) UnpackChangeOfRulesEvent(log *types.Log) (*DAOChangeOfRules, err
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOChangeOfRules)
-	if len(log.Data) > 0 {
-		if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range dAO.abi.Events[event].Inputs {
@@ -663,10 +661,8 @@ func (dAO *DAO) UnpackMembershipChangedEvent(log *types.Log) (*DAOMembershipChan
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOMembershipChanged)
-	if len(log.Data) > 0 {
-		if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range dAO.abi.Events[event].Inputs {
@@ -710,10 +706,8 @@ func (dAO *DAO) UnpackProposalAddedEvent(log *types.Log) (*DAOProposalAdded, err
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOProposalAdded)
-	if len(log.Data) > 0 {
-		if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range dAO.abi.Events[event].Inputs {
@@ -757,10 +751,8 @@ func (dAO *DAO) UnpackProposalTalliedEvent(log *types.Log) (*DAOProposalTallied,
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOProposalTallied)
-	if len(log.Data) > 0 {
-		if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range dAO.abi.Events[event].Inputs {
@@ -804,10 +796,8 @@ func (dAO *DAO) UnpackVotedEvent(log *types.Log) (*DAOVoted, error) {
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DAOVoted)
-	if len(log.Data) > 0 {
-		if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := dAO.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range dAO.abi.Events[event].Inputs {
