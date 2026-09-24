@@ -531,6 +531,99 @@ func TestForkchoiceUpdatedReorgDepthLimit(t *testing.T) {
 	})
 }
 
+// TestForkchoiceUpdatedAtomicity checks that a forkchoiceUpdated call rejected
+// with -38002 leaves the forkchoice state untouched. The Engine API spec
+// requires all updates resulting from the call to be applied atomically, so a
+// head that is VALID but carries a safe or finalized block outside its own
+// chain must not move the chain head.
+func TestForkchoiceUpdatedAtomicity(t *testing.T) {
+	genesis, blocks := generateMergeChain(3, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	var (
+		api        = newConsensusAPIWithoutHeartbeat(ethservice)
+		chain      = ethservice.BlockChain()
+		a1, a2, a3 = blocks[0], blocks[1], blocks[2]
+	)
+	// Establish a1 <- a2 <- a3 as the canonical chain, a2 safe and a1 finalized.
+	canonical := engine.ForkchoiceStateV1{
+		HeadBlockHash:      a3.Hash(),
+		SafeBlockHash:      a2.Hash(),
+		FinalizedBlockHash: a1.Hash(),
+	}
+	if _, err := api.ForkchoiceUpdatedV1(context.Background(), canonical, nil); err != nil {
+		t.Fatalf("failed to set up canonical forkchoice: %v", err)
+	}
+	// Build a sibling chain b1 <- b2 off the genesis block and deliver both with
+	// newPayload only, leaving them known and VALID but not canonical.
+	var (
+		parent   = chain.GetHeaderByNumber(0)
+		siblings []common.Hash
+	)
+	for i := 0; i < 2; i++ {
+		envelope := getNewEnvelope(t, api, parent, nil, nil)
+		payload := envelope.ExecutionPayload
+		status, err := api.newPayload(context.Background(), *payload, []common.Hash{}, nil, envelope.Requests, false)
+		if err != nil {
+			t.Fatalf("can't execute sibling payload b%d: %v", i+1, err)
+		}
+		if status.Status != engine.VALID {
+			t.Fatalf("sibling payload b%d not valid: %v", i+1, status.Status)
+		}
+		parent = chain.GetHeaderByHash(payload.BlockHash)
+		if parent == nil {
+			t.Fatalf("sibling payload b%d not stored", i+1)
+		}
+		siblings = append(siblings, payload.BlockHash)
+	}
+	b1Hash, b2Hash := siblings[0], siblings[1]
+	if b1Hash == a1.Hash() || b2Hash == a2.Hash() {
+		t.Fatal("sibling chain did not branch off the canonical chain")
+	}
+	if head := chain.CurrentBlock().Hash(); head != a3.Hash() {
+		t.Fatalf("newPayload moved the chain head: have %x, want %x", head, a3.Hash())
+	}
+	// b2 is VALID, but neither a2 nor a1 belongs to its chain, so the call must
+	// be rejected with -38002 and must not change the forkchoice state.
+	conflicting := engine.ForkchoiceStateV1{
+		HeadBlockHash:      b2Hash,
+		SafeBlockHash:      a2.Hash(),
+		FinalizedBlockHash: a1.Hash(),
+	}
+	_, err := api.ForkchoiceUpdatedV1(context.Background(), conflicting, nil)
+	var apiErr *engine.EngineAPIError
+	if !errors.As(err, &apiErr) || apiErr.ErrorCode() != engine.InvalidForkChoiceState.ErrorCode() {
+		t.Fatalf("conflicting forkchoice: have error %v, want %v", err, engine.InvalidForkChoiceState)
+	}
+	if head := chain.CurrentBlock().Hash(); head != a3.Hash() {
+		t.Errorf("chain head moved on rejected forkchoice update: have %x, want %x", head, a3.Hash())
+	}
+	if safe := chain.CurrentSafeBlock().Hash(); safe != a2.Hash() {
+		t.Errorf("safe block moved on rejected forkchoice update: have %x, want %x", safe, a2.Hash())
+	}
+	if final := chain.CurrentFinalBlock().Hash(); final != a1.Hash() {
+		t.Errorf("finalized block moved on rejected forkchoice update: have %x, want %x", final, a1.Hash())
+	}
+	// Control: the same head with a safe and finalized block that do belong to
+	// its chain is still accepted and moves the head. Without this the test
+	// would also pass if the check rejected every reorg.
+	consistent := engine.ForkchoiceStateV1{
+		HeadBlockHash:      b2Hash,
+		SafeBlockHash:      b1Hash,
+		FinalizedBlockHash: b1Hash,
+	}
+	if _, err := api.ForkchoiceUpdatedV1(context.Background(), consistent, nil); err != nil {
+		t.Fatalf("consistent forkchoice update rejected: %v", err)
+	}
+	if head := chain.CurrentBlock().Hash(); head != b2Hash {
+		t.Errorf("chain head not moved by accepted forkchoice update: have %x, want %x", head, b2Hash)
+	}
+	if final := chain.CurrentFinalBlock().Hash(); final != b1Hash {
+		t.Errorf("finalized block not moved by accepted forkchoice update: have %x, want %x", final, b1Hash)
+	}
+}
+
 func TestFullAPI(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
