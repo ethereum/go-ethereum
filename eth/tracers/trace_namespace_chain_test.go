@@ -19,6 +19,7 @@ package tracers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"math/big"
 	"strings"
 	"testing"
@@ -157,8 +158,9 @@ func TestTraceNamespaceMinedPathsReplayAndFilter(t *testing.T) {
 
 func TestTraceNamespaceSelfDestructForkRules(t *testing.T) {
 	beneficiary := common.HexToAddress("0xcafe0005")
-	code := append([]byte{0x73}, beneficiary.Bytes()...)
-	code = append(code, 0xff)
+	// Overwrite slot 0, then selfdestruct.
+	code := append(common.FromHex("6005600055"), 0x73)
+	code = append(append(code, beneficiary.Bytes()...), 0xff)
 	for _, postCancun := range []bool{false, true} {
 		config := *params.AllDevChainProtocolChanges
 		if !postCancun {
@@ -168,7 +170,7 @@ func TestTraceNamespaceSelfDestructForkRules(t *testing.T) {
 			config.BogotaTime = nil
 		}
 		backend := newTestBackend(t, 0, &core.Genesis{Config: &config, GasLimit: 30_000_000, Difficulty: big.NewInt(0), BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
-			traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)}, traceTestTarget: {Balance: big.NewInt(7), Code: code},
+			traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)}, traceTestTarget: {Balance: big.NewInt(7), Code: code, Storage: map[common.Hash]common.Hash{{}: {31: 7}}},
 		}}, nil)
 		api := NewTraceAPI(backend)
 		result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "stateDiff", "vmTrace"}, nil, nil, nil)
@@ -192,6 +194,68 @@ func TestTraceNamespaceSelfDestructForkRules(t *testing.T) {
 			if !ok || !bytes.Equal(change["-"].(hexutil.Bytes), code) {
 				t.Fatalf("pre-Cancun deletion: %+v", diff.Code)
 			}
+			// Deletion wipes all storage; slots are not listed.
+			if diff.Storage == nil || len(diff.Storage) != 0 {
+				t.Fatalf("deleted account storage: %+v", diff.Storage)
+			}
 		}
+	}
+}
+
+func TestTraceNamespaceTouchedEmptyAccountDeletion(t *testing.T) {
+	empty := common.HexToAddress("0xcafe0006")
+	// CALL the empty account without value.
+	code := append(common.FromHex("600060006000600060007"+"3"), empty.Bytes()...)
+	code = append(code, common.FromHex("61fffff15000")...)
+	config := *params.AllDevChainProtocolChanges
+	// Genesis keeps EIP-161-empty accounts, including the zero-address coinbase.
+	backend := newTestBackend(t, 0, &core.Genesis{Config: &config, GasLimit: 30_000_000, Difficulty: big.NewInt(0), BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
+		traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)}, traceTestTarget: {Code: code},
+		empty: {Balance: common.Big0}, common.Address{}: {Balance: common.Big0},
+	}}, nil)
+	t.Cleanup(backend.teardown)
+	api := NewTraceAPI(backend)
+	deleted := `{"balance":{"-":"0x0"},"nonce":{"-":"0x0"},"code":{"-":"0x"},"storage":{}}`
+	// A zero-fee call skips the fee payment and does not touch the coinbase.
+	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"stateDiff"}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, _ := json.Marshal(result.StateDiff[empty]); string(have) != deleted {
+		t.Fatalf("touched empty account: have %s, want %s", have, deleted)
+	}
+	if diff := result.StateDiff[common.Address{}]; diff != nil {
+		t.Fatalf("untouched coinbase: %+v", diff)
+	}
+	// Paying a zero tip touches the empty coinbase, which is then deleted.
+	args := traceTestArgs(&traceTestTarget, nil)
+	args.GasPrice = (*hexutil.Big)(big.NewInt(params.InitialBaseFee))
+	if result, err = api.Call(context.Background(), args, TraceTypes{"stateDiff"}, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, address := range []common.Address{empty, {}} {
+		if have, _ := json.Marshal(result.StateDiff[address]); string(have) != deleted {
+			t.Fatalf("%x: have %s, want %s", address, have, deleted)
+		}
+	}
+}
+
+func TestTraceNamespaceBlobFeeAccounting(t *testing.T) {
+	api, _ := traceTestAPI(t, common.FromHex("00"), nil)
+	args := traceTestArgs(&traceTestTarget, nil)
+	args.MaxFeePerGas = (*hexutil.Big)(big.NewInt(params.InitialBaseFee))
+	args.BlobHashes = []common.Hash{{0: 1}}
+	args.BlobFeeCap = (*hexutil.Big)(big.NewInt(1))
+	result, err := api.Call(context.Background(), args, TraceTypes{"stateDiff"}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The sender pays gasUsed times the price plus blob gas times the blob
+	// base fee (1 at zero excess blob gas).
+	change := result.StateDiff[traceTestSender].Balance.(map[string]any)["*"].(map[string]any)
+	paid := new(big.Int).Sub(change["from"].(*hexutil.Big).ToInt(), change["to"].(*hexutil.Big).ToInt())
+	want := new(big.Int).Add(new(big.Int).SetUint64(params.TxGas*params.InitialBaseFee), new(big.Int).SetUint64(params.BlobTxBlobGasPerBlob))
+	if paid.Cmp(want) != 0 {
+		t.Fatalf("sender paid %v, want %v", paid, want)
 	}
 }

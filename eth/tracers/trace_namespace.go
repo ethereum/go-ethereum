@@ -583,6 +583,9 @@ func (api *TraceAPI) execute(ctx context.Context, tx *types.Transaction, msg *co
 		active = vm.ActivePrecompiledContracts(rules)
 	}
 	capture := newTraceCapture(st, kinds, rules, active)
+	// Paying a zero fee touches the fee recipient without a balance change
+	// event; touch-clearing may still delete it.
+	capture.touch(vmctx.Coinbase)
 	hooks := capture.hooks()
 	evm := vm.NewEVM(vmctx, state.NewHookedState(st, hooks), api.api.backend.ChainConfig(), vm.Config{Tracer: hooks, NoBaseFee: unsigned})
 	defer evm.Release()
