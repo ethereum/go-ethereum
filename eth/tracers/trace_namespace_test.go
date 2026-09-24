@@ -346,3 +346,33 @@ func TestTraceNamespaceExplicitCallType(t *testing.T) {
 		}
 	}
 }
+
+func TestTraceNamespaceStorageMarkers(t *testing.T) {
+	// Set slot 0 from zero to 42 and clear slot 1 on an account that survives.
+	code := common.FromHex("602a6000556000600155")
+	slot0, slot1 := common.Hash{}, common.Hash{31: 1}
+	api, _ := traceTestAPI(t, code, types.GenesisAlloc{traceTestTarget: {Code: code, Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{slot1: {31: 7}}}})
+	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"stateDiff"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	have, _ := json.Marshal(result.StateDiff[traceTestTarget].Storage)
+	want, _ := json.Marshal(map[common.Hash]any{
+		slot0: map[string]any{"*": map[string]any{"from": common.Hash{}, "to": common.Hash{31: 42}}},
+		slot1: map[string]any{"*": map[string]any{"from": common.Hash{31: 7}, "to": common.Hash{}}},
+	})
+	if !bytes.Equal(have, want) {
+		t.Fatalf("surviving account storage:\nhave %s\nwant %s", have, want)
+	}
+	// A born account's storage carries the creation marker.
+	created, err := api.Call(context.Background(), traceTestArgs(nil, common.FromHex("602a60005500")), TraceTypes{"trace", "stateDiff"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := created.Trace[0].Result.(traceCreateResult).Address
+	have, _ = json.Marshal(created.StateDiff[address].Storage)
+	want, _ = json.Marshal(map[common.Hash]any{slot0: map[string]any{"+": common.Hash{31: 42}}})
+	if !bytes.Equal(have, want) {
+		t.Fatalf("born account storage:\nhave %s\nwant %s", have, want)
+	}
+}

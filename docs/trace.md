@@ -39,6 +39,9 @@ results and selfdestruct actions. Their gas fields describe frame execution, not
 transaction intrinsic gas. `stateDiff` compares pre-transaction and finalized
 state, including fees and authorization changes. Deleted accounts carry deletion
 markers; storage entries describe touched slots, not an enumeration of the old trie.
+Storage slots use creation or deletion markers only when the account itself is
+created or deleted; on an account present before and after, every changed slot,
+including one set from or to zero, is a `*` change between 32-byte words.
 `vmTrace` contains executing bytecode and same-instruction stack/memory/storage
 deltas, recursively nested for executed child bytecode. Precompile calls have no
 child bytecode trace.

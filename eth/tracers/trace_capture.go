@@ -240,13 +240,15 @@ func (c *traceCapture) stateDiff() map[common.Address]*traceAccountDiff {
 		oldBalance, newBalance := c.before.GetBalance(address), c.state.GetBalance(address)
 		oldNonce, newNonce := c.before.GetNonce(address), c.state.GetNonce(address)
 		oldCode, newCode := c.before.GetCode(address), c.state.GetCode(address)
+		// Slots follow the account's existence: zero words on a surviving account
+		// are changes, not slot creations or deletions.
 		storage := make(map[common.Hash]any)
 		for key := range slots {
 			oldValue, newValue := c.before.GetState(address, key), c.state.GetState(address, key)
 			if oldValue == newValue {
 				continue
 			}
-			storage[key] = traceChange(oldValue, newValue, oldValue != (common.Hash{}), newValue != (common.Hash{}), false)
+			storage[key] = traceChange(oldValue, newValue, oldExists, newExists, false)
 		}
 		if oldExists == newExists && oldBalance.Eq(newBalance) && oldNonce == newNonce && bytes.Equal(oldCode, newCode) && len(storage) == 0 {
 			continue
