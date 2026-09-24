@@ -352,9 +352,9 @@ func TestConvertedBaseAcceptsCommits(t *testing.T) {
 	}
 }
 
-// TestDeleteSourceLifecycle: after deletion the converted bytes stand alone,
-// the merkle trie is gone, and code and preimages survive.
-func TestDeleteSourceLifecycle(t *testing.T) {
+// TestConvertedStateOutlivesMerkleDisposal: once the merkle state is disposed
+// of, the converted bytes stand alone, and code and preimages survive.
+func TestConvertedStateOutlivesMerkleDisposal(t *testing.T) {
 	t.Run("path scheme", func(t *testing.T) {
 		alloc := mixedAlloc(424242)
 		chaindb := rawdb.NewMemoryDatabase()

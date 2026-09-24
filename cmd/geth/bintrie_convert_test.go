@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -458,6 +459,29 @@ func TestWipeRestoresVirginNamespace(t *testing.T) {
 		t.Fatal("re-conversion produced a different preimage file")
 	}
 }
+
+// TestWipeDropsAnchorFirst: a wipe killed after the cursors go must not leave
+// an anchor the follower would bind to the state left behind.
+func TestWipeDropsAnchorFirst(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+	rawdb.WritePBTAnchor(pbtdb, 0, common.Hash{0x01})
+	if err := wipeBinaryTrieState(refusedBatchDB{db}, ""); err == nil {
+		t.Fatal("wipe succeeded through refused batches")
+	}
+	if _, _, ok := rawdb.ReadPBTAnchor(pbtdb); ok {
+		t.Fatal("anchor outlived the refused wipe")
+	}
+}
+
+// refusedBatchDB fails every batch write, leaving direct writes alone.
+type refusedBatchDB struct{ ethdb.Database }
+
+func (db refusedBatchDB) NewBatch() ethdb.Batch { return refusedBatch{db.Database.NewBatch()} }
+
+type refusedBatch struct{ ethdb.Batch }
+
+func (refusedBatch) Write() error { return errors.New("batch refused") }
 
 // TestConvertCorruptPreimageRefused: a corrupt preimage store entry must
 // abort the conversion with nothing surviving - no artifacts, no
