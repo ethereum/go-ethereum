@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"math/big"
 	"slices"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
@@ -344,6 +346,77 @@ func TestTraceNamespaceRPCValidation(t *testing.T) {
 	}
 	if string(result) != "null" {
 		t.Fatalf("unknown tx: %s", result)
+	}
+}
+
+func TestTraceNamespaceErrorLabels(t *testing.T) {
+	inner := common.HexToAddress("0xcafe0020")
+	// Call inner with STATICCALL, then stop.
+	static := "6000600060006000" + "73" + common.Bytes2Hex(inner.Bytes()) + "5afa5000"
+	create2 := "6000600060006000f550"
+	for _, tc := range []struct {
+		name, code, inner string
+		to                *common.Address
+		input             []byte
+		nonce, gas        uint64
+		frame             int
+		want              string
+	}{
+		{name: "revert", code: "60006000fd", want: "Reverted"},
+		{name: "out of gas", code: "5b600056", want: "Out of gas"},
+		{name: "designated invalid", code: "fe", want: "Bad instruction"},
+		{name: "undefined opcode", code: "0c", want: "Bad instruction"},
+		{name: "bad jump", code: "600556", want: "Bad jump destination"},
+		{name: "stack underflow", code: "01", want: "Stack underflow"},
+		{name: "stack overflow", code: "5b5f5f56", want: "Out of stack"},
+		{name: "static sstore", code: static, inner: "6001600055", frame: 1, want: "Mutable Call In Static Context"},
+		{name: "static tstore", code: static, inner: "600160005d", frame: 1, want: "Mutable Call In Static Context"},
+		{name: "returndata bounds", code: "6001600060003e", want: "Out of bounds"},
+		{name: "precompile", to: &common.Address{19: 6}, input: bytes.Repeat([]byte{1}, 128), want: "Built-in failed"},
+		{name: "collision", code: create2 + create2 + "00", frame: 2, want: "Contract address collision"},
+		{name: "code deposit", input: common.FromHex("6110006000f3"), want: "Out of gas"},
+		{name: "code size", input: common.FromHex("62010001" + "6000f3"), gas: 25_000_000, want: "Code size limit exceeded"},
+		{name: "code prefix", input: common.FromHex("60ef60005360016000f3"), want: "Invalid code prefix 0xEF"},
+		{name: "nonce overflow", code: "600060006000f000", nonce: math.MaxUint64, frame: 1, want: "Nonce overflow"},
+	} {
+		api, _ := traceTestAPI(t, nil, nil)
+		overrides := override.StateOverride{}
+		to := tc.to
+		if tc.code != "" {
+			code := hexutil.Bytes(common.FromHex(tc.code))
+			account := override.OverrideAccount{Code: &code}
+			if tc.nonce != 0 {
+				account.Nonce = (*hexutil.Uint64)(&tc.nonce)
+			}
+			overrides[traceTestTarget] = account
+			to = &traceTestTarget
+		}
+		if tc.inner != "" {
+			code := hexutil.Bytes(common.FromHex(tc.inner))
+			overrides[inner] = override.OverrideAccount{Code: &code}
+		}
+		args := traceTestArgs(to, tc.input)
+		gas := hexutil.Uint64(100_000)
+		if tc.gas != 0 {
+			gas = hexutil.Uint64(tc.gas)
+		}
+		args.Gas = &gas
+		result, err := api.Call(context.Background(), args, TraceTypes{"trace"}, nil, &overrides, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if len(result.Trace) <= tc.frame {
+			t.Fatalf("%s: missing frame %d", tc.name, tc.frame)
+		}
+		if have := result.Trace[tc.frame].Error; have != tc.want {
+			t.Errorf("%s: frame %d error %q, want %q", tc.name, tc.frame, have, tc.want)
+			continue
+		}
+		frame := result.Trace[tc.frame]
+		// REVERT keeps {gasUsed, output}; exceptional halts have no result.
+		if _, ok := frame.Result.(traceCallResult); ok != (tc.want == "Reverted") {
+			t.Fatalf("%s: result %+v", tc.name, frame.Result)
+		}
 	}
 }
 
