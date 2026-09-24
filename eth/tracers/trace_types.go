@@ -330,6 +330,17 @@ func traceInvalid(format string, args ...any) error {
 	return &traceRPCError{-32602, fmt.Sprintf(format, args...)}
 }
 
+// traceItemError reports the zero-based index of the failing trace_callMany
+// item in error.data.
+type traceItemError struct {
+	err   rpc.Error
+	index int
+}
+
+func (e *traceItemError) Error() string  { return fmt.Sprintf("call %d: %v", e.index, e.err) }
+func (e *traceItemError) ErrorCode() int { return e.err.ErrorCode() }
+func (e *traceItemError) ErrorData() any { return map[string]int{"index": e.index} }
+
 // traceCallRejection maps a rejected unsigned call to the eth_simulateV1
 // validation codes. Nonce and sender-code checks are skipped for unsigned
 // calls, as in eth_call; other rejections are invalid parameters.

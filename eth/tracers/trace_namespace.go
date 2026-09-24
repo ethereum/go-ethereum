@@ -41,6 +41,7 @@ import (
 const (
 	traceFilterBlockLimit  = 1000
 	traceFilterResultLimit = 10000
+	traceCallManyLimit     = 10000
 	traceBatchTimeout      = 30 * time.Second
 )
 
@@ -67,8 +68,8 @@ func (api *TraceAPI) Call(ctx context.Context, args TraceCallArgs, kinds TraceTy
 func (api *TraceAPI) CallMany(ctx context.Context, calls TraceCalls, block *rpc.BlockNumberOrHash, stateOverrides *override.StateOverride, blockOverrides *override.BlockOverrides) ([]*TraceExecution, error) {
 	ctx, cancel := context.WithTimeout(ctx, traceBatchTimeout)
 	defer cancel()
-	if len(calls) > traceFilterResultLimit {
-		return nil, traceInvalid("too many calls (limit %d)", traceFilterResultLimit)
+	if len(calls) > traceCallManyLimit {
+		return nil, &traceRPCError{-38026, fmt.Sprintf("too many calls (limit %d)", traceCallManyLimit)}
 	}
 	for _, call := range calls {
 		if err := call.Types.validate(); err != nil {
@@ -82,11 +83,13 @@ func (api *TraceAPI) CallMany(ctx context.Context, calls TraceCalls, block *rpc.
 	defer env.release()
 	results := make([]*TraceExecution, 0, len(calls))
 	for i, call := range calls {
+		// Each item is a separate transaction on the preceding post-state.
+		// A failing item fails the whole request, identified by its index.
 		result, err := api.call(ctx, call.Call, call.Types, env, i)
 		if err != nil {
 			var rpcErr rpc.Error
 			if errors.As(err, &rpcErr) {
-				return nil, &traceRPCError{rpcErr.ErrorCode(), fmt.Sprintf("call %d: %v", i, err)}
+				return nil, &traceItemError{rpcErr, i}
 			}
 			return nil, fmt.Errorf("call %d: %w", i, err)
 		}
