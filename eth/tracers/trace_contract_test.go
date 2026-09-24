@@ -84,23 +84,31 @@ func TestTraceNamespaceRawRejectionCodes(t *testing.T) {
 	sender := crypto.PubkeyToAddress(key.PublicKey)
 	api, backend := traceTestAPI(t, common.FromHex("60006000fd"), types.GenesisAlloc{sender: {Balance: big.NewInt(1e18), Nonce: 1}})
 	client := traceContractClient(t, api)
-	for _, name := range []string{"low nonce", "high nonce", "intrinsic gas", "balance", "fee", "chain", "signature"} {
+	// Decodable transactions failing validation use the eth_sendRawTransaction
+	// error groups, with -32003 for other rejections.
+	for name, code := range map[string]int{"low nonce": 1, "high nonce": 2, "intrinsic gas": 800, "tip": 804, "fee": 806, "balance": 809, "chain": -32003, "signature": -32003, "gas cap": -38026} {
 		t.Run(name, func(t *testing.T) {
-			data := &types.LegacyTx{Nonce: 1, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee), To: &traceTestTarget}
+			var data types.TxData
+			legacy := &types.LegacyTx{Nonce: 1, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee), To: &traceTestTarget}
+			data = legacy
 			signer := types.LatestSigner(backend.ChainConfig())
 			switch name {
 			case "low nonce":
-				data.Nonce = 0
+				legacy.Nonce = 0
 			case "high nonce":
-				data.Nonce = 2
+				legacy.Nonce = 2
 			case "intrinsic gas":
-				data.Gas = 20000
+				legacy.Gas = 20000
 			case "balance":
-				data.Value = new(big.Int).Exp(big.NewInt(10), big.NewInt(20), nil)
+				legacy.Value = new(big.Int).Exp(big.NewInt(10), big.NewInt(20), nil)
 			case "fee":
-				data.GasPrice = big.NewInt(1)
+				legacy.GasPrice = big.NewInt(1)
+			case "tip":
+				data = &types.DynamicFeeTx{ChainID: backend.ChainConfig().ChainID, Nonce: 1, Gas: 100000, GasFeeCap: big.NewInt(params.InitialBaseFee), GasTipCap: big.NewInt(params.InitialBaseFee + 1), To: &traceTestTarget}
 			case "chain":
 				signer = types.LatestSignerForChainID(big.NewInt(999999))
+			case "gas cap":
+				legacy.Gas = backend.RPCGasCap() + 1
 			}
 			tx := types.MustSignNewTx(key, signer, data)
 			if name == "signature" {
@@ -108,7 +116,7 @@ func TestTraceNamespaceRawRejectionCodes(t *testing.T) {
 			}
 			encoded, _ := tx.MarshalBinary()
 			var result json.RawMessage
-			requireTraceCode(t, client.Call(&result, "trace_rawTransaction", hexutil.Bytes(encoded), TraceTypes{"trace"}), -32003)
+			requireTraceCode(t, client.Call(&result, "trace_rawTransaction", hexutil.Bytes(encoded), TraceTypes{"trace"}), code)
 		})
 	}
 	var result json.RawMessage
@@ -124,6 +132,37 @@ func TestTraceNamespaceRawRejectionCodes(t *testing.T) {
 		if len(result.Trace) != 1 || result.Trace[0].Error == "" {
 			t.Fatalf("missing EVM failure: %+v", result)
 		}
+	}
+}
+
+func TestTraceNamespaceCallRejectionCodes(t *testing.T) {
+	api, backend := traceTestAPI(t, common.FromHex("00"), nil)
+	client := traceContractClient(t, api)
+	base := big.NewInt(params.InitialBaseFee)
+	unfunded := common.HexToAddress("0xcafe0009")
+	for _, tc := range []struct {
+		fields map[string]any
+		code   int
+	}{
+		{map[string]any{"gasPrice": "0x1"}, -38012},
+		{map[string]any{"maxFeePerGas": "0x1"}, -38012},
+		{map[string]any{"gas": "0x5207"}, -38013},
+		{map[string]any{"from": unfunded, "value": "0x1"}, -38014},
+		{map[string]any{"from": unfunded, "gasPrice": hexutil.EncodeBig(base)}, -38014},
+		{map[string]any{"to": nil, "input": hexutil.Bytes(make([]byte, 1<<20)), "gas": hexutil.Uint64(backend.RPCGasCap())}, -38025},
+		{map[string]any{"gas": hexutil.Uint64(backend.RPCGasCap() + 1)}, -38026},
+		{map[string]any{"maxFeePerGas": hexutil.EncodeBig(base), "maxPriorityFeePerGas": hexutil.EncodeBig(new(big.Int).Add(base, common.Big1))}, -32602},
+	} {
+		args := map[string]any{"from": traceTestSender, "to": traceTestTarget}
+		for k, v := range tc.fields {
+			args[k] = v
+		}
+		var result json.RawMessage
+		err := client.Call(&result, "trace_call", args, TraceTypes{})
+		requireTraceCode(t, err, tc.code)
+		// trace_callMany reports the same validation codes.
+		err = client.Call(&result, "trace_callMany", []any{[]any{args, TraceTypes{}}})
+		requireTraceCode(t, err, tc.code)
 	}
 }
 

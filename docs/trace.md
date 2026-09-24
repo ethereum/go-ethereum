@@ -31,9 +31,14 @@ omitted fee fields default to zero, a zero effective gas price runs with `BASEFE
 0, and a supplied or defaulted zero `maxFeePerBlobGas` runs with `BLOBBASEFEE` 0.
 Positive prices are validated against the base fee, funded and charged. A supplied
 nonce is accepted but neither validated nor used; CREATE addresses derive from the
-sender's state nonce. Signed raw and mined
-transactions use the chain's applicable rules. Malformed parameters return
-`-32602`, unknown selected blocks `-32001`, and rejected transactions `-32003`.
+sender's state nonce. Signed raw and mined transactions use the chain's applicable
+rules. Malformed parameters return `-32602` and unknown selected blocks `-32001`. Rejected unsigned calls use the
+`eth_simulateV1` codes: `-38012` fee cap below base fee, `-38013` intrinsic gas,
+`-38014` insufficient funds, `-38025` initcode size and `-38026` gas above the RPC
+gas cap; a priority fee above the fee cap and other invalid calls are `-32602`.
+Rejected signed transactions use the `eth_sendRawTransaction` groups: `1` nonce too
+low, `2` nonce too high, `800` intrinsic gas, `804` priority fee above fee cap,
+`806` fee cap below base fee, `809` insufficient funds and `-32003` otherwise.
 Valid transactions that revert or halt in the EVM return execution results.
 
 Call trees omit nested zero-value precompile frames, retaining root precompiles
@@ -73,7 +78,8 @@ their corresponding blocks.
 
 ## Limits and history
 
-- Calls use Geth's configured RPC gas cap; signed raw transactions exceeding it are rejected.
+- Calls without `gas` use Geth's configured RPC gas cap. Calls and signed raw
+  transactions whose gas exceeds it are rejected with `-38026`, never capped.
 - Each execution has a five-second timeout. Batches, block replay and filter scans
   have a thirty-second timeout.
 - Filter ranges are limited to 1,000 blocks and returned results to 10,000 records.

@@ -19,11 +19,14 @@ package tracers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -326,3 +329,45 @@ func (e *traceRPCError) ErrorCode() int { return e.code }
 func traceInvalid(format string, args ...any) error {
 	return &traceRPCError{-32602, fmt.Sprintf(format, args...)}
 }
+
+// traceCallRejection maps a rejected unsigned call to the eth_simulateV1
+// validation codes. Nonce and sender-code checks are skipped for unsigned
+// calls, as in eth_call; other rejections are invalid parameters.
+func traceCallRejection(err error) error {
+	code := -32602
+	switch {
+	case errors.Is(err, core.ErrFeeCapTooLow):
+		code = -38012
+	case errors.Is(err, core.ErrIntrinsicGas), errors.Is(err, core.ErrFloorDataGas):
+		code = -38013
+	case errors.Is(err, core.ErrInsufficientFunds), errors.Is(err, core.ErrInsufficientFundsForTransfer):
+		code = -38014
+	case errors.Is(err, vm.ErrMaxInitCodeSizeExceeded):
+		code = -38025
+	}
+	return &traceRPCError{code, err.Error()}
+}
+
+// traceRawRejection maps a rejected signed transaction to the
+// eth_sendRawTransaction error groups, with -32003 for other rejections.
+func traceRawRejection(err error) error {
+	code := -32003
+	switch {
+	case errors.Is(err, core.ErrNonceTooLow):
+		code = 1
+	case errors.Is(err, core.ErrNonceTooHigh):
+		code = 2
+	case errors.Is(err, core.ErrIntrinsicGas), errors.Is(err, core.ErrFloorDataGas):
+		code = 800
+	case errors.Is(err, core.ErrTipAboveFeeCap):
+		code = 804
+	case errors.Is(err, core.ErrFeeCapTooLow):
+		code = 806
+	case errors.Is(err, core.ErrInsufficientFunds), errors.Is(err, core.ErrInsufficientFundsForTransfer):
+		code = 809
+	}
+	return &traceRPCError{code, err.Error()}
+}
+
+// traceRejected reports a mined transaction that failed validation on replay.
+func traceRejected(err error) error { return &traceRPCError{-32003, err.Error()} }

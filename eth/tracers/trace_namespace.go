@@ -108,15 +108,15 @@ func (api *TraceAPI) RawTransaction(ctx context.Context, input hexutil.Bytes, ki
 		return nil, err
 	}
 	defer release()
-	if cap := api.api.backend.RPCGasCap(); cap != 0 && tx.Gas() > cap {
-		return nil, traceInvalid("transaction gas exceeds RPC cap %d", cap)
+	if err := api.checkGasCap(tx.Gas()); err != nil {
+		return nil, err
 	}
 	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.api.backend.ChainConfig(), block.Number(), block.Time()), block.BaseFee())
 	if err != nil {
-		return nil, &traceRPCError{-32003, fmt.Sprintf("invalid signed transaction: %v", err)}
+		return nil, traceRawRejection(fmt.Errorf("invalid signed transaction: %w", err))
 	}
 	vmctx := core.NewEVMBlockContext(block.Header(), api.api.chainContext(ctx), nil)
-	return api.execute(ctx, tx, msg, kinds, vmctx, st, common.Hash{}, 0, false)
+	return api.execute(ctx, tx, msg, kinds, vmctx, st, common.Hash{}, 0, false, traceRawRejection)
 }
 
 // ReplayTransaction returns one replay envelope or null for an unknown transaction.
@@ -374,6 +374,11 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	// CREATE address derivation, uses the sender's state nonce.
 	nonce := hexutil.Uint64(st.GetNonce(from))
 	args.Nonce = &nonce
+	if args.Gas != nil {
+		if err := api.checkGasCap(uint64(*args.Gas)); err != nil {
+			return nil, err
+		}
+	}
 	vmctx := core.NewEVMBlockContext(block.Header(), api.api.chainContext(ctx), nil)
 	if err := args.CallDefaults(api.api.backend.RPCGasCap(), vmctx.BaseFee, api.api.backend.ChainConfig().ChainID); err != nil {
 		return nil, traceInvalid("invalid call: %v", err)
@@ -397,7 +402,15 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
 		vmctx.BlobBaseFee = new(big.Int)
 	}
-	return api.execute(ctx, tx, msg, kinds, vmctx, st, common.Hash{}, index, true)
+	return api.execute(ctx, tx, msg, kinds, vmctx, st, common.Hash{}, index, true, traceCallRejection)
+}
+
+// checkGasCap rejects gas above the RPC gas cap explicitly instead of capping it.
+func (api *TraceAPI) checkGasCap(gas uint64) error {
+	if cap := api.api.backend.RPCGasCap(); cap != 0 && gas > cap {
+		return &traceRPCError{-38026, fmt.Sprintf("gas %d exceeds the RPC gas cap %d", gas, cap)}
+	}
+	return nil
 }
 
 func (api *TraceAPI) transaction(ctx context.Context, hash common.Hash, kinds TraceTypes) (*TraceExecution, *types.Block, uint64, error) {
@@ -433,7 +446,7 @@ func (api *TraceAPI) transaction(ctx context.Context, hash common.Hash, kinds Tr
 		if uint64(i) == index {
 			modes = kinds
 		}
-		result, err := api.execute(ctx, tx, msg, modes, vmctx, st, blockHash, i, false)
+		result, err := api.execute(ctx, tx, msg, modes, vmctx, st, blockHash, i, false, traceRejected)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -486,7 +499,7 @@ func (api *TraceAPI) replayBlock(ctx context.Context, block *types.Block, kinds 
 		if err != nil {
 			return nil, err
 		}
-		result, err := api.execute(ctx, tx, msg, kinds, vmctx, st, block.Hash(), i, false)
+		result, err := api.execute(ctx, tx, msg, kinds, vmctx, st, block.Hash(), i, false, traceRejected)
 		if err != nil {
 			return nil, err
 		}
@@ -497,7 +510,9 @@ func (api *TraceAPI) replayBlock(ctx context.Context, block *types.Block, kinds 
 	return results, nil
 }
 
-func (api *TraceAPI) execute(ctx context.Context, tx *types.Transaction, msg *core.Message, kinds TraceTypes, vmctx vm.BlockContext, st *state.StateDB, blockHash common.Hash, index int, unsigned bool) (*TraceExecution, error) {
+// execute applies one message; reject maps a validation failure, which leaves
+// the message unexecuted, to its RPC error.
+func (api *TraceAPI) execute(ctx context.Context, tx *types.Transaction, msg *core.Message, kinds TraceTypes, vmctx vm.BlockContext, st *state.StateDB, blockHash common.Hash, index int, unsigned bool, reject func(error) error) (*TraceExecution, error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultTraceTimeout)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
@@ -532,7 +547,7 @@ func (api *TraceAPI) execute(ctx context.Context, tx *types.Transaction, msg *co
 		// EVM reverts and exceptional halts are execution results. Errors from
 		// ApplyTransactionWithEVM reject the message before execution; a failed
 		// state read must take precedence over any resulting validation error.
-		return nil, &traceRPCError{-32003, err.Error()}
+		return nil, reject(err)
 	}
 	result := capture.result()
 	if err := st.Error(); err != nil {
