@@ -736,10 +736,18 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		}
 		return nil
 
-	case history.KeepPostMerge, history.KeepPostPrague:
+	case history.KeepPostMerge, history.KeepPostPrague, history.KeepPostOsaka,
+		history.KeepPostMay2026, history.KeepCustom:
 		target := policy.Target
 		// Already at the target.
 		if freezerTail == target.BlockNumber {
+			// The canonical hash table is never tail-pruned, so the recorded point can
+			// be checked against what the database actually holds. This matters for
+			// KeepCustom, whose point comes from the operator: a mismatched pair would
+			// otherwise only show up much later as odd history API errors.
+			if hash := bc.GetCanonicalHash(freezerTail); hash != (common.Hash{}) && hash != target.BlockHash {
+				return fmt.Errorf("database tail %d has hash %s, want %s", freezerTail, hash, target.BlockHash)
+			}
 			bc.historyPrunePoint.Store(target)
 			return nil
 		}
@@ -749,8 +757,14 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		}
 		// Database needs pruning (freezerTail < target).
 		if latest != 0 {
+			arg := policy.Mode.String()
+			if policy.Mode == history.KeepCustom {
+				// The built-in points are re-derived from the mode alone, but a custom
+				// point has to be repeated on the command line.
+				arg += " --history.tail " + policy.Target.String()
+			}
 			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned to the target block.", policy.Mode.String()))
-			log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", policy.Mode.String()))
+			log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", arg))
 			return errors.New("history pruning required")
 		}
 		// Fresh database (latest == 0), will sync from target point.
