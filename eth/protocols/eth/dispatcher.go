@@ -188,7 +188,7 @@ func (p *Peer) dispatchResponse(res *Response, metadata func() interface{}) erro
 	case p.resDispatch <- resOp:
 		// Ensure the response is accepted by the dispatcher
 		if err := <-resOp.fail; err != nil {
-			return nil
+			return err
 		}
 		// Request was accepted, run any postprocessing step to generate metadata
 		// on the receiver thread, not the sink thread
