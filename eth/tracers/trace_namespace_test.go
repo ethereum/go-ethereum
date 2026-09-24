@@ -351,9 +351,9 @@ func TestTraceNamespaceCancellation(t *testing.T) {
 	api, _ := traceTestAPI(t, common.FromHex("5b600056"), nil)
 	for i := 0; i < 20; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		// Omitted gas runs up to the RPC gas cap.
 		args := traceTestArgs(&traceTestTarget, nil)
-		gas := hexutil.Uint64(50_000_000)
-		args.Gas = &gas
+		args.Gas = nil
 		_, err := api.Call(ctx, args, TraceTypes{"vmTrace"}, nil)
 		cancel()
 		if !errors.Is(err, context.DeadlineExceeded) {
