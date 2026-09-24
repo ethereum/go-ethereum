@@ -212,6 +212,7 @@ This command dumps out the state for a given block (or latest, if none provided)
 		ArgsUsage: "",
 		Flags: slices.Concat(utils.DatabaseFlags, []cli.Flag{
 			utils.ChainHistoryFlag,
+			utils.HistoryTailFlag,
 		}),
 		Description: `
 The prune-history command removes historical block bodies and receipts from the
@@ -219,8 +220,23 @@ blockchain database up to a specified point, while preserving block headers. Thi
 helps reduce storage requirements for nodes that don't need full historical data.
 
 The --history.chain flag is required to specify the pruning target:
+  - all:        not valid for pruning; history is restored with 'geth import-history'.
   - postmerge:  Prune up to the merge block. The node will keep the merge block and everything thereafter.
-  - postprague: Prune up to the Prague (Pectra) upgrade block. The node will keep the prague block and everything thereafter.`,
+  - postprague: Prune up to the Prague (Pectra) upgrade block. The node will keep the prague block and everything thereafter.
+  - postosaka:  Prune up to the Osaka upgrade block. The node will keep the osaka block and everything thereafter.
+  - 2026-05:    Prune up to a fixed date rather than a fork, currently block 25182208 on mainnet.
+  - custom:     Prune up to a block of your choosing, named with --history.tail as
+                "<block number>:<block hash>", e.g. "25182208:0x6f7c16414e091d817bdbb0e1d0a17f74cd2b42d1a734d9864a7cd37a32514aad".
+
+Take the pair from a node that still has the history in question, and prefer a block
+that is well behind any reorg risk: a number alone is not enough, since the canonical
+chain need not include the block you have in mind. The pair is checked against the
+canonical chain in this database before anything is removed, so a wrong hash fails
+rather than pruning the wrong range. Headers and the canonical hash table are kept even
+below the pruning point, so the check keeps working on a re-run.
+
+Re-running the command with a higher target prunes further; a target below the current
+database tail cannot be undone except by importing history back.`,
 	}
 
 	downloadEraCommand = &cli.Command{
@@ -715,12 +731,22 @@ func pruneHistory(ctx *cli.Context) error {
 	if !ctx.IsSet(utils.ChainHistoryFlag.Name) {
 		return errors.New("--history.chain flag is required")
 	}
-	var mode history.HistoryMode
+	var (
+		mode   history.HistoryMode
+		custom *history.PrunePoint
+	)
 	if err := mode.UnmarshalText([]byte(ctx.String(utils.ChainHistoryFlag.Name))); err != nil {
 		return err
 	}
 	if mode == history.KeepAll {
 		return errors.New("--history.chain=all is not valid for pruning. To restore history, use 'geth import-history'")
+	}
+	if ctx.IsSet(utils.HistoryTailFlag.Name) {
+		target, err := history.ParsePrunePoint(ctx.String(utils.HistoryTailFlag.Name))
+		if err != nil {
+			return err
+		}
+		custom = target
 	}
 
 	stack, _ := makeConfigNode(ctx)
@@ -733,7 +759,7 @@ func pruneHistory(ctx *cli.Context) error {
 
 	// Determine the prune point based on the history mode.
 	genesisHash := chain.Genesis().Hash()
-	policy, err := history.NewPolicy(mode, genesisHash)
+	policy, err := history.NewPolicy(mode, genesisHash, custom)
 	if err != nil {
 		return err
 	}

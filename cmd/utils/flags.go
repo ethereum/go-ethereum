@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
@@ -330,8 +331,13 @@ var (
 	}
 	ChainHistoryFlag = &cli.StringFlag{
 		Name:     "history.chain",
-		Usage:    `Blockchain history retention ("all", "postmerge", or "postprague")`,
+		Usage:    fmt.Sprintf(`Blockchain history retention ("%s")`, strings.Join(history.HistoryModeNames(), `", "`)),
 		Value:    ethconfig.Defaults.HistoryMode.String(),
+		Category: flags.StateCategory,
+	}
+	HistoryTailFlag = &cli.StringFlag{
+		Name:     "history.tail",
+		Usage:    `Pruning point for --history.chain=custom, as "<block number>:<block hash>"`,
 		Category: flags.StateCategory,
 	}
 	LogHistoryFlag = &cli.Uint64Flag{
@@ -1805,6 +1811,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if err := cfg.HistoryMode.UnmarshalText([]byte(value)); err != nil {
 			Fatalf("--%s: %v", ChainHistoryFlag.Name, err)
 		}
+	}
+	if ctx.IsSet(HistoryTailFlag.Name) {
+		target, err := history.ParsePrunePoint(ctx.String(HistoryTailFlag.Name))
+		if err != nil {
+			Fatalf("--%s: %v", HistoryTailFlag.Name, err)
+		}
+		cfg.HistoryTail = target
 	}
 
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheDatabaseFlag.Name) {
