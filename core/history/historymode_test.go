@@ -24,17 +24,17 @@ import (
 )
 
 func TestNewPolicy(t *testing.T) {
-	// KeepAll: no target.
-	p, err := NewPolicy(KeepAll, params.MainnetGenesisHash)
+	// KeepAll: no target, no window.
+	p, err := NewPolicy(KeepAll, params.MainnetGenesisHash, 0)
 	if err != nil {
 		t.Fatalf("KeepAll: %v", err)
 	}
-	if p.Mode != KeepAll || p.Target != nil {
+	if p.Mode != KeepAll || p.Target != nil || p.Window != 0 {
 		t.Errorf("KeepAll: unexpected policy %+v", p)
 	}
 
 	// PostMerge: resolves known mainnet prune point.
-	p, err = NewPolicy(KeepPostMerge, params.MainnetGenesisHash)
+	p, err = NewPolicy(KeepPostMerge, params.MainnetGenesisHash, 0)
 	if err != nil {
 		t.Fatalf("PostMerge: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestNewPolicy(t *testing.T) {
 	}
 
 	// PostPrague: resolves known mainnet prune point.
-	p, err = NewPolicy(KeepPostPrague, params.MainnetGenesisHash)
+	p, err = NewPolicy(KeepPostPrague, params.MainnetGenesisHash, 0)
 	if err != nil {
 		t.Fatalf("PostPrague: %v", err)
 	}
@@ -52,7 +52,21 @@ func TestNewPolicy(t *testing.T) {
 	}
 
 	// PostMerge on unknown network: error.
-	if _, err = NewPolicy(KeepPostMerge, common.HexToHash("0xdeadbeef")); err == nil {
+	if _, err = NewPolicy(KeepPostMerge, common.HexToHash("0xdeadbeef"), 0); err == nil {
 		t.Fatal("PostMerge unknown network: expected error")
+	}
+
+	// KeepRecent: valid window.
+	p, err = NewPolicy(KeepRecent, common.Hash{}, 200000)
+	if err != nil {
+		t.Fatalf("KeepRecent: %v", err)
+	}
+	if p.Window != 200000 {
+		t.Errorf("KeepRecent: window got %d, want 200000", p.Window)
+	}
+
+	// KeepRecent below minimum: error.
+	if _, err = NewPolicy(KeepRecent, common.Hash{}, 50000); err == nil {
+		t.Fatal("KeepRecent below minimum: expected error")
 	}
 }

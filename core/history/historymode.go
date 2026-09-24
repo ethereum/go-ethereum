@@ -35,10 +35,14 @@ const (
 
 	// KeepPostPrague sets the history pruning point to the Prague (Pectra) activation block.
 	KeepPostPrague
+
+	// KeepRecent configures a rolling history window, keeping the last N blocks
+	// and continuously pruning older block bodies and receipts.
+	KeepRecent
 )
 
 func (m HistoryMode) IsValid() bool {
-	return m <= KeepPostPrague
+	return m <= KeepRecent
 }
 
 func (m HistoryMode) String() string {
@@ -49,6 +53,8 @@ func (m HistoryMode) String() string {
 		return "postmerge"
 	case KeepPostPrague:
 		return "postprague"
+	case KeepRecent:
+		return "recent"
 	default:
 		return fmt.Sprintf("invalid HistoryMode(%d)", m)
 	}
@@ -71,8 +77,10 @@ func (m *HistoryMode) UnmarshalText(text []byte) error {
 		*m = KeepPostMerge
 	case "postprague":
 		*m = KeepPostPrague
+	case "recent":
+		*m = KeepRecent
 	default:
-		return fmt.Errorf(`unknown history mode %q, want "all", "postmerge", or "postprague"`, text)
+		return fmt.Errorf(`unknown history mode %q, want "all", "postmerge", "postprague" or "recent"`, text)
 	}
 	return nil
 }
@@ -115,15 +123,19 @@ var staticPrunePoints = map[HistoryMode]map[common.Hash]*PrunePoint{
 }
 
 // HistoryPolicy describes the configured history pruning strategy. It captures
-// user intent as opposed to the actual DB state.
+// user intent as opposed to actual DB state.
 type HistoryPolicy struct {
 	Mode HistoryMode
 	// Static prune point for PostMerge/PostPrague, nil otherwise.
 	Target *PrunePoint
+	// Rolling window size for KeepRecent, 0 otherwise.
+	Window uint64
 }
 
-// NewPolicy constructs a HistoryPolicy from the given mode and genesis hash.
-func NewPolicy(mode HistoryMode, genesisHash common.Hash) (HistoryPolicy, error) {
+// NewPolicy constructs a HistoryPolicy from the given mode, genesis hash, and
+// rolling window size. The genesis hash is used to look up static prune points
+// for PostMerge/PostPrague modes.
+func NewPolicy(mode HistoryMode, genesisHash common.Hash, historyBlocks uint64) (HistoryPolicy, error) {
 	switch mode {
 	case KeepAll:
 		return HistoryPolicy{Mode: KeepAll}, nil
@@ -134,6 +146,13 @@ func NewPolicy(mode HistoryMode, genesisHash common.Hash) (HistoryPolicy, error)
 			return HistoryPolicy{}, fmt.Errorf("%s history pruning not available for network %s", mode, genesisHash.Hex())
 		}
 		return HistoryPolicy{Mode: mode, Target: point}, nil
+
+	case KeepRecent:
+		const minHistoryBlocks = params.FullImmutabilityThreshold + 10000
+		if historyBlocks < minHistoryBlocks {
+			return HistoryPolicy{}, fmt.Errorf("history.blocks must be at least %d, got %d", minHistoryBlocks, historyBlocks)
+		}
+		return HistoryPolicy{Mode: KeepRecent, Window: historyBlocks}, nil
 
 	default:
 		return HistoryPolicy{}, fmt.Errorf("invalid history mode: %d", mode)
