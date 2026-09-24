@@ -84,10 +84,8 @@ func (eventChecker *EventChecker) UnpackDynamicEvent(log *types.Log) (*EventChec
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerDynamic)
-	if len(log.Data) > 0 {
-		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range eventChecker.abi.Events[event].Inputs {
@@ -127,10 +125,8 @@ func (eventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventChecke
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerEmpty)
-	if len(log.Data) > 0 {
-		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range eventChecker.abi.Events[event].Inputs {
@@ -172,10 +168,8 @@ func (eventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventChec
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerIndexed)
-	if len(log.Data) > 0 {
-		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range eventChecker.abi.Events[event].Inputs {
@@ -217,10 +211,8 @@ func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventChecke
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerMixed)
-	if len(log.Data) > 0 {
-		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range eventChecker.abi.Events[event].Inputs {
@@ -262,10 +254,8 @@ func (eventChecker *EventChecker) UnpackUnnamedEvent(log *types.Log) (*EventChec
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(EventCheckerUnnamed)
-	if len(log.Data) > 0 {
-		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range eventChecker.abi.Events[event].Inputs {
