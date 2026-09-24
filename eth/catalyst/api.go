@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -997,6 +998,18 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 		log.Warn("State not available, ignoring new payload")
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
+	// Only the states of the most recent TriesInMemory blocks are retained,
+	// counted along the chain being executed from where it forks off the
+	// canonical chain. Executing payloads further out without a forkchoice
+	// update in between would evict the head state and leave the node
+	// stateless. The payload's ancestors are all known at this point, so stash
+	// it and report it as accepted, leaving the head to be advanced by a
+	// forkchoice update.
+	if api.forkDepth(block) >= state.TriesInMemory {
+		api.remoteBlocks.put(block.Hash(), block.Header())
+		log.Warn("Payload too far ahead of head, ignoring new payload", "number", block.NumberU64(), "hash", block.Hash(), "head", api.eth.BlockChain().CurrentBlock().Number)
+		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
+	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
 	start := time.Now()
 	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(ctx, block, witness)
@@ -1057,6 +1070,29 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 // either via a forkchoice update or a sync extension. This method is meant to
 // be called by the newpayload command when the block seems to be ok, but some
 // prerequisite prevents it from being processed (e.g. no parent, or snap sync).
+// forkDepth returns the number of blocks between the given block and its most
+// recent canonical ancestor, i.e. how many states the trie database has to
+// retain along that branch on top of the canonical chain. The walk stops at
+// state.TriesInMemory, since nothing beyond that is retained anyway.
+func (api *ConsensusAPI) forkDepth(block *types.Block) uint64 {
+	var (
+		chain  = api.eth.BlockChain()
+		hash   = block.ParentHash()
+		number = block.NumberU64() - 1
+	)
+	for depth := uint64(1); depth < state.TriesInMemory; depth++ {
+		if chain.GetCanonicalHash(number) == hash {
+			return depth
+		}
+		parent := chain.GetHeader(hash, number)
+		if parent == nil {
+			return depth
+		}
+		hash, number = parent.ParentHash, number-1
+	}
+	return state.TriesInMemory
+}
+
 func (api *ConsensusAPI) delayPayloadImport(block *types.Block) engine.PayloadStatusV1 {
 	// Sanity check that this block's parent is not on a previously invalidated
 	// chain. If it is, mark the block as invalid too.
