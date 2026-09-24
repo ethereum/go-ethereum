@@ -10,8 +10,8 @@ their behavior. No database migration or additional index is required.
 
 | Method | Behavior |
 | --- | --- |
-| `trace_call(call, types, block?)` | Simulate on the selected block's post-state, using that block's environment. |
-| `trace_callMany([[call, types], ...], block?)` | Execute in order on shared temporary state; reverted execution writes roll back. |
+| `trace_call(call, types, block?, stateOverrides?, blockOverrides?)` | Simulate on the selected block's post-state, using that block's environment. |
+| `trace_callMany([[call, types], ...], block?, stateOverrides?, blockOverrides?)` | Execute in order on shared temporary state; reverted execution writes roll back. |
 | `trace_rawTransaction(bytes, types)` | Validate and execute a signed transaction against latest state without broadcasting it. |
 | `trace_replayTransaction(hash, types)` | Replay in original transaction context; include `transactionHash`. |
 | `trace_replayBlockTransactions(block, types)` | Replay every transaction in order, one envelope per transaction. |
@@ -74,7 +74,11 @@ never clamped. The `earliest` tag selects the lowest block with available histor
 as it does for `eth_*`; explicit block numbers below a node's history cutoff return
 `4444`.
 Calls and callMany default to latest; available safe and finalized tags select
-their corresponding blocks.
+their corresponding blocks, and EIP-1898 block hashes (optionally with
+`requireCanonical`) select a block by hash. Optional state and block overrides use
+the `eth_call`/`eth_simulateV1` objects and apply once before the first call: block
+overrides replace fields of the selected block environment, and the zero-fee rule
+then uses the overridden base fee. Invalid overrides return `-32602`.
 
 ## Limits and history
 

@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -50,20 +51,20 @@ type TraceAPI struct{ api *API }
 func NewTraceAPI(backend Backend) *TraceAPI { return &TraceAPI{api: NewAPI(backend)} }
 
 // Call executes an unsigned call on the selected block's post-state.
-func (api *TraceAPI) Call(ctx context.Context, args TraceCallArgs, kinds TraceTypes, number *rpc.BlockNumber) (*TraceExecution, error) {
+func (api *TraceAPI) Call(ctx context.Context, args TraceCallArgs, kinds TraceTypes, block *rpc.BlockNumberOrHash, stateOverrides *override.StateOverride, blockOverrides *override.BlockOverrides) (*TraceExecution, error) {
 	if err := kinds.validate(); err != nil {
 		return nil, err
 	}
-	block, st, release, err := api.callState(ctx, number)
+	env, err := api.callEnv(ctx, block, stateOverrides, blockOverrides)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
-	return api.call(ctx, args, kinds, block, st, 0)
+	defer env.release()
+	return api.call(ctx, args, kinds, env, 0)
 }
 
 // CallMany executes calls sequentially, retaining successful writes in the sequence.
-func (api *TraceAPI) CallMany(ctx context.Context, calls TraceCalls, number *rpc.BlockNumber) ([]*TraceExecution, error) {
+func (api *TraceAPI) CallMany(ctx context.Context, calls TraceCalls, block *rpc.BlockNumberOrHash, stateOverrides *override.StateOverride, blockOverrides *override.BlockOverrides) ([]*TraceExecution, error) {
 	ctx, cancel := context.WithTimeout(ctx, traceBatchTimeout)
 	defer cancel()
 	if len(calls) > traceFilterResultLimit {
@@ -74,14 +75,14 @@ func (api *TraceAPI) CallMany(ctx context.Context, calls TraceCalls, number *rpc
 			return nil, err
 		}
 	}
-	block, st, release, err := api.callState(ctx, number)
+	env, err := api.callEnv(ctx, block, stateOverrides, blockOverrides)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
+	defer env.release()
 	results := make([]*TraceExecution, 0, len(calls))
 	for i, call := range calls {
-		result, err := api.call(ctx, call.Call, call.Types, block, st, i)
+		result, err := api.call(ctx, call.Call, call.Types, env, i)
 		if err != nil {
 			var rpcErr rpc.Error
 			if errors.As(err, &rpcErr) {
@@ -103,9 +104,13 @@ func (api *TraceAPI) RawTransaction(ctx context.Context, input hexutil.Bytes, ki
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return nil, traceInvalid("invalid transaction: %v", err)
 	}
-	block, st, release, err := api.callState(ctx, nil)
+	block, err := api.block(ctx, rpc.LatestBlockNumber)
 	if err != nil {
 		return nil, err
+	}
+	st, release, err := api.api.backend.StateAtBlock(ctx, block, nil, true, false)
+	if err != nil {
+		return nil, traceStateError(err)
 	}
 	defer release()
 	if err := api.checkGasCap(tx.Gas()); err != nil {
@@ -116,7 +121,7 @@ func (api *TraceAPI) RawTransaction(ctx context.Context, input hexutil.Bytes, ki
 		return nil, traceRawRejection(fmt.Errorf("invalid signed transaction: %w", err))
 	}
 	vmctx := core.NewEVMBlockContext(block.Header(), api.api.chainContext(ctx), nil)
-	return api.execute(ctx, tx, msg, kinds, vmctx, st, common.Hash{}, 0, false, traceRawRejection)
+	return api.execute(ctx, tx, msg, kinds, vmctx, st, nil, common.Hash{}, 0, false, traceRawRejection)
 }
 
 // ReplayTransaction returns one replay envelope or null for an unknown transaction.
@@ -313,23 +318,73 @@ func traceTagMissing(number rpc.BlockNumber, err error) bool {
 	return (number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber) && err.Error() == number.String()+" block not found"
 }
 
-func (api *TraceAPI) callState(ctx context.Context, number *rpc.BlockNumber) (*types.Block, *state.StateDB, StateReleaseFunc, error) {
-	n := rpc.LatestBlockNumber
-	if number != nil {
-		n = *number
+// traceCallEnv is the shared state and block environment of unsigned calls.
+type traceCallEnv struct {
+	state       *state.StateDB
+	vmctx       vm.BlockContext
+	precompiles vm.PrecompiledContracts // nil unless state overrides replaced them
+	release     StateReleaseFunc
+}
+
+// callEnv selects a block by number, tag or EIP-1898 hash and applies the
+// optional overrides as eth_call does: block overrides replace fields of the
+// block environment, then state overrides apply before the first call.
+func (api *TraceAPI) callEnv(ctx context.Context, selector *rpc.BlockNumberOrHash, stateOverrides *override.StateOverride, blockOverrides *override.BlockOverrides) (*traceCallEnv, error) {
+	var (
+		block *types.Block
+		err   error
+	)
+	if selector == nil {
+		block, err = api.block(ctx, rpc.LatestBlockNumber)
+	} else if number, ok := selector.Number(); ok {
+		block, err = api.block(ctx, number)
+	} else {
+		hash, _ := selector.Hash()
+		block, err = api.blockByHash(ctx, hash, selector.RequireCanonical)
 	}
-	block, err := api.block(ctx, n)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	st, release, err := api.api.backend.StateAtBlock(ctx, block, nil, true, false)
 	if err != nil {
-		return nil, nil, nil, traceStateError(err)
+		return nil, traceStateError(err)
 	}
-	return block, st, release, nil
+	env := &traceCallEnv{state: st, vmctx: core.NewEVMBlockContext(block.Header(), api.api.chainContext(ctx), nil), release: release}
+	if err := blockOverrides.Apply(&env.vmctx); err != nil {
+		release()
+		return nil, traceInvalid("invalid block overrides: %v", err)
+	}
+	if stateOverrides != nil {
+		env.precompiles = vm.ActivePrecompiledContracts(api.api.backend.ChainConfig().Rules(env.vmctx.BlockNumber, env.vmctx.Random != nil, env.vmctx.Time))
+		if err := stateOverrides.Apply(st, env.precompiles); err != nil {
+			release()
+			return nil, traceInvalid("invalid state overrides: %v", err)
+		}
+	}
+	return env, nil
 }
 
-func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceTypes, block *types.Block, st *state.StateDB, index int) (*TraceExecution, error) {
+func (api *TraceAPI) blockByHash(ctx context.Context, hash common.Hash, canonical bool) (*types.Block, error) {
+	block, err := api.api.backend.BlockByHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	if block == nil {
+		return nil, &traceRPCError{-32001, fmt.Sprintf("block %s not found", hash.Hex())}
+	}
+	if canonical {
+		header, err := api.api.backend.HeaderByNumber(ctx, rpc.BlockNumber(block.NumberU64()))
+		if err != nil {
+			return nil, err
+		}
+		if header == nil || header.Hash() != hash {
+			return nil, &traceRPCError{-32001, fmt.Sprintf("block %s is not canonical", hash.Hex())}
+		}
+	}
+	return block, nil
+}
+
+func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceTypes, env *traceCallEnv, index int) (*TraceExecution, error) {
 	args := input.TransactionArgs
 	if args.AuthorizationList != nil && args.IsEIP4844() {
 		return nil, traceInvalid("authorizationList conflicts with blob fields")
@@ -372,14 +427,14 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	}
 	// A supplied nonce is neither validated nor used: execution, including
 	// CREATE address derivation, uses the sender's state nonce.
-	nonce := hexutil.Uint64(st.GetNonce(from))
+	nonce := hexutil.Uint64(env.state.GetNonce(from))
 	args.Nonce = &nonce
 	if args.Gas != nil {
 		if err := api.checkGasCap(uint64(*args.Gas)); err != nil {
 			return nil, err
 		}
 	}
-	vmctx := core.NewEVMBlockContext(block.Header(), api.api.chainContext(ctx), nil)
+	vmctx := env.vmctx
 	if err := args.CallDefaults(api.api.backend.RPCGasCap(), vmctx.BaseFee, api.api.backend.ChainConfig().ChainID); err != nil {
 		return nil, traceInvalid("invalid call: %v", err)
 	}
@@ -402,7 +457,7 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
 		vmctx.BlobBaseFee = new(big.Int)
 	}
-	return api.execute(ctx, tx, msg, kinds, vmctx, st, common.Hash{}, index, true, traceCallRejection)
+	return api.execute(ctx, tx, msg, kinds, vmctx, env.state, env.precompiles, common.Hash{}, index, true, traceCallRejection)
 }
 
 // checkGasCap rejects gas above the RPC gas cap explicitly instead of capping it.
@@ -446,7 +501,7 @@ func (api *TraceAPI) transaction(ctx context.Context, hash common.Hash, kinds Tr
 		if uint64(i) == index {
 			modes = kinds
 		}
-		result, err := api.execute(ctx, tx, msg, modes, vmctx, st, blockHash, i, false, traceRejected)
+		result, err := api.execute(ctx, tx, msg, modes, vmctx, st, nil, blockHash, i, false, traceRejected)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -499,7 +554,7 @@ func (api *TraceAPI) replayBlock(ctx context.Context, block *types.Block, kinds 
 		if err != nil {
 			return nil, err
 		}
-		result, err := api.execute(ctx, tx, msg, kinds, vmctx, st, block.Hash(), i, false, traceRejected)
+		result, err := api.execute(ctx, tx, msg, kinds, vmctx, st, nil, block.Hash(), i, false, traceRejected)
 		if err != nil {
 			return nil, err
 		}
@@ -510,18 +565,27 @@ func (api *TraceAPI) replayBlock(ctx context.Context, block *types.Block, kinds 
 	return results, nil
 }
 
-// execute applies one message; reject maps a validation failure, which leaves
-// the message unexecuted, to its RPC error.
-func (api *TraceAPI) execute(ctx context.Context, tx *types.Transaction, msg *core.Message, kinds TraceTypes, vmctx vm.BlockContext, st *state.StateDB, blockHash common.Hash, index int, unsigned bool, reject func(error) error) (*TraceExecution, error) {
+// execute applies one message. Precompiles replace the active set when not
+// nil; reject maps a validation failure, which leaves the message unexecuted,
+// to its RPC error.
+func (api *TraceAPI) execute(ctx context.Context, tx *types.Transaction, msg *core.Message, kinds TraceTypes, vmctx vm.BlockContext, st *state.StateDB, precompiles vm.PrecompiledContracts, blockHash common.Hash, index int, unsigned bool, reject func(error) error) (*TraceExecution, error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultTraceTimeout)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	capture := newTraceCapture(st, kinds, api.api.backend.ChainConfig().Rules(vmctx.BlockNumber, vmctx.Random != nil, vmctx.Time))
+	rules := api.api.backend.ChainConfig().Rules(vmctx.BlockNumber, vmctx.Random != nil, vmctx.Time)
+	active := precompiles
+	if active == nil {
+		active = vm.ActivePrecompiledContracts(rules)
+	}
+	capture := newTraceCapture(st, kinds, rules, active)
 	hooks := capture.hooks()
 	evm := vm.NewEVM(vmctx, state.NewHookedState(st, hooks), api.api.backend.ChainConfig(), vm.Config{Tracer: hooks, NoBaseFee: unsigned})
 	defer evm.Release()
+	if precompiles != nil {
+		evm.SetPrecompiles(precompiles)
+	}
 	capture.stop = evm.Cancel
 	stopped := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { evm.Cancel(); close(stopped) })

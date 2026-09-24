@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
-	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -43,7 +42,7 @@ type traceCapture struct {
 	before      *state.StateDB
 	kinds       TraceTypes
 	table       vm.JumpTable
-	precompiles []common.Address
+	precompiles vm.PrecompiledContracts
 	frames      []*TraceFrame
 	scopes      []*traceScope
 	output      hexutil.Bytes
@@ -74,9 +73,9 @@ type tracePendingOp struct {
 	store        *traceStorageWrite
 }
 
-func newTraceCapture(st *state.StateDB, kinds TraceTypes, rules params.Rules) *traceCapture {
+func newTraceCapture(st *state.StateDB, kinds TraceTypes, rules params.Rules, precompiles vm.PrecompiledContracts) *traceCapture {
 	table, _ := vm.LookupInstructionSet(rules)
-	c := &traceCapture{state: st, kinds: kinds, table: table, precompiles: vm.ActivePrecompiles(rules), frames: []*TraceFrame{}, touched: make(map[common.Address]map[common.Hash]bool)}
+	c := &traceCapture{state: st, kinds: kinds, table: table, precompiles: precompiles, frames: []*TraceFrame{}, touched: make(map[common.Address]map[common.Hash]bool)}
 	if kinds.has("stateDiff") {
 		c.before = st.Copy()
 	}
@@ -145,7 +144,8 @@ func (c *traceCapture) enter(depth int, typ byte, from, to common.Address, input
 	hidden := false
 	switch vm.OpCode(typ) {
 	case vm.CALL, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL:
-		hidden = len(c.scopes) > 0 && (value == nil || value.Sign() == 0) && slices.Contains(c.precompiles, to)
+		_, precompile := c.precompiles[to]
+		hidden = len(c.scopes) > 0 && (value == nil || value.Sign() == 0) && precompile
 	}
 	path := []uint64{}
 	if len(c.scopes) > 0 {
