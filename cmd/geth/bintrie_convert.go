@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -164,11 +165,8 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	// Probe before MakeTrieDatabase: its guard fatals on a completed
 	// conversion and cannot see interrupted debris.
 	if ctx.Bool(forceConvertFlag.Name) {
-		// The wipe destroys the tree so the conversion can rebuild it from
-		// the merkle state. With no such state the datadir is left with
-		// neither tree.
 		if !hasMerkleSource(chaindb, root) {
-			return errors.New("refusing --force: no merkle state to convert from, so wiping the binary tree would leave no state at all")
+			return errors.New("refusing --force: no merkle state to reconvert from")
 		}
 		if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
 			return fmt.Errorf("failed to wipe binary tree state: %w", err)
@@ -177,7 +175,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		return fmt.Errorf("failed to probe the binary tree namespace: %w", err)
 	} else if dirty {
 		if !hasMerkleSource(chaindb, root) {
-			return errors.New("database already holds binary tree state and the merkle state it was built from is gone; re-import rather than reconvert")
+			return errors.New("binary tree state present, merkle state gone; re-import rather than reconvert")
 		}
 		return errors.New("database already holds binary tree state, complete or from an interrupted conversion; re-run with --force to wipe and reconvert")
 	}
@@ -186,6 +184,11 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	// close it early to reset the freezers it holds open.
 	closeSource := sync.OnceValue(srcTriedb.Close)
 	defer closeSource()
+	// The disposal deletes whole key families; on the hash scheme they also
+	// hold bare-hash code the converted node still reads.
+	if ctx.Bool(deleteSourceFlag.Name) && srcTriedb.Scheme() != rawdb.PathScheme {
+		return errors.New("refusing --delete-source: needs the path scheme")
+	}
 
 	binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{
 		sortBudget:   int(budgetMB << 20),
@@ -200,16 +203,14 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 
 	if ctx.Bool(deleteSourceFlag.Name) {
 		log.Info("Deleting source MPT data")
-		if err := deleteMPTData(chaindb, srcTriedb, root); err != nil {
-			return fmt.Errorf("MPT deletion failed: %w", err)
-		}
-		// The history freezers and the journal file are the trie database's
-		// own handles; it has to let go of them before they can be reset.
+		// Marker first: a killed deletion must not pass for an intact store.
+		rawdb.WritePBTMerkleDisposed(chaindb)
+		// The source holds the history freezers open.
 		if err := closeSource(); err != nil {
 			return fmt.Errorf("failed to close the source trie database: %w", err)
 		}
-		if err := wipeMerkleHistory(chaindb, stack.ResolvePath("triedb")); err != nil {
-			return fmt.Errorf("MPT history deletion failed: %w", err)
+		if err := core.DisposeMerkleState(chaindb, stack.ResolvePath("triedb"), nil); err != nil {
+			return fmt.Errorf("MPT deletion failed: %w", err)
 		}
 		log.Info("Source MPT data deleted")
 	}
@@ -623,16 +624,12 @@ func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 	return false, nil
 }
 
-// hasMerkleSource reports whether the state a conversion reads is on disk.
-// Two facts, because either alone is wrong: a disposal that has begun but
-// not finished still leaves nodes behind, and a datadir built by "bintrie
-// import" never had merkle state and carries no disposal marker.
+// hasMerkleSource reports merkle state to convert from: no disposal marker (a
+// begun disposal leaves nodes behind) and a root node on disk (an imported
+// datadir never had one).
 func hasMerkleSource(chaindb ethdb.Database, root common.Hash) bool {
-	if rawdb.ReadPBTMerkleDisposed(chaindb) {
-		return false
-	}
-	return len(rawdb.ReadAccountTrieNode(chaindb, nil)) > 0 ||
-		len(rawdb.ReadLegacyTrieNode(chaindb, root)) > 0
+	return !rawdb.ReadPBTMerkleDisposed(chaindb) &&
+		(rawdb.HasAccountTrieNode(chaindb, nil) || rawdb.HasLegacyTrieNode(chaindb, root))
 }
 
 // wipeBinaryTrieState clears the binary tree state: the key families (the
@@ -941,123 +938,5 @@ func wipePreimages(chaindb ethdb.Database) error {
 		return err
 	}
 	log.Warn("Deleted the preimage store", "records", wiped)
-	return nil
-}
-
-// wipeMerkleHistory resets the merkle history freezers and removes the merkle
-// journal file. Both are the trie database's own handles, so it must already
-// be closed.
-func wipeMerkleHistory(chaindb ethdb.Database, triedbDir string) error {
-	if ancient, err := chaindb.AncientDatadir(); err == nil {
-		for _, open := range []func(string, bool, bool) (ethdb.ResettableAncientStore, error){
-			rawdb.NewStateFreezer,
-			rawdb.NewTrienodeFreezer,
-		} {
-			store, err := open(ancient, false, false)
-			if err != nil {
-				return err
-			}
-			err = store.Reset()
-			store.Close()
-			if err != nil {
-				return err
-			}
-		}
-	}
-	if triedbDir != "" {
-		if err := os.Remove(filepath.Join(triedbDir, "merkle.journal")); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
-
-// deleteMPTData removes the merkle state the conversion superseded, through
-// the same rawdb list the online disposal uses. The marker goes first, so a
-// killed deletion cannot pass for an intact store. On the hash scheme the
-// nodes are only nameable by traversal, hence the walk.
-func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash) error {
-	rawdb.WritePBTMerkleDisposed(chaindb)
-
-	if srcTriedb.Scheme() == rawdb.HashScheme {
-		if err := deleteLegacyMPTNodes(chaindb, srcTriedb, root); err != nil {
-			return err
-		}
-	}
-	if err := rawdb.DeleteMerkleState(chaindb, srcTriedb.Scheme(), nil); err != nil {
-		return fmt.Errorf("failed to delete the merkle state: %w", err)
-	}
-	log.Info("Deleted merkle state")
-	return nil
-}
-
-// deleteLegacyMPTNodes walks the hash-scheme state and deletes every node it
-// names, which is the only way to name them.
-func deleteLegacyMPTNodes(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash) error {
-	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
-	if err != nil {
-		return fmt.Errorf("failed to open source trie for deletion: %w", err)
-	}
-	acctIt, err := srcTrie.NodeIterator(nil)
-	if err != nil {
-		return fmt.Errorf("failed to create account iterator for deletion: %w", err)
-	}
-	batch := chaindb.NewBatch()
-	deleted := 0
-
-	for acctIt.Next(true) {
-		if node := acctIt.Hash(); node != (common.Hash{}) {
-			rawdb.DeleteLegacyTrieNode(batch, node)
-		}
-		deleted++
-
-		if acctIt.Leaf() {
-			var acc types.StateAccount
-			if err := rlp.DecodeBytes(acctIt.LeafBlob(), &acc); err != nil {
-				return fmt.Errorf("invalid account during deletion: %w", err)
-			}
-			if acc.Root != types.EmptyRootHash {
-				addrHash := common.BytesToHash(acctIt.LeafKey())
-				storageTrie, err := trie.NewStateTrie(trie.StorageTrieID(root, addrHash, acc.Root), srcTriedb)
-				if err != nil {
-					return fmt.Errorf("failed to open storage trie for deletion: %w", err)
-				}
-				storageIt, err := storageTrie.NodeIterator(nil)
-				if err != nil {
-					return fmt.Errorf("failed to create storage iterator for deletion: %w", err)
-				}
-				for storageIt.Next(true) {
-					if node := storageIt.Hash(); node != (common.Hash{}) {
-						rawdb.DeleteLegacyTrieNode(batch, node)
-					}
-					deleted++
-					if batch.ValueSize() >= ethdb.IdealBatchSize {
-						if err := batch.Write(); err != nil {
-							return fmt.Errorf("batch write failed: %w", err)
-						}
-						batch.Reset()
-					}
-				}
-				if storageIt.Error() != nil {
-					return fmt.Errorf("storage deletion iterator error: %w", storageIt.Error())
-				}
-			}
-		}
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return fmt.Errorf("batch write failed: %w", err)
-			}
-			batch.Reset()
-		}
-	}
-	if acctIt.Error() != nil {
-		return fmt.Errorf("account deletion iterator error: %w", acctIt.Error())
-	}
-	if batch.ValueSize() > 0 {
-		if err := batch.Write(); err != nil {
-			return fmt.Errorf("final batch write failed: %w", err)
-		}
-	}
-	log.Info("MPT deletion complete", "nodesDeleted", deleted)
 	return nil
 }

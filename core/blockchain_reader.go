@@ -381,9 +381,8 @@ func (bc *BlockChain) TxIndexDone() bool {
 // HasState checks if state trie is fully present in the database or not. A
 // migrating node answers for both trees.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
-	// A retired handle keeps its stale layers, whose pre-fork roots would
-	// pass a rewind guard onto state that is gone.
-	if !bc.merkleRetired() {
+	// A retired handle still lists its roots; a rewind must not trust them.
+	if !bc.merkleRetired.Load() {
 		if _, err := bc.triedb.NodeReader(hash); err == nil {
 			return true
 		}

@@ -404,49 +404,52 @@ func (db *Database) Disable() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	if err := db.deactivate(); err != nil {
+	// Short circuit if the database is in read only mode.
+	if db.readOnly {
+		return errDatabaseReadOnly
+	}
+	// Prevent duplicated disable operation.
+	if db.waitSync {
+		log.Error("Reject duplicated disable operation")
+		return nil
+	}
+	db.waitSync = true
+
+	// Terminate the state generator if it's active and mark the disk layer
+	// as stale to prevent access to persistent state.
+	disk := db.tree.bottom()
+	if err := disk.terminate(); err != nil {
 		return err
 	}
+	disk.markStale()
+
 	// Write the initial sync flag to persist it across restarts.
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
 	log.Info("Disabled trie database due to state sync")
 	return nil
 }
 
-// Retire deactivates the database for good: the state under it is being
-// deleted. Unlike Disable it records nothing, and has no counterpart.
+// Retire deactivates the database for good because the state under it is
+// being deleted. Unlike Disable it leaves no sync marker behind.
 func (db *Database) Retire() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	if err := db.deactivate(); err != nil {
-		return err
-	}
-	log.Info("Retired trie database, the state under it is being deleted")
-	return nil
-}
-
-// deactivate marks every layer stale, so no reader reaches the persistent
-// state, and stops the writers that would add to it. Lock held by caller.
-func (db *Database) deactivate() error {
-	// Short circuit if the database is in read only mode.
 	if db.readOnly {
 		return errDatabaseReadOnly
 	}
-	// Already deactivated; markStale below panics if it runs twice.
 	if db.waitSync {
 		return nil
 	}
 	db.waitSync = true
 
-	// Release the clean caches first: a stale layer disowns them, and every
-	// successor builds its own.
 	disk := db.tree.bottom()
 	if err := disk.terminate(); err != nil {
 		return err
 	}
-	disk.resetCache()
+	disk.resetCache() // a stale layer refuses to release its caches
 	disk.markStale()
+	log.Info("Retired trie database")
 	return nil
 }
 

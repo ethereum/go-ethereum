@@ -82,9 +82,8 @@ var (
 	// pbtMigrationDoneKey marks a finished migration.
 	pbtMigrationDoneKey = []byte("PBTMigrationDone")
 
-	// pbtMerkleDisposedKey marks the merkle state as disposed of after the
-	// migration: written before the first deletion, so it never means the
-	// state is intact.
+	// pbtMerkleDisposedKey marks the merkle state gone or going: written
+	// before the first deletion, never cleared.
 	pbtMerkleDisposedKey = []byte("PBTMerkleDisposed")
 
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
@@ -188,10 +187,8 @@ var (
 		StateHistoryIndexPrefix, // history index metadata
 	}
 
-	// MerkleKeyFamilies lists the key families holding merkle-patricia state,
-	// the one description on disk of what both disposals delete. State ids
-	// are absent on purpose: their prefix byte is shared with every "Last..."
-	// chain head pointer, so DeleteMerkleState takes them by key length.
+	// MerkleKeyFamilies lists the merkle state's key families. State ids share
+	// their byte with the Last* head keys and are deleted by key length.
 	MerkleKeyFamilies = [][]byte{
 		TrieNodeAccountPrefix,   // path-scheme account trie nodes
 		TrieNodeStoragePrefix,   // path-scheme storage trie nodes

@@ -255,36 +255,24 @@ func TestFullMigrationLifecycle(t *testing.T) {
 	waitFor(t, 5*time.Second, "progress never reached done", func() bool {
 		return chain2.MigrationProgress().Phase == "done"
 	})
-	// A full node reclaims the merkle state it no longer commits: the marker
-	// lands with the close and the deletion follows behind it, so pre-fork
-	// state is refused from here on rather than answered out of a store that
-	// is half gone.
-	waitFor(t, 10*time.Second, "the merkle state was never disposed of", func() bool {
+	// A full node condemns the merkle state at the close; pre-fork reads are
+	// refused from here on.
+	waitFor(t, 10*time.Second, "disposal marker never written", func() bool {
 		return rawdb.ReadPBTMerkleDisposed(eth2.ChainDb())
 	})
 	if _, err := chain2.StateAt(chain2.GetHeaderByNumber(2)); err == nil {
-		t.Fatal("pre-fork state served after the merkle trie was disposed of")
+		t.Fatal("pre-fork state served after disposal")
 	}
-	// The running node finishes the job: no restart reclaims the space.
-	waitFor(t, 10*time.Second, "the running node never deleted the merkle state", func() bool {
-		for _, family := range rawdb.MerkleKeyFamilies {
-			it := eth2.ChainDb().NewIterator(family, nil)
-			left := it.Next()
-			it.Release()
-			if left {
-				return false
-			}
-		}
-		return true
+	waitFor(t, 10*time.Second, "merkle state never deleted", func() bool {
+		return merkleStateGone(eth2.ChainDb())
 	})
-	// A crash between the two markers leaves the window closed but the
-	// disposal undecided; the live node decides it at start, and a full
-	// node condemns. Simulated by dropping the marker the running node wrote.
+	// Simulate a crash between the two markers; the live node settles it at
+	// start.
 	if err := eth2.ChainDb().Delete([]byte("PBTMerkleDisposed")); err != nil {
 		t.Fatal(err)
 	}
 	if rawdb.ReadPBTMerkleDisposed(eth2.ChainDb()) {
-		t.Fatal("the disposal marker survived its deletion; the key literal has drifted")
+		t.Fatal("marker still set")
 	}
 	n2.Close()
 	closed2 = true
@@ -298,8 +286,21 @@ func TestFullMigrationLifecycle(t *testing.T) {
 		t.Fatalf("finished node cannot open its state: %v", err)
 	}
 	if !rawdb.ReadPBTMerkleDisposed(eth3.ChainDb()) {
-		t.Fatal("a full node started on a closed but undecided window without condemning the merkle state")
+		t.Fatal("full node did not settle the disposal at start")
 	}
+}
+
+// merkleStateGone reports whether every merkle key family is empty.
+func merkleStateGone(db ethdb.Database) bool {
+	for _, family := range rawdb.MerkleKeyFamilies {
+		it := db.NewIterator(family, nil)
+		left := it.Next()
+		it.Release()
+		if left {
+			return false
+		}
+	}
+	return true
 }
 
 // TestFullMigrationLifecycleBlocksKnob is the same rehearsal closed by the
@@ -323,35 +324,23 @@ func TestFullMigrationLifecycleBlocksKnob(t *testing.T) {
 	if p := chain.MigrationProgress(); p.Phase != "done" {
 		t.Fatalf("progress %q, want done", p.Phase)
 	}
-	// This node crossed the fork in-run, so the merkle tree is its own
-	// canonical handle, retired and closed by the disposal while the process
-	// keeps executing on the binary tree.
-	waitFor(t, 10*time.Second, "the running node never deleted the merkle state", func() bool {
-		if !rawdb.ReadPBTMerkleDisposed(ethservice.ChainDb()) {
-			return false
-		}
-		for _, family := range rawdb.MerkleKeyFamilies {
-			it := ethservice.ChainDb().NewIterator(family, nil)
-			left := it.Next()
-			it.Release()
-			if left {
-				return false
-			}
-		}
-		return true
+	// This node crossed the fork in-run: bc.triedb is the merkle trie, retired
+	// by the disposal.
+	waitFor(t, 10*time.Second, "merkle state never deleted", func() bool {
+		return rawdb.ReadPBTMerkleDisposed(ethservice.ChainDb()) && merkleStateGone(ethservice.ChainDb())
 	})
 	if chain.TrieDB().IsPBT() {
-		t.Fatal("a node that crossed the fork in-run opened on the binary tree")
+		t.Fatal("opened on the binary tree")
 	}
 	if chain.HasState(chain.GetHeaderByNumber(1).Root) {
-		t.Fatal("the retired handle still vouches for a pre-fork root, so a rewind guard would let the head back onto deleted state")
+		t.Fatal("HasState vouches for a pre-fork root after disposal")
 	}
 	head := buildBlock(t, api, parent, 7, common.Hash{})
 	if _, err := chain.StateAt(head); err != nil {
-		t.Fatalf("state at the head built after the disposal: %v", err)
+		t.Fatalf("post-disposal head state: %v", err)
 	}
 	if _, err := chain.StateAt(chain.GetHeaderByNumber(1)); err == nil {
-		t.Fatal("pre-fork state served after the merkle trie was disposed of")
+		t.Fatal("pre-fork state served after disposal")
 	}
 }
 

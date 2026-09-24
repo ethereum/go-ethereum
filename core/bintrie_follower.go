@@ -203,11 +203,12 @@ func (f *bintrieFollower) loop() {
 					close(stop)
 					<-done
 				}
-				rawdb.WritePBTMigrationDone(f.db)
-				if f.chain != nil {
+				// An archive node keeps its follower past the close; decide once.
+				if !rawdb.ReadPBTMigrationDone(f.db) {
+					rawdb.WritePBTMigrationDone(f.db)
 					f.chain.disposeMerkle()
+					log.Info("State migration finished", "closed", closer.Number)
 				}
-				log.Info("State migration finished", "closed", closer.Number)
 				return
 			}
 			latest = ev.Header
@@ -650,10 +651,10 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	// The marker lands before release nils the handle, both under this lock,
-	// so no open can hand out a handle over a namespace being deleted.
+	// The marker is written before release takes this lock, so a handle
+	// handed out here is retired by the same disposal.
 	if !t.pbt && rawdb.ReadPBTMerkleDisposed(f.db) {
-		return nil, errors.New("merkle trie disposed of after the migration")
+		return nil, errors.New("merkle trie disposed")
 	}
 	if t.handle != nil {
 		return t.handle, nil
@@ -871,17 +872,19 @@ func (t *followerTree) journal(head *types.Header) {
 	if head != nil && t.f.config.IsBinaryTrie(head.Number, head.Time) == t.pbt {
 		root = head.Root
 	}
-	if err := handle.Journal(root); err != nil {
-		log.Warn("Failed to journal shadow trie", "err", err)
+	// Never resolved: a merkle handle an archive node opened only for reads.
+	if root != (common.Hash{}) {
+		if err := handle.Journal(root); err != nil {
+			log.Warn("Failed to journal shadow trie", "err", err)
+		}
 	}
 	if err := handle.Close(); err != nil {
 		log.Error("Failed to close shadow trie", "err", err)
 	}
 }
 
-// release hands the tree's handle over without journaling it - the caller is
-// about to delete the state a journal would describe - and only when the
-// follower owns it. A shared handle is the chain's own; its owner retires it.
+// release drops the tree's handle, unjournaled, and returns it if the follower
+// owns it; a shared handle is bc.triedb, retired by its owner.
 func (t *followerTree) release() *triedb.Database {
 	t.f.mu.Lock()
 	defer t.f.mu.Unlock()
@@ -910,7 +913,6 @@ func (t *followerTree) hasState(root common.Hash) bool {
 	t.f.mu.Lock()
 	handle := t.handle
 	t.f.mu.Unlock()
-	// Released by a disposal, or never opened: no state either way.
 	if handle == nil {
 		return false
 	}

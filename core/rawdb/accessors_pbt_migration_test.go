@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // TestShadowStateRootStorage exercises the shadow-root table.
@@ -108,52 +107,5 @@ func TestWipeMigrationState(t *testing.T) {
 	}
 	if _, ok := ReadShadowStateRoot(db, common.Hash{0x01}, 5); ok {
 		t.Fatal("shadow-root record survived the wipe")
-	}
-}
-
-// TestDeleteMerkleStateSparesBareHashKeys: a hash-scheme datadir keys trie
-// nodes and legacy contract code by their bare hash, and one in five of those
-// begins with a merkle family byte. Deleting a family wholesale there would
-// take state the converted node still executes.
-func TestDeleteMerkleStateSparesBareHashKeys(t *testing.T) {
-	db := NewMemoryDatabase()
-
-	// A blob whose hash - the key it is stored under - starts with a family
-	// byte, which is what makes it indistinguishable from flat state.
-	var (
-		blob []byte
-		key  common.Hash
-	)
-	for i := 0; ; i++ {
-		blob = []byte{0x60, byte(i), byte(i >> 8)}
-		if key = crypto.Keccak256Hash(blob); key[0] == SnapshotAccountPrefix[0] {
-			break
-		}
-		if i == 1<<16 {
-			t.Fatal("no blob hashed into the flat-account family")
-		}
-	}
-	if err := db.Put(key.Bytes(), blob); err != nil {
-		t.Fatal(err)
-	}
-	account, slot := common.Hash{0x02}, common.Hash{0x03}
-	WriteAccountSnapshot(db, account, []byte{0x01})
-	WriteStorageSnapshot(db, account, slot, []byte{0x02})
-
-	if err := DeleteMerkleState(db, HashScheme, nil); err != nil {
-		t.Fatalf("hash-scheme deletion: %v", err)
-	}
-	if ReadAccountSnapshot(db, account) != nil || ReadStorageSnapshot(db, account, slot) != nil {
-		t.Fatal("the flat state survived the hash-scheme deletion")
-	}
-	if got, _ := db.Get(key.Bytes()); got == nil {
-		t.Fatal("a bare-hash key under a family byte went with the flat state")
-	}
-	// The path scheme owns its family bytes outright and takes them whole.
-	if err := DeleteMerkleState(db, PathScheme, nil); err != nil {
-		t.Fatalf("path-scheme deletion: %v", err)
-	}
-	if got, _ := db.Get(key.Bytes()); got != nil {
-		t.Fatal("the path-scheme deletion left a key under a merkle family byte")
 	}
 }

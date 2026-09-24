@@ -109,8 +109,7 @@ func TestBintrieConvertCLI(t *testing.T) {
 	// where the wipe resets the PBT freezers and removes the journal file.
 	runCmd(false, "bintrie", "convert", "--force")
 
-	// The refusal above recommends --force, and on a datadir whose merkle
-	// state is gone that would leave neither tree.
+	// With the merkle state gone, --force would leave neither tree.
 	chaindb := mustOpenChainDB(t, datadir)
 	rawdb.WritePBTMerkleDisposed(chaindb)
 	if err := chaindb.Close(); err != nil {
@@ -118,21 +117,20 @@ func TestBintrieConvertCLI(t *testing.T) {
 	}
 	out = runCmd(true, "bintrie", "convert", "--force")
 	if !strings.Contains(out, "refusing --force") {
-		t.Fatalf("--force wiped the binary tree with no merkle state to rebuild it from:\n%s", out)
+		t.Fatalf("no --force refusal without merkle state:\n%s", out)
 	}
 	out = runCmd(true, "bintrie", "convert")
 	if !strings.Contains(out, "re-import rather than reconvert") {
-		t.Fatalf("the refusal still recommends --force with no merkle state left:\n%s", out)
+		t.Fatalf("refusal lacks the re-import hint:\n%s", out)
 	}
 	after := mustOpenChainDB(t, datadir)
 	defer after.Close()
 	if !rawdb.ReadPBTFlatState(rawdb.NewTable(rawdb.NewDatabase(after), string(rawdb.PBTPrefix))) {
-		t.Fatal("the refused --force wiped the namespace anyway")
+		t.Fatal("refused --force wiped the namespace")
 	}
 }
 
-// mustOpenChainDB opens the datadir's chaindata directly, to reach keys the
-// CLI has no flag for.
+// mustOpenChainDB opens chaindata directly; the CLI cannot write the marker.
 func mustOpenChainDB(t *testing.T, datadir string) ethdb.KeyValueStore {
 	t.Helper()
 	db, err := pebble.New(filepath.Join(datadir, "geth", "chaindata"), 0, 0, "", false)

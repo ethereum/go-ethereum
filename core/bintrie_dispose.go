@@ -27,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// merkleDisposer deletes the retired merkle state in the background,
-// interrupted at shutdown rather than awaited. The marker makes it resumable.
+// merkleDisposer deletes the retired merkle state in the background; Stop
+// interrupts it and the marker resumes it.
 type merkleDisposer struct {
 	quit chan struct{}
 	done chan struct{}
@@ -43,28 +43,25 @@ func (d *merkleDisposer) stop() {
 	<-d.done
 }
 
-// disposeMerkle condemns the merkle state once the window has closed; archive
-// nodes keep it. The marker means "gone or going": it lands before the first
-// key and is never cleared.
+// disposeMerkle retires and deletes the merkle state. Only the live node
+// decides, and an archive node keeps it.
 func (bc *BlockChain) disposeMerkle() {
-	if bc.cfg.ArchiveMode {
-		log.Info("Keeping the merkle state: archive node")
+	if !bc.live.Load() || bc.cfg.ArchiveMode {
 		return
 	}
+	log.Info("Disposing of the merkle state")
 	rawdb.WritePBTMerkleDisposed(bc.db)
 
-	// A pathdb left serving answers deleted records as absent accounts, and
-	// closing it does not stop reads reaching disk.
+	// A live pathdb reads deleted records as empty accounts.
 	if err := bc.retireMerkleTree(); err != nil {
-		log.Error("Failed to retire the merkle tree, its deletion waits for the next start", "err", err)
+		log.Error("Failed to retire the merkle trie, disposal deferred to the next start", "err", err)
 		return
 	}
 	bc.startMerkleDisposal()
 }
 
-// retireMerkleTree stops whichever handle holds the merkle namespace: the
-// chain's own if the node crossed the fork in-run, a follower-owned one
-// otherwise.
+// retireMerkleTree retires and closes the merkle handle: bc.triedb after an
+// in-run crossing, the follower's otherwise.
 func (bc *BlockChain) retireMerkleTree() error {
 	var handle *triedb.Database
 	if bc.follower != nil {
@@ -81,42 +78,30 @@ func (bc *BlockChain) retireMerkleTree() error {
 	if err := handle.Retire(); err != nil {
 		return err
 	}
+	if handle == bc.triedb {
+		bc.merkleRetired.Store(true)
+	}
 	return handle.Close()
 }
 
-// merkleRetired reports whether bc.triedb is the handle this run retired, so
-// shutdown neither journals nor closes it again.
-func (bc *BlockChain) merkleRetired() bool {
-	return !bc.triedb.IsPBT() && rawdb.ReadPBTMerkleDisposed(bc.db)
-}
-
-// resumeMerkleDisposal finishes a deletion a previous run began. Marker only:
-// switching gcmode does not bring back the half that is gone.
-func (bc *BlockChain) resumeMerkleDisposal() {
-	if rawdb.ReadPBTMerkleDisposed(bc.db) {
-		bc.startMerkleDisposal()
-	}
-}
-
-// SettleMerkleDisposal decides the disposal for a window that closed without
-// one. Only the live node calls it: archive mode is this node's
-// configuration, not a fact of the datadir, and an offline command's default
-// would condemn an archive node's state.
+// SettleMerkleDisposal marks this process as the live node, the only one that
+// decides the disposal: gcmode is per run, and an offline command's default
+// must not condemn an archive node's state. It also decides a window that
+// closed undecided.
 func (bc *BlockChain) SettleMerkleDisposal() error {
+	bc.live.Store(true)
 	if rawdb.ReadPBTMerkleDisposed(bc.db) || !rawdb.ReadPBTMigrationDone(bc.db) {
 		return nil
 	}
-	// Condemning here would retire the handle this node executes on, and it
-	// gets no follower to cross the fork again.
+	// Disposing would retire the handle this node executes on.
 	if !bc.cfg.ArchiveMode && !bc.triedb.IsPBT() {
-		return errors.New("migration window closed but the head commits the merkle trie; this datadir cannot follow a pre-fork chain")
+		return errors.New("migration window closed at a pre-fork head: re-anchor or resync")
 	}
 	bc.disposeMerkle()
 	return nil
 }
 
-// startMerkleDisposal launches the deletion once. Window close, startup and
-// shutdown all reach the disposer from their own goroutine.
+// startMerkleDisposal launches the deletion once.
 func (bc *BlockChain) startMerkleDisposal() {
 	d := &merkleDisposer{quit: make(chan struct{}), done: make(chan struct{})}
 	if !bc.disposer.CompareAndSwap(nil, d) {
@@ -124,22 +109,25 @@ func (bc *BlockChain) startMerkleDisposal() {
 	}
 	go func() {
 		defer close(d.done)
-		disposeMerkleState(bc.db, bc.cfg.TrieJournalDirectory, d.quit)
+		switch err := DisposeMerkleState(bc.db, bc.cfg.TrieJournalDirectory, d.quit); {
+		case errors.Is(err, rawdb.ErrDeleteRangeInterrupted):
+			log.Info("Merkle disposal interrupted")
+		case err != nil:
+			log.Error("Failed to dispose of the merkle state", "err", err)
+		default:
+			// Debug: every start after the first disposal reruns it.
+			log.Debug("Disposed of the merkle state")
+		}
 	}()
 }
 
-// disposeMerkleState deletes the merkle state, then the history and journal
-// that describe it. Every step is a deletion, so a partial run just restarts.
-func disposeMerkleState(db ethdb.Database, journalDir string, interrupt <-chan struct{}) {
-	switch err := rawdb.DeleteMerkleState(db, rawdb.PathScheme, interrupt); {
-	case errors.Is(err, rawdb.ErrDeleteRangeInterrupted):
-		log.Info("Merkle disposal interrupted, resumes on the next start")
-		return
-	case err != nil:
-		log.Error("Failed to dispose of the merkle state", "err", err)
-		return
+// DisposeMerkleState deletes the merkle state, its history freezers and its
+// journal file. Every step is idempotent, so an interrupted run restarts. The
+// caller writes the disposal marker first and closes every merkle handle.
+func DisposeMerkleState(db ethdb.Database, journalDir string, interrupt <-chan struct{}) error {
+	if err := rawdb.DeleteMerkleState(db, interrupt); err != nil {
+		return err
 	}
-	// History goes only once the state it indexes has.
 	if ancient, err := db.AncientDatadir(); err == nil {
 		for _, open := range []func(string, bool, bool) (ethdb.ResettableAncientStore, error){
 			rawdb.NewStateFreezer,
@@ -147,22 +135,19 @@ func disposeMerkleState(db ethdb.Database, journalDir string, interrupt <-chan s
 		} {
 			store, err := open(ancient, false, false)
 			if err != nil {
-				log.Error("Failed to open a merkle history freezer", "err", err)
-				return
+				return err
 			}
 			err = store.Reset()
 			store.Close()
 			if err != nil {
-				log.Error("Failed to reset a merkle history freezer", "err", err)
-				return
+				return err
 			}
 		}
 	}
 	if journalDir != "" {
 		if err := os.Remove(filepath.Join(journalDir, "merkle.journal")); err != nil && !os.IsNotExist(err) {
-			log.Error("Failed to remove the merkle journal", "err", err)
-			return
+			return err
 		}
 	}
-	log.Info("Disposed of the merkle state")
+	return nil
 }

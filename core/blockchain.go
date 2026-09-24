@@ -360,6 +360,8 @@ type BlockChain struct {
 	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
 	follower        *bintrieFollower                 // Shadow tree follower, nil unless migrating
 	disposer        atomic.Pointer[merkleDisposer]   // Merkle state disposal, nil unless retiring it
+	merkleRetired   atomic.Bool                      // bc.triedb retired by the disposal
+	live            atomic.Bool                      // Set by the live node, the only one to decide the disposal
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -438,10 +440,9 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		if head := rawdb.ReadHeadBlock(db); head != nil && resolvedConfig.IsBinaryTrie(head.Number(), head.Time()) {
 			isPBT = true
 		}
-		// A head back under the boundary would read deletions as empty
-		// accounts. Re-anchor or resync.
+		// A pre-fork head would execute on deleted state.
 		if !isPBT && rawdb.ReadPBTMerkleDisposed(db) {
-			return nil, errors.New("merkle state was disposed of after the migration; this datadir cannot follow a pre-fork chain")
+			return nil, errors.New("merkle state disposed at a pre-fork head: re-anchor or resync")
 		}
 	}
 	tdbConfig, err := cfg.triedbConfig(isPBT)
@@ -628,11 +629,12 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
 	}
 
-	// Resume a deletion a previous run began before the follower exists.
-	bc.resumeMerkleDisposal()
+	// Finish a disposal a previous run began.
+	if rawdb.ReadPBTMerkleDisposed(db) {
+		bc.startMerkleDisposal()
+	}
 
-	// The follower outlives the migration on an archive node: it owns the
-	// only route to a merkle handle.
+	// An archive node keeps the follower: its only route to a merkle handle.
 	if mode == modeMigration && !rawdb.ReadPBTMerkleDisposed(db) && (!rawdb.ReadPBTMigrationDone(db) || cfg.ArchiveMode) {
 		bc.follower = newBintrieFollower(bc)
 	}
@@ -1420,7 +1422,6 @@ func (bc *BlockChain) stopWithoutSaving() {
 	if bc.follower != nil {
 		bc.follower.close()
 	}
-	// The disposal holds the database the node is about to close.
 	bc.disposer.Load().stop()
 	// Unsubscribe all subscriptions registered from blockchain.
 	bc.scope.Close()
@@ -1461,7 +1462,7 @@ func (bc *BlockChain) Stop() {
 		// with the last own-flavour header as the never-ran fallback.
 		head := bc.CurrentBlock()
 		root, pbt := head.Root, bc.triedb.IsPBT()
-		if bc.follower != nil && bc.chainConfig.IsBinaryTrie(head.Number, head.Time) != pbt {
+		if !bc.merkleRetired.Load() && bc.follower != nil && bc.chainConfig.IsBinaryTrie(head.Number, head.Time) != pbt {
 			if r := bc.follower.cursorRoot(pbt); r != (common.Hash{}) {
 				root = r
 			} else {
@@ -1475,8 +1476,7 @@ func (bc *BlockChain) Stop() {
 				}
 			}
 		}
-		// Retired by the disposal: no state left for a journal to describe.
-		if !bc.merkleRetired() {
+		if !bc.merkleRetired.Load() {
 			if err := bc.triedb.Journal(root); err != nil {
 				log.Info("Failed to journal in-memory trie nodes", "err", err)
 			}
@@ -1521,9 +1521,8 @@ func (bc *BlockChain) Stop() {
 	if bc.logger != nil && bc.logger.OnClose != nil {
 		bc.logger.OnClose()
 	}
-	// Close the trie database as the last step. A retired merkle handle was
-	// already closed by the disposal.
-	if !bc.merkleRetired() {
+	// Close the trie database, release all the held resources as the last step.
+	if !bc.merkleRetired.Load() {
 		if err := bc.triedb.Close(); err != nil {
 			log.Error("Failed to close trie database", "err", err)
 		}
@@ -2241,10 +2240,9 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 
 // treeFor returns the trie database holding the given flavour.
 func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
-	// Refused before the fast path: on a node that crossed the fork in-run
-	// the merkle tree IS bc.triedb.
+	// After an in-run crossing bc.triedb is the merkle trie: refuse before the fast path.
 	if !pbt && rawdb.ReadPBTMerkleDisposed(bc.db) {
-		return nil, errors.New("merkle trie disposed of after the migration")
+		return nil, errors.New("merkle trie disposed")
 	}
 	if bc.triedb.IsPBT() == pbt {
 		return bc.triedb, nil

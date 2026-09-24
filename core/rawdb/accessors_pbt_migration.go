@@ -101,28 +101,25 @@ func WritePBTMigrationDone(db ethdb.KeyValueWriter) {
 	}
 }
 
-// ReadPBTMerkleDisposed reports whether the merkle state has been disposed
-// of. Written before the deletion starts, so it means "gone or going".
+// ReadPBTMerkleDisposed reports whether the merkle state is gone or going.
 func ReadPBTMerkleDisposed(db ethdb.KeyValueReader) bool {
 	data, _ := db.Get(pbtMerkleDisposedKey)
 	return len(data) == 1 && data[0] == 1
 }
 
-// WritePBTMerkleDisposed condemns the merkle state. It must land before the
-// first key goes: a half-deleted state that still looks intact is the one
-// shape a reader cannot tell from a complete one.
+// WritePBTMerkleDisposed condemns the merkle state; write it before the first
+// deletion.
 func WritePBTMerkleDisposed(db ethdb.KeyValueWriter) {
 	if err := db.Put(pbtMerkleDisposedKey, []byte{1}); err != nil {
 		log.Crit("Failed to store merkle disposal marker", "err", err)
 	}
 }
 
-// DeleteMerkleState removes the merkle-patricia state: the snapshot markers
-// first, so a half-deleted store cannot pass for a complete one, then the key
-// families they blessed. Interrupt stops it between ranges; resuming is safe
-// because the caller's marker outlives it. History freezers and the journal
-// file belong to the caller.
-func DeleteMerkleState(db ethdb.KeyValueStore, scheme string, interrupt <-chan struct{}) error {
+// DeleteMerkleState deletes the merkle state from the key-value store: the
+// snapshot and pathdb singletons, MerkleKeyFamilies, then the state ids. Path
+// scheme only: on the hash scheme the families also hold bare-hash code.
+// Interrupt stops it between batches; a rerun finishes the job.
+func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) error {
 	batch := db.NewBatch()
 	DeleteSnapshotRoot(batch)
 	DeleteSnapshotJournal(batch)
@@ -147,26 +144,23 @@ func DeleteMerkleState(db ethdb.KeyValueStore, scheme string, interrupt <-chan s
 			return false
 		}
 	}
-	// On the hash scheme a trie node or code blob is keyed by its bare hash
-	// and may begin with any family byte; SafeDeleteRange skips those.
 	for _, prefix := range MerkleKeyFamilies {
-		if err := SafeDeleteRange(db, prefix, increaseKey(bytes.Clone(prefix)), scheme == HashScheme, stop); err != nil {
+		if err := SafeDeleteRange(db, prefix, increaseKey(bytes.Clone(prefix)), false, stop); err != nil {
 			return err
 		}
 	}
 	return deleteStateIDs(db, stop)
 }
 
-// deleteStateIDs removes the root-to-id mappings and the persistent id. Their
-// leading byte is shared with every "Last..." chain head pointer, so they go
-// by exact key length rather than by range.
+// deleteStateIDs removes the root-to-id mappings and LastStateID by key
+// length; see MerkleKeyFamilies.
 func deleteStateIDs(db ethdb.KeyValueStore, stop func(bool) bool) error {
 	it := NewKeyLengthIterator(db.NewIterator(stateIDPrefix, nil), len(stateIDPrefix)+common.HashLength)
 	defer it.Release()
 
 	batch := db.NewBatch()
 	for it.Next() {
-		if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
+		if err := batch.Delete(it.Key()); err != nil {
 			return err
 		}
 		if batch.ValueSize() < ethdb.IdealBatchSize {

@@ -265,7 +265,7 @@ func TestBintrieConvertDeleteSource(t *testing.T) {
 		t.Fatalf("verification failed, which must gate deletion: %v", err)
 	}
 
-	if err := deleteMPTData(chaindb, srcTriedb2, root); err != nil {
+	if err := core.DisposeMerkleState(chaindb, "", nil); err != nil {
 		t.Fatalf("deletion failed: %v", err)
 	}
 	srcTriedb2.Close()
