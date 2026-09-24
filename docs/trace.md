@@ -43,8 +43,10 @@ Storage slots use creation or deletion markers only when the account itself is
 created or deleted; on an account present before and after, every changed slot,
 including one set from or to zero, is a `*` change between 32-byte words.
 `vmTrace` contains executing bytecode and same-instruction stack/memory/storage
-deltas, recursively nested for executed child bytecode. Precompile calls have no
-child bytecode trace.
+deltas, recursively nested as `sub` for every entered child frame. A selected
+`vmTrace` is never null: a frame in which no instruction ran, such as a call to an
+account without code or to a precompile, is `{"code":"0x","ops":[]}`. Calls that
+fail the depth or balance precondition enter no frame and keep `sub: null`.
 
 Filter address matching is OR within each list and AND between lists, as `eth_getLogs`
 composes topic positions. Omitted, null or empty lists are unrestricted. Optional

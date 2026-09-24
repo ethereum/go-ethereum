@@ -180,6 +180,12 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 		return
 	}
 	scope := c.scopes[len(c.scopes)-1]
+	// Every entered frame has a VM trace, even when no instruction ran (empty
+	// code or a precompile). Selfdestruct and failed call preconditions do not
+	// enter a frame.
+	if c.kinds.has("vmTrace") && scope.vm == nil && scope.frame.Type != "suicide" && !errors.Is(err, vm.ErrDepth) && !errors.Is(err, vm.ErrInsufficientBalance) {
+		c.openVM(nil)
+	}
 	c.scopes = c.scopes[:len(c.scopes)-1]
 	if len(c.scopes) == 0 {
 		c.output = common.CopyBytes(output)
@@ -269,20 +275,8 @@ func (c *traceCapture) opcode(pc uint64, op byte, gas, cost uint64, context trac
 	}
 	scope := c.scopes[len(c.scopes)-1]
 	c.finishOp(scope, context, gas)
-	if scope.vm == nil {
-		code := context.ContractCode()
-		if !c.reserve(len(code)) {
-			return
-		}
-		scope.vm = &traceVM{Code: common.CopyBytes(code), Ops: []*traceVMOp{}}
-		if len(c.scopes) == 1 {
-			c.rootVM = scope.vm
-		} else {
-			parent := c.scopes[len(c.scopes)-2]
-			if parent.pending != nil {
-				parent.pending.op.Sub = scope.vm
-			}
-		}
+	if scope.vm == nil && !c.openVM(context.ContractCode()) {
+		return
 	}
 	c.entries++
 	if !c.reserve(0) {
@@ -329,6 +323,25 @@ func (c *traceCapture) opcode(pc uint64, op byte, gas, cost uint64, context trac
 		}
 	}
 	scope.pending = pending
+}
+
+// openVM starts the innermost scope's VM trace and attaches it to the parent's
+// pending call or create instruction.
+func (c *traceCapture) openVM(code []byte) bool {
+	if !c.reserve(len(code)) {
+		return false
+	}
+	scope := c.scopes[len(c.scopes)-1]
+	scope.vm = &traceVM{Code: common.CopyBytes(code), Ops: []*traceVMOp{}}
+	if len(c.scopes) == 1 {
+		c.rootVM = scope.vm
+	} else {
+		parent := c.scopes[len(c.scopes)-2]
+		if parent.pending != nil {
+			parent.pending.op.Sub = scope.vm
+		}
+	}
+	return true
 }
 
 func (c *traceCapture) finishOp(scope *traceScope, context tracing.OpContext, gas uint64) {
