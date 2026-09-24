@@ -198,6 +198,19 @@ type signTransactionResult struct {
 // by the external signer. For non-legacy transactions, the chain ID of the
 // transaction overrides the chainID parameter.
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
+	args, err := signTxArgs(account, tx, chainID)
+	if err != nil {
+		return nil, err
+	}
+
+	var res signTransactionResult
+	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
+		return nil, err
+	}
+	return res.Tx, nil
+}
+
+func signTxArgs(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*apitypes.SendTxArgs, error) {
 	data := hexutil.Bytes(tx.Data())
 	var to *common.MixedcaseAddress
 	if tx.To() != nil {
@@ -215,9 +228,13 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 	switch tx.Type() {
 	case types.LegacyTxType, types.AccessListTxType:
 		args.GasPrice = (*hexutil.Big)(tx.GasPrice())
-	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
+	case types.DynamicFeeTxType, types.BlobTxType:
 		args.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap())
 		args.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap())
+	case types.SetCodeTxType:
+		args.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap())
+		args.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap())
+		args.AuthorizationList = tx.SetCodeAuthorizations()
 	default:
 		return nil, fmt.Errorf("unsupported tx type %d", tx.Type())
 	}
@@ -246,12 +263,7 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		args.Commitments = sidecar.Commitments
 		args.Proofs = sidecar.Proofs
 	}
-
-	var res signTransactionResult
-	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
-		return nil, err
-	}
-	return res.Tx, nil
+	return args, nil
 }
 
 func (api *ExternalSigner) SignTextWithPassphrase(account accounts.Account, passphrase string, text []byte) ([]byte, error) {
