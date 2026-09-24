@@ -138,7 +138,7 @@ type dialSetupFunc func(net.Conn, connFlag, *enode.Node) error
 
 type dialConfig struct {
 	self           enode.ID         // our own ID
-	maxDialPeers   int              // maximum number of dialed peers
+	maxDialPeers   int              // target number of dialed peers (static peers may exceed it)
 	maxActiveDials int              // maximum number of active dials
 	netRestrict    *netutil.Netlist // IP netrestrict list, disabled if nil
 	resolver       nodeResolver
@@ -257,10 +257,11 @@ func (d *dialScheduler) loop(it enode.Iterator) {
 
 loop:
 	for {
-		// Launch new dials if slots are available.
-		slots := d.freeDialSlots()
-		slots -= d.startStaticDials(slots)
-		if slots > 0 {
+		// Static peers must be retried even when discovery has filled the dial quota.
+		if d.maxDialPeers > 0 {
+			d.startStaticDials(d.maxActiveDials - len(d.dialing))
+		}
+		if d.freeDialSlots() > 0 {
 			nodesCh = d.nodesIn
 		} else {
 			nodesCh = nil
@@ -397,7 +398,7 @@ func (d *dialScheduler) expireHistory() {
 	})
 }
 
-// freeDialSlots returns the number of free dial slots. The result can be negative
+// freeDialSlots returns the number of free dynamic dial slots. The result can be negative
 // when peers are connected while their task is still running.
 func (d *dialScheduler) freeDialSlots() int {
 	slots := (d.maxDialPeers - d.dialPeers) * 2

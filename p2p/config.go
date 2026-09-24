@@ -46,6 +46,7 @@ type Config struct {
 	// DialRatio controls the ratio of inbound to dialed connections.
 	// Example: a DialRatio of 2 allows 1/2 of connections to be dialed.
 	// Setting DialRatio to zero defaults it to 3.
+	// Static connections are not limited by this ratio.
 	DialRatio int `toml:",omitempty"`
 
 	// NoDiscovery can be used to disable the peer discovery mechanism.

@@ -188,10 +188,10 @@ func TestDialSchedStaticDial(t *testing.T) {
 				newNode(uintID(0x04), "127.0.0.4:30303"),
 				newNode(uintID(0x05), "127.0.0.5:30303"),
 				newNode(uintID(0x06), "127.0.0.6:30303"),
+				newNode(uintID(0x07), "127.0.0.7:30303"),
 			},
 		},
-		// Dial to 0x03 completes, filling a peer slot. One slot remains,
-		// two dials are launched to attempt to fill it.
+		// Completed dials free active slots for the remaining static nodes.
 		{
 			succeeded: []enode.ID{
 				uintID(0x03),
@@ -224,6 +224,79 @@ func TestDialSchedStaticDial(t *testing.T) {
 				newNode(uintID(0x01), "127.0.0.1:30303"),
 			},
 		},
+	})
+}
+
+// This test checks that static peers reconnect after discovery fills their slot.
+func TestDialSchedStaticRedialAtLimit(t *testing.T) {
+	t.Parallel()
+
+	static := newNode(uintID(0x01), "127.0.0.1:30303")
+	dynamic := newNode(uintID(0x02), "127.0.0.2:30303")
+	replacement := newNode(uintID(0x03), "127.0.0.3:30303")
+	config := dialConfig{maxActiveDials: 2, maxDialPeers: 2}
+	runDialTest(t, config, []dialTestRound{
+		{
+			update:       func(d *dialScheduler) { d.addStatic(static) },
+			wantNewDials: []*enode.Node{static},
+		},
+		{
+			succeeded:    []enode.ID{static.ID()},
+			discovered:   []*enode.Node{dynamic},
+			wantNewDials: []*enode.Node{dynamic},
+		},
+		{
+			peersAdded:   []*conn{{flags: dynDialedConn, node: replacement}},
+			peersRemoved: []enode.ID{static.ID()},
+			succeeded:    []enode.ID{dynamic.ID()},
+		},
+		// The static peer's history expires with both dynamic peers still connected.
+		{
+			discovered:   []*enode.Node{newNode(uintID(0x04), "127.0.0.4:30303")},
+			wantNewDials: []*enode.Node{static},
+		},
+		{
+			failed:       []enode.ID{static.ID()},
+			wantResolves: map[enode.ID]*enode.Node{static.ID(): nil},
+		},
+		{},
+		{wantNewDials: []*enode.Node{static}},
+		{succeeded: []enode.ID{static.ID()}},
+	})
+}
+
+func TestDialSchedStaticAtLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, dialPeers := range []int{1, 2, 3} {
+		t.Run(fmt.Sprint(dialPeers), func(t *testing.T) {
+			static := newNode(uintID(0x01), "127.0.0.1:30303")
+			var peers []*conn
+			for i := 0; i < dialPeers; i++ {
+				peers = append(peers, &conn{flags: dynDialedConn, node: newNode(uintID(uint16(i+2)), "")})
+			}
+			runDialTest(t, dialConfig{maxDialPeers: 2}, []dialTestRound{
+				{
+					peersAdded:   peers,
+					update:       func(d *dialScheduler) { d.addStatic(static) },
+					wantNewDials: []*enode.Node{static},
+				},
+				{succeeded: []enode.ID{static.ID()}},
+			})
+		})
+	}
+}
+
+func TestDialSchedNoDial(t *testing.T) {
+	t.Parallel()
+
+	static := newNode(uintID(0x01), "127.0.0.1:30303")
+	runDialTest(t, dialConfig{maxDialPeers: 0}, []dialTestRound{
+		{
+			update:     func(d *dialScheduler) { d.addStatic(static) },
+			discovered: []*enode.Node{newNode(uintID(0x02), "127.0.0.2:30303")},
+		},
+		{}, {}, {},
 	})
 }
 
@@ -283,13 +356,20 @@ func TestDialSchedRemoveStatic(t *testing.T) {
 func TestDialSchedManyStaticNodes(t *testing.T) {
 	t.Parallel()
 
-	config := dialConfig{maxDialPeers: 2}
+	config := dialConfig{maxDialPeers: 2, maxActiveDials: 4}
+	dynamic := []*enode.Node{
+		newNode(uintID(0xFFFC), "127.0.0.1:30303"),
+		newNode(uintID(0xFFFD), "127.0.0.1:30303"),
+		newNode(uintID(0xFFFE), "127.0.0.1:30303"),
+		newNode(uintID(0xFFFF), "127.0.0.1:30303"),
+	}
 	runDialTest(t, config, []dialTestRound{
 		{
-			peersAdded: []*conn{
-				{flags: dynDialedConn, node: newNode(uintID(0xFFFE), "")},
-				{flags: dynDialedConn, node: newNode(uintID(0xFFFF), "")},
-			},
+			discovered:   dynamic,
+			wantNewDials: dynamic,
+		},
+		// Populate the static pool while all active dial slots are occupied.
+		{
 			update: func(d *dialScheduler) {
 				for id := uint16(0); id < 2000; id++ {
 					n := newNode(uintID(id), "127.0.0.1:30303")
@@ -298,10 +378,7 @@ func TestDialSchedManyStaticNodes(t *testing.T) {
 			},
 		},
 		{
-			peersRemoved: []enode.ID{
-				uintID(0xFFFE),
-				uintID(0xFFFF),
-			},
+			succeeded: []enode.ID{dynamic[0].ID(), dynamic[1].ID(), dynamic[2].ID(), dynamic[3].ID()},
 			wantNewDials: []*enode.Node{
 				newNode(uintID(0x0085), "127.0.0.1:30303"),
 				newNode(uintID(0x02dc), "127.0.0.1:30303"),
