@@ -298,20 +298,26 @@ func readPreimageRecords(t *testing.T, path string) []preRecord {
 	return recs
 }
 
+// writePreimageRecords lays the records out as EIP-8347 demands: fixed-width
+// records in keccak256(address) order, slot keys in keccak256(slotKey) order.
+// Cases therefore mutate the set and leave the ordering to this helper.
 func writePreimageRecords(t *testing.T, path string, recs []preRecord) {
 	t.Helper()
-	slices.SortFunc(recs, func(a, b preRecord) int { return bytes.Compare(a.addr[:], b.addr[:]) })
+	byHash := func(a, b common.Hash) int {
+		return bytes.Compare(crypto.Keccak256(a[:]), crypto.Keccak256(b[:]))
+	}
+	slices.SortFunc(recs, func(a, b preRecord) int {
+		return bytes.Compare(crypto.Keccak256(a.addr[:]), crypto.Keccak256(b.addr[:]))
+	})
 	var buf bytes.Buffer
 	for _, rec := range recs {
-		slots := make([][]byte, 0, len(rec.slots))
-		for _, slot := range rec.slots {
-			slots = append(slots, common.TrimLeftZeroes(slot[:]))
+		slots := slices.Clone(rec.slots)
+		slices.SortFunc(slots, byHash)
+		buf.Write(rec.addr[:])
+		buf.Write(binary.BigEndian.AppendUint32(nil, uint32(len(slots))))
+		for _, slot := range slots {
+			buf.Write(slot[:])
 		}
-		blob, err := rlp.EncodeToBytes([]any{rec.addr[:], slots})
-		if err != nil {
-			t.Fatal(err)
-		}
-		buf.Write(blob)
 	}
 	if err := os.WriteFile(path, buf.Bytes(), 0600); err != nil {
 		t.Fatal(err)
@@ -565,7 +571,6 @@ func TestImportRejects(t *testing.T) {
 				for i := range recs {
 					if recs[i].addr == contract {
 						recs[i].slots = append(recs[i].slots, common.BigToHash(big.NewInt(7)))
-						slices.SortFunc(recs[i].slots, func(a, b common.Hash) int { return bytes.Compare(a[:], b[:]) })
 					}
 				}
 				return recs

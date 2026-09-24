@@ -293,13 +293,11 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	stats := newStats("Converting state")
 
-	// Four sorters can be alive at once, and a sealed one keeps its buffer
-	// while its stream drains, so the budget is split rather than reused.
-	parts := 3
-	if opts.preimagePath != "" {
-		parts = 4
-	}
-	share := opts.sortBudget / parts
+	// Three sorters can be alive at once, and a sealed one keeps its buffer
+	// while its stream drains, so the budget is split rather than reused. The
+	// preimage file needs none of it: the scan already walks in hashed-key
+	// order, which is the order the file wants.
+	share := opts.sortBudget / 3
 
 	sorter := bintrie.NewLeafSorter(opts.tmpDir, share)
 	defer sorter.Close()
@@ -327,8 +325,16 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}()
 	}
 	if opts.preimagePath != "" {
-		preimages = newPreimageFile(opts.tmpDir, share)
-		defer preimages.close()
+		pf, err := newPreimageFile(opts.preimagePath)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		preimages = pf
+		defer func() {
+			if preimages != nil {
+				preimages.abort()
+			}
+		}()
 	}
 	// Phase 1: scan, deriving leaves and streaming flat state.
 	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, accounts, slots, preimages, stats); err != nil {
@@ -417,13 +423,13 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		snapshot = nil // finalized; disarm the abort
 	}
 	if preimages != nil {
-		digest, err := preimages.write(opts.preimagePath)
+		digest, err := preimages.finalize()
 		if err != nil {
-			os.Remove(opts.preimagePath)
 			return common.Hash{}, err
 		}
 		log.Info("Wrote preimage file", "path", opts.preimagePath,
 			"accounts", preimages.accounts, "digest", digest)
+		preimages = nil // finalized; disarm the abort
 	}
 
 	// The anchor names the block this tree commits; without it the follower
@@ -480,7 +486,7 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		}
 		addr := common.BytesToAddress(addrBytes)
 		if preimages != nil {
-			if err := preimages.beginAccount(addr); err != nil {
+			if err := preimages.beginAccount(addr, common.BytesToHash(accIter.Key)); err != nil {
 				return err
 			}
 		}
@@ -517,7 +523,9 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 					return err
 				}
 				if preimages != nil {
-					preimages.addSlot(slotKey)
+					if err := preimages.addSlot(slotKey, common.BytesToHash(storageIter.Key)); err != nil {
+						return err
+					}
 				}
 				_, content, rest, err := rlp.Split(storageIter.Value)
 				if err != nil {
