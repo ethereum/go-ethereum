@@ -212,9 +212,9 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 	}
 	frame := scope.frame
 	if err != nil && reverted {
-		frame.Error = err.Error()
-		if errors.Is(err, vm.ErrExecutionReverted) || strings.Contains(err.Error(), "execution reverted") {
-			frame.Error = "Reverted"
+		_, precompile := c.precompiles[scope.target]
+		frame.Error = traceErrorLabel(err, precompile && frame.Type == "call")
+		if frame.Error == "Reverted" {
 			frame.Result = traceCallResult{hexutil.Uint64(gasUsed), common.CopyBytes(output)}
 		}
 	} else if frame.Type == "create" {
@@ -223,6 +223,46 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 		frame.Result = traceCallResult{hexutil.Uint64(gasUsed), common.CopyBytes(output)}
 	}
 	c.reserve(len(output))
+}
+
+// traceErrorLabel maps an EVM failure to the profile's failure label. Unknown
+// errors keep their text, which consumers treat as a generic failure.
+func traceErrorLabel(err error, precompile bool) string {
+	var (
+		invalidOp *vm.ErrInvalidOpCode
+		underflow *vm.ErrStackUnderflow
+		overflow  *vm.ErrStackOverflow
+	)
+	switch {
+	case errors.Is(err, vm.ErrExecutionReverted):
+		return "Reverted"
+	// Dynamic gas failures are wrapped as out of gas with the cause as text.
+	case errors.Is(err, vm.ErrWriteProtection) || strings.HasSuffix(err.Error(), ": "+vm.ErrWriteProtection.Error()):
+		return "Mutable Call In Static Context"
+	case errors.Is(err, vm.ErrOutOfGas), errors.Is(err, vm.ErrCodeStoreOutOfGas), errors.Is(err, vm.ErrGasUintOverflow):
+		return "Out of gas"
+	case errors.As(err, &invalidOp):
+		return "Bad instruction"
+	case errors.Is(err, vm.ErrInvalidJump):
+		return "Bad jump destination"
+	case errors.As(err, &underflow):
+		return "Stack underflow"
+	case errors.As(err, &overflow):
+		return "Out of stack"
+	case errors.Is(err, vm.ErrReturnDataOutOfBounds):
+		return "Out of bounds"
+	case errors.Is(err, vm.ErrContractAddressCollision):
+		return "Contract address collision"
+	case errors.Is(err, vm.ErrMaxCodeSizeExceeded):
+		return "Code size limit exceeded"
+	case errors.Is(err, vm.ErrInvalidCode):
+		return "Invalid code prefix 0xEF"
+	case errors.Is(err, vm.ErrNonceUintOverflow):
+		return "Nonce overflow"
+	case precompile:
+		return "Built-in failed"
+	}
+	return err.Error()
 }
 
 func (c *traceCapture) result() *TraceExecution {

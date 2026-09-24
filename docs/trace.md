@@ -53,7 +53,13 @@ and nested frames with nonzero transferred or inherited value. Paths and child
 counts describe the emitted tree. VM return-memory effects remain available even
 when the child frame is omitted. Trees retain revert bytes, failed children, creation
 results and selfdestruct actions. Their gas fields describe frame execution, not
-transaction intrinsic gas. `stateDiff` compares pre-transaction and finalized
+transaction intrinsic gas. Failed frames carry the profile's labels rather than
+Geth error text: `Reverted`, `Out of gas`, `Bad instruction`, `Bad jump
+destination`, `Stack underflow`, `Out of stack`, `Mutable Call In Static Context`,
+`Built-in failed`, `Out of bounds`, `Contract address collision`, `Code size limit
+exceeded`, `Invalid code prefix 0xEF` and `Nonce overflow`. A `Reverted` frame,
+including a create, keeps `result: {gasUsed, output}`; other failures have
+`result: null`. `stateDiff` compares pre-transaction and finalized
 state, including fees and authorization changes. Deleted accounts carry deletion
 markers; storage entries describe touched slots, not an enumeration of the old trie.
 Storage slots use creation or deletion markers only when the account itself is
