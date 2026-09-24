@@ -41,8 +41,7 @@ nonce is accepted but neither validated nor used; CREATE addresses derive from t
 sender's state nonce. Signed raw and mined transactions use the chain's applicable
 rules. Malformed parameters return `-32602` and unknown selected blocks `-32001`. Rejected unsigned calls use the
 `eth_simulateV1` codes: `-38012` fee cap below base fee, `-38013` intrinsic gas,
-`-38014` insufficient funds, `-38025` initcode size and `-38026` gas above the RPC
-gas cap; a priority fee above the fee cap and other invalid calls are `-32602`.
+`-38014` insufficient funds and `-38025` initcode size; a priority fee above the fee cap and other invalid calls are `-32602`.
 Rejected signed transactions use the `eth_sendRawTransaction` groups: `1` nonce too
 low, `2` nonce too high, `800` intrinsic gas, `804` priority fee above fee cap,
 `806` fee cap below base fee, `809` insufficient funds and `-32003` otherwise.
@@ -108,8 +107,9 @@ then uses the overridden base fee. Invalid overrides return `-32602`.
 
 ## Limits and history
 
-- Calls without `gas` use Geth's configured RPC gas cap. Calls and signed raw
-  transactions whose gas exceeds it are rejected with `-38026`, never capped.
+- Unsigned calls without `gas`, or with more than Geth's configured RPC gas cap, run
+  with the cap, as `eth_call` does. A signed raw transaction whose gas limit exceeds
+  the cap is rejected with `-38026`, because capping it would change the transaction.
 - Each execution has a five-second timeout. Batches, block replay and filter scans
   have a thirty-second timeout.
 - Filter ranges are limited to 1,000 blocks and returned results to 10,000 records.
