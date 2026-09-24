@@ -60,7 +60,7 @@ func requireTraceCode(t *testing.T, err error, code int) {
 func TestTraceNamespaceBlockErrors(t *testing.T) {
 	api, _ := traceTestAPI(t, nil, nil)
 	client := traceContractClient(t, api)
-	for _, method := range []string{"trace_call", "trace_callMany", "trace_block", "trace_replayBlockTransactions", "trace_filter"} {
+	for _, method := range []string{"trace_call", "trace_callMany", "trace_block", "trace_replayBlockTransactions"} {
 		t.Run(method, func(t *testing.T) {
 			var args []any
 			switch method {
@@ -70,8 +70,6 @@ func TestTraceNamespaceBlockErrors(t *testing.T) {
 				args = []any{TraceCalls{}, "0xffff"}
 			case "trace_replayBlockTransactions":
 				args = []any{"0xffff", TraceTypes{}}
-			case "trace_filter":
-				args = []any{map[string]string{"toBlock": "0xffff"}}
 			default:
 				args = []any{"0xffff"}
 			}
@@ -218,6 +216,50 @@ func TestTraceNamespaceConflictingCallFields(t *testing.T) {
 	}
 }
 
+func TestTraceNamespaceFilterBounds(t *testing.T) {
+	config := *params.AllEthashProtocolChanges
+	backend := newTestBackend(t, 3, &core.Genesis{Config: &config, GasLimit: 30_000_000, BaseFee: big.NewInt(params.InitialBaseFee)}, nil)
+	t.Cleanup(backend.teardown)
+	client := traceContractClient(t, NewTraceAPI(backend))
+	// Bounds beyond the head, reversed ranges (including an explicit toBlock
+	// before the omitted latest start) and pending are invalid parameters.
+	for _, filter := range []map[string]any{
+		{"fromBlock": "0x4"}, {"toBlock": "0x4"}, {"fromBlock": "0x1", "toBlock": "0xffff"},
+		{"fromBlock": "0x2", "toBlock": "0x1"}, {"toBlock": "0x2"}, {"fromBlock": "latest", "toBlock": "0x1"},
+		{"fromBlock": "pending"}, {"toBlock": "pending"},
+	} {
+		var result json.RawMessage
+		requireTraceCode(t, client.Call(&result, "trace_filter", filter), -32602)
+	}
+	// Omitted bounds select only the head block.
+	for _, filter := range []map[string]any{{}, {"fromBlock": "latest"}, {"toBlock": "latest"}, {"fromBlock": "0x3"}} {
+		var frames []map[string]any
+		if err := client.Call(&frames, "trace_filter", filter); err != nil {
+			t.Fatalf("%v: %v", filter, err)
+		}
+		if len(frames) != 1 || frames[0]["blockNumber"] != 3.0 || frames[0]["type"] != "reward" {
+			t.Fatalf("%v: %+v", filter, frames)
+		}
+	}
+	var frames []map[string]any
+	if err := client.Call(&frames, "trace_filter", map[string]any{"fromBlock": "0x1"}); err != nil || len(frames) != 3 {
+		t.Fatalf("explicit history search: %+v %v", frames, err)
+	}
+	// Single-block selectors reject pending too; genesis has no records.
+	var result json.RawMessage
+	requireTraceCode(t, client.Call(&result, "trace_block", "pending"), -32602)
+	requireTraceCode(t, client.Call(&result, "trace_replayBlockTransactions", "pending", TraceTypes{}), -32602)
+	for _, method := range []string{"trace_block", "trace_replayBlockTransactions"} {
+		args := []any{"0x0"}
+		if method != "trace_block" {
+			args = append(args, TraceTypes{"trace"})
+		}
+		if err := client.Call(&result, method, args...); err != nil || string(result) != "[]" {
+			t.Fatalf("%s genesis: %s %v", method, result, err)
+		}
+	}
+}
+
 type traceBlockErrorBackend struct {
 	Backend
 	err error
@@ -238,9 +280,11 @@ func TestTraceNamespaceBackendErrors(t *testing.T) {
 			api := NewTraceAPI(traceBlockErrorBackend{backend, original})
 			_, blockErr := api.Block(context.Background(), number)
 			_, filterErr := api.Filter(context.Background(), TraceFilter{FromBlock: &number})
-			for _, err := range []error{blockErr, filterErr} {
+			for i, err := range []error{blockErr, filterErr} {
 				if original.Error() == number.String()+" block not found" {
-					requireTraceCode(t, err, -32001)
+					// trace_filter has no resource-not-found code: an
+					// unavailable bound is an invalid range.
+					requireTraceCode(t, err, []int{-32001, -32602}[i])
 				} else if err != original {
 					t.Fatalf("backend error was reclassified: %v -> %v", original, err)
 				}
