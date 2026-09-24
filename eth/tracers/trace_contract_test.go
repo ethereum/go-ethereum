@@ -27,6 +27,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -268,31 +270,61 @@ func TestTraceNamespacePrunedTransactionLookup(t *testing.T) {
 	}
 }
 
-// Model a backend whose earliest tag is a retention boundary, not genesis.
-type traceRetentionBackend struct{ Backend }
+// Model a node whose history before block 1 is pruned: earliest resolves to
+// the cutoff and bodies below it are unavailable.
+type traceRetentionBackend struct{ *testBackend }
 
 func (b traceRetentionBackend) HeaderByNumber(ctx context.Context, n rpc.BlockNumber) (*types.Header, error) {
 	if n == rpc.EarliestBlockNumber {
-		return nil, errors.New("retention boundary selected")
+		n = 1
 	}
-	return b.Backend.HeaderByNumber(ctx, n)
+	return b.testBackend.HeaderByNumber(ctx, n)
 }
 
 func (b traceRetentionBackend) BlockByNumber(ctx context.Context, n rpc.BlockNumber) (*types.Block, error) {
 	if n == rpc.EarliestBlockNumber {
-		return nil, errors.New("retention boundary selected")
+		n = 1
 	}
-	return b.Backend.BlockByNumber(ctx, n)
+	if n == 0 {
+		return nil, &history.PrunedHistoryError{}
+	}
+	return b.testBackend.BlockByNumber(ctx, n)
 }
 
-func TestTraceNamespaceEarliestMeansGenesis(t *testing.T) {
-	_, backend := traceTestAPI(t, nil, nil)
+func (b traceRetentionBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	if hash == b.chain.Genesis().Hash() {
+		return nil, &history.PrunedHistoryError{}
+	}
+	return b.testBackend.BlockByHash(ctx, hash)
+}
+
+func TestTraceNamespaceEarliestMeansCutoff(t *testing.T) {
+	// Block 1 carries only its PoW reward, so tracing it needs no pruned parent body.
+	config := *params.AllEthashProtocolChanges
+	backend := newTestBackend(t, 2, &core.Genesis{Config: &config, GasLimit: 30_000_000, BaseFee: big.NewInt(params.InitialBaseFee)}, nil)
+	t.Cleanup(backend.teardown)
 	api := NewTraceAPI(traceRetentionBackend{backend})
-	n := rpc.EarliestBlockNumber
-	if _, err := api.Block(context.Background(), n); err != nil {
-		t.Fatal(err)
+	ctx := context.Background()
+	earliest, genesisNumber := rpc.EarliestBlockNumber, rpc.BlockNumber(0)
+	onlyCutoff := func(frames []*TraceFrame) bool {
+		for _, frame := range frames {
+			if frame.BlockNumber != 1 {
+				return false
+			}
+		}
+		return len(frames) > 0
 	}
-	if _, err := api.Filter(context.Background(), TraceFilter{FromBlock: &n, ToBlock: &n}); err != nil {
-		t.Fatal(err)
+	frames, err := api.Block(ctx, earliest)
+	if err != nil || !onlyCutoff(frames) {
+		t.Fatalf("trace_block earliest: %+v %v", frames, err)
 	}
+	frames, err = api.Filter(ctx, TraceFilter{FromBlock: &earliest, ToBlock: &earliest})
+	if err != nil || !onlyCutoff(frames) {
+		t.Fatalf("trace_filter earliest: %+v %v", frames, err)
+	}
+	// Explicit numbers below the cutoff remain unavailable history.
+	_, err = api.Block(ctx, genesisNumber)
+	requireTraceCode(t, err, 4444)
+	_, err = api.Filter(ctx, TraceFilter{FromBlock: &genesisNumber, ToBlock: &earliest})
+	requireTraceCode(t, err, 4444)
 }

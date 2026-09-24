@@ -199,9 +199,6 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 		if n == rpc.LatestBlockNumber {
 			return current, nil
 		}
-		if n == rpc.EarliestBlockNumber {
-			n = 0
-		}
 		h, err := api.api.backend.HeaderByNumber(ctx, n)
 		if err != nil {
 			return nil, traceBlockError(n, err)
@@ -287,11 +284,7 @@ func (api *TraceAPI) block(ctx context.Context, number rpc.BlockNumber) (*types.
 	if number == rpc.PendingBlockNumber {
 		return nil, traceInvalid("pending tracing is not supported")
 	}
-	// The trace profile uses genesis even when eth_* resolves earliest to the
-	// node's history retention boundary.
-	if number == rpc.EarliestBlockNumber {
-		number = 0
-	}
+	// The backend resolves earliest to the lowest available block, as eth_* does.
 	block, err := api.api.backend.BlockByNumber(ctx, number)
 	if err != nil {
 		return nil, traceBlockError(number, err)
