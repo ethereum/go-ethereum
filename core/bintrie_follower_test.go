@@ -523,3 +523,115 @@ func TestFollowerSharesCanonicalHandle(t *testing.T) {
 		t.Fatal("the binary direction must own its handle")
 	}
 }
+
+// TestNamespaceMustNameItsBlock: the genesis seed records an anchor, so state
+// without one is a converted namespace whose block is unknowable - which the
+// follower used to take for a genesis seed.
+func TestNamespaceMustNameItsBlock(t *testing.T) {
+	t.Run("genesis seed anchors itself", func(t *testing.T) {
+		genesis, db, blocks, _ := generateMigrationChain(t, 1)
+		writeChainShape(db, blocks)
+
+		f := standaloneFollower(genesis, db)
+		if err := f.direction(true).ensure(); err != nil {
+			t.Fatalf("seeding from genesis: %v", err)
+		}
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		num, hash, ok := rawdb.ReadPBTAnchor(pbtdb)
+		if !ok {
+			t.Fatal("the genesis seed left the namespace without an anchor")
+		}
+		if num != 0 || hash != rawdb.ReadCanonicalHash(db, 0) {
+			t.Fatalf("anchored at %d %x, want the genesis block", num, hash)
+		}
+	})
+
+	t.Run("anchorless state is refused", func(t *testing.T) {
+		genesis, db, blocks, _ := generateMigrationChain(t, 2)
+		writeChainShape(db, blocks)
+		// A namespace as an older converter left it: no anchor.
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		rawdb.WritePBTFlatState(pbtdb)
+		rawdb.WriteSnapshotRoot(pbtdb, common.Hash{0xaa})
+
+		f := standaloneFollower(genesis, db)
+		err := f.direction(true).ensure()
+		if err == nil || !strings.Contains(err.Error(), "no anchor") {
+			t.Fatalf("anchorless namespace resolved with err = %v, want a refusal", err)
+		}
+	})
+
+	// What a crash mid-seed leaves behind: pathdb attested the empty
+	// namespace when the handle was opened and the anchor landed next; the
+	// seed's record and cursor are written while pathdb's flush of the state
+	// they name is still in flight, so the crash can fall on either side of
+	// them - and the state itself never lands.
+	for _, shape := range []struct {
+		name   string
+		cursor bool
+	}{
+		{"unfinished genesis seed re-seeds", false},
+		{"unfinished genesis seed with its cursor re-seeds", true},
+	} {
+		t.Run(shape.name, func(t *testing.T) {
+			genesis, db, blocks, _ := generateMigrationChain(t, 1)
+			writeChainShape(db, blocks)
+			ghash := rawdb.ReadCanonicalHash(db, 0)
+			pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+			rawdb.WritePBTFlatState(pbtdb)
+			rawdb.WritePBTAnchor(pbtdb, 0, ghash)
+			if shape.cursor {
+				lost := common.Hash{0x5e, 0xed}
+				rawdb.WriteShadowStateRoot(db, ghash, 0, lost)
+				rawdb.WriteMigrationCursor(db, true, rawdb.MigrationCursor{Number: 0, Hash: ghash, Root: lost})
+			}
+
+			f := standaloneFollower(genesis, db)
+			if err := f.direction(true).ensure(); err != nil {
+				t.Fatalf("an unfinished seed did not re-seed: %v", err)
+			}
+			num, hash, root := f.direction(true).cursor()
+			if num != 0 || hash != ghash || root == (common.Hash{}) || root == (common.Hash{0x5e, 0xed}) {
+				t.Fatalf("cursor at %d %x root %x, want the seeded genesis", num, hash, root)
+			}
+			if got, _ := rawdb.ReadShadowStateRoot(db, ghash, 0); got != root {
+				t.Fatalf("genesis record %x, want the re-seeded root %x", got, root)
+			}
+		})
+	}
+
+	t.Run("anchor lands before the state", func(t *testing.T) {
+		// pathdb's flush is the seed's only batch, so a batch that cannot be
+		// written is a seed that never persists its state: the anchor must
+		// already be on disk when that fails, or a crash in the flush window
+		// leaves state no anchor explains.
+		genesis, db, blocks, _ := generateMigrationChain(t, 1)
+		writeChainShape(db, blocks)
+		ghash := rawdb.ReadCanonicalHash(db, 0)
+
+		f := standaloneFollower(genesis, unflushableDB{db})
+		if err := f.direction(true).ensure(); err == nil {
+			t.Fatal("the seed persisted its state through a batch that cannot be written")
+		}
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		if num, hash, ok := rawdb.ReadPBTAnchor(pbtdb); !ok || num != 0 || hash != ghash {
+			t.Fatalf("anchor after a failed seed flush: ok=%v %d %x, want the genesis anchor written ahead of the state", ok, num, hash)
+		}
+	})
+}
+
+// unflushableDB fails every batch write, leaving direct puts alone.
+type unflushableDB struct {
+	ethdb.Database
+}
+
+func (db unflushableDB) NewBatch() ethdb.Batch { return unflushableBatch{db.Database.NewBatch()} }
+func (db unflushableDB) NewBatchWithSize(size int) ethdb.Batch {
+	return unflushableBatch{db.Database.NewBatchWithSize(size)}
+}
+
+type unflushableBatch struct {
+	ethdb.Batch
+}
+
+func (unflushableBatch) Write() error { return errors.New("batch refused") }

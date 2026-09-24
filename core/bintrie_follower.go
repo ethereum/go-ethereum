@@ -697,6 +697,7 @@ func (t *followerTree) ensure() error {
 		return err
 	}
 
+	pbtdb := rawdb.NewTable(f.db, string(rawdb.PBTPrefix))
 	cursor, ok, err := rawdb.ReadMigrationCursor(f.db, t.pbt)
 	if err != nil {
 		return fmt.Errorf("migration cursor corrupt, re-anchor: %w", err)
@@ -723,7 +724,13 @@ func (t *followerTree) ensure() error {
 				return nil
 			}
 		}
-		return errors.New("shadow position unresolvable: re-anchor")
+		// A binary namespace nothing was ever flushed to has nothing a
+		// cursor can name: the seed's cursor lands before pathdb's
+		// asynchronous flush of the seed, so a crash there leaves exactly
+		// this. It resolves as virgin below, where a genesis anchor re-seeds.
+		if !t.pbt || rawdb.HasSnapshotRoot(pbtdb) {
+			return errors.New("shadow position unresolvable: re-anchor")
+		}
 	}
 	if !t.pbt {
 		// The merkle window has no artifacts: its floor is the newest block
@@ -741,7 +748,6 @@ func (t *followerTree) ensure() error {
 		}
 		return errors.New("merkle window position unresolvable: no live merkle state")
 	}
-	pbtdb := rawdb.NewTable(f.db, string(rawdb.PBTPrefix))
 	if num, hash, ok := rawdb.ReadPBTAnchor(pbtdb); ok {
 		// Virgin import: the follower never ran, so the disk root is the
 		// anchor's state, and both are proven before use.
@@ -749,19 +755,24 @@ func (t *followerTree) ensure() error {
 			return errors.New("imported anchor not canonical: re-import")
 		}
 		root := rawdb.ReadSnapshotRoot(pbtdb)
-		if !t.hasState(root) {
+		if rawdb.HasSnapshotRoot(pbtdb) && t.hasState(root) {
+			t.setCursor(num, hash, root)
+			return nil
+		}
+		// A genesis anchor over no state is a seed that did not finish, and
+		// the seed is deterministic, so fall through and redo it. Any other
+		// anchor names state only an import can restore.
+		if num != 0 {
 			return errors.New("imported anchor state gone: re-import")
 		}
-		t.setCursor(num, hash, root)
-		return nil
+	} else if rawdb.HasSnapshotRoot(pbtdb) {
+		// The genesis seed and the importer both write an anchor, so state
+		// without one comes from a converter that recorded none: the block
+		// it commits is unknowable, and assuming genesis would replay the
+		// whole chain on top of head state.
+		return errors.New("binary tree state has no anchor: re-convert or re-import")
 	}
 	ghash := rawdb.ReadCanonicalHash(f.db, 0)
-	if root := rawdb.ReadSnapshotRoot(pbtdb); root != (common.Hash{}) {
-		// Seeded, then crashed before the first record: only the genesis
-		// seed writes the namespace with no cursor ever recorded.
-		t.setCursor(0, ghash, root)
-		return nil
-	}
 	// Fresh namespace: seed from the genesis allocation.
 	genesis := rawdb.ReadHeader(f.db, ghash, 0)
 	if genesis == nil {
@@ -777,6 +788,10 @@ func (t *followerTree) ensure() error {
 	if alloc == nil {
 		return errors.New("genesis allocation unavailable")
 	}
+	// Anchored before the state it names: pathdb writes the namespace root
+	// from its own buffer flush, so anchoring afterwards leaves a crash
+	// window with state no anchor explains. A crash this way round re-seeds.
+	rawdb.WritePBTAnchor(pbtdb, 0, ghash)
 	root, err := flushAlloc(&alloc, handle, nil)
 	if err != nil {
 		return err

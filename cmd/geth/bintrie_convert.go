@@ -125,16 +125,24 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		return errors.New("no head block found")
 	}
 	var (
-		root common.Hash
-		err  error
+		root   common.Hash
+		anchor *types.Header
+		err    error
 	)
 	if ctx.NArg() == 1 {
 		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			return fmt.Errorf("invalid state root: %w", err)
 		}
+		// Only the head's root can be named: nothing maps a state root back
+		// to its block. Any other root converts into artifacts, never into a
+		// namespace a node can boot on.
+		if root == headBlock.Root() {
+			anchor = headBlock.Header()
+		}
 	} else {
 		root = headBlock.Root()
+		anchor = headBlock.Header()
 	}
 	// --delete-source is settled before anything is wiped or converted: it
 	// disposes of state the chain may still be running on, and learning that
@@ -146,6 +154,13 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		stored := rawdb.ReadChainConfig(chaindb, rawdb.ReadCanonicalHash(chaindb, 0))
 		if stored == nil || !stored.IsBinaryTrie(headBlock.Number(), headBlock.Time()) {
 			return errors.New("refusing --delete-source: the head block commits the merkle trie, which the node still executes on")
+		}
+		// Past the window the head root is binary, so the source can only
+		// be read at an explicitly named older root - one the chain cannot
+		// map back to its block. The namespace that leaves is not bootable,
+		// and the merkle state would have been its only way back.
+		if anchor == nil {
+			return errors.New("refusing --delete-source: this root cannot be anchored, so the namespace it leaves is not bootable and the merkle state would be its only copy")
 		}
 	}
 	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
@@ -195,6 +210,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		tmpDir:       ctx.String(tmpDirFlag.Name),
 		snapshotPath: snapshotPath,
 		preimagePath: preimagePath,
+		anchor:       anchor,
 	})
 	if err != nil {
 		return err
@@ -228,10 +244,11 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 
 // conversionOptions carries the tunables of a conversion run.
 type conversionOptions struct {
-	sortBudget   int    // total bytes of buffered records before the sorts spill
-	tmpDir       string // spill directory; empty means the OS temp dir
-	snapshotPath string // PBT snapshot artifact destination; empty writes none
-	preimagePath string // preimage file destination; empty writes none
+	sortBudget   int           // total bytes of buffered records before the sorts spill
+	tmpDir       string        // spill directory; empty means the OS temp dir
+	snapshotPath string        // PBT snapshot artifact destination; empty writes none
+	preimagePath string        // preimage file destination; empty writes none
+	anchor       *types.Header // the block whose state is converted; nil converts nothing bootable
 }
 
 // conversionStats tracks progress for the periodic report. The message names
@@ -409,9 +426,17 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 			"accounts", preimages.accounts, "digest", digest)
 	}
 
-	// No state id: the converted tree bases an empty history and live commits
-	// number from 1. The attestation is the completion marker and comes last.
+	// The anchor names the block this tree commits; without it the follower
+	// refuses the namespace rather than assume genesis. A root the local
+	// chain cannot name still produces artifacts, which is what those runs
+	// are for. No state id: the tree bases an empty history and live commits
+	// number from 1. The attestation comes last.
 	rawdb.WriteSnapshotRoot(pbtdb, binRoot)
+	if opts.anchor != nil {
+		rawdb.WritePBTAnchor(pbtdb, opts.anchor.Number.Uint64(), opts.anchor.Hash())
+	} else {
+		log.Warn("Converted without an anchor: the artifacts are usable, the namespace is not bootable")
+	}
 	rawdb.WritePBTFlatState(pbtdb)
 	return binRoot, nil
 }
