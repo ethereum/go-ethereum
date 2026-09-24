@@ -26,7 +26,12 @@ unrequested families are `null`. Unknown transactions and paths return `null`.
 Pending-block tracing and extra arguments are rejected. Calls accept the standard
 unsigned transaction fields, including chain ID, blob context and authorization
 lists under the selected fork's rules. Unknown call fields are ignored; known
-fields and conflicting transaction types are validated. Signed raw and mined
+fields and conflicting transaction types are validated. Fees follow `eth_call`:
+omitted fee fields default to zero, a zero effective gas price runs with `BASEFEE`
+0, and a supplied or defaulted zero `maxFeePerBlobGas` runs with `BLOBBASEFEE` 0.
+Positive prices are validated against the base fee, funded and charged. A supplied
+nonce is accepted but neither validated nor used; CREATE addresses derive from the
+sender's state nonce. Signed raw and mined
 transactions use the chain's applicable rules. Malformed parameters return
 `-32602`, unknown selected blocks `-32001`, and rejected transactions `-32003`.
 Valid transactions that revert or halt in the EVM return execution results.

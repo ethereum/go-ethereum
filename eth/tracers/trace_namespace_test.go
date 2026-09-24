@@ -94,17 +94,71 @@ func TestTraceNamespaceVMEffects(t *testing.T) {
 }
 
 func TestTraceNamespaceBaseFeeAndEmptySelection(t *testing.T) {
-	api, _ := traceTestAPI(t, common.FromHex("4860005260206000f3"), nil)
+	// Return BASEFEE, GASPRICE and BLOBBASEFEE.
+	api, _ := traceTestAPI(t, common.FromHex("486000523a6020524a60405260606000f3"), nil)
+	base := big.NewInt(params.InitialBaseFee)
+	quantity := func(n *big.Int) *hexutil.Big { return (*hexutil.Big)(n) }
+	blobHashes := []common.Hash{{0: 1}}
+	for _, tc := range []struct {
+		name                           string
+		modify                         func(*TraceCallArgs)
+		baseFee, gasPrice, blobBaseFee *big.Int
+	}{
+		// Omitted and zero fees select a zero effective price, as in eth_call:
+		// GASPRICE and BASEFEE are both zero.
+		{"omitted", func(*TraceCallArgs) {}, common.Big0, common.Big0, common.Big1},
+		{"zero gasPrice", func(a *TraceCallArgs) { a.GasPrice = quantity(common.Big0) }, common.Big0, common.Big0, common.Big1},
+		{"zero caps", func(a *TraceCallArgs) {
+			a.MaxFeePerGas, a.MaxPriorityFeePerGas = quantity(common.Big0), quantity(common.Big0)
+		}, common.Big0, common.Big0, common.Big1},
+		// Positive prices keep the block's base fee.
+		{"gasPrice", func(a *TraceCallArgs) { a.GasPrice = quantity(base) }, base, base, common.Big1},
+		{"fee cap", func(a *TraceCallArgs) { a.MaxFeePerGas = quantity(new(big.Int).Mul(base, common.Big2)) }, base, base, common.Big1},
+		// BLOBBASEFEE is zero when maxFeePerBlobGas is defaulted or supplied as zero.
+		{"defaulted blob fee", func(a *TraceCallArgs) { a.BlobHashes = blobHashes }, common.Big0, common.Big0, common.Big0},
+		{"zero blob fee", func(a *TraceCallArgs) { a.BlobHashes, a.BlobFeeCap = blobHashes, quantity(common.Big0) }, common.Big0, common.Big0, common.Big0},
+		{"blob fee", func(a *TraceCallArgs) { a.BlobHashes, a.BlobFeeCap = blobHashes, quantity(common.Big1) }, common.Big0, common.Big0, common.Big1},
+	} {
+		args := traceTestArgs(&traceTestTarget, nil)
+		tc.modify(&args)
+		result, err := api.Call(context.Background(), args, TraceTypes{}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		want := append(append(common.LeftPadBytes(tc.baseFee.Bytes(), 32), common.LeftPadBytes(tc.gasPrice.Bytes(), 32)...), common.LeftPadBytes(tc.blobBaseFee.Bytes(), 32)...)
+		if !bytes.Equal(result.Output, want) {
+			t.Fatalf("%s: BASEFEE, GASPRICE, BLOBBASEFEE\nhave %x\nwant %x", tc.name, []byte(result.Output), want)
+		}
+	}
 	for _, kinds := range []TraceTypes{{}, {"stateDiff"}, {"vmTrace"}} {
 		result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), kinds, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if new(big.Int).SetBytes(result.Output).Uint64() != params.InitialBaseFee {
-			t.Fatalf("BASEFEE rewritten: %x", result.Output)
-		}
 		if result.Trace == nil || len(result.Trace) != 0 {
 			t.Fatal("unrequested trace must be []")
+		}
+	}
+}
+
+func TestTraceNamespaceIgnoresSuppliedNonce(t *testing.T) {
+	api, _ := traceTestAPI(t, nil, nil)
+	for _, nonce := range []uint64{0, 5} {
+		args := traceTestArgs(nil, common.FromHex("600160005360016000f3"))
+		supplied := hexutil.Uint64(nonce)
+		args.Nonce = &supplied
+		result, err := api.Call(context.Background(), args, TraceTypes{"trace", "stateDiff"}, nil)
+		if err != nil {
+			t.Fatalf("nonce %d: %v", nonce, err)
+		}
+		// The sender's state nonce is 0; the supplied nonce is neither
+		// validated nor used for the created address.
+		want := crypto.CreateAddress(traceTestSender, 0)
+		if have := result.Trace[0].Result.(traceCreateResult).Address; have != want {
+			t.Fatalf("nonce %d: created %x, want %x", nonce, have, want)
+		}
+		if change, ok := result.StateDiff[traceTestSender].Nonce.(map[string]any)["*"].(map[string]any); !ok || change["to"] != hexutil.Uint64(1) {
+			t.Fatalf("nonce %d: sender nonce diff %+v", nonce, result.StateDiff[traceTestSender].Nonce)
 		}
 	}
 }
