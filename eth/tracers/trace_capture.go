@@ -130,6 +130,16 @@ func (c *traceCapture) enter(depth int, typ byte, from, to common.Address, input
 	}
 	c.touch(from)
 	c.touch(to)
+	// CREATE and CREATE2 deduct the gas they make available to the child after
+	// their own cost, like the CALL family does within its cost.
+	switch vm.OpCode(typ) {
+	case vm.CREATE, vm.CREATE2:
+		if len(c.scopes) > 0 {
+			if pending := c.scopes[len(c.scopes)-1].pending; pending != nil {
+				pending.op.Cost += gas
+			}
+		}
+	}
 	// Parity clients omit nested zero-value precompiles from the call tree.
 	// Keep the execution scope: its return bytes still feed the caller's VM delta.
 	hidden := false
