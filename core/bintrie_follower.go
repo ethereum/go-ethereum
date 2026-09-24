@@ -64,8 +64,8 @@ type BALRequest struct {
 	Hash   common.Hash
 }
 
-// bintrieFollower replays block access lists onto the shadow trees: the
-// binary one ahead of the fork, the merkle one through the window after it.
+// bintrieFollower replays block access lists onto the binary shadow tree
+// ahead of the fork; the merkle trie stays frozen where the fork found it.
 // Each tree is the truth for where its replay stands; the persisted cursors
 // are hints a crash may leave ahead of them.
 type bintrieFollower struct {

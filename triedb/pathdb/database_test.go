@@ -700,8 +700,8 @@ func TestRecoverableDisabled(t *testing.T) {
 	}
 }
 
-// TestRetireStopsReads: a reader taken before Retire fails afterwards, and no
-// snap-sync marker is left behind.
+// TestRetireStopsReads: a reader taken before Retire fails afterwards, the diff
+// layers are released, and no snap-sync marker is left behind.
 func TestRetireStopsReads(t *testing.T) {
 	tester := newTester(t, &testerConfig{layers: 8})
 	defer tester.release()
@@ -718,6 +718,9 @@ func TestRetireStopsReads(t *testing.T) {
 	}
 	if _, err := reader.Account(common.Hash{0x01}); !errors.Is(err, errSnapshotStale) {
 		t.Fatalf("read after retire: got %v, want %v", err, errSnapshotStale)
+	}
+	if diffs, _ := tester.db.Size(); diffs != 0 {
+		t.Fatalf("retire kept %v of diff layers", diffs)
 	}
 	if flag := rawdb.ReadSnapSyncStatusFlag(tester.db.diskdb); flag == rawdb.StateSyncRunning {
 		t.Fatal("retire left the snap-sync marker")

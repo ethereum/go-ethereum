@@ -449,6 +449,7 @@ func (db *Database) Retire() error {
 	}
 	disk.resetCache() // a stale layer refuses to release its caches
 	disk.markStale()
+	db.tree.init(disk) // drop the diff layers; the stale disk buffer stays until restart
 	log.Info("Retired trie database")
 	return nil
 }
