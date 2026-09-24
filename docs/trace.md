@@ -77,7 +77,15 @@ account without code or to a precompile, is `{"code":"0x","ops":[]}`. Calls that
 fail the depth or balance precondition enter no frame and keep `sub: null`.
 The `cost` of call and create instructions includes the gas made available to the
 child frame, excluding the value-transfer stipend, and `used` is the gas left after
-the child's unused gas is returned.
+the child's unused gas is returned. `mem` is the post-operation contents of the
+range the operands designate: `[off, off+32)` for MSTORE and MLOAD, one byte for
+MSTORE8, the destination of the copy instructions and the full CALL-family output
+window, or `null` when that range is empty or the opcode has none. `store` is set by
+every completed SSTORE from its operands, even when the value is unchanged. Every
+`pc` lies inside `code`: Geth's implicit STOP past the end of the code is not
+traced. Operations rejected before execution (undefined opcodes, stack underflow or
+overflow) are omitted; an operation that began executing and halted keeps its
+`cost` with `ex: null` and `sub: null`.
 
 Filter address matching is OR within each list and AND between lists, as `eth_getLogs`
 composes topic positions. Omitted, null or empty lists are unrestricted. Optional

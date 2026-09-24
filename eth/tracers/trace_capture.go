@@ -68,8 +68,6 @@ type tracePendingOp struct {
 	stackBase    int
 	memoryOffset uint64
 	memorySize   uint64
-	callMemory   bool
-	returnSize   uint64
 	store        *traceStorageWrite
 }
 
@@ -204,12 +202,6 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 		c.output = common.CopyBytes(output)
 		c.reserve(len(output))
 	}
-	if len(c.scopes) > 0 {
-		parent := c.scopes[len(c.scopes)-1]
-		if parent.pending != nil {
-			parent.pending.returnSize = uint64(len(output))
-		}
-	}
 	if !c.kinds.has("trace") || scope.hidden {
 		return
 	}
@@ -342,6 +334,11 @@ func (c *traceCapture) opcode(pc uint64, op byte, gas, cost uint64, context trac
 	if scope.vm == nil && !c.openVM(context.ContractCode()) {
 		return
 	}
+	// Geth executes an implicit STOP past the end of the code, which is not an
+	// instruction of the code. Operations rejected before execution are omitted.
+	if pc >= uint64(len(context.ContractCode())) || traceRejectedOp(err) {
+		return
+	}
 	c.entries++
 	if !c.reserve(0) {
 		return
@@ -368,8 +365,9 @@ func (c *traceCapture) opcode(pc uint64, op byte, gas, cost uint64, context trac
 		}
 		return stack[len(stack)-1-i].Uint64()
 	}
+	// mem is the post-operation contents of the range the operands designate.
 	switch vm.OpCode(op) {
-	case vm.MSTORE:
+	case vm.MSTORE, vm.MLOAD:
 		pending.memoryOffset, pending.memorySize = word(0), 32
 	case vm.MSTORE8:
 		pending.memoryOffset, pending.memorySize = word(0), 1
@@ -378,9 +376,9 @@ func (c *traceCapture) opcode(pc uint64, op byte, gas, cost uint64, context trac
 	case vm.EXTCODECOPY:
 		pending.memoryOffset, pending.memorySize = word(1), word(3)
 	case vm.CALL, vm.CALLCODE:
-		pending.memoryOffset, pending.memorySize, pending.callMemory = word(5), word(6), true
+		pending.memoryOffset, pending.memorySize = word(5), word(6)
 	case vm.DELEGATECALL, vm.STATICCALL:
-		pending.memoryOffset, pending.memorySize, pending.callMemory = word(4), word(5), true
+		pending.memoryOffset, pending.memorySize = word(4), word(5)
 	case vm.SSTORE:
 		if len(stack) >= 2 {
 			pending.store = &traceStorageWrite{(*hexutil.Big)(stack[len(stack)-1].ToBig()), (*hexutil.Big)(stack[len(stack)-2].ToBig())}
@@ -427,9 +425,6 @@ func (c *traceCapture) finishOp(scope *traceScope, context tracing.OpContext, ga
 		effects.Push = append(effects.Push, (*hexutil.Big)(stack[i].ToBig()))
 	}
 	offset, size := pending.memoryOffset, pending.memorySize
-	if pending.callMemory && size > pending.returnSize {
-		size = pending.returnSize
-	}
 	memory := context.MemoryData()
 	if size > 0 && offset <= uint64(len(memory)) && size <= uint64(len(memory))-offset {
 		if !c.reserve(int(size)) {
@@ -450,7 +445,25 @@ func (c *traceCapture) fault(pc uint64, op byte, gas, cost uint64, context traci
 	}
 	scope := c.scopes[len(c.scopes)-1]
 	if scope.last != nil && scope.last.PC == pc {
-		scope.last.Ex = nil
+		if traceRejectedOp(err) {
+			// Undefined opcodes pass the gas phase and fail when executed.
+			scope.vm.Ops = scope.vm.Ops[:len(scope.vm.Ops)-1]
+			scope.last = nil
+		} else {
+			// The operation began executing: keep its cost, without effects.
+			scope.last.Ex = nil
+		}
 	}
 	scope.pending = nil
+}
+
+// traceRejectedOp reports failures that reject an operation before it
+// executes: undefined opcodes and stack bounds.
+func traceRejectedOp(err error) bool {
+	var (
+		invalidOp *vm.ErrInvalidOpCode
+		underflow *vm.ErrStackUnderflow
+		overflow  *vm.ErrStackOverflow
+	)
+	return errors.As(err, &invalidOp) || errors.As(err, &underflow) || errors.As(err, &overflow)
 }

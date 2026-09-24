@@ -95,6 +95,95 @@ func TestTraceNamespaceVMEffects(t *testing.T) {
 	}
 }
 
+func TestTraceNamespaceVMOperandRanges(t *testing.T) {
+	code := common.FromHex("602a600052" + // MSTORE 42 at [0, 32)
+		"60005150" + // MLOAD [0, 32)
+		"60206040600160" + "1f60006004" + "61fffff150" + // identity returns 1 byte into the window [64, 96)
+		"600060006001601f60006004" + "61fffff150" + // CALL without an output window
+		"600060005d" + // TSTORE
+		"6000600055" + // SSTORE leaving slot 0 unchanged
+		"6001600155") // SSTORE, then run off the end of the code
+	api, _ := traceTestAPI(t, code, nil)
+	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"vmTrace"}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mems, stores []string
+	for _, op := range result.VMTrace.Ops {
+		if op.PC >= uint64(len(code)) {
+			t.Fatalf("synthetic %s at pc %d", op.Op, op.PC)
+		}
+		if op.Ex == nil {
+			t.Fatalf("%s at pc %d has no effects", op.Op, op.PC)
+		}
+		switch op.Op {
+		case "MLOAD", "CALL":
+			mem, _ := json.Marshal(op.Ex.Mem)
+			mems = append(mems, string(mem))
+		case "TSTORE", "SSTORE":
+			store, _ := json.Marshal(op.Ex.Store)
+			stores = append(stores, string(store))
+		}
+	}
+	word := hexutil.Encode(common.LeftPadBytes([]byte{42}, 32))
+	window := hexutil.Encode(common.RightPadBytes([]byte{42}, 32))
+	if want := []string{`{"off":0,"data":"` + word + `"}`, `{"off":64,"data":"` + window + `"}`, `null`}; !slices.Equal(mems, want) {
+		t.Fatalf("mem:\nhave %v\nwant %v", mems, want)
+	}
+	if want := []string{`null`, `{"key":"0x0","val":"0x0"}`, `{"key":"0x1","val":"0x1"}`}; !slices.Equal(stores, want) {
+		t.Fatalf("store:\nhave %v\nwant %v", stores, want)
+	}
+	if last := result.VMTrace.Ops[len(result.VMTrace.Ops)-1]; last.Op != "SSTORE" {
+		t.Fatalf("last op %s", last.Op)
+	}
+}
+
+func TestTraceNamespaceVMFailingOps(t *testing.T) {
+	for _, tc := range []struct {
+		name, code string
+		ops        []string // opcodes in the trace; the last one halted if halted is set
+		halted     bool
+	}{
+		// Operations rejected before execution are omitted.
+		{"undefined opcode", "60010c", []string{"PUSH1"}, false},
+		{"stack underflow", "600101", []string{"PUSH1"}, false},
+		// Operations that began executing keep their cost with ex and sub null.
+		{"bad jump", "600556", []string{"PUSH1", "JUMP"}, true},
+		{"out of gas", "6001600155", []string{"PUSH1", "PUSH1", "SSTORE"}, true},
+	} {
+		api, _ := traceTestAPI(t, common.FromHex(tc.code), nil)
+		args := traceTestArgs(&traceTestTarget, nil)
+		gas := hexutil.Uint64(30_000)
+		args.Gas = &gas
+		result, err := api.Call(context.Background(), args, TraceTypes{"vmTrace"}, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		var ops []string
+		for i, op := range result.VMTrace.Ops {
+			ops = append(ops, op.Op)
+			last := i == len(result.VMTrace.Ops)-1
+			if halted := last && tc.halted; (op.Ex == nil) != halted || op.Sub != nil || op.Cost == 0 && halted {
+				t.Errorf("%s: %s ex %+v sub %+v cost %d", tc.name, op.Op, op.Ex, op.Sub, op.Cost)
+			}
+		}
+		if !slices.Equal(ops, tc.ops) {
+			t.Fatalf("%s: ops %v, want %v", tc.name, ops, tc.ops)
+		}
+	}
+	// Stack overflow: the rejected push is omitted and every traced op completed.
+	api, _ := traceTestAPI(t, common.FromHex("5b5f5f56"), nil)
+	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"vmTrace"}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range result.VMTrace.Ops {
+		if op.Ex == nil {
+			t.Fatalf("stack overflow: %s at pc %d has no effects", op.Op, op.PC)
+		}
+	}
+}
+
 func TestTraceNamespaceBaseFeeAndEmptySelection(t *testing.T) {
 	// Return BASEFEE, GASPRICE and BLOBBASEFEE.
 	api, _ := traceTestAPI(t, common.FromHex("486000523a6020524a60405260606000f3"), nil)
