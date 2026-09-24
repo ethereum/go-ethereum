@@ -109,30 +109,8 @@ func TestBintrieConvertCLI(t *testing.T) {
 	// where the wipe resets the PBT freezers and removes the journal file.
 	runCmd(false, "bintrie", "convert", "--force")
 
-	// Past the window - the marker set and the stored config committing the
-	// head to the binary tree - the source can only be read at an explicitly
-	// named root, which nothing can anchor: the namespace that would leave
-	// is not bootable, so the source must not go with it.
-	chaindb := mustOpenChainDB(t, datadir)
-	db := rawdb.NewDatabase(chaindb)
-	ghash := rawdb.ReadCanonicalHash(db, 0)
-	cfg := rawdb.ReadChainConfig(db, ghash)
-	cfg.BinaryTrieTime = new(uint64)
-	rawdb.WriteChainConfig(db, ghash, cfg)
-	rawdb.WritePBTMigrationDone(db)
-	if err := chaindb.Close(); err != nil {
-		t.Fatal(err)
-	}
-	out = runCmd(true, "bintrie", "convert", "--delete-source", "0x"+strings.Repeat("ab", 32))
-	if !strings.Contains(out, "refusing --delete-source: this root cannot be anchored") {
-		t.Fatalf("an unanchorable conversion was allowed to delete its source:\n%s", out)
-	}
-	if strings.Contains(out, "Starting MPT to binary trie conversion") {
-		t.Fatalf("the refusal came after starting the conversion:\n%s", out)
-	}
-
 	// With the merkle state gone, --force would leave neither tree.
-	chaindb = mustOpenChainDB(t, datadir)
+	chaindb := mustOpenChainDB(t, datadir)
 	rawdb.WritePBTMerkleDisposed(chaindb)
 	if err := chaindb.Close(); err != nil {
 		t.Fatal(err)
@@ -144,6 +122,22 @@ func TestBintrieConvertCLI(t *testing.T) {
 	out = runCmd(true, "bintrie", "convert")
 	if !strings.Contains(out, "re-import rather than reconvert") {
 		t.Fatalf("refusal lacks the re-import hint:\n%s", out)
+	}
+
+	// A head past the fork commits the binary tree: refused before any wipe.
+	chaindb = mustOpenChainDB(t, datadir)
+	db := rawdb.NewDatabase(chaindb)
+	ghash := rawdb.ReadCanonicalHash(db, 0)
+	cfg := rawdb.ReadChainConfig(db, ghash)
+	cfg.BinaryTrieTime = new(uint64)
+	rawdb.WriteChainConfig(db, ghash, cfg)
+	if err := chaindb.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"bintrie", "convert"}, {"bintrie", "convert", "--force"}} {
+		if out := runCmd(true, args...); !strings.Contains(out, "commits the binary tree") {
+			t.Fatalf("%v not refused past the fork:\n%s", args, out)
+		}
 	}
 	after := mustOpenChainDB(t, datadir)
 	defer after.Close()

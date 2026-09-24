@@ -173,6 +173,13 @@ func WritePBTAnchor(db ethdb.KeyValueWriter, number uint64, hash common.Hash) {
 	}
 }
 
+// DeletePBTAnchor removes the binary tree anchor.
+func DeletePBTAnchor(db ethdb.KeyValueWriter) {
+	if err := db.Delete(pbtAnchorKey); err != nil {
+		log.Crit("Failed to delete binary tree anchor", "err", err)
+	}
+}
+
 // WritePersistentStateID stores the id of the persistent state into database.
 func WritePersistentStateID(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(persistentStateIDKey, encodeBlockNumber(number)); err != nil {
