@@ -116,16 +116,11 @@ func (sw *snapshotWriter) abort() {
 // followed by slotCount[4, big-endian].
 const preimageRecordHeaderSize = common.AddressLength + 4
 
-// preimageFile writes the EIP-8347 preimage file: fixed-width per-account
-// records, no framing between them, ordered by the MPT path of every key -
-// keccak256(address) across records, keccak256(slotKey) within one.
-//
-// The source scan already walks both tries in hashed-key order, so the file
-// streams out in that order with no sort of its own; the hashes it is handed
-// are the trie paths the scan is standing on, and it holds them to strict
-// ascent rather than trusting the caller. Only the open account's slot keys
-// are buffered, because slotCount precedes them - that is the bound the EIP's
-// per-account grouping exists to keep.
+// preimageFile streams the EIP-8347 preimage file: fixed-width per-account
+// records in MPT-path order, keccak256(address) across records and
+// keccak256(slotKey) within one. The scan already walks in that order; the
+// writer checks the paths it is handed for strict ascent and buffers only the
+// open account's slot keys, since slotCount precedes them.
 type preimageFile struct {
 	path     string
 	f        *os.File
@@ -160,29 +155,22 @@ func (pf *preimageFile) beginAccount(addr common.Address, hash common.Hash) erro
 		return fmt.Errorf("preimage records out of hashed-key order at account %x", addr)
 	}
 	pf.addr, pf.prevAddr, pf.open = addr, hash, true
-	pf.prevSlot = common.Hash{}
 	pf.accounts++
 	return nil
 }
 
-// addSlot records one slot key of the open account, padded to its full 32
-// bytes. hash is the slot's MPT path, keccak256(slotKey).
-func (pf *preimageFile) addSlot(slotKey []byte, hash common.Hash) error {
+// addSlot records one slot key of the open account; hash is its MPT path,
+// keccak256(slotKey).
+func (pf *preimageFile) addSlot(slotKey, hash common.Hash) error {
 	if len(pf.slots) > 0 && bytes.Compare(pf.prevSlot[:], hash[:]) >= 0 {
 		return fmt.Errorf("slot keys out of hashed-key order in account %x", pf.addr)
 	}
-	if len(slotKey) > common.HashLength {
-		return fmt.Errorf("slot key of account %x is %d bytes, want at most 32", pf.addr, len(slotKey))
-	}
-	var padded common.Hash
-	copy(padded[common.HashLength-len(slotKey):], slotKey)
-	pf.slots = append(pf.slots, padded[:]...)
+	pf.slots = append(pf.slots, slotKey[:]...)
 	pf.prevSlot = hash
 	return nil
 }
 
-// sealAccount writes the open account's record: its address, its slot count,
-// then the slot keys themselves.
+// sealAccount writes the open account's record.
 func (pf *preimageFile) sealAccount() error {
 	if !pf.open {
 		return nil
@@ -209,7 +197,6 @@ func (pf *preimageFile) finalize() (common.Hash, error) {
 	if err := pf.w.Flush(); err != nil {
 		return common.Hash{}, err
 	}
-	// The digest names the file; make its bytes durable first.
 	if err := pf.f.Sync(); err != nil {
 		return common.Hash{}, err
 	}
@@ -320,21 +307,14 @@ func (sr *snapshotReader) next() ([]byte, [32]byte, error) {
 // digest returns the keccak of everything read; the whole file once next
 // returned io.EOF.
 func (sr *snapshotReader) digest() common.Hash {
-	var d common.Hash
-	sr.hasher.Read(d[:])
-	return d
+	return common.BytesToHash(sr.hasher.Sum(nil))
 }
 
 func (sr *snapshotReader) close() { sr.f.Close() }
 
-// preimageReader streams the EIP-8347 preimage file: fixed-width per-account
-// records in strictly ascending keccak256(address) order, whose slot keys are
-// full 32-byte values in strictly ascending keccak256(slotKey) order, hashing
-// the file as it reads.
-//
-// Records are self-delimiting through slotCount alone, so a truncated record,
-// a slot count larger than the bytes that follow it, or any trailing byte are
-// all read as what they are: an invalid file.
+// preimageReader streams the EIP-8347 preimage file, hashing it as it reads:
+// records strictly ascending by keccak256(address), slot keys strictly
+// ascending by keccak256(slotKey), nothing after the last record.
 type preimageReader struct {
 	f        *os.File
 	hasher   crypto.KeccakState
@@ -361,7 +341,7 @@ func openPreimages(path string) (*preimageReader, error) {
 }
 
 // next returns the following account record: the address and its slot keys.
-// io.EOF ends the stream, and only ever on a record boundary.
+// io.EOF ends the stream only on a record boundary.
 func (pr *preimageReader) next() (common.Address, []common.Hash, error) {
 	var header [preimageRecordHeaderSize]byte
 	if _, err := io.ReadFull(pr.r, header[:]); err == io.EOF {
@@ -378,11 +358,10 @@ func (pr *preimageReader) next() (common.Address, []common.Hash, error) {
 	}
 	pr.prevAddr = hash
 
-	// The count is attacker-controlled, so it is checked against the bytes
-	// that actually remain before anything is allocated for it.
+	// Bound the attacker-controlled count by the bytes left before allocating.
 	count := int64(binary.BigEndian.Uint32(header[common.AddressLength:]))
-	if want := count * common.HashLength; want > pr.left {
-		return common.Address{}, nil, fmt.Errorf("preimage record %d claims %d slots, %d bytes past the end of the file", pr.records, count, want-pr.left)
+	if count*common.HashLength > pr.left {
+		return common.Address{}, nil, fmt.Errorf("preimage record %d claims %d slots past the end of the file", pr.records, count)
 	}
 	var (
 		slots    = make([]common.Hash, count)
@@ -406,9 +385,7 @@ func (pr *preimageReader) next() (common.Address, []common.Hash, error) {
 // digest returns the keccak of everything read; the whole file once next
 // returned io.EOF.
 func (pr *preimageReader) digest() common.Hash {
-	var d common.Hash
-	pr.hasher.Read(d[:])
-	return d
+	return common.BytesToHash(pr.hasher.Sum(nil))
 }
 
 func (pr *preimageReader) close() { pr.f.Close() }
