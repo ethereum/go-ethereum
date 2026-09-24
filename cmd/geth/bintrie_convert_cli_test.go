@@ -205,4 +205,29 @@ func TestBintrieImportCLI(t *testing.T) {
 	// --force wipes and re-imports; on a real datadir this is the one path
 	// where the wipe meets an ancient directory and a node-layout journal.
 	run(consumer, false, "bintrie", "import", "--force", snapPath, prePath, "0")
+
+	// No preimages here: convert --force is refused before it wipes the import.
+	out = run(consumer, true, "bintrie", "convert", "--force")
+	if !strings.Contains(out, "no preimages") {
+		t.Fatalf("convert --force not refused without preimages:\n%s", out)
+	}
+	// Past the fork the namespace is the live state: import --force is refused.
+	chaindb := mustOpenChainDB(t, consumer)
+	db := rawdb.NewDatabase(chaindb)
+	ghash := rawdb.ReadCanonicalHash(db, 0)
+	cfg := rawdb.ReadChainConfig(db, ghash)
+	cfg.BinaryTrieTime = new(uint64)
+	rawdb.WriteChainConfig(db, ghash, cfg)
+	if err := chaindb.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out = run(consumer, true, "bintrie", "import", "--force", snapPath, prePath, "0")
+	if !strings.Contains(out, "commits the binary tree") {
+		t.Fatalf("import --force not refused past the fork:\n%s", out)
+	}
+	after := mustOpenChainDB(t, consumer)
+	defer after.Close()
+	if !rawdb.ReadPBTFlatState(rawdb.NewTable(rawdb.NewDatabase(after), string(rawdb.PBTPrefix))) {
+		t.Fatal("refused --force wiped the imported namespace")
+	}
 }

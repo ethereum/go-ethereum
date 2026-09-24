@@ -131,8 +131,20 @@ func importBinaryTrie(ctx *cli.Context) error {
 	if ctx.Bool(forceConvertFlag.Name) {
 		if verifyOnly {
 			log.Warn("Ignoring --force: verification writes nothing")
-		} else if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
-			return fmt.Errorf("failed to wipe binary tree state: %w", err)
+		} else {
+			head := rawdb.ReadHeadBlock(chaindb)
+			if head == nil {
+				return errors.New("no head block found")
+			}
+			// Past the fork the namespace is the node's live state.
+			if past, err := headCommitsBinaryTree(chaindb, head); err != nil {
+				return err
+			} else if past {
+				return errors.New("refusing --force: the head block commits the binary tree")
+			}
+			if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
+				return fmt.Errorf("failed to wipe binary tree state: %w", err)
+			}
 		}
 	}
 	budgetMB := ctx.Uint64(memoryLimitFlag.Name)

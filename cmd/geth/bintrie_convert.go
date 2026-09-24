@@ -120,8 +120,14 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	}
 	// Past the fork the head commits the binary tree: no merkle state exists
 	// at its root, and the namespace a conversion wipes is the live tree.
-	if stored := rawdb.ReadChainConfig(chaindb, rawdb.ReadCanonicalHash(chaindb, 0)); stored == nil || stored.IsBinaryTrie(headBlock.Number(), headBlock.Time()) {
+	if past, err := headCommitsBinaryTree(chaindb, headBlock); err != nil {
+		return err
+	} else if past {
 		return errors.New("the head block commits the binary tree; nothing to convert")
+	}
+	// Without preimages the scan fails, and only after --force has wiped.
+	if !hasPreimages(chaindb) {
+		return errors.New("no preimages to convert from; the source must sync with --cache.preimages")
 	}
 	var (
 		root   common.Hash
@@ -903,7 +909,7 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 // consults. The whole key family goes, --vmdebug's SHA3 preimages included:
 // they share the key space, and a 32-byte one looks like a slot key.
 func wipePreimages(chaindb ethdb.Database) error {
-	it := rawdb.NewKeyLengthIterator(chaindb.NewIterator(rawdb.PreimagePrefix, nil), len(rawdb.PreimagePrefix)+common.HashLength)
+	it := preimageKeys(chaindb)
 	defer it.Release()
 
 	batch := chaindb.NewBatch()
@@ -928,4 +934,26 @@ func wipePreimages(chaindb ethdb.Database) error {
 	}
 	log.Warn("Deleted the preimage store", "records", wiped)
 	return nil
+}
+
+// headCommitsBinaryTree reports whether head is past the fork, where the
+// binary tree namespace holds the node's live state.
+func headCommitsBinaryTree(chaindb ethdb.Database, head *types.Block) (bool, error) {
+	stored := rawdb.ReadChainConfig(chaindb, rawdb.ReadCanonicalHash(chaindb, 0))
+	if stored == nil {
+		return false, errors.New("no chain config stored for the genesis block")
+	}
+	return stored.IsBinaryTrie(head.Number(), head.Time()), nil
+}
+
+// hasPreimages reports whether the preimage store holds anything.
+func hasPreimages(chaindb ethdb.Database) bool {
+	it := preimageKeys(chaindb)
+	defer it.Release()
+	return it.Next()
+}
+
+// preimageKeys iterates the preimage store: hash-length keys under its prefix.
+func preimageKeys(chaindb ethdb.Database) ethdb.Iterator {
+	return rawdb.NewKeyLengthIterator(chaindb.NewIterator(rawdb.PreimagePrefix, nil), len(rawdb.PreimagePrefix)+common.HashLength)
 }

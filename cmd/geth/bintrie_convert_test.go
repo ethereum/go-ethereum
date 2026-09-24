@@ -483,6 +483,27 @@ type refusedBatch struct{ ethdb.Batch }
 
 func (refusedBatch) Write() error { return errors.New("batch refused") }
 
+// TestWipePreimages: --drop-preimages deletes the preimage store and no other
+// key under its prefix.
+func TestWipePreimages(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	hash := crypto.Keccak256Hash([]byte{1})
+	rawdb.WritePreimages(db, map[common.Hash][]byte{hash: {1}})
+	other := append(bytes.Clone(rawdb.PreimagePrefix), 0x01)
+	if err := db.Put(other, []byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := wipePreimages(db); err != nil {
+		t.Fatal(err)
+	}
+	if rawdb.ReadPreimage(db, hash) != nil {
+		t.Fatal("preimage survived")
+	}
+	if ok, _ := db.Has(other); !ok {
+		t.Fatal("wiped a key that is not a preimage")
+	}
+}
+
 // TestConvertCorruptPreimageRefused: a corrupt preimage store entry must
 // abort the conversion with nothing surviving - no artifacts, no
 // attestation.
