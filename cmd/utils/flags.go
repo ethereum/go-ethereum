@@ -467,6 +467,12 @@ var (
 		Value:    ethconfig.Defaults.TxPool.GlobalQueue,
 		Category: flags.TxPoolCategory,
 	}
+	TxPoolMaxInflightDelegatedSlotsFlag = &cli.Uint64Flag{
+		Name:     "txpool.maxinflightdelegatedslots",
+		Usage:    "Maximum number of in-flight transaction slots per delegated or pending delegated account",
+		Value:    ethconfig.Defaults.TxPool.MaxInflightDelegatedSlots,
+		Category: flags.TxPoolCategory,
+	}
 	TxPoolLifetimeFlag = &cli.DurationFlag{
 		Name:     "txpool.lifetime",
 		Usage:    "Maximum amount of time non-executable transaction are queued",
@@ -1678,6 +1684,9 @@ func setTxPool(ctx *cli.Context, cfg *legacypool.Config) {
 	}
 	if ctx.IsSet(TxPoolGlobalQueueFlag.Name) {
 		cfg.GlobalQueue = ctx.Uint64(TxPoolGlobalQueueFlag.Name)
+	}
+	if ctx.IsSet(TxPoolMaxInflightDelegatedSlotsFlag.Name) {
+		cfg.MaxInflightDelegatedSlots = ctx.Uint64(TxPoolMaxInflightDelegatedSlotsFlag.Name)
 	}
 	if ctx.IsSet(TxPoolLifetimeFlag.Name) {
 		cfg.Lifetime = ctx.Duration(TxPoolLifetimeFlag.Name)
