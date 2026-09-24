@@ -57,8 +57,9 @@ composes topic positions. Omitted, null or empty lists are unrestricted. Optiona
 list; other values are invalid parameters. Creation recipients are successful created addresses;
 selfdestruct uses the destroyed address and beneficiary; rewards have only a
 recipient. Post-Merge blocks do not receive synthetic issuance rewards.
-Omitted filter bounds mean genesis through latest. The `earliest` tag always
-means genesis in this namespace, including on a node with pruned history.
+Omitted filter bounds mean genesis through latest. The `earliest` tag selects the
+lowest block with available history, as it does for `eth_*`; explicit block numbers
+below a node's history cutoff return `4444`.
 Calls and callMany default to latest; available safe and finalized tags select
 their corresponding blocks.
 
