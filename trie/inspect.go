@@ -402,6 +402,7 @@ func (in *inspector) writeDumpRecord(owner common.Hash, s *LevelStats) {
 	in.dumpMu.Unlock()
 	if err != nil {
 		in.setError(fmt.Errorf("failed writing trie dump record: %w", err))
+		return
 	}
 
 	// Increment counter for storage tries only (not for account trie)
