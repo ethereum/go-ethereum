@@ -19,6 +19,7 @@ package ethclient_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -441,7 +443,9 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 			big.NewInt(765625000),
 			big.NewInt(671627818),
 		},
-		GasUsedRatio: []float64{0.008912678667376286},
+		GasUsedRatio:     []float64{0.008912678667376286},
+		BlobBaseFee:      []*big.Int{big.NewInt(1), big.NewInt(1)},
+		BlobGasUsedRatio: []float64{0},
 	}
 	if !reflect.DeepEqual(history, want) {
 		t.Fatalf("FeeHistory result doesn't match expected: (got: %v, want: %v)", history, want)
@@ -727,6 +731,56 @@ type blockReceiptsTestService struct {
 func (s *blockReceiptsTestService) GetBlockReceipts(ctx context.Context, block rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
 	s.calls <- block
 	return []*types.Receipt{}, nil
+}
+
+func TestFeeHistoryBlobFields(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		fields string
+		fees   []*big.Int
+		ratios []float64
+	}{
+		{
+			name:   "populated",
+			fields: `,"baseFeePerBlobGas":["0x1","0x10000000000000000","0x2"],"blobGasUsedRatio":[0.25,1]`,
+			fees:   []*big.Int{big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 64), big.NewInt(2)},
+			ratios: []float64{0.25, 1},
+		},
+		{name: "omitted"},
+		{name: "empty", fields: `,"baseFeePerBlobGas":[],"blobGasUsedRatio":[]`, fees: []*big.Int{}, ratios: []float64{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := json.RawMessage(`{"oldestBlock":"0xa","baseFeePerGas":["0x10","0x20","0x30"],"gasUsedRatio":[0.5,0.75]` + test.fields + `}`)
+			srv := rpc.NewServer()
+			defer srv.Stop()
+			if err := srv.RegisterName("eth", &feeHistoryBlobService{response: response}); err != nil {
+				t.Fatal(err)
+			}
+			ec := ethclient.NewClient(rpc.DialInProc(srv))
+			defer ec.Close()
+			got, err := ec.FeeHistory(context.Background(), 2, big.NewInt(11), []float64{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := &ethereum.FeeHistory{
+				OldestBlock: big.NewInt(10), Reward: [][]*big.Int{},
+				BaseFee:      []*big.Int{big.NewInt(16), big.NewInt(32), big.NewInt(48)},
+				GasUsedRatio: []float64{0.5, 0.75},
+				BlobBaseFee:  test.fees, BlobGasUsedRatio: test.ratios,
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("fee history mismatch: have %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+type feeHistoryBlobService struct {
+	response json.RawMessage
+}
+
+func (s *feeHistoryBlobService) FeeHistory(context.Context, hexutil.Uint, rpc.BlockNumber, []float64) json.RawMessage {
+	return s.response
 }
 
 func newCanceledContext() context.Context {
