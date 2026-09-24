@@ -970,6 +970,12 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		}
 	}
 
+	// Osaka is a prerequisite for Amsterdam (at least on Ethereum mainnet networks).
+	// Reject configs that schedule Amsterdam without Osaka.
+	if c.AmsterdamTime != nil && c.OsakaTime == nil {
+		return fmt.Errorf("unsupported fork ordering: amsterdam enabled, but osakaTime not set")
+	}
+
 	// Check that all forks with blobs explicitly define the blob schedule configuration.
 	bsc := c.BlobScheduleConfig
 	if bsc == nil {
