@@ -20,6 +20,13 @@ their behavior. No database migration or additional index is required.
 | `trace_block(block)` | Return transaction trees and actual historical PoW block/uncle rewards. |
 | `trace_filter(filter)` | Scan a bounded canonical snapshot, match addresses, then paginate. |
 
+Each `trace_callMany` item is a separate transaction on the preceding item's
+post-state: original storage values, access lists, transient storage, refunds and
+the EIP-6780 same-transaction scope start afresh, while all items share one block
+environment. If an item fails validation the request returns one error, using the
+`trace_call` codes, whose `error.data.index` is the zero-based item index, and no
+partial results.
+
 `types` selects any combination of `trace`, `stateDiff`, and `vmTrace`. An empty
 selection still executes and returns output. Unrequested trace is `[]`; other
 unrequested families are `null`. Unknown transactions and paths return `null`.
@@ -88,7 +95,8 @@ then uses the overridden base fee. Invalid overrides return `-32602`.
   have a thirty-second timeout.
 - Filter ranges are limited to 1,000 blocks and returned results to 10,000 records.
   Explicit `count` ends a page normally; exceeding the default limit returns an
-  error. `trace_callMany` accepts at most 10,000 calls.
+  error. `trace_callMany` accepts at most 10,000 calls; longer requests return
+  `-38026` rather than being truncated.
 - Each execution limits captured frames/opcodes to 1,000,000 and tracked byte
   payloads to 64 MiB. This is an output guard, not a bound on total process memory.
   Limit and cancellation failures return an error, not a partial trace.

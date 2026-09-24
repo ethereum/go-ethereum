@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
@@ -257,6 +258,102 @@ func TestTraceNamespaceCallBlockHashAndOverrides(t *testing.T) {
 		{args, TraceTypes{}, "latest", nil, nil, nil},
 	} {
 		requireTraceCode(t, client.Call(&result, "trace_call", params...), -32602)
+	}
+}
+
+func TestTraceNamespaceCallManyItemErrors(t *testing.T) {
+	api, _ := traceTestAPI(t, common.FromHex("00"), nil)
+	client := traceContractClient(t, api)
+	valid := []any{map[string]any{"from": traceTestSender, "to": traceTestTarget}, TraceTypes{"trace"}}
+	for _, tc := range []struct {
+		invalid map[string]any
+		index   int
+		code    int
+	}{
+		{map[string]any{"from": traceTestSender, "to": traceTestTarget, "gasPrice": "0x1"}, 1, -38012},
+		{map[string]any{"from": traceTestSender, "to": traceTestTarget, "gas": "0x5207"}, 2, -38013},
+		{map[string]any{"to": traceTestTarget, "data": "0x01", "input": "0x02"}, 0, -32602},
+	} {
+		calls := []any{valid, valid, valid}
+		calls[tc.index] = []any{tc.invalid, TraceTypes{"trace"}}
+		var result json.RawMessage
+		err := client.Call(&result, "trace_callMany", calls)
+		requireTraceCode(t, err, tc.code)
+		// One error for the request, with the zero-based item index and no
+		// partial results.
+		var dataErr rpc.DataError
+		if !errors.As(err, &dataErr) {
+			t.Fatalf("item %d: error without data: %v", tc.index, err)
+		}
+		if data, ok := dataErr.ErrorData().(map[string]any); !ok || data["index"] != float64(tc.index) {
+			t.Fatalf("item %d: error data %v", tc.index, dataErr.ErrorData())
+		}
+		if result != nil {
+			t.Fatalf("partial result %s", result)
+		}
+	}
+	// Server caps are explicit client-limit errors, never truncation.
+	calls := make([]any, traceCallManyLimit+1)
+	for i := range calls {
+		calls[i] = valid
+	}
+	var result json.RawMessage
+	requireTraceCode(t, client.Call(&result, "trace_callMany", calls), -38026)
+}
+
+func TestTraceNamespaceCallManyTransactionBoundaries(t *testing.T) {
+	transient := common.HexToAddress("0xcafe0010") // return TLOAD(0), then TSTORE(0, 1)
+	counter := common.HexToAddress("0xcafe0011")   // SSTORE(0, SLOAD(0) + 1)
+	env := common.HexToAddress("0xcafe0012")       // return NUMBER, TIMESTAMP
+	api, _ := traceTestAPI(t, nil, types.GenesisAlloc{
+		transient: {Code: common.FromHex("60005c600052600160005d60206000f3")},
+		counter:   {Code: common.FromHex("60005460010160005500")},
+		env:       {Code: common.FromHex("436000524260205260406000f3")},
+	})
+	call := func(to *common.Address, data []byte, kinds ...string) TraceCallManyEntry {
+		return TraceCallManyEntry{traceTestArgs(to, data), TraceTypes(kinds)}
+	}
+	// Initcode deploying CALLER SELFDESTRUCT.
+	created := crypto.CreateAddress(traceTestSender, 0)
+	results, err := api.CallMany(context.Background(), []TraceCallManyEntry{
+		call(nil, common.FromHex("6133ff6000526002601ef3"), "trace"),
+		call(&transient, nil), call(&transient, nil),
+		call(&counter, nil, "trace"), call(&counter, nil, "trace"),
+		call(&env, nil), call(&env, nil),
+		call(&created, nil, "trace", "stateDiff"),
+	}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have := results[0].Trace[0].Result.(traceCreateResult).Address; have != created {
+		t.Fatalf("created %x, want %x", have, created)
+	}
+	// Transient storage starts empty for every item.
+	for _, i := range []int{1, 2} {
+		if !bytes.Equal(results[i].Output, make([]byte, 32)) {
+			t.Fatalf("item %d: transient storage leaked: %x", i, []byte(results[i].Output))
+		}
+	}
+	// The second increment sees original value 1 and a cold slot, exactly like
+	// a separate call on the first increment's post-state.
+	slot := map[common.Hash]common.Hash{{}: {31: 1}}
+	single, err := api.Call(context.Background(), traceTestArgs(&counter, nil), TraceTypes{"trace"}, nil, &override.StateOverride{counter: override.OverrideAccount{StateDiff: slot}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := results[4].Trace[0].Result.(traceCallResult).GasUsed, single.Trace[0].Result.(traceCallResult).GasUsed; have != want {
+		t.Fatalf("second increment used %d gas, want %d", have, want)
+	}
+	// Items share one block environment.
+	if !bytes.Equal(results[5].Output, results[6].Output) {
+		t.Fatalf("environment advanced: %x %x", []byte(results[5].Output), []byte(results[6].Output))
+	}
+	// EIP-6780: a contract created by an earlier item is not destroyed.
+	if len(results[7].Trace) != 2 || results[7].Trace[1].Type != "suicide" {
+		t.Fatalf("selfdestruct trace: %+v", results[7].Trace)
+	}
+	if diff := results[7].StateDiff[created]; diff != nil && diff.Code != "=" {
+		t.Fatalf("contract from an earlier item was deleted: %+v", diff)
 	}
 }
 
