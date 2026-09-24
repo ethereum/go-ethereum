@@ -676,9 +676,9 @@ func testSyncV2AccountRangeNoProofNonZeroOrigin(t *testing.T, scheme string) {
 
 // TestSyncV2FrozenPivot checks the pivot freeze signal around the sync
 // lifecycle. The pivot is unfrozen while flat state is downloading, frozen
-// once the download completes, stays frozen after the sync returns so the
-// downloader resumes against it until the pivot block is committed, and
-// unfreezes again after a state reset.
+// for the trie generation only (also across a restart into it), and unfrozen
+// again once the sync is complete, from where a pivot move is rolled forward
+// locally, as well as after a state reset.
 func TestSyncV2FrozenPivot(t *testing.T) {
 	t.Parallel()
 	testSyncV2FrozenPivot(t, rawdb.HashScheme)
@@ -714,14 +714,20 @@ func testSyncV2FrozenPivot(t *testing.T, scheme string) {
 	if err := syncer.Sync(pivot, cancel); err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
-	if frozen := syncer.FrozenPivot(); frozen == nil || frozen.Hash() != pivot.Hash() {
-		t.Fatal("pivot not frozen at the synced header after download completed")
+	// The sync is complete, flat state and tries alike, so the pivot may
+	// move again: a move is rolled forward locally by the catch-up.
+	if frozen := syncer.FrozenPivot(); frozen != nil {
+		t.Fatalf("pivot frozen after the sync completed, got %v", frozen.Number)
 	}
-	// A restart must not lose the freeze: a fresh syncer instance on the same
-	// database derives it from the persisted journal, before any Sync call.
+	// The freeze covers the trie generation. Rewind the journal into the
+	// generation phase, as a crash mid-generation leaves it: a fresh syncer
+	// instance on the same database derives the freeze from the persisted
+	// journal, before any Sync call, so a restart doesn't lose it.
+	syncer.setPhase(phaseGenerate)
+	syncer.saveSyncStatus()
 	restarted := newSyncerV2(syncer.db, nodeScheme)
 	if frozen := restarted.FrozenPivot(); frozen == nil || frozen.Hash() != pivot.Hash() {
-		t.Fatal("pivot freeze lost after restart")
+		t.Fatal("pivot not frozen at the journaled header during trie generation")
 	}
 	syncer.resetSyncState()
 	if syncer.FrozenPivot() != nil {
@@ -1441,6 +1447,36 @@ func makeAccountTrieWithAddresses(n int, scheme string) (string, *trie.Trie, []*
 	return db.Scheme(), accTrie, entries, addrs
 }
 
+// accountTrieRoot computes the account trie root of the given leaves.
+func accountTrieRoot(elems []*kv) common.Hash {
+	tr := trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil))
+	for _, e := range elems {
+		tr.MustUpdate(e.k, e.v)
+	}
+	return tr.Hash()
+}
+
+// withLeafBalance returns a copy of the account leaves with the balance of the
+// given account replaced, the way a balance-only BAL moves it.
+func withLeafBalance(t *testing.T, elems []*kv, hash common.Hash, balance uint64) []*kv {
+	t.Helper()
+	out := make([]*kv, len(elems))
+	for i, e := range elems {
+		if !bytes.Equal(e.k, hash[:]) {
+			out[i] = e
+			continue
+		}
+		var acc types.StateAccount
+		if err := rlp.DecodeBytes(e.v, &acc); err != nil {
+			t.Fatal(err)
+		}
+		acc.Balance = uint256.NewInt(balance)
+		val, _ := rlp.EncodeToBytes(&acc)
+		out[i] = &kv{e.k, val}
+	}
+	return out
+}
+
 // TestIsPivotReorged verifies the four conditions isPivotReorged covers:
 // reorged out, non-advancing pivot, missing canonical, and the happy path
 // where the previous pivot is still canonical and the new pivot advances.
@@ -1503,43 +1539,6 @@ func TestIsPivotReorged(t *testing.T) {
 			t.Fatal("should not detect reorg when prev is canonical and curr advances")
 		}
 	})
-}
-
-// TestIsPivotCommitted checks the commit detection against the head block
-// positions that matter.
-func TestIsPivotCommitted(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		head      int64 // head block number, -1 for no head block at all
-		pivot     uint64
-		canonical bool // pivot still canonical at its height
-		committed bool
-	}{
-		{-1, 100, true, false},   // no head block, nothing committed
-		{50, 100, true, false},   // head behind the pivot, crash before the commit
-		{100, 100, true, true},   // head at the pivot, the commit just happened
-		{103, 100, true, true},   // head past the pivot, full sync ran after
-		{0, 0, true, false},      // genesis head is just an empty chain
-		{103, 100, false, false}, // pivot reorged out, head past it on a fork
-	}
-	for _, tt := range tests {
-		db := rawdb.NewMemoryDatabase()
-		pivot := mkPivot(tt.pivot, common.HexToHash("0xaaaa"))
-		if tt.canonical {
-			rawdb.WriteCanonicalHash(db, pivot.Hash(), tt.pivot)
-		} else {
-			rawdb.WriteCanonicalHash(db, common.HexToHash("0xdead"), tt.pivot)
-		}
-		if tt.head >= 0 {
-			head := mkPivot(uint64(tt.head), common.HexToHash("0xbbbb"))
-			rawdb.WriteHeader(db, head)
-			rawdb.WriteHeadBlockHash(db, head.Hash())
-		}
-		if have := isPivotCommitted(db, pivot); have != tt.committed {
-			t.Errorf("head %d pivot %d canonical %v: isPivotCommitted = %v, want %v", tt.head, tt.pivot, tt.canonical, have, tt.committed)
-		}
-	}
 }
 
 // TestSyncDetectsPivotReorged exercises the reorg-handling branch in Sync
@@ -1966,6 +1965,7 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 	// target down to the previous pivot.
 	blocks := make([]balBlock, 3)
 	parent := pivotAHeader.Hash()
+	leaves := elems
 	for i := 0; i < 3; i++ {
 		blockNum := numA + uint64(i) + 1
 		target := goodAddr
@@ -1985,9 +1985,12 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 			t.Fatal(err)
 		}
 		balHash := b.Hash()
+		// The completed sync rolls its tries forward and checks every
+		// block's root, so the headers must carry the real post-state.
+		leaves = withLeafBalance(t, leaves, crypto.Keccak256Hash(target[:]), balance.Uint64())
 		header := &types.Header{
-			ParentHash: parent,
-			Number:     new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
+			ParentHash: parent, Root: accountTrieRoot(leaves),
+			Number: new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
 			BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
 			BlobGasUsed: &zero, ExcessBlobGas: &zero,
 			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
@@ -2107,6 +2110,7 @@ func testCatchUpWindowed(t *testing.T, scheme string) {
 		lastBalance *uint256.Int
 		balsByHash  = make(map[common.Hash]rlp.RawValue, gap)
 		parent      = pivotA.Hash()
+		leaves      = elems
 	)
 	for i := 0; i < gap; i++ {
 		blockNum := numA + uint64(i) + 1
@@ -2123,9 +2127,12 @@ func testCatchUpWindowed(t *testing.T, scheme string) {
 			t.Fatal(err)
 		}
 		balHash := b.Hash()
+		// The completed sync rolls its tries forward and checks every
+		// block's root, so the headers must carry the real post-state.
+		leaves = withLeafBalance(t, leaves, targetHash, balance.Uint64())
 		header := &types.Header{
-			ParentHash: parent,
-			Number:     new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
+			ParentHash: parent, Root: accountTrieRoot(leaves),
+			Number: new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
 			BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
 			BlobGasUsed: &zero, ExcessBlobGas: &zero,
 			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
@@ -2158,8 +2165,7 @@ func testCatchUpWindowed(t *testing.T, scheme string) {
 
 	// Run catch-up to A+5 directly with a window of 2, forcing three windows
 	// ([A+1,A+2], [A+3,A+4], [A+5]). Calling catchUp in isolation keeps the
-	// focus on the windowing logic without the surrounding download/trie-gen
-	// phases (which would need a real target state root).
+	// focus on the windowing logic.
 	var (
 		once   sync.Once
 		cancel = make(chan struct{})
@@ -2201,6 +2207,8 @@ func testCatchUpWindowed(t *testing.T, scheme string) {
 	if loader.pivot == nil || loader.pivot.Hash() != lastHeader.Hash() {
 		t.Errorf("persisted pivot did not reach target after windowed catch-up")
 	}
+	// The seed sync was complete, so the catch-up carried the trie along.
+	verifyTrie(scheme, db, lastHeader.Root, t)
 }
 
 // TestSyncStatusMarkedCompleteAfterCompletion verifies that after a full sync
@@ -2377,29 +2385,37 @@ func seedCompletedSync(t *testing.T, scheme string) *reenableFixture {
 		return header
 	}
 
-	// The account trie as of block 102, only Y differs from pivot A.
-	trieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
-	newTrie := trie.NewEmpty(trieDB)
-	elems102 := make([]*kv, len(elems))
-	for i, entry := range elems {
-		if bytes.Equal(entry.k, hashY[:]) {
-			val, _ := rlp.EncodeToBytes(&types.StateAccount{
-				Nonce: 50, Balance: uint256.NewInt(2000),
-				Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
-			})
-			elems102[i] = &kv{entry.k, val}
-		} else {
-			elems102[i] = entry
+	// The account tries as of blocks 101 and 102, only Y differs from pivot
+	// A. Both headers carry their real post-state root: a completed sync
+	// rolls its tries forward through the catch-up and checks the root of
+	// every block it applies.
+	mkTrie := func(balance uint64) (*trie.Trie, []*kv, common.Hash) {
+		trieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
+		newTrie := trie.NewEmpty(trieDB)
+		newElems := make([]*kv, len(elems))
+		for i, entry := range elems {
+			if bytes.Equal(entry.k, hashY[:]) {
+				val, _ := rlp.EncodeToBytes(&types.StateAccount{
+					Nonce: 50, Balance: uint256.NewInt(balance),
+					Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
+				})
+				newElems[i] = &kv{entry.k, val}
+			} else {
+				newElems[i] = entry
+			}
+			newTrie.MustUpdate(newElems[i].k, newElems[i].v)
 		}
-		newTrie.MustUpdate(elems102[i].k, elems102[i].v)
+		root, nodes := newTrie.Commit(false)
+		trieDB.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), triedb.NewStateSet())
+		tr, err := trie.New(trie.StateTrieID(root), trieDB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tr, newElems, root
 	}
-	root102, nodes := newTrie.Commit(false)
-	trieDB.Update(root102, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), triedb.NewStateSet())
-	trie102, err := trie.New(trie.StateTrieID(root102), trieDB)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mkBALHeader(101, common.HexToHash("0x65"), 1000)
+	_, _, root101 := mkTrie(1000)
+	trie102, elems102, root102 := mkTrie(2000)
+	mkBALHeader(101, root101, 1000)
 	header102 := mkBALHeader(102, root102, 2000)
 
 	return &reenableFixture{
@@ -2451,85 +2467,70 @@ func assertAccountBalance(t *testing.T, db ethdb.Database, hash common.Hash, wan
 	}
 }
 
-// TestReenableAfterCompletedSyncPurges reproduces the poisoned re-enable.
-// A sync completed, its pivot block was committed and full sync moved the
-// flat state past it, but the journal is still on disk. A new sync must
-// wipe everything and download fresh. Without the purge it would roll
-// forward with BALs instead, miss the rows full sync changed outside the
-// BAL range and fail trie generation. Runs with the head both between the
-// old pivot and the target and past it.
-func TestReenableAfterCompletedSyncPurges(t *testing.T) {
+// TestReenableAfterCommitCatchesUp covers snap sync being re-enabled after
+// a completed sync committed its pivot. That should not happen, the chain
+// has a stateful head and full sync takes over, but if it does the journal
+// is still a completed sync at the old pivot and the state on disk is the
+// one it left, the downloader being the sole chain mutator. A new target
+// is then an ordinary complete-phase pivot move: rolled forward through
+// the BAL catch-up, tries included, with no re-download. Runs with the
+// head block at the old pivot, the commit just happened, and past it.
+func TestReenableAfterCommitCatchesUp(t *testing.T) {
 	t.Parallel()
-	testReenableAfterCompletedSyncPurges(t, rawdb.HashScheme, 101)
-	testReenableAfterCompletedSyncPurges(t, rawdb.HashScheme, 103)
-	testReenableAfterCompletedSyncPurges(t, rawdb.PathScheme, 101)
-	testReenableAfterCompletedSyncPurges(t, rawdb.PathScheme, 103)
+	testReenableAfterCommitCatchesUp(t, rawdb.HashScheme, 100)
+	testReenableAfterCommitCatchesUp(t, rawdb.HashScheme, 101)
+	testReenableAfterCommitCatchesUp(t, rawdb.PathScheme, 100)
+	testReenableAfterCommitCatchesUp(t, rawdb.PathScheme, 101)
 }
 
-func testReenableAfterCompletedSyncPurges(t *testing.T, scheme string, headNum uint64) {
+func testReenableAfterCommitCatchesUp(t *testing.T, scheme string, headNum uint64) {
 	fix := seedCompletedSync(t, scheme)
 
-	// Construct the syncer before the head moves so the re-enable is
-	// handled by the purge in Sync, not the constructor drop.
-	syncer := newSyncerV2(fix.db, fix.nodeScheme)
+	// Commit the pivot: the head block reaches it, or gets past it. The
+	// flat state and the tries stay as the completed sync left them.
+	rawdb.WriteHeadBlockHash(fix.db, rawdb.ReadCanonicalHash(fix.db, headNum))
 
-	// Commit the pivot and let full sync move the head and the flat state.
-	headHash := rawdb.ReadCanonicalHash(fix.db, headNum)
-	if headHash == (common.Hash{}) {
-		headHash = fix.mkHeader(headNum, common.HexToHash("0x67"), nil).Hash()
-	}
-	rawdb.WriteHeadBlockHash(fix.db, headHash)
-	rawdb.WriteAccountSnapshot(fix.db, fix.hashY, types.SlimAccountRLP(types.StateAccount{
-		Nonce: 50, Balance: uint256.NewInt(2000),
-		Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
-	}))
-	rawdb.WriteAccountSnapshot(fix.db, fix.hashX, types.SlimAccountRLP(types.StateAccount{
-		Nonce: 10, Balance: uint256.NewInt(9999),
-		Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
-	}))
-	orphan := common.HexToHash("0xdeadbeef")
-	rawdb.WriteAccountSnapshot(fix.db, orphan, types.SlimAccountRLP(types.StateAccount{
-		Nonce: 1, Balance: uint256.NewInt(1),
-		Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
-	}))
-
-	// Re-enable snap sync with a target near the old pivot.
 	var (
 		once   sync.Once
 		cancel = make(chan struct{})
 		term   = func() { once.Do(func() { close(cancel) }) }
 	)
+	syncer := newSyncerV2(fix.db, fix.nodeScheme)
 	src := newTestPeerV2("source2", t, term)
 	src.accountTrie = fix.trie102.Copy()
 	src.accountValues = fix.elems102
 	src.accessLists = fix.bals
+	var accountReqs atomic.Int32
+	src.accountRequestV2Handler = func(tp *testPeerV2, id uint64, root common.Hash, origin common.Hash, limit common.Hash, cap int) error {
+		accountReqs.Add(1)
+		return defaultAccountRequestHandlerV2(tp, id, root, origin, limit, cap)
+	}
 	syncer.Register(src)
 	src.remote = syncer
 	if err := syncer.Sync(fix.header102, cancel); err != nil {
 		t.Fatalf("re-enabled sync failed: %v", err)
 	}
 
-	// The stale journal is gone, a fresh sync completed at the new target.
+	// Pure catch-up, no re-download, complete at the new target.
+	if n := accountReqs.Load(); n != 0 {
+		t.Fatalf("expected pure catch-up without re-download, got %d account requests", n)
+	}
 	progress := decodeJournal(t, fix.db)
 	if progress.Phase != phaseComplete {
-		t.Fatal("expected re-enabled sync to reach the complete phase")
+		t.Fatal("expected re-enabled sync to stay in the complete phase")
 	}
 	if progress.Pivot == nil || progress.Pivot.Hash() != fix.header102.Hash() {
 		t.Fatal("expected persisted pivot to match the new target")
 	}
-	// Fresh download, not catch-up. X is back to its real value and the
-	// orphan row is gone.
 	assertAccountBalance(t, fix.db, fix.hashX, 10)
 	assertAccountBalance(t, fix.db, fix.hashY, 2000)
-	if data := rawdb.ReadAccountSnapshot(fix.db, orphan); len(data) != 0 {
-		t.Errorf("orphan account row should be wiped, got %x", data)
-	}
+	verifyTrie(scheme, fix.db, fix.header102.Root, t)
 }
 
 // TestCommittedPivotRetrySkips guards the retry after a commit. If the
-// cycle dies before snap mode flips to full sync, the downloader retries
-// against the frozen pivot. The skip must fire before the purge so the
-// pivot is recommitted instead of a good sync being wiped.
+// cycle dies before snap mode flips to full sync, the downloader may retry
+// against the same pivot. The skip must fire so the pivot is recommitted
+// without any work being redone.
 func TestCommittedPivotRetrySkips(t *testing.T) {
 	t.Parallel()
 	testCommittedPivotRetrySkips(t, rawdb.HashScheme)
@@ -2578,11 +2579,11 @@ func testCommittedPivotRetrySkips(t *testing.T, scheme string) {
 	}
 }
 
-// TestCommittedPivotNotFrozen covers FrozenPivot. A pivot from a crash
-// before the commit must stay frozen so the downloader resumes against it.
-// Once the pivot block is committed and the head has moved on, FrozenPivot
-// must report it as unfrozen so a re-enabled sync is not pinned to it. The
-// journal stays on disk either way, the next Sync cleans it.
+// TestCommittedPivotNotFrozen covers FrozenPivot for a completed sync. The
+// pivot is never frozen once the sync is complete: before the commit a move
+// is rolled forward by the catch-up, and after the commit the pivot is a
+// dead leftover a re-enabled sync must not be pinned to. The journal stays
+// on disk either way, the next Sync cleans it.
 func TestCommittedPivotNotFrozen(t *testing.T) {
 	t.Parallel()
 	testCommittedPivotNotFrozen(t, rawdb.HashScheme)
@@ -2592,13 +2593,13 @@ func TestCommittedPivotNotFrozen(t *testing.T) {
 func testCommittedPivotNotFrozen(t *testing.T, scheme string) {
 	fix := seedCompletedSync(t, scheme)
 
-	// Crash before the commit, the head never reached the pivot, so it
-	// stays frozen for the resume.
+	// Crash before the commit, the head never reached the pivot. The sync
+	// is complete, so the downloader is free to pick a fresh pivot.
 	head50 := fix.mkHeader(50, common.HexToHash("0x50"), nil)
 	rawdb.WriteHeadBlockHash(fix.db, head50.Hash())
 	syncer := newSyncerV2(fix.db, fix.nodeScheme)
-	if frozen := syncer.FrozenPivot(); frozen == nil || frozen.Hash() != fix.pivotA.Hash() {
-		t.Fatal("expected the pivot to stay frozen before the commit")
+	if frozen := syncer.FrozenPivot(); frozen != nil {
+		t.Fatalf("expected the completed pivot to be unfrozen before the commit, got %v", frozen.Number)
 	}
 
 	// Commit the pivot and advance the head, the pivot is now a dead
@@ -2729,10 +2730,10 @@ func TestInterruptedGenerationRecovery(t *testing.T) {
 	if err := syncer2.Sync(mkPivot(0, root), cancel2); err != nil {
 		t.Fatalf("resumed sync failed: %v", err)
 	}
-	// The resumed run re-arms the pivot freeze once its no-op download
-	// completes, the downloader relies on it until the pivot block commits.
-	if syncer2.FrozenPivot() == nil {
-		t.Fatal("pivot not frozen after resumed sync")
+	// The resumed run ran the generation to completion, so the pivot is
+	// free to move again.
+	if frozen := syncer2.FrozenPivot(); frozen != nil {
+		t.Fatalf("pivot frozen after resumed sync completed, got %v", frozen.Number)
 	}
 	// After generation completes, status should reach the complete phase.
 	loader := newSyncerV2(db, nodeScheme)
@@ -3625,11 +3626,10 @@ func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
 		if err := syncer.Sync(hdrB, cancel); err != nil {
 			t.Fatalf("pivot A+1 catch-up sync failed: %v", err)
 		}
-		// The freeze must re-arm on a pivot-moved cycle too, the downloader
-		// relies on it from download completion until commit, and it must
-		// point at the new pivot the catch-up rolled forward to.
-		if frozen := syncer.FrozenPivot(); frozen == nil || frozen.Hash() != hdrB.Hash() {
-			t.Fatal("pivot not frozen at the new header after catch-up sync")
+		// The pivot-moved cycle rolled the completed sync forward without a
+		// regeneration, so the pivot stays free to move.
+		if frozen := syncer.FrozenPivot(); frozen != nil {
+			t.Fatalf("pivot frozen after catch-up sync, got %v", frozen.Number)
 		}
 		close(done)
 	}
