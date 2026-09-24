@@ -63,7 +63,7 @@ var (
 	}
 	preimagesOutFlag = &cli.StringFlag{
 		Name:  "preimages-out",
-		Usage: "File to write the address-sorted preimage file to",
+		Usage: "File to write the EIP-8347 preimage file to",
 	}
 	dropPreimagesFlag = &cli.BoolFlag{
 		Name:  "drop-preimages",
@@ -254,9 +254,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	stats := newStats("Converting state")
 
 	// Three sorters can be alive at once, and a sealed one keeps its buffer
-	// while its stream drains, so the budget is split rather than reused. The
-	// preimage file needs none of it: the scan already walks in hashed-key
-	// order, which is the order the file wants.
+	// while its stream drains, so the budget is split rather than reused.
 	share := opts.sortBudget / 3
 
 	sorter := bintrie.NewLeafSorter(opts.tmpDir, share)
@@ -480,7 +478,7 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 					return err
 				}
 				if preimages != nil {
-					if err := preimages.addSlot(slotKey, common.BytesToHash(storageIter.Key)); err != nil {
+					if err := preimages.addSlot(common.BytesToHash(slotKey), common.BytesToHash(storageIter.Key)); err != nil {
 						return err
 					}
 				}
