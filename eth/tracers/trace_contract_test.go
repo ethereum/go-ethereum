@@ -151,7 +151,6 @@ func TestTraceNamespaceCallRejectionCodes(t *testing.T) {
 		{map[string]any{"from": unfunded, "value": "0x1"}, -38014},
 		{map[string]any{"from": unfunded, "gasPrice": hexutil.EncodeBig(base)}, -38014},
 		{map[string]any{"to": nil, "input": hexutil.Bytes(make([]byte, 1<<20)), "gas": hexutil.Uint64(backend.RPCGasCap())}, -38025},
-		{map[string]any{"gas": hexutil.Uint64(backend.RPCGasCap() + 1)}, -38026},
 		{map[string]any{"maxFeePerGas": hexutil.EncodeBig(base), "maxPriorityFeePerGas": hexutil.EncodeBig(new(big.Int).Add(base, common.Big1))}, -32602},
 	} {
 		args := map[string]any{"from": traceTestSender, "to": traceTestTarget}
@@ -164,6 +163,37 @@ func TestTraceNamespaceCallRejectionCodes(t *testing.T) {
 		// trace_callMany reports the same validation codes.
 		err = client.Call(&result, "trace_callMany", []any{[]any{args, TraceTypes{}}})
 		requireTraceCode(t, err, tc.code)
+	}
+}
+
+func TestTraceNamespaceCallGasAboveCapRunsAtCap(t *testing.T) {
+	api, backend := traceTestAPI(t, common.FromHex("00"), nil)
+	client := traceContractClient(t, api)
+	args := map[string]any{"from": traceTestSender, "to": traceTestTarget, "gas": hexutil.Uint64(backend.RPCGasCap() + 1)}
+	// As in eth_call, the unsigned call runs with the RPC gas cap.
+	want := hexutil.Uint64(backend.RPCGasCap() - params.TxGas)
+	var single struct {
+		Trace []struct {
+			Action struct {
+				Gas hexutil.Uint64 `json:"gas"`
+			} `json:"action"`
+		} `json:"trace"`
+	}
+	if err := client.Call(&single, "trace_call", args, TraceTypes{"trace"}); err != nil {
+		t.Fatal(err)
+	}
+	var many []struct {
+		Trace []struct {
+			Action struct {
+				Gas hexutil.Uint64 `json:"gas"`
+			} `json:"action"`
+		} `json:"trace"`
+	}
+	if err := client.Call(&many, "trace_callMany", []any{[]any{args, TraceTypes{"trace"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(single.Trace) == 0 || single.Trace[0].Action.Gas != want || len(many) != 1 || len(many[0].Trace) == 0 || many[0].Trace[0].Action.Gas != want {
+		t.Fatalf("root action gas: have %+v and %+v, want %d", single.Trace, many, want)
 	}
 }
 

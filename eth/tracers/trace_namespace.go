@@ -432,11 +432,7 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	// CREATE address derivation, uses the sender's state nonce.
 	nonce := hexutil.Uint64(env.state.GetNonce(from))
 	args.Nonce = &nonce
-	if args.Gas != nil {
-		if err := api.checkGasCap(uint64(*args.Gas)); err != nil {
-			return nil, err
-		}
-	}
+	// As in eth_call, CallDefaults runs omitted or over-cap gas at the RPC gas cap.
 	vmctx := env.vmctx
 	if err := args.CallDefaults(api.api.backend.RPCGasCap(), vmctx.BaseFee, api.api.backend.ChainConfig().ChainID); err != nil {
 		return nil, traceInvalid("invalid call: %v", err)
@@ -463,7 +459,8 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	return api.execute(ctx, tx, msg, kinds, vmctx, env.state, env.precompiles, common.Hash{}, index, true, traceCallRejection)
 }
 
-// checkGasCap rejects gas above the RPC gas cap explicitly instead of capping it.
+// checkGasCap rejects a signed gas limit above the RPC gas cap, since capping it
+// would change the transaction.
 func (api *TraceAPI) checkGasCap(gas uint64) error {
 	if cap := api.api.backend.RPCGasCap(); cap != 0 && gas > cap {
 		return &traceRPCError{-38026, fmt.Sprintf("gas %d exceeds the RPC gas cap %d", gas, cap)}
