@@ -187,32 +187,36 @@ func (api *TraceAPI) Block(ctx context.Context, number rpc.BlockNumber) ([]*Trac
 func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFrame, error) {
 	ctx, cancel := context.WithTimeout(ctx, traceBatchTimeout)
 	defer cancel()
-	current := api.api.backend.CurrentHeader()
-	resolve := func(number *rpc.BlockNumber, fallback rpc.BlockNumber) (*types.Header, error) {
-		n := fallback
+	// Resolve both bounds against one head. As for eth_getLogs, a bound beyond
+	// the head or a reversed range is invalid rather than clamped.
+	head := api.api.backend.CurrentHeader()
+	resolve := func(number *rpc.BlockNumber) (*types.Header, error) {
+		n := rpc.LatestBlockNumber
 		if number != nil {
 			n = *number
 		}
-		if n == rpc.PendingBlockNumber {
-			return nil, traceInvalid("pending tracing is not supported")
-		}
-		if n == rpc.LatestBlockNumber {
-			return current, nil
+		switch {
+		case n == rpc.PendingBlockNumber:
+			return nil, traceInvalid("pending is not a valid trace_filter bound")
+		case n == rpc.LatestBlockNumber:
+			return head, nil
+		case n >= 0 && uint64(n) > head.Number.Uint64():
+			return nil, traceInvalid("block %d is beyond the current head %d", n, head.Number.Uint64())
 		}
 		h, err := api.api.backend.HeaderByNumber(ctx, n)
-		if err != nil {
-			return nil, traceBlockError(n, err)
+		if (err != nil && traceTagMissing(n, err)) || (err == nil && h == nil) {
+			return nil, traceInvalid("block %s not found", n)
 		}
-		if h == nil {
-			return nil, &traceRPCError{-32001, fmt.Sprintf("block %s not found", n)}
+		if err != nil {
+			return nil, err
 		}
 		return h, nil
 	}
-	from, err := resolve(filter.FromBlock, 0)
+	from, err := resolve(filter.FromBlock)
 	if err != nil {
 		return nil, err
 	}
-	to, err := resolve(filter.ToBlock, rpc.LatestBlockNumber)
+	to, err := resolve(filter.ToBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -296,12 +300,17 @@ func (api *TraceAPI) block(ctx context.Context, number rpc.BlockNumber) (*types.
 }
 
 func traceBlockError(number rpc.BlockNumber, err error) error {
-	// These tags report absence as errors rather than nil headers in the backend.
 	// Preserve other backend failures, including the typed pruned-history error.
-	if (number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber) && err.Error() == number.String()+" block not found" {
+	if traceTagMissing(number, err) {
 		return &traceRPCError{-32001, err.Error()}
 	}
 	return err
+}
+
+// traceTagMissing reports whether the backend signalled an unavailable safe or
+// finalized block. These tags report absence as errors rather than nil headers.
+func traceTagMissing(number rpc.BlockNumber, err error) bool {
+	return (number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber) && err.Error() == number.String()+" block not found"
 }
 
 func (api *TraceAPI) callState(ctx context.Context, number *rpc.BlockNumber) (*types.Block, *state.StateDB, StateReleaseFunc, error) {

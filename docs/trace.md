@@ -57,9 +57,12 @@ composes topic positions. Omitted, null or empty lists are unrestricted. Optiona
 list; other values are invalid parameters. Creation recipients are successful created addresses;
 selfdestruct uses the destroyed address and beneficiary; rewards have only a
 recipient. Post-Merge blocks do not receive synthetic issuance rewards.
-Omitted filter bounds mean genesis through latest. The `earliest` tag selects the
-lowest block with available history, as it does for `eth_*`; explicit block numbers
-below a node's history cutoff return `4444`.
+Omitted filter bounds both mean `latest`, resolved against one head; historical
+searches must set `fromBlock`. As for `eth_getLogs`, a bound beyond the head, a
+`pending` bound or a `fromBlock` above `toBlock` returns `-32602` and the range is
+never clamped. The `earliest` tag selects the lowest block with available history,
+as it does for `eth_*`; explicit block numbers below a node's history cutoff return
+`4444`.
 Calls and callMany default to latest; available safe and finalized tags select
 their corresponding blocks.
 
