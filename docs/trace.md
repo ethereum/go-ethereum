@@ -62,11 +62,14 @@ destination`, `Stack underflow`, `Out of stack`, `Mutable Call In Static Context
 exceeded`, `Invalid code prefix 0xEF` and `Nonce overflow`. A `Reverted` frame,
 including a create, keeps `result: {gasUsed, output}`; other failures have
 `result: null`. `stateDiff` compares pre-transaction and finalized
-state, including fees and authorization changes. Deleted accounts carry deletion
-markers; storage entries describe touched slots, not an enumeration of the old trie.
-Storage slots use creation or deletion markers only when the account itself is
-created or deleted; on an account present before and after, every changed slot,
-including one set from or to zero, is a `*` change between 32-byte words.
+state, including fees (with blob fees) and authorization changes. An account
+appears when its balance, nonce, code, storage or existence changed; an existing
+EIP-161-empty account removed by touch-clearing is a deletion. Deleted accounts
+carry deletion markers and `storage: {}`, since deletion wipes all storage. A
+created account lists its nonzero touched slots with `+`; on an account present
+before and after, every changed slot, including one set from or to zero, is a `*`
+change between 32-byte words. Storage entries describe touched slots, not an
+enumeration of the old trie.
 `vmTrace` contains executing bytecode and same-instruction stack/memory/storage
 deltas, recursively nested as `sub` for every entered child frame. A selected
 `vmTrace` is never null: a frame in which no instruction ran, such as a call to an

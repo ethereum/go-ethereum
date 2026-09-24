@@ -307,9 +307,13 @@ func (c *traceCapture) stateDiff() map[common.Address]*traceAccountDiff {
 		oldNonce, newNonce := c.before.GetNonce(address), c.state.GetNonce(address)
 		oldCode, newCode := c.before.GetCode(address), c.state.GetCode(address)
 		// Slots follow the account's existence: zero words on a surviving account
-		// are changes, not slot creations or deletions.
+		// are changes, not slot creations or deletions. A deleted account's
+		// marker implies all of its storage is wiped, so it lists no slots.
 		storage := make(map[common.Hash]any)
 		for key := range slots {
+			if !newExists {
+				break
+			}
 			oldValue, newValue := c.before.GetState(address, key), c.state.GetState(address, key)
 			if oldValue == newValue {
 				continue
