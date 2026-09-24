@@ -109,7 +109,7 @@ func TestImportRoundTrip(t *testing.T) {
 	impDB := rawdb.NewMemoryDatabase()
 	anchor := &types.Header{Number: big.NewInt(7), Root: root}
 	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
-		anchor: anchor, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
+		anchor: anchor, keepPreimages: true, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 	if err != nil {
 		t.Fatalf("import failed: %v", err)
 	}
@@ -298,22 +298,28 @@ func readPreimageRecords(t *testing.T, path string) []preRecord {
 	return recs
 }
 
-func writePreimageRecords(t *testing.T, path string, recs []preRecord) {
-	t.Helper()
-	slices.SortFunc(recs, func(a, b preRecord) int { return bytes.Compare(a.addr[:], b.addr[:]) })
+// encodePreimageRecords lays recs out in the EIP-8347 layout and hashed-key
+// order, so cases only choose the set.
+func encodePreimageRecords(recs []preRecord) []byte {
+	byHash := func(a, b []byte) int { return bytes.Compare(crypto.Keccak256(a), crypto.Keccak256(b)) }
+	recs = slices.Clone(recs)
+	slices.SortFunc(recs, func(a, b preRecord) int { return byHash(a.addr[:], b.addr[:]) })
 	var buf bytes.Buffer
 	for _, rec := range recs {
-		slots := make([][]byte, 0, len(rec.slots))
-		for _, slot := range rec.slots {
-			slots = append(slots, common.TrimLeftZeroes(slot[:]))
+		slots := slices.Clone(rec.slots)
+		slices.SortFunc(slots, func(a, b common.Hash) int { return byHash(a[:], b[:]) })
+		buf.Write(rec.addr[:])
+		buf.Write(binary.BigEndian.AppendUint32(nil, uint32(len(slots))))
+		for _, slot := range slots {
+			buf.Write(slot[:])
 		}
-		blob, err := rlp.EncodeToBytes([]any{rec.addr[:], slots})
-		if err != nil {
-			t.Fatal(err)
-		}
-		buf.Write(blob)
 	}
-	if err := os.WriteFile(path, buf.Bytes(), 0600); err != nil {
+	return buf.Bytes()
+}
+
+func writePreimageRecords(t *testing.T, path string, recs []preRecord) {
+	t.Helper()
+	if err := os.WriteFile(path, encodePreimageRecords(recs), 0600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -446,7 +452,6 @@ func TestImportRejects(t *testing.T) {
 				for i := range recs {
 					if recs[i].addr == contract {
 						recs[i].slots = append(recs[i].slots, common.HexToHash("0x99"))
-						slices.SortFunc(recs[i].slots, func(a, b common.Hash) int { return bytes.Compare(a[:], b[:]) })
 					}
 				}
 				return recs
@@ -565,7 +570,6 @@ func TestImportRejects(t *testing.T) {
 				for i := range recs {
 					if recs[i].addr == contract {
 						recs[i].slots = append(recs[i].slots, common.BigToHash(big.NewInt(7)))
-						slices.SortFunc(recs[i].slots, func(a, b common.Hash) int { return bytes.Compare(a[:], b[:]) })
 					}
 				}
 				return recs

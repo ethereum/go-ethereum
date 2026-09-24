@@ -31,9 +31,9 @@ import (
 
 // RecordSorter is an external merge-sort: records accumulate in an in-memory
 // run, spilled to a temporary file past the budget, and reading merges the
-// runs. It serves EIP-8347's two mainnet-scale sorts: tree leaves in key
-// order (plain bytewise, the keys being prefix-free) and preimage records by
-// address. Duplicate keys are corruption and error out at sort or merge.
+// runs. It serves EIP-8347's mainnet-scale sorts, tree leaves in key order
+// (plain bytewise, the keys being prefix-free) first among them. Duplicate
+// keys are corruption and error out at sort or merge.
 type RecordSorter struct {
 	tmpDir    string
 	budget    int // bytes of buffered records that trigger a spill

@@ -46,6 +46,10 @@ var (
 		Name:  "verify-only",
 		Usage: "Run both verification checks without writing anything",
 	}
+	keepPreimagesFlag = &cli.BoolFlag{
+		Name:  "keep-preimages",
+		Usage: "Persist the artifact's preimages into the node's preimage store",
+	}
 
 	bintrieImportCommand = &cli.Command{
 		Name:      "import",
@@ -54,6 +58,7 @@ var (
 		Action:    importBinaryTrie,
 		Flags: slices.Concat([]cli.Flag{
 			verifyOnlyFlag,
+			keepPreimagesFlag,
 			forceConvertFlag,
 			memoryLimitFlag,
 			tmpDirFlag,
@@ -67,6 +72,9 @@ are re-derived into the merkle root the anchor block commits, resolved from
 the local header chain - the artifacts never vouch for themselves. Code is
 reassembled from its chunks and pinned to each code hash. A failed check
 leaves nothing openable. --verify-only runs both checks and writes nothing.
+
+Preimages are not persisted unless --keep-preimages is given: nothing on a
+binary-tree node reads them.
 `,
 	}
 )
@@ -132,10 +140,11 @@ func importBinaryTrie(ctx *cli.Context) error {
 		budgetMB = math.MaxInt >> 20
 	}
 	if _, err := importState(chaindb, importOptions{
-		snapshot:   ctx.Args().Get(0),
-		preimages:  ctx.Args().Get(1),
-		anchor:     header,
-		verifyOnly: verifyOnly,
+		snapshot:      ctx.Args().Get(0),
+		preimages:     ctx.Args().Get(1),
+		anchor:        header,
+		verifyOnly:    verifyOnly,
+		keepPreimages: ctx.Bool(keepPreimagesFlag.Name),
 		conversionOptions: conversionOptions{
 			sortBudget: int(budgetMB << 20),
 			tmpDir:     ctx.String(tmpDirFlag.Name),
@@ -218,10 +227,11 @@ type importSlot struct {
 // whose header the state is proven against, and the conversion tunables the
 // two commands share.
 type importOptions struct {
-	snapshot   string
-	preimages  string
-	anchor     *types.Header
-	verifyOnly bool
+	snapshot      string
+	preimages     string
+	anchor        *types.Header
+	verifyOnly    bool
+	keepPreimages bool
 	conversionOptions
 }
 
@@ -327,7 +337,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if !verifyOnly {
 		pbtBatch = pbtdb.NewBatch()
 		rawBatch = chaindb.NewBatch()
-		preims = &preimageWriter{batch: rawBatch, buf: make(map[common.Hash][]byte, 1024)}
+		if opts.keepPreimages {
+			preims = &preimageWriter{batch: rawBatch, buf: make(map[common.Hash][]byte, 1024)}
+		}
 	}
 	flush := func(force bool) error {
 		for _, batch := range []ethdb.Batch{pbtBatch, rawBatch} {

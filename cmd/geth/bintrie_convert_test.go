@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -226,72 +227,6 @@ func assertConvertedStateReadable(t *testing.T, chaindb ethdb.Database, destTrie
 	if got := statedb.GetState(addr1, common.HexToHash("0x77")); got != (common.Hash{}) {
 		t.Errorf("absent slot reads %x through the state reader", got)
 	}
-}
-
-func TestBintrieConvertDeleteSource(t *testing.T) {
-	addr1 := common.HexToAddress("0x3333333333333333333333333333333333333333")
-
-	chaindb := rawdb.NewMemoryDatabase()
-
-	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.Defaults,
-	})
-
-	gspec := &core.Genesis{
-		Config:  params.TestChainConfig,
-		BaseFee: big.NewInt(params.InitialBaseFee),
-		Alloc: types.GenesisAlloc{
-			addr1: {
-				Balance: big.NewInt(1000000),
-			},
-		},
-	}
-
-	genesisBlock := gspec.MustCommit(chaindb, srcTriedb)
-	root := genesisBlock.Root()
-	srcTriedb.Close()
-
-	srcTriedb2 := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.ReadOnly,
-	})
-
-	newRoot, err := convertState(chaindb, srcTriedb2, root, conversionOptions{})
-	if err != nil {
-		t.Fatalf("conversion failed: %v", err)
-	}
-	if err := verifyConvertedState(chaindb, newRoot); err != nil {
-		t.Fatalf("verification failed, which must gate deletion: %v", err)
-	}
-
-	if err := deleteMPTData(chaindb, srcTriedb2, root); err != nil {
-		t.Fatalf("deletion failed: %v", err)
-	}
-	srcTriedb2.Close()
-
-	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		IsPBT:  true,
-		PathDB: pathdb.Defaults,
-	})
-
-	bt2, err := bintrie.NewBinaryTrie(newRoot, destTriedb)
-	if err != nil {
-		t.Fatalf("failed to reload binary trie after deletion: %v", err)
-	}
-
-	acc, err := bt2.GetAccount(addr1)
-	if err != nil {
-		t.Fatalf("failed to get account after deletion: %v", err)
-	}
-	if acc == nil {
-		t.Fatal("account not found after MPT deletion")
-	}
-	wantBal := uint256.NewInt(1000000)
-	if acc.Balance.Cmp(wantBal) != 0 {
-		t.Errorf("balance after deletion: got %s, want %s", acc.Balance, wantBal)
-	}
-	destTriedb.Close()
 }
 
 // TestConvertRefusesDirtyNamespace pins the crash story: a dead run leaves
@@ -525,6 +460,29 @@ func TestWipeRestoresVirginNamespace(t *testing.T) {
 	}
 }
 
+// TestWipeDropsAnchorFirst: a wipe killed after the cursors go must not leave
+// an anchor the follower would bind to the state left behind.
+func TestWipeDropsAnchorFirst(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+	rawdb.WritePBTAnchor(pbtdb, 0, common.Hash{0x01})
+	if err := wipeBinaryTrieState(refusedBatchDB{db}, ""); err == nil {
+		t.Fatal("wipe succeeded through refused batches")
+	}
+	if _, _, ok := rawdb.ReadPBTAnchor(pbtdb); ok {
+		t.Fatal("anchor outlived the refused wipe")
+	}
+}
+
+// refusedBatchDB fails every batch write, leaving direct writes alone.
+type refusedBatchDB struct{ ethdb.Database }
+
+func (db refusedBatchDB) NewBatch() ethdb.Batch { return refusedBatch{db.Database.NewBatch()} }
+
+type refusedBatch struct{ ethdb.Batch }
+
+func (refusedBatch) Write() error { return errors.New("batch refused") }
+
 // TestConvertCorruptPreimageRefused: a corrupt preimage store entry must
 // abort the conversion with nothing surviving - no artifacts, no
 // attestation.
@@ -605,10 +563,8 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 // raw-namespace cursors and records must not outlive the state they name.
 
 // TestConvertDetectsLostRecords pins the only check that ties a conversion's
-// output back to its input: the scanned records must re-derive the state root
-// they were read from. Neither the tree walk nor the flat-state pass can see
-// a lossy scan, because both are built out of the same records and therefore
-// agree with each other about state nobody has.
+// output to its input: the other two are fed by the same scan, so a lossy
+// one verifies green against its own loss.
 func TestConvertDetectsLostRecords(t *testing.T) {
 	alloc := artifactAlloc()
 
@@ -625,9 +581,8 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 	root := gspec.MustCommit(chaindb, srcTriedb).Root()
 	srcTriedb.Close()
 
-	// scan rebuilds the records deriveLeaves emits, minus whatever drop
-	// rejects: the account row for (addr, nil), a storage row for (addr,
-	// &key). A nil drop keeps everything.
+	// scan rebuilds the records deriveLeaves emits, minus what drop rejects:
+	// the account row for (addr, nil), a storage row for (addr, &key).
 	scan := func(t *testing.T, drop func(addr common.Address, slot *common.Hash) bool) (*bintrie.RecordSorter, *bintrie.RecordSorter) {
 		t.Helper()
 		accounts := bintrie.NewRecordSorter(t.TempDir(), 0, nil)
@@ -704,8 +659,6 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		}
 	})
 
-	// Storage whose account went missing is corruption, not a gap: it must
-	// name itself rather than fold into a root mismatch.
 	t.Run("orphaned storage", func(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot == nil

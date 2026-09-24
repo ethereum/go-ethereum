@@ -473,6 +473,8 @@ func TestFollowerRefusesTreesDuringSnapSync(t *testing.T) {
 	if _, err := chain.follower.tree(true); err == nil {
 		t.Fatal("tree opened during snap sync")
 	}
+	// Stop the loop first: its own sync would race the manual ensure below.
+	chain.follower.close()
 	rawdb.WriteSnapSyncStatusFlag(db, rawdb.StateSyncFinished)
 	if _, err := chain.follower.tree(true); err != nil {
 		t.Fatalf("tree still refused after snap sync: %v", err)
@@ -521,3 +523,133 @@ func TestFollowerSharesCanonicalHandle(t *testing.T) {
 		t.Fatal("the binary direction must own its handle")
 	}
 }
+
+// TestNamespaceMustNameItsBlock pins the anchor rule: the seed writes one,
+// anchorless state is refused, and an anchor over no state re-seeds.
+func TestNamespaceMustNameItsBlock(t *testing.T) {
+	t.Run("genesis seed anchors itself", func(t *testing.T) {
+		genesis, db, blocks, _ := generateMigrationChain(t, 1)
+		writeChainShape(db, blocks)
+
+		f := standaloneFollower(genesis, db)
+		if err := f.direction(true).ensure(); err != nil {
+			t.Fatalf("seeding from genesis: %v", err)
+		}
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		num, hash, ok := rawdb.ReadPBTAnchor(pbtdb)
+		if !ok {
+			t.Fatal("seed wrote no anchor")
+		}
+		if num != 0 || hash != rawdb.ReadCanonicalHash(db, 0) {
+			t.Fatalf("anchored at %d %x, want genesis", num, hash)
+		}
+	})
+
+	t.Run("anchorless state is refused", func(t *testing.T) {
+		genesis, db, blocks, _ := generateMigrationChain(t, 2)
+		writeChainShape(db, blocks)
+		// An older converter's namespace: no anchor.
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		rawdb.WritePBTFlatState(pbtdb)
+		rawdb.WriteSnapshotRoot(pbtdb, common.Hash{0xaa})
+
+		f := standaloneFollower(genesis, db)
+		err := f.direction(true).ensure()
+		if err == nil || !strings.Contains(err.Error(), "no anchor") {
+			t.Fatalf("err = %v, want the no-anchor refusal", err)
+		}
+	})
+
+	// A crash mid-seed: attestation and anchor landed, the flush did not; the
+	// record and cursor, written while the flush is in flight, may or may not.
+	for _, shape := range []struct {
+		name   string
+		cursor bool
+	}{
+		{"unfinished genesis seed re-seeds", false},
+		{"unfinished genesis seed with its cursor re-seeds", true},
+	} {
+		t.Run(shape.name, func(t *testing.T) {
+			genesis, db, blocks, _ := generateMigrationChain(t, 1)
+			writeChainShape(db, blocks)
+			ghash, lost := rawdb.ReadCanonicalHash(db, 0), common.Hash{0x5e, 0xed}
+			pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+			rawdb.WritePBTFlatState(pbtdb)
+			rawdb.WritePBTAnchor(pbtdb, 0, ghash)
+			if shape.cursor {
+				rawdb.WriteShadowStateRoot(db, ghash, 0, lost)
+				rawdb.WriteMigrationCursor(db, true, rawdb.MigrationCursor{Number: 0, Hash: ghash, Root: lost})
+			}
+
+			f := standaloneFollower(genesis, db)
+			if err := f.direction(true).ensure(); err != nil {
+				t.Fatalf("unfinished seed did not re-seed: %v", err)
+			}
+			num, hash, root := f.direction(true).cursor()
+			if num != 0 || hash != ghash || root == (common.Hash{}) || root == lost {
+				t.Fatalf("cursor at %d %x root %x, want the re-seeded genesis", num, hash, root)
+			}
+			if got, _ := rawdb.ReadShadowStateRoot(db, ghash, 0); got != root {
+				t.Fatalf("genesis record %x, want %x", got, root)
+			}
+		})
+	}
+
+	t.Run("anchor lands before the state", func(t *testing.T) {
+		// The flush is the seed's only batch, so refused batches are a seed
+		// whose state never lands: the anchor must already be there.
+		genesis, db, blocks, _ := generateMigrationChain(t, 1)
+		writeChainShape(db, blocks)
+		ghash := rawdb.ReadCanonicalHash(db, 0)
+
+		f := standaloneFollower(genesis, unflushableDB{db})
+		if err := f.direction(true).ensure(); err == nil {
+			t.Fatal("seed flushed through refused batches")
+		}
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		if num, hash, ok := rawdb.ReadPBTAnchor(pbtdb); !ok || num != 0 || hash != ghash {
+			t.Fatalf("anchor after a failed flush: ok=%v %d %x, want 0 %x", ok, num, hash, ghash)
+		}
+	})
+
+	t.Run("unflushed replay above an anchor resolves to it", func(t *testing.T) {
+		genesis, db, blocks, _ := generateMigrationChain(t, 2)
+		writeChainShape(db, blocks)
+		// Seeded and flushed, then lost the record and cursor.
+		if err := standaloneFollower(genesis, db).direction(true).ensure(); err != nil {
+			t.Fatal(err)
+		}
+		if err := rawdb.WipeMigrationState(db); err != nil {
+			t.Fatal(err)
+		}
+		// Bound through the anchor, then a replay dies before its flush.
+		if err := standaloneFollower(genesis, db).direction(true).ensure(); err != nil {
+			t.Fatalf("bind through the anchor: %v", err)
+		}
+		rawdb.WriteMigrationCursor(db, true, rawdb.MigrationCursor{Number: 1, Hash: blocks[0].Hash(), Root: common.Hash{0xde, 0xad}})
+
+		f := standaloneFollower(genesis, db)
+		if err := f.direction(true).ensure(); err != nil {
+			t.Fatalf("dead cursor above the anchor: %v", err)
+		}
+		if num, _, _ := f.direction(true).cursor(); num != 0 {
+			t.Fatalf("cursor at %d, want the anchor block", num)
+		}
+	})
+}
+
+// unflushableDB fails every batch write, leaving direct puts alone.
+type unflushableDB struct {
+	ethdb.Database
+}
+
+func (db unflushableDB) NewBatch() ethdb.Batch { return unflushableBatch{db.Database.NewBatch()} }
+func (db unflushableDB) NewBatchWithSize(size int) ethdb.Batch {
+	return unflushableBatch{db.Database.NewBatchWithSize(size)}
+}
+
+type unflushableBatch struct {
+	ethdb.Batch
+}
+
+func (unflushableBatch) Write() error { return errors.New("batch refused") }

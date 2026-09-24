@@ -32,18 +32,13 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// The merkle re-derivation both commands hold themselves to: the converter
-// demands the state root it scanned, the importer the root its anchor block
-// commits. One implementation, because two would drift, and a drifting
-// re-derivation is a check that passes on state nobody has.
+// The merkle re-derivation shared by both commands: the converter demands
+// the state root it scanned, the importer the root its anchor commits.
 
-// merkleAccountRecordLen is the width of an account record: nonce, balance
-// and code hash, in that order.
 const merkleAccountRecordLen = 8 + 32 + common.HashLength
 
-// merkleAccountRecord encodes the account fields the re-derivation folds
-// back into a trie. The storage root is deliberately absent: it is recomputed
-// from the storage records, which is the whole point of the check.
+// merkleAccountRecord encodes the account fields the fold needs. The storage
+// root is absent: it is recomputed from the storage records.
 func merkleAccountRecord(nonce uint64, balance *uint256.Int, codeHash common.Hash) []byte {
 	record := make([]byte, 0, merkleAccountRecordLen)
 	record = binary.BigEndian.AppendUint64(record, nonce)
@@ -52,15 +47,14 @@ func merkleAccountRecord(nonce uint64, balance *uint256.Int, codeHash common.Has
 	return append(record, codeHash.Bytes()...)
 }
 
-// heldStream wraps a sorted record stream with one record of lookahead, the
-// shape a merge-join needs.
+// heldStream wraps a sorted record stream with one record of lookahead.
 type heldStream struct {
 	stream     *bintrie.RecordStream
 	key, value []byte
 	done       bool
 }
 
-// current returns the held record, loading the next one if none is held.
+// current returns the held record, loading one if none is held.
 func (h *heldStream) current() ([]byte, []byte, error) {
 	if h.done || h.key != nil {
 		return h.key, h.value, nil
@@ -81,14 +75,9 @@ func (h *heldStream) current() ([]byte, []byte, error) {
 func (h *heldStream) advance() { h.key, h.value = nil, nil }
 
 // rederiveMerkleRoot folds account and storage records back into a
-// merkle-patricia trie and returns its root. Both streams must ascend -
-// accounts by account hash, storage by account hash then slot hash - which is
-// what the sorters guarantee.
-//
-// Storage under no account errors rather than being skipped: it means the
-// record set is short an account the state holds, exactly the loss the root
-// comparison exists to catch, and skipping it would hide it behind a root
-// that happens to match.
+// merkle-patricia trie. Both streams must ascend, which the sorters
+// guarantee. Storage under no account is the loss this check exists to
+// catch, so it errors rather than being skipped.
 func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, start time.Time) (common.Hash, error) {
 	var (
 		slotHeld    = &heldStream{stream: slots}
@@ -104,8 +93,6 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, start time.Time) 
 		if err != nil {
 			return common.Hash{}, err
 		}
-		// The two producers encode this record independently; a short one
-		// would otherwise slice out of range mid-fold.
 		if len(avalue) != merkleAccountRecordLen {
 			return common.Hash{}, fmt.Errorf("account record for %x is %d bytes, want %d", akey, len(avalue), merkleAccountRecordLen)
 		}

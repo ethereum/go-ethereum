@@ -65,8 +65,8 @@ var (
 	// a non-empty database means the flat state cannot be trusted.
 	pbtFlatStateKey = []byte("PBTFlatState")
 
-	// pbtAnchorKey records the block a binary tree state was converted or
-	// imported at: its number and hash. The tree alone does not say which
+	// pbtAnchorKey records the block a binary tree state was seeded, converted
+	// or imported at: its number and hash. The tree alone does not say which
 	// block it commits, and catching up from an anchor has to start
 	// somewhere.
 	pbtAnchorKey = []byte("PBTAnchor")
@@ -81,6 +81,10 @@ var (
 
 	// pbtMigrationDoneKey marks a finished migration.
 	pbtMigrationDoneKey = []byte("PBTMigrationDone")
+
+	// pbtMerkleDisposedKey marks the merkle state gone or going: written
+	// before the first deletion, never cleared.
+	pbtMerkleDisposedKey = []byte("PBTMerkleDisposed")
 
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
@@ -181,6 +185,16 @@ var (
 		trieJournalKey[:1],      // TrieJournal
 		pbtFlatStateKey[:1],     // PBTFlatState attestation, PBTAnchor
 		StateHistoryIndexPrefix, // history index metadata
+	}
+
+	// MerkleKeyFamilies lists the merkle state's key families. State ids share
+	// their byte with the Last* head keys and are deleted by key length.
+	MerkleKeyFamilies = [][]byte{
+		TrieNodeAccountPrefix,   // path-scheme account trie nodes
+		TrieNodeStoragePrefix,   // path-scheme storage trie nodes
+		SnapshotAccountPrefix,   // flat accounts
+		SnapshotStoragePrefix,   // flat storage slots
+		StateHistoryIndexPrefix, // history index data and metadata
 	}
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage

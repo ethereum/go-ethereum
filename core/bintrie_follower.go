@@ -203,13 +203,12 @@ func (f *bintrieFollower) loop() {
 					close(stop)
 					<-done
 				}
-				if m := f.peek(false); m == nil {
-					log.Warn("Merkle window closing without ever running", "closed", closer.Number)
-				} else if num, _, _ := m.cursor(); num < closer.Number.Uint64() {
-					log.Warn("Merkle window closing behind", "cursor", num, "closed", closer.Number)
+				// An archive node keeps its follower past the close; decide once.
+				if !rawdb.ReadPBTMigrationDone(f.db) {
+					rawdb.WritePBTMigrationDone(f.db)
+					f.chain.disposeMerkle()
+					log.Info("State migration finished", "closed", closer.Number)
 				}
-				rawdb.WritePBTMigrationDone(f.db)
-				log.Info("State migration finished", "closed", closer.Number)
 				return
 			}
 			latest = ev.Header
@@ -272,12 +271,19 @@ func (f *bintrieFollower) close() {
 	}
 }
 
-// sync runs every live direction once, ensuring the one the head calls for
-// exists: the direction opposite the head's flavour does the replay work,
-// its sibling only parks or rewinds. Outcomes latch; the next head retries.
+// sync runs the live directions once, creating the binary one while the head
+// still commits the merkle trie. Past activation the merkle direction never
+// follows, whatever opened it: the tree stays frozen where the fork found it.
+// Outcomes latch; the next head retries.
 func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
-	f.direction(!f.config.IsBinaryTrie(head.Number, head.Time))
+	owed := !f.config.IsBinaryTrie(head.Number, head.Time)
+	if owed {
+		f.direction(true)
+	}
 	for _, t := range f.live() {
+		if !t.pbt && !owed {
+			continue
+		}
 		err := t.follow(head, stop)
 		f.mu.Lock()
 		t.stall = err
@@ -645,6 +651,11 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// The marker is written before release takes this lock, so a handle
+	// handed out here is retired by the same disposal.
+	if !t.pbt && rawdb.ReadPBTMerkleDisposed(f.db) {
+		return nil, errors.New("merkle trie disposed")
+	}
 	if t.handle != nil {
 		return t.handle, nil
 	}
@@ -670,9 +681,10 @@ func (t *followerTree) persistCursor(num uint64, hash common.Hash, root common.H
 	rawdb.WriteMigrationCursor(t.f.db, t.pbt, rawdb.MigrationCursor{Number: num, Hash: hash, Root: root})
 }
 
-// ensure opens the tree and resolves the replay position. With a cursor ever
-// written it must resolve through it or the records: the seeding fallbacks
-// bind pathdb's disk root to a guessed block, poisoning the rest.
+// ensure opens the tree and resolves the replay position: through the cursor
+// or a live record once anything was flushed, else from the anchor, else by
+// seeding from genesis. Binding the disk root to a guessed block poisons the
+// rest.
 func (t *followerTree) ensure() error {
 	f := t.f
 	f.mu.Lock()
@@ -686,6 +698,7 @@ func (t *followerTree) ensure() error {
 		return err
 	}
 
+	pbtdb := rawdb.NewTable(f.db, string(rawdb.PBTPrefix))
 	cursor, ok, err := rawdb.ReadMigrationCursor(f.db, t.pbt)
 	if err != nil {
 		return fmt.Errorf("migration cursor corrupt, re-anchor: %w", err)
@@ -712,7 +725,11 @@ func (t *followerTree) ensure() error {
 				return nil
 			}
 		}
-		return errors.New("shadow position unresolvable: re-anchor")
+		// Nothing was ever flushed: the seed's cursor can land before its
+		// flush. Resolve as virgin, where a genesis anchor re-seeds.
+		if !t.pbt || rawdb.HasSnapshotRoot(pbtdb) {
+			return errors.New("shadow position unresolvable: re-anchor")
+		}
 	}
 	if !t.pbt {
 		// The merkle window has no artifacts: its floor is the newest block
@@ -730,27 +747,29 @@ func (t *followerTree) ensure() error {
 		}
 		return errors.New("merkle window position unresolvable: no live merkle state")
 	}
-	pbtdb := rawdb.NewTable(f.db, string(rawdb.PBTPrefix))
 	if num, hash, ok := rawdb.ReadPBTAnchor(pbtdb); ok {
-		// Virgin import: the follower never ran, so the disk root is the
-		// anchor's state, and both are proven before use.
+		// Anchored, never replayed: the disk root is the anchor's state.
 		if rawdb.ReadCanonicalHash(f.db, num) != hash {
-			return errors.New("imported anchor not canonical: re-import")
+			return errors.New("anchor block not canonical: re-convert or re-import")
 		}
 		root := rawdb.ReadSnapshotRoot(pbtdb)
-		if !t.hasState(root) {
-			return errors.New("imported anchor state gone: re-import")
+		if rawdb.HasSnapshotRoot(pbtdb) && t.hasState(root) {
+			// Recorded, so a replay that dies unflushed resolves back here.
+			rawdb.WriteShadowStateRoot(f.db, hash, num, root)
+			t.setCursor(num, hash, root)
+			return nil
 		}
-		t.setCursor(num, hash, root)
-		return nil
+		// A genesis anchor over no state is an unfinished seed: redo it. Any
+		// other anchor names state only an import or conversion restores.
+		if num != 0 {
+			return errors.New("anchored state gone: re-convert or re-import")
+		}
+	} else if rawdb.HasSnapshotRoot(pbtdb) {
+		// Every writer anchors this namespace; anchorless state is an older
+		// conversion whose block is unknowable.
+		return errors.New("binary tree state has no anchor: re-convert or re-import")
 	}
 	ghash := rawdb.ReadCanonicalHash(f.db, 0)
-	if root := rawdb.ReadSnapshotRoot(pbtdb); root != (common.Hash{}) {
-		// Seeded, then crashed before the first record: only the genesis
-		// seed writes the namespace with no cursor ever recorded.
-		t.setCursor(0, ghash, root)
-		return nil
-	}
 	// Fresh namespace: seed from the genesis allocation.
 	genesis := rawdb.ReadHeader(f.db, ghash, 0)
 	if genesis == nil {
@@ -766,6 +785,10 @@ func (t *followerTree) ensure() error {
 	if alloc == nil {
 		return errors.New("genesis allocation unavailable")
 	}
+	// Anchor first: pathdb lands the state in an asynchronous flush, and state
+	// without an anchor is refused above, while an anchor without state
+	// re-seeds.
+	rawdb.WritePBTAnchor(pbtdb, 0, ghash)
 	root, err := flushAlloc(&alloc, handle, nil)
 	if err != nil {
 		return err
@@ -802,11 +825,12 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 	if header == nil {
 		return fmt.Errorf("missing header for block %d %x", number, hash)
 	}
+	// The block's flavour fixes which direction owes it - the binary one, in
+	// practice: the only crossing is a binary block on a merkle parent.
+	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
+	t := f.direction(pbt)
 	f.kick(header)
 
-	// The block's flavour fixes which direction owes it, so only the
-	// direction lookup repeats - the header read must not.
-	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
 	deadline := time.Now().Add(timeout)
 	for {
 		if _, ok := rawdb.ReadShadowStateRoot(f.db, hash, number); ok {
@@ -817,13 +841,11 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 			return errors.New("migration follower stopped")
 		default:
 		}
-		if t := f.peek(pbt); t != nil {
-			f.mu.Lock()
-			stall := t.stall
-			f.mu.Unlock()
-			if stall != nil {
-				return stall
-			}
+		f.mu.Lock()
+		stall := t.stall
+		f.mu.Unlock()
+		if stall != nil {
+			return stall
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("shadow has not reached block %d %x", number, hash)
@@ -862,12 +884,29 @@ func (t *followerTree) journal(head *types.Header) {
 	if head != nil && t.f.config.IsBinaryTrie(head.Number, head.Time) == t.pbt {
 		root = head.Root
 	}
-	if err := handle.Journal(root); err != nil {
-		log.Warn("Failed to journal shadow trie", "err", err)
+	// Never resolved: a merkle handle an archive node opened only for reads.
+	if root != (common.Hash{}) {
+		if err := handle.Journal(root); err != nil {
+			log.Warn("Failed to journal shadow trie", "err", err)
+		}
 	}
 	if err := handle.Close(); err != nil {
 		log.Error("Failed to close shadow trie", "err", err)
 	}
+}
+
+// release drops the tree's handle, unjournaled, and returns it if the follower
+// owns it; a shared handle is bc.triedb, retired by its owner.
+func (t *followerTree) release() *triedb.Database {
+	t.f.mu.Lock()
+	defer t.f.mu.Unlock()
+
+	handle, owned := t.handle, t.owned
+	t.handle, t.sdb = nil, nil
+	if !owned {
+		return nil
+	}
+	return handle
 }
 
 func (t *followerTree) cursor() (uint64, common.Hash, common.Hash) {
@@ -886,6 +925,9 @@ func (t *followerTree) hasState(root common.Hash) bool {
 	t.f.mu.Lock()
 	handle := t.handle
 	t.f.mu.Unlock()
+	if handle == nil {
+		return false
+	}
 	_, err := handle.NodeReader(root)
 	return err == nil
 }

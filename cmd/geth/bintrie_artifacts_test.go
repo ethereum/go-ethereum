@@ -39,9 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
-// The artifact round-trips: decoded with an independent parser written
-// against EIP-8347's rules, not the writer, and required to be
-// byte-canonical across runs.
+// The artifacts are checked against parsers and layouts written from
+// EIP-8347's rules, not the writers, and must be byte-canonical across runs.
 
 // artifactAlloc covers the artifact encoding decisions: shared code, a
 // delegation, zero-tailed code, boundary storage, slot zero.
@@ -209,71 +208,17 @@ func TestSnapshotArtifactRoundTrip(t *testing.T) {
 	}
 }
 
-// TestPreimageFileRoundTrip: the decoded records must name exactly the
-// converted accounts and slots.
-func TestPreimageFileRoundTrip(t *testing.T) {
+// TestPreimageFileLayout: the converter's preimage file is exactly the EIP-8347
+// layout of the converted state.
+func TestPreimageFileLayout(t *testing.T) {
 	alloc := artifactAlloc()
 	_, _, prePath := convertWithArtifacts(t, alloc, 512)
-
-	f, err := os.Open(prePath)
+	got, err := os.ReadFile(prePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-
-	var (
-		stream   = rlp.NewStream(bufio.NewReader(f), 0)
-		got      = make(map[common.Address]map[common.Hash]bool)
-		prevAddr []byte
-	)
-	for {
-		var rec struct {
-			Address  []byte
-			SlotKeys [][]byte
-		}
-		if err := stream.Decode(&rec); err == io.EOF {
-			break
-		} else if err != nil {
-			t.Fatalf("record %d does not decode: %v", len(got), err)
-		}
-		if len(rec.Address) != common.AddressLength {
-			t.Fatalf("address %x is %d bytes, the encoding demands 20", rec.Address, len(rec.Address))
-		}
-		if prevAddr != nil && bytes.Compare(prevAddr, rec.Address) >= 0 {
-			t.Fatalf("address %x out of order after %x", rec.Address, prevAddr)
-		}
-		prevAddr = rec.Address
-
-		slots := make(map[common.Hash]bool, len(rec.SlotKeys))
-		var prevSlot *common.Hash
-		for _, enc := range rec.SlotKeys {
-			slot := mustCanonicalInt(t, enc, "slot key")
-			if prevSlot != nil && bytes.Compare(prevSlot[:], slot[:]) >= 0 {
-				t.Fatalf("slot %x of %x out of order after %x", slot, rec.Address, *prevSlot)
-			}
-			prevSlot = &slot
-			slots[slot] = true
-		}
-		got[common.BytesToAddress(rec.Address)] = slots
-	}
-
-	// Exactly the allocation, both directions.
-	if len(got) != len(alloc) {
-		t.Fatalf("decoded %d accounts, converted %d", len(got), len(alloc))
-	}
-	for addr, acct := range alloc {
-		slots, ok := got[addr]
-		if !ok {
-			t.Fatalf("account %x converted but missing from the preimage file", addr)
-		}
-		if len(slots) != len(acct.Storage) {
-			t.Fatalf("account %x carries %d slot keys, state holds %d", addr, len(slots), len(acct.Storage))
-		}
-		for slot := range acct.Storage {
-			if !slots[slot] {
-				t.Fatalf("slot %x of %x converted but missing from the preimage file", slot, addr)
-			}
-		}
+	if want := specPreimageFile(alloc); !bytes.Equal(got, want) {
+		t.Fatalf("preimage file is\n%x\nwant\n%x", got, want)
 	}
 }
 
@@ -306,19 +251,35 @@ func TestArtifactsAreByteCanonical(t *testing.T) {
 	}
 }
 
+// specPreimageFile derives the EIP-8347 preimage file from the allocation
+// alone, independently of the writer.
+func specPreimageFile(alloc types.GenesisAlloc) []byte {
+	recs := make([]preRecord, 0, len(alloc))
+	for addr, acct := range alloc {
+		rec := preRecord{addr: addr}
+		for slot := range acct.Storage {
+			rec.slots = append(rec.slots, slot)
+		}
+		recs = append(recs, rec)
+	}
+	return encodePreimageRecords(recs)
+}
+
 // TestArtifactGoldenDigests freezes the artifact byte format: any encoding
 // change moves these reference-pinned digests, and moving them breaks every
-// existing producer.
+// existing producer. The preimage file must also match the layout the state
+// implies, so the golden cannot pin a writer bug.
 func TestArtifactGoldenDigests(t *testing.T) {
 	const (
 		wantSnapshot  = "0xf10d40938b44dd9b4a27ddf7d265a6cb20b79d2c45118a2c3e114d16e7f251ef"
-		wantPreimages = "0x8b6e6a6c99b425ad7806362e4cfeef8ad5cd81b9e944c7656e6335b309e04900"
+		wantPreimages = "0xf7031eb1bf7682466c33c4a7e0e0616139990ebd4a4cff82f59a1d68b045fdc8"
 	)
 	for _, sv := range loadStateVectors(t) {
 		if sv.Name != "contract" {
 			continue
 		}
-		_, snapPath, prePath := convertWithArtifacts(t, allocOf(t, sv), 0)
+		alloc := allocOf(t, sv)
+		_, snapPath, prePath := convertWithArtifacts(t, alloc, 0)
 		snap, err := os.ReadFile(snapPath)
 		if err != nil {
 			t.Fatal(err)
@@ -326,6 +287,9 @@ func TestArtifactGoldenDigests(t *testing.T) {
 		pre, err := os.ReadFile(prePath)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if want := specPreimageFile(alloc); !bytes.Equal(pre, want) {
+			t.Fatalf("preimage file is\n%x\nthe layout the state implies is\n%x", pre, want)
 		}
 		if got := crypto.Keccak256Hash(snap); got != common.HexToHash(wantSnapshot) {
 			t.Fatalf("snapshot digest %x, the recorded golden is %s", got, wantSnapshot)
@@ -365,8 +329,11 @@ func TestArtifactReaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := sr.digest(), crypto.Keccak256Hash(blob); got != want {
-		t.Fatalf("snapshot digest %x, file hashes to %x", got, want)
+	// Read twice: the importer logs each digest more than once.
+	for range 2 {
+		if got, want := sr.digest(), crypto.Keccak256Hash(blob); got != want {
+			t.Fatalf("snapshot digest %x, file hashes to %x", got, want)
+		}
 	}
 
 	pr, err := openPreimages(prePath)
@@ -389,8 +356,10 @@ func TestArtifactReaders(t *testing.T) {
 	if blob, err = os.ReadFile(prePath); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := pr.digest(), crypto.Keccak256Hash(blob); got != want {
-		t.Fatalf("preimage digest %x, file hashes to %x", got, want)
+	for range 2 {
+		if got, want := pr.digest(), crypto.Keccak256Hash(blob); got != want {
+			t.Fatalf("preimage digest %x, file hashes to %x", got, want)
+		}
 	}
 
 	// A trailing byte and a truncation must both reject.
@@ -443,17 +412,29 @@ func rawSnapshot(t *testing.T, root common.Hash, count uint64, recs [][2][]byte)
 	return path
 }
 
-// rawPreimages writes a preimage file from verbatim records: rec[0] is the
-// address, the rest are slot keys.
-func rawPreimages(t *testing.T, recs [][][]byte) string {
+// rawPreRecord is one verbatim preimage record; a negative count means
+// len(slots).
+type rawPreRecord struct {
+	addr  []byte
+	count int
+	slots [][]byte
+}
+
+// rawPreimages writes a preimage file from verbatim records, so a case can
+// inject bytes the writer can never emit.
+func rawPreimages(t *testing.T, recs []rawPreRecord) string {
 	t.Helper()
 	var buf bytes.Buffer
 	for _, rec := range recs {
-		blob, err := rlp.EncodeToBytes([]any{rec[0], rec[1:]})
-		if err != nil {
-			t.Fatal(err)
+		count := rec.count
+		if count < 0 {
+			count = len(rec.slots)
 		}
-		buf.Write(blob)
+		buf.Write(rec.addr)
+		buf.Write(binary.BigEndian.AppendUint32(nil, uint32(count)))
+		for _, slot := range rec.slots {
+			buf.Write(slot)
+		}
 	}
 	path := filepath.Join(t.TempDir(), "preimages.bin")
 	if err := os.WriteFile(path, buf.Bytes(), 0600); err != nil {
@@ -539,20 +520,29 @@ func TestArtifactReadersReject(t *testing.T) {
 	})
 
 	t.Run("preimages", func(t *testing.T) {
-		other := common.Address{2}.Bytes()
+		// low/high are ordered by hash, not raw bytes.
+		lowAddr, highAddr := addr, common.Address{2}.Bytes()
+		if bytes.Compare(crypto.Keccak256(lowAddr), crypto.Keccak256(highAddr)) > 0 {
+			lowAddr, highAddr = highAddr, lowAddr
+		}
+		lowSlot, highSlot := common.Hash{31: 1}, common.Hash{31: 2}
+		if bytes.Compare(crypto.Keccak256(lowSlot[:]), crypto.Keccak256(highSlot[:])) > 0 {
+			lowSlot, highSlot = highSlot, lowSlot
+		}
 		for _, tc := range []struct {
 			name    string
-			recs    [][][]byte
+			recs    []rawPreRecord
 			wantErr string
 		}{
-			{"short address", [][][]byte{{addr[:19]}}, "want 20"},
-			{"long address", [][][]byte{{append(addr, 0)}}, "want 20"},
-			{"duplicate address", [][][]byte{{addr}, {addr}}, "out of address order"},
-			{"descending addresses", [][][]byte{{other}, {addr}}, "out of address order"},
-			{"leading zero slot", [][][]byte{{addr, {0x00, 0x01}}}, "canonical"},
-			{"over-long slot", [][][]byte{{addr, bytes.Repeat([]byte{1}, 33)}}, "canonical"},
-			{"descending slots", [][][]byte{{addr, {0x02}, {0x01}}}, "slot keys out of order"},
-			{"duplicate slots", [][][]byte{{addr, {0x02}, {0x02}}}, "slot keys out of order"},
+			{"truncated record header", []rawPreRecord{{addr: addr[:19], count: -1}}, "truncated"},
+			{"duplicate address", []rawPreRecord{{addr: addr, count: -1}, {addr: addr, count: -1}}, "out of hashed-key order"},
+			{"descending addresses", []rawPreRecord{{addr: highAddr, count: -1}, {addr: lowAddr, count: -1}}, "out of hashed-key order"},
+			{"descending slots", []rawPreRecord{{addr: addr, count: -1, slots: [][]byte{highSlot[:], lowSlot[:]}}}, "slot keys are out of hashed-key order"},
+			{"duplicate slots", []rawPreRecord{{addr: addr, count: -1, slots: [][]byte{lowSlot[:], lowSlot[:]}}}, "slot keys are out of hashed-key order"},
+			{"slot count over the file", []rawPreRecord{{addr: addr, count: 4, slots: [][]byte{lowSlot[:]}}}, "past the end of the file"},
+			{"truncated slot key", []rawPreRecord{{addr: addr, count: 1, slots: [][]byte{lowSlot[:31]}}}, "past the end of the file"},
+			{"slot count over the file after a stored account", []rawPreRecord{{addr: lowAddr, count: -1, slots: [][]byte{lowSlot[:]}}, {addr: highAddr, count: 2, slots: [][]byte{lowSlot[:]}}}, "past the end of the file"},
+			{"trailing partial header", []rawPreRecord{{addr: addr, count: -1}, {addr: highAddr[:1], count: -1}}, "truncated"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				pr, err := openPreimages(rawPreimages(t, tc.recs))

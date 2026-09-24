@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -43,10 +44,6 @@ import (
 )
 
 var (
-	deleteSourceFlag = &cli.BoolFlag{
-		Name:  "delete-source",
-		Usage: "Delete MPT trie nodes after the conversion verifies",
-	}
 	memoryLimitFlag = &cli.Uint64Flag{
 		Name:  "memory-limit",
 		Usage: "Total sort-buffer budget in MB before records spill to disk",
@@ -66,7 +63,11 @@ var (
 	}
 	preimagesOutFlag = &cli.StringFlag{
 		Name:  "preimages-out",
-		Usage: "File to write the address-sorted preimage file to",
+		Usage: "File to write the EIP-8347 preimage file to",
+	}
+	dropPreimagesFlag = &cli.BoolFlag{
+		Name:  "drop-preimages",
+		Usage: "Delete the preimage store after the conversion verifies",
 	}
 
 	bintrieCommand = &cli.Command{
@@ -81,23 +82,22 @@ var (
 				ArgsUsage: "[state-root]",
 				Action:    convertToBinaryTrie,
 				Flags: slices.Concat([]cli.Flag{
-					deleteSourceFlag,
 					memoryLimitFlag,
 					tmpDirFlag,
 					forceConvertFlag,
 					snapshotOutFlag,
 					preimagesOutFlag,
+					dropPreimagesFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth bintrie convert [flags] [state-root]
 
-Converts the MPT state into the EIP-8297 binary tree, offline, per the
-EIP-8347 pipeline: derive every leaf, sort in tree-key order, build
-bottom-up, with flat state written alongside. Both stores are verified and
-the completion marker lands last, so an interrupted run refuses to open.
-Defaults to the head root; the source must hold preimages
-(--cache.preimages), each verified against its hash. --snapshot-out and
---preimages-out emit the byte-canonical EIP-8347 distribution artifacts.
+Converts the MPT state into the EIP-8297 binary tree offline, following the
+EIP-8347 pipeline, and verifies the result before marking it complete.
+Defaults to the head root. The source must hold preimages
+(--cache.preimages). --snapshot-out and --preimages-out emit the EIP-8347
+distribution artifacts. --drop-preimages deletes the preimage store
+afterwards, which also rules out a re-conversion.
 `,
 			},
 		},
@@ -118,17 +118,29 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	if headBlock == nil {
 		return errors.New("no head block found")
 	}
+	// Past the fork the head commits the binary tree: no merkle state exists
+	// at its root, and the namespace a conversion wipes is the live tree.
+	if stored := rawdb.ReadChainConfig(chaindb, rawdb.ReadCanonicalHash(chaindb, 0)); stored == nil || stored.IsBinaryTrie(headBlock.Number(), headBlock.Time()) {
+		return errors.New("the head block commits the binary tree; nothing to convert")
+	}
 	var (
-		root common.Hash
-		err  error
+		root   common.Hash
+		anchor *types.Header
+		err    error
 	)
 	if ctx.NArg() == 1 {
 		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			return fmt.Errorf("invalid state root: %w", err)
 		}
+		// Only the head root is anchored; any other root converts into
+		// artifacts, not a bootable namespace.
+		if root == headBlock.Root() {
+			anchor = headBlock.Header()
+		}
 	} else {
 		root = headBlock.Root()
+		anchor = headBlock.Header()
 	}
 	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
 
@@ -147,44 +159,56 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	// Probe before MakeTrieDatabase: its guard fatals on a completed
 	// conversion and cannot see interrupted debris.
 	if ctx.Bool(forceConvertFlag.Name) {
+		if !hasMerkleSource(chaindb, root) {
+			return errors.New("refusing --force: no merkle state to reconvert from")
+		}
 		if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
 			return fmt.Errorf("failed to wipe binary tree state: %w", err)
 		}
 	} else if dirty, err := hasBinaryTrieState(chaindb); err != nil {
 		return fmt.Errorf("failed to probe the binary tree namespace: %w", err)
 	} else if dirty {
+		if !hasMerkleSource(chaindb, root) {
+			return errors.New("binary tree state present, merkle state gone; re-import rather than reconvert")
+		}
 		return errors.New("database already holds binary tree state, complete or from an interrupted conversion; re-run with --force to wipe and reconvert")
 	}
 	srcTriedb := utils.MakeTrieDatabase(ctx, stack, chaindb, true, true, false)
-	defer srcTriedb.Close()
+	// Closed once: --drop-preimages closes it early, before its wipe.
+	closeSource := sync.OnceValue(srcTriedb.Close)
+	defer closeSource()
 
 	binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{
 		sortBudget:   int(budgetMB << 20),
 		tmpDir:       ctx.String(tmpDirFlag.Name),
 		snapshotPath: snapshotPath,
 		preimagePath: preimagePath,
+		anchor:       anchor,
 	})
 	if err != nil {
 		return err
 	}
 	log.Info("Conversion complete", "binaryRoot", binRoot)
 
-	if ctx.Bool(deleteSourceFlag.Name) {
-		log.Info("Deleting source MPT data")
-		if err := deleteMPTData(chaindb, srcTriedb, root); err != nil {
-			return fmt.Errorf("MPT deletion failed: %w", err)
+	if ctx.Bool(dropPreimagesFlag.Name) {
+		// The trie database flushes on close; wipe once it has let go.
+		if err := closeSource(); err != nil {
+			return fmt.Errorf("failed to close the source trie database: %w", err)
 		}
-		log.Info("Source MPT data deleted")
+		if err := wipePreimages(chaindb); err != nil {
+			return fmt.Errorf("preimage deletion failed: %w", err)
+		}
 	}
 	return nil
 }
 
 // conversionOptions carries the tunables of a conversion run.
 type conversionOptions struct {
-	sortBudget   int    // total bytes of buffered records before the sorts spill
-	tmpDir       string // spill directory; empty means the OS temp dir
-	snapshotPath string // PBT snapshot artifact destination; empty writes none
-	preimagePath string // preimage file destination; empty writes none
+	sortBudget   int           // total bytes of buffered records before the sorts spill
+	tmpDir       string        // spill directory; empty means the OS temp dir
+	snapshotPath string        // PBT snapshot artifact destination; empty writes none
+	preimagePath string        // preimage file destination; empty writes none
+	anchor       *types.Header // block committing root; nil leaves the namespace unbootable
 }
 
 // conversionStats tracks progress for the periodic report. The message names
@@ -215,11 +239,9 @@ func (s *conversionStats) report(force bool) {
 // convertState converts the MPT state at root into the binary tree namespace
 // per EIP-8347: one scan derives every leaf and streams flat state, an
 // external sort orders the leaves in tree-key order, and the tree builds
-// bottom-up in one pass. Three checks gate the result - the scan against the
-// source state root, then the tree and the flat store against the converted
-// root - and the flat-state attestation lands last: a run that dies or fails
-// verification leaves a namespace that refuses to open, and a re-run needs
-// --force.
+// bottom-up in one pass. Three checks gate the result: the scan against the
+// source state root, the tree and the flat store against the converted one.
+// The attestation lands last, so an interrupted run refuses to open.
 func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 
@@ -231,21 +253,14 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	stats := newStats("Converting state")
 
-	// Sorts alive at once during the scan: the leaves, the two limbs of the
-	// merkle re-derivation, and the preimage file when it is asked for. A
-	// sealed sorter keeps its buffer while its stream drains, so the budget
-	// is split rather than handed to each in turn.
-	parts := 3
-	if opts.preimagePath != "" {
-		parts = 4
-	}
-	share := opts.sortBudget / parts
+	// Three sorters can be alive at once, and a sealed one keeps its buffer
+	// while its stream drains, so the budget is split rather than reused.
+	share := opts.sortBudget / 3
 
 	sorter := bintrie.NewLeafSorter(opts.tmpDir, share)
 	defer sorter.Close()
 
-	// The re-derivation limbs: accounts keyed by account hash, storage by
-	// account hash then slot hash.
+	// The re-derivation limbs, keyed by account hash and by account‖slot.
 	accounts := bintrie.NewRecordSorter(opts.tmpDir, share, nil)
 	defer accounts.Close()
 	slots := bintrie.NewRecordSorter(opts.tmpDir, share, nil)
@@ -268,8 +283,16 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}()
 	}
 	if opts.preimagePath != "" {
-		preimages = newPreimageFile(opts.tmpDir, share)
-		defer preimages.close()
+		pf, err := newPreimageFile(opts.preimagePath)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		preimages = pf
+		defer func() {
+			if preimages != nil {
+				preimages.abort()
+			}
+		}()
 	}
 	// Phase 1: scan, deriving leaves and streaming flat state.
 	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, accounts, slots, preimages, stats); err != nil {
@@ -282,12 +305,8 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, errors.New("refusing to convert an empty state")
 	}
 
-	// Check 1: the scanned records must re-derive the state root they came
-	// from. Everything below is built out of this record set, and the two
-	// checks after the build only prove the tree and the flat store agree
-	// with each other, so a scan that silently lost an account would verify
-	// green against its own loss. This is the only check that ties the
-	// output back to the source state.
+	// Check 1, before the build: the other two checks are fed by this same
+	// record set, so only this one ties the output to the source state.
 	if err := verifySourceRoot(accounts, slots, root, stats.start); err != nil {
 		return common.Hash{}, err
 	}
@@ -362,18 +381,23 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		snapshot = nil // finalized; disarm the abort
 	}
 	if preimages != nil {
-		digest, err := preimages.write(opts.preimagePath)
+		digest, err := preimages.finalize()
 		if err != nil {
-			os.Remove(opts.preimagePath)
 			return common.Hash{}, err
 		}
 		log.Info("Wrote preimage file", "path", opts.preimagePath,
 			"accounts", preimages.accounts, "digest", digest)
+		preimages = nil // finalized; disarm the abort
 	}
 
-	// No state id: the converted tree bases an empty history and live commits
-	// number from 1. The attestation is the completion marker and comes last.
+	// No state id: the tree bases an empty history and live commits number
+	// from 1. The attestation comes last.
 	rawdb.WriteSnapshotRoot(pbtdb, binRoot)
+	if opts.anchor != nil {
+		rawdb.WritePBTAnchor(pbtdb, opts.anchor.Number.Uint64(), opts.anchor.Hash())
+	} else {
+		log.Warn("Converted without an anchor: the namespace is not bootable; reconvert at the head root with --force before starting the node")
+	}
 	rawdb.WritePBTFlatState(pbtdb)
 	return binRoot, nil
 }
@@ -417,7 +441,7 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		}
 		addr := common.BytesToAddress(addrBytes)
 		if preimages != nil {
-			if err := preimages.beginAccount(addr); err != nil {
+			if err := preimages.beginAccount(addr, common.BytesToHash(accIter.Key)); err != nil {
 				return err
 			}
 		}
@@ -454,7 +478,9 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 					return err
 				}
 				if preimages != nil {
-					preimages.addSlot(slotKey)
+					if err := preimages.addSlot(common.BytesToHash(slotKey), common.BytesToHash(storageIter.Key)); err != nil {
+						return err
+					}
 				}
 				_, content, rest, err := rlp.Split(storageIter.Value)
 				if err != nil {
@@ -586,16 +612,25 @@ func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 	return false, nil
 }
 
+// hasMerkleSource reports merkle state to convert from: no disposal marker (a
+// begun disposal leaves nodes behind) and a root node on disk (an imported
+// datadir never had one).
+func hasMerkleSource(chaindb ethdb.Database, root common.Hash) bool {
+	return !rawdb.ReadPBTMerkleDisposed(chaindb) &&
+		(rawdb.HasAccountTrieNode(chaindb, nil) || rawdb.HasLegacyTrieNode(chaindb, root))
+}
+
 // wipeBinaryTrieState clears the binary tree state: the key families (the
 // bare prefix is shared with block bodies), the PBT history freezers, and
 // the journal file in triedbDir.
 func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
-	// Bookkeeping before state: any crash prefix leaves stale state the next
-	// import detects, never a position that shadows a fresh anchor.
+	// Anchor, then bookkeeping, then state: any crash prefix leaves state the
+	// follower refuses, never an anchor or a position it would bind to it.
+	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
+	rawdb.DeletePBTAnchor(pbtdb)
 	if err := rawdb.WipeMigrationState(chaindb); err != nil {
 		return err
 	}
-	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	batch := pbtdb.NewBatch()
 	wiped := 0
 	for _, family := range rawdb.PBTKeyFamilies {
@@ -666,10 +701,8 @@ func (r rawBinaryNodes) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte,
 }
 
 // verifySourceRoot demands that the scanned records re-derive the state root
-// they were read from. It is the converter's counterpart to the importer's
-// anchor check: without it nothing compares the conversion's output to its
-// input, and a scan that ended early would produce a perfectly consistent
-// tree of state nobody has.
+// they were read from, the converter's counterpart to the importer's anchor
+// check.
 func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, start time.Time) error {
 	acctStream, err := accounts.Sort()
 	if err != nil {
@@ -691,7 +724,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, s
 }
 
 // verifyConvertedState refolds every persisted leaf and requires the rebuilt
-// root to match. Gates the completion marker and --delete-source.
+// root to match. Gates the completion marker.
 func verifyConvertedState(chaindb ethdb.Database, root common.Hash) error {
 	tr, err := bintrie.NewBinaryTrie(root, rawBinaryNodes{pbtdb: rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))})
 	if err != nil {
@@ -866,83 +899,33 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 	return nil
 }
 
-func deleteMPTData(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash) error {
-	isPathDB := srcTriedb.Scheme() == rawdb.PathScheme
+// wipePreimages deletes the preimage store, which a binary tree never
+// consults. The whole key family goes, --vmdebug's SHA3 preimages included:
+// they share the key space, and a 32-byte one looks like a slot key.
+func wipePreimages(chaindb ethdb.Database) error {
+	it := rawdb.NewKeyLengthIterator(chaindb.NewIterator(rawdb.PreimagePrefix, nil), len(rawdb.PreimagePrefix)+common.HashLength)
+	defer it.Release()
 
-	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
-	if err != nil {
-		return fmt.Errorf("failed to open source trie for deletion: %w", err)
-	}
-	acctIt, err := srcTrie.NodeIterator(nil)
-	if err != nil {
-		return fmt.Errorf("failed to create account iterator for deletion: %w", err)
-	}
 	batch := chaindb.NewBatch()
-	deleted := 0
-
-	for acctIt.Next(true) {
-		if isPathDB {
-			rawdb.DeleteAccountTrieNode(batch, acctIt.Path())
-		} else {
-			node := acctIt.Hash()
-			if node != (common.Hash{}) {
-				rawdb.DeleteLegacyTrieNode(batch, node)
-			}
+	wiped := 0
+	for it.Next() {
+		if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
+			return err
 		}
-		deleted++
-
-		if acctIt.Leaf() {
-			var acc types.StateAccount
-			if err := rlp.DecodeBytes(acctIt.LeafBlob(), &acc); err != nil {
-				return fmt.Errorf("invalid account during deletion: %w", err)
-			}
-			if acc.Root != types.EmptyRootHash {
-				addrHash := common.BytesToHash(acctIt.LeafKey())
-				storageTrie, err := trie.NewStateTrie(trie.StorageTrieID(root, addrHash, acc.Root), srcTriedb)
-				if err != nil {
-					return fmt.Errorf("failed to open storage trie for deletion: %w", err)
-				}
-				storageIt, err := storageTrie.NodeIterator(nil)
-				if err != nil {
-					return fmt.Errorf("failed to create storage iterator for deletion: %w", err)
-				}
-				for storageIt.Next(true) {
-					if isPathDB {
-						rawdb.DeleteStorageTrieNode(batch, addrHash, storageIt.Path())
-					} else {
-						node := storageIt.Hash()
-						if node != (common.Hash{}) {
-							rawdb.DeleteLegacyTrieNode(batch, node)
-						}
-					}
-					deleted++
-					if batch.ValueSize() >= ethdb.IdealBatchSize {
-						if err := batch.Write(); err != nil {
-							return fmt.Errorf("batch write failed: %w", err)
-						}
-						batch.Reset()
-					}
-				}
-				if storageIt.Error() != nil {
-					return fmt.Errorf("storage deletion iterator error: %w", storageIt.Error())
-				}
-			}
-		}
+		wiped++
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				return fmt.Errorf("batch write failed: %w", err)
+				return err
 			}
 			batch.Reset()
 		}
 	}
-	if acctIt.Error() != nil {
-		return fmt.Errorf("account deletion iterator error: %w", acctIt.Error())
+	if err := it.Error(); err != nil {
+		return err
 	}
-	if batch.ValueSize() > 0 {
-		if err := batch.Write(); err != nil {
-			return fmt.Errorf("final batch write failed: %w", err)
-		}
+	if err := batch.Write(); err != nil {
+		return err
 	}
-	log.Info("MPT deletion complete", "nodesDeleted", deleted)
+	log.Warn("Deleted the preimage store", "records", wiped)
 	return nil
 }

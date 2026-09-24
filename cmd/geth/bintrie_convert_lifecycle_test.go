@@ -352,9 +352,9 @@ func TestConvertedBaseAcceptsCommits(t *testing.T) {
 	}
 }
 
-// TestDeleteSourceLifecycle: after deletion the converted bytes stand alone,
-// the merkle trie is gone, and code and preimages survive.
-func TestDeleteSourceLifecycle(t *testing.T) {
+// TestConvertedStateOutlivesMerkleDisposal: once the merkle state is disposed
+// of, the converted bytes stand alone, and code and preimages survive.
+func TestConvertedStateOutlivesMerkleDisposal(t *testing.T) {
 	t.Run("path scheme", func(t *testing.T) {
 		alloc := mixedAlloc(424242)
 		chaindb := rawdb.NewMemoryDatabase()
@@ -380,7 +380,7 @@ func TestDeleteSourceLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("conversion failed: %v", err)
 		}
-		if err := deleteMPTData(chaindb, src, root); err != nil {
+		if err := core.DisposeMerkleState(chaindb, "", nil); err != nil {
 			t.Fatalf("deletion failed: %v", err)
 		}
 		// Converted bytes alone must verify.
@@ -443,31 +443,5 @@ func TestDeleteSourceLifecycle(t *testing.T) {
 		if pre := rawdb.ReadPreimage(chaindb, crypto.Keccak256Hash(contract.Bytes())); len(pre) == 0 {
 			t.Fatal("deletion took the preimages with it")
 		}
-	})
-
-	t.Run("hash scheme", func(t *testing.T) {
-		chaindb := rawdb.NewMemoryDatabase()
-		srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true})
-		gspec := &core.Genesis{
-			Config:  params.TestChainConfig,
-			BaseFee: big.NewInt(params.InitialBaseFee),
-			Alloc:   artifactAlloc(),
-		}
-		root := gspec.MustCommit(chaindb, srcTriedb).Root()
-
-		binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{})
-		if err != nil {
-			t.Fatalf("conversion from a hash-scheme source failed: %v", err)
-		}
-		if err := deleteMPTData(chaindb, srcTriedb, root); err != nil {
-			t.Fatalf("hash-scheme deletion failed: %v", err)
-		}
-		if node := rawdb.ReadLegacyTrieNode(chaindb, root); len(node) != 0 {
-			t.Fatal("the merkle root node survived hash-scheme deletion")
-		}
-		if err := verifyConvertedState(chaindb, binRoot); err != nil {
-			t.Fatalf("tree verification fails after hash-scheme deletion: %v", err)
-		}
-		srcTriedb.Close()
 	})
 }
