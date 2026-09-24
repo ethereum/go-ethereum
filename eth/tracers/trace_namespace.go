@@ -370,10 +370,10 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	if args.From != nil {
 		from = *args.From
 	}
-	if args.Nonce == nil {
-		n := hexutil.Uint64(st.GetNonce(from))
-		args.Nonce = &n
-	}
+	// A supplied nonce is neither validated nor used: execution, including
+	// CREATE address derivation, uses the sender's state nonce.
+	nonce := hexutil.Uint64(st.GetNonce(from))
+	args.Nonce = &nonce
 	vmctx := core.NewEVMBlockContext(block.Header(), api.api.chainContext(ctx), nil)
 	if err := args.CallDefaults(api.api.backend.RPCGasCap(), vmctx.BaseFee, api.api.backend.ChainConfig().ChainID); err != nil {
 		return nil, traceInvalid("invalid call: %v", err)
@@ -388,7 +388,15 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 			tx = types.NewTx(&types.AccessListTx{ChainID: api.api.backend.ChainConfig().ChainID, Nonce: msg.Nonce, To: msg.To, Gas: msg.GasLimit, GasPrice: msg.GasPrice.ToBig(), Value: msg.Value.ToBig(), Data: msg.Data, AccessList: msg.AccessList})
 		}
 	}
-	// NoBaseFee bypasses zero-fee validation without rewriting the BASEFEE opcode.
+	// As in eth_call, a zero effective gas price runs with BASEFEE 0, and a
+	// zero blob fee cap (supplied or defaulted) with BLOBBASEFEE 0. NoBaseFee
+	// skips fee validation only when both fee caps are zero.
+	if msg.GasPrice.Sign() == 0 {
+		vmctx.BaseFee = new(big.Int)
+	}
+	if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
+		vmctx.BlobBaseFee = new(big.Int)
+	}
 	return api.execute(ctx, tx, msg, kinds, vmctx, st, common.Hash{}, index, true)
 }
 
