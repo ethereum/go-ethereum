@@ -18,24 +18,15 @@
 package types
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
 
-	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/ssz"
 	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
-
-const (
-	headerIndexSlot          = 8
-	headerIndexProposerIndex = 9
-	headerIndexParentRoot    = 10
-	headerIndexStateRoot     = 11
-	headerIndexBodyRoot      = 12
-)
 
 // Header defines a beacon header.
 //
@@ -75,23 +66,14 @@ type headerMarshaling struct {
 }
 
 // Hash calculates the block root of the header.
-//
-// TODO(zsfelfoldi): Remove this when an SSZ encoder lands.
 func (h *Header) Hash() common.Hash {
-	var values [16]merkle.Value // values corresponding to indices 8 to 15 of the beacon header tree
-	binary.LittleEndian.PutUint64(values[headerIndexSlot][:8], h.Slot)
-	binary.LittleEndian.PutUint64(values[headerIndexProposerIndex][:8], h.ProposerIndex)
-	values[headerIndexParentRoot] = merkle.Value(h.ParentRoot)
-	values[headerIndexStateRoot] = merkle.Value(h.StateRoot)
-	values[headerIndexBodyRoot] = merkle.Value(h.BodyRoot)
-	hasher := sha256.New()
-	for i := 7; i > 0; i-- {
-		hasher.Reset()
-		hasher.Write(values[i*2][:])
-		hasher.Write(values[i*2+1][:])
-		hasher.Sum(values[i][:0])
-	}
-	return common.Hash(values[1])
+	var leaves [5][32]byte
+	binary.LittleEndian.PutUint64(leaves[0][:8], h.Slot)
+	binary.LittleEndian.PutUint64(leaves[1][:8], h.ProposerIndex)
+	leaves[2] = h.ParentRoot
+	leaves[3] = h.StateRoot
+	leaves[4] = h.BodyRoot
+	return common.Hash(ssz.Merkleize(leaves[:], 5))
 }
 
 // Epoch returns the epoch the header belongs to.
