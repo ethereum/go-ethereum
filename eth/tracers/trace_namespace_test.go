@@ -414,3 +414,44 @@ func TestTraceNamespaceEmptyVMFrames(t *testing.T) {
 		t.Fatalf("CALL subs: have %v, want %v", subs, want)
 	}
 }
+
+func TestTraceNamespaceCreateCost(t *testing.T) {
+	// Store initcode PUSH1 42 PUSH1 0 SSTORE STOP at memory offset 26, then run
+	// it through CREATE and CREATE2 (salt 0).
+	code := common.FromHex("65602a600055006000526006601a6000f05060006006601a6000f55000")
+	config := *params.AllDevChainProtocolChanges
+	config.OsakaTime = nil
+	config.BogotaTime = nil
+	backend := newTestBackend(t, 0, &core.Genesis{Config: &config, GasLimit: 30_000_000, Difficulty: big.NewInt(0), BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
+		traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)}, traceTestTarget: {Code: code},
+	}}, nil)
+	t.Cleanup(backend.teardown)
+	result, err := NewTraceAPI(backend).Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Prague base costs: 32000, one initcode word, and one hashed word for CREATE2.
+	base := map[string]uint64{"CREATE": 32002, "CREATE2": 32008}
+	creates := 0
+	ops := result.VMTrace.Ops
+	for i, op := range ops {
+		if base[op.Op] == 0 {
+			continue
+		}
+		creates++
+		forwarded := uint64(result.Trace[creates].Action.(traceCreateAction).Gas)
+		if op.Cost != base[op.Op]+forwarded {
+			t.Fatalf("%s cost %d, want %d + %d forwarded", op.Op, op.Cost, base[op.Op], forwarded)
+		}
+		if op.Sub == nil || len(op.Sub.Ops) == 0 || op.Ex == nil {
+			t.Fatalf("%s missing child trace or effects: %+v", op.Op, op)
+		}
+		leftover := op.Sub.Ops[len(op.Sub.Ops)-1].Ex.Used
+		if prev := ops[i-1].Ex.Used; op.Ex.Used != prev-op.Cost+leftover {
+			t.Fatalf("%s used %d, want %d - %d + %d", op.Op, op.Ex.Used, prev, op.Cost, leftover)
+		}
+	}
+	if creates != 2 {
+		t.Fatalf("traced %d creations", creates)
+	}
+}

@@ -47,6 +47,9 @@ deltas, recursively nested as `sub` for every entered child frame. A selected
 `vmTrace` is never null: a frame in which no instruction ran, such as a call to an
 account without code or to a precompile, is `{"code":"0x","ops":[]}`. Calls that
 fail the depth or balance precondition enter no frame and keep `sub: null`.
+The `cost` of call and create instructions includes the gas made available to the
+child frame, excluding the value-transfer stipend, and `used` is the gas left after
+the child's unused gas is returned.
 
 Filter address matching is OR within each list and AND between lists, as `eth_getLogs`
 composes topic positions. Omitted, null or empty lists are unrestricted. Optional
