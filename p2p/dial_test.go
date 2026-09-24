@@ -285,12 +285,16 @@ func TestDialSchedManyStaticNodes(t *testing.T) {
 
 	config := dialConfig{maxDialPeers: 2}
 	runDialTest(t, config, []dialTestRound{
+		// Two connected static peers use up the static budget,
+		// so none of the other static nodes are dialed yet.
 		{
 			peersAdded: []*conn{
-				{flags: dynDialedConn, node: newNode(uintID(0xFFFE), "")},
-				{flags: dynDialedConn, node: newNode(uintID(0xFFFF), "")},
+				{flags: staticDialedConn, node: newNode(uintID(0xFFFE), "")},
+				{flags: staticDialedConn, node: newNode(uintID(0xFFFF), "")},
 			},
 			update: func(d *dialScheduler) {
+				d.addStatic(newNode(uintID(0xFFFE), ""))
+				d.addStatic(newNode(uintID(0xFFFF), ""))
 				for id := uint16(0); id < 2000; id++ {
 					n := newNode(uintID(id), "127.0.0.1:30303")
 					d.addStatic(n)
@@ -303,10 +307,61 @@ func TestDialSchedManyStaticNodes(t *testing.T) {
 				uintID(0xFFFF),
 			},
 			wantNewDials: []*enode.Node{
-				newNode(uintID(0x0085), "127.0.0.1:30303"),
-				newNode(uintID(0x02dc), "127.0.0.1:30303"),
-				newNode(uintID(0x0285), "127.0.0.1:30303"),
-				newNode(uintID(0x00cb), "127.0.0.1:30303"),
+				newNode(uintID(0x03d6), "127.0.0.1:30303"),
+				newNode(uintID(0x01e3), "127.0.0.1:30303"),
+				newNode(uintID(0x05d0), "127.0.0.1:30303"),
+				newNode(uintID(0x00a6), "127.0.0.1:30303"),
+			},
+		},
+	})
+}
+
+// This test checks that a static node is dialed when all dialed peer slots are
+// taken by dynamic peers, and that the static budget is still enforced.
+func TestDialSchedStaticNotStarvedByDynamic(t *testing.T) {
+	t.Parallel()
+
+	config := dialConfig{
+		maxActiveDials: 5,
+		maxDialPeers:   2,
+	}
+	runDialTest(t, config, []dialTestRound{
+		// Dynamic peers fill both dialed peer slots. The static node is
+		// dialed anyway, and no dynamic candidates are dialed.
+		{
+			peersAdded: []*conn{
+				{flags: dynDialedConn, node: newNode(uintID(0x01), "127.0.0.1:30303")},
+				{flags: dynDialedConn, node: newNode(uintID(0x02), "127.0.0.2:30303")},
+			},
+			update: func(d *dialScheduler) {
+				d.addStatic(newNode(uintID(0x10), "127.0.0.16:30303"))
+			},
+			discovered: []*enode.Node{
+				newNode(uintID(0x20), "127.0.0.32:30303"),
+			},
+			wantNewDials: []*enode.Node{
+				newNode(uintID(0x10), "127.0.0.16:30303"),
+			},
+		},
+		// Two more static nodes are dialed and the first static dial succeeds.
+		{
+			update: func(d *dialScheduler) {
+				d.addStatic(newNode(uintID(0x11), "127.0.0.17:30303"))
+				d.addStatic(newNode(uintID(0x12), "127.0.0.18:30303"))
+			},
+			succeeded: []enode.ID{
+				uintID(0x10),
+			},
+			wantNewDials: []*enode.Node{
+				newNode(uintID(0x11), "127.0.0.17:30303"),
+				newNode(uintID(0x12), "127.0.0.18:30303"),
+			},
+		},
+		// One static peer is connected and two static dials are running, which
+		// uses up the two remaining static dial slots. Another static node waits.
+		{
+			update: func(d *dialScheduler) {
+				d.addStatic(newNode(uintID(0x13), "127.0.0.19:30303"))
 			},
 		},
 	})

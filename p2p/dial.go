@@ -114,7 +114,7 @@ type dialScheduler struct {
 	// Everything below here belongs to loop and
 	// should only be accessed by code on the loop goroutine.
 	dialing        map[enode.ID]*dialTask // active tasks
-	peers          map[enode.ID]struct{}  // all connected peers
+	peers          map[enode.ID]bool      // all connected peers, true if we dialed them
 	pendingInbound map[enode.ID]struct{}  // in-progress inbound connections
 	dialPeers      int                    // current number of dialed peers
 
@@ -176,7 +176,7 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 		dnsLookupFunc:  net.DefaultResolver.LookupNetIP,
 		dialing:        make(map[enode.ID]*dialTask),
 		static:         make(map[enode.ID]*dialTask),
-		peers:          make(map[enode.ID]struct{}),
+		peers:          make(map[enode.ID]bool),
 		pendingInbound: make(map[enode.ID]struct{}),
 		doneCh:         make(chan *dialTask),
 		nodesIn:        make(chan *enode.Node),
@@ -257,9 +257,10 @@ func (d *dialScheduler) loop(it enode.Iterator) {
 
 loop:
 	for {
-		// Launch new dials if slots are available.
+		// Launch new dials if slots are available. Static dials have their own
+		// budget so that dynamic peers cannot starve them.
+		d.startStaticDials(d.freeStaticDialSlots())
 		slots := d.freeDialSlots()
-		slots -= d.startStaticDials(slots)
 		if slots > 0 {
 			nodesCh = d.nodesIn
 		} else {
@@ -283,11 +284,12 @@ loop:
 			d.doneSinceLastLog++
 
 		case c := <-d.addPeerCh:
-			if c.is(dynDialedConn) || c.is(staticDialedConn) {
+			dialed := c.is(dynDialedConn) || c.is(staticDialedConn)
+			if dialed {
 				d.dialPeers++
 			}
 			id := c.node.ID()
-			d.peers[id] = struct{}{}
+			d.peers[id] = dialed
 			// Remove from static pool because the node is now connected.
 			task := d.static[id]
 			if task != nil && task.staticPoolIndex >= 0 {
@@ -406,6 +408,20 @@ func (d *dialScheduler) freeDialSlots() int {
 	}
 	free := slots - len(d.dialing)
 	return free
+}
+
+// freeStaticDialSlots ignores dynamic peers when budgeting static dials.
+func (d *dialScheduler) freeStaticDialSlots() int {
+	staticPeers := 0
+	for id := range d.static {
+		if d.peers[id] {
+			staticPeers++
+		}
+	}
+
+	slots := min((d.maxDialPeers-staticPeers)*2, d.maxActiveDials)
+
+	return slots - len(d.dialing)
 }
 
 // checkDial returns an error if node n should not be dialed.
