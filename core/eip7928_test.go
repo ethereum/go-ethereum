@@ -155,7 +155,8 @@ func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, 
 	if got := types.DeriveSha(parRes.Receipts, trie.NewStackTrie(nil)); got != block.ReceiptHash() {
 		t.Fatalf("parallel receipt root %x != committed %x", got, block.ReceiptHash())
 	}
-	if p, s := parRes.Bal.ToEncodingObj().Hash(), *block.BlockAccessListHash(); p != s {
+	_, parBalHash := parRes.encodedAccessList()
+	if p, s := parBalHash, *block.BlockAccessListHash(); p != s {
 		t.Fatalf("parallel access list hash %x != committed %x", p, s)
 	}
 	if parRes.Requests == nil {
@@ -166,7 +167,8 @@ func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, 
 	}
 
 	// Parallel and sequential must agree on every re-executed output.
-	if p, s := parRes.Bal.ToEncodingObj().Hash(), seqRes.Bal.ToEncodingObj().Hash(); p != s {
+	_, seqBalHash := seqRes.encodedAccessList()
+	if p, s := parBalHash, seqBalHash; p != s {
 		t.Fatalf("rebuilt access list hash: parallel %x != sequential %x", p, s)
 	}
 	if parRes.GasUsed != seqRes.GasUsed {
@@ -185,14 +187,18 @@ func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, 
 	// Both processors digest their receipts alongside execution. What the
 	// validator is handed has to match the receipts that came out.
 	for _, res := range []*ProcessResult{parRes, seqRes} {
-		if res.digest == nil {
-			t.Fatalf("process result carries no receipt digest")
+		if res.pipeline == nil {
+			t.Fatalf("process result carries no digest pipeline")
 		}
-		if want := types.MergeBloom(res.Receipts); res.digest.bloom != want {
-			t.Fatalf("digested bloom %x != merged %x", res.digest.bloom, want)
+		digest := res.pipeline.joinReceipts()
+		if want := types.MergeBloom(res.Receipts); digest.bloom != want {
+			t.Fatalf("digested bloom %x != merged %x", digest.bloom, want)
 		}
-		if want := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil)); res.digest.root != want {
-			t.Fatalf("digested receipt root %x != derived %x", res.digest.root, want)
+		if want := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil)); digest.root != want {
+			t.Fatalf("digested receipt root %x != derived %x", digest.root, want)
+		}
+		if enc, hash := res.encodedAccessList(); enc == nil || enc.Hash() != hash {
+			t.Fatalf("digested access list hash %x != encoded", hash)
 		}
 	}
 }
