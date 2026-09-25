@@ -68,8 +68,8 @@ type Config struct {
 //   - iterate the database, delete all other state entries which
 //     don't belong to the target state and the genesis state
 //
-// It can take several hours(around 2 hours for mainnet) to finish
-// the whole pruning work. It's recommended to run this offline tool
+// It can take several hours to several days, depending on chain size and
+// disk speed, to finish the whole pruning work. It's recommended to run this offline tool
 // periodically in order to release the disk usage and improve the
 // disk read performance to some extent.
 type Pruner struct {
