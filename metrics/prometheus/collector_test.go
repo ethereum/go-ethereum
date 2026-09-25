@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/internal"
@@ -48,6 +49,49 @@ func TestCollector(t *testing.T) {
 		t.Logf("have\n%v", have)
 		t.Logf("have vs want:\n%v", findFirstDiffPos(have, want))
 		t.Fatalf("unexpected collector output")
+	}
+}
+
+func TestResettingTimerCumulativePrometheus(t *testing.T) {
+	registry := metrics.NewRegistry()
+	timer := metrics.NewRegisteredResettingTimer("test/resetting", registry)
+
+	// First batch of updates.
+	timer.Update(10 * time.Millisecond)
+	timer.Update(20 * time.Millisecond)
+
+	// First scrape.
+	c1 := newCollector()
+	registry.Each(func(name string, i interface{}) {
+		c1.Add(name, i)
+	})
+	out1 := c1.buff.String()
+	if !strings.Contains(out1, "test_resetting_count 2") {
+		t.Fatalf("first scrape should have count 2, got:\n%s", out1)
+	}
+
+	// Second batch.
+	timer.Update(30 * time.Millisecond)
+
+	// Second scrape - count should be cumulative (3, not 1).
+	c2 := newCollector()
+	registry.Each(func(name string, i interface{}) {
+		c2.Add(name, i)
+	})
+	out2 := c2.buff.String()
+	if !strings.Contains(out2, "test_resetting_count 3") {
+		t.Fatalf("second scrape should have cumulative count 3, got:\n%s", out2)
+	}
+
+	// Third scrape with no new updates - count should stay at 3.
+	c3 := newCollector()
+	registry.Each(func(name string, i interface{}) {
+		c3.Add(name, i)
+	})
+	out3 := c3.buff.String()
+	// With no new events and totalCount > 0, we still need to report.
+	if !strings.Contains(out3, "test_resetting_count 3") {
+		t.Fatalf("third scrape should still report cumulative count 3, got:\n%s", out3)
 	}
 }
 
