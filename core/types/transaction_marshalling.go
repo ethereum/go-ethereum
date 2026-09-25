@@ -58,6 +58,28 @@ type txJSON struct {
 	Hash common.Hash `json:"hash"`
 }
 
+var errBlobTxSidecarInJSON = errors.New("blob transaction sidecar fields are not supported in JSON")
+
+func (tx *txJSON) UnmarshalJSON(input []byte) error {
+	type txJSONNoMethod txJSON
+	dec := struct {
+		*txJSONNoMethod
+		Version     json.RawMessage `json:"version,omitempty"`
+		Blobs       json.RawMessage `json:"blobs,omitempty"`
+		Commitments json.RawMessage `json:"commitments,omitempty"`
+		Proofs      json.RawMessage `json:"proofs,omitempty"`
+	}{
+		txJSONNoMethod: (*txJSONNoMethod)(tx),
+	}
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.Version != nil || dec.Blobs != nil || dec.Commitments != nil || dec.Proofs != nil {
+		return errBlobTxSidecarInJSON
+	}
+	return nil
+}
+
 // yParityValue returns the YParity value from JSON. For backwards-compatibility reasons,
 // this can be given in the 'v' field or the 'yParity' field. If both exist, they must match.
 func (tx *txJSON) yParityValue() (*big.Int, error) {
