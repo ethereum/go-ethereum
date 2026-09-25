@@ -222,29 +222,34 @@ func constructDevModeBanner(ctx *cli.Context, cfg gethConfig) string {
 	return devModeBanner
 }
 
-// makeFullNode loads geth configuration and creates the Ethereum backend.
-func makeFullNode(ctx *cli.Context) *node.Node {
-	stack, cfg := makeConfigNode(ctx)
+// applyForkOverrides copies the fork override flags into the eth config.
+func applyForkOverrides(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.IsSet(utils.OverrideOsaka.Name) {
 		v := ctx.Uint64(utils.OverrideOsaka.Name)
-		cfg.Eth.OverrideOsaka = &v
+		cfg.OverrideOsaka = &v
 	}
 	if ctx.IsSet(utils.OverrideAmsterdam.Name) {
 		v := ctx.Uint64(utils.OverrideAmsterdam.Name)
-		cfg.Eth.OverrideAmsterdam = &v
+		cfg.OverrideAmsterdam = &v
 	}
 	if ctx.IsSet(utils.OverrideBPO1.Name) {
 		v := ctx.Uint64(utils.OverrideBPO1.Name)
-		cfg.Eth.OverrideBPO1 = &v
+		cfg.OverrideBPO1 = &v
 	}
 	if ctx.IsSet(utils.OverrideBPO2.Name) {
 		v := ctx.Uint64(utils.OverrideBPO2.Name)
-		cfg.Eth.OverrideBPO2 = &v
+		cfg.OverrideBPO2 = &v
 	}
 	if ctx.IsSet(utils.OverrideUBT.Name) {
 		v := ctx.Uint64(utils.OverrideUBT.Name)
-		cfg.Eth.OverrideUBT = &v
+		cfg.OverrideUBT = &v
 	}
+}
+
+// makeFullNode loads geth configuration and creates the Ethereum backend.
+func makeFullNode(ctx *cli.Context) *node.Node {
+	stack, cfg := makeConfigNode(ctx)
+	applyForkOverrides(ctx, &cfg.Eth)
 
 	// Start metrics export if enabled.
 	utils.SetupMetrics(&cfg.Metrics)
@@ -329,6 +334,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
 	_, cfg := makeConfigNode(ctx)
+	applyForkOverrides(ctx, &cfg.Eth)
 	comment := ""
 
 	if cfg.Eth.Genesis != nil {
