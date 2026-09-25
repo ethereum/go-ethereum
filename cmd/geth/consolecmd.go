@@ -18,11 +18,13 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -141,9 +143,28 @@ func remoteConsole(ctx *cli.Context) error {
 	}
 
 	// Otherwise print the welcome screen and enter interactive mode
+	if err := requireInteractiveTTY(); err != nil {
+		return err
+	}
 	console.Welcome()
 	console.Interactive()
 	return nil
+}
+
+// requireInteractiveTTY ensures stdin is a terminal or an open pipe when starting
+// an interactive attach session. Piped stdin is allowed for scripting and tests;
+// closed or non-interactive sources such as /dev/null are rejected early.
+func requireInteractiveTTY() error {
+	if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
+		return nil
+	}
+	fi, err := os.Stdin.Stat()
+	if err == nil && fi.Mode()&os.ModeNamedPipe != 0 {
+		return nil
+	}
+	return fmt.Errorf(`Cannot start interactive console: input closed or not a terminal.
+Hint: use 'geth attach --exec "eth.blockNumber" <endpoint>' for non-interactive use,
+or run attach inside a TTY (e.g. screen -dmS name bash -lc 'geth attach ...').`)
 }
 
 // ephemeralConsole starts a new geth node, attaches an ephemeral JavaScript
