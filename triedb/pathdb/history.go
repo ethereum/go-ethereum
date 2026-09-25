@@ -366,6 +366,38 @@ func syncHistory(stores ...ethdb.AncientWriter) error {
 	return nil
 }
 
+// unindexHistories removes the index entries of the histories above nhead
+// while they are still present in the freezer. It must be called before those
+// histories are truncated: the histories regenerated afterwards may belong to
+// a different chain, and the index would otherwise keep referring to the lost
+// ones.
+func unindexHistories(db ethdb.KeyValueStore, freezer ethdb.AncientReader, typ historyType, nhead uint64) error {
+	metadata := loadIndexMetadata(db, typ)
+	if metadata == nil || metadata.Last <= nhead {
+		return nil
+	}
+	head, err := freezer.Ancients()
+	if err != nil {
+		return err
+	}
+	tail, err := freezer.Tail(rawdb.DefaultHistoryGroup)
+	if err != nil {
+		return err
+	}
+	// The index is ahead of the stored histories, the missing ones can't be
+	// unindexed. Leave it to the indexer recovery.
+	if metadata.Last > head {
+		return nil
+	}
+	for id := metadata.Last; id > nhead && id > tail; id-- {
+		if err := unindexSingle(id, db, freezer, typ); err != nil {
+			return err
+		}
+	}
+	log.Warn("Unindexed extra histories", "typ", typ, "number", metadata.Last-max(nhead, tail))
+	return nil
+}
+
 // repairHistory truncates any leftover history objects in either the state
 // history or the trienode history, which may occur due to an unclean shutdown
 // or other unexpected events.
@@ -445,6 +477,11 @@ func repairHistory(db ethdb.Database, isUBT bool, readOnly bool, stateID uint64,
 	truncate := func(store ethdb.AncientStore, typ historyType, nhead uint64) {
 		if store == nil {
 			return
+		}
+		if !readOnly {
+			if err := unindexHistories(db, store, typ, nhead); err != nil {
+				log.Crit("Failed to unindex extra histories", "typ", typ, "err", err)
+			}
 		}
 		pruned, err := truncateFromHead(store, typ, nhead)
 		if err != nil {
