@@ -145,9 +145,6 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	if f.rangeLimit != 0 && (end-begin) > f.rangeLimit {
-		return nil, invalidParamsErr("exceed maximum block range %d", f.rangeLimit)
-	}
 	return f.rangeLogs(ctx, begin, end)
 }
 
@@ -199,6 +196,14 @@ func newSearchSession(ctx context.Context, filter *Filter, mb filtermaps.Matcher
 	}
 	if err := s.updateChainView(); err != nil {
 		return nil, err
+	}
+	// The range limit is checked here rather than on the requested range because
+	// the "latest" tag is carried as MaxUint64 until updateChainView resolves it
+	// against the current head. Checking it earlier would reject any range ending
+	// at the head, however short, and would underflow when the search range is
+	// specified backwards.
+	if limit := filter.rangeLimit; limit != 0 && s.searchRange.Last()-s.searchRange.First() > limit {
+		return nil, invalidParamsErr("exceed maximum block range %d", limit)
 	}
 	return s, nil
 }

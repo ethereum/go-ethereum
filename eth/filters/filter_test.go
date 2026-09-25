@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"testing"
@@ -632,22 +633,45 @@ func TestRangeLimit(t *testing.T) {
 	backend.startFilterMaps(0, false, filtermaps.DefaultParams)
 	defer backend.stopFilterMaps()
 
-	// Set rangeLimit to 5, but request a range of 9 (end - begin = 9, from 0 to 9)
-	filter := sys.NewRangeFilter(0, 9, nil, nil, 5)
-	_, err = filter.Logs(context.Background())
-	if err == nil {
-		t.Fatal("expected range limit error, got nil")
-	}
-
-	var re rpc.Error
-	if errors.As(err, &re) {
-		if re.ErrorCode() != -32602 {
-			t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
-		}
-		if re.Error() != "exceed maximum block range 5" {
-			t.Fatalf("expected error message 'exceed maximum block range 5', got %q", re.Error())
-		}
-	} else {
-		t.Fatalf("expected rpc error, got %v", err)
+	latest := rpc.LatestBlockNumber.Int64()
+	for _, tc := range []struct {
+		name       string
+		begin, end int64
+		limit      uint64
+		wantErr    bool
+	}{
+		// Head is block 10 and the limit is 5 throughout.
+		{name: "explicit range over limit", begin: 0, end: 9, limit: 5, wantErr: true},
+		{name: "explicit range within limit", begin: 4, end: 9, limit: 5},
+		// The "latest" tag has to be resolved against the head before the range
+		// is measured, otherwise every query ending at the head is rejected.
+		{name: "latest end within limit", begin: 8, end: latest, limit: 5},
+		{name: "latest end over limit", begin: 0, end: latest, limit: 5, wantErr: true},
+		{name: "latest on both ends", begin: latest, end: latest, limit: 5},
+		{name: "no limit configured", begin: 0, end: latest, limit: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := sys.NewRangeFilter(tc.begin, tc.end, nil, nil, tc.limit)
+			_, err := filter.Logs(context.Background())
+			if !tc.wantErr {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected range limit error, got nil")
+			}
+			var re rpc.Error
+			if !errors.As(err, &re) {
+				t.Fatalf("expected rpc error, got %v", err)
+			}
+			if re.ErrorCode() != -32602 {
+				t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
+			}
+			if want := fmt.Sprintf("exceed maximum block range %d", tc.limit); re.Error() != want {
+				t.Fatalf("expected error message %q, got %q", want, re.Error())
+			}
+		})
 	}
 }
