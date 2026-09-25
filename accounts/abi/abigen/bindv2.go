@@ -357,6 +357,7 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		"bindtopictype":      bindTopicType,
 		"capitalise":         abi.ToCamelCase,
 		"decapitalise":       decapitalise,
+		"hasErrors":          hasErrors,
 		"ispointertype":      isPointerType,
 		"underlyingbindtype": underlyingBindType,
 	}
@@ -370,4 +371,13 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		return "", fmt.Errorf("%v\n%s", err, buffer)
 	}
 	return string(code), nil
+}
+
+func hasErrors(contracts map[string]*tmplContractV2) bool {
+	for _, contract := range contracts {
+		if len(contract.Errors) > 0 {
+			return true
+		}
+	}
+	return false
 }
