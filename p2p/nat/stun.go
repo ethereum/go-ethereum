@@ -91,15 +91,9 @@ func (s *stun) ExternalIP() (net.IP, error) {
 
 func (s *stun) randomServers(n int) []string {
 	n = min(n, len(s.serverList))
-	m := make(map[int]struct{}, n)
 	list := make([]string, 0, n)
-	for i := 0; i < len(s.serverList)*2 && len(list) < n; i++ {
-		index := rand.Intn(len(s.serverList))
-		if _, alreadyHit := m[index]; alreadyHit {
-			continue
-		}
+	for _, index := range rand.Perm(len(s.serverList))[:n] {
 		list = append(list, s.serverList[index])
-		m[index] = struct{}{}
 	}
 	return list
 }
