@@ -223,6 +223,22 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		allLogs = append(allLogs, r.Logs...)
 	}
 
+	// Apply the consensus-specific post-transaction changes (e.g.
+	// withdrawals, block rewards), before collecting the consensus-layer
+	// requests below, since withdrawals are applied before requests in the
+	// block-processing order.
+	miner.engine.Finalize(miner.chain, work.header, work.state, &body, uint32(work.tcount+1), work.bal)
+
+	// Close out the withdrawals' access-list scope before the post-execution
+	// system calls open their own, so that a system call touching a
+	// withdrawal recipient records the post-withdrawal balance as its
+	// baseline instead of diffing all the way back across the withdrawals.
+	// Only block-level access lists (Amsterdam) need this; earlier forks
+	// keep their existing finalisation points.
+	if rules := work.evm.GetRules(); rules.IsAmsterdam {
+		work.bal.Merge(work.evm.StateDB.Finalise(rules))
+	}
+
 	// Collect consensus-layer requests if Prague is enabled.
 	requests, bal, err := core.PostExecution(ctx, miner.chainConfig, work.header.Number, work.header.Time, allLogs, work.evm, uint32(work.tcount+1))
 	if err != nil {
@@ -233,9 +249,6 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		work.header.RequestsHash = &reqHash
 	}
 	work.bal.Merge(bal)
-
-	// Apply the consensus-specific post-transaction changes
-	miner.engine.Finalize(miner.chain, work.header, work.state, &body, uint32(work.tcount+1), work.bal)
 
 	// Assemble the block for delivery.
 	_, _, assembleSpanEnd := telemetry.StartSpan(ctx, "miner.AssembleBlock")

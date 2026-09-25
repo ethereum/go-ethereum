@@ -136,17 +136,29 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		allLogs = append(allLogs, receipt.Logs...)
 		blockAccessList.Merge(bal)
 	}
+	// Finalize the block, applying any consensus engine specific extras
+	// (e.g. withdrawals, block rewards). This must run before the
+	// post-execution system calls below, since withdrawals are applied
+	// before requests in the block-processing order.
+	//
+	// TODO(rjl493456442) integrate it into the PostExecution.
+	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body(), uint32(len(block.Transactions())+1), blockAccessList)
+
+	// Close out the withdrawals' access-list scope before the post-execution
+	// system calls open their own, so that a system call touching a
+	// withdrawal recipient records the post-withdrawal balance as its
+	// baseline instead of diffing all the way back across the withdrawals.
+	// Only block-level access lists (Amsterdam) need this; earlier forks
+	// keep their existing finalisation points.
+	if rules := evm.GetRules(); rules.IsAmsterdam {
+		blockAccessList.Merge(evm.StateDB.Finalise(rules))
+	}
+
 	requests, bal, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, evm, uint32(len(block.Transactions())+1))
 	if err != nil {
 		return nil, err
 	}
 	blockAccessList.Merge(bal)
-
-	// Finalize the block, applying any consensus engine specific extras
-	// (e.g. block rewards).
-	//
-	// TODO(rjl493456442) integrate it into the PostExecution.
-	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body(), uint32(len(block.Transactions())+1), blockAccessList)
 
 	// The access list is final, let the pipeline encode it while the block is
 	// validated.

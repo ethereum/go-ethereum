@@ -393,17 +393,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		header.BlobGasUsed = &blobGasUsed
 	}
 
-	// Process EIP-7685 requests
-	requests, bal, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm, uint32(len(block.Calls)+1))
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if requests != nil {
-		reqHash := types.CalcRequestsHash(requests)
-		header.RequestsHash = &reqHash
-	}
-	blockAccessList.Merge(bal)
-
 	blockBody := &types.Body{
 		Transactions: txes,
 	}
@@ -415,8 +404,32 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
 
-	// Apply the consensus-specific post-transaction changes
+	// Apply the consensus-specific post-transaction changes (e.g.
+	// withdrawals, block rewards), before processing the EIP-7685 requests
+	// below, since withdrawals are applied before requests in the
+	// block-processing order.
 	sim.b.Engine().Finalize(chainHeadReader, header, sim.state, blockBody, uint32(len(block.Calls)+1), blockAccessList)
+
+	// Close out the withdrawals' access-list scope before the post-execution
+	// system calls open their own, so that a system call touching a
+	// withdrawal recipient records the post-withdrawal balance as its
+	// baseline instead of diffing all the way back across the withdrawals.
+	// Only block-level access lists (Amsterdam) need this; earlier forks
+	// keep their existing finalisation points.
+	if rules := evm.GetRules(); rules.IsAmsterdam {
+		blockAccessList.Merge(evm.StateDB.Finalise(rules))
+	}
+
+	// Process EIP-7685 requests
+	requests, bal, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm, uint32(len(block.Calls)+1))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if requests != nil {
+		reqHash := types.CalcRequestsHash(requests)
+		header.RequestsHash = &reqHash
+	}
+	blockAccessList.Merge(bal)
 
 	// Assemble the block
 	b := core.AssembleBlock(chainHeadReader, header, sim.state, blockBody, receipts, blockAccessList)

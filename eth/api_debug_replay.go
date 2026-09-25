@@ -178,7 +178,27 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 		blockAL.Merge(txBal)
 	}
 
-	// Post-execution system calls and finalize.
+	// Finalize and post-execution system calls.
+	body := types.Body{
+		Transactions: committed,
+		Withdrawals:  block.Withdrawals(),
+	}
+	// Apply the consensus-specific post-transaction changes (e.g.
+	// withdrawals, block rewards), before running the post-execution system
+	// calls below, since withdrawals are applied before requests in the
+	// block-processing order.
+	bc.Engine().Finalize(bc, header, statedb, &body, uint32(tcount+1), blockAL)
+
+	// Close out the withdrawals' access-list scope before the post-execution
+	// system calls open their own, so that a system call touching a
+	// withdrawal recipient records the post-withdrawal balance as its
+	// baseline instead of diffing all the way back across the withdrawals.
+	// Only block-level access lists (Amsterdam) need this; earlier forks
+	// keep their existing finalisation points.
+	if rules := evm.GetRules(); rules.IsAmsterdam {
+		blockAL.Merge(evm.StateDB.Finalise(rules))
+	}
+
 	var allLogs []*types.Log
 	for _, r := range receipts {
 		allLogs = append(allLogs, r.Logs...)
@@ -189,11 +209,6 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 	}
 	blockAL.Merge(postBal)
 
-	body := types.Body{
-		Transactions: committed,
-		Withdrawals:  block.Withdrawals(),
-	}
-	bc.Engine().Finalize(bc, header, statedb, &body, uint32(tcount+1), blockAL)
 	root := statedb.IntermediateRoot(evm.GetRules())
 
 	return blockAL.ToEncodingObj(), receipts, gp.Used(), root, nil

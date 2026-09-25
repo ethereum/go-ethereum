@@ -358,6 +358,17 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 	}
 
+	// Close out the withdrawals' access-list scope before the
+	// post-execution system calls open their own, so that a system call
+	// touching a withdrawal recipient records the post-withdrawal balance
+	// as its baseline instead of diffing all the way back across the
+	// withdrawals.
+	// Only block-level access lists (Amsterdam) need this; earlier forks
+	// keep their existing finalisation points.
+	if rules := evm.GetRules(); rules.IsAmsterdam {
+		blockAccessList.Merge(evm.StateDB.Finalise(rules))
+	}
+
 	// Gather the execution-layer triggered requests.
 	var allLogs []*types.Log
 	for _, receipt := range receipts {
