@@ -115,6 +115,54 @@ func TestUDPv5_pingHandling(t *testing.T) {
 	})
 }
 
+// This test checks that a node whose handshake record claims a loopback/LAN
+// address is not added to the table when it contacts us from the internet.
+func TestUDPv5_handshakeRecordRelayAddr(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	check := func(claimed net.IP, from netip.AddrPort, wantAdded bool) {
+		t.Helper()
+		key := newkey()
+		db, _ := enode.OpenDB("")
+		ln := enode.NewLocalNode(db, key)
+		ln.SetStaticIP(claimed)
+		ln.Set(enr.UDP(30303))
+		test.nodesByID[ln.ID()] = ln
+
+		// Make the codec report a completed handshake carrying ln's record.
+		test.udp.codec = &recordCodec{testCodec: &testCodec{test: test, id: test.udp.Self().ID()}, node: ln.Node()}
+		test.packetInFrom(key, from, &v5wire.Ping{ReqID: []byte("foo")})
+		test.waitPacketOut(func(p *v5wire.Pong, addr netip.AddrPort, _ v5wire.Nonce) {})
+
+		if added := test.table.getNode(ln.ID()) != nil; added != wantAdded {
+			t.Errorf("record claiming %v from %v: added=%v, want %v", claimed, from, added, wantAdded)
+		}
+	}
+	public := netip.MustParseAddrPort("1.2.3.4:30303")
+	check(net.IP{127, 0, 0, 1}, public, false)
+	check(net.IP{10, 0, 0, 7}, public, false)
+	check(net.IP{1, 2, 3, 4}, public, true)
+	// A LAN sender may still register a LAN address.
+	check(net.IP{10, 0, 0, 8}, netip.MustParseAddrPort("10.0.1.99:30303"), true)
+}
+
+// recordCodec is a testCodec whose Decode reports a completed handshake with
+// the given node record, which the real codec does after a WHOAREYOU exchange.
+type recordCodec struct {
+	*testCodec
+	node *enode.Node
+}
+
+func (c *recordCodec) Decode(input []byte, addr string) (enode.ID, *enode.Node, v5wire.Packet, error) {
+	id, _, p, err := c.testCodec.Decode(input, addr)
+	if err != nil {
+		return id, nil, p, err
+	}
+	return id, c.node, p, nil
+}
+
 // This test checks that incoming 'unknown' packets trigger the handshake.
 func TestUDPv5_unknownPacket(t *testing.T) {
 	t.Parallel()

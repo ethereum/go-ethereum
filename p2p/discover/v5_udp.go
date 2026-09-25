@@ -754,8 +754,15 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 		return err
 	}
 	if fromNode != nil {
-		// Handshake succeeded, add to table.
-		t.tab.addInboundNode(fromNode)
+		// Handshake succeeded, add to table. The record's endpoint is chosen by
+		// the remote node, so apply the same relay check as for records received
+		// in NODES responses: a peer contacting us from the internet may not
+		// register a loopback, LAN or special-purpose address.
+		if err := netutil.CheckRelayAddr(fromAddr.Addr(), fromNode.IPAddr()); err != nil {
+			t.log.Debug("Invalid endpoint in handshake record", "id", fromID, "addr", addr, "err", err)
+		} else {
+			t.tab.addInboundNode(fromNode)
+		}
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.
