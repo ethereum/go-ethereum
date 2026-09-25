@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -1075,6 +1076,23 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 		}
 	}
 
+	// Collect the states touched by the histories above the persistent state,
+	// which are going to be truncated
+	var idents []stateIdent
+	head, err := env.db.stateFreezer.Ancients()
+	if err != nil {
+		t.Fatalf("Failed to read history head, %v", err)
+	}
+	for id := uint64(dIndex + 2); id <= head; id++ {
+		h, err := readStateHistory(env.db.stateFreezer, id)
+		if err != nil {
+			t.Fatalf("Failed to read state history, %v", err)
+		}
+		for elem := range h.forEach() {
+			idents = append(idents, elem.key())
+		}
+	}
+
 	// Terminate the database and mutate the journal, it's for simulating
 	// the unclean shutdown
 	env.db.Journal(env.lastHash())
@@ -1101,8 +1119,22 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to obtain the progress, %v", err)
 	}
-	if remain == 0 {
+	if remain != 0 {
 		t.Fatalf("Unexpected progress remain, %d", remain)
+	}
+	// The index entries of the truncated histories should be removed too
+	for _, ident := range idents {
+		r, err := newIndexReader(env.db.diskdb, ident, 0)
+		if err != nil {
+			t.Fatalf("Failed to open index reader, %v", err)
+		}
+		id, err := r.readGreaterThan(uint64(dIndex + 1))
+		if err != nil {
+			t.Fatalf("Failed to read index, %v", err)
+		}
+		if id != math.MaxUint64 {
+			t.Fatalf("Index refers to truncated history, %s, id: %d", ident.String(), id)
+		}
 	}
 
 	// Apply new states on top, ensuring state indexing can respond correctly
@@ -1110,13 +1142,6 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 		if err := env.db.Update(roots[i], roots[i-1], uint64(i), env.nodes[i], env.states[i]); err != nil {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
-	}
-	remain, _, err = env.db.IndexProgress()
-	if err != nil {
-		t.Fatalf("Failed to obtain the progress, %v", err)
-	}
-	if remain != 0 {
-		t.Fatalf("Unexpected progress remain, %d", remain)
 	}
 	waitIndexing(env.db)
 
