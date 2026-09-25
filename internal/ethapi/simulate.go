@@ -562,8 +562,9 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 		}
 		// Set difficulty to zero if the given block is post-merge. Without this, all post-merge hardforks would remain inactive.
 		// For example, calling eth_simulateV1(..., blockParameter: 0x0) on hoodi network will cause all blocks to have a difficulty of 1 and be treated as pre-merge.
+		isPostMerge := sim.chainConfig.IsPostMerge(number.Uint64(), timestamp)
 		difficulty := header.Difficulty
-		if sim.chainConfig.IsPostMerge(number.Uint64(), timestamp) {
+		if isPostMerge {
 			difficulty = big.NewInt(0)
 		}
 		header = overrides.MakeHeader(&types.Header{
@@ -576,6 +577,10 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 			WithdrawalsHash:  withdrawalsHash,
 			ParentBeaconRoot: parentBeaconRoot,
 		})
+		// A difficulty override is documented as a no-op for post-merge blocks.
+		if isPostMerge {
+			header.Difficulty = big.NewInt(0)
+		}
 		res[bi] = header
 	}
 	return res, nil
