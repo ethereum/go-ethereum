@@ -274,6 +274,67 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
+// TestSizeEstimateIgnoresInvalidReplies checks that the body and receipt size
+// estimates used to cap request sizes are only fed by replies that match the
+// requested headers.
+func TestSizeEstimateIgnoresInvalidReplies(t *testing.T) {
+	blocks := make(map[common.Hash]*types.Block)
+	for _, b := range chain.blocks {
+		blocks[b.Hash()] = b
+	}
+	junk := types.NewTransaction(0, common.Address{}, new(big.Int), 0, new(big.Int), make([]byte, 1<<20))
+	junkList, _ := rlp.EncodeToRawList([]*types.Transaction{junk})
+
+	q := newQueue(10, 10)
+	q.Prepare(1, SnapSync)
+	headers := chain.headers()
+	hashes := make([]common.Hash, len(headers))
+	for i, header := range headers {
+		hashes[i] = header.Hash()
+	}
+	q.Schedule(headers, hashes, 1)
+
+	// A body that doesn't match the requested header must not move the estimate
+	peer := dummyPeer("peer-1")
+	req, _, _ := q.ReserveBodies(peer, 1)
+	bodyHashes := eth.BlockBodyHashes{
+		TransactionRoots: []common.Hash{{0x1}},
+		UncleHashes:      []common.Hash{types.EmptyUncleHash},
+		WithdrawalRoots:  []common.Hash{{}},
+	}
+	if _, err := q.DeliverBodies(peer.id, bodyHashes, []eth.BlockBody{{Transactions: junkList}}); err == nil {
+		t.Fatal("invalid body accepted")
+	}
+	if q.bodySize != 0 {
+		t.Fatalf("body size estimate updated by invalid reply: %v", q.bodySize)
+	}
+	// A matching body should still be accounted for
+	req, _, _ = q.ReserveBodies(peer, 1)
+	block := blocks[req.Headers[0].Hash()]
+	txList, _ := rlp.EncodeToRawList([]*types.Transaction(block.Transactions()))
+	bodyHashes = eth.BlockBodyHashes{
+		TransactionRoots: []common.Hash{block.TxHash()},
+		UncleHashes:      []common.Hash{block.UncleHash()},
+		WithdrawalRoots:  []common.Hash{{}},
+	}
+	if _, err := q.DeliverBodies(peer.id, bodyHashes, []eth.BlockBody{{Transactions: txList}}); err != nil {
+		t.Fatalf("valid body rejected: %v", err)
+	}
+	if q.bodySize == 0 || q.bodySize > 1024 {
+		t.Fatalf("unexpected body size estimate: %v", q.bodySize)
+	}
+	// Same for receipts
+	if req, _, _ = q.ReserveReceipts(peer, 1); req == nil {
+		t.Fatal("no receipts to fetch")
+	}
+	if _, err := q.DeliverReceipts(peer.id, []rlp.RawValue{make([]byte, 1<<20)}, []common.Hash{{0x1}}); err == nil {
+		t.Fatal("invalid receipts accepted")
+	}
+	if q.receiptSize != 0 {
+		t.Fatalf("receipt size estimate updated by invalid reply: %v", q.receiptSize)
+	}
+}
+
 // TestBlockAccessLists tests the scheduling and delivery of the best-effort
 // block access list component: only blocks above the configured cutoff are
 // scheduled, block delivery is never held back by outstanding access lists,
