@@ -731,6 +731,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 		api          = NewFilterAPI(sys)
 		done         = make(chan struct{})
 	)
+	defer close(done)
 
 	go func() {
 		// Bombard feed with txes until signal was received to stop
@@ -752,6 +753,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	// timeout either in 100ms or 200ms
 	subs := make([]*Subscription, 20)
 	for i := range subs {
+		created := time.Now()
 		fid := api.NewPendingTransactionFilter(nil)
 		api.filtersMu.Lock()
 		f, ok := api.filters[fid]
@@ -763,6 +765,14 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 		// Wait for at least one tx to arrive in filter
 		for {
 			hashes, err := api.GetFilterChanges(fid)
+			if errors.Is(err, errFilterNotFound) && time.Since(created) >= timeout {
+				// The filter was not polled for longer than the configured
+				// timeout and has already been uninstalled. This can happen
+				// on a loaded system and is not a deadlock: the uninstall
+				// is verified through sub.Err() below. The time check keeps
+				// this tolerance from masking uninstalls before the deadline.
+				break
+			}
 			if err != nil {
 				t.Fatalf("Filter should exist: %v\n", err)
 			}
