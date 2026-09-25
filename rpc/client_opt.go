@@ -33,6 +33,7 @@ type clientConfig struct {
 	httpClient  *http.Client
 	httpHeaders http.Header
 	httpAuth    HTTPAuth
+	httpLimit   int64 // response size limit, 0 = no limit
 	tmprop      propagation.TextMapPropagator
 
 	// WebSocket options
@@ -74,6 +75,15 @@ func WithWebsocketDialer(dialer websocket.Dialer) ClientOption {
 func WithWebsocketMessageSizeLimit(messageSizeLimit int64) ClientOption {
 	return optionFunc(func(cfg *clientConfig) {
 		cfg.wsMessageSizeLimit = &messageSizeLimit
+	})
+}
+
+// WithHTTPResponseSizeLimit configures the maximum size of a response body the
+// RPC client accepts over HTTP. Passing a limit of 0 means no limit, which is
+// the default.
+func WithHTTPResponseSizeLimit(limit int64) ClientOption {
+	return optionFunc(func(cfg *clientConfig) {
+		cfg.httpLimit = limit
 	})
 }
 

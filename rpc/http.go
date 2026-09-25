@@ -52,6 +52,7 @@ type httpConn struct {
 	mu        sync.Mutex // protects headers
 	headers   http.Header
 	auth      HTTPAuth
+	limit     int64 // response size limit, 0 = no limit
 	tmprop    propagation.TextMapPropagator
 }
 
@@ -169,6 +170,7 @@ func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
 		headers: headers,
 		url:     endpoint,
 		auth:    cfg.httpAuth,
+		limit:   cfg.httpLimit,
 		tmprop:  cfg.tmprop,
 		closeCh: make(chan interface{}),
 	}
@@ -247,6 +249,9 @@ func (hc *httpConn) doRequest(ctx context.Context, body []byte) (io.ReadCloser, 
 	if err != nil {
 		return nil, err
 	}
+	if hc.limit > 0 {
+		resp.Body = &limitedBody{ReadCloser: resp.Body, n: hc.limit}
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var buf bytes.Buffer
 		var body []byte
@@ -261,6 +266,31 @@ func (hc *httpConn) doRequest(ctx context.Context, body []byte) (io.ReadCloser, 
 		}
 	}
 	return resp.Body, nil
+}
+
+// errResponseTooLarge is returned when a response body exceeds the limit set
+// with WithHTTPResponseSizeLimit.
+var errResponseTooLarge = errors.New("response body too large")
+
+// limitedBody is a response body that fails once more than n bytes are read.
+type limitedBody struct {
+	io.ReadCloser
+	n int64 // bytes remaining
+}
+
+func (b *limitedBody) Read(p []byte) (int, error) {
+	// Read one byte past the limit so that a body of exactly n bytes still
+	// reaches EOF, while a longer one is detected.
+	if int64(len(p)) > b.n+1 {
+		p = p[:b.n+1]
+	}
+	n, err := b.ReadCloser.Read(p)
+	if int64(n) > b.n {
+		n, b.n = int(b.n), 0
+		return n, errResponseTooLarge
+	}
+	b.n -= int64(n)
+	return n, err
 }
 
 // httpServerConn turns a HTTP connection into a Conn.

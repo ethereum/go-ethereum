@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -143,6 +144,35 @@ func TestHTTPRespBodyUnlimited(t *testing.T) {
 	}
 	if len(r) != respLength {
 		t.Fatalf("response has wrong length %d, want %d", len(r), respLength)
+	}
+}
+
+// This checks that WithHTTPResponseSizeLimit is applied to responses.
+func TestHTTPRespBodyLimit(t *testing.T) {
+	t.Parallel()
+
+	const respLength = 1024 * 1024
+
+	s := NewServer()
+	defer s.Stop()
+	s.RegisterName("test", largeRespService{respLength})
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+
+	call := func(limit int64) error {
+		c, err := DialOptions(context.Background(), ts.URL, WithHTTPResponseSizeLimit(limit))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		var r string
+		return c.Call(&r, "test_largeResp")
+	}
+	if err := call(respLength / 2); !errors.Is(err, errResponseTooLarge) {
+		t.Fatalf("wrong error for response over the limit: %v", err)
+	}
+	if err := call(2 * respLength); err != nil {
+		t.Fatalf("response under the limit failed: %v", err)
 	}
 }
 
