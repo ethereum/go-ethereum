@@ -239,9 +239,47 @@ func extractReceiptFields(receiptRLP rlp.RawValue) (uint64, uint, error) {
 	// - bytes: post state root
 	// for receipt after the byzantium fork:
 	// - bytes: receipt status flag
+	// for frame transaction receipt (EIP-8141):
+	// - uint64: cumulative gas used
 	_, _, rest, err := rlp.Split(receiptList)
 	if err != nil {
 		return 0, 0, err
+	}
+	// Frame transaction receipts are recognized by the 20-byte payer in place of the uint64 gas.
+	// Their logs are the concatenation of the logs of all frames.
+	if kind, payer, frames, err := rlp.Split(rest); err == nil && kind == rlp.String && len(payer) == common.AddressLength {
+		gasUsed, _, err := rlp.SplitUint64(receiptList)
+		if err != nil {
+			return 0, 0, err
+		}
+		frameList, _, err := rlp.SplitList(frames)
+		if err != nil {
+			return 0, 0, err
+		}
+		// Tease out log count from individual frame receipts.
+		var logCount uint
+		for len(frameList) > 0 {
+			var frame []byte
+			if frame, frameList, err = rlp.SplitList(frameList); err != nil {
+				return 0, 0, err
+			}
+			// Skip the fields: status, gas used
+			for range 2 {
+				if _, _, frame, err = rlp.Split(frame); err != nil {
+					return 0, 0, err
+				}
+			}
+			logList, _, err := rlp.SplitList(frame)
+			if err != nil {
+				return 0, 0, err
+			}
+			n, err := rlp.CountValues(logList)
+			if err != nil {
+				return 0, 0, err
+			}
+			logCount += uint(n)
+		}
+		return gasUsed, logCount, nil
 	}
 	// Decode the field: cumulative gas used (type: uint64)
 	gasUsed, rest, err := rlp.SplitUint64(rest)

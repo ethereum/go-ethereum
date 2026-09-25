@@ -267,6 +267,33 @@ func TestExtractReceiptFields(t *testing.T) {
 	invalidReceiptBlob, _ := rlp.EncodeToBytes(&invalidReceipt)
 	invalidReceiptBlob[len(invalidReceiptBlob)-1] = 0xf
 
+	// Frame transaction receipts (EIP-8141) are stored in their consensus shape
+	// [cumulativeGasUsed, payer, frameReceipts]; the logs are spread across frames.
+	payer := common.BytesToAddress([]byte{0x3})
+	frameReceipt := types.ReceiptForStorage(types.Receipt{
+		Type:              types.FrameTxType,
+		CumulativeGasUsed: 100,
+		Payer:             &payer,
+		FrameReceipts: []types.FrameReceipt{
+			{Status: 1, GasUsed: 40, StateGasUsed: 5},
+			{Status: 1, GasUsed: 50, StateGasUsed: 5, Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x1})},
+				{Address: common.BytesToAddress([]byte{0x2})},
+			}},
+			{Status: 2, GasUsed: 10, Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x3})},
+			}},
+		},
+	})
+	frameReceiptBlob, _ := rlp.EncodeToBytes(&frameReceipt)
+
+	frameReceiptNoFrames := types.ReceiptForStorage(types.Receipt{
+		Type:              types.FrameTxType,
+		CumulativeGasUsed: 60000,
+		Payer:             &common.Address{},
+	})
+	frameReceiptNoFramesBlob, _ := rlp.EncodeToBytes(&frameReceiptNoFrames)
+
 	var cases = []struct {
 		logs       rlp.RawValue
 		expErr     error
@@ -276,6 +303,8 @@ func TestExtractReceiptFields(t *testing.T) {
 		{receiptWithPostStateBlob, nil, 100, 0},
 		{receiptNoLogBlob, nil, 100, 0},
 		{receiptWithLogBlob, nil, 100, 2},
+		{frameReceiptBlob, nil, 100, 3},
+		{frameReceiptNoFramesBlob, nil, 60000, 0},
 		{invalidReceiptBlob, rlp.ErrExpectedList, 100, 0},
 	}
 	for _, c := range cases {
