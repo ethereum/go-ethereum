@@ -1567,6 +1567,70 @@ func TestBALWithdrawalNonZeroAmountRecordsBalance(t *testing.T) {
 	}
 }
 
+// TestBALWithdrawalBeforePostExecutionSystemCalls: withdrawals must be
+// applied before the post-execution system calls (EIP-7002/7251/8282) run.
+// See https://github.com/ethereum/go-ethereum/issues/35775.
+//
+// The withdrawal recipient here is the EIP-7002 withdrawal-queue predeploy
+// itself, whose code has been replaced with a stub that forwards half of its
+// native balance elsewhere whenever it is called. If the withdrawal were
+// credited after the post-execution system call runs (as it used to be), the
+// forward would only see the pre-withdrawal balance (zero) and the entire
+// withdrawn amount would be left stranded at the predeploy afterwards,
+// instead of half of it being forwarded on, both in the final state and in
+// the BAL recorded at the shared block-access index.
+//
+// Forwarding exactly half (rather than the whole balance) keeps the
+// predeploy's balance strictly between what it held at the very start of
+// this block-access index (zero) and what it would hold if withdrawn-but-
+// not-forwarded, so the expected BAL entry is unambiguous regardless of
+// whether it is diffed against the pre-withdrawal or the pre-index balance.
+func TestBALWithdrawalBeforePostExecutionSystemCalls(t *testing.T) {
+	forwardTarget := common.HexToAddress("0xfeedfacefeedfacefeedfacefeedfacefeedface")
+
+	// Forwarding stub: send half of the withdrawal-queue predeploy's native
+	// balance to forwardTarget whenever it is called.
+	forwardCode := []byte{
+		byte(vm.PUSH1), 0x00, // retLength (pushed first, popped last by CALL)
+		byte(vm.PUSH1), 0x00, // retOffset
+		byte(vm.PUSH1), 0x00, // argsLength
+		byte(vm.PUSH1), 0x00, // argsOffset
+		byte(vm.PUSH1), 0x02,
+		byte(vm.SELFBALANCE),
+		byte(vm.DIV), // value = balance / 2
+		byte(vm.PUSH20),
+	}
+	forwardCode = append(forwardCode, forwardTarget.Bytes()...) // address
+	forwardCode = append(forwardCode,
+		byte(vm.GAS), // gas
+		byte(vm.CALL),
+		byte(vm.POP),
+		byte(vm.STOP),
+	)
+
+	env := newBALTestEnv(types.GenesisAlloc{
+		params.WithdrawalQueueAddress: {Nonce: 1, Code: forwardCode, Balance: common.Big0},
+		// Pre-funded so the forwarding CALL touches an existing account
+		// rather than creating a new one.
+		forwardTarget: {Balance: newGwei(1)},
+	})
+
+	const withdrawalGwei = 10
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+		g.AddWithdrawal(&types.Withdrawal{Validator: 1, Address: params.WithdrawalQueueAddress, Amount: withdrawalGwei})
+	})
+
+	r := assertPresent(t, b, params.WithdrawalQueueAddress)
+	if len(r.BalanceChanges) != 1 {
+		t.Fatalf("expected exactly one balance change for the withdrawal queue: %+v", r.BalanceChanges)
+	}
+	want := new(big.Int).Div(newGwei(withdrawalGwei), big.NewInt(2))
+	if got := r.BalanceChanges[0].PostBalance; got.ToBig().Cmp(want) != 0 {
+		t.Fatalf("withdrawal queue must forward half of the withdrawn amount, final BAL balance = %v, want %v", got, want)
+	}
+}
+
 // ============================== EIP-7702 authority ==============================
 
 // TestBALAuthorityIncludedOnSetCodeTx: the authority of an EIP-7702 set-code

@@ -413,13 +413,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			ProcessBeaconBlockRoot(*b.header.ParentBeaconRoot, evm, b.bal)
 		}
 
-		requests, bal := b.collectRequests(false)
-		if requests != nil {
-			reqHash := types.CalcRequestsHash(requests)
-			b.header.RequestsHash = &reqHash
-		}
-		b.bal.Merge(bal)
-
 		body := types.Body{
 			Transactions: b.txs,
 			Uncles:       b.uncles,
@@ -434,14 +427,36 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 				body.Withdrawals = make([]*types.Withdrawal, 0)
 			}
 		}
-		// Apply the consensus-specific post-transaction changes
+		// Apply the consensus-specific post-transaction changes (e.g.
+		// withdrawals, block rewards) before collecting the post-execution
+		// requests below, since withdrawals are applied before requests in
+		// the block-processing order.
 		b.engine.Finalize(cm, b.header, statedb, &body, uint32(len(b.txs)+1), b.bal)
+
+		rules := config.Rules(b.header.Number, b.header.Difficulty.Sign() == 0, b.header.Time)
+
+		// Close out the withdrawals' access-list scope before the
+		// post-execution system calls open their own, so that a system call
+		// touching a withdrawal recipient records the post-withdrawal
+		// balance as its baseline instead of diffing all the way back
+		// across the withdrawals.
+		// Only block-level access lists (Amsterdam) need this; earlier forks
+		// keep their existing finalisation points.
+		if rules.IsAmsterdam {
+			b.bal.Merge(statedb.Finalise(rules))
+		}
+
+		requests, bal := b.collectRequests(false)
+		if requests != nil {
+			reqHash := types.CalcRequestsHash(requests)
+			b.header.RequestsHash = &reqHash
+		}
+		b.bal.Merge(bal)
 
 		// Assemble the block for delivery.
 		block := AssembleBlock(cm, b.header, statedb, &body, b.receipts, b.bal)
 
 		// Write state changes to db
-		rules := config.Rules(b.header.Number, b.header.Difficulty.Sign() == 0, b.header.Time)
 		root, err := statedb.Commit(rules, b.header.Number.Uint64())
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))

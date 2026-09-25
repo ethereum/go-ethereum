@@ -285,13 +285,28 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if precompileCache != nil {
 		postEVM.SetPrecompileCache(precompileCache)
 	}
+	// Finalize the block, applying any consensus engine specific extras
+	// (e.g. withdrawals, block rewards), before the post-execution system
+	// calls below, since withdrawals are applied before requests in the
+	// block-processing order.
+	p.chain.Engine().Finalize(p.chain, header, postState, block.Body(), postIndex, blockAccessList)
+
+	// Close out the withdrawals' access-list scope before the post-execution
+	// system calls open their own, so that a system call touching a
+	// withdrawal recipient records the post-withdrawal balance as its
+	// baseline instead of diffing all the way back across the withdrawals.
+	// Only block-level access lists (Amsterdam) need this; earlier forks
+	// keep their existing finalisation points.
+	if rules := postEVM.GetRules(); rules.IsAmsterdam {
+		blockAccessList.Merge(postEVM.StateDB.Finalise(rules))
+	}
+
 	requests, postBAL, err := PostExecution(ctx, config, header.Number, header.Time, allLogs, postEVM, postIndex)
 	postEVM.Release()
 	if err != nil {
 		return nil, err
 	}
 	blockAccessList.Merge(postBAL)
-	p.chain.Engine().Finalize(p.chain, header, postState, block.Body(), postIndex, blockAccessList)
 	if err := postState.Error(); err != nil {
 		return nil, fmt.Errorf("database error in post-execution system calls: %w", err)
 	}
