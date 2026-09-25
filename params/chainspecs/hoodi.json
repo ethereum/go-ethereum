@@ -1,0 +1,49 @@
+{
+  "chainName": "hoodi",
+  "chainId": 560048,
+  "consensus": "ethash",
+  "homesteadBlock": 0,
+  "daoForkSupport": true,
+  "eip150Block": 0,
+  "eip155Block": 0,
+  "eip158Block": 0,
+  "byzantiumBlock": 0,
+  "constantinopleBlock": 0,
+  "petersburgBlock": 0,
+  "istanbulBlock": 0,
+  "muirGlacierBlock": 0,
+  "berlinBlock": 0,
+  "londonBlock": 0,
+  "terminalTotalDifficulty": 0,
+  "mergeNetsplitBlock": 0,
+  "shanghaiTime": 0,
+  "cancunTime": 0,
+  "pragueTime": 1742999832,
+  "osakaTime": 1761677592,
+  "bpo1Time": 1762365720,
+  "bpo2Time": 1762955544,
+  "blobSchedule": {
+    "cancun": {
+      "target": 3,
+      "max": 6,
+      "baseFeeUpdateFraction": 3338477
+    },
+    "prague": {
+      "target": 6,
+      "max": 9,
+      "baseFeeUpdateFraction": 5007716
+    },
+    "bpo1": {
+      "target": 10,
+      "max": 15,
+      "baseFeeUpdateFraction": 8346193
+    },
+    "bpo2": {
+      "target": 14,
+      "max": 21,
+      "baseFeeUpdateFraction": 11684671
+    }
+  },
+  "depositContractAddress": "0x00000000219ab540356cBB839Cbe05303d7705Fa",
+  "ethash": {}
+}
