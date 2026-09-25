@@ -460,6 +460,7 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 	defer spanEnd(nil)
 
 	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
+	isAmsterdam := miner.chainConfig.IsAmsterdam(env.header.Number, env.header.Time)
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -468,7 +469,7 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 			}
 		}
 		// If we don't have enough gas for any further transactions then we're done.
-		if env.gasPool.Gas() < params.TxGas {
+		if !isAmsterdam && env.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
 			break
 		}
@@ -503,7 +504,13 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 			break
 		}
 		// If we don't have enough space for the next transaction, skip the account.
-		if env.gasPool.Gas() < ltx.Gas {
+		if isAmsterdam {
+			if err := env.gasPool.CheckGasAmsterdam(min(ltx.Gas, params.MaxTxGas), ltx.Gas); err != nil {
+				log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
+				txs.Pop()
+				continue
+			}
+		} else if env.gasPool.Gas() < ltx.Gas {
 			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
 			txs.Pop()
 			continue
