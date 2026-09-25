@@ -138,8 +138,9 @@ func (db *nofreezedb) TruncateTail(group string, items uint64) (uint64, error) {
 }
 
 // SyncAncient returns an error as we don't have a backing chain freezer.
+// SyncAncient is a no-op without an ancient store, there is nothing to flush.
 func (db *nofreezedb) SyncAncient() error {
-	return errNotSupported
+	return nil
 }
 
 func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err error) {
