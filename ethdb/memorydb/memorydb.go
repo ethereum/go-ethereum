@@ -169,7 +169,7 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 
 	var (
 		pr     = string(prefix)
-		st     = string(append(prefix, start...))
+		st     = string(prefix) + string(start)
 		keys   = make([]string, 0, len(db.db))
 		values = make([][]byte, 0, len(db.db))
 	)
