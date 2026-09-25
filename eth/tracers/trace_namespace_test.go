@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
@@ -631,7 +632,7 @@ func TestTraceNamespaceEmptyVMFrames(t *testing.T) {
 	}
 }
 
-func TestTraceNamespacePrecheckFailuresEmitNoFrame(t *testing.T) {
+func TestTraceNamespacePrecheckFailuresKeepFailedFrames(t *testing.T) {
 	empty := common.HexToAddress("0xcafe0003")
 	call := func(value string) string {
 		return "60006000600060006" + value + "73" + common.Bytes2Hex(empty.Bytes()) + "61fffff150"
@@ -644,11 +645,19 @@ func TestTraceNamespacePrecheckFailuresEmitNoFrame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Trace) != 2 || result.Trace[0].Subtraces != 1 {
-		t.Fatalf("precheck failures must not emit frames: %+v", result.Trace)
+	// The failed CALL and CREATE keep their frames with the failure, no result
+	// and no children; the successful CALL follows them at [2].
+	if len(result.Trace) != 4 || result.Trace[0].Subtraces != 3 {
+		t.Fatalf("precheck failures must emit failed frames: %+v", result.Trace)
 	}
-	child := result.Trace[1]
-	if !slices.Equal(child.TraceAddress, []uint64{0}) || child.Error != "" || child.Action.(traceCallAction).To != empty {
+	for i, typ := range []string{"call", "create"} {
+		failed := result.Trace[1+i]
+		if failed.Type != typ || !slices.Equal(failed.TraceAddress, []uint64{uint64(i)}) || failed.Error != "Insufficient balance for transfer" || failed.Result != nil || failed.Subtraces != 0 {
+			t.Fatalf("failed %s: %+v", typ, failed)
+		}
+	}
+	child := result.Trace[3]
+	if !slices.Equal(child.TraceAddress, []uint64{2}) || child.Error != "" || child.Action.(traceCallAction).To != empty {
 		t.Fatalf("child path: %+v", child)
 	}
 	var subs []bool
@@ -700,5 +709,17 @@ func TestTraceNamespaceCreateCost(t *testing.T) {
 	}
 	if creates != 2 {
 		t.Fatalf("traced %d creations", creates)
+	}
+}
+
+func TestTraceErrorLabelPrecheckFailures(t *testing.T) {
+	for err, want := range map[error]string{
+		vm.ErrInsufficientBalance: "Insufficient balance for transfer",
+		vm.ErrDepth:               "Max call depth exceeded",
+		vm.ErrNonceUintOverflow:   "Nonce overflow",
+	} {
+		if have := traceErrorLabel(err, false); have != want {
+			t.Errorf("%v: have %q, want %q", err, have, want)
+		}
 	}
 }

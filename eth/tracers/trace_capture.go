@@ -188,10 +188,10 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 		return
 	}
 	scope := c.scopes[len(c.scopes)-1]
-	// Geth reports calls and creates that fail their depth or balance
-	// precheck as frames, but they start no execution: they have neither a
-	// call frame nor a VM trace.
-	precheck := errors.Is(err, vm.ErrDepth) || errors.Is(err, vm.ErrInsufficientBalance)
+	// A call or create that fails its depth, balance or nonce precheck keeps
+	// its frame with the failure, but it starts no execution, so it has no VM
+	// trace. From Amsterdam a failed create precheck never enters a frame.
+	precheck := errors.Is(err, vm.ErrDepth) || errors.Is(err, vm.ErrInsufficientBalance) || errors.Is(err, vm.ErrNonceUintOverflow)
 	// Every entered frame has a VM trace, even when no instruction ran (empty
 	// code or a precompile). Selfdestruct does not enter a frame.
 	if c.kinds.has("vmTrace") && scope.vm == nil && scope.frame.Type != "suicide" && !precheck {
@@ -206,13 +206,6 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 		return
 	}
 	frame := scope.frame
-	if precheck {
-		// The frame never executed, so it is the last one recorded; release
-		// its child ordinal for the next sibling.
-		c.frames = c.frames[:len(c.frames)-1]
-		c.scopes[len(c.scopes)-1].frame.Subtraces--
-		return
-	}
 	if err != nil && reverted {
 		_, precompile := c.precompiles[scope.target]
 		frame.Error = traceErrorLabel(err, precompile && frame.Type == "call")
@@ -261,6 +254,10 @@ func traceErrorLabel(err error, precompile bool) string {
 		return "Invalid code prefix 0xEF"
 	case errors.Is(err, vm.ErrNonceUintOverflow):
 		return "Nonce overflow"
+	case errors.Is(err, vm.ErrInsufficientBalance):
+		return "Insufficient balance for transfer"
+	case errors.Is(err, vm.ErrDepth):
+		return "Max call depth exceeded"
 	case precompile:
 		return "Built-in failed"
 	}
