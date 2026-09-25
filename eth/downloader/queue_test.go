@@ -274,6 +274,68 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
+// TestReserveOutsideServedRange checks that a peer whose announced range
+// starts past the reservable blocks is not handed anything, and that the
+// blocks at the edge are still handed out.
+func TestReserveOutsideServedRange(t *testing.T) {
+	q := newQueue(10, 10)
+	q.Prepare(1, FullSync)
+	headers := chain.headers()
+	hashes := make([]common.Hash, len(headers))
+	for i, header := range headers {
+		hashes[i] = header.Hash()
+	}
+	q.Schedule(headers, hashes, 1)
+
+	ranged := func(id string, earliest uint64) *peerConnection {
+		r := &eth.BlockRangeUpdatePacket{EarliestBlock: earliest, LatestBlock: 1 << 40}
+		return newPeerConnection(id, eth.ETH69, rangedPeer{r: r}, log.Root())
+	}
+	limit := q.resultCache.Limit()
+	pending := q.PendingBodies()
+
+	if req, _, _ := q.ReserveBodies(ranged("far", limit), 50); req != nil {
+		t.Fatalf("reserved %d headers for a peer not serving them", len(req.Headers))
+	}
+	if have := q.PendingBodies(); have != pending {
+		t.Fatalf("pending bodies changed: have %d, want %d", have, pending)
+	}
+	// Of the two blocks below the limit one has a body to fetch
+	req, _, _ := q.ReserveBodies(ranged("near", limit-2), 50)
+	if req == nil {
+		t.Fatal("nothing reserved for a peer serving the last reservable blocks")
+	}
+	for _, header := range req.Headers {
+		if n := header.Number.Uint64(); n < limit-2 || n >= limit {
+			t.Fatalf("reserved block %d outside [%d, %d)", n, limit-2, limit)
+		}
+	}
+}
+
+// BenchmarkReserveOutsideServedRange measures a reservation for a peer that
+// serves none of the queued blocks.
+func BenchmarkReserveOutsideServedRange(b *testing.B) {
+	headers := make([]*types.Header, blockCacheMaxItems)
+	hashes := make([]common.Hash, len(headers))
+	var parent common.Hash
+	for i := range headers {
+		headers[i] = &types.Header{ParentHash: parent, Number: big.NewInt(int64(i + 1)), TxHash: common.Hash{0x1}}
+		hashes[i] = headers[i].Hash()
+		parent = hashes[i]
+	}
+	q := newQueue(blockCacheMaxItems, blockCacheMaxItems)
+	q.Prepare(1, FullSync)
+	q.Schedule(headers, hashes, 1)
+
+	r := &eth.BlockRangeUpdatePacket{EarliestBlock: 1 << 40, LatestBlock: 1 << 41}
+	peer := newPeerConnection("peer", eth.ETH69, rangedPeer{r: r}, log.Root())
+
+	b.ResetTimer()
+	for b.Loop() {
+		q.ReserveBodies(peer, 1)
+	}
+}
+
 // TestBlockAccessLists tests the scheduling and delivery of the best-effort
 // block access list component: only blocks above the configured cutoff are
 // scheduled, block delivery is never held back by outstanding access lists,
