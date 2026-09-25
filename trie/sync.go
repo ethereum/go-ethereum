@@ -368,7 +368,7 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []common.Hash) {
 
 		// If we have too many already-pending tasks for this depth, throttle
 		depth := int(prio >> 56)
-		if s.fetches[depth] > maxFetchesPerDepth {
+		if s.fetches[depth] >= maxFetchesPerDepth {
 			break
 		}
 		// Item is allowed to be scheduled, add it to the task list
