@@ -93,6 +93,15 @@ func (r *resultStore) AddFetch(header *types.Header, snapSync bool, fetchBAL boo
 	return false, false, item
 }
 
+// Limit returns the number of the first block that can't be reserved for
+// retrieval until earlier results are delivered.
+func (r *resultStore) Limit() uint64 {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	return r.resultOffset + r.throttleThreshold
+}
+
 // GetDeliverySlot returns the fetchResult for the given header. If the 'stale' flag
 // is true, that means the header has already been delivered 'upstream'.
 func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, error) {

@@ -718,6 +718,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 	// Only hand out blocks within the range the peer announced to serve. The
 	// range is loose at the top, see peerConnection.servedRange.
 	earliest, latest := p.servedRange()
+	limit := q.resultCache.Limit()
 	for len(send) < count && !taskQueue.Empty() {
 		// the task queue will pop items in order, so the highest prio block
 		// is also the lowest block number.
@@ -756,6 +757,11 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 			continue
 		}
 		if header.Number.Uint64() > latest {
+			break
+		}
+		// If the peer starts past the reservable blocks, every remaining task
+		// would be skipped too, stop instead of cycling through the queue.
+		if header.Number.Uint64() < earliest && earliest >= limit {
 			break
 		}
 		// Remove it from the task queue
