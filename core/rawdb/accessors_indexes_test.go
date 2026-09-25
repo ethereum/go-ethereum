@@ -267,6 +267,34 @@ func TestExtractReceiptFields(t *testing.T) {
 	invalidReceiptBlob, _ := rlp.EncodeToBytes(&invalidReceipt)
 	invalidReceiptBlob[len(invalidReceiptBlob)-1] = 0xf
 
+	// Frame transaction receipts (EIP-8141) are stored in their consensus
+	// shape [cumulativeGasUsed, payer, frameReceipts]; the logs are spread
+	// across the frames.
+	payer := common.BytesToAddress([]byte{0x3})
+	frameReceipt := types.ReceiptForStorage(types.Receipt{
+		Type:              types.FrameTxType,
+		CumulativeGasUsed: 100,
+		Payer:             &payer,
+		FrameReceipts: []types.FrameReceipt{
+			{Status: 1, GasUsed: 40, StateGasUsed: 5},
+			{Status: 1, GasUsed: 50, StateGasUsed: 5, Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x1})},
+				{Address: common.BytesToAddress([]byte{0x2})},
+			}},
+			{Status: 0, GasUsed: 10, Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x3})},
+			}},
+		},
+	})
+	frameReceiptBlob, _ := rlp.EncodeToBytes(&frameReceipt)
+
+	frameReceiptNoFrames := types.ReceiptForStorage(types.Receipt{
+		Type:              types.FrameTxType,
+		CumulativeGasUsed: 100,
+		Payer:             &payer,
+	})
+	frameReceiptNoFramesBlob, _ := rlp.EncodeToBytes(&frameReceiptNoFrames)
+
 	var cases = []struct {
 		logs       rlp.RawValue
 		expErr     error
@@ -276,6 +304,8 @@ func TestExtractReceiptFields(t *testing.T) {
 		{receiptWithPostStateBlob, nil, 100, 0},
 		{receiptNoLogBlob, nil, 100, 0},
 		{receiptWithLogBlob, nil, 100, 2},
+		{frameReceiptBlob, nil, 100, 3},
+		{frameReceiptNoFramesBlob, nil, 100, 0},
 		{invalidReceiptBlob, rlp.ErrExpectedList, 100, 0},
 	}
 	for _, c := range cases {
@@ -295,5 +325,68 @@ func TestExtractReceiptFields(t *testing.T) {
 				t.Fatalf("Unexpected logs, want %d, got %d", c.expLogs, logs)
 			}
 		}
+	}
+}
+
+// Tests that a receipt can be read by position when it is preceded by a frame
+// transaction receipt (EIP-8141), which is stored in its consensus shape and
+// thus has a different layout than regular receipts.
+func TestReadCanonicalRawReceiptAfterFrameReceipt(t *testing.T) {
+	payer := common.BytesToAddress([]byte{0x3})
+	frameReceipt := &types.Receipt{
+		Type:              types.FrameTxType,
+		CumulativeGasUsed: 100,
+		Payer:             &payer,
+		FrameReceipts: []types.FrameReceipt{
+			{Status: 1, GasUsed: 60, StateGasUsed: 5, Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x1})},
+				{Address: common.BytesToAddress([]byte{0x2})},
+			}},
+			{Status: 0, GasUsed: 40, Logs: []*types.Log{
+				{Address: common.BytesToAddress([]byte{0x3})},
+			}},
+		},
+	}
+	legacyReceipt := &types.Receipt{
+		Type:              types.DynamicFeeTxType,
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 121000,
+		Logs: []*types.Log{
+			{Address: common.BytesToAddress([]byte{0x4})},
+		},
+	}
+	var (
+		db     = NewMemoryDatabase()
+		hash   = common.HexToHash("0x0a")
+		number = uint64(7)
+	)
+	WriteCanonicalHash(db, hash, number)
+	WriteReceipts(db, hash, number, types.Receipts{frameReceipt, legacyReceipt})
+
+	// The regular receipt after the frame receipt used to fail with
+	// "rlp: uint overflow" while the payer was parsed as gas used.
+	receipt, ctx, err := ReadCanonicalRawReceipt(db, hash, number, 1)
+	if err != nil {
+		t.Fatalf("Failed to read receipt after frame receipt: %v", err)
+	}
+	if receipt.CumulativeGasUsed != 121000 || receipt.Status != types.ReceiptStatusSuccessful || len(receipt.Logs) != 1 {
+		t.Fatalf("Unexpected receipt: %+v", receipt)
+	}
+	if ctx.GasUsed != 121000-100 {
+		t.Fatalf("Unexpected gas used, want %d, got %d", 121000-100, ctx.GasUsed)
+	}
+	if ctx.LogIndex != 3 {
+		t.Fatalf("Unexpected log index, want 3, got %d", ctx.LogIndex)
+	}
+	// The frame receipt itself is decoded in its consensus shape.
+	receipt, ctx, err = ReadCanonicalRawReceipt(db, hash, number, 0)
+	if err != nil {
+		t.Fatalf("Failed to read frame receipt: %v", err)
+	}
+	if receipt.Payer == nil || *receipt.Payer != payer || len(receipt.FrameReceipts) != 2 || len(receipt.Logs) != 3 {
+		t.Fatalf("Unexpected frame receipt: %+v", receipt)
+	}
+	if ctx.GasUsed != 100 || ctx.LogIndex != 0 {
+		t.Fatalf("Unexpected frame receipt context: %+v", ctx)
 	}
 }

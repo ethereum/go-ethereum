@@ -228,20 +228,36 @@ func ReadCanonicalReceipt(db ethdb.Reader, hash common.Hash, config *params.Chai
 }
 
 // extractReceiptFields takes a raw RLP-encoded receipt blob and extracts
-// specific fields from it.
+// specific fields from it: the cumulative gas used and the number of logs.
+//
+// Two storage shapes are understood. Regular receipts are stored as
+// [status, cumulativeGasUsed, logs]. Frame transaction receipts (EIP-8141)
+// are stored in their consensus shape [cumulativeGasUsed, payer, frameReceipts]
+// and the two are told apart by the second field: a fee payer is a 20-byte
+// string, whereas a cumulative gas used never exceeds 8 bytes.
 func extractReceiptFields(receiptRLP rlp.RawValue) (uint64, uint, error) {
 	receiptList, _, err := rlp.SplitList(receiptRLP)
 	if err != nil {
 		return 0, 0, err
 	}
-	// Decode the field: receipt status
+	// Decode the first field:
 	// for receipt before the byzantium fork:
 	// - bytes: post state root
 	// for receipt after the byzantium fork:
 	// - bytes: receipt status flag
+	// for frame transaction receipt:
+	// - uint64: cumulative gas used
 	_, _, rest, err := rlp.Split(receiptList)
 	if err != nil {
 		return 0, 0, err
+	}
+	// Peek at the second field to detect the frame receipt shape.
+	kind, content, afterPayer, err := rlp.Split(rest)
+	if err != nil {
+		return 0, 0, err
+	}
+	if kind == rlp.String && len(content) == common.AddressLength {
+		return extractFrameReceiptFields(receiptList, afterPayer)
 	}
 	// Decode the field: cumulative gas used (type: uint64)
 	gasUsed, rest, err := rlp.SplitUint64(rest)
@@ -258,6 +274,52 @@ func extractReceiptFields(receiptRLP rlp.RawValue) (uint64, uint, error) {
 		return 0, 0, err
 	}
 	return gasUsed, uint(logCount), nil
+}
+
+// extractFrameReceiptFields extracts the cumulative gas used and the number of
+// logs from a frame transaction receipt stored in its consensus shape
+// [cumulativeGasUsed, payer, [[status, [execution, state], logs], ...]].
+// receiptList is the content of the receipt list and frames the encoding that
+// follows the payer, i.e. the list of frame receipts.
+func extractFrameReceiptFields(receiptList, frames rlp.RawValue) (uint64, uint, error) {
+	// Decode the field: cumulative gas used (type: uint64)
+	gasUsed, _, err := rlp.SplitUint64(receiptList)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Decode the field: frame receipts (type: rlp list)
+	frameList, _, err := rlp.SplitList(frames)
+	if err != nil {
+		return 0, 0, err
+	}
+	// The logs of a frame transaction are the concatenation of the logs of
+	// its frames, so count them across all frame receipts.
+	var logCount uint
+	for len(frameList) > 0 {
+		var frame rlp.RawValue
+		frame, frameList, err = rlp.SplitList(frameList)
+		if err != nil {
+			return 0, 0, err
+		}
+		// Skip the fields: status (type: uint64), gas used (type: rlp list)
+		if _, _, frame, err = rlp.Split(frame); err != nil {
+			return 0, 0, err
+		}
+		if _, _, frame, err = rlp.Split(frame); err != nil {
+			return 0, 0, err
+		}
+		// Decode the field: logs (type: rlp list)
+		logList, _, err := rlp.SplitList(frame)
+		if err != nil {
+			return 0, 0, err
+		}
+		n, err := rlp.CountValues(logList)
+		if err != nil {
+			return 0, 0, err
+		}
+		logCount += uint(n)
+	}
+	return gasUsed, logCount, nil
 }
 
 // RawReceiptContext carries the contextual information that is needed to derive
