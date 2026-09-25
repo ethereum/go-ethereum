@@ -392,11 +392,18 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		if count%10000000 == 0 {
 			log.Info("Pruning tx index", "count", count, "removed", removed)
 		}
-		if len(v) > 8 {
-			log.Error("Skipping legacy tx index entry", "hash", txhash)
+		var bn uint64
+		// Database v7: block number (8 bytes) + tx index (4 bytes) = 12 bytes
+		if len(v) == 12 {
+			bn = binary.BigEndian.Uint64(v[:8])
+		} else if len(v) <= 8 {
+			// Database v6 or earlier
+			bn = decodeNumber(v)
+		} else {
+			// Unknown format
+			log.Error("Skipping unknown tx index entry format", "hash", txhash, "len", len(v))
 			return false
 		}
-		bn := decodeNumber(v)
 		if bn < pruneBlock {
 			removed++
 			return true
