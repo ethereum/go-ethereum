@@ -120,7 +120,7 @@ func potentialGateways() (gws []net.IP) {
 	for _, iface := range ifaces {
 		ifaddrs, err := iface.Addrs()
 		if err != nil {
-			return gws
+			continue
 		}
 		for _, addr := range ifaddrs {
 			if x, ok := addr.(*net.IPNet); ok {
