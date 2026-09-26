@@ -564,11 +564,14 @@ func TestTraceNamespaceFilterBounds(t *testing.T) {
 	t.Cleanup(backend.teardown)
 	client := traceContractClient(t, NewTraceAPI(backend))
 	// Bounds beyond the head, reversed ranges (including an explicit toBlock
-	// before the omitted latest start) and pending are invalid parameters.
+	// before the omitted latest start), pending and block hashes (plain or as
+	// EIP-1898 objects) are invalid parameters.
+	head := backend.chain.CurrentBlock().Hash()
 	for _, filter := range []map[string]any{
 		{"fromBlock": "0x4"}, {"toBlock": "0x4"}, {"fromBlock": "0x1", "toBlock": "0xffff"},
 		{"fromBlock": "0x2", "toBlock": "0x1"}, {"toBlock": "0x2"}, {"fromBlock": "latest", "toBlock": "0x1"},
 		{"fromBlock": "pending"}, {"toBlock": "pending"},
+		{"fromBlock": head}, {"toBlock": map[string]any{"blockHash": head}}, {"fromBlock": map[string]any{"blockNumber": "0x3"}},
 	} {
 		var result json.RawMessage
 		requireTraceCode(t, client.Call(&result, "trace_filter", filter), -32602)
@@ -587,7 +590,8 @@ func TestTraceNamespaceFilterBounds(t *testing.T) {
 	if err := client.Call(&frames, "trace_filter", map[string]any{"fromBlock": "0x1"}); err != nil || len(frames) != 3 {
 		t.Fatalf("explicit history search: %+v %v", frames, err)
 	}
-	// Single-block selectors reject pending too; genesis has no records.
+	// Without a pending block, single-block selectors reject pending too;
+	// genesis has no records.
 	var result json.RawMessage
 	requireTraceCode(t, client.Call(&result, "trace_block", "pending"), -32602)
 	requireTraceCode(t, client.Call(&result, "trace_replayBlockTransactions", "pending", TraceTypes{}), -32602)

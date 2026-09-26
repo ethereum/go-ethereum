@@ -295,7 +295,8 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 
 func (api *TraceAPI) block(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number == rpc.PendingBlockNumber {
-		return nil, traceInvalid("pending tracing is not supported")
+		block, _, err := api.pending()
+		return block, err
 	}
 	// The backend resolves earliest to the lowest available block, as eth_* does.
 	block, err := api.api.backend.BlockByNumber(ctx, number)
@@ -306,6 +307,17 @@ func (api *TraceAPI) block(ctx context.Context, number rpc.BlockNumber) (*types.
 		return nil, &traceRPCError{-32001, fmt.Sprintf("block %s not found", number)}
 	}
 	return block, nil
+}
+
+// pending returns the pending block and its post-state. Only a real pending
+// environment, the next block built from pending transactions, selects
+// pending; without one it is an invalid parameter rather than latest.
+func (api *TraceAPI) pending() (*types.Block, *state.StateDB, error) {
+	block, _, st := api.api.backend.Pending()
+	if block == nil || st == nil {
+		return nil, nil, traceInvalid("pending block is not available")
+	}
+	return block, st, nil
 }
 
 func traceBlockError(number rpc.BlockNumber, err error) error {
@@ -335,23 +347,32 @@ type traceCallEnv struct {
 // block environment, then state overrides apply before the first call.
 func (api *TraceAPI) callEnv(ctx context.Context, selector *rpc.BlockNumberOrHash, stateOverrides *override.StateOverride, blockOverrides *override.BlockOverrides) (*traceCallEnv, error) {
 	var (
-		block *types.Block
-		err   error
+		block   *types.Block
+		st      *state.StateDB
+		release StateReleaseFunc = func() {}
+		err     error
 	)
-	if selector == nil {
-		block, err = api.block(ctx, rpc.LatestBlockNumber)
-	} else if number, ok := selector.Number(); ok {
-		block, err = api.block(ctx, number)
-	} else {
+	number, byNumber := rpc.LatestBlockNumber, true
+	if selector != nil {
+		number, byNumber = selector.Number()
+	}
+	switch {
+	case !byNumber:
 		hash, _ := selector.Hash()
 		block, err = api.blockByHash(ctx, hash, selector.RequireCanonical)
+	case number == rpc.PendingBlockNumber:
+		// The pending post-state already includes the pending transactions.
+		block, st, err = api.pending()
+	default:
+		block, err = api.block(ctx, number)
 	}
 	if err != nil {
 		return nil, err
 	}
-	st, release, err := api.api.backend.StateAtBlock(ctx, block, nil, true, false)
-	if err != nil {
-		return nil, traceStateError(err)
+	if st == nil {
+		if st, release, err = api.api.backend.StateAtBlock(ctx, block, nil, true, false); err != nil {
+			return nil, traceStateError(err)
+		}
 	}
 	env := &traceCallEnv{state: st, vmctx: core.NewEVMBlockContext(block.Header(), api.api.chainContext(ctx), nil), release: release}
 	if err := blockOverrides.Apply(&env.vmctx); err != nil {
