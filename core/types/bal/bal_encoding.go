@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 
@@ -33,6 +34,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
+
+// ErrExceedsItemLimit is returned when an access list exceeds the allowed item limit during decoding.
+var ErrExceedsItemLimit = errors.New("block access list exceeds item limit")
 
 //go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_generated.go -type AccountAccess -decoder
 
@@ -56,17 +60,32 @@ func (e BlockAccessList) EncodeRLP(w io.Writer) error {
 	return buf.Flush()
 }
 
-// DecodeRLP implements rlp.Decoder.
-func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
+// DecodeRLPLimited decodes the access list from an RLP stream, returning an error
+// if the number of items (accounts and storage slots) exceeds maxItems.
+// Decoding stops immediately when the limit is exceeded, preventing unbounded
+// memory allocations.
+func (e *BlockAccessList) DecodeRLPLimited(s *rlp.Stream, maxItems uint64) error {
 	if _, err := s.List(); err != nil {
 		return err
 	}
-	var list BlockAccessList
+	var (
+		list  BlockAccessList
+		items uint64
+	)
 	for s.MoreDataInList() {
+		// Each account access adds at least 1 item (the address itself).
+		if items >= maxItems {
+			return fmt.Errorf("%w: item count exceeds limit %d", ErrExceedsItemLimit, maxItems)
+		}
 		var a AccountAccess
 		if err := a.DecodeRLP(s); err != nil {
 			return err
 		}
+		accountItems := 1 + uint64(len(a.StorageChanges)) + uint64(len(a.StorageReads))
+		if accountItems > maxItems || items > maxItems-accountItems {
+			return fmt.Errorf("%w: item count exceeds limit %d", ErrExceedsItemLimit, maxItems)
+		}
+		items += accountItems
 		list = append(list, a)
 	}
 	if err := s.ListEnd(); err != nil {
@@ -74,6 +93,26 @@ func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 	}
 	*e = list
 	return nil
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
+	return e.DecodeRLPLimited(s, math.MaxUint64)
+}
+
+// DecodeBytesLimited decodes a BlockAccessList from RLP bytes, enforcing a maximum
+// item count limit.
+func DecodeBytesLimited(b []byte, maxItems uint64) (*BlockAccessList, error) {
+	r := bytes.NewReader(b)
+	s := rlp.NewStream(r, uint64(len(b)))
+	var list BlockAccessList
+	if err := list.DecodeRLPLimited(s, maxItems); err != nil {
+		return nil, err
+	}
+	if r.Len() > 0 {
+		return nil, rlp.ErrMoreThanOneValue
+	}
+	return &list, nil
 }
 
 // Validate returns an error if the contents of the access list are not ordered
