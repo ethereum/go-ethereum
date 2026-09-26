@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -257,5 +258,128 @@ func TestTraceNamespaceBlobFeeAccounting(t *testing.T) {
 	want := new(big.Int).Add(new(big.Int).SetUint64(params.TxGas*params.InitialBaseFee), new(big.Int).SetUint64(params.BlobTxBlobGasPerBlob))
 	if paid.Cmp(want) != 0 {
 		t.Fatalf("sender paid %v, want %v", paid, want)
+	}
+}
+
+// tracePendingBackend serves a pending block and post-state as the miner does.
+type tracePendingBackend struct {
+	*testBackend
+	block *types.Block
+	state *state.StateDB
+}
+
+func (b tracePendingBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
+	if b.state == nil {
+		return b.block, nil, nil
+	}
+	return b.block, nil, b.state.Copy()
+}
+
+func TestTraceNamespacePending(t *testing.T) {
+	key, _ := crypto.HexToECDSA(strings.Repeat("0", 63) + "5")
+	sender := crypto.PubkeyToAddress(key.PublicKey)
+	payee := common.HexToAddress("0xcafe0005")
+	number, balance, counter := common.HexToAddress("0xcafe0006"), common.HexToAddress("0xcafe0007"), common.HexToAddress("0xcafe0008")
+	config := *params.AllEthashProtocolChanges
+	genesis := func() *core.Genesis {
+		return &core.Genesis{Config: &config, GasLimit: 30_000_000, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
+			sender: {Balance: big.NewInt(1e18)},
+			// Return NUMBER, and the payee's BALANCE.
+			number:  {Code: common.FromHex("4360005260206000f3")},
+			balance: {Code: append(append(common.FromHex("73"), payee.Bytes()...), common.FromHex("3160005260206000f3")...)},
+			// Increment slot 0 and return the new value.
+			counter: {Code: common.FromHex("6000546001018060005560005260206000f3")},
+		}}
+	}
+	// Each block pays the payee one wei. The node has mined the first block;
+	// the second, built on it, is pending.
+	pay := func(i int, b *core.BlockGen) {
+		b.AddTx(types.MustSignNewTx(key, types.LatestSigner(&config), &types.LegacyTx{Nonce: uint64(i), Gas: params.TxGas, GasPrice: big.NewInt(2 * params.InitialBaseFee), To: &payee, Value: common.Big1}))
+	}
+	backend := newTestBackend(t, 1, genesis(), pay)
+	t.Cleanup(backend.teardown)
+	next := newTestBackend(t, 2, genesis(), pay)
+	t.Cleanup(next.teardown)
+	block := next.chain.GetBlockByNumber(2)
+	if block.ParentHash() != backend.chain.CurrentBlock().Hash() {
+		t.Fatal("pending block does not extend the head")
+	}
+	st, err := next.chain.StateAt(block.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	word := func(n int64) hexutil.Bytes { return common.LeftPadBytes(big.NewInt(n).Bytes(), 32) }
+	calls := []any{
+		[]any{map[string]any{"to": number}, TraceTypes{}},
+		[]any{map[string]any{"to": balance}, TraceTypes{}},
+	}
+
+	// Without a pending block, pending is an invalid parameter for every
+	// method rather than an alias of latest.
+	client := traceContractClient(t, NewTraceAPI(backend))
+	var result json.RawMessage
+	requireTraceCode(t, client.Call(&result, "trace_block", "pending"), -32602)
+	requireTraceCode(t, client.Call(&result, "trace_replayBlockTransactions", "pending", TraceTypes{"trace"}), -32602)
+	requireTraceCode(t, client.Call(&result, "trace_call", calls[0].([]any)[0], TraceTypes{}, "pending"), -32602)
+	requireTraceCode(t, client.Call(&result, "trace_callMany", calls, map[string]any{"blockNumber": "pending"}), -32602)
+	// A pending block without its post-state is not a pending environment.
+	client = traceContractClient(t, NewTraceAPI(tracePendingBackend{backend, block, nil}))
+	requireTraceCode(t, client.Call(&result, "trace_block", "pending"), -32602)
+	requireTraceCode(t, client.Call(&result, "trace_call", calls[0].([]any)[0], TraceTypes{}, "pending"), -32602)
+
+	// With one, block methods trace the pending block and simulations run on
+	// its post-state and header: NUMBER is the next block, and the pending
+	// transfer is visible.
+	client = traceContractClient(t, NewTraceAPI(tracePendingBackend{backend, block, st}))
+	var frames []map[string]any
+	if err := client.Call(&frames, "trace_block", "pending"); err != nil {
+		t.Fatal(err)
+	}
+	tx := block.Transactions()[0].Hash().Hex()
+	// The pending ethash block also carries its block reward.
+	if len(frames) != 2 || frames[0]["blockNumber"] != 2.0 || frames[0]["blockHash"] != block.Hash().Hex() || frames[0]["transactionHash"] != tx || frames[1]["type"] != "reward" {
+		t.Fatalf("pending block traces: %+v", frames)
+	}
+	var replays []map[string]any
+	if err := client.Call(&replays, "trace_replayBlockTransactions", "pending", TraceTypes{"trace"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(replays) != 1 || replays[0]["transactionHash"] != tx {
+		t.Fatalf("pending block replays: %+v", replays)
+	}
+	for tag, want := range map[string][]hexutil.Bytes{"latest": {word(1), word(1)}, "pending": {word(2), word(2)}} {
+		var many []TraceExecution
+		if err := client.Call(&many, "trace_callMany", calls, tag); err != nil {
+			t.Fatal(err)
+		}
+		var one TraceExecution
+		if err := client.Call(&one, "trace_call", map[string]any{"to": balance}, TraceTypes{}, map[string]any{"blockNumber": tag}); err != nil {
+			t.Fatal(err)
+		}
+		if len(many) != 2 || !bytes.Equal(many[0].Output, want[0]) || !bytes.Equal(many[1].Output, want[1]) || !bytes.Equal(one.Output, want[1]) {
+			t.Fatalf("%s: NUMBER and BALANCE %+v, %x", tag, many, one.Output)
+		}
+	}
+	// Pending simulations write only their own copy of the pending state:
+	// items see earlier writes, later requests start afresh, and overrides
+	// do not persist.
+	increment := []any{map[string]any{"to": counter}, TraceTypes{}}
+	seven := hexutil.Bytes(common.LeftPadBytes([]byte{7}, 32))
+	for _, overrides := range []any{nil, map[string]any{counter.Hex(): map[string]any{"stateDiff": map[string]any{common.Hash{}.Hex(): common.BytesToHash(seven).Hex()}}}} {
+		var many []TraceExecution
+		if err := client.Call(&many, "trace_callMany", []any{increment, increment}, "pending", overrides); err != nil {
+			t.Fatal(err)
+		}
+		first := word(1)
+		if overrides != nil {
+			first = word(8)
+		}
+		if len(many) != 2 || !bytes.Equal(many[0].Output, first) || !bytes.Equal(many[1].Output, common.LeftPadBytes(new(big.Int).Add(new(big.Int).SetBytes(first), common.Big1).Bytes(), 32)) {
+			t.Fatalf("pending writes with overrides %v: %+v", overrides, many)
+		}
+	}
+	var fresh TraceExecution
+	if err := client.Call(&fresh, "trace_call", increment[0], TraceTypes{}, "pending"); err != nil || !bytes.Equal(fresh.Output, word(1)) {
+		t.Fatalf("pending state leaked between requests: %x %v", fresh.Output, err)
 	}
 }

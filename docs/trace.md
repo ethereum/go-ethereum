@@ -30,7 +30,11 @@ partial results.
 `types` selects any combination of `trace`, `stateDiff`, and `vmTrace`. An empty
 selection still executes and returns output. Unrequested trace is `[]`; other
 unrequested families are `null`. Unknown transactions and paths return `null`.
-Pending-block tracing and extra arguments are rejected. Calls accept the standard
+`pending` selects the node's pending block (the next block, built from pending
+transactions) for `trace_block`, `trace_replayBlockTransactions`, `trace_call` and
+`trace_callMany`, which trace that block or run on its post-state and header; when
+the node has no pending block, `pending` returns `-32602` rather than evaluating
+`latest`. Extra arguments are rejected. Calls accept the standard
 unsigned transaction fields, including chain ID, blob context and authorization
 lists under the selected fork's rules. Unknown call fields are ignored; known
 fields and conflicting transaction types are validated. Fees follow `eth_call`:
@@ -103,8 +107,8 @@ selfdestruct uses the destroyed address and beneficiary; rewards have only a
 recipient. Post-Merge blocks do not receive synthetic issuance rewards.
 Omitted filter bounds both mean `latest`, resolved against one head; historical
 searches must set `fromBlock`. As for `eth_getLogs`, a bound beyond the head, a
-`pending` bound or a `fromBlock` above `toBlock` returns `-32602` and the range is
-never clamped. The `earliest` tag selects the lowest block with available history,
+`pending` bound, a block hash bound or a `fromBlock` above `toBlock` returns `-32602`
+and the range is never clamped. The `earliest` tag selects the lowest block with available history,
 as it does for `eth_*`; explicit block numbers below a node's history cutoff return
 `4444`.
 Calls and callMany default to latest; available safe and finalized tags select
