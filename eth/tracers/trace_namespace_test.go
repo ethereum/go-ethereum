@@ -23,6 +23,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -416,10 +417,17 @@ func TestTraceNamespaceRPCValidation(t *testing.T) {
 			t.Fatalf("%s: %v", params, err)
 		}
 	}
-	for _, params := range []string{`{"mode":"garbage"}`, `{"mode":null}`, `{"mode":1}`, `{"count":-1}`, `{"after":null}`} {
+	for _, params := range []string{`{"mode":"garbage"}`, `{"mode":1}`, `{"count":-1}`} {
 		var result json.RawMessage
 		err := client.Call(&result, "trace_filter", json.RawMessage(params))
 		if e, ok := err.(rpc.Error); !ok || e.ErrorCode() != -32602 {
+			t.Fatalf("filter %s: %v", params, err)
+		}
+	}
+	// An explicit null is an omitted member.
+	for _, params := range []string{`{"mode":null}`, `{"after":null}`, `{"count":null}`, `{"fromBlock":null,"toBlock":null}`} {
+		var result json.RawMessage
+		if err := client.Call(&result, "trace_filter", json.RawMessage(params)); err != nil {
 			t.Fatalf("filter %s: %v", params, err)
 		}
 	}
@@ -720,6 +728,35 @@ func TestTraceErrorLabelPrecheckFailures(t *testing.T) {
 	} {
 		if have := traceErrorLabel(err, false); have != want {
 			t.Errorf("%v: have %q, want %q", err, have, want)
+		}
+	}
+}
+
+func TestTraceRequestNullMembersAreOmitted(t *testing.T) {
+	var withNulls, omitted TraceCallArgs
+	if err := json.Unmarshal([]byte(`{"from":null,"to":null,"gas":null,"gasPrice":null,"value":null,"data":"0x01","input":null,"nonce":null,"type":null,"accessList":null,"chainId":null,"maxFeePerBlobGas":null,"blobVersionedHashes":null,"authorizationList":null}`), &withNulls); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{"data":"0x01"}`), &omitted); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(withNulls, omitted) {
+		t.Fatalf("null call members: have %+v, want %+v", withNulls, omitted)
+	}
+	var filterNulls, filterOmitted TraceFilter
+	if err := json.Unmarshal([]byte(`{"fromBlock":null,"toBlock":null,"fromAddress":null,"toAddress":null,"mode":null,"after":null,"count":null}`), &filterNulls); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{}`), &filterOmitted); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(filterNulls, filterOmitted) {
+		t.Fatalf("null filter members: have %+v, want %+v", filterNulls, filterOmitted)
+	}
+	// Unknown members and invalid values are still rejected.
+	for _, input := range []string{`{"mode":"garbage"}`, `{"count":-1}`, `{"extra":1}`} {
+		if err := json.Unmarshal([]byte(input), new(TraceFilter)); err == nil {
+			t.Errorf("%s: expected an error", input)
 		}
 	}
 }

@@ -90,8 +90,10 @@ func (a *TraceCallArgs) UnmarshalJSON(input []byte) error {
 			delete(fields, key)
 			continue
 		}
+		// An explicit null is an omitted member; only a null to has a meaning
+		// of its own, contract creation.
 		if key != "to" && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			return fmt.Errorf("%s must not be null", key)
+			delete(fields, key)
 		}
 	}
 	if raw, ok := fields["type"]; ok {
@@ -204,14 +206,20 @@ func (f *TraceFilter) UnmarshalJSON(input []byte) error {
 	if fields == nil {
 		return fmt.Errorf("filter must be an object")
 	}
-	// Null address lists are unrestricted, like omitted or empty lists.
+	// An explicit null is an omitted member: a null mode is intersection and
+	// null address lists are unrestricted, like omitted or empty lists.
 	for key, value := range fields {
-		if key != "fromAddress" && key != "toAddress" && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			return fmt.Errorf("%s must not be null", key)
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			delete(fields, key)
 		}
 	}
+	filtered, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
 	type plain TraceFilter
-	dec := json.NewDecoder(bytes.NewReader(input))
+	*f = TraceFilter{}
+	dec := json.NewDecoder(bytes.NewReader(filtered))
 	dec.DisallowUnknownFields()
 	return dec.Decode((*plain)(f))
 }
