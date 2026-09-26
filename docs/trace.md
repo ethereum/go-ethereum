@@ -62,8 +62,9 @@ and nested frames with nonzero transferred or inherited value. Paths and child
 counts describe the emitted tree. VM return-memory effects remain available even
 when the child frame is omitted. Calls and creates that fail their depth or
 balance precheck start no execution but keep their frame with the failure and no
-result; a create whose address collides keeps its frame with `Contract address
-collision`. Trees retain revert
+result; from Amsterdam a create checks these in the parent frame, so a failed create
+precheck emits no frame and forwards no gas. A create whose address collides keeps
+its frame with `Contract address collision`. Trees retain revert
 bytes, failed children, creation results and selfdestruct actions. Their gas fields describe frame execution, not
 transaction intrinsic gas. Failed frames carry the profile's labels rather than
 Geth error text: `Reverted`, `Out of gas`, `Bad instruction`, `Bad jump
@@ -89,7 +90,9 @@ account without code or to a precompile, is `{"code":"0x","ops":[]}`. Calls that
 fail the depth or balance precondition enter no frame and keep `sub: null`.
 The `cost` of call and create instructions includes the gas made available to the
 child frame, excluding the value-transfer stipend, and `used` is the gas left after
-the child's unused gas is returned. `mem` is the post-operation contents of the
+the child's unused gas is returned. This holds when a call, or a create before
+Amsterdam, fails its balance or depth precheck too: that gas, and any stipend, is
+returned at once. `mem` is the post-operation contents of the
 range the operands designate: `[off, off+32)` for MSTORE and MLOAD, one byte for
 MSTORE8, the destination of the copy instructions and the full CALL-family output
 window, or `null` when that range is empty or the opcode has none. `store` is set by
