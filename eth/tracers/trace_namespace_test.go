@@ -679,6 +679,74 @@ func TestTraceNamespacePrecheckFailuresKeepFailedFrames(t *testing.T) {
 	}
 }
 
+func TestTraceNamespacePrecheckFailureCost(t *testing.T) {
+	empty := common.HexToAddress("0xcafe0003")
+	// The target holds one wei: a CALL forwarding 0xffff gas and a CREATE,
+	// each transferring two wei, fail their balance precheck.
+	code := common.FromHex("60006000600060006002" + "73" + common.Bytes2Hex(empty.Bytes()) + "61fffff150" + "600060006002f05000")
+	config := *params.AllDevChainProtocolChanges
+	config.OsakaTime = nil
+	config.BogotaTime = nil
+	backend := newTestBackend(t, 0, &core.Genesis{Config: &config, GasLimit: 30_000_000, Difficulty: big.NewInt(0), BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
+		traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)}, traceTestTarget: {Code: code, Balance: big.NewInt(1)},
+	}}, nil)
+	t.Cleanup(backend.teardown)
+	for _, kinds := range []TraceTypes{{"trace", "vmTrace"}, {"vmTrace"}} {
+		result, err := NewTraceAPI(backend).Call(context.Background(), traceTestArgs(&traceTestTarget, nil), kinds, nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Prague: a cold value CALL creating an account forwards its 0xffff
+		// gas argument plus the stipend; a CREATE of empty initcode forwards
+		// all but 1/64 of the gas left after its base cost. The cost includes
+		// the forwarded gas (without the stipend), and the failed precheck
+		// returns it at once with any stipend.
+		failed := 0
+		ops := result.VMTrace.Ops
+		for i, op := range ops {
+			if op.Op != "CALL" && op.Op != "CREATE" {
+				continue
+			}
+			var base, forwarded, stipend uint64
+			prev := ops[i-1].Ex.Used
+			switch op.Op {
+			case "CALL":
+				base = params.ColdAccountAccessCostEIP2929 + params.CallValueTransferGas + params.CallNewAccountGas
+				forwarded, stipend = 0xffff, params.CallStipend
+			case "CREATE":
+				base = params.CreateGas
+				forwarded = prev - base - (prev-base)/64
+			}
+			failed++
+			if op.Sub != nil {
+				t.Fatalf("%v: %s entered a frame", kinds, op.Op)
+			}
+			if op.Cost != base+forwarded {
+				t.Fatalf("%v: %s cost %d, want %d + %d forwarded", kinds, op.Op, op.Cost, base, forwarded)
+			}
+			if op.Ex.Used != prev-base+stipend {
+				t.Fatalf("%v: %s used %d, want %d - %d + %d", kinds, op.Op, op.Ex.Used, prev, base, stipend)
+			}
+			if kinds.has("trace") {
+				frame := result.Trace[failed]
+				gas := uint64(0)
+				switch action := frame.Action.(type) {
+				case traceCallAction:
+					gas = uint64(action.Gas)
+				case traceCreateAction:
+					gas = uint64(action.Gas)
+				}
+				if frame.Error != "Insufficient balance for transfer" || gas != forwarded+stipend {
+					t.Fatalf("%v: %s frame %+v", kinds, op.Op, frame)
+				}
+			}
+		}
+		if failed != 2 {
+			t.Fatalf("%v: traced %d failed prechecks", kinds, failed)
+		}
+	}
+}
+
 func TestTraceNamespaceCreateCost(t *testing.T) {
 	// Store initcode PUSH1 42 PUSH1 0 SSTORE STOP at memory offset 26, then run
 	// it through CREATE and CREATE2 (salt 0).
