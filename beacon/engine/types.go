@@ -390,15 +390,23 @@ func executableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // list encodes as 0xc0) and is rejected like any other undecodable payload:
 // the engine API requires such payloads to be answered with the INVALID status
 // rather than an invalid params error.
+//
+// Payloads with an access list whose encoded size exceeds MaxBlockSize or whose
+// item count exceeds blockGasLimit / BALItemCost are rejected immediately before
+// inflating objects on the heap.
 func attachAccessList(block *types.Block, data ExecutableData) (*types.Block, error) {
 	if data.BlockAccessList == nil {
 		return block, nil
 	}
-	var accessList bal.BlockAccessList
-	if err := rlp.DecodeBytes(data.BlockAccessList, &accessList); err != nil {
+	if len(data.BlockAccessList) > params.MaxBlockSize {
+		return nil, fmt.Errorf("failed to decode BAL: size %d exceeds max block size %d", len(data.BlockAccessList), params.MaxBlockSize)
+	}
+	maxItems := block.GasLimit() / params.BALItemCost
+	accessList, err := bal.DecodeBytesLimited(data.BlockAccessList, maxItems)
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode BAL: %w", err)
 	}
-	return block.WithAccessListUnsafe(&accessList), nil
+	return block.WithAccessListUnsafe(accessList), nil
 }
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the

@@ -19,6 +19,7 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"errors"
 	"math"
 	"reflect"
 	"slices"
@@ -379,5 +380,80 @@ func TestBlockAccessListValidation(t *testing.T) {
 	listB := cBAL.ToEncodingObj()
 	if err := listB.Validate(math.MaxUint64, 10000); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
+	}
+}
+
+func TestBlockAccessListDecodeLimited(t *testing.T) {
+	one := func() *uint256.Int { return new(uint256.Int).SetBytes(testrand.Bytes(32)) }
+	bal := make(BlockAccessList, 3)
+	for i := range bal {
+		bal[i].Address = common.Address(testrand.Bytes(20))
+		for j := 0; j < 5; j++ {
+			bal[i].StorageChanges = append(bal[i].StorageChanges, encodingSlotChanges{
+				Slot: one(), SlotChanges: []encodingStorageWrite{{BlockAccessIndex: 0, PostValue: one()}},
+			})
+		}
+		for j := 0; j < 4; j++ {
+			bal[i].StorageReads = append(bal[i].StorageReads, one())
+		}
+	}
+	// 3 accounts, each has 1 addr + 5 writes + 4 reads = 10 items. Total 30 items.
+	if got := bal.itemCount(); got != 30 {
+		t.Fatalf("setup: item count = %d, want 30", got)
+	}
+
+	var buf bytes.Buffer
+	if err := bal.EncodeRLP(&buf); err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+	enc := buf.Bytes()
+
+	// Exactly at limit (30 items) -> success
+	res, err := DecodeBytesLimited(enc, 30)
+	if err != nil {
+		t.Fatalf("expected success at exact limit, got: %v", err)
+	}
+	if len(*res) != 3 {
+		t.Fatalf("expected 3 accounts, got %d", len(*res))
+	}
+
+	// Well above limit -> success
+	if _, err := DecodeBytesLimited(enc, 100); err != nil {
+		t.Fatalf("expected success well above limit, got: %v", err)
+	}
+
+	// One below limit (29 items) -> error
+	if _, err := DecodeBytesLimited(enc, 29); !errors.Is(err, ErrExceedsItemLimit) {
+		t.Fatalf("expected ErrExceedsItemLimit for 29 items, got: %v", err)
+	}
+
+	// Below first account item count (9 items, first account needs 10) -> error
+	if _, err := DecodeBytesLimited(enc, 9); !errors.Is(err, ErrExceedsItemLimit) {
+		t.Fatalf("expected ErrExceedsItemLimit for 9 items, got: %v", err)
+	}
+
+	// Zero limit -> error
+	if _, err := DecodeBytesLimited(enc, 0); !errors.Is(err, ErrExceedsItemLimit) {
+		t.Fatalf("expected ErrExceedsItemLimit for 0 limit, got: %v", err)
+	}
+
+	// Empty BAL with 0 limit -> success
+	emptyBal := BlockAccessList{}
+	var emptyBuf bytes.Buffer
+	if err := emptyBal.EncodeRLP(&emptyBuf); err != nil {
+		t.Fatalf("encode empty BAL error: %v", err)
+	}
+	resEmpty, err := DecodeBytesLimited(emptyBuf.Bytes(), 0)
+	if err != nil {
+		t.Fatalf("expected success decoding empty BAL with 0 limit, got: %v", err)
+	}
+	if len(*resEmpty) != 0 {
+		t.Fatalf("expected 0 accounts, got %d", len(*resEmpty))
+	}
+
+	// Trailing garbage -> error
+	trailing := append(slices.Clone(enc), 0x01)
+	if _, err := DecodeBytesLimited(trailing, 100); !errors.Is(err, rlp.ErrMoreThanOneValue) {
+		t.Fatalf("expected ErrMoreThanOneValue for trailing bytes, got: %v", err)
 	}
 }
