@@ -234,7 +234,9 @@ func traceErrorLabel(err error, precompile bool) string {
 	// Dynamic gas failures are wrapped as out of gas with the cause as text.
 	case errors.Is(err, vm.ErrWriteProtection) || strings.HasSuffix(err.Error(), ": "+vm.ErrWriteProtection.Error()):
 		return "Mutable Call In Static Context"
-	case errors.Is(err, vm.ErrOutOfGas), errors.Is(err, vm.ErrCodeStoreOutOfGas), errors.Is(err, vm.ErrGasUintOverflow):
+	// As in Parity and EIP-170, a code-deposit failure, including code above
+	// the size limit, is out of gas.
+	case errors.Is(err, vm.ErrOutOfGas), errors.Is(err, vm.ErrCodeStoreOutOfGas), errors.Is(err, vm.ErrMaxCodeSizeExceeded), errors.Is(err, vm.ErrGasUintOverflow):
 		return "Out of gas"
 	case errors.As(err, &invalidOp):
 		return "Bad instruction"
@@ -248,10 +250,9 @@ func traceErrorLabel(err error, precompile bool) string {
 		return "Out of bounds"
 	case errors.Is(err, vm.ErrContractAddressCollision):
 		return "Contract address collision"
-	case errors.Is(err, vm.ErrMaxCodeSizeExceeded):
-		return "Code size limit exceeded"
+	// OpenEthereum's label for returned code starting with 0xEF (EIP-3541).
 	case errors.Is(err, vm.ErrInvalidCode):
-		return "Invalid code prefix 0xEF"
+		return "Invalid code"
 	case errors.Is(err, vm.ErrNonceUintOverflow):
 		return "Nonce overflow"
 	case errors.Is(err, vm.ErrInsufficientBalance):

@@ -473,8 +473,8 @@ func TestTraceNamespaceErrorLabels(t *testing.T) {
 		{name: "precompile", to: &common.Address{19: 6}, input: bytes.Repeat([]byte{1}, 128), want: "Built-in failed"},
 		{name: "collision", code: create2 + create2 + "00", frame: 2, want: "Contract address collision"},
 		{name: "code deposit", input: common.FromHex("6110006000f3"), want: "Out of gas"},
-		{name: "code size", input: common.FromHex("62010001" + "6000f3"), gas: 25_000_000, want: "Code size limit exceeded"},
-		{name: "code prefix", input: common.FromHex("60ef60005360016000f3"), want: "Invalid code prefix 0xEF"},
+		{name: "code size", input: common.FromHex("62010001" + "6000f3"), gas: 25_000_000, want: "Out of gas"},
+		{name: "code prefix", input: common.FromHex("60ef60005360016000f3"), want: "Invalid code"},
 		{name: "nonce overflow", code: "600060006000f000", nonce: math.MaxUint64, frame: 1, want: "Nonce overflow"},
 	} {
 		api, _ := traceTestAPI(t, nil, nil)
