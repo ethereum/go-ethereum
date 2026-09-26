@@ -408,9 +408,19 @@ func TestTraceNamespaceCallFields(t *testing.T) {
 			delete(args, field)
 		}
 	}
+	// An explicit null is an omitted member.
+	var omitted TraceExecution
+	if err := client.Call(&omitted, "trace_call", map[string]any{}, TraceTypes{}); err != nil {
+		t.Fatal(err)
+	}
 	for _, field := range []string{"gas", "chainId", "blobVersionedHashes", "authorizationList"} {
-		var result json.RawMessage
-		requireTraceCode(t, client.Call(&result, "trace_call", map[string]any{field: nil}, TraceTypes{}), -32602)
+		var result TraceExecution
+		if err := client.Call(&result, "trace_call", map[string]any{field: nil}, TraceTypes{}); err != nil {
+			t.Fatalf("null %s: %v", field, err)
+		}
+		if !bytes.Equal(result.Output, omitted.Output) {
+			t.Fatalf("null %s changed execution", field)
+		}
 	}
 }
 
