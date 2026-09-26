@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"slices"
 	"strings"
 	"testing"
 
@@ -163,6 +164,76 @@ func TestTraceNamespaceCallRejectionCodes(t *testing.T) {
 		// trace_callMany reports the same validation codes.
 		err = client.Call(&result, "trace_callMany", []any{[]any{args, TraceTypes{}}})
 		requireTraceCode(t, err, tc.code)
+	}
+}
+
+func TestTraceNamespaceCallRejectionFallback(t *testing.T) {
+	blob := common.Hash{0: 1}
+	// Rejections of a well-formed call at the selected block without a listed
+	// code are -32003 (Transaction rejected).
+	api, _ := traceTestAPI(t, common.FromHex("00"), nil)
+	client := traceContractClient(t, api)
+	args := map[string]any{"from": traceTestSender, "to": traceTestTarget, "blobVersionedHashes": []common.Hash{blob}, "maxFeePerBlobGas": "0x1"}
+	var result json.RawMessage
+	requireTraceCode(t, client.Call(&result, "trace_call", args, TraceTypes{}, "latest", nil, map[string]any{"blobBaseFee": "0x2"}), -32003)
+	args["blobVersionedHashes"] = slices.Repeat([]common.Hash{blob}, params.BlobTxMaxBlobs+1)
+	delete(args, "maxFeePerBlobGas")
+	requireTraceCode(t, client.Call(&result, "trace_call", args, TraceTypes{}), -32003)
+	requireTraceCode(t, client.Call(&result, "trace_callMany", []any{[]any{args, TraceTypes{}}}), -32003)
+
+	// A transaction type not active at the selected fork.
+	config := *params.AllDevChainProtocolChanges
+	config.PragueTime, config.OsakaTime, config.BogotaTime = nil, nil, nil
+	backend := newTestBackend(t, 0, &core.Genesis{Config: &config, GasLimit: 30_000_000, Difficulty: big.NewInt(0), BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
+		traceTestSender: {Balance: big.NewInt(1e18)},
+	}}, nil)
+	t.Cleanup(backend.teardown)
+	client = traceContractClient(t, NewTraceAPI(backend))
+	auth := []types.SetCodeAuthorization{{Address: traceTestTarget}}
+	requireTraceCode(t, client.Call(&result, "trace_call", map[string]any{"from": traceTestSender, "to": traceTestTarget, "authorizationList": auth}, TraceTypes{}), -32003)
+	// Before Osaka, the per-transaction blob limit does not apply.
+	var many TraceExecution
+	if err := client.Call(&many, "trace_call", map[string]any{"from": traceTestSender, "to": traceTestTarget, "blobVersionedHashes": slices.Repeat([]common.Hash{blob}, params.BlobTxMaxBlobs+1)}, TraceTypes{}); err != nil {
+		t.Fatalf("pre-Osaka blob count: %v", err)
+	}
+	// Defects no transaction can carry stay -32602 at an earlier fork, ahead
+	// of the inactive type.
+	for _, fields := range []map[string]any{
+		{"authorizationList": []types.SetCodeAuthorization{}},
+		{"maxPriorityFeePerGas": "0x1", "authorizationList": auth},
+	} {
+		fields["from"], fields["to"] = traceTestSender, traceTestTarget
+		requireTraceCode(t, client.Call(&result, "trace_call", fields, TraceTypes{}), -32602)
+		requireTraceCode(t, client.Call(&result, "trace_callMany", []any{[]any{fields, TraceTypes{}}}), -32602)
+	}
+}
+
+func TestTraceNamespaceCallRejectionPrecedence(t *testing.T) {
+	api, _ := traceTestAPI(t, common.FromHex("00"), nil)
+	client := traceContractClient(t, api)
+	unfunded := common.HexToAddress("0xcafe0009")
+	// Each call also has a fee cap below the base fee (-38012), and one lacks
+	// the funds (-38014), but a call object invalid regardless of state is
+	// -32602 first.
+	for name, fields := range map[string]map[string]any{
+		"tip above cap":        {"maxFeePerGas": "0x1", "maxPriorityFeePerGas": "0x2"},
+		"tip without cap":      {"maxPriorityFeePerGas": "0x1"},
+		"empty auth list":      {"maxFeePerGas": "0x1", "authorizationList": []types.SetCodeAuthorization{}},
+		"empty blob hashes":    {"maxFeePerGas": "0x1", "blobVersionedHashes": []common.Hash{}},
+		"blob fee, no hashes":  {"maxFeePerGas": "0x1", "maxFeePerBlobGas": "0x1"},
+		"blob fee, null list":  {"maxFeePerGas": "0x1", "maxFeePerBlobGas": "0x1", "blobVersionedHashes": nil},
+		"blob hash version":    {"maxFeePerGas": "0x1", "blobVersionedHashes": []common.Hash{{0: 2}}},
+		"unfunded, empty list": {"from": unfunded, "value": "0x1", "authorizationList": []types.SetCodeAuthorization{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			args := map[string]any{"from": traceTestSender, "to": traceTestTarget}
+			for k, v := range fields {
+				args[k] = v
+			}
+			var result json.RawMessage
+			requireTraceCode(t, client.Call(&result, "trace_call", args, TraceTypes{}), -32602)
+			requireTraceCode(t, client.Call(&result, "trace_callMany", []any{[]any{args, TraceTypes{}}}), -32602)
+		})
 	}
 }
 

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -423,6 +424,30 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	}
 	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
 		return nil, traceInvalid("data and input disagree")
+	}
+	// Reject call objects that no transaction can carry at any block before
+	// execution, so that these take precedence over block-dependent rejections.
+	// An omitted fee cap defaults to zero.
+	if args.MaxPriorityFeePerGas != nil {
+		feeCap := new(big.Int)
+		if args.MaxFeePerGas != nil {
+			feeCap = args.MaxFeePerGas.ToInt()
+		}
+		if args.MaxPriorityFeePerGas.ToInt().Cmp(feeCap) > 0 {
+			return nil, traceInvalid("%v: maxPriorityFeePerGas %v, maxFeePerGas %v", core.ErrTipAboveFeeCap, args.MaxPriorityFeePerGas.ToInt(), feeCap)
+		}
+	}
+	// A blob fee cap or hash list requires at least one blob hash.
+	if args.IsEIP4844() && len(args.BlobHashes) == 0 {
+		return nil, traceInvalid("%v", core.ErrMissingBlobHashes)
+	}
+	for i, hash := range args.BlobHashes {
+		if !kzg4844.IsValidVersionedHash(hash[:]) {
+			return nil, traceInvalid("blob %d has invalid hash version", i)
+		}
+	}
+	if args.AuthorizationList != nil && len(args.AuthorizationList) == 0 {
+		return nil, traceInvalid("%v", core.ErrEmptyAuthList)
 	}
 	from := common.Address{}
 	if args.From != nil {
