@@ -41,7 +41,13 @@ nonce is accepted but neither validated nor used; CREATE addresses derive from t
 sender's state nonce. Signed raw and mined transactions use the chain's applicable
 rules. Malformed parameters return `-32602` and unknown selected blocks `-32001`. Rejected unsigned calls use the
 `eth_simulateV1` codes: `-38012` fee cap below base fee, `-38013` intrinsic gas,
-`-38014` insufficient funds and `-38025` initcode size; a priority fee above the fee cap and other invalid calls are `-32602`.
+`-38014` insufficient funds and `-38025` initcode size. A call object invalid
+regardless of state (a priority fee above the fee cap, a type or field combination
+no transaction can carry, blob fields without blob hashes, malformed blob hashes,
+an empty authorization
+list) is `-32602` and takes precedence when several rules fail; any other rejection
+at the selected block, such as a blob fee cap below the blob base fee or a type not
+active at that fork, is `-32003`.
 Rejected signed transactions use the `eth_sendRawTransaction` groups: `1` nonce too
 low, `2` nonce too high, `800` intrinsic gas, `804` priority fee above fee cap,
 `806` fee cap below base fee, `809` insufficient funds and `-32003` otherwise.
