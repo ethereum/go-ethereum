@@ -34,6 +34,7 @@ type txJSON struct {
 	ChainID              *hexutil.Big           `json:"chainId,omitempty"`
 	Nonce                *hexutil.Uint64        `json:"nonce"`
 	Sender               *common.Address        `json:"sender,omitempty"`
+	From                 *common.Address        `json:"from,omitempty"` // JSON-RPC name for a frame transaction's sender
 	Frames               []Frame                `json:"frames,omitempty"`
 	Signatures           SignatureList          `json:"signatures,omitempty"`
 	To                   *common.Address        `json:"to"`
@@ -539,10 +540,14 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
 		itx.Nonce = uint64(*dec.Nonce)
-		if dec.Sender == nil {
+		switch {
+		case dec.Sender != nil:
+			itx.Sender = *dec.Sender
+		case dec.From != nil:
+			itx.Sender = *dec.From
+		default:
 			return errors.New("missing required field 'sender' in transaction")
 		}
-		itx.Sender = *dec.Sender
 		if dec.Frames == nil {
 			return errors.New("missing required field 'frames' in transaction")
 		}

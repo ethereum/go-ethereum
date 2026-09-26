@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -101,6 +103,54 @@ type FrameReceipt struct {
 	GasUsed      uint64 `json:"gasUsed"`
 	StateGasUsed uint64 `json:"stateGasUsed"`
 	Logs         []*Log `json:"logs"`
+}
+
+// UnmarshalJSON decodes both the encoding above and the JSON-RPC one, where
+// gasUsed is the sum of executionGasUsed and stateGasUsed.
+func (f *FrameReceipt) UnmarshalJSON(input []byte) error {
+	var dec struct {
+		Status           *math.HexOrDecimal64 `json:"status"`
+		GasUsed          *math.HexOrDecimal64 `json:"gasUsed"`
+		ExecutionGasUsed *math.HexOrDecimal64 `json:"executionGasUsed"`
+		StateGasUsed     *math.HexOrDecimal64 `json:"stateGasUsed"`
+		Logs             []*Log               `json:"logs"`
+	}
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.Status == nil {
+		return errors.New("missing required field 'status' for FrameReceipt")
+	}
+	if dec.Logs == nil {
+		return errors.New("missing required field 'logs' for FrameReceipt")
+	}
+	f.Status, f.Logs = uint64(*dec.Status), dec.Logs
+	if dec.StateGasUsed != nil {
+		f.StateGasUsed = uint64(*dec.StateGasUsed)
+	}
+	switch {
+	case dec.ExecutionGasUsed != nil:
+		f.GasUsed = uint64(*dec.ExecutionGasUsed)
+		if dec.GasUsed != nil && uint64(*dec.GasUsed) != f.GasUsed+f.StateGasUsed {
+			return errors.New("FrameReceipt 'gasUsed' is not the sum of 'executionGasUsed' and 'stateGasUsed'")
+		}
+	case dec.GasUsed != nil:
+		f.GasUsed = uint64(*dec.GasUsed)
+	default:
+		return errors.New("missing required field 'gasUsed' for FrameReceipt")
+	}
+	return nil
+}
+
+// FrameTxStatus derives the transaction-level status of a frame transaction,
+// which its receipt does not carry: successful only if every frame succeeded.
+func FrameTxStatus(frames []FrameReceipt) uint64 {
+	for _, fr := range frames {
+		if fr.Status != ReceiptStatusSuccessful {
+			return ReceiptStatusFailed
+		}
+	}
+	return ReceiptStatusSuccessful
 }
 
 // receiptRLP is the consensus encoding of a receipt.
@@ -288,7 +338,6 @@ func (r *Receipt) decodeTyped(b []byte) error {
 }
 
 func (r *Receipt) setFromFrameRLP(data frameTxReceiptRLP) error {
-	r.Status = ReceiptStatusSuccessful
 	r.PostState = nil
 	r.CumulativeGasUsed = data.CumulativeGasUsed
 	payer := data.Payer
@@ -304,6 +353,7 @@ func (r *Receipt) setFromFrameRLP(data frameTxReceiptRLP) error {
 		}
 		r.Logs = append(r.Logs, fr.Logs...)
 	}
+	r.Status = FrameTxStatus(r.FrameReceipts)
 	r.Bloom = CreateBloom(r)
 	return nil
 }
