@@ -1,5 +1,9 @@
 ## Go Ethereum
 
+This experimental fork adds the nine Parity-style `trace_*` methods on `feat/trace`.
+See [trace namespace usage and limits](docs/trace.md). This is a draft implementation,
+not upstream Geth support.
+
 Golang execution layer implementation of the Ethereum protocol.
 
 [![API Reference](
