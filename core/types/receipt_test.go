@@ -588,3 +588,58 @@ func clearComputedFieldsOnLogs(logs []*Log) []*Log {
 	}
 	return l
 }
+
+// TestFrameReceiptStatus checks that a decoded frame transaction receipt
+// derives its status from its frames, as the encodings carry no status.
+func TestFrameReceiptStatus(t *testing.T) {
+	payer := common.Address{0x3}
+	tests := []struct {
+		frames []uint64
+		want   uint64
+	}{
+		{[]uint64{1, 1}, ReceiptStatusSuccessful},
+		{[]uint64{1, 0}, ReceiptStatusFailed},
+		{[]uint64{1, 1, 0, 2}, ReceiptStatusFailed},
+		{[]uint64{1, 2}, ReceiptStatusFailed},
+	}
+	for _, tt := range tests {
+		r := &Receipt{Type: FrameTxType, CumulativeGasUsed: 100, Payer: &payer, Logs: []*Log{}}
+		for _, s := range tt.frames {
+			r.FrameReceipts = append(r.FrameReceipts, FrameReceipt{Status: s, GasUsed: 10, Logs: []*Log{}})
+		}
+		r.Status = tt.want
+
+		consensus, err := r.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fromConsensus Receipt
+		if err := fromConsensus.UnmarshalBinary(consensus); err != nil {
+			t.Fatal(err)
+		}
+		stored, err := rlp.EncodeToBytes((*ReceiptForStorage)(r))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fromStorage ReceiptForStorage
+		if err := rlp.DecodeBytes(stored, &fromStorage); err != nil {
+			t.Fatal(err)
+		}
+		enc, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fromJSON Receipt
+		if err := json.Unmarshal(enc, &fromJSON); err != nil {
+			t.Fatal(err)
+		}
+		for name, got := range map[string]*Receipt{"consensus": &fromConsensus, "storage": (*Receipt)(&fromStorage), "json": &fromJSON} {
+			if got.Status != tt.want {
+				t.Errorf("frames %v, %s: status %d, want %d", tt.frames, name, got.Status, tt.want)
+			}
+			if !reflect.DeepEqual(got.FrameReceipts, r.FrameReceipts) {
+				t.Errorf("frames %v, %s: frame receipts %+v, want %+v", tt.frames, name, got.FrameReceipts, r.FrameReceipts)
+			}
+		}
+	}
+}

@@ -103,6 +103,17 @@ type FrameReceipt struct {
 	Logs         []*Log `json:"logs"`
 }
 
+// FrameTxStatus derives the transaction-level status of a frame transaction,
+// which its receipt does not carry: successful only if every frame succeeded.
+func FrameTxStatus(frames []FrameReceipt) uint64 {
+	for _, fr := range frames {
+		if fr.Status != ReceiptStatusSuccessful {
+			return ReceiptStatusFailed
+		}
+	}
+	return ReceiptStatusSuccessful
+}
+
 // receiptRLP is the consensus encoding of a receipt.
 type receiptRLP struct {
 	PostStateOrStatus []byte
@@ -288,7 +299,6 @@ func (r *Receipt) decodeTyped(b []byte) error {
 }
 
 func (r *Receipt) setFromFrameRLP(data frameTxReceiptRLP) error {
-	r.Status = ReceiptStatusSuccessful
 	r.PostState = nil
 	r.CumulativeGasUsed = data.CumulativeGasUsed
 	payer := data.Payer
@@ -304,6 +314,7 @@ func (r *Receipt) setFromFrameRLP(data frameTxReceiptRLP) error {
 		}
 		r.Logs = append(r.Logs, fr.Logs...)
 	}
+	r.Status = FrameTxStatus(r.FrameReceipts)
 	r.Bloom = CreateBloom(r)
 	return nil
 }
