@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
@@ -61,7 +62,9 @@ func AzureBlobstoreUpload(path string, name string, config AzureBlobstoreConfig)
 	}
 	defer in.Close()
 
-	_, err = client.UploadFile(context.Background(), config.Container, name, in, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	_, err = client.UploadFile(ctx, config.Container, name, in, nil)
 	return err
 }
 
@@ -80,8 +83,10 @@ func AzureBlobstoreList(config AzureBlobstoreConfig) ([]*container.BlobItem, err
 	pager := client.NewListBlobsFlatPager(config.Container, nil)
 
 	var blobs []*container.BlobItem
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 	for pager.More() {
-		page, err := pager.NextPage(context.TODO())
+		page, err := pager.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -111,9 +116,12 @@ func AzureBlobstoreDelete(config AzureBlobstoreConfig, blobs []*container.BlobIt
 	}
 	// Iterate over the blobs and delete them
 	for _, blob := range blobs {
-		if _, err := client.DeleteBlob(context.Background(), config.Container, *blob.Name, nil); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		if _, err := client.DeleteBlob(ctx, config.Container, *blob.Name, nil); err != nil {
+			cancel()
 			return err
 		}
+		cancel()
 		fmt.Printf("deleted  %s (%s)\n", *blob.Name, blob.Properties.LastModified)
 	}
 	return nil
