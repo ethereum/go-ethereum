@@ -4435,3 +4435,97 @@ func TestStateMethodsDefaultToLatest(t *testing.T) {
 		[]any{map[common.Address][]common.Hash{acc: {slot}}, "latest"},
 		[]any{map[common.Address][]common.Hash{acc: {slot}}})
 }
+
+// TestFrameTransactionRPC checks that frame transactions and their receipts
+// expose the EIP-8141 fields over RPC, and that the transaction round-trips.
+func TestFrameTransactionRPC(t *testing.T) {
+	t.Parallel()
+
+	var (
+		config    = *params.MergedTestChainConfig
+		sender    = common.Address{0xaa}
+		target    = common.Address{0xbb}
+		baseFee   = big.NewInt(7)
+		blockHash = common.Hash{0x1}
+	)
+	config.BogotaTime = new(uint64)
+	tx := types.NewTx(&types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Nonce:   3,
+		Sender:  sender,
+		Frames: []types.Frame{
+			{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 5000}, Value: uint256.NewInt(0)},
+			{Mode: types.ModeSender, Target: &target, GasLimits: types.Limits{Execution: 30000, State: 100}, Value: uint256.NewInt(0), Data: []byte{0x1}},
+		},
+		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: sender.Bytes(), Signature: make([]byte, 65)}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(2),
+			MaxFeePerGas:         uint256.NewInt(100),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
+	})
+
+	data, err := json.Marshal(newRPCTransaction(tx, blockHash, 1, 0, 0, baseFee, &config))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded types.Transaction
+	if err := decoded.UnmarshalJSON(data); err != nil {
+		t.Fatalf("unmarshal rpc transaction: %v", err)
+	}
+	if decoded.Hash() != tx.Hash() {
+		t.Fatalf("hash changed: want %x, have %x", tx.Hash(), decoded.Hash())
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatal(err)
+	}
+	wantFields := map[string]string{
+		"from":     `"0xaa00000000000000000000000000000000000000"`,
+		"gasPrice": `"0x9"`,
+		"frames": `[{"mode":"0x1","flags":"0x3","executionGas":"0x1388","stateGas":"0x0","value":"0x0","data":"0x"},` +
+			`{"mode":"0x2","flags":"0x0","target":"0xbb00000000000000000000000000000000000000","executionGas":"0x7530","stateGas":"0x64","value":"0x0","data":"0x01"}]`,
+	}
+	for name, want := range wantFields {
+		require.JSONEqf(t, want, string(fields[name]), "field %s", name)
+	}
+	if _, ok := fields["sender"]; ok {
+		t.Error("unexpected field sender, the sender is reported as from")
+	}
+
+	receipt := &types.Receipt{
+		Type:   types.FrameTxType,
+		Status: types.ReceiptStatusFailed,
+		Payer:  &sender,
+		FrameReceipts: []types.FrameReceipt{
+			{Status: types.ReceiptStatusSuccessful, GasUsed: 100, StateGasUsed: 50, Logs: []*types.Log{{Address: target, Topics: []common.Hash{}}}},
+			{Status: types.ReceiptStatusFailed, GasUsed: 30000},
+		},
+	}
+	receipt.Logs = receipt.FrameReceipts[0].Logs
+	data, err = json.Marshal(MarshalReceipt(receipt, blockHash, 1, types.LatestSigner(&config), tx, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"status":"0x0","payer":"0xaa00000000000000000000000000000000000000","frameReceipts":[` +
+		`{"status":"0x1","gasUsed":"0x96","executionGasUsed":"0x64","stateGasUsed":"0x32","logs":[{"address":"0xbb00000000000000000000000000000000000000","topics":[],"data":"0x","blockNumber":"0x0","blockTimestamp":"0x0","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","logIndex":"0x0","removed":false}]},` +
+		`{"status":"0x0","gasUsed":"0x7530","executionGasUsed":"0x7530","stateGasUsed":"0x0","logs":[]}]}`
+	var have map[string]json.RawMessage
+	if err := json.Unmarshal(data, &have); err != nil {
+		t.Fatal(err)
+	}
+	subset, _ := json.Marshal(map[string]json.RawMessage{"status": have["status"], "payer": have["payer"], "frameReceipts": have["frameReceipts"]})
+	require.JSONEq(t, want, string(subset))
+
+	// The receipt decodes back into the frame receipts it was built from.
+	var decodedReceipt types.Receipt
+	if err := json.Unmarshal(data, &decodedReceipt); err != nil {
+		t.Fatalf("unmarshal rpc receipt: %v", err)
+	}
+	for i, want := range receipt.FrameReceipts {
+		have := decodedReceipt.FrameReceipts[i]
+		if have.Status != want.Status || have.GasUsed != want.GasUsed || have.StateGasUsed != want.StateGasUsed || len(have.Logs) != len(want.Logs) {
+			t.Errorf("frame receipt %d changed: want %+v, have %+v", i, want, have)
+		}
+	}
+}
