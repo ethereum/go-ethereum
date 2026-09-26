@@ -643,3 +643,70 @@ func TestFrameReceiptStatus(t *testing.T) {
 		}
 	}
 }
+
+// TestFrameReceiptUnmarshalJSON checks that frame receipts decode from both
+// the t8n encoding and the JSON-RPC one, where gasUsed spans both dimensions.
+func TestFrameReceiptUnmarshalJSON(t *testing.T) {
+	want := FrameReceipt{Status: 1, GasUsed: 100, StateGasUsed: 50, Logs: []*Log{}}
+	for _, input := range []string{
+		`{"status":1,"gasUsed":100,"stateGasUsed":50,"logs":[]}`,
+		`{"status":"0x1","gasUsed":"0x96","executionGasUsed":"0x64","stateGasUsed":"0x32","logs":[]}`,
+		`{"status":1,"executionGasUsed":"0x64","stateGasUsed":"0x32","logs":[]}`,
+	} {
+		var have FrameReceipt
+		if err := json.Unmarshal([]byte(input), &have); err != nil {
+			t.Errorf("%s: %v", input, err)
+		} else if !reflect.DeepEqual(have, want) {
+			t.Errorf("%s: want %+v, have %+v", input, want, have)
+		}
+	}
+	for _, input := range []string{
+		`{"status":"0x1","gasUsed":"0x64","executionGasUsed":"0x64","stateGasUsed":"0x32","logs":[]}`,
+		`{"gasUsed":"0x64","logs":[]}`,
+		`{"status":"0x1","logs":[]}`,
+		`{"status":"0x1","gasUsed":"0x64"}`,
+	} {
+		var have FrameReceipt
+		if err := json.Unmarshal([]byte(input), &have); err == nil {
+			t.Errorf("%s: expected error, have %+v", input, have)
+		}
+	}
+}
+
+// TestFrameTxUnmarshalRPCNames checks that a frame transaction decodes from
+// the JSON-RPC field names as well as the transaction's own.
+func TestFrameTxUnmarshalRPCNames(t *testing.T) {
+	target := common.Address{0xbb}
+	tx := NewTx(&FrameTx{
+		ChainID: uint256.NewInt(1),
+		Sender:  common.Address{0xaa},
+		Frames: []Frame{{
+			Mode:      ModeSender,
+			Target:    &target,
+			GasLimits: Limits{Execution: 30000, State: 100},
+			Value:     uint256.NewInt(0),
+			Data:      []byte{0x1},
+		}},
+		Signatures: SignatureList{},
+		Fees: Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(2),
+			MaxFeePerGas:         uint256.NewInt(100),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
+	})
+	own, err := json.Marshal(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := `{"type":"0x6","chainId":"0x1","nonce":"0x0","from":"0xaa00000000000000000000000000000000000000",` +
+		`"frames":[{"mode":"0x2","flags":"0x0","target":"0xbb00000000000000000000000000000000000000","executionGas":"0x7530","stateGas":"0x64","value":"0x0","data":"0x01"}],` +
+		`"signatures":[],"maxPriorityFeePerGas":"0x2","maxFeePerGas":"0x64","maxFeePerBlobGas":"0x0","blobVersionedHashes":[]}`
+	for _, input := range []string{string(own), rpc} {
+		var have Transaction
+		if err := json.Unmarshal([]byte(input), &have); err != nil {
+			t.Errorf("%s: %v", input, err)
+		} else if have.Hash() != tx.Hash() {
+			t.Errorf("%s: hash changed, want %x have %x", input, tx.Hash(), have.Hash())
+		}
+	}
+}
