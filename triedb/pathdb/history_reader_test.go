@@ -19,6 +19,7 @@ package pathdb
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -214,4 +215,70 @@ func TestHistoricalStateReader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
+}
+
+func TestConcurrentHistoricalStateReader(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	config := &testerConfig{
+		stateHistory: 0,
+		layers:       64,
+		enableIndex:  true,
+	}
+	env := newTester(t, config)
+	defer env.release()
+	waitIndexing(env.db)
+
+	realRoot := env.roots[9]
+	reader, err := env.db.HistoricReader(realRoot)
+	if err != nil {
+		t.Fatalf("Failed to create historic reader: %v", err)
+	}
+
+	accounts := env.snapAccounts[realRoot]
+	storages := env.snapStorages[realRoot]
+
+	var wg sync.WaitGroup
+	workers := 10
+	iterations := 20
+
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for iter := 0; iter < iterations; iter++ {
+				for addrHash := range accounts {
+					addr := env.accountPreimage(addrHash)
+					acct, err := reader.Account(addr)
+					if err != nil {
+						t.Errorf("worker %d: failed to read account %x: %v", workerID, addr, err)
+						return
+					}
+					if acct == nil {
+						t.Errorf("worker %d: account %x not found", workerID, addr)
+						return
+					}
+				}
+				for addrHash, slots := range storages {
+					addr := env.accountPreimage(addrHash)
+					for slotHash := range slots {
+						key := env.hashPreimage(slotHash)
+						val, err := reader.Storage(addr, key)
+						if err != nil {
+							t.Errorf("worker %d: failed to read storage %x: %v", workerID, key, err)
+							return
+						}
+						if len(val) == 0 {
+							t.Errorf("worker %d: storage slot %x not found", workerID, key)
+							return
+						}
+					}
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
 }
