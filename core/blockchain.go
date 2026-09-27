@@ -736,8 +736,7 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		}
 		return nil
 
-	case history.KeepPostMerge, history.KeepPostPrague, history.KeepPostOsaka,
-		history.KeepPostMay2026, history.KeepCustom:
+	case history.KeepPostMerge, history.KeepPostPrague, history.KeepPostOsaka, history.KeepCustom:
 		target := policy.Target
 		// Already at the target.
 		if freezerTail == target.BlockNumber {
@@ -757,12 +756,7 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		}
 		// Database needs pruning (freezerTail < target).
 		if latest != 0 {
-			arg := policy.Mode.String()
-			if policy.Mode == history.KeepCustom {
-				// The built-in points are re-derived from the mode alone, but a custom
-				// point has to be repeated on the command line.
-				arg += " --history.tail " + policy.Target.String()
-			}
+			arg := history.ChainHistory{Mode: policy.Mode, Point: policy.Target}.String()
 			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned to the target block.", policy.Mode.String()))
 			log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", arg))
 			return errors.New("history pruning required")

@@ -57,25 +57,25 @@ func TestNewPolicy(t *testing.T) {
 	}
 }
 
-// mainnetMay2026 is the prune point of KeepPostMay2026, used to exercise the
-// custom mode with a realistic pair.
-var mainnetMay2026 = &PrunePoint{
+// customPoint is a real mainnet block, used to exercise the custom mode with a
+// realistic pair.
+var customPoint = &PrunePoint{
 	BlockNumber: 25182208,
 	BlockHash:   common.HexToHash("0x6f7c16414e091d817bdbb0e1d0a17f74cd2b42d1a734d9864a7cd37a32514aad"),
 }
 
 func TestNewPolicyCustom(t *testing.T) {
 	// KeepCustom resolves the operator's own point, untouched.
-	p, err := NewPolicy(KeepCustom, params.MainnetGenesisHash, mainnetMay2026)
+	p, err := NewPolicy(KeepCustom, params.MainnetGenesisHash, customPoint)
 	if err != nil {
 		t.Fatalf("KeepCustom: %v", err)
 	}
-	if p.Mode != KeepCustom || p.Target == nil || *p.Target != *mainnetMay2026 {
+	if p.Mode != KeepCustom || p.Target == nil || *p.Target != *customPoint {
 		t.Errorf("KeepCustom: unexpected policy %+v", p)
 	}
 	// The custom point is not looked up in staticPrunePoints, so it works on a
 	// network that has no built-in entry for it.
-	if _, err := NewPolicy(KeepCustom, common.HexToHash("0xdeadbeef"), mainnetMay2026); err != nil {
+	if _, err := NewPolicy(KeepCustom, common.HexToHash("0xdeadbeef"), customPoint); err != nil {
 		t.Errorf("KeepCustom on unknown network: %v", err)
 	}
 	// Missing point: error, rather than a policy that prunes nothing.
@@ -84,16 +84,16 @@ func TestNewPolicyCustom(t *testing.T) {
 	}
 	// Degenerate points: error.
 	for name, point := range map[string]*PrunePoint{
-		"genesis":   {BlockNumber: 0, BlockHash: mainnetMay2026.BlockHash},
-		"zero hash": {BlockNumber: mainnetMay2026.BlockNumber},
+		"genesis":   {BlockNumber: 0, BlockHash: customPoint.BlockHash},
+		"zero hash": {BlockNumber: customPoint.BlockNumber},
 	} {
 		if _, err := NewPolicy(KeepCustom, params.MainnetGenesisHash, point); err == nil {
 			t.Errorf("KeepCustom with %s: expected error", name)
 		}
 	}
 	// A point supplied for a mode that ignores it is a mistake worth reporting.
-	for _, mode := range []HistoryMode{KeepAll, KeepPostMerge, KeepPostPrague, KeepPostOsaka, KeepPostMay2026} {
-		if _, err := NewPolicy(mode, params.MainnetGenesisHash, mainnetMay2026); err == nil {
+	for _, mode := range []HistoryMode{KeepAll, KeepPostMerge, KeepPostPrague, KeepPostOsaka} {
+		if _, err := NewPolicy(mode, params.MainnetGenesisHash, customPoint); err == nil {
 			t.Errorf("%s with a custom point: expected error", mode)
 		}
 	}
@@ -108,8 +108,7 @@ func TestHistoryModeText(t *testing.T) {
 		{KeepAll, "all", nil},
 		{KeepPostMerge, "postmerge", nil},
 		{KeepPostPrague, "postprague", nil},
-		{KeepPostOsaka, "postosaka", []string{"osaka"}},
-		{KeepPostMay2026, "2026-05", []string{"post2026-05"}},
+		{KeepPostOsaka, "postosaka", nil},
 		{KeepCustom, "custom", nil},
 	} {
 		if got := tt.mode.String(); got != tt.text {
@@ -130,7 +129,7 @@ func TestHistoryModeText(t *testing.T) {
 			}
 		}
 	}
-	for _, bad := range []string{"", " ", "ALL", "post", "2026", "0x2026-05", "custom:25182208", "invalid HistoryMode(7)"} {
+	for _, bad := range []string{"", " ", "ALL", "post", "2026", "0x2026-05", "custom:25182208", "2026-05", "invalid HistoryMode(7)"} {
 		var got HistoryMode
 		if err := got.UnmarshalText([]byte(bad)); err == nil {
 			t.Errorf("UnmarshalText(%q): expected error, got mode %d", bad, got)
@@ -166,8 +165,8 @@ func TestParsePrunePoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("valid point: %v", err)
 	}
-	if *got != *mainnetMay2026 {
-		t.Errorf("valid point: got %+v want %+v", got, mainnetMay2026)
+	if *got != *customPoint {
+		t.Errorf("valid point: got %+v want %+v", got, customPoint)
 	}
 	// String formats the point back into the form this parses, which is what the
 	// "run prune-history again" hint relies on.
@@ -199,11 +198,42 @@ func TestParsePrunePoint(t *testing.T) {
 	}
 }
 
+// TestChainHistoryText checks the text form shared by --history.chain and the
+// config file, so that a dumped config can be fed back in unchanged.
+func TestChainHistoryText(t *testing.T) {
+	for _, mode := range []HistoryMode{KeepAll, KeepPostMerge, KeepPostPrague, KeepPostOsaka} {
+		var got ChainHistory
+		if err := got.UnmarshalText([]byte(mode.String())); err != nil || got != (ChainHistory{Mode: mode}) {
+			t.Errorf("%q: got %+v, %v", mode, got, err)
+		}
+		if text, err := got.MarshalText(); err != nil || string(text) != mode.String() {
+			t.Errorf("%q: marshalled as %q, %v", mode, text, err)
+		}
+	}
+	value := customPoint.String()
+	var got ChainHistory
+	if err := got.UnmarshalText([]byte(value)); err != nil || got.Mode != KeepCustom || got.Point == nil || *got.Point != *customPoint {
+		t.Fatalf("%q: got %+v, %v", value, got, err)
+	}
+	if text, err := got.MarshalText(); err != nil || string(text) != value {
+		t.Errorf("custom point marshalled as %q, %v, want %q", text, err, value)
+	}
+	for _, bad := range []string{"", "custom", "postfoo", "25182208", "25182208:0xdeadbeef"} {
+		var got ChainHistory
+		if err := got.UnmarshalText([]byte(bad)); err == nil {
+			t.Errorf("%q: expected error, got %+v", bad, got)
+		}
+	}
+	if _, err := (ChainHistory{Mode: KeepCustom}).MarshalText(); err == nil {
+		t.Error("custom retention without a point: expected marshal error")
+	}
+}
+
 // TestStaticPrunePoints checks the built-in points are usable as configured: every
 // mode that needs a point has entries, they are non-degenerate, and they resolve
 // through the same paths a node uses.
 func TestStaticPrunePoints(t *testing.T) {
-	for mode := KeepPostMerge; mode <= KeepPostMay2026; mode++ {
+	for mode := KeepPostMerge; mode <= KeepPostOsaka; mode++ {
 		networks := staticPrunePoints[mode]
 		if len(networks) == 0 {
 			t.Errorf("%s has no prune points for any network", mode)
@@ -232,31 +262,6 @@ func TestStaticPrunePoints(t *testing.T) {
 			if p.Target != point {
 				t.Errorf("%s on %s: target %+v, want %+v", mode, genesis, p.Target, point)
 			}
-		}
-	}
-}
-
-// TestPrunePointText checks the text form used by both --history.tail and the
-// config file, so that a dumped config can be fed back in unchanged.
-func TestPrunePointText(t *testing.T) {
-	text, err := mainnetMay2026.MarshalText()
-	if err != nil {
-		t.Fatalf("MarshalText: %v", err)
-	}
-	if want := "25182208:0x6f7c16414e091d817bdbb0e1d0a17f74cd2b42d1a734d9864a7cd37a32514aad"; string(text) != want {
-		t.Errorf("MarshalText: got %q want %q", text, want)
-	}
-	var got PrunePoint
-	if err := got.UnmarshalText(text); err != nil {
-		t.Fatalf("UnmarshalText: %v", err)
-	}
-	if got != *mainnetMay2026 {
-		t.Errorf("round trip: got %+v want %+v", got, mainnetMay2026)
-	}
-	for _, bad := range []string{"", "25182208", "25182208:0xdead", "0:0x6f7c16414e091d817bdbb0e1d0a17f74cd2b42d1a734d9864a7cd37a32514aad"} {
-		var point PrunePoint
-		if err := point.UnmarshalText([]byte(bad)); err == nil {
-			t.Errorf("UnmarshalText(%q): expected error, got %+v", bad, point)
 		}
 	}
 }

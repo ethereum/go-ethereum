@@ -42,11 +42,6 @@ const (
 	// KeepPostOsaka sets the history pruning point to the Osaka activation block.
 	KeepPostOsaka
 
-	// KeepPostMay2026 sets the history pruning point to a fixed date instead of a
-	// fork transition. Such a point lets a node prune to a chosen date without
-	// waiting for the next fork; see staticPrunePoints for the derivation.
-	KeepPostMay2026
-
 	// KeepCustom sets the history pruning point to a block number and hash supplied
 	// by the operator, in place of one of the built-in points.
 	KeepCustom
@@ -66,8 +61,6 @@ func (m HistoryMode) String() string {
 		return "postprague"
 	case KeepPostOsaka:
 		return "postosaka"
-	case KeepPostMay2026:
-		return "2026-05"
 	case KeepCustom:
 		return "custom"
 	default:
@@ -92,14 +85,12 @@ func (m *HistoryMode) UnmarshalText(text []byte) error {
 		*m = KeepPostMerge
 	case "postprague":
 		*m = KeepPostPrague
-	case "postosaka", "osaka":
+	case "postosaka":
 		*m = KeepPostOsaka
-	case "2026-05", "post2026-05":
-		*m = KeepPostMay2026
 	case "custom":
 		*m = KeepCustom
 	default:
-		return fmt.Errorf(`unknown history mode %q, want "all", "postmerge", "postprague", "postosaka", "2026-05", or "custom"`, text)
+		return fmt.Errorf(`unknown history mode %q, want "all", "postmerge", "postprague", "postosaka", or "custom"`, text)
 	}
 	return nil
 }
@@ -107,7 +98,7 @@ func (m *HistoryMode) UnmarshalText(text []byte) error {
 // HistoryModeNames returns the accepted values for a history mode, for use in
 // flag usage strings and error messages.
 func HistoryModeNames() []string {
-	return []string{"all", "postmerge", "postprague", "postosaka", "2026-05", "custom"}
+	return []string{"all", "postmerge", "postprague", "postosaka", "custom"}
 }
 
 // PrunePoint identifies a specific block for history pruning.
@@ -125,29 +116,8 @@ func (p *PrunePoint) String() string {
 	return fmt.Sprintf("%d:%s", p.BlockNumber, p.BlockHash.Hex())
 }
 
-// MarshalText implements encoding.TextMarshaler, and UnmarshalText the counterpart.
-// They make a configured prune point serialise as the same "number:hash" string the
-// --history.tail flag takes. Keeping it a string rather than a nested table also
-// matters for the TOML config file, where a table cannot be followed by plain keys.
-//
-// Both are on the pointer receiver: the TOML library reflects on *PrunePoint and calls
-// the marshaller even when the pointer is nil, which a value receiver would turn into
-// a nil dereference.
-func (p *PrunePoint) MarshalText() ([]byte, error) {
-	return []byte(p.String()), nil
-}
-
-func (p *PrunePoint) UnmarshalText(text []byte) error {
-	point, err := ParsePrunePoint(string(text))
-	if err != nil {
-		return err
-	}
-	*p = *point
-	return nil
-}
-
 // ParsePrunePoint parses a history pruning point given as "<number>:<hash>", the
-// form accepted by the --history.tail flag.
+// form accepted by the --history.chain flag.
 //
 // Both halves are required. The number alone cannot be trusted as a pruning point
 // because nothing guarantees the canonical chain includes it (a reorged block has
@@ -173,6 +143,66 @@ func ParsePrunePoint(input string) (*PrunePoint, error) {
 		return nil, errors.New("prune point block hash must not be zero")
 	}
 	return &PrunePoint{BlockNumber: block, BlockHash: point}, nil
+}
+
+// ChainHistory is the configured chain history retention: a mode, plus the prune
+// point when the mode is KeepCustom. Its text form is the --history.chain value,
+// either a mode name or "<block number>:<block hash>".
+type ChainHistory struct {
+	Mode  HistoryMode
+	Point *PrunePoint
+}
+
+// String implements fmt.Stringer.
+func (c ChainHistory) String() string {
+	if c.Mode == KeepCustom {
+		return c.Point.String()
+	}
+	return c.Mode.String()
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (c ChainHistory) MarshalText() ([]byte, error) {
+	if c.Mode == KeepCustom && c.Point == nil {
+		return nil, errors.New("custom history retention without a prune point")
+	}
+	if !c.Mode.IsValid() {
+		return nil, fmt.Errorf("unknown history mode %d", c.Mode)
+	}
+	return []byte(c.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (c *ChainHistory) UnmarshalText(text []byte) error {
+	value := string(text)
+	var mode HistoryMode
+	if err := mode.UnmarshalText(text); err == nil {
+		if mode == KeepCustom {
+			return errors.New(`custom history retention is given as "<block number>:<block hash>"`)
+		}
+		*c = ChainHistory{Mode: mode}
+		return nil
+	}
+	if !strings.Contains(value, ":") {
+		return fmt.Errorf(`unknown history retention %q, want %s, or "<block number>:<block hash>"`, value, ChainHistoryNames())
+	}
+	point, err := ParsePrunePoint(value)
+	if err != nil {
+		return err
+	}
+	*c = ChainHistory{Mode: KeepCustom, Point: point}
+	return nil
+}
+
+// ChainHistoryNames lists the named values of the --history.chain flag.
+func ChainHistoryNames() string {
+	var names []string
+	for _, name := range HistoryModeNames() {
+		if name != KeepCustom.String() {
+			names = append(names, name)
+		}
+	}
+	return `"` + strings.Join(names, `", "`) + `"`
 }
 
 // staticPrunePoints contains the pre-defined history pruning cutoff blocks for
@@ -218,26 +248,13 @@ var staticPrunePoints = map[HistoryMode]map[common.Hash]*PrunePoint{
 			BlockHash:   common.HexToHash("0xff88199acc4b4e29b6129b2fe691e4c84c1bfde3b75727eba2ec2dde89847d24"),
 		},
 	},
-	KeepPostMay2026: {
-		// Block 25182208 is the first mainnet block whose timestamp is at or after
-		// 2026-05-26T21:33:11Z, and is also an era1 boundary (3074*8192), which keeps a
-		// pruned database aligned with the era files that could restore what was removed.
-		//
-		// Only mainnet is listed. Derive a network's own point the same way - ask a node
-		// that still has the history for the header of the first block at or after the
-		// chosen instant, by number and hash - and add it here rather than reusing
-		// mainnet's pair, whose number need not be canonical elsewhere.
-		params.MainnetGenesisHash: {
-			BlockNumber: 25182208,
-			BlockHash:   common.HexToHash("0x6f7c16414e091d817bdbb0e1d0a17f74cd2b42d1a734d9864a7cd37a32514aad"),
-		},
-	},
 }
 
 // HistoryPolicy describes the configured history pruning strategy. It captures
 // user intent as opposed to the actual DB state.
 type HistoryPolicy struct {
 	Mode HistoryMode
+
 	// Static prune point for the modes with a fixed target, and the operator's own
 	// point for KeepCustom. Nil for KeepAll.
 	Target *PrunePoint
@@ -256,7 +273,7 @@ func NewPolicy(mode HistoryMode, genesisHash common.Hash, custom *PrunePoint) (H
 	case KeepAll:
 		return HistoryPolicy{Mode: KeepAll}, nil
 
-	case KeepPostMerge, KeepPostPrague, KeepPostOsaka, KeepPostMay2026:
+	case KeepPostMerge, KeepPostPrague, KeepPostOsaka:
 		point := staticPrunePoints[mode][genesisHash]
 		if point == nil {
 			return HistoryPolicy{}, fmt.Errorf("%s history pruning not available for network %s", mode, genesisHash.Hex())

@@ -51,7 +51,7 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	HistoryMode:             history.KeepAll,
+	HistoryMode:             history.ChainHistory{Mode: history.KeepAll},
 	SyncMode:                SnapSync,
 	NetworkId:               0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:           2350000,
@@ -96,11 +96,7 @@ type Config struct {
 	SyncMode  SyncMode
 
 	// HistoryMode configures chain history retention.
-	HistoryMode history.HistoryMode
-	// HistoryTail is the pruning point used when HistoryMode is history.KeepCustom,
-	// given as a block number and hash pair. It must be nil for every other mode,
-	// which history.NewPolicy enforces.
-	HistoryTail *history.PrunePoint `toml:",omitempty"`
+	HistoryMode history.ChainHistory
 
 	// This can be set to list of enrtree:// URLs which will be queried for
 	// nodes to connect to.

@@ -331,13 +331,8 @@ var (
 	}
 	ChainHistoryFlag = &cli.StringFlag{
 		Name:     "history.chain",
-		Usage:    fmt.Sprintf(`Blockchain history retention ("%s")`, strings.Join(history.HistoryModeNames(), `", "`)),
+		Usage:    fmt.Sprintf(`Blockchain history retention (%s, or "<block number>:<block hash>" to keep from that block)`, history.ChainHistoryNames()),
 		Value:    ethconfig.Defaults.HistoryMode.String(),
-		Category: flags.StateCategory,
-	}
-	HistoryTailFlag = &cli.StringFlag{
-		Name:     "history.tail",
-		Usage:    `Pruning point for --history.chain=custom, as "<block number>:<block hash>"`,
 		Category: flags.StateCategory,
 	}
 	LogHistoryFlag = &cli.Uint64Flag{
@@ -1807,17 +1802,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 
 	if ctx.IsSet(ChainHistoryFlag.Name) {
-		value := ctx.String(ChainHistoryFlag.Name)
-		if err := cfg.HistoryMode.UnmarshalText([]byte(value)); err != nil {
+		if err := cfg.HistoryMode.UnmarshalText([]byte(ctx.String(ChainHistoryFlag.Name))); err != nil {
 			Fatalf("--%s: %v", ChainHistoryFlag.Name, err)
 		}
-	}
-	if ctx.IsSet(HistoryTailFlag.Name) {
-		target, err := history.ParsePrunePoint(ctx.String(HistoryTailFlag.Name))
-		if err != nil {
-			Fatalf("--%s: %v", HistoryTailFlag.Name, err)
-		}
-		cfg.HistoryTail = target
 	}
 
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheDatabaseFlag.Name) {

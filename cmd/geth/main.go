@@ -84,7 +84,6 @@ var (
 		utils.SnapshotFlag,
 		utils.TransactionHistoryFlag,
 		utils.ChainHistoryFlag,
-		utils.HistoryTailFlag,
 		utils.LogHistoryFlag,
 		utils.LogNoHistoryFlag,
 		utils.LogExportCheckpointsFlag,
