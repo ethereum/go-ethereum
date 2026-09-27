@@ -69,6 +69,7 @@ type prestateTracer struct {
 	pre         stateMap
 	post        stateMap
 	to          common.Address
+	frameTx     bool
 	config      PrestateTracerConfig
 	chainConfig *params.ChainConfig
 	interrupt   atomic.Bool           // Atomic flag to signal execution interruption
@@ -106,6 +107,7 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 		Hooks: &tracing.Hooks{
 			OnTxStart: t.OnTxStart,
 			OnTxEnd:   t.OnTxEnd,
+			OnEnter:   t.OnEnter,
 			OnOpcode:  t.OnOpcode,
 		},
 		GetResult: t.GetResult,
@@ -175,8 +177,24 @@ func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scop
 	}
 }
 
+func (t *prestateTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	if !t.frameTx || depth != 0 || t.interrupt.Load() {
+		return
+	}
+	t.lookupAccount(to)
+	if delegate, ok := types.ParseDelegation(t.env.StateDB.GetCode(to)); ok {
+		t.lookupAccount(delegate)
+	}
+}
+
 func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
+	if tx.Type() == types.FrameTxType {
+		t.frameTx = true
+		t.lookupAccount(from)
+		t.lookupAccount(env.Coinbase)
+		return
+	}
 	if tx.To() == nil {
 		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
 		t.created[t.to] = true

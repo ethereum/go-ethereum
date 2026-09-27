@@ -216,6 +216,14 @@ func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
 		return
 	}
 	t.tracer.OnTxEnd(receipt, err)
+	if t.tracer.frameTx == nil || len(t.tracer.callstack) != 1 {
+		return
+	}
+	for i := range t.tracer.callstack[0].Calls {
+		if t.tracer.callstack[0].Calls[i].Value == nil {
+			t.tracer.callstack[0].Calls[i].Value = big.NewInt(0)
+		}
+	}
 }
 
 // GetResult returns an empty json object.

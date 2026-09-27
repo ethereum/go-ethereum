@@ -155,6 +155,10 @@ func (s *hookedStateDB) Snapshot() int {
 	return s.inner.Snapshot()
 }
 
+func (s *hookedStateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash, blockTime uint64) []*types.Log {
+	return s.inner.GetLogs(hash, blockNumber, blockHash, blockTime)
+}
+
 func (s *hookedStateDB) AddPreimage(hash common.Hash, bytes []byte) {
 	s.inner.AddPreimage(hash, bytes)
 }

@@ -1605,7 +1605,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 		accessCost = params.WarmAccountAccessAmsterdam
 	}
 	if !budget.ChargeExecutionOnly(accessCost) {
-		return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas
+		return st.traceFrameOutsideEVM(frame, caller, target, types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas)
 	}
 	st.state.AddAddressToAccessList(target)
 
@@ -1623,7 +1623,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 			// The APPROVE could not cover the sender-creation state
 			// charge: the frame halts exceptionally, consuming its
 			// execution budget.
-			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vmerr
+			return st.traceFrameOutsideEVM(frame, caller, target, types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vmerr)
 		}
 		receipt := types.FrameReceipt{
 			Status:       frameStatusSuccess,
@@ -1634,7 +1634,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 			receipt.Status = frameStatusFailed
 			receipt.StateGasUsed = 0
 		}
-		return receipt, vmerr
+		return st.traceFrameOutsideEVM(frame, caller, target, receipt, vmerr)
 	}
 
 	// As with an ordinary CALL, a caller that cannot cover the transferred
@@ -1644,16 +1644,16 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 		value = new(uint256.Int)
 	}
 	if !value.IsZero() && st.state.GetBalance(caller).Cmp(value) < 0 {
-		return types.FrameReceipt{
+		return st.traceFrameOutsideEVM(frame, caller, target, types.FrameReceipt{
 			Status:  frameStatusFailed,
 			GasUsed: frame.GasLimits.Execution - budget.ExecutionGas,
-		}, vm.ErrInsufficientBalance
+		}, vm.ErrInsufficientBalance)
 	}
 	// A value transfer reviving a dead account is permanent state growth,
 	// charged from the frame's state gas pool before its code executes.
 	if !value.IsZero() && st.state.Empty(target) {
 		if _, ok := budget.Charge(vm.GasCosts{StateGas: params.AccountCreationSize * st.evm.Context.CostPerStateByte}); !ok {
-			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas
+			return st.traceFrameOutsideEVM(frame, caller, target, types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas)
 		}
 	}
 	// Resolving an EIP-7702 delegation loads the delegated code: a warm or
@@ -1664,7 +1664,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 			delegationCost = params.WarmAccountAccessAmsterdam
 		}
 		if !budget.ChargeExecutionOnly(delegationCost) {
-			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas
+			return st.traceFrameOutsideEVM(frame, caller, target, types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas)
 		}
 		st.state.AddAddressToAccessList(addr)
 		// Record the delegated code load in the block level access list.
@@ -1691,6 +1691,24 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 		receipt.StateGasUsed = 0
 	}
 	return receipt, vmerr
+}
+
+func (st *stateTransition) traceFrameOutsideEVM(frame *types.Frame, caller, target common.Address, receipt types.FrameReceipt, err error) (types.FrameReceipt, error) {
+	tracer := st.evm.Config.Tracer
+	if tracer == nil {
+		return receipt, err
+	}
+	callType, value := vm.CALL, frame.Value
+	if frame.Mode == types.ModeVerify {
+		callType, value = vm.STATICCALL, nil
+	}
+	if tracer.OnEnter != nil {
+		tracer.OnEnter(0, byte(callType), caller, target, frame.Data, frame.GasLimits.Execution, value.ToBig())
+	}
+	if tracer.OnExit != nil {
+		tracer.OnExit(0, nil, receipt.GasUsed, vm.VMErrorFromErr(err), err != nil)
+	}
+	return receipt, err
 }
 
 // runDefaultVerifyFrame executes the EIP-8141 default code for a VERIFY

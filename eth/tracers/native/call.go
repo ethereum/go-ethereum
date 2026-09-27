@@ -111,11 +111,17 @@ type callFrameMarshaling struct {
 	Output     hexutil.Bytes
 }
 
+const (
+	frameStatusSkipped = 2
+	frameSkippedError  = "frame skipped"
+)
+
 type callTracer struct {
 	callstack []callFrame
 	config    callTracerConfig
 	gasLimit  uint64
 	depth     int
+	frameTx   *types.Transaction
 	interrupt atomic.Bool           // Atomic flag to signal execution interruption
 	reason    atomic.Pointer[error] // Reason for the interruption, populated by Stop
 }
@@ -157,8 +163,9 @@ func newCallTracerObject(ctx *tracers.Context, cfg json.RawMessage) (*callTracer
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	depth = t.callDepth(depth)
 	t.depth = depth
-	if t.config.OnlyTopCall && depth > 0 {
+	if t.config.OnlyTopCall && depth > t.topCallDepth() {
 		return
 	}
 	// Skip if tracing was interrupted
@@ -184,13 +191,14 @@ func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *callTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	depth = t.callDepth(depth)
 	if depth == 0 {
 		t.captureEnd(output, gasUsed, err, reverted)
 		return
 	}
 
 	t.depth = depth - 1
-	if t.config.OnlyTopCall {
+	if t.config.OnlyTopCall && depth > t.topCallDepth() {
 		return
 	}
 
@@ -218,6 +226,33 @@ func (t *callTracer) captureEnd(output []byte, gasUsed uint64, err error, revert
 
 func (t *callTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.gasLimit = tx.Gas()
+	if tx.Type() != types.FrameTxType {
+		return
+	}
+	t.frameTx = tx
+	entryPoint := params.FrameTxEntryPoint
+	t.callstack = append(t.callstack, callFrame{
+		Type:  vm.CALL,
+		From:  from,
+		To:    &entryPoint,
+		Input: []byte{},
+		Gas:   t.gasLimit,
+		Value: new(big.Int),
+	})
+}
+
+func (t *callTracer) callDepth(evmDepth int) int {
+	if t.frameTx != nil {
+		return evmDepth + 1
+	}
+	return evmDepth
+}
+
+func (t *callTracer) topCallDepth() int {
+	if t.frameTx != nil {
+		return 1
+	}
+	return 0
 }
 
 func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
@@ -228,9 +263,60 @@ func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if receipt != nil {
 		t.callstack[0].GasUsed = receipt.GasUsed
 	}
+	if t.frameTx != nil && receipt != nil && len(t.callstack) == 1 && len(receipt.FrameReceipts) == len(t.frameTx.Frames()) {
+		t.assembleFrameCalls(receipt)
+	}
 	if t.config.WithLog {
 		// Logs are not emitted when the call fails
 		clearFailedLogs(&t.callstack[0], false)
+	}
+}
+
+func (t *callTracer) assembleFrameCalls(receipt *types.Receipt) {
+	var (
+		root       = &t.callstack[0]
+		frames     = t.frameTx.Frames()
+		sender     = root.From
+		entered    = root.Calls
+		frameCalls = make([]callFrame, len(frames))
+		txFailed   = receipt.Status == types.ReceiptStatusFailed
+	)
+	for i := range frames {
+		frame := &frames[i]
+		frameReceipt := receipt.FrameReceipts[i]
+		call := callFrame{Error: frameSkippedError}
+		if frameReceipt.Status != frameStatusSkipped && len(entered) > 0 {
+			call, entered = entered[0], entered[1:]
+		}
+		call.From = params.FrameTxEntryPoint
+		call.Type = vm.CALL
+		call.Value = frame.Value.ToBig()
+		if frame.Mode == types.ModeSender {
+			call.From = sender
+		}
+		if frame.Mode == types.ModeVerify {
+			call.Type = vm.STATICCALL
+			call.Value = nil
+		}
+		target := frame.ResolvedTarget(sender)
+		call.To = &target
+		call.Input = common.CopyBytes(frame.Data)
+		call.Gas = frame.GasLimits.Execution + frame.GasLimits.State
+		call.GasUsed = frameReceipt.GasUsed
+		if frameReceipt.Status != types.ReceiptStatusSuccessful {
+			txFailed = true
+			if call.Error == "" {
+				call.Error = vm.ErrExecutionReverted.Error()
+			}
+		}
+		if len(frameReceipt.Logs) == 0 {
+			clearFailedLogs(&call, true)
+		}
+		frameCalls[i] = call
+	}
+	root.Calls = frameCalls
+	if txFailed {
+		root.Error = vm.ErrExecutionReverted.Error()
 	}
 }
 
@@ -240,7 +326,7 @@ func (t *callTracer) OnLog(log *types.Log) {
 		return
 	}
 	// Avoid processing nested calls when only caring about top call
-	if t.config.OnlyTopCall && t.depth > 0 {
+	if t.config.OnlyTopCall && t.depth > t.topCallDepth() {
 		return
 	}
 	// Skip if tracing was interrupted
