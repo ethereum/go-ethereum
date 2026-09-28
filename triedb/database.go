@@ -171,6 +171,28 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	return errors.New("unknown backend")
 }
 
+// AddLayer adds the new state layer like Update, but leaves the flattening to CapLayers.
+func (db *Database) AddLayer(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *StateSet) error {
+	// Only the path database can flatten its layers later on
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	if db.preimages != nil {
+		db.preimages.commit(false)
+	}
+	return pdb.Add(root, parent, block, nodes, states.internal())
+}
+
+// CapLayers flattens the layers that are too far below root, finishing an AddLayer.
+func (db *Database) CapLayers(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Cap(root)
+}
+
 // Commit iterates over all the children of a particular node, writes them out
 // to disk. As a side effect, all pre-images accumulated up to this point are
 // also written.

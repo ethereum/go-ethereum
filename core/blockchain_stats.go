@@ -55,6 +55,8 @@ type ExecuteStats struct {
 	// Cache hit rates
 	StateReadCacheStats     state.ReaderStats
 	StatePrefetchCacheStats state.ReaderStats
+
+	writeDeferred bool // The chain writer commits the state and reports the commit times
 }
 
 // ProcessStats contains the statistics recorded by the Processor. The times are
@@ -150,9 +152,13 @@ func (s *ExecuteStats) reportMetrics() {
 	accountUpdateTimer.Update(v.AccountUpdates) // Account updates are complete(in validation)
 	storageUpdateTimer.Update(v.StorageUpdates) // Storage updates are complete(in validation)
 	accountHashTimer.Update(v.AccountHashes)    // Account hashes are complete(in validation)
-	accountCommitTimer.Update(c.AccountCommits) // Account commits are complete, we can mark them
-	storageCommitTimer.Update(c.StorageCommits) // Storage commits are complete, we can mark them
-	triedbCommitTimer.Update(c.DatabaseCommit)  // Trie database commits are complete, we can mark them
+
+	// A deferred write reports its commit times from the chain writer
+	if !s.writeDeferred {
+		accountCommitTimer.Update(c.AccountCommits) // Account commits are complete, we can mark them
+		storageCommitTimer.Update(c.StorageCommits) // Storage commits are complete, we can mark them
+		triedbCommitTimer.Update(c.DatabaseCommit)  // Trie database commits are complete, we can mark them
+	}
 
 	blockExecutionTimer.Update(p.Execution)             // The critical-path time of the processing
 	blockValidationTimer.Update(v.Validation)           // The critical-path time of the validation
