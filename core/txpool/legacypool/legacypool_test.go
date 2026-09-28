@@ -1372,33 +1372,78 @@ func TestBlobCarryingFrameTxSidecarValidation(t *testing.T) {
 	if pooled == nil || !reflect.DeepEqual(pooled.BlobTxSidecar(), sidecar) {
 		t.Fatal("pooled frame transaction lost its sidecar")
 	}
+}
 
-	for _, replacement := range []struct {
+func TestBlobCarryingFrameTxReplacement(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zeroTime := uint64(0)
+	config.AmsterdamTime = &zeroTime
+	config.BogotaTime = &zeroTime
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	blockchain := newTestBlockChain(&config, 10000000, statedb, new(event.Feed))
+	poolConfig := testTxPoolConfig
+	poolConfig.BlobPriceBump = 50
+	pool := New(poolConfig, blockchain)
+	if err := pool.Init(poolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatal(err)
+	}
+	<-pool.initDoneCh
+	defer pool.Close()
+
+	key, _ := crypto.GenerateKey()
+	sender := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, sender, big.NewInt(params.Ether))
+
+	blob := kzg4844.Blob{0x01}
+	commitment, err := kzg4844.BlobToCommitment(&blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cellProofs, err := kzg4844.ComputeCellProofs(&blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecar := types.NewBlobTxSidecar(types.BlobSidecarVersion1, []kzg4844.Blob{blob}, []kzg4844.Commitment{commitment}, cellProofs)
+	frameTx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  sender,
+		Frames: []types.Frame{{
+			Mode:      types.ModeVerify,
+			Flags:     types.ApproveExecutionAndPayment,
+			GasLimits: types.Limits{Execution: 100_000},
+			Value:     uint256.NewInt(0),
+		}},
+		BlobVersionedHashes: sidecar.BlobHashes(),
+	}
+	for i, replacement := range []struct {
 		fees     types.Fees
 		accepted bool
 	}{
+		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(params.GWei), MaxFeePerGas: uint256.NewInt(10 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei)}, true},
 		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(params.GWei * 11 / 10), MaxFeePerGas: uint256.NewInt(11 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei * 11 / 10)}, false},
-		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(2 * params.GWei), MaxFeePerGas: uint256.NewInt(20 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei)}, false},
-		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(2 * params.GWei), MaxFeePerGas: uint256.NewInt(20 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei * 11 / 10)}, false},
-		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(2 * params.GWei), MaxFeePerGas: uint256.NewInt(20 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(2 * params.GWei)}, true},
+		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(params.GWei * 16 / 10), MaxFeePerGas: uint256.NewInt(16 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei)}, false},
+		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(params.GWei * 16 / 10), MaxFeePerGas: uint256.NewInt(16 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei * 14 / 10)}, false},
+		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(params.GWei * 16 / 10), MaxFeePerGas: uint256.NewInt(16 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei * 16 / 10)}, true},
 	} {
 		frameTx.Fees = replacement.fees
+		frameTx.Signatures = types.SignatureList{{
+			Scheme: types.FrameTxSchemeSecp256k1,
+			Signer: sender.Bytes(),
+		}}
 		sigHash := types.LatestSigner(&config).Hash(types.NewTx(frameTx))
 		sig, err := crypto.Sign(sigHash[:], key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		frameTx.Signatures = types.SignatureList{{
-			Scheme:    types.FrameTxSchemeSecp256k1,
-			Signer:    sender.Bytes(),
-			Signature: append([]byte{sig[64]}, sig[:64]...),
-		}}
+		frameTx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
 		err = pool.addRemoteSync(types.NewTx(frameTx).WithBlobTxSidecar(sidecar))
 		if replacement.accepted && err != nil {
-			t.Fatalf("rejected replacement with blob pool price bump: %v", err)
+			t.Fatalf("transaction %d rejected with the configured blob price bump: %v", i, err)
 		}
 		if !replacement.accepted && !errors.Is(err, txpool.ErrReplaceUnderpriced) {
-			t.Fatalf("replacement with fees %+v: have %v, want %v", replacement.fees, err, txpool.ErrReplaceUnderpriced)
+			t.Fatalf("transaction %d: have %v, want %v", i, err, txpool.ErrReplaceUnderpriced)
 		}
 	}
 }
@@ -2020,7 +2065,7 @@ func TestDualHeapEviction(t *testing.T) {
 
 	add(false)
 	for baseFee = 0; baseFee <= 1000; baseFee += 100 {
-		pool.priced.SetBaseFee(big.NewInt(int64(baseFee)))
+		pool.priced.SetBaseFee(big.NewInt(int64(baseFee)), nil)
 		add(true)
 		check(highCap, "fee cap")
 		add(false)

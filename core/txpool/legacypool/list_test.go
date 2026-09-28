@@ -40,7 +40,7 @@ func TestStrictListAdd(t *testing.T) {
 	// Insert the transactions in a random order
 	list := newList(true)
 	for _, v := range rand.Perm(len(txs)) {
-		list.Add(txs[v], DefaultConfig.PriceBump)
+		list.Add(txs[v], DefaultConfig.PriceBump, DefaultConfig.BlobPriceBump)
 	}
 	// Verify internal state
 	if len(list.txs.items) != len(txs) {
@@ -64,7 +64,7 @@ func TestListAddVeryExpensive(t *testing.T) {
 		gaslimit := uint64(i)
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), common.Address{}, value, gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
 		t.Logf("cost: %x bitlen: %d\n", tx.Cost(), tx.Cost().BitLen())
-		list.Add(tx, DefaultConfig.PriceBump)
+		list.Add(tx, DefaultConfig.PriceBump, DefaultConfig.BlobPriceBump)
 	}
 }
 
@@ -105,6 +105,30 @@ func TestPriceHeapCmp(t *testing.T) {
 	}
 }
 
+func TestPricedListDiscardsBlobFrameTxBelowBlobBaseFee(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	plain := dynamicFeeTx(0, 1000, big.NewInt(10), big.NewInt(1), key)
+	frame := types.NewTx(&types.FrameTx{
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(5),
+			MaxFeePerGas:         uint256.NewInt(10),
+			MaxFeePerBlobGas:     uint256.NewInt(1),
+		},
+		BlobVersionedHashes: []common.Hash{{0x01}},
+	})
+	all := newLookup()
+	priced := newPricedList(all)
+	for _, tx := range []*types.Transaction{plain, frame} {
+		all.Add(tx)
+		priced.Put(tx)
+	}
+	priced.SetBaseFee(big.NewInt(1), big.NewInt(2))
+	drop, ok := priced.Discard(1)
+	if !ok || len(drop) != 1 || drop[0] != frame {
+		t.Fatalf("expected the frame transaction below the blob base fee to be discarded, got %v", drop)
+	}
+}
+
 func BenchmarkListAdd(b *testing.B) {
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()
@@ -119,7 +143,7 @@ func BenchmarkListAdd(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		list := newList(true)
 		for _, v := range rand.Perm(len(txs)) {
-			list.Add(txs[v], DefaultConfig.PriceBump)
+			list.Add(txs[v], DefaultConfig.PriceBump, DefaultConfig.BlobPriceBump)
 			list.Filter(priceLimit, DefaultConfig.PriceBump)
 		}
 	}
@@ -139,7 +163,7 @@ func BenchmarkListCapOneTx(b *testing.B) {
 		list := newList(true)
 		// Insert the transactions in a random order
 		for _, v := range rand.Perm(len(txs)) {
-			list.Add(txs[v], DefaultConfig.PriceBump)
+			list.Add(txs[v], DefaultConfig.PriceBump, DefaultConfig.BlobPriceBump)
 		}
 		b.StartTimer()
 		list.Cap(list.Len() - 1)

@@ -323,6 +323,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
+	config.TxPool.BlobPriceBump = config.BlobPool.PriceBump
 	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
 
 	if config.BlobPool.Datadir != "" {

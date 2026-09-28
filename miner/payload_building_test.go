@@ -391,6 +391,101 @@ func TestBuildPayloadWithBlobCarryingFrameTx(t *testing.T) {
 	if _, err := chain.InsertChain(types.Blocks{payloadBlock}); err != nil {
 		t.Fatalf("built block failed validation: %v", err)
 	}
+}
+
+func TestBlobCarryingFrameTxReorg(t *testing.T) {
+	var (
+		config        = *params.MergedTestChainConfig
+		zeroTime      = uint64(0)
+		consensusCore = beacon.New(ethash.NewFaker())
+		senderKey, _  = crypto.GenerateKey()
+		sender        = crypto.PubkeyToAddress(senderKey.PublicKey)
+		blobs         = []kzg4844.Blob{{0x01}, {0x02}}
+		commitments   []kzg4844.Commitment
+		cellProofs    []kzg4844.Proof
+		slotNumber    = uint64(1)
+		beaconRoot    = common.Hash{}
+	)
+	config.AmsterdamTime = &zeroTime
+	config.BogotaTime = &zeroTime
+	alloc := core.SystemContractAllocs()
+	alloc[sender] = types.Account{Balance: big.NewInt(params.Ether)}
+	alloc[params.FrameTxExpiryVerifier] = types.Account{Code: params.FrameTxExpiryVerifierCode, Balance: big.NewInt(0)}
+	genesis := &core.Genesis{Config: &config, Alloc: alloc, Difficulty: common.Big0}
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, consensusCore, nil)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	defer chain.Stop()
+	legacyPool := legacypool.New(testTxPoolConfig, chain)
+	pool, err := txpool.New(testTxPoolConfig.PriceLimit, chain, []txpool.SubPool{legacyPool})
+	if err != nil {
+		t.Fatalf("failed to create txpool: %v", err)
+	}
+	defer pool.Close()
+
+	for i := range blobs {
+		commitment, err := kzg4844.BlobToCommitment(&blobs[i])
+		if err != nil {
+			t.Fatalf("failed to commit to blob: %v", err)
+		}
+		proofs, err := kzg4844.ComputeCellProofs(&blobs[i])
+		if err != nil {
+			t.Fatalf("failed to compute cell proofs: %v", err)
+		}
+		commitments = append(commitments, commitment)
+		cellProofs = append(cellProofs, proofs...)
+	}
+	sidecar := types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, cellProofs)
+	blobHashes := sidecar.BlobHashes()
+	frameTx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  sender,
+		Frames: []types.Frame{{
+			Mode:      types.ModeVerify,
+			Flags:     types.ApproveExecutionAndPayment,
+			GasLimits: types.Limits{Execution: 100_000},
+			Value:     uint256.NewInt(0),
+		}},
+		Signatures: types.SignatureList{{
+			Scheme: types.FrameTxSchemeSecp256k1,
+			Signer: sender.Bytes(),
+		}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(params.GWei),
+			MaxFeePerGas:         uint256.NewInt(10 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(params.GWei),
+		},
+		BlobVersionedHashes: blobHashes,
+	}
+	sigHash := types.LatestSigner(&config).Hash(types.NewTx(frameTx))
+	sig, err := crypto.Sign(sigHash[:], senderKey)
+	if err != nil {
+		t.Fatalf("failed to sign frame transaction: %v", err)
+	}
+	frameTx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
+	if errs := pool.Add([]*types.Transaction{types.NewTx(frameTx).WithBlobTxSidecar(sidecar)}, true); errs[0] != nil {
+		t.Fatalf("failed to add frame transaction: %v", errs[0])
+	}
+
+	miner := New(&testWorkerBackend{chain: chain, txPool: pool, genesis: genesis}, testConfig, consensusCore)
+	result := miner.generateWork(context.Background(), &generateParams{
+		timestamp:   chain.CurrentBlock().Time + 12,
+		parentHash:  chain.CurrentBlock().Hash(),
+		withdrawals: types.Withdrawals{},
+		beaconRoot:  &beaconRoot,
+		slotNum:     &slotNumber,
+	}, false)
+	if result.err != nil {
+		t.Fatalf("failed to build block: %v", result.err)
+	}
+	block := result.block
+	if len(block.Transactions()) != 1 {
+		t.Fatalf("expected the frame transaction in the block, got %d transactions", len(block.Transactions()))
+	}
+	if _, err := chain.InsertChain(types.Blocks{block}); err != nil {
+		t.Fatalf("built block failed validation: %v", err)
+	}
 	if err := pool.Sync(); err != nil {
 		t.Fatalf("failed to sync txpool: %v", err)
 	}
@@ -418,10 +513,21 @@ func TestBuildPayloadWithBlobCarryingFrameTx(t *testing.T) {
 	if err := pool.Sync(); err != nil {
 		t.Fatalf("failed to sync txpool: %v", err)
 	}
-	if pool.Get(block.Transactions()[0].Hash()) != nil {
-		t.Fatal("reorg reinjected blob-carrying frame transaction without its sidecar")
+	pooled := pool.Get(block.Transactions()[0].Hash())
+	if pooled == nil || !reflect.DeepEqual(pooled.BlobTxSidecar(), sidecar) {
+		t.Fatal("reorg did not reinject blob-carrying frame transaction with its sidecar")
 	}
-	if errs := pool.Add([]*types.Transaction{block.Transactions()[0].WithBlobTxSidecar(sidecar)}, true); errs[0] != nil {
-		t.Fatalf("failed to re-add frame transaction with its sidecar after reorg: %v", errs[0])
+	result = miner.generateWork(context.Background(), &generateParams{
+		timestamp:   chain.CurrentBlock().Time + 12,
+		parentHash:  chain.CurrentBlock().Hash(),
+		withdrawals: types.Withdrawals{},
+		beaconRoot:  &beaconRoot,
+		slotNum:     &slotNumber,
+	}, false)
+	if result.err != nil {
+		t.Fatalf("failed to build block after reorg: %v", result.err)
+	}
+	if len(result.block.Transactions()) != 1 || len(result.sidecars) != 1 || !reflect.DeepEqual(result.sidecars[0], sidecar) {
+		t.Fatal("block built after reorg lacks the frame transaction or its sidecar")
 	}
 }

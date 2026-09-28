@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 )
@@ -301,7 +300,7 @@ func (l *list) Contains(nonce uint64) bool {
 //
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
-func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
+func (l *list) Add(tx *types.Transaction, priceBump uint64, blobPriceBump uint64) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
@@ -313,7 +312,7 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 			if len(tx.BlobHashes()) == 0 || old.BlobGasFeeCapCmp(tx) >= 0 {
 				return false, nil
 			}
-			priceBump = blobpool.DefaultConfig.PriceBump
+			priceBump = blobPriceBump
 		}
 		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
 		a := big.NewInt(100 + int64(priceBump))
@@ -496,8 +495,9 @@ func (l *list) subTotalCost(txs []*types.Transaction) {
 // then the heap is sorted based on the effective tip based on the given base fee.
 // If baseFee is nil then the sorting is based on gasFeeCap.
 type priceHeap struct {
-	baseFee *uint256.Int // heap should always be re-sorted after baseFee is changed
-	list    []*types.Transaction
+	baseFee     *uint256.Int // heap should always be re-sorted after baseFee is changed
+	blobBaseFee *big.Int
+	list        []*types.Transaction
 }
 
 func (h *priceHeap) Len() int      { return len(h.list) }
@@ -515,6 +515,16 @@ func (h *priceHeap) Less(i, j int) bool {
 }
 
 func (h *priceHeap) cmp(a, b *types.Transaction) int {
+	if h.blobBaseFee != nil {
+		aStuck := len(a.BlobHashes()) > 0 && a.BlobGasFeeCapIntCmp(h.blobBaseFee) < 0
+		bStuck := len(b.BlobHashes()) > 0 && b.BlobGasFeeCapIntCmp(h.blobBaseFee) < 0
+		if aStuck != bStuck {
+			if aStuck {
+				return -1
+			}
+			return 1
+		}
+	}
 	if h.baseFee != nil {
 		// Compare effective tips if baseFee is specified
 		if c := a.EffectiveGasTipCmp(b, h.baseFee); c != 0 {
@@ -697,11 +707,12 @@ func (l *pricedList) Reheap() {
 
 // SetBaseFee updates the base fee and triggers a re-heap. Note that Removed is not
 // necessary to call right before SetBaseFee when processing a new block.
-func (l *pricedList) SetBaseFee(baseFee *big.Int) {
+func (l *pricedList) SetBaseFee(baseFee *big.Int, blobBaseFee *big.Int) {
 	base := new(uint256.Int)
 	if baseFee != nil {
 		base.SetFromBig(baseFee)
 	}
 	l.urgent.baseFee = base
+	l.urgent.blobBaseFee = blobBaseFee
 	l.Reheap()
 }

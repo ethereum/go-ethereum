@@ -30,9 +30,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -149,6 +151,8 @@ type Config struct {
 	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
 	PriceBump  uint64 // Minimum price bump percentage to replace an already existing transaction (nonce)
 
+	BlobPriceBump uint64 `toml:"-"`
+
 	AccountSlots uint64 // Number of executable transaction slots guaranteed per account
 	GlobalSlots  uint64 // Maximum number of executable transaction slots for all accounts
 	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
@@ -164,6 +168,8 @@ var DefaultConfig = Config{
 
 	PriceLimit: 1,
 	PriceBump:  10,
+
+	BlobPriceBump: blobpool.DefaultConfig.PriceBump,
 
 	AccountSlots: 16,
 	GlobalSlots:  4096 + 1024, // urgent + floating queue capacity with 4:1 ratio
@@ -184,6 +190,10 @@ func (config *Config) sanitize() Config {
 	if conf.PriceBump < 1 {
 		log.Warn("Sanitizing invalid txpool price bump", "provided", conf.PriceBump, "updated", DefaultConfig.PriceBump)
 		conf.PriceBump = DefaultConfig.PriceBump
+	}
+	if conf.BlobPriceBump < 1 {
+		log.Warn("Sanitizing invalid txpool blob price bump", "provided", conf.BlobPriceBump, "updated", DefaultConfig.BlobPriceBump)
+		conf.BlobPriceBump = DefaultConfig.BlobPriceBump
 	}
 	if conf.AccountSlots < 1 {
 		log.Warn("Sanitizing invalid txpool account slots", "provided", conf.AccountSlots, "updated", DefaultConfig.AccountSlots)
@@ -247,6 +257,7 @@ type LegacyPool struct {
 	queue   *queue
 	all     *lookup     // All transactions to allow lookups
 	priced  *pricedList // All transactions sorted by price
+	limbo   map[common.Hash]limboSidecar
 
 	reqResetCh      chan *txpoolResetRequest
 	reqPromoteCh    chan *accountSet
@@ -257,6 +268,11 @@ type LegacyPool struct {
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+}
+
+type limboSidecar struct {
+	sidecar *types.BlobTxSidecar
+	block   uint64
 }
 
 type txpoolResetRequest struct {
@@ -279,6 +295,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		pending:         make(map[common.Address]*list),
 		queue:           newQueue(config, signer),
 		all:             newLookup(),
+		limbo:           make(map[common.Hash]limboSidecar),
 		reqResetCh:      make(chan *txpoolResetRequest),
 		reqPromoteCh:    make(chan *accountSet),
 		queueTxEventCh:  make(chan *types.Transaction),
@@ -769,7 +786,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 	// Try to replace an existing transaction in the pending pool
 	if list := pool.pending[from]; list != nil && list.Contains(tx.Nonce()) {
 		// Nonce already pending, check if required price bump is met
-		inserted, old := list.Add(tx, pool.config.PriceBump)
+		inserted, old := list.Add(tx, pool.config.PriceBump, pool.config.BlobPriceBump)
 		if !inserted {
 			pendingDiscardMeter.Mark(1)
 			return false, txpool.ErrReplaceUnderpriced
@@ -858,7 +875,7 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 	}
 	list := pool.pending[addr]
 
-	inserted, old := list.Add(tx, pool.config.PriceBump)
+	inserted, old := list.Add(tx, pool.config.PriceBump, pool.config.BlobPriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
 		pool.all.Remove(hash)
@@ -1264,7 +1281,11 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 		if reset.newHead != nil {
 			if pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
 				pendingBaseFee := eip1559.CalcBaseFee(pool.chainconfig, reset.newHead)
-				pool.priced.SetBaseFee(pendingBaseFee)
+				var blobBaseFee *big.Int
+				if reset.newHead.ExcessBlobGas != nil {
+					blobBaseFee = eip4844.CalcBlobFee(pool.chainconfig, reset.newHead)
+				}
+				pool.priced.SetBaseFee(pendingBaseFee, blobBaseFee)
 			} else {
 				pool.priced.Reheap()
 			}
@@ -1374,9 +1395,17 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 				}
 				lost := make([]*types.Transaction, 0, len(discarded))
 				for _, tx := range types.TxDifference(discarded, included) {
-					if pool.Filter(tx) && (len(tx.BlobHashes()) == 0 || tx.BlobTxSidecar() != nil) {
-						lost = append(lost, tx)
+					if !pool.Filter(tx) {
+						continue
 					}
+					if len(tx.BlobHashes()) > 0 && tx.BlobTxSidecar() == nil {
+						entry, ok := pool.limbo[tx.Hash()]
+						if !ok {
+							continue
+						}
+						tx = tx.WithBlobTxSidecar(entry.sidecar)
+					}
+					lost = append(lost, tx)
 				}
 				reinject = lost
 			}
@@ -1393,6 +1422,11 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 	}
 	pool.currentHead.Store(newHead)
 	pool.currentState = statedb
+	for hash, entry := range pool.limbo {
+		if entry.block+64 < newHead.Number.Uint64() {
+			delete(pool.limbo, hash)
+		}
+	}
 	pool.pendingNonces = newNoncer(statedb)
 
 	// Inject any transactions discarded due to reorgs
@@ -1550,6 +1584,9 @@ func (pool *LegacyPool) demoteUnexecutables() {
 		olds := list.Forward(nonce)
 		for _, tx := range olds {
 			hash := tx.Hash()
+			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
+				pool.limbo[hash] = limboSidecar{sidecar: sidecar, block: pool.currentHead.Load().Number.Uint64()}
+			}
 			pool.all.Remove(hash)
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}

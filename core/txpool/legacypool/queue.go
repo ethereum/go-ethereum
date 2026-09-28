@@ -130,7 +130,7 @@ func (q *queue) add(tx *types.Transaction) (*common.Hash, error) {
 		q.queued[from] = newList(false)
 		queuedAddrsGauge.Inc(1)
 	}
-	inserted, old := q.queued[from].Add(tx, q.config.PriceBump)
+	inserted, old := q.queued[from].Add(tx, q.config.PriceBump, q.config.BlobPriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
 		queuedDiscardMeter.Mark(1)
