@@ -357,6 +357,7 @@ func (db *Database) Disable() error {
 	if err := disk.terminate(); err != nil {
 		return err
 	}
+	disk.resetCache() // a stale layer can no longer release its caches
 	disk.markStale()
 
 	// Write the initial sync flag to persist it across restarts.

@@ -736,10 +736,15 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		}
 		return nil
 
-	case history.KeepPostMerge, history.KeepPostPrague:
+	case history.KeepPostMerge, history.KeepPostPrague, history.KeepPostOsaka, history.KeepCustom:
 		target := policy.Target
+
 		// Already at the target.
 		if freezerTail == target.BlockNumber {
+			// Absent while snap sync has yet to write the cutoff block itself.
+			if hash := bc.GetCanonicalHash(freezerTail); hash != (common.Hash{}) && hash != target.BlockHash {
+				return fmt.Errorf("database tail %d has hash %s, want %s", freezerTail, hash, target.BlockHash)
+			}
 			bc.historyPrunePoint.Store(target)
 			return nil
 		}
@@ -749,8 +754,9 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		}
 		// Database needs pruning (freezerTail < target).
 		if latest != 0 {
+			arg := policy.String()
 			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned to the target block.", policy.Mode.String()))
-			log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", policy.Mode.String()))
+			log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", arg))
 			return errors.New("history pruning required")
 		}
 		// Fresh database (latest == 0), will sync from target point.
