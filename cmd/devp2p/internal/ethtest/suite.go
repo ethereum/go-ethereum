@@ -1367,7 +1367,11 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	txs, _ := s.makeBlobTxs(10, 4, 0x30)
+	txs, _ := s.makeBlobTxs(10, 20, 0x30)
+	txsByHash := make(map[common.Hash]*types.Transaction, len(txs))
+	for _, tx := range txs {
+		txsByHash[tx.Hash()] = tx
+	}
 
 	conn, err := s.dial()
 	if err != nil {
@@ -1378,7 +1382,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 		t.Fatalf("peering failed: %v", err)
 	}
 
-	// Announce all 4 txs from a single peer.
+	// Announce all 10 txs from a single peer.
 	hashes := make([]common.Hash, len(txs))
 	txTypes := make([]byte, len(txs))
 	sizes := make([]uint32, len(txs))
@@ -1420,11 +1424,22 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 				t.Fatalf("received partial GetCells request with only %d cells from single peer announcement", req.Mask.OneCount())
 			}
 		case *eth.GetPooledTransactionsPacket:
-			encTxs, _ := rlp.EncodeToRawList(txs)
-			conn.Write(ethProto, eth.PooledTransactionsMsg, eth.PooledTransactionsPacket{
+			requestedTxs := make(types.Transactions, 0, len(req.GetPooledTransactionsRequest))
+			for _, hash := range req.GetPooledTransactionsRequest {
+				if tx := txsByHash[hash]; tx != nil {
+					requestedTxs = append(requestedTxs, tx)
+				}
+			}
+			encTxs, err := rlp.EncodeToRawList(requestedTxs)
+			if err != nil {
+				t.Fatalf("failed to encode requested transactions: %v", err)
+			}
+			if err := conn.Write(ethProto, eth.PooledTransactionsMsg, eth.PooledTransactionsPacket{
 				RequestId: req.RequestId,
 				List:      encTxs,
-			})
+			}); err != nil {
+				t.Fatalf("failed to send requested transactions: %v", err)
+			}
 		}
 	}
 }
