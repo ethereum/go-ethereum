@@ -2718,3 +2718,139 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 		pool.addRemotesSync([]*types.Transaction{tx})
 	}
 }
+
+func TestFrameTxForgedReplacementRejected(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, victimKey := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	signer := types.LatestSigner(&config)
+	victim := crypto.PubkeyToAddress(victimKey.PublicKey)
+	attackerKey, _ := crypto.GenerateKey()
+	attacker := crypto.PubkeyToAddress(attackerKey.PublicKey)
+	testAddBalance(pool, victim, big.NewInt(params.Ether))
+
+	victimFrameTx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  victim,
+		Frames: []types.Frame{{
+			Mode:      types.ModeVerify,
+			Flags:     types.ApproveExecutionAndPayment,
+			GasLimits: types.Limits{Execution: 50_000},
+			Value:     uint256.NewInt(0),
+		}},
+		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: victim.Bytes()}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(params.GWei),
+			MaxFeePerGas:         uint256.NewInt(5 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
+	}
+	victimSigHash := signer.Hash(types.NewTx(victimFrameTx))
+	victimSig, _ := crypto.Sign(victimSigHash[:], victimKey)
+	victimFrameTx.Signatures[0].Signature = append([]byte{victimSig[64]}, victimSig[:64]...)
+	victimTx := types.NewTx(victimFrameTx)
+	if err := pool.addRemoteSync(victimTx); err != nil {
+		t.Fatalf("failed to add victim frame transaction: %v", err)
+	}
+
+	forgedFrameTx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  victim,
+		Frames: []types.Frame{{
+			Mode:      types.ModeVerify,
+			Flags:     types.ApproveExecutionAndPayment,
+			GasLimits: types.Limits{Execution: 50_000},
+			Value:     uint256.NewInt(0),
+		}},
+		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: attacker.Bytes()}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(2 * params.GWei),
+			MaxFeePerGas:         uint256.NewInt(10 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
+	}
+	forgedSigHash := signer.Hash(types.NewTx(forgedFrameTx))
+	forgedSig, _ := crypto.Sign(forgedSigHash[:], attackerKey)
+	forgedFrameTx.Signatures[0].Signature = append([]byte{forgedSig[64]}, forgedSig[:64]...)
+	if err := pool.addRemoteSync(types.NewTx(forgedFrameTx)); err == nil {
+		t.Fatalf("forged frame transaction replaced the victim's transaction")
+	}
+	pending, queued := pool.Stats()
+	if pending != 1 || queued != 0 {
+		t.Fatalf("pool stats mismatch: have %d pending %d queued, want 1 pending 0 queued", pending, queued)
+	}
+	if pooled := pool.Get(victimTx.Hash()); pooled == nil {
+		t.Fatalf("victim frame transaction was evicted")
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
+func TestFrameTxSponsoredAdmitted(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, senderKey := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	signer := types.LatestSigner(&config)
+	sender := crypto.PubkeyToAddress(senderKey.PublicKey)
+	payerKey, _ := crypto.GenerateKey()
+	payer := crypto.PubkeyToAddress(payerKey.PublicKey)
+	testAddBalance(pool, payer, big.NewInt(params.Ether))
+
+	sponsoredFrameTx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  sender,
+		Frames: []types.Frame{
+			{
+				Mode:      types.ModeVerify,
+				Flags:     types.ApproveExecution,
+				GasLimits: types.Limits{Execution: 30_000},
+				Value:     uint256.NewInt(0),
+			},
+			{
+				Mode:      types.ModeVerify,
+				Target:    &payer,
+				Flags:     types.ApprovePayment,
+				GasLimits: types.Limits{Execution: 30_000, State: params.AccountCreationSize * params.CostPerStateByte},
+				Value:     uint256.NewInt(0),
+			},
+		},
+		Signatures: types.SignatureList{
+			{Scheme: types.FrameTxSchemeSecp256k1, Signer: sender.Bytes()},
+			{Scheme: types.FrameTxSchemeSecp256k1, Signer: payer.Bytes()},
+		},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(params.GWei),
+			MaxFeePerGas:         uint256.NewInt(5 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
+	}
+	sigHash := signer.Hash(types.NewTx(sponsoredFrameTx))
+	senderSig, _ := crypto.Sign(sigHash[:], senderKey)
+	payerSig, _ := crypto.Sign(sigHash[:], payerKey)
+	sponsoredFrameTx.Signatures[0].Signature = append([]byte{senderSig[64]}, senderSig[:64]...)
+	sponsoredFrameTx.Signatures[1].Signature = append([]byte{payerSig[64]}, payerSig[:64]...)
+	sponsoredTx := types.NewTx(sponsoredFrameTx)
+	if err := pool.addRemoteSync(sponsoredTx); err != nil {
+		t.Fatalf("failed to add sponsored frame transaction: %v", err)
+	}
+	pending, queued := pool.Stats()
+	if pending != 1 || queued != 0 {
+		t.Fatalf("pool stats mismatch: have %d pending %d queued, want 1 pending 0 queued", pending, queued)
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}

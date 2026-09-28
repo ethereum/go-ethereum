@@ -317,6 +317,8 @@ type Message struct {
 	// - From is not verified to be an EOA
 	// - GasLimit is not checked against the protocol defined tx gaslimit
 	SkipTransactionChecks bool
+
+	ValidationPrefixOnly bool
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -1553,6 +1555,9 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 			}
 		} else if terminatesBatch {
 			inBatch = false
+		}
+		if msg.ValidationPrefixOnly && frame.Flags&types.ApprovePayment != 0 {
+			break
 		}
 	}
 

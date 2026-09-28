@@ -20,8 +20,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -37,6 +39,8 @@ var (
 	// parameter to avoid constructing a new big integer for every transaction.
 	blobTxMinBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
 )
+
+const frameTxMaxVerifyGas = 100_000
 
 // ValidationOptions define certain differences between transaction validation
 // across the different pools without having to duplicate those checks.
@@ -247,6 +251,9 @@ func validateCellsOsaka(sidecar *types.BlobTxCellSidecar) error {
 type ValidationOptionsWithState struct {
 	State *state.StateDB // State database to check nonces and balances against
 
+	Config *params.ChainConfig
+	Head   *types.Header
+
 	// FirstNonceGap is an optional callback to retrieve the first nonce gap in
 	// the list of pooled transactions of a specific account. If this method is
 	// set, nonce gaps will be checked and forbidden. If this method is not set,
@@ -290,6 +297,9 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 			return fmt.Errorf("%w: tx nonce %v, gapped nonce %v", core.ErrNonceTooHigh, tx.Nonce(), gap)
 		}
 	}
+	if tx.Type() == types.FrameTxType {
+		return validateFrameTxPrefix(tx, signer, opts)
+	}
 	// Ensure the transactor has enough funds to cover the transaction costs
 	var (
 		balance = opts.State.GetBalance(from).ToBig()
@@ -320,6 +330,53 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 				return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
 			}
 		}
+	}
+	return nil
+}
+
+func validateFrameTxPrefix(tx *types.Transaction, signer types.Signer, opts *ValidationOptionsWithState) error {
+	msg, err := core.TransactionToMessage(tx, signer, nil)
+	if err != nil {
+		return err
+	}
+	payerFrame := slices.IndexFunc(msg.Frames, func(frame types.Frame) bool {
+		return frame.Flags&types.ApprovePayment != 0
+	})
+	if payerFrame < 0 {
+		return errors.New("frame transaction has no payment approval frame")
+	}
+	verifyGas, _ := types.FrameTxBudgetTotals(msg.Frames[:payerFrame+1])
+	for i := range msg.FrameSignatures {
+		verifyGas += types.FrameTxSignatureGas(&msg.FrameSignatures[i])
+	}
+	if verifyGas > frameTxMaxVerifyGas {
+		return fmt.Errorf("frame transaction validation prefix gas %d exceeds limit %d", verifyGas, frameTxMaxVerifyGas)
+	}
+	msg.SkipNonceChecks = true
+	msg.ValidationPrefixOnly = true
+
+	head := opts.Head
+	blockContext := vm.BlockContext{
+		CanTransfer:      core.CanTransfer,
+		Transfer:         core.Transfer,
+		GetHash:          func(uint64) common.Hash { return common.Hash{} },
+		BlockNumber:      new(big.Int).Set(head.Number),
+		Time:             head.Time,
+		Difficulty:       new(big.Int).Set(head.Difficulty),
+		BaseFee:          new(big.Int),
+		BlobBaseFee:      new(big.Int),
+		GasLimit:         head.GasLimit,
+		CostPerStateByte: params.CostPerStateByte,
+	}
+	if head.ExcessBlobGas != nil {
+		blockContext.BlobBaseFee = eip4844.CalcBlobFee(opts.Config, head)
+	}
+	if head.Difficulty.Sign() == 0 {
+		blockContext.Random = &head.MixDigest
+	}
+	evm := vm.NewEVM(blockContext, opts.State.Copy(), opts.Config, vm.Config{})
+	if _, err := core.ApplyMessage(evm, msg, core.NewGasPool(head.GasLimit)); err != nil {
+		return fmt.Errorf("frame transaction validation prefix failed: %w", err)
 	}
 	return nil
 }

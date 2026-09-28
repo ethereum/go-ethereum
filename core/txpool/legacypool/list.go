@@ -379,7 +379,7 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 
 	// Filter out all the transactions above the account's funds
 	removed := l.txs.Filter(func(tx *types.Transaction) bool {
-		return tx.Gas() > gasLimit || tx.Cost().Cmp(costLimit.ToBig()) > 0
+		return tx.Gas() > gasLimit || (tx.Type() != types.FrameTxType && tx.Cost().Cmp(costLimit.ToBig()) > 0)
 	})
 
 	if len(removed) == 0 {
