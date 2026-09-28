@@ -583,6 +583,8 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.He
 		if _, err := api.ForkchoiceUpdatedV1(context.Background(), fcState, nil); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
+		// The head update lands in the background
+		ethservice.BlockChain().WaitWrites()
 		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != payload.Number {
 			t.Fatal("Chain head should be updated")
 		}
@@ -728,6 +730,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		if _, err := api.ForkchoiceUpdatedV1(context.Background(), fcState, nil); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
+		ethservice.BlockChain().WaitWrites()
 		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != payload.ExecutionPayload.Number {
 			t.Fatalf("Chain head should be updated")
 		}
@@ -1159,6 +1162,7 @@ func TestWithdrawals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
+	ethservice.BlockChain().WaitWrites()
 
 	// 11: verify withdrawals were processed.
 	db, _, err := ethservice.APIBackend.StateAndHeaderByNumber(context.Background(), rpc.BlockNumber(execData.ExecutionPayload.Number))
@@ -1751,6 +1755,7 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	if resp.PayloadStatus.Status != engine.VALID {
 		t.Fatalf("unexpected status (got: %s, want: %s)", resp.PayloadStatus.Status, engine.VALID)
 	}
+	ethservice.BlockChain().WaitWrites()
 
 	// 11: verify beacon root was processed.
 	db, _, err := ethservice.APIBackend.StateAndHeaderByNumber(context.Background(), rpc.BlockNumber(execData.ExecutionPayload.Number))

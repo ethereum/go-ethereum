@@ -65,6 +65,8 @@ type HeaderChain struct {
 	headerCache *lru.Cache[common.Hash, *types.Header]
 	numberCache *lru.Cache[common.Hash, uint64] // most recent block numbers
 
+	pending func(hash common.Hash) *types.Header // headers of blocks still being written, optional
+
 	procInterrupt func() bool
 	engine        consensus.Engine
 }
@@ -100,6 +102,10 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 func (hc *HeaderChain) GetBlockNumber(hash common.Hash) (uint64, bool) {
 	if cached, ok := hc.numberCache.Get(hash); ok {
 		return cached, true
+	}
+	// A block the chain writer is still writing isn't in the database yet
+	if header := hc.pendingHeader(hash); header != nil {
+		return header.Number.Uint64(), true
 	}
 	number, ok := rawdb.ReadHeaderNumber(hc.chainDb, hash)
 	if ok {
@@ -390,6 +396,10 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return header
 	}
+	// A block the chain writer is still writing isn't in the database yet
+	if header := hc.pendingHeader(hash); header != nil && header.Number.Uint64() == number {
+		return header
+	}
 	header := rawdb.ReadHeader(hc.chainDb, hash, number)
 	if header == nil {
 		return nil
@@ -397,6 +407,14 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	// Cache the found header for next time and return
 	hc.headerCache.Add(hash, header)
 	return header
+}
+
+// pendingHeader returns the header of a block whose write hasn't landed yet, or nil.
+func (hc *HeaderChain) pendingHeader(hash common.Hash) *types.Header {
+	if hc.pending == nil {
+		return nil
+	}
+	return hc.pending(hash)
 }
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
@@ -414,6 +432,9 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 // like td and hash->number should be present too.
 func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
+		return true
+	}
+	if header := hc.pendingHeader(hash); header != nil && header.Number.Uint64() == number {
 		return true
 	}
 	return rawdb.HasHeader(hc.chainDb, hash, number)

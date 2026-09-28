@@ -888,6 +888,71 @@ func TestCommit(t *testing.T) {
 	}
 }
 
+// Tests that Add keeps every layer in memory and Cap flattens them in order later.
+func TestAddCap(t *testing.T) {
+	// Redefine the diff layer depth allowance for faster testing.
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	tester := newTester(t, &testerConfig{})
+	defer tester.release()
+
+	// Add the layers without any flattening, the tree grows past the allowance
+	if err := addWithoutCap(tester, 12); err != nil {
+		t.Fatal(err)
+	}
+	if n := tester.db.tree.len(); n != len(tester.roots)+1 {
+		t.Fatalf("Unexpected layer count, want %d, got %d", len(tester.roots)+1, n)
+	}
+	if err := tester.verifyState(tester.lastHash()); err != nil {
+		t.Fatalf("State is invalid before capping, err: %v", err)
+	}
+	// Cap the layers in order, each cap flattens what's too far below its root
+	for i, root := range tester.roots {
+		if err := tester.db.Cap(root); err != nil {
+			t.Fatalf("Failed to cap layer %d, err: %v", i, err)
+		}
+	}
+	if n := tester.db.tree.len(); n != maxDiffLayers+1 {
+		t.Fatalf("Unexpected layer count, want %d, got %d", maxDiffLayers+1, n)
+	}
+	if root := tester.db.tree.bottom().rootHash(); root != tester.roots[len(tester.roots)-maxDiffLayers-1] {
+		t.Fatalf("Unexpected disk layer %x", root)
+	}
+	// The result matches what Update would have left behind
+	if err := tester.verifyState(tester.lastHash()); err != nil {
+		t.Fatalf("State is invalid, err: %v", err)
+	}
+	if err := tester.verifyHistory(); err != nil {
+		t.Fatalf("State history is invalid, err: %v", err)
+	}
+}
+
+// addWithoutCap adds n layers on top of the last one with Add, so none of the
+// old layers get flattened.
+func addWithoutCap(tester *tester, n int) error {
+	for i := 0; i < n; i++ {
+		parent := types.EmptyRootHash
+		if len(tester.roots) != 0 {
+			parent = tester.roots[len(tester.roots)-1]
+		}
+		root, nodes, states := tester.generate(parent, i > 6)
+		if err := tester.db.Add(root, parent, uint64(len(tester.roots)), nodes, states); err != nil {
+			return fmt.Errorf("failed to add layer %d, err: %w", i, err)
+		}
+		tester.roots = append(tester.roots, root)
+		tester.nodes = append(tester.nodes, nodes)
+		tester.states = append(tester.states, states)
+	}
+	// A state is only snapshotted once its child is generated, so do the head here
+	head := tester.lastHash()
+	tester.snapAccounts[head] = copyAccounts(tester.accounts)
+	tester.snapStorages[head] = copyStorages(tester.storages)
+	return nil
+}
+
 func TestJournal(t *testing.T) {
 	testJournal(t, "")
 	testJournal(t, filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000))))
