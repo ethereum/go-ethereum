@@ -23,6 +23,7 @@ import (
 	"iter"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -33,10 +34,23 @@ type Receipt struct {
 	PostStateOrStatus []byte
 	GasUsed           uint64
 	Logs              rlp.RawValue
+	Payer             []byte       `rlp:"-"`
+	FrameReceipts     rlp.RawValue `rlp:"-"`
 }
 
 func newReceipt(tr *types.Receipt) Receipt {
 	r := Receipt{TxType: tr.Type, GasUsed: tr.CumulativeGasUsed}
+	if tr.Type == types.FrameTxType {
+		consensus, _ := tr.MarshalBinary()
+		var payload struct {
+			CumulativeGasUsed uint64
+			Payer             []byte
+			FrameReceipts     rlp.RawValue
+		}
+		rlp.DecodeBytes(consensus[1:], &payload)
+		r.Payer, r.FrameReceipts = payload.Payer, payload.FrameReceipts
+		return r
+	}
 	if tr.PostState != nil {
 		r.PostStateOrStatus = tr.PostState
 	} else {
@@ -46,11 +60,38 @@ func newReceipt(tr *types.Receipt) Receipt {
 	return r
 }
 
+func (r *Receipt) EncodeRLP(out io.Writer) error {
+	w := rlp.NewEncoderBuffer(out)
+	l := w.List()
+	w.WriteUint64(uint64(r.TxType))
+	if r.TxType == types.FrameTxType {
+		w.WriteUint64(r.GasUsed)
+		w.WriteBytes(r.Payer)
+		w.Write(r.FrameReceipts)
+	} else {
+		w.WriteBytes(r.PostStateOrStatus)
+		w.WriteUint64(r.GasUsed)
+		w.Write(r.Logs)
+	}
+	w.ListEnd(l)
+	return w.Flush()
+}
+
 // encodeForHash encodes a receipt for the block receiptsRoot derivation.
 func (r *Receipt) encodeForHash(bloomBuf *[6]byte, out *bytes.Buffer) {
 	// For typed receipts, add the tx type.
 	if r.TxType != 0 {
 		out.WriteByte(r.TxType)
+	}
+	if r.TxType == types.FrameTxType {
+		w := rlp.NewEncoderBuffer(out)
+		l := w.List()
+		w.WriteUint64(r.GasUsed)
+		w.WriteBytes(r.Payer)
+		w.Write(r.FrameReceipts)
+		w.ListEnd(l)
+		w.Flush()
+		return
 	}
 	// Encode list = [postStateOrStatus, gasUsed, bloom, logs].
 	w := rlp.NewEncoderBuffer(out)
@@ -107,6 +148,29 @@ func (r *Receipt) decode(input []byte) error {
 		return fmt.Errorf("invalid txType: too large")
 	}
 	r.TxType = byte(txType)
+
+	if r.TxType == types.FrameTxType {
+		r.GasUsed, input, err = rlp.SplitUint64(input)
+		if err != nil {
+			return fmt.Errorf("invalid gasUsed: %w", err)
+		}
+		r.Payer, input, err = rlp.SplitString(input)
+		if err != nil {
+			return fmt.Errorf("invalid payer: %w", err)
+		}
+		if len(r.Payer) != common.AddressLength {
+			return fmt.Errorf("invalid payer length %d", len(r.Payer))
+		}
+		_, rest, err := rlp.SplitList(input)
+		if err != nil {
+			return fmt.Errorf("invalid frame receipts: %w", err)
+		}
+		if len(rest) != 0 {
+			return fmt.Errorf("junk at end of receipt")
+		}
+		r.FrameReceipts = input
+		return nil
+	}
 
 	// status
 	r.PostStateOrStatus, input, err = rlp.SplitString(input)

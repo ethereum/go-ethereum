@@ -137,3 +137,50 @@ func TestReceiptList(t *testing.T) {
 		}
 	}
 }
+
+func TestFrameReceiptListRoundTrip(t *testing.T) {
+	payer := common.Address{0xaa}
+	frameReceipt := &types.Receipt{
+		Type:              types.FrameTxType,
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 90000,
+		Payer:             &payer,
+		FrameReceipts: []types.FrameReceipt{
+			{Status: types.ReceiptStatusSuccessful, GasUsed: 30000, StateGasUsed: 100, Logs: receiptsTestLogs1},
+			{Status: types.ReceiptStatusFailed, GasUsed: 20000, StateGasUsed: 0, Logs: receiptsTestLogs2},
+		},
+	}
+	frameReceipt.Logs = append(append([]*types.Log{}, receiptsTestLogs1...), receiptsTestLogs2...)
+	frameReceipt.Bloom = types.CreateBloom(frameReceipt)
+	legacyReceipt := &types.Receipt{Type: types.DynamicFeeTxType, Status: types.ReceiptStatusSuccessful, CumulativeGasUsed: 21000, Logs: receiptsTestLogs1}
+	legacyReceipt.Bloom = types.CreateBloom(legacyReceipt)
+	receipts := types.Receipts{legacyReceipt, frameReceipt}
+	wantRoot := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+
+	network, err := rlp.EncodeToBytes(NewReceiptList(receipts))
+	if err != nil {
+		t.Fatalf("can't encode network receipts: %v", err)
+	}
+	storageReceipts := []*types.ReceiptForStorage{(*types.ReceiptForStorage)(legacyReceipt), (*types.ReceiptForStorage)(frameReceipt)}
+	canonDB, _ := rlp.EncodeToBytes(storageReceipts)
+	canonBody, _ := rlp.EncodeToBytes(types.Body{Transactions: []*types.Transaction{types.NewTx(&types.DynamicFeeTx{}), types.NewTx(&types.FrameTx{})}})
+	served, _, err := blockReceiptsToNetwork(canonDB, canonBody, receiptQueryParams{})
+	if err != nil {
+		t.Fatalf("blockReceiptsToNetwork error: %v", err)
+	}
+	if !bytes.Equal(network, served) {
+		t.Fatalf("network encoding differs from served receipts\nhave: %x\nwant: %x", network, served)
+	}
+
+	var decoded ReceiptList
+	if err := rlp.DecodeBytes(network, &decoded); err != nil {
+		t.Fatalf("can't decode network receipts: %v", err)
+	}
+	reencoded, _ := rlp.EncodeToBytes(&decoded)
+	if !bytes.Equal(reencoded, network) {
+		t.Fatalf("re-encoded network receipt list not equal\nhave: %x\nwant: %x", reencoded, network)
+	}
+	if haveRoot := types.DeriveSha(decoded.Derivable(), trie.NewStackTrie(nil)); haveRoot != wantRoot {
+		t.Fatalf("wrong root hash from ReceiptList\nhave: %v\nwant: %v", haveRoot, wantRoot)
+	}
+}
