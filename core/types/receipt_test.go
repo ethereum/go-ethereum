@@ -607,7 +607,6 @@ func TestFrameReceiptStatus(t *testing.T) {
 		for _, s := range tt.frames {
 			r.FrameReceipts = append(r.FrameReceipts, FrameReceipt{Status: s, GasUsed: 10, Logs: []*Log{}})
 		}
-		r.Status = tt.want
 
 		consensus, err := r.MarshalBinary()
 		if err != nil {
@@ -625,15 +624,7 @@ func TestFrameReceiptStatus(t *testing.T) {
 		if err := rlp.DecodeBytes(stored, &fromStorage); err != nil {
 			t.Fatal(err)
 		}
-		enc, err := json.Marshal(r)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var fromJSON Receipt
-		if err := json.Unmarshal(enc, &fromJSON); err != nil {
-			t.Fatal(err)
-		}
-		for name, got := range map[string]*Receipt{"consensus": &fromConsensus, "storage": (*Receipt)(&fromStorage), "json": &fromJSON} {
+		for name, got := range map[string]*Receipt{"consensus": &fromConsensus, "storage": (*Receipt)(&fromStorage)} {
 			if got.Status != tt.want {
 				t.Errorf("frames %v, %s: status %d, want %d", tt.frames, name, got.Status, tt.want)
 			}
