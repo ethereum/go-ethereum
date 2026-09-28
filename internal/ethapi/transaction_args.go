@@ -40,14 +40,17 @@ import (
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
-	From                 *common.Address `json:"from"`
-	To                   *common.Address `json:"to"`
-	Gas                  *hexutil.Uint64 `json:"gas"`
-	GasPrice             *hexutil.Big    `json:"gasPrice"`
-	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
-	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
-	Value                *hexutil.Big    `json:"value"`
-	Nonce                *hexutil.Uint64 `json:"nonce"`
+	Type                 *hexutil.Uint64      `json:"type"`
+	Frames               []FrameArgs          `json:"frames,omitempty"`
+	Signatures           []FrameSignatureArgs `json:"signatures,omitempty"`
+	From                 *common.Address      `json:"from"`
+	To                   *common.Address      `json:"to"`
+	Gas                  *hexutil.Uint64      `json:"gas"`
+	GasPrice             *hexutil.Big         `json:"gasPrice"`
+	MaxFeePerGas         *hexutil.Big         `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *hexutil.Big         `json:"maxPriorityFeePerGas"`
+	Value                *hexutil.Big         `json:"value"`
+	Nonce                *hexutil.Uint64      `json:"nonce"`
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
@@ -101,6 +104,9 @@ type sidecarConfig struct {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config sidecarConfig) error {
+	if args.isFrame() {
+		return errors.New("frame transactions are not supported by this method")
+	}
 	if err := args.setBlobTxSidecar(ctx, config); err != nil {
 		return err
 	}
@@ -399,6 +405,11 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 // CallDefaults sanitizes the transaction arguments, often filling in zero values,
 // for the purpose of eth_call class of RPC methods.
 func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int) error {
+	if args.isFrame() {
+		if err := args.frameDefaults(globalGasCap); err != nil {
+			return err
+		}
+	}
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -442,10 +453,17 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 			args.MaxPriorityFeePerGas = new(hexutil.Big)
 		}
 	}
-	if args.BlobFeeCap == nil && args.BlobHashes != nil {
+	if args.BlobFeeCap == nil && (args.BlobHashes != nil || args.isFrame()) {
 		args.BlobFeeCap = new(hexutil.Big)
 	}
 
+	if args.isFrame() {
+		for _, fee := range []*hexutil.Big{args.MaxFeePerGas, args.MaxPriorityFeePerGas, args.BlobFeeCap} {
+			if fee == nil || fee.ToInt().Sign() < 0 || fee.ToInt().BitLen() > 256 {
+				return errors.New("invalid frame transaction fee")
+			}
+		}
+	}
 	return nil
 }
 
@@ -488,7 +506,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 	}
 	value, _ := args.Value.ToUint256()
 	blobFeeCap, _ := args.BlobFeeCap.ToUint256()
-	return &core.Message{
+	msg := &core.Message{
 		From:                  args.from(),
 		To:                    args.To,
 		Value:                 value,
@@ -505,11 +523,26 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 		SkipNonceChecks:       skipNonceCheck,
 		SkipTransactionChecks: true,
 	}
+	if args.isFrame() {
+		tx := args.frameTransaction()
+		msg.Frames = tx.Frames()
+		msg.FrameSignatures = tx.FrameSignatures()
+		msg.FrameSigHash = types.LatestSignerForChainID(args.ChainID.ToInt()).Hash(tx)
+		msg.GasLimit = tx.Gas()
+		msg.FrameSignaturePlaceholders = make([]bool, len(args.Signatures))
+		for i, signature := range args.Signatures {
+			msg.FrameSignaturePlaceholders[i] = signature.Signature == nil || len(*signature.Signature) == 0
+		}
+	}
+	return msg
 }
 
 // ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
 func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
+	if args.isFrame() {
+		return args.frameTransaction()
+	}
 	usedType := types.LegacyTxType
 	switch {
 	case args.AuthorizationList != nil || defaultType == types.SetCodeTxType:
