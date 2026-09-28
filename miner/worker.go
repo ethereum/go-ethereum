@@ -392,7 +392,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx *types.Transaction) (err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransaction")
 	defer spanEnd(&err)
-	if tx.Type() == types.BlobTxType {
+	if tx.Type() == types.BlobTxType || len(tx.BlobHashes()) > 0 {
 		return miner.commitBlobTransaction(env, tx)
 	}
 	receipt, bal, err := miner.applyTransaction(env, tx)
@@ -409,7 +409,7 @@ func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx 
 
 func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transaction) error {
 	sc := tx.BlobTxSidecar()
-	if sc == nil {
+	if sc == nil && tx.Type() == types.BlobTxType {
 		panic("blob transaction without blobs in miner")
 	}
 	// Checking against blob gas limit: It's kind of ugly to perform this check here, but there
@@ -417,7 +417,7 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	// and not during execution. This means core.ApplyTransaction will not return an error if the
 	// tx has too many blobs. So we have to explicitly check it here.
 	maxBlobs := miner.maxBlobsPerBlock(env.header.Time)
-	if env.blobs+len(sc.Blobs) > maxBlobs {
+	if env.blobs+len(tx.BlobHashes()) > maxBlobs {
 		return errors.New("max data blobs reached")
 	}
 	receipt, bal, err := miner.applyTransaction(env, tx)
@@ -427,8 +427,10 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	txNoBlob := tx.WithoutBlobTxSidecar()
 	env.txs = append(env.txs, txNoBlob)
 	env.receipts = append(env.receipts, receipt)
-	env.sidecars = append(env.sidecars, sc)
-	env.blobs += len(sc.Blobs)
+	if sc != nil {
+		env.sidecars = append(env.sidecars, sc)
+	}
+	env.blobs += len(tx.BlobHashes())
 	env.size += txNoBlob.Size()
 	*env.header.BlobGasUsed += receipt.BlobGasUsed
 	env.tcount++

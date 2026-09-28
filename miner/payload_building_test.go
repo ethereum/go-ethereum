@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -270,5 +271,87 @@ func TestPayloadId(t *testing.T) {
 			t.Errorf("ID collision, case %d and case %d: id %v", prev, i, id)
 		}
 		ids[id] = i
+	}
+}
+
+func TestBuildPayloadWithBlobCarryingFrameTx(t *testing.T) {
+	var (
+		config        = *params.MergedTestChainConfig
+		zeroTime      = uint64(0)
+		consensusCore = beacon.New(ethash.NewFaker())
+		senderKey, _  = crypto.GenerateKey()
+		sender        = crypto.PubkeyToAddress(senderKey.PublicKey)
+		blobHashes    = []common.Hash{{0x01, 0x01}, {0x01, 0x02}}
+		slotNumber    = uint64(1)
+		beaconRoot    = common.Hash{}
+	)
+	config.AmsterdamTime = &zeroTime
+	config.BogotaTime = &zeroTime
+	alloc := core.SystemContractAllocs()
+	alloc[sender] = types.Account{Balance: big.NewInt(params.Ether)}
+	alloc[params.FrameTxExpiryVerifier] = types.Account{Code: params.FrameTxExpiryVerifierCode, Balance: big.NewInt(0)}
+	genesis := &core.Genesis{Config: &config, Alloc: alloc, Difficulty: common.Big0}
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, consensusCore, nil)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	defer chain.Stop()
+	legacyPool := legacypool.New(testTxPoolConfig, chain)
+	pool, err := txpool.New(testTxPoolConfig.PriceLimit, chain, []txpool.SubPool{legacyPool})
+	if err != nil {
+		t.Fatalf("failed to create txpool: %v", err)
+	}
+	defer pool.Close()
+
+	frameTx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  sender,
+		Frames: []types.Frame{{
+			Mode:      types.ModeVerify,
+			Flags:     types.ApproveExecutionAndPayment,
+			GasLimits: types.Limits{Execution: 100_000},
+			Value:     uint256.NewInt(0),
+		}},
+		Signatures: types.SignatureList{{
+			Scheme: types.FrameTxSchemeSecp256k1,
+			Signer: sender.Bytes(),
+		}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(params.GWei),
+			MaxFeePerGas:         uint256.NewInt(10 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(params.GWei),
+		},
+		BlobVersionedHashes: blobHashes,
+	}
+	sigHash := types.LatestSigner(&config).Hash(types.NewTx(frameTx))
+	sig, err := crypto.Sign(sigHash[:], senderKey)
+	if err != nil {
+		t.Fatalf("failed to sign frame transaction: %v", err)
+	}
+	frameTx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
+	if errs := pool.Add([]*types.Transaction{types.NewTx(frameTx)}, true); errs[0] != nil {
+		t.Fatalf("failed to add frame transaction: %v", errs[0])
+	}
+
+	miner := New(&testWorkerBackend{chain: chain, txPool: pool, genesis: genesis}, testConfig, consensusCore)
+	result := miner.generateWork(context.Background(), &generateParams{
+		timestamp:   chain.CurrentBlock().Time + 12,
+		parentHash:  chain.CurrentBlock().Hash(),
+		withdrawals: types.Withdrawals{},
+		beaconRoot:  &beaconRoot,
+		slotNum:     &slotNumber,
+	}, false)
+	if result.err != nil {
+		t.Fatalf("failed to build block: %v", result.err)
+	}
+	block := result.block
+	if len(block.Transactions()) != 1 {
+		t.Fatalf("expected the frame transaction in the block, got %d transactions", len(block.Transactions()))
+	}
+	if want := uint64(len(blobHashes) * params.BlobTxBlobGasPerBlob); *block.BlobGasUsed() != want {
+		t.Fatalf("header blob gas used mismatch: have %d, want %d", *block.BlobGasUsed(), want)
+	}
+	if _, err := chain.InsertChain(types.Blocks{block}); err != nil {
+		t.Fatalf("built block failed validation: %v", err)
 	}
 }
