@@ -93,6 +93,15 @@ func (r *resultStore) AddFetch(header *types.Header, snapSync bool, fetchBAL boo
 	return false, false, item
 }
 
+// Offset returns the block number of the first cached fetch result, i.e. the
+// next block to be delivered upstream.
+func (r *resultStore) Offset() uint64 {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	return r.resultOffset
+}
+
 // GetDeliverySlot returns the fetchResult for the given header. If the 'stale' flag
 // is true, that means the header has already been delivered 'upstream'.
 func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, error) {

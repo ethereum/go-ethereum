@@ -337,8 +337,8 @@ func TestBlockAccessLists(t *testing.T) {
 	if accepted != 1 || err != nil {
 		t.Fatalf("unexpected delivery result, accepted %d, err %v", accepted, err)
 	}
-	if got, exp := q.balBytes.Load(), int64(len(enc)); got != exp {
-		t.Errorf("wrong attached access list bytes, got %d, exp %d", got, exp)
+	if got, exp := q.balSize, common.StorageSize(len(enc)); got != exp {
+		t.Errorf("wrong access list size estimate, got %v, exp %v", got, exp)
 	}
 	// The unavailable entry should be returned to the task queue and the peer
 	// marked as not possessing it
@@ -375,10 +375,6 @@ func TestBlockAccessLists(t *testing.T) {
 	}
 	if got, exp := q.PendingBALs(), 0; got != exp {
 		t.Errorf("wrong pending access list count after delivery, got %d, exp %d", got, exp)
-	}
-	// The access list memory allowance must have drained with the delivery
-	if got, exp := q.balBytes.Load(), int64(0); got != exp {
-		t.Errorf("wrong attached access list bytes after delivery, got %d, exp %d", got, exp)
 	}
 }
 
