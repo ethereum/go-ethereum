@@ -3373,8 +3373,8 @@ func TestFrameTxOnePendingPerSender(t *testing.T) {
 	if err := pool.addRemoteSync(txs[0]); err != nil {
 		t.Fatalf("failed to add first frame transaction: %v", err)
 	}
-	if err := pool.addRemoteSync(txs[1]); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
-		t.Fatalf("second pending frame transaction from the same sender: have %v, want %v", err, txpool.ErrInflightTxLimitReached)
+	if err := pool.addRemoteSync(txs[1]); !errors.Is(err, ErrFrameTxSenderPending) {
+		t.Fatalf("second pending frame transaction from the same sender: have %v, want %v", err, ErrFrameTxSenderPending)
 	}
 	if err := pool.addRemoteSync(txs[2]); err != nil {
 		t.Fatalf("failed to replace frame transaction with a fee bump: %v", err)
@@ -3426,7 +3426,7 @@ func TestFrameTxEvictionPrefersNearestExpiry(t *testing.T) {
 			Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: sender.Bytes()}},
 			Fees: types.Fees{
 				MaxPriorityFeePerGas: uint256.NewInt(variant.tip * params.GWei),
-				MaxFeePerGas:         uint256.NewInt(10 * params.GWei),
+				MaxFeePerGas:         uint256.NewInt(variant.tip * params.GWei),
 				MaxFeePerBlobGas:     uint256.NewInt(0),
 			},
 		}
@@ -3448,5 +3448,125 @@ func TestFrameTxEvictionPrefersNearestExpiry(t *testing.T) {
 	}
 	if pool.Get(txs[1].Hash()) == nil {
 		t.Fatalf("frame transaction without expiry deadline was evicted")
+	}
+}
+
+func TestFrameTxEvictionKeepsPlainTxOrder(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.SetCode(params.FrameTxExpiryVerifier, params.FrameTxExpiryVerifierCode, tracing.CodeChangeUnspecified)
+	blockchain := newTestBlockChain(&config, 10000000, statedb, new(event.Feed))
+
+	poolConfig := testTxPoolConfig
+	poolConfig.GlobalSlots = 1
+	poolConfig.GlobalQueue = 1
+	pool := New(poolConfig, blockchain)
+	pool.Init(poolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
+	defer pool.Close()
+
+	plainKey, _ := crypto.GenerateKey()
+	testAddBalance(pool, crypto.PubkeyToAddress(plainKey.PublicKey), big.NewInt(params.Ether))
+	plainTx := pricedTransaction(0, 100000, big.NewInt(params.GWei), plainKey)
+	if err := pool.addRemoteSync(plainTx); err != nil {
+		t.Fatalf("failed to add plain transaction: %v", err)
+	}
+
+	senderKey, _ := crypto.GenerateKey()
+	sender := crypto.PubkeyToAddress(senderKey.PublicKey)
+	testAddBalance(pool, sender, big.NewInt(params.Ether))
+	expiryVerifier := params.FrameTxExpiryVerifier
+	frameTx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  sender,
+		Frames: []types.Frame{
+			{Mode: types.ModeVerify, Target: &expiryVerifier, GasLimits: types.Limits{Execution: 5_000}, Value: uint256.NewInt(0), Data: []byte{0, 0, 0, 0, 0, 0, 0x03, 0xe8}},
+			{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 30_000}, Value: uint256.NewInt(0)},
+		},
+		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: sender.Bytes()}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(3 * params.GWei),
+			MaxFeePerGas:         uint256.NewInt(10 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
+	}
+	sigHash := types.LatestSigner(&config).Hash(types.NewTx(frameTx))
+	sig, _ := crypto.Sign(sigHash[:], senderKey)
+	frameTx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
+	expiringTx := types.NewTx(frameTx)
+	if err := pool.addRemoteSync(expiringTx); err != nil {
+		t.Fatalf("failed to add frame transaction: %v", err)
+	}
+
+	newKey, _ := crypto.GenerateKey()
+	testAddBalance(pool, crypto.PubkeyToAddress(newKey.PublicKey), big.NewInt(params.Ether))
+	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(2*params.GWei), newKey)); err != nil {
+		t.Fatalf("failed to add transaction to the full pool: %v", err)
+	}
+	if pool.Get(plainTx.Hash()) != nil {
+		t.Fatalf("cheapest plain transaction was not evicted first")
+	}
+	if pool.Get(expiringTx.Hash()) == nil {
+		t.Fatalf("expiring frame transaction was evicted ahead of a cheaper plain transaction")
+	}
+}
+
+func TestFrameTxCalleeBalanceChangeNotResimulated(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, _ := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	sender := common.Address{0xcd, 0xef}
+	callee := common.Address{0xca, 0x11}
+	testAddBalance(pool, sender, big.NewInt(params.Ether))
+	pool.mu.Lock()
+	pool.currentState.SetCode(callee, []byte{byte(vm.STOP)}, tracing.CodeChangeUnspecified)
+	pool.currentState.SetCode(sender, append(append([]byte{
+		byte(vm.PUSH0), byte(vm.PUSH0), byte(vm.PUSH0), byte(vm.PUSH0), byte(vm.PUSH20)}, callee.Bytes()...),
+		byte(vm.GAS), byte(vm.STATICCALL), byte(vm.POP),
+		byte(vm.PUSH1), byte(types.ApproveExecutionAndPayment), byte(vm.PUSH0), byte(vm.PUSH0), byte(vm.APPROVE),
+	), tracing.CodeChangeUnspecified)
+	pool.mu.Unlock()
+	tx := types.NewTx(&types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  sender,
+		Frames:  []types.Frame{{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 30_000}, Value: uint256.NewInt(0)}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(params.GWei),
+			MaxFeePerGas:         uint256.NewInt(5 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
+	})
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add frame transaction: %v", err)
+	}
+	pool.mu.Lock()
+	payment := pool.frameTxPayments[tx.Hash()]
+	pool.currentState.AddBalance(callee, uint256.NewInt(params.Ether), tracing.BalanceChangeUnspecified)
+	pool.mu.Unlock()
+
+	oldHead := pool.currentHead.Load()
+	newHead := &types.Header{
+		ParentHash: oldHead.Hash(),
+		Number:     big.NewInt(1),
+		Difficulty: common.Big0,
+		GasLimit:   oldHead.GasLimit,
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+	}
+	<-pool.requestReset(oldHead, newHead)
+
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	if payment == nil || pool.frameTxPayments[tx.Hash()] != payment {
+		t.Fatalf("frame transaction was re-simulated after a balance change of a callee it cannot observe")
 	}
 }

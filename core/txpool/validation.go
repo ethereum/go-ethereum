@@ -291,7 +291,7 @@ type FrameTxReads map[common.Address]*FrameTxRead
 
 func (reads FrameTxReads) Changed(statedb *state.StateDB) bool {
 	for addr, read := range reads {
-		if statedb.GetNonce(addr) != read.Nonce || statedb.GetBalance(addr).Cmp(read.Balance) != 0 || statedb.GetCodeHash(addr) != read.CodeHash {
+		if statedb.GetNonce(addr) != read.Nonce || statedb.GetCodeHash(addr) != read.CodeHash || (read.Balance != nil && statedb.GetBalance(addr).Cmp(read.Balance) != 0) {
 			return true
 		}
 		for slot, value := range read.Storage {
@@ -441,7 +441,6 @@ func validateFrameTxPrefix(tx *types.Transaction, signer types.Signer, opts *Val
 		if reads[addr] == nil {
 			reads[addr] = &FrameTxRead{
 				Nonce:    opts.State.GetNonce(addr),
-				Balance:  opts.State.GetBalance(addr).Clone(),
 				CodeHash: opts.State.GetCodeHash(addr),
 				Storage:  make(map[common.Hash]common.Hash),
 			}
@@ -544,7 +543,7 @@ func validateFrameTxPrefix(tx *types.Transaction, signer types.Signer, opts *Val
 	cost := new(uint256.Int).Mul(uint256.NewInt(msg.GasLimit), msg.GasFeeCap)
 	cost.Add(cost, new(uint256.Int).Mul(uint256.NewInt(tx.BlobGas()), msg.BlobGasFeeCap))
 	payer := *result.FramePayer
-	read(payer)
+	read(payer).Balance = opts.State.GetBalance(payer).Clone()
 	paymaster := msg.Frames[prefix-1].Flags == types.ApprovePayment && len(statedb.GetCode(payer)) > 0
 	return opts.FrameTxPayment(tx, payer, cost, paymaster, reads)
 }

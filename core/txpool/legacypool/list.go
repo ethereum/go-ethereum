@@ -504,9 +504,6 @@ func (h *priceHeap) Less(i, j int) bool {
 }
 
 func (h *priceHeap) cmp(a, b *types.Transaction) int {
-	if c := cmp.Compare(frameTxDeadline(a), frameTxDeadline(b)); c != 0 {
-		return c
-	}
 	if h.baseFee != nil {
 		// Compare effective tips if baseFee is specified
 		if c := a.EffectiveGasTipCmp(b, h.baseFee); c != 0 {
@@ -653,6 +650,9 @@ func (l *pricedList) Discard(slots int) (types.Transactions, bool) {
 				continue
 			}
 			// Non stale transaction found, discard it
+			if tx.Type() == types.FrameTxType {
+				tx = l.nearestExpiryFrameTx(tx)
+			}
 			drop = append(drop, tx)
 			slots -= numSlots(tx)
 		}
@@ -665,6 +665,29 @@ func (l *pricedList) Discard(slots int) (types.Transactions, bool) {
 		return nil, false
 	}
 	return drop, true
+}
+
+func (l *pricedList) nearestExpiryFrameTx(tx *types.Transaction) *types.Transaction {
+	var (
+		best = tx
+		from *priceHeap
+		at   int
+	)
+	for _, h := range []*priceHeap{&l.urgent, &l.floating} {
+		for i, c := range h.list {
+			if c.Type() != types.FrameTxType || l.all.Get(c.Hash()) == nil {
+				continue
+			}
+			if d := cmp.Compare(frameTxDeadline(c), frameTxDeadline(best)); d < 0 || (d == 0 && l.floating.cmp(c, best) < 0) {
+				best, from, at = c, h, i
+			}
+		}
+	}
+	if from != nil {
+		heap.Remove(from, at)
+		heap.Push(&l.floating, tx)
+	}
+	return best
 }
 
 // Reheap forcibly rebuilds the heap based on the current remote transaction set.

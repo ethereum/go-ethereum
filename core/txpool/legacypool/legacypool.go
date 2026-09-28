@@ -76,6 +76,8 @@ var (
 	// ErrFutureReplacePending is returned if a future transaction replaces a pending
 	// one. Future transactions should only be able to replace other future transactions.
 	ErrFutureReplacePending = errors.New("future transaction tries to replace pending")
+
+	ErrFrameTxSenderPending = errors.New("sender already has a pending frame transaction")
 )
 
 var (
@@ -627,7 +629,7 @@ func (pool *LegacyPool) checkFrameTxLimit(tx *types.Transaction) error {
 		}
 		for _, pooled := range list.Flatten() {
 			if pooled.Type() == types.FrameTxType && pooled.Nonce() != tx.Nonce() {
-				return fmt.Errorf("%w: sender %v already has a pending frame transaction", txpool.ErrInflightTxLimitReached, from)
+				return fmt.Errorf("%w: %v", ErrFrameTxSenderPending, from)
 			}
 		}
 	}

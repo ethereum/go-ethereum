@@ -40,6 +40,8 @@ func IsTemporaryReject(err error) bool {
 		return true
 	case errors.Is(err, legacypool.ErrFutureReplacePending):
 		return true
+	case errors.Is(err, legacypool.ErrFrameTxSenderPending):
+		return true
 	default:
 		return false
 	}
