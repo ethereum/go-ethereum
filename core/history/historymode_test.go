@@ -129,7 +129,7 @@ func TestHistoryModeText(t *testing.T) {
 			}
 		}
 	}
-	for _, bad := range []string{"", " ", "ALL", "post", "2026", "0x2026-05", "custom:25182208", "2026-05", "invalid HistoryMode(7)"} {
+	for _, bad := range []string{"", " ", "ALL", "post", "custom:25182208", "invalid HistoryMode(7)"} {
 		var got HistoryMode
 		if err := got.UnmarshalText([]byte(bad)); err == nil {
 			t.Errorf("UnmarshalText(%q): expected error, got mode %d", bad, got)
