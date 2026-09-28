@@ -277,7 +277,30 @@ type ValidationOptionsWithState struct {
 	// transaction's cost with the given nonce to check for overdrafts.
 	ExistingCost func(addr common.Address, nonce uint64) *big.Int
 
-	FrameTxPayment func(tx *types.Transaction, payer common.Address, cost *uint256.Int, paymaster bool) error
+	FrameTxPayment func(tx *types.Transaction, payer common.Address, cost *uint256.Int, paymaster bool, reads FrameTxReads) error
+}
+
+type FrameTxRead struct {
+	Nonce    uint64
+	Balance  *uint256.Int
+	CodeHash common.Hash
+	Storage  map[common.Hash]common.Hash
+}
+
+type FrameTxReads map[common.Address]*FrameTxRead
+
+func (reads FrameTxReads) Changed(statedb *state.StateDB) bool {
+	for addr, read := range reads {
+		if statedb.GetNonce(addr) != read.Nonce || statedb.GetBalance(addr).Cmp(read.Balance) != 0 || statedb.GetCodeHash(addr) != read.CodeHash {
+			return true
+		}
+		for slot, value := range read.Storage {
+			if statedb.GetState(addr, slot) != value {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ValidateTransactionWithState is a helper method to check whether a transaction
@@ -412,7 +435,20 @@ func validateFrameTxPrefix(tx *types.Transaction, signer types.Signer, opts *Val
 		calls       = []vm.OpCode{vm.CALL, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL}
 		evm         *vm.EVM
 		violation   error
+		reads       = make(FrameTxReads)
 	)
+	read := func(addr common.Address) *FrameTxRead {
+		if reads[addr] == nil {
+			reads[addr] = &FrameTxRead{
+				Nonce:    opts.State.GetNonce(addr),
+				Balance:  opts.State.GetBalance(addr).Clone(),
+				CodeHash: opts.State.GetCodeHash(addr),
+				Storage:  make(map[common.Hash]common.Hash),
+			}
+		}
+		return reads[addr]
+	}
+	read(msg.From)
 	violate := func(format string, args ...any) {
 		if violation == nil {
 			violation = fmt.Errorf("frame transaction validation prefix "+format, args...)
@@ -429,6 +465,7 @@ func validateFrameTxPrefix(tx *types.Transaction, signer types.Signer, opts *Val
 	}
 	hooks := &tracing.Hooks{
 		OnEnter: func(depth int, typ byte, from, to common.Address, input []byte, gas uint64, value *big.Int) {
+			read(to)
 			if value != nil && value.Sign() != 0 {
 				violate("transfers value to %v", to)
 			}
@@ -465,15 +502,21 @@ func validateFrameTxPrefix(tx *types.Transaction, signer types.Signer, opts *Val
 					violate("writes storage of %v", scope.Address())
 				}
 			case vm.SLOAD:
+				slot := common.Hash(stack[len(stack)-1].Bytes32())
+				read(scope.Address()).Storage[slot] = opts.State.GetState(scope.Address(), slot)
 				if scope.Address() != msg.From {
 					violate("reads storage of %v", scope.Address())
 				}
 			case vm.CALL, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL:
-				if target := common.Address(stack[len(stack)-2].Bytes20()); !callable(target) {
+				target := common.Address(stack[len(stack)-2].Bytes20())
+				read(target)
+				if !callable(target) {
 					violate("calls %v, which is not an undelegated contract or precompile", target)
 				}
 			case vm.EXTCODESIZE, vm.EXTCODECOPY, vm.EXTCODEHASH:
-				if target := common.Address(stack[len(stack)-1].Bytes20()); !callable(target) {
+				target := common.Address(stack[len(stack)-1].Bytes20())
+				read(target)
+				if !callable(target) {
 					violate("reads code of %v, which is not an undelegated contract or precompile", target)
 				}
 			}
@@ -501,6 +544,7 @@ func validateFrameTxPrefix(tx *types.Transaction, signer types.Signer, opts *Val
 	cost := new(uint256.Int).Mul(uint256.NewInt(msg.GasLimit), msg.GasFeeCap)
 	cost.Add(cost, new(uint256.Int).Mul(uint256.NewInt(tx.BlobGas()), msg.BlobGasFeeCap))
 	payer := *result.FramePayer
+	read(payer)
 	paymaster := msg.Frames[prefix-1].Flags == types.ApprovePayment && len(statedb.GetCode(payer)) > 0
-	return opts.FrameTxPayment(tx, payer, cost, paymaster)
+	return opts.FrameTxPayment(tx, payer, cost, paymaster, reads)
 }

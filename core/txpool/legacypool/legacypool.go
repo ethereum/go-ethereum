@@ -261,13 +261,14 @@ type LegacyPool struct {
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
 
-	frameTxPayments map[common.Hash]frameTxPayment
+	frameTxPayments map[common.Hash]*frameTxPayment
 }
 
 type frameTxPayment struct {
 	payer     common.Address
 	cost      *uint256.Int
 	paymaster bool
+	reads     txpool.FrameTxReads
 }
 
 type txpoolResetRequest struct {
@@ -296,7 +297,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		initDoneCh:      make(chan struct{}),
-		frameTxPayments: make(map[common.Hash]frameTxPayment),
+		frameTxPayments: make(map[common.Hash]*frameTxPayment),
 	}
 	pool.priced = newPricedList(pool.all)
 
@@ -583,6 +584,11 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
+	if tx.Type() == types.FrameTxType {
+		if err := pool.checkFrameTxLimit(tx); err != nil {
+			return err
+		}
+	}
 	opts := &txpool.ValidationOptionsWithState{
 		State:  pool.currentState,
 		Config: pool.chainconfig,
@@ -612,7 +618,23 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 	return pool.validateAuth(tx)
 }
 
-func (pool *LegacyPool) reserveFrameTxPayment(tx *types.Transaction, payer common.Address, cost *uint256.Int, paymaster bool) error {
+func (pool *LegacyPool) checkFrameTxLimit(tx *types.Transaction) error {
+	from, _ := types.Sender(pool.signer, tx)
+	queued, _ := pool.queue.get(from)
+	for _, list := range []*list{pool.pending[from], queued} {
+		if list == nil {
+			continue
+		}
+		for _, pooled := range list.Flatten() {
+			if pooled.Type() == types.FrameTxType && pooled.Nonce() != tx.Nonce() {
+				return fmt.Errorf("%w: sender %v already has a pending frame transaction", txpool.ErrInflightTxLimitReached, from)
+			}
+		}
+	}
+	return nil
+}
+
+func (pool *LegacyPool) reserveFrameTxPayment(tx *types.Transaction, payer common.Address, cost *uint256.Int, paymaster bool, reads txpool.FrameTxReads) error {
 	from, _ := types.Sender(pool.signer, tx)
 	var (
 		exposure  = new(uint256.Int).Set(cost)
@@ -641,7 +663,7 @@ func (pool *LegacyPool) reserveFrameTxPayment(tx *types.Transaction, payer commo
 	if paymaster && sponsored >= maxPendingTxsUsingNonCanonicalPaymaster {
 		return fmt.Errorf("%w: paymaster %v already sponsors %d pending transactions", txpool.ErrInflightTxLimitReached, payer, sponsored)
 	}
-	pool.frameTxPayments[tx.Hash()] = frameTxPayment{payer: payer, cost: cost, paymaster: paymaster}
+	pool.frameTxPayments[tx.Hash()] = &frameTxPayment{payer: payer, cost: cost, paymaster: paymaster, reads: reads}
 	return nil
 }
 
@@ -1290,13 +1312,24 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 		// Reset from the old head to the new, rescheduling any reorged transactions
 		pool.reset(reset.oldHead, reset.newHead)
 
-		clear(pool.frameTxPayments)
-		var frameTxs []*types.Transaction
+		var (
+			head     = pool.currentHead.Load()
+			targeted = reset.oldHead != nil && reset.newHead != nil && reset.oldHead.Hash() == reset.newHead.ParentHash
+			frameTxs []*types.Transaction
+		)
 		pool.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
-			if tx.Type() == types.FrameTxType {
+			if tx.Type() != types.FrameTxType {
+				return true
+			}
+			payment := pool.frameTxPayments[hash]
+			if !targeted || payment == nil || payment.reads.Changed(pool.currentState) || tx.Frames()[0].IsExpiryVerifier() {
+				delete(pool.frameTxPayments, hash)
 				frameTxs = append(frameTxs, tx)
 			}
 			return true
+		})
+		slices.SortFunc(frameTxs, func(a, b *types.Transaction) int {
+			return b.EffectiveGasTipValue(head.BaseFee).Cmp(a.EffectiveGasTipValue(head.BaseFee))
 		})
 		for _, tx := range frameTxs {
 			if pool.validateTx(tx) != nil {

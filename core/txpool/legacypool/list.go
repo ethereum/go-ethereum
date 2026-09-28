@@ -17,7 +17,9 @@
 package legacypool
 
 import (
+	"cmp"
 	"container/heap"
+	"encoding/binary"
 	"math"
 	"math/big"
 	"slices"
@@ -28,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -501,6 +504,9 @@ func (h *priceHeap) Less(i, j int) bool {
 }
 
 func (h *priceHeap) cmp(a, b *types.Transaction) int {
+	if c := cmp.Compare(frameTxDeadline(a), frameTxDeadline(b)); c != 0 {
+		return c
+	}
 	if h.baseFee != nil {
 		// Compare effective tips if baseFee is specified
 		if c := a.EffectiveGasTipCmp(b, h.baseFee); c != 0 {
@@ -513,6 +519,13 @@ func (h *priceHeap) cmp(a, b *types.Transaction) int {
 	}
 	// Compare tips if effective tips and fee caps are equal
 	return a.GasTipCapCmp(b)
+}
+
+func frameTxDeadline(tx *types.Transaction) uint64 {
+	if frames := tx.Frames(); len(frames) > 0 && frames[0].IsExpiryVerifier() && len(frames[0].Data) == params.FrameTxExpiryDataLen {
+		return binary.BigEndian.Uint64(frames[0].Data)
+	}
+	return math.MaxUint64
 }
 
 func (h *priceHeap) Push(x interface{}) {
