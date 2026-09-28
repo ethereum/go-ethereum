@@ -4308,6 +4308,12 @@ func TestEIP8141(t *testing.T) {
 				GasLimits: types.Limits{Execution: 300_000, State: 200_000},
 				Value:     uint256.NewInt(0),
 			},
+			{ // Runs out of gas, failing the transaction without undoing the others.
+				Mode:      types.ModeSender,
+				Target:    &aa,
+				GasLimits: types.Limits{Execution: 1},
+				Value:     uint256.NewInt(0),
+			},
 		},
 		Signatures: types.SignatureList{{
 			Scheme: types.FrameTxSchemeSecp256k1,
@@ -4329,7 +4335,7 @@ func TestEIP8141(t *testing.T) {
 	frametx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
 	tx := types.NewTx(frametx)
 
-	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+	_, blocks, generated := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		// Run the EIP-4788 system call with the zero root set by the chain
 		// maker, so the generated access list matches block processing.
 		b.SetParentBeaconRoot(common.Hash{})
@@ -4370,13 +4376,22 @@ func TestEIP8141(t *testing.T) {
 	if receipt.Payer == nil || *receipt.Payer != addr1 {
 		t.Fatalf("receipt payer wrong: expected %v, got %v", addr1, receipt.Payer)
 	}
-	if len(receipt.FrameReceipts) != 2 {
-		t.Fatalf("expected 2 frame receipts, got %d", len(receipt.FrameReceipts))
+	wantFrames := []uint64{types.ReceiptStatusSuccessful, types.ReceiptStatusSuccessful, types.ReceiptStatusFailed}
+	if len(receipt.FrameReceipts) != len(wantFrames) {
+		t.Fatalf("expected %d frame receipts, got %d", len(wantFrames), len(receipt.FrameReceipts))
 	}
 	for i, frameReceipt := range receipt.FrameReceipts {
-		if frameReceipt.Status != 1 {
-			t.Fatalf("frame %d status wrong: expected 1, got %d", i, frameReceipt.Status)
+		if frameReceipt.Status != wantFrames[i] {
+			t.Fatalf("frame %d status wrong: expected %d, got %d", i, wantFrames[i], frameReceipt.Status)
 		}
+	}
+	// The transaction status is derived from the frames, both when the
+	// receipt is produced and when it is read back from the database.
+	if status := generated[0][0].Status; status != types.ReceiptStatusFailed {
+		t.Fatalf("produced receipt status wrong: expected %d, got %d", types.ReceiptStatusFailed, status)
+	}
+	if receipt.Status != types.ReceiptStatusFailed {
+		t.Fatalf("stored receipt status wrong: expected %d, got %d", types.ReceiptStatusFailed, receipt.Status)
 	}
 }
 

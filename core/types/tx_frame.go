@@ -422,6 +422,10 @@ type frameJSON struct {
 	StateGasLimit math.HexOrDecimal64   `json:"stateGasLimit"`
 	Value         *math.HexOrDecimal256 `json:"value"`
 	Data          hexutil.Bytes         `json:"data"`
+
+	// JSON-RPC names for the limits, accepted when decoding.
+	ExecutionGas *math.HexOrDecimal64 `json:"executionGas,omitempty"`
+	StateGas     *math.HexOrDecimal64 `json:"stateGas,omitempty"`
 }
 
 func (f Frame) MarshalJSON() ([]byte, error) {
@@ -450,6 +454,12 @@ func (f *Frame) UnmarshalJSON(input []byte) error {
 	f.GasLimits = Limits{
 		Execution: uint64(dec.GasLimit),
 		State:     uint64(dec.StateGasLimit),
+	}
+	if dec.ExecutionGas != nil {
+		f.GasLimits.Execution = uint64(*dec.ExecutionGas)
+	}
+	if dec.StateGas != nil {
+		f.GasLimits.State = uint64(*dec.StateGas)
 	}
 	f.Value = new(uint256.Int)
 	if dec.Value != nil {

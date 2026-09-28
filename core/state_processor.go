@@ -282,6 +282,7 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 
 	// EIP-8141 frame transaction fields.
 	if tx.Type() == types.FrameTxType {
+		receipt.Status = types.FrameTxStatus(result.FrameReceipts)
 		receipt.Payer = result.FramePayer
 		receipt.FrameReceipts = result.FrameReceipts
 	}
