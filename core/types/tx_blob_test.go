@@ -17,12 +17,15 @@
 package types
 
 import (
+	"bytes"
 	"crypto/ecdsa"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -71,6 +74,65 @@ func TestBlobTxSize(t *testing.T) {
 	}
 	if sz := withBlobsStripped.Size(); sz != sizeNoBlobs {
 		t.Fatal("wrong size on tx after WithoutBlobTxSidecar:", sz)
+	}
+}
+
+func TestFrameTxBlobSidecarEncoding(t *testing.T) {
+	cellProofs, err := kzg4844.ComputeCellProofs(emptyBlob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecar := NewBlobTxSidecar(BlobSidecarVersion1, []kzg4844.Blob{*emptyBlob}, []kzg4844.Commitment{emptyBlobCommit}, cellProofs)
+	withoutBlobs := NewTx(&FrameTx{
+		ChainID: uint256.NewInt(1),
+		Nonce:   5,
+		Sender:  common.Address{0x01},
+		Frames:  []Frame{{Mode: ModeSender, GasLimits: Limits{Execution: 21000}, Value: uint256.NewInt(0)}},
+		Fees: Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(1),
+			MaxFeePerGas:         uint256.NewInt(2),
+			MaxFeePerBlobGas:     uint256.NewInt(3),
+		},
+		BlobVersionedHashes: sidecar.BlobHashes(),
+	})
+	canonicalEnc, err := withoutBlobs.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	withBlobsEnc, err := withoutBlobs.WithBlobTxSidecar(sidecar).MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wrapperFields []rlp.RawValue
+	if err := rlp.DecodeBytes(withBlobsEnc[1:], &wrapperFields); err != nil {
+		t.Fatal(err)
+	}
+	if len(wrapperFields) != 5 || !bytes.Equal(wrapperFields[0], canonicalEnc[1:]) || !bytes.Equal(wrapperFields[1], []byte{BlobSidecarVersion1}) {
+		t.Fatalf("unexpected network wrapper layout: %x", withBlobsEnc)
+	}
+	decoded := new(Transaction)
+	if err := decoded.UnmarshalBinary(withBlobsEnc); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Hash() != withoutBlobs.Hash() {
+		t.Fatal("wrong tx hash after decoding the network wrapper:", decoded.Hash())
+	}
+	if !reflect.DeepEqual(decoded.BlobTxSidecar(), sidecar) {
+		t.Fatal("decoded sidecar does not match the original")
+	}
+	if decoded.Size() != uint64(len(withBlobsEnc)) {
+		t.Error("wrong size with blobs:", decoded.Size(), "encoded length:", len(withBlobsEnc))
+	}
+	stripped := decoded.WithoutBlobTxSidecar()
+	strippedEnc, err := stripped.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(strippedEnc, canonicalEnc) {
+		t.Fatalf("canonical encoding changed after WithoutBlobTxSidecar: have %x, want %x", strippedEnc, canonicalEnc)
+	}
+	if stripped.Size() != uint64(len(canonicalEnc)) || stripped.BlobTxSidecar() != nil {
+		t.Fatal("wrong stripped tx, size:", stripped.Size(), "encoded length:", len(canonicalEnc))
 	}
 }
 

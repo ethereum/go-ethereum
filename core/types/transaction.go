@@ -486,6 +486,9 @@ func (tx *Transaction) BlobTxSidecar() *BlobTxSidecar {
 	if blobtx, ok := tx.inner.(*BlobTx); ok {
 		return blobtx.Sidecar
 	}
+	if frametx, ok := tx.inner.(*FrameTx); ok {
+		return frametx.Sidecar
+	}
 	return nil
 }
 
@@ -501,17 +504,20 @@ func (tx *Transaction) BlobGasFeeCapIntCmp(other *big.Int) int {
 
 // WithoutBlobTxSidecar returns a copy of tx with the blob sidecar removed.
 func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
-	blobtx, ok := tx.inner.(*BlobTx)
-	if !ok || blobtx.Sidecar == nil {
+	sidecar := tx.BlobTxSidecar()
+	if sidecar == nil {
 		return tx
 	}
-	cpy := &Transaction{
-		inner: blobtx.withoutSidecar(),
-		time:  tx.time,
+	cpy := &Transaction{time: tx.time}
+	switch txdata := tx.inner.(type) {
+	case *BlobTx:
+		cpy.inner = txdata.withoutSidecar()
+	case *FrameTx:
+		cpy.inner = txdata.withoutSidecar()
 	}
 	if size := tx.size.Load(); size != 0 {
 		// The tx had a sidecar before, so we need to subtract it from the size.
-		scSize := rlp.ListSize(blobtx.Sidecar.encodedSize())
+		scSize := rlp.ListSize(sidecar.encodedSize())
 		cpy.size.Store(size - scSize)
 	}
 	if h := tx.hash.Load(); h != nil {
@@ -525,13 +531,14 @@ func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 
 // WithBlobTxSidecar returns a copy of tx with the blob sidecar added.
 func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
-	blobtx, ok := tx.inner.(*BlobTx)
-	if !ok {
+	cpy := &Transaction{time: tx.time}
+	switch txdata := tx.inner.(type) {
+	case *BlobTx:
+		cpy.inner = txdata.withSidecar(sideCar)
+	case *FrameTx:
+		cpy.inner = txdata.withSidecar(sideCar)
+	default:
 		return tx
-	}
-	cpy := &Transaction{
-		inner: blobtx.withSidecar(sideCar),
-		time:  tx.time,
 	}
 	// Note: tx.size cache not carried over because the sidecar is included in size!
 	if h := tx.hash.Load(); h != nil {

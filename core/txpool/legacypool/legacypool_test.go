@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"reflect"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -37,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -1299,6 +1301,76 @@ func TestAllowedTxSize(t *testing.T) {
 	}
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
+func TestBlobCarryingFrameTxSidecarValidation(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zeroTime := uint64(0)
+	config.AmsterdamTime = &zeroTime
+	config.BogotaTime = &zeroTime
+	pool, key := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	sender := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, sender, big.NewInt(params.Ether))
+
+	blob := kzg4844.Blob{0x01}
+	commitment, err := kzg4844.BlobToCommitment(&blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cellProofs, err := kzg4844.ComputeCellProofs(&blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecar := types.NewBlobTxSidecar(types.BlobSidecarVersion1, []kzg4844.Blob{blob}, []kzg4844.Commitment{commitment}, cellProofs)
+	frameTx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  sender,
+		Frames: []types.Frame{{
+			Mode:      types.ModeVerify,
+			Flags:     types.ApproveExecutionAndPayment,
+			GasLimits: types.Limits{Execution: 100_000},
+			Value:     uint256.NewInt(0),
+		}},
+		Signatures: types.SignatureList{{
+			Scheme: types.FrameTxSchemeSecp256k1,
+			Signer: sender.Bytes(),
+		}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(params.GWei),
+			MaxFeePerGas:         uint256.NewInt(10 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(params.GWei),
+		},
+		BlobVersionedHashes: sidecar.BlobHashes(),
+	}
+	sigHash := types.LatestSigner(&config).Hash(types.NewTx(frameTx))
+	sig, err := crypto.Sign(sigHash[:], key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frameTx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
+	withoutSidecar := types.NewTx(frameTx)
+
+	badProofs := slices.Clone(cellProofs)
+	badProofs[0], badProofs[1] = badProofs[1], badProofs[0]
+	withBadProof := withoutSidecar.WithBlobTxSidecar(types.NewBlobTxSidecar(types.BlobSidecarVersion1, sidecar.Blobs, sidecar.Commitments, badProofs))
+
+	if err := pool.addRemoteSync(withoutSidecar); err == nil {
+		t.Fatal("accepted blob-carrying frame transaction without sidecar")
+	}
+	if err := pool.addRemoteSync(withBadProof); !errors.Is(err, txpool.ErrKZGVerificationError) {
+		t.Fatalf("frame transaction with bad cell proof: have %v, want %v", err, txpool.ErrKZGVerificationError)
+	}
+	if err := pool.addRemoteSync(withoutSidecar.WithBlobTxSidecar(sidecar)); err != nil {
+		t.Fatalf("rejected frame transaction with valid sidecar: %v", err)
+	}
+	pooled := pool.Get(withoutSidecar.Hash())
+	if pooled == nil || !reflect.DeepEqual(pooled.BlobTxSidecar(), sidecar) {
+		t.Fatal("pooled frame transaction lost its sidecar")
 	}
 }
 

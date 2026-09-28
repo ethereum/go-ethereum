@@ -168,6 +168,15 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if tx.Type() == types.BlobTxType {
 		return validateBlobSidecar(tx, head, opts)
 	}
+	if len(tx.BlobHashes()) > 0 {
+		if err := validateBlobSidecar(tx, head, opts); err != nil {
+			return err
+		}
+		sidecar := tx.BlobTxSidecar()
+		if err := kzg4844.VerifyCellProofs(sidecar.Blobs, sidecar.Commitments, sidecar.Proofs); err != nil {
+			return fmt.Errorf("%w: %v", ErrKZGVerificationError, err)
+		}
+	}
 	if tx.Type() == types.SetCodeTxType {
 		if len(tx.SetCodeAuthorizations()) == 0 {
 			return errors.New("set code tx must have at least one authorization tuple")

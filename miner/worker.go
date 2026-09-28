@@ -409,8 +409,11 @@ func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx 
 
 func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transaction) error {
 	sc := tx.BlobTxSidecar()
-	if sc == nil && tx.Type() == types.BlobTxType {
-		panic("blob transaction without blobs in miner")
+	if sc == nil {
+		if tx.Type() == types.BlobTxType {
+			panic("blob transaction without blobs in miner")
+		}
+		return errors.New("blob-carrying transaction without sidecar")
 	}
 	// Checking against blob gas limit: It's kind of ugly to perform this check here, but there
 	// isn't really a better place right now. The blob gas limit is checked at block validation time
@@ -427,9 +430,7 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	txNoBlob := tx.WithoutBlobTxSidecar()
 	env.txs = append(env.txs, txNoBlob)
 	env.receipts = append(env.receipts, receipt)
-	if sc != nil {
-		env.sidecars = append(env.sidecars, sc)
-	}
+	env.sidecars = append(env.sidecars, sc)
 	env.blobs += len(tx.BlobHashes())
 	env.size += txNoBlob.Size()
 	*env.header.BlobGasUsed += receipt.BlobGasUsed

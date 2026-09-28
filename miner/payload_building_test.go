@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"bytes"
 	"context"
 	"math/big"
 	"reflect"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -281,7 +283,9 @@ func TestBuildPayloadWithBlobCarryingFrameTx(t *testing.T) {
 		consensusCore = beacon.New(ethash.NewFaker())
 		senderKey, _  = crypto.GenerateKey()
 		sender        = crypto.PubkeyToAddress(senderKey.PublicKey)
-		blobHashes    = []common.Hash{{0x01, 0x01}, {0x01, 0x02}}
+		blobs         = []kzg4844.Blob{{0x01}, {0x02}}
+		commitments   []kzg4844.Commitment
+		cellProofs    []kzg4844.Proof
 		slotNumber    = uint64(1)
 		beaconRoot    = common.Hash{}
 	)
@@ -303,6 +307,20 @@ func TestBuildPayloadWithBlobCarryingFrameTx(t *testing.T) {
 	}
 	defer pool.Close()
 
+	for i := range blobs {
+		commitment, err := kzg4844.BlobToCommitment(&blobs[i])
+		if err != nil {
+			t.Fatalf("failed to commit to blob: %v", err)
+		}
+		proofs, err := kzg4844.ComputeCellProofs(&blobs[i])
+		if err != nil {
+			t.Fatalf("failed to compute cell proofs: %v", err)
+		}
+		commitments = append(commitments, commitment)
+		cellProofs = append(cellProofs, proofs...)
+	}
+	sidecar := types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, cellProofs)
+	blobHashes := sidecar.BlobHashes()
 	frameTx := &types.FrameTx{
 		ChainID: uint256.MustFromBig(config.ChainID),
 		Sender:  sender,
@@ -329,7 +347,7 @@ func TestBuildPayloadWithBlobCarryingFrameTx(t *testing.T) {
 		t.Fatalf("failed to sign frame transaction: %v", err)
 	}
 	frameTx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
-	if errs := pool.Add([]*types.Transaction{types.NewTx(frameTx)}, true); errs[0] != nil {
+	if errs := pool.Add([]*types.Transaction{types.NewTx(frameTx).WithBlobTxSidecar(sidecar)}, true); errs[0] != nil {
 		t.Fatalf("failed to add frame transaction: %v", errs[0])
 	}
 
@@ -351,7 +369,26 @@ func TestBuildPayloadWithBlobCarryingFrameTx(t *testing.T) {
 	if want := uint64(len(blobHashes) * params.BlobTxBlobGasPerBlob); *block.BlobGasUsed() != want {
 		t.Fatalf("header blob gas used mismatch: have %d, want %d", *block.BlobGasUsed(), want)
 	}
-	if _, err := chain.InsertChain(types.Blocks{block}); err != nil {
+	envelope := engine.BlockToExecutableData(block, result.fees, result.sidecars, result.requests)
+	bundle := envelope.BlobsBundle
+	if len(bundle.Blobs) != len(blobs) || len(bundle.Commitments) != len(commitments) || len(bundle.Proofs) != len(cellProofs) {
+		t.Fatalf("blobs bundle size mismatch: have %d blobs, %d commitments, %d proofs", len(bundle.Blobs), len(bundle.Commitments), len(bundle.Proofs))
+	}
+	for i := range blobs {
+		if !bytes.Equal(bundle.Blobs[i], blobs[i][:]) || !bytes.Equal(bundle.Commitments[i], commitments[i][:]) {
+			t.Fatalf("blobs bundle entry %d does not match the frame transaction sidecar", i)
+		}
+	}
+	for i := range cellProofs {
+		if !bytes.Equal(bundle.Proofs[i], cellProofs[i][:]) {
+			t.Fatalf("blobs bundle proof %d does not match the frame transaction sidecar", i)
+		}
+	}
+	payloadBlock, err := engine.ExecutableDataToBlock(*envelope.ExecutionPayload, blobHashes, &beaconRoot, envelope.Requests)
+	if err != nil {
+		t.Fatalf("payload with the frame transaction versioned hashes rejected: %v", err)
+	}
+	if _, err := chain.InsertChain(types.Blocks{payloadBlock}); err != nil {
 		t.Fatalf("built block failed validation: %v", err)
 	}
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/crypto/secp256r1"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -61,6 +62,16 @@ type FrameTx struct {
 	Signatures          SignatureList
 	Fees                Fees
 	BlobVersionedHashes []common.Hash
+
+	Sidecar *BlobTxSidecar `rlp:"-"`
+}
+
+type frameTxWithBlobs struct {
+	FrameTx     *FrameTx
+	Version     byte
+	Blobs       []kzg4844.Blob
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
 }
 
 // FrameTxValidateStatic runs the EIP-8141 static-constraint checks if tx is
@@ -293,6 +304,9 @@ func (tx *FrameTx) copy() TxData {
 	if tx.Fees.MaxFeePerBlobGas != nil {
 		cpy.Fees.MaxFeePerBlobGas.Set(tx.Fees.MaxFeePerBlobGas)
 	}
+	if tx.Sidecar != nil {
+		cpy.Sidecar = tx.Sidecar.Copy()
+	}
 	return cpy
 }
 
@@ -354,12 +368,54 @@ func (tx *FrameTx) rawSignatureValues() (v, r, s *big.Int) {
 
 func (tx *FrameTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 
+func (tx *FrameTx) withoutSidecar() *FrameTx {
+	cpy := *tx
+	cpy.Sidecar = nil
+	return &cpy
+}
+
+func (tx *FrameTx) withSidecar(sideCar *BlobTxSidecar) *FrameTx {
+	cpy := *tx
+	cpy.Sidecar = sideCar
+	return &cpy
+}
+
 func (tx *FrameTx) encode(b *bytes.Buffer) error {
-	return rlp.Encode(b, tx)
+	if tx.Sidecar == nil {
+		return rlp.Encode(b, tx)
+	}
+	if tx.Sidecar.Version != BlobSidecarVersion1 {
+		return errors.New("unsupported sidecar version")
+	}
+	return rlp.Encode(b, &frameTxWithBlobs{
+		FrameTx:     tx,
+		Version:     tx.Sidecar.Version,
+		Blobs:       tx.Sidecar.Blobs,
+		Commitments: tx.Sidecar.Commitments,
+		Proofs:      tx.Sidecar.Proofs,
+	})
 }
 
 func (tx *FrameTx) decode(input []byte) error {
-	if err := rlp.DecodeBytes(input, tx); err != nil {
+	firstElem, _, err := rlp.SplitList(input)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
+	}
+	firstElemKind, _, _, err := rlp.Split(firstElem)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
+	}
+	if firstElemKind == rlp.List {
+		var wrapper frameTxWithBlobs
+		if err := rlp.DecodeBytes(input, &wrapper); err != nil {
+			return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
+		}
+		if wrapper.Version != BlobSidecarVersion1 || len(wrapper.FrameTx.BlobVersionedHashes) == 0 {
+			return ErrFrameTxInvalidFormat
+		}
+		*tx = *wrapper.FrameTx
+		tx.Sidecar = NewBlobTxSidecar(wrapper.Version, wrapper.Blobs, wrapper.Commitments, wrapper.Proofs)
+	} else if err := rlp.DecodeBytes(input, tx); err != nil {
 		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
 	}
 	if tx.ChainID == nil || tx.Fees.MaxPriorityFeePerGas == nil || tx.Fees.MaxFeePerGas == nil || tx.Fees.MaxFeePerBlobGas == nil {
