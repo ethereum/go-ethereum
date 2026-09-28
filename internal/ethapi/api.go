@@ -1824,6 +1824,9 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 // on a given unsigned transaction, and returns it to the caller for further
 // processing (signing + broadcast).
 func (api *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
+	if args.isFrame() {
+		return api.fillFrameTransaction(ctx, args)
+	}
 	// Set some sanity defaults and terminate on failure
 	config := sidecarConfig{
 		blobSidecarAllowed: true,
@@ -1838,7 +1841,7 @@ func (api *TransactionAPI) FillTransaction(ctx context.Context, args Transaction
 	if err != nil {
 		return nil, err
 	}
-	return &SignTransactionResult{data, tx}, nil
+	return &SignTransactionResult{Raw: data, Tx: tx}, nil
 }
 
 func (api *TransactionAPI) currentBlobSidecarVersion() byte {
@@ -1996,8 +1999,9 @@ func (api *TransactionAPI) Sign(addr common.Address, data hexutil.Bytes) (hexuti
 
 // SignTransactionResult represents a RLP encoded signed transaction.
 type SignTransactionResult struct {
-	Raw hexutil.Bytes      `json:"raw"`
-	Tx  *types.Transaction `json:"tx"`
+	Raw   hexutil.Bytes      `json:"raw"`
+	Tx    *types.Transaction `json:"tx"`
+	frame *filledFrameTransaction
 }
 
 // SignTransaction will sign the given transaction with the from account.
@@ -2047,7 +2051,7 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	if err != nil {
 		return nil, err
 	}
-	return &SignTransactionResult{data, signed}, nil
+	return &SignTransactionResult{Raw: data, Tx: signed}, nil
 }
 
 // PendingTransactions returns the transactions that are in the transaction pool
