@@ -42,8 +42,29 @@ type ExecutionResult struct {
 	// transaction and the per-frame receipt entries.
 	FramePayer    *common.Address
 	FrameReceipts []types.FrameReceipt
+	FrameResults  []FrameExecutionResult
 	Err           error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData    []byte // Returned data from evm(function result or data supplied with revert opcode)
+}
+
+// FrameExecutionResult contains transient output that is not stored in receipts.
+type FrameExecutionResult struct {
+	ReturnData []byte
+	Err        error
+}
+
+// FrameExecutionError identifies a frame that invalidated the transaction.
+type FrameExecutionError struct {
+	Index int
+	Err   error
+}
+
+func (e *FrameExecutionError) Error() string {
+	return fmt.Sprintf("%v: VERIFY frame %d failed: %v", ErrFrameTxInvalidExecution, e.Index, e.Err)
+}
+
+func (e *FrameExecutionError) Unwrap() []error {
+	return []error{ErrFrameTxInvalidExecution, e.Err}
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -298,11 +319,13 @@ type Message struct {
 	TxHash        common.Hash
 
 	// Frame transaction fields (EIP-8141).
-	Frames                []types.Frame
-	FrameSignatures       types.SignatureList
-	FrameSigHash          common.Hash
-	BlobHashes            []common.Hash
-	SetCodeAuthorizations []types.SetCodeAuthorization
+	Frames          []types.Frame
+	FrameSignatures types.SignatureList
+	FrameSigHash    common.Hash
+	// FrameSignaturePlaceholders is used only with SkipTransactionChecks for RPC simulation.
+	FrameSignaturePlaceholders []bool
+	BlobHashes                 []common.Hash
+	SetCodeAuthorizations      []types.SetCodeAuthorization
 
 	// When SkipNonceChecks is true, the message nonce is not checked against the
 	// account nonce in state.
@@ -752,8 +775,19 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if isFrameTx {
 		// The protocol signature entries are validated against the
 		// canonical signature hash before any frame executes.
-		if err := types.ValidateFrameTxSignatures(msg.FrameSignatures, msg.From, msg.FrameSigHash); err != nil {
-			return nil, err
+		if !msg.SkipTransactionChecks || len(msg.FrameSignaturePlaceholders) == 0 {
+			if err := types.ValidateFrameTxSignatures(msg.FrameSignatures, msg.From, msg.FrameSigHash); err != nil {
+				return nil, err
+			}
+		} else {
+			for i, signature := range msg.FrameSignatures {
+				if i < len(msg.FrameSignaturePlaceholders) && msg.FrameSignaturePlaceholders[i] {
+					continue
+				}
+				if err := types.ValidateFrameTxSignatures(types.SignatureList{signature}, msg.From, msg.FrameSigHash); err != nil {
+					return nil, fmt.Errorf("signature %d: %w", i, err)
+				}
+			}
 		}
 	}
 	// Calculate the intrinsic gas of this transaction and make sure the gas limit
@@ -838,6 +872,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 		framePayer    *common.Address
 		frameReceipts []types.FrameReceipt
+		frameResults  []FrameExecutionResult
 	)
 	switch {
 	case isFrameTx:
@@ -849,10 +884,27 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			st.evm.TxContext.Origin = prevOrigin
 			st.evm.TxContext.FrameContext = prevFrameContext
 		}()
-		framePayer, frameReceipts, err = st.applyFrames(rules)
+		if msg.SkipTransactionChecks {
+			frameResults = make([]FrameExecutionResult, len(msg.Frames))
+		}
+		framePayer, frameReceipts, err = st.applyFrames(rules, frameResults)
 		if err != nil {
 			return nil, err
 		}
+
+		if msg.SkipTransactionChecks {
+			for i, result := range frameResults {
+				ret = result.ReturnData
+				if frameReceipts[i].Status != frameStatusSuccess {
+					vmerr = result.Err
+					if vmerr == nil {
+						vmerr = vm.ErrExecutionReverted
+					}
+					break
+				}
+			}
+		}
+
 	case contractCreation:
 		ret, vmerr = st.executeCreate(rules, value)
 	default:
@@ -901,6 +953,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		ReturnData:    ret,
 		FramePayer:    framePayer,
 		FrameReceipts: frameReceipts,
+		FrameResults:  frameResults,
 	}, nil
 }
 
@@ -1398,7 +1451,7 @@ type frameLogRange struct {
 //
 // The frame context is left installed on the EVM for settlement; the caller
 // is responsible for restoring it.
-func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []types.FrameReceipt, error) {
+func (st *stateTransition) applyFrames(rules params.Rules, results []FrameExecutionResult) (*common.Address, []types.FrameReceipt, error) {
 	msg := st.msg
 
 	// The maximum cost collected from the payer upon payment approval: the
@@ -1512,7 +1565,10 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 			frameSnapshot = st.state.Snapshot()
 			logStart      = countLogs()
 		)
-		receipt, vmerr := st.executeFrame(frameCtx, frame, caller, precompiles)
+		receipt, output, vmerr := st.executeFrame(frameCtx, frame, caller, precompiles)
+		if results != nil {
+			results[i] = FrameExecutionResult{ReturnData: output, Err: vmerr}
+		}
 		if vmerr != nil {
 			// Discard the frame's effects, including the pre-warming of the
 			// frame's resolved target, and roll back the frame context.
@@ -1521,7 +1577,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 			// A failing VERIFY frame — reverting or halting exceptionally —
 			// invalidates the whole transaction.
 			if frame.Mode == types.ModeVerify {
-				return nil, nil, fmt.Errorf("%w: VERIFY frame failed", ErrFrameTxInvalidExecution)
+				return nil, nil, &FrameExecutionError{Index: i, Err: vmerr}
 			}
 		}
 		frameCtx.Receipts = append(frameCtx.Receipts, receipt)
@@ -1592,7 +1648,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 //
 // A failing frame reports zero state gas; the caller extends the rollback
 // over the frame-entry charges by restoring the entry snapshots.
-func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.Frame, caller common.Address, precompiles map[common.Address]struct{}) (types.FrameReceipt, error) {
+func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.Frame, caller common.Address, precompiles map[common.Address]struct{}) (types.FrameReceipt, []byte, error) {
 	var (
 		target = frame.ResolvedTarget(frameCtx.Sender)
 		budget = vm.NewFrameGasBudget(frame.GasLimits.Execution, frame.GasLimits.State)
@@ -1605,7 +1661,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 		accessCost = params.WarmAccountAccessAmsterdam
 	}
 	if !budget.ChargeExecutionOnly(accessCost) {
-		return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas
+		return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, nil, vm.ErrOutOfGas
 	}
 	st.state.AddAddressToAccessList(target)
 
@@ -1623,7 +1679,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 			// The APPROVE could not cover the sender-creation state
 			// charge: the frame halts exceptionally, consuming its
 			// execution budget.
-			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vmerr
+			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, nil, vmerr
 		}
 		receipt := types.FrameReceipt{
 			Status:       frameStatusSuccess,
@@ -1634,7 +1690,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 			receipt.Status = frameStatusFailed
 			receipt.StateGasUsed = 0
 		}
-		return receipt, vmerr
+		return receipt, nil, vmerr
 	}
 
 	// As with an ordinary CALL, a caller that cannot cover the transferred
@@ -1647,13 +1703,13 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 		return types.FrameReceipt{
 			Status:  frameStatusFailed,
 			GasUsed: frame.GasLimits.Execution - budget.ExecutionGas,
-		}, vm.ErrInsufficientBalance
+		}, nil, vm.ErrInsufficientBalance
 	}
 	// A value transfer reviving a dead account is permanent state growth,
 	// charged from the frame's state gas pool before its code executes.
 	if !value.IsZero() && st.state.Empty(target) {
 		if _, ok := budget.Charge(vm.GasCosts{StateGas: params.AccountCreationSize * st.evm.Context.CostPerStateByte}); !ok {
-			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas
+			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, nil, vm.ErrOutOfGas
 		}
 	}
 	// Resolving an EIP-7702 delegation loads the delegated code: a warm or
@@ -1664,7 +1720,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 			delegationCost = params.WarmAccountAccessAmsterdam
 		}
 		if !budget.ChargeExecutionOnly(delegationCost) {
-			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, vm.ErrOutOfGas
+			return types.FrameReceipt{Status: frameStatusFailed, GasUsed: frame.GasLimits.Execution}, nil, vm.ErrOutOfGas
 		}
 		st.state.AddAddressToAccessList(addr)
 		// Record the delegated code load in the block level access list.
@@ -1672,14 +1728,15 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 	}
 
 	var (
+		output   []byte
 		leftover vm.GasBudget
 		vmerr    error
 	)
 	if frame.Mode == types.ModeVerify {
 		// VERIFY frames execute as static calls: only APPROVE may mutate.
-		_, leftover, vmerr = st.evm.StaticCall(caller, target, frame.Data, budget)
+		output, leftover, vmerr = st.evm.StaticCall(caller, target, frame.Data, budget)
 	} else {
-		_, leftover, vmerr = st.evm.Call(caller, target, frame.Data, budget, value)
+		output, leftover, vmerr = st.evm.Call(caller, target, frame.Data, budget, value)
 	}
 	receipt := types.FrameReceipt{
 		Status:       frameStatusSuccess,
@@ -1690,7 +1747,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 		receipt.Status = frameStatusFailed
 		receipt.StateGasUsed = 0
 	}
-	return receipt, vmerr
+	return receipt, output, vmerr
 }
 
 // runDefaultVerifyFrame executes the EIP-8141 default code for a VERIFY

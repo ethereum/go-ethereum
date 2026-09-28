@@ -779,6 +779,11 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	// this makes sure resources are cleaned up.
 	defer cancel()
 
+	if args.isFrame() {
+		if err := args.prepareFrames(ctx, b, state, header, &blockCtx, precompiles, globalGasCap); err != nil {
+			return nil, err
+		}
+	}
 	gp := core.NewGasPool(globalGasCap)
 	if globalGasCap == 0 {
 		gp = core.NewGasPool(gomath.MaxUint64)
@@ -931,6 +936,29 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	precompiles := vm.ActivePrecompiledContracts(rules)
 	if err := overrides.Apply(state, precompiles); err != nil {
 		return 0, err
+	}
+	if args.isFrame() {
+		var cancel context.CancelFunc
+		if b.RPCEVMTimeout() > 0 {
+			ctx, cancel = context.WithTimeout(ctx, b.RPCEVMTimeout())
+		} else {
+			ctx, cancel = context.WithCancel(ctx)
+		}
+		defer cancel()
+		if err := args.prepareFrames(ctx, b, state, header, &blockCtx, precompiles, gasCap); err != nil {
+			return 0, err
+		}
+		result, err := applyMessage(ctx, b, args, state.Copy(), header, b.RPCEVMTimeout(), core.NewGasPool(uint64(*args.Gas)), &blockCtx, &vm.Config{NoBaseFee: true}, precompiles)
+		if err != nil {
+			return 0, err
+		}
+		if errors.Is(result.Err, vm.ErrExecutionReverted) {
+			return 0, newRevertError(result.Revert())
+		}
+		if result.Err != nil {
+			return 0, result.Err
+		}
+		return *args.Gas, nil
 	}
 	// Construct the gas estimator option from the user input
 	var blobBaseFee *big.Int
@@ -1409,6 +1437,17 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		args.Nonce = &nonce
 	}
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	if args.isFrame() {
+		ctxWithTimeout, cancel := context.WithCancel(ctx)
+		if b.RPCEVMTimeout() > 0 {
+			cancel()
+			ctxWithTimeout, cancel = context.WithTimeout(ctx, b.RPCEVMTimeout())
+		}
+		defer cancel()
+		if err := args.prepareFrames(ctxWithTimeout, b, db, header, &blockCtx, nil, b.RPCGasCap()); err != nil {
+			return nil, 0, nil, err
+		}
+	}
 	if err = args.CallDefaults(b.RPCGasCap(), blockCtx.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, 0, nil, err
 	}
@@ -1785,6 +1824,9 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 // on a given unsigned transaction, and returns it to the caller for further
 // processing (signing + broadcast).
 func (api *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
+	if args.isFrame() {
+		return api.fillFrameTransaction(ctx, args)
+	}
 	// Set some sanity defaults and terminate on failure
 	config := sidecarConfig{
 		blobSidecarAllowed: true,
@@ -1799,7 +1841,7 @@ func (api *TransactionAPI) FillTransaction(ctx context.Context, args Transaction
 	if err != nil {
 		return nil, err
 	}
-	return &SignTransactionResult{data, tx}, nil
+	return &SignTransactionResult{Raw: data, Tx: tx}, nil
 }
 
 func (api *TransactionAPI) currentBlobSidecarVersion() byte {
@@ -1957,8 +1999,9 @@ func (api *TransactionAPI) Sign(addr common.Address, data hexutil.Bytes) (hexuti
 
 // SignTransactionResult represents a RLP encoded signed transaction.
 type SignTransactionResult struct {
-	Raw hexutil.Bytes      `json:"raw"`
-	Tx  *types.Transaction `json:"tx"`
+	Raw   hexutil.Bytes      `json:"raw"`
+	Tx    *types.Transaction `json:"tx"`
+	frame *filledFrameTransaction
 }
 
 // SignTransaction will sign the given transaction with the from account.
@@ -2008,7 +2051,7 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	if err != nil {
 		return nil, err
 	}
-	return &SignTransactionResult{data, signed}, nil
+	return &SignTransactionResult{Raw: data, Tx: signed}, nil
 }
 
 // PendingTransactions returns the transactions that are in the transaction pool
