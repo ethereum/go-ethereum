@@ -168,6 +168,9 @@ func (r *Receipt) decode(input []byte) error {
 		if len(rest) != 0 {
 			return fmt.Errorf("junk at end of receipt")
 		}
+		if _, err := frameReceiptsLogsSize(input); err != nil {
+			return fmt.Errorf("invalid frame receipts: %w", err)
+		}
 		r.FrameReceipts = input
 		return nil
 	}
@@ -294,6 +297,14 @@ func (rl *ReceiptList) LogsSize() (uint64, error) {
 				return 0, fmt.Errorf("invalid receipt structure: %v", err)
 			}
 		}
+		if txType, _, err := rlp.SplitUint64(content); err == nil && txType == types.FrameTxType {
+			frameLogsSize, err := frameReceiptsLogsSize(rest)
+			if err != nil {
+				return 0, fmt.Errorf("invalid frame receipts: %v", err)
+			}
+			size += frameLogsSize
+			continue
+		}
 		// and finally access the logs list to get its inner size:
 		logsContent, _, err := rlp.SplitList(rest)
 		if err != nil {
@@ -302,6 +313,45 @@ func (rl *ReceiptList) LogsSize() (uint64, error) {
 		size += uint64(len(logsContent))
 	}
 	return size, nil
+}
+
+func frameReceiptsLogsSize(frameReceipts []byte) (uint64, error) {
+	var size uint64
+	it, err := rlp.NewListIterator(frameReceipts)
+	if err != nil {
+		return 0, err
+	}
+	for i := 0; it.Next(); i++ {
+		frame, _, err := rlp.SplitList(it.Value())
+		if err != nil {
+			return 0, fmt.Errorf("frame receipt %d: %v", i, err)
+		}
+		if _, frame, err = rlp.SplitUint64(frame); err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid status: %w", i, err)
+		}
+		gasUsed, frame, err := rlp.SplitList(frame)
+		if err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid gasUsed: %w", i, err)
+		}
+		if _, gasUsed, err = rlp.SplitUint64(gasUsed); err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid execution gasUsed: %w", i, err)
+		}
+		if _, gasUsed, err = rlp.SplitUint64(gasUsed); err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid state gasUsed: %w", i, err)
+		}
+		if len(gasUsed) != 0 {
+			return 0, fmt.Errorf("frame receipt %d: junk at end of gasUsed", i)
+		}
+		logs, rest, err := rlp.SplitList(frame)
+		if err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid logs: %w", i, err)
+		}
+		if len(rest) != 0 {
+			return 0, fmt.Errorf("frame receipt %d: junk at end of frame receipt", i)
+		}
+		size += uint64(len(logs))
+	}
+	return size, it.Err()
 }
 
 type receiptQueryParams struct {

@@ -176,11 +176,61 @@ func TestFrameReceiptListRoundTrip(t *testing.T) {
 	if err := rlp.DecodeBytes(network, &decoded); err != nil {
 		t.Fatalf("can't decode network receipts: %v", err)
 	}
+	legacyLogs, _ := rlp.EncodeToBytes(legacyReceipt.Logs)
+	frameLogs, _ := rlp.EncodeToBytes(frameReceipt.Logs)
+	legacyLogsContent, _, _ := rlp.SplitList(legacyLogs)
+	frameLogsContent, _, _ := rlp.SplitList(frameLogs)
+	wantLogsSize := uint64(len(legacyLogsContent) + len(frameLogsContent))
+	if haveLogsSize, err := decoded.LogsSize(); err != nil || haveLogsSize != wantLogsSize {
+		t.Fatalf("wrong logs size: have %d (err %v), want %d", haveLogsSize, err, wantLogsSize)
+	}
 	reencoded, _ := rlp.EncodeToBytes(&decoded)
 	if !bytes.Equal(reencoded, network) {
 		t.Fatalf("re-encoded network receipt list not equal\nhave: %x\nwant: %x", reencoded, network)
 	}
 	if haveRoot := types.DeriveSha(decoded.Derivable(), trie.NewStackTrie(nil)); haveRoot != wantRoot {
 		t.Fatalf("wrong root hash from ReceiptList\nhave: %v\nwant: %v", haveRoot, wantRoot)
+	}
+}
+
+func TestFrameReceiptDecodeMalformed(t *testing.T) {
+	payer := common.Address{0xaa}.Bytes()
+	validFrame := []any{types.ReceiptStatusSuccessful, []uint64{30000, 100}, receiptsTestLogs1}
+	tests := map[string][]any{
+		"valid":             {validFrame},
+		"status is a list":  {validFrame, []any{[]uint64{1}, []uint64{30000, 100}, receiptsTestLogs1}},
+		"gas is a scalar":   {validFrame, []any{uint64(1), uint64(30000), receiptsTestLogs1}},
+		"gas has one item":  {validFrame, []any{uint64(1), []uint64{30000}, receiptsTestLogs1}},
+		"gas has 3 items":   {validFrame, []any{uint64(1), []uint64{30000, 100, 7}, receiptsTestLogs1}},
+		"logs is a string":  {validFrame, []any{uint64(1), []uint64{30000, 100}, []byte{1}}},
+		"missing logs":      {validFrame, []any{uint64(1), []uint64{30000, 100}}},
+		"junk after logs":   {validFrame, []any{uint64(1), []uint64{30000, 100}, receiptsTestLogs1, uint64(9)}},
+		"frame is a string": {validFrame, []byte{1}},
+	}
+	for name, frames := range tests {
+		encoded, err := rlp.EncodeToBytes([]any{uint64(types.FrameTxType), uint64(90000), payer, frames})
+		if err != nil {
+			t.Fatalf("%s: can't encode receipt: %v", name, err)
+		}
+		var r Receipt
+		decodeErr := r.decode(encoded)
+		list, _ := rlp.EncodeToBytes([]rlp.RawValue{encoded})
+		var rl ReceiptList
+		if err := rlp.DecodeBytes(list, &rl); err != nil {
+			t.Fatalf("%s: can't decode receipt list: %v", name, err)
+		}
+		_, logsSizeErr := rl.LogsSize()
+		if name == "valid" {
+			if decodeErr != nil || logsSizeErr != nil {
+				t.Fatalf("%s: unexpected errors: decode %v, logs size %v", name, decodeErr, logsSizeErr)
+			}
+			continue
+		}
+		if decodeErr == nil {
+			t.Errorf("%s: decode accepted malformed frame receipt", name)
+		}
+		if logsSizeErr == nil {
+			t.Errorf("%s: LogsSize accepted malformed frame receipt", name)
+		}
 	}
 }
