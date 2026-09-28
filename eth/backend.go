@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
-	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -142,8 +141,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	if !config.HistoryMode.IsValid() {
-		return nil, fmt.Errorf("invalid history mode %d", config.HistoryMode)
+	if !config.HistoryMode.Mode.IsValid() {
+		return nil, fmt.Errorf("invalid history mode %d", config.HistoryMode.Mode)
 	}
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Sign() <= 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
@@ -230,7 +229,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
-	histPolicy, err := history.NewPolicy(config.HistoryMode, genesisHash)
+	histPolicy, err := config.HistoryMode.Resolve(genesisHash)
 	if err != nil {
 		return nil, err
 	}
