@@ -4457,7 +4457,7 @@ func TestFrameTransactionRPC(t *testing.T) {
 			{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 5000}, Value: uint256.NewInt(0)},
 			{Mode: types.ModeSender, Target: &target, GasLimits: types.Limits{Execution: 30000, State: 100}, Value: uint256.NewInt(0), Data: []byte{0x1}},
 		},
-		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: sender.Bytes(), Signature: make([]byte, 65)}},
+		Signatures: types.SignatureList{},
 		Fees: types.Fees{
 			MaxPriorityFeePerGas: uint256.NewInt(2),
 			MaxFeePerGas:         uint256.NewInt(100),
@@ -4485,6 +4485,9 @@ func TestFrameTransactionRPC(t *testing.T) {
 		"gasPrice": `"0x9"`,
 		"frames": `[{"mode":"0x1","flags":"0x3","executionGas":"0x1388","stateGas":"0x0","value":"0x0","data":"0x"},` +
 			`{"mode":"0x2","flags":"0x0","target":"0xbb00000000000000000000000000000000000000","executionGas":"0x7530","stateGas":"0x64","value":"0x0","data":"0x01"}]`,
+		// Required by the frame transaction schema even when empty.
+		"signatures":          `[]`,
+		"blobVersionedHashes": `[]`,
 	}
 	for name, want := range wantFields {
 		require.JSONEqf(t, want, string(fields[name]), "field %s", name)

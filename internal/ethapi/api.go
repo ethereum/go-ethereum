@@ -1082,10 +1082,10 @@ type RPCTransaction struct {
 	Type                hexutil.Uint64               `json:"type"`
 	Accesses            *types.AccessList            `json:"accessList,omitempty"`
 	ChainID             *hexutil.Big                 `json:"chainId,omitempty"`
-	BlobVersionedHashes []common.Hash                `json:"blobVersionedHashes,omitempty"`
+	BlobVersionedHashes *[]common.Hash               `json:"blobVersionedHashes,omitempty"`
 	AuthorizationList   []types.SetCodeAuthorization `json:"authorizationList,omitempty"`
 	Frames              []rpcFrame                   `json:"frames,omitempty"`
-	Signatures          types.SignatureList          `json:"signatures,omitempty"`
+	Signatures          *types.SignatureList         `json:"signatures,omitempty"`
 	V                   *hexutil.Big                 `json:"v"`
 	R                   *hexutil.Big                 `json:"r"`
 	S                   *hexutil.Big                 `json:"s"`
@@ -1185,7 +1185,8 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
-		result.BlobVersionedHashes = tx.BlobHashes()
+		hashes := tx.BlobHashes()
+		result.BlobVersionedHashes = &hashes
 
 	case types.SetCodeTxType:
 		al := tx.AccessList()
@@ -1216,7 +1217,13 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 				Data:         f.Data,
 			})
 		}
-		result.Signatures = tx.FrameSignatures()
+		// Frame transactions report their signature and blob hash lists even
+		// when empty, as the lists are required fields of the transaction.
+		sigs := tx.FrameSignatures()
+		if sigs == nil {
+			sigs = types.SignatureList{}
+		}
+		result.Signatures = &sigs
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
 		if baseFee != nil && blockHash != (common.Hash{}) {
@@ -1225,7 +1232,11 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
-		result.BlobVersionedHashes = tx.BlobHashes()
+		hashes := tx.BlobHashes()
+		if hashes == nil {
+			hashes = []common.Hash{}
+		}
+		result.BlobVersionedHashes = &hashes
 	}
 	return result
 }
