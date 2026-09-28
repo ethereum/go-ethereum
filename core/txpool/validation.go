@@ -17,15 +17,16 @@
 package txpool
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -40,7 +41,10 @@ var (
 	blobTxMinBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
 )
 
-const frameTxMaxVerifyGas = 100_000
+const (
+	frameTxMaxVerifyGas      = 100_000
+	frameTxMaxVerifyStateGas = 500_000
+)
 
 // ValidationOptions define certain differences between transaction validation
 // across the different pools without having to duplicate those checks.
@@ -272,6 +276,8 @@ type ValidationOptionsWithState struct {
 	// ExistingCost is a mandatory callback to retrieve an already pooled
 	// transaction's cost with the given nonce to check for overdrafts.
 	ExistingCost func(addr common.Address, nonce uint64) *big.Int
+
+	FrameTxPayment func(tx *types.Transaction, payer common.Address, cost *uint256.Int, paymaster bool) error
 }
 
 // ValidateTransactionWithState is a helper method to check whether a transaction
@@ -334,23 +340,52 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 	return nil
 }
 
+func frameTxValidationPrefix(frames []types.Frame, sender common.Address) (int, int, error) {
+	verifies := func(frame *types.Frame, flags uint64) bool {
+		return frame.Mode == types.ModeVerify && frame.Flags == flags && (flags == types.ApprovePayment || frame.ResolvedTarget(sender) == sender)
+	}
+	start, deploy := 0, -1
+	if len(frames) > 0 && frames[0].IsExpiryVerifier() {
+		start = 1
+	}
+	if start < len(frames) && frames[start].Mode == types.ModeDefault && frames[start].Flags == 0 {
+		deploy, start = start, start+1
+	}
+	var prefix int
+	switch {
+	case start < len(frames) && verifies(&frames[start], types.ApproveExecutionAndPayment):
+		prefix = start + 1
+	case start+1 < len(frames) && verifies(&frames[start], types.ApproveExecution) && verifies(&frames[start+1], types.ApprovePayment):
+		prefix = start + 2
+	default:
+		return 0, 0, errors.New("frame transaction validation prefix is not a recognized shape")
+	}
+	for i := prefix; i < len(frames); i++ {
+		if frames[i].Mode == types.ModeVerify {
+			return 0, 0, errors.New("frame transaction has a VERIFY frame after the validation prefix")
+		}
+	}
+	return prefix, deploy, nil
+}
+
 func validateFrameTxPrefix(tx *types.Transaction, signer types.Signer, opts *ValidationOptionsWithState) error {
 	msg, err := core.TransactionToMessage(tx, signer, nil)
 	if err != nil {
 		return err
 	}
-	payerFrame := slices.IndexFunc(msg.Frames, func(frame types.Frame) bool {
-		return frame.Flags&types.ApprovePayment != 0
-	})
-	if payerFrame < 0 {
-		return errors.New("frame transaction has no payment approval frame")
+	prefix, deploy, err := frameTxValidationPrefix(msg.Frames, msg.From)
+	if err != nil {
+		return err
 	}
-	verifyGas, _ := types.FrameTxBudgetTotals(msg.Frames[:payerFrame+1])
+	verifyGas, verifyStateGas := types.FrameTxBudgetTotals(msg.Frames[:prefix])
 	for i := range msg.FrameSignatures {
 		verifyGas += types.FrameTxSignatureGas(&msg.FrameSignatures[i])
 	}
 	if verifyGas > frameTxMaxVerifyGas {
 		return fmt.Errorf("frame transaction validation prefix gas %d exceeds limit %d", verifyGas, frameTxMaxVerifyGas)
+	}
+	if verifyStateGas > frameTxMaxVerifyStateGas {
+		return fmt.Errorf("frame transaction validation prefix state gas %d exceeds limit %d", verifyStateGas, frameTxMaxVerifyStateGas)
 	}
 	msg.SkipNonceChecks = true
 	msg.ValidationPrefixOnly = true
@@ -364,19 +399,108 @@ func validateFrameTxPrefix(tx *types.Transaction, signer types.Signer, opts *Val
 		Time:             head.Time,
 		Difficulty:       new(big.Int).Set(head.Difficulty),
 		BaseFee:          new(big.Int),
-		BlobBaseFee:      new(big.Int),
+		BlobBaseFee:      msg.BlobGasFeeCap.ToBig(),
 		GasLimit:         head.GasLimit,
 		CostPerStateByte: params.CostPerStateByte,
-	}
-	if head.ExcessBlobGas != nil {
-		blockContext.BlobBaseFee = eip4844.CalcBlobFee(opts.Config, head)
 	}
 	if head.Difficulty.Sign() == 0 {
 		blockContext.Random = &head.MixDigest
 	}
-	evm := vm.NewEVM(blockContext, opts.State.Copy(), opts.Config, vm.Config{})
-	if _, err := core.ApplyMessage(evm, msg, core.NewGasPool(head.GasLimit)); err != nil {
+	var (
+		statedb     = opts.State.Copy()
+		precompiles = vm.ActivePrecompiles(opts.Config.Rules(head.Number, head.Difficulty.Sign() == 0, head.Time))
+		calls       = []vm.OpCode{vm.CALL, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL}
+		evm         *vm.EVM
+		violation   error
+	)
+	violate := func(format string, args ...any) {
+		if violation == nil {
+			violation = fmt.Errorf("frame transaction validation prefix "+format, args...)
+			evm.Cancel()
+		}
+	}
+	callable := func(addr common.Address) bool {
+		if addr == msg.From || slices.Contains(precompiles, addr) {
+			return true
+		}
+		code := statedb.GetCode(addr)
+		_, delegated := types.ParseDelegation(code)
+		return len(code) > 0 && !delegated
+	}
+	hooks := &tracing.Hooks{
+		OnEnter: func(depth int, typ byte, from, to common.Address, input []byte, gas uint64, value *big.Int) {
+			if value != nil && value.Sign() != 0 {
+				violate("transfers value to %v", to)
+			}
+			if (vm.OpCode(typ) == vm.CREATE || vm.OpCode(typ) == vm.CREATE2) && to != msg.From {
+				violate("creates contract %v outside the sender", to)
+			}
+		},
+		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+			if err != nil {
+				return
+			}
+			var (
+				frame  = evm.TxContext.FrameContext.CurrentFrame
+				stack  = scope.StackData()
+				opcode = vm.OpCode(op)
+			)
+			switch opcode {
+			case vm.GASPRICE, vm.BLOCKHASH, vm.COINBASE, vm.NUMBER, vm.PREVRANDAO, vm.GASLIMIT, vm.BASEFEE, vm.BLOBBASEFEE, vm.SLOTNUM, vm.INVALID, vm.SELFDESTRUCT, vm.BALANCE, vm.SELFBALANCE:
+				violate("uses banned opcode %v", opcode)
+			case vm.TIMESTAMP:
+				if !msg.Frames[frame].IsExpiryVerifier() || scope.Address() != params.FrameTxExpiryVerifier || !bytes.Equal(scope.ContractCode(), params.FrameTxExpiryVerifierCode) {
+					violate("uses banned opcode %v", opcode)
+				}
+			case vm.GAS:
+				if code := scope.ContractCode(); pc+1 >= uint64(len(code)) || !slices.Contains(calls, vm.OpCode(code[pc+1])) {
+					violate("uses banned opcode %v", opcode)
+				}
+			case vm.CREATE, vm.CREATE2:
+				if frame != deploy {
+					violate("uses banned opcode %v", opcode)
+				}
+			case vm.SSTORE:
+				if frame != deploy || scope.Address() != msg.From {
+					violate("writes storage of %v", scope.Address())
+				}
+			case vm.SLOAD:
+				if scope.Address() != msg.From {
+					violate("reads storage of %v", scope.Address())
+				}
+			case vm.CALL, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL:
+				if target := common.Address(stack[len(stack)-2].Bytes20()); !callable(target) {
+					violate("calls %v, which is not an undelegated contract or precompile", target)
+				}
+			case vm.EXTCODESIZE, vm.EXTCODECOPY, vm.EXTCODEHASH:
+				if target := common.Address(stack[len(stack)-1].Bytes20()); !callable(target) {
+					violate("reads code of %v, which is not an undelegated contract or precompile", target)
+				}
+			}
+		},
+	}
+	evm = vm.NewEVM(blockContext, statedb, opts.Config, vm.Config{Tracer: hooks})
+	result, err := core.ApplyMessage(evm, msg, core.NewGasPool(head.GasLimit))
+	if violation != nil {
+		return violation
+	}
+	if err != nil {
 		return fmt.Errorf("frame transaction validation prefix failed: %w", err)
 	}
-	return nil
+	for i, receipt := range result.FrameReceipts {
+		if receipt.Status != types.ReceiptStatusSuccessful {
+			return fmt.Errorf("frame transaction validation prefix frame %d failed", i)
+		}
+	}
+	if deploy >= 0 && len(statedb.GetCode(msg.From)) == 0 {
+		return errors.New("frame transaction deploy frame installed no code at the sender")
+	}
+	if opts.FrameTxPayment == nil {
+		return nil
+	}
+	cost := new(uint256.Int).Mul(uint256.NewInt(msg.GasLimit), msg.GasFeeCap)
+	cost.Add(cost, new(uint256.Int).Mul(uint256.NewInt(tx.BlobGas()), msg.BlobGasFeeCap))
+	payer := *result.FramePayer
+	paymaster := msg.Frames[prefix-1].Flags == types.ApprovePayment && len(statedb.GetCode(payer)) > 0
+	return opts.FrameTxPayment(tx, payer, cost, paymaster)
 }

@@ -2854,3 +2854,285 @@ func TestFrameTxSponsoredAdmitted(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 }
+
+func frameTransaction(config *params.ChainConfig, frameTx *types.FrameTx, keys ...*ecdsa.PrivateKey) *types.Transaction {
+	frameTx.ChainID = uint256.MustFromBig(config.ChainID)
+	if frameTx.Fees.MaxFeePerGas == nil {
+		frameTx.Fees = types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(params.GWei),
+			MaxFeePerGas:         uint256.NewInt(5 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		}
+	}
+	for i := range frameTx.Frames {
+		if frameTx.Frames[i].Value == nil {
+			frameTx.Frames[i].Value = new(uint256.Int)
+		}
+	}
+	for _, key := range keys {
+		frameTx.Signatures = append(frameTx.Signatures, types.SignatureEntry{
+			Scheme: types.FrameTxSchemeSecp256k1,
+			Signer: crypto.PubkeyToAddress(key.PublicKey).Bytes(),
+		})
+	}
+	sigHash := types.LatestSigner(config).Hash(types.NewTx(frameTx))
+	for i, key := range keys {
+		sig, _ := crypto.Sign(sigHash[:], key)
+		frameTx.Signatures[i].Signature = append([]byte{sig[64]}, sig[:64]...)
+	}
+	return types.NewTx(frameTx)
+}
+
+func TestFrameTxUnrecognizedPrefixShapeRejected(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, _ := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	selfVerify := types.Frame{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 30_000}}
+	shapes := map[string][]types.Frame{
+		"verify frame after the prefix": {
+			selfVerify,
+			{Mode: types.ModeVerify, Flags: types.ApproveExecution, GasLimits: types.Limits{Execution: 30_000}},
+		},
+		"atomic batch in the prefix": {
+			{Mode: types.ModeDefault, Flags: types.AtomicBatchFlag, GasLimits: types.Limits{Execution: 30_000}},
+			{Mode: types.ModeDefault, GasLimits: types.Limits{Execution: 30_000}},
+			selfVerify,
+		},
+	}
+	for name, frames := range shapes {
+		senderKey, _ := crypto.GenerateKey()
+		sender := crypto.PubkeyToAddress(senderKey.PublicKey)
+		testAddBalance(pool, sender, big.NewInt(params.Ether))
+		tx := frameTransaction(&config, &types.FrameTx{Sender: sender, Frames: frames}, senderKey)
+		if err := pool.addRemoteSync(tx); err == nil {
+			t.Errorf("%s: frame transaction admitted", name)
+		}
+	}
+}
+
+func TestFrameTxVerifyStateGasCapped(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, senderKey := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	sender := crypto.PubkeyToAddress(senderKey.PublicKey)
+	testAddBalance(pool, sender, big.NewInt(params.Ether))
+
+	tx := frameTransaction(&config, &types.FrameTx{
+		Sender: sender,
+		Frames: []types.Frame{{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 30_000, State: 500_001}}},
+	}, senderKey)
+	if err := pool.addRemoteSync(tx); err == nil {
+		t.Fatalf("frame transaction with validation prefix state gas above the cap admitted")
+	}
+}
+
+func TestFrameTxValidationTraceRules(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, _ := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	helper := common.Address{0x01, 0x23}
+	account := common.Address{0x45, 0x67}
+	pool.mu.Lock()
+	pool.currentState.SetCode(helper, []byte{byte(vm.PUSH0), byte(vm.SLOAD), byte(vm.STOP)}, tracing.CodeChangeUnspecified)
+	pool.mu.Unlock()
+
+	approve := []byte{byte(vm.PUSH1), byte(types.ApproveExecutionAndPayment), byte(vm.PUSH0), byte(vm.PUSH0), byte(vm.APPROVE)}
+	staticCall := func(target common.Address) []byte {
+		code := []byte{byte(vm.PUSH0), byte(vm.PUSH0), byte(vm.PUSH0), byte(vm.PUSH0), byte(vm.PUSH20)}
+		return append(append(code, target.Bytes()...), byte(vm.GAS), byte(vm.STATICCALL), byte(vm.POP))
+	}
+	tests := []struct {
+		name     string
+		code     []byte
+		admitted bool
+	}{
+		{"approve only", approve, true},
+		{"sender storage read", append([]byte{byte(vm.PUSH0), byte(vm.SLOAD), byte(vm.POP)}, approve...), true},
+		{"timestamp", append([]byte{byte(vm.TIMESTAMP), byte(vm.POP)}, approve...), false},
+		{"gas not followed by a call", append([]byte{byte(vm.GAS), byte(vm.POP)}, approve...), false},
+		{"storage read through a helper", append(staticCall(helper), approve...), false},
+		{"call to an account without code", append(staticCall(account), approve...), false},
+	}
+	for _, test := range tests {
+		senderKey, _ := crypto.GenerateKey()
+		sender := crypto.PubkeyToAddress(senderKey.PublicKey)
+		testAddBalance(pool, sender, big.NewInt(params.Ether))
+		pool.mu.Lock()
+		pool.currentState.SetCode(sender, test.code, tracing.CodeChangeUnspecified)
+		pool.mu.Unlock()
+
+		tx := frameTransaction(&config, &types.FrameTx{
+			Sender: sender,
+			Frames: []types.Frame{{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 60_000}}},
+		})
+		if err := pool.addRemoteSync(tx); (err == nil) != test.admitted {
+			t.Errorf("%s: admitted %v, want %v: %v", test.name, err == nil, test.admitted, err)
+		}
+	}
+}
+
+func TestFrameTxNonCanonicalPaymasterCapped(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, firstKey := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	paymaster := common.Address{0x89, 0xab}
+	testAddBalance(pool, paymaster, big.NewInt(params.Ether))
+	pool.mu.Lock()
+	pool.currentState.SetCode(paymaster, []byte{byte(vm.PUSH1), byte(types.ApprovePayment), byte(vm.PUSH0), byte(vm.PUSH0), byte(vm.APPROVE)}, tracing.CodeChangeUnspecified)
+	pool.mu.Unlock()
+
+	secondKey, _ := crypto.GenerateKey()
+	for i, senderKey := range []*ecdsa.PrivateKey{firstKey, secondKey} {
+		tx := frameTransaction(&config, &types.FrameTx{
+			Sender: crypto.PubkeyToAddress(senderKey.PublicKey),
+			Frames: []types.Frame{
+				{Mode: types.ModeVerify, Flags: types.ApproveExecution, GasLimits: types.Limits{Execution: 30_000}},
+				{Mode: types.ModeVerify, Target: &paymaster, Flags: types.ApprovePayment, GasLimits: types.Limits{Execution: 30_000, State: params.AccountCreationSize * params.CostPerStateByte}},
+			},
+		}, senderKey)
+		if err := pool.addRemoteSync(tx); (err == nil) != (i == 0) {
+			t.Fatalf("transaction %d sponsored by the paymaster: admitted %v, want %v: %v", i, err == nil, i == 0, err)
+		}
+	}
+	if pending, queued := pool.Stats(); pending != 1 || queued != 0 {
+		t.Fatalf("pool stats mismatch: have %d pending %d queued, want 1 pending 0 queued", pending, queued)
+	}
+}
+
+func TestFrameTxPayerExposureCapped(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, firstKey := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	payerKey, _ := crypto.GenerateKey()
+	payer := crypto.PubkeyToAddress(payerKey.PublicKey)
+	secondKey, _ := crypto.GenerateKey()
+	var txs []*types.Transaction
+	for _, senderKey := range []*ecdsa.PrivateKey{firstKey, secondKey} {
+		txs = append(txs, frameTransaction(&config, &types.FrameTx{
+			Sender: crypto.PubkeyToAddress(senderKey.PublicKey),
+			Frames: []types.Frame{
+				{Mode: types.ModeVerify, Flags: types.ApproveExecution, GasLimits: types.Limits{Execution: 30_000}},
+				{Mode: types.ModeVerify, Target: &payer, Flags: types.ApprovePayment, GasLimits: types.Limits{Execution: 30_000, State: params.AccountCreationSize * params.CostPerStateByte}},
+			},
+		}, senderKey, payerKey))
+	}
+	testAddBalance(pool, payer, new(big.Int).Mul(big.NewInt(int64(txs[0].Gas()*3/2)), big.NewInt(5*params.GWei)))
+
+	if err := pool.addRemoteSync(txs[0]); err != nil {
+		t.Fatalf("failed to add first sponsored frame transaction: %v", err)
+	}
+	if err := pool.addRemoteSync(txs[1]); err == nil {
+		t.Fatalf("second sponsored frame transaction admitted beyond the payer's balance")
+	}
+	testSetNonce(pool, crypto.PubkeyToAddress(firstKey.PublicKey), 1)
+	<-pool.requestReset(nil, nil)
+	if err := pool.addRemoteSync(txs[1]); err != nil {
+		t.Fatalf("failed to add second sponsored frame transaction after the first was included: %v", err)
+	}
+	if pending, queued := pool.Stats(); pending != 1 || queued != 0 {
+		t.Fatalf("pool stats mismatch: have %d pending %d queued, want 1 pending 0 queued", pending, queued)
+	}
+}
+
+func TestFrameTxRevalidatedOnNewHead(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, senderKey := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	payerKey, _ := crypto.GenerateKey()
+	payer := crypto.PubkeyToAddress(payerKey.PublicKey)
+	testAddBalance(pool, payer, big.NewInt(params.Ether))
+
+	tx := frameTransaction(&config, &types.FrameTx{
+		Sender: crypto.PubkeyToAddress(senderKey.PublicKey),
+		Frames: []types.Frame{
+			{Mode: types.ModeVerify, Flags: types.ApproveExecution, GasLimits: types.Limits{Execution: 30_000}},
+			{Mode: types.ModeVerify, Target: &payer, Flags: types.ApprovePayment, GasLimits: types.Limits{Execution: 30_000, State: params.AccountCreationSize * params.CostPerStateByte}},
+		},
+	}, senderKey, payerKey)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add sponsored frame transaction: %v", err)
+	}
+	pool.mu.Lock()
+	pool.currentState.SetBalance(payer, new(uint256.Int), tracing.BalanceChangeUnspecified)
+	pool.mu.Unlock()
+	<-pool.requestReset(nil, nil)
+
+	if pool.Get(tx.Hash()) != nil {
+		t.Fatalf("frame transaction whose payer can no longer pay survived the new head")
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
+func TestFrameTxBlobFeeCapBelowBlobBaseFeeAdmitted(t *testing.T) {
+	t.Parallel()
+
+	config := *params.MergedTestChainConfig
+	zero := uint64(0)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	pool, senderKey := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	excessBlobGas := uint64(50_000_000)
+	head := pool.chain.CurrentBlock()
+	head.ExcessBlobGas = &excessBlobGas
+	pool.currentHead.Store(head)
+
+	sender := crypto.PubkeyToAddress(senderKey.PublicKey)
+	testAddBalance(pool, sender, big.NewInt(params.Ether))
+
+	tx := frameTransaction(&config, &types.FrameTx{
+		Sender:              sender,
+		Frames:              []types.Frame{{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 30_000}}},
+		BlobVersionedHashes: []common.Hash{{0x01}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(params.GWei),
+			MaxFeePerGas:         uint256.NewInt(5 * params.GWei),
+			MaxFeePerBlobGas:     uint256.NewInt(1),
+		},
+	}, senderKey)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add frame transaction with blob fee cap below the blob base fee: %v", err)
+	}
+	if pending, queued := pool.Stats(); pending != 1 || queued != 0 {
+		t.Fatalf("pool stats mismatch: have %d pending %d queued, want 1 pending 0 queued", pending, queued)
+	}
+}

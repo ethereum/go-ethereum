@@ -19,6 +19,7 @@ package legacypool
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"math"
 	"math/big"
@@ -54,6 +55,8 @@ const (
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
 	txMaxSize = 4 * txSlotSize // 128KB
+
+	maxPendingTxsUsingNonCanonicalPaymaster = 1
 )
 
 var (
@@ -257,6 +260,14 @@ type LegacyPool struct {
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+
+	frameTxPayments map[common.Hash]frameTxPayment
+}
+
+type frameTxPayment struct {
+	payer     common.Address
+	cost      *uint256.Int
+	paymaster bool
 }
 
 type txpoolResetRequest struct {
@@ -285,6 +296,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		initDoneCh:      make(chan struct{}),
+		frameTxPayments: make(map[common.Hash]frameTxPayment),
 	}
 	pool.priced = newPricedList(pool.all)
 
@@ -592,11 +604,45 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			}
 			return nil
 		},
+		FrameTxPayment: pool.reserveFrameTxPayment,
 	}
 	if err := txpool.ValidateTransactionWithState(tx, pool.signer, opts); err != nil {
 		return err
 	}
 	return pool.validateAuth(tx)
+}
+
+func (pool *LegacyPool) reserveFrameTxPayment(tx *types.Transaction, payer common.Address, cost *uint256.Int, paymaster bool) error {
+	from, _ := types.Sender(pool.signer, tx)
+	var (
+		exposure  = new(uint256.Int).Set(cost)
+		sponsored int
+	)
+	for hash, payment := range pool.frameTxPayments {
+		pooled := pool.all.Get(hash)
+		if pooled == nil {
+			delete(pool.frameTxPayments, hash)
+			continue
+		}
+		if payment.payer != payer {
+			continue
+		}
+		if sender, _ := types.Sender(pool.signer, pooled); sender == from && pooled.Nonce() == tx.Nonce() {
+			continue
+		}
+		exposure.Add(exposure, payment.cost)
+		if payment.paymaster {
+			sponsored++
+		}
+	}
+	if balance := pool.currentState.GetBalance(payer); balance.Cmp(exposure) < 0 {
+		return fmt.Errorf("%w: payer %v balance %v, pending exposure %v", core.ErrInsufficientFunds, payer, balance, exposure)
+	}
+	if paymaster && sponsored >= maxPendingTxsUsingNonCanonicalPaymaster {
+		return fmt.Errorf("%w: paymaster %v already sponsors %d pending transactions", txpool.ErrInflightTxLimitReached, payer, sponsored)
+	}
+	pool.frameTxPayments[tx.Hash()] = frameTxPayment{payer: payer, cost: cost, paymaster: paymaster}
+	return nil
 }
 
 // checkDelegationLimit determines if the tx sender is delegated or has a
@@ -1243,6 +1289,20 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 		}
 		// Reset from the old head to the new, rescheduling any reorged transactions
 		pool.reset(reset.oldHead, reset.newHead)
+
+		clear(pool.frameTxPayments)
+		var frameTxs []*types.Transaction
+		pool.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
+			if tx.Type() == types.FrameTxType {
+				frameTxs = append(frameTxs, tx)
+			}
+			return true
+		})
+		for _, tx := range frameTxs {
+			if pool.validateTx(tx) != nil {
+				pool.removeTx(tx.Hash(), true, true)
+			}
+		}
 
 		// Nonces were reset, discard any events that became stale
 		for addr := range events {
