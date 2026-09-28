@@ -76,6 +76,10 @@ func newSlotterEIP7594(maxBlobsPerTransaction int) billy.SlotSizeFn {
 	}
 }
 
+func NewSlotter(maxBlobsPerTransaction int) billy.SlotSizeFn {
+	return newSlotterEIP7594(maxBlobsPerTransaction)
+}
+
 // newVersionSlotter creates a slotter with a single 8 byte shelf to store
 // version metadata in.
 func newVersionSlotter() billy.SlotSizeFn {

@@ -45,6 +45,10 @@ func evictionPriority(basefeeJumps float64, txBasefeeJumps, blobfeeJumps, txBlob
 	return min(0, basefeePriority, blobfeePriority)
 }
 
+func BlobFeeEvictionPriority(blobfee *uint256.Int, txBlobFeeCap *uint256.Int) int {
+	return evictionPriority1D(dynamicBlobFeeJumps(blobfee), dynamicBlobFeeJumps(txBlobFeeCap))
+}
+
 // evictionPriority1D calculates the eviction priority based on the algorithm
 // described in the BlobPool docs for a single fee component.
 func evictionPriority1D(basefeeJumps float64, txfeeJumps float64) int {

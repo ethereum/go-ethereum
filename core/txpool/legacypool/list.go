@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 )
@@ -523,6 +524,17 @@ func (h *priceHeap) cmp(a, b *types.Transaction) int {
 				return -1
 			}
 			return 1
+		}
+		if aStuck {
+			blobBaseFee := uint256.MustFromBig(h.blobBaseFee)
+			aPrio := blobpool.BlobFeeEvictionPriority(blobBaseFee, uint256.MustFromBig(a.BlobGasFeeCap()))
+			bPrio := blobpool.BlobFeeEvictionPriority(blobBaseFee, uint256.MustFromBig(b.BlobGasFeeCap()))
+			if aPrio != bPrio {
+				if aPrio < bPrio {
+					return -1
+				}
+				return 1
+			}
 		}
 	}
 	if h.baseFee != nil {

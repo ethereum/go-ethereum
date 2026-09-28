@@ -22,6 +22,7 @@ import (
 	"maps"
 	"math"
 	"math/big"
+	"os"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -41,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/billy"
 	"github.com/holiman/uint256"
 )
 
@@ -152,6 +154,7 @@ type Config struct {
 	PriceBump  uint64 // Minimum price bump percentage to replace an already existing transaction (nonce)
 
 	BlobPriceBump uint64 `toml:"-"`
+	Limbo         string `toml:"-"`
 
 	AccountSlots uint64 // Number of executable transaction slots guaranteed per account
 	GlobalSlots  uint64 // Maximum number of executable transaction slots for all accounts
@@ -258,6 +261,7 @@ type LegacyPool struct {
 	all     *lookup     // All transactions to allow lookups
 	priced  *pricedList // All transactions sorted by price
 	limbo   map[common.Hash]limboSidecar
+	store   billy.Database
 
 	reqResetCh      chan *txpoolResetRequest
 	reqPromoteCh    chan *accountSet
@@ -271,8 +275,37 @@ type LegacyPool struct {
 }
 
 type limboSidecar struct {
-	sidecar *types.BlobTxSidecar
-	block   uint64
+	TxHash  common.Hash
+	Block   uint64
+	Sidecar *types.BlobTxSidecar
+	id      uint64
+}
+
+func (pool *LegacyPool) pushLimbo(entry limboSidecar) {
+	if old, ok := pool.limbo[entry.TxHash]; ok {
+		pool.dropLimbo(entry.TxHash, old)
+	}
+	if pool.store != nil {
+		data, err := rlp.EncodeToBytes(&entry)
+		if err != nil {
+			log.Error("Failed to encode limbo sidecar", "hash", entry.TxHash, "err", err)
+			return
+		}
+		if entry.id, err = pool.store.Put(data); err != nil {
+			log.Error("Failed to store limbo sidecar", "hash", entry.TxHash, "err", err)
+			return
+		}
+	}
+	pool.limbo[entry.TxHash] = entry
+}
+
+func (pool *LegacyPool) dropLimbo(hash common.Hash, entry limboSidecar) {
+	if pool.store != nil {
+		if err := pool.store.Delete(entry.id); err != nil {
+			log.Error("Failed to delete limbo sidecar", "hash", hash, "err", err)
+		}
+	}
+	delete(pool.limbo, hash)
 }
 
 type txpoolResetRequest struct {
@@ -334,6 +367,31 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserver txpool.
 	// Set the basic pool parameters
 	pool.gasTip.Store(uint256.NewInt(gasTip))
 
+	if pool.config.Limbo != "" {
+		if err := os.MkdirAll(pool.config.Limbo, 0700); err != nil {
+			return err
+		}
+		var fails []uint64
+		index := func(id uint64, size uint32, data []byte) {
+			entry := limboSidecar{id: id}
+			if err := rlp.DecodeBytes(data, &entry); err != nil {
+				fails = append(fails, id)
+				return
+			}
+			pool.limbo[entry.TxHash] = entry
+		}
+		store, err := billy.Open(billy.Options{Path: pool.config.Limbo, Repair: true}, blobpool.NewSlotter(params.BlobTxMaxBlobs), index)
+		if err != nil {
+			return err
+		}
+		for _, id := range fails {
+			if err := store.Delete(id); err != nil {
+				store.Close()
+				return err
+			}
+		}
+		pool.store = store
+	}
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
 	// fully synced).
@@ -409,6 +467,11 @@ func (pool *LegacyPool) Close() error {
 	close(pool.reorgShutdownCh)
 	pool.wg.Wait()
 
+	if pool.store != nil {
+		if err := pool.store.Close(); err != nil {
+			return err
+		}
+	}
 	log.Info("Transaction pool stopped")
 	return nil
 }
@@ -1403,7 +1466,7 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 						if !ok {
 							continue
 						}
-						tx = tx.WithBlobTxSidecar(entry.sidecar)
+						tx = tx.WithBlobTxSidecar(entry.Sidecar)
 					}
 					lost = append(lost, tx)
 				}
@@ -1423,8 +1486,8 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 	pool.currentHead.Store(newHead)
 	pool.currentState = statedb
 	for hash, entry := range pool.limbo {
-		if entry.block+64 < newHead.Number.Uint64() {
-			delete(pool.limbo, hash)
+		if entry.Block+64 < newHead.Number.Uint64() {
+			pool.dropLimbo(hash, entry)
 		}
 	}
 	pool.pendingNonces = newNoncer(statedb)
@@ -1585,7 +1648,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 		for _, tx := range olds {
 			hash := tx.Hash()
 			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
-				pool.limbo[hash] = limboSidecar{sidecar: sidecar, block: pool.currentHead.Load().Number.Uint64()}
+				pool.pushLimbo(limboSidecar{TxHash: hash, Block: pool.currentHead.Load().Number.Uint64(), Sidecar: sidecar})
 			}
 			pool.all.Remove(hash)
 			log.Trace("Removed old pending transaction", "hash", hash)

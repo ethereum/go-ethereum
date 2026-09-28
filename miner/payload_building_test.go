@@ -417,12 +417,13 @@ func TestBlobCarryingFrameTxReorg(t *testing.T) {
 		t.Fatalf("failed to create chain: %v", err)
 	}
 	defer chain.Stop()
-	legacyPool := legacypool.New(testTxPoolConfig, chain)
-	pool, err := txpool.New(testTxPoolConfig.PriceLimit, chain, []txpool.SubPool{legacyPool})
+	poolConfig := testTxPoolConfig
+	poolConfig.Limbo = t.TempDir()
+	pool, err := txpool.New(poolConfig.PriceLimit, chain, []txpool.SubPool{legacypool.New(poolConfig, chain)})
 	if err != nil {
 		t.Fatalf("failed to create txpool: %v", err)
 	}
-	defer pool.Close()
+	defer func() { pool.Close() }()
 
 	for i := range blobs {
 		commitment, err := kzg4844.BlobToCommitment(&blobs[i])
@@ -489,6 +490,14 @@ func TestBlobCarryingFrameTxReorg(t *testing.T) {
 	if err := pool.Sync(); err != nil {
 		t.Fatalf("failed to sync txpool: %v", err)
 	}
+	if err := pool.Close(); err != nil {
+		t.Fatalf("failed to close txpool: %v", err)
+	}
+	pool, err = txpool.New(poolConfig.PriceLimit, chain, []txpool.SubPool{legacypool.New(poolConfig, chain)})
+	if err != nil {
+		t.Fatalf("failed to restart txpool: %v", err)
+	}
+	miner = New(&testWorkerBackend{chain: chain, txPool: pool, genesis: genesis}, testConfig, consensusCore)
 	parentHash := chain.Genesis().Hash()
 	for timestamp := chain.Genesis().Time() + 6; timestamp <= chain.Genesis().Time()+12; timestamp += 6 {
 		forkResult := miner.generateWork(context.Background(), &generateParams{

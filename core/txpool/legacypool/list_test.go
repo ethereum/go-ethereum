@@ -129,6 +129,36 @@ func TestPricedListDiscardsBlobFrameTxBelowBlobBaseFee(t *testing.T) {
 	}
 }
 
+func TestPricedListDiscardsBlobFrameTxFurthestBelowBlobBaseFee(t *testing.T) {
+	near := types.NewTx(&types.FrameTx{
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(1),
+			MaxFeePerGas:         uint256.NewInt(10),
+			MaxFeePerBlobGas:     uint256.NewInt(90),
+		},
+		BlobVersionedHashes: []common.Hash{{0x01}},
+	})
+	far := types.NewTx(&types.FrameTx{
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(5),
+			MaxFeePerGas:         uint256.NewInt(10),
+			MaxFeePerBlobGas:     uint256.NewInt(1),
+		},
+		BlobVersionedHashes: []common.Hash{{0x02}},
+	})
+	all := newLookup()
+	priced := newPricedList(all)
+	for _, tx := range []*types.Transaction{near, far} {
+		all.Add(tx)
+		priced.Put(tx)
+	}
+	priced.SetBaseFee(big.NewInt(1), big.NewInt(100))
+	drop, ok := priced.Discard(1)
+	if !ok || len(drop) != 1 || drop[0] != far {
+		t.Fatalf("expected the frame transaction furthest below the blob base fee to be discarded, got %v", drop)
+	}
+}
+
 func BenchmarkListAdd(b *testing.B) {
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()
