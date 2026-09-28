@@ -462,6 +462,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 	if s.config.SnapshotCache > 0 {
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.config.SnapV2)...)
 	}
+	protos = append(protos, makeBrowserTxProtocol(s.handler.txpool))
 	return protos
 }
 

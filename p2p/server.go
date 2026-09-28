@@ -52,6 +52,10 @@ const (
 	// This time limits inbound connection attempts per source IP.
 	inboundThrottleTime = 30 * time.Second
 
+	// This is the reconnection cooldown applied to a browser peer's source IP
+	// after it disconnects due to an invalid message.
+	browserInvalidThrottleTime = 5 * time.Minute
+
 	// Maximum time allowed for reading a complete message.
 	// This is effectively the amount of time a connection can be idle.
 	frameReadTimeout = 30 * time.Second
@@ -889,12 +893,26 @@ func perIPBrowserExceeded(c *conn, browserIPs map[netip.Addr]int, limit int) boo
 
 func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount, browserCount int, browserIPs map[netip.Addr]int, c *conn) error {
 	// Drop connections with no matching protocols.
-	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
+	if protos := srv.protocolsFor(c); len(protos) > 0 && countMatchingProtocols(protos, c.caps) == 0 {
 		return DiscUselessPeer
 	}
 	// Repeat the post-handshake checks because the
 	// peer set might have changed since those checks were performed.
 	return srv.postHandshakeChecks(peers, inboundCount, browserCount, browserIPs, c)
+}
+
+// protocolsFor returns the subprotocols a connection may run.
+func (srv *Server) protocolsFor(c *conn) []Protocol {
+	if !c.browser {
+		return srv.Protocols
+	}
+	var protos []Protocol
+	for _, p := range srv.Protocols {
+		if p.AllowBrowser {
+			protos = append(protos, p)
+		}
+	}
+	return protos
 }
 
 // listenLoop runs in its own goroutine and accepts
@@ -987,6 +1005,26 @@ func (srv *Server) checkInboundConn(remoteIP netip.Addr) error {
 	}
 	srv.inboundHistory.add(remoteIP.String(), now.Add(inboundThrottleTime))
 	return nil
+}
+
+// penalizeBrowser reports whether a browser peer's disconnect reason warrants a
+// longer reconnection cooldown. Only protocol-level misbehavior counts; clean
+// disconnects and dropped connections do not.
+func penalizeBrowser(err error) bool {
+	r, ok := err.(DiscReason)
+	return ok && (r == DiscProtocolError || r == DiscReadTimeout)
+}
+
+// penalizeInbound records a longer reconnection cooldown for a connection's
+// source IP. LAN and loopback addresses are exempt.
+func (srv *Server) penalizeInbound(c *conn) {
+	ip := connIP(c)
+	if !ip.IsValid() || netutil.AddrIsLAN(ip) {
+		return
+	}
+	srv.inboundLock.Lock()
+	defer srv.inboundLock.Unlock()
+	srv.inboundHistory.add(ip.String(), srv.clock.Now().Add(browserInvalidThrottleTime))
 }
 
 // SetupConn runs the handshakes and attempts to add the connection
@@ -1104,7 +1142,7 @@ func (srv *Server) checkpoint(c *conn, stage chan<- *conn) error {
 }
 
 func (srv *Server) launchPeer(c *conn) *Peer {
-	p := newPeer(srv.log, c, srv.Protocols)
+	p := newPeer(srv.log, c, srv.protocolsFor(c))
 	if srv.EnableMsgEvents {
 		// If message events are enabled, pass the peerFeed
 		// to the peer.
@@ -1128,6 +1166,12 @@ func (srv *Server) runPeer(p *Peer) {
 
 	// Run the per-peer main loop.
 	remoteRequested, err := p.run()
+
+	// A browser that disconnects due to an invalid message gets a longer
+	// reconnection cooldown on its source IP.
+	if p.rw.browser && penalizeBrowser(err) {
+		srv.penalizeInbound(p.rw)
+	}
 
 	// Announce disconnect on the main loop to update the peer set.
 	// The main loop waits for existing peers to be sent on srv.delpeer
