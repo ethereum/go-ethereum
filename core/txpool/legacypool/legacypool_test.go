@@ -1372,6 +1372,35 @@ func TestBlobCarryingFrameTxSidecarValidation(t *testing.T) {
 	if pooled == nil || !reflect.DeepEqual(pooled.BlobTxSidecar(), sidecar) {
 		t.Fatal("pooled frame transaction lost its sidecar")
 	}
+
+	for _, replacement := range []struct {
+		fees     types.Fees
+		accepted bool
+	}{
+		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(params.GWei * 11 / 10), MaxFeePerGas: uint256.NewInt(11 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei * 11 / 10)}, false},
+		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(2 * params.GWei), MaxFeePerGas: uint256.NewInt(20 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei)}, false},
+		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(2 * params.GWei), MaxFeePerGas: uint256.NewInt(20 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(params.GWei * 11 / 10)}, false},
+		{types.Fees{MaxPriorityFeePerGas: uint256.NewInt(2 * params.GWei), MaxFeePerGas: uint256.NewInt(20 * params.GWei), MaxFeePerBlobGas: uint256.NewInt(2 * params.GWei)}, true},
+	} {
+		frameTx.Fees = replacement.fees
+		sigHash := types.LatestSigner(&config).Hash(types.NewTx(frameTx))
+		sig, err := crypto.Sign(sigHash[:], key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		frameTx.Signatures = types.SignatureList{{
+			Scheme:    types.FrameTxSchemeSecp256k1,
+			Signer:    sender.Bytes(),
+			Signature: append([]byte{sig[64]}, sig[:64]...),
+		}}
+		err = pool.addRemoteSync(types.NewTx(frameTx).WithBlobTxSidecar(sidecar))
+		if replacement.accepted && err != nil {
+			t.Fatalf("rejected replacement with blob pool price bump: %v", err)
+		}
+		if !replacement.accepted && !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+			t.Fatalf("replacement with fees %+v: have %v, want %v", replacement.fees, err, txpool.ErrReplaceUnderpriced)
+		}
+	}
 }
 
 // Tests that if transactions start being capped, transactions are also removed from 'all'

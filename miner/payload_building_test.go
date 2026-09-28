@@ -391,4 +391,37 @@ func TestBuildPayloadWithBlobCarryingFrameTx(t *testing.T) {
 	if _, err := chain.InsertChain(types.Blocks{payloadBlock}); err != nil {
 		t.Fatalf("built block failed validation: %v", err)
 	}
+	if err := pool.Sync(); err != nil {
+		t.Fatalf("failed to sync txpool: %v", err)
+	}
+	parentHash := chain.Genesis().Hash()
+	for timestamp := chain.Genesis().Time() + 6; timestamp <= chain.Genesis().Time()+12; timestamp += 6 {
+		forkResult := miner.generateWork(context.Background(), &generateParams{
+			timestamp:   timestamp,
+			parentHash:  parentHash,
+			withdrawals: types.Withdrawals{},
+			beaconRoot:  &beaconRoot,
+			slotNum:     &slotNumber,
+			noTxs:       true,
+		}, false)
+		if forkResult.err != nil {
+			t.Fatalf("failed to build fork block: %v", forkResult.err)
+		}
+		if _, err := chain.InsertChain(types.Blocks{forkResult.block}); err != nil {
+			t.Fatalf("fork block failed validation: %v", err)
+		}
+		parentHash = forkResult.block.Hash()
+	}
+	if chain.CurrentBlock().Hash() != parentHash {
+		t.Fatal("fork did not become canonical")
+	}
+	if err := pool.Sync(); err != nil {
+		t.Fatalf("failed to sync txpool: %v", err)
+	}
+	if pool.Get(block.Transactions()[0].Hash()) != nil {
+		t.Fatal("reorg reinjected blob-carrying frame transaction without its sidecar")
+	}
+	if errs := pool.Add([]*types.Transaction{block.Transactions()[0].WithBlobTxSidecar(sidecar)}, true); errs[0] != nil {
+		t.Fatalf("failed to re-add frame transaction with its sidecar after reorg: %v", errs[0])
+	}
 }

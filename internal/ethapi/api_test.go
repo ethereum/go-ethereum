@@ -4435,3 +4435,30 @@ func TestStateMethodsDefaultToLatest(t *testing.T) {
 		[]any{map[common.Address][]common.Hash{acc: {slot}}, "latest"},
 		[]any{map[common.Address][]common.Hash{acc: {slot}}})
 }
+
+func TestMarshalReceiptBlobCarryingFrameTx(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	zeroTime := uint64(0)
+	config.AmsterdamTime = &zeroTime
+	config.BogotaTime = &zeroTime
+	tx := types.NewTx(&types.FrameTx{
+		ChainID:             uint256.MustFromBig(config.ChainID),
+		Sender:              common.Address{0x01},
+		BlobVersionedHashes: []common.Hash{{0x01}, {0x02}},
+		Fees:                types.Fees{MaxFeePerBlobGas: uint256.NewInt(params.GWei)},
+	})
+	receipt := &types.Receipt{
+		Type:              types.FrameTxType,
+		Status:            types.ReceiptStatusSuccessful,
+		BlobGasUsed:       tx.BlobGas(),
+		BlobGasPrice:      big.NewInt(7),
+		EffectiveGasPrice: big.NewInt(1),
+	}
+	fields := MarshalReceipt(receipt, common.Hash{}, 1, types.LatestSigner(&config), tx, 0)
+	if have, want := fields["blobGasUsed"], hexutil.Uint64(2*params.BlobTxBlobGasPerBlob); have != want {
+		t.Fatalf("blobGasUsed mismatch: have %v, want %v", have, want)
+	}
+	if have, ok := fields["blobGasPrice"].(*hexutil.Big); !ok || have.ToInt().Cmp(receipt.BlobGasPrice) != 0 {
+		t.Fatalf("blobGasPrice mismatch: have %v, want %v", fields["blobGasPrice"], receipt.BlobGasPrice)
+	}
+}

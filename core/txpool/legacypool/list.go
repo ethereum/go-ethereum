@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 )
@@ -307,6 +308,13 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		if old.GasFeeCapCmp(tx) >= 0 || old.GasTipCapCmp(tx) >= 0 {
 			return false, nil
 		}
+		oldCarriesBlobs := len(old.BlobHashes()) > 0
+		if oldCarriesBlobs {
+			if len(tx.BlobHashes()) == 0 || old.BlobGasFeeCapCmp(tx) >= 0 {
+				return false, nil
+			}
+			priceBump = blobpool.DefaultConfig.PriceBump
+		}
 		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
 		a := big.NewInt(100 + int64(priceBump))
 		aFeeCap := new(big.Int).Mul(a, old.GasFeeCap())
@@ -322,6 +330,12 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		// this is accurate for low (Wei-level) gas price replacements.
 		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
 			return false, nil
+		}
+		if oldCarriesBlobs {
+			thresholdBlobFeeCap := new(big.Int).Mul(big.NewInt(100+int64(priceBump)), old.BlobGasFeeCap())
+			if tx.BlobGasFeeCapIntCmp(thresholdBlobFeeCap.Div(thresholdBlobFeeCap, b)) < 0 {
+				return false, nil
+			}
 		}
 	}
 	// Add new tx cost to totalcost

@@ -1623,7 +1623,7 @@ func MarshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber u
 		fields["logs"] = []*types.Log{}
 	}
 
-	if tx.Type() == types.BlobTxType {
+	if len(tx.BlobHashes()) > 0 {
 		fields["blobGasUsed"] = hexutil.Uint64(receipt.BlobGasUsed)
 		fields["blobGasPrice"] = (*hexutil.Big)(receipt.BlobGasPrice)
 	}

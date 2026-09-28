@@ -121,7 +121,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 func handleTransactions(peer *eth.Peer, list []*types.Transaction, directBroadcast bool) error {
 	seen := make(map[common.Hash]struct{}, len(list))
 	for _, tx := range list {
-		if tx.Type() == types.BlobTxType {
+		if tx.Type() == types.BlobTxType || (directBroadcast && len(tx.BlobHashes()) > 0) {
 			if directBroadcast {
 				return errors.New("disallowed broadcast blob transaction")
 			} else {

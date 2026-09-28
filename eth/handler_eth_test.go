@@ -426,3 +426,19 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		}
 	}
 }
+
+func TestHandleBlobCarryingFrameTxBroadcast(t *testing.T) {
+	p2pSrc, p2pSink := p2p.MsgPipe()
+	defer p2pSrc.Close()
+	defer p2pSink.Close()
+	peer := eth.NewPeer(eth.ETH69, p2p.NewPeerPipe(enode.ID{1}, "", nil, p2pSink), p2pSink, nil, nil, nil)
+	defer peer.Close()
+
+	tx := types.NewTx(&types.FrameTx{BlobVersionedHashes: []common.Hash{{0x01}}})
+	if err := handleTransactions(peer, []*types.Transaction{tx}, true); err == nil {
+		t.Fatal("accepted blob-carrying frame transaction in a direct broadcast")
+	}
+	if err := handleTransactions(peer, []*types.Transaction{tx}, false); err != nil {
+		t.Fatalf("rejected pooled blob-carrying frame transaction: %v", err)
+	}
+}
