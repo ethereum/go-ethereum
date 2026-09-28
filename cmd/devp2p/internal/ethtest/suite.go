@@ -985,7 +985,7 @@ the transactions using a GetPooledTransactions request.`)
 
 	// Send announcement.
 	ann := eth.NewPooledTransactionHashesPacket72{Types: txTypes, Sizes: sizes, Hashes: hashes}
-	err = conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann)
+	err = conn.writeTxAnnouncement(ann)
 	if err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
 	}
@@ -1103,7 +1103,7 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 		if err := conn.peer(s.chain, nil); err != nil {
 			t.Fatalf("peering failed: %v", err)
 		}
-		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, test.ann); err != nil {
+		if err := conn.writeTxAnnouncement(test.ann); err != nil {
 			t.Fatalf("sending announcement failed: %v", err)
 		}
 		req := new(eth.GetPooledTransactionsPacket)
@@ -1128,8 +1128,8 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 					break
 				}
 				switch code {
-				case protoOffset(ethProto) + eth.NewPooledTransactionHashesMsg,
-					protoOffset(ethProto) + eth.GetCellsMsg:
+				case conn.protoOffset(ethProto) + eth.NewPooledTransactionHashesMsg,
+					conn.protoOffset(ethProto) + eth.GetCellsMsg:
 					continue
 				default:
 					t.Fatalf("expected disconnect on blob violation, got msg code: %d", code)
@@ -1150,18 +1150,40 @@ func mangleSidecar(tx *types.Transaction) *types.Transaction {
 	return tx.WithBlobTxSidecar(cpy)
 }
 
+// withBlobs returns tx with the given blobs put back into its sidecar.
+func withBlobs(tx *types.Transaction, blobs []kzg4844.Blob) *types.Transaction {
+	sc := tx.BlobTxSidecar().Copy()
+	sc.Blobs = blobs
+	return tx.WithBlobTxSidecar(sc)
+}
+
+// pooledTx returns tx in the form it is served in a PooledTransactions response
+// on conn. eth/72 (EIP-8070) leaves the blobs out and serves them as cells, while
+// earlier versions carry the full sidecar.
+func pooledTx(conn *Conn, tx *types.Transaction) *types.Transaction {
+	sc := tx.BlobTxSidecar()
+	if sc == nil || conn.negotiatedProtoVersion < eth.ETH72 {
+		return tx
+	}
+	cpy := sc.Copy()
+	cpy.Blobs = nil
+	return tx.WithBlobTxSidecar(cpy)
+}
+
 func (s *Suite) TestBlobTxWithoutSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx, _ := s.makeBlobTxs(1, 2, 42)
-	badTx := tx[0].WithoutBlobTxSidecar()
-	s.testBadBlobTx(t, tx[0], badTx)
+	txs, blobs := s.makeBlobTxs(1, 2, 42)
+	tx := withBlobs(txs[0], blobs[0])
+	badTx := tx.WithoutBlobTxSidecar()
+	s.testBadBlobTx(t, tx, badTx)
 }
 
 func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs, whose commitment don't correspond to the blob_versioned_hashes in the transaction, will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx, _ := s.makeBlobTxs(1, 2, 43)
-	badTx := mangleSidecar(tx[0])
-	s.testBadBlobTx(t, tx[0], badTx)
+	txs, blobs := s.makeBlobTxs(1, 2, 43)
+	tx := withBlobs(txs[0], blobs[0])
+	badTx := mangleSidecar(tx)
+	s.testBadBlobTx(t, tx, badTx)
 }
 
 // readUntil reads eth protocol messages until a message of the target type is
@@ -1228,6 +1250,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			errc <- fmt.Errorf("bad peer: peering failed: %v", err)
 			return
 		}
+		badTx := pooledTx(conn, badTx)
 
 		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
@@ -1236,7 +1259,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			Mask:   types.CustodyBitmapAll,
 		}
 
-		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		if err := conn.writeTxAnnouncement(ann); err != nil {
 			errc <- fmt.Errorf("sending announcement failed: %v", err)
 			return
 		}
@@ -1280,6 +1303,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			errc <- fmt.Errorf("peering failed: %v", err)
 			return
 		}
+		tx := pooledTx(conn, tx)
 
 		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
@@ -1288,7 +1312,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			Mask:   types.CustodyBitmapAll,
 		}
 
-		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		if err := conn.writeTxAnnouncement(ann); err != nil {
 			errc <- fmt.Errorf("sending first announcement failed: %v", err)
 			return
 		}

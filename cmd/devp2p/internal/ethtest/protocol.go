@@ -17,6 +17,7 @@
 package ethtest
 
 import (
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -32,13 +33,22 @@ const (
 // Unexported devp2p protocol lengths from p2p package.
 const (
 	baseProtoLen = 16
-	ethProtoLen  = 22
 	// snapProtoLen accommodates snap/2 (EIP-8189) which extends snap/1 with two
 	// additional message codes (GetBlockAccessLists=0x08, BlockAccessLists=0x09).
 	// Using 10 is safe for snap/1 connections because the extra codes are simply
 	// never used on that protocol version.
 	snapProtoLen = 10
 )
+
+// ethProtoLens are the message counts of the eth versions the suite speaks,
+// mirroring the unexported lengths in eth/protocols/eth. The snap message codes
+// start right after the eth range, so they move with the negotiated eth version.
+var ethProtoLens = map[uint]uint64{
+	eth.ETH69: 18,
+	eth.ETH70: 18,
+	eth.ETH71: 20,
+	eth.ETH72: 22,
+}
 
 // Unexported handshake structure from p2p/peer.go.
 type protoHandshake struct {
@@ -63,7 +73,8 @@ const (
 
 // getProto returns the protocol a certain message code is associated with
 // (assuming the negotiated capabilities are exactly {eth,snap})
-func getProto(code uint64) Proto {
+func (c *Conn) getProto(code uint64) Proto {
+	ethProtoLen := ethProtoLens[c.negotiatedProtoVersion]
 	switch {
 	case code < baseProtoLen:
 		return baseProto
@@ -78,14 +89,14 @@ func getProto(code uint64) Proto {
 
 // protoOffset will return the offset at which the specified protocol's messages
 // begin.
-func protoOffset(proto Proto) uint64 {
+func (c *Conn) protoOffset(proto Proto) uint64 {
 	switch proto {
 	case baseProto:
 		return 0
 	case ethProto:
 		return baseProtoLen
 	case snapProto:
-		return baseProtoLen + ethProtoLen
+		return baseProtoLen + ethProtoLens[c.negotiatedProtoVersion]
 	default:
 		panic("unhandled protocol")
 	}

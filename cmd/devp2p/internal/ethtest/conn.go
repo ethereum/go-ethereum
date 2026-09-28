@@ -145,7 +145,7 @@ func (c *Conn) ReadMsg(proto Proto, code uint64, msg any) error {
 		if err != nil {
 			return err
 		}
-		if protoOffset(proto)+code == got {
+		if c.protoOffset(proto)+code == got {
 			return rlp.DecodeBytes(data, msg)
 		}
 	}
@@ -158,8 +158,22 @@ func (c *Conn) Write(proto Proto, code uint64, msg any) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.Conn.Write(protoOffset(proto)+code, payload)
+	_, err = c.Conn.Write(c.protoOffset(proto)+code, payload)
 	return err
+}
+
+// writeTxAnnouncement sends a NewPooledTransactionHashes message using the layout
+// of the negotiated eth version. The custody bitmap only exists from eth/72 on,
+// so it is dropped on older sessions.
+func (c *Conn) writeTxAnnouncement(ann eth.NewPooledTransactionHashesPacket72) error {
+	if c.negotiatedProtoVersion < eth.ETH72 {
+		return c.Write(ethProto, eth.NewPooledTransactionHashesMsg, eth.NewPooledTransactionHashesPacket71{
+			Types:  ann.Types,
+			Sizes:  ann.Sizes,
+			Hashes: ann.Hashes,
+		})
+	}
+	return c.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann)
 }
 
 var errDisc error = errors.New("disconnect")
@@ -179,7 +193,7 @@ func (c *Conn) ReadEth() (any, error) {
 			c.Write(baseProto, pongMsg, []byte{})
 			continue
 		}
-		if getProto(code) != ethProto {
+		if c.getProto(code) != ethProto {
 			// Read until eth message.
 			continue
 		}
@@ -200,6 +214,15 @@ func (c *Conn) ReadEth() (any, error) {
 		case eth.TransactionsMsg:
 			msg = new(eth.TransactionsPacket)
 		case eth.NewPooledTransactionHashesMsg:
+			if c.negotiatedProtoVersion < eth.ETH72 {
+				// Announcements before eth/72 carry no custody bitmap. Decode the
+				// older layout and return it as the eth/72 type the tests match on.
+				var ann eth.NewPooledTransactionHashesPacket71
+				if err := rlp.DecodeBytes(data, &ann); err != nil {
+					return nil, fmt.Errorf("unable to decode eth msg: %v", err)
+				}
+				return &eth.NewPooledTransactionHashesPacket72{Types: ann.Types, Sizes: ann.Sizes, Hashes: ann.Hashes}, nil
+			}
 			msg = new(eth.NewPooledTransactionHashesPacket72)
 		case eth.GetPooledTransactionsMsg:
 			msg = new(eth.GetPooledTransactionsPacket)
@@ -230,11 +253,11 @@ func (c *Conn) ReadSnap() (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if getProto(code) != snapProto {
+		if c.getProto(code) != snapProto {
 			// Read until snap message.
 			continue
 		}
-		code -= baseProtoLen + ethProtoLen
+		code -= c.protoOffset(snapProto)
 
 		var msg any
 		switch int(code) {
@@ -363,7 +386,7 @@ loop:
 			return fmt.Errorf("failed to read from connection: %w", err)
 		}
 		switch code {
-		case eth.StatusMsg + protoOffset(ethProto):
+		case eth.StatusMsg + c.protoOffset(ethProto):
 			msg := new(eth.StatusPacket)
 			if err := rlp.DecodeBytes(data, &msg); err != nil {
 				return fmt.Errorf("error decoding status packet: %w", err)
