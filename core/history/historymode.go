@@ -145,55 +145,6 @@ func ParsePrunePoint(input string) (*PrunePoint, error) {
 	return &PrunePoint{BlockNumber: block, BlockHash: point}, nil
 }
 
-// ChainHistory is the configured chain history retention: a mode, plus the prune
-// point when the mode is KeepCustom. Its text form is the --history.chain value,
-// either a mode name or "<block number>:<block hash>".
-type ChainHistory struct {
-	Mode  HistoryMode
-	Point *PrunePoint
-}
-
-// String implements fmt.Stringer.
-func (c ChainHistory) String() string {
-	if c.Mode == KeepCustom {
-		return c.Point.String()
-	}
-	return c.Mode.String()
-}
-
-// MarshalText implements encoding.TextMarshaler.
-func (c ChainHistory) MarshalText() ([]byte, error) {
-	if c.Mode == KeepCustom && c.Point == nil {
-		return nil, errors.New("custom history retention without a prune point")
-	}
-	if !c.Mode.IsValid() {
-		return nil, fmt.Errorf("unknown history mode %d", c.Mode)
-	}
-	return []byte(c.String()), nil
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (c *ChainHistory) UnmarshalText(text []byte) error {
-	value := string(text)
-	var mode HistoryMode
-	if err := mode.UnmarshalText(text); err == nil {
-		if mode == KeepCustom {
-			return errors.New(`custom history retention is given as "<block number>:<block hash>"`)
-		}
-		*c = ChainHistory{Mode: mode}
-		return nil
-	}
-	if !strings.Contains(value, ":") {
-		return fmt.Errorf(`unknown history retention %q, want %s, or "<block number>:<block hash>"`, value, ChainHistoryNames())
-	}
-	point, err := ParsePrunePoint(value)
-	if err != nil {
-		return err
-	}
-	*c = ChainHistory{Mode: KeepCustom, Point: point}
-	return nil
-}
-
 // ChainHistoryNames lists the named values of the --history.chain flag.
 func ChainHistoryNames() string {
 	var names []string
@@ -253,47 +204,93 @@ var staticPrunePoints = map[HistoryMode]map[common.Hash]*PrunePoint{
 // HistoryPolicy describes the configured history pruning strategy. It captures
 // user intent as opposed to the actual DB state.
 type HistoryPolicy struct {
-	Mode HistoryMode
-
-	// Static prune point for the modes with a fixed target, and the operator's own
-	// point for KeepCustom. Nil for KeepAll.
+	Mode   HistoryMode
 	Target *PrunePoint
 }
 
-// NewPolicy constructs a HistoryPolicy from the given mode and genesis hash.
-//
-// The custom point must be non-nil if and only if mode is KeepCustom: a point
-// given for another mode would be silently ignored, which is likelier a mistake
-// than a decision. Callers that do not use KeepCustom pass nil.
-func NewPolicy(mode HistoryMode, genesisHash common.Hash, custom *PrunePoint) (HistoryPolicy, error) {
-	if mode != KeepCustom && custom != nil {
-		return HistoryPolicy{}, fmt.Errorf("history mode %q does not take a custom prune point, use %q", mode, KeepCustom)
+// String implements fmt.Stringer.
+func (p HistoryPolicy) String() string {
+	if p.Mode == KeepCustom {
+		return p.Target.String()
 	}
-	switch mode {
+	return p.Mode.String()
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (p HistoryPolicy) MarshalText() ([]byte, error) {
+	if p.Mode == KeepCustom && p.Target == nil {
+		return nil, errors.New("custom history retention without a prune point")
+	}
+	if !p.Mode.IsValid() {
+		return nil, fmt.Errorf("unknown history mode %d", p.Mode)
+	}
+	return []byte(p.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (p *HistoryPolicy) UnmarshalText(text []byte) error {
+	var (
+		value = string(text)
+		mode  HistoryMode
+	)
+	if err := mode.UnmarshalText(text); err == nil {
+		if mode == KeepCustom {
+			return errors.New(`custom history retention is given as "<block number>:<block hash>"`)
+		}
+		*p = HistoryPolicy{Mode: mode}
+		return nil
+	}
+	if !strings.Contains(value, ":") {
+		return fmt.Errorf(`unknown history retention %q, want %s, or "<block number>:<block hash>"`, value, ChainHistoryNames())
+	}
+	point, err := ParsePrunePoint(value)
+	if err != nil {
+		return err
+	}
+	*p = HistoryPolicy{
+		Mode:   KeepCustom,
+		Target: point,
+	}
+	return nil
+}
+
+// Resolve returns the policy for the network with the given genesis hash,
+// filling in the built-in prune point for the fork-based modes.
+//
+// A prune point is only accepted for KeepCustom, or for a fork-based mode when it
+// equals the built-in one, so that resolving an already resolved policy works.
+func (p HistoryPolicy) Resolve(genesisHash common.Hash) (HistoryPolicy, error) {
+	switch p.Mode {
 	case KeepAll:
+		if p.Target != nil {
+			return HistoryPolicy{}, fmt.Errorf("history mode %q does not take a prune point", p.Mode)
+		}
 		return HistoryPolicy{Mode: KeepAll}, nil
 
 	case KeepPostMerge, KeepPostPrague, KeepPostOsaka:
-		point := staticPrunePoints[mode][genesisHash]
+		point := staticPrunePoints[p.Mode][genesisHash]
 		if point == nil {
-			return HistoryPolicy{}, fmt.Errorf("%s history pruning not available for network %s", mode, genesisHash.Hex())
+			return HistoryPolicy{}, fmt.Errorf("%s history pruning not available for network %s", p.Mode, genesisHash.Hex())
 		}
-		return HistoryPolicy{Mode: mode, Target: point}, nil
+		if p.Target != nil && *p.Target != *point {
+			return HistoryPolicy{}, fmt.Errorf("history mode %q prunes to %s, not %s", p.Mode, point, p.Target)
+		}
+		return HistoryPolicy{Mode: p.Mode, Target: point}, nil
 
 	case KeepCustom:
-		if custom == nil {
-			return HistoryPolicy{}, fmt.Errorf("history mode %q requires a prune point, given as \"<block number>:<block hash>\"", mode)
+		if p.Target == nil {
+			return HistoryPolicy{}, fmt.Errorf("history mode %q requires a prune point, given as \"<block number>:<block hash>\"", p.Mode)
 		}
-		if custom.BlockNumber == 0 {
-			return HistoryPolicy{}, fmt.Errorf("history mode %q: prune point must be above the genesis block", mode)
+		if p.Target.BlockNumber == 0 {
+			return HistoryPolicy{}, fmt.Errorf("history mode %q: prune point must be above the genesis block", p.Mode)
 		}
-		if custom.BlockHash == (common.Hash{}) {
-			return HistoryPolicy{}, fmt.Errorf("history mode %q: prune point block hash must not be zero", mode)
+		if p.Target.BlockHash == (common.Hash{}) {
+			return HistoryPolicy{}, fmt.Errorf("history mode %q: prune point block hash must not be zero", p.Mode)
 		}
-		return HistoryPolicy{Mode: mode, Target: custom}, nil
+		return p, nil
 
 	default:
-		return HistoryPolicy{}, fmt.Errorf("invalid history mode: %d", mode)
+		return HistoryPolicy{}, fmt.Errorf("invalid history mode: %d", p.Mode)
 	}
 }
 

@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
-	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -230,7 +229,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
-	histPolicy, err := history.NewPolicy(config.HistoryMode.Mode, genesisHash, config.HistoryMode.Point)
+	histPolicy, err := config.HistoryMode.Resolve(genesisHash)
 	if err != nil {
 		return nil, err
 	}

@@ -20,7 +20,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               uint64
 		SyncMode                SyncMode
-		HistoryMode             history.ChainHistory
+		HistoryMode             history.HistoryPolicy
 		EthDiscoveryURLs        []string
 		SnapDiscoveryURLs       []string
 		NoPruning               bool
@@ -138,7 +138,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               *uint64
 		SyncMode                *SyncMode
-		HistoryMode             *history.ChainHistory
+		HistoryMode             *history.HistoryPolicy
 		EthDiscoveryURLs        []string
 		SnapDiscoveryURLs       []string
 		NoPruning               *bool

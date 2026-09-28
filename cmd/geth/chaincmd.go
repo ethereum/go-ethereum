@@ -730,7 +730,7 @@ func pruneHistory(ctx *cli.Context) error {
 	if !ctx.IsSet(utils.ChainHistoryFlag.Name) {
 		return errors.New("--history.chain flag is required")
 	}
-	var retention history.ChainHistory
+	var retention history.HistoryPolicy
 	if err := retention.UnmarshalText([]byte(ctx.String(utils.ChainHistoryFlag.Name))); err != nil {
 		return err
 	}
@@ -748,8 +748,7 @@ func pruneHistory(ctx *cli.Context) error {
 	defer chain.Stop()
 
 	// Determine the prune point based on the history mode.
-	genesisHash := chain.Genesis().Hash()
-	policy, err := history.NewPolicy(mode, genesisHash, retention.Point)
+	policy, err := retention.Resolve(chain.Genesis().Hash())
 	if err != nil {
 		return err
 	}

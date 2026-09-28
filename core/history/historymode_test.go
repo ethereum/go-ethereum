@@ -23,9 +23,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestNewPolicy(t *testing.T) {
+func TestResolve(t *testing.T) {
 	// KeepAll: no target.
-	p, err := NewPolicy(KeepAll, params.MainnetGenesisHash, nil)
+	p, err := HistoryPolicy{Mode: KeepAll}.Resolve(params.MainnetGenesisHash)
 	if err != nil {
 		t.Fatalf("KeepAll: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestNewPolicy(t *testing.T) {
 	}
 
 	// PostMerge: resolves known mainnet prune point.
-	p, err = NewPolicy(KeepPostMerge, params.MainnetGenesisHash, nil)
+	p, err = HistoryPolicy{Mode: KeepPostMerge}.Resolve(params.MainnetGenesisHash)
 	if err != nil {
 		t.Fatalf("PostMerge: %v", err)
 	}
@@ -43,16 +43,20 @@ func TestNewPolicy(t *testing.T) {
 	}
 
 	// PostPrague: resolves known mainnet prune point.
-	p, err = NewPolicy(KeepPostPrague, params.MainnetGenesisHash, nil)
+	p, err = HistoryPolicy{Mode: KeepPostPrague}.Resolve(params.MainnetGenesisHash)
 	if err != nil {
 		t.Fatalf("PostPrague: %v", err)
 	}
 	if p.Target == nil || p.Target.BlockNumber != 22431084 {
 		t.Errorf("PostPrague: unexpected target %+v", p.Target)
 	}
+	// Resolving an already resolved policy is a no-op.
+	if again, err := p.Resolve(params.MainnetGenesisHash); err != nil || again.Mode != p.Mode || *again.Target != *p.Target {
+		t.Errorf("PostPrague resolved twice: got %+v, %v", again, err)
+	}
 
 	// PostMerge on unknown network: error.
-	if _, err = NewPolicy(KeepPostMerge, common.HexToHash("0xdeadbeef"), nil); err == nil {
+	if _, err = (HistoryPolicy{Mode: KeepPostMerge}).Resolve(common.HexToHash("0xdeadbeef")); err == nil {
 		t.Fatal("PostMerge unknown network: expected error")
 	}
 }
@@ -64,9 +68,9 @@ var customPoint = &PrunePoint{
 	BlockHash:   common.HexToHash("0x6f7c16414e091d817bdbb0e1d0a17f74cd2b42d1a734d9864a7cd37a32514aad"),
 }
 
-func TestNewPolicyCustom(t *testing.T) {
+func TestResolveCustom(t *testing.T) {
 	// KeepCustom resolves the operator's own point, untouched.
-	p, err := NewPolicy(KeepCustom, params.MainnetGenesisHash, customPoint)
+	p, err := HistoryPolicy{Mode: KeepCustom, Target: customPoint}.Resolve(params.MainnetGenesisHash)
 	if err != nil {
 		t.Fatalf("KeepCustom: %v", err)
 	}
@@ -75,11 +79,11 @@ func TestNewPolicyCustom(t *testing.T) {
 	}
 	// The custom point is not looked up in staticPrunePoints, so it works on a
 	// network that has no built-in entry for it.
-	if _, err := NewPolicy(KeepCustom, common.HexToHash("0xdeadbeef"), customPoint); err != nil {
+	if _, err := (HistoryPolicy{Mode: KeepCustom, Target: customPoint}).Resolve(common.HexToHash("0xdeadbeef")); err != nil {
 		t.Errorf("KeepCustom on unknown network: %v", err)
 	}
 	// Missing point: error, rather than a policy that prunes nothing.
-	if _, err := NewPolicy(KeepCustom, params.MainnetGenesisHash, nil); err == nil {
+	if _, err := (HistoryPolicy{Mode: KeepCustom}).Resolve(params.MainnetGenesisHash); err == nil {
 		t.Error("KeepCustom without point: expected error")
 	}
 	// Degenerate points: error.
@@ -87,13 +91,13 @@ func TestNewPolicyCustom(t *testing.T) {
 		"genesis":   {BlockNumber: 0, BlockHash: customPoint.BlockHash},
 		"zero hash": {BlockNumber: customPoint.BlockNumber},
 	} {
-		if _, err := NewPolicy(KeepCustom, params.MainnetGenesisHash, point); err == nil {
+		if _, err := (HistoryPolicy{Mode: KeepCustom, Target: point}).Resolve(params.MainnetGenesisHash); err == nil {
 			t.Errorf("KeepCustom with %s: expected error", name)
 		}
 	}
-	// A point supplied for a mode that ignores it is a mistake worth reporting.
+	// A point that differs from the mode's own is a mistake worth reporting.
 	for _, mode := range []HistoryMode{KeepAll, KeepPostMerge, KeepPostPrague, KeepPostOsaka} {
-		if _, err := NewPolicy(mode, params.MainnetGenesisHash, customPoint); err == nil {
+		if _, err := (HistoryPolicy{Mode: mode, Target: customPoint}).Resolve(params.MainnetGenesisHash); err == nil {
 			t.Errorf("%s with a custom point: expected error", mode)
 		}
 	}
@@ -198,12 +202,12 @@ func TestParsePrunePoint(t *testing.T) {
 	}
 }
 
-// TestChainHistoryText checks the text form shared by --history.chain and the
+// TestHistoryPolicyText checks the text form shared by --history.chain and the
 // config file, so that a dumped config can be fed back in unchanged.
-func TestChainHistoryText(t *testing.T) {
+func TestHistoryPolicyText(t *testing.T) {
 	for _, mode := range []HistoryMode{KeepAll, KeepPostMerge, KeepPostPrague, KeepPostOsaka} {
-		var got ChainHistory
-		if err := got.UnmarshalText([]byte(mode.String())); err != nil || got != (ChainHistory{Mode: mode}) {
+		var got HistoryPolicy
+		if err := got.UnmarshalText([]byte(mode.String())); err != nil || got != (HistoryPolicy{Mode: mode}) {
 			t.Errorf("%q: got %+v, %v", mode, got, err)
 		}
 		if text, err := got.MarshalText(); err != nil || string(text) != mode.String() {
@@ -211,20 +215,20 @@ func TestChainHistoryText(t *testing.T) {
 		}
 	}
 	value := customPoint.String()
-	var got ChainHistory
-	if err := got.UnmarshalText([]byte(value)); err != nil || got.Mode != KeepCustom || got.Point == nil || *got.Point != *customPoint {
+	var got HistoryPolicy
+	if err := got.UnmarshalText([]byte(value)); err != nil || got.Mode != KeepCustom || got.Target == nil || *got.Target != *customPoint {
 		t.Fatalf("%q: got %+v, %v", value, got, err)
 	}
 	if text, err := got.MarshalText(); err != nil || string(text) != value {
 		t.Errorf("custom point marshalled as %q, %v, want %q", text, err, value)
 	}
 	for _, bad := range []string{"", "custom", "postfoo", "25182208", "25182208:0xdeadbeef"} {
-		var got ChainHistory
+		var got HistoryPolicy
 		if err := got.UnmarshalText([]byte(bad)); err == nil {
 			t.Errorf("%q: expected error, got %+v", bad, got)
 		}
 	}
-	if _, err := (ChainHistory{Mode: KeepCustom}).MarshalText(); err == nil {
+	if _, err := (HistoryPolicy{Mode: KeepCustom}).MarshalText(); err == nil {
 		t.Error("custom retention without a point: expected marshal error")
 	}
 }
@@ -254,7 +258,7 @@ func TestStaticPrunePoints(t *testing.T) {
 			case point.BlockHash == (common.Hash{}):
 				t.Errorf("%s on %s: prune point has a zero hash", mode, genesis)
 			}
-			p, err := NewPolicy(mode, genesis, nil)
+			p, err := HistoryPolicy{Mode: mode}.Resolve(genesis)
 			if err != nil {
 				t.Errorf("%s on %s: %v", mode, genesis, err)
 				continue

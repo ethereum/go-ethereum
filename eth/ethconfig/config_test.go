@@ -30,9 +30,9 @@ import (
 // prune point, and that configs written before custom points existed still load.
 func TestHistoryModeTOML(t *testing.T) {
 	const value = "25182208:0x6f7c16414e091d817bdbb0e1d0a17f74cd2b42d1a734d9864a7cd37a32514aad"
-	want := history.ChainHistory{
+	want := history.HistoryPolicy{
 		Mode: history.KeepCustom,
-		Point: &history.PrunePoint{
+		Target: &history.PrunePoint{
 			BlockNumber: 25182208,
 			BlockHash:   common.HexToHash("0x6f7c16414e091d817bdbb0e1d0a17f74cd2b42d1a734d9864a7cd37a32514aad"),
 		},
@@ -53,11 +53,11 @@ func TestHistoryModeTOML(t *testing.T) {
 	if err := toml.Unmarshal([]byte(`history_mode = "`+value+`"`), &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if got.HistoryMode.Mode != want.Mode || got.HistoryMode.Point == nil || *got.HistoryMode.Point != *want.Point {
+	if got.HistoryMode.Mode != want.Mode || got.HistoryMode.Target == nil || *got.HistoryMode.Target != *want.Target {
 		t.Errorf("got %+v, want %+v", got.HistoryMode, want)
 	}
 	var old Config
-	if err := toml.Unmarshal([]byte(`history_mode = "postmerge"`), &old); err != nil || old.HistoryMode != (history.ChainHistory{Mode: history.KeepPostMerge}) {
+	if err := toml.Unmarshal([]byte(`history_mode = "postmerge"`), &old); err != nil || old.HistoryMode != (history.HistoryPolicy{Mode: history.KeepPostMerge}) {
 		t.Errorf("named mode: got %+v, %v", old.HistoryMode, err)
 	}
 	var broken Config
