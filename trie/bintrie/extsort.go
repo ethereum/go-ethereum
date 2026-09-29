@@ -39,15 +39,30 @@ type RecordSorter struct {
 	budget    int // bytes of buffered records that trigger a spill
 	validate  func(key, value []byte) error
 	buffered  int
-	pending   []sortRecord
+	arena     []byte        // pending run's keys and values, packed back to back
+	index     []arenaRecord // pending run, offsets into arena
 	runs      []*os.File
 	sealed    bool
 	discarded bool
 }
 
-type sortRecord struct {
-	key   []byte
-	value []byte
+// arenaRecord locates one record inside a RecordSorter's arena: its key at
+// off, its value right after. Storing offsets instead of slices keeps Add to
+// one append per field and lets a spill reset the arena in place rather than
+// freeing per-record backing arrays.
+type arenaRecord struct {
+	off, klen, vlen int
+}
+
+// key and value slice the arena for one record, capacity clipped so that an
+// append on either cannot reach the next record.
+func (r arenaRecord) key(arena []byte) []byte {
+	return arena[r.off : r.off+r.klen : r.off+r.klen]
+}
+
+func (r arenaRecord) value(arena []byte) []byte {
+	end := r.off + r.klen + r.vlen
+	return arena[r.off+r.klen : end : end]
 }
 
 // spillRecordOverhead approximates per-record bookkeeping bytes, so the
@@ -81,7 +96,9 @@ func validateLeafRecord(key, value []byte) error {
 }
 
 // Add buffers one record. Keys must be 1 to 255 bytes for the run encoding,
-// plus whatever the validation hook demands.
+// plus whatever the validation hook demands. Add copies both key and value
+// into its own arena; the caller's slices are free to reuse the moment Add
+// returns.
 func (s *RecordSorter) Add(key, value []byte) error {
 	if s.sealed {
 		return errors.New("bintrie: sorter already sorted")
@@ -97,10 +114,9 @@ func (s *RecordSorter) Add(key, value []byte) error {
 			return err
 		}
 	}
-	s.pending = append(s.pending, sortRecord{
-		key:   bytes.Clone(key),
-		value: bytes.Clone(value),
-	})
+	off := len(s.arena)
+	s.arena = append(append(s.arena, key...), value...)
+	s.index = append(s.index, arenaRecord{off: off, klen: len(key), vlen: len(value)})
 	s.buffered += len(key) + len(value) + spillRecordOverhead
 	if s.budget > 0 && s.buffered >= s.budget {
 		return s.spill()
@@ -110,7 +126,7 @@ func (s *RecordSorter) Add(key, value []byte) error {
 
 // spill sorts the pending run and writes it to a temporary file.
 func (s *RecordSorter) spill() error {
-	if len(s.pending) == 0 {
+	if len(s.index) == 0 {
 		return nil
 	}
 	if err := s.sortPending(); err != nil {
@@ -128,8 +144,8 @@ func (s *RecordSorter) spill() error {
 		return err
 	}
 	w := bufio.NewWriterSize(f, 1<<20)
-	for _, rec := range s.pending {
-		if err := writeRunRecord(w, rec.key, rec.value); err != nil {
+	for _, rec := range s.index {
+		if err := writeRunRecord(w, rec.key(s.arena), rec.value(s.arena)); err != nil {
 			return discard(err)
 		}
 	}
@@ -140,7 +156,8 @@ func (s *RecordSorter) spill() error {
 		return discard(err)
 	}
 	s.runs = append(s.runs, f)
-	s.pending = s.pending[:0]
+	s.arena = s.arena[:0]
+	s.index = s.index[:0]
 	s.buffered = 0
 	return nil
 }
@@ -148,12 +165,13 @@ func (s *RecordSorter) spill() error {
 // sortPending orders the in-memory run and rejects duplicates, which sorting
 // makes adjacent.
 func (s *RecordSorter) sortPending() error {
-	slices.SortFunc(s.pending, func(a, b sortRecord) int {
-		return bytes.Compare(a.key, b.key)
+	arena := s.arena
+	slices.SortFunc(s.index, func(a, b arenaRecord) int {
+		return bytes.Compare(a.key(arena), b.key(arena))
 	})
-	for i := 1; i < len(s.pending); i++ {
-		if bytes.Equal(s.pending[i-1].key, s.pending[i].key) {
-			return fmt.Errorf("bintrie: duplicate key %x in sort input", s.pending[i].key)
+	for i := 1; i < len(s.index); i++ {
+		if bytes.Equal(s.index[i-1].key(arena), s.index[i].key(arena)) {
+			return fmt.Errorf("bintrie: duplicate key %x in sort input", s.index[i].key(arena))
 		}
 	}
 	return nil
@@ -172,12 +190,14 @@ func (s *RecordSorter) Sort() (*RecordStream, error) {
 		if err := s.sortPending(); err != nil {
 			return nil, err
 		}
-		return &RecordStream{pending: s.pending}, nil
+		return &RecordStream{arena: s.arena, index: s.index}, nil
 	}
-	// Spill the tail so the merge reads uniform sources.
+	// Spill the tail so the merge reads uniform sources. Nothing is added
+	// after Sort, so the pending run's buffers go now rather than at Close.
 	if err := s.spill(); err != nil {
 		return nil, err
 	}
+	s.arena, s.index = nil, nil
 	stream := &RecordStream{}
 	for _, f := range s.runs {
 		src := &runReader{r: bufio.NewReaderSize(f, 1<<20)}
@@ -205,14 +225,16 @@ func (s *RecordSorter) Close() {
 		os.Remove(name)
 	}
 	s.runs = nil
-	s.pending = nil
+	s.arena = nil
+	s.index = nil
 }
 
 // RecordStream yields the sorted records: the in-memory path serves the
-// pending slice, the merged path pops the run heap.
+// pending arena, the merged path pops the run heap.
 type RecordStream struct {
-	pending []sortRecord
-	next    int
+	arena []byte
+	index []arenaRecord
+	next  int
 
 	heap    runHeap
 	lastKey []byte
@@ -222,12 +244,12 @@ type RecordStream struct {
 // The returned slices are the caller's.
 func (ls *RecordStream) Next() (key, value []byte, err error) {
 	if ls.heap == nil {
-		if ls.next >= len(ls.pending) {
+		if ls.next >= len(ls.index) {
 			return nil, nil, io.EOF
 		}
-		rec := ls.pending[ls.next]
+		rec := ls.index[ls.next]
 		ls.next++
-		return rec.key, rec.value, nil
+		return rec.key(ls.arena), rec.value(ls.arena), nil
 	}
 	if len(ls.heap) == 0 {
 		return nil, nil, io.EOF
@@ -257,39 +279,41 @@ type runReader struct {
 	value []byte
 }
 
-// advance reads the next record into the reader, io.EOF at the end.
+// advance reads the next record into the reader, io.EOF at the end. Key and
+// value share one allocation: the run encoding puts both lengths ahead of
+// both payloads, so the combined size is known before any payload byte is
+// read.
 func (rr *runReader) advance() error {
 	klen, err := rr.r.ReadByte()
 	if err != nil {
 		return err // io.EOF included
 	}
-	key := make([]byte, klen)
-	if _, err := io.ReadFull(rr.r, key); err != nil {
-		return fmt.Errorf("bintrie: truncated sort run key: %w", err)
-	}
-	var vlen [4]byte
-	if _, err := io.ReadFull(rr.r, vlen[:]); err != nil {
+	var vlenBuf [4]byte
+	if _, err := io.ReadFull(rr.r, vlenBuf[:]); err != nil {
 		return fmt.Errorf("bintrie: truncated sort run value length: %w", err)
 	}
-	value := make([]byte, binary.BigEndian.Uint32(vlen[:]))
-	if _, err := io.ReadFull(rr.r, value); err != nil {
-		return fmt.Errorf("bintrie: truncated sort run value: %w", err)
+	vlen := binary.BigEndian.Uint32(vlenBuf[:])
+	buf := make([]byte, int(klen)+int(vlen))
+	if _, err := io.ReadFull(rr.r, buf); err != nil {
+		return fmt.Errorf("bintrie: truncated sort run record: %w", err)
 	}
-	rr.key, rr.value = key, value
+	rr.key, rr.value = buf[:klen], buf[klen:]
 	return nil
 }
 
-// writeRunRecord encodes one record as keyLen ‖ key ‖ valueLen ‖ value.
+// writeRunRecord encodes one record as keyLen ‖ valueLen ‖ key ‖ value: both
+// lengths ahead of both payloads, so a reader sizes one combined buffer
+// before it reads any payload byte.
 func writeRunRecord(w *bufio.Writer, key, value []byte) error {
 	if err := w.WriteByte(byte(len(key))); err != nil {
-		return err
-	}
-	if _, err := w.Write(key); err != nil {
 		return err
 	}
 	var vlen [4]byte
 	binary.BigEndian.PutUint32(vlen[:], uint32(len(value)))
 	if _, err := w.Write(vlen[:]); err != nil {
+		return err
+	}
+	if _, err := w.Write(key); err != nil {
 		return err
 	}
 	_, err := w.Write(value)

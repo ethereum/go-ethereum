@@ -28,6 +28,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// sortRecord is a key/value pair, the shape tests build sorter input and
+// drained output around. RecordSorter itself stores pending records in an
+// arena, not this struct.
+type sortRecord struct {
+	key   []byte
+	value []byte
+}
+
 // drainSorted adds every record, sorts, and returns the drained stream.
 func drainSorted(t *testing.T, budget int, recs []sortRecord) []sortRecord {
 	t.Helper()
