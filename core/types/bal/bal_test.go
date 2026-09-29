@@ -381,3 +381,83 @@ func TestBlockAccessListValidation(t *testing.T) {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }
+
+func TestConstructionBALDemoteStorageWriteToRead(t *testing.T) {
+	cBAL := NewConstructionBlockAccessList()
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	slotSingle := common.HexToHash("0x01")
+	slotMulti := common.HexToHash("0x02")
+
+	// slotSingle only has write at txIdx 2
+	cBAL.StorageWrite(2, addr, slotSingle, common.HexToHash("0xaa"))
+
+	// slotMulti has writes at txIdx 1 and txIdx 2
+	cBAL.StorageWrite(1, addr, slotMulti, common.HexToHash("0xbb"))
+	cBAL.StorageWrite(2, addr, slotMulti, common.HexToHash("0xcc"))
+
+	// Demote slotSingle at txIdx 2 -> should be moved to StorageReads
+	cBAL.DemoteStorageWriteToRead(2, addr, slotSingle)
+
+	acc := cBAL.Accounts[addr]
+	if _, ok := acc.StorageWrites[slotSingle]; ok {
+		t.Fatalf("expected slotSingle to be deleted from StorageWrites")
+	}
+	if _, ok := acc.StorageReads[slotSingle]; !ok {
+		t.Fatalf("expected slotSingle to be added to StorageReads")
+	}
+
+	// Demote slotMulti at txIdx 2 -> should still remain in StorageWrites (txIdx 1) and NOT in StorageReads
+	cBAL.DemoteStorageWriteToRead(2, addr, slotMulti)
+
+	if writes, ok := acc.StorageWrites[slotMulti]; !ok {
+		t.Fatalf("expected slotMulti to remain in StorageWrites")
+	} else if _, ok := writes[2]; ok {
+		t.Fatalf("expected txIdx 2 to be removed from slotMulti writes")
+	} else if val, ok := writes[1]; !ok || val != common.HexToHash("0xbb") {
+		t.Fatalf("expected txIdx 1 to remain in slotMulti writes with value 0xbb")
+	}
+
+	if _, ok := acc.StorageReads[slotMulti]; ok {
+		t.Fatalf("slotMulti should not be in StorageReads because it has writes at another index")
+	}
+
+	// The resulting BAL must encode and validate without errors
+	enc := cBAL.ToEncodingObj()
+	if err := enc.Validate(10_000_000, 2); err != nil {
+		t.Fatalf("validation failed after demotion: %v", err)
+	}
+}
+
+func TestConstructionBALDropChanges(t *testing.T) {
+	cBAL := NewConstructionBlockAccessList()
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+
+	cBAL.BalanceChange(1, addr, uint256.NewInt(100))
+	cBAL.BalanceChange(2, addr, uint256.NewInt(200))
+	cBAL.NonceChange(addr, 2, 5)
+	cBAL.CodeChange(addr, 2, []byte{0x60, 0x00})
+
+	// Drop index 2 changes
+	cBAL.DropBalanceChange(2, addr)
+	cBAL.DropNonceChange(2, addr)
+	cBAL.DropCodeChange(2, addr)
+
+	acc := cBAL.Accounts[addr]
+	if _, ok := acc.BalanceChanges[2]; ok {
+		t.Fatalf("expected balance change at index 2 to be dropped")
+	}
+	if bal, ok := acc.BalanceChanges[1]; !ok || bal.Cmp(uint256.NewInt(100)) != 0 {
+		t.Fatalf("expected balance change at index 1 to remain 100")
+	}
+	if _, ok := acc.NonceChanges[2]; ok {
+		t.Fatalf("expected nonce change at index 2 to be dropped")
+	}
+	if _, ok := acc.CodeChange[2]; ok {
+		t.Fatalf("expected code change at index 2 to be dropped")
+	}
+
+	enc := cBAL.ToEncodingObj()
+	if err := enc.Validate(10_000_000, 2); err != nil {
+		t.Fatalf("validation failed: %v", err)
+	}
+}
