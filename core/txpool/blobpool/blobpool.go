@@ -1289,6 +1289,10 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 			p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
 		}
 	}
+	// The new head may have filled nonce gaps, promote what became executable
+	for from := range p.gapped {
+		p.promoteGapped(from)
+	}
 	// Flush out any blobs from limbo that are older than the latest finality
 	if p.chain.Config().IsCancun(newHead.Number, newHead.Time) {
 		p.limbo.finalize(p.chain.CurrentFinalBlock())
@@ -2280,7 +2284,16 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 	}
 
 	//check the gapped queue for this account and try to promote
-	if gtxs, ok := p.gapped[from]; checkGapped && ok && len(gtxs) > 0 {
+	if checkGapped {
+		p.promoteGapped(from)
+	}
+	return nil
+}
+
+// promoteGapped moves gapped transactions of an account into the pool once their
+// nonce gap is filled. The caller must hold the pool lock.
+func (p *BlobPool) promoteGapped(from common.Address) {
+	if gtxs, ok := p.gapped[from]; ok && len(gtxs) > 0 {
 		// We have to add in nonce order, but we want to stable sort to cater for situations
 		// where transactions are replaced, keeping the original receive order for same nonce
 		sort.SliceStable(gtxs, func(i, j int) bool {
@@ -2328,7 +2341,6 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 		}
 		gappedGauge.Update(int64(len(p.gappedSource)))
 	}
-	return nil
 }
 
 // drop removes the worst transaction from the pool. It is primarily used when a
