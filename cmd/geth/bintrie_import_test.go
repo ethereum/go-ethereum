@@ -158,6 +158,9 @@ func TestImportRoundTrip(t *testing.T) {
 			if got := statedb.GetState(addr, slot); got != value {
 				t.Fatalf("slot %x of %x reads %x, want %x", slot, addr, got, value)
 			}
+			if got := rawdb.ReadPreimage(impDB, crypto.Keccak256Hash(slot[:])); !bytes.Equal(got, slot[:]) {
+				t.Fatalf("slot %x preimage missing after import", slot)
+			}
 		}
 		// The preimages travelled too.
 		if got := rawdb.ReadPreimage(impDB, crypto.Keccak256Hash(addr.Bytes())); !bytes.Equal(got, addr.Bytes()) {
@@ -434,7 +437,7 @@ func readPreimageRecords(t *testing.T, path string) []preRecord {
 	defer pr.close()
 	var recs []preRecord
 	for {
-		addr, slots, err := pr.next()
+		addr, _, slots, err := pr.next()
 		if err == io.EOF {
 			break
 		}

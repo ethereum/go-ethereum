@@ -193,31 +193,6 @@ func importBinaryTrie(ctx *cli.Context) error {
 // cost the verifier gigabytes.
 const maxImportCodeSize = 1 << 20
 
-// preimageWriter batches preimage-store writes, or discards them when nil.
-type preimageWriter struct {
-	batch ethdb.Batch
-	buf   map[common.Hash][]byte
-}
-
-func (pw *preimageWriter) add(hash common.Hash, preimage []byte) {
-	if pw == nil {
-		return
-	}
-	pw.buf[hash] = common.CopyBytes(preimage)
-	if len(pw.buf) >= 1024 {
-		rawdb.WritePreimages(pw.batch, pw.buf)
-		pw.buf = make(map[common.Hash][]byte, 1024)
-	}
-}
-
-func (pw *preimageWriter) flush() {
-	if pw == nil || len(pw.buf) == 0 {
-		return
-	}
-	rawdb.WritePreimages(pw.batch, pw.buf)
-	pw.buf = make(map[common.Hash][]byte)
-}
-
 // importGroup carries one account's header-stem leaves through the join.
 type importGroup struct {
 	stem        []byte
@@ -283,6 +258,29 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return common.Hash{}, err
 	}
 	defer snap.close()
+	var (
+		pbtBatch ethdb.Batch // tree nodes and flat state, inside the namespace
+		rawBatch ethdb.Batch // code and preimages, outside it
+	)
+	if !verifyOnly {
+		pbtBatch = pbtdb.NewBatch()
+		rawBatch = chaindb.NewBatch()
+	}
+	flush := func(force bool) error {
+		for _, batch := range []ethdb.Batch{pbtBatch, rawBatch} {
+			if batch == nil {
+				continue
+			}
+			if force || batch.ValueSize() >= ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					return err
+				}
+				batch.Reset()
+			}
+		}
+		return nil
+	}
+
 	// Phase 1: derive every candidate tree key the preimages can stand for.
 
 	cand := bintrie.NewRecordSorter(opts.tmpDir, quarter, nil)
@@ -293,12 +291,27 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		prePreimages uint64
 	)
 	for {
-		addr, slots, err := pre.next()
+		addr, addrHash, slots, err := pre.next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return common.Hash{}, err
+		}
+		// The preimage file is keccak-ordered, which its reader enforces, so
+		// the preimage store is written in that order.
+		if rawBatch != nil && opts.keepPreimages {
+			if err := putPreimage(rawBatch, addrHash, addr.Bytes()); err != nil {
+				return common.Hash{}, err
+			}
+			for _, slot := range slots {
+				if err := putPreimage(rawBatch, crypto.Keccak256Hash(slot[:]), slot[:]); err != nil {
+					return common.Hash{}, err
+				}
+			}
+			if err := flush(false); err != nil {
+				return common.Hash{}, err
+			}
 		}
 		// One candidate per header stem, carrying the address and a bitmap of
 		// the header-range slots this record claims. A header-range slot's
@@ -339,33 +352,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	held := &heldStream{stream: candStream}
 
 	var (
-		pbtBatch ethdb.Batch // tree nodes and flat state, inside the namespace
-		rawBatch ethdb.Batch // code and preimages, outside it
-		preims   *preimageWriter
-	)
-	if !verifyOnly {
-		pbtBatch = pbtdb.NewBatch()
-		rawBatch = chaindb.NewBatch()
-		if opts.keepPreimages {
-			preims = &preimageWriter{batch: rawBatch, buf: make(map[common.Hash][]byte, 1024)}
-		}
-	}
-	flush := func(force bool) error {
-		for _, batch := range []ethdb.Batch{pbtBatch, rawBatch} {
-			if batch == nil {
-				continue
-			}
-			if force || batch.ValueSize() >= ethdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					return err
-				}
-				batch.Reset()
-			}
-		}
-		return nil
-	}
-
-	var (
 		builderErr error
 		onNode     func(path []byte, hash common.Hash, blob []byte)
 	)
@@ -401,7 +387,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			slotHash = crypto.Keccak256Hash(slot[:])
 			enc, _   = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 		)
-		preims.add(slotHash, slot[:])
 		stats.slots++
 		return slotSorter.Add(append(accountHash.Bytes(), slotHash.Bytes()...), enc)
 	}
@@ -460,7 +445,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			}
 		}
 		accountHash := crypto.Keccak256Hash(g.addr.Bytes())
-		preims.add(accountHash, g.addr.Bytes())
 		stats.accounts++
 
 		value := merkleAccountRecord(nonce, balance, codeHash)
@@ -769,7 +753,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			"snapshotDigest", snap.digest(), "preimageDigest", pre.digest())
 		return snap.root, nil
 	}
-	preims.flush()
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
 	}
@@ -783,4 +766,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	log.Info("Import complete", "binaryRoot", snap.root, "anchor", opts.anchor.Number,
 		"snapshotDigest", snap.digest(), "preimageDigest", pre.digest())
 	return snap.root, nil
+}
+
+// putPreimage writes one preimage store entry under its keccak hash.
+func putPreimage(w ethdb.KeyValueWriter, hash common.Hash, preimage []byte) error {
+	return w.Put(append(append([]byte{}, rawdb.PreimagePrefix...), hash[:]...), preimage)
 }

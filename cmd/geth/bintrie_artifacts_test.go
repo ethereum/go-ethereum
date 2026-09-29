@@ -439,7 +439,7 @@ func TestArtifactReaders(t *testing.T) {
 	defer pr.close()
 	accounts := 0
 	for {
-		if _, _, err := pr.next(); err == io.EOF {
+		if _, _, _, err := pr.next(); err == io.EOF {
 			break
 		} else if err != nil {
 			t.Fatalf("preimage reader rejected the writer's output: %v", err)
@@ -475,7 +475,7 @@ func TestArtifactReaders(t *testing.T) {
 			t.Fatal(err)
 		}
 		for {
-			if _, _, err := pr2.next(); err == io.EOF {
+			if _, _, _, err := pr2.next(); err == io.EOF {
 				t.Fatalf("a %s preimage file was accepted", tamper.name)
 			} else if err != nil {
 				break
@@ -779,7 +779,7 @@ func TestArtifactReadersReject(t *testing.T) {
 				defer pr.close()
 				var lastErr error
 				for {
-					if _, _, err := pr.next(); err == io.EOF {
+					if _, _, _, err := pr.next(); err == io.EOF {
 						break
 					} else if err != nil {
 						lastErr = err
