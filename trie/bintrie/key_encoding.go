@@ -160,15 +160,23 @@ func StorageBucketPrefix(addr common.Address) []byte {
 func StorageStem(addr common.Address, treeIndex *uint256.Int) []byte {
 	a32 := Address32(addr)
 	prefix := KeyHash(a32[:])
+	return StorageStemWithPrefix(addr, prefix[:], treeIndex)
+}
 
+// StorageStemWithPrefix is StorageStem given the account's storage bucket
+// prefix (StorageBucketPrefix(addr)[1:]) already derived. A caller deriving
+// many stems for one account - one per overflow slot - hashes address32
+// once and reuses it here instead of paying KeyHash again per slot.
+func StorageStemWithPrefix(addr common.Address, prefix []byte, treeIndex *uint256.Int) []byte {
+	a32 := Address32(addr)
 	var buf [64]byte
 	copy(buf[:32], a32[:])
 	treeIndex.PutUint256(buf[32:])
 	suffix := KeyHash(buf[:])
 
-	stem := make([]byte, 0, StorageKeyLength-1)
+	stem := make([]byte, 0, StorageKeyLength) // room for the caller's sub-index
 	stem = append(stem, StorageZone)
-	stem = append(stem, prefix[:]...)
+	stem = append(stem, prefix...)
 	return append(stem, suffix[:]...)
 }
 

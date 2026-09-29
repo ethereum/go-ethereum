@@ -318,13 +318,23 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		// number is its sub-index minus the offset, so it needs no candidate
 		// of its own - unlike an overflow slot, whose stem is a one-way hash
 		// of the slot number and can only be matched by deriving it forward.
-		var headerSlots uint64
+		var (
+			headerSlots   uint64
+			storagePrefix [32]byte // blake3(address32), hashed once and reused for every overflow slot
+			havePrefix    bool
+		)
 		for _, slot := range slots {
-			if inHeader, _, sub := bintrie.StorageIndex(slot[:]); inHeader {
+			inHeader, treeIndex, sub := bintrie.StorageIndex(slot[:])
+			if inHeader {
 				headerSlots |= 1 << (sub - bintrie.HeaderStorageOffset)
 				continue
 			}
-			if err := cand.Add(bintrie.StorageSlotKey(addr, slot[:]), append(addr.Bytes(), slot[:]...)); err != nil {
+			if !havePrefix {
+				a32 := bintrie.Address32(addr)
+				storagePrefix, havePrefix = bintrie.KeyHash(a32[:]), true
+			}
+			key := append(bintrie.StorageStemWithPrefix(addr, storagePrefix[:], &treeIndex), sub)
+			if err := cand.Add(key, append(addr.Bytes(), slot[:]...)); err != nil {
 				return common.Hash{}, err
 			}
 		}
@@ -520,6 +530,14 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return nil
 	}
 
+	// The storage zone groups every leaf of one account before the next, so
+	// keccak(addr) is computed once per account.
+	var (
+		lastStorageAddr common.Address
+		lastStorageHash common.Hash
+		haveStorageHash bool
+	)
+
 	for {
 		key, value, err := snap.next()
 		if err == io.EOF {
@@ -603,9 +621,11 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		addr := common.BytesToAddress(matched[:common.AddressLength])
 
 		if key[0] == bintrie.StorageZone {
-			accountHash := crypto.Keccak256Hash(addr.Bytes())
+			if !haveStorageHash || addr != lastStorageAddr {
+				lastStorageAddr, lastStorageHash, haveStorageHash = addr, crypto.Keccak256Hash(addr.Bytes()), true
+			}
 			slot := common.BytesToHash(matched[common.AddressLength:])
-			if err := addSlot(accountHash, slot, value); err != nil {
+			if err := addSlot(lastStorageHash, slot, value); err != nil {
 				return common.Hash{}, err
 			}
 			continue
