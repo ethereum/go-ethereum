@@ -84,7 +84,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if header == nil {
 		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
-	stateDb, err := api.eth.BlockChain().StateAt(header)
+	stateDb, err := api.eth.BlockChain().StateAt(header.Root, header.Number, header.Time)
 	if err != nil {
 		return state.Dump{}, err
 	}
@@ -213,7 +213,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			if header == nil {
 				return state.Dump{}, fmt.Errorf("block #%d not found", number)
 			}
-			stateDb, err = api.eth.BlockChain().StateAt(header)
+			stateDb, err = api.eth.BlockChain().StateAt(header.Root, header.Number, header.Time)
 			if err != nil {
 				return state.Dump{}, err
 			}
@@ -223,7 +223,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
-		stateDb, err = api.eth.BlockChain().StateAt(block.Header())
+		stateDb, err = api.eth.BlockChain().StateAt(block.Root(), block.Number(), block.Time())
 		if err != nil {
 			return state.Dump{}, err
 		}
