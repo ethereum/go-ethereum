@@ -393,8 +393,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		header.BlobGasUsed = &blobGasUsed
 	}
 
-	// Process EIP-7685 requests
-	requests, bal, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm, uint32(len(block.Calls)+1))
+	// Process EIP-7685 requests; EIP-8304 tables are nil here, wired in a later PR
+	requests, bal, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, nil, evm, uint32(len(block.Calls)+1))
 	if err != nil {
 		return nil, nil, nil, err
 	}
