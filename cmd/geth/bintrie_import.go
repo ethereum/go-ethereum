@@ -239,11 +239,13 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			return common.Hash{}, errors.New("binary tree namespace already holds state, whether a finished import or the debris of one; re-run with --force to wipe it")
 		}
 	}
-	// Five sorters live across the pipeline - the candidates, the accounts,
-	// the slots, the chunks and the code stems - and a sealed one keeps its
-	// buffer while its stream drains, so the budget is split five ways rather
-	// than sized for one at a time.
-	quarter := opts.sortBudget / 5
+	// cand accumulates alone in Phase 1 - it fully drains via Sort() before
+	// Phase 2's other sorters fill in earnest, so it gets the whole budget.
+	// Phase 2 runs four sorters concurrently (accounts, slots, chunks and,
+	// briefly at the account/code-zone boundary, the code stems), so they
+	// split the same budget four ways: either phase's peak sorter RAM stays
+	// within opts.sortBudget.
+	quarter := opts.sortBudget / 4
 
 	// Open both artifacts before the expensive phase: a mistyped path should
 	// not cost a full pass over the other file.
@@ -283,7 +285,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 
 	// Phase 1: derive every candidate tree key the preimages can stand for.
 
-	cand := bintrie.NewRecordSorter(opts.tmpDir, quarter, nil)
+	cand := bintrie.NewRecordSorter(opts.tmpDir, opts.sortBudget, nil)
 	defer cand.Close() // a second Close is a no-op; this one covers the error paths
 	var (
 		start        = time.Now()
