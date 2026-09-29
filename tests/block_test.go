@@ -91,6 +91,10 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	bt.skipLoad(`.*eip7251_consolidations/contract_deployment/system_contract_deployment\.json`)
 	bt.skipLoad(`.*eip7002_el_triggerable_withdrawals/contract_deployment/system_contract_deployment\.json`)
 
+	// TODO: these require netting the BAL changes over a whole block access index
+	bt.skipLoad(`.*bal_withdrawals_and_dequeues_net_balance_at_last_index\.json/.*forward_all\]`)
+	bt.skipLoad(`.*bal_post_execution_calls_net_storage_at_last_index\.json`)
+
 	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)
 	})

@@ -28,7 +28,8 @@ const (
 	MaxGasLimit          uint64 = 0x7fffffffffffffff // Maximum the gas limit (2^63-1).
 	GenesisGasLimit      uint64 = 4712388            // Gas limit of the Genesis block.
 
-	MaxTxGas uint64 = 1 << 24 // Maximum transaction gas limit after eip-7825 (16,777,216).
+	MaxTxGas      uint64 = 1 << 24   // Maximum transaction gas limit after eip-7825 (16,777,216).
+	MaxTxTotalGas uint64 = 1<<32 - 1 // Maximum total transaction gas limit after eip-8037 (4,294,967,295).
 
 	FrameTxIntrinsicGas    uint64 = 12000 // Base intrinsic cost of an EIP-8141 frame transaction (EIP-2780 TX_BASE_COST).
 	FrameTxPerFrameGas     uint64 = 475   // Fixed cost per frame in an EIP-8141 frame transaction.
