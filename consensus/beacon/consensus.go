@@ -339,9 +339,7 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	return nil
 }
 
-// Finalize implements consensus.Engine. Withdrawals are processed by
-// core.PostExecution, and there is no block reward which is issued by
-// consensus layer instead.
+// Finalize implements consensus.Engine.
 func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
 	if !beacon.IsPoSHeader(header) {
 		beacon.ethone.Finalize(chain, header, state, body)
