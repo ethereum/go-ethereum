@@ -2757,6 +2757,45 @@ func TestSimulateV1WithdrawalsByFork(t *testing.T) {
 	})
 }
 
+// TestSimulateV1NonceLimit checks that a call from a sender whose nonce is 2^64-1 fails in
+// both validation modes (EIP-2681), instead of wrapping the nonce when validation is off.
+func TestSimulateV1NonceLimit(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts  = newAccounts(2)
+		sender    = accounts[0].addr
+		recipient = accounts[1].addr
+		maxNonce  = hexutil.Uint64(^uint64(0))
+	)
+	gspec := &core.Genesis{
+		Config: params.MergedTestChainConfig,
+		Alloc:  types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}},
+	}
+	for _, validate := range []bool{false, true} {
+		t.Run(fmt.Sprintf("validation=%v", validate), func(t *testing.T) {
+			backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+			stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+			if err != nil {
+				t.Fatalf("failed to get state and header: %v", err)
+			}
+			sim := &simulator{
+				b:           backend,
+				state:       stateDB,
+				base:        baseHeader,
+				chainConfig: backend.ChainConfig(),
+				budget:      newGasBudget(0),
+				validate:    validate,
+			}
+			_, err = sim.execute(context.Background(), []simBlock{{
+				StateOverrides: &override.StateOverride{sender: override.OverrideAccount{Nonce: &maxNonce}},
+				Calls:          []TransactionArgs{{From: &sender, To: &recipient}},
+			}})
+			require.ErrorContains(t, err, core.ErrNonceMax.Error())
+		})
+	}
+}
+
 func TestSignTransaction(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
