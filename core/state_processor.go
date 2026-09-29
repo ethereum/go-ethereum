@@ -19,6 +19,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 	"sync/atomic"
 
@@ -136,7 +137,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		allLogs = append(allLogs, receipt.Logs...)
 		blockAccessList.Merge(bal)
 	}
-	requests, bal, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, evm, uint32(len(block.Transactions())+1))
+	requests, bal, err := PostExecution(ctx, config, block.Number(), block.Time(), allLogs, block.Withdrawals(), evm, uint32(len(block.Transactions())+1))
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +145,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 
 	// Finalize the block, applying any consensus engine specific extras
 	// (e.g. block rewards).
-	//
-	// TODO(rjl493456442) integrate it into the PostExecution.
-	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body(), uint32(len(block.Transactions())+1), blockAccessList)
+	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body())
 
 	// The access list is final, let the pipeline encode it while the block is
 	// validated.
@@ -185,10 +184,10 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 	return blockAccessList
 }
 
-// PostExecution processes post-execution system calls when Prague is enabled.
-// If Prague is not activated, it returns null requests to differentiate from
-// empty requests.
-func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.Int, time uint64, allLogs []*types.Log, evm *vm.EVM, blockAccessIndex uint32) (requests [][]byte, blockAccessList *bal.ConstructionBlockAccessList, err error) {
+// PostExecution processes the withdrawals and then the post-execution system
+// calls when Prague is enabled. If Prague is not activated, it returns null
+// requests to differentiate from empty requests.
+func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.Int, time uint64, allLogs []*types.Log, withdrawals types.Withdrawals, evm *vm.EVM, blockAccessIndex uint32) (requests [][]byte, blockAccessList *bal.ConstructionBlockAccessList, err error) {
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.postExecution")
 	defer spanEnd(&err)
 
@@ -196,8 +195,13 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	}
 	rules := config.Rules(number, true, time) // IsMerge is always true
+
+	// Withdrawals are applied before the system calls
+	if rules.IsShanghai {
+		ProcessWithdrawals(withdrawals, evm, blockAccessIndex, blockAccessList)
+	}
 	// Read requests if Prague is enabled.
-	if config.IsPrague(number, time) {
+	if rules.IsPrague {
 		requests = [][]byte{}
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
@@ -213,7 +217,7 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 		}
 	}
 
-	if config.IsAmsterdam(number, time) {
+	if rules.IsAmsterdam {
 		// EIP-8282
 		if err := ProcessBuilderDepositQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
 			return nil, nil, fmt.Errorf("failed to process builder deposit queue: %w", err)
@@ -223,6 +227,27 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 		}
 	}
 	return requests, blockAccessList, nil
+}
+
+// ProcessWithdrawals credits the given withdrawals to their recipients.
+func ProcessWithdrawals(withdrawals types.Withdrawals, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) {
+	rules := evm.GetRules()
+	evm.StateDB.Prepare(rules, common.Address{}, common.Address{}, nil, nil, nil)
+	evm.StateDB.SetTxContext(common.Hash{}, 0, blockAccessIndex)
+	for _, w := range withdrawals {
+		// Convert amount from gwei to wei.
+		amount := new(uint256.Int).SetUint64(w.Amount)
+		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
+		evm.StateDB.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
+
+		if rules.IsEIP4762 {
+			evm.StateDB.AccessEvents().AddAccount(w.Address, true, math.MaxUint64)
+		}
+	}
+	accessList := evm.StateDB.Finalise(rules)
+	if rules.IsAmsterdam {
+		blockAccessList.Merge(accessList)
+	}
 }
 
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database
@@ -370,11 +395,16 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, blockAccessList
 	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.AddAddressToAccessList(params.BeaconRootsAddress)
+
+	// Unchecked system call (EIP-4788), failures are ignored as spec
 	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
-	blockAccessList.Merge(evm.StateDB.Finalise(evm.GetRules()))
+	accessList := evm.StateDB.Finalise(evm.GetRules())
+	if evm.GetRules().IsAmsterdam {
+		blockAccessList.Merge(accessList)
+	}
 }
 
 // ProcessParentBlockHash stores the parent block hash in the history storage contract
@@ -400,14 +430,16 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.AddAddressToAccessList(params.HistoryStorageAddress)
-	_, _, err := evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
-	if err != nil {
-		panic(err)
-	}
+
+	// Unchecked system call (EIP-2935), failures are ignored as spec
+	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
-	blockAccessList.Merge(evm.StateDB.Finalise(evm.GetRules()))
+	accessList := evm.StateDB.Finalise(evm.GetRules())
+	if evm.GetRules().IsAmsterdam {
+		blockAccessList.Merge(accessList)
+	}
 }
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
@@ -465,8 +497,9 @@ func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.E
 	if err != nil {
 		return fmt.Errorf("system call failed to execute: %v", err)
 	}
-	blockAccessList.Merge(bal)
-
+	if rules.IsAmsterdam {
+		blockAccessList.Merge(bal)
+	}
 	if len(ret) == 0 {
 		return nil // skip empty output
 	}

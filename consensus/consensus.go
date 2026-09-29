@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -81,11 +80,13 @@ type Engine interface {
 	Prepare(chain ChainHeaderReader, header *types.Header) error
 
 	// Finalize runs any post-transaction consensus-specific state modifications
-	// (e.g. block rewards or process withdrawals) but does not assemble the block.
+	// (e.g. block rewards) but does not assemble the block.
 	//
 	// Note: The state database might be updated to reflect any consensus rules
 	// that happen at finalization (e.g. block rewards).
-	Finalize(chain ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body, blockAccessIndex uint32, bal *bal.ConstructionBlockAccessList)
+	//
+	// TODO(rjl) Integrate the state mutation into core.PostExecution.
+	Finalize(chain ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.

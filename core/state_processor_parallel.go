@@ -285,13 +285,13 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if precompileCache != nil {
 		postEVM.SetPrecompileCache(precompileCache)
 	}
-	requests, postBAL, err := PostExecution(ctx, config, header.Number, header.Time, allLogs, postEVM, postIndex)
+	requests, postBAL, err := PostExecution(ctx, config, header.Number, header.Time, allLogs, block.Withdrawals(), postEVM, postIndex)
 	postEVM.Release()
 	if err != nil {
 		return nil, err
 	}
 	blockAccessList.Merge(postBAL)
-	p.chain.Engine().Finalize(p.chain, header, postState, block.Body(), postIndex, blockAccessList)
+	p.chain.Engine().Finalize(p.chain, header, postState, block.Body())
 	if err := postState.Error(); err != nil {
 		return nil, fmt.Errorf("database error in post-execution system calls: %w", err)
 	}
