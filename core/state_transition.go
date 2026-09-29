@@ -559,7 +559,10 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 		}
 	}
 	if !msg.SkipTransactionChecks {
-		// Verify tx gas limit does not exceed EIP-7825 cap.
+		// Verify tx gas limit does not exceed the EIP-8037 total cap, or the EIP-7825 cap before it.
+		if rules.IsAmsterdam && msg.GasLimit > params.MaxTxTotalGas {
+			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxTotalGas, msg.GasLimit)
+		}
 		if !rules.IsAmsterdam && rules.IsOsaka && msg.GasLimit > params.MaxTxGas {
 			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
 		}

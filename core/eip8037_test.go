@@ -611,6 +611,16 @@ func TestValidationIntrinsicExecutionCap(t *testing.T) {
 	}
 }
 
+// The total gas limit of a transaction is capped at MaxTxTotalGas.
+func TestValidationTotalGasCap(t *testing.T) {
+	for _, gas := range []uint64{params.MaxTxTotalGas, params.MaxTxTotalGas + 1} {
+		_, _, err := applyMsg(t, mkState(senderAlloc(nil)), callTx(0, senderAddr, 0, gas, nil))
+		if have, want := errors.Is(err, ErrGasLimitTooHigh), gas > params.MaxTxTotalGas; have != want {
+			t.Errorf("gas %d: have error %v, want cap violation %v", gas, err, want)
+		}
+	}
+}
+
 // The EIP-7623/7976 calldata floor is capped by MaxTxGas even when the gas
 // limit covers it: a transaction whose floor cost exceeds the cap is rejected
 // regardless of its (much smaller) intrinsic gas.
