@@ -20,8 +20,12 @@ import (
 	"bytes"
 	"io"
 	"math/rand"
+	randv2 "math/rand/v2"
 	"path/filepath"
+	"slices"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // drainSorted adds every record, sorts, and returns the drained stream.
@@ -335,5 +339,94 @@ func TestRecordSorterVarlen(t *testing.T) {
 	}
 	if drained != len(recs) {
 		t.Fatalf("drained %d records, put in %d", drained, len(recs))
+	}
+}
+
+// benchLeafRecords builds a state-shaped leaf set: every account a header
+// stem (basic data, code hash, a few header slots), every tenth account a
+// code group and a bigger storage group. Returned in random order. The fixed
+// seed keeps before/after benchmark runs comparable.
+func benchLeafRecords(accounts int) []sortRecord {
+	src := randv2.NewChaCha8([32]byte{83, 47})
+	rng := randv2.New(src)
+	var recs []sortRecord
+	add := func(key []byte) {
+		value := make([]byte, 32)
+		src.Read(value)
+		value[0] |= 1
+		recs = append(recs, sortRecord{key: key, value: value})
+	}
+	for i := range accounts {
+		var addr common.Address
+		src.Read(addr[:])
+		add(BasicDataKey(addr))
+		add(CodeHashKey(addr))
+		for slot := range byte(3) {
+			add(StorageSlotKey(addr, []byte{slot}))
+		}
+		if i%10 == 0 {
+			var codeHash common.Hash
+			src.Read(codeHash[:])
+			for chunk := range uint64(40) {
+				add(CodeChunkKey(codeHash, chunk))
+			}
+			for idx := range 20 {
+				add(StorageSlotKey(addr, []byte{1, byte(idx)}))
+			}
+		}
+	}
+	rng.Shuffle(len(recs), func(i, j int) { recs[i], recs[j] = recs[j], recs[i] })
+	return recs
+}
+
+func benchmarkLeafSorter(b *testing.B, spill bool) {
+	recs := benchLeafRecords(10_000)
+	budget := 0
+	if spill {
+		budget = len(recs) * (33 + 32 + spillRecordOverhead) / 8 // roughly eight runs
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		s := NewLeafSorter(b.TempDir(), budget)
+		for _, r := range recs {
+			if err := s.Add(r.key, r.value); err != nil {
+				b.Fatal(err)
+			}
+		}
+		stream, err := s.Sort()
+		if err != nil {
+			b.Fatal(err)
+		}
+		for {
+			if _, _, err := stream.Next(); err == io.EOF {
+				break
+			} else if err != nil {
+				b.Fatal(err)
+			}
+		}
+		s.Close()
+	}
+}
+
+func BenchmarkLeafSorterInMemory(b *testing.B) { benchmarkLeafSorter(b, false) }
+func BenchmarkLeafSorterSpilling(b *testing.B) { benchmarkLeafSorter(b, true) }
+
+// BenchmarkStackBuilder folds a sorted, state-shaped leaf set, emitting every
+// record.
+func BenchmarkStackBuilder(b *testing.B) {
+	recs := benchLeafRecords(10_000)
+	slices.SortFunc(recs, func(x, y sortRecord) int { return bytes.Compare(x.key, y.key) })
+	var sink int
+	onNode := func(path []byte, hash common.Hash, blob []byte) { sink += len(path) + len(blob) }
+
+	b.ReportAllocs()
+	for b.Loop() {
+		builder := NewStackBuilder(onNode)
+		for _, r := range recs {
+			if err := builder.Add(r.key, r.value); err != nil {
+				b.Fatal(err)
+			}
+		}
+		builder.Finish()
 	}
 }
