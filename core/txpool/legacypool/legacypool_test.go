@@ -149,13 +149,21 @@ func TestInitWithoutHeadOrGenesisState(t *testing.T) {
 
 func TestInitDuringPathSnapSync(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	chain, err := core.NewBlockChain(db, &core.Genesis{Config: params.TestChainConfig}, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	gspec := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc:  types.GenesisAlloc{common.Address{0x01}: {Balance: big.NewInt(1)}},
+	}
+	chain, err := core.NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
 	if err != nil {
 		t.Fatalf("failed to create blockchain: %v", err)
 	}
 	defer chain.Stop()
 	if err := chain.SnapSyncStart(); err != nil {
 		t.Fatalf("failed to start snap sync: %v", err)
+	}
+	// The genesis state is non-empty and unavailable, so falling back to it fails.
+	if _, err := chain.StateAt(chain.Genesis().Header()); err == nil {
+		t.Fatal("genesis state still available during snap sync")
 	}
 	pool := New(testTxPoolConfig, chain)
 	if err := pool.Init(testTxPoolConfig.PriceLimit, chain.CurrentBlock(), newReserver()); err != nil {

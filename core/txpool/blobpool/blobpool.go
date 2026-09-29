@@ -651,15 +651,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
 	// fully synced).
-	state, err := p.chain.StateAt(head)
-	if err != nil {
-		empty := *head
-		empty.Root = types.EmptyRootHash
-		if p.chain.Config().IsUBT(head.Number, head.Time) {
-			empty.Root = types.EmptyBinaryHash
-		}
-		state, err = p.chain.StateAt(&empty)
-	}
+	state, err := txpool.HeadState(p.chain.Config(), p.chain.StateAt, head)
 	if err != nil {
 		return err
 	}

@@ -31,6 +31,23 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// HeadState returns the state of the given head, or an empty state if that is
+// not available, which happens while the node is not fully synced. The fallback
+// is the empty state and not the genesis state: during a path-based snap sync
+// the genesis state is gone as well, and the empty state can always be opened.
+func HeadState(config *params.ChainConfig, stateAt func(*types.Header) (*state.StateDB, error), head *types.Header) (*state.StateDB, error) {
+	statedb, err := stateAt(head)
+	if err == nil {
+		return statedb, nil
+	}
+	empty := *head
+	empty.Root = types.EmptyRootHash
+	if config.IsUBT(head.Number, head.Time) {
+		empty.Root = types.EmptyBinaryHash
+	}
+	return stateAt(&empty)
+}
+
 // TxStatus is the current status of a transaction as seen by the pool.
 type TxStatus uint
 
@@ -49,9 +66,6 @@ type BlockChain interface {
 
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
-
-	// Genesis returns the genesis block of the chain.
-	Genesis() *types.Block
 
 	// SubscribeChainHeadEvent subscribes to new blocks being added to the chain.
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
@@ -93,10 +107,7 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
 	// fully synced).
-	statedb, err := chain.StateAt(head)
-	if err != nil {
-		statedb, err = chain.StateAt(chain.Genesis().Header())
-	}
+	statedb, err := HeadState(chain.Config(), chain.StateAt, head)
 	if err != nil {
 		return nil, err
 	}
