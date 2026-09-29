@@ -450,6 +450,8 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		_, err := acctW.Write(val)
 		return err
 	}
+	// RecordSorter.Add copies its inputs, so one key buffer serves every slot.
+	var slotKeyBuf [2 * common.HashLength]byte
 	emit := func(key []byte, value [32]byte) error {
 		// Zero values resolve to absence and are never written.
 		if value == ([32]byte{}) {
@@ -529,7 +531,9 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 					return err
 				}
 				rawdb.WriteStorageSnapshot(storageBatch, accountHash, common.BytesToHash(storageIter.Key), common.CopyBytes(storageIter.Value))
-				if err := slots.Add(append(accountHash.Bytes(), storageIter.Key...), storageIter.Value); err != nil {
+				copy(slotKeyBuf[:common.HashLength], accountHash[:])
+				copy(slotKeyBuf[common.HashLength:], storageIter.Key)
+				if err := slots.Add(slotKeyBuf[:], storageIter.Value); err != nil {
 					return err
 				}
 				stats.slots++
