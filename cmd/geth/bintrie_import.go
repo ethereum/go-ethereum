@@ -75,6 +75,13 @@ leaves nothing openable. --verify-only runs both checks and writes nothing.
 
 Preimages are not persisted unless --keep-preimages is given: nothing on a
 binary-tree node reads them.
+
+Memory: the sorters hold at most --memory-limit of records, and the database
+its cache plus memtables, about 1.5 x (--cache x --cache.database / 100). Go's
+collector can hold as much again before it runs, so budget about twice their
+sum, or cap it with GOMEMLIMIT. Draining a sorter also takes 1 MB per spilled
+run, and a smaller --memory-limit means more runs, so setting it far below the
+state size stops saving memory.
 `,
 	}
 )
