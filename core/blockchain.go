@@ -683,6 +683,13 @@ func (bc *BlockChain) loadLastState() error {
 		if block := bc.GetBlockByHash(head); block != nil {
 			bc.currentSnapBlock.Store(block.Header())
 			headFastBlockGauge.Update(int64(block.NumberU64()))
+		} else if header := bc.GetHeaderByHash(head); header != nil {
+			// Blocks before the history cutoff have no body: while snap sync
+			// inserts the headers before the cutoff, the head snap block is one.
+			if cutoff, _ := bc.HistoryPruningCutoff(); header.Number.Uint64() < cutoff {
+				bc.currentSnapBlock.Store(header)
+				headFastBlockGauge.Update(header.Number.Int64())
+			}
 		}
 	}
 
@@ -754,6 +761,13 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		// Database is pruned beyond the target.
 		if freezerTail > target.BlockNumber {
 			return fmt.Errorf("database pruned beyond requested history (tail=%d, target=%d)", freezerTail, target.BlockNumber)
+		}
+		// Snap sync still inserting the headers before the target: the whole
+		// chain is in the ancient store, which holds headers only (its block
+		// data is empty up to the head), so there is nothing to prune.
+		if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 && freezerTail == frozen && latest < frozen {
+			bc.historyPrunePoint.Store(target)
+			return nil
 		}
 		// Database needs pruning (freezerTail < target).
 		if latest != 0 {

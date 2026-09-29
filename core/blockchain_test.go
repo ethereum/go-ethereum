@@ -26,7 +26,9 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -36,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -4560,4 +4563,206 @@ func withSystemContracts(alloc types.GenesisAlloc) types.GenesisAlloc {
 		}
 	}
 	return alloc
+}
+
+// cutoffTestDB opens (or reopens) the database of the history cutoff restart
+// tests, either in memory or on disk in dir.
+func cutoffTestDB(t *testing.T, mem ethdb.KeyValueStore, dir string) ethdb.Database {
+	t.Helper()
+	if mem != nil {
+		db, err := rawdb.Open(mem, rawdb.OpenOptions{})
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		return db
+	}
+	pdb, err := pebble.New(dir, 0, 0, "", false)
+	if err != nil {
+		t.Fatalf("failed to open key-value database: %v", err)
+	}
+	db, err := rawdb.Open(pdb, rawdb.OpenOptions{Ancient: filepath.Join(dir, "ancient")})
+	if err != nil {
+		t.Fatalf("failed to open freezer: %v", err)
+	}
+	return db
+}
+
+func cutoffConfig(cutoff *types.Block) *BlockChainConfig {
+	cfg := DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	cfg.HistoryPolicy = history.HistoryPolicy{
+		Mode:   history.KeepCustom,
+		Target: &history.PrunePoint{BlockNumber: cutoff.NumberU64(), BlockHash: cutoff.Hash()},
+	}
+	return cfg
+}
+
+// Tests that a node snap syncing with a history cutoff can be restarted after
+// a completed batch of the headers before the cutoff. In that phase the ancient
+// store holds headers but no block data, so there is nothing to prune.
+func TestRestartDuringHeadersBeforeCutoff(t *testing.T) {
+	t.Run("memory", func(t *testing.T) { testRestartDuringHeadersBeforeCutoff(t, false) })
+	t.Run("disk", func(t *testing.T) { testRestartDuringHeadersBeforeCutoff(t, true) })
+}
+
+func testRestartDuringHeadersBeforeCutoff(t *testing.T, disk bool) {
+	var (
+		gspec = &Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		engine = beacon.New(ethash.NewFaker())
+		mem    ethdb.KeyValueStore
+		dir    = t.TempDir()
+	)
+	if !disk {
+		mem = rawdb.NewMemoryDatabase()
+	}
+	_, blocks, receipts := GenerateChainWithGenesis(gspec, engine, 64, nil)
+	cutoff := blocks[31] // block #32
+	cfg := cutoffConfig(cutoff)
+
+	db := cutoffTestDB(t, mem, dir)
+	chain, err := NewBlockChain(db, gspec, engine, cfg)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	var headers []*types.Header
+	for _, b := range blocks[:31] {
+		headers = append(headers, b.Header())
+	}
+	// Insert the first batch of headers before the cutoff, then restart.
+	if n, err := chain.InsertHeadersBeforeCutoff(headers[:16]); err != nil {
+		t.Fatalf("failed to insert headers before cutoff %d: %v", n, err)
+	}
+	chain.Stop()
+	if disk {
+		// Reopen the database from disk; the memory freezer can only be reused.
+		db.Close()
+		db = cutoffTestDB(t, mem, dir)
+	}
+	defer db.Close()
+
+	chain, err = NewBlockChain(db, gspec, engine, cfg)
+	if err != nil {
+		t.Fatalf("failed to restart chain during header insertion before cutoff: %v", err)
+	}
+	defer chain.Stop()
+
+	// The heads and the ancient store are where the batch left them.
+	if n := chain.CurrentBlock().Number.Uint64(); n != 0 {
+		t.Errorf("head block: want 0, got %d", n)
+	}
+	if n := chain.CurrentHeader().Number.Uint64(); n != 16 {
+		t.Errorf("head header: want 16, got %d", n)
+	}
+	if n := chain.CurrentSnapBlock().Number.Uint64(); n != 16 {
+		t.Errorf("head snap block: want 16, got %d", n)
+	}
+	frozen, _ := db.Ancients()
+	tail, _ := db.Tail(rawdb.ChainFreezerBlockDataGroup)
+	if frozen != 17 || tail != 17 {
+		t.Errorf("ancient store: want frozen 17 and tail 17, got %d and %d", frozen, tail)
+	}
+	// The chain data import continues where it left off.
+	if n, err := chain.InsertHeadersBeforeCutoff(headers[16:]); err != nil {
+		t.Fatalf("failed to insert remaining headers before cutoff %d: %v", n, err)
+	}
+	if n, err := chain.InsertReceiptChain(blocks[31:], types.EncodeBlockReceiptLists(receipts[31:]), 64); err != nil {
+		t.Fatalf("failed to insert receipt chain %d: %v", n, err)
+	}
+	tail, err = db.Tail(rawdb.ChainFreezerBlockDataGroup)
+	if err != nil {
+		t.Fatalf("failed to get chain tail: %v", err)
+	}
+	if tail != cutoff.NumberU64() {
+		t.Fatalf("unexpected chain tail: want %d, got %d", cutoff.NumberU64(), tail)
+	}
+	if n, h := chain.HistoryPruningCutoff(); n != cutoff.NumberU64() || h != cutoff.Hash() {
+		t.Fatalf("unexpected history pruning cutoff: want %d %x, got %d %x", cutoff.NumberU64(), cutoff.Hash(), n, h)
+	}
+}
+
+// requirePruning checks that starting a chain on db with the given cutoff fails
+// because the database has block data below the cutoff.
+func requirePruning(t *testing.T, db ethdb.Database, gspec *Genesis, cutoff *types.Block) {
+	t.Helper()
+	chain, err := NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), cutoffConfig(cutoff))
+	if err == nil {
+		chain.Stop()
+		t.Fatal("expected startup to require history pruning")
+	}
+	if !strings.Contains(err.Error(), "history pruning required") {
+		t.Fatalf("expected a history pruning error, got: %v", err)
+	}
+}
+
+// Tests that a node whose blocks are all still in the key-value store (empty
+// ancient store) must prune before using a cutoff above its head.
+func TestRestartBelowCutoffWithEmptyAncients(t *testing.T) {
+	var (
+		gspec = &Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		engine = beacon.New(ethash.NewFaker())
+	)
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 64, nil)
+
+	db, _ := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{})
+	defer db.Close()
+
+	chain, err := NewBlockChain(db, gspec, engine, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks[:16]); err != nil {
+		t.Fatalf("failed to insert block %d: %v", n, err)
+	}
+	chain.Stop()
+	if frozen, _ := db.Ancients(); frozen != 0 {
+		t.Fatalf("expected an empty ancient store, have %d items", frozen)
+	}
+	requirePruning(t, db, gspec, blocks[31])
+}
+
+// Tests that raising the cutoff of a node that synced with a lower one requires
+// pruning: its ancient store holds headers only, but the key-value store has
+// block data between the old and the new cutoff.
+func TestRestartWithRaisedCutoff(t *testing.T) {
+	var (
+		gspec = &Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		engine = beacon.New(ethash.NewFaker())
+	)
+	_, blocks, receipts := GenerateChainWithGenesis(gspec, engine, 64, nil)
+
+	db, _ := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{})
+	defer db.Close()
+
+	// Sync with cutoff #8: headers 1-7 to the ancient store, blocks 8-15 to the
+	// key-value store.
+	chain, err := NewBlockChain(db, gspec, engine, cutoffConfig(blocks[7]))
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	var headers []*types.Header
+	for _, b := range blocks[:7] {
+		headers = append(headers, b.Header())
+	}
+	if n, err := chain.InsertHeadersBeforeCutoff(headers); err != nil {
+		t.Fatalf("failed to insert headers before cutoff %d: %v", n, err)
+	}
+	if n, err := chain.InsertReceiptChain(blocks[7:15], types.EncodeBlockReceiptLists(receipts[7:15]), 8); err != nil {
+		t.Fatalf("failed to insert receipt chain %d: %v", n, err)
+	}
+	chain.Stop()
+	frozen, _ := db.Ancients()
+	tail, _ := db.Tail(rawdb.ChainFreezerBlockDataGroup)
+	if frozen != 8 || tail != 8 {
+		t.Fatalf("ancient store: want frozen 8 and tail 8, got %d and %d", frozen, tail)
+	}
+	// Restart with cutoff #32.
+	requirePruning(t, db, gspec, blocks[31])
 }
