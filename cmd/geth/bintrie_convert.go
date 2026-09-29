@@ -714,7 +714,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, s
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, nil, nil, start)
 	if err != nil {
 		return err
 	}

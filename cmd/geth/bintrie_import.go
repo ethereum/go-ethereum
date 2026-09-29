@@ -393,23 +393,22 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	defer slotSorter.Close()
 	defer chunkSorter.Close()
 
-	// addSlot records one storage slot everywhere it goes: flat state, the
-	// preimage store, and the MPT re-derivation.
+	// addSlot records one storage slot everywhere it goes but flat state,
+	// which the check-2 fold writes in keccak order: the preimage store,
+	// and the MPT re-derivation.
 	addSlot := func(accountHash common.Hash, slot common.Hash, value [32]byte) error {
 		var (
 			slotHash = crypto.Keccak256Hash(slot[:])
 			enc, _   = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 		)
-		if pbtBatch != nil {
-			rawdb.WriteStorageSnapshot(pbtBatch, accountHash, slotHash, enc)
-		}
 		preims.add(slotHash, slot[:])
 		stats.slots++
 		return slotSorter.Add(append(accountHash.Bytes(), slotHash.Bytes()...), enc)
 	}
 
-	// sealGroup validates one account's header leaves and records the
-	// account everywhere it goes.
+	// sealGroup validates one account's header leaves and records it
+	// everywhere it goes but flat state, which the check-2 fold writes in
+	// keccak order.
 	sealGroup := func(g *importGroup) error {
 		// Header-range slots are derived from sub-indices, so the preimage
 		// file's list of them is checked rather than believed - the exact
@@ -461,14 +460,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			}
 		}
 		accountHash := crypto.Keccak256Hash(g.addr.Bytes())
-		if pbtBatch != nil {
-			rawdb.WriteAccountSnapshot(pbtBatch, accountHash, types.SlimAccountRLP(types.StateAccount{
-				Nonce:    nonce,
-				Balance:  balance,
-				Root:     types.EmptyRootHash,
-				CodeHash: codeHash.Bytes(),
-			}))
-		}
 		preims.add(accountHash, g.addr.Bytes())
 		stats.accounts++
 
@@ -764,7 +755,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err != nil {
 		return common.Hash{}, err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, stats.start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, flush, stats.start)
 	if err != nil {
 		return common.Hash{}, err
 	}

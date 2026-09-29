@@ -24,7 +24,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -75,10 +77,12 @@ func (h *heldStream) current() ([]byte, []byte, error) {
 func (h *heldStream) advance() { h.key, h.value = nil, nil }
 
 // rederiveMerkleRoot folds account and storage records back into a
-// merkle-patricia trie. Both streams must ascend, which the sorters
-// guarantee. Storage under no account is the loss this check exists to
-// catch, so it errors rather than being skipped.
-func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, start time.Time) (common.Hash, error) {
+// merkle-patricia trie and returns its root. Both streams must ascend, which
+// the sorters guarantee. Storage under no account is the loss this check
+// exists to catch, so it errors rather than being skipped. With a batch, the
+// fold also writes the flat account and storage state, in the keccak order it
+// already walks; the converter passes none.
+func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, pbtBatch ethdb.Batch, flush func(bool) error, start time.Time) (common.Hash, error) {
 	var (
 		slotHeld    = &heldStream{stream: slots}
 		accountTrie = trie.NewStackTrie(nil)
@@ -96,6 +100,12 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, start time.Time) 
 		if len(avalue) != merkleAccountRecordLen {
 			return common.Hash{}, fmt.Errorf("account record for %x is %d bytes, want %d", akey, len(avalue), merkleAccountRecordLen)
 		}
+		var (
+			accountHash = common.BytesToHash(akey)
+			nonce       = binary.BigEndian.Uint64(avalue[:8])
+			balance     = new(uint256.Int).SetBytes(avalue[8:40])
+			codeHash    = common.CopyBytes(avalue[40:merkleAccountRecordLen])
+		)
 		storageTrie.Reset()
 		storageRoot := types.EmptyRootHash
 		hasStorage := false
@@ -115,6 +125,12 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, start time.Time) 
 				if err := storageTrie.Update(skey[common.HashLength:], svalue); err != nil {
 					return common.Hash{}, err
 				}
+				if pbtBatch != nil {
+					rawdb.WriteStorageSnapshot(pbtBatch, accountHash, common.BytesToHash(skey[common.HashLength:]), svalue)
+					if err := flush(false); err != nil {
+						return common.Hash{}, err
+					}
+				}
 				hasStorage = true
 				slotHeld.advance()
 				continue
@@ -125,16 +141,27 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, start time.Time) 
 			storageRoot = storageTrie.Hash()
 		}
 		full, err := rlp.EncodeToBytes(&types.StateAccount{
-			Nonce:    binary.BigEndian.Uint64(avalue[:8]),
-			Balance:  new(uint256.Int).SetBytes(avalue[8:40]),
+			Nonce:    nonce,
+			Balance:  balance,
 			Root:     storageRoot,
-			CodeHash: common.CopyBytes(avalue[40:merkleAccountRecordLen]),
+			CodeHash: codeHash,
 		})
 		if err != nil {
 			return common.Hash{}, err
 		}
 		if err := accountTrie.Update(akey, full); err != nil {
 			return common.Hash{}, err
+		}
+		if pbtBatch != nil {
+			rawdb.WriteAccountSnapshot(pbtBatch, accountHash, types.SlimAccountRLP(types.StateAccount{
+				Nonce:    nonce,
+				Balance:  balance,
+				Root:     types.EmptyRootHash,
+				CodeHash: codeHash,
+			}))
+			if err := flush(false); err != nil {
+				return common.Hash{}, err
+			}
 		}
 		rederived++
 		if rederived%100_000 == 0 {
