@@ -17,6 +17,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -302,7 +304,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}()
 	}
 	// Phase 1: scan, deriving leaves and streaming flat state.
-	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, accounts, slots, preimages, stats); err != nil {
+	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, accounts, slots, preimages, stats, opts.tmpDir); err != nil {
 		return common.Hash{}, err
 	}
 	stats.report(true)
@@ -407,7 +409,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 // deriveLeaves walks the merkle state at root, deriving every tree leaf into
 // the sorter, writing flat state alongside, and recording the merkle
 // re-derivation limbs the source-root check folds back up.
-func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, sorter, accounts, slots *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats) error {
+func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, sorter, accounts, slots *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats, tmpDir string) error {
 	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
 	if err != nil {
 		return fmt.Errorf("failed to open source trie: %w", err)
@@ -417,10 +419,37 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		return fmt.Errorf("failed to create account iterator: %w", err)
 	}
 	var (
-		accIter   = trie.NewIterator(acctIt)
-		flatBatch = pbtdb.NewBatch()
-		seenCode  = make(map[common.Hash]struct{})
+		accIter      = trie.NewIterator(acctIt)
+		storageBatch = pbtdb.NewBatch()
+		seenCode     = make(map[common.Hash]struct{})
 	)
+	// Flat accounts are spilled to a sequential temp file - already
+	// ascending, since the scan visits accounts in keccak order - and
+	// replayed into a fresh batch after the storage writes finish, so
+	// their "a"-prefixed keys never interleave in the LSM with the
+	// "o"-prefixed storage keys the same batch would otherwise carry: the
+	// two ranges land in disjoint, non-overlapping sstables instead of
+	// every flush spanning both. The file keeps memory constant in the
+	// number of accounts.
+	acctFile, err := os.CreateTemp(tmpDir, "bintrie-acctrows-*")
+	if err != nil {
+		return fmt.Errorf("failed to create account row spill file: %w", err)
+	}
+	defer os.Remove(acctFile.Name())
+	defer acctFile.Close()
+	acctW := bufio.NewWriter(acctFile)
+	var acctLenBuf [4]byte
+	spillAcctRow := func(hash common.Hash, val []byte) error {
+		if _, err := acctW.Write(hash[:]); err != nil {
+			return err
+		}
+		binary.BigEndian.PutUint32(acctLenBuf[:], uint32(len(val)))
+		if _, err := acctW.Write(acctLenBuf[:]); err != nil {
+			return err
+		}
+		_, err := acctW.Write(val)
+		return err
+	}
 	emit := func(key []byte, value [32]byte) error {
 		// Zero values resolve to absence and are never written.
 		if value == ([32]byte{}) {
@@ -456,7 +485,10 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		accountHash := common.BytesToHash(accIter.Key)
 		slim := acc
 		slim.Root = types.EmptyRootHash
-		rawdb.WriteAccountSnapshot(flatBatch, accountHash, types.SlimAccountRLP(slim))
+		val := types.SlimAccountRLP(slim)
+		if err := spillAcctRow(accountHash, val); err != nil {
+			return err
+		}
 		if err := accounts.Add(accountHash.Bytes(), merkleAccountRecord(acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash))); err != nil {
 			return err
 		}
@@ -496,17 +528,17 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 				if err := emit(bintrie.StorageSlotKey(addr, slotKey), padded); err != nil {
 					return err
 				}
-				rawdb.WriteStorageSnapshot(flatBatch, accountHash, common.BytesToHash(storageIter.Key), common.CopyBytes(storageIter.Value))
+				rawdb.WriteStorageSnapshot(storageBatch, accountHash, common.BytesToHash(storageIter.Key), common.CopyBytes(storageIter.Value))
 				if err := slots.Add(append(accountHash.Bytes(), storageIter.Key...), storageIter.Value); err != nil {
 					return err
 				}
 				stats.slots++
 
-				if flatBatch.ValueSize() >= ethdb.IdealBatchSize {
-					if err := flatBatch.Write(); err != nil {
+				if storageBatch.ValueSize() >= ethdb.IdealBatchSize {
+					if err := storageBatch.Write(); err != nil {
 						return err
 					}
-					flatBatch.Reset()
+					storageBatch.Reset()
 				}
 			}
 			if err := storageIter.Err; err != nil {
@@ -514,18 +546,53 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 			}
 		}
 		stats.accounts++
-		if flatBatch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := flatBatch.Write(); err != nil {
+		if storageBatch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := storageBatch.Write(); err != nil {
 				return err
 			}
-			flatBatch.Reset()
+			storageBatch.Reset()
 		}
 		stats.report(false)
 	}
 	if err := accIter.Err; err != nil {
 		return fmt.Errorf("account iteration failed: %w", err)
 	}
-	return flatBatch.Write()
+	if err := storageBatch.Write(); err != nil {
+		return err
+	}
+	if err := acctW.Flush(); err != nil {
+		return err
+	}
+	if _, err := acctFile.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	acctBatch := pbtdb.NewBatch()
+	acctR := bufio.NewReader(acctFile)
+	for {
+		var hash common.Hash
+		if _, err := io.ReadFull(acctR, hash[:]); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		var lenBuf [4]byte
+		if _, err := io.ReadFull(acctR, lenBuf[:]); err != nil {
+			return err
+		}
+		val := make([]byte, binary.BigEndian.Uint32(lenBuf[:]))
+		if _, err := io.ReadFull(acctR, val); err != nil {
+			return err
+		}
+		rawdb.WriteAccountSnapshot(acctBatch, hash, val)
+		if acctBatch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := acctBatch.Write(); err != nil {
+				return err
+			}
+			acctBatch.Reset()
+		}
+	}
+	return acctBatch.Write()
 }
 
 // checkPreimage rejects a preimage of the wrong length or one that does not
