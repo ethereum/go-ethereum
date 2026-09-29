@@ -27,14 +27,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
-	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
 // The artifacts are checked against parsers and layouts written from
@@ -82,40 +77,13 @@ func artifactAlloc() types.GenesisAlloc {
 // two artifact paths.
 func convertWithArtifacts(t *testing.T, alloc types.GenesisAlloc, budget int) (common.Hash, string, string) {
 	t.Helper()
-	dir := t.TempDir()
-	var (
-		snapPath = filepath.Join(dir, "snapshot.bin")
-		prePath  = filepath.Join(dir, "preimages.bin")
-	)
-	chaindb := rawdb.NewMemoryDatabase()
-	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.Defaults,
-	})
-	gspec := &core.Genesis{
-		Config:  params.TestChainConfig,
-		BaseFee: big.NewInt(params.InitialBaseFee),
-		Alloc:   alloc,
-	}
-	root := gspec.MustCommit(chaindb, srcTriedb).Root()
-	srcTriedb.Close()
-
-	src := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.ReadOnly,
-	})
-	defer src.Close()
-
-	binRoot, err := convertState(chaindb, src, root, conversionOptions{
-		sortBudget:   budget,
-		tmpDir:       dir,
-		snapshotPath: snapPath,
-		preimagePath: prePath,
-	})
+	opts := artifactOptions(t)
+	opts.sortBudget = budget
+	_, _, binRoot, err := convertGenesis(t, alloc, true, opts)
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}
-	return binRoot, snapPath, prePath
+	return binRoot, opts.snapshotPath, opts.preimagePath
 }
 
 // TestSnapshotArtifactRoundTrip: the snapshot's typed records, decoded here

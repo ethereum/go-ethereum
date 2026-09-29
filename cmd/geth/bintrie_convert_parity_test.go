@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -115,30 +116,47 @@ func convertAlloc(t *testing.T, alloc types.GenesisAlloc) (common.Hash, ethdb.Da
 // convertAllocOpts is convertAlloc under explicit conversion options.
 func convertAllocOpts(t *testing.T, alloc types.GenesisAlloc, opts conversionOptions) (common.Hash, ethdb.Database) {
 	t.Helper()
-	chaindb := rawdb.NewMemoryDatabase()
-	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.Defaults,
-	})
-	gspec := &core.Genesis{
-		Config:  params.TestChainConfig,
-		BaseFee: big.NewInt(params.InitialBaseFee),
-		Alloc:   alloc,
-	}
-	root := gspec.MustCommit(chaindb, srcTriedb).Root()
-	srcTriedb.Close()
-
-	src := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.ReadOnly,
-	})
-	defer src.Close()
-
-	binRoot, err := convertState(chaindb, src, root, opts)
+	chaindb, _, binRoot, err := convertGenesis(t, alloc, true, opts)
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}
 	return binRoot, chaindb
+}
+
+// convertGenesis commits alloc as a merkle genesis, under the path scheme or
+// else the hash scheme, and converts it under opts. It returns the source
+// database, its merkle root and the conversion's outcome.
+func convertGenesis(t *testing.T, alloc types.GenesisAlloc, pathScheme bool, opts conversionOptions) (chaindb ethdb.Database, root, binRoot common.Hash, err error) {
+	t.Helper()
+	cfg, roCfg := &triedb.Config{Preimages: true}, &triedb.Config{Preimages: true}
+	if pathScheme {
+		cfg.PathDB, roCfg.PathDB = pathdb.Defaults, pathdb.ReadOnly
+	}
+	chaindb = rawdb.NewMemoryDatabase()
+	srcTriedb := triedb.NewDatabase(chaindb, cfg)
+	gspec := &core.Genesis{Config: params.TestChainConfig, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: alloc}
+	root = gspec.MustCommit(chaindb, srcTriedb).Root()
+	srcTriedb.Close()
+
+	src := triedb.NewDatabase(chaindb, roCfg)
+	defer src.Close()
+	// The flat scan needs a completed snapshot; without one a path-scheme
+	// conversion would silently fall back to the node walk.
+	if pathScheme && !src.SnapshotCompleted() {
+		t.Fatal("path-scheme source has no completed snapshot")
+	}
+	binRoot, err = convertState(chaindb, src, root, opts)
+	return chaindb, root, binRoot, err
+}
+
+// artifactOptions writes both artifacts, and spills, to a fresh temp dir.
+func artifactOptions(t *testing.T) conversionOptions {
+	dir := t.TempDir()
+	return conversionOptions{
+		tmpDir:       dir,
+		snapshotPath: filepath.Join(dir, "snapshot.bin"),
+		preimagePath: filepath.Join(dir, "preimages.bin"),
+	}
 }
 
 // embedAlloc writes alloc through the typed writers - what replay does - and

@@ -28,13 +28,11 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
@@ -46,39 +44,12 @@ import (
 // binary root and the artifact paths.
 func importFixture(t *testing.T, alloc types.GenesisAlloc) (ethdb.Database, common.Hash, common.Hash, string, string) {
 	t.Helper()
-	var (
-		dir      = t.TempDir()
-		snapPath = filepath.Join(dir, "snapshot.bin")
-		prePath  = filepath.Join(dir, "preimages.bin")
-	)
-	chaindb := rawdb.NewMemoryDatabase()
-	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.Defaults,
-	})
-	gspec := &core.Genesis{
-		Config:  params.TestChainConfig,
-		BaseFee: big.NewInt(params.InitialBaseFee),
-		Alloc:   alloc,
-	}
-	root := gspec.MustCommit(chaindb, srcTriedb).Root()
-	srcTriedb.Close()
-
-	src := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.ReadOnly,
-	})
-	defer src.Close()
-
-	binRoot, err := convertState(chaindb, src, root, conversionOptions{
-		tmpDir:       dir,
-		snapshotPath: snapPath,
-		preimagePath: prePath,
-	})
+	opts := artifactOptions(t)
+	chaindb, root, binRoot, err := convertGenesis(t, alloc, true, opts)
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}
-	return chaindb, root, binRoot, snapPath, prePath
+	return chaindb, root, binRoot, opts.snapshotPath, opts.preimagePath
 }
 
 // namespaceFamily collects one key family of the binary tree namespace.
@@ -205,19 +176,7 @@ func TestImportMatchesReference(t *testing.T) {
 				// writer refuses it rather than silently drop it; DB-only
 				// conversion (no snapshot requested) is unaffected, which is
 				// why this vector still exists for the tree-parity tests.
-				dir := t.TempDir()
-				chaindb := rawdb.NewMemoryDatabase()
-				srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.Defaults})
-				gspec := &core.Genesis{Config: params.TestChainConfig, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: allocOf(t, sv)}
-				root := gspec.MustCommit(chaindb, srcTriedb).Root()
-				srcTriedb.Close()
-				src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
-				defer src.Close()
-				_, err := convertState(chaindb, src, root, conversionOptions{
-					tmpDir:       dir,
-					snapshotPath: filepath.Join(dir, "snapshot.bin"),
-					preimagePath: filepath.Join(dir, "preimages.bin"),
-				})
+				_, _, _, err := convertGenesis(t, allocOf(t, sv), true, artifactOptions(t))
 				if err == nil {
 					t.Fatal("converting an EIP-7523 empty account into a snapshot succeeded")
 				}

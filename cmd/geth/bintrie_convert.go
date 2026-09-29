@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
@@ -304,7 +305,8 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}()
 	}
 	// Phase 1: scan, deriving leaves and streaming flat state.
-	if err := deriveLeaves(chaindb, pbtdb, srcTriedb, root, sorter, accounts, slots, preimages, stats, opts.tmpDir); err != nil {
+	src := leafSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
+	if err := deriveLeaves(chaindb, pbtdb, src, sorter, accounts, slots, preimages, stats, opts.tmpDir); err != nil {
 		return common.Hash{}, err
 	}
 	stats.report(true)
@@ -406,20 +408,68 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	return binRoot, nil
 }
 
-// deriveLeaves walks the merkle state at root, deriving every tree leaf into
+// leafSource yields the source state's accounts, then each account's
+// storage, in keccak order, as RLP the way the state stores it. flat reads
+// pathdb's flat state, which its iterators allow only once complete;
+// otherwise the trie nodes are walked: a hash-scheme source, or a pathdb
+// still syncing or generating. Either way verifySourceRoot authenticates
+// the scanned leaves against root.
+type leafSource struct {
+	db   *triedb.Database
+	root common.Hash
+	flat bool // flat accounts are slim RLP, trie leaves full RLP
+}
+
+func (s leafSource) accounts() (pathdb.AccountIterator, error) {
+	if s.flat {
+		return s.db.AccountIterator(s.root, common.Hash{})
+	}
+	return s.walk(trie.StateTrieID(s.root))
+}
+
+func (s leafSource) storage(accountHash, storageRoot common.Hash) (pathdb.StorageIterator, error) {
+	if s.flat {
+		return s.db.StorageIterator(s.root, accountHash, common.Hash{})
+	}
+	return s.walk(trie.StorageTrieID(s.root, accountHash, storageRoot))
+}
+
+func (s leafSource) walk(id *trie.ID) (*trieLeafIterator, error) {
+	tr, err := trie.New(id, s.db)
+	if err != nil {
+		return nil, err
+	}
+	it, err := tr.NodeIterator(nil)
+	if err != nil {
+		return nil, err
+	}
+	return &trieLeafIterator{trie.NewIterator(it)}, nil
+}
+
+// trieLeafIterator adapts a trie leaf iterator to both flat iterator shapes.
+type trieLeafIterator struct{ it *trie.Iterator }
+
+func (t *trieLeafIterator) Next() bool        { return t.it.Next() }
+func (t *trieLeafIterator) Error() error      { return t.it.Err }
+func (t *trieLeafIterator) Hash() common.Hash { return common.BytesToHash(t.it.Key) }
+func (t *trieLeafIterator) Release()          {}
+func (t *trieLeafIterator) Account() []byte   { return t.it.Value }
+func (t *trieLeafIterator) Slot() []byte      { return t.it.Value }
+
+// deriveLeaves scans the source state at root, deriving every tree leaf into
 // the sorter, writing flat state alongside, and recording the merkle
 // re-derivation limbs the source-root check folds back up.
-func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, sorter, accounts, slots *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats, tmpDir string) error {
-	srcTrie, err := trie.NewStateTrie(trie.StateTrieID(root), srcTriedb)
+func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, src leafSource, sorter, accounts, slots *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats, tmpDir string) error {
+	// ponytail: a flat scan holds one pebble read snapshot throughout,
+	// pinning a memtable and every table compacted meanwhile (the old flat
+	// state on a --force reconvert). Reopen from the last hash every 30s, as
+	// pathdb's index pruner does, if producer RAM or disk gets tight.
+	accIter, err := src.accounts()
 	if err != nil {
-		return fmt.Errorf("failed to open source trie: %w", err)
+		return fmt.Errorf("failed to open source accounts: %w", err)
 	}
-	acctIt, err := srcTrie.NodeIterator(nil)
-	if err != nil {
-		return fmt.Errorf("failed to create account iterator: %w", err)
-	}
+	defer accIter.Release()
 	var (
-		accIter      = trie.NewIterator(acctIt)
 		storageBatch = pbtdb.NewBatch()
 		seenCode     = make(map[common.Hash]struct{})
 	)
@@ -460,21 +510,78 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		stats.leaves++
 		return sorter.Add(key, value[:])
 	}
+	// scanStorage derives one account's slots; the deferred release keeps
+	// the iterator from leaking on any error path.
+	scanStorage := func(accountHash common.Hash, addr common.Address, storageRoot common.Hash) error {
+		storageIter, err := src.storage(accountHash, storageRoot)
+		if err != nil {
+			return fmt.Errorf("failed to open storage for %x: %w", addr, err)
+		}
+		defer storageIter.Release()
+		for storageIter.Next() {
+			slotHash := storageIter.Hash()
+			slotKey := src.db.Preimage(slotHash)
+			if slotKey == nil {
+				return fmt.Errorf("missing preimage for storage key %x (account %x)", slotHash, addr)
+			}
+			if err := checkPreimage(slotKey, slotHash, common.HashLength); err != nil {
+				return err
+			}
+			if preimages != nil {
+				if err := preimages.addSlot(common.BytesToHash(slotKey), slotHash); err != nil {
+					return err
+				}
+			}
+			slotVal := storageIter.Slot()
+			_, content, rest, err := rlp.Split(slotVal)
+			if err != nil {
+				return fmt.Errorf("invalid storage RLP for key %x (account %x): %w", slotKey, addr, err)
+			}
+			if len(rest) != 0 || len(content) > 32 {
+				return fmt.Errorf("malformed storage value for key %x (account %x)", slotKey, addr)
+			}
+			var padded [32]byte
+			copy(padded[32-len(content):], content)
+			if err := emit(bintrie.StorageSlotKey(addr, slotKey), padded); err != nil {
+				return err
+			}
+			rawdb.WriteStorageSnapshot(storageBatch, accountHash, slotHash, common.CopyBytes(slotVal))
+			copy(slotKeyBuf[:common.HashLength], accountHash[:])
+			copy(slotKeyBuf[common.HashLength:], slotHash[:])
+			if err := slots.Add(slotKeyBuf[:], slotVal); err != nil {
+				return err
+			}
+			stats.slots++
+
+			if storageBatch.ValueSize() >= ethdb.IdealBatchSize {
+				if err := storageBatch.Write(); err != nil {
+					return err
+				}
+				storageBatch.Reset()
+			}
+		}
+		if err := storageIter.Error(); err != nil {
+			return fmt.Errorf("storage iteration failed for %x: %w", addr, err)
+		}
+		return nil
+	}
 	for accIter.Next() {
-		var acc types.StateAccount
-		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
+		// Full and slim account RLP both decode here.
+		acc, err := types.FullAccount(accIter.Account())
+		if err != nil {
 			return fmt.Errorf("invalid account RLP: %w", err)
 		}
-		addrBytes := srcTrie.GetKey(accIter.Key)
+		accountHash := accIter.Hash()
+		addrBytes := src.db.Preimage(accountHash)
 		if addrBytes == nil {
-			return fmt.Errorf("missing preimage for account hash %x (the source node must have synced with --cache.preimages)", accIter.Key)
+			return fmt.Errorf("missing preimage for account hash %x (the source node must have synced with --cache.preimages)", accountHash)
 		}
-		if err := checkPreimage(addrBytes, common.BytesToHash(accIter.Key), common.AddressLength); err != nil {
+		if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
 			return err
 		}
 		addr := common.BytesToAddress(addrBytes)
 		if preimages != nil {
-			if err := preimages.beginAccount(addr, common.BytesToHash(accIter.Key)); err != nil {
+			if err := preimages.beginAccount(addr, accountHash); err != nil {
 				return err
 			}
 		}
@@ -484,8 +591,7 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		}
 
 		// Normalize the storage root: replaying nodes record EmptyRootHash.
-		accountHash := common.BytesToHash(accIter.Key)
-		slim := acc
+		slim := *acc
 		slim.Root = types.EmptyRootHash
 		val := types.SlimAccountRLP(slim)
 		if err := spillAcctRow(accountHash, val); err != nil {
@@ -496,57 +602,8 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		}
 
 		if acc.Root != types.EmptyRootHash {
-			storageTrie, err := trie.NewStateTrie(trie.StorageTrieID(root, accountHash, acc.Root), srcTriedb)
-			if err != nil {
-				return fmt.Errorf("failed to open storage trie for %x: %w", addr, err)
-			}
-			storageIt, err := storageTrie.NodeIterator(nil)
-			if err != nil {
-				return fmt.Errorf("failed to create storage iterator for %x: %w", addr, err)
-			}
-			storageIter := trie.NewIterator(storageIt)
-			for storageIter.Next() {
-				slotKey := storageTrie.GetKey(storageIter.Key)
-				if slotKey == nil {
-					return fmt.Errorf("missing preimage for storage key %x (account %x)", storageIter.Key, addr)
-				}
-				if err := checkPreimage(slotKey, common.BytesToHash(storageIter.Key), common.HashLength); err != nil {
-					return err
-				}
-				if preimages != nil {
-					if err := preimages.addSlot(common.BytesToHash(slotKey), common.BytesToHash(storageIter.Key)); err != nil {
-						return err
-					}
-				}
-				_, content, rest, err := rlp.Split(storageIter.Value)
-				if err != nil {
-					return fmt.Errorf("invalid storage RLP for key %x (account %x): %w", slotKey, addr, err)
-				}
-				if len(rest) != 0 || len(content) > 32 {
-					return fmt.Errorf("malformed storage value for key %x (account %x)", slotKey, addr)
-				}
-				var padded [32]byte
-				copy(padded[32-len(content):], content)
-				if err := emit(bintrie.StorageSlotKey(addr, slotKey), padded); err != nil {
-					return err
-				}
-				rawdb.WriteStorageSnapshot(storageBatch, accountHash, common.BytesToHash(storageIter.Key), common.CopyBytes(storageIter.Value))
-				copy(slotKeyBuf[:common.HashLength], accountHash[:])
-				copy(slotKeyBuf[common.HashLength:], storageIter.Key)
-				if err := slots.Add(slotKeyBuf[:], storageIter.Value); err != nil {
-					return err
-				}
-				stats.slots++
-
-				if storageBatch.ValueSize() >= ethdb.IdealBatchSize {
-					if err := storageBatch.Write(); err != nil {
-						return err
-					}
-					storageBatch.Reset()
-				}
-			}
-			if err := storageIter.Err; err != nil {
-				return fmt.Errorf("storage iteration failed for %x: %w", addr, err)
+			if err := scanStorage(accountHash, addr, acc.Root); err != nil {
+				return err
 			}
 		}
 		stats.accounts++
@@ -558,7 +615,7 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tried
 		}
 		stats.report(false)
 	}
-	if err := accIter.Err; err != nil {
+	if err := accIter.Error(); err != nil {
 		return fmt.Errorf("account iteration failed: %w", err)
 	}
 	if err := storageBatch.Write(); err != nil {
