@@ -24,7 +24,9 @@ import (
 )
 
 // OnNode receives every record the builder emits: its database path, hash
-// and blob. Records arrive children before parents.
+// and blob. Records arrive children before parents. path and blob are only
+// valid for the call: the builder reuses their backing arrays for the next
+// record, so a callback that needs one past its return must copy it.
 type OnNode func(path []byte, hash common.Hash, blob []byte)
 
 // StackBuilder constructs a binary tree from a strictly-ascending stream of
@@ -43,14 +45,22 @@ type StackBuilder struct {
 	onNode OnNode
 
 	// Pending group: the stem currently being filled.
-	stem []byte
-	subs []byte
-	vals [][]byte
+	stem     []byte
+	subs     []byte
+	valArena []byte // pending group's 32-byte values, packed back to back
 
 	frames  []builderFrame
 	lastKey []byte
 	root    common.Hash
 	done    bool
+
+	// Scratch reused across every emitted record: each node is built,
+	// hashed and handed to onNode once, so one instance of each serves the
+	// whole build, marked dirty before every use. valViews slices valArena
+	// into the [][]byte groupNode.vals wants.
+	groupScratch  groupNode
+	branchScratch branchNode
+	valViews      [][]byte
 }
 
 type builderFrame struct {
@@ -65,7 +75,8 @@ func NewStackBuilder(onNode OnNode) *StackBuilder {
 }
 
 // Add appends the next key/value pair. Keys must be zone-conformant,
-// strictly ascending, with 32-byte values.
+// strictly ascending, with 32-byte values. Add copies the value into its own
+// arena; the caller's slices are free to reuse the moment Add returns.
 func (b *StackBuilder) Add(key, value []byte) error {
 	if b.done {
 		return errors.New("bintrie: builder already finished")
@@ -95,10 +106,10 @@ func (b *StackBuilder) Add(key, value []byte) error {
 		left := b.closeBelow(div)
 		b.frames = append(b.frames, builderFrame{split: div, left: left})
 		b.stem = append(b.stem[:0], stem...)
-		b.subs, b.vals = b.subs[:0], b.vals[:0]
+		b.subs, b.valArena = b.subs[:0], b.valArena[:0]
 	}
 	b.subs = append(b.subs, sub)
-	b.vals = append(b.vals, append([]byte{}, value...))
+	b.valArena = append(b.valArena, value...)
 	b.lastKey = append(b.lastKey[:0], key...)
 	return nil
 }
@@ -124,14 +135,18 @@ func (b *StackBuilder) posBelow(div int) int {
 // flushStem hashes and emits the pending stem group at its final position.
 func (b *StackBuilder) flushStem(div int) common.Hash {
 	pos := b.posBelow(div)
-	g := &groupNode{
-		stem: b.stem,
-		subs: append([]byte{}, b.subs...),
-		vals: append([][]byte{}, b.vals...),
+	n := len(b.subs)
+	b.valViews = b.valViews[:0]
+	for i := range n {
+		b.valViews = append(b.valViews, b.valArena[i*32:i*32+32])
 	}
-	h := g.hashAt(pos)
+	b.groupScratch.stem = b.stem
+	b.groupScratch.subs = b.subs
+	b.groupScratch.vals = b.valViews
+	b.groupScratch.dirty = true
+	h := b.groupScratch.hashAt(pos)
 	if b.onNode != nil {
-		b.onNode(encodePath(b.stem, pos), h, serializeNode(g, pos))
+		b.onNode(encodePath(b.stem, pos), h, serializeNode(&b.groupScratch, pos))
 	}
 	return h
 }
@@ -139,22 +154,22 @@ func (b *StackBuilder) flushStem(div int) common.Hash {
 // closeBelow finishes the pending stem and folds every frame deeper than
 // div, returning the hash of the resulting subtree. The branch prefixes are
 // reconstructed from the last key, which shares every bit above each fold's
-// split with the subtree below it.
+// split with the subtree below it. b.lastKey is stable for the duration of
+// this call - Add only overwrites it once closeBelow has returned - so the
+// fold reads it directly rather than through a defensive copy.
 func (b *StackBuilder) closeBelow(div int) common.Hash {
 	right := b.flushStem(div)
-	rightKey := append([]byte{}, b.lastKey...)
 	for len(b.frames) > 0 && b.frames[len(b.frames)-1].split > div {
 		frame := b.frames[len(b.frames)-1]
 		b.frames = b.frames[:len(b.frames)-1]
 		parentPos := b.posBelow(div)
-		branch := &branchNode{
-			prefix: slice(rightKey, parentPos, frame.split-parentPos),
-			left:   hashedNode(frame.left),
-			right:  hashedNode(right),
-		}
-		right = branch.hashAt(parentPos)
+		b.branchScratch.prefix = slice(b.lastKey, parentPos, frame.split-parentPos)
+		b.branchScratch.left = hashedNode(frame.left)
+		b.branchScratch.right = hashedNode(right)
+		b.branchScratch.dirty = true
+		right = b.branchScratch.hashAt(parentPos)
 		if b.onNode != nil {
-			b.onNode(encodePath(rightKey, parentPos), right, serializeNode(branch, parentPos))
+			b.onNode(encodePath(b.lastKey, parentPos), right, serializeNode(&b.branchScratch, parentPos))
 		}
 	}
 	return right
