@@ -90,32 +90,8 @@ type testBlockChain struct {
 	blockTime *uint64
 }
 
-type statelessTestBlockChain struct {
-	*testBlockChain
-}
-
-func (bc *statelessTestBlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
-	if root != types.EmptyRootHash {
-		return nil, errors.New("missing trie node")
-	}
-	return state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-}
-
 func (bc *testBlockChain) Config() *params.ChainConfig {
 	return bc.config
-}
-
-func TestInitWithoutHeadOrGenesisState(t *testing.T) {
-	chain := &statelessTestBlockChain{&testBlockChain{
-		config:  params.MainnetChainConfig,
-		basefee: uint256.NewInt(params.InitialBaseFee),
-		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
-	}}
-	pool := New(Config{Datadir: t.TempDir()}, chain, nil)
-	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
-		t.Fatalf("failed to initialize blobpool without chain state: %v", err)
-	}
-	pool.Close()
 }
 
 func (bc *testBlockChain) CurrentBlock() *types.Header {

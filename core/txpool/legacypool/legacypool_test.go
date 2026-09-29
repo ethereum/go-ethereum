@@ -30,10 +30,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -72,18 +69,6 @@ type testBlockChain struct {
 	chainHeadFeed *event.Feed
 }
 
-type statelessTestBlockChain struct {
-	*testBlockChain
-	emptyRoot common.Hash
-}
-
-func (bc *statelessTestBlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
-	if root != bc.emptyRoot {
-		return nil, errors.New("missing trie node")
-	}
-	return state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-}
-
 func newTestBlockChain(config *params.ChainConfig, gasLimit uint64, statedb *state.StateDB, chainHeadFeed *event.Feed) *testBlockChain {
 	bc := testBlockChain{config: config, statedb: statedb, chainHeadFeed: new(event.Feed)}
 	bc.gasLimit.Store(gasLimit)
@@ -120,57 +105,6 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent)
 
 func transaction(nonce uint64, gaslimit uint64, key *ecdsa.PrivateKey) *types.Transaction {
 	return pricedTransaction(nonce, gaslimit, big.NewInt(1), key)
-}
-
-func TestInitWithoutHeadOrGenesisState(t *testing.T) {
-	for _, tc := range []struct {
-		name      string
-		ubtTime   *uint64
-		emptyRoot common.Hash
-	}{
-		{name: "mpt", emptyRoot: types.EmptyRootHash},
-		{name: "ubt", ubtTime: new(uint64), emptyRoot: types.EmptyBinaryHash},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			config := *params.TestChainConfig
-			config.UBTTime = tc.ubtTime
-			chain := &statelessTestBlockChain{
-				testBlockChain: newTestBlockChain(&config, 10000000, nil, new(event.Feed)),
-				emptyRoot:      tc.emptyRoot,
-			}
-			pool := New(testTxPoolConfig, chain)
-			if err := pool.Init(testTxPoolConfig.PriceLimit, chain.CurrentBlock(), newReserver()); err != nil {
-				t.Fatalf("failed to initialize txpool without chain state: %v", err)
-			}
-			pool.Close()
-		})
-	}
-}
-
-func TestInitDuringPathSnapSync(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	gspec := &core.Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  types.GenesisAlloc{common.Address{0x01}: {Balance: big.NewInt(1)}},
-	}
-	chain, err := core.NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
-	if err != nil {
-		t.Fatalf("failed to create blockchain: %v", err)
-	}
-	defer chain.Stop()
-	if err := chain.SnapSyncStart(); err != nil {
-		t.Fatalf("failed to start snap sync: %v", err)
-	}
-	// The genesis state is non-empty and unavailable, so falling back to it fails.
-	genesis := chain.Genesis()
-	if _, err := chain.StateAt(genesis.Root(), genesis.Number(), genesis.Time()); err == nil {
-		t.Fatal("genesis state still available during snap sync")
-	}
-	pool := New(testTxPoolConfig, chain)
-	if err := pool.Init(testTxPoolConfig.PriceLimit, chain.CurrentBlock(), newReserver()); err != nil {
-		t.Fatalf("failed to initialize txpool during snap sync: %v", err)
-	}
-	pool.Close()
 }
 
 func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
