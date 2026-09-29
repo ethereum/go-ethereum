@@ -58,6 +58,9 @@ const bintrieCLIGenesis = `{
 	}
 }`
 
+// bintrieCLIEmptyGenesis is bintrieCLIGenesis with nothing allocated.
+var bintrieCLIEmptyGenesis = bintrieCLIGenesis[:strings.Index(bintrieCLIGenesis, `"alloc"`)] + `"alloc": {}}`
+
 // TestBintrieConvertCLI drives the real command against a real datadir: the
 // only test that runs the CLI action, and the only configuration in which
 // the wipe meets an ancient directory and a node-layout triedb path.
@@ -92,7 +95,7 @@ func TestBintrieConvertCLI(t *testing.T) {
 			t.Fatalf("conversion output lacks %q:\n%s", want, out)
 		}
 	}
-	if fi, err := os.Stat(snapPath); err != nil || fi.Size() <= snapshotHeaderSize {
+	if fi, err := os.Stat(snapPath); err != nil || fi.Size() <= snapshotOverhead {
 		t.Fatalf("snapshot artifact missing or empty: %v", err)
 	}
 	if fi, err := os.Stat(prePath); err != nil || fi.Size() == 0 {
@@ -229,5 +232,39 @@ func TestBintrieImportCLI(t *testing.T) {
 	defer after.Close()
 	if !rawdb.ReadPBTFlatState(rawdb.NewTable(rawdb.NewDatabase(after), string(rawdb.PBTPrefix))) {
 		t.Fatal("refused --force wiped the imported namespace")
+	}
+}
+
+// TestBintrieEmptyStateCLI: an anchor with no accounts converts to the empty
+// snapshot, a zero root and three zero counts, beside an empty preimage file,
+// and the pair verifies against the same empty anchor.
+func TestBintrieEmptyStateCLI(t *testing.T) {
+	t.Parallel()
+	producer, consumer, outdir := t.TempDir(), t.TempDir(), t.TempDir()
+	json := filepath.Join(outdir, "genesis.json")
+	if err := os.WriteFile(json, []byte(bintrieCLIEmptyGenesis), 0600); err != nil {
+		t.Fatal(err)
+	}
+	run := func(datadir string, args ...string) string {
+		t.Helper()
+		geth := runGeth(t, append([]string{"--datadir", datadir}, args...)...)
+		geth.WaitExit()
+		if geth.ExitStatus() != 0 {
+			t.Fatalf("geth %v: exit status %d\nstderr:\n%s", args, geth.ExitStatus(), geth.StderrText())
+		}
+		return geth.StderrText()
+	}
+	snapPath, prePath := filepath.Join(outdir, "snapshot.bin"), filepath.Join(outdir, "preimages.bin")
+	run(producer, "--cache.preimages", "init", json)
+	run(producer, "bintrie", "convert", "--snapshot-out", snapPath, "--preimages-out", prePath)
+	if fi, err := os.Stat(snapPath); err != nil || fi.Size() != snapshotOverhead {
+		t.Fatalf("empty snapshot: %v, want %d bytes", fi, snapshotOverhead)
+	}
+	if fi, err := os.Stat(prePath); err != nil || fi.Size() != 0 {
+		t.Fatalf("empty preimage file: %v, want 0 bytes", fi)
+	}
+	run(consumer, "init", json)
+	if out := run(consumer, "bintrie", "import", "--verify-only", snapPath, prePath, "0"); !strings.Contains(out, "nothing written") {
+		t.Fatalf("verify-only did not accept the empty pair:\n%s", out)
 	}
 }

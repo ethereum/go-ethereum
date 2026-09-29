@@ -125,10 +125,6 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	} else if past {
 		return errors.New("the head block commits the binary tree; nothing to convert")
 	}
-	// Without preimages the scan fails, and only after --force has wiped.
-	if !hasPreimages(chaindb) {
-		return errors.New("no preimages to convert from; the source must sync with --cache.preimages")
-	}
 	var (
 		root   common.Hash
 		anchor *types.Header
@@ -147,6 +143,11 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	} else {
 		root = headBlock.Root()
 		anchor = headBlock.Header()
+	}
+	// Without preimages the scan fails, and only after --force has wiped. An
+	// empty state has nothing to resolve.
+	if root != types.EmptyRootHash && !hasPreimages(chaindb) {
+		return errors.New("no preimages to convert from; the source must sync with --cache.preimages")
 	}
 	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
 
@@ -305,11 +306,6 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, err
 	}
 	stats.report(true)
-
-	// An empty state would finalize a zero root; not worth supporting.
-	if stats.leaves == 0 {
-		return common.Hash{}, errors.New("refusing to convert an empty state")
-	}
 
 	// Check 1, before the build: the other two checks are fed by this same
 	// record set, so only this one ties the output to the source state.

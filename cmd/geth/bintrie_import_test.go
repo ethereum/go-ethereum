@@ -35,10 +35,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/holiman/uint256"
 )
 
 // importFixture converts alloc with both artifacts and returns everything an
@@ -197,6 +197,32 @@ func TestImportVerifyOnly(t *testing.T) {
 func TestImportMatchesReference(t *testing.T) {
 	for _, sv := range loadStateVectors(t) {
 		t.Run(sv.Name, func(t *testing.T) {
+			if sv.Name == "zero_basic_data_with_storage" {
+				// EIP-7523: a snapshot cannot carry an empty account. The
+				// writer refuses it rather than silently drop it; DB-only
+				// conversion (no snapshot requested) is unaffected, which is
+				// why this vector still exists for the tree-parity tests.
+				dir := t.TempDir()
+				chaindb := rawdb.NewMemoryDatabase()
+				srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.Defaults})
+				gspec := &core.Genesis{Config: params.TestChainConfig, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: allocOf(t, sv)}
+				root := gspec.MustCommit(chaindb, srcTriedb).Root()
+				srcTriedb.Close()
+				src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
+				defer src.Close()
+				_, err := convertState(chaindb, src, root, conversionOptions{
+					tmpDir:       dir,
+					snapshotPath: filepath.Join(dir, "snapshot.bin"),
+					preimagePath: filepath.Join(dir, "preimages.bin"),
+				})
+				if err == nil {
+					t.Fatal("converting an EIP-7523 empty account into a snapshot succeeded")
+				}
+				if !strings.Contains(err.Error(), "EIP-7523") {
+					t.Fatalf("rejection %q does not name the fault", err)
+				}
+				return
+			}
 			_, root, _, snapPath, prePath := importFixture(t, allocOf(t, sv))
 
 			impDB := rawdb.NewMemoryDatabase()
@@ -212,8 +238,85 @@ func TestImportMatchesReference(t *testing.T) {
 	}
 }
 
+// TestImportEmptyState covers the empty state end to end: a zero-account
+// genesis converts to the bare 33-byte snapshot (the end tag, then a zero
+// binary root) and an empty preimage file, verify-only accepts it against the
+// anchor whose root a genuinely empty state commits and rejects it against
+// any other, and a full import leaves a namespace that reopens like any
+// other.
+func TestImportEmptyState(t *testing.T) {
+	_, mptRoot, binRoot, snapPath, prePath := importFixture(t, types.GenesisAlloc{})
+	if binRoot != (common.Hash{}) {
+		t.Fatalf("empty state's binary root is %x, want zero", binRoot)
+	}
+
+	blob, err := os.ReadFile(snapPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blob) != snapshotOverhead {
+		t.Fatalf("empty snapshot is %d bytes, want %d", len(blob), snapshotOverhead)
+	}
+	preBlob, err := os.ReadFile(prePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preBlob) != 0 {
+		t.Fatalf("empty preimage file holds %d bytes, want 0", len(preBlob))
+	}
+
+	// verify-only accepts the empty state's own root.
+	imported, err := importState(rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: prePath,
+		anchor: &types.Header{Number: new(big.Int), Root: mptRoot}, verifyOnly: true, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
+	if err != nil {
+		t.Fatalf("verify-only rejected the empty state against its own anchor: %v", err)
+	}
+	if imported != binRoot {
+		t.Fatalf("verify-only reported root %x, converter built %x", imported, binRoot)
+	}
+
+	// verify-only rejects a non-empty anchor.
+	if _, err := importState(rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: prePath,
+		anchor: &types.Header{Number: new(big.Int), Root: common.HexToHash("0xdead")}, verifyOnly: true, conversionOptions: conversionOptions{tmpDir: t.TempDir()}}); err == nil {
+		t.Fatal("verify-only accepted the empty state against a mismatched anchor")
+	}
+
+	// A full import writes the attestation and reopens.
+	impDB := rawdb.NewMemoryDatabase()
+	anchor := &types.Header{Number: big.NewInt(1), Root: mptRoot}
+	imported, err = importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+		anchor: anchor, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
+	if err != nil {
+		t.Fatalf("full import of the empty state failed: %v", err)
+	}
+	if imported != binRoot {
+		t.Fatalf("import reported root %x, converter built %x", imported, binRoot)
+	}
+	if !rawdb.HasPBTState(impDB) {
+		t.Fatal("the empty import attested no namespace")
+	}
+	pbtdb := rawdb.NewTable(impDB, string(rawdb.PBTPrefix))
+	if number, hash, ok := rawdb.ReadPBTAnchor(pbtdb); !ok || number != 1 || hash != anchor.Hash() {
+		t.Fatalf("anchor reads back as %d/%x/%v, imported at %d/%x", number, hash, ok, 1, anchor.Hash())
+	}
+	destTriedb := triedb.NewDatabase(impDB, &triedb.Config{IsPBT: true, PathDB: pathdb.Defaults})
+	defer destTriedb.Close()
+	if _, err := state.New(imported, state.NewPBTDatabase(destTriedb, state.NewCodeDB(impDB))); err != nil {
+		t.Fatalf("reopening the PBT namespace on an empty state: %v", err)
+	}
+}
+
 // The tamper harness: read the writer's valid artifacts, perform surgery,
 // re-encode, and demand rejection.
+
+// The tamper harness reads a valid snapshot as derived leaves, lets a case
+// mutate that leaf set, and re-encodes it: a general, unguarded grouping
+// encoder that mirrors the production writer's stem/zone grouping but
+// trusts whatever leaves it is given, since a case's whole point is to
+// construct leaf sets the production writer's canonical-form guard would
+// itself refuse to emit. Byte-level corruption that isn't expressible as a
+// leaf mutation goes through the typed builders directly (rawHeader,
+// rawGroup, rawSnapshot, from bintrie_artifacts_test.go).
 
 type snapRecord struct {
 	key   []byte
@@ -236,15 +339,17 @@ func readSnapshotRecords(t *testing.T, path string) (common.Hash, []snapRecord) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		recs = append(recs, snapRecord{key: key, value: value})
+		recs = append(recs, snapRecord{key: bytes.Clone(key), value: value})
 	}
 	return sr.root, recs
 }
 
-// writeSnapshotRecords re-encodes a snapshot. A zero root recomputes the
-// honest one from the records, so mutations can choose which check meets
-// them.
-func writeSnapshotRecords(t *testing.T, path string, root common.Hash, count int, recs []snapRecord) {
+// writeSnapshotRecords re-encodes a leaf set, grouped by contiguous
+// same-stem runs in whatever order recs holds them - so a case that
+// reorders whole stems produces a genuinely out-of-order file. A zero root
+// recomputes the honest one from the records, so mutations can choose which
+// check meets them.
+func writeSnapshotRecords(t *testing.T, path string, root common.Hash, recs []snapRecord) {
 	t.Helper()
 	if root == (common.Hash{}) {
 		rebuild := bintrie.NewStackBuilder(nil)
@@ -255,19 +360,62 @@ func writeSnapshotRecords(t *testing.T, path string, root common.Hash, count int
 		}
 		root = rebuild.Finish()
 	}
-	var buf bytes.Buffer
-	header := make([]byte, snapshotHeaderSize)
-	copy(header, root[:])
-	binary.BigEndian.PutUint64(header[32:], uint64(count))
-	buf.Write(header)
-	for _, rec := range recs {
-		blob, err := rlp.EncodeToBytes([]any{rec.key, common.TrimLeftZeroes(rec.value[:])})
-		if err != nil {
-			t.Fatal(err)
+	snap := rawSnapshot{root: root}
+	for i := 0; i < len(recs); {
+		key := recs[i].key
+		switch key[0] {
+		case bintrie.AccountZone:
+			stem := key[:33]
+			h := rawHeader{addrHash: [32]byte(stem[1:33])}
+			var codeSize []byte
+			for i < len(recs) && len(recs[i].key) == 34 && bytes.Equal(recs[i].key[:33], stem) {
+				sub, v := recs[i].key[33], recs[i].value
+				switch {
+				case sub == bintrie.BasicDataLeafKey:
+					h.nonce = common.TrimLeftZeroes(v[8:16])
+					h.balance = common.TrimLeftZeroes(v[16:32])
+					codeSize = common.TrimLeftZeroes(v[4:8])
+				case sub == bintrie.CodeHashLeafKey:
+					if v == types.EmptyCodeHash {
+						h.kind = 0
+					} else {
+						h.kind = 1
+						h.codeRef = append(append([]byte{}, v[:]...), rawVarint(codeSize...)...)
+					}
+				case sub == bintrie.DelegationLeafKey:
+					h.kind = 2
+					h.codeRef = append([]byte{}, v[len(types.DelegationPrefix):23]...)
+				default:
+					h.slots = append(h.slots, rawEntry{sub: sub - bintrie.HeaderStorageOffset, value: common.TrimLeftZeroes(v[:])})
+				}
+				i++
+			}
+			snap.records = append(snap.records, h.bytes()...)
+		case bintrie.CodeZone:
+			stem := key[:33]
+			g := rawGroup{stemHash: [32]byte(stem[1:33])}
+			for i < len(recs) && len(recs[i].key) == 34 && bytes.Equal(recs[i].key[:33], stem) {
+				g.entries = append(g.entries, rawEntry{sub: recs[i].key[33], value: common.TrimLeftZeroes(recs[i].value[:])})
+				i++
+			}
+			snap.records = append(snap.records, rawCodeGroup(g)...)
+		case bintrie.StorageZone:
+			addrHash := key[1:33]
+			snap.records = append(snap.records, rawStorageAccount([32]byte(addrHash))...)
+			for i < len(recs) && len(recs[i].key) == 66 && bytes.Equal(recs[i].key[1:33], addrHash) {
+				gstem := recs[i].key[:65]
+				g := rawGroup{stemHash: [32]byte(gstem[33:65])}
+				for i < len(recs) && len(recs[i].key) == 66 && bytes.Equal(recs[i].key[:65], gstem) {
+					g.entries = append(g.entries, rawEntry{sub: recs[i].key[65], value: common.TrimLeftZeroes(recs[i].value[:])})
+					i++
+				}
+				snap.records = append(snap.records, rawStorageGroup(g)...)
+			}
+		default:
+			t.Fatalf("record %x sits in an unknown zone", key)
 		}
-		buf.Write(blob)
 	}
-	if err := os.WriteFile(path, buf.Bytes(), 0600); err != nil {
+	if err := os.WriteFile(path, snap.encode(), 0600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -330,9 +478,8 @@ func writePreimageRecords(t *testing.T, path string, recs []preRecord) {
 // internal-consistency check to the layer they target.
 func TestImportRejects(t *testing.T) {
 	var (
-		contract  = common.HexToAddress("0x2000000000000000000000000000000000000002")
-		delegated = common.HexToAddress("0x4000000000000000000000000000000000000004")
-		eoa       = common.HexToAddress("0x1000000000000000000000000000000000000001")
+		contract = common.HexToAddress("0x2000000000000000000000000000000000000002")
+		eoa      = common.HexToAddress("0x1000000000000000000000000000000000000001")
 		// The one account whose code no other account shares, so a surgery
 		// on its size or chunks reaches the code limb rather than tripping
 		// the shared-hash size conflict first.
@@ -366,6 +513,19 @@ func TestImportRejects(t *testing.T) {
 		t.Fatal("fixture holds no code leaves")
 		return -1
 	}
+	// swapHeaderSlots swaps two of one account's header-range storage
+	// leaves. They share a stem, so the preimage candidate join (which
+	// matches on the stem alone) sees no mismatch; only the reader's own
+	// key-ordering check can catch it. Swapping whole stems instead would
+	// also desync the candidate join, which reports its own, earlier
+	// mismatch first.
+	swapHeaderSlots := func(recs []snapRecord) []snapRecord {
+		recs = slices.Clone(recs)
+		i := findKey(recs, bintrie.HeaderKey(contract, bintrie.HeaderStorageOffset))
+		j := findKey(recs, bintrie.HeaderKey(contract, bintrie.HeaderStorageOffset+63))
+		recs[i], recs[j] = recs[j], recs[i]
+		return recs
+	}
 
 	for _, tc := range []struct {
 		name      string
@@ -382,17 +542,9 @@ func TestImportRejects(t *testing.T) {
 				_, recs := readSnapshotRecords(t, path)
 				bad := root
 				bad[0] ^= 1
-				writeSnapshotRecords(t, path, bad, len(recs), recs)
+				writeSnapshotRecords(t, path, bad, recs)
 			},
 			wantErr: "rebuild to",
-		},
-		{
-			name: "wrong leaf count",
-			file: func(t *testing.T, path string) {
-				claimed, recs := readSnapshotRecords(t, path)
-				writeSnapshotRecords(t, path, claimed, len(recs)+1, recs)
-			},
-			wantErr: "header claims",
 		},
 		{
 			name: "flipped leaf value",
@@ -403,14 +555,13 @@ func TestImportRejects(t *testing.T) {
 			wantErr: "rebuild to",
 		},
 		{
-			name: "records out of order",
-			snap: func(recs []snapRecord) []snapRecord {
-				recs[0], recs[1] = recs[1], recs[0]
-				return recs
-			},
+			name:    "records out of order",
+			snap:    swapHeaderSlots,
 			wantErr: "out of order",
 		},
 		{
+			// Appended after an otherwise complete, valid snapshot: one stray
+			// byte past the root.
 			name: "trailing garbage",
 			file: func(t *testing.T, path string) {
 				blob, err := os.ReadFile(path)
@@ -421,16 +572,7 @@ func TestImportRejects(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			wantErr: "does not decode",
-		},
-		{
-			name: "reserved zone",
-			snap: func(recs []snapRecord) []snapRecord {
-				recs[0].key = bytes.Clone(recs[0].key)
-				recs[0].key[0] = 0x02
-				return recs
-			},
-			wantErr: "reserved zone",
+			wantErr: "trailing byte",
 		},
 		{
 			name: "missing preimage record",
@@ -498,49 +640,6 @@ func TestImportRejects(t *testing.T) {
 			wantErr: "claimed with sizes",
 		},
 		{
-			// The reserved bytes take part in no check but the tree's hash:
-			// the MPT commits nothing there and the claimed root is the
-			// attacker's to recompute, so only full-value canonicality
-			// catches it.
-			name:      "garbage in the basic-data reserved bytes",
-			recompute: true,
-			snap: func(recs []snapRecord) []snapRecord {
-				i := findKey(recs, bintrie.BasicDataKey(contract))
-				recs[i].value[1] = 0xff
-				return recs
-			},
-			wantErr: "canonical",
-		},
-		{
-			// Likewise the nine padding bytes after a 23-byte designator.
-			name:      "garbage in the delegation padding",
-			recompute: true,
-			snap: func(recs []snapRecord) []snapRecord {
-				i := findKey(recs, bintrie.DelegationKey(delegated))
-				recs[i].value[23] = 0xff
-				return recs
-			},
-			wantErr: "canonical",
-		},
-		{
-			name:      "nonzero version",
-			recompute: true,
-			snap: func(recs []snapRecord) []snapRecord {
-				i := findKey(recs, bintrie.BasicDataKey(contract))
-				recs[i].value[0] = 1
-				return recs
-			},
-			wantErr: "version 1, must be 0",
-		},
-		{
-			name:      "delegation and code hash together",
-			recompute: true,
-			snap: func(recs []snapRecord) []snapRecord {
-				return insertSorted(recs, snapRecord{key: bintrie.CodeHashKey(delegated), value: types.EmptyCodeHash})
-			},
-			wantErr: "holds both",
-		},
-		{
 			name:      "surplus code leaf",
 			recompute: true,
 			snap: func(recs []snapRecord) []snapRecord {
@@ -591,28 +690,6 @@ func TestImportRejects(t *testing.T) {
 			wantErr: "import bound",
 		},
 		{
-			name:      "empty code hash claiming code",
-			recompute: true,
-			snap: func(recs []snapRecord) []snapRecord {
-				i := findKey(recs, bintrie.BasicDataKey(eoa))
-				recs[i].value[7] = 10
-				return recs
-			},
-			wantErr: "assembled code hashes to",
-		},
-		{
-			name:      "code hash claiming no code",
-			recompute: true,
-			snap: func(recs []snapRecord) []snapRecord {
-				i := findKey(recs, bintrie.BasicDataKey(loner))
-				for b := 4; b < 8; b++ {
-					recs[i].value[b] = 0
-				}
-				return recs
-			},
-			wantErr: "addressed by no account",
-		},
-		{
 			name:      "whole bytecode absent",
 			recompute: true,
 			snap: func(recs []snapRecord) []snapRecord {
@@ -636,38 +713,57 @@ func TestImportRejects(t *testing.T) {
 			wantErr: "beyond the",
 		},
 		{
-			name:      "account with neither code-hash nor delegation",
-			recompute: true,
-			snap: func(recs []snapRecord) []snapRecord {
-				i := findKey(recs, bintrie.CodeHashKey(eoa))
-				return slices.Delete(recs, i, i+1)
-			},
-			wantErr: "holds neither",
-		},
-		{
-			name:      "delegation with a wrong code size",
-			recompute: true,
-			snap: func(recs []snapRecord) []snapRecord {
-				i := findKey(recs, bintrie.BasicDataKey(delegated))
-				recs[i].value[7] = 24
-				return recs
-			},
-			wantErr: "must be 23",
-		},
-		{
-			name:      "malformed designator",
-			recompute: true,
-			snap: func(recs []snapRecord) []snapRecord {
-				i := findKey(recs, bintrie.DelegationKey(delegated))
-				recs[i].value[0] ^= 1 // breaks the 0xef0100 marker
-				return recs
-			},
-			wantErr: "malformed delegation",
-		},
-		{
 			name:    "wrong anchor root",
 			anchor:  common.HexToHash("0xdead"),
 			wantErr: "re-derive merkle root",
+		},
+		{
+			// A kind-1 account's bytecode must not itself be an EIP-7702
+			// delegation indicator: that account must carry kind 2 instead.
+			name:      "delegation bytecode without kind 2",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				target := common.HexToAddress("0x9000000000000000000000000000000000000009")
+				newCode := types.AddressToDelegation(target)
+				newHash := crypto.Keccak256Hash(newCode)
+				chunked := bintrie.ChunkifyCode(newCode)
+				i := findKey(recs, bintrie.BasicDataKey(loner))
+				recs[i].value[7] = byte(len(newCode))
+				j := findKey(recs, bintrie.CodeHashKey(loner))
+				recs[j].value = newHash
+				recs = slices.DeleteFunc(recs, func(r snapRecord) bool {
+					return r.key[0] == bintrie.CodeZone && bytes.Equal(r.key[:33], bintrie.CodeChunkStem(lonerHash, 0))
+				})
+				return insertSorted(recs, snapRecord{key: bintrie.CodeChunkKey(newHash, 0), value: [32]byte(chunked[:32])})
+			},
+			wantErr: "recovers to a delegation indicator",
+		},
+		{
+			// A slot number below 64 belongs in the header stem; encoding
+			// the same slot again through the overflow path produces a
+			// leaf no preimage candidate can match - the preimage file
+			// never registers a header-range slot as an overflow candidate.
+			name:      "header slot repeated as a storage entry",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				var treeIndex uint256.Int
+				key := append(bintrie.StorageStem(contract, &treeIndex), 0)
+				return insertSorted(recs, snapRecord{key: key, value: common.Hash{31: 1}})
+			},
+			wantErr: "has no preimage",
+		},
+		{
+			// Every storage record must name an account that has a header
+			// record. With the header gone, the account's storage and its
+			// preimage remain, and the preimage names an address the state
+			// does not hold.
+			name:      "storage record without its header record",
+			recompute: true,
+			snap: func(recs []snapRecord) []snapRecord {
+				header := bintrie.HeaderStem(contract)
+				return slices.DeleteFunc(recs, func(r snapRecord) bool { return bytes.HasPrefix(r.key, header) })
+			},
+			wantErr: "the state does not hold",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -691,9 +787,9 @@ func TestImportRejects(t *testing.T) {
 				if tc.recompute {
 					claimed = common.Hash{}
 				}
-				writeSnapshotRecords(t, badSnap, claimed, len(recs), recs)
+				writeSnapshotRecords(t, badSnap, claimed, recs)
 			default:
-				writeSnapshotRecords(t, badSnap, claimed, len(recs), recs)
+				writeSnapshotRecords(t, badSnap, claimed, recs)
 			}
 			preRecs := readPreimageRecords(t, prePath)
 			if tc.pre != nil {

@@ -293,6 +293,16 @@ func mixedAlloc(seed int64) types.GenesisAlloc {
 		}
 		alloc[addr] = acct
 	}
+	// Shapes the draw above may miss: a code of exactly one full 256-leaf
+	// group, a code whose only chunk is zero, and a delegation with header
+	// and overflow storage.
+	alloc[common.Address{0xed, 1}] = types.Account{Nonce: 1, Code: bytes.Repeat([]byte{0x5b}, 256*31)}
+	alloc[common.Address{0xed, 2}] = types.Account{Nonce: 1, Code: []byte{0x00}}
+	alloc[common.Address{0xed, 3}] = types.Account{
+		Nonce:   1,
+		Code:    types.AddressToDelegation(common.Address{0xde, 0x1e}),
+		Storage: map[common.Hash]common.Hash{{31: 1}: {31: 1}, {30: 1}: {31: 2}},
+	}
 	return alloc
 }
 

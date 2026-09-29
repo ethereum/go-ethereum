@@ -283,9 +283,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return common.Hash{}, err
 	}
 	defer snap.close()
-	if snap.count == 0 {
-		return common.Hash{}, errors.New("refusing to import an empty snapshot")
-	}
 	// Phase 1: derive every candidate tree key the preimages can stand for.
 
 	cand := bintrie.NewRecordSorter(opts.tmpDir, quarter, nil)
@@ -426,49 +423,25 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			return fmt.Errorf("account %x holds slot %d, which the preimage file does not name",
 				g.addr, bits.TrailingZeros64(g.headerSeen&^g.headerClaim))
 		}
+		// The typed record fixes the basic-data leaf's version and reserved
+		// bytes at zero, so a decoded leaf is canonical by construction.
 		var (
 			nonce    uint64
 			balance  = new(uint256.Int)
 			codeSize uint32
-			version  byte
 		)
 		if g.basic != nil {
-			version, codeSize, nonce, balance = bintrie.DecodeBasicData(g.basic[:])
-			if version != 0 {
-				return fmt.Errorf("account %x carries basic-data version %d, must be 0", g.addr, version)
-			}
-			// Re-encode rather than check field by field: the leaf's reserved
-			// bytes take part in no check but the tree's own hash, and the
-			// claimed root is the artifact's to choose, so anything the
-			// decoder ignores would ride through both checks and leave a root
-			// no honest converter produces.
-			want, err := bintrie.EncodeBasicData(codeSize, nonce, balance)
-			if err != nil {
-				return fmt.Errorf("account %x: %w", g.addr, err)
-			}
-			if want != *g.basic {
-				return fmt.Errorf("account %x basic-data leaf is not the canonical encoding of its fields", g.addr)
-			}
+			_, codeSize, nonce, balance = bintrie.DecodeBasicData(g.basic[:])
 		}
+		// A header record carries kind 0, 1 or 2, and derivation emits
+		// exactly one of a code-hash or a delegation leaf for it - g.basic,
+		// and one of g.codeHash/g.delegation, are never both nil or both set.
 		var codeHash common.Hash
 		switch {
-		case g.delegation != nil && g.codeHash != nil:
-			return fmt.Errorf("account %x holds both a code-hash and a delegation leaf", g.addr)
 		case g.delegation != nil:
-			// GetAccount's rules: the designator is the leading code_size
-			// bytes, and a zero size is malformed.
-			if codeSize != 23 {
-				return fmt.Errorf("account %x holds a delegation with code size %d, must be 23", g.addr, codeSize)
-			}
+			// The delegation leaf derives from a 20-byte target, so its
+			// designator is always the 23-byte EIP-7702 indicator.
 			designator := g.delegation[:23]
-			if _, ok := types.ParseDelegation(designator); !ok {
-				return fmt.Errorf("account %x holds a malformed delegation leaf", g.addr)
-			}
-			// The nine bytes after the designator are padding, and nothing
-			// downstream reads them; see the basic-data note above.
-			if *g.delegation != [32]byte(bintrie.EncodeDelegation(designator)) {
-				return fmt.Errorf("account %x delegation leaf is not the canonical encoding of its designator", g.addr)
-			}
 			codeHash = crypto.Keccak256Hash(designator)
 			if rawBatch != nil {
 				rawdb.WriteCode(rawBatch, codeHash, designator)
@@ -486,8 +459,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 				}
 				codeSizes[codeHash] = codeSize
 			}
-		default:
-			return fmt.Errorf("account %x holds neither a code-hash nor a delegation leaf", g.addr)
 		}
 		accountHash := crypto.Keccak256Hash(g.addr.Bytes())
 		if pbtBatch != nil {
@@ -622,7 +593,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 					}
 					break
 				}
-				codeHeld.advance() // a fully zero-chunk stem: legitimate
+				codeHeld.advance() // matched already, or a fully zero-chunk stem
 			}
 			continue
 		}
@@ -695,8 +666,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			slot[31] = sub - bintrie.HeaderStorageOffset
 			group.slots = append(group.slots, importSlot{slot: slot, value: leaf})
 			group.headerSeen |= 1 << (sub - bintrie.HeaderStorageOffset)
-		default:
-			return common.Hash{}, fmt.Errorf("account leaf %x sits at reserved sub-index %d", key, sub)
 		}
 	}
 	if group != nil {
@@ -731,7 +700,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return common.Hash{}, builderErr
 	}
 	if rebuilt != snap.root {
-		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its header claims %x", rebuilt, snap.root)
+		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
 	}
 	log.Info("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves, "digest", snap.digest())
 
@@ -765,6 +734,11 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		code, err := bintrie.AssembleCode(hash, codeSizes[hash], chunks)
 		if err != nil {
 			return common.Hash{}, err
+		}
+		// A kind-1 account's bytecode must not itself be an EIP-7702
+		// delegation indicator: that account must carry kind 2 instead.
+		if _, ok := types.ParseDelegation(code); ok {
+			return common.Hash{}, fmt.Errorf("code %x recovers to a delegation indicator; its account must hold kind 2", hash)
 		}
 		if rawBatch != nil {
 			rawdb.WriteCode(rawBatch, hash, code)
