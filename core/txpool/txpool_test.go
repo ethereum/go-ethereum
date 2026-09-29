@@ -48,7 +48,8 @@ func TestNewDuringPathSnapSync(t *testing.T) {
 	if err := chain.SnapSyncStart(); err != nil {
 		t.Fatalf("failed to start snap sync: %v", err)
 	}
-	if _, err := chain.StateAt(chain.Genesis().Header()); err == nil {
+	genesis := chain.Genesis()
+	if _, err := chain.StateAt(genesis.Root(), genesis.Number(), genesis.Time()); err == nil {
 		t.Fatal("genesis state still available during snap sync")
 	}
 	legacyPool := legacypool.New(legacypool.DefaultConfig, chain)

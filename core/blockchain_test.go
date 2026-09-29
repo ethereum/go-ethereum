@@ -3890,7 +3890,8 @@ func TestTransientStorageReset(t *testing.T) {
 		t.Fatalf("failed to insert into chain: %v", err)
 	}
 	// Check the storage
-	state, err := chain.StateAt(chain.CurrentHeader())
+	head := chain.CurrentHeader()
+	state, err := chain.StateAt(head.Root, head.Number, head.Time)
 	if err != nil {
 		t.Fatalf("Failed to load state %v", err)
 	}

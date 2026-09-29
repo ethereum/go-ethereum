@@ -32,20 +32,17 @@ import (
 )
 
 // HeadState returns the state of the given head, or an empty state if that is
-// not available, which happens while the node is not fully synced. The fallback
-// is the empty state and not the genesis state: during a path-based snap sync
-// the genesis state is gone as well, and the empty state can always be opened.
-func HeadState(config *params.ChainConfig, stateAt func(*types.Header) (*state.StateDB, error), head *types.Header) (*state.StateDB, error) {
-	statedb, err := stateAt(head)
+// not available, which happens while the node is not fully synced.
+func HeadState(config *params.ChainConfig, stateAt func(common.Hash, *big.Int, uint64) (*state.StateDB, error), head *types.Header) (*state.StateDB, error) {
+	statedb, err := stateAt(head.Root, head.Number, head.Time)
 	if err == nil {
 		return statedb, nil
 	}
-	empty := *head
-	empty.Root = types.EmptyRootHash
+	root := types.EmptyRootHash
 	if config.IsUBT(head.Number, head.Time) {
-		empty.Root = types.EmptyBinaryHash
+		root = types.EmptyBinaryHash
 	}
-	return stateAt(&empty)
+	return stateAt(root, head.Number, head.Time)
 }
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -71,7 +68,7 @@ type BlockChain interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 
 	// StateAt returns a state database for a given chain header (generally the head).
-	StateAt(header *types.Header) (*state.StateDB, error)
+	StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error)
 }
 
 // TxPool is an aggregator for various transaction specific pools, collectively
@@ -200,7 +197,7 @@ func (p *TxPool) loop(head *types.Header) {
 			case resetBusy <- struct{}{}:
 				// Updates the statedb with the new chain head. The head state may be
 				// unavailable if the initial state sync has not yet completed.
-				if statedb, err := p.chain.StateAt(newHead); err != nil {
+				if statedb, err := p.chain.StateAt(newHead.Root, newHead.Number, newHead.Time); err != nil {
 					log.Error("Failed to reset txpool state", "err", err)
 				} else {
 					p.stateLock.Lock()

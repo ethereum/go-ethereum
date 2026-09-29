@@ -80,7 +80,7 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 	return types.NewBlock(bc.CurrentBlock(), nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
+func (bc *testBlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 

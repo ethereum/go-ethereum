@@ -77,8 +77,8 @@ type statelessTestBlockChain struct {
 	emptyRoot common.Hash
 }
 
-func (bc *statelessTestBlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	if header.Root != bc.emptyRoot {
+func (bc *statelessTestBlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
+	if root != bc.emptyRoot {
 		return nil, errors.New("missing trie node")
 	}
 	return state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
@@ -106,7 +106,7 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 	return types.NewBlock(bc.CurrentBlock(), nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
+func (bc *testBlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 
@@ -162,7 +162,8 @@ func TestInitDuringPathSnapSync(t *testing.T) {
 		t.Fatalf("failed to start snap sync: %v", err)
 	}
 	// The genesis state is non-empty and unavailable, so falling back to it fails.
-	if _, err := chain.StateAt(chain.Genesis().Header()); err == nil {
+	genesis := chain.Genesis()
+	if _, err := chain.StateAt(genesis.Root(), genesis.Number(), genesis.Time()); err == nil {
 		t.Fatal("genesis state still available during snap sync")
 	}
 	pool := New(testTxPoolConfig, chain)

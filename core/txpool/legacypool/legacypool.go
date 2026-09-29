@@ -133,7 +133,7 @@ type BlockChain interface {
 	GetBlock(hash common.Hash, number uint64) *types.Block
 
 	// StateAt returns a state database for a given chain header (generally the head).
-	StateAt(header *types.Header) (*state.StateDB, error)
+	StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error)
 }
 
 // Config are the configuration parameters of the transaction pool.
@@ -1378,7 +1378,7 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock() // Special case during testing
 	}
-	statedb, err := pool.chain.StateAt(newHead)
+	statedb, err := pool.chain.StateAt(newHead.Root, newHead.Number, newHead.Time)
 	if err != nil {
 		log.Error("Failed to reset txpool state", "err", err)
 		return

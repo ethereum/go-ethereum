@@ -94,8 +94,8 @@ type statelessTestBlockChain struct {
 	*testBlockChain
 }
 
-func (bc *statelessTestBlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	if header.Root != types.EmptyRootHash {
+func (bc *statelessTestBlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
+	if root != types.EmptyRootHash {
 		return nil, errors.New("missing trie node")
 	}
 	return state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
@@ -202,7 +202,7 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 	return bc.blocks[number]
 }
 
-func (bc *testBlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
+func (bc *testBlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 

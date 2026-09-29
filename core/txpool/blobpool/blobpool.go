@@ -1216,7 +1216,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	// Handle reorg buffer timeouts evicting old gapped transactions
 	p.evictGapped()
 
-	statedb, err := p.chain.StateAt(newHead)
+	statedb, err := p.chain.StateAt(newHead.Root, newHead.Number, newHead.Time)
 	if err != nil {
 		log.Error("Failed to reset blobpool state", "err", err)
 		return
