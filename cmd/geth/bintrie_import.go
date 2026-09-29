@@ -82,6 +82,9 @@ collector can hold as much again before it runs, so budget about twice their
 sum, or cap it with GOMEMLIMIT. Draining a sorter also takes 1 MB per spilled
 run, and a smaller --memory-limit means more runs, so setting it far below the
 state size stops saving memory.
+
+Disk: --tmpdir holds the sort spills and a copy of every tree node until the
+import ends, so it needs disk space, not a tmpfs.
 `,
 	}
 )
@@ -370,19 +373,23 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	}
 	held := &heldStream{stream: candStream}
 
+	// Tree nodes are staged per depth and written only once check 1 has
+	// passed, in key order (see nodeStager).
 	var (
 		builderErr error
 		onNode     func(path []byte, hash common.Hash, blob []byte)
+		nodes      *nodeStager
 	)
 	if !verifyOnly {
+		if nodes, err = newNodeStager(opts.tmpDir); err != nil {
+			return common.Hash{}, err
+		}
+		defer nodes.close()
 		onNode = func(path []byte, hash common.Hash, blob []byte) {
 			if builderErr != nil {
 				return
 			}
-			rawdb.WriteAccountTrieNode(pbtBatch, path, blob)
-			if err := flush(false); err != nil {
-				builderErr = err
-			}
+			builderErr = nodes.add(path, blob)
 		}
 	}
 	builder := bintrie.NewStackBuilder(onNode)
@@ -707,6 +714,15 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
 	}
 	log.Info("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves, "digest", snap.digest())
+	if nodes != nil {
+		err := nodes.replay(func(path, blob []byte) error {
+			rawdb.WriteAccountTrieNode(pbtBatch, path, blob)
+			return flush(false)
+		})
+		if err != nil {
+			return common.Hash{}, err
+		}
+	}
 
 	// The code limb: every claimed code hash must reassemble from its
 	// chunks, and the chunks must be exactly the code's re-chunking.

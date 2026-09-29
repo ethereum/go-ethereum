@@ -53,7 +53,7 @@ var (
 	}
 	tmpDirFlag = &cli.StringFlag{
 		Name:  "tmpdir",
-		Usage: "Directory for the sort's spill files (default: the OS temp dir)",
+		Usage: "Directory for scratch files, the sort spills and on import a copy of every tree node; needs disk, not tmpfs (default: the OS temp dir)",
 	}
 	forceConvertFlag = &cli.BoolFlag{
 		Name:  "force",
