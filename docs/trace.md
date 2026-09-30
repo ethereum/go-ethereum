@@ -18,7 +18,7 @@ their behavior. No database migration or additional index is required.
 | `trace_transaction(hash)` | Return the localized call tree in preorder. |
 | `trace_get(hash, position)` | Select a tree path: `[]` is the root, `["0x0"]` its first child. |
 | `trace_block(block)` | Return transaction trees and actual historical PoW block/uncle rewards. |
-| `trace_filter(filter)` | Scan a bounded canonical snapshot, match addresses, then paginate. |
+| `trace_filter(filter)` | Select an exact block hash or scan a bounded canonical snapshot, match addresses, then paginate. |
 
 Each `trace_callMany` item is a separate transaction on the preceding item's
 post-state: original storage values, access lists, transient storage, refunds and
@@ -108,6 +108,13 @@ composes topic positions. Omitted, null or empty lists are unrestricted. Optiona
 list; other values are invalid parameters. Creation recipients are successful created addresses;
 selfdestruct uses the destroyed address and beneficiary; rewards have only a
 recipient. Post-Merge blocks do not receive synthetic issuance rewards.
+An optional `blockHash` selects exactly one canonical, executed block and is mutually
+exclusive with non-null `fromBlock` and `toBlock`. Null members are omitted. Unknown,
+noncanonical and unexecuted hashes return `-32001`, including with `count: 0`;
+malformed hashes and hash-plus-range requests return `-32602`. The selected block is
+retained by identity during replay, so a reorg cannot substitute another block at
+its height. The proposed H33 contract permits accurate orphan results, but this
+fork currently rejects noncanonical hashes and does not require orphan retention.
 Omitted filter bounds both mean `latest`, resolved against one head; historical
 searches must set `fromBlock`. As for `eth_getLogs`, a bound beyond the head, a
 `pending` bound, a block hash bound or a `fromBlock` above `toBlock` returns `-32602`
