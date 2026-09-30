@@ -2949,8 +2949,10 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(ctx context.Context, block *type
 	defer bc.chainmu.Unlock()
 
 	// Hand the write to the chain writer once the block is validated, when the
-	// scheme allows it. A synchronous write waits for the queued ones first.
-	deferWrite := !makeWitness && bc.canDeferWrite(block)
+	// scheme allows it and the block builds on the last one handed over. The
+	// flattening of a block on another branch could drop layers the writer
+	// still counts as present. A synchronous write waits for the queued ones first.
+	deferWrite := !makeWitness && bc.canDeferWrite(block) && bc.writer.extends(block)
 	if !deferWrite {
 		bc.writer.drain()
 	}

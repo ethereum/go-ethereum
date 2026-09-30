@@ -29,6 +29,10 @@ package core
 // in one batch. Both phases keep the order the blocks came in, and the second
 // one can lag behind the first by a few blocks.
 //
+// Only a block that builds on the last one handed over gets queued, a block on
+// another branch is written synchronously. So the queued blocks form one line,
+// and no flattening in the queue drops a layer of the blocks before it.
+//
 // Until its data is on disk, the chain serves a queued block from memory and
 // counts its state as present, and the last block written counts as present
 // too. Opening that state waits for the first phase. Processing a child block
@@ -260,6 +264,14 @@ func (w *chainWriter) queueHead(head *types.Block, current *types.Header) bool {
 	return true
 }
 
+// extends reports whether the block builds on the last block handed over, or none is since the last drain.
+func (w *chainWriter) extends(block *types.Block) bool {
+	w.lock.RLock()
+	defer w.lock.RUnlock()
+
+	return w.validated == (common.Hash{}) || block.ParentHash() == w.validated
+}
+
 // isHead reports whether hash is the last queued head, or the current head if none is queued.
 func (w *chainWriter) isHead(hash common.Hash, current *types.Header) bool {
 	w.lock.RLock()
@@ -432,7 +444,8 @@ func (w *chainWriter) hasState(root common.Hash) bool {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 
-	// The last block written is still one of the newest layers, and whatever
+	// The last block written is still one of the newest layers. The queued
+	// blocks all build on it, so their flattening keeps it, and whatever else
 	// could drop it drains the writer first. Answering here keeps a check of
 	// the head state from waiting on a flattening.
 	if root == w.persisted && root != (common.Hash{}) {
