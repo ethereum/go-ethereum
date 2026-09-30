@@ -639,7 +639,10 @@ type traceBlockErrorBackend struct {
 	err error
 }
 
-func (b traceBlockErrorBackend) HeaderByNumber(context.Context, rpc.BlockNumber) (*types.Header, error) {
+func (b traceBlockErrorBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	if number == rpc.LatestBlockNumber {
+		return b.Backend.HeaderByNumber(ctx, number)
+	}
 	return nil, b.err
 }
 

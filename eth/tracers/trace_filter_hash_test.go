@@ -142,6 +142,9 @@ func (b traceHashUnexecutedBackend) HeaderByNumber(ctx context.Context, number r
 	if number == rpc.LatestBlockNumber {
 		return b.chain.Genesis().Header(), nil
 	}
+	if number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber {
+		return b.chain.CurrentHeader(), nil
+	}
 	return b.testBackend.HeaderByNumber(ctx, number)
 }
 
@@ -153,5 +156,28 @@ func TestTraceNamespaceFilterUnexecutedBlockHash(t *testing.T) {
 	for _, filter := range []map[string]any{{"blockHash": hash}, {"blockHash": hash, "count": 0}} {
 		var got json.RawMessage
 		requireTraceCode(t, client.Call(&got, "trace_filter", filter), -32001)
+	}
+}
+
+func TestTraceNamespaceFilterExecutedHead(t *testing.T) {
+	backend := newTestBackend(t, 1, &core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: 30_000_000}, nil)
+	t.Cleanup(backend.teardown)
+	client := traceContractClient(t, NewTraceAPI(traceHashUnexecutedBackend{backend}))
+	// The header chain is at block 1, but execution is still at genesis.
+	// Latest bounds must select the executed head, which has no traces.
+	for _, filter := range []map[string]any{{}, {"fromBlock": "latest"}, {"toBlock": "latest"}, {"fromBlock": "0x0"}} {
+		var got json.RawMessage
+		if err := client.Call(&got, "trace_filter", filter); err != nil || string(got) != "[]" {
+			t.Errorf("latest filter %v: got %s, err %v", filter, got, err)
+		}
+	}
+	// Explicit bounds above execution are invalid, including with count zero.
+	for _, filter := range []map[string]any{
+		{"fromBlock": "0x1"}, {"toBlock": "0x1"},
+		{"fromBlock": "0x1", "count": 0}, {"toBlock": "0x1", "count": 0},
+		{"fromBlock": "safe"}, {"toBlock": "finalized", "count": 0},
+	} {
+		var got json.RawMessage
+		requireTraceCode(t, client.Call(&got, "trace_filter", filter), -32602)
 	}
 }

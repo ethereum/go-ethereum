@@ -116,7 +116,8 @@ and hash-plus-range requests return `-32602`. The selected block is retained by
 identity during replay, so a reorg cannot substitute another block at its height,
 and a block reorganized out while it is traced returns `-32001`. Side-chain blocks
 are not served: the result is never another block's traces or `[]`.
-Omitted filter bounds both mean `latest`, resolved against one head; historical
+Omitted filter bounds both mean `latest`, resolved against one executed head (which
+can lag the header chain during sync); historical
 searches must set `fromBlock`. As for `eth_getLogs`, a bound beyond the head, a
 `pending` bound, a block hash or EIP-1898 object bound or a `fromBlock` above `toBlock`
 returns `-32602` and the range is never clamped. The `earliest` tag selects the lowest block with available history,

@@ -198,7 +198,15 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 	defer cancel()
 	// Resolve both bounds against one head. As for eth_getLogs, a bound beyond
 	// the head or a reversed range is invalid rather than clamped.
-	head := api.api.backend.CurrentHeader()
+	// The header chain can be ahead of execution during sync. Resolve latest
+	// against the executed head, as the other trace methods and eth_* do.
+	head, err := api.api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return nil, err
+	}
+	if head == nil {
+		return nil, &traceRPCError{-32001, "latest block not found"}
+	}
 	resolve := func(number *rpc.BlockNumber) (*types.Header, error) {
 		n := rpc.LatestBlockNumber
 		if number != nil {
@@ -219,6 +227,9 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 		if err != nil {
 			return nil, err
 		}
+		if h.Number.Cmp(head.Number) > 0 {
+			return nil, traceInvalid("block %s is beyond the current head %d", n, head.Number.Uint64())
+		}
 		return h, nil
 	}
 	var from, to *types.Header
@@ -227,19 +238,13 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 		if filter.FromBlock != nil || filter.ToBlock != nil {
 			return nil, traceInvalid("blockHash is mutually exclusive with fromBlock and toBlock")
 		}
-		// CurrentHeader can be ahead of execution during sync. A known body
-		// above the executed head must not become an empty successful selection.
-		// The executed head is read first, so a reorg after the canonical check
-		// cannot lift it over a block that was never executed.
-		executed, err := api.api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-		if err != nil {
-			return nil, err
-		}
 		selected, err = api.blockByHash(ctx, *filter.BlockHash, true)
 		if err != nil {
 			return nil, err
 		}
-		if executed == nil || selected.NumberU64() > executed.Number.Uint64() {
+		// The executed head was read before the canonical check, so a reorg
+		// cannot lift it over a block that was never executed.
+		if selected.NumberU64() > head.Number.Uint64() {
 			return nil, &traceRPCError{-32001, fmt.Sprintf("block %s is not executed", filter.BlockHash.Hex())}
 		}
 		from, to = selected.Header(), selected.Header()

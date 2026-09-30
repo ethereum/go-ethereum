@@ -210,8 +210,11 @@ func (f *TraceFilter) UnmarshalJSON(input []byte) error {
 	// An explicit null is an omitted member: a null mode is intersection and
 	// null address lists are unrestricted, like omitted or empty lists.
 	for key, value := range fields {
-		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			delete(fields, key)
+		switch key {
+		case "blockHash", "fromBlock", "toBlock", "fromAddress", "toAddress", "mode", "after", "count":
+			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+				delete(fields, key)
+			}
 		}
 	}
 	filtered, err := json.Marshal(fields)
