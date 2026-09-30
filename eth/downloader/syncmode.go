@@ -79,8 +79,15 @@ func (m *syncModer) get(report bool) ethconfig.SyncMode {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	// If we're in snap sync mode, return that directly
+	// If we're in snap sync mode, check if the chain has progressed past genesis
+	// and has state available. If so, snap sync is complete and we can switch to full sync.
 	if m.mode == ethconfig.SnapSync {
+		head := m.chain.CurrentBlock()
+		if head.Number.Uint64() > 0 && m.chain.HasState(head.Root) {
+			m.mode = ethconfig.FullSync
+			log.Info("Switching from snap-sync to full-sync", "reason", "snap-sync complete", "head", head.Number, "hash", head.Hash())
+			return ethconfig.FullSync
+		}
 		return ethconfig.SnapSync
 	}
 	logger := log.Debug
