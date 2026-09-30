@@ -213,7 +213,7 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 			frame.Result = traceCallResult{hexutil.Uint64(gasUsed), common.CopyBytes(output)}
 		}
 	} else if frame.Type == "create" {
-		frame.Result = traceCreateResult{hexutil.Uint64(gasUsed), scope.target, common.CopyBytes(output)}
+		frame.Result = traceCreateResult{hexutil.Uint64(gasUsed), scope.target, common.CopyBytes(c.state.GetCode(scope.target))}
 	} else if frame.Type == "call" {
 		frame.Result = traceCallResult{hexutil.Uint64(gasUsed), common.CopyBytes(output)}
 	}

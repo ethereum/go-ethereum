@@ -59,6 +59,34 @@ func requireTraceCode(t *testing.T, err error, code int) {
 	}
 }
 
+func TestTraceFrontierCreateCodeDeposit(t *testing.T) {
+	config := &params.ChainConfig{ChainID: big.NewInt(1)}
+	backend := newTestBackend(t, 0, &core.Genesis{
+		Config: config, GasLimit: 30_000_000, Difficulty: big.NewInt(1),
+		Alloc: types.GenesisAlloc{traceTestSender: {Balance: big.NewInt(1e18)}},
+	}, nil)
+	t.Cleanup(backend.teardown)
+	client := traceContractClient(t, NewTraceAPI(backend))
+	var result struct {
+		Output hexutil.Bytes `json:"output"`
+		Trace  []struct {
+			Error  string `json:"error"`
+			Result struct {
+				Code hexutil.Bytes `json:"code"`
+			} `json:"result"`
+		} `json:"trace"`
+	}
+	err := client.Call(&result, "trace_call", map[string]any{
+		"from": traceTestSender, "input": "0x600160005360016000f3", "gas": "0x5460", "gasPrice": "0x0",
+	}, TraceTypes{"trace"}, "latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Output) != 1 || result.Output[0] != 0x01 || len(result.Trace) != 1 || result.Trace[0].Error != "" || len(result.Trace[0].Result.Code) != 0 {
+		t.Fatalf("Frontier CREATE reported deployed code: %+v", result)
+	}
+}
+
 func TestTraceNamespaceBlockErrors(t *testing.T) {
 	api, _ := traceTestAPI(t, nil, nil)
 	client := traceContractClient(t, api)
