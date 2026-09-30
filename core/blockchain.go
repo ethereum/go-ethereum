@@ -2377,8 +2377,10 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// config, keeping the BAL-parallel/sequential decision consistent.
 	vmConfig := bc.overrideTracerActivation(config.EnableTracer)
 
-	// The chain writer may still be committing the parent state.
-	bc.writer.waitState(parentRoot)
+	// The chain writer may still be committing the parent state. Reading it
+	// would wait for the flattening too, so wait for that here and count it
+	// as commit time.
+	commitWait := bc.writer.waitFlattened(parentRoot)
 
 	// Set up the state reader feeding execution, along with a cleanup to run once
 	// processing is complete (stop the prefetcher, upload reader statistics).
@@ -2488,6 +2490,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
 	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
 	stats.CodeReads = statedb.CodeReads
+	stats.CommitWait = commitWait
 
 	stats.AccountLoaded = statedb.AccountLoaded
 	stats.AccountUpdated = statedb.AccountUpdated

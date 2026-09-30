@@ -53,6 +53,7 @@ type ExecuteStats struct {
 	Validation      time.Duration // Time spent on the block validation
 	CrossValidation time.Duration // Optional, time spent on the block cross validation
 	DatabaseCommit  time.Duration // Time spent on database commit
+	CommitWait      time.Duration // Time spent waiting for the chain writer to commit the parent state
 	TotalTime       time.Duration // The total time spent on block execution
 	MgasPerSecond   float64       // The million gas processed per second
 
@@ -214,7 +215,7 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			ExecutionMs: durationToMs(s.Execution),
 			StateReadMs: durationToMs(s.AccountReads + s.StorageReads + s.CodeReads),
 			StateHashMs: durationToMs(s.AccountHashes + s.AccountUpdates + s.StorageUpdates),
-			CommitMs:    durationToMs(max(s.AccountCommits, s.StorageCommits) + s.DatabaseCommit),
+			CommitMs:    durationToMs(max(s.AccountCommits, s.StorageCommits) + s.DatabaseCommit + s.CommitWait),
 			TotalMs:     durationToMs(s.TotalTime),
 		},
 		Throughput: slowBlockThru{

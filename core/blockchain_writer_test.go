@@ -502,13 +502,16 @@ func TestDeferredWritePersistOrder(t *testing.T) {
 			t.Fatalf("failed to insert block #%d: %v", block.NumberU64(), err)
 		}
 	}
-	// All layers are added and none flattened, so the tree holds more diff
-	// layers than usual. Block 3 would be gone otherwise.
-	chain.writer.waitState(queued[len(queued)-1].Root())
-	for _, block := range blocks[2 : synced+len(queued)] {
-		if _, err := chain.TrieDB().NodeReader(block.Root()); err != nil {
-			t.Fatalf("layer of block #%d missing: %v", block.NumberU64(), err)
+	// The flattening doesn't wait for the held block data. Each one capped
+	// below its own block already, so the disk layer is block 7 now.
+	chain.writer.waitFlattened(queued[len(queued)-1].Root())
+	for _, block := range blocks[2:6] {
+		if _, err := chain.TrieDB().NodeReader(block.Root()); err == nil {
+			t.Fatalf("layer of block #%d not flattened", block.NumberU64())
 		}
+	}
+	if _, err := chain.TrieDB().NodeReader(blocks[6].Root()); err != nil {
+		t.Fatalf("disk layer of block #%d missing: %v", blocks[6].NumberU64(), err)
 	}
 	probe.release("persist", queued[0])
 	chain.WaitWrites()
@@ -523,14 +526,90 @@ func TestDeferredWritePersistOrder(t *testing.T) {
 			t.Fatalf("block #%d persisted before its parent", block.NumberU64())
 		}
 	}
-	// Each flattening capped below its own block, the disk layer is block 7 now
-	for _, block := range blocks[2:6] {
-		if _, err := chain.TrieDB().NodeReader(block.Root()); err == nil {
-			t.Fatalf("layer of block #%d not flattened", block.NumberU64())
-		}
+}
+
+// Tests that a block waits for the flattening below its parent before it runs,
+// and reports that wait as commit time.
+func TestDeferredWriteCommitWait(t *testing.T) {
+	chain, _, blocks, _ := newWriteTestChain(t, 3, rawdb.NewMemoryDatabase(), DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	defer chain.Stop()
+
+	if _, err := chain.InsertChain(blocks[:1]); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
 	}
-	if _, err := chain.TrieDB().NodeReader(blocks[6].Root()); err != nil {
-		t.Fatalf("disk layer of block #%d missing: %v", blocks[6].NumberU64(), err)
+	parent, block := blocks[1], blocks[2]
+	probe := newWriteProbe(chain)
+	probe.hold("flatten", parent)
+	defer probe.releaseAll()
+
+	if _, err := chain.InsertBlockWithoutSetHead(context.Background(), parent, false); err != nil {
+		t.Fatalf("failed to insert block: %v", err)
+	}
+	// The parent state is readable already, only the flattening is held
+	probe.wait(t, "flatten", parent.Hash())
+	chain.writer.waitState(parent.Root())
+
+	type result struct {
+		res *blockProcessingResult
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		res, err := chain.ProcessBlock(context.Background(), parent.Root(), block, ExecuteConfig{})
+		done <- result{res, err}
+	}()
+	probe.wait(t, "wait", parent.Hash())
+	select {
+	case <-done:
+		t.Fatal("block processed before the flattening below its parent")
+	default:
+	}
+	probe.release("flatten", parent)
+	r := <-done
+	if r.err != nil {
+		t.Fatalf("failed to process block: %v", r.err)
+	}
+	if r.res.stats.CommitWait <= 0 {
+		t.Fatal("wait for the parent not reported as commit time")
+	}
+	// With the parent written there's nothing left to wait for
+	chain.WaitWrites()
+	res, err := chain.ProcessBlock(context.Background(), parent.Root(), block, ExecuteConfig{})
+	if err != nil {
+		t.Fatalf("failed to process block: %v", err)
+	}
+	if res.stats.CommitWait != 0 {
+		t.Fatalf("commit wait %v with the parent written", res.stats.CommitWait)
+	}
+}
+
+// Tests that the state of the last block written counts as present without the
+// database, until a synchronous update.
+func TestDeferredWriteLastState(t *testing.T) {
+	chain, _, blocks, _ := newWriteTestChain(t, 2, rawdb.NewMemoryDatabase(), DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	defer chain.Stop()
+
+	if _, err := chain.InsertChain(blocks[:1]); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+	if _, err := chain.InsertBlockWithoutSetHead(context.Background(), blocks[1], false); err != nil {
+		t.Fatalf("failed to insert block: %v", err)
+	}
+	chain.WaitWrites()
+
+	// The writer vouches for the block it wrote last, and only for that one
+	if !chain.writer.hasState(blocks[1].Root()) {
+		t.Fatal("state of the last block written not present")
+	}
+	if chain.writer.hasState(blocks[0].Root()) {
+		t.Fatal("state of a block written synchronously present in the writer")
+	}
+	// A rewind may drop that state, so the writer forgets it first
+	if err := chain.SetHead(blocks[0].NumberU64()); err != nil {
+		t.Fatalf("failed to rewind: %v", err)
+	}
+	if chain.writer.hasState(blocks[1].Root()) {
+		t.Fatal("state of the last block written still present after a rewind")
 	}
 }
 

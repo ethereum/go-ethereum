@@ -410,7 +410,7 @@ func (bc *BlockChain) TxIndexDone() bool {
 
 // HasState checks if state trie is fully present in the database or not.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
-	// A state still being committed by the chain writer counts as present
+	// A state the chain writer is committing, or just wrote, counts as present
 	if bc.writer.hasState(hash) {
 		return true
 	}

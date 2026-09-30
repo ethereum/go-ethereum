@@ -22,17 +22,20 @@ package core
 //
 // The first phase makes the state of the block readable. It commits the state,
 // writes the new contract code and adds the diff layer of the block to the path
-// database. The second phase persists the block. It flattens the diff layers
-// that got too old into the disk layer, appending their state history on the
-// way, and writes the header, body, receipts and preimages in one batch. Both
-// phases keep the order the blocks came in, and the second one can lag behind
-// the first by a few blocks.
+// database. Right after, the same loop flattens the diff layers that got too old
+// into the disk layer, appending their state history on the way. The second
+// phase persists the block. It writes the header, body, receipts and preimages
+// in one batch, next to the flattening. Both phases keep the order the blocks
+// came in, and the second one can lag behind the first by a few blocks.
 //
 // Until its data is on disk, the chain serves a queued block from memory and
-// counts its state as present. Opening that state waits for the first phase.
-// A head update from QueueHead runs after the second phase of its block, so
-// the head markers never reach disk before the block they point at. Any other
-// update of the chain waits for all the queued work first.
+// counts its state as present, and the last block written counts as present
+// too. Opening that state waits for the first phase. Processing a child block
+// waits for the flattening as well, since reading the path database would wait
+// for it anyway, and reports that wait as commit time. A head update from
+// QueueHead runs after the second phase of its block, so the head markers never
+// reach disk before the block they point at. Any other update of the chain
+// waits for all the queued work first.
 
 import (
 	"math/big"
@@ -57,6 +60,7 @@ const maxQueuedWrites = 8
 
 var (
 	stateWriteTimer   = metrics.NewRegisteredResettingTimer("chain/write/state", nil)
+	flattenWriteTimer = metrics.NewRegisteredResettingTimer("chain/write/flatten", nil)
 	persistWriteTimer = metrics.NewRegisteredResettingTimer("chain/write/persist", nil)
 	headWriteTimer    = metrics.NewRegisteredResettingTimer("chain/write/head", nil)
 )
@@ -74,6 +78,9 @@ type writeJob struct {
 	committed chan struct{} // closed once the state is readable
 	stateTime time.Duration // time the state commit took
 
+	flattened   chan struct{} // closed once the layers that got too old are flattened
+	flattenTime time.Duration // time the flattening took
+
 	encodeOnce  sync.Once
 	receiptsRLP rlp.RawValue // receipts in their storage encoding, for readers
 }
@@ -87,6 +94,7 @@ type chainWriter struct {
 	tail      chan struct{}             // closed once the last queued task has run
 	head      *types.Block              // last queued head, nil if none since the last drain
 	validated common.Hash               // last block handed over
+	persisted common.Hash               // state root of the last block written, zero if none since the last drain
 	running   bool                      // whether the loops are started
 	closed    bool                      // whether the writer is stopped
 
@@ -128,6 +136,7 @@ func (bc *BlockChain) newWriteJob(block *types.Block, receipts types.Receipts, s
 		rules:      bc.chainConfig.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time()),
 		statedb:    statedb,
 		committed:  make(chan struct{}),
+		flattened:  make(chan struct{}),
 	}, nil
 }
 
@@ -170,7 +179,7 @@ func (bc *BlockChain) WaitWrites() {
 	bc.writer.wait()
 }
 
-// SetWriteHookForTesting sets a hook run before each writer step: state, persist, head, wait or drain.
+// SetWriteHookForTesting sets a hook run before each writer step: state, flatten, persist, head, wait or drain.
 func (bc *BlockChain) SetWriteHookForTesting(hook func(step string, block *types.Block)) {
 	bc.writer.hook.Store(&hook)
 }
@@ -203,9 +212,11 @@ func (w *chainWriter) queue(job *writeJob) {
 		w.runHook("persist", job.block)
 		w.persist(job)
 
-		// Readers go to the database from now on
+		// Readers go to the database from now on, but the state still counts
+		// as present without asking it, see hasState
 		w.lock.Lock()
 		delete(w.jobs, hash)
+		w.persisted = job.header.Root
 		w.lock.Unlock()
 
 		<-w.slots
@@ -259,7 +270,7 @@ func (w *chainWriter) isHead(hash common.Hash, current *types.Header) bool {
 	return current.Hash() == hash
 }
 
-// stateLoop runs the first phase of the handed over writes, in order.
+// stateLoop runs the first phase of the handed over writes and the flattening after each, in order.
 func (w *chainWriter) stateLoop() {
 	defer w.wg.Done()
 	for {
@@ -268,6 +279,12 @@ func (w *chainWriter) stateLoop() {
 			w.runHook("state", job.block)
 			w.commitState(job)
 			close(job.committed)
+
+			// Flatten here and not in the second phase, so a child block waiting
+			// for it doesn't also wait behind the data of older blocks
+			w.runHook("flatten", job.block)
+			w.flatten(job)
+			close(job.flattened)
 		case <-w.quit:
 			return
 		}
@@ -305,31 +322,37 @@ func (w *chainWriter) commitState(job *writeJob) {
 	stateWriteTimer.Update(job.stateTime)
 }
 
-// persist flattens the diff layers that got too old and writes the block data.
-func (w *chainWriter) persist(job *writeJob) {
+// flatten flattens the diff layers that got too old below the block into the disk layer.
+func (w *chainWriter) flatten(job *writeJob) {
 	start := time.Now()
 
-	// Write the block data next to the flattening, like the synchronous write does
-	written := make(chan struct{})
-	go func() {
-		w.bc.writeBlockData(job.block, job.receipts, job.preimages)
-		close(written)
-	}()
 	// A block that doesn't change the state adds no layer to flatten from
 	if root := job.block.Root(); root != job.parentRoot {
 		if err := w.bc.triedb.CapLayers(root); err != nil {
 			log.Crit("Failed to flatten state layers", "number", job.block.Number(), "hash", job.block.Hash(), "err", err)
 		}
 	}
-	<-written
+	job.flattenTime = time.Since(start)
+	flattenWriteTimer.Update(job.flattenTime)
+}
+
+// persist writes the block data, while the state loop flattens next to it.
+func (w *chainWriter) persist(job *writeJob) {
+	start := time.Now()
+	w.bc.writeBlockData(job.block, job.receipts, job.preimages)
 	elapsed := time.Since(start)
 	persistWriteTimer.Update(elapsed)
 
+	// The block only counts as written once its flattening is done too, so
+	// draining the writer covers the flattening
+	<-job.flattened
+
 	// The slow block log stops at the handover, so the write gets a line of
 	// its own when that log is on
-	if limit := w.bc.slowBlockThreshold; limit >= 0 && job.stateTime+elapsed >= limit {
+	if limit := w.bc.slowBlockThreshold; limit >= 0 && job.stateTime+job.flattenTime+elapsed >= limit {
 		log.Info("Wrote block", "number", job.block.Number(), "hash", job.block.Hash(),
-			"state", common.PrettyDuration(job.stateTime), "persist", common.PrettyDuration(elapsed))
+			"state", common.PrettyDuration(job.stateTime), "flatten", common.PrettyDuration(job.flattenTime),
+			"persist", common.PrettyDuration(elapsed))
 	}
 }
 
@@ -355,9 +378,10 @@ func (w *chainWriter) wait() {
 func (w *chainWriter) drain() {
 	w.wait()
 
-	// The synchronous update may move the head, so the next queued head starts over from it
+	// The synchronous update may move the head, so the next queued head starts
+	// over from it. It may also drop the last state written, so forget that too.
 	w.lock.Lock()
-	w.head, w.validated = nil, common.Hash{}
+	w.head, w.validated, w.persisted = nil, common.Hash{}, common.Hash{}
 	w.lock.Unlock()
 }
 
@@ -396,11 +420,17 @@ func (w *chainWriter) header(hash common.Hash) *types.Header {
 	return nil
 }
 
-// hasState reports whether a queued block has the given state root.
+// hasState reports whether a queued block, or the last one written, has the given state root.
 func (w *chainWriter) hasState(root common.Hash) bool {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 
+	// The last block written is still one of the newest layers, and whatever
+	// could drop it drains the writer first. Answering here keeps a check of
+	// the head state from waiting on a flattening.
+	if root == w.persisted && root != (common.Hash{}) {
+		return true
+	}
 	for _, job := range w.jobs {
 		if job.header.Root == root {
 			return true
@@ -411,7 +441,17 @@ func (w *chainWriter) hasState(root common.Hash) bool {
 
 // waitState blocks until the given state is readable, if a queued block is still committing it.
 func (w *chainWriter) waitState(root common.Hash) {
-	// Any queued block with this root makes it readable once its state is committed
+	w.waitJob(root, func(job *writeJob) chan struct{} { return job.committed })
+}
+
+// waitFlattened blocks until a queued block with the given state root is done flattening, and returns how long that took.
+func (w *chainWriter) waitFlattened(root common.Hash) time.Duration {
+	return w.waitJob(root, func(job *writeJob) chan struct{} { return job.flattened })
+}
+
+// waitJob blocks until the step of a queued block with the given root is done, and returns how long it waited.
+func (w *chainWriter) waitJob(root common.Hash, step func(*writeJob) chan struct{}) time.Duration {
+	// Any queued block with this root will do
 	w.lock.RLock()
 	var pending *writeJob
 	for _, job := range w.jobs {
@@ -419,9 +459,9 @@ func (w *chainWriter) waitState(root common.Hash) {
 			continue
 		}
 		select {
-		case <-job.committed:
+		case <-step(job):
 			w.lock.RUnlock()
-			return
+			return 0
 		default:
 			pending = job
 		}
@@ -429,10 +469,12 @@ func (w *chainWriter) waitState(root common.Hash) {
 	w.lock.RUnlock()
 
 	if pending == nil {
-		return
+		return 0
 	}
+	start := time.Now()
 	w.runHook("wait", pending.block)
-	<-pending.committed
+	<-step(pending)
+	return time.Since(start)
 }
 
 // runHook calls the test hook if one is set.
