@@ -14,23 +14,22 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build wasm && !womir && !zisk
-// +build wasm,!womir,!zisk
+//go:build zisk
 
 package main
 
 import (
-	"unsafe"
+	"fmt"
+	"io"
+	"os"
 )
 
-//go:wasmimport geth_io len
-func hintLen() uint32
-
-//go:wasmimport geth_io read
-func hintRead(data unsafe.Pointer)
-
+// getInput reads the RLP-encoded Payload from stdin.
 func getInput() []byte {
-	data := make([]byte, hintLen())
-	hintRead(unsafe.Pointer(&data[0]))
-	return data
+	input, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to read input: %v\n", err)
+		os.Exit(14)
+	}
+	return input
 }
