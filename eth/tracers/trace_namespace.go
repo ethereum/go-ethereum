@@ -227,14 +227,15 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 		if filter.FromBlock != nil || filter.ToBlock != nil {
 			return nil, traceInvalid("blockHash is mutually exclusive with fromBlock and toBlock")
 		}
-		var err error
-		selected, err = api.blockByHash(ctx, *filter.BlockHash, true)
+		// CurrentHeader can be ahead of execution during sync. A known body
+		// above the executed head must not become an empty successful selection.
+		// The executed head is read first, so a reorg after the canonical check
+		// cannot lift it over a block that was never executed.
+		executed, err := api.api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 		if err != nil {
 			return nil, err
 		}
-		// CurrentHeader can be ahead of execution during sync. A known body
-		// above the executed head must not become an empty successful selection.
-		executed, err := api.api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		selected, err = api.blockByHash(ctx, *filter.BlockHash, true)
 		if err != nil {
 			return nil, err
 		}
@@ -299,6 +300,13 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 		frames, err := api.blockTraces(ctx, block)
 		if err != nil {
 			return nil, err
+		}
+		// Replay reads ancestors and historical state by canonical number, so
+		// the traces of a block reorganized out while it ran may mix branches.
+		if selected != nil {
+			if _, err := api.blockByHash(ctx, selected.Hash(), true); err != nil {
+				return nil, err
+			}
 		}
 		for _, frame := range frames {
 			if !traceMatches(frame, filter) {

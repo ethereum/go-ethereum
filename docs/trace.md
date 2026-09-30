@@ -108,17 +108,18 @@ composes topic positions. Omitted, null or empty lists are unrestricted. Optiona
 list; other values are invalid parameters. Creation recipients are successful created addresses;
 selfdestruct uses the destroyed address and beneficiary; rewards have only a
 recipient. Post-Merge blocks do not receive synthetic issuance rewards.
-An optional `blockHash` selects exactly one canonical, executed block and is mutually
-exclusive with non-null `fromBlock` and `toBlock`. Null members are omitted. Unknown,
-noncanonical and unexecuted hashes return `-32001`, including with `count: 0`;
-malformed hashes and hash-plus-range requests return `-32602`. The selected block is
-retained by identity during replay, so a reorg cannot substitute another block at
-its height. The proposed H33 contract permits accurate orphan results, but this
-fork currently rejects noncanonical hashes and does not require orphan retention.
+A `blockHash` member, shaped like the `eth_getLogs` one, selects exactly one canonical,
+executed block and is mutually exclusive with non-null `fromBlock` and `toBlock`. Null
+members are omitted. Unknown, noncanonical and unexecuted hashes return `-32001`, and
+a block whose history is pruned `4444`, including with `count: 0`; malformed hashes
+and hash-plus-range requests return `-32602`. The selected block is retained by
+identity during replay, so a reorg cannot substitute another block at its height,
+and a block reorganized out while it is traced returns `-32001`. Side-chain blocks
+are not served: the result is never another block's traces or `[]`.
 Omitted filter bounds both mean `latest`, resolved against one head; historical
 searches must set `fromBlock`. As for `eth_getLogs`, a bound beyond the head, a
-`pending` bound, a block hash bound or a `fromBlock` above `toBlock` returns `-32602`
-and the range is never clamped. The `earliest` tag selects the lowest block with available history,
+`pending` bound, a block hash or EIP-1898 object bound or a `fromBlock` above `toBlock`
+returns `-32602` and the range is never clamped. The `earliest` tag selects the lowest block with available history,
 as it does for `eth_*`; explicit block numbers below a node's history cutoff return
 `4444`.
 Calls and callMany default to latest; available safe and finalized tags select

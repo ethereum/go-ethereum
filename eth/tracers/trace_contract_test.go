@@ -745,4 +745,10 @@ func TestTraceNamespaceEarliestMeansCutoff(t *testing.T) {
 	requireTraceCode(t, err, 4444)
 	_, err = api.Filter(ctx, TraceFilter{FromBlock: &genesisNumber, ToBlock: &earliest})
 	requireTraceCode(t, err, 4444)
+	// So is a block selected by hash below the cutoff, before any count 0 shortcut.
+	genesisHash, zero := backend.chain.Genesis().Hash(), uint64(0)
+	_, err = api.Filter(ctx, TraceFilter{BlockHash: &genesisHash})
+	requireTraceCode(t, err, 4444)
+	_, err = api.Filter(ctx, TraceFilter{BlockHash: &genesisHash, Count: &zero})
+	requireTraceCode(t, err, 4444)
 }

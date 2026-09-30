@@ -33,7 +33,8 @@ import (
 )
 
 // Replace the chain after the canonical lookup has returned the requested header.
-// The subsequent trace must retain the original block, rather than resolve its height again.
+// The block is then traced against a chain it no longer belongs to, so the request
+// must fail rather than return the requested hash with the replacement's ancestry.
 type traceHashReorgBackend struct {
 	*testBackend
 	reorg func()
@@ -100,6 +101,10 @@ func TestTraceNamespaceFilterBlockHash(t *testing.T) {
 		{"blockHash": "0x01"},
 		{"blockHash": map[string]any{"blockHash": hash, "requireCanonical": true}},
 		{"fromBlock": hash},
+		{"fromBlock": "0x1", "toBlock": hash},
+		{"fromBlock": map[string]any{"blockHash": hash}, "toBlock": "0x1"},
+		{"fromBlock": "0x1", "toBlock": map[string]any{"blockHash": hash, "requireCanonical": true}},
+		{"fromBlock": map[string]any{"blockNumber": "0x1"}, "toBlock": "0x1"},
 	} {
 		var got json.RawMessage
 		requireTraceCode(t, client.Call(&got, "trace_filter", filter), -32602)
@@ -120,9 +125,7 @@ func TestTraceNamespaceFilterBlockHash(t *testing.T) {
 		}
 	}
 	var got json.RawMessage
-	if err := client.Call(&got, "trace_filter", map[string]any{"blockHash": hash}); err != nil || !bytes.Equal(got, want) {
-		t.Fatalf("reorg substituted requested block: %s, want %s, err %v", got, want, err)
-	}
+	requireTraceCode(t, client.Call(&got, "trace_filter", map[string]any{"blockHash": hash}), -32001)
 	if backend.chain.GetBlockByNumber(1).Hash() == hash {
 		t.Fatal("replacement branch did not become canonical")
 	}
