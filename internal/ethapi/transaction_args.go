@@ -499,7 +499,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 	}
 	value, _ := args.Value.ToUint256()
 	blobFeeCap, _ := args.BlobFeeCap.ToUint256()
-	return &core.Message{
+	msg := &core.Message{
 		From:                  args.from(),
 		To:                    args.To,
 		Value:                 value,
@@ -513,9 +513,11 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 		BlobGasFeeCap:         blobFeeCap,
 		BlobHashes:            args.BlobHashes,
 		SetCodeAuthorizations: args.AuthorizationList,
-		SkipNonceChecks:       skipNonceCheck,
-		SkipTransactionChecks: true,
 	}
+	if skipNonceCheck {
+		msg.SkipNonceCheck()
+	}
+	return msg.SkipEOACheck().SkipGasLimitCapCheck()
 }
 
 // ToTransaction converts the arguments to a transaction.

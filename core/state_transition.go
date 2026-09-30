@@ -280,19 +280,50 @@ type Message struct {
 	BlobHashes            []common.Hash
 	SetCodeAuthorizations []types.SetCodeAuthorization
 
-	// When SkipNonceChecks is true, the message nonce is not checked against the
+	// When skipNonceCheck is true, the message nonce is not checked against the
 	// account nonce in state.
-	//
-	// This field will be set to true for operations like RPC eth_call
-	// or the state prefetching.
-	SkipNonceChecks bool
+	skipNonceCheck bool
 
-	// When set, the message is not treated as a transaction, and certain
-	// transaction-specific checks are skipped:
-	//
-	// - From is not verified to be an EOA
-	// - GasLimit is not checked against the protocol defined tx gaslimit
-	SkipTransactionChecks bool
+	// When skipEOACheck is true, the message sender is not verified to be an EOA.
+	skipEOACheck bool
+
+	// When skipGasLimitCapCheck is true, the message gas limit is not checked
+	// against the protocol defined tx gaslimit cap (EIP-7825, or EIP-8037 after
+	// Amsterdam).
+	skipGasLimitCapCheck bool
+
+	// When skipExecutionGasCap is true, the whole gas limit is available for
+	// execution after Amsterdam, instead of capping it at params.MaxTxGas and
+	// moving the remainder into the EIP-8037 state gas reservoir.
+	skipExecutionGasCap bool
+}
+
+// SkipNonceCheck disables the check of the message nonce against the account
+// nonce in state.
+func (msg *Message) SkipNonceCheck() *Message {
+	msg.skipNonceCheck = true
+	return msg
+}
+
+// SkipEOACheck disables the check that the message sender is an EOA.
+func (msg *Message) SkipEOACheck() *Message {
+	msg.skipEOACheck = true
+	return msg
+}
+
+// SkipGasLimitCapCheck disables the check of the message gas limit against the
+// protocol defined tx gaslimit cap.
+func (msg *Message) SkipGasLimitCapCheck() *Message {
+	msg.skipGasLimitCapCheck = true
+	return msg
+}
+
+// SkipExecutionGasCapCheck lifts the params.MaxTxGas cap on the execution gas
+// of the message after Amsterdam, so that the whole gas limit can be spent on
+// execution.
+func (msg *Message) SkipExecutionGasCapCheck() *Message {
+	msg.skipExecutionGasCap = true
+	return msg
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -339,8 +370,6 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Data:                  tx.Data(),
 		AccessList:            tx.AccessList(),
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
-		SkipNonceChecks:       false,
-		SkipTransactionChecks: false,
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         blobGasFeeCap,
 	}
@@ -502,7 +531,7 @@ func (st *stateTransition) buyGas() error {
 func (st *stateTransition) initRuntimeGasBudget(rules params.Rules, intrinsicGas uint64) {
 	evmGas := st.msg.GasLimit - intrinsicGas
 	gasLeft := evmGas
-	if rules.IsAmsterdam {
+	if rules.IsAmsterdam && !st.msg.skipExecutionGasCap {
 		gasLeft = min(params.MaxTxGas-intrinsicGas, evmGas)
 	}
 	st.gasRemaining = vm.NewGasBudget(gasLeft, evmGas-gasLeft)
@@ -539,12 +568,12 @@ func (st *stateTransition) initRuntimeGasBudget(rules params.Rules, intrinsicGas
 //
 //   - Insufficient block gas budget for including the transaction.
 //
-// The SkipNonceChecks / SkipTransactionChecks / NoBaseFee flags bypass
-// subsets of these checks for simulation paths (eth_call, eth_estimateGas).
+// The SkipNonceCheck / SkipEOACheck / SkipGasLimitCapCheck / NoBaseFee flags
+// bypass subsets of these checks for simulation paths (eth_call, eth_estimateGas).
 func (st *stateTransition) preCheck(rules params.Rules) error {
 	// Only check transactions that are not fake
 	msg := st.msg
-	if !msg.SkipNonceChecks {
+	if !msg.skipNonceCheck {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(msg.From)
 		if msgNonce := msg.Nonce; stNonce < msgNonce {
@@ -558,7 +587,7 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 				msg.From.Hex(), stNonce)
 		}
 	}
-	if !msg.SkipTransactionChecks {
+	if !msg.skipGasLimitCapCheck {
 		// Verify tx gas limit does not exceed the EIP-8037 total cap, or the EIP-7825 cap before it.
 		if rules.IsAmsterdam && msg.GasLimit > params.MaxTxTotalGas {
 			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxTotalGas, msg.GasLimit)
@@ -566,6 +595,8 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 		if !rules.IsAmsterdam && rules.IsOsaka && msg.GasLimit > params.MaxTxGas {
 			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
 		}
+	}
+	if !msg.skipEOACheck {
 		// Make sure the sender is an EOA
 		code := st.state.GetCode(msg.From)
 		_, delegated := types.ParseDelegation(code)
@@ -653,7 +684,11 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 	// Reserve the gas budget in the block gas pool
 	var err error
 	if rules.IsAmsterdam {
-		err = st.gp.CheckGasAmsterdam(min(st.msg.GasLimit, params.MaxTxGas), st.msg.GasLimit)
+		executionGas := st.msg.GasLimit
+		if !st.msg.skipExecutionGasCap {
+			executionGas = min(executionGas, params.MaxTxGas)
+		}
+		err = st.gp.CheckGasAmsterdam(executionGas, st.msg.GasLimit)
 	} else {
 		err = st.gp.CheckGasLegacy(st.msg.GasLimit)
 	}
@@ -710,7 +745,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// In Amsterdam, the transaction gas limit is allowed to exceed
 	// params.MaxTxGas, but the intrinsic cost and calldata floor
 	// cost is still capped by it.
-	if rules.IsAmsterdam && max(intrinsicGas, floorDataGas) > params.MaxTxGas {
+	if rules.IsAmsterdam && !msg.skipExecutionGasCap && max(intrinsicGas, floorDataGas) > params.MaxTxGas {
 		return nil, fmt.Errorf("%w: intrinsic cost %v, floor: %v", ErrFloorDataGas, intrinsicGas, floorDataGas)
 	}
 

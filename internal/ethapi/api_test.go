@@ -4015,6 +4015,98 @@ func TestEstimateGasAmsterdam(t *testing.T) {
 	}
 }
 
+// TestExecutionGasCapAmsterdam checks that after Amsterdam (EIP-8037), eth_call
+// and non-strict eth_simulateV1 may spend more than params.MaxTxGas on execution,
+// while eth_estimateGas and strict eth_simulateV1 are still bound by it.
+func TestExecutionGasCapAmsterdam(t *testing.T) {
+	t.Parallel()
+
+	const (
+		threshold = 20_000_000 // Execution gas the contract requires, above params.MaxTxGas
+		gasLimit  = 30_000_000 // Gas limit of the calls
+		gasCap    = 50_000_000 // RPC gas cap
+	)
+	var (
+		accounts = newAccounts(1)
+		contract = common.HexToAddress("0x000000000000000000000000000000000000c0de")
+		config   = *params.MergedTestChainConfig
+		genesis  = &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			GasLimit:   60_000_000,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: new(big.Int).Mul(big.NewInt(10), big.NewInt(params.Ether))},
+				// Returns the gas left at entry if it is at least threshold, reverts otherwise:
+				//   GAS PUSH4 threshold DUP2 LT PUSH1 0x11 JUMPI
+				//   PUSH0 MSTORE PUSH1 0x20 PUSH0 RETURN
+				//   JUMPDEST PUSH0 PUSH0 REVERT
+				contract: {Code: common.FromHex("0x5a6301312d0081106011575f5260205ff35b5f5ffd")},
+			},
+		}
+	)
+	config.AmsterdamTime = new(uint64)
+	backend := newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil)
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+	newArgs := func() TransactionArgs {
+		gas := hexutil.Uint64(gasLimit)
+		return TransactionArgs{
+			From:         &accounts[0].addr,
+			To:           &contract,
+			Gas:          &gas,
+			MaxFeePerGas: (*hexutil.Big)(big.NewInt(params.GWei)),
+		}
+	}
+
+	// eth_call gets the whole gas limit for execution.
+	res, err := DoCall(context.Background(), backend, newArgs(), latest, nil, nil, time.Second, gasCap)
+	if err != nil {
+		t.Fatalf("eth_call: unexpected error: %v", err)
+	}
+	if res.Err != nil {
+		t.Fatalf("eth_call: execution failed: %v", res.Err)
+	}
+	if left := new(big.Int).SetBytes(res.ReturnData); left.Cmp(big.NewInt(threshold)) < 0 {
+		t.Fatalf("eth_call: execution gas too low: have %v, want >= %d", left, threshold)
+	}
+
+	// eth_estimateGas must not report a gas limit that a transaction cannot
+	// actually execute with.
+	if gas, err := DoEstimateGas(context.Background(), backend, newArgs(), latest, nil, nil, gasCap); err == nil {
+		t.Fatalf("eth_estimateGas: expected error, have estimate %d", gas)
+	}
+
+	// eth_simulateV1 lifts the cap only in non-strict mode.
+	for _, validate := range []bool{false, true} {
+		state, base, err := backend.StateAndHeaderByNumberOrHash(context.Background(), latest)
+		if err != nil {
+			t.Fatalf("failed to retrieve state: %v", err)
+		}
+		sim := &simulator{
+			b:           backend,
+			state:       state,
+			base:        base,
+			chainConfig: backend.ChainConfig(),
+			budget:      newGasBudget(gasCap),
+			validate:    validate,
+		}
+		results, err := sim.execute(context.Background(), []simBlock{{Calls: []TransactionArgs{newArgs()}}})
+		if err != nil {
+			t.Fatalf("eth_simulateV1 (validate=%v): unexpected error: %v", validate, err)
+		}
+		call := results[0].Calls[0]
+		if validate {
+			if call.Status != hexutil.Uint64(types.ReceiptStatusFailed) {
+				t.Errorf("eth_simulateV1 (validate=true): expected failure, have status %d", call.Status)
+			}
+		} else {
+			if call.Status != hexutil.Uint64(types.ReceiptStatusSuccessful) {
+				t.Errorf("eth_simulateV1 (validate=false): expected success, have status %d, error %v", call.Status, call.Error)
+			}
+		}
+	}
+}
+
 func TestEstimateGasWithMovePrecompile(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
