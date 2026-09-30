@@ -17,6 +17,8 @@
 package blsync
 
 import (
+	"strings"
+
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/api"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
@@ -63,6 +65,7 @@ func NewClient(config params.ClientConfig) *Client {
 	checkpointInit := sync.NewCheckpointInit(committeeChain, config.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
 	beaconBlockSync := newBeaconBlockSync(headTracker)
+	beaconBlockSync.prefetch = beforeGloas(&config.ChainConfig)
 	scheduler.RegisterTarget(headTracker)
 	scheduler.RegisterTarget(committeeChain)
 	scheduler.RegisterModule(checkpointInit, "checkpointInit")
@@ -100,5 +103,17 @@ func (c *Client) Stop() error {
 	c.engineClient.stop()
 	c.chainHeadSub.Unsubscribe()
 	c.scheduler.Stop()
+	return nil
+}
+
+// beforeGloas returns whether a slot is before the Gloas fork, from which on the execution
+// payload of a block is published separately and later.
+func beforeGloas(config *params.ChainConfig) func(slot uint64) bool {
+	for _, fork := range config.Forks {
+		if strings.EqualFold(fork.Name, "gloas") {
+			gloas := fork.Epoch
+			return func(slot uint64) bool { return slot/params.EpochLength < gloas }
+		}
+	}
 	return nil
 }
