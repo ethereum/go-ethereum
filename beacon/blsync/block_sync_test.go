@@ -163,6 +163,34 @@ func TestBlockSync(t *testing.T) {
 	expHeadEvent(testBlock2, testFinal2)
 }
 
+// TestBlockSyncNoPrefetch tests that a head announced for a slot where prefetching is off
+// (from Gloas on) is not fetched until it is validated.
+func TestBlockSyncNoPrefetch(t *testing.T) {
+	ht := &testHeadTracker{}
+	blockSync := newBeaconBlockSync(ht)
+	blockSync.prefetch = func(slot uint64) bool { return slot < testBlock2.Slot() }
+	ts := sync.NewTestScheduler(t, blockSync)
+	ts.AddServer(testServer1, 1)
+
+	// block 1 is before the cut: prefetched as usual
+	head1 := blockHeadInfo(testBlock1)
+	ht.prefetch = head1
+	ts.ServerEvent(sync.EvNewHead, testServer1, head1)
+	ts.Run(1, testServer1, sync.ReqBeaconBlock(head1.BlockRoot))
+	ts.RequestEvent(request.EvResponse, ts.Request(1, 1), testBlock1)
+	ts.AddAllowance(testServer1, 1)
+
+	// block 2 is announced but not prefetched
+	head2 := blockHeadInfo(testBlock2)
+	ht.prefetch = head2
+	ts.ServerEvent(sync.EvNewHead, testServer1, head2)
+	ts.Run(2)
+
+	// once validated, it is fetched
+	ht.validated.Header = testBlock2.Header()
+	ts.Run(3, testServer1, sync.ReqBeaconBlock(head2.BlockRoot))
+}
+
 type testHeadTracker struct {
 	prefetch         types.HeadInfo
 	validated        types.SignedHeader
