@@ -117,6 +117,7 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracin
 		Gas:           gas,
 		GasCost:       cost,
 		MemorySize:    len(memory),
+		CreateAddr:    projectedCreateAddress(vm.OpCode(op), scope, l.env.StateDB),
 		Depth:         depth,
 		RefundCounter: l.env.StateDB.GetRefund(),
 		Err:           err,
