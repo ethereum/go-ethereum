@@ -2403,8 +2403,10 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// Resolve the EVM config for this execution before any component consults it.
 	vmConfig := bc.overrideTracerActivation(config.EnableTracer)
 
-	// The chain writer may still be committing the parent state.
-	bc.writer.waitState(parentRoot)
+	// The chain writer may still be committing the parent state. Reading it
+	// would wait for the flattening too, so wait for that here and count it
+	// as commit time.
+	commitWait := bc.writer.waitFlattened(parentRoot)
 
 	// Set up the state reader feeding execution, along with a cleanup to run once
 	// processing is complete (stop the prefetcher, upload reader statistics).
@@ -2454,6 +2456,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 
 	// Process block using the parent state as reference point
 	stats := new(ExecuteStats)
+	stats.Commit.Wait = commitWait
 	pctx, _, spanEnd := telemetry.StartSpan(ctx, "bc.processor.Process")
 	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.precompileCache, vmConfig, &execIndex, &stats.Process)
 	spanEnd(&err)

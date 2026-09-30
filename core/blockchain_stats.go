@@ -131,6 +131,7 @@ type CommitStats struct {
 	AccountCommits time.Duration // Time spent on the account trie commit
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	DatabaseCommit time.Duration // Time spent on database commit
+	Wait           time.Duration // Time spent waiting for the chain writer to commit the parent state
 }
 
 // reportMetrics uploads execution statistics to the metrics system.
@@ -167,7 +168,7 @@ func (s *ExecuteStats) reportMetrics() {
 	blockInsertTimer.Update(s.TotalTime)                    // The total time spent on block execution
 	blockProcessTimer.Update(p.Total)                       // The wall-clock time of the processing phase
 	blockValidateTimer.Update(v.Total)                      // The wall-clock time of the validation phase
-	blockCommitTimer.Update(c.Total)                        // The wall-clock time of the write phase
+	blockCommitTimer.Update(c.Total + c.Wait)               // The wall-clock time of the write phase and the wait for the parent
 	chainMgaspsMeter.Update(time.Duration(s.MgasPerSecond)) // TODO(rjl493456442) generalize the ResettingTimer
 
 	// Cache hit rates
@@ -298,14 +299,14 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			ExecutionMs: durationToMs(s.Process.Execution),
 			StateReadMs: durationToMs(s.Process.stateReads()),
 			StateHashMs: durationToMs(s.Validate.stateHashes()),
-			CommitMs:    durationToMs(max(s.Commit.AccountCommits, s.Commit.StorageCommits) + s.Commit.DatabaseCommit),
+			CommitMs:    durationToMs(max(s.Commit.AccountCommits, s.Commit.StorageCommits) + s.Commit.DatabaseCommit + s.Commit.Wait),
 			TotalMs:     durationToMs(s.TotalTime),
 		},
 		Phases: slowBlockPhases{
 			PrepareMs:  durationToMs(s.Prepare),
 			ProcessMs:  durationToMs(s.Process.Total),
 			ValidateMs: durationToMs(s.Validate.Total),
-			CommitMs:   durationToMs(s.Commit.Total),
+			CommitMs:   durationToMs(s.Commit.Total + s.Commit.Wait),
 		},
 		Throughput: slowBlockThru{
 			MgasPerSec: s.MgasPerSecond,
