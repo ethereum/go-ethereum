@@ -103,6 +103,12 @@ var (
 			Tags:   "womir",
 		},
 		{
+			Name:   "zisk",
+			GOOS:   "wasip1",
+			GOARCH: "wasm",
+			Tags:   "zisk",
+		},
+		{
 			Name:   "wasm-js",
 			GOOS:   "js",
 			GOARCH: "wasm",
