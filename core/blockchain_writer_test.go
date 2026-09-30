@@ -451,17 +451,20 @@ func TestDeferredWriteSiblingHead(t *testing.T) {
 	if !chain.QueueHead(blocks[2]) {
 		t.Fatal("head update not queued")
 	}
-	if _, err := chain.InsertBlockWithoutSetHead(context.Background(), sibling, false); err != nil {
-		t.Fatalf("failed to insert sibling: %v", err)
-	}
-	// The sibling extends the current head, but not the queued one. Turning it
-	// down waits for the queued writes, which are held.
-	queued := make(chan bool, 1)
-	go func() { queued <- chain.QueueHead(sibling) }()
-
+	// The sibling doesn't build on the queued block, so its write waits for the
+	// queued writes, which are held, and then runs synchronously
+	inserted := make(chan error, 1)
+	go func() {
+		_, err := chain.InsertBlockWithoutSetHead(context.Background(), sibling, false)
+		inserted <- err
+	}()
 	probe.wait(t, "drain", common.Hash{})
 	probe.release("persist", blocks[2])
-	if <-queued {
+	if err := <-inserted; err != nil {
+		t.Fatalf("failed to insert sibling: %v", err)
+	}
+	// It extends the current head, but was never handed over, so it can't be queued
+	if chain.QueueHead(sibling) {
 		t.Fatal("sibling head queued without a reorg")
 	}
 	// The synchronous update reorgs away from the queued head
@@ -659,6 +662,53 @@ func TestDeferredWriteLastState(t *testing.T) {
 	}
 	if chain.writer.hasState(blocks[1].Root()) {
 		t.Fatal("state of the last block written still present after a rewind")
+	}
+}
+
+// Tests that a block on another branch than the queued ones is written synchronously,
+// so its flattening can't drop a layer the writer still counts as present.
+func TestDeferredWriteForkSynchronous(t *testing.T) {
+	const synced = 130
+	chain, gspec, blocks, genDb := newWriteTestChain(t, synced+1, rawdb.NewMemoryDatabase(), DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	defer chain.Stop()
+
+	// Fill the layer tree, the disk layer ends up at block 2
+	if _, err := chain.InsertChain(blocks[:synced]); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+	// Queue a side block right on top of the disk layer and hold its block data
+	side, _ := GenerateChain(gspec.Config, blocks[1], beacon.New(ethash.NewFaker()), genDb, 1, func(i int, gen *BlockGen) {
+		gen.AddTx(writeTestTx(gspec.Config, gen, common.Address{0x02}))
+	})
+	probe := newWriteProbe(chain)
+	probe.hold("persist", side[0])
+	defer probe.releaseAll()
+
+	if _, err := chain.InsertBlockWithoutSetHead(context.Background(), side[0], false); err != nil {
+		t.Fatalf("failed to insert side block: %v", err)
+	}
+	// The next canonical block doesn't build on it, so its write waits for the
+	// queued one and then runs synchronously
+	block := blocks[synced]
+	inserted := make(chan error, 1)
+	go func() {
+		_, err := chain.InsertBlockWithoutSetHead(context.Background(), block, false)
+		inserted <- err
+	}()
+	probe.wait(t, "drain", common.Hash{})
+	probe.release("persist", side[0])
+	if err := <-inserted; err != nil {
+		t.Fatalf("failed to insert block: %v", err)
+	}
+	if probe.count("state", block) != 0 {
+		t.Fatal("block on another branch queued")
+	}
+	// Its flattening dropped the side layer, and nothing counts it as present anymore
+	if _, err := chain.TrieDB().NodeReader(side[0].Root()); err == nil {
+		t.Fatal("side layer not dropped")
+	}
+	if chain.HasState(side[0].Root()) {
+		t.Fatal("dropped side state still present")
 	}
 }
 
