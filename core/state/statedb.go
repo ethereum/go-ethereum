@@ -134,6 +134,10 @@ type StateDB struct {
 	// Block access index (0 for pre-execution, 1..n for transactions, n+1 for post-execution)
 	blockAccessIndex uint32
 
+	// sameIndexBaseline holds pre-values for the block access index whose
+	// scopes are being reconciled. It is nil outside that window.
+	sameIndexBaseline *sameIndexBaseline
+
 	// Transient storage
 	transientStorage transientStorage
 
@@ -708,6 +712,7 @@ func (s *StateDB) Copy() *StateDB {
 		thash:                s.thash,
 		txIndex:              s.txIndex,
 		blockAccessIndex:     s.blockAccessIndex,
+		sameIndexBaseline:    s.sameIndexBaseline.copy(),
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),

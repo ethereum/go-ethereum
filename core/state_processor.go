@@ -193,6 +193,17 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 
 	if config.IsAmsterdam(number, time) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
+		// Withdrawals and the post-execution system calls share blockAccessIndex
+		// and finalise separately. Capture pre-values on the first mutation of
+		// this index, including when tracing wraps the state.
+		state.BeginSameIndexBaseline(evm.StateDB, blockAccessIndex)
+		defer func() {
+			if err != nil || blockAccessList == nil {
+				state.DiscardSameIndexBaseline(evm.StateDB)
+				return
+			}
+			state.NetSameIndexChanges(evm.StateDB, blockAccessList, blockAccessIndex)
+		}()
 	}
 	rules := config.Rules(number, true, time) // IsMerge is always true
 
