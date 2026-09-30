@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -79,16 +80,37 @@ func (h *heldStream) advance() { h.key, h.value = nil, nil }
 // rederiveMerkleRoot folds account and storage records back into a
 // merkle-patricia trie and returns its root. Both streams must ascend, which
 // the sorters guarantee. Storage under no account is the loss this check
-// exists to catch, so it errors rather than being skipped. With a batch, the
-// fold also writes the flat account and storage state, in the keccak order it
-// already walks; the converter passes none.
-func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, pbtBatch ethdb.Batch, flush func(bool) error, start time.Time) (common.Hash, error) {
+// exists to catch, so it errors rather than being skipped.
+//
+// With a batch, the fold also writes the flat state in the keccak order it
+// walks: storage rows as it goes, account rows spilled to a file under tmpDir
+// and written after the last storage row, so no flushed table mixes the two
+// key families. Everything is written by return, batch included.
+func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch, tmpDir string, start time.Time) (common.Hash, error) {
 	var (
 		slotHeld    = &heldStream{stream: slots}
 		accountTrie = trie.NewStackTrie(nil)
 		storageTrie = trie.NewStackTrie(nil)
 		rederived   uint64
+		acctRows    *spillFile
 	)
+	if batch != nil {
+		var err error
+		if acctRows, err = newSpillFile(tmpDir, "bintrie-acctrows-*"); err != nil {
+			return common.Hash{}, err
+		}
+		defer acctRows.close()
+	}
+	flush := func() error {
+		if batch.ValueSize() < ethdb.IdealBatchSize {
+			return nil
+		}
+		if err := batch.Write(); err != nil {
+			return err
+		}
+		batch.Reset()
+		return nil
+	}
 	for {
 		akey, avalue, err := accounts.Next()
 		if err == io.EOF {
@@ -125,9 +147,9 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, pbtBatch ethdb.Ba
 				if err := storageTrie.Update(skey[common.HashLength:], svalue); err != nil {
 					return common.Hash{}, err
 				}
-				if pbtBatch != nil {
-					rawdb.WriteStorageSnapshot(pbtBatch, accountHash, common.BytesToHash(skey[common.HashLength:]), svalue)
-					if err := flush(false); err != nil {
+				if batch != nil {
+					rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(skey[common.HashLength:]), svalue)
+					if err := flush(); err != nil {
 						return common.Hash{}, err
 					}
 				}
@@ -152,14 +174,14 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, pbtBatch ethdb.Ba
 		if err := accountTrie.Update(akey, full); err != nil {
 			return common.Hash{}, err
 		}
-		if pbtBatch != nil {
-			rawdb.WriteAccountSnapshot(pbtBatch, accountHash, types.SlimAccountRLP(types.StateAccount{
+		if acctRows != nil {
+			slim := types.SlimAccountRLP(types.StateAccount{
 				Nonce:    nonce,
 				Balance:  balance,
 				Root:     types.EmptyRootHash,
 				CodeHash: codeHash,
-			}))
-			if err := flush(false); err != nil {
+			})
+			if err := acctRows.add(akey, slim); err != nil {
 				return common.Hash{}, err
 			}
 		}
@@ -174,5 +196,19 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, pbtBatch ethdb.Ba
 	} else if skey != nil {
 		return common.Hash{}, fmt.Errorf("storage under account hash %x, which holds no account", skey[:common.HashLength])
 	}
+	if batch == nil {
+		return accountTrie.Hash(), nil
+	}
+	err := acctRows.replay(bufio.NewReaderSize(nil, 256<<10), func(hash, row []byte) error {
+		rawdb.WriteAccountSnapshot(batch, common.BytesToHash(hash), row)
+		return flush()
+	})
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if err := batch.Write(); err != nil {
+		return common.Hash{}, err
+	}
+	batch.Reset()
 	return accountTrie.Hash(), nil
 }

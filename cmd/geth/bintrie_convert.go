@@ -17,8 +17,6 @@
 package main
 
 import (
-	"bufio"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -304,16 +302,17 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 			}
 		}()
 	}
-	// Phase 1: scan, deriving leaves and streaming flat state.
+	// Phase 1: scan, deriving leaves.
 	src := leafSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
-	if err := deriveLeaves(chaindb, pbtdb, src, sorter, accounts, slots, preimages, stats, opts.tmpDir); err != nil {
+	if err := deriveLeaves(chaindb, src, sorter, accounts, slots, preimages, stats); err != nil {
 		return common.Hash{}, err
 	}
 	stats.report(true)
 
 	// Check 1, before the build: the other two checks are fed by this same
-	// record set, so only this one ties the output to the source state.
-	if err := verifySourceRoot(accounts, slots, root, stats.start); err != nil {
+	// record set, so only this one ties the output to the source state. The
+	// fold writes the flat state as it goes.
+	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), opts.tmpDir, stats.start); err != nil {
 		return common.Hash{}, err
 	}
 	accounts.Close()
@@ -457,9 +456,9 @@ func (t *trieLeafIterator) Account() []byte   { return t.it.Value }
 func (t *trieLeafIterator) Slot() []byte      { return t.it.Value }
 
 // deriveLeaves scans the source state at root, deriving every tree leaf into
-// the sorter, writing flat state alongside, and recording the merkle
-// re-derivation limbs the source-root check folds back up.
-func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, src leafSource, sorter, accounts, slots *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats, tmpDir string) error {
+// the sorter and recording the merkle re-derivation limbs the source-root
+// check folds back up.
+func deriveLeaves(chaindb ethdb.Database, src leafSource, sorter, accounts, slots *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats) error {
 	// ponytail: a flat scan holds one pebble read snapshot throughout,
 	// pinning a memtable and every table compacted meanwhile (the old flat
 	// state on a --force reconvert). Reopen from the last hash every 30s, as
@@ -469,37 +468,7 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, src leafSource, 
 		return fmt.Errorf("failed to open source accounts: %w", err)
 	}
 	defer accIter.Release()
-	var (
-		storageBatch = pbtdb.NewBatch()
-		seenCode     = make(map[common.Hash]struct{})
-	)
-	// Flat accounts are spilled to a sequential temp file - already
-	// ascending, since the scan visits accounts in keccak order - and
-	// replayed into a fresh batch after the storage writes finish, so
-	// their "a"-prefixed keys never interleave in the LSM with the
-	// "o"-prefixed storage keys the same batch would otherwise carry: the
-	// two ranges land in disjoint, non-overlapping sstables instead of
-	// every flush spanning both. The file keeps memory constant in the
-	// number of accounts.
-	acctFile, err := os.CreateTemp(tmpDir, "bintrie-acctrows-*")
-	if err != nil {
-		return fmt.Errorf("failed to create account row spill file: %w", err)
-	}
-	defer os.Remove(acctFile.Name())
-	defer acctFile.Close()
-	acctW := bufio.NewWriter(acctFile)
-	var acctLenBuf [4]byte
-	spillAcctRow := func(hash common.Hash, val []byte) error {
-		if _, err := acctW.Write(hash[:]); err != nil {
-			return err
-		}
-		binary.BigEndian.PutUint32(acctLenBuf[:], uint32(len(val)))
-		if _, err := acctW.Write(acctLenBuf[:]); err != nil {
-			return err
-		}
-		_, err := acctW.Write(val)
-		return err
-	}
+	seenCode := make(map[common.Hash]struct{})
 	// RecordSorter.Add copies its inputs, so one key buffer serves every slot.
 	var slotKeyBuf [2 * common.HashLength]byte
 	emit := func(key []byte, value [32]byte) error {
@@ -545,20 +514,12 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, src leafSource, 
 			if err := emit(bintrie.StorageSlotKey(addr, slotKey), padded); err != nil {
 				return err
 			}
-			rawdb.WriteStorageSnapshot(storageBatch, accountHash, slotHash, common.CopyBytes(slotVal))
 			copy(slotKeyBuf[:common.HashLength], accountHash[:])
 			copy(slotKeyBuf[common.HashLength:], slotHash[:])
 			if err := slots.Add(slotKeyBuf[:], slotVal); err != nil {
 				return err
 			}
 			stats.slots++
-
-			if storageBatch.ValueSize() >= ethdb.IdealBatchSize {
-				if err := storageBatch.Write(); err != nil {
-					return err
-				}
-				storageBatch.Reset()
-			}
 		}
 		if err := storageIter.Error(); err != nil {
 			return fmt.Errorf("storage iteration failed for %x: %w", addr, err)
@@ -589,14 +550,6 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, src leafSource, 
 		if err := emitAccountHeader(chaindb, addr, acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash), seenCode, stats, emit); err != nil {
 			return err
 		}
-
-		// Normalize the storage root: replaying nodes record EmptyRootHash.
-		slim := *acc
-		slim.Root = types.EmptyRootHash
-		val := types.SlimAccountRLP(slim)
-		if err := spillAcctRow(accountHash, val); err != nil {
-			return err
-		}
 		if err := accounts.Add(accountHash.Bytes(), merkleAccountRecord(acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash))); err != nil {
 			return err
 		}
@@ -607,53 +560,12 @@ func deriveLeaves(chaindb ethdb.Database, pbtdb ethdb.Database, src leafSource, 
 			}
 		}
 		stats.accounts++
-		if storageBatch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := storageBatch.Write(); err != nil {
-				return err
-			}
-			storageBatch.Reset()
-		}
 		stats.report(false)
 	}
 	if err := accIter.Error(); err != nil {
 		return fmt.Errorf("account iteration failed: %w", err)
 	}
-	if err := storageBatch.Write(); err != nil {
-		return err
-	}
-	if err := acctW.Flush(); err != nil {
-		return err
-	}
-	if _, err := acctFile.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	acctBatch := pbtdb.NewBatch()
-	acctR := bufio.NewReader(acctFile)
-	for {
-		var hash common.Hash
-		if _, err := io.ReadFull(acctR, hash[:]); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-		var lenBuf [4]byte
-		if _, err := io.ReadFull(acctR, lenBuf[:]); err != nil {
-			return err
-		}
-		val := make([]byte, binary.BigEndian.Uint32(lenBuf[:]))
-		if _, err := io.ReadFull(acctR, val); err != nil {
-			return err
-		}
-		rawdb.WriteAccountSnapshot(acctBatch, hash, val)
-		if acctBatch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := acctBatch.Write(); err != nil {
-				return err
-			}
-			acctBatch.Reset()
-		}
-	}
-	return acctBatch.Write()
+	return nil
 }
 
 // checkPreimage rejects a preimage of the wrong length or one that does not
@@ -832,8 +744,8 @@ func (r rawBinaryNodes) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte,
 
 // verifySourceRoot demands that the scanned records re-derive the state root
 // they were read from, the converter's counterpart to the importer's anchor
-// check.
-func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, start time.Time) error {
+// check. With a batch it also writes the flat state, see rederiveMerkleRoot.
+func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, tmpDir string, start time.Time) error {
 	acctStream, err := accounts.Sort()
 	if err != nil {
 		return err
@@ -842,7 +754,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, s
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, nil, nil, start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, tmpDir, start)
 	if err != nil {
 		return err
 	}

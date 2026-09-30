@@ -23,7 +23,6 @@ import (
 	"io"
 	"maps"
 	"os"
-	"path/filepath"
 	"slices"
 )
 
@@ -38,13 +37,7 @@ import (
 // instead.
 type nodeStager struct {
 	dir    string
-	depths map[int]*stagedDepth
-	head   [2 * binary.MaxVarintLen64]byte // a record's length prefix
-}
-
-type stagedDepth struct {
-	f *os.File
-	w *bufio.Writer
+	depths map[int]*spillFile
 }
 
 // newNodeStager stages its files in a fresh directory under tmpDir.
@@ -53,7 +46,7 @@ func newNodeStager(tmpDir string) (*nodeStager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &nodeStager{dir: dir, depths: make(map[int]*stagedDepth)}, nil
+	return &nodeStager{dir: dir, depths: make(map[int]*spillFile)}, nil
 }
 
 // nodeDepth is the bit count encodePath leads a node's path with. The root's
@@ -65,67 +58,29 @@ func nodeDepth(path []byte) int {
 	return int(binary.BigEndian.Uint16(path))
 }
 
-// add appends one node to its depth's file, path and blob length-prefixed.
-// Neither needs to outlive the call.
+// add appends one node to its depth's file. Neither path nor blob needs to
+// outlive the call.
 func (s *nodeStager) add(path, blob []byte) error {
 	depth := nodeDepth(path)
 	d := s.depths[depth]
 	if d == nil {
-		f, err := os.Create(filepath.Join(s.dir, fmt.Sprintf("depth-%d", depth)))
-		if err != nil {
+		var err error
+		if d, err = newSpillFile(s.dir, fmt.Sprintf("depth-%d-*", depth)); err != nil {
 			return err
 		}
-		d = &stagedDepth{f: f, w: bufio.NewWriterSize(f, 256<<10)}
 		s.depths[depth] = d
 	}
-	n := binary.PutUvarint(s.head[:], uint64(len(path)))
-	n += binary.PutUvarint(s.head[n:], uint64(len(blob)))
-	if _, err := d.w.Write(s.head[:n]); err != nil {
-		return err
-	}
-	if _, err := d.w.Write(path); err != nil {
-		return err
-	}
-	_, err := d.w.Write(blob)
-	return err
+	return d.add(path, blob)
 }
 
 // replay feeds every staged node to write in database key order: depth by
 // depth, each depth in the order its nodes were added. path and blob are only
 // valid for the call.
 func (s *nodeStager) replay(write func(path, blob []byte) error) error {
-	var (
-		r   = bufio.NewReaderSize(nil, 1<<20)
-		buf []byte
-	)
+	r := bufio.NewReaderSize(nil, 1<<20)
 	for _, depth := range slices.Sorted(maps.Keys(s.depths)) {
-		d := s.depths[depth]
-		if err := d.w.Flush(); err != nil {
+		if err := s.depths[depth].replay(r, write); err != nil {
 			return err
-		}
-		if _, err := d.f.Seek(0, io.SeekStart); err != nil {
-			return err
-		}
-		r.Reset(d.f)
-		for {
-			plen, err := binary.ReadUvarint(r)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return err
-			}
-			blen, err := binary.ReadUvarint(r)
-			if err != nil {
-				return err
-			}
-			buf = slices.Grow(buf[:0], int(plen+blen))[:plen+blen]
-			if _, err := io.ReadFull(r, buf); err != nil {
-				return err
-			}
-			if err := write(buf[:plen], buf[plen:]); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -134,7 +89,79 @@ func (s *nodeStager) replay(write func(path, blob []byte) error) error {
 // close removes the staging files.
 func (s *nodeStager) close() {
 	for _, d := range s.depths {
-		d.f.Close()
+		d.close()
 	}
 	os.RemoveAll(s.dir)
+}
+
+// spillFile is an append-only temp file of two-field records, read back in
+// the order they were added.
+type spillFile struct {
+	f    *os.File
+	w    *bufio.Writer
+	head [2 * binary.MaxVarintLen64]byte // a record's length prefix
+}
+
+// newSpillFile creates a spill file in dir, named from pattern as
+// os.CreateTemp does.
+func newSpillFile(dir, pattern string) (*spillFile, error) {
+	f, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	return &spillFile{f: f, w: bufio.NewWriterSize(f, 256<<10)}, nil
+}
+
+// add appends one record, both fields length-prefixed. Neither needs to
+// outlive the call.
+func (s *spillFile) add(a, b []byte) error {
+	n := binary.PutUvarint(s.head[:], uint64(len(a)))
+	n += binary.PutUvarint(s.head[n:], uint64(len(b)))
+	if _, err := s.w.Write(s.head[:n]); err != nil {
+		return err
+	}
+	if _, err := s.w.Write(a); err != nil {
+		return err
+	}
+	_, err := s.w.Write(b)
+	return err
+}
+
+// replay feeds every record to fn in the order added, reading through r. a
+// and b are only valid for the call.
+func (s *spillFile) replay(r *bufio.Reader, fn func(a, b []byte) error) error {
+	if err := s.w.Flush(); err != nil {
+		return err
+	}
+	if _, err := s.f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	r.Reset(s.f)
+	var buf []byte
+	for {
+		alen, err := binary.ReadUvarint(r)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		blen, err := binary.ReadUvarint(r)
+		if err != nil {
+			return err
+		}
+		buf = slices.Grow(buf[:0], int(alen+blen))[:alen+blen]
+		if _, err := io.ReadFull(r, buf); err != nil {
+			return err
+		}
+		if err := fn(buf[:alen], buf[alen:]); err != nil {
+			return err
+		}
+	}
+}
+
+// close removes the file.
+func (s *spillFile) close() {
+	s.f.Close()
+	os.Remove(s.f.Name())
 }
