@@ -17,7 +17,6 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -192,12 +191,19 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.postExecution")
 	defer spanEnd(&err)
 
-	var baselineState vm.StateDB
 	if config.IsAmsterdam(number, time) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
-		if sdb, ok := evm.StateDB.(*state.StateDB); ok {
-			baselineState = sdb.Copy()
-		}
+		// Withdrawals and the post-execution system calls share blockAccessIndex
+		// and finalise separately. Capture pre-values on the first mutation of
+		// this index, including when tracing wraps the state.
+		state.BeginSameIndexBaseline(evm.StateDB, blockAccessIndex)
+		defer func() {
+			if err != nil || blockAccessList == nil {
+				state.DiscardSameIndexBaseline(evm.StateDB)
+				return
+			}
+			state.NetSameIndexChanges(evm.StateDB, blockAccessList, blockAccessIndex)
+		}()
 	}
 	rules := config.Rules(number, true, time) // IsMerge is always true
 
@@ -231,46 +237,7 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 			return nil, nil, fmt.Errorf("failed to process builder exit queue: %w", err)
 		}
 	}
-	if baselineState != nil && blockAccessList != nil {
-		netSameIndexChanges(blockAccessList, blockAccessIndex, baselineState)
-	}
 	return requests, blockAccessList, nil
-}
-
-// netSameIndexChanges reconciles all modifications recorded at blockAccessIndex against
-// baseline (captured immediately prior to this index). Any storage writes whose
-// final value matches the baseline value are demoted to reads (or dropped if other writes
-// exist for that slot), and any metadata changes (balance, nonce, code) whose final value
-// matches the baseline are dropped.
-func netSameIndexChanges(blockAccessList *bal.ConstructionBlockAccessList, blockAccessIndex uint32, baseline vm.StateDB) {
-	for addr, acc := range blockAccessList.Accounts {
-		var demoteSlots []common.Hash
-		for slot, writes := range acc.StorageWrites {
-			if postVal, ok := writes[blockAccessIndex]; ok {
-				if postVal == baseline.GetState(addr, slot) {
-					demoteSlots = append(demoteSlots, slot)
-				}
-			}
-		}
-		for _, slot := range demoteSlots {
-			blockAccessList.DemoteStorageWriteToRead(blockAccessIndex, addr, slot)
-		}
-		if postBal, ok := acc.BalanceChanges[blockAccessIndex]; ok {
-			if postBal.Cmp(baseline.GetBalance(addr)) == 0 {
-				blockAccessList.DropBalanceChange(blockAccessIndex, addr)
-			}
-		}
-		if postNonce, ok := acc.NonceChanges[blockAccessIndex]; ok {
-			if postNonce == baseline.GetNonce(addr) {
-				blockAccessList.DropNonceChange(blockAccessIndex, addr)
-			}
-		}
-		if postCode, ok := acc.CodeChange[blockAccessIndex]; ok {
-			if bytes.Equal(postCode, baseline.GetCode(addr)) {
-				blockAccessList.DropCodeChange(blockAccessIndex, addr)
-			}
-		}
-	}
 }
 
 // ProcessWithdrawals credits the given withdrawals to their recipients.

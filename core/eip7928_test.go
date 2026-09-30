@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -96,8 +97,44 @@ func (e *balTestEnv) run(t *testing.T, gen func(*BlockGen)) (*bal.BlockAccessLis
 		t.Fatal("expected non-nil block access list")
 	}
 	assertParallelEquiv(t, e.gspec, engine, blocks[0])
+	assertTracedEquiv(t, e.gspec, engine, blocks[0])
 
 	return blocks[0].AccessList(), receipts[0]
+}
+
+// assertTracedEquiv re-executes the block with a tracing wrapper around the
+// state. The wrapper must not change the access list: post-execution netting
+// reads pre-values from the concrete state either way.
+func assertTracedEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, block *types.Block) {
+	t.Helper()
+	if block.AccessList() == nil || block.BlockAccessListHash() == nil {
+		return
+	}
+	bc, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("new blockchain: %v", err)
+	}
+	defer bc.Stop()
+
+	statedb, err := bc.State()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	res, err := NewStateProcessor(bc).Process(context.Background(), block, statedb, nil, nil, vm.Config{
+		DisableParallelExecution: true,
+		Tracer:                   &tracing.Hooks{},
+	}, nil)
+	if err != nil {
+		t.Fatalf("traced process: %v", err)
+	}
+	traced, tracedHash := res.encodedAccessList()
+	if tracedHash != *block.BlockAccessListHash() {
+		printed := ""
+		if traced != nil {
+			printed = traced.PrettyPrint()
+		}
+		t.Fatalf("traced access list hash %x != committed %x\n%s", tracedHash, *block.BlockAccessListHash(), printed)
+	}
 }
 
 // assertParallelEquiv re-executes a sequentially-generated block through both
@@ -1536,6 +1573,7 @@ func TestBALPostExecutionQueueReads(t *testing.T) {
 // nets changes back to the pre-index baseline.
 func TestBALPostExecutionSameIndexNetting(t *testing.T) {
 	beneficiary := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	prior := uint256.NewInt(7)
 
 	// The forwarder contract forwards any received balance to beneficiary.
 	// bytecode: 4 zeros (retOffset, retSize, inOffset, inSize), SELFBALANCE (0x47), PUSH20 beneficiary, GAS (0x5a), CALL (0xf1)
@@ -1555,6 +1593,7 @@ func TestBALPostExecutionSameIndexNetting(t *testing.T) {
 			Code:    forwarderCode,
 			Balance: common.Big0,
 		},
+		beneficiary: {Balance: prior.ToBig()},
 	}
 	env := newBALTestEnv(extra)
 
@@ -1578,9 +1617,12 @@ func TestBALPostExecutionSameIndexNetting(t *testing.T) {
 	}
 
 	// Beneficiary should have the balance increase recorded at index 1 (post-execution index).
+	// The recorded value is the prior balance plus the forwarded 1 gwei.
 	benAA := assertPresent(t, b, beneficiary)
-	if len(benAA.BalanceChanges) != 1 || benAA.BalanceChanges[0].BlockAccessIndex != 1 {
-		t.Fatalf("expected beneficiary to record balance change at index 1, got: %+v", benAA.BalanceChanges)
+	wantBal := new(uint256.Int).Add(prior, uint256.NewInt(params.GWei))
+	if len(benAA.BalanceChanges) != 1 || benAA.BalanceChanges[0].BlockAccessIndex != 1 ||
+		benAA.BalanceChanges[0].PostBalance.Cmp(wantBal) != 0 {
+		t.Fatalf("expected beneficiary balance %s at index 1, got: %+v", wantBal, benAA.BalanceChanges)
 	}
 }
 
@@ -1639,6 +1681,51 @@ func TestBALPostExecutionStorageNetting(t *testing.T) {
 	// slot 1 MUST be in StorageReads
 	if !hasSlotIn(aa.StorageReads, slot) {
 		t.Fatalf("slot 1 must appear in storage_reads after demotion\n%s", b.PrettyPrint())
+	}
+}
+
+// TestBALPostExecutionKeepsPriorIndexWrite checks that netting stops at the
+// index boundary. A transaction write restored by the post-execution system
+// call stays in the access list at both indices.
+func TestBALPostExecutionKeepsPriorIndexWrite(t *testing.T) {
+	callerSlot := common.HexToHash("0x01")
+	counterSlot := common.HexToHash("0x02")
+	// SSTORE(1, CALLER); SSTORE(2, SLOAD(2) + 1); STOP
+	// SSTORE pops the key first, then the value.
+	code := []byte{
+		0x33, 0x60, 0x01, 0x55,
+		0x60, 0x02, 0x54, 0x60, 0x01, 0x01, 0x60, 0x02, 0x55,
+		0x00,
+	}
+	env := newBALTestEnv(types.GenesisAlloc{
+		params.ConsolidationQueueAddress: {
+			Nonce: 1,
+			Code:  code,
+			Storage: map[common.Hash]common.Hash{
+				callerSlot: common.BytesToHash(params.SystemAddress.Bytes()),
+			},
+			Balance: common.Big0,
+		},
+	})
+
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+		g.AddTx(env.tx(0, &params.ConsolidationQueueAddress, big.NewInt(0), 1_000_000, 0, nil))
+	})
+
+	aa := assertPresent(t, b, params.ConsolidationQueueAddress)
+	alice := common.BytesToHash(env.from.Bytes())
+	system := common.BytesToHash(params.SystemAddress.Bytes())
+	assertStorageChanges(t, aa, callerSlot, []balStorageChangeExpectation{
+		{index: 1, value: alice},
+		{index: 2, value: system},
+	})
+	assertStorageChanges(t, aa, counterSlot, []balStorageChangeExpectation{
+		{index: 1, value: common.HexToHash("0x01")},
+		{index: 2, value: common.HexToHash("0x02")},
+	})
+	if hasSlotIn(aa.StorageReads, callerSlot) || hasSlotIn(aa.StorageReads, counterSlot) {
+		t.Fatalf("restored slots must stay writes, not reads\n%s", b.PrettyPrint())
 	}
 }
 
