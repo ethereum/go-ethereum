@@ -765,16 +765,42 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		// Snap sync still inserting the headers before the target: the whole
 		// chain is in the ancient store, which holds headers only (its block
 		// data is empty up to the head), so there is nothing to prune.
-		if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 && freezerTail == frozen && latest < frozen {
+		if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 && latest < frozen {
+			// The block data tail normally sits at the ancient head, but a batch
+			// of headers interrupted between its ancient write and its tail
+			// truncation leaves it behind. The entries in between are then the
+			// nil placeholders written alongside the headers, at most a batch
+			// of them, so they are all checked and the tail is repaired, as no
+			// later insertion moves it otherwise.
+			if freezerTail < frozen {
+				for number := max(freezerTail, 1); number < frozen; number++ {
+					body, err := bc.db.Ancient(rawdb.ChainFreezerBodiesTable, number)
+					if err != nil {
+						return fmt.Errorf("failed to read block body %d: %w", number, err)
+					}
+					if len(body) != 0 {
+						return bc.historyPruningRequired(policy, freezerTail, frozen, latest)
+					}
+					receipts, err := bc.db.Ancient(rawdb.ChainFreezerReceiptTable, number)
+					if err != nil {
+						return fmt.Errorf("failed to read block receipts %d: %w", number, err)
+					}
+					if len(receipts) != 0 {
+						return bc.historyPruningRequired(policy, freezerTail, frozen, latest)
+					}
+				}
+				log.Warn("Repairing chain history tail", "tail", freezerTail, "frozen", frozen)
+				if _, err := bc.db.TruncateTail(rawdb.ChainFreezerBlockDataGroup, frozen); err != nil {
+					return fmt.Errorf("failed to repair chain history tail: %w", err)
+				}
+			}
 			bc.historyPrunePoint.Store(target)
 			return nil
 		}
 		// Database needs pruning (freezerTail < target).
 		if latest != 0 {
-			arg := policy.String()
-			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned to the target block.", policy.Mode.String()))
-			log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", arg))
-			return errors.New("history pruning required")
+			frozen, _ := bc.db.Ancients()
+			return bc.historyPruningRequired(policy, freezerTail, frozen, latest)
 		}
 		// Fresh database (latest == 0), will sync from target point.
 		bc.historyPrunePoint.Store(target)
@@ -783,6 +809,15 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 	default:
 		return fmt.Errorf("invalid history mode: %d", policy.Mode)
 	}
+}
+
+// historyPruningRequired logs the instructions for pruning the chain history to
+// the configured target and returns the error refusing to start without it.
+func (bc *BlockChain) historyPruningRequired(policy history.HistoryPolicy, tail, frozen, latest uint64) error {
+	log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned to the target block.", policy.Mode.String()),
+		"tail", tail, "frozen", frozen, "latest", latest, "target", policy.Target.BlockNumber)
+	log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", policy.String()))
+	return errors.New("history pruning required")
 }
 
 // SetHead rewinds the local chain to a new head. Depending on whether the node
