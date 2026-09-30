@@ -231,10 +231,14 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			receive = &tmplMethod{Original: evmABI.Receive}
 		}
 
+		bytecode, err := normalizeBytecode(bytecodes[i])
+		if err != nil {
+			return "", fmt.Errorf("invalid bytecode for %q: %w", types[i], err)
+		}
 		contracts[types[i]] = &tmplContract{
 			Type:        abi.ToCamelCase(types[i]),
 			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
-			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
+			InputBin:    bytecode,
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,

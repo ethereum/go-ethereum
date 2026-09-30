@@ -332,7 +332,11 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		if err != nil {
 			return "", err
 		}
-		b.contracts[types[i]] = newTmplContractV2(types[i], abis[i], bytecodes[i], evmABI.Constructor, cb)
+		bytecode, err := normalizeBytecode(bytecodes[i])
+		if err != nil {
+			return "", fmt.Errorf("invalid bytecode for %q: %w", types[i], err)
+		}
+		b.contracts[types[i]] = newTmplContractV2(types[i], abis[i], bytecode, evmABI.Constructor, cb)
 	}
 
 	invertedLibs := make(map[string]string)
