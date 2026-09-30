@@ -2274,3 +2274,33 @@ func TestForkchoiceUpdatedV4(t *testing.T) {
 		t.Fatalf("Unexpected status with nil custody bitmap: got %s, want %s", resp.PayloadStatus.Status, engine.VALID)
 	}
 }
+
+// TestSyncFetchedHeadSuperseded tests that a head fetched in the background is synced to only
+// while it is still the head of the latest forkchoice update.
+func TestSyncFetchedHeadSuperseded(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+	var synced []common.Hash
+	api.syncTo = func(head, finalized *types.Header) error {
+		synced = append(synced, head.Hash())
+		return nil
+	}
+	headA := &types.Header{Number: big.NewInt(100), Extra: []byte("a")}
+	headB := &types.Header{Number: big.NewInt(100), Extra: []byte("b")}
+
+	// a later forkchoice update moved to B: the fetched A is dropped
+	api.fcuHead = headB.Hash()
+	api.syncFetchedHead(headA, common.Hash{})
+	if len(synced) != 0 {
+		t.Fatalf("synced to a superseded head: %v", synced)
+	}
+	// A is still the latest head (e.g. the same update repeated): synced
+	api.fcuHead = headA.Hash()
+	api.syncFetchedHead(headA, common.Hash{})
+	if len(synced) != 1 || synced[0] != headA.Hash() {
+		t.Fatalf("expected a sync to %x, got %v", headA.Hash(), synced)
+	}
+}
