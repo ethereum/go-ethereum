@@ -236,6 +236,41 @@ func TestTraceNamespaceCallRejectionFallback(t *testing.T) {
 	}
 }
 
+func TestTraceNamespaceInactiveCallTypes(t *testing.T) {
+	// Explicit type 1 and type 2 must not silently become legacy calls before
+	// their activation when no access list or dynamic fee fields are supplied.
+	config := *params.AllEthashProtocolChanges
+	config.BerlinBlock, config.LondonBlock = big.NewInt(1), big.NewInt(2)
+	config.ArrowGlacierBlock, config.GrayGlacierBlock = nil, nil
+	backend := newTestBackend(t, 2, &core.Genesis{
+		Config: &config, GasLimit: 30_000_000, Difficulty: big.NewInt(1),
+		Alloc: types.GenesisAlloc{traceTestSender: {Balance: big.NewInt(1e18)}},
+	}, nil)
+	t.Cleanup(backend.teardown)
+	client := traceContractClient(t, NewTraceAPI(backend))
+	for block := uint64(0); block <= 2; block++ {
+		for kind := uint64(1); kind <= 2; kind++ {
+			t.Run(hexutil.EncodeUint64(block)+"/"+hexutil.EncodeUint64(kind), func(t *testing.T) {
+				args := map[string]any{"from": traceTestSender, "to": traceTestTarget, "type": hexutil.EncodeUint64(kind)}
+				var result json.RawMessage
+				for _, method := range []string{"trace_call", "trace_callMany"} {
+					var err error
+					if method == "trace_call" {
+						err = client.Call(&result, method, args, TraceTypes{}, hexutil.EncodeUint64(block))
+					} else {
+						err = client.Call(&result, method, []any{[]any{args, TraceTypes{}}}, hexutil.EncodeUint64(block))
+					}
+					if block < kind {
+						requireTraceCode(t, err, -32003)
+					} else if err != nil {
+						t.Fatalf("%s rejected an active type: %v", method, err)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestTraceNamespaceCallRejectionPrecedence(t *testing.T) {
 	api, _ := traceTestAPI(t, common.FromHex("00"), nil)
 	client := traceContractClient(t, api)

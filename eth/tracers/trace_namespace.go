@@ -523,6 +523,16 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	if err := args.CallDefaults(api.api.backend.RPCGasCap(), vmctx.BaseFee, api.api.backend.ChainConfig().ChainID); err != nil {
 		return nil, traceInvalid("invalid call: %v", err)
 	}
+	// Message validation only sees an access list or fee fields, not the
+	// explicit type. An empty type 1 or type 2 call must still respect its
+	// activation fork instead of executing as a legacy call.
+	if input.Type != nil {
+		config := api.api.backend.ChainConfig()
+		if (*input.Type == types.AccessListTxType && !config.IsBerlin(vmctx.BlockNumber)) ||
+			(*input.Type == types.DynamicFeeTxType && !config.IsLondon(vmctx.BlockNumber)) {
+			return nil, traceCallRejection(core.ErrTxTypeNotSupported)
+		}
+	}
 	msg := args.ToMessage(vmctx.BaseFee, true)
 	tx := args.ToTransaction(types.DynamicFeeTxType)
 	if input.Type != nil {
