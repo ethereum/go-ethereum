@@ -545,9 +545,13 @@ func TestDeferredWriteCommitWait(t *testing.T) {
 	if _, err := chain.InsertBlockWithoutSetHead(context.Background(), parent, false); err != nil {
 		t.Fatalf("failed to insert block: %v", err)
 	}
-	// The parent state is readable already, only the flattening is held
+	// The commit goes on next to the held flattening, so the parent state gets readable
 	probe.wait(t, "flatten", parent.Hash())
-	chain.writer.waitState(parent.Root())
+	select {
+	case <-chain.writer.job(parent.Hash()).committed:
+	case <-time.After(time.Minute):
+		t.Fatal("state commit waited for the flattening")
+	}
 
 	type result struct {
 		res *blockProcessingResult
@@ -580,6 +584,51 @@ func TestDeferredWriteCommitWait(t *testing.T) {
 	}
 	if res.stats.CommitWait != 0 {
 		t.Fatalf("commit wait %v with the parent written", res.stats.CommitWait)
+	}
+}
+
+// Tests that the flattening that makes room for a block runs while its state commit is held.
+func TestDeferredWriteFlattenNextToCommit(t *testing.T) {
+	const synced = 130
+	chain, _, blocks, _ := newWriteTestChain(t, synced+1, rawdb.NewMemoryDatabase(), DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	defer chain.Stop()
+
+	// Fill the layer tree, the disk layer ends up at block 2
+	if _, err := chain.InsertChain(blocks[:synced]); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+	block := blocks[synced]
+	probe := newWriteProbe(chain)
+	probe.hold("state", block)
+	defer probe.releaseAll()
+
+	if _, err := chain.InsertBlockWithoutSetHead(context.Background(), block, false); err != nil {
+		t.Fatalf("failed to insert block: %v", err)
+	}
+	// Block 3 gets flattened to make room, while the commit of the block is held
+	probe.wait(t, "flatten", block.Hash())
+	for timeout := time.After(time.Minute); ; {
+		if _, err := chain.TrieDB().NodeReader(blocks[1].Root()); err != nil {
+			break
+		}
+		select {
+		case <-timeout:
+			t.Fatal("flattening waited for the state commit")
+		case <-time.After(time.Millisecond):
+		}
+	}
+	if _, err := chain.TrieDB().NodeReader(block.Root()); err == nil {
+		t.Fatal("layer of the block added while its commit is held")
+	}
+	probe.release("state", block)
+	chain.WaitWrites()
+
+	// The new layer sits on top of the usual number of diff layers
+	if _, err := chain.TrieDB().NodeReader(block.Root()); err != nil {
+		t.Fatalf("layer of the block missing: %v", err)
+	}
+	if _, err := chain.TrieDB().NodeReader(blocks[2].Root()); err != nil {
+		t.Fatalf("disk layer of block #%d missing: %v", blocks[2].NumberU64(), err)
 	}
 }
 

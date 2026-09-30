@@ -323,17 +323,21 @@ func (db *Database) Add(root common.Hash, parentRoot common.Hash, block uint64, 
 	return db.add(root, parentRoot, block, nodes, states)
 }
 
-// Cap flattens the diff layers that are too far below root into the disk layer.
-func (db *Database) Cap(root common.Hash) error {
+// Cap makes room for a new layer on top of parent, flattening the diff layers that would be too far below it into the disk layer.
+func (db *Database) Cap(parent common.Hash) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
-	// Only the layers below root are counted, so the ones added on top of it
-	// in the meantime stay in memory until their own cap.
-	return db.tree.cap(root, maxDiffLayers)
+	// Nothing sits below the disk layer, so there's no room to make
+	if _, ok := db.tree.get(parent).(*diskLayer); ok {
+		return nil
+	}
+	// Keep one layer less than Update does, the new one makes up for it. The
+	// layers already added on top of parent aren't counted, they stay in memory.
+	return db.tree.cap(parent, maxDiffLayers-1)
 }
 
 // add links a new layer into the tree. It assumes the db.lock is held.

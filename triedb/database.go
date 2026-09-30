@@ -184,13 +184,13 @@ func (db *Database) AddLayer(root common.Hash, parent common.Hash, block uint64,
 	return pdb.Add(root, parent, block, nodes, states.internal())
 }
 
-// CapLayers flattens the layers that are too far below root, finishing an AddLayer.
-func (db *Database) CapLayers(root common.Hash) error {
+// CapLayers makes room for a new layer on top of parent, the flattening an AddLayer leaves out.
+func (db *Database) CapLayers(parent common.Hash) error {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
 		return errors.New("not supported")
 	}
-	return pdb.Cap(root)
+	return pdb.Cap(parent)
 }
 
 // Commit iterates over all the children of a particular node, writes them out

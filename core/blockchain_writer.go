@@ -22,11 +22,12 @@ package core
 //
 // The first phase makes the state of the block readable. It commits the state,
 // writes the new contract code and adds the diff layer of the block to the path
-// database. Right after, the same loop flattens the diff layers that got too old
-// into the disk layer, appending their state history on the way. The second
+// database. Next to the commit, the same loop flattens the diff layers that the
+// new one would push too far down into the disk layer, appending their state
+// history on the way. That only needs the layers below the parent. The second
 // phase persists the block. It writes the header, body, receipts and preimages
-// in one batch, next to the flattening. Both phases keep the order the blocks
-// came in, and the second one can lag behind the first by a few blocks.
+// in one batch. Both phases keep the order the blocks came in, and the second
+// one can lag behind the first by a few blocks.
 //
 // Until its data is on disk, the chain serves a queued block from memory and
 // counts its state as present, and the last block written counts as present
@@ -78,7 +79,7 @@ type writeJob struct {
 	committed chan struct{} // closed once the state is readable
 	stateTime time.Duration // time the state commit took
 
-	flattened   chan struct{} // closed once the layers that got too old are flattened
+	flattened   chan struct{} // closed once the state is committed and the old layers are flattened
 	flattenTime time.Duration // time the flattening took
 
 	encodeOnce  sync.Once
@@ -270,20 +271,26 @@ func (w *chainWriter) isHead(hash common.Hash, current *types.Header) bool {
 	return current.Hash() == hash
 }
 
-// stateLoop runs the first phase of the handed over writes and the flattening after each, in order.
+// stateLoop runs the first phase of the handed over writes and the flattening next to each, in order.
 func (w *chainWriter) stateLoop() {
 	defer w.wg.Done()
 	for {
 		select {
 		case job := <-w.stateCh:
+			// The flattening only needs the layers below the parent, so it runs
+			// next to the commit instead of after it
+			capped := make(chan struct{})
+			go func() {
+				w.runHook("flatten", job.block)
+				w.flatten(job)
+				close(capped)
+			}()
 			w.runHook("state", job.block)
 			w.commitState(job)
 			close(job.committed)
 
-			// Flatten here and not in the second phase, so a child block waiting
-			// for it doesn't also wait behind the data of older blocks
-			w.runHook("flatten", job.block)
-			w.flatten(job)
+			// A child block waits for both, so no flattening holds up its reads
+			<-capped
 			close(job.flattened)
 		case <-w.quit:
 			return
@@ -322,13 +329,13 @@ func (w *chainWriter) commitState(job *writeJob) {
 	stateWriteTimer.Update(job.stateTime)
 }
 
-// flatten flattens the diff layers that got too old below the block into the disk layer.
+// flatten makes room for the layer of the block, flattening the diff layers that would end up too far down into the disk layer.
 func (w *chainWriter) flatten(job *writeJob) {
 	start := time.Now()
 
-	// A block that doesn't change the state adds no layer to flatten from
-	if root := job.block.Root(); root != job.parentRoot {
-		if err := w.bc.triedb.CapLayers(root); err != nil {
+	// A block that doesn't change the state adds no layer to make room for
+	if job.block.Root() != job.parentRoot {
+		if err := w.bc.triedb.CapLayers(job.parentRoot); err != nil {
 			log.Crit("Failed to flatten state layers", "number", job.block.Number(), "hash", job.block.Hash(), "err", err)
 		}
 	}
@@ -336,7 +343,7 @@ func (w *chainWriter) flatten(job *writeJob) {
 	flattenWriteTimer.Update(job.flattenTime)
 }
 
-// persist writes the block data, while the state loop flattens next to it.
+// persist writes the block data, while the flattening may still run on the state loop.
 func (w *chainWriter) persist(job *writeJob) {
 	start := time.Now()
 	w.bc.writeBlockData(job.block, job.receipts, job.preimages)

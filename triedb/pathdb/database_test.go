@@ -888,7 +888,7 @@ func TestCommit(t *testing.T) {
 	}
 }
 
-// Tests that Add keeps every layer in memory and Cap flattens them in order later.
+// Tests that making room below the parent and adding the layer leaves the same tree as Update.
 func TestAddCap(t *testing.T) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4
@@ -899,58 +899,56 @@ func TestAddCap(t *testing.T) {
 	tester := newTester(t, &testerConfig{})
 	defer tester.release()
 
-	// Add the layers without any flattening, the tree grows past the allowance
-	if err := addWithoutCap(tester, 12); err != nil {
-		t.Fatal(err)
-	}
-	if n := tester.db.tree.len(); n != len(tester.roots)+1 {
-		t.Fatalf("Unexpected layer count, want %d, got %d", len(tester.roots)+1, n)
-	}
-	if err := tester.verifyState(tester.lastHash()); err != nil {
-		t.Fatalf("State is invalid before capping, err: %v", err)
-	}
-	// Cap the layers in order, each cap flattens what's too far below its root
-	for i, root := range tester.roots {
-		if err := tester.db.Cap(root); err != nil {
-			t.Fatalf("Failed to cap layer %d, err: %v", i, err)
-		}
-	}
-	if n := tester.db.tree.len(); n != maxDiffLayers+1 {
-		t.Fatalf("Unexpected layer count, want %d, got %d", maxDiffLayers+1, n)
-	}
-	if root := tester.db.tree.bottom().rootHash(); root != tester.roots[len(tester.roots)-maxDiffLayers-1] {
-		t.Fatalf("Unexpected disk layer %x", root)
-	}
-	// The result matches what Update would have left behind
-	if err := tester.verifyState(tester.lastHash()); err != nil {
-		t.Fatalf("State is invalid, err: %v", err)
-	}
-	if err := tester.verifyHistory(); err != nil {
-		t.Fatalf("State history is invalid, err: %v", err)
-	}
-}
-
-// addWithoutCap adds n layers on top of the last one with Add, so none of the
-// old layers get flattened.
-func addWithoutCap(tester *tester, n int) error {
-	for i := 0; i < n; i++ {
+	for i := 0; i < 12; i++ {
 		parent := types.EmptyRootHash
 		if len(tester.roots) != 0 {
 			parent = tester.roots[len(tester.roots)-1]
 		}
 		root, nodes, states := tester.generate(parent, i > 6)
-		if err := tester.db.Add(root, parent, uint64(len(tester.roots)), nodes, states); err != nil {
-			return fmt.Errorf("failed to add layer %d, err: %w", i, err)
+
+		// The chain writer runs the two side by side, so either may land first.
+		// The first parent is the disk layer, which has no room to make.
+		if i%2 == 0 {
+			if err := tester.db.Cap(parent); err != nil {
+				t.Fatalf("Failed to cap below layer %d, err: %v", i, err)
+			}
+		}
+		if err := tester.db.Add(root, parent, uint64(i), nodes, states); err != nil {
+			t.Fatalf("Failed to add layer %d, err: %v", i, err)
+		}
+		if i%2 == 1 {
+			if err := tester.db.Cap(parent); err != nil {
+				t.Fatalf("Failed to cap below layer %d, err: %v", i, err)
+			}
 		}
 		tester.roots = append(tester.roots, root)
 		tester.nodes = append(tester.nodes, nodes)
 		tester.states = append(tester.states, states)
+
+		// The tree holds the layers Update would keep, the disk layer right below
+		want := min(len(tester.roots), maxDiffLayers)
+		if n := tester.db.tree.len(); n != want+1 {
+			t.Fatalf("Unexpected layer count after layer %d, want %d, got %d", i, want+1, n)
+		}
+		disk := types.EmptyRootHash
+		if len(tester.roots) > maxDiffLayers {
+			disk = tester.roots[len(tester.roots)-maxDiffLayers-1]
+		}
+		if root := tester.db.tree.bottom().rootHash(); root != disk {
+			t.Fatalf("Unexpected disk layer %x after layer %d, want %x", root, i, disk)
+		}
 	}
 	// A state is only snapshotted once its child is generated, so do the head here
 	head := tester.lastHash()
 	tester.snapAccounts[head] = copyAccounts(tester.accounts)
 	tester.snapStorages[head] = copyStorages(tester.storages)
-	return nil
+
+	if err := tester.verifyState(head); err != nil {
+		t.Fatalf("State is invalid, err: %v", err)
+	}
+	if err := tester.verifyHistory(); err != nil {
+		t.Fatalf("State history is invalid, err: %v", err)
+	}
 }
 
 func TestJournal(t *testing.T) {
