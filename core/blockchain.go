@@ -773,7 +773,7 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 			// of them, so they are all checked and the tail is repaired, as no
 			// later insertion moves it otherwise.
 			if freezerTail < frozen {
-				for number := freezerTail; number < frozen; number++ {
+				for number := max(freezerTail, 1); number < frozen; number++ {
 					body, err := bc.db.Ancient(rawdb.ChainFreezerBodiesTable, number)
 					if err != nil {
 						return fmt.Errorf("failed to read block body %d: %w", number, err)
