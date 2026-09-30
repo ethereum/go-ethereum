@@ -119,7 +119,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, j
 				return nil // Also invalid block, bail out
 			}
 			// Disable the nonce check
-			msg.SkipNonceChecks = true
+			msg.SkipNonceCheck()
 
 			stateCpy.SetTxContext(tx.Hash(), i, uint32(i+1))
 
