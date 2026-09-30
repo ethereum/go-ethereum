@@ -187,6 +187,12 @@ type Config struct {
 	// It is not safe to enable on public networks yet.
 	SnapV2 bool
 
+	// BALStateReconstruction rebuilds the state of blocks at or below the
+	// finalized head from their EIP-7928 block access lists instead of executing
+	// them, accelerating catch-up. Blocks imported this way carry no receipts.
+	// Experimental.
+	BALStateReconstruction bool
+
 	// Enables VM tracing
 	VMTrace           string
 	VMTraceJsonConfig string

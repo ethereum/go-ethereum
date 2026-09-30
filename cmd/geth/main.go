@@ -210,6 +210,7 @@ var (
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
 		utils.SnapV2Flag,
+		utils.StateBALReconstructionFlag,
 		utils.StateSizeTrackingFlag, // deprecated
 	}
 )

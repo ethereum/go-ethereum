@@ -298,6 +298,11 @@ var (
 		Value:    ethconfig.Defaults.SnapV2,
 		Category: flags.StateCategory,
 	}
+	StateBALReconstructionFlag = &cli.BoolFlag{
+		Name:     "state.balreconstruction",
+		Usage:    "Reconstruct the state of finalized blocks from their EIP-7928 block access lists instead of executing them (faster catch-up; no receipts are stored for those blocks; experimental)",
+		Category: flags.StateCategory,
+	}
 	BinTrieGroupDepthFlag = &cli.IntFlag{
 		Name:     "bintrie.groupdepth",
 		Usage:    "Number of levels per serialized group in binary trie (1-8, default 5). Lower values create smaller groups with more nodes.",
@@ -1821,6 +1826,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.Bool(CacheNoPrefetchFlag.Name)
+	}
+	if ctx.IsSet(StateBALReconstructionFlag.Name) {
+		cfg.BALStateReconstruction = ctx.Bool(StateBALReconstructionFlag.Name)
 	}
 	if ctx.IsSet(CachePreimagesFlag.Name) {
 		cfg.Preimages = ctx.Bool(CachePreimagesFlag.Name)

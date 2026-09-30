@@ -223,6 +223,12 @@ type BlockChainConfig struct {
 	// Execution configs
 	StatelessSelfValidation bool // Generate execution witnesses and self-check against them (testing purpose)
 	EnableWitnessStats      bool // Whether trie access statistics collection is enabled
+
+	// BALStateReconstruction rebuilds the post-state of blocks at or below the
+	// consensus-finalized head from their EIP-7928 block access lists instead of
+	// executing their transactions, accelerating catch-up. Blocks imported this
+	// way carry no receipts. Disabled by default.
+	BALStateReconstruction bool
 }
 
 // DefaultConfig returns the default config.
@@ -2231,6 +2237,19 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// execution strategy (StateProcessor.Process) key off this resolved
 	// config, keeping the BAL-parallel/sequential decision consistent.
 	vmConfig := bc.overrideTracerActivation(config.EnableTracer)
+
+	// Executionless fast path (EIP-7928): for a finalized block carrying a
+	// verified access list, reconstruct its post-state from the recorded
+	// post-values instead of executing its transactions. Any failure falls
+	// through to full execution below, so a bad access list can never advance
+	// the head.
+	if bc.useAccessListReconstruction(block, vmConfig) {
+		res, err := bc.processBlockFromAccessList(parentRoot, block, config)
+		if err == nil {
+			return res, nil
+		}
+		log.Debug("Access-list state reconstruction failed, re-executing", "number", block.Number(), "hash", block.Hash(), "err", err)
+	}
 
 	// Set up the state reader feeding execution, along with a cleanup to run once
 	// processing is complete (stop the prefetcher, upload reader statistics).
