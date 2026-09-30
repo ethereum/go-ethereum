@@ -159,6 +159,25 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if rbloom != header.Bloom {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
+	// Verify the block-level access list once Amsterdam is enabled. This must run
+	// in stateless mode too: stateless execution derives the post-state from the
+	// received access list, so it has to be checked against the re-executed list
+	// before returning, otherwise a forged list would be accepted.
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		enc, local := res.encodedAccessList()
+		if enc == nil {
+			return errors.New("block access list is not available in amsterdam")
+		}
+		if header.BlockAccessListHash == nil {
+			return errors.New("block access list hash not set in header")
+		}
+		if remote := *header.BlockAccessListHash; local != remote {
+			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
+		}
+		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
+			return fmt.Errorf("invalid block access list: %v", err)
+		}
+	}
 	// In stateless mode, return early because the receipt and state root are not
 	// provided through the witness, rather the cross validator needs to return it.
 	if stateless {
@@ -177,22 +196,6 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		}
 	} else if res.Requests != nil {
 		return errors.New("block has requests before prague fork")
-	}
-	// Verify Block-level accessList once Amsterdam is enabled
-	if v.config.IsAmsterdam(block.Number(), block.Time()) {
-		enc, local := res.encodedAccessList()
-		if enc == nil {
-			return errors.New("block access list is not available in amsterdam")
-		}
-		if header.BlockAccessListHash == nil {
-			return errors.New("block access list hash not set in header")
-		}
-		if remote := *header.BlockAccessListHash; local != remote {
-			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
-		}
-		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
-			return fmt.Errorf("invalid block access list: %v", err)
-		}
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
