@@ -227,6 +227,16 @@ func checkBlockReadable(t *testing.T, chain *BlockChain, block *types.Block) {
 	if raw := chain.GetRawReceipts(hash, number); len(raw) != len(block.Transactions()) {
 		t.Fatalf("raw receipts of block #%d missing", number)
 	}
+	// Log filters turn missing logs into an error, so there's one entry per transaction
+	logs := chain.GetLogs(hash, number)
+	if logs == nil || len(logs) != len(receipts) {
+		t.Fatalf("logs of block #%d missing", number)
+	}
+	for i, receipt := range receipts {
+		if len(logs[i]) != len(receipt.Logs) {
+			t.Fatalf("logs of tx %d in block #%d don't match its receipt", i, number)
+		}
+	}
 	if enc := chain.GetReceiptsRLP(hash); len(enc) == 0 {
 		t.Fatalf("receipts rlp of block #%d missing", number)
 	}
