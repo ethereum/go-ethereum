@@ -127,10 +127,8 @@ func (c *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(CBasic1)
-	if len(log.Data) > 0 {
-		if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events[event].Inputs {
@@ -172,10 +170,8 @@ func (c *C) UnpackBasic2Event(log *types.Log) (*CBasic2, error) {
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(CBasic2)
-	if len(log.Data) > 0 {
-		if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events[event].Inputs {

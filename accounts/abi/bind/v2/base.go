@@ -541,10 +541,8 @@ func (c *BoundContract) UnpackLog(out any, event string, log types.Log) error {
 	if log.Topics[0] != c.abi.Events[event].ID {
 		return ErrEventSignatureMismatch
 	}
-	if len(log.Data) > 0 {
-		if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return err
-		}
+	if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return err
 	}
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events[event].Inputs {
@@ -564,10 +562,8 @@ func (c *BoundContract) UnpackLogIntoMap(out map[string]any, event string, log t
 	if log.Topics[0] != c.abi.Events[event].ID {
 		return ErrEventSignatureMismatch
 	}
-	if len(log.Data) > 0 {
-		if err := c.abi.UnpackIntoMap(out, event, log.Data); err != nil {
-			return err
-		}
+	if err := c.abi.UnpackIntoMap(out, event, log.Data); err != nil {
+		return err
 	}
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events[event].Inputs {
