@@ -221,13 +221,37 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 		}
 		return h, nil
 	}
-	from, err := resolve(filter.FromBlock)
-	if err != nil {
-		return nil, err
-	}
-	to, err := resolve(filter.ToBlock)
-	if err != nil {
-		return nil, err
+	var from, to *types.Header
+	var selected *types.Block
+	if filter.BlockHash != nil {
+		if filter.FromBlock != nil || filter.ToBlock != nil {
+			return nil, traceInvalid("blockHash is mutually exclusive with fromBlock and toBlock")
+		}
+		var err error
+		selected, err = api.blockByHash(ctx, *filter.BlockHash, true)
+		if err != nil {
+			return nil, err
+		}
+		// CurrentHeader can be ahead of execution during sync. A known body
+		// above the executed head must not become an empty successful selection.
+		executed, err := api.api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if err != nil {
+			return nil, err
+		}
+		if executed == nil || selected.NumberU64() > executed.Number.Uint64() {
+			return nil, &traceRPCError{-32001, fmt.Sprintf("block %s is not executed", filter.BlockHash.Hex())}
+		}
+		from, to = selected.Header(), selected.Header()
+	} else {
+		var err error
+		from, err = resolve(filter.FromBlock)
+		if err != nil {
+			return nil, err
+		}
+		to, err = resolve(filter.ToBlock)
+		if err != nil {
+			return nil, err
+		}
 	}
 	lo, hi := from.Number.Uint64(), to.Number.Uint64()
 	if lo > hi {
@@ -247,22 +271,25 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 	if count == 0 {
 		return result, nil
 	}
-	// Walk parent hashes once, so a concurrent reorg cannot mix branches by height.
-	blocks := make([]*types.Block, hi-lo+1)
-	hash := to.Hash()
-	for i := len(blocks) - 1; i >= 0; i-- {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	blocks := []*types.Block{selected}
+	if selected == nil {
+		// Walk parent hashes once, so a concurrent reorg cannot mix branches by height.
+		blocks = make([]*types.Block, hi-lo+1)
+		hash := to.Hash()
+		for i := len(blocks) - 1; i >= 0; i-- {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			block, err := api.api.blockByHash(ctx, hash)
+			if err != nil {
+				return nil, err
+			}
+			blocks[i] = block
+			hash = block.ParentHash()
 		}
-		block, err := api.api.blockByHash(ctx, hash)
-		if err != nil {
-			return nil, err
+		if blocks[0].Hash() != from.Hash() {
+			return nil, errors.New("canonical chain changed while resolving trace_filter bounds")
 		}
-		blocks[i] = block
-		hash = block.ParentHash()
-	}
-	if blocks[0].Hash() != from.Hash() {
-		return nil, errors.New("canonical chain changed while resolving trace_filter bounds")
 	}
 	after := uint64(0)
 	if filter.After != nil {

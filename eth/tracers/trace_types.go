@@ -166,8 +166,9 @@ func (p *TracePosition) UnmarshalJSON(input []byte) error {
 	return json.Unmarshal(input, (*plain)(p))
 }
 
-// TraceFilter describes an inclusive block range and pagination after matching.
+// TraceFilter describes an inclusive block range or an exact block hash, and pagination after matching.
 type TraceFilter struct {
+	BlockHash   *common.Hash     `json:"blockHash"`
 	FromBlock   *rpc.BlockNumber `json:"fromBlock"`
 	ToBlock     *rpc.BlockNumber `json:"toBlock"`
 	FromAddress []common.Address `json:"fromAddress"`
