@@ -29,8 +29,9 @@ import (
 
 func waitIndexing(db *Database) {
 	for {
+		// The metadata is persisted before the indexer reports inited, so check both
 		metadata := loadIndexMetadata(db.diskdb, typeStateHistory)
-		if metadata != nil && metadata.Last >= db.tree.bottom().stateID() {
+		if metadata != nil && metadata.Last >= db.tree.bottom().stateID() && db.stateIndexer.inited() {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
