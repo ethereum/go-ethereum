@@ -306,6 +306,24 @@ func (bc *BlockChain) GetRawReceipts(hash common.Hash, number uint64) types.Rece
 	return rawdb.ReadRawReceipts(bc.db, hash, number)
 }
 
+// GetLogs retrieves the logs of every transaction in a block, without derived fields like rawdb.ReadLogs.
+func (bc *BlockChain) GetLogs(hash common.Hash, number uint64) [][]*types.Log {
+	// Callers fill in the derived fields, so a block still being written hands
+	// out a fresh copy too
+	if job := bc.writer.job(hash); job != nil {
+		receipts := job.rawReceipts()
+		if receipts == nil {
+			return nil
+		}
+		logs := make([][]*types.Log, len(receipts))
+		for i, receipt := range receipts {
+			logs[i] = receipt.Logs
+		}
+		return logs
+	}
+	return rawdb.ReadLogs(bc.db, hash, number)
+}
+
 // GetReceiptsRLP retrieves the receipts of a block.
 func (bc *BlockChain) GetReceiptsRLP(hash common.Hash) rlp.RawValue {
 	if job := bc.writer.job(hash); job != nil {
