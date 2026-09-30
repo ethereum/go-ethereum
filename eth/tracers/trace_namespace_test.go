@@ -822,7 +822,7 @@ func TestTraceRequestNullMembersAreOmitted(t *testing.T) {
 		t.Fatalf("null filter members: have %+v, want %+v", filterNulls, filterOmitted)
 	}
 	// Unknown members and invalid values are still rejected.
-	for _, input := range []string{`{"mode":"garbage"}`, `{"count":-1}`, `{"extra":1}`} {
+	for _, input := range []string{`{"mode":"garbage"}`, `{"count":-1}`, `{"extra":1}`, `{"extra":null}`} {
 		if err := json.Unmarshal([]byte(input), new(TraceFilter)); err == nil {
 			t.Errorf("%s: expected an error", input)
 		}
