@@ -143,6 +143,7 @@ var (
 		utils.BeaconApiHeaderFlag,
 		utils.BeaconThresholdFlag,
 		utils.BeaconNoFilterFlag,
+		utils.BeaconP2PBlocksFlag,
 		utils.BeaconConfigFlag,
 		utils.BeaconGenesisRootFlag,
 		utils.BeaconGenesisTimeFlag,

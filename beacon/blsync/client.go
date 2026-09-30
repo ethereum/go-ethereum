@@ -62,7 +62,7 @@ func NewClient(config params.ClientConfig) *Client {
 	scheduler := request.NewScheduler()
 	checkpointInit := sync.NewCheckpointInit(committeeChain, config.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
-	beaconBlockSync := newBeaconBlockSync(headTracker)
+	beaconBlockSync := newBeaconBlockSync(headTracker, config.P2PBlocks)
 	scheduler.RegisterTarget(headTracker)
 	scheduler.RegisterTarget(committeeChain)
 	scheduler.RegisterModule(checkpointInit, "checkpointInit")

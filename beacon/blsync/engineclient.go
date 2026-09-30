@@ -58,9 +58,22 @@ func (ec *engineClient) stop() {
 	ec.wg.Wait()
 }
 
+// Without the block (P2PBlocks), geth answers the forkchoice update with SYNCING while it
+// fetches the block, and records the head, safe and finalized blocks only for a known head:
+// repeat the update until it is VALID (or the next head arrives).
+const (
+	p2pRetryInterval = time.Second
+	p2pRetries       = 10
+)
+
 func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
 	defer ec.wg.Done()
 
+	var (
+		pending types.ChainHeadEvent // P2PBlocks: head still being fetched by the execution client
+		retry   <-chan time.Time
+		retries int
+	)
 	for {
 		select {
 		case <-ec.rootCtx.Done():
@@ -68,33 +81,61 @@ func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
 			return
 
 		case event := <-headCh:
+			retry = nil
 			if ec.rpc == nil { // dry run, no engine API specified
-				log.Info("New execution block retrieved", "number", event.Block.NumberU64(), "hash", event.Block.Hash(), "finalized", event.Finalized)
+				log.Info("New execution block retrieved", "hash", event.ExecHash, "finalized", event.Finalized)
 				continue
 			}
-
-			fork := ec.config.ForkAtEpoch(event.BeaconHead.Epoch())
-			forkName := strings.ToLower(fork.Name)
-
-			log.Debug("Calling NewPayload", "number", event.Block.NumberU64(), "hash", event.Block.Hash())
-			if status, err := ec.callNewPayload(forkName, event); err == nil {
-				log.Info("Successful NewPayload", "number", event.Block.NumberU64(), "hash", event.Block.Hash(), "status", status)
-			} else {
-				log.Error("Failed NewPayload", "number", event.Block.NumberU64(), "hash", event.Block.Hash(), "error", err)
+			if status := ec.sendHead(event); event.Block == nil && status != engine.VALID {
+				pending, retries, retry = event, 0, time.After(p2pRetryInterval)
 			}
 
-			log.Debug("Calling ForkchoiceUpdated", "head", event.Block.Hash())
-			if status, err := ec.callForkchoiceUpdated(forkName, event); err == nil {
-				log.Info("Successful ForkchoiceUpdated", "head", event.Block.Hash(), "status", status)
-			} else {
-				if err.Error() == "beacon syncer reorging" {
-					log.Debug("Failed ForkchoiceUpdated", "head", event.Block.Hash(), "error", err)
-					continue // ignore beacon syncer reorging errors, this error can occur if the blsync is skipping a block
-				}
-				log.Error("Failed ForkchoiceUpdated", "head", event.Block.Hash(), "error", err)
+		case <-retry:
+			retry = nil
+			retries++
+			log.Debug("Repeating ForkchoiceUpdated", "head", pending.ExecHash, "attempt", retries)
+			if status := ec.forkchoiceUpdated(pending); status != engine.VALID && retries < p2pRetries {
+				retry = time.After(p2pRetryInterval)
 			}
 		}
 	}
+}
+
+// sendHead hands a new head to the execution client: the block if there is one, then the
+// forkchoice update. It returns the forkchoice status.
+func (ec *engineClient) sendHead(event types.ChainHeadEvent) string {
+	// Without the block (P2PBlocks), the forkchoice update alone makes the execution client
+	// fetch it from its peers.
+	if event.Block != nil {
+		forkName := ec.forkName(event)
+		log.Debug("Calling NewPayload", "number", event.Block.NumberU64(), "hash", event.ExecHash)
+		if status, err := ec.callNewPayload(forkName, event); err == nil {
+			log.Info("Successful NewPayload", "number", event.Block.NumberU64(), "hash", event.ExecHash, "status", status)
+		} else {
+			log.Error("Failed NewPayload", "number", event.Block.NumberU64(), "hash", event.ExecHash, "error", err)
+		}
+	}
+	return ec.forkchoiceUpdated(event)
+}
+
+// forkchoiceUpdated sends the forkchoice update for a head and returns its status.
+func (ec *engineClient) forkchoiceUpdated(event types.ChainHeadEvent) string {
+	log.Debug("Calling ForkchoiceUpdated", "head", event.ExecHash)
+	status, err := ec.callForkchoiceUpdated(ec.forkName(event), event)
+	if err == nil {
+		log.Info("Successful ForkchoiceUpdated", "head", event.ExecHash, "status", status)
+		return status
+	}
+	if err.Error() == "beacon syncer reorging" {
+		log.Debug("Failed ForkchoiceUpdated", "head", event.ExecHash, "error", err)
+		return status // ignore beacon syncer reorging errors, this error can occur if the blsync is skipping a block
+	}
+	log.Error("Failed ForkchoiceUpdated", "head", event.ExecHash, "error", err)
+	return status
+}
+
+func (ec *engineClient) forkName(event types.ChainHeadEvent) string {
+	return strings.ToLower(ec.config.ForkAtEpoch(event.BeaconHead.Epoch()).Name)
 }
 
 func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) (string, error) {
@@ -142,7 +183,7 @@ func collectBlobHashes(b *ctypes.Block) []common.Hash {
 
 func (ec *engineClient) callForkchoiceUpdated(fork string, event types.ChainHeadEvent) (string, error) {
 	update := engine.ForkchoiceStateV1{
-		HeadBlockHash:      event.Block.Hash(),
+		HeadBlockHash:      event.ExecHash,
 		SafeBlockHash:      event.Finalized,
 		FinalizedBlockHash: event.Finalized,
 	}

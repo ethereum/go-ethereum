@@ -374,6 +374,11 @@ var (
 		Usage:    "Disable future slot signature filter",
 		Category: flags.BeaconCategory,
 	}
+	BeaconP2PBlocksFlag = &cli.BoolFlag{
+		Name:     "beacon.p2pblocks",
+		Usage:    "Fetch execution blocks from execution-layer peers instead of the beacon API (only light client updates are downloaded)",
+		Category: flags.BeaconCategory,
+	}
 	BeaconConfigFlag = &cli.StringFlag{
 		Name:     "beacon.config",
 		Usage:    "Beacon chain config YAML file",
@@ -2202,6 +2207,7 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 	}
 	config.Threshold = ctx.Int(BeaconThresholdFlag.Name)
 	config.NoFilter = ctx.Bool(BeaconNoFilterFlag.Name)
+	config.P2PBlocks = ctx.Bool(BeaconP2PBlocksFlag.Name)
 	return config
 }
 

@@ -28,12 +28,16 @@ import (
 )
 
 // beaconBlockSync implements request.Module; it fetches the beacon blocks belonging
-// to the validated and prefetch heads.
+// to the validated and prefetch heads. With p2pBlocks it fetches no blocks: the head
+// events carry only the execution block hash proven by the light client update, and the
+// execution client retrieves the block from its own peers.
 type beaconBlockSync struct {
 	recentBlocks *lru.Cache[common.Hash, *types.BeaconBlock]
+	recentSlots  *lru.Cache[common.Hash, uint64] // slots of recently validated heads, by block root
 	locked       map[common.Hash]request.ServerAndID
 	serverHeads  map[request.Server]common.Hash
 	headTracker  headTracker
+	p2pBlocks    bool
 
 	lastHeadInfo  types.HeadInfo
 	chainHeadFeed event.FeedOf[types.ChainHeadEvent]
@@ -46,12 +50,14 @@ type headTracker interface {
 }
 
 // newBeaconBlockSync returns a new beaconBlockSync.
-func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
+func newBeaconBlockSync(headTracker headTracker, p2pBlocks bool) *beaconBlockSync {
 	return &beaconBlockSync{
 		headTracker:  headTracker,
 		recentBlocks: lru.NewCache[common.Hash, *types.BeaconBlock](10),
+		recentSlots:  lru.NewCache[common.Hash, uint64](10),
 		locked:       make(map[common.Hash]request.ServerAndID),
 		serverHeads:  make(map[request.Server]common.Hash),
+		p2pBlocks:    p2pBlocks,
 	}
 }
 
@@ -80,6 +86,9 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 		}
 	}
 	s.updateEventFeed()
+	if s.p2pBlocks {
+		return
+	}
 	// request validated head block if unavailable and not yet requested
 	if vh, ok := s.headTracker.ValidatedOptimistic(); ok {
 		s.tryRequestBlock(requester, vh.Attested.Hash(), false)
@@ -121,9 +130,12 @@ func (s *beaconBlockSync) updateEventFeed() {
 	}
 
 	validatedHead := optimistic.Attested.Hash()
-	headBlock, ok := s.recentBlocks.Get(validatedHead)
-	if !ok {
-		return
+	s.recentSlots.Add(validatedHead, optimistic.Attested.Slot)
+	var headBlock *types.BeaconBlock
+	if !s.p2pBlocks {
+		if headBlock, ok = s.recentBlocks.Get(validatedHead); !ok {
+			return
+		}
 	}
 
 	var finalizedHash common.Hash
@@ -136,19 +148,36 @@ func (s *beaconBlockSync) updateEventFeed() {
 		case he < fe:
 			return
 		case he == fe+1:
-			parent, ok := s.recentBlocks.Get(optimistic.Attested.ParentRoot)
-			if !ok || parent.Slot()/params.EpochLength == fe {
+			parentSlot, ok := s.parentSlot(optimistic.Attested.ParentRoot)
+			if !ok || parentSlot/params.EpochLength == fe {
 				return // head is at first slot of next epoch, wait for finality update
 			}
 		}
 	}
 
-	headInfo := blockHeadInfo(headBlock)
+	headInfo := types.HeadInfo{Slot: optimistic.Attested.Slot, BlockRoot: validatedHead}
 	if headInfo == s.lastHeadInfo {
 		return
 	}
 	s.lastHeadInfo = headInfo
 
+	if s.p2pBlocks {
+		// only the execution block hash, proven by the light client update
+		var execHash common.Hash
+		if optimistic.Attested.PayloadHeader != nil {
+			execHash = optimistic.Attested.PayloadHeader.BlockHash()
+		}
+		if execHash == (common.Hash{}) {
+			log.Error("Validated beacon head has no execution block hash", "slot", headInfo.Slot, "root", validatedHead)
+			return
+		}
+		s.chainHeadFeed.Send(types.ChainHeadEvent{
+			BeaconHead: optimistic.Attested.Header,
+			ExecHash:   execHash,
+			Finalized:  finalizedHash,
+		})
+		return
+	}
 	// new head block and finality info available; extract executable data and send event to feed
 	execBlock, err := headBlock.ExecutionPayload()
 	if err != nil {
@@ -157,8 +186,18 @@ func (s *beaconBlockSync) updateEventFeed() {
 	}
 	s.chainHeadFeed.Send(types.ChainHeadEvent{
 		BeaconHead:   optimistic.Attested.Header,
+		ExecHash:     execBlock.Hash(),
 		Block:        execBlock,
 		ExecRequests: headBlock.ExecutionRequestsList(),
 		Finalized:    finalizedHash,
 	})
+}
+
+// parentSlot returns the slot of a recent beacon block, from the fetched blocks or the
+// validated heads.
+func (s *beaconBlockSync) parentSlot(root common.Hash) (uint64, bool) {
+	if block, ok := s.recentBlocks.Get(root); ok {
+		return block.Slot(), true
+	}
+	return s.recentSlots.Get(root)
 }
