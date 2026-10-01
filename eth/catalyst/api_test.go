@@ -38,6 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -45,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/miner"
@@ -67,6 +70,14 @@ var (
 )
 
 func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
+	genesis, _, blocks := generateMergeChainWithDB(n, merged)
+	return genesis, blocks
+}
+
+// generateMergeChainWithDB is generateMergeChain that also returns the database
+// holding the generated states, so that side chains can be generated from any
+// of the returned blocks.
+func generateMergeChainWithDB(n int, merged bool) (*core.Genesis, ethdb.Database, []*types.Block) {
 	config := *params.AllEthashProtocolChanges
 	engine := beacon.New(ethash.NewFaker())
 	if merged {
@@ -112,7 +123,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 		g.AddTx(tx)
 		testNonce++
 	}
-	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, n, generate)
+	db, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, n, generate)
 
 	if !merged {
 		totalDifficulty := big.NewInt(0)
@@ -121,7 +132,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 		}
 		config.TerminalTotalDifficulty = totalDifficulty
 	}
-	return genesis, blocks
+	return genesis, db, blocks
 }
 
 func TestEth2AssembleBlock(t *testing.T) {
@@ -1051,6 +1062,122 @@ func TestSimultaneousNewBlock(t *testing.T) {
 			t.Fatalf("Chain head should be updated, have %d want %d", have, want)
 		}
 		parent = block
+	}
+}
+
+// TestNewPayloadWithoutForkchoiceKeepsHeadState feeds a long run of valid
+// payloads without any interleaved forkchoiceUpdated, as a consensus client
+// does when it catches up after an outage. The head state must survive: the
+// path database only retains a bounded number of diff layers, and if the
+// canonical head's state is flattened away, the downloader reports the node as
+// stateless, flips to snap sync and rejects every further payload with SYNCING.
+//
+// The payloads either extend the head directly, or a side chain forking off a
+// few blocks below it, as happens when the head was orphaned while the
+// consensus client was away. The trie database counts the retained states
+// along the chain being executed, so in the latter case the head state is at
+// risk well before the payloads are TriesInMemory blocks past the head.
+func TestNewPayloadWithoutForkchoiceKeepsHeadState(t *testing.T) {
+	t.Run("extend-head", func(t *testing.T) { testNewPayloadWithoutForkchoice(t, 0) })
+	t.Run("fork-below-head", func(t *testing.T) { testNewPayloadWithoutForkchoice(t, 3) })
+}
+
+func testNewPayloadWithoutForkchoice(t *testing.T, orphaned int) {
+	// Every generated block carries a transfer, so each one produces a new
+	// state root and thus a new diff layer. Blocks without state changes are
+	// not committed to the trie database at all and would not exercise the
+	// layer cap.
+	const headNumber = 10
+	genesis, db, canonical := generateMergeChainWithDB(headNumber, true)
+	n, ethservice := startEthService(t, genesis, canonical)
+	defer n.Close()
+
+	var (
+		api   = newConsensusAPIWithoutHeartbeat(ethservice)
+		chain = ethservice.BlockChain()
+		head  = chain.CurrentBlock()
+	)
+	if scheme := chain.TrieDB().Scheme(); scheme != rawdb.PathScheme {
+		t.Fatalf("unexpected state scheme %s, want %s", scheme, rawdb.PathScheme)
+	}
+	// Anchor the head with a forkchoice update, as a synced node would have.
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash:      head.Hash(),
+		SafeBlockHash:      head.Hash(),
+		FinalizedBlockHash: head.Hash(),
+	}
+	if resp, err := api.ForkchoiceUpdatedV1(context.Background(), fcState, nil); err != nil || resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("failed to set head: status %v, err %v", resp.PayloadStatus.Status, err)
+	}
+	// Generate the payloads on top of the fork point. Their transfers go to a
+	// different recipient than the canonical ones, so a side chain never shares
+	// a state root with the canonical blocks it replaces.
+	ancestor := canonical[headNumber-orphaned-1]
+	blocks, _ := core.GenerateChain(genesis.Config, ancestor, beacon.New(ethash.NewFaker()), db, state.TriesInMemory+3, func(i int, g *core.BlockGen) {
+		g.OffsetTime(5)
+		g.SetExtra([]byte("test"))
+		tx, _ := types.SignTx(types.NewTransaction(g.TxNonce(testAddr), common.HexToAddress("0x1111111111111111111111111111111111111111"), big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(genesis.Config), testKey)
+		g.AddTx(tx)
+	})
+	// Feed more descendants than the trie database keeps states for, without
+	// ever moving the head. Payloads within the retained window are executed,
+	// the first one beyond it is stashed and reported as ACCEPTED, and the ones
+	// after that have an unknown parent and are answered with SYNCING.
+	limit := ancestor.NumberU64() + state.TriesInMemory
+	for i, block := range blocks {
+		payload := engine.BlockToExecutableData(block, nil, nil, nil).ExecutionPayload
+		resp, err := api.NewPayloadV1(context.Background(), *payload)
+		if err != nil {
+			t.Fatalf("payload %d: failed to insert block: %v", i+1, err)
+		}
+		var (
+			current  = chain.CurrentBlock()
+			hasState = chain.HasState(current.Root)
+			mode     = ethservice.Downloader().ConfigSyncMode()
+		)
+		t.Logf("payload %3d (block %d): status=%s head=%d headStatePresent=%v syncMode=%s", i+1, block.NumberU64(), resp.Status, current.Number, hasState, mode)
+		if current.Hash() != head.Hash() {
+			t.Fatalf("payload %d: head moved without a forkchoice update, have %d want %d", i+1, current.Number, head.Number)
+		}
+		if !hasState {
+			t.Fatalf("payload %d: head state of block %d was evicted", i+1, current.Number)
+		}
+		if mode != ethconfig.FullSync {
+			t.Fatalf("payload %d: sync mode flipped to %s", i+1, mode)
+		}
+		want := engine.VALID
+		switch {
+		case block.NumberU64() == limit:
+			want = engine.ACCEPTED
+		case block.NumberU64() > limit:
+			want = engine.SYNCING
+		}
+		if resp.Status != want {
+			t.Fatalf("payload %d: unexpected status %s, want %s", i+1, resp.Status, want)
+		}
+	}
+	// The consensus client reacts to a non-VALID status by advancing the head
+	// with a forkchoice update. Once the head has moved, the deferred payload
+	// must be executed. Note blocks[i] is block number ancestor+i+1.
+	last, deferred := blocks[state.TriesInMemory-2], blocks[state.TriesInMemory-1]
+	fcState = engine.ForkchoiceStateV1{
+		HeadBlockHash:      last.Hash(),
+		SafeBlockHash:      last.Hash(),
+		FinalizedBlockHash: last.Hash(),
+	}
+	if resp, err := api.ForkchoiceUpdatedV1(context.Background(), fcState, nil); err != nil || resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("failed to advance head: status %v, err %v", resp.PayloadStatus.Status, err)
+	}
+	if current := chain.CurrentBlock(); current.Hash() != last.Hash() {
+		t.Fatalf("head not advanced, have %d want %d", current.Number, last.NumberU64())
+	}
+	payload := engine.BlockToExecutableData(deferred, nil, nil, nil).ExecutionPayload
+	resp, err := api.NewPayloadV1(context.Background(), *payload)
+	if err != nil {
+		t.Fatalf("failed to insert deferred block: %v", err)
+	}
+	if resp.Status != engine.VALID {
+		t.Fatalf("unexpected status for deferred block: %s, want %s", resp.Status, engine.VALID)
 	}
 }
 
