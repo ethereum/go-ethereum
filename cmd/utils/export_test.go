@@ -18,12 +18,17 @@ package utils
 
 import (
 	"fmt"
+	"math/big"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -36,6 +41,37 @@ func TestExport(t *testing.T) {
 func TestExportGzip(t *testing.T) {
 	f := fmt.Sprintf("%v/tempdump.gz", t.TempDir())
 	testExport(t, f)
+}
+
+func TestExportBlockAccessList(t *testing.T) {
+	accessList := &bal.BlockAccessList{{Address: common.HexToAddress("0x1234")}}
+	block := types.NewBlockWithHeader(&types.Header{Number: big.NewInt(1)}).WithAccessListUnsafe(accessList)
+	encoded, err := rlp.EncodeToBytes(makeExportBlock(block))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded exportBlock
+	if err := rlp.DecodeBytes(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if got := decoded.block().AccessList(); !reflect.DeepEqual(got, accessList) {
+		t.Fatalf("access list = %#v, want %#v", got, accessList)
+	}
+}
+
+func TestImportLegacyBlock(t *testing.T) {
+	block := types.NewBlockWithHeader(&types.Header{Number: big.NewInt(1)})
+	encoded, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded exportBlock
+	if err := rlp.DecodeBytes(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if got := decoded.block().AccessList(); got != nil {
+		t.Fatalf("access list = %#v, want nil", got)
+	}
 }
 
 type testIterator struct {

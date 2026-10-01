@@ -56,6 +56,9 @@ func makeTestBAL(minSize int) *bal.BlockAccessList {
 func getChainWithBALs(nBlocks int, balSize int) (*core.BlockChain, []common.Hash, []rlp.RawValue) {
 	gspec := &core.Genesis{
 		Config: params.MergedTestChainConfig,
+		// The config is merged up to the latest fork, so the system contracts it
+		// calls into have to be deployed for the generated blocks to be valid.
+		Alloc: core.SystemContractAllocs(),
 	}
 	db := rawdb.NewMemoryDatabase()
 	engine := beacon.New(ethash.NewFaker())

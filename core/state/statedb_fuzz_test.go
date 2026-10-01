@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -217,19 +218,19 @@ func (test *stateTest) run() bool {
 		for i, action := range actions {
 			if i%test.chunk == 0 && i != 0 {
 				if byzantium {
-					state.Finalise(true) // call finalise at the transaction boundary
+					state.Finalise(params.Rules{IsEIP158: true}) // call finalise at the transaction boundary
 				} else {
-					state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
+					state.IntermediateRoot(params.Rules{IsEIP158: true}) // call intermediateRoot at the transaction boundary
 				}
 			}
 			action.fn(action, state)
 		}
 		if byzantium {
-			state.Finalise(true) // call finalise at the transaction boundary
+			state.Finalise(params.Rules{IsEIP158: true}) // call finalise at the transaction boundary
 		} else {
-			state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
+			state.IntermediateRoot(params.Rules{IsEIP158: true}) // call intermediateRoot at the transaction boundary
 		}
-		ret, err := state.commitAndFlush(0, true, false, false) // call commit at the block boundary
+		ret, err := state.commitAndFlush(params.Rules{IsEIP158: true}, 0, false) // call commit at the block boundary
 		if err != nil {
 			panic(err)
 		}

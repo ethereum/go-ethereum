@@ -264,7 +264,7 @@ func TestIntrinsicGas(t *testing.T) {
 			isHomestead: true,
 			isEIP2028:   true,
 			isAmsterdam: true,
-			// EIP-2780: creation regular gas is TxBaseCost + CreateAccess (23,000);
+			// EIP-2780: creation execution gas is TxBaseCost + CreateAccess (23,000);
 			// the new-account state charge is applied at runtime.
 			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 		},
@@ -307,14 +307,14 @@ func TestIntrinsicGas(t *testing.T) {
 			isEIP2028:   true,
 			isAmsterdam: true,
 			// EIP-2780: the recipient touch and the per-authorization authority
-			// access (priced into RegularPerAuthBaseCost) are both charged at the
+			// access (priced into ExecutionPerAuthBaseCost) are both charged at the
 			// cold rate unconditionally at the intrinsic phase; the account leaf
 			// and indicator bytes are charged at runtime.
 			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
 				100*params.TxDataNonZeroGasEIP2028 +
 				1*params.TxAccessListAddressGasAmsterdam + 1*params.TxAccessListStorageKeyGasAmsterdam +
 				1*amsterdamAddressCost + 1*amsterdamStorageKeyCost +
-				1*params.RegularPerAuthBaseCost,
+				1*params.ExecutionPerAuthBaseCost,
 		},
 		{
 			name:        "amsterdam/value-transfer-call",
@@ -323,7 +323,7 @@ func TestIntrinsicGas(t *testing.T) {
 			value:       uint256.NewInt(1),
 			// EIP-2780: TxBaseCost + ColdAccountAccess + TransferLogCost + TxValueCost = 21,000.
 			want: params.TxBaseCost2780 + params.ColdAccountAccessAmsterdam +
-				params.TransferLogCost2780 + params.TxValueCost2780,
+				params.TxValueCost2780,
 		},
 		{
 			name:        "amsterdam/value-bearing-contract-creation",
@@ -334,7 +334,7 @@ func TestIntrinsicGas(t *testing.T) {
 			value:       uint256.NewInt(1),
 			// EIP-2780: TxBaseCost + CreateAccess + TransferLogCost = 24,756;
 			// the new-account state charge is applied at runtime.
-			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam + params.TransferLogCost2780,
+			want: params.TxBaseCost2780 + params.CreateAccessAmsterdam,
 		},
 	}
 	for _, tt := range tests {

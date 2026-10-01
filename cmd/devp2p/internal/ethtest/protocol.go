@@ -32,7 +32,7 @@ const (
 // Unexported devp2p protocol lengths from p2p package.
 const (
 	baseProtoLen = 16
-	ethProtoLen  = 18
+	ethProtoLen  = 22
 	// snapProtoLen accommodates snap/2 (EIP-8189) which extends snap/1 with two
 	// additional message codes (GetBlockAccessLists=0x08, BlockAccessLists=0x09).
 	// Using 10 is safe for snap/1 connections because the extra codes are simply

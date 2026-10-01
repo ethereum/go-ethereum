@@ -546,7 +546,7 @@ func opMsize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opGas(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.get().SetUint64(scope.Contract.Gas.RegularGas)
+	scope.Stack.get().SetUint64(scope.Contract.Gas.ExecutionGas)
 	return nil, nil
 }
 
@@ -641,8 +641,8 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if halt {
 		return nil, err
 	}
-	// Apply EIP-150 to the regular gas left after the state charge.
-	forward := scope.Contract.Gas.RegularGas
+	// Apply EIP-150 to the execution gas left after the state charge.
+	forward := scope.Contract.Gas.ExecutionGas
 	if evm.chainRules.IsEIP150 {
 		forward -= forward / 64
 	}
@@ -667,7 +667,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	// Refund the leftover gas back to current frame
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	// Refill the account-creation charge if the create frame failed (reverted,
 	// halted exceptionally, or collided); a successful creation consumes it.
@@ -697,8 +697,8 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if halt {
 		return nil, err
 	}
-	// Apply EIP-150 to the regular gas left after the state charge.
-	forward := scope.Contract.Gas.RegularGas
+	// Apply EIP-150 to the execution gas left after the state charge.
+	forward := scope.Contract.Gas.ExecutionGas
 	forward -= forward / 64
 
 	// reuse size int for stackvalue
@@ -714,7 +714,7 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	// Refund the leftover gas back to current frame
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	// Refill the account-creation charge if the create frame failed (reverted,
 	// halted exceptionally, or collided); a successful creation consumes it.
@@ -750,7 +750,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		gas += params.CallStipend
 	}
 
-	// Regular gas for the forward was already pre-deducted by the dynamic
+	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table (see makeCallVariantGasCallEIP*); only the state reservoir
 	// needs to be handed off to the child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
@@ -766,7 +766,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if err == nil || err == ErrExecutionReverted {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	// If the call frame reverts or halts exceptionally, the charged state-gas
 	// is refilled back to the state reservoir in Amsterdam.
@@ -792,7 +792,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
-	// Regular gas for the forward was already pre-deducted by the dynamic
+	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table, only the state reservoir needs to be handed off to the
 	// child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
@@ -807,7 +807,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	evm.returnData = ret
 	return ret, nil
@@ -825,7 +825,7 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
-	// Regular gas for the forward was already pre-deducted by the dynamic
+	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table, only the state reservoir needs to be handed off to the
 	// child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
@@ -839,7 +839,7 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if err == nil || err == ErrExecutionReverted {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	evm.returnData = ret
 	return ret, nil
@@ -857,7 +857,7 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
-	// Regular gas for the forward was already pre-deducted by the dynamic
+	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table, only the state reservoir needs to be handed off to the
 	// child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
@@ -872,7 +872,7 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	evm.returnData = ret
 	return ret, nil
@@ -921,12 +921,8 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	evm.StateDB.SelfDestruct(this)
 
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
-		}
-		if tracer.OnExit != nil {
-			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
-		}
+		tracer.EmitEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, tracing.Gas{}, balance.ToBig())
+		tracer.EmitExit(evm.depth, []byte{}, tracing.Gas{}, tracing.Gas{}, nil, false)
 	}
 	return nil, errStopToken
 }
@@ -970,12 +966,8 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	}
 
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
-		}
-		if tracer.OnExit != nil {
-			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
-		}
+		tracer.EmitEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, tracing.Gas{}, balance.ToBig())
+		tracer.EmitExit(evm.depth, []byte{}, tracing.Gas{}, tracing.Gas{}, nil, false)
 	}
 	return nil, errStopToken
 }

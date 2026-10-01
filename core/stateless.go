@@ -68,7 +68,7 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
 
 	// Run the stateless blocks processing and self-validate certain fields
-	res, err := processor.Process(ctx, block, db, nil, vmconfig)
+	res, err := processor.Process(ctx, block, db, nil, nil, vmconfig, nil)
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
@@ -77,6 +77,6 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	}
 	// Almost everything validated, but receipt and state root needs to be returned
 	receiptRoot := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
-	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
+	stateRoot := db.IntermediateRoot(config.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time()))
 	return stateRoot, receiptRoot, nil
 }

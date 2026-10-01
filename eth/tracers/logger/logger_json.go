@@ -145,6 +145,9 @@ func (l *jsonLogger) onSystemCallStart() {
 
 // OnEnter is not enabled by default.
 func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	if l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
+		return
+	}
 	frame := callFrame{
 		op:    vm.OpCode(typ),
 		From:  from,
@@ -159,6 +162,9 @@ func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common
 }
 
 func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
+		return
+	}
 	type endLog struct {
 		Output  string              `json:"output"`
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`

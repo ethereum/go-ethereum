@@ -253,7 +253,7 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorEVM, errors.New("UBT alloc recorder was not enabled"))
 		}
 		collector = Alloc(rec.Alloc())
-		if err := mergeUnmigratedBaseAlloc(udb, s.IntermediateRoot(false), collector); err != nil {
+		if err := mergeUnmigratedBaseAlloc(udb, s.IntermediateRoot(params.Rules{}), collector); err != nil {
 			return NewError(ErrorEVM, fmt.Errorf("failed to merge base MPT alloc: %v", err))
 		}
 	}

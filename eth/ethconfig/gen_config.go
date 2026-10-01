@@ -20,11 +20,12 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               uint64
 		SyncMode                SyncMode
-		HistoryMode             history.HistoryMode
+		HistoryMode             history.HistoryPolicy
 		EthDiscoveryURLs        []string
 		SnapDiscoveryURLs       []string
 		NoPruning               bool
 		NoPrefetch              bool
+		NoPrecompileCache       bool
 		TxLookupLimit           uint64 `toml:",omitempty"`
 		TransactionHistory      uint64 `toml:",omitempty"`
 		LogHistory              uint64 `toml:",omitempty"`
@@ -56,14 +57,13 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EnablePreimageRecording bool
 		EnableWitnessStats      bool
 		StatelessSelfValidation bool
-		EnableStateSizeTracking bool
 		SnapV2                  bool
 		VMTrace                 string
 		VMTraceJsonConfig       string
 		RPCGasCap               uint64
 		RPCEVMTimeout           time.Duration
 		RPCTxFeeCap             float64
-		EngineMaxReorgDepth     uint64        `toml:",omitempty"`
+		EngineMaxReorgDepth     uint64
 		OverrideOsaka           *uint64       `toml:",omitempty"`
 		OverrideAmsterdam       *uint64       `toml:",omitempty"`
 		OverrideBPO1            *uint64       `toml:",omitempty"`
@@ -82,6 +82,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.SnapDiscoveryURLs = c.SnapDiscoveryURLs
 	enc.NoPruning = c.NoPruning
 	enc.NoPrefetch = c.NoPrefetch
+	enc.NoPrecompileCache = c.NoPrecompileCache
 	enc.TxLookupLimit = c.TxLookupLimit
 	enc.TransactionHistory = c.TransactionHistory
 	enc.LogHistory = c.LogHistory
@@ -113,7 +114,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.EnableWitnessStats = c.EnableWitnessStats
 	enc.StatelessSelfValidation = c.StatelessSelfValidation
-	enc.EnableStateSizeTracking = c.EnableStateSizeTracking
 	enc.SnapV2 = c.SnapV2
 	enc.VMTrace = c.VMTrace
 	enc.VMTraceJsonConfig = c.VMTraceJsonConfig
@@ -138,11 +138,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               *uint64
 		SyncMode                *SyncMode
-		HistoryMode             *history.HistoryMode
+		HistoryMode             *history.HistoryPolicy
 		EthDiscoveryURLs        []string
 		SnapDiscoveryURLs       []string
 		NoPruning               *bool
 		NoPrefetch              *bool
+		NoPrecompileCache       *bool
 		TxLookupLimit           *uint64 `toml:",omitempty"`
 		TransactionHistory      *uint64 `toml:",omitempty"`
 		LogHistory              *uint64 `toml:",omitempty"`
@@ -174,14 +175,13 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EnablePreimageRecording *bool
 		EnableWitnessStats      *bool
 		StatelessSelfValidation *bool
-		EnableStateSizeTracking *bool
 		SnapV2                  *bool
 		VMTrace                 *string
 		VMTraceJsonConfig       *string
 		RPCGasCap               *uint64
 		RPCEVMTimeout           *time.Duration
 		RPCTxFeeCap             *float64
-		EngineMaxReorgDepth     *uint64        `toml:",omitempty"`
+		EngineMaxReorgDepth     *uint64
 		OverrideOsaka           *uint64        `toml:",omitempty"`
 		OverrideAmsterdam       *uint64        `toml:",omitempty"`
 		OverrideBPO1            *uint64        `toml:",omitempty"`
@@ -218,6 +218,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.NoPrefetch != nil {
 		c.NoPrefetch = *dec.NoPrefetch
+	}
+	if dec.NoPrecompileCache != nil {
+		c.NoPrecompileCache = *dec.NoPrecompileCache
 	}
 	if dec.TxLookupLimit != nil {
 		c.TxLookupLimit = *dec.TxLookupLimit
@@ -311,9 +314,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.StatelessSelfValidation != nil {
 		c.StatelessSelfValidation = *dec.StatelessSelfValidation
-	}
-	if dec.EnableStateSizeTracking != nil {
-		c.EnableStateSizeTracking = *dec.EnableStateSizeTracking
 	}
 	if dec.SnapV2 != nil {
 		c.SnapV2 = *dec.SnapV2

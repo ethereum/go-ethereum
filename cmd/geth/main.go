@@ -76,6 +76,7 @@ var (
 		utils.BlobPoolDataDirFlag,
 		utils.BlobPoolDataCapFlag,
 		utils.BlobPoolPriceBumpFlag,
+		utils.BlobPoolFetchProbabilityFlag,
 		utils.SyncModeFlag,
 		utils.SyncTargetFlag,
 		utils.ExitWhenSyncedFlag,
@@ -98,10 +99,12 @@ var (
 		utils.CacheGCFlag,
 		utils.CacheSnapshotFlag,
 		utils.CacheNoPrefetchFlag,
+		utils.CacheNoPrecompileFlag,
 		utils.CachePreimagesFlag,
 		utils.CacheLogSizeFlag,
 		utils.FDLimitFlag,
 		utils.MemoryLimitFlag,
+		utils.GOGCFlag,
 		utils.CryptoKZGFlag,
 		utils.ListenPortFlag,
 		utils.DiscoveryPortFlag,
@@ -207,8 +210,8 @@ var (
 		utils.MetricsInfluxDBTokenFlag,
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
-		utils.StateSizeTrackingFlag,
 		utils.SnapV2Flag,
+		utils.StateSizeTrackingFlag, // deprecated
 	}
 )
 
@@ -295,9 +298,6 @@ func prepare(ctx *cli.Context) {
 	switch {
 	case ctx.Bool(utils.SepoliaFlag.Name):
 		log.Info("Starting Geth on Sepolia testnet...")
-
-	case ctx.Bool(utils.HoleskyFlag.Name):
-		log.Info("Starting Geth on Holesky testnet...")
 
 	case ctx.Bool(utils.HoodiFlag.Name):
 		log.Info("Starting Geth on Hoodi testnet...")

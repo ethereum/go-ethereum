@@ -29,8 +29,12 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -98,8 +102,31 @@ type txAnnounce struct {
 // txMetadata provides the extra data transmitted along with the announcement
 // for better fetch scheduling.
 type txMetadata struct {
-	kind byte   // Transaction consensus type
-	size uint32 // Transaction size in bytes
+	kind    byte   // Transaction consensus type
+	size    uint32 // Transaction size in bytes, as announced
+	version uint   // Protocol version of the announcing peer
+}
+
+// txDeliveryMeta is the metadata of a delivered transaction. eth72 announces
+// blob transactions without the blob payload, so both sizes are kept.
+type txDeliveryMeta struct {
+	kind            byte   // Transaction consensus type
+	size            uint32 // Size with blobs
+	sizeWithoutBlob uint32 // Size without blobs (eth72)
+}
+
+// sizeForVersion returns the size an announcer on the given version advertises.
+func (m *txDeliveryMeta) sizeForVersion(version uint) uint32 {
+	if m.kind == types.BlobTxType && version >= eth.ETH72 {
+		return m.sizeWithoutBlob
+	}
+	return m.size
+}
+
+// blobPayloadSize returns the encoded size of the blob payload omitted (under eth72)
+func blobPayloadSize(n int) uint32 {
+	const blobRLPSize = params.BlobTxFieldElementsPerBlob*params.BlobTxBytesPerFieldElement + 4
+	return uint32(n)*blobRLPSize + 4
 }
 
 // txMetadataWithSeq is a wrapper of transaction metadata with an extra field
@@ -120,11 +147,11 @@ type txRequest struct {
 // txDelivery is the notification that a batch of transactions have been added
 // to the pool and should be untracked.
 type txDelivery struct {
-	origin    string        // Identifier of the peer originating the notification
-	hashes    []common.Hash // Batch of transaction hashes having been delivered
-	metas     []txMetadata  // Batch of metadata associated with the delivered hashes
-	direct    bool          // Whether this is a direct reply or a broadcast
-	violation error         // Whether we encountered a protocol violation
+	origin    string           // Identifier of the peer originating the notification
+	hashes    []common.Hash    // Batch of transaction hashes having been delivered
+	metas     []txDeliveryMeta // Batch of metadata associated with the delivered hashes
+	direct    bool             // Whether this is a direct reply or a broadcast
+	violation error            // Whether we encountered a protocol violation
 }
 
 // txDrop is the notification that a peer has disconnected.
@@ -186,6 +213,8 @@ type TxFetcher struct {
 	dropPeer     func(string)                            // Drops a peer in case of announcement violation
 	onAccepted   func(peer string, hashes []common.Hash) // Optional: notified with accepted tx hashes per peer
 
+	buffer *blobpool.BlobBuffer
+
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
 	realTime func() time.Time // Real system time or simulated time for tests
@@ -195,8 +224,9 @@ type TxFetcher struct {
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
 // Chain can be nil to disable on-chain checks.
-func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash)) *TxFetcher {
-	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, onAccepted, mclock.System{}, time.Now, nil)
+func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error,
+	dropPeer func(string), onAccepted func(string, []common.Hash), buffer *blobpool.BlobBuffer) *TxFetcher {
+	return NewTxFetcherForTests(chain, validateMeta, addTxs, fetchTxs, dropPeer, onAccepted, buffer, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
@@ -204,7 +234,7 @@ func NewTxFetcher(chain *core.BlockChain, validateMeta func(common.Hash, byte) e
 // Chain can be nil to disable on-chain checks.
 func NewTxFetcherForTests(
 	chain *core.BlockChain, validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string), onAccepted func(string, []common.Hash),
-	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
+	buffer *blobpool.BlobBuffer, clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
 		notify:         make(chan *txAnnounce),
 		cleanup:        make(chan *txDelivery),
@@ -225,6 +255,7 @@ func NewTxFetcherForTests(
 		addTxs:         addTxs,
 		fetchTxs:       fetchTxs,
 		dropPeer:       dropPeer,
+		buffer:         buffer,
 		onAccepted:     onAccepted,
 		clock:          clock,
 		realTime:       realTime,
@@ -233,8 +264,8 @@ func NewTxFetcherForTests(
 }
 
 // Notify announces the fetcher of the potential availability of a new batch of
-// transactions in the network.
-func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []common.Hash) error {
+// transactions in the network. It returns array of hashes decided to be fetched.
+func (f *TxFetcher) Notify(peer string, version uint, kinds []byte, sizes []uint32, hashes []common.Hash) ([]common.Hash, error) {
 	// Keep track of all the announced transactions
 	txAnnounceInMeter.Mark(int64(len(hashes)))
 
@@ -247,13 +278,18 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 		unknownHashes = make([]common.Hash, 0, len(hashes))
 		unknownMetas  = make([]txMetadata, 0, len(hashes))
 
+		blobFetchHashes = make([]common.Hash, 0, len(hashes))
+
 		duplicate   int64
 		onchain     int64
 		underpriced int64
 	)
 	for i, hash := range hashes {
-		err := f.validateMeta(hash, types[i])
+		err := f.validateMeta(hash, kinds[i])
 		if errors.Is(err, txpool.ErrAlreadyKnown) {
+			if kinds[i] == types.BlobTxType {
+				blobFetchHashes = append(blobFetchHashes, hash)
+			}
 			duplicate++
 			continue
 		}
@@ -273,11 +309,14 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 		}
 
 		unknownHashes = append(unknownHashes, hash)
+		if kinds[i] == types.BlobTxType {
+			blobFetchHashes = append(blobFetchHashes, hash)
+		}
 
 		// Transaction metadata has been available since eth68, and all
 		// legacy eth protocols (prior to eth68) have been deprecated.
 		// Therefore, metadata is always expected in the announcement.
-		unknownMetas = append(unknownMetas, txMetadata{kind: types[i], size: sizes[i]})
+		unknownMetas = append(unknownMetas, txMetadata{kind: kinds[i], size: sizes[i], version: version})
 	}
 	txAnnounceKnownMeter.Mark(duplicate)
 	txAnnounceUnderpricedMeter.Mark(underpriced)
@@ -285,14 +324,14 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 
 	// If anything's left to announce, push it into the internal loop
 	if len(unknownHashes) == 0 {
-		return nil
+		return blobFetchHashes, nil
 	}
 	announce := &txAnnounce{origin: peer, hashes: unknownHashes, metas: unknownMetas}
 	select {
 	case f.notify <- announce:
-		return nil
+		return blobFetchHashes, nil
 	case <-f.quit:
-		return errTerminated
+		return nil, errTerminated
 	}
 }
 
@@ -306,32 +345,45 @@ func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
 	return ok
 }
 
+type deliveryMetrics struct {
+	inMeter          *metrics.Meter
+	knownMeter       *metrics.Meter
+	underpricedMeter *metrics.Meter
+	otherRejectMeter *metrics.Meter
+	noCapacityMeter  *metrics.Meter
+}
+
 // Enqueue imports a batch of received transaction into the transaction pool
 // and the fetcher. This method may be called by both transaction broadcasts and
 // direct request replies. The differentiation is important so the fetcher can
 // re-schedule missing transactions as soon as possible.
-func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
-	var (
-		inMeter          = txReplyInMeter
-		knownMeter       = txReplyKnownMeter
-		underpricedMeter = txReplyUnderpricedMeter
-		otherRejectMeter = txReplyOtherRejectMeter
-		violation        error
-	)
+func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction, direct bool) error {
+	var violation error
+
+	metrics := deliveryMetrics{
+		inMeter:          txReplyInMeter,
+		knownMeter:       txReplyKnownMeter,
+		underpricedMeter: txReplyUnderpricedMeter,
+		otherRejectMeter: txReplyOtherRejectMeter,
+		noCapacityMeter:  txReplyNoCapacityMeter,
+	}
 	if !direct {
-		inMeter = txBroadcastInMeter
-		knownMeter = txBroadcastKnownMeter
-		underpricedMeter = txBroadcastUnderpricedMeter
-		otherRejectMeter = txBroadcastOtherRejectMeter
+		metrics = deliveryMetrics{
+			inMeter:          txBroadcastInMeter,
+			knownMeter:       txBroadcastKnownMeter,
+			underpricedMeter: txBroadcastUnderpricedMeter,
+			otherRejectMeter: txBroadcastOtherRejectMeter,
+			noCapacityMeter:  txBroadcastNoCapacityMeter,
+		}
 	}
 	// Keep track of all the propagated transactions
-	inMeter.Mark(int64(len(txs)))
+	metrics.inMeter.Mark(int64(len(txs)))
 
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
 	// re-requesting them and dropping the peer in case of malicious transfers.
 	var (
 		added = make([]common.Hash, 0, len(txs))
-		metas = make([]txMetadata, 0, len(txs))
+		metas = make([]txDeliveryMeta, 0, len(txs))
 	)
 	// proceed in batches
 	for i := 0; i < len(txs); i += addTxsBatchSize {
@@ -339,64 +391,79 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		if end > len(txs) {
 			end = len(txs)
 		}
-		var (
-			duplicate   int64
-			underpriced int64
-			otherreject int64
-		)
 		batch := txs[i:end]
-
-		var accepted []common.Hash
-
-		for j, err := range f.addTxs(batch) {
-			// Track the transaction hash if the price is too low for us.
-			// Avoid re-request this transaction when we receive another
-			// announcement.
-			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) || errors.Is(err, txpool.ErrTxGasPriceTooLow) {
-				f.underpriced.Add(batch[j].Hash(), batch[j].Time())
+		var (
+			poolTxs []*types.Transaction
+			blobTxs []*types.Transaction
+		)
+		if version >= eth.ETH72 {
+			for _, tx := range batch {
+				if tx.Type() == types.BlobTxType {
+					blobTxs = append(blobTxs, tx)
+				} else {
+					poolTxs = append(poolTxs, tx)
+				}
 			}
-			// Track a few interesting failure types
-			switch {
-			case err == nil:
+		} else {
+			poolTxs = batch
+		}
+		batch = append(poolTxs, blobTxs...)
+
+		// Add regular tx to pool, blob tx to buffer.
+		errs := append(f.addTxs(poolTxs), f.buffer.AddTx(blobTxs, peer)...)
+
+		hashes := make([]common.Hash, len(batch))
+		for j := range batch {
+			hashes[j] = batch[j].Hash()
+		}
+		var accepted []common.Hash
+		for j, err := range errs {
+			if err == nil {
 				accepted = append(accepted, batch[j].Hash())
-
-			case errors.Is(err, txpool.ErrAlreadyKnown):
-				duplicate++
-
-			case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) || errors.Is(err, txpool.ErrTxGasPriceTooLow):
-				underpriced++
-
-			case errors.Is(err, txpool.ErrKZGVerificationError):
+			}
+			if errors.Is(err, txpool.ErrKZGVerificationError) || errors.Is(err, txpool.ErrSidecarFormatError) {
 				// KZG verification failed, terminate transaction processing immediately.
 				// Since KZG verification is computationally expensive, this acts as a
 				// defensive measure against potential DoS attacks.
 				violation = err
-
-			default:
-				otherreject++
 			}
 			added = append(added, batch[j].Hash())
-			metas = append(metas, txMetadata{
-				kind: batch[j].Type(),
-				size: uint32(batch[j].Size()),
-			})
+			size := uint32(batch[j].Size())
+			meta := txDeliveryMeta{
+				kind:            batch[j].Type(),
+				size:            size,
+				sizeWithoutBlob: size,
+			}
+			if sc := batch[j].BlobTxSidecar(); sc != nil {
+				if version >= eth.ETH72 {
+					// tx should be delivered without blobs
+					meta.size += blobPayloadSize(len(sc.Commitments))
+				} else {
+					meta.sizeWithoutBlob -= blobPayloadSize(len(sc.Commitments))
+				}
+			}
+			metas = append(metas, meta)
 			// Terminate the transaction processing if violation is encountered. All
 			// the remaining transactions in response will be silently discarded.
 			if violation != nil {
 				break
 			}
 		}
-		knownMeter.Mark(duplicate)
-		underpricedMeter.Mark(underpriced)
-		otherRejectMeter.Mark(otherreject)
+		otherreject, nocapacity := f.handleAddErrors(hashes, errs, metrics)
 
 		// Notify the tracker which txs from this peer were accepted.
 		if f.onAccepted != nil && len(accepted) > 0 {
 			f.onAccepted(peer, accepted)
 		}
-		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
-		if otherreject > int64((len(batch)+3)/4) {
-			log.Debug("Peer delivering stale or invalid transactions", "peer", peer, "rejected", otherreject)
+		// If more than 25% of the batch was refused, sleep a bit to throttle
+		// the peer. Capacity refusals count towards this (the backpressure is
+		// intended) but are reported separately.
+		if refused := otherreject + nocapacity; refused > int64((len(hashes)+3)/4) {
+			if nocapacity > otherreject {
+				log.Debug("Peer delivering transactions faster than there is room for", "refused", nocapacity)
+			} else {
+				log.Debug("Peer delivering stale or invalid transactions", "rejected", otherreject)
+			}
 			time.Sleep(200 * time.Millisecond)
 		}
 		// If we encountered a protocol violation, disconnect this peer.
@@ -410,6 +477,43 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	case <-f.quit:
 		return errTerminated
 	}
+}
+
+func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics deliveryMetrics) (otherreject, nocapacity int64) {
+	var (
+		duplicate   int64
+		underpriced int64
+	)
+	for i, err := range errs {
+		// Track a few interesting failure types
+		switch {
+		case err == nil: // Noop, but need to handle to not count these
+
+		case errors.Is(err, txpool.ErrAlreadyKnown):
+			duplicate++
+
+		// Track the transaction hash if the price is too low for us.
+		// Avoid re-request this transaction when we receive another
+		// announcement.
+		case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) || errors.Is(err, txpool.ErrTxGasPriceTooLow):
+			f.underpriced.Add(txs[i], f.realTime())
+			underpriced++
+
+		// Refused for lack of room, not for anything wrong with the tx. It is
+		// not added to the underpriced set, so it can be fetched again when
+		// announced again.
+		case errors.Is(err, txpool.ErrOutOfCapacity):
+			nocapacity++
+
+		default:
+			otherreject++
+		}
+	}
+	metrics.knownMeter.Mark(duplicate)
+	metrics.underpricedMeter.Mark(underpriced)
+	metrics.otherRejectMeter.Mark(otherreject)
+	metrics.noCapacityMeter.Mark(nocapacity)
+	return otherreject, nocapacity
 }
 
 // Drop should be called when a peer disconnects. It cleans up all the internal
@@ -457,6 +561,15 @@ func (f *TxFetcher) loop() {
 	}
 
 	for {
+		txs, errs := f.buffer.Flush()
+		f.handleAddErrors(txs, errs, deliveryMetrics{
+			inMeter:          txReplyInMeter,
+			knownMeter:       txReplyKnownMeter,
+			underpricedMeter: txReplyUnderpricedMeter,
+			otherRejectMeter: txReplyOtherRejectMeter,
+			noCapacityMeter:  txReplyNoCapacityMeter,
+		})
+
 		select {
 		case ann := <-f.notify:
 			// Drop part of the new announcements if there are too many accumulated.
@@ -693,13 +806,15 @@ func (f *TxFetcher) loop() {
 							if delivery.metas[i].kind != meta.kind {
 								log.Warn("Announced transaction type mismatch", "peer", peer, "tx", hash, "type", delivery.metas[i].kind, "ann", meta.kind)
 								f.dropPeer(peer)
-							} else if delivery.metas[i].size != meta.size {
-								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
-									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
+							} else if size := delivery.metas[i].sizeForVersion(meta.version); size != meta.size {
+								if math.Abs(float64(size)-float64(meta.size)) > 8 {
+									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", size, "ann", meta.size)
 
-									// Normally we should drop a peer considering this is a protocol violation.
-									// However, due to the RLP vs consensus format messyness, allow a few bytes
-									// wiggle-room where we only warn, but don't drop.
+									// Announcing a size that disagrees with the transaction served is a
+									// protocol violation, so the peer is dropped. Due to the RLP vs consensus
+									// format messyness, a few bytes of wiggle-room are tolerated: a difference
+									// of 8 bytes or less is neither warned about nor dropped for, which is why
+									// this branch is guarded above.
 									//
 									// TODO(karalabe): Get rid of this relaxation when clients are proven stable.
 									f.dropPeer(peer)
@@ -719,13 +834,15 @@ func (f *TxFetcher) loop() {
 							if delivery.metas[i].kind != meta.kind {
 								log.Warn("Announced transaction type mismatch", "peer", peer, "tx", hash, "type", delivery.metas[i].kind, "ann", meta.kind)
 								f.dropPeer(peer)
-							} else if delivery.metas[i].size != meta.size {
-								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
-									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
+							} else if size := delivery.metas[i].sizeForVersion(meta.version); size != meta.size {
+								if math.Abs(float64(size)-float64(meta.size)) > 8 {
+									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", size, "ann", meta.size)
 
-									// Normally we should drop a peer considering this is a protocol violation.
-									// However, due to the RLP vs consensus format messyness, allow a few bytes
-									// wiggle-room where we only warn, but don't drop.
+									// Announcing a size that disagrees with the transaction served is a
+									// protocol violation, so the peer is dropped. Due to the RLP vs consensus
+									// format messyness, a few bytes of wiggle-room are tolerated: a difference
+									// of 8 bytes or less is neither warned about nor dropped for, which is why
+									// this branch is guarded above.
 									//
 									// TODO(karalabe): Get rid of this relaxation when clients are proven stable.
 									f.dropPeer(peer)

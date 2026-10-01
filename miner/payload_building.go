@@ -40,14 +40,15 @@ import (
 // Check engine-api specification for more details.
 // https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#payloadattributesv3
 type BuildPayloadArgs struct {
-	Parent       common.Hash           // The parent block to build payload on top
-	Timestamp    uint64                // The provided timestamp of generated payload
-	FeeRecipient common.Address        // The provided recipient address for collecting transaction fee
-	Random       common.Hash           // The provided randomness value
-	Withdrawals  types.Withdrawals     // The provided withdrawals
-	BeaconRoot   *common.Hash          // The provided beaconRoot (Cancun)
-	SlotNum      *uint64               // The provided slotNumber
-	Version      engine.PayloadVersion // Versioning byte for payload id calculation.
+	Parent         common.Hash           // The parent block to build payload on top
+	Timestamp      uint64                // The provided timestamp of generated payload
+	FeeRecipient   common.Address        // The provided recipient address for collecting transaction fee
+	Random         common.Hash           // The provided randomness value
+	Withdrawals    types.Withdrawals     // The provided withdrawals
+	BeaconRoot     *common.Hash          // The provided beaconRoot (Cancun)
+	SlotNum        *uint64               // The provided slotNumber (Amsterdam)
+	TargetGasLimit *uint64               // The provided target gas limit (Amsterdam)
+	Version        engine.PayloadVersion // Versioning byte for payload id calculation.
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -62,7 +63,10 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 		hasher.Write(args.BeaconRoot[:])
 	}
 	if args.SlotNum != nil {
-		binary.Write(hasher, binary.BigEndian, args.SlotNum)
+		binary.Write(hasher, binary.BigEndian, *args.SlotNum)
+	}
+	if args.TargetGasLimit != nil {
+		binary.Write(hasher, binary.BigEndian, *args.TargetGasLimit)
 	}
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
@@ -76,11 +80,16 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 // the revenue. Therefore, the empty-block here is always available and full-block
 // will be set/updated afterwards.
 type Payload struct {
-	id            engine.PayloadID
-	empty         *types.Block
-	emptyWitness  *stateless.Witness
-	full          *types.Block
-	fullWitness   *stateless.Witness
+	id           engine.PayloadID
+	empty        *types.Block
+	emptyWitness *stateless.Witness
+
+	full            *types.Block
+	fullReceipts    []*types.Receipt
+	fullRevertedTxs []*types.Transaction
+	fullRevertedIdx []uint32
+	fullWitness     *stateless.Witness
+
 	sidecars      []*types.BlobTxSidecar
 	emptyRequests [][]byte
 	requests      [][]byte
@@ -120,13 +129,19 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) (resu
 	// fee(apart from the mev revenue) is the only indicator for comparison.
 	if payload.full == nil || r.fees.Cmp(payload.fullFees) > 0 {
 		payload.full = r.block
+		payload.fullReceipts = r.receipts
+		payload.fullRevertedTxs = r.revertedTxs
+		payload.fullRevertedIdx = r.revertedIdx
 		payload.fullFees = r.fees
 		payload.sidecars = r.sidecars
 		payload.requests = r.requests
 		payload.fullWitness = r.witness
 
-		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(r.fees), big.NewFloat(params.Ether))
-		log.Info("Updated payload",
+		var (
+			attrs       []any
+			feesInEther = new(big.Float).Quo(new(big.Float).SetInt(r.fees), big.NewFloat(params.Ether))
+		)
+		attrs = append(attrs,
 			"id", payload.id,
 			"number", r.block.NumberU64(),
 			"hash", r.block.Hash(),
@@ -137,10 +152,24 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) (resu
 			"root", r.block.Root(),
 			"elapsed", common.PrettyDuration(elapsed),
 		)
+		if r.block.BlockAccessListHash() != nil {
+			attrs = append(attrs, "balhash", r.block.BlockAccessListHash().Hex())
+		}
+		log.Info("Updated payload", attrs...)
 		result = true
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
 	return
+}
+
+// FullBlockAndReceipts returns the latest built full block together with the
+// receipts produced during its construction and the transactions that were
+// tried-and-reverted during building.
+func (payload *Payload) FullBlockAndReceipts() (*types.Block, []*types.Receipt, []*types.Transaction, []uint32) {
+	payload.lock.Lock()
+	defer payload.lock.Unlock()
+
+	return payload.full, payload.fullReceipts, payload.fullRevertedTxs, payload.fullRevertedIdx
 }
 
 // Resolve returns the latest built payload and also terminates the background
@@ -246,15 +275,16 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
 	emptyParams := &generateParams{
-		timestamp:   args.Timestamp,
-		forceTime:   true,
-		parentHash:  args.Parent,
-		coinbase:    args.FeeRecipient,
-		random:      args.Random,
-		withdrawals: args.Withdrawals,
-		beaconRoot:  args.BeaconRoot,
-		slotNum:     args.SlotNum,
-		noTxs:       true,
+		timestamp:      args.Timestamp,
+		forceTime:      true,
+		parentHash:     args.Parent,
+		coinbase:       args.FeeRecipient,
+		random:         args.Random,
+		withdrawals:    args.Withdrawals,
+		beaconRoot:     args.BeaconRoot,
+		slotNum:        args.SlotNum,
+		targetGasLimit: args.TargetGasLimit,
+		noTxs:          true,
 	}
 	empty := miner.generateWork(ctx, emptyParams, witness)
 	if empty.err != nil {
@@ -286,15 +316,16 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 		endTimer := time.NewTimer(time.Second * 12)
 
 		fullParams := &generateParams{
-			timestamp:   args.Timestamp,
-			forceTime:   true,
-			parentHash:  args.Parent,
-			coinbase:    args.FeeRecipient,
-			random:      args.Random,
-			withdrawals: args.Withdrawals,
-			beaconRoot:  args.BeaconRoot,
-			slotNum:     args.SlotNum,
-			noTxs:       false,
+			timestamp:      args.Timestamp,
+			forceTime:      true,
+			parentHash:     args.Parent,
+			coinbase:       args.FeeRecipient,
+			random:         args.Random,
+			withdrawals:    args.Withdrawals,
+			beaconRoot:     args.BeaconRoot,
+			slotNum:        args.SlotNum,
+			targetGasLimit: args.TargetGasLimit,
+			noTxs:          false,
 		}
 		for {
 			select {
@@ -351,6 +382,7 @@ func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*
 		withdrawals:       args.Withdrawals,
 		beaconRoot:        args.BeaconRoot,
 		slotNum:           args.SlotNum,
+		targetGasLimit:    args.TargetGasLimit,
 		noTxs:             empty,
 		forceOverrides:    true,
 		overrideExtraData: extraData,

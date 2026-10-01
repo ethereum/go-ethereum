@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -206,7 +207,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(ctx context.Context, update engine.
 			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
 		case params.BeaconRoot == nil:
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
-		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
+		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads")
 		}
 	}
@@ -219,7 +220,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(ctx context.Context, update engine.
 
 // ForkchoiceUpdatedV4 is equivalent to V3 with the addition of slot number
 // in the payload attributes. It supports only PayloadAttributesV4.
-func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes, custodyColumns *types.CustodyBitmap) (engine.ForkChoiceResponse, error) {
 	if params != nil {
 		switch {
 		case params.Withdrawals == nil:
@@ -228,9 +229,12 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
 		case params.SlotNumber == nil:
 			return engine.STATUS_INVALID, attributesErr("missing slot number")
-		case !api.checkFork(params.Timestamp, forks.Amsterdam):
+		case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
 		}
+	}
+	if custodyColumns != nil {
+		api.eth.BlobFetcher().UpdateCustody(*custodyColumns)
 	}
 	// TODO(matt): the spec requires that fcu is applied when called on a valid
 	// hash, even if params are wrong. To do this we need to split up
@@ -327,12 +331,12 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
 	} else {
-		if finalized := api.eth.BlockChain().CurrentFinalBlock(); finalized != nil && block.NumberU64() <= finalized.Number.Uint64() {
+		if finalized := api.eth.BlockChain().CurrentFinalBlock(); finalized != nil && block.NumberU64() < finalized.Number.Uint64() {
 			log.Info("Skipping beacon update to finalized ancestor", "number", block.NumberU64(), "hash", update.HeadBlockHash)
 			return valid(nil), nil
 		}
 		depth := api.eth.BlockChain().CurrentBlock().Number.Uint64() - block.NumberU64()
-		if api.maxReorgDepth > 0 && depth >= api.maxReorgDepth {
+		if api.maxReorgDepth > 0 && depth > api.maxReorgDepth {
 			log.Warn("Refusing too deep reorg", "depth", depth, "head", update.HeadBlockHash)
 			return engine.STATUS_INVALID, engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds limit %d", depth, api.maxReorgDepth))
 		}
@@ -381,14 +385,15 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		args := &miner.BuildPayloadArgs{
-			Parent:       update.HeadBlockHash,
-			Timestamp:    payloadAttributes.Timestamp,
-			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
-			Random:       payloadAttributes.Random,
-			Withdrawals:  payloadAttributes.Withdrawals,
-			BeaconRoot:   payloadAttributes.BeaconRoot,
-			SlotNum:      payloadAttributes.SlotNumber,
-			Version:      payloadVersion,
+			Parent:         update.HeadBlockHash,
+			Timestamp:      payloadAttributes.Timestamp,
+			FeeRecipient:   payloadAttributes.SuggestedFeeRecipient,
+			Random:         payloadAttributes.Random,
+			Withdrawals:    payloadAttributes.Withdrawals,
+			BeaconRoot:     payloadAttributes.BeaconRoot,
+			SlotNum:        payloadAttributes.SlotNumber,
+			TargetGasLimit: payloadAttributes.TargetGasLimit,
+			Version:        payloadVersion,
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
@@ -495,9 +500,6 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 			forks.Osaka,
 			forks.BPO1,
 			forks.BPO2,
-			forks.BPO3,
-			forks.BPO4,
-			forks.BPO5,
 		})
 }
 
@@ -510,6 +512,10 @@ func (api *ConsensusAPI) GetPayloadV6(payloadID engine.PayloadID) (*engine.Execu
 		[]engine.PayloadVersion{engine.PayloadV4},
 		[]forks.Fork{
 			forks.Amsterdam,
+			forks.BPO3,
+			forks.BPO4,
+			forks.BPO5,
+			forks.Bogota,
 		})
 }
 
@@ -710,6 +716,63 @@ func (api *ConsensusAPI) getBlobs(ctx context.Context, hashes []common.Hash, v2 
 	return res, nil
 }
 
+// GetBlobsV4 returns cell-level blob data from the transaction pool.
+// V4 returns only the requested cells as specified by the indices_bitarray.
+func (api *ConsensusAPI) GetBlobsV4(hashes []common.Hash, indicesBitarray types.CustodyBitmap) ([]*engine.BlobCellsAndProofsV1, error) {
+	head := api.eth.BlockChain().CurrentHeader()
+	// Sparse blobpool is not necessarily coupled with the Amsterdam fork and
+	// can technically be supported after the Osaka fork
+	// (where cell proofs are introduced).
+	if api.config().LatestFork(head.Time) < forks.Osaka {
+		return nil, nil
+	}
+	if len(hashes) > 128 {
+		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
+	}
+	cells, proofs, err := api.eth.BlobCache().GetCells(hashes, indicesBitarray)
+	if err != nil {
+		return nil, engine.InvalidParams.With(err)
+	}
+	var (
+		res      = make([]*engine.BlobCellsAndProofsV1, len(hashes))
+		hitCount int
+	)
+	getBlobsRequestedCounter.Inc(int64(len(hashes)))
+	for i := range hashes {
+		if cells[i] == nil || proofs[i] == nil {
+			continue
+		}
+		hitCount++
+		blobCells := make([]*hexutil.Bytes, len(cells[i]))
+		for j, cell := range cells[i] {
+			if cell != nil {
+				b := hexutil.Bytes(cell[:])
+				blobCells[j] = &b
+			}
+		}
+		blobProofs := make([]*hexutil.Bytes, len(proofs[i]))
+		for j, proof := range proofs[i] {
+			if proof != nil {
+				b := hexutil.Bytes(proof[:])
+				blobProofs[j] = &b
+			}
+		}
+		res[i] = &engine.BlobCellsAndProofsV1{
+			BlobCells: blobCells,
+			Proofs:    blobProofs,
+		}
+	}
+	getBlobsAvailableCounter.Inc(int64(hitCount))
+	if hitCount == len(hashes) {
+		getBlobsRequestCompleteHit.Inc(1)
+	} else if hitCount > 0 {
+		getBlobsRequestPartialHit.Inc(1)
+	} else {
+		getBlobsRequestMiss.Inc(1)
+	}
+	return res, nil
+}
+
 // HasBlobs reports availability for the requested blob-versioned-hashes.
 func (api *ConsensusAPI) HasBlobs(hashes []common.Hash) []bool {
 	return api.eth.BlobCache().HasBlobs(context.Background(), hashes)
@@ -781,7 +844,11 @@ func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.Executa
 		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
-	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
+	case params.SlotNumber != nil:
+		return invalidStatus, paramsErr("slotNumber not supported pre-amsterdam")
+	case params.BlockAccessList != nil:
+		return invalidStatus, paramsErr("block access list not supported pre-amsterdam")
+	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2):
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
 	requests := convertRequests(executionRequests)
@@ -809,8 +876,12 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 	case params.SlotNumber == nil:
 		return invalidStatus, paramsErr("nil slotnumber post-amsterdam")
 	case params.BlockAccessList == nil:
-		return invalidStatus, paramsErr("nil block access list post-amsterdam")
-	case !api.checkFork(params.Timestamp, forks.Amsterdam):
+		// Post-Amsterdam the access list field is always present, an empty
+		// block still carries the RLP encoding of an empty list. A field that
+		// is present but does not decode (including the empty byte string) is
+		// not a params error, the payload is rejected as INVALID further down.
+		return invalidStatus, paramsErr("missing block access list post-amsterdam")
+	case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
 		return invalidStatus, unsupportedForkErr("newPayloadV5 must only be called for amsterdam payloads")
 	}
 	requests := convertRequests(executionRequests)
@@ -933,6 +1004,30 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
 
+		// If this block was also built locally, its local build succeeded while
+		// re-import now fails.
+		localBlock, localReceipts, revertedTxs, revertedIdx := api.localBlocks.getWithDetails(block.Root())
+		if localBlock != nil {
+			log.Warn("NewPayload: locally-built block failed to import", "number", localBlock.NumberU64(), "hash", localBlock.Hash(), "root", localBlock.Root())
+
+			reverted := make([]*rawdb.RevertedTx, len(revertedTxs))
+			for i, tx := range revertedTxs {
+				reverted[i] = &rawdb.RevertedTx{
+					Index: revertedIdx[i],
+					Tx:    tx,
+				}
+			}
+			receipts := make([]*types.ReceiptForStorage, len(localReceipts))
+			for i, r := range localReceipts {
+				receipts[i] = (*types.ReceiptForStorage)(r)
+			}
+			rawdb.WriteBadBlockWithDetails(api.eth.ChainDb(), localBlock, &rawdb.ExecutionDetail{
+				AccessList: localBlock.AccessList(),
+				Receipts:   receipts,
+				Reason:     err.Error(),
+				Reverted:   reverted,
+			})
+		}
 		api.invalidLock.Lock()
 		api.invalidBlocksHits[block.Hash()] = 1
 		api.invalidTipsets[block.Hash()] = block.Header()
@@ -1139,17 +1234,26 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 }
 
 // ExchangeCapabilities returns the current methods provided by this node.
-func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
+func (api *ConsensusAPI) ExchangeCapabilities(caps []string) []string {
 	valueT := reflect.TypeOf(api)
-	caps := make([]string, 0, valueT.NumMethod())
+
+	// If the CL supports getBlobsV4, we call EnableCell() on the
+	// blob cache to skip the blob recovery process. This is a
+	// one-directional toggle, which assumes that once the CL
+	// supports getBlobsV4, it will not fall back to getBlobsV3
+	// again.
+	cellmode := slices.Contains(caps, "engine_getBlobsV4")
+	api.eth.BlobCache().SetCellMode(cellmode)
+
+	ourCaps := make([]string, 0, valueT.NumMethod())
 	for i := 0; i < valueT.NumMethod(); i++ {
 		name := []rune(valueT.Method(i).Name)
 		if string(name) == "ExchangeCapabilities" {
 			continue
 		}
-		caps = append(caps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
+		ourCaps = append(ourCaps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
 	}
-	return caps
+	return ourCaps
 }
 
 // GetClientVersionV1 exchanges client version data of this node.
@@ -1250,9 +1354,17 @@ func getBodyV2(block *types.Block) *engine.ExecutionPayloadBodyV2 {
 	if body == nil {
 		return nil
 	}
+	var balData *hexutil.Bytes
+	if bal := block.AccessList(); bal != nil {
+		// Ignore the RLP encoding error just in case, interpreting
+		// the BAL as unavailable.
+		if enc, err := rlp.EncodeToBytes(bal); err == nil {
+			balData = (*hexutil.Bytes)(&enc)
+		}
+	}
 	return &engine.ExecutionPayloadBodyV2{
 		ExecutionPayloadBody: *body,
-		BlockAccessList:      block.AccessList(),
+		BlockAccessList:      balData,
 	}
 }
 

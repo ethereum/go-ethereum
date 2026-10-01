@@ -3,6 +3,7 @@ package bn256
 import (
 	"bytes"
 	"crypto/rand"
+	"math/big"
 	"testing"
 )
 
@@ -102,6 +103,29 @@ func TestG2SelfAddition(t *testing.T) {
 	m := p.Add(p, p).Marshal()
 	if _, err := p.Unmarshal(m); err != nil {
 		t.Fatalf("p.Add(p, p) ∉ G₂: %v", err)
+	}
+}
+
+// TestPairNegativeG2 tests that e(g1, -g2) + e(-g1, g2) = O.
+// It is based on py_ecc:
+// https://github.com/ethereum/py_ecc/blob/v8.0.0/tests/core/test_bn128_and_bls12_381.py#L296
+func TestPairNegativeG2(t *testing.T) {
+	g1Inf := new(G1).ScalarBaseMult(Order)
+	g2Inf := new(G2).ScalarBaseMult(Order)
+	gTInf := Pair(g1Inf, g2Inf)
+
+	g1 := new(G1).ScalarBaseMult(big.NewInt(1))
+	g2 := new(G2).ScalarBaseMult(big.NewInt(1))
+	p1 := Pair(g1, g2)
+	pn1 := Pair(new(G1).Neg(g1), g2)
+	np1 := Pair(g1, new(G2).Neg(g2))
+
+	p1np1 := new(GT).Add(p1, np1)
+	if !bytes.Equal(p1np1.Marshal(), gTInf.Marshal()) {
+		t.Errorf("p1 * np1 = %v want %v", p1np1, gTInf)
+	}
+	if !bytes.Equal(pn1.Marshal(), np1.Marshal()) {
+		t.Errorf("e(-G1, G2) != e(G1, -G2)")
 	}
 }
 

@@ -357,6 +357,7 @@ func (db *Database) Disable() error {
 	if err := disk.terminate(); err != nil {
 		return err
 	}
+	disk.resetCache() // a stale layer can no longer release its caches
 	disk.markStale()
 
 	// Write the initial sync flag to persist it across restarts.
@@ -524,6 +525,10 @@ func (db *Database) Recover(root common.Hash) error {
 //
 // The supplied root must be a valid trie hash value.
 func (db *Database) Recoverable(root common.Hash) bool {
+	// Nothing is recoverable while a state sync is in progress.
+	if db.waitSync {
+		return false
+	}
 	// Ensure the requested state is a known state.
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {

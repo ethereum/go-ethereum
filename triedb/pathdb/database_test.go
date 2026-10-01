@@ -657,6 +657,38 @@ func TestDatabaseRecoverable(t *testing.T) {
 	}
 }
 
+// TestRecoverableDisabled checks that a database disabled for state sync
+// reports nothing as recoverable, matching Recover which refuses to roll
+// back mid-sync. Regression test for a snap-sync restart crash loop: during
+// chain repair Recoverable returned true while Recover returned
+// errDatabaseWaitSync, so setHeadBeyondRoot tripped a log.Crit.
+func TestRecoverableDisabled(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() { maxDiffLayers = 128 }()
+
+	tester := newTester(t, &testerConfig{layers: 12})
+	defer tester.release()
+
+	// A state below the disk layer is recoverable while the database is active.
+	root := tester.roots[tester.bottomIndex()-1]
+	if !tester.db.Recoverable(root) {
+		t.Fatalf("state below the disk layer should be recoverable while active")
+	}
+	// Disable the database to simulate an interrupted, still-running snap sync.
+	if err := tester.db.Disable(); err != nil {
+		t.Fatalf("failed to disable database: %v", err)
+	}
+	// Recover refuses while the sync is in progress.
+	if err := tester.db.Recover(root); !errors.Is(err, errDatabaseWaitSync) {
+		t.Fatalf("Recover: want errDatabaseWaitSync, got %v", err)
+	}
+	// Recoverable must agree, otherwise chain repair enters a Recover it
+	// believes is safe and crashes on the waitSync error.
+	if tester.db.Recoverable(root) {
+		t.Fatalf("disabled database must not report any state as recoverable")
+	}
+}
+
 func TestExecuteRollback(t *testing.T) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4

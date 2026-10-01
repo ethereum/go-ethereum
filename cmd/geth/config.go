@@ -100,6 +100,7 @@ var deprecatedConfigFields = map[string]bool{
 	"ethconfig.Config.LightPeers":              true,
 	"ethconfig.Config.LightNoPrune":            true,
 	"ethconfig.Config.LightNoSyncServe":        true,
+	"ethconfig.Config.EnableStateSizeTracking": true,
 }
 
 type ethstatsConfig struct {

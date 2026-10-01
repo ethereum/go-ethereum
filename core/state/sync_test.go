@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -81,7 +82,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 		}
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit(0, false, false)
+	root, _ := state.Commit(params.Rules{}, 0)
 
 	// Return the generated state
 	return db, sdb, nodeDb, root, accounts

@@ -47,7 +47,6 @@ func main() {
 		//TODO datadir for optional permanent database
 		utils.MainnetFlag,
 		utils.SepoliaFlag,
-		utils.HoleskyFlag,
 		utils.HoodiFlag,
 		utils.BlsyncApiFlag,
 		utils.BlsyncJWTSecretFlag,

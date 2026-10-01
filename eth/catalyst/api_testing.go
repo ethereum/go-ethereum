@@ -94,13 +94,14 @@ func (api *testingAPI) buildTestingBlock(payloadAttributes engine.PayloadAttribu
 		extra = *extraData
 	}
 	args := &miner.BuildPayloadArgs{
-		Parent:       parentHash,
-		Timestamp:    payloadAttributes.Timestamp,
-		FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
-		Random:       payloadAttributes.Random,
-		Withdrawals:  payloadAttributes.Withdrawals,
-		BeaconRoot:   payloadAttributes.BeaconRoot,
-		SlotNum:      payloadAttributes.SlotNumber,
+		Parent:         parentHash,
+		Timestamp:      payloadAttributes.Timestamp,
+		FeeRecipient:   payloadAttributes.SuggestedFeeRecipient,
+		Random:         payloadAttributes.Random,
+		Withdrawals:    payloadAttributes.Withdrawals,
+		BeaconRoot:     payloadAttributes.BeaconRoot,
+		SlotNum:        payloadAttributes.SlotNumber,
+		TargetGasLimit: payloadAttributes.TargetGasLimit,
 	}
 	return api.eth.Miner().BuildTestingPayload(args, txs, buildEmpty, extra)
 }

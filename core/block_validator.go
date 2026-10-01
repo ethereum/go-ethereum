@@ -155,11 +155,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
-	//
-	// Receipts must go through MakeReceipt to calculate the receipt's bloom
-	// already. Merge the receipt's bloom together instead of recalculating
-	// everything.
-	rbloom := types.MergeBloom(res.Receipts)
+	rbloom := res.blockBloom()
 	if rbloom != header.Bloom {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
@@ -169,7 +165,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		return nil
 	}
 	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
-	receiptSha := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
+	receiptSha := res.receiptRoot()
 	if receiptSha != header.ReceiptHash {
 		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
 	}
@@ -184,15 +180,14 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Verify Block-level accessList once Amsterdam is enabled
 	if v.config.IsAmsterdam(block.Number(), block.Time()) {
-		if res.Bal == nil {
+		enc, local := res.encodedAccessList()
+		if enc == nil {
 			return errors.New("block access list is not available in amsterdam")
 		}
-		if block.Header().BlockAccessListHash == nil {
+		if header.BlockAccessListHash == nil {
 			return errors.New("block access list hash not set in header")
 		}
-		enc := res.Bal.ToEncodingObj()
-		local, remote := enc.Hash(), *block.Header().BlockAccessListHash
-		if local != remote {
+		if remote := *header.BlockAccessListHash; local != remote {
 			return fmt.Errorf("access list hash mismatch, local: %x, remote: %x", local, remote)
 		}
 		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
@@ -201,7 +196,8 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+	rules := v.config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
+	if root := statedb.IntermediateRoot(rules); header.Root != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
 	return nil
