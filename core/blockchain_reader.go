@@ -205,7 +205,7 @@ func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
-	hash := rawdb.ReadCanonicalHash(bc.db, number)
+	hash := bc.GetCanonicalHash(number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
@@ -245,6 +245,14 @@ func (bc *BlockChain) GetCanonicalReceipt(tx *types.Transaction, blockHash commo
 	header := bc.GetHeader(blockHash, blockNumber)
 	if header == nil {
 		return nil, fmt.Errorf("block header is not found, %d, %x", blockNumber, blockHash)
+	}
+	// A block still being written has its receipts in memory
+	if job := bc.writer.job(blockHash); job != nil {
+		receipts := job.derivedReceipts(bc.chainConfig)
+		if int(txIndex) >= len(receipts) {
+			return nil, fmt.Errorf("receipt out of index, length: %d, index: %d", len(receipts), txIndex)
+		}
+		return receipts[txIndex], nil
 	}
 	var blobGasPrice *big.Int
 	if header.ExcessBlobGas != nil {
@@ -393,6 +401,10 @@ func (bc *BlockChain) GetCanonicalTransaction(hash common.Hash) (*rawdb.LegacyTx
 	// Short circuit if the txlookup already in the cache, retrieve otherwise
 	if item, exist := bc.txLookupCache.Get(hash); exist {
 		return item.lookup, item.transaction
+	}
+	// A transaction in a head queued in memory has no lookup on disk yet
+	if tx, block, index := bc.writer.headTransaction(hash); tx != nil {
+		return &rawdb.LegacyTxLookupEntry{BlockHash: block.Hash(), BlockIndex: block.NumberU64(), Index: index}, tx
 	}
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadCanonicalTransaction(bc.db, hash)
 	if tx == nil {

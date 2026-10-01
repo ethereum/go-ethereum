@@ -37,10 +37,14 @@ package core
 // counts its state as present, and the last block written counts as present
 // too. Opening that state waits for the first phase. Processing a child block
 // waits for the flattening as well, since reading the path database would wait
-// for it anyway, and reports that wait as commit time. A head update from
-// QueueHead runs after the second phase of its block, so the head markers never
-// reach disk before the block they point at. Any other update of the chain
-// waits for all the queued work first.
+// for it anyway, and reports that wait as commit time.
+//
+// QueueHead moves the chain head in memory right away. Until its markers are on
+// disk, the chain serves the queued head by number and its transactions by hash
+// from memory too. The markers are written after the second phase of the block,
+// so they never reach disk before the block they point at, and the chain events
+// go out after them. Any other update of the chain waits for all the queued
+// work first.
 
 import (
 	"math/big"
@@ -90,6 +94,12 @@ type writeJob struct {
 	receiptsRLP rlp.RawValue // receipts in their storage encoding, for readers
 }
 
+// headTx locates a transaction in a queued head.
+type headTx struct {
+	block *types.Block
+	index uint64
+}
+
 // chainWriter writes the blocks handed over by InsertBlockWithoutSetHead in the background.
 type chainWriter struct {
 	bc *BlockChain
@@ -98,6 +108,8 @@ type chainWriter struct {
 	jobs      map[common.Hash]*writeJob // blocks whose data is not on disk yet
 	tail      chan struct{}             // closed once the last queued task has run
 	head      *types.Block              // last queued head, nil if none since the last drain
+	heads     map[uint64]*types.Block   // queued heads whose markers are not on disk yet
+	headTxs   map[common.Hash]headTx    // transactions of those heads, whose lookups are not on disk yet
 	validated common.Hash               // last block handed over
 	persisted common.Hash               // state root of the last block written, zero if none since the last drain
 	running   bool                      // whether the loops are started
@@ -117,6 +129,8 @@ func newChainWriter(bc *BlockChain) *chainWriter {
 	return &chainWriter{
 		bc:      bc,
 		jobs:    make(map[common.Hash]*writeJob),
+		heads:   make(map[uint64]*types.Block),
+		headTxs: make(map[common.Hash]headTx),
 		slots:   make(chan struct{}, maxQueuedWrites),
 		stateCh: make(chan *writeJob, maxQueuedWrites),
 		// A head update needs a block handed over after the previous update,
@@ -249,19 +263,64 @@ func (w *chainWriter) queueHead(head *types.Block, current *types.Header) bool {
 	done := make(chan struct{})
 	w.head = head
 	w.tail = done
+
+	// Serve the head by number and its transactions by hash until their markers
+	// and lookups are on disk
+	w.heads[head.NumberU64()] = head
+	for i, tx := range head.Transactions() {
+		w.headTxs[tx.Hash()] = headTx{block: head, index: uint64(i)}
+	}
 	w.lock.Unlock()
 
-	// The update runs after the second phase of its block, so the block data
-	// is on disk before the head markers. It doesn't need the chain mutex,
-	// every other head update waits for the writer first.
+	// The chain moves to the head in memory right away, the lookups above
+	// resolve it for anyone who sees it
+	w.bc.setCurrentHead(head.Header())
+
+	// The markers get written after the second phase of the block, so the block
+	// data is on disk before them. It doesn't need the chain mutex, every other
+	// head update waits for the writer first.
 	w.taskCh <- func() {
 		w.runHook("head", head)
 		start := time.Now()
-		w.bc.updateHead(head, start)
+		w.bc.writeHeadMarkers(head)
+
+		// Lookups go to the database from now on
+		w.lock.Lock()
+		delete(w.heads, head.NumberU64())
+		for _, tx := range head.Transactions() {
+			delete(w.headTxs, tx.Hash())
+		}
+		w.lock.Unlock()
+
+		// The events go out once everything they point at is on disk
+		w.bc.sendHeadEvents(head, start)
 		headWriteTimer.UpdateSince(start)
 		close(done)
 	}
 	return true
+}
+
+// canonicalHash returns the hash of the queued head with the given number, or zero if there's none.
+func (w *chainWriter) canonicalHash(number uint64) common.Hash {
+	w.lock.RLock()
+	defer w.lock.RUnlock()
+
+	if head := w.heads[number]; head != nil {
+		return head.Hash()
+	}
+	return common.Hash{}
+}
+
+// headTransaction returns a transaction of a queued head with its block and index, or nil if there's none.
+func (w *chainWriter) headTransaction(hash common.Hash) (*types.Transaction, *types.Block, uint64) {
+	w.lock.RLock()
+	defer w.lock.RUnlock()
+
+	loc, ok := w.headTxs[hash]
+	if !ok {
+		return nil, nil, 0
+	}
+	return loc.block.Transactions()[loc.index], loc.block, loc.index
 }
 
 // extends reports whether the block builds on the last block handed over, or none is since the last drain.

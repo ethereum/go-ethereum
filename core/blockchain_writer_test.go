@@ -401,6 +401,96 @@ func TestDeferredWriteHeadEvent(t *testing.T) {
 	<-held
 }
 
+// Tests that a queued head is the chain head in memory right away, and that the
+// lookups by number and by transaction find it before its markers are on disk.
+func TestDeferredWriteHeadInMemory(t *testing.T) {
+	t.Run("persist", func(t *testing.T) { testDeferredWriteHeadInMemory(t, "persist") })
+	t.Run("head", func(t *testing.T) { testDeferredWriteHeadInMemory(t, "head") })
+}
+
+func testDeferredWriteHeadInMemory(t *testing.T, step string) {
+	db := rawdb.NewMemoryDatabase()
+	chain, _, blocks, _ := newWriteTestChain(t, 3, db, DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	defer chain.Stop()
+
+	if _, err := chain.InsertChain(blocks[:2]); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+	block := blocks[2]
+	probe := newWriteProbe(chain)
+	probe.hold(step, block)
+	defer probe.releaseAll()
+
+	if _, err := chain.InsertBlockWithoutSetHead(context.Background(), block, false); err != nil {
+		t.Fatalf("failed to insert block: %v", err)
+	}
+	if !chain.QueueHead(block) {
+		t.Fatal("head update not queued")
+	}
+	probe.wait(t, step, block.Hash())
+
+	// Nothing of the head is on disk yet, it's all served from memory
+	if rawdb.ReadHeadBlockHash(db) != blocks[1].Hash() || rawdb.ReadCanonicalHash(db, block.NumberU64()) != (common.Hash{}) {
+		t.Fatal("head markers on disk while the head update is held")
+	}
+	checkHeadReadable(t, chain, block)
+
+	// Once the markers land the same reads come from disk
+	probe.release(step, block)
+	chain.WaitWrites()
+	if rawdb.ReadHeadBlockHash(db) != block.Hash() || rawdb.ReadCanonicalHash(db, block.NumberU64()) != block.Hash() {
+		t.Fatal("head markers not on disk after the head update landed")
+	}
+	chain.writer.lock.RLock()
+	queued := len(chain.writer.heads) + len(chain.writer.headTxs)
+	chain.writer.lock.RUnlock()
+	if queued != 0 {
+		t.Fatal("head still served from memory after its markers landed")
+	}
+	checkHeadReadable(t, chain, block)
+}
+
+// checkHeadReadable checks that the block reads back as the chain head, by number and through its transactions.
+func checkHeadReadable(t *testing.T, chain *BlockChain, block *types.Block) {
+	t.Helper()
+
+	hash, number := block.Hash(), block.NumberU64()
+	if chain.CurrentBlock().Hash() != hash || chain.CurrentHeader().Hash() != hash || chain.CurrentSnapBlock().Hash() != hash {
+		t.Fatalf("block #%d not the current head", number)
+	}
+	if chain.GetCanonicalHash(number) != hash {
+		t.Fatalf("block #%d not canonical", number)
+	}
+	if header := chain.GetHeaderByNumber(number); header == nil || header.Hash() != hash {
+		t.Fatalf("header #%d missing by number", number)
+	}
+	if got := chain.GetBlockByNumber(number); got == nil || got.Hash() != hash {
+		t.Fatalf("block #%d missing by number", number)
+	}
+	// Peers syncing down from the head get it along with its parent
+	headers := chain.GetHeadersFrom(number, 2)
+	if len(headers) != 2 {
+		t.Fatalf("headers down from #%d: have %d, want 2", number, len(headers))
+	}
+	var head, parent types.Header
+	if err := rlp.DecodeBytes(headers[0], &head); err != nil || head.Hash() != hash {
+		t.Fatalf("header #%d served wrong: %v", number, err)
+	}
+	if err := rlp.DecodeBytes(headers[1], &parent); err != nil || parent.Hash() != block.ParentHash() {
+		t.Fatalf("parent of #%d served wrong: %v", number, err)
+	}
+	for i, tx := range block.Transactions() {
+		lookup, found := chain.GetCanonicalTransaction(tx.Hash())
+		if found == nil || lookup.BlockHash != hash || lookup.BlockIndex != number || lookup.Index != uint64(i) {
+			t.Fatalf("tx %d of block #%d not found", i, number)
+		}
+		receipt, err := chain.GetCanonicalReceipt(found, hash, number, uint64(i))
+		if err != nil || receipt.TxHash != tx.Hash() || receipt.BlockHash != hash || receipt.BlockNumber.Uint64() != number {
+			t.Fatalf("receipt of tx %d in block #%d missing: %v", i, number, err)
+		}
+	}
+}
+
 // Tests that repeating the head update of a queued head doesn't queue it again.
 func TestDeferredWriteRepeatedHead(t *testing.T) {
 	chain, _, blocks, _ := newWriteTestChain(t, 2, rawdb.NewMemoryDatabase(), DefaultConfig().WithStateScheme(rawdb.PathScheme))
