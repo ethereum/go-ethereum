@@ -709,8 +709,12 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from netip.AddrPort, fromID enode
 
 	// Update node database and endpoint predictor.
 	t.db.UpdateLastPingReceived(n.ID(), from.Addr(), time.Now())
-	toaddr := netip.AddrPortFrom(netutil.IPToAddr(req.To.IP), req.To.UDP)
-	t.localNode.UDPEndpointStatement(from, toaddr)
+
+	// Only bonded nodes are allowed to make statements about our endpoint.
+	if t.checkBond(fromID, from) {
+		toaddr := netip.AddrPortFrom(netutil.IPToAddr(req.To.IP), req.To.UDP)
+		t.localNode.UDPEndpointStatement(from, toaddr)
+	}
 }
 
 // PONG/v4
