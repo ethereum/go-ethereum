@@ -21,9 +21,11 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
@@ -33,9 +35,22 @@ var app = flags.NewApp("go-ethereum devp2p tool")
 
 func init() {
 	app.Flags = append(app.Flags, debug.Flags...)
+	app.Flags = append(app.Flags, utils.MetricsEnabledFlag, utils.MetricsHTTPFlag, utils.MetricsPortFlag)
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
-		return debug.Setup(ctx)
+		if err := debug.Setup(ctx); err != nil {
+			return err
+		}
+		cfg := metrics.DefaultConfig
+		cfg.Enabled = ctx.Bool(utils.MetricsEnabledFlag.Name)
+		if ctx.IsSet(utils.MetricsHTTPFlag.Name) {
+			cfg.HTTP = ctx.String(utils.MetricsHTTPFlag.Name)
+		}
+		if ctx.IsSet(utils.MetricsPortFlag.Name) {
+			cfg.Port = ctx.Int(utils.MetricsPortFlag.Name)
+		}
+		utils.SetupMetrics(&cfg)
+		return nil
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
