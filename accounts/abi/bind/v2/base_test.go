@@ -230,6 +230,84 @@ func TestUnpackAnonymousLogIntoMap(t *testing.T) {
 	}
 }
 
+func TestUnpackLogEmptyPayload(t *testing.T) {
+	t.Parallel()
+
+	// 1. Event with non-indexed arguments: empty payload should fail.
+	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"id","type":"uint256"},{"indexed":false,"name":"data","type":"uint256"}],"name":"basic1","type":"event"}]`
+	parsedAbi, err := abi.JSON(strings.NewReader(abiString))
+	assert.NoError(t, err)
+
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
+	topics := []common.Hash{
+		parsedAbi.Events["basic1"].ID,
+		common.BigToHash(big.NewInt(7)),
+	}
+	mockLog := newMockLog(topics, common.Hash{})
+	mockLog.Data = nil
+
+	type basic1Event struct {
+		Id   *big.Int
+		Data *big.Int
+	}
+	var out basic1Event
+	err = bc.UnpackLog(&out, "basic1", mockLog)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "attempting to unmarshal an empty string while arguments are expected")
+
+	receivedMap := make(map[string]interface{})
+	err = bc.UnpackLogIntoMap(receivedMap, "basic1", mockLog)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "attempting to unmarshal an empty string while arguments are expected")
+
+	// 2. Event with only indexed arguments: empty payload should succeed.
+	indexedOnlyABI := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"id","type":"uint256"}],"name":"indexedOnly","type":"event"}]`
+	parsedIndexedOnly, err := abi.JSON(strings.NewReader(indexedOnlyABI))
+	assert.NoError(t, err)
+
+	bcIndexed := bind.NewBoundContract(common.HexToAddress("0x0"), parsedIndexedOnly, nil, nil, nil)
+	indexedTopics := []common.Hash{
+		parsedIndexedOnly.Events["indexedOnly"].ID,
+		common.BigToHash(big.NewInt(42)),
+	}
+	mockIndexedLog := newMockLog(indexedTopics, common.Hash{})
+	mockIndexedLog.Data = nil
+
+	type indexedEvent struct {
+		Id *big.Int
+	}
+	var outIndexed indexedEvent
+	err = bcIndexed.UnpackLog(&outIndexed, "indexedOnly", mockIndexedLog)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(42), outIndexed.Id)
+
+	receivedIndexedMap := make(map[string]interface{})
+	err = bcIndexed.UnpackLogIntoMap(receivedIndexedMap, "indexedOnly", mockIndexedLog)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(42), receivedIndexedMap["id"])
+
+	// 3. Event with no arguments: empty payload should succeed.
+	noArgsABI := `[{"anonymous":false,"inputs":[],"name":"noArgs","type":"event"}]`
+	parsedNoArgs, err := abi.JSON(strings.NewReader(noArgsABI))
+	assert.NoError(t, err)
+
+	bcNoArgs := bind.NewBoundContract(common.HexToAddress("0x0"), parsedNoArgs, nil, nil, nil)
+	noArgsTopics := []common.Hash{
+		parsedNoArgs.Events["noArgs"].ID,
+	}
+	mockNoArgsLog := newMockLog(noArgsTopics, common.Hash{})
+	mockNoArgsLog.Data = nil
+
+	type noArgsEvent struct{}
+	var outNoArgs noArgsEvent
+	err = bcNoArgs.UnpackLog(&outNoArgs, "noArgs", mockNoArgsLog)
+	assert.NoError(t, err)
+
+	receivedNoArgsMap := make(map[string]interface{})
+	err = bcNoArgs.UnpackLogIntoMap(receivedNoArgsMap, "noArgs", mockNoArgsLog)
+	assert.NoError(t, err)
+}
+
 func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 	t.Parallel()
 	sliceBytes, err := rlp.EncodeToBytes([]string{"name1", "name2", "name3", "name4"})

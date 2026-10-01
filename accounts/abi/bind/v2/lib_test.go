@@ -19,6 +19,7 @@ package bind_test
 import (
 	"context"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -455,5 +456,23 @@ func TestWatchEventsIgnoreMismatch(t *testing.T) {
 		case <-timeout.C:
 			t.Fatalf("timeout waiting for events, only got %d", e1Count)
 		}
+	}
+}
+
+func TestGeneratedEventUnpackEmptyPayload(t *testing.T) {
+	c := events.NewC()
+	log := &types.Log{
+		Topics: []common.Hash{
+			c.GetABI().Events["basic1"].ID,
+			common.BigToHash(big.NewInt(7)),
+		},
+		Data: nil,
+	}
+	_, err := c.UnpackBasic1Event(log)
+	if err == nil {
+		t.Fatal("expected error unpacking event with non-indexed arguments and empty data, got nil")
+	}
+	if !strings.Contains(err.Error(), "attempting to unmarshal an empty string while arguments are expected") {
+		t.Fatalf("unexpected error message: %v", err)
 	}
 }
