@@ -394,12 +394,36 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 	if err != nil {
 		return fmt.Errorf("BlockBodies: %w", err)
 	}
+	for i := range items {
+		if err := checkBodyItemCounts(&items[i]); err != nil {
+			return fmt.Errorf("BlockBodies: body %d: %w", i, err)
+		}
+	}
 	metadata := func() any { return hashBodyParts(items) }
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
 		code: BlockBodiesMsg,
 		Res:  (*BlockBodiesResponse)(&items),
 	}, metadata)
+}
+
+const (
+	minTxEncodedSize         = 1 + 9      // Min size for RLP encoded transaction
+	minWithdrawalEncodedSize = 1 + 3 + 21 // Min size for RLP encoded withdrawal
+)
+
+// checkBodyItemCounts rejects bodies containing more transactions or withdrawals
+// than can fit in their encoded size.
+func checkBodyItemCounts(body *BlockBody) error {
+	if n := body.Transactions.Len(); n*minTxEncodedSize > len(body.Transactions.Content()) {
+		return fmt.Errorf("%d transactions in %d bytes", n, len(body.Transactions.Content()))
+	}
+	if body.Withdrawals != nil {
+		if n := body.Withdrawals.Len(); n*minWithdrawalEncodedSize > len(body.Withdrawals.Content()) {
+			return fmt.Errorf("%d withdrawals in %d bytes", n, len(body.Withdrawals.Content()))
+		}
+	}
+	return nil
 }
 
 // BlockBodyHashes contains the lists of block body part roots for a list of block bodies.
