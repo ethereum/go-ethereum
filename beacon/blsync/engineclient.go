@@ -114,8 +114,18 @@ func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) 
 		parentBeaconRoot := event.BeaconHead.ParentRoot
 		blobHashes := collectBlobHashes(event.Block)
 		params = append(params, blobHashes, parentBeaconRoot)
-	default: // electra, fulu and above
+	case "electra", "fulu":
 		method = "engine_newPayloadV4"
+		parentBeaconRoot := event.BeaconHead.ParentRoot
+		blobHashes := collectBlobHashes(event.Block)
+		hexRequests := make([]hexutil.Bytes, len(event.ExecRequests))
+		for i := range event.ExecRequests {
+			hexRequests[i] = hexutil.Bytes(event.ExecRequests[i])
+		}
+		params = append(params, blobHashes, parentBeaconRoot, hexRequests)
+	default:
+		// gloas and above
+		method = "engine_newPayloadV5"
 		parentBeaconRoot := event.BeaconHead.ParentRoot
 		blobHashes := collectBlobHashes(event.Block)
 		hexRequests := make([]hexutil.Bytes, len(event.ExecRequests))
@@ -146,17 +156,17 @@ func (ec *engineClient) callForkchoiceUpdated(fork string, event types.ChainHead
 		SafeBlockHash:      event.Finalized,
 		FinalizedBlockHash: event.Finalized,
 	}
-
 	var method string
 	switch fork {
 	case "altair", "bellatrix":
 		method = "engine_forkchoiceUpdatedV1"
 	case "capella":
 		method = "engine_forkchoiceUpdatedV2"
-	default: // deneb, electra, fulu and above
+	case "deneb", "electra", "fulu":
 		method = "engine_forkchoiceUpdatedV3"
+	case "gloas":
+		method = "engine_forkchoiceUpdatedV4"
 	}
-
 	ctx, cancel := context.WithTimeout(ec.rootCtx, time.Second*5)
 	defer cancel()
 	var resp engine.ForkChoiceResponse
