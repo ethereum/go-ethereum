@@ -39,15 +39,14 @@ type fileCache struct {
 func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string], mapset.Set[string], error) {
 	t0 := time.Now()
 
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
 	// List all the files from the keystore folder
 	files, err := os.ReadDir(keyDir)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	t1 := time.Now()
-
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
 
 	// Iterate all the files and gather their metadata
 	all := mapset.NewThreadUnsafeSet[string]()
