@@ -304,8 +304,18 @@ func TestCallDefaults(t *testing.T) {
 			args: TransactionArgs{To: &addr, AuthorizationList: []types.SetCodeAuthorization{{Address: addr}}},
 		},
 		{
+			name: "authorization list with gasPrice",
+			args: TransactionArgs{To: &addr, GasPrice: (*hexutil.Big)(big.NewInt(100)), AuthorizationList: []types.SetCodeAuthorization{{Address: addr}}},
+			err:  errors.New("both gasPrice and authorizationList specified"),
+		},
+		{
 			name: "blob hashes with to",
 			args: TransactionArgs{To: &addr, BlobHashes: []common.Hash{{0x01}}},
+		},
+		{
+			name: "blob hashes with gasPrice",
+			args: TransactionArgs{To: &addr, GasPrice: (*hexutil.Big)(big.NewInt(100)), BlobHashes: []common.Hash{{0x01}}},
+			err:  errors.New("both gasPrice and blob fields specified"),
 		},
 	}
 	for _, tt := range tests {
@@ -318,7 +328,7 @@ func TestCallDefaults(t *testing.T) {
 				// Sanitized args must be representable as a transaction, as
 				// eth_simulateV1 and debug_traceCall convert them after this.
 				tt.args.ToTransaction(types.DynamicFeeTxType)
-			} else if !errors.Is(err, tt.err) {
+			} else if !errors.Is(err, tt.err) && (err == nil || err.Error() != tt.err.Error()) {
 				t.Fatalf("error mismatch, want %q, have %v", tt.err, err)
 			}
 		})
@@ -344,6 +354,28 @@ func TestSetDefaultsEmptyAuthList(t *testing.T) {
 		AuthorizationList:    []types.SetCodeAuthorization{},
 	}
 	want := `authorizationList provided for contract creation, but "to" field is missing`
+	if err := args.setDefaults(context.Background(), b, sidecarConfig{}); err == nil || err.Error() != want {
+		t.Fatalf("error mismatch, want %q, have %v", want, err)
+	}
+}
+
+// TestSetDefaultsBlobGasPrice tests that setDefaults rejects gasPrice when blob
+// fields are provided, preventing silent conversion to a legacy transaction.
+func TestSetDefaultsBlobGasPrice(t *testing.T) {
+	t.Parallel()
+
+	var (
+		b    = newBackendMock()
+		gas  = hexutil.Uint64(100000)
+		addr = common.Address{0x42}
+	)
+	args := &TransactionArgs{
+		To:         &addr,
+		GasPrice:   (*hexutil.Big)(big.NewInt(42)),
+		Gas:        &gas,
+		BlobHashes: []common.Hash{{0x01}},
+	}
+	want := `both gasPrice and blob fields specified`
 	if err := args.setDefaults(context.Background(), b, sidecarConfig{}); err == nil || err.Error() != want {
 		t.Fatalf("error mismatch, want %q, have %v", want, err)
 	}

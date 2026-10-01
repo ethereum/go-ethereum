@@ -201,6 +201,12 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 	if args.GasPrice != nil && args.AuthorizationList != nil {
 		return errors.New("both gasPrice and authorizationList specified")
 	}
+	// An EIP-4844 blob transaction cannot be a legacy transaction, so gasPrice
+	// is incompatible with blob hashes or blob fee cap. Reject the combination
+	// instead of silently dropping the blobs in ToTransaction.
+	if args.GasPrice != nil && (args.BlobHashes != nil || args.BlobFeeCap != nil) {
+		return errors.New("both gasPrice and blob fields specified")
+	}
 	// If the tx has completely specified a fee mechanism, no default is needed.
 	// This allows users who are not yet synced past London to get defaults for
 	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
@@ -403,6 +409,14 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
+	if args.GasPrice != nil {
+		if args.AuthorizationList != nil {
+			return errors.New("both gasPrice and authorizationList specified")
+		}
+		if args.BlobHashes != nil || args.BlobFeeCap != nil {
+			return errors.New("both gasPrice and blob fields specified")
+		}
+	}
 	// Reject blob and setcode transaction types without a recipient. They
 	// cannot be represented as a transaction, so reject them up front with the
 	// same errors that message execution would return for them.
@@ -533,7 +547,8 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 		usedType = types.AccessListTxType
 	}
 	// Make it possible to default to newer tx, but use legacy if gasprice is provided
-	if args.GasPrice != nil {
+	// and neither authorization list nor blob hashes are set.
+	if args.GasPrice != nil && args.AuthorizationList == nil && args.BlobHashes == nil {
 		usedType = types.LegacyTxType
 	}
 	var data types.TxData
