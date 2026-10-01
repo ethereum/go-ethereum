@@ -35,16 +35,18 @@ import (
 type engineClient struct {
 	config     *params.ClientConfig
 	rpc        *rpc.Client
+	fetchBlock func(types.ChainHeadEvent) // P2PBlocks: get a head's block from the beacon API instead
 	rootCtx    context.Context
 	cancelRoot context.CancelFunc
 	wg         sync.WaitGroup
 }
 
-func startEngineClient(config *params.ClientConfig, rpc *rpc.Client, headCh <-chan types.ChainHeadEvent) *engineClient {
+func startEngineClient(config *params.ClientConfig, rpc *rpc.Client, headCh <-chan types.ChainHeadEvent, fetchBlock func(types.ChainHeadEvent)) *engineClient {
 	ctx, cancel := context.WithCancel(context.Background())
 	ec := &engineClient{
 		config:     config,
 		rpc:        rpc,
+		fetchBlock: fetchBlock,
 		rootCtx:    ctx,
 		cancelRoot: cancel,
 	}
@@ -60,10 +62,13 @@ func (ec *engineClient) stop() {
 
 // Without the block (P2PBlocks), geth answers the forkchoice update with SYNCING while it
 // fetches the block, and records the head, safe and finalized blocks only for a known head:
-// repeat the update until it is VALID (or the next head arrives).
+// repeat the update until it is VALID (or the next head arrives). If it isn't VALID after
+// p2pFallbackAfter repeats, the execution client's peers didn't provide the block (or it is
+// still catching up): fetch the block from the beacon API and send it with newPayload.
 const (
 	p2pRetryInterval = time.Second
 	p2pRetries       = 10
+	p2pFallbackAfter = 4
 )
 
 func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
@@ -95,6 +100,10 @@ func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
 			retries++
 			log.Debug("Repeating ForkchoiceUpdated", "head", pending.ExecHash, "attempt", retries)
 			if status := ec.forkchoiceUpdated(pending); status != engine.VALID && retries < p2pRetries {
+				if retries == p2pFallbackAfter && ec.fetchBlock != nil {
+					log.Info("Execution client lacks the head block, fetching it from the beacon API", "head", pending.ExecHash, "status", status)
+					ec.fetchBlock(pending)
+				}
 				retry = time.After(p2pRetryInterval)
 			}
 		}

@@ -224,6 +224,75 @@ func TestBlockSyncP2PBlocks(t *testing.T) {
 	expHeadEvent(payload3.BlockHash(), common.Hash{})
 }
 
+// TestBlockSyncP2PBlocksFallback tests that with p2pBlocks the execution block of a head is
+// fetched when asked for (the execution client couldn't get it from its peers), and the head
+// sent again with it.
+func TestBlockSyncP2PBlocksFallback(t *testing.T) {
+	ht := &testHeadTracker{}
+	blockSync := newBeaconBlockSync(ht, true)
+	headCh := make(chan types.ChainHeadEvent, 16)
+	blockSync.SubscribeChainHead(headCh)
+	ts := sync.NewTestScheduler(t, blockSync)
+	ts.AddServer(testServer1, 1)
+
+	nextEvent := func() (types.ChainHeadEvent, bool) {
+		select {
+		case event := <-headCh:
+			return event, true
+		default:
+			return types.ChainHeadEvent{}, false
+		}
+	}
+	payload1, _ := testBlock1.ExecutionPayload()
+	head := testBlock1.Header()
+	ht.validated.Header = head
+	ht.validatedPayload = types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
+		BlockNumber: view.Uint64View(payload1.NumberU64()),
+		BlockHash:   zrntcommon.Hash32(payload1.Hash()),
+	})
+
+	// the validated head is sent without its block
+	ts.Run(1)
+	event, ok := nextEvent()
+	if !ok || event.Block != nil || event.ExecHash != payload1.Hash() {
+		t.Fatalf("expected the head without its block, got %v (event: %v)", event, ok)
+	}
+
+	// asked for its block: requested once, then the head is sent again with it, once
+	blockSync.fetchBlock(event)
+	ts.Run(2, testServer1, sync.ReqBeaconBlock(testBlock1.Root()))
+	ts.RequestEvent(request.EvResponse, ts.Request(2, 1), testBlock1)
+	ts.AddAllowance(testServer1, 1)
+	ts.Run(3)
+	again, ok := nextEvent()
+	if !ok || again.Block == nil || again.Block.Hash() != payload1.Hash() || again.ExecHash != payload1.Hash() ||
+		again.BeaconHead != testBlock1.Header() {
+		t.Fatalf("expected the head with its block, got %v (event: %v)", again, ok)
+	}
+	ts.Run(4)
+	if e, ok := nextEvent(); ok {
+		t.Fatalf("unexpected head event %v", e)
+	}
+
+	// a failed request isn't repeated
+	head2 := types.Header{Slot: head.Slot + 1, ParentRoot: head.Hash()}
+	ht.validated.Header = head2
+	ts.Run(5)
+	event2, _ := nextEvent()
+	blockSync.fetchBlock(event2)
+	ts.Run(6, testServer1, sync.ReqBeaconBlock(head2.Hash()))
+	ts.RequestEvent(request.EvFail, ts.Request(6, 1), nil)
+	ts.AddAllowance(testServer1, 1)
+	ts.Run(7)
+
+	// a request for a head older than the last one sent is dropped (its block is at hand)
+	blockSync.fetchBlock(event)
+	ts.Run(8)
+	if e, ok := nextEvent(); ok {
+		t.Fatalf("unexpected head event %v", e)
+	}
+}
+
 type testHeadTracker struct {
 	prefetch         types.HeadInfo
 	validated        types.SignedHeader
