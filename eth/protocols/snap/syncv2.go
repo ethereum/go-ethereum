@@ -918,23 +918,25 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 			num := start + uint64(i)
 			hash := winHashes[i]
 
-			// Decode the raw RLP into a BAL.
+			// Decode only the final-state consequences consumed by applyAccessList.
+			// The raw BAL has already been fully decoded and hash-verified at the
+			// peer-response boundary.
+			b, err := bal.DecodeApplyRLP(raw)
+			if err != nil {
+				return fmt.Errorf("failed to decode BAL apply view for block %d: %v", num, err)
+			}
 			var (
-				b         bal.BlockAccessList
 				batch     = s.db.NewBatch()
 				nextPivot = headers[hash]
 				tries     *stateTrie
 			)
-			if err := rlp.DecodeBytes(raw, &b); err != nil {
-				return fmt.Errorf("failed to decode BAL for block %d: %v", num, err)
-			}
 			if withTrie {
 				tries, err = s.openStateTrie(parent.Root, batch)
 				if err != nil {
 					return err
 				}
 			}
-			root, err := s.applyAccessList(&b, batch, tries)
+			root, err := s.applyAccessList(b, batch, tries)
 			if err != nil {
 				return fmt.Errorf("BAL application failed for block %d: %v", num, err)
 			}
