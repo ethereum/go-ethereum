@@ -100,13 +100,24 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		if err != nil {
 			return fmt.Errorf("Cells: %v", err)
 		}
-		cells := make([][]kzg4844.Cell, len(outer))
+		var (
+			cells = make([][]kzg4844.Cell, len(outer))
+			count = packet.Mask.OneCount()
+		)
 		for i := range outer {
 			if outer[i].Len() > params.BlobTxMaxBlobs*kzg4844.CellsPerBlob {
 				return fmt.Errorf("Cells: cells per tx exceeded the possible maximum")
 			}
 			if cells[i], err = outer[i].Items(); err != nil {
 				return fmt.Errorf("Cells: %v", err)
+			}
+			if count > 0 && len(cells[i])%count == 0 {
+				blobs := len(cells[i]) / count
+				reordered := make([]kzg4844.Cell, len(cells[i]))
+				for j, cell := range cells[i] {
+					reordered[(j%blobs)*count+j/blobs] = cell
+				}
+				cells[i] = reordered
 			}
 		}
 		return h.blobFetcher.Enqueue(peer.ID(), packet.Hashes, cells, packet.Mask)
