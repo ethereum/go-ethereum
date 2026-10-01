@@ -17,13 +17,60 @@
 package ethapi
 
 import (
+	"context"
 	"math/big"
+	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 )
+
+type uncappedTestBackend struct{ *testBackend }
+
+func (uncappedTestBackend) RPCGasCap() uint64 { return 0 }
+
+func TestSimulateValidationChecksTransactionGasLimit(t *testing.T) {
+	var (
+		sender    = common.Address{0xaa}
+		recipient = common.Address{0xbb}
+		gas       = hexutil.Uint64(params.MaxTxGas + 1)
+		blockGas  = hexutil.Uint64(params.MaxTxGas + 2)
+		genesis   = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				sender: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	backend := newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), func(int, *core.BlockGen) {})
+	api := NewBlockChainAPI(uncappedTestBackend{backend})
+	opts := simOpts{
+		Validation: true,
+		BlockStateCalls: []simBlock{{
+			BlockOverrides: &override.BlockOverrides{GasLimit: &blockGas},
+			Calls: []TransactionArgs{{
+				From:                 &sender,
+				To:                   &recipient,
+				Gas:                  &gas,
+				MaxFeePerGas:         newInt(1_000_000_000),
+				MaxPriorityFeePerGas: newInt(1),
+			}},
+		}},
+	}
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	_, err := api.SimulateV1(context.Background(), opts, &latest)
+	if err == nil || !strings.Contains(err.Error(), core.ErrGasLimitTooHigh.Error()) {
+		t.Fatalf("expected transaction gas limit error, got %v", err)
+	}
+}
 
 func TestSimulateSanitizeBlockOrder(t *testing.T) {
 	type result struct {
