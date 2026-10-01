@@ -368,6 +368,32 @@ func TestErrors(t *testing.T) {
 	}
 }
 
+func TestUnpackErrorRejectsMalformedData(t *testing.T) {
+	c := solc_errors.NewC()
+	selector := solc_errors.CBadThingErrorID()
+	tests := []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{"nil data", nil, "insufficient error data: have 0, want at least 4"},
+		{"short data", []byte{1, 2, 3}, "insufficient error data: have 3, want at least 4"},
+		{"unknown selector", []byte{0, 1, 2, 3}, "Unknown error"},
+		{"known selector with malformed payload", append(append([]byte{}, selector[:4]...), 0), ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := c.UnpackError(tt.raw)
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if tt.want != "" && err.Error() != tt.want {
+				t.Fatalf("error: got %q, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestEventUnpackEmptyTopics(t *testing.T) {
 	c := events.NewC()
 
