@@ -873,17 +873,18 @@ func (q *queue) DeliverBodies(id string, hashes eth.BlockBodyHashes, bodies []et
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	// Track the reply size to calibrate the request sizes against the reply
-	// limit of remote peers
-	if len(bodies) > 0 {
-		var size uint64
-		for i := range bodies {
-			size += bodies[i].Transactions.Size() + bodies[i].Uncles.Size()
-			if bodies[i].Withdrawals != nil {
-				size += bodies[i].Withdrawals.Size()
-			}
+	bodySize := func(body *eth.BlockBody) uint64 {
+		size := body.Transactions.Size() + body.Uncles.Size()
+		if body.Withdrawals != nil {
+			size += body.Withdrawals.Size()
 		}
-		q.bodySize = updateSizeEstimate(q.bodySize, common.StorageSize(size)/common.StorageSize(len(bodies)))
+		return size
+	}
+	var size uint64
+	for i := range bodies {
+		size += bodySize(&bodies[i])
+	}
+	if len(bodies) > 0 {
 		bodyFetchMetrics.bytes.Mark(int64(size))
 	}
 	bodyFetchMetrics.items.Update(int64(len(bodies)))
@@ -943,8 +944,24 @@ func (q *queue) DeliverBodies(id string, hashes eth.BlockBodyHashes, bodies []et
 		result.SetBodyDone()
 	}
 	nresults := len(hashes.TransactionRoots)
-	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
+	validated, err := q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
 		bodyReqTimer, bodyInMeter, bodyDropMeter, nresults, validate, reconstruct)
+
+	// Track the reply size to calibrate the request sizes against the reply
+	// limit of remote peers. Only bodies matching the requested headers are
+	// counted, so that an invalid reply cannot skew the estimate.
+	if validated > 0 {
+		// deliver accepts a prefix of the reply, so the size above can be
+		// reused unless the peer sent invalid bodies.
+		if validated < len(bodies) {
+			size = 0
+			for i := range bodies[:validated] {
+				size += bodySize(&bodies[i])
+			}
+		}
+		q.bodySize = updateSizeEstimate(q.bodySize, common.StorageSize(size)/common.StorageSize(validated))
+	}
+	return validated, err
 }
 
 // DeliverReceipts injects a receipt retrieval response into the results queue.
@@ -954,14 +971,11 @@ func (q *queue) DeliverReceipts(id string, receiptList []rlp.RawValue, receiptLi
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	// Track the reply size to calibrate the request sizes against the reply
-	// limit of remote peers
+	var size int
+	for _, receipts := range receiptList {
+		size += len(receipts)
+	}
 	if len(receiptList) > 0 {
-		var size int
-		for _, receipts := range receiptList {
-			size += len(receipts)
-		}
-		q.receiptSize = updateSizeEstimate(q.receiptSize, common.StorageSize(size)/common.StorageSize(len(receiptList)))
 		receiptFetchMetrics.bytes.Mark(int64(size))
 	}
 	receiptFetchMetrics.items.Update(int64(len(receiptList)))
@@ -976,8 +990,22 @@ func (q *queue) DeliverReceipts(id string, receiptList []rlp.RawValue, receiptLi
 		result.Receipts = receiptList[index]
 		result.SetReceiptsDone()
 	}
-	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool,
+	validated, err := q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool,
 		receiptReqTimer, receiptInMeter, receiptDropMeter, len(receiptList), validate, reconstruct)
+
+	// Track the reply size to calibrate the request sizes against the reply
+	// limit of remote peers. Only receipts matching the requested headers are
+	// counted, so that an invalid reply cannot skew the estimate.
+	if validated > 0 {
+		if validated < len(receiptList) {
+			size = 0
+			for _, receipts := range receiptList[:validated] {
+				size += len(receipts)
+			}
+		}
+		q.receiptSize = updateSizeEstimate(q.receiptSize, common.StorageSize(size)/common.StorageSize(validated))
+	}
+	return validated, err
 }
 
 // DeliverBALs injects a block access list retrieval response into the results
