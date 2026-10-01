@@ -35,6 +35,12 @@ const (
 	quicMaxMsgSize = (1 << 24) - 1
 	quicProofLabel = "ENR-key-proof-v1"
 	quicNonceLen   = 32
+
+	// quicExporterLabel and quicExporterLen parameterize the TLS exporter
+	// (RFC 5705) used as the channel binding for node-to-node mutual
+	// authentication.
+	quicExporterLabel = "devp2p-quic-id-proof-v1"
+	quicExporterLen   = 32
 )
 
 var errQUICMsgTooLarge = errors.New("quic: message too large")
@@ -67,41 +73,74 @@ func newQUICTransport(fd net.Conn, session *webtransport.Session, nonce []byte, 
 // random identity minted for an unverified inbound peer.
 func (w *quicWire) overrideID() []byte { return w.nodeID }
 
-// Handshake establishes node identity. The dialer sends a nonce in the CONNECT
-// request; the server proves ownership of its node key by signing that nonce,
-// which the dialer verifies against the ENR it dialed. Mutual authentication is
-// not yet implemented, so the server does not verify the dialer and instead
-// assigns it a random identity rather than trusting a self-reported one.
+// Handshake establishes node identity over the QUIC stream.
+//
+// A browser sends a nonce in the CONNECT request and the server signs it to prove
+// ownership of its node key.
+//
+// Node peers don't send nonce and authenticate mutually over the TLS exporter
+// (RFC 5705). Each side signs the exporter value which is unique to the connection.
 func (w *quicWire) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
-	if w.dialDest == nil {
-		// inbound: prove our identity, then assign the peer a random one.
-		if err := w.writeProof(prv); err != nil {
-			return nil, err
-		}
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			return nil, err
-		}
-		w.nodeID = crypto.FromECDSAPub(&key.PublicKey)[1:]
-		return &key.PublicKey, nil
+	if w.nonce != nil {
+		return w.browserHandshake(prv)
 	}
-	// dialed: verify the server's proof over the nonce we sent.
-	remote, err := w.readProof()
+	return w.nodeHandshake(prv)
+}
+
+// browserHandshake runs the server side of a browser connection.
+func (w *quicWire) browserHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
+	if err := w.writeProof(prv, w.nonce); err != nil {
+		return nil, err
+	}
+	// assign random node id and node key
+	// todo: node key
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		return nil, err
+	}
+	w.nodeID = crypto.FromECDSAPub(&key.PublicKey)[1:]
+	return &key.PublicKey, nil
+}
+
+func (w *quicWire) nodeHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
+	ekm, err := w.exporter()
+	if err != nil {
+		return nil, err
+	}
+	if w.dialDest == nil {
+		// inbound: prove our identity over the exporter, then verify the dialer's.
+		if err := w.writeProof(prv, ekm); err != nil {
+			return nil, err
+		}
+		return w.readProof(ekm)
+	}
+	// dialed: verify the server's proof, then prove our own identity.
+	remote, err := w.readProof(ekm)
 	if err != nil {
 		return nil, err
 	}
 	if !remote.Equal(w.dialDest) {
 		return nil, errors.New("quic: node identity mismatch")
 	}
+	if err := w.writeProof(prv, ekm); err != nil {
+		return nil, err
+	}
 	return remote, nil
 }
 
-func (w *quicWire) proofDigest() []byte {
-	return crypto.Keccak256([]byte(quicProofLabel), w.nonce)
+// exporter returns the TLS exported keying material (RFC 5705) for the
+// connection. Both ends derive the same value and it is unique per connection.
+func (w *quicWire) exporter() ([]byte, error) {
+	cs := w.session.SessionState().ConnectionState.TLS
+	return cs.ExportKeyingMaterial(quicExporterLabel, nil, quicExporterLen)
 }
 
-func (w *quicWire) writeProof(prv *ecdsa.PrivateKey) error {
-	sig, err := crypto.Sign(w.proofDigest(), prv)
+func proofDigest(challenge []byte) []byte {
+	return crypto.Keccak256([]byte(quicProofLabel), challenge)
+}
+
+func (w *quicWire) writeProof(prv *ecdsa.PrivateKey, challenge []byte) error {
+	sig, err := crypto.Sign(proofDigest(challenge), prv)
 	if err != nil {
 		return err
 	}
@@ -109,12 +148,12 @@ func (w *quicWire) writeProof(prv *ecdsa.PrivateKey) error {
 	return err
 }
 
-func (w *quicWire) readProof() (*ecdsa.PublicKey, error) {
+func (w *quicWire) readProof(challenge []byte) (*ecdsa.PublicKey, error) {
 	sig := make([]byte, crypto.SignatureLength)
 	if _, err := io.ReadFull(w.fd, sig); err != nil {
 		return nil, err
 	}
-	return crypto.SigToPub(w.proofDigest(), sig)
+	return crypto.SigToPub(proofDigest(challenge), sig)
 }
 
 func (w *quicWire) Read() (uint64, []byte, int, error) {

@@ -1042,8 +1042,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		dialPub = dialDest.Pubkey()
 	}
 	if qc := unwrapQUICConn(fd); qc != nil {
-		// We currently assume every inbound QUIC connection is a browser.
-		c.browser = c.is(inboundConn)
+		c.browser = c.is(inboundConn) && qc.nonce != nil
 		c.transport = newQUICTransport(fd, qc.session, qc.nonce, dialPub)
 	} else {
 		c.transport = srv.newTransport(fd, dialPub)

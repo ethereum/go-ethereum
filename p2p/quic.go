@@ -18,7 +18,6 @@ package p2p
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
 	"errors"
@@ -145,30 +144,38 @@ func (l *quicListener) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// readNonce extracts the dialer's nonce from the "ENR-key-proof=<hex>" entry in
-// the WT-Available-Protocols header of the CONNECT request.
+// readNonce extracts the browser's nonce from the "ENR-key-proof=<hex>" entry in
+// the WT-Available-Protocols header of the CONNECT request. It returns a nil
+// nonce when no such entry is present.
 func readNonce(r *http.Request) ([]byte, error) {
-	list, err := httpsfv.UnmarshalList(r.Header.Values("WT-Available-Protocols"))
-	if err != nil || len(list) == 0 {
-		return nil, errors.New("quic: missing nonce")
+	hdr := r.Header.Values("WT-Available-Protocols")
+	if len(hdr) == 0 {
+		return nil, nil
 	}
-	item, ok := list[0].(httpsfv.Item)
-	if !ok {
-		return nil, errors.New("quic: invalid nonce")
+	list, err := httpsfv.UnmarshalList(hdr)
+	if err != nil {
+		return nil, errors.New("quic: invalid WT-Available-Protocols")
 	}
-	s, ok := item.Value.(string)
-	if !ok {
-		return nil, errors.New("quic: invalid nonce")
+	for _, member := range list {
+		item, ok := member.(httpsfv.Item)
+		if !ok {
+			continue
+		}
+		s, ok := item.Value.(string)
+		if !ok {
+			continue
+		}
+		hexNonce, ok := strings.CutPrefix(s, quicNonceProto)
+		if !ok {
+			continue
+		}
+		nonce, err := hex.DecodeString(hexNonce)
+		if err != nil || len(nonce) != quicNonceLen {
+			return nil, errors.New("quic: invalid nonce")
+		}
+		return nonce, nil
 	}
-	hexNonce, ok := strings.CutPrefix(s, quicNonceProto)
-	if !ok {
-		return nil, errors.New("quic: invalid nonce")
-	}
-	nonce, err := hex.DecodeString(hexNonce)
-	if err != nil || len(nonce) != quicNonceLen {
-		return nil, errors.New("quic: invalid nonce")
-	}
-	return nonce, nil
+	return nil, nil
 }
 
 func (l *quicListener) Accept() (net.Conn, error) {
@@ -208,14 +215,9 @@ func (d *quicDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, erro
 	ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
 	defer cancel()
 
-	nonce := make([]byte, quicNonceLen)
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, err
-	}
 	wd := &webtransport.Dialer{
-		TLSClientConfig:      quicClientTLSConfig(d.ln.tlsConf, qh),
-		QUICConfig:           quicConfig,
-		ApplicationProtocols: []string{quicNonceProto + hex.EncodeToString(nonce)},
+		TLSClientConfig: quicClientTLSConfig(d.ln.tlsConf, qh),
+		QUICConfig:      quicConfig,
 		DialAddr: func(ctx context.Context, _ string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
 			return d.ln.tr.Dial(ctx, net.UDPAddrFromAddrPort(ep), tlsCfg, cfg)
 		},
@@ -230,7 +232,7 @@ func (d *quicDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, erro
 		sess.CloseWithError(0, "")
 		return nil, err
 	}
-	return newQUICConn(sess, str, nonce), nil
+	return newQUICConn(sess, str, nil), nil
 }
 
 // unwrapQUICConn returns the quicConn carried by fd, reaching through the
