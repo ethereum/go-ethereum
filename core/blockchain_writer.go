@@ -198,7 +198,7 @@ func (bc *BlockChain) WaitWrites() {
 	bc.writer.wait()
 }
 
-// SetWriteHookForTesting sets a hook run before each writer step: state, flatten, persist, head, wait or drain.
+// SetWriteHookForTesting sets a hook run before each writer step: state, persist, head or drain.
 func (bc *BlockChain) SetWriteHookForTesting(hook func(step string, block *types.Block)) {
 	bc.writer.hook.Store(&hook)
 }
@@ -352,7 +352,6 @@ func (w *chainWriter) stateLoop() {
 			// next to the commit instead of after it
 			capped := make(chan struct{})
 			go func() {
-				w.runHook("flatten", job.block)
 				w.flatten(job)
 				close(capped)
 			}()
@@ -551,7 +550,6 @@ func (w *chainWriter) waitJob(root common.Hash, step func(*writeJob) chan struct
 		return 0
 	}
 	start := time.Now()
-	w.runHook("wait", pending.block)
 	<-step(pending)
 	return time.Since(start)
 }
