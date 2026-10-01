@@ -46,8 +46,8 @@ func (f *FilterMaps) indexerLoop() {
 		// Note: acquiring the indexLock read lock is unnecessary here,
 		// as the `indexedRange` is accessed within the indexerLoop.
 		if !f.indexedRange.initialized {
-			if f.targetView.HeadNumber() == 0 {
-				// initialize when chain head is available
+			if f.targetView.HeadNumber() == 0 || f.targetView.HeadNumber() <= f.historyCutoff {
+				// initialize when chain head is available, past the history cutoff
 				f.processSingleEvent(true)
 				continue
 			}
@@ -392,6 +392,9 @@ func (f *FilterMaps) tryUnindexTail() (bool, error) {
 // needTailEpoch returns true if the given tail epoch needs to be kept
 // according to the current tail target, false if it can be removed.
 func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
+	if epoch == 0 && f.indexedRange.localBase {
+		return false // nothing to render before a local base
+	}
 	firstEpoch := f.mapEpoch(f.indexedRange.maps.First())
 	if epoch > firstEpoch {
 		return true
