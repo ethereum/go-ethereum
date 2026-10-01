@@ -255,7 +255,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		}
 		// Import the batch.
 		if checkInterrupt() {
-			return errors.New("interrupted")
+			return ErrImportInterrupted
 		}
 		missing := missingBlocks(chain, blocks[:i])
 		if len(missing) == 0 {
