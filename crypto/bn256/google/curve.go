@@ -180,6 +180,7 @@ func (c *curvePoint) Add(a, b *curvePoint, pool *bnPool) {
 	pool.Put(t6)
 }
 
+// Double sets c to 2a. c may alias a.
 func (c *curvePoint) Double(a *curvePoint, pool *bnPool) {
 	// See http://hyperelliptic.org/EFD/g1p/auto-code/shortw/jacobian-0/doubling/dbl-2009-l.op3
 	A := pool.Get().Mul(a.x, a.x)
@@ -203,6 +204,12 @@ func (c *curvePoint) Double(a *curvePoint, pool *bnPool) {
 	t.Add(d, d)
 	c.x.Sub(f, t)
 
+	// z3 = 2*y1*z1 is the last use of a.y, so it has to be computed before
+	// c.y is overwritten below: c is allowed to alias a.
+	t.Mul(a.y, a.z)
+	t.Mod(t, P)
+	c.z.Add(t, t)
+
 	t.Add(C_, C_)
 	t2.Add(t, t)
 	t.Add(t2, t2)
@@ -210,10 +217,6 @@ func (c *curvePoint) Double(a *curvePoint, pool *bnPool) {
 	t2.Mul(e, c.y)
 	t2.Mod(t2, P)
 	c.y.Sub(t2, t)
-
-	t.Mul(a.y, a.z)
-	t.Mod(t, P)
-	c.z.Add(t, t)
 
 	pool.Put(A)
 	pool.Put(B)
