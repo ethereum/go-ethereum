@@ -84,9 +84,7 @@ func (t *keccak256PreimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64,
 	}
 }
 
-// GetResult returns the collected keccak256 preimages as a JSON object mapping
-// hashes to preimages, and any error arising from the encoding or forceful
-// termination (via `Stop`).
+// GetResult returns the collected keccak256 preimages as a JSON object mapping hashes to preimages.
 func (t *keccak256PreimageTracer) GetResult() (json.RawMessage, error) {
 	msg, err := json.Marshal(t.computedHashes)
 	if err != nil {
