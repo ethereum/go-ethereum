@@ -150,5 +150,8 @@ func (t *tracer) reset(txHash common.Hash, txIdx uint) {
 }
 
 func (t *tracer) Logs() []*types.Log {
+	if len(t.logs) == 0 {
+		return nil
+	}
 	return t.logs[0]
 }
