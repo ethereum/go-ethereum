@@ -18,6 +18,7 @@ package native
 
 import (
 	"encoding/json"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -39,6 +40,8 @@ func init() {
 // especially when debugging storage access in Solidity mappings and dynamic arrays.
 type keccak256PreimageTracer struct {
 	computedHashes map[common.Hash]hexutil.Bytes
+	interrupt      atomic.Bool           // Atomic flag to signal execution interruption
+	reason         atomic.Pointer[error] // Reason for the interruption, populated by Stop
 }
 
 // newKeccak256PreimageTracer returns a new keccak256PreimageTracer instance.
@@ -51,10 +54,15 @@ func newKeccak256PreimageTracer(ctx *tracers.Context, cfg json.RawMessage, chain
 			OnOpcode: t.OnOpcode,
 		},
 		GetResult: t.GetResult,
+		Stop:      t.Stop,
 	}, nil
 }
 
 func (t *keccak256PreimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	// Skip if tracing was interrupted
+	if t.interrupt.Load() {
+		return
+	}
 	if op == byte(vm.KECCAK256) {
 		sd := scope.StackData()
 		// it turns out that sometimes the stack is empty, evm will fail in this case, but we should not panic here
@@ -76,11 +84,22 @@ func (t *keccak256PreimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64,
 	}
 }
 
-// GetResult returns the collected keccak256 preimages as a JSON object mapping hashes to preimages.
+// GetResult returns the collected keccak256 preimages as a JSON object mapping
+// hashes to preimages, and any error arising from the encoding or forceful
+// termination (via `Stop`).
 func (t *keccak256PreimageTracer) GetResult() (json.RawMessage, error) {
 	msg, err := json.Marshal(t.computedHashes)
 	if err != nil {
 		return nil, err
 	}
+	if p := t.reason.Load(); p != nil {
+		return msg, *p
+	}
 	return msg, nil
+}
+
+// Stop terminates execution of the tracer.
+func (t *keccak256PreimageTracer) Stop(err error) {
+	t.reason.Store(&err)
+	t.interrupt.Store(true)
 }
