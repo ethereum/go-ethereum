@@ -2341,3 +2341,266 @@ func TestTransactionForgotten(t *testing.T) {
 		t.Errorf("wrong final underpriced cache size: got %d, want 1", size)
 	}
 }
+
+type txFetcherScheduleInput struct {
+	peers  []string
+	hashes [][]common.Hash
+	kinds  []byte
+	sizes  []uint32
+	metas  []txDeliveryMeta
+}
+
+func newTxFetcherScheduleInput(peers, announcements int, size uint32) txFetcherScheduleInput {
+	input := txFetcherScheduleInput{
+		peers:  make([]string, peers),
+		hashes: make([][]common.Hash, peers),
+		kinds:  make([]byte, announcements),
+		sizes:  make([]uint32, announcements),
+		metas:  make([]txDeliveryMeta, announcements),
+	}
+	for i := range input.kinds {
+		input.kinds[i] = types.LegacyTxType
+		input.sizes[i] = size
+		input.metas[i] = txDeliveryMeta{kind: types.LegacyTxType, size: size, sizeWithoutBlob: size}
+	}
+	for peer := range input.peers {
+		input.peers[peer] = string(rune('A' + peer))
+		input.hashes[peer] = make([]common.Hash, announcements)
+		for i := range input.hashes[peer] {
+			input.hashes[peer][i] = common.Hash{byte(peer + 1), byte(i >> 8), byte(i)}
+		}
+	}
+	return input
+}
+
+func announceTxFetcherSchedule(tb testing.TB, fetcher *TxFetcher, step <-chan struct{}, input txFetcherScheduleInput, peer int) {
+	tb.Helper()
+	if _, err := fetcher.Notify(input.peers[peer], eth.ETH70, input.kinds, input.sizes, input.hashes[peer]); err != nil {
+		tb.Fatal(err)
+	}
+	<-step
+}
+
+func startTxFetcherSchedule(tb testing.TB, input txFetcherScheduleInput, peers int) (*TxFetcher, *mclock.Simulated, chan struct{}) {
+	tb.Helper()
+
+	clock := new(mclock.Simulated)
+	step := make(chan struct{})
+	fetcher := newTestTxFetcher()
+	fetcher.clock = clock
+	fetcher.step = step
+	fetcher.rand = rand.New(rand.NewSource(0x3a29))
+	fetcher.Start()
+
+	for peer := 0; peer < peers; peer++ {
+		announceTxFetcherSchedule(tb, fetcher, step, input, peer)
+	}
+	clock.Run(txArriveTimeout)
+	<-step
+
+	return fetcher, clock, step
+}
+
+func deliverTxFetcherSchedule(fetcher *TxFetcher, step <-chan struct{}, peer string, hashes []common.Hash, metas []txDeliveryMeta) {
+	fetcher.cleanup <- &txDelivery{origin: peer, hashes: hashes, metas: metas, direct: true}
+	<-step
+}
+
+func requireTxFetcherRequest(tb testing.TB, fetcher *TxFetcher, peer string, want []common.Hash) {
+	tb.Helper()
+
+	request := fetcher.requests[peer]
+	if request == nil {
+		tb.Fatalf("peer %s has no request", peer)
+	}
+	if len(request.hashes) != len(want) {
+		tb.Fatalf("peer %s request has %d hashes, want %d", peer, len(request.hashes), len(want))
+	}
+	for i := range want {
+		if request.hashes[i] != want[i] {
+			tb.Fatalf("peer %s request hash %d is %x, want %x", peer, i, request.hashes[i], want[i])
+		}
+	}
+}
+
+func (input txFetcherScheduleInput) requestSize(offset int) int {
+	var bytes uint64
+	for i := offset; i < len(input.sizes); i++ {
+		count := i - offset + 1
+		if count >= maxTxRetrievals {
+			return count
+		}
+		bytes += uint64(input.sizes[i])
+		if bytes >= maxTxRetrievalSize {
+			return count
+		}
+	}
+	return len(input.sizes) - offset
+}
+
+func runTxFetcherSchedule(tb testing.TB, input txFetcherScheduleInput, partial bool) {
+	tb.Helper()
+
+	fetcher, _, step := startTxFetcherSchedule(tb, input, len(input.peers))
+	defer fetcher.Stop()
+
+	var (
+		delivered          = make([]int, len(input.peers))
+		partiallyDelivered = make([]bool, len(input.peers))
+		remaining          = len(input.peers) * len(input.sizes)
+	)
+	for remaining > 0 {
+		var served bool
+		for peer, name := range input.peers {
+			request := fetcher.requests[name]
+			if request == nil {
+				continue
+			}
+			if request.hashes == nil {
+				tb.Fatalf("peer %s has a dangling request", name)
+			}
+			start := delivered[peer]
+			count := input.requestSize(start)
+			requireTxFetcherRequest(tb, fetcher, name, input.hashes[peer][start:start+count])
+
+			response := count
+			if partial && !partiallyDelivered[peer] {
+				response /= 2
+				partiallyDelivered[peer] = true
+			}
+			deliverTxFetcherSchedule(fetcher, step, name, request.hashes[:response], input.metas[start:start+response])
+			delivered[peer] += response
+			remaining -= response
+			served = true
+			break
+		}
+		if !served {
+			tb.Fatal("no request available while transactions remain")
+		}
+	}
+	if len(fetcher.requests) != 0 || len(fetcher.announced) != 0 {
+		tb.Fatalf("fetcher did not drain: %d requests, %d announcements", len(fetcher.requests), len(fetcher.announced))
+	}
+}
+
+func TestTransactionFetcherLargeBacklogOrdering(t *testing.T) {
+	t.Parallel()
+
+	input := newTxFetcherScheduleInput(2, maxTxAnnounces, 1)
+	t.Run("full", func(t *testing.T) {
+		fetcher, _, step := startTxFetcherSchedule(t, input, 1)
+		defer fetcher.Stop()
+
+		peer := input.peers[0]
+		requireTxFetcherRequest(t, fetcher, peer, input.hashes[0][:maxTxRetrievals])
+		deliverTxFetcherSchedule(fetcher, step, peer, input.hashes[0][:maxTxRetrievals], input.metas[:maxTxRetrievals])
+		requireTxFetcherRequest(t, fetcher, peer, input.hashes[0][maxTxRetrievals:2*maxTxRetrievals])
+	})
+	t.Run("partial", func(t *testing.T) {
+		fetcher, _, step := startTxFetcherSchedule(t, input, 1)
+		defer fetcher.Stop()
+
+		peer := input.peers[0]
+		delivered := maxTxRetrievals / 2
+		requireTxFetcherRequest(t, fetcher, peer, input.hashes[0][:maxTxRetrievals])
+		deliverTxFetcherSchedule(fetcher, step, peer, input.hashes[0][:delivered], input.metas[:delivered])
+		requireTxFetcherRequest(t, fetcher, peer, input.hashes[0][delivered:delivered+maxTxRetrievals])
+	})
+	t.Run("alternate", func(t *testing.T) {
+		testTxFetcherLargeBacklogAlternate(t, input)
+	})
+	t.Run("timeout", func(t *testing.T) {
+		testTxFetcherLargeBacklogRescheduling(t, input, false)
+	})
+	t.Run("drop", func(t *testing.T) {
+		testTxFetcherLargeBacklogRescheduling(t, input, true)
+	})
+	t.Run("byte-limited", func(t *testing.T) {
+		input := newTxFetcherScheduleInput(1, maxTxAnnounces, maxTxRetrievalSize)
+		fetcher, _, step := startTxFetcherSchedule(t, input, 1)
+		defer fetcher.Stop()
+
+		peer := input.peers[0]
+		requireTxFetcherRequest(t, fetcher, peer, input.hashes[0][:1])
+		deliverTxFetcherSchedule(fetcher, step, peer, input.hashes[0][:1], input.metas[:1])
+		requireTxFetcherRequest(t, fetcher, peer, input.hashes[0][1:2])
+	})
+}
+
+func testTxFetcherLargeBacklogAlternate(t *testing.T, input txFetcherScheduleInput) {
+	t.Helper()
+
+	input.hashes[1] = input.hashes[0]
+	fetcher, _, step := startTxFetcherSchedule(t, input, 1)
+	defer fetcher.Stop()
+
+	first, second := input.peers[0], input.peers[1]
+	requireTxFetcherRequest(t, fetcher, first, input.hashes[0][:maxTxRetrievals])
+	announceTxFetcherSchedule(t, fetcher, step, input, 1)
+	requireTxFetcherRequest(t, fetcher, second, input.hashes[1][maxTxRetrievals:2*maxTxRetrievals])
+}
+
+func testTxFetcherLargeBacklogRescheduling(t *testing.T, input txFetcherScheduleInput, drop bool) {
+	t.Helper()
+
+	input.hashes[1] = input.hashes[0][:maxTxRetrievals]
+	fetcher, clock, step := startTxFetcherSchedule(t, input, 1)
+	defer fetcher.Stop()
+
+	first, second := input.peers[0], input.peers[1]
+	requireTxFetcherRequest(t, fetcher, first, input.hashes[0][:maxTxRetrievals])
+	announceTxFetcherSchedule(t, fetcher, step, input, 1)
+	if fetcher.requests[second] != nil {
+		t.Fatalf("peer %s requested transactions already fetching from %s", second, first)
+	}
+
+	if drop {
+		if err := fetcher.Drop(first); err != nil {
+			t.Fatal(err)
+		}
+		<-step
+	} else {
+		clock.Run(txFetchTimeout)
+		<-step
+	}
+	requireTxFetcherRequest(t, fetcher, second, input.hashes[1])
+}
+
+func BenchmarkTransactionFetcherScheduleFetches(b *testing.B) {
+	type scenario struct {
+		peers         int
+		announcements int
+		size          uint32
+		partial       bool
+	}
+	var scenarios []scenario
+	for _, peers := range []int{1, 4} {
+		for _, announcements := range []int{256, 512, 1024, 4096} {
+			scenarios = append(scenarios,
+				scenario{peers: peers, announcements: announcements, size: 1},
+				scenario{peers: peers, announcements: announcements, size: 1, partial: true},
+				scenario{peers: peers, announcements: announcements, size: maxTxRetrievalSize},
+			)
+		}
+	}
+	inputs := make([]txFetcherScheduleInput, len(scenarios))
+	for i, scenario := range scenarios {
+		inputs[i] = newTxFetcherScheduleInput(scenario.peers, scenario.announcements, scenario.size)
+	}
+
+	b.Run("all", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			for i, scenario := range scenarios {
+				runTxFetcherSchedule(b, inputs[i], scenario.partial)
+			}
+		}
+	})
+	b.Run("byte-limited-guard", func(b *testing.B) {
+		input := newTxFetcherScheduleInput(4, maxTxRetrievals, maxTxRetrievalSize)
+		b.ReportAllocs()
+		for b.Loop() {
+			runTxFetcherSchedule(b, input, false)
+		}
+	})
+}
