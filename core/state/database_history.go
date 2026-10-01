@@ -62,7 +62,7 @@ func (r *historicStateReader) Account(addr common.Address) (*types.StateAccount,
 		Root:     common.BytesToHash(account.Root),
 	}
 	if len(acct.CodeHash) == 0 {
-		acct.CodeHash = types.EmptyCodeHash.Bytes()
+		acct.CodeHash = types.EmptyCodeHash[:]
 	}
 	if acct.Root == (common.Hash{}) {
 		acct.Root = types.EmptyRootHash

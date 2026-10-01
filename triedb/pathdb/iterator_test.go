@@ -122,8 +122,7 @@ func TestAccountIteratorBasics(t *testing.T) {
 	// Fill up a parent
 	for i := 0; i < 100; i++ {
 		hash := testrand.Hash()
-		data := testrand.Bytes(32)
-		accounts[hash] = data
+		accounts[hash] = randomAccount()
 
 		if rand.Intn(2) == 0 {
 			accStorage := make(map[common.Hash][]byte)
@@ -153,7 +152,7 @@ func TestStorageIteratorBasics(t *testing.T) {
 	// Fill some random data
 	for i := 0; i < 10; i++ {
 		hash := testrand.Hash()
-		accounts[hash] = testrand.Bytes(32)
+		accounts[hash] = randomAccount()
 
 		accStorage := make(map[common.Hash][]byte)
 		var nilstorage int
@@ -344,6 +343,18 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 
+	// layerAccount returns a valid slim-RLP account whose nonce uniquely encodes
+	// the (layer, key) pair, so that values are distinct per layer and the
+	// iterator's "newest layer wins" behavior is exercised.
+	layerAccount := func(layer, key byte) []byte {
+		return types.SlimAccountRLP(types.StateAccount{
+			Nonce:    uint64(layer)<<8 | uint64(key),
+			Balance:  uint256.NewInt(uint64(key)),
+			Root:     types.EmptyRootHash,
+			CodeHash: types.EmptyCodeHash[:],
+		})
+	}
+
 	// Create a batch of account sets to seed subsequent layers with
 	var (
 		a = make(map[common.Hash][]byte)
@@ -356,27 +367,27 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 		h = make(map[common.Hash][]byte)
 	)
 	for i := byte(2); i < 0xff; i++ {
-		a[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 0, i)
+		a[common.Hash{i}] = layerAccount(0, i)
 		if i > 20 && i%2 == 0 {
-			b[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 1, i)
+			b[common.Hash{i}] = layerAccount(1, i)
 		}
 		if i%4 == 0 {
-			c[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 2, i)
+			c[common.Hash{i}] = layerAccount(2, i)
 		}
 		if i%7 == 0 {
-			d[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 3, i)
+			d[common.Hash{i}] = layerAccount(3, i)
 		}
 		if i%8 == 0 {
-			e[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 4, i)
+			e[common.Hash{i}] = layerAccount(4, i)
 		}
 		if i > 50 && i < 85 {
-			f[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 5, i)
+			f[common.Hash{i}] = layerAccount(5, i)
 		}
 		if i%64 == 0 {
-			g[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 6, i)
+			g[common.Hash{i}] = layerAccount(6, i)
 		}
 		if i%128 == 0 {
-			h[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 7, i)
+			h[common.Hash{i}] = layerAccount(7, i)
 		}
 	}
 	// Assemble a stack of snapshots from the account layers
