@@ -36,9 +36,14 @@ type engineClient struct {
 	config     *params.ClientConfig
 	rpc        *rpc.Client
 	fetchBlock func(types.ChainHeadEvent) // P2PBlocks: get a head's block from the beacon API instead
-	rootCtx    context.Context
-	cancelRoot context.CancelFunc
-	wg         sync.WaitGroup
+	repeats    []time.Duration            // P2PBlocks: when to repeat a forkchoice update (p2pRepeats)
+
+	// fallbackPaused is set when a block fetched for the execution client didn't make
+	// the head VALID (it is still catching up, so the parent is unknown), until a head is.
+	fallbackPaused bool
+	rootCtx        context.Context
+	cancelRoot     context.CancelFunc
+	wg             sync.WaitGroup
 }
 
 func startEngineClient(config *params.ClientConfig, rpc *rpc.Client, headCh <-chan types.ChainHeadEvent, fetchBlock func(types.ChainHeadEvent)) *engineClient {
@@ -47,6 +52,7 @@ func startEngineClient(config *params.ClientConfig, rpc *rpc.Client, headCh <-ch
 		config:     config,
 		rpc:        rpc,
 		fetchBlock: fetchBlock,
+		repeats:    p2pRepeats,
 		rootCtx:    ctx,
 		cancelRoot: cancel,
 	}
@@ -62,14 +68,17 @@ func (ec *engineClient) stop() {
 
 // Without the block (P2PBlocks), geth answers the forkchoice update with SYNCING while it
 // fetches the block, and records the head, safe and finalized blocks only for a known head:
-// repeat the update until it is VALID (or the next head arrives). If it isn't VALID after
-// p2pFallbackAfter repeats, the execution client's peers didn't provide the block (or it is
-// still catching up): fetch the block from the beacon API and send it with newPayload.
-const (
-	p2pRetryInterval = time.Second
-	p2pRetries       = 10
-	p2pFallbackAfter = 4
-)
+// repeat the update until it is VALID, at these times after the head (a new head starts
+// over). A synced node has the block within a second or two; a node that is still syncing
+// stays SYNCING, so the repeats back off and log at debug level only.
+//
+// If the head isn't VALID at the p2pFallbackAt-th repeat, the execution client's peers didn't
+// provide the block: fetch it from the beacon API and send it with newPayload. If that block
+// doesn't make the head VALID either, the execution client is still catching up (it lacks the
+// parent), and fetching blocks is paused until a head is VALID again.
+var p2pRepeats = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}
+
+const p2pFallbackAt = 3
 
 func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
 	defer ec.wg.Done()
@@ -91,53 +100,82 @@ func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
 				log.Info("New execution block retrieved", "hash", event.ExecHash, "finalized", event.Finalized)
 				continue
 			}
-			if status := ec.sendHead(event); event.Block == nil && status != engine.VALID {
-				pending, retries, retry = event, 0, time.After(p2pRetryInterval)
+			payloadStatus, status := ec.sendHead(event)
+			switch {
+			case status == engine.VALID:
+				ec.resumeFallback()
+			case event.Block == nil:
+				pending, retries, retry = event, 0, time.After(ec.repeats[0])
+			case ec.fetchBlock != nil && payloadStatus != engine.VALID && !ec.fallbackPaused:
+				// a block fetched for the fallback, and the execution client couldn't use it
+				log.Info("Execution client is catching up, not fetching head blocks until it has synced", "status", payloadStatus)
+				ec.fallbackPaused = true
 			}
 
 		case <-retry:
 			retry = nil
 			retries++
 			log.Debug("Repeating ForkchoiceUpdated", "head", pending.ExecHash, "attempt", retries)
-			if status := ec.forkchoiceUpdated(pending); status != engine.VALID && retries < p2pRetries {
-				if retries == p2pFallbackAfter && ec.fetchBlock != nil {
-					log.Info("Execution client lacks the head block, fetching it from the beacon API", "head", pending.ExecHash, "status", status)
-					ec.fetchBlock(pending)
-				}
-				retry = time.After(p2pRetryInterval)
+			status := ec.forkchoiceUpdated(pending, true)
+			if status == engine.VALID {
+				ec.resumeFallback()
+				continue
+			}
+			if retries == p2pFallbackAt && ec.fetchBlock != nil && !ec.fallbackPaused {
+				log.Info("Execution client lacks the head block, fetching it from the beacon API", "head", pending.ExecHash, "status", status)
+				ec.fetchBlock(pending)
+			}
+			if retries < len(ec.repeats) {
+				retry = time.After(ec.repeats[retries] - ec.repeats[retries-1])
 			}
 		}
 	}
 }
 
+func (ec *engineClient) resumeFallback() {
+	if ec.fallbackPaused {
+		log.Info("Execution client has synced, fetching missing head blocks again")
+		ec.fallbackPaused = false
+	}
+}
+
 // sendHead hands a new head to the execution client: the block if there is one, then the
-// forkchoice update. It returns the forkchoice status.
-func (ec *engineClient) sendHead(event types.ChainHeadEvent) string {
+// forkchoice update. It returns the newPayload status (empty without a block) and the
+// forkchoice status.
+func (ec *engineClient) sendHead(event types.ChainHeadEvent) (payloadStatus, status string) {
 	// Without the block (P2PBlocks), the forkchoice update alone makes the execution client
 	// fetch it from its peers.
 	if event.Block != nil {
 		forkName := ec.forkName(event)
 		log.Debug("Calling NewPayload", "number", event.Block.NumberU64(), "hash", event.ExecHash)
-		if status, err := ec.callNewPayload(forkName, event); err == nil {
-			log.Info("Successful NewPayload", "number", event.Block.NumberU64(), "hash", event.ExecHash, "status", status)
+		var err error
+		if payloadStatus, err = ec.callNewPayload(forkName, event); err == nil {
+			log.Info("Successful NewPayload", "number", event.Block.NumberU64(), "hash", event.ExecHash, "status", payloadStatus)
 		} else {
 			log.Error("Failed NewPayload", "number", event.Block.NumberU64(), "hash", event.ExecHash, "error", err)
 		}
 	}
-	return ec.forkchoiceUpdated(event)
+	return payloadStatus, ec.forkchoiceUpdated(event, false)
 }
 
-// forkchoiceUpdated sends the forkchoice update for a head and returns its status.
-func (ec *engineClient) forkchoiceUpdated(event types.ChainHeadEvent) string {
+// forkchoiceUpdated sends the forkchoice update for a head and returns its status. A
+// repeat that doesn't make the head VALID logs at debug level only.
+func (ec *engineClient) forkchoiceUpdated(event types.ChainHeadEvent, repeat bool) string {
 	log.Debug("Calling ForkchoiceUpdated", "head", event.ExecHash)
 	status, err := ec.callForkchoiceUpdated(ec.forkName(event), event)
 	if err == nil {
-		log.Info("Successful ForkchoiceUpdated", "head", event.ExecHash, "status", status)
+		if repeat && status != engine.VALID {
+			log.Debug("Successful ForkchoiceUpdated", "head", event.ExecHash, "status", status)
+		} else {
+			log.Info("Successful ForkchoiceUpdated", "head", event.ExecHash, "status", status)
+		}
 		return status
 	}
-	if err.Error() == "beacon syncer reorging" {
+	if repeat || err.Error() == "beacon syncer reorging" {
 		log.Debug("Failed ForkchoiceUpdated", "head", event.ExecHash, "error", err)
-		return status // ignore beacon syncer reorging errors, this error can occur if the blsync is skipping a block
+		// a repeat can time out while the execution client is busy syncing; "beacon syncer
+		// reorging" can occur if blsync is skipping a block
+		return status
 	}
 	log.Error("Failed ForkchoiceUpdated", "head", event.ExecHash, "error", err)
 	return status
