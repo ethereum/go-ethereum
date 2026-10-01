@@ -60,7 +60,7 @@ var (
 
 	HoodiLightConfig = (&ChainConfig{
 		GenesisValidatorsRoot: common.HexToHash("0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"),
-		GenesisTime:           1742212800,
+		GenesisTime:           1742213400,
 		Checkpoint:            common.HexToHash(checkpointHoodi),
 	}).
 		AddFork("GENESIS", 0, common.FromHex("0x10000910")).
