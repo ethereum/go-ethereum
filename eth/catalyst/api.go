@@ -321,7 +321,9 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 			PayloadID: id,
 		}
 	}
-	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
+	if api.eth.BlockChain().QueueHead(block) {
+		// The head update is queued behind the block write, or the block is the head already
+	} else if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
 		// Block is not canonical, set head.
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
 			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
@@ -359,7 +361,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		if finalBlock == nil {
 			log.Warn("Final block not available in database", "hash", update.FinalizedBlockHash)
 			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("final block not available in database"))
-		} else if rawdb.ReadCanonicalHash(api.eth.ChainDb(), finalBlock.NumberU64()) != update.FinalizedBlockHash {
+		} else if !api.isCanonical(finalBlock) {
 			log.Warn("Final block not in canonical chain", "number", finalBlock.NumberU64(), "hash", update.FinalizedBlockHash)
 			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("final block not in canonical chain"))
 		}
@@ -373,7 +375,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 			log.Warn("Safe block not available in database")
 			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("safe block not available in database"))
 		}
-		if rawdb.ReadCanonicalHash(api.eth.ChainDb(), safeBlock.NumberU64()) != update.SafeBlockHash {
+		if !api.isCanonical(safeBlock) {
 			log.Warn("Safe block not in canonical chain")
 			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("safe block not in canonical chain"))
 		}
@@ -410,6 +412,16 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		return valid(&id), nil
 	}
 	return valid(nil), nil
+}
+
+// isCanonical reports whether the block is in the canonical chain.
+func (api *ConsensusAPI) isCanonical(block *types.Block) bool {
+	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) == block.Hash() {
+		return true
+	}
+	// The markers of a queued head land in the background, look again once they have
+	api.eth.BlockChain().WaitWrites()
+	return rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) == block.Hash()
 }
 
 // ExchangeTransitionConfigurationV1 checks the given configuration against

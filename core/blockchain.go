@@ -337,6 +337,7 @@ type BlockChain struct {
 	jumpDestCache   vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
 	precompileCache *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
 	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
+	writer          *chainWriter                     // Background writer of the blocks handed over by InsertBlockWithoutSetHead
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -438,10 +439,13 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		logger:             cfg.VmConfig.Tracer,
 		slowBlockThreshold: cfg.SlowBlockThreshold,
 	}
+	bc.writer = newChainWriter(bc)
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
 	if err != nil {
 		return nil, err
 	}
+	bc.hc.pending = bc.writer.header
+	bc.hc.queuedHead = bc.writer.canonicalHash
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
@@ -1064,6 +1068,9 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	}
 	defer bc.chainmu.Unlock()
 
+	// The rewind works on what's on disk, so the queued writes land first
+	bc.writer.drain()
+
 	var (
 		// Track the block number of the requested root hash
 		rootNumber uint64 // (no root == always 0)
@@ -1212,6 +1219,7 @@ func (bc *BlockChain) SnapSyncStart() error {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+	bc.writer.drain()
 
 	// Snap sync will directly modify the persistent state, making the entire
 	// trie database unusable until the state is fully synced. To prevent any
@@ -1245,6 +1253,7 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash, isSnapV2 bool) error {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+	bc.writer.drain()
 
 	// Reset the trie database with the fresh snap synced state. Snap/1 needs
 	// a full trie-to-flat regeneration; snap/2 adopts the already-consistent
@@ -1299,6 +1308,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+	bc.writer.drain()
 
 	// Prepare the genesis block and reinitialise the chain
 	batch := bc.db.NewBatch()
@@ -1365,6 +1375,14 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
+	bc.writeHeadMarkers(block)
+
+	// Update all in-memory chain markers in the last step
+	bc.setCurrentHead(block.Header())
+}
+
+// writeHeadMarkers writes the canonical and head markers of the block, along with its tx lookups.
+func (bc *BlockChain) writeHeadMarkers(block *types.Block) {
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
 	defer batch.Close()
@@ -1379,14 +1397,17 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to update chain indexes and markers", "err", err)
 	}
-	// Update all in-memory chain markers in the last step
-	bc.hc.SetCurrentHeader(block.Header())
+}
 
-	bc.currentSnapBlock.Store(block.Header())
-	headFastBlockGauge.Update(int64(block.NumberU64()))
+// setCurrentHead moves the in-memory head markers of the chain to the header.
+func (bc *BlockChain) setCurrentHead(head *types.Header) {
+	bc.hc.SetCurrentHeader(head)
 
-	bc.currentBlock.Store(block.Header())
-	headBlockGauge.Update(int64(block.NumberU64()))
+	bc.currentSnapBlock.Store(head)
+	headFastBlockGauge.Update(head.Number.Int64())
+
+	bc.currentBlock.Store(head)
+	headBlockGauge.Update(head.Number.Int64())
 }
 
 // stopWithoutSaving stops the blockchain service. If any imports are currently in progress
@@ -1421,6 +1442,9 @@ func (bc *BlockChain) stopWithoutSaving() {
 	bc.prefetchLock.Lock()
 	bc.prefetchWg.Wait()
 	bc.prefetchLock.Unlock()
+
+	// Nothing can queue a block write anymore, let the queued ones land.
+	bc.writer.close()
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress
@@ -1540,6 +1564,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+	bc.writer.drain()
 
 	var (
 		stats = struct{ processed, ignored int32 }{}
@@ -1717,6 +1742,25 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	return nil
 }
 
+// writeBlockData writes the block, its receipts and preimages to the database.
+func (bc *BlockChain) writeBlockData(block *types.Block, receipts []*types.Receipt, preimages map[common.Hash][]byte) {
+	// Note all the components of block(hash->number map, header, body, receipts)
+	// should be written atomically. BlockBatch is used for containing all components.
+	batch := bc.db.NewBatch()
+	defer batch.Close()
+
+	start := time.Now()
+	rawdb.WriteBlock(batch, block)
+	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WritePreimages(batch, preimages)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write block into disk", "err", err)
+	}
+	elapsed := time.Since(start)
+	log.Debug("Committed block data", "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(elapsed))
+	blockWriteTimer.Update(elapsed)
+}
+
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
@@ -1724,27 +1768,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return consensus.ErrUnknownAncestor
 	}
 	// Irrelevant of the canonical status, write the block itself to the database.
-	//
-	// Note all the components of block(hash->number map, header, body, receipts)
-	// should be written atomically. BlockBatch is used for containing all components.
 	var (
-		batch      = bc.db.NewBatch()
 		preimages  = statedb.Preimages()
 		blockWrite = make(chan struct{})
 	)
-	defer batch.Close()
-
 	go func() {
-		start := time.Now()
-		rawdb.WriteBlock(batch, block)
-		rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
-		rawdb.WritePreimages(batch, preimages)
-		if err := batch.Write(); err != nil {
-			log.Crit("Failed to write block into disk", "err", err)
-		}
-		elapsed := time.Since(start)
-		log.Debug("Committed block data", "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(elapsed))
-		blockWriteTimer.Update(elapsed)
+		bc.writeBlockData(block, receipts, preimages)
 		close(blockWrite)
 	}()
 	defer func() { <-blockWrite }()
@@ -1900,8 +1929,9 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+	bc.writer.drain()
 
-	_, n, err := bc.insertChain(context.Background(), chain, true, false) // No witness collection for mass inserts (would get super large)
+	_, n, err := bc.insertChain(context.Background(), chain, true, false, false) // No witness collection for mass inserts (would get super large)
 	return n, err
 }
 
@@ -1913,7 +1943,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHead bool, makeWitness bool) (*stateless.Witness, int, error) {
+func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHead bool, makeWitness bool, deferWrite bool) (*stateless.Witness, int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return nil, 0, nil
@@ -1952,6 +1982,13 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 	// Peek the error for the first block to decide the directing import logic
 	it := newInsertIterator(chain, results, bc.validator)
 	block, err := it.next()
+
+	// A known block may be set as the head below, and a pruned ancestor gets
+	// executed again. Both have to wait for the queued block writes.
+	if deferWrite && (errors.Is(err, ErrKnownBlock) || errors.Is(err, consensus.ErrPrunedAncestor)) {
+		bc.writer.drain()
+		deferWrite = false
+	}
 
 	// Left-trim all the known blocks that don't need to build snapshot
 	if bc.skipBlock(err, it) {
@@ -2078,10 +2115,20 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 			MakeWitness:             makeWitness && len(chain) == 1,
 			StatelessSelfValidation: bc.cfg.StatelessSelfValidation,
 			EnableWitnessStats:      bc.cfg.EnableWitnessStats,
+			deferWrite:              deferWrite && len(chain) == 1,
 		}
 		res, err := bc.ProcessBlock(ctx, parent.Root, block, config)
 		if err != nil {
 			return nil, it.index, err
+		}
+		// ProcessBlock has let go of the state, so the write can be handed over
+		if res.write != nil {
+			queued := time.Now()
+			bc.writer.queue(res.write)
+
+			// Waiting for room in the queue is part of the block's time
+			res.stats.TotalTime += time.Since(queued)
+			res.stats.MgasPerSecond = float64(res.usedGas) * 1000 / float64(res.stats.TotalTime)
 		}
 		res.stats.reportMetrics()
 
@@ -2152,6 +2199,7 @@ type blockProcessingResult struct {
 	status   WriteStatus
 	witness  *stateless.Witness
 	stats    *ExecuteStats
+	write    *writeJob // write for the caller to hand to the chain writer, if deferred
 }
 
 func (bpr *blockProcessingResult) Witness() *stateless.Witness {
@@ -2187,6 +2235,10 @@ type ExecuteConfig struct {
 	// EnableWitnessStats indicates whether to enable collection of witness trie
 	// access statistics
 	EnableWitnessStats bool
+
+	// deferWrite leaves the write of the block and its state to the chain
+	// writer. It goes with WriteState and without WriteHead.
+	deferWrite bool
 }
 
 // overrideTracerActivation returns the EVM configuration to execute a block with, honoring the
@@ -2336,6 +2388,11 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// config, keeping the BAL-parallel/sequential decision consistent.
 	vmConfig := bc.overrideTracerActivation(config.EnableTracer)
 
+	// The chain writer may still be committing the parent state. Reading it
+	// would wait for the flattening too, so wait for that here and count it
+	// as commit time.
+	commitWait := bc.writer.waitFlattened(parentRoot)
+
 	// Set up the state reader feeding execution, along with a cleanup to run once
 	// processing is complete (stop the prefetcher, upload reader statistics).
 	statedb, cleanup, err := bc.setupExecutionState(parentRoot, block, vmConfig, config, &interrupt, &execIndex)
@@ -2444,6 +2501,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
 	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
 	stats.CodeReads = statedb.CodeReads
+	stats.CommitWait = commitWait
 
 	stats.AccountLoaded = statedb.AccountLoaded
 	stats.AccountUpdated = statedb.AccountUpdated
@@ -2470,8 +2528,18 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	}
 
 	// Write the block to the chain and get the status.
-	var status WriteStatus
-	if config.WriteState {
+	var (
+		status WriteStatus
+		write  *writeJob
+	)
+	if config.WriteState && config.deferWrite {
+		// The verdict doesn't depend on the write, so leave it to the chain writer
+		write, err = bc.newWriteJob(block, res.Receipts, statedb, parentRoot)
+		if err != nil {
+			return nil, err
+		}
+		stats.writeDeferred = true
+	} else if config.WriteState {
 		if !config.WriteHead {
 			// Don't set the head, only insert the block
 			err = bc.writeBlockWithState(block, res.Receipts, statedb)
@@ -2496,6 +2564,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		status:   status,
 		witness:  witness,
 		stats:    stats,
+		write:    write,
 	}, nil
 }
 
@@ -2587,7 +2656,7 @@ func (bc *BlockChain) insertSideChain(ctx context.Context, block *types.Block, i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, _, err := bc.insertChain(ctx, blocks, true, false); err != nil {
+			if _, _, err := bc.insertChain(ctx, blocks, true, false, false); err != nil {
 				return nil, 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -2601,7 +2670,7 @@ func (bc *BlockChain) insertSideChain(ctx context.Context, block *types.Block, i
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(ctx, blocks, true, makeWitness)
+		return bc.insertChain(ctx, blocks, true, makeWitness, false)
 	}
 	return nil, 0, nil
 }
@@ -2650,7 +2719,7 @@ func (bc *BlockChain) recoverAncestors(ctx context.Context, block *types.Block, 
 		} else {
 			b = bc.GetBlock(hashes[i], numbers[i])
 		}
-		if _, _, err := bc.insertChain(ctx, types.Blocks{b}, false, makeWitness && i == 0); err != nil {
+		if _, _, err := bc.insertChain(ctx, types.Blocks{b}, false, makeWitness && i == 0, false); err != nil {
 			return b.ParentHash(), err
 		}
 	}
@@ -2890,7 +2959,15 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(ctx context.Context, block *type
 	}
 	defer bc.chainmu.Unlock()
 
-	witness, _, err = bc.insertChain(ctx, types.Blocks{block}, false, makeWitness)
+	// Hand the write to the chain writer once the block is validated, when the
+	// scheme allows it and the block builds on the last one handed over. The
+	// flattening of a block on another branch could drop layers the writer
+	// still counts as present. A synchronous write waits for the queued ones first.
+	deferWrite := !makeWitness && bc.canDeferWrite(block) && bc.writer.extends(block)
+	if !deferWrite {
+		bc.writer.drain()
+	}
+	witness, _, err = bc.insertChain(ctx, types.Blocks{block}, false, makeWitness, deferWrite)
 	return
 }
 
@@ -2902,6 +2979,10 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 		return common.Hash{}, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+
+	// Let the queued block writes and head updates land, the checks below
+	// read what's on disk.
+	bc.writer.drain()
 
 	// Re-execute the reorged chain in case the head state is missing.
 	if !bc.HasState(head.Root()) {
@@ -2917,8 +2998,18 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 			return common.Hash{}, err
 		}
 	}
-	bc.writeHeadBlock(head)
+	bc.updateHead(head, start)
+	return head.Hash(), nil
+}
 
+// updateHead writes the head markers of the block and sends the chain events for it.
+func (bc *BlockChain) updateHead(head *types.Block, start time.Time) {
+	bc.writeHeadBlock(head)
+	bc.sendHeadEvents(head, start)
+}
+
+// sendHeadEvents sends the chain events for a new head block and logs it.
+func (bc *BlockChain) sendHeadEvents(head *types.Block, start time.Time) {
 	// Emit events
 	receipts, logs := bc.collectReceiptsAndLogs(head, false)
 
@@ -2943,7 +3034,6 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 		context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 	}
 	log.Info("Chain head was updated", context...)
-	return head.Hash(), nil
 }
 
 // skipBlock returns 'true', if the block being imported can be skipped over, meaning
@@ -3064,6 +3154,7 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+	bc.writer.drain()
 
 	_, err := bc.hc.InsertHeaderChain(chain, start)
 	return 0, err
@@ -3086,6 +3177,7 @@ func (bc *BlockChain) InsertHeadersBeforeCutoff(headers []*types.Header) (int, e
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+	bc.writer.drain()
 
 	// Initialize the ancient store with genesis block if it's empty.
 	var (

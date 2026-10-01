@@ -888,6 +888,69 @@ func TestCommit(t *testing.T) {
 	}
 }
 
+// Tests that making room below the parent and adding the layer leaves the same tree as Update.
+func TestAddCap(t *testing.T) {
+	// Redefine the diff layer depth allowance for faster testing.
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	tester := newTester(t, &testerConfig{})
+	defer tester.release()
+
+	for i := 0; i < 12; i++ {
+		parent := types.EmptyRootHash
+		if len(tester.roots) != 0 {
+			parent = tester.roots[len(tester.roots)-1]
+		}
+		root, nodes, states := tester.generate(parent, i > 6)
+
+		// The chain writer runs the two side by side, so either may land first.
+		// The first parent is the disk layer, which has no room to make.
+		if i%2 == 0 {
+			if err := tester.db.Cap(parent); err != nil {
+				t.Fatalf("Failed to cap below layer %d, err: %v", i, err)
+			}
+		}
+		if err := tester.db.Add(root, parent, uint64(i), nodes, states); err != nil {
+			t.Fatalf("Failed to add layer %d, err: %v", i, err)
+		}
+		if i%2 == 1 {
+			if err := tester.db.Cap(parent); err != nil {
+				t.Fatalf("Failed to cap below layer %d, err: %v", i, err)
+			}
+		}
+		tester.roots = append(tester.roots, root)
+		tester.nodes = append(tester.nodes, nodes)
+		tester.states = append(tester.states, states)
+
+		// The tree holds the layers Update would keep, the disk layer right below
+		want := min(len(tester.roots), maxDiffLayers)
+		if n := tester.db.tree.len(); n != want+1 {
+			t.Fatalf("Unexpected layer count after layer %d, want %d, got %d", i, want+1, n)
+		}
+		disk := types.EmptyRootHash
+		if len(tester.roots) > maxDiffLayers {
+			disk = tester.roots[len(tester.roots)-maxDiffLayers-1]
+		}
+		if root := tester.db.tree.bottom().rootHash(); root != disk {
+			t.Fatalf("Unexpected disk layer %x after layer %d, want %x", root, i, disk)
+		}
+	}
+	// A state is only snapshotted once its child is generated, so do the head here
+	head := tester.lastHash()
+	tester.snapAccounts[head] = copyAccounts(tester.accounts)
+	tester.snapStorages[head] = copyStorages(tester.storages)
+
+	if err := tester.verifyState(head); err != nil {
+		t.Fatalf("State is invalid, err: %v", err)
+	}
+	if err := tester.verifyHistory(); err != nil {
+		t.Fatalf("State history is invalid, err: %v", err)
+	}
+}
+
 func TestJournal(t *testing.T) {
 	testJournal(t, "")
 	testJournal(t, filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000))))

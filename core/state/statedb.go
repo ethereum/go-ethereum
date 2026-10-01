@@ -1479,6 +1479,28 @@ func (s *StateDB) CommitWithUpdate(rules params.Rules, block uint64) (common.Has
 	return ret.Root, ret, nil
 }
 
+// CommitLayer commits the state like Commit, but leaves flattening old layers to the caller.
+func (s *StateDB) CommitLayer(rules params.Rules, block uint64) (common.Hash, error) {
+	// Only the merkle database splits the commit from the flattening
+	db, ok := s.db.(*MPTDatabase)
+	if !ok {
+		return common.Hash{}, errors.New("layer commit needs a merkle database")
+	}
+	ret, err := s.commit(rules, block)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	start := time.Now()
+	if err := db.commit(ret, false); err != nil {
+		return common.Hash{}, err
+	}
+	s.DatabaseCommits = time.Since(start)
+
+	// Unlike Commit, the reader isn't reopened on the new root. The caller is
+	// done with the state once it's committed.
+	return ret.Root, nil
+}
+
 // Prepare handles the preparatory steps for executing a state transition with.
 // This method must be invoked before state transition.
 //
