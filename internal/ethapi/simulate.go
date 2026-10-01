@@ -334,6 +334,12 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		// EIP-2681 also limits the nonce when validation is off and the nonce checks are skipped.
+		if !sim.validate {
+			if from := call.from(); sim.state.GetNonce(from) == math.MaxUint64 {
+				return nil, nil, nil, txValidationError(fmt.Errorf("%w: address %v, nonce: %d", core.ErrNonceMax, from.Hex(), uint64(math.MaxUint64)))
+			}
+		}
 		var (
 			tx     = call.ToTransaction(types.DynamicFeeTxType)
 			txHash = tx.Hash()
