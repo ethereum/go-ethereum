@@ -445,6 +445,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		return nil, err
 	}
 	bc.hc.pending = bc.writer.header
+	bc.hc.queuedHead = bc.writer.canonicalHash
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
@@ -1372,9 +1373,16 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // header and the head snap sync block to this very same block if they are older
 // or if they are on a different side chain.
 //
-// Note, this function assumes that the `mu` mutex is held, or that it runs on
-// the chain writer, which every other head update waits for first!
+// Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
+	bc.writeHeadMarkers(block)
+
+	// Update all in-memory chain markers in the last step
+	bc.setCurrentHead(block.Header())
+}
+
+// writeHeadMarkers writes the canonical and head markers of the block, along with its tx lookups.
+func (bc *BlockChain) writeHeadMarkers(block *types.Block) {
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
 	defer batch.Close()
@@ -1389,14 +1397,17 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to update chain indexes and markers", "err", err)
 	}
-	// Update all in-memory chain markers in the last step
-	bc.hc.SetCurrentHeader(block.Header())
+}
 
-	bc.currentSnapBlock.Store(block.Header())
-	headFastBlockGauge.Update(int64(block.NumberU64()))
+// setCurrentHead moves the in-memory head markers of the chain to the header.
+func (bc *BlockChain) setCurrentHead(head *types.Header) {
+	bc.hc.SetCurrentHeader(head)
 
-	bc.currentBlock.Store(block.Header())
-	headBlockGauge.Update(int64(block.NumberU64()))
+	bc.currentSnapBlock.Store(head)
+	headFastBlockGauge.Update(head.Number.Int64())
+
+	bc.currentBlock.Store(head)
+	headBlockGauge.Update(head.Number.Int64())
 }
 
 // stopWithoutSaving stops the blockchain service. If any imports are currently in progress
@@ -2994,7 +3005,11 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 // updateHead writes the head markers of the block and sends the chain events for it.
 func (bc *BlockChain) updateHead(head *types.Block, start time.Time) {
 	bc.writeHeadBlock(head)
+	bc.sendHeadEvents(head, start)
+}
 
+// sendHeadEvents sends the chain events for a new head block and logs it.
+func (bc *BlockChain) sendHeadEvents(head *types.Block, start time.Time) {
 	// Emit events
 	receipts, logs := bc.collectReceiptsAndLogs(head, false)
 
