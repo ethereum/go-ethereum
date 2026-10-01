@@ -43,6 +43,12 @@ func NewAdminAPI(eth *Ethereum) *AdminAPI {
 // ExportChain exports the current blockchain into a local file,
 // or a range of blocks if first and last are non-nil.
 func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool, error) {
+	return api.exportChain(file, first, last, func(writer io.Writer) io.WriteCloser {
+		return gzip.NewWriter(writer)
+	})
+}
+
+func (api *AdminAPI) exportChain(file string, first *uint64, last *uint64, newGzipWriter func(io.Writer) io.WriteCloser) (success bool, resultErr error) {
 	if first == nil && last != nil {
 		return false, errors.New("last cannot be specified without first")
 	}
@@ -60,12 +66,23 @@ func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool
 	if err != nil {
 		return false, err
 	}
-	defer out.Close()
+	defer func() {
+		if err := out.Close(); err != nil && resultErr == nil {
+			success = false
+			resultErr = fmt.Errorf("failed to close export file: %w", err)
+		}
+	}()
 
 	var writer io.Writer = out
 	if strings.HasSuffix(file, ".gz") {
-		writer = gzip.NewWriter(writer)
-		defer writer.(*gzip.Writer).Close()
+		gzipWriter := newGzipWriter(writer)
+		writer = gzipWriter
+		defer func() {
+			if err := gzipWriter.Close(); err != nil && resultErr == nil {
+				success = false
+				resultErr = fmt.Errorf("failed to finalize gzip stream: %w", err)
+			}
+		}()
 	}
 
 	// Export the blockchain
