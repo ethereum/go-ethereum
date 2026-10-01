@@ -26,20 +26,20 @@ import (
 )
 
 // NewKeccakState creates a new KeccakState
-func NewKeccakState() KeccakState {
-	return keccak.NewLegacyKeccak256().(KeccakState)
+func NewKeccakState() *keccak.KeccakState {
+	return keccak.NewLegacyKeccak256State()
 }
 
 var hasherPool = sync.Pool{
 	New: func() any {
-		return keccak.NewLegacyKeccak256().(KeccakState)
+		return keccak.NewLegacyKeccak256State()
 	},
 }
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
 	b := make([]byte, 32)
-	d := hasherPool.Get().(KeccakState)
+	d := hasherPool.Get().(*keccak.KeccakState)
 	d.Reset()
 	for _, b := range data {
 		d.Write(b)
@@ -51,8 +51,19 @@ func Keccak256(data ...[]byte) []byte {
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
-func Keccak256Hash(data ...[]byte) (h common.Hash) {
-	d := hasherPool.Get().(KeccakState)
+func Keccak256Hash(data []byte) (h common.Hash) {
+	d := hasherPool.Get().(*keccak.KeccakState)
+	d.Reset()
+	d.Write(data)
+	d.Read(h[:])
+	hasherPool.Put(d)
+	return h
+}
+
+// Keccak256HashV calculates and returns the Keccak256 hash of the input data,
+// converting it to an internal Hash data structure.
+func Keccak256HashV(data ...[]byte) (h common.Hash) {
+	d := hasherPool.Get().(*keccak.KeccakState)
 	d.Reset()
 	for _, b := range data {
 		d.Write(b)
@@ -60,4 +71,12 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	d.Read(h[:])
 	hasherPool.Put(d)
 	return h
+}
+
+// Keccak256Address calculates the Keccak256 hash of the input data and
+// returns the last 20 bytes as an address.
+func Keccak256Address(data []byte) (a common.Address) {
+	hash := Keccak256Hash(data)
+	copy(a[:], hash[12:])
+	return a
 }
