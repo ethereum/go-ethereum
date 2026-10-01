@@ -10,9 +10,9 @@ import (
 )
 
 // the precomputed values for BLAKE2b
-// there are 10 16-byte arrays - one for each round
+// there is one 16-byte array per round of the message-schedule cycle
 // the entries are calculated from the sigma constants.
-var precomputed = [10][16]byte{
+var precomputed = [sigmaRounds][16]byte{
 	{0, 2, 4, 6, 1, 3, 5, 7, 8, 10, 12, 14, 9, 11, 13, 15},
 	{14, 4, 9, 13, 10, 8, 15, 6, 1, 0, 11, 5, 12, 2, 7, 3},
 	{11, 12, 5, 15, 8, 0, 2, 13, 10, 3, 7, 9, 14, 6, 1, 4},
@@ -52,7 +52,7 @@ func fGeneric(h *[8]uint64, m *[16]uint64, c0, c1 uint64, flag uint64, rounds ui
 	v14 ^= flag
 
 	for i := 0; i < int(rounds); i++ {
-		s := &(precomputed[i%10])
+		s := &(precomputed[i%sigmaRounds])
 
 		v0 += m[s[0]]
 		v0 += v4
