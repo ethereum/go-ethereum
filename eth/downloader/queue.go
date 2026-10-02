@@ -287,6 +287,11 @@ func (q *queue) PendingBALs() int {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
+	// Tasks of delivered blocks may be requeued after Results pruned them, and
+	// only eth/71 peers would discard them on reservation.
+	if offset := q.resultCache.Offset(); offset > 0 {
+		q.pruneBALTasks(offset - 1)
+	}
 	return q.balTaskQueue.Size()
 }
 
@@ -476,7 +481,9 @@ func (q *queue) Results(block bool) []*fetchResult {
 	// that has been delivered upstream (with or without one) is obsolete, drop
 	// them to unblock the access list fetcher's termination.
 	if len(results) > 0 {
+		q.lock.Lock()
 		q.pruneBALTasks(results[len(results)-1].Header.Number.Uint64())
+		q.lock.Unlock()
 	}
 	for _, result := range results {
 		// Recalculate the result item weights to prevent memory exhaustion
@@ -541,10 +548,9 @@ func (q *queue) stats() []interface{} {
 // pruneBALTasks drops all queued access list retrieval tasks at or below the
 // given block number. Since blocks are delivered upstream without waiting for
 // their access lists, tasks below the delivery point serve no purpose anymore.
+//
+// Note, this method expects the queue lock to be already held.
 func (q *queue) pruneBALTasks(delivered uint64) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
 	for !q.balTaskQueue.Empty() {
 		header, _ := q.balTaskQueue.Peek()
 		if header.Number.Uint64() > delivered {
