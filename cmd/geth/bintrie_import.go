@@ -75,6 +75,16 @@ leaves nothing openable. --verify-only runs both checks and writes nothing.
 
 Preimages are not persisted unless --keep-preimages is given: nothing on a
 binary-tree node reads them.
+
+Memory: the sorters hold at most --memory-limit of records, and the database
+its cache plus memtables, about 1.5 x (--cache x --cache.database / 100). Go's
+collector can hold as much again before it runs, so budget about twice their
+sum, or cap it with GOMEMLIMIT. Draining a sorter also takes 1 MB per spilled
+run, and a smaller --memory-limit means more runs, so setting it far below the
+state size stops saving memory.
+
+Disk: --tmpdir holds the sort spills and a copy of every tree node until the
+import ends, so it needs disk space, not a tmpfs.
 `,
 	}
 )
@@ -193,31 +203,6 @@ func importBinaryTrie(ctx *cli.Context) error {
 // cost the verifier gigabytes.
 const maxImportCodeSize = 1 << 20
 
-// preimageWriter batches preimage-store writes, or discards them when nil.
-type preimageWriter struct {
-	batch ethdb.Batch
-	buf   map[common.Hash][]byte
-}
-
-func (pw *preimageWriter) add(hash common.Hash, preimage []byte) {
-	if pw == nil {
-		return
-	}
-	pw.buf[hash] = common.CopyBytes(preimage)
-	if len(pw.buf) >= 1024 {
-		rawdb.WritePreimages(pw.batch, pw.buf)
-		pw.buf = make(map[common.Hash][]byte, 1024)
-	}
-}
-
-func (pw *preimageWriter) flush() {
-	if pw == nil || len(pw.buf) == 0 {
-		return
-	}
-	rawdb.WritePreimages(pw.batch, pw.buf)
-	pw.buf = make(map[common.Hash][]byte)
-}
-
 // importGroup carries one account's header-stem leaves through the join.
 type importGroup struct {
 	stem        []byte
@@ -264,11 +249,13 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			return common.Hash{}, errors.New("binary tree namespace already holds state, whether a finished import or the debris of one; re-run with --force to wipe it")
 		}
 	}
-	// Five sorters live across the pipeline - the candidates, the accounts,
-	// the slots, the chunks and the code stems - and a sealed one keeps its
-	// buffer while its stream drains, so the budget is split five ways rather
-	// than sized for one at a time.
-	quarter := opts.sortBudget / 5
+	// cand accumulates alone in Phase 1 - it fully drains via Sort() before
+	// Phase 2's other sorters fill in earnest, so it gets the whole budget.
+	// Phase 2 runs four sorters concurrently (accounts, slots, chunks and,
+	// briefly at the account/code-zone boundary, the code stems), so they
+	// split the same budget four ways: either phase's peak sorter RAM stays
+	// within opts.sortBudget.
+	quarter := opts.sortBudget / 4
 
 	// Open both artifacts before the expensive phase: a mistyped path should
 	// not cost a full pass over the other file.
@@ -283,12 +270,32 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return common.Hash{}, err
 	}
 	defer snap.close()
-	if snap.count == 0 {
-		return common.Hash{}, errors.New("refusing to import an empty snapshot")
+	var (
+		pbtBatch ethdb.Batch // tree nodes and flat state, inside the namespace
+		rawBatch ethdb.Batch // code and preimages, outside it
+	)
+	if !verifyOnly {
+		pbtBatch = pbtdb.NewBatch()
+		rawBatch = chaindb.NewBatch()
 	}
+	flush := func(force bool) error {
+		for _, batch := range []ethdb.Batch{pbtBatch, rawBatch} {
+			if batch == nil {
+				continue
+			}
+			if force || batch.ValueSize() >= ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					return err
+				}
+				batch.Reset()
+			}
+		}
+		return nil
+	}
+
 	// Phase 1: derive every candidate tree key the preimages can stand for.
 
-	cand := bintrie.NewRecordSorter(opts.tmpDir, quarter, nil)
+	cand := bintrie.NewRecordSorter(opts.tmpDir, opts.sortBudget, nil)
 	defer cand.Close() // a second Close is a no-op; this one covers the error paths
 	var (
 		start        = time.Now()
@@ -296,25 +303,50 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		prePreimages uint64
 	)
 	for {
-		addr, slots, err := pre.next()
+		addr, addrHash, slots, err := pre.next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return common.Hash{}, err
 		}
+		// The preimage file is keccak-ordered, which its reader enforces, so
+		// the preimage store is written in that order.
+		if rawBatch != nil && opts.keepPreimages {
+			if err := putPreimage(rawBatch, addrHash, addr.Bytes()); err != nil {
+				return common.Hash{}, err
+			}
+			for _, slot := range slots {
+				if err := putPreimage(rawBatch, crypto.Keccak256Hash(slot[:]), slot[:]); err != nil {
+					return common.Hash{}, err
+				}
+			}
+			if err := flush(false); err != nil {
+				return common.Hash{}, err
+			}
+		}
 		// One candidate per header stem, carrying the address and a bitmap of
 		// the header-range slots this record claims. A header-range slot's
 		// number is its sub-index minus the offset, so it needs no candidate
 		// of its own - unlike an overflow slot, whose stem is a one-way hash
 		// of the slot number and can only be matched by deriving it forward.
-		var headerSlots uint64
+		var (
+			headerSlots   uint64
+			storagePrefix [32]byte // blake3(address32), hashed once and reused for every overflow slot
+			havePrefix    bool
+		)
 		for _, slot := range slots {
-			if inHeader, _, sub := bintrie.StorageIndex(slot[:]); inHeader {
+			inHeader, treeIndex, sub := bintrie.StorageIndex(slot[:])
+			if inHeader {
 				headerSlots |= 1 << (sub - bintrie.HeaderStorageOffset)
 				continue
 			}
-			if err := cand.Add(bintrie.StorageSlotKey(addr, slot[:]), append(addr.Bytes(), slot[:]...)); err != nil {
+			if !havePrefix {
+				a32 := bintrie.Address32(addr)
+				storagePrefix, havePrefix = bintrie.KeyHash(a32[:]), true
+			}
+			key := append(bintrie.StorageStemWithPrefix(addr, storagePrefix[:], &treeIndex), sub)
+			if err := cand.Add(key, append(addr.Bytes(), slot[:]...)); err != nil {
 				return common.Hash{}, err
 			}
 		}
@@ -341,46 +373,23 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	}
 	held := &heldStream{stream: candStream}
 
-	var (
-		pbtBatch ethdb.Batch // tree nodes and flat state, inside the namespace
-		rawBatch ethdb.Batch // code and preimages, outside it
-		preims   *preimageWriter
-	)
-	if !verifyOnly {
-		pbtBatch = pbtdb.NewBatch()
-		rawBatch = chaindb.NewBatch()
-		if opts.keepPreimages {
-			preims = &preimageWriter{batch: rawBatch, buf: make(map[common.Hash][]byte, 1024)}
-		}
-	}
-	flush := func(force bool) error {
-		for _, batch := range []ethdb.Batch{pbtBatch, rawBatch} {
-			if batch == nil {
-				continue
-			}
-			if force || batch.ValueSize() >= ethdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					return err
-				}
-				batch.Reset()
-			}
-		}
-		return nil
-	}
-
+	// Tree nodes are staged per depth and written only once check 1 has
+	// passed, in key order (see nodeStager).
 	var (
 		builderErr error
 		onNode     func(path []byte, hash common.Hash, blob []byte)
+		nodes      *nodeStager
 	)
 	if !verifyOnly {
+		if nodes, err = newNodeStager(opts.tmpDir); err != nil {
+			return common.Hash{}, err
+		}
+		defer nodes.close()
 		onNode = func(path []byte, hash common.Hash, blob []byte) {
 			if builderErr != nil {
 				return
 			}
-			rawdb.WriteAccountTrieNode(pbtBatch, path, blob)
-			if err := flush(false); err != nil {
-				builderErr = err
-			}
+			builderErr = nodes.add(path, blob)
 		}
 	}
 	builder := bintrie.NewStackBuilder(onNode)
@@ -396,23 +405,21 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	defer slotSorter.Close()
 	defer chunkSorter.Close()
 
-	// addSlot records one storage slot everywhere it goes: flat state, the
-	// preimage store, and the MPT re-derivation.
+	// addSlot records one storage slot everywhere it goes but flat state,
+	// which the check-2 fold writes in keccak order: the preimage store,
+	// and the MPT re-derivation.
 	addSlot := func(accountHash common.Hash, slot common.Hash, value [32]byte) error {
 		var (
 			slotHash = crypto.Keccak256Hash(slot[:])
 			enc, _   = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 		)
-		if pbtBatch != nil {
-			rawdb.WriteStorageSnapshot(pbtBatch, accountHash, slotHash, enc)
-		}
-		preims.add(slotHash, slot[:])
 		stats.slots++
 		return slotSorter.Add(append(accountHash.Bytes(), slotHash.Bytes()...), enc)
 	}
 
-	// sealGroup validates one account's header leaves and records the
-	// account everywhere it goes.
+	// sealGroup validates one account's header leaves and records it
+	// everywhere it goes but flat state, which the check-2 fold writes in
+	// keccak order.
 	sealGroup := func(g *importGroup) error {
 		// Header-range slots are derived from sub-indices, so the preimage
 		// file's list of them is checked rather than believed - the exact
@@ -426,49 +433,25 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			return fmt.Errorf("account %x holds slot %d, which the preimage file does not name",
 				g.addr, bits.TrailingZeros64(g.headerSeen&^g.headerClaim))
 		}
+		// The typed record fixes the basic-data leaf's version and reserved
+		// bytes at zero, so a decoded leaf is canonical by construction.
 		var (
 			nonce    uint64
 			balance  = new(uint256.Int)
 			codeSize uint32
-			version  byte
 		)
 		if g.basic != nil {
-			version, codeSize, nonce, balance = bintrie.DecodeBasicData(g.basic[:])
-			if version != 0 {
-				return fmt.Errorf("account %x carries basic-data version %d, must be 0", g.addr, version)
-			}
-			// Re-encode rather than check field by field: the leaf's reserved
-			// bytes take part in no check but the tree's own hash, and the
-			// claimed root is the artifact's to choose, so anything the
-			// decoder ignores would ride through both checks and leave a root
-			// no honest converter produces.
-			want, err := bintrie.EncodeBasicData(codeSize, nonce, balance)
-			if err != nil {
-				return fmt.Errorf("account %x: %w", g.addr, err)
-			}
-			if want != *g.basic {
-				return fmt.Errorf("account %x basic-data leaf is not the canonical encoding of its fields", g.addr)
-			}
+			_, codeSize, nonce, balance = bintrie.DecodeBasicData(g.basic[:])
 		}
+		// A header record carries kind 0, 1 or 2, and derivation emits
+		// exactly one of a code-hash or a delegation leaf for it - g.basic,
+		// and one of g.codeHash/g.delegation, are never both nil or both set.
 		var codeHash common.Hash
 		switch {
-		case g.delegation != nil && g.codeHash != nil:
-			return fmt.Errorf("account %x holds both a code-hash and a delegation leaf", g.addr)
 		case g.delegation != nil:
-			// GetAccount's rules: the designator is the leading code_size
-			// bytes, and a zero size is malformed.
-			if codeSize != 23 {
-				return fmt.Errorf("account %x holds a delegation with code size %d, must be 23", g.addr, codeSize)
-			}
+			// The delegation leaf derives from a 20-byte target, so its
+			// designator is always the 23-byte EIP-7702 indicator.
 			designator := g.delegation[:23]
-			if _, ok := types.ParseDelegation(designator); !ok {
-				return fmt.Errorf("account %x holds a malformed delegation leaf", g.addr)
-			}
-			// The nine bytes after the designator are padding, and nothing
-			// downstream reads them; see the basic-data note above.
-			if *g.delegation != [32]byte(bintrie.EncodeDelegation(designator)) {
-				return fmt.Errorf("account %x delegation leaf is not the canonical encoding of its designator", g.addr)
-			}
 			codeHash = crypto.Keccak256Hash(designator)
 			if rawBatch != nil {
 				rawdb.WriteCode(rawBatch, codeHash, designator)
@@ -486,19 +469,8 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 				}
 				codeSizes[codeHash] = codeSize
 			}
-		default:
-			return fmt.Errorf("account %x holds neither a code-hash nor a delegation leaf", g.addr)
 		}
 		accountHash := crypto.Keccak256Hash(g.addr.Bytes())
-		if pbtBatch != nil {
-			rawdb.WriteAccountSnapshot(pbtBatch, accountHash, types.SlimAccountRLP(types.StateAccount{
-				Nonce:    nonce,
-				Balance:  balance,
-				Root:     types.EmptyRootHash,
-				CodeHash: codeHash.Bytes(),
-			}))
-		}
-		preims.add(accountHash, g.addr.Bytes())
 		stats.accounts++
 
 		value := merkleAccountRecord(nonce, balance, codeHash)
@@ -574,6 +546,14 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return nil
 	}
 
+	// The storage zone groups every leaf of one account before the next, so
+	// keccak(addr) is computed once per account.
+	var (
+		lastStorageAddr common.Address
+		lastStorageHash common.Hash
+		haveStorageHash bool
+	)
+
 	for {
 		key, value, err := snap.next()
 		if err == io.EOF {
@@ -622,7 +602,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 					}
 					break
 				}
-				codeHeld.advance() // a fully zero-chunk stem: legitimate
+				codeHeld.advance() // matched already, or a fully zero-chunk stem
 			}
 			continue
 		}
@@ -657,9 +637,11 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		addr := common.BytesToAddress(matched[:common.AddressLength])
 
 		if key[0] == bintrie.StorageZone {
-			accountHash := crypto.Keccak256Hash(addr.Bytes())
+			if !haveStorageHash || addr != lastStorageAddr {
+				lastStorageAddr, lastStorageHash, haveStorageHash = addr, crypto.Keccak256Hash(addr.Bytes()), true
+			}
 			slot := common.BytesToHash(matched[common.AddressLength:])
-			if err := addSlot(accountHash, slot, value); err != nil {
+			if err := addSlot(lastStorageHash, slot, value); err != nil {
 				return common.Hash{}, err
 			}
 			continue
@@ -695,8 +677,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			slot[31] = sub - bintrie.HeaderStorageOffset
 			group.slots = append(group.slots, importSlot{slot: slot, value: leaf})
 			group.headerSeen |= 1 << (sub - bintrie.HeaderStorageOffset)
-		default:
-			return common.Hash{}, fmt.Errorf("account leaf %x sits at reserved sub-index %d", key, sub)
 		}
 	}
 	if group != nil {
@@ -731,9 +711,18 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return common.Hash{}, builderErr
 	}
 	if rebuilt != snap.root {
-		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its header claims %x", rebuilt, snap.root)
+		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
 	}
 	log.Info("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves, "digest", snap.digest())
+	if nodes != nil {
+		err := nodes.replay(func(path, blob []byte) error {
+			rawdb.WriteAccountTrieNode(pbtBatch, path, blob)
+			return flush(false)
+		})
+		if err != nil {
+			return common.Hash{}, err
+		}
+	}
 
 	// The code limb: every claimed code hash must reassemble from its
 	// chunks, and the chunks must be exactly the code's re-chunking.
@@ -766,6 +755,11 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		if err != nil {
 			return common.Hash{}, err
 		}
+		// A kind-1 account's bytecode must not itself be an EIP-7702
+		// delegation indicator: that account must carry kind 2 instead.
+		if _, ok := types.ParseDelegation(code); ok {
+			return common.Hash{}, fmt.Errorf("code %x recovers to a delegation indicator; its account must hold kind 2", hash)
+		}
 		if rawBatch != nil {
 			rawdb.WriteCode(rawBatch, hash, code)
 			if err := flush(false); err != nil {
@@ -790,7 +784,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err != nil {
 		return common.Hash{}, err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, stats.start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, opts.tmpDir, stats.start)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -804,7 +798,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			"snapshotDigest", snap.digest(), "preimageDigest", pre.digest())
 		return snap.root, nil
 	}
-	preims.flush()
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
 	}
@@ -818,4 +811,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	log.Info("Import complete", "binaryRoot", snap.root, "anchor", opts.anchor.Number,
 		"snapshotDigest", snap.digest(), "preimageDigest", pre.digest())
 	return snap.root, nil
+}
+
+// putPreimage writes one preimage store entry under its keccak hash.
+func putPreimage(w ethdb.KeyValueWriter, hash common.Hash, preimage []byte) error {
+	return w.Put(append(append([]byte{}, rawdb.PreimagePrefix...), hash[:]...), preimage)
 }
