@@ -1240,11 +1240,11 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		badTx := blobTxForProtocol(badTx, conn.negotiatedProtoVersion)
+		wireTx := blobTxForProtocol(badTx, conn.negotiatedProtoVersion)
 		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
-			Sizes:  []uint32{uint32(badTx.Size())},
-			Hashes: []common.Hash{badTx.Hash()},
+			Sizes:  []uint32{uint32(wireTx.Size())},
+			Hashes: []common.Hash{wireTx.Hash()},
 			Mask:   types.CustodyBitmapAll,
 		}
 
@@ -1265,7 +1265,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 		// the good peer is connected, and has announced the tx.
 		// proceed to send the incorrect one from the bad peer.
 
-		encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{badTx})
+		encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{wireTx})
 		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, List: encTxs}
 		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
 			errc <- fmt.Errorf("writing pooled tx response failed: %v", err)
@@ -1293,11 +1293,11 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		tx := blobTxForProtocol(tx, conn.negotiatedProtoVersion)
+		wireTx := blobTxForProtocol(tx, conn.negotiatedProtoVersion)
 		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
-			Sizes:  []uint32{uint32(tx.Size())},
-			Hashes: []common.Hash{tx.Hash()},
+			Sizes:  []uint32{uint32(wireTx.Size())},
+			Hashes: []common.Hash{wireTx.Hash()},
 			Mask:   types.CustodyBitmapAll,
 		}
 
@@ -1323,12 +1323,12 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		if req.GetPooledTransactionsRequest[0] != tx.Hash() {
+		if req.GetPooledTransactionsRequest[0] != wireTx.Hash() {
 			errc <- errors.New("requested unknown tx hash")
 			return
 		}
 
-		encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{tx})
+		encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{wireTx})
 		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, List: encTxs}
 		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
 			errc <- fmt.Errorf("writing pooled tx response failed: %v", err)

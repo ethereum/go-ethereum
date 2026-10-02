@@ -163,6 +163,7 @@ func (c *Conn) Write(proto Proto, code uint64, msg any) error {
 	return err
 }
 
+// WriteAnnounce encodes an announcement for the negotiated eth version.
 func (c *Conn) WriteAnnounce(ann eth.NewPooledTransactionHashesPacket72) error {
 	if c.negotiatedProtoVersion < eth.ETH72 {
 		return c.Write(ethProto, eth.NewPooledTransactionHashesMsg, eth.NewPooledTransactionHashesPacket71{
@@ -230,6 +231,7 @@ func (c *Conn) ReadEth() (any, error) {
 			return nil, fmt.Errorf("unable to decode eth msg: %v", err)
 		}
 		if ann, ok := msg.(*eth.NewPooledTransactionHashesPacket71); ok {
+			// Test readers use one announcement type for all eth versions.
 			return &eth.NewPooledTransactionHashesPacket72{
 				Types: ann.Types, Sizes: ann.Sizes, Hashes: ann.Hashes, Mask: types.CustodyBitmapAll,
 			}, nil

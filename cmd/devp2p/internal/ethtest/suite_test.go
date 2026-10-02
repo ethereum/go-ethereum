@@ -71,6 +71,14 @@ func testEthSuite(t *testing.T, ethVersion uint) {
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
+	conn, err := suite.dialAndPeer(nil)
+	if err != nil {
+		t.Fatalf("could not peer with test node: %v", err)
+	}
+	conn.Close()
+	if conn.negotiatedProtoVersion != ethVersion {
+		t.Fatalf("negotiated eth/%d, want eth/%d", conn.negotiatedProtoVersion, ethVersion)
+	}
 	suite.requireAvailableBALs = true
 	for _, test := range suite.EthTests() {
 		t.Run(test.Name, func(t *testing.T) {
