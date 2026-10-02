@@ -1289,10 +1289,6 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 			p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
 		}
 	}
-	// The new head may have filled nonce gaps, promote what became executable
-	for from := range p.gapped {
-		p.promoteGapped(from)
-	}
 	// Flush out any blobs from limbo that are older than the latest finality
 	if p.chain.Config().IsCancun(newHead.Number, newHead.Time) {
 		p.limbo.finalize(p.chain.CurrentFinalBlock())
@@ -1306,6 +1302,10 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(p.chain.Config(), newHead))
 	}
 	p.evict.reinit(basefee, blobfee, false)
+	// The new head may have filled nonce gaps, promote what became executable
+	for from := range p.gapped {
+		p.promoteGapped(from)
+	}
 
 	// Announce transactions that became announcable due to fee changes
 	var announcable []*types.Transaction
