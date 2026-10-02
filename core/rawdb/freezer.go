@@ -301,13 +301,43 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 	if oitems <= items {
 		return oitems, nil
 	}
+	// Tail groups are pruned independently, so their tails can differ. Cutting
+	// the head below the tail of one group is fine: that group simply retains
+	// nothing, while the groups with a lower tail keep their data. Cutting below
+	// every group's tail is not, as it discards data that no group had pruned.
+	// Reject that up front.
+	if lowest := f.lowestTail(); items < lowest {
+		return 0, fmt.Errorf("truncation below tail: head %d, lowest group tail %d", items, lowest)
+	}
 	for _, table := range f.tables {
 		if err := table.truncateHead(items); err != nil {
 			return 0, err
 		}
 	}
 	f.head.Store(items)
+
+	// A group whose tail sat above the new head has been reset down to it by the
+	// truncation above, so the cached tail has to follow.
+	for _, tail := range f.tails {
+		if tail.Load() > items {
+			tail.Store(items)
+		}
+	}
 	return oitems, nil
+}
+
+// lowestTail returns the smallest tail among the tail groups.
+func (f *Freezer) lowestTail() uint64 {
+	var (
+		lowest uint64
+		first  = true
+	)
+	for _, tail := range f.tails {
+		if v := tail.Load(); first || v < lowest {
+			lowest, first = v, false
+		}
+	}
+	return lowest
 }
 
 // TruncateTail discards all data below the specified threshold across every

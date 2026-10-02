@@ -51,6 +51,19 @@ type Config struct {
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
 
+// countingWriter wraps an io.Writer and records how many bytes have been
+// written through it.
+type countingWriter struct {
+	w io.Writer
+	n int
+}
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += n
+	return n, err
+}
+
 //go:generate go run github.com/fjl/gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the
@@ -227,7 +240,7 @@ type StructLogger struct {
 
 	writer     io.Writer         // If set, the logger will stream instead of store logs
 	logs       []json.RawMessage // buffer of json-encoded logs
-	resultSize int
+	resultSize int               // total bytes of trace output
 
 	interrupt atomic.Bool           // Atomic flag to signal execution interruption
 	reason    atomic.Pointer[error] // Reason for the interruption, populated by Stop
@@ -237,7 +250,7 @@ type StructLogger struct {
 // NewStreamingStructLogger returns a new streaming logger.
 func NewStreamingStructLogger(cfg *Config, writer io.Writer) *StructLogger {
 	l := NewStructLogger(cfg)
-	l.writer = writer
+	l.writer = &countingWriter{w: writer}
 	return l
 }
 
@@ -334,6 +347,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		return
 	}
 	log.Write(l.writer)
+	l.resultSize = l.writer.(*countingWriter).n
 }
 
 // OnExit is called a call frame finishes processing.

@@ -61,6 +61,11 @@ type Tuple struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *Tuple) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewTuple creates a new instance of Tuple.
 func NewTuple() *Tuple {
 	parsed, err := TupleMetaData.ParseABI()

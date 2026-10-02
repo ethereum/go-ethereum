@@ -138,7 +138,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 		if len(args.data()) == 0 {
 			return errors.New(`contract creation without any data provided`)
 		}
-		if len(args.AuthorizationList) > 0 {
+		if args.AuthorizationList != nil {
 			return errors.New(`authorizationList provided for contract creation, but "to" field is missing`)
 		}
 	}
@@ -194,6 +194,12 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	// An EIP-7702 set-code transaction cannot be a legacy transaction, so gasPrice
+	// is incompatible with an authorization list. Reject the combination instead of
+	// silently dropping the authorization list in ToTransaction.
+	if args.GasPrice != nil && args.AuthorizationList != nil {
+		return errors.New("both gasPrice and authorizationList specified")
 	}
 	// If the tx has completely specified a fee mechanism, no default is needed.
 	// This allows users who are not yet synced past London to get defaults for
@@ -396,6 +402,17 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	// Reject blob and setcode transaction types without a recipient. They
+	// cannot be represented as a transaction, so reject them up front with the
+	// same errors that message execution would return for them.
+	if args.To == nil {
+		if args.BlobHashes != nil {
+			return core.ErrBlobTxCreate
+		}
+		if args.AuthorizationList != nil {
+			return core.ErrSetCodeTxCreate
+		}
 	}
 	if args.ChainID == nil {
 		args.ChainID = (*hexutil.Big)(chainID)

@@ -109,6 +109,8 @@ func TestBlockNumberOrHash_UnmarshalJSON(t *testing.T) {
 		27: {`{"blockNumber":"safe"}`, false, BlockNumberOrHashWithNumber(SafeBlockNumber)},
 		28: {`{"blockNumber":"finalized"}`, false, BlockNumberOrHashWithNumber(FinalizedBlockNumber)},
 		29: {`{"blockNumber":"0x1", "blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, true, BlockNumberOrHash{}},
+		30: {`{}`, true, BlockNumberOrHash{}},
+		31: {`{"requireCanonical":true}`, true, BlockNumberOrHash{}},
 	}
 
 	for i, test := range tests {

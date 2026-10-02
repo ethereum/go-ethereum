@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
-	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -44,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
@@ -141,8 +141,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	if !config.HistoryMode.IsValid() {
-		return nil, fmt.Errorf("invalid history mode %d", config.HistoryMode)
+	if !config.HistoryMode.Mode.IsValid() {
+		return nil, fmt.Errorf("invalid history mode %d", config.HistoryMode.Mode)
 	}
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Sign() <= 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
@@ -229,7 +229,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
-	histPolicy, err := history.NewPolicy(config.HistoryMode, genesisHash)
+	histPolicy, err := config.HistoryMode.Resolve(genesisHash)
 	if err != nil {
 		return nil, err
 	}
@@ -237,6 +237,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		options = &core.BlockChainConfig{
 			TrieCleanLimit:          config.TrieCleanCache,
 			NoPrefetch:              config.NoPrefetch,
+			NoPrecompileCache:       config.NoPrecompileCache,
 			TrieDirtyLimit:          config.TrieDirtyCache,
 			ArchiveMode:             config.NoPruning,
 			TrieTimeLimit:           config.TrieTimeout,
@@ -257,7 +258,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			// - DATADIR/triedb/merkle.journal
 			// - DATADIR/triedb/verkle.journal
 			TrieJournalDirectory: stack.ResolvePath("triedb"),
-			StateSizeTracking:    config.EnableStateSizeTracking,
 			SlowBlockThreshold:   config.SlowBlockThreshold,
 
 			StatelessSelfValidation: config.StatelessSelfValidation,
@@ -279,6 +279,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	var overrides core.ChainOverrides
 	if config.OverrideOsaka != nil {
 		overrides.OverrideOsaka = config.OverrideOsaka
+	}
+	if config.OverrideAmsterdam != nil {
+		overrides.OverrideAmsterdam = config.OverrideAmsterdam
 	}
 	if config.OverrideBPO1 != nil {
 		overrides.OverrideBPO1 = config.OverrideBPO1
@@ -326,12 +329,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		config.BlobPool.Datadir = stack.ResolvePath(config.BlobPool.Datadir)
 	}
 	eth.blobTxPool = blobpool.New(config.BlobPool, eth.blockchain, legacyPool.HasPendingAuth)
-	eth.blobCache = blobpool.NewCache(eth.blobTxPool)
 
 	eth.txPool, err = txpool.New(config.TxPool.PriceLimit, eth.blockchain, []txpool.SubPool{legacyPool, eth.blobTxPool})
 	if err != nil {
 		return nil, err
 	}
+	// Only after txpool.New has run the pool's Init: the cache reads the pool's
+	// lookup and store, which Init builds without holding the pool lock.
+	eth.blobCache = blobpool.NewCache(eth.blobTxPool)
 
 	if !config.TxPool.NoLocals {
 		rejournal := config.TxPool.Rejournal
@@ -346,15 +351,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := options.TrieCleanLimit + options.TrieDirtyLimit + options.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
-		NodeID:         eth.p2pServer.Self().ID(),
-		Database:       chainDb,
-		Chain:          eth.blockchain,
-		TxPool:         eth.txPool,
-		Network:        networkID,
-		Sync:           config.SyncMode,
-		BloomCache:     uint64(cacheLimit),
-		RequiredBlocks: config.RequiredBlocks,
-		SnapV2:         config.SnapV2,
+		NodeID:           eth.p2pServer.Self().ID(),
+		Database:         chainDb,
+		Chain:            eth.blockchain,
+		TxPool:           eth.txPool,
+		BlobPool:         eth.blobTxPool,
+		Network:          networkID,
+		Sync:             config.SyncMode,
+		BloomCache:       uint64(cacheLimit),
+		RequiredBlocks:   config.RequiredBlocks,
+		SnapV2:           config.SnapV2,
+		FetchProbability: config.BlobPool.FetchProbability,
 	}); err != nil {
 		return nil, err
 	}
@@ -438,6 +445,7 @@ func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
 func (s *Ethereum) TxPool() *txpool.TxPool             { return s.txPool }
 func (s *Ethereum) BlobTxPool() *blobpool.BlobPool     { return s.blobTxPool }
+func (s *Ethereum) BlobFetcher() *fetcher.BlobFetcher  { return s.handler.blobFetcher }
 func (s *Ethereum) BlobCache() *blobpool.Cache         { return s.blobCache }
 func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
@@ -446,6 +454,7 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downlo
 func (s *Ethereum) Synced() bool                       { return s.handler.synced.Load() }
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
+func (s *Ethereum) EngineMaxReorgDepth() uint64        { return s.config.EngineMaxReorgDepth }
 
 // Protocols returns all the currently configured
 // network protocols to start.
@@ -470,8 +479,8 @@ func (s *Ethereum) Start() error {
 	// Start the networking layer
 	s.handler.Start(s.p2pServer.MaxPeers)
 
-	// Start the connection manager
-	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() })
+	// Start the connection manager with inclusion-based peer protection.
+	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() }, s.handler.txTracker.GetAllPeerStats)
 
 	// Subscribe to chain events for the filterMaps head updater.
 	s.fmHeadSub = s.blockchain.SubscribeChainEvent(s.fmHeadEventCh)
@@ -597,6 +606,7 @@ func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.discmix.Close()
 	s.dropper.Stop()
+	s.handler.txTracker.Stop()
 	s.handler.Stop()
 
 	// Then stop everything else.

@@ -56,11 +56,30 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	wrapped := *hooks
 
 	// Create journal
-	j := &journal{hooks: hooks}
+	j := &journal{
+		hooks: hooks,
+	}
 	// Scope hooks need to be re-implemented.
 	wrapped.OnTxEnd = j.OnTxEnd
-	wrapped.OnEnter = j.OnEnter
-	wrapped.OnExit = j.OnExit
+
+	noEnterHook := hooks.OnEnter == nil && hooks.OnEnterV2 == nil
+	wrapped.OnEnter, wrapped.OnEnterV2 = nil, nil
+	if hooks.OnEnter != nil || noEnterHook {
+		wrapped.OnEnter = j.OnEnter
+	}
+	if hooks.OnEnterV2 != nil || noEnterHook {
+		wrapped.OnEnterV2 = j.OnEnterV2
+	}
+
+	noExitHook := hooks.OnExit == nil && hooks.OnExitV2 == nil
+	wrapped.OnExit, wrapped.OnExitV2 = nil, nil
+	if hooks.OnExit != nil || noExitHook {
+		wrapped.OnExit = j.OnExit
+	}
+	if hooks.OnExitV2 != nil || noExitHook {
+		wrapped.OnExitV2 = j.OnExitV2
+	}
+
 	// Wrap state change hooks.
 	if hooks.OnBalanceChange != nil {
 		wrapped.OnBalanceChange = j.OnBalanceChange
@@ -69,6 +88,7 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 		// Regardless of which hook version is used in the tracer,
 		// the journal will want to capture the nonce change reason.
 		wrapped.OnNonceChangeV2 = j.OnNonceChangeV2
+
 		// A precaution to ensure EVM doesn't call both hooks.
 		wrapped.OnNonceChange = nil
 	}
@@ -125,7 +145,8 @@ func (j *journal) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 }
 
-// OnEnter is invoked for each EVM call frame and records a journal revision.
+// OnEnter records a journal revision for a frame reported through the
+// single-dimensional hook.
 func (j *journal) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	j.snapshot()
 	if j.hooks.OnEnter != nil {
@@ -133,17 +154,38 @@ func (j *journal) OnEnter(depth int, typ byte, from common.Address, to common.Ad
 	}
 }
 
-// OnExit is invoked when an EVM call frame ends.
+// OnExit forwards a frame exit reported through the single-dimensional hook.
+func (j *journal) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	j.exit(reverted)
+	if j.hooks.OnExit != nil {
+		j.hooks.OnExit(depth, output, gasUsed, err, reverted)
+	}
+}
+
+// OnEnterV2 is invoked for each EVM call frame and records a journal revision.
+func (j *journal) OnEnterV2(depth int, typ byte, from common.Address, to common.Address, input []byte, gas Gas, value *big.Int) {
+	j.snapshot()
+	if j.hooks.OnEnterV2 != nil {
+		j.hooks.OnEnterV2(depth, typ, from, to, input, gas, value)
+	}
+}
+
+// OnExitV2 is invoked when an EVM call frame ends.
 // If the call has reverted, all state changes made by that frame are undone.
 // If the call did not revert, we forget about changes in that revision.
-func (j *journal) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (j *journal) OnExitV2(depth int, output []byte, gasLeft Gas, err error, reverted bool) {
+	j.exit(reverted)
+	if j.hooks.OnExitV2 != nil {
+		j.hooks.OnExitV2(depth, output, gasLeft, err, reverted)
+	}
+}
+
+// exit unwinds the revision recorded by the matching enter.
+func (j *journal) exit(reverted bool) {
 	if reverted {
 		j.revert(j.hooks)
 	} else {
 		j.popRevision()
-	}
-	if j.hooks.OnExit != nil {
-		j.hooks.OnExit(depth, output, gasUsed, err, reverted)
 	}
 }
 

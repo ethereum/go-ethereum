@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"cmp"
 	mrand "math/rand"
 	"slices"
 	"sync"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/eth/txtracker"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -40,6 +42,10 @@ const (
 	// dropping when no more peers can be added. Larger numbers result in more
 	// aggressive drop behavior.
 	peerDropThreshold = 0
+	// Fraction of inbound/dialed peers to protect based on inclusion stats.
+	// The top inclusionProtectionFrac of each category (by score) are
+	// shielded from random dropping. 0.1 = top 10%.
+	inclusionProtectionFrac = 0.1
 )
 
 var (
@@ -47,18 +53,55 @@ var (
 	droppedInbound = metrics.NewRegisteredMeter("eth/dropper/inbound", nil)
 	// droppedOutbound is the number of outbound peers dropped
 	droppedOutbound = metrics.NewRegisteredMeter("eth/dropper/outbound", nil)
+	// dropSkipped counts times a drop was attempted but no peer was dropped,
+	// for any reason (pool has headroom, all candidates trusted/static/young,
+	// or protected by inclusion stats).
+	dropSkipped = metrics.NewRegisteredMeter("eth/dropper/skipped", nil)
 )
 
-// dropper monitors the state of the peer pool and makes changes as follows:
-//   - during sync the Downloader handles peer connections, so dropper is disabled
-//   - if not syncing and the peer count is close to the limit, it drops peers
-//     randomly every peerDropInterval to make space for new peers
-//   - peers are dropped separately from the inbound pool and from the dialed pool
+// Callback type to get per-peer inclusion statistics.
+type getPeerStatsFunc func() map[string]txtracker.PeerStats
+
+// protectionCategory defines a peer scoring function and the fraction of peers
+// to protect per inbound/dialed category. Multiple categories are unioned.
+type protectionCategory struct {
+	score func(txtracker.PeerStats) float64
+	frac  float64 // fraction of max peers to protect (0.0–1.0)
+}
+
+// protectionCategories is the list of protection criteria. Each category
+// independently selects its top-N peers per pool; the union is protected.
+var protectionCategories = []protectionCategory{
+	{func(s txtracker.PeerStats) float64 { return s.RecentFinalized }, inclusionProtectionFrac}, // Recent finalized
+	{func(s txtracker.PeerStats) float64 { return s.RecentIncluded }, inclusionProtectionFrac},  // Recent included
+}
+
+// dropper monitors the state of the peer pool and introduces churn by
+// periodically disconnecting a random peer to make room for new connections.
+// The main goal is to allow new peers to join the network and to facilitate
+// continuous topology adaptation.
+//
+// Behavior:
+//   - During sync the Downloader handles peer connections, so dropper is disabled.
+//   - When not syncing and a peer category (inbound or dialed) is close to its
+//     limit, a random peer from that category is disconnected every 3–7 minutes.
+//   - Trusted and static peers are never dropped.
+//   - Recently connected peers are also protected from dropping to give them time
+//     to prove their value before being at risk of disconnection.
+//   - Some peers are protected from dropping based on their contribution
+//     to the tx pool. Each pool (inbound/dialed) independently selects its
+//     top fraction of peers by a per-peer EMA score — a slow EMA of
+//     finalized inclusions (~1-day half-life, rewards sustained long-term
+//     contribution) and a fast EMA of recent block inclusions (rewards
+//     current activity). The union of all protected sets is shielded from
+//     random dropping, and the drop target is chosen randomly from the
+//     remainder.
 type dropper struct {
 	maxDialPeers    int // maximum number of dialed peers
 	maxInboundPeers int // maximum number of inbound peers
 	peersFunc       getPeersFunc
 	syncingFunc     getSyncingFunc
+	peerStatsFunc   getPeerStatsFunc // optional: inclusion stats for protection
 
 	// peerDropTimer introduces churn if we are close to limit capacity.
 	// We handle Dialed and Inbound connections separately
@@ -88,10 +131,12 @@ func newDropper(maxDialPeers, maxInboundPeers int) *dropper {
 	return cm
 }
 
-// Start the dropper.
-func (cm *dropper) Start(srv *p2p.Server, syncingFunc getSyncingFunc) {
+// Start the dropper. peerStatsFunc is optional (nil disables inclusion
+// protection).
+func (cm *dropper) Start(srv *p2p.Server, syncingFunc getSyncingFunc, peerStatsFunc getPeerStatsFunc) {
 	cm.peersFunc = srv.Peers
 	cm.syncingFunc = syncingFunc
+	cm.peerStatsFunc = peerStatsFunc
 	cm.wg.Add(1)
 	go cm.loop()
 }
@@ -114,30 +159,101 @@ func (cm *dropper) dropRandomPeer() bool {
 	}
 	numDialed := len(peers) - numInbound
 
+	// Fast path: if neither pool is near capacity, every non-trusted/non-static
+	// peer is already do-not-drop by pool-threshold rules. No point computing
+	// inclusion protection.
+	if cm.maxDialPeers-numDialed > peerDropThreshold &&
+		cm.maxInboundPeers-numInbound > peerDropThreshold {
+		dropSkipped.Mark(1)
+		return false
+	}
+
+	// Compute the set of inclusion-protected peers before filtering.
+	protected := cm.protectedPeers(peers)
+
 	selectDoNotDrop := func(p *p2p.Peer) bool {
-		// Avoid dropping trusted and static peers, or recent peers.
-		// Only drop peers if their respective category (dialed/inbound)
-		// is close to limit capacity.
 		return p.Trusted() || p.StaticDialed() ||
 			p.Lifetime() < mclock.AbsTime(doNotDropBefore) ||
 			(p.DynDialed() && cm.maxDialPeers-numDialed > peerDropThreshold) ||
-			(p.Inbound() && cm.maxInboundPeers-numInbound > peerDropThreshold)
+			(p.Inbound() && cm.maxInboundPeers-numInbound > peerDropThreshold) ||
+			protected[p]
 	}
 
 	droppable := slices.DeleteFunc(peers, selectDoNotDrop)
-	if len(droppable) > 0 {
-		p := droppable[mrand.Intn(len(droppable))]
-		log.Debug("Dropping random peer", "inbound", p.Inbound(),
-			"id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()), "peercountbefore", len(peers))
-		p.Disconnect(p2p.DiscUselessPeer)
-		if p.Inbound() {
-			droppedInbound.Mark(1)
-		} else {
-			droppedOutbound.Mark(1)
-		}
-		return true
+	if len(droppable) == 0 {
+		dropSkipped.Mark(1)
+		return false
 	}
-	return false
+	p := droppable[mrand.Intn(len(droppable))]
+	log.Debug("Dropping random peer", "inbound", p.Inbound(),
+		"id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()), "peercountbefore", len(peers))
+	p.Disconnect(p2p.DiscUselessPeer)
+	if p.Inbound() {
+		droppedInbound.Mark(1)
+	} else {
+		droppedOutbound.Mark(1)
+	}
+	return true
+}
+
+// protectedPeers computes the set of peers that should not be dropped based
+// on inclusion stats. Each protection category independently selects its
+// top-N peers per inbound/dialed pool; the union is returned.
+func (cm *dropper) protectedPeers(peers []*p2p.Peer) map[*p2p.Peer]bool {
+	if cm.peerStatsFunc == nil {
+		return nil
+	}
+	stats := cm.peerStatsFunc()
+	if len(stats) == 0 {
+		return nil
+	}
+	// Split peers by direction.
+	var inbound, dialed []*p2p.Peer
+	for _, p := range peers {
+		if p.Inbound() {
+			inbound = append(inbound, p)
+		} else {
+			dialed = append(dialed, p)
+		}
+	}
+	result := protectedPeersByPool(inbound, dialed, stats)
+	if len(result) > 0 {
+		log.Debug("Protecting high-value peers from drop", "protected", len(result))
+	}
+	return result
+}
+
+// protectedPeersByPool selects the union of top-N peers per protection
+// category across the given already-split inbound and dialed pools.
+// Factored from protectedPeers so tests can exercise the per-pool
+// selection logic without needing to construct direction-flagged
+// *p2p.Peer instances (which require unexported p2p types).
+func protectedPeersByPool(inbound, dialed []*p2p.Peer, stats map[string]txtracker.PeerStats) map[*p2p.Peer]bool {
+	result := make(map[*p2p.Peer]bool)
+	// protectPool selects the top-frac peers from pool by score and adds them to result.
+	protectPool := func(pool []*p2p.Peer, cat protectionCategory) {
+		n := int(float64(len(pool)) * cat.frac)
+		if n == 0 {
+			return
+		}
+		sorted := slices.SortedFunc(slices.Values(pool), func(a, b *p2p.Peer) int {
+			// descending
+			scoreB := cat.score(stats[b.ID().String()])
+			scoreA := cat.score(stats[a.ID().String()])
+			return cmp.Compare(scoreB, scoreA)
+		})
+		// select top n peers excluding 0
+		for _, p := range sorted[:min(n, len(sorted))] {
+			if cat.score(stats[p.ID().String()]) > 0 {
+				result[p] = true
+			}
+		}
+	}
+	for _, cat := range protectionCategories {
+		protectPool(inbound, cat)
+		protectPool(dialed, cat)
+	}
+	return result
 }
 
 // randomDuration generates a random duration between min and max.

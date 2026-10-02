@@ -63,9 +63,10 @@ func u64(val uint64) *uint64 { return &val }
 // purpose is to allow testing the request/reply workflows and wire serialization
 // in the `eth` protocol without actually doing any data processing.
 type testBackend struct {
-	db     ethdb.Database
-	chain  *core.BlockChain
-	txpool *txpool.TxPool
+	db       ethdb.Database
+	chain    *core.BlockChain
+	txpool   *txpool.TxPool
+	blobpool *blobpool.BlobPool
 }
 
 // newTestBackend creates an empty chain and wraps it into a mock backend.
@@ -143,9 +144,10 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, cancun bool, generat
 	txpool, _ := txpool.New(txconfig.PriceLimit, chain, []txpool.SubPool{legacyPool, blobPool})
 
 	return &testBackend{
-		db:     db,
-		chain:  chain,
-		txpool: txpool,
+		db:       db,
+		chain:    chain,
+		txpool:   txpool,
+		blobpool: blobPool,
 	}
 }
 
@@ -157,6 +159,7 @@ func (b *testBackend) close() {
 
 func (b *testBackend) Chain() *core.BlockChain { return b.chain }
 func (b *testBackend) TxPool() TxPool          { return b.txpool }
+func (b *testBackend) BlobPool() BlobPool      { return b.blobpool }
 
 func (b *testBackend) RunPeer(peer *Peer, handler Handler) error {
 	// Normally the backend would do peer maintenance and handshakes. All that
@@ -742,7 +745,7 @@ func testGetBlockAccessLists(t *testing.T, protocol uint) {
 
 	var (
 		hashes []common.Hash
-		expect rlp.RawList[RawBlockAccessList]
+		expect rlp.RawList[rlp.RawValue]
 	)
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
@@ -768,6 +771,42 @@ func testGetBlockAccessLists(t *testing.T, protocol uint) {
 		List:      expect,
 	}); err != nil {
 		t.Errorf("BAL response mismatch: %v", err)
+	}
+}
+
+// TestBlockAccessListsUnavailableDecode checks that a BlockAccessLists response
+// containing the EIP-8159 unavailability marker (RLP empty string).
+func TestBlockAccessListsUnavailableDecode(t *testing.T) {
+	t.Parallel()
+
+	balRaw := makeTestBAL(t, common.Address{0x11})
+
+	// Assemble a response the way the serving side does, with the middle
+	// entry signaled as unavailable.
+	var list rlp.RawList[rlp.RawValue]
+	list.AppendRaw(balRaw)
+	list.AppendRaw(rlp.EmptyString)
+	list.AppendRaw(balRaw)
+
+	enc, err := rlp.EncodeToBytes(&BlockAccessListPacket{RequestId: 42, List: list})
+	if err != nil {
+		t.Fatalf("failed to encode packet: %v", err)
+	}
+	var packet BlockAccessListPacket
+	if err := rlp.DecodeBytes(enc, &packet); err != nil {
+		t.Fatalf("failed to decode packet: %v", err)
+	}
+	bals, err := packet.List.Items()
+	if err != nil {
+		t.Fatalf("failed to decode BAL entries: %v", err)
+	}
+	if len(bals) != 3 {
+		t.Fatalf("wrong entry count: got %d, want 3", len(bals))
+	}
+	for i, want := range [][]byte{balRaw, rlp.EmptyString, balRaw} {
+		if !bytes.Equal(bals[i], want) {
+			t.Errorf("entry %d mismatch: got %x, want %x", i, bals[i], want)
+		}
 	}
 }
 

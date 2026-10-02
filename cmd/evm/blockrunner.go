@@ -78,7 +78,7 @@ func blockTestCmd(ctx *cli.Context) error {
 			return err
 		}
 		// During fuzzing, we report the result after every block
-		if !ctx.IsSet(FuzzFlag.Name) {
+		if !ctx.Bool(FuzzFlag.Name) {
 			report(ctx, results)
 		}
 	}
@@ -101,7 +101,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	tracer := tracerFromFlags(ctx)
 
 	// Suppress INFO logs during fuzzing
-	if ctx.IsSet(FuzzFlag.Name) {
+	if ctx.Bool(FuzzFlag.Name) {
 		log.SetDefault(log.NewLogger(log.DiscardHandler()))
 	}
 
@@ -140,7 +140,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		}
 
 		// When fuzzing, write results after every block
-		if ctx.IsSet(FuzzFlag.Name) {
+		if ctx.Bool(FuzzFlag.Name) {
 			report(ctx, []testResult{*result})
 		}
 		results = append(results, *result)

@@ -100,6 +100,7 @@ var deprecatedConfigFields = map[string]bool{
 	"ethconfig.Config.LightPeers":              true,
 	"ethconfig.Config.LightNoPrune":            true,
 	"ethconfig.Config.LightNoSyncServe":        true,
+	"ethconfig.Config.EnableStateSizeTracking": true,
 }
 
 type ethstatsConfig struct {
@@ -227,6 +228,10 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if ctx.IsSet(utils.OverrideOsaka.Name) {
 		v := ctx.Uint64(utils.OverrideOsaka.Name)
 		cfg.Eth.OverrideOsaka = &v
+	}
+	if ctx.IsSet(utils.OverrideAmsterdam.Name) {
+		v := ctx.Uint64(utils.OverrideAmsterdam.Name)
+		cfg.Eth.OverrideAmsterdam = &v
 	}
 	if ctx.IsSet(utils.OverrideBPO1.Name) {
 		v := ctx.Uint64(utils.OverrideBPO1.Name)

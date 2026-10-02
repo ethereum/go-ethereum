@@ -357,6 +357,7 @@ func (db *Database) Disable() error {
 	if err := disk.terminate(); err != nil {
 		return err
 	}
+	disk.resetCache() // a stale layer can no longer release its caches
 	disk.markStale()
 
 	// Write the initial sync flag to persist it across restarts.
@@ -524,6 +525,10 @@ func (db *Database) Recover(root common.Hash) error {
 //
 // The supplied root must be a valid trie hash value.
 func (db *Database) Recoverable(root common.Hash) bool {
+	// Nothing is recoverable while a state sync is in progress.
+	if db.waitSync {
+		return false
+	}
 	// Ensure the requested state is a known state.
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
@@ -543,15 +548,15 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if db.stateFreezer == nil {
 		return false
 	}
-	// Ensure the requested state is a canonical state and all state
-	// histories in range [id+1, dl.ID] are present and complete.
-	return checkStateHistories(db.stateFreezer, *id+1, dl.stateID()-*id, func(m *meta) error {
-		if m.parent != root {
-			return errors.New("unexpected state history")
-		}
-		root = m.root
-		return nil
-	}) == nil
+	blob := rawdb.ReadStateHistoryMeta(db.stateFreezer, *id+1)
+	if len(blob) == 0 {
+		return false // pruned from the tail or otherwise unavailable
+	}
+	var m meta
+	if err := m.decode(blob); err != nil {
+		return false
+	}
+	return m.parent == root
 }
 
 // Close closes the trie database and the held freezer.

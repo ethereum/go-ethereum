@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // receiptQueue implements typedQueue and is a type adapter between the generic
@@ -38,6 +37,12 @@ func (q *receiptQueue) waker() chan bool {
 // by the concurrent downloader.
 func (q *receiptQueue) pending() int {
 	return q.queue.PendingReceipts()
+}
+
+// next returns the number of the block at the head of the receipt retrieval
+// queue, false if none is pending.
+func (q *receiptQueue) next() (uint64, bool) {
+	return q.queue.NextReceipt()
 }
 
 // capacity is responsible for calculating how many receipts a particular peer is
@@ -58,17 +63,10 @@ func (q *receiptQueue) reserve(peer *peerConnection, items int) (*fetchRequest, 
 	return q.queue.ReserveReceipts(peer, items)
 }
 
-// unreserve is responsible for removing the current receipt retrieval allocation
-// assigned to a specific peer and placing it back into the pool to allow
-// reassigning to some other peer.
-func (q *receiptQueue) unreserve(peer string) int {
-	fails := q.queue.ExpireReceipts(peer)
-	if fails > 2 {
-		log.Trace("Receipt delivery timed out", "peer", peer)
-	} else {
-		log.Debug("Receipt delivery stalling", "peer", peer)
-	}
-	return fails
+// requeue is responsible for placing the current receipt retrieval allocation of
+// a specific peer back into the pool for some other peer to retrieve as well.
+func (q *receiptQueue) requeue(peer string) {
+	q.queue.RequeueReceipts(peer)
 }
 
 // request is responsible for converting a generic fetch request into a receipt
@@ -107,4 +105,16 @@ func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int,
 		peer.log.Debug("Failed to deliver retrieved receipts", "err", err)
 	}
 	return accepted, err
+}
+
+// stalled returns the peer whose receipt request holds the head of the result
+// cache for longer than the given threshold, blocking the consumer.
+func (q *receiptQueue) stalled(threshold time.Duration) string {
+	return q.queue.StalledReceipts(threshold)
+}
+
+// metrics returns the collectors the concurrent fetcher reports the scheduling
+// state of receipt retrievals into.
+func (q *receiptQueue) metrics() *fetchMetrics {
+	return receiptFetchMetrics
 }

@@ -186,7 +186,6 @@ func TestGenesisHashes(t *testing.T) {
 	}{
 		{DefaultGenesisBlock(), params.MainnetGenesisHash},
 		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
-		{DefaultHoleskyGenesisBlock(), params.HoleskyGenesisHash},
 		{DefaultHoodiGenesisBlock(), params.HoodiGenesisHash},
 	} {
 		// Test via MustCommit
@@ -293,8 +292,6 @@ func TestBinaryGenesisCommit(t *testing.T) {
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			UBT:    params.DefaultPragueBlobConfig,
 		},
 	}
 

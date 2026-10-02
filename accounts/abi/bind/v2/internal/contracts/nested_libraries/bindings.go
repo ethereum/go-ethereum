@@ -40,6 +40,11 @@ type C1 struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *C1) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewC1 creates a new instance of C1.
 func NewC1() *C1 {
 	parsed, err := C1MetaData.ParseABI()
@@ -118,6 +123,11 @@ type C2 struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *C2) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewC2 creates a new instance of C2.
 func NewC2() *C2 {
 	parsed, err := C2MetaData.ParseABI()
@@ -192,6 +202,11 @@ type L1 struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *L1) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewL1 creates a new instance of L1.
 func NewL1() *L1 {
 	parsed, err := L1MetaData.ParseABI()
@@ -255,6 +270,11 @@ var L2MetaData = bind.MetaData{
 // L2 is an auto generated Go binding around an Ethereum contract.
 type L2 struct {
 	abi abi.ABI
+}
+
+// GetABI returns the ABI associated with this contract binding.
+func (c *L2) GetABI() abi.ABI {
+	return c.abi
 }
 
 // NewL2 creates a new instance of L2.
@@ -322,6 +342,11 @@ type L2b struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *L2b) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewL2b creates a new instance of L2b.
 func NewL2b() *L2b {
 	parsed, err := L2bMetaData.ParseABI()
@@ -382,6 +407,11 @@ var L3MetaData = bind.MetaData{
 // L3 is an auto generated Go binding around an Ethereum contract.
 type L3 struct {
 	abi abi.ABI
+}
+
+// GetABI returns the ABI associated with this contract binding.
+func (c *L3) GetABI() abi.ABI {
+	return c.abi
 }
 
 // NewL3 creates a new instance of L3.
@@ -450,6 +480,11 @@ type L4 struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *L4) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewL4 creates a new instance of L4.
 func NewL4() *L4 {
 	parsed, err := L4MetaData.ParseABI()
@@ -513,6 +548,11 @@ var L4bMetaData = bind.MetaData{
 // L4b is an auto generated Go binding around an Ethereum contract.
 type L4b struct {
 	abi abi.ABI
+}
+
+// GetABI returns the ABI associated with this contract binding.
+func (c *L4b) GetABI() abi.ABI {
+	return c.abi
 }
 
 // NewL4b creates a new instance of L4b.

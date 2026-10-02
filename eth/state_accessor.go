@@ -56,7 +56,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 		// The state is available in live database, create a reference
 		// on top to prevent garbage collection and return a release
 		// function to deref it.
-		if statedb, err = eth.blockchain.StateAt(block.Header()); err == nil {
+		if statedb, err = eth.blockchain.StateAt(block.Root(), block.Number(), block.Time()); err == nil {
 			eth.blockchain.TrieDB().Reference(block.Root(), common.Hash{})
 			return statedb, func() {
 				eth.blockchain.TrieDB().Dereference(block.Root())
@@ -151,12 +151,13 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
 			return nil, nil, fmt.Errorf("block #%d not found", next)
 		}
-		_, err := eth.blockchain.Processor().Process(ctx, current, statedb, nil, vm.Config{})
+		_, err := eth.blockchain.Processor().Process(ctx, current, statedb, nil, nil, vm.Config{}, nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(current.NumberU64(), eth.blockchain.Config().IsEIP158(current.Number()), eth.blockchain.Config().IsCancun(current.Number(), current.Time()))
+		rules := eth.blockchain.Config().Rules(current.Number(), current.Difficulty().Sign() == 0, current.Time())
+		root, err := statedb.Commit(rules, current.NumberU64())
 		if err != nil {
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
@@ -183,11 +184,11 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), error) {
 	// Check if the requested state is available in the live chain.
 	header := block.Header()
-	statedb, err := eth.blockchain.StateAt(header)
+	statedb, err := eth.blockchain.StateAt(header.Root, header.Number, header.Time)
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
-	statedb, err = eth.blockchain.HistoricState(header)
+	statedb, err = eth.blockchain.HistoricState(header.Root, header.Number, header.Time)
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
@@ -250,7 +251,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	defer evm.Release()
 
 	// Run pre-execution system calls
-	core.PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), eth.blockchain.Config(), evm, block.Number(), block.Time())
+	core.PreExecution(ctx, block.BeaconRoot(), parent.Header(), eth.blockchain.Config(), evm, block.Number(), block.Time())
 
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, context, statedb, release, nil
@@ -270,8 +271,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(evm.GetRules())
 	}
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

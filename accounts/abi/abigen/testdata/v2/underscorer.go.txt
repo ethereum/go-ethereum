@@ -36,6 +36,11 @@ type Underscorer struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *Underscorer) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewUnderscorer creates a new instance of Underscorer.
 func NewUnderscorer() *Underscorer {
 	parsed, err := UnderscorerMetaData.ParseABI()

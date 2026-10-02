@@ -137,4 +137,9 @@ var (
 	ErrAuthorizationInvalidSignature   = errors.New("EIP-7702 authorization has invalid signature")
 	ErrAuthorizationDestinationHasCode = errors.New("EIP-7702 authorization destination is a contract")
 	ErrAuthorizationNonceMismatch      = errors.New("EIP-7702 authorization nonce does not match current account nonce")
+
+	// ErrOutOfGasRuntime is returned when the transaction's gas budget cannot
+	// cover an EIP-2780 runtime charge. The transaction remains valid: the top
+	// frame halts out of gas and its state changes are reverted.
+	ErrOutOfGasRuntime = errors.New("out of gas covering EIP-2780 runtime charge")
 )

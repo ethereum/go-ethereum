@@ -546,7 +546,7 @@ func opMsize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opGas(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.get().SetUint64(scope.Contract.Gas.RegularGas)
+	scope.Stack.get().SetUint64(scope.Contract.Gas.ExecutionGas)
 	return nil, nil
 }
 
@@ -635,9 +635,14 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		value        = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
+		contractAddr = crypto.CreateAddress(scope.Contract.Address(), evm.StateDB.GetNonce(scope.Contract.Address()))
 	)
-	// Apply EIP-150 to the regular gas left after the state charge.
-	forward := scope.Contract.Gas.RegularGas
+	creationCharged, halt, err := evm.chargeAccountCreation(scope, contractAddr, &value)
+	if halt {
+		return nil, err
+	}
+	// Apply EIP-150 to the execution gas left after the state charge.
+	forward := scope.Contract.Gas.ExecutionGas
 	if evm.chainRules.IsEIP150 {
 		forward -= forward / 64
 	}
@@ -646,7 +651,8 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	stackvalue := size
 
 	child := scope.Contract.forwardGas(forward, evm.Config.Tracer, tracing.GasChangeCallContractCreation)
-	res, addr, result, creation, suberr := evm.Create(scope.Contract.Address(), input, child, &value)
+	res, addr, result, suberr := evm.create(scope.Contract.Address(), input, child, &value, contractAddr, CREATE)
+
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -661,10 +667,13 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	// Refund the leftover gas back to current frame
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
-	// Refund the state gas of account-creation if creation doesn't happen
-	if evm.GetRules().IsAmsterdam && !creation {
+	// Refill the account-creation charge if the create frame failed (reverted,
+	// halted exceptionally, or collided); a successful creation consumes it.
+	// This rule is only applied since the Amsterdam, therefore all non-nil vm
+	// error can be interpreted as deployment failure.
+	if creationCharged && suberr != nil {
 		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeRefundAccountCreation)
 	}
 	if suberr == ErrExecutionReverted {
@@ -681,15 +690,21 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		salt         = scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
+		inithash     = crypto.Keccak256Hash(input)
+		contractAddr = crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), inithash[:])
 	)
-	// Apply EIP-150 to the regular gas left after the state charge.
-	forward := scope.Contract.Gas.RegularGas
+	creationCharged, halt, err := evm.chargeAccountCreation(scope, contractAddr, &endowment)
+	if halt {
+		return nil, err
+	}
+	// Apply EIP-150 to the execution gas left after the state charge.
+	forward := scope.Contract.Gas.ExecutionGas
 	forward -= forward / 64
 
 	// reuse size int for stackvalue
 	stackvalue := size
 	child := scope.Contract.forwardGas(forward, evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
-	res, addr, result, creation, suberr := evm.Create2(scope.Contract.Address(), input, child, &endowment, &salt)
+	res, addr, result, suberr := evm.create(scope.Contract.Address(), input, child, &endowment, contractAddr, CREATE2)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
 		stackvalue.Clear()
@@ -699,10 +714,13 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	// Refund the leftover gas back to current frame
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
-	// Refund the state gas of account-creation if creation doesn't happen
-	if evm.GetRules().IsAmsterdam && !creation {
+	// Refill the account-creation charge if the create frame failed (reverted,
+	// halted exceptionally, or collided); a successful creation consumes it.
+	// This rule is only applied since the Amsterdam, therefore all non-nil vm
+	// error can be interpreted as deployment failure.
+	if creationCharged && suberr != nil {
 		scope.Contract.refundState(params.AccountCreationSize*evm.Context.CostPerStateByte, evm.Config.Tracer, tracing.GasChangeRefundAccountCreation)
 	}
 	if suberr == ErrExecutionReverted {
@@ -732,7 +750,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		gas += params.CallStipend
 	}
 
-	// Regular gas for the forward was already pre-deducted by the dynamic
+	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table (see makeCallVariantGasCallEIP*); only the state reservoir
 	// needs to be handed off to the child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
@@ -748,7 +766,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if err == nil || err == ErrExecutionReverted {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	// If the call frame reverts or halts exceptionally, the charged state-gas
 	// is refilled back to the state reservoir in Amsterdam.
@@ -774,7 +792,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
-	// Regular gas for the forward was already pre-deducted by the dynamic
+	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table, only the state reservoir needs to be handed off to the
 	// child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
@@ -789,7 +807,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	evm.returnData = ret
 	return ret, nil
@@ -807,7 +825,7 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
-	// Regular gas for the forward was already pre-deducted by the dynamic
+	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table, only the state reservoir needs to be handed off to the
 	// child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
@@ -821,7 +839,7 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if err == nil || err == ErrExecutionReverted {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	evm.returnData = ret
 	return ret, nil
@@ -839,7 +857,7 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
-	// Regular gas for the forward was already pre-deducted by the dynamic
+	// Execution gas for the forward was already pre-deducted by the dynamic
 	// gas table, only the state reservoir needs to be handed off to the
 	// child here.
 	childBudget := NewGasBudget(gas, scope.Contract.Gas.StateGas)
@@ -854,7 +872,7 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	scope.Contract.refundGas(result, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.refundGas(result, evm.Config.Tracer)
 
 	evm.returnData = ret
 	return ret, nil
@@ -903,12 +921,8 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	evm.StateDB.SelfDestruct(this)
 
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
-		}
-		if tracer.OnExit != nil {
-			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
-		}
+		tracer.EmitEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, tracing.Gas{}, balance.ToBig())
+		tracer.EmitExit(evm.depth, []byte{}, tracing.Gas{}, tracing.Gas{}, nil, false)
 	}
 	return nil, errStopToken
 }
@@ -928,8 +942,15 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	if newContract {
 		if this != beneficiary { // Skip no-op transfer when self-destructing to self.
 			evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
+			evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+		} else if !evm.chainRules.IsAmsterdam {
+			// Self-destructing to self burns the balance prior to EIP-8246.
+			// EIP-8246 (Amsterdam) removes this burn: the balance is left
+			// untouched and the account is preserved as a balance-only account
+			// at transaction finalization (unless its balance is zero, in which
+			// case EIP-161 deletes it).
+			evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
 		}
-		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
 		evm.StateDB.SelfDestruct(this)
 	}
 
@@ -938,21 +959,15 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
 		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
 	}
-	if evm.chainRules.IsAmsterdam && !balance.IsZero() {
-		if this != beneficiary {
-			evm.StateDB.AddLog(types.EthTransferLog(this, beneficiary, balance))
-		} else if newContract {
-			evm.StateDB.AddLog(types.EthBurnLog(this, balance))
-		}
+	// EIP-7708: emit a transfer log for the moved balance. EIP-8246 removes the
+	// SELFDESTRUCT burn entirely, so there is no longer a burn to log.
+	if evm.chainRules.IsAmsterdam && !balance.IsZero() && this != beneficiary {
+		evm.StateDB.AddLog(types.EthTransferLog(this, beneficiary, balance))
 	}
 
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
-		}
-		if tracer.OnExit != nil {
-			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
-		}
+		tracer.EmitEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, tracing.Gas{}, balance.ToBig())
+		tracer.EmitExit(evm.depth, []byte{}, tracing.Gas{}, tracing.Gas{}, nil, false)
 	}
 	return nil, errStopToken
 }

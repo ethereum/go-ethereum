@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -115,6 +116,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
 		e.Authorize(testBankAddress)
 	case *ethash.Ethash:
+	case *beacon.Beacon:
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}

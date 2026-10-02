@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
@@ -48,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/syncer"
@@ -137,7 +139,7 @@ var (
 	}
 	NetworkIdFlag = &cli.Uint64Flag{
 		Name:     "networkid",
-		Usage:    "Explicitly set network ID (integer)(For testnets: use --sepolia, --holesky, --hoodi instead)",
+		Usage:    "Explicitly set network ID (integer)(For testnets: use --sepolia, --hoodi instead)",
 		Value:    ethconfig.Defaults.NetworkId,
 		Category: flags.EthCategory,
 	}
@@ -149,11 +151,6 @@ var (
 	SepoliaFlag = &cli.BoolFlag{
 		Name:     "sepolia",
 		Usage:    "Sepolia network: pre-configured proof-of-stake test network",
-		Category: flags.EthCategory,
-	}
-	HoleskyFlag = &cli.BoolFlag{
-		Name:     "holesky",
-		Usage:    "Holesky network: pre-configured proof-of-stake test network",
 		Category: flags.EthCategory,
 	}
 	HoodiFlag = &cli.BoolFlag{
@@ -254,6 +251,11 @@ var (
 		Usage:    "Manually specify the Osaka fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
+	OverrideAmsterdam = &cli.Uint64Flag{
+		Name:     "override.amsterdam",
+		Usage:    "Manually specify the Amsterdam fork timestamp, overriding the bundled setting",
+		Category: flags.EthCategory,
+	}
 	OverrideBPO1 = &cli.Uint64Flag{
 		Name:     "override.bpo1",
 		Usage:    "Manually specify the bpo1 fork timestamp, overriding the bundled setting",
@@ -289,12 +291,6 @@ var (
 	StateSchemeFlag = &cli.StringFlag{
 		Name:     "state.scheme",
 		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path')",
-		Category: flags.StateCategory,
-	}
-	StateSizeTrackingFlag = &cli.BoolFlag{
-		Name:     "state.size-tracking",
-		Usage:    "Enable state size tracking, retrieve state size with debug_stateSize.",
-		Value:    ethconfig.Defaults.EnableStateSizeTracking,
 		Category: flags.StateCategory,
 	}
 	SnapV2Flag = &cli.BoolFlag{
@@ -335,7 +331,7 @@ var (
 	}
 	ChainHistoryFlag = &cli.StringFlag{
 		Name:     "history.chain",
-		Usage:    `Blockchain history retention ("all", "postmerge", or "postprague")`,
+		Usage:    fmt.Sprintf(`Blockchain history retention (%s, or "<block number>:<block hash>" to keep from that block)`, history.ChainHistoryNames()),
 		Value:    ethconfig.Defaults.HistoryMode.String(),
 		Category: flags.StateCategory,
 	}
@@ -497,6 +493,12 @@ var (
 		Value:    ethconfig.Defaults.BlobPool.PriceBump,
 		Category: flags.BlobPoolCategory,
 	}
+	BlobPoolFetchProbabilityFlag = &cli.Uint64Flag{
+		Name:     "blobpool.fetchprobability",
+		Usage:    "Probability of fetching the full blob payload for sparse blobpool (min=15, max=100)",
+		Value:    fetcher.DefaultFetchProbability,
+		Category: flags.BlobPoolCategory,
+	}
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
@@ -533,6 +535,11 @@ var (
 		Usage:    "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
 		Category: flags.PerfCategory,
 	}
+	CacheNoPrecompileFlag = &cli.BoolFlag{
+		Name:     "cache.noprecompile",
+		Usage:    "Disable precompile result caching",
+		Category: flags.PerfCategory,
+	}
 	CachePreimagesFlag = &cli.BoolFlag{
 		Name:     "cache.preimages",
 		Usage:    "Enable recording the SHA3/keccak preimages of trie keys",
@@ -547,6 +554,17 @@ var (
 	FDLimitFlag = &cli.IntFlag{
 		Name:     "fdlimit",
 		Usage:    "Raise the open file descriptor resource limit (default = system fd limit)",
+		Category: flags.PerfCategory,
+	}
+	MemoryLimitFlag = &cli.IntFlag{
+		Name:     "memorylimit",
+		Usage:    "Soft memory limit for the Go runtime in megabytes (default = no limit)",
+		Category: flags.PerfCategory,
+	}
+	GOGCFlag = &cli.IntFlag{
+		Name:     "gogc",
+		Usage:    "Go garbage collection target percentage (default = 50, negative disables)",
+		Value:    50,
 		Category: flags.PerfCategory,
 	}
 	CryptoKZGFlag = &cli.StringFlag{
@@ -672,6 +690,12 @@ var (
 		Name:     "rpc.rangelimit",
 		Usage:    "Maximum block range (end - begin) allowed for range queries (0 = unlimited)",
 		Value:    ethconfig.Defaults.RangeLimit,
+		Category: flags.APICategory,
+	}
+	EngineMaxReorgDepthFlag = &cli.Uint64Flag{
+		Name:     "engine.maxreorgdepth",
+		Usage:    "Maximum depth the chain head can be rewound to a canonical ancestor via engine forkchoiceUpdated (0 = no limit)",
+		Value:    ethconfig.Defaults.EngineMaxReorgDepth,
 		Category: flags.APICategory,
 	}
 	// Authenticated RPC HTTP settings
@@ -854,6 +878,12 @@ var (
 		Name:     "rpc.batch-response-max-size",
 		Usage:    "Maximum number of bytes returned from a batched call",
 		Value:    node.DefaultConfig.BatchResponseMaxSize,
+		Category: flags.APICategory,
+	}
+	HTTPBodyLimitFlag = &cli.IntFlag{
+		Name:     "rpc.http-body-limit",
+		Usage:    "Maximum size (in megabytes) of an HTTP request body",
+		Value:    node.DefaultConfig.HTTPBodyLimit / (1024 * 1024),
 		Category: flags.APICategory,
 	}
 
@@ -1124,7 +1154,6 @@ var (
 	// TestnetFlags is the flag group of all built-in supported testnets.
 	TestnetFlags = []cli.Flag{
 		SepoliaFlag,
-		HoleskyFlag,
 		HoodiFlag,
 	}
 	// NetworkFlags is the flag group of all built-in supported networks.
@@ -1155,9 +1184,6 @@ func MakeDataDir(ctx *cli.Context) string {
 	if path := ctx.String(DataDirFlag.Name); path != "" {
 		if ctx.Bool(SepoliaFlag.Name) {
 			return filepath.Join(path, "sepolia")
-		}
-		if ctx.Bool(HoleskyFlag.Name) {
-			return filepath.Join(path, "holesky")
 		}
 		if ctx.Bool(HoodiFlag.Name) {
 			return filepath.Join(path, "hoodi")
@@ -1207,7 +1233,7 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 //
 // 1. --bootnodes flag
 // 2. Config file
-// 3. Network preset flags (e.g. --holesky)
+// 3. Network preset flags (e.g. --sepolia)
 // 4. default to mainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.MainnetBootnodes
@@ -1218,8 +1244,6 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 			return // Already set by config file, don't apply defaults.
 		}
 		switch {
-		case ctx.Bool(HoleskyFlag.Name):
-			urls = params.HoleskyBootnodes
 		case ctx.Bool(SepoliaFlag.Name):
 			urls = params.SepoliaBootnodes
 		case ctx.Bool(HoodiFlag.Name):
@@ -1355,6 +1379,10 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.IsSet(BatchResponseMaxSize.Name) {
 		cfg.BatchResponseMaxSize = ctx.Int(BatchResponseMaxSize.Name)
+	}
+
+	if ctx.IsSet(HTTPBodyLimitFlag.Name) {
+		cfg.HTTPBodyLimit = ctx.Int(HTTPBodyLimitFlag.Name) * 1024 * 1024
 	}
 }
 
@@ -1594,8 +1622,6 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.Bool(SepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
-	case ctx.Bool(HoleskyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "holesky")
 	case ctx.Bool(HoodiFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "hoodi")
 	}
@@ -1669,6 +1695,9 @@ func setBlobPool(ctx *cli.Context, cfg *blobpool.Config) {
 	if ctx.IsSet(BlobPoolPriceBumpFlag.Name) {
 		cfg.PriceBump = ctx.Uint64(BlobPoolPriceBumpFlag.Name)
 	}
+	if ctx.IsSet(BlobPoolFetchProbabilityFlag.Name) {
+		cfg.FetchProbability = ctx.Uint64(BlobPoolFetchProbabilityFlag.Name)
+	}
 }
 
 func setMiner(ctx *cli.Context, cfg *miner.Config) {
@@ -1715,7 +1744,7 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, OverrideGenesisFlag)
+	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoodiFlag, OverrideGenesisFlag)
 	flags.CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	// Set configurations from CLI flags
@@ -1741,12 +1770,27 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
 		}
 	}
-	// Ensure Go's GC ignores the database cache for trigger percentage
-	cache := ctx.Int(CacheFlag.Name)
-	gogc := max(20, min(100, 100/(float64(cache)/1024)))
 
-	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
-	godebug.SetGCPercent(int(gogc))
+	// Setting go runtime settings
+	gcPercent := ctx.Int(GOGCFlag.Name)
+	if ctx.IsSet(GOGCFlag.Name) {
+		log.Info("Sanitizing Go's GC trigger", "percent", gcPercent)
+	}
+	godebug.SetGCPercent(gcPercent)
+
+	if ctx.IsSet(MemoryLimitFlag.Name) {
+		memLimit := int64(ctx.Int(MemoryLimitFlag.Name)) * 1024 * 1024
+		if total > 0 && memLimit > int64(total) {
+			log.Info("Sanitizing memory limit", "provided(MB)", memLimit/1024/1024, "updated(MB)", total/1024/1024)
+			memLimit = int64(total)
+		}
+		if memLimit < 0 {
+			log.Warn("Ignoring negative Go memory limit")
+		} else {
+			log.Info("Setting Go memory limit", "MB", memLimit/1024/1024)
+			godebug.SetMemoryLimit(memLimit)
+		}
+	}
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
 		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync
@@ -1758,8 +1802,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 
 	if ctx.IsSet(ChainHistoryFlag.Name) {
-		value := ctx.String(ChainHistoryFlag.Name)
-		if err := cfg.HistoryMode.UnmarshalText([]byte(value)); err != nil {
+		if err := cfg.HistoryMode.UnmarshalText([]byte(ctx.String(ChainHistoryFlag.Name))); err != nil {
 			Fatalf("--%s: %v", ChainHistoryFlag.Name, err)
 		}
 	}
@@ -1783,6 +1826,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.Bool(CacheNoPrefetchFlag.Name)
+	}
+	if ctx.IsSet(CacheNoPrecompileFlag.Name) {
+		cfg.NoPrecompileCache = ctx.Bool(CacheNoPrecompileFlag.Name)
 	}
 	if ctx.IsSet(CachePreimagesFlag.Name) {
 		cfg.Preimages = ctx.Bool(CachePreimagesFlag.Name)
@@ -1900,7 +1946,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = ctx.Float64(RPCGlobalTxFeeCapFlag.Name)
 	}
-	if ctx.IsSet(NoDiscoverFlag.Name) {
+	if ctx.IsSet(EngineMaxReorgDepthFlag.Name) {
+		cfg.EngineMaxReorgDepth = ctx.Uint64(EngineMaxReorgDepthFlag.Name)
+	}
+	if cfg.EngineMaxReorgDepth != 0 {
+		log.Info("Engine API maximum reorg depth", "depth", cfg.EngineMaxReorgDepth)
+	} else {
+		log.Info("Engine API reorg depth limit disabled")
+	}
+	if ctx.Bool(NoDiscoverFlag.Name) {
 		cfg.EthDiscoveryURLs, cfg.SnapDiscoveryURLs = []string{}, []string{}
 	} else if ctx.IsSet(DNSDiscoveryFlag.Name) {
 		urls := ctx.String(DNSDiscoveryFlag.Name)
@@ -1909,9 +1963,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
-	}
-	if ctx.IsSet(StateSizeTrackingFlag.Name) {
-		cfg.EnableStateSizeTracking = ctx.Bool(StateSizeTrackingFlag.Name)
 	}
 	if ctx.IsSet(SnapV2Flag.Name) {
 		cfg.SnapV2 = ctx.Bool(SnapV2Flag.Name)
@@ -1922,10 +1973,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.NetworkId = 1
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
-	case ctx.Bool(HoleskyFlag.Name):
-		cfg.NetworkId = 17000
-		cfg.Genesis = core.DefaultHoleskyGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.HoleskyGenesisHash)
 	case ctx.Bool(SepoliaFlag.Name):
 		cfg.NetworkId = 11155111
 		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
@@ -2069,14 +2116,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 	var config bparams.ClientConfig
 	customConfig := ctx.IsSet(BeaconConfigFlag.Name)
-	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, BeaconConfigFlag)
+	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoodiFlag, BeaconConfigFlag)
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		config.ChainConfig = *bparams.MainnetLightConfig
 	case ctx.Bool(SepoliaFlag.Name):
 		config.ChainConfig = *bparams.SepoliaLightConfig
-	case ctx.Bool(HoleskyFlag.Name):
-		config.ChainConfig = *bparams.HoleskyLightConfig
 	case ctx.Bool(HoodiFlag.Name):
 		config.ChainConfig = *bparams.HoodiLightConfig
 	default:
@@ -2279,7 +2324,7 @@ func SplitTagsFlag(tagsFlag string) map[string]string {
 
 	for _, t := range tags {
 		if t != "" {
-			kv := strings.Split(t, "=")
+			kv := strings.SplitN(t, "=", 2)
 
 			if len(kv) == 2 {
 				tagsMap[kv[0]] = kv[1]
@@ -2338,7 +2383,7 @@ func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database 
 func IsNetworkPreset(ctx *cli.Context) bool {
 	for _, flag := range NetworkFlags {
 		bFlag, _ := flag.(*cli.BoolFlag)
-		if ctx.IsSet(bFlag.Name) {
+		if ctx.Bool(bFlag.Name) {
 			return true
 		}
 	}
@@ -2374,8 +2419,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		genesis = core.DefaultGenesisBlock()
-	case ctx.Bool(HoleskyFlag.Name):
-		genesis = core.DefaultHoleskyGenesisBlock()
 	case ctx.Bool(SepoliaFlag.Name):
 		genesis = core.DefaultSepoliaGenesisBlock()
 	case ctx.Bool(HoodiFlag.Name):
@@ -2410,6 +2453,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	options := &core.BlockChainConfig{
 		TrieCleanLimit:          ethconfig.Defaults.TrieCleanCache,
 		NoPrefetch:              ctx.Bool(CacheNoPrefetchFlag.Name),
+		NoPrecompileCache:       ctx.Bool(CacheNoPrecompileFlag.Name),
 		TrieDirtyLimit:          ethconfig.Defaults.TrieDirtyCache,
 		ArchiveMode:             ctx.String(GCModeFlag.Name) == "archive",
 		TrieTimeLimit:           ethconfig.Defaults.TrieTimeout,
@@ -2429,9 +2473,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		// - DATADIR/triedb/merkle.journal
 		// - DATADIR/triedb/verkle.journal
 		TrieJournalDirectory: stack.ResolvePath("triedb"),
-
-		// Enable state size tracking if enabled
-		StateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
 
 		// Configure the slow block statistic logger (disabled by default)
 		SlowBlockThreshold: ethconfig.Defaults.SlowBlockThreshold,

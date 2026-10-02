@@ -276,6 +276,11 @@ const schema string = `
         blobGasUsed: Long
         # ExcessBlobGas is a running total of blob gas consumed in excess of the target, prior to the block.
         excessBlobGas: Long
+        # SlotNumber is the slot number of the block.
+        slotNumber: Long
+        # BlockAccessListHash is the hash of the EIP-7928 block-level access list.
+        # If the access list is unavailable for this block, this field will be null.
+        blockAccessListHash: Bytes32
     }
 
     # CallData represents the data associated with a local contract call.

@@ -160,10 +160,10 @@ func HandleMessage(backend Backend, peer *Peer) error {
 	if err != nil {
 		return err
 	}
+	defer msg.Discard()
 	if msg.Size > maxMessageSize {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
 	}
-	defer msg.Discard()
 
 	var handlers map[uint64]msgHandler
 	switch peer.version {

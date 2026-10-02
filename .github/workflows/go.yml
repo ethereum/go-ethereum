@@ -30,7 +30,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.25
+        go-version: 1.27
         cache: false
 
     - name: Run linters
@@ -51,7 +51,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.27'
           cache: false
 
       - name: Build
@@ -69,7 +69,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.27'
           cache: false
 
       - name: Install cross toolchain
@@ -87,8 +87,9 @@ jobs:
     strategy:
       matrix:
         go:
+          - '1.27'
+          - '1.26'
           - '1.25'
-          - '1.24'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -128,7 +129,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.27'
           cache: false
 
       - name: Build

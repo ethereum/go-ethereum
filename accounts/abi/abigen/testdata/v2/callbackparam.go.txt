@@ -36,6 +36,11 @@ type CallbackParam struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *CallbackParam) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewCallbackParam creates a new instance of CallbackParam.
 func NewCallbackParam() *CallbackParam {
 	parsed, err := CallbackParamMetaData.ParseABI()

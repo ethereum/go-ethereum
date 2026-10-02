@@ -35,6 +35,11 @@ type InputChecker struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *InputChecker) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewInputChecker creates a new instance of InputChecker.
 func NewInputChecker() *InputChecker {
 	parsed, err := InputCheckerMetaData.ParseABI()

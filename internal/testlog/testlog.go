@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -76,7 +77,7 @@ func (h *bufHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	copy(records[:], h.buf[:])
 	return &bufHandler{
 		buf:   records,
-		attrs: append(h.attrs, attrs...),
+		attrs: append(slices.Clone(h.attrs), attrs...),
 		level: h.level,
 	}
 }
@@ -186,7 +187,7 @@ func (h *bufHandler) terminalFormat(r slog.Record) string {
 		return true
 	})
 
-	attrs = append(h.attrs, attrs...)
+	attrs = append(slices.Clone(h.attrs), attrs...)
 
 	fmt.Fprintf(buf, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Message)
 	if length := len(r.Message); length < 40 {

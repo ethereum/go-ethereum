@@ -47,7 +47,7 @@ func TestLoopInterrupt(t *testing.T) {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.CreateAccount(address)
 		statedb.SetCode(address, common.Hex2Bytes(tt), tracing.CodeChangeUnspecified)
-		statedb.Finalise(true)
+		statedb.Finalise(params.Rules{IsEIP158: true})
 
 		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{})
 

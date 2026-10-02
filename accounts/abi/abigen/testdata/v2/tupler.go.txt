@@ -36,6 +36,11 @@ type Tupler struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *Tupler) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewTupler creates a new instance of Tupler.
 func NewTupler() *Tupler {
 	parsed, err := TuplerMetaData.ParseABI()

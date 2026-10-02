@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math/big"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -97,7 +98,7 @@ func (h *TerminalHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		wr:           h.wr,
 		lvl:          h.lvl,
 		useColor:     h.useColor,
-		attrs:        append(h.attrs, attrs...),
+		attrs:        append(slices.Clone(h.attrs), attrs...),
 		fieldPadding: make(map[string]int),
 	}
 }

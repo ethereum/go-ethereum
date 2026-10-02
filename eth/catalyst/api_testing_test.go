@@ -120,6 +120,48 @@ func TestBuildBlockV1(t *testing.T) {
 	})
 }
 
+func TestBuildBlockV1TargetGasLimit(t *testing.T) {
+	genesis, blocks := generateMergeChain(5, true)
+
+	time := blocks[len(blocks)-1].Time() + 5
+	genesis.Config.ShanghaiTime = &time
+	genesis.Config.CancunTime = &time
+	genesis.Config.PragueTime = &time
+	genesis.Config.OsakaTime = &time
+	genesis.Config.AmsterdamTime = &time
+	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	var (
+		api        = &testingAPI{eth: ethservice}
+		parent     = ethservice.BlockChain().CurrentBlock()
+		beaconRoot = common.Hash{42}
+		slot       = uint64(1)
+		// Within the per-block adjustment bound, so the built block
+		// must hit the target exactly.
+		target = parent.GasLimit - 1000
+	)
+	attrs := engine.PayloadAttributes{
+		Timestamp:             parent.Time + 5,
+		Random:                crypto.Keccak256Hash([]byte("test")),
+		SuggestedFeeRecipient: parent.Coinbase,
+		Withdrawals:           make([]*types.Withdrawal, 0),
+		BeaconRoot:            &beaconRoot,
+		SlotNumber:            &slot,
+		TargetGasLimit:        &target,
+	}
+	emptyTxs := []hexutil.Bytes{}
+	envelope, err := api.BuildBlockV1(parent.Hash(), attrs, &emptyTxs, nil)
+	if err != nil {
+		t.Fatalf("BuildBlockV1 failed: %v", err)
+	}
+	if got := envelope.ExecutionPayload.GasLimit; got != target {
+		t.Errorf("gas limit mismatch: got %d want %d", got, target)
+	}
+}
+
 func TestCommitBlockV1(t *testing.T) {
 	genesis, blocks := generateMergeChain(5, true)
 	n, ethservice := startEthService(t, genesis, blocks)

@@ -100,7 +100,9 @@ type freezerTable struct {
 	// should never be lower than itemOffset.
 	itemHidden atomic.Uint64
 
-	config      freezerTableConfig // table configuration (compression, prunability). Note: compression flag does not apply retroactively to existing files
+	// table configuration (compression, prunability). Note: compression flag
+	// does not apply retroactively to existing files.
+	config      freezerTableConfig
 	readonly    bool
 	maxFileSize uint32 // Max file size for data-files
 	name        string
@@ -611,8 +613,14 @@ func (t *freezerTable) truncateHead(items uint64) error {
 	if existing <= items {
 		return nil
 	}
-	if items < t.itemHidden.Load() {
-		return errors.New("truncation below tail")
+	hidden := t.itemHidden.Load()
+
+	// The new head sits below this table's tail, so nothing of it survives:
+	// everything above the new head is discarded here and everything below
+	// the tail was already pruned. Reset the table to be empty at the new
+	// head.
+	if items < hidden {
+		return t.resetTo(items)
 	}
 	// We need to truncate, save the old size for metrics tracking
 	oldSize, err := t.sizeNolock()

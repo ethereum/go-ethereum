@@ -46,7 +46,7 @@ var (
 	// persistentStateIDKey tracks the id of latest stored state(for path-based only).
 	persistentStateIDKey = []byte("LastStateID")
 
-	// lastPivotKey tracks the last pivot block used by fast sync (to reenable on sethead).
+	// lastPivotKey tracks the last pivot block used by snap sync (to reject sethead below it).
 	lastPivotKey = []byte("LastPivot")
 
 	// fastTrieProgressKey tracks the number of trie entries imported during fast sync.

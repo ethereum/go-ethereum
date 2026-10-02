@@ -35,6 +35,11 @@ type EventChecker struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *EventChecker) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewEventChecker creates a new instance of EventChecker.
 func NewEventChecker() *EventChecker {
 	parsed, err := EventCheckerMetaData.ParseABI()

@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -64,6 +65,24 @@ func (b *EthAPIBackend) CurrentBlock() *types.Header {
 }
 
 func (b *EthAPIBackend) SetHead(number uint64) error {
+	// Reject rewinding to a point before the snap-sync pivot. The earliest
+	// recoverable state is the pivot block, so a target below it would simply
+	// reset the chain to genesis, which is almost never the intent behind a
+	// manual debug_setHead.
+	if pivot := rawdb.ReadLastPivotNumber(b.eth.ChainDb()); pivot != nil && number < *pivot {
+		return fmt.Errorf("rewind target %d is before the snap-sync pivot %d", number, *pivot)
+	}
+	// In path mode the deepest reachable state is bounded by the amount of state
+	// histories retained. If the reverse diffs for the target have already been
+	// pruned, its state is no longer recoverable.
+	bc := b.eth.blockchain
+	if bc.TrieDB().Scheme() == rawdb.PathScheme {
+		if header := bc.GetHeaderByNumber(number); header != nil {
+			if !bc.HasState(header.Root) && !bc.StateRecoverable(header.Root) {
+				return errors.New("rewind target is not recoverable")
+			}
+		}
+	}
 	b.eth.handler.downloader.Cancel()
 	return b.eth.blockchain.SetHead(number)
 }
@@ -238,9 +257,9 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	stateDb, err := b.eth.BlockChain().StateAt(header)
+	stateDb, err := b.eth.BlockChain().StateAt(header.Root, header.Number, header.Time)
 	if err != nil {
-		stateDb, err = b.eth.BlockChain().HistoricState(header)
+		stateDb, err = b.eth.BlockChain().HistoricState(header.Root, header.Number, header.Time)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -263,9 +282,9 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
-		stateDb, err := b.eth.BlockChain().StateAt(header)
+		stateDb, err := b.eth.BlockChain().StateAt(header.Root, header.Number, header.Time)
 		if err != nil {
-			stateDb, err = b.eth.BlockChain().HistoricState(header)
+			stateDb, err = b.eth.BlockChain().HistoricState(header.Root, header.Number, header.Time)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -36,6 +36,11 @@ type DAO struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *DAO) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewDAO creates a new instance of DAO.
 func NewDAO() *DAO {
 	parsed, err := DAOMetaData.ParseABI()

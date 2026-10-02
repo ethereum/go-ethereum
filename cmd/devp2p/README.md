@@ -44,7 +44,7 @@ set to standard output. The following filters are supported:
 - `-limit <N>` limits the output set to N entries, taking the top N nodes by score
 - `-ip <CIDR>` filters nodes by IP subnet
 - `-min-age <duration>` filters nodes by 'first seen' time
-- `-eth-network <mainnet/sepolia/holesky>` filters nodes by "eth" ENR entry
+- `-eth-network <mainnet/sepolia/hoodi>` filters nodes by "eth" ENR entry
 - `-les-server` filters nodes by LES server support
 - `-snap` filters nodes by snap protocol support
 
@@ -79,6 +79,13 @@ Run `devp2p discv5 listen` to run a Discovery v5 node.
 
 Run `devp2p discv5 crawl <nodes.json path>` to create or update a JSON node set containing
 discv5 nodes.
+
+### Combined Discovery
+
+Run `devp2p discovery listen` to run a node speaking all supported discovery protocol
+versions (currently discv4 and discv5) on a single UDP port. For a single-protocol node, use
+`devp2p discv4 listen` or `devp2p discv5 listen`. Add `--rpc <addr>` to expose the
+per-protocol HTTP API (`discv4_*`, `discv5_*`).
 
 ### Discovery Test Suites
 

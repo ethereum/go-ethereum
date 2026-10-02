@@ -102,10 +102,10 @@ func (t *talkSystem) handleRequest(id enode.ID, addr netip.AddrPort, req *v5wire
 		}()
 	case <-timeout.C:
 		// Couldn't get it in time, drop the request.
+		t.dropCount++
 		if time.Since(t.lastLog) > 5*time.Second {
 			log.Warn("Dropping TALKREQ due to overload", "ndrop", t.dropCount)
 			t.lastLog = time.Now()
-			t.dropCount++
 		}
 	case <-t.transport.closeCtx.Done():
 		// Transport closed, drop the request.

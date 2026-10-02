@@ -27,6 +27,7 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/tracker"
 	"github.com/ethereum/go-ethereum/params"
@@ -66,7 +67,8 @@ type Peer struct {
 	version   uint              // Protocol version negotiated
 	lastRange atomic.Pointer[BlockRangeUpdatePacket]
 
-	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
+	txpool      TxPool // Transaction pool used by the broadcasters for liveness checks
+	blobpool    BlobPool
 	knownTxs    *knownCache        // Set of transaction hashes known to be known by this peer
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
 	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
@@ -74,6 +76,7 @@ type Peer struct {
 	tracker     *tracker.Tracker
 	reqDispatch chan *request  // Dispatch channel to send requests and track then until fulfillment
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
+	reqResend   chan *resend   // Dispatch channel to send follow-ups for still-pending requests
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
 	chainConfig *params.ChainConfig // Chain configuration for fork-aware validation
@@ -86,11 +89,11 @@ type Peer struct {
 
 // NewPeer creates a wrapper for a network connection and negotiated  protocol
 // version.
-func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool, chainConfig *params.ChainConfig) *Peer {
+func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool, blobpool BlobPool, chainConfig *params.ChainConfig) *Peer {
 	cap := p2p.Cap{Name: ProtocolName, Version: version}
 	id := p.ID().String()
 	peer := &Peer{
-		id:            p.ID().String(),
+		id:            id,
 		Peer:          p,
 		rw:            rw,
 		version:       version,
@@ -100,8 +103,10 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool, cha
 		tracker:       tracker.New(cap, id, 5*time.Minute),
 		reqDispatch:   make(chan *request),
 		reqCancel:     make(chan *cancel),
+		reqResend:     make(chan *resend),
 		resDispatch:   make(chan *response),
 		txpool:        txpool,
+		blobpool:      blobpool,
 		chainConfig:   chainConfig,
 		receiptBuffer: make(map[uint64]*receiptRequest),
 		term:          make(chan struct{}),
@@ -188,8 +193,14 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 // This method is a helper used by the async transaction announcer. Don't call it
 // directly as the queueing (memory) and transmission (bandwidth) costs should
 // not be managed directly.
-func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash, types []byte, sizes []uint32) error {
-	if err := p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket{Types: types, Sizes: sizes, Hashes: hashes}); err != nil {
+func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash, types []byte, sizes []uint32, cells types.CustodyBitmap) error {
+	var err error
+	if p.version >= ETH72 {
+		err = p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket72{Types: types, Sizes: sizes, Hashes: hashes, Mask: cells})
+	} else {
+		err = p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket71{Types: types, Sizes: sizes, Hashes: hashes})
+	}
+	if err != nil {
 		return err
 	}
 	// Mark all the transactions as known, but ensure we don't overflow our limits
@@ -248,6 +259,49 @@ func (p *Peer) ReplyReceiptsRLP69(id uint64, receipts rlp.RawList[*ReceiptList])
 	})
 }
 
+// ReplyCells is the response to GetCells.
+func (p *Peer) ReplyCells(id uint64, hashes []common.Hash, cells [][]kzg4844.Cell, mask types.CustodyBitmap) error {
+	inner := make([]rlp.RawList[kzg4844.Cell], len(cells))
+	for i, c := range cells {
+		raw, err := rlp.EncodeToRawList(c)
+		if err != nil {
+			return err
+		}
+		inner[i] = raw
+	}
+	rawCells, err := rlp.EncodeToRawList(inner)
+	if err != nil {
+		return err
+	}
+	return p2p.Send(p.rw, CellsMsg, &CellsPacket{
+		RequestId: id,
+		Hashes:    hashes,
+		Cells:     rawCells,
+		Mask:      mask,
+	})
+}
+
+// RequestPayload fetches a batch of cells from a remote node.
+func (p *Peer) RequestPayload(hashes []common.Hash, cell types.CustodyBitmap) error {
+	p.Log().Debug("Fetching batch of cells", "txcount", len(hashes), "cellcount", cell.OneCount())
+	id := rand.Uint64()
+
+	err := p.tracker.Track(tracker.Request{
+		ID:       id,
+		ReqCode:  GetCellsMsg,
+		RespCode: CellsMsg,
+		Size:     len(hashes),
+	})
+	if err != nil {
+		return err
+	}
+	return p2p.Send(p.rw, GetCellsMsg, &GetCellsRequestPacket{
+		RequestId: id,
+		Hashes:    hashes,
+		Mask:      cell,
+	})
+}
+
 // ReplyReceiptsRLP70 is the response to GetReceipts.
 func (p *Peer) ReplyReceiptsRLP70(id uint64, receipts rlp.RawList[*ReceiptList], lastBlockIncomplete bool) error {
 	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsPacket70{
@@ -258,7 +312,7 @@ func (p *Peer) ReplyReceiptsRLP70(id uint64, receipts rlp.RawList[*ReceiptList],
 }
 
 // ReplyBlockAccessLists is the response to GetBlockAccessLists (EIP-8159).
-func (p *Peer) ReplyBlockAccessLists(id uint64, list rlp.RawList[RawBlockAccessList]) error {
+func (p *Peer) ReplyBlockAccessLists(id uint64, list rlp.RawList[rlp.RawValue]) error {
 	return p2p.Send(p.rw, BlockAccessListsMsg, &BlockAccessListPacket{
 		RequestId: id,
 		List:      list,
@@ -414,6 +468,14 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamp
 				FirstBlockReceiptIndex: 0,
 				GetReceiptsRequest:     hashes,
 			},
+			// The buffer entry lives and dies with the request: the dispatcher
+			// releases it if the request is cancelled or fails to send, while
+			// a completed response consumes it on the delivery path.
+			cleanup: func() {
+				p.receiptBufferLock.Lock()
+				delete(p.receiptBuffer, id)
+				p.receiptBufferLock.Unlock()
+			},
 		}
 		p.receiptBufferLock.Lock()
 		p.receiptBuffer[id] = &receiptRequest{
@@ -441,38 +503,37 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamp
 	return req, nil
 }
 
-// HandlePartialReceipts re-request partial receipts
+// requestPartialReceipts re-requests the remainder of a partially delivered
+// receipt request under its original id.
 func (p *Peer) requestPartialReceipts(id uint64) error {
 	p.receiptBufferLock.Lock()
-	defer p.receiptBufferLock.Unlock()
 
 	// Do not re-request for the stale request
-	if _, ok := p.receiptBuffer[id]; !ok {
+	buffer, ok := p.receiptBuffer[id]
+	if !ok {
+		p.receiptBufferLock.Unlock()
 		return nil
 	}
-	lastBlock := len(p.receiptBuffer[id].list) - 1
-	lastReceipt := p.receiptBuffer[id].list[lastBlock].items.Len()
+	lastBlock := len(buffer.list) - 1
+	lastReceipt := buffer.list[lastBlock].items.Len()
 
-	hashes := p.receiptBuffer[id].request[lastBlock:]
+	hashes := buffer.request[lastBlock:]
+	p.receiptBufferLock.Unlock()
 
-	req := &Request{
-		id:   id,
-		sink: nil,
-		code: GetReceiptsMsg,
-		want: ReceiptsMsg,
-		data: &GetReceiptsPacket70{
-			RequestId:              id,
-			FirstBlockReceiptIndex: uint64(lastReceipt),
-			GetReceiptsRequest:     hashes,
-		},
-		numItems: len(hashes),
-	}
-	return p.dispatchRequest(req)
+	// The follow-up continues the original request under its original id,
+	// hand it to the dispatcher as a resend operation. The dispatcher only
+	// sends it if the original request is still pending, or silently drop
+	// the request if the original one is cancelled (with no error returned).
+	return p.dispatchResend(id, GetReceiptsMsg, len(hashes), &GetReceiptsPacket70{
+		RequestId:              id,
+		FirstBlockReceiptIndex: uint64(lastReceipt),
+		GetReceiptsRequest:     hashes,
+	})
 }
 
 // bufferReceipts validates a receipt packet and buffer the incomplete packet.
 // If the request is completed, it appends previously collected receipts.
-func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, lastBlockIncomplete bool, backend Backend) error {
+func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, lastBlockIncomplete bool) error {
 	p.receiptBufferLock.Lock()
 	defer p.receiptBufferLock.Unlock()
 
@@ -495,6 +556,11 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, las
 	}
 	// Buffer the last block when the response is incomplete.
 	if lastBlockIncomplete {
+		// Prevent sending a single empty receipt.
+		if len(receiptLists) == 1 && receiptLists[0].items.Len() == 0 {
+			delete(p.receiptBuffer, requestId)
+			return errors.New("no receipt delivered in incomplete receipt response")
+		}
 		lastBlock := len(receiptLists) - 1
 		if len(buffer.list) > 0 {
 			lastBlock += len(buffer.list) - 1

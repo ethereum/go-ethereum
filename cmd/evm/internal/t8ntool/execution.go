@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	stdmath "math"
 	"math/big"
 	"os"
 	"sort"
@@ -273,6 +272,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 
 		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		rules       = chainConfig.Rules(big.NewInt(int64(pre.Env.Number)), pre.Env.Random != nil, pre.Env.Timestamp)
 	)
 	if pre.AllocPath != "" {
 		var err error
@@ -425,7 +425,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			snapshot = statedb.Snapshot()
 			gp       = gaspool.Snapshot()
 		)
-		receipt, bal, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, evm)
+		receipt, bal, err := core.ApplyTransactionWithEVM(context.Background(), msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, evm)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
@@ -448,6 +448,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		blockAccessList.Merge(bal)
 	}
 
+	// TODO(rjl493456442) call engine.Finalize() instead
 	// Add mining reward? (-1 means rewards are disabled)
 	if miningReward >= 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
@@ -472,34 +473,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 		statedb.AddBalance(pre.Env.Coinbase, uint256.MustFromBig(minerReward), tracing.BalanceIncreaseRewardMineBlock)
 	}
-	// Apply withdrawals
-	for _, w := range pre.Env.Withdrawals {
-		// Amount is in gwei, turn into wei
-		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-		prev := statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
-
-		if isEIP4762 {
-			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
-		}
-		if isAmsterdam {
-			if w.Amount == 0 {
-				// Zero amount withdrawal, account is accessed potential
-				// without state changes.
-				blockAccessList.AccountRead(w.Address)
-			} else {
-				// Non-zero amount withdrawal, account is accessed with
-				// a balance change.
-				blockAccessList.BalanceChange(uint32(len(receipts)+1), w.Address, new(uint256.Int).Add(&prev, uint256.MustFromBig(amount)))
-			}
-		}
-	}
-
 	// Gather the execution-layer triggered requests.
 	var allLogs []*types.Log
 	for _, receipt := range receipts {
 		allLogs = append(allLogs, receipt.Logs...)
 	}
-	requests, bal, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, evm, uint32(len(receipts)+1))
+	requests, bal, err := core.PostExecution(context.Background(), chainConfig, vmContext.BlockNumber, vmContext.Time, allLogs, pre.Env.Withdrawals, evm, uint32(len(receipts)+1))
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("failed to process post-execution: %v", err))
 	}
@@ -509,7 +488,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 
 	// Commit block
-	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
+	root, err := statedb.Commit(rules, vmContext.BlockNumber.Uint64())
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
@@ -601,7 +580,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, err = statedb.Commit(0, false, false)
+	root, err = statedb.Commit(params.Rules{}, 0)
 	if err != nil {
 		panic(fmt.Errorf("failed to commit initial state: %v", err))
 	}
@@ -676,7 +655,7 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie bool) 
 		return nil, NewError(ErrorJson, fmt.Errorf("failed reading alloc closing token: %v", err))
 	}
 
-	root, err = statedb.Commit(0, false, false)
+	root, err = statedb.Commit(params.Rules{}, 0)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
 	}

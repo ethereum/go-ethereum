@@ -25,12 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 // Proof-of-stake protocol constants.
@@ -342,33 +339,11 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	return nil
 }
 
-// Finalize implements consensus.Engine and processes withdrawals on top.
-func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body, blockAccessIndex uint32, bal *bal.ConstructionBlockAccessList) {
+// Finalize implements consensus.Engine.
+func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
 	if !beacon.IsPoSHeader(header) {
-		beacon.ethone.Finalize(chain, header, state, body, blockAccessIndex, bal)
-		return
+		beacon.ethone.Finalize(chain, header, state, body)
 	}
-	// Withdrawals processing.
-	for _, w := range body.Withdrawals {
-		// Convert amount from gwei to wei.
-		amount := new(uint256.Int).SetUint64(w.Amount)
-		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
-		prev := state.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
-
-		// Populate the block-level accessList if Amsterdam is enabled
-		if chain.Config().IsAmsterdam(header.Number, header.Time) {
-			if w.Amount == 0 {
-				// Zero amount withdrawal, account is accessed potential
-				// without state changes.
-				bal.AccountRead(w.Address)
-			} else {
-				// Non-zero amount withdrawal, account is accessed with
-				// a balance change.
-				bal.BalanceChange(blockAccessIndex, w.Address, new(uint256.Int).Add(&prev, amount))
-			}
-		}
-	}
-	// No block reward which is issued by consensus layer instead.
 }
 
 // Seal generates a new sealing request for the given input block and pushes

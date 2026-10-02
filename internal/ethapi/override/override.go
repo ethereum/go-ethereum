@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -121,7 +122,7 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	// Now finalize the changes. Finalize is normally performed between transactions.
 	// By using finalize, the overrides are semantically behaving as
 	// if they were created in a transaction just before the tracing occur.
-	statedb.Finalise(false)
+	statedb.Finalise(params.Rules{})
 	return nil
 }
 
@@ -189,7 +190,8 @@ func (o *BlockOverrides) MakeHeader(header *types.Header) *types.Header {
 	if o.Number != nil {
 		h.Number = o.Number.ToInt()
 	}
-	if o.Difficulty != nil {
+	// Difficulty is a no-op on post-merge (zero-difficulty) headers.
+	if o.Difficulty != nil && (h.Difficulty == nil || h.Difficulty.Sign() != 0) {
 		h.Difficulty = o.Difficulty.ToInt()
 	}
 	if o.Time != nil {

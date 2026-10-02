@@ -322,7 +322,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		evm.SetPrecompiles(precompiles)
 	}
 	// Run pre-execution system calls
-	blockAccessList.Merge(core.PreExecution(ctx, header.ParentBeaconRoot, header.ParentHash, sim.chainConfig, evm, header.Number, header.Time))
+	blockAccessList.Merge(core.PreExecution(ctx, header.ParentBeaconRoot, parent, sim.chainConfig, evm, header.Number, header.Time))
 
 	var allLogs []*types.Log
 	for i, call := range block.Calls {
@@ -353,9 +353,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// Update the state with pending changes.
 		var root []byte
 		if sim.chainConfig.IsByzantium(blockContext.BlockNumber) {
-			blockAccessList.Merge(tracingStateDB.Finalise(true))
+			blockAccessList.Merge(tracingStateDB.Finalise(evm.GetRules()))
 		} else {
-			root = sim.state.IntermediateRoot(sim.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
+			root = sim.state.IntermediateRoot(evm.GetRules()).Bytes()
 		}
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, blockContext.Time, tx, gp.CumulativeUsed(), root)
 		blobGasUsed += receipts[i].BlobGasUsed
@@ -393,17 +393,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		header.BlobGasUsed = &blobGasUsed
 	}
 
-	// Process EIP-7685 requests
-	requests, bal, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm, uint32(len(block.Calls)+1))
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if requests != nil {
-		reqHash := types.CalcRequestsHash(requests)
-		header.RequestsHash = &reqHash
-	}
-	blockAccessList.Merge(bal)
-
 	blockBody := &types.Body{
 		Transactions: txes,
 	}
@@ -413,10 +402,20 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
 		blockBody.Withdrawals = *block.BlockOverrides.Withdrawals
 	}
+	// Process the withdrawals and EIP-7685 requests
+	requests, bal, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, blockBody.Withdrawals, evm, uint32(len(block.Calls)+1))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if requests != nil {
+		reqHash := types.CalcRequestsHash(requests)
+		header.RequestsHash = &reqHash
+	}
+	blockAccessList.Merge(bal)
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
 
 	// Apply the consensus-specific post-transaction changes
-	sim.b.Engine().Finalize(chainHeadReader, header, sim.state, blockBody, uint32(len(block.Calls)+1), blockAccessList)
+	sim.b.Engine().Finalize(chainHeadReader, header, sim.state, blockBody)
 
 	// Assemble the block
 	b := core.AssembleBlock(chainHeadReader, header, sim.state, blockBody, receipts, blockAccessList)
@@ -442,7 +441,7 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, head
 		call.Nonce = (*hexutil.Uint64)(&nonce)
 	}
 	// Let the call run wild unless explicitly specified.
-	remaining := gp.Gas()
+	remaining := gp.Available(sim.chainConfig.IsAmsterdam(header.Number, header.Time))
 	if call.Gas == nil {
 		call.Gas = (*hexutil.Uint64)(&remaining)
 	}

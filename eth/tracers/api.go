@@ -373,7 +373,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
 			evm := vm.NewEVM(context, statedb, api.backend.ChainConfig(), vm.Config{})
 
-			core.PreExecution(ctx, next.BeaconRoot(), next.ParentHash(), api.backend.ChainConfig(), evm, next.Number(), next.Time())
+			core.PreExecution(ctx, next.BeaconRoot(), block.Header(), api.backend.ChainConfig(), evm, next.Number(), next.Time())
 			evm.Release()
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
@@ -514,16 +514,16 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	defer release()
 
 	var (
-		roots              []common.Hash
-		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		chainConfig        = api.backend.ChainConfig()
-		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
-		evm                = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+		roots       []common.Hash
+		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
+		chainConfig = api.backend.ChainConfig()
+		rules       = chainConfig.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())
+		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		evm         = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
 	)
 	defer evm.Release()
 	// Run pre-execution system calls
-	core.PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), chainConfig, evm, block.Number(), block.Time())
+	core.PreExecution(ctx, block.BeaconRoot(), parent.Header(), chainConfig, evm, block.Number(), block.Time())
 
 	for i, tx := range block.Transactions() {
 		if err := ctx.Err(); err != nil {
@@ -543,7 +543,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		}
 		// Calling IntermediateRoot will internally call Finalize on the state
 		// so any modifications are written to the trie
-		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
+		roots = append(roots, statedb.IntermediateRoot(rules))
 	}
 	return roots, nil
 }
@@ -582,7 +582,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	defer evm.Release()
 
 	// Run pre-execution system calls
-	core.PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), api.backend.ChainConfig(), evm, block.Number(), block.Time())
+	core.PreExecution(ctx, block.BeaconRoot(), parent.Header(), api.backend.ChainConfig(), evm, block.Number(), block.Time())
 
 	// JS tracers have high overhead. In this case run a parallel
 	// process that generates states in one thread and traces txes
@@ -687,8 +687,7 @@ txloop:
 			break txloop
 		}
 		// Finalize the state so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(evm.GetRules())
 	}
 
 	close(jobs)
@@ -754,7 +753,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	defer evm.Release()
 
 	// Run pre-execution system calls
-	core.PreExecution(ctx, block.BeaconRoot(), block.ParentHash(), chainConfig, evm, block.Number(), block.Time())
+	core.PreExecution(ctx, block.BeaconRoot(), parent.Header(), chainConfig, evm, block.Number(), block.Time())
 
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
@@ -766,8 +765,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 				return dumps, err
 			}
 			// Finalize the state so any modifications are written to the trie
-			// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-			statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+			statedb.Finalise(evm.GetRules())
 			continue
 		}
 		// The transaction should be traced.
@@ -810,8 +808,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			return dumps, err
 		}
 		// Finalize the state so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(chainConfig.IsEIP158(block.Number()))
+		statedb.Finalise(evm.GetRules())
 
 		// If we've traced the transaction we were looking for, abort
 		if tx.Hash() == txHash {
@@ -878,7 +875,12 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 // after executing the specified block. However, if a transaction index is provided,
 // the trace will be conducted on the state after executing the specified transaction
 // within the specified block.
-func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
+// If no block is specified, the latest block is used.
+func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
+	if blockNrOrHash == nil {
+		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		blockNrOrHash = &latest
+	}
 	// Try to retrieve the specified block
 	var (
 		err         error
@@ -1018,7 +1020,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex, uint32(txctx.TxIndex+1))
 
-	_, _, err = core.ApplyTransactionWithEVM(message, core.NewGasPool(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, vmctx.Time, tx, evm)
+	_, _, err = core.ApplyTransactionWithEVM(ctx, message, core.NewGasPool(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, vmctx.Time, tx, evm)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}

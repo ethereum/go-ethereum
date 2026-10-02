@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // The EIP27928 reader utilizes a hierarchical architecture to optimize state
@@ -86,7 +87,6 @@ type prefetchStateReader struct {
 	closeOnce sync.Once
 }
 
-// nolint:unused
 func newPrefetchStateReader(reader StateReader, accessList map[common.Address][]common.Hash, nThreads int) *prefetchStateReader {
 	tasks := make([]*fetchTask, 0, len(accessList))
 	for addr, slots := range accessList {
@@ -193,13 +193,28 @@ func (r *prefetchStateReader) process(start, limit int) {
 	}
 }
 
+// NewBlockExecutionReader wraps base with a shared, concurrency-safe cache so
+// that any state resolved once, whether by the background prefetcher or by
+// transaction execution, is not fetched from the underlying reader again.
+func NewBlockExecutionReader(base Reader, prefetch map[common.Address][]common.Hash, threads int) (Reader, func()) {
+	var (
+		cache = newStateReaderWithCache(base)
+		stop  = func() {}
+	)
+	if len(prefetch) > 0 && threads > 0 {
+		pf := newPrefetchStateReader(cache, prefetch, threads)
+		stop = pf.Close
+	}
+	return newReader(base, newStateReaderWithStats(cache)), stop
+}
+
 // ReaderWithBlockLevelAccessList provides state access that reflects the
 // pre-transition state combined with the mutations made by transactions
 // prior to TxIndex.
 type ReaderWithBlockLevelAccessList struct {
 	Reader
-	AccessList *bal.ConstructionBlockAccessList
-	TxIndex    int
+	lookup  *bal.Lookup
+	txIndex uint32
 }
 
 // NewReaderWithBlockLevelAccessList constructs a reader for accessing states
@@ -209,39 +224,85 @@ type ReaderWithBlockLevelAccessList struct {
 // - 0 for pre‑execution system contract calls.
 // - 1 … n for transactions (in block order).
 // - n + 1 for post‑execution system contract calls.
-func NewReaderWithBlockLevelAccessList(base Reader, accessList *bal.ConstructionBlockAccessList, txIndex int) *ReaderWithBlockLevelAccessList {
+func NewReaderWithBlockLevelAccessList(base Reader, lookup *bal.Lookup, txIndex int) *ReaderWithBlockLevelAccessList {
 	return &ReaderWithBlockLevelAccessList{
-		Reader:     base,
-		AccessList: accessList,
-		TxIndex:    txIndex,
+		Reader:  base,
+		lookup:  lookup,
+		txIndex: uint32(txIndex),
 	}
 }
 
 // Account implements Reader, returning the account with the specific address.
+//
+// The returned account reflects the pre-transition state overlaid with all
+// mutations made by call frames prior to the reader's TxIndex.
 func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (*types.StateAccount, error) {
-	panic("implement me")
+	base, err := r.Reader.Account(addr)
+	if err != nil {
+		return nil, err
+	}
+	balance, nonce, code, hasBalance, hasNonce, hasCode := r.lookup.AccountChanges(addr, r.txIndex)
+
+	// No mutation precedes the current call frame, return the base account as is.
+	if !hasBalance && !hasNonce && !hasCode {
+		return base, nil
+	}
+	// Overlay the mutations on top of a copy of the base account. The base
+	// account must not be mutated in place: with a shared cache in front of the
+	// underlying reader, the same instance is handed to concurrent readers.
+	account := types.NewEmptyStateAccount()
+	if base != nil {
+		account = base.Copy()
+	}
+	if hasBalance {
+		account.Balance = balance.Clone()
+	}
+	if hasNonce {
+		account.Nonce = nonce
+	}
+	if hasCode {
+		if len(code) == 0 {
+			account.CodeHash = types.EmptyCodeHash.Bytes()
+		} else {
+			account.CodeHash = crypto.Keccak256(code)
+		}
+	}
+	return account, nil
 }
 
 // Storage implements Reader, returning the storage slot with the specific
 // address and slot key.
 func (r *ReaderWithBlockLevelAccessList) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	panic("implement me")
+	if value, ok := r.lookup.Storage(addr, slot, r.txIndex); ok {
+		return value, nil
+	}
+	return r.Reader.Storage(addr, slot)
 }
 
 // Has implements Reader, returning the flag indicating whether the contract
 // code with specified address and hash exists or not.
 func (r *ReaderWithBlockLevelAccessList) Has(addr common.Address, codeHash common.Hash) bool {
-	panic("implement me")
+	if _, ok := r.lookup.Code(addr, r.txIndex); ok {
+		return true
+	}
+	return r.Reader.Has(addr, codeHash)
 }
 
 // Code implements Reader, returning the contract code with specified address
-// and hash.
-func (r *ReaderWithBlockLevelAccessList) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	panic("implement me")
+// and hash. Code created earlier in the block (and therefore absent from the
+// pre-transition state) is served directly from the access list.
+func (r *ReaderWithBlockLevelAccessList) Code(addr common.Address, codeHash common.Hash) []byte {
+	if code, ok := r.lookup.Code(addr, r.txIndex); ok {
+		return code
+	}
+	return r.Reader.Code(addr, codeHash)
 }
 
 // CodeSize implements Reader, returning the contract code size with specified
 // address and hash.
-func (r *ReaderWithBlockLevelAccessList) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	panic("implement me")
+func (r *ReaderWithBlockLevelAccessList) CodeSize(addr common.Address, codeHash common.Hash) int {
+	if code, ok := r.lookup.Code(addr, r.txIndex); ok {
+		return len(code)
+	}
+	return r.Reader.CodeSize(addr, codeHash)
 }

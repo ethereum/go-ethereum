@@ -84,6 +84,10 @@ func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack fun
 				// New log arrived, parse the event and forward to the user
 				ev, err := unpack(&log)
 				if err != nil {
+					// If the signature doesn't match, skip this log.
+					if errors.Is(err, ErrEventSignatureMismatch) {
+						continue
+					}
 					return err
 				}
 
