@@ -1871,6 +1871,28 @@ func TestAdd(t *testing.T) {
 				},
 			},
 		},
+		// Gapped transactions should be promoted if the gap is filled by a block
+		{
+			seeds: map[string]seed{
+				"alice": {balance: 1000000, nonce: 10},
+			},
+			adds: []addtx{
+				{
+					from: "alice",
+					tx:   makeUnsignedTx(11, 1, 1, 1),
+				},
+			},
+			block: []addtx{
+				{
+					from: "alice",
+					tx:   makeUnsignedTx(10, 1, 1, 1),
+					check: func(pool *BlobPool, tx *types.Transaction) bool {
+						from, _ := types.Sender(pool.signer, tx)
+						return len(pool.index[from]) == 1 && len(pool.gapped[from]) == 0
+					},
+				},
+			},
+		},
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend
@@ -1975,6 +1997,12 @@ func TestAdd(t *testing.T) {
 			}
 			pool.Reset(chain.CurrentBlock(), header)
 			verifyPoolInternals(t, pool)
+
+			for j, inc := range tt.block {
+				if inc.check != nil && !inc.check(pool, txs[j]) {
+					t.Errorf("test %d, block tx %d: custom check failed", i, j)
+				}
+			}
 		}
 		// Close down the test
 		pool.Close()
