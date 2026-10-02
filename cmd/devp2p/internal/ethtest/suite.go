@@ -985,7 +985,7 @@ the transactions using a GetPooledTransactions request.`)
 
 	// Send announcement.
 	ann := eth.NewPooledTransactionHashesPacket72{Types: txTypes, Sizes: sizes, Hashes: hashes}
-	err = conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann)
+	err = conn.WriteAnnounce(ann)
 	if err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
 	}
@@ -1051,11 +1051,19 @@ func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs typ
 			panic("blob tx signing failed")
 		}
 		blobs = append(blobs, sidecar.Blobs)
-		scNoBlob := sidecar.Copy()
-		scNoBlob.Blobs = nil
-		txs = append(txs, tx.WithBlobTxSidecar(scNoBlob))
+		txs = append(txs, tx)
 	}
 	return txs, blobs
+}
+
+func blobTxForProtocol(tx *types.Transaction, version uint) *types.Transaction {
+	sidecar := tx.BlobTxSidecar()
+	if version < eth.ETH72 || sidecar == nil {
+		return tx
+	}
+	sidecar = sidecar.Copy()
+	sidecar.Blobs = nil
+	return tx.WithBlobTxSidecar(sidecar)
 }
 
 func (s *Suite) TestBlobViolations(t *utesting.T) {
@@ -1101,7 +1109,12 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 		if err := conn.peer(s.chain, nil); err != nil {
 			t.Fatalf("peering failed: %v", err)
 		}
-		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, test.ann); err != nil {
+		for i, tx := range test.resp {
+			wireTx := blobTxForProtocol(tx, conn.negotiatedProtoVersion)
+			test.ann.Sizes[i] -= uint32(tx.Size() - wireTx.Size())
+			test.resp[i] = wireTx
+		}
+		if err := conn.WriteAnnounce(test.ann); err != nil {
 			t.Fatalf("sending announcement failed: %v", err)
 		}
 		req := new(eth.GetPooledTransactionsPacket)
@@ -1227,6 +1240,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
+		badTx := blobTxForProtocol(badTx, conn.negotiatedProtoVersion)
 		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
 			Sizes:  []uint32{uint32(badTx.Size())},
@@ -1234,7 +1248,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			Mask:   types.CustodyBitmapAll,
 		}
 
-		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		if err := conn.WriteAnnounce(ann); err != nil {
 			errc <- fmt.Errorf("sending announcement failed: %v", err)
 			return
 		}
@@ -1279,6 +1293,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
+		tx := blobTxForProtocol(tx, conn.negotiatedProtoVersion)
 		ann := eth.NewPooledTransactionHashesPacket72{
 			Types:  []byte{types.BlobTxType},
 			Sizes:  []uint32{uint32(tx.Size())},
@@ -1286,7 +1301,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			Mask:   types.CustodyBitmapAll,
 		}
 
-		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		if err := conn.WriteAnnounce(ann); err != nil {
 			errc <- fmt.Errorf("sending first announcement failed: %v", err)
 			return
 		}
@@ -1367,7 +1382,9 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 
 	txs, _ := s.makeBlobTxs(10, 2, 0x30)
 	txsByHash := make(map[common.Hash]*types.Transaction, len(txs))
-	for _, tx := range txs {
+	for i, tx := range txs {
+		tx = blobTxForProtocol(tx, eth.ETH72)
+		txs[i] = tx
 		txsByHash[tx.Hash()] = tx
 	}
 
@@ -1395,7 +1412,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 		Hashes: hashes,
 		Mask:   types.CustodyBitmapAll,
 	}
-	if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn.WriteAnnounce(ann); err != nil {
 		t.Fatalf("announce failed: %v", err)
 	}
 
@@ -1521,7 +1538,7 @@ and that providing valid cells causes the tx to enter the pool.`)
 	}
 
 	txs, blobs := s.makeBlobTxs(1, 1, 0x31)
-	tx := txs[0]
+	tx := blobTxForProtocol(txs[0], eth.ETH72)
 	blob := blobs[0]
 
 	// Two peers ensure GetCells arrives regardless of full/partial fetch path.
@@ -1549,10 +1566,10 @@ and that providing valid cells causes the tx to enter the pool.`)
 		Hashes: []common.Hash{tx.Hash()},
 		Mask:   types.CustodyBitmapAll,
 	}
-	if err := conn1.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn1.WriteAnnounce(ann); err != nil {
 		t.Fatalf("conn1 announce failed: %v", err)
 	}
-	if err := conn2.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn2.WriteAnnounce(ann); err != nil {
 		t.Fatalf("conn2 announce failed: %v", err)
 	}
 
@@ -1607,7 +1624,7 @@ while the other peer is not.`)
 	}
 
 	txs, blobs := s.makeBlobTxs(1, 1, 0x32)
-	tx := txs[0]
+	tx := blobTxForProtocol(txs[0], eth.ETH72)
 	blob := blobs[0]
 
 	conn1, err := s.dial()
@@ -1634,10 +1651,10 @@ while the other peer is not.`)
 		Hashes: []common.Hash{tx.Hash()},
 		Mask:   types.CustodyBitmapAll,
 	}
-	if err := conn1.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn1.WriteAnnounce(ann); err != nil {
 		t.Fatalf("conn1 announce failed: %v", err)
 	}
-	if err := conn2.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn2.WriteAnnounce(ann); err != nil {
 		t.Fatalf("conn2 announce failed: %v", err)
 	}
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -47,11 +49,19 @@ func makeJWTSecret(t *testing.T) (string, [32]byte, error) {
 }
 
 func TestEthSuite(t *testing.T) {
+	testEthSuite(t, ethproto.ETH72)
+}
+
+func TestEthSuiteEth71(t *testing.T) {
+	testEthSuite(t, ethproto.ETH71)
+}
+
+func testEthSuite(t *testing.T, ethVersion uint) {
 	jwtPath, secret, err := makeJWTSecret(t)
 	if err != nil {
 		t.Fatalf("could not make jwt secret: %v", err)
 	}
-	geth, err := runGeth("./testdata", jwtPath)
+	geth, err := runGeth("./testdata", jwtPath, ethVersion)
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
 	}
@@ -80,7 +90,7 @@ func TestSnapSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not make jwt secret: %v", err)
 	}
-	geth, err := runGeth("./testdata", jwtPath)
+	geth, err := runGeth("./testdata", jwtPath, ethproto.ETH72)
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
 	}
@@ -105,7 +115,7 @@ func TestSnap2Suite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not make jwt secret: %v", err)
 	}
-	geth, err := runGeth("./testdata", jwtPath)
+	geth, err := runGeth("./testdata", jwtPath, ethproto.ETH72)
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
 	}
@@ -127,7 +137,7 @@ func TestSnap2Suite(t *testing.T) {
 }
 
 // runGeth creates and starts a geth node
-func runGeth(dir string, jwtPath string) (*node.Node, error) {
+func runGeth(dir string, jwtPath string, ethVersion uint) (*node.Node, error) {
 	stack, err := node.New(&node.Config{
 		AuthAddr: "127.0.0.1",
 		AuthPort: 0,
@@ -148,6 +158,9 @@ func runGeth(dir string, jwtPath string) (*node.Node, error) {
 		stack.Close()
 		return nil, err
 	}
+	stack.Server().Protocols = slices.DeleteFunc(stack.Server().Protocols, func(protocol p2p.Protocol) bool {
+		return protocol.Name == "eth" && protocol.Version > ethVersion
+	})
 	if err = stack.Start(); err != nil {
 		stack.Close()
 		return nil, err
