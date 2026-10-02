@@ -86,7 +86,7 @@ func TestEIP8246SelfdestructNoBurn(t *testing.T) {
 	// which the chain-generation harness on this branch does not yet populate
 	// consistently — an orthogonal concern to the EIP-8246 state semantics under
 	// test here.
-	state, err := chain.StateAt(blocks[0].Header())
+	state, err := chain.StateAt(blocks[0].Root(), blocks[0].Number(), blocks[0].Time())
 	if err != nil {
 		t.Fatalf("failed to obtain block state: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestEIP8246SelfdestructRefunded(t *testing.T) {
 		t.Fatalf("failed to create chain: %v", err)
 	}
 	defer chain.Stop()
-	state, err := chain.StateAt(blocks[0].Header())
+	state, err := chain.StateAt(blocks[0].Root(), blocks[0].Number(), blocks[0].Time())
 	if err != nil {
 		t.Fatalf("failed to obtain block state: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestEIP8246Create2RecreatesBalanceOnly(t *testing.T) {
 		t.Fatalf("failed to create chain: %v", err)
 	}
 	defer chain.Stop()
-	state, err := chain.StateAt(blocks[1].Header())
+	state, err := chain.StateAt(blocks[1].Root(), blocks[1].Number(), blocks[1].Time())
 	if err != nil {
 		t.Fatalf("failed to obtain block state: %v", err)
 	}

@@ -162,7 +162,7 @@ func setupTestBlockchain(t *testing.T, genesis *core.Genesis, tx *types.Transact
 	if genesisBlock == nil {
 		t.Fatalf("failed to get genesis block")
 	}
-	statedb, err := blockchain.StateAt(genesisBlock.Header())
+	statedb, err := blockchain.StateAt(genesisBlock.Root(), genesisBlock.Number(), genesisBlock.Time())
 	if err != nil {
 		t.Fatalf("failed to get state: %v", err)
 	}

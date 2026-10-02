@@ -19,16 +19,23 @@ package core
 import (
 	"fmt"
 	"math"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // GasPool tracks the amount of gas available for transaction execution
 // within a block, along with the cumulative gas consumed.
 type GasPool struct {
-	remaining      uint64
-	initial        uint64
-	cumulativeUsed uint64
+	initial        uint64 // block gas limit, the budget of every dimension
+	cumulativeUsed uint64 // gas used as reported in the receipts
 
-	// After 8037 Block gas used is max(cumulativeExecution, cumulativeState).
+	// Before Amsterdam the pool is a single budget: a transaction reserves
+	// its whole gas limit up front and returns the unused part afterwards.
+	remaining uint64
+
+	// After Amsterdam (EIP-8037) the pool has two dimensions, execution and
+	// state, each charged once the transaction ran. The block gas used is
+	// the larger of the two.
 	cumulativeExecution uint64
 	cumulativeState     uint64
 }
@@ -42,7 +49,7 @@ func NewGasPool(amount uint64) *GasPool {
 }
 
 // CheckGasLegacy deducts the given amount from the pool if enough gas is
-// available and returns an error otherwise.
+// available and returns an error otherwise. Used before Amsterdam.
 func (gp *GasPool) CheckGasLegacy(amount uint64) error {
 	if gp.remaining < amount {
 		return ErrGasLimitReached
@@ -65,7 +72,7 @@ func (gp *GasPool) CheckGasAmsterdam(executionReservation, stateReservation uint
 }
 
 // ChargeGasLegacy adds the refunded gas back to the pool and updates
-// the cumulative gas usage accordingly.
+// the cumulative gas usage accordingly. Used before Amsterdam.
 func (gp *GasPool) ChargeGasLegacy(returned uint64, gasUsed uint64) error {
 	if gp.remaining > math.MaxUint64-returned {
 		return fmt.Errorf("%w: remaining: %d, returned: %d", ErrGasLimitOverflow, gp.remaining, returned)
@@ -93,15 +100,23 @@ func (gp *GasPool) ChargeGasAmsterdam(txExecution, txState, receiptGasUsed uint6
 	gp.cumulativeExecution = cumulativeExecution
 	gp.cumulativeState = cumulativeState
 	gp.cumulativeUsed += receiptGasUsed
-	// TODO(rjl, marius), the semantics of this counter is slightly different
-	// in the context of Amsterdam, the API Gas() should be reworked.
-	gp.remaining = gp.initial - gp.cumulativeExecution
 	return nil
 }
 
-// Gas returns the amount of gas remaining in the pool.
-func (gp *GasPool) Gas() uint64 {
-	return gp.remaining
+// Available returns the largest gas limit a further transaction can reserve.
+// After Amsterdam (EIP-8037) the execution reservation is capped at MaxTxGas
+// while the state reservation is the full limit, so the execution dimension
+// stops binding once it holds a full cap.
+func (gp *GasPool) Available(amsterdam bool) uint64 {
+	if !amsterdam {
+		return gp.remaining
+	}
+	exec := gp.initial - gp.cumulativeExecution
+	state := gp.initial - gp.cumulativeState
+	if exec >= params.MaxTxGas {
+		return state
+	}
+	return min(exec, state)
 }
 
 // CumulativeUsed returns the cumulative gas consumed for receipt tracking.
@@ -156,5 +171,9 @@ func (gp *GasPool) Set(other *GasPool) {
 }
 
 func (gp *GasPool) String() string {
+	if gp.cumulativeExecution > 0 || gp.cumulativeState > 0 {
+		return fmt.Sprintf("initial: %d, execution: %d, state: %d, cumulative used: %d",
+			gp.initial, gp.cumulativeExecution, gp.cumulativeState, gp.cumulativeUsed)
+	}
 	return fmt.Sprintf("initial: %d, remaining: %d, cumulative used: %d", gp.initial, gp.remaining, gp.cumulativeUsed)
 }

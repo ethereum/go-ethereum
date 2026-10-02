@@ -183,7 +183,7 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 	for _, r := range receipts {
 		allLogs = append(allLogs, r.Logs...)
 	}
-	_, postBal, err := core.PostExecution(ctx, config, header.Number, header.Time, allLogs, evm, uint32(tcount+1))
+	_, postBal, err := core.PostExecution(ctx, config, header.Number, header.Time, allLogs, block.Withdrawals(), evm, uint32(tcount+1))
 	if err != nil {
 		return nil, nil, 0, common.Hash{}, err
 	}
@@ -193,7 +193,7 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 		Transactions: committed,
 		Withdrawals:  block.Withdrawals(),
 	}
-	bc.Engine().Finalize(bc, header, statedb, &body, uint32(tcount+1), blockAL)
+	bc.Engine().Finalize(bc, header, statedb, &body)
 	root := statedb.IntermediateRoot(evm.GetRules())
 
 	return blockAL.ToEncodingObj(), receipts, gp.Used(), root, nil

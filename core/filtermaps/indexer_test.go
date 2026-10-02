@@ -103,8 +103,10 @@ func TestIndexerRandomRange(t *testing.T) {
 			ts.testDisableSnapshots = rand.Intn(2) == 0
 			ts.setHistory(uint64(history), noHistory)
 		case 1:
-			// change head to random position of random fork
-			fork, head = rand.Intn(len(forks)), rand.Intn(1001)
+			// change head to random position of random fork. Genesis is left out
+			// because a reset index is not initialized until the head moves past
+			// it, so WaitIdle would never return.
+			fork, head = rand.Intn(len(forks)), rand.Intn(1000)+1
 			ts.chain.setCanonicalChain(forks[fork][:head+1])
 		case 2:
 			checkSnapshot = false

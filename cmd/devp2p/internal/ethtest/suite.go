@@ -1039,11 +1039,9 @@ func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs typ
 	from, nonce := s.chain.GetSender(5 + s.blobSenders)
 	s.blobSenders++
 	for i := 0; i < txCount; i++ {
-		// Make blob data, max of 2 blobs per tx.
-		blobdata := make([]byte, min(blobCount, 2))
+		blobdata := make([]byte, blobCount)
 		for i := range blobdata {
 			blobdata[i] = discriminator
-			blobCount -= 1
 		}
 		sidecar := makeSidecar(blobdata...)
 		inner := &types.BlobTx{
@@ -1375,7 +1373,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	txs, _ := s.makeBlobTxs(10, 20, 0x30)
+	txs, _ := s.makeBlobTxs(10, 2, 0x30)
 	txsByHash := make(map[common.Hash]*types.Transaction, len(txs))
 	for _, tx := range txs {
 		txsByHash[tx.Hash()] = tx
