@@ -499,8 +499,16 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	args.Nonce = &nonce
 	// As in eth_call, CallDefaults runs omitted or over-cap gas at the RPC gas cap.
 	vmctx := env.vmctx
+	// Before London only gasPrice priced a transaction, so dynamic fee fields are rejected there, even
+	// with zero values, rather than dropped: CallDefaults prices such a call at gasPrice 0 (H14). The
+	// fields are noted first, and the rejection follows CallDefaults, whose invalid-parameter checks
+	// take precedence over this block-dependent one.
+	dynamicFees := args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil
 	if err := args.CallDefaults(api.api.backend.RPCGasCap(), vmctx.BaseFee, api.api.backend.ChainConfig().ChainID); err != nil {
 		return nil, traceInvalid("invalid call: %v", err)
+	}
+	if dynamicFees && !api.api.backend.ChainConfig().IsLondon(vmctx.BlockNumber) {
+		return nil, traceCallRejection(fmt.Errorf("%w: maxFeePerGas or maxPriorityFeePerGas before London", core.ErrTxTypeNotSupported))
 	}
 	// An explicit type adds no requirement of its own (H14): a supplied feature
 	// that is not active at the selected fork is rejected by message validation.
