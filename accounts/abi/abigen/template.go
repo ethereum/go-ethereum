@@ -60,6 +60,7 @@ type tmplContractV2 struct {
 }
 
 func newTmplContractV2(typ string, abiStr string, bytecode string, constructor abi.Method, cb *contractBinder) *tmplContractV2 {
+	constructor.Inputs = normalizeConstructorArgs(constructor.Inputs, decapitalise(abi.ToCamelCase(typ)))
 	// Strip any whitespace from the JSON ABI
 	strippedABI := strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) {
