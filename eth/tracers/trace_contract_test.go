@@ -237,9 +237,9 @@ func TestTraceNamespaceCallRejectionFallback(t *testing.T) {
 }
 
 func TestTraceNamespaceInactiveCallTypes(t *testing.T) {
-	// An explicit type must be active at the selected block even when no field
-	// of that type is supplied: types 1 and 2 activate at blocks 1 and 2, and
-	// this chain never reaches Cancun or Prague, so types 3 and 4 never activate.
+	// An explicit type adds no requirement of its own, so a type alone runs before
+	// its fork, while a supplied feature does not: types 1 and 2 activate at blocks
+	// 1 and 2, and this chain never reaches Cancun or Prague (H14).
 	config := *params.AllEthashProtocolChanges
 	config.BerlinBlock, config.LondonBlock = big.NewInt(1), big.NewInt(2)
 	config.ArrowGlacierBlock, config.GrayGlacierBlock = nil, nil
@@ -261,14 +261,32 @@ func TestTraceNamespaceInactiveCallTypes(t *testing.T) {
 					} else {
 						err = client.Call(&result, method, []any{[]any{args, TraceTypes{}}}, hexutil.EncodeUint64(block))
 					}
-					if block < kind || kind > 2 {
-						requireTraceCode(t, err, -32003)
-					} else if err != nil {
-						t.Fatalf("%s rejected an active type: %v", method, err)
+					if err != nil {
+						t.Fatalf("%s rejected type %d alone: %v", method, kind, err)
 					}
 				}
 			})
 		}
+	}
+	for block := uint64(0); block <= 1; block++ {
+		args := map[string]any{"from": traceTestSender, "to": traceTestTarget, "accessList": types.AccessList{{Address: traceTestTarget, StorageKeys: []common.Hash{}}}}
+		var result json.RawMessage
+		err := client.Call(&result, "trace_call", args, TraceTypes{}, hexutil.EncodeUint64(block))
+		if block == 0 {
+			requireTraceCode(t, err, -32003)
+		} else if err != nil {
+			t.Fatalf("rejected an access list at Berlin: %v", err)
+		}
+	}
+	// Blob fields and an authorization list are supplied features this chain never activates.
+	for _, feature := range []map[string]any{
+		{"blobVersionedHashes": []common.Hash{{0: 1}}},
+		{"authorizationList": []types.SetCodeAuthorization{{Address: traceTestTarget}}},
+	} {
+		feature["from"], feature["to"] = traceTestSender, traceTestTarget
+		var result json.RawMessage
+		requireTraceCode(t, client.Call(&result, "trace_call", feature, TraceTypes{}, "0x2"), -32003)
+		requireTraceCode(t, client.Call(&result, "trace_callMany", []any{[]any{feature, TraceTypes{}}}, "0x2"), -32003)
 	}
 }
 
