@@ -2274,3 +2274,181 @@ func TestForkchoiceUpdatedV4(t *testing.T) {
 		t.Fatalf("Unexpected status with nil custody bitmap: got %s, want %s", resp.PayloadStatus.Status, engine.VALID)
 	}
 }
+
+// TestSyncFetchedHeadSuperseded tests that a head fetched in the background is not synced to
+// once a forkchoice update has taken effect since it was requested.
+func TestSyncFetchedHeadSuperseded(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+	var synced []common.Hash
+	api.syncTo = func(head, finalized *types.Header) error {
+		synced = append(synced, head.Hash())
+		return nil
+	}
+	headA := &types.Header{Number: big.NewInt(100), Extra: []byte("a")}
+
+	// an update took effect after A was requested: the fetched A is dropped
+	req := &headFetch{head: headA.Hash(), epoch: api.fetchEpoch}
+	api.fetchEpoch++
+	api.syncFetchedHead(headA, req)
+	if len(synced) != 0 {
+		t.Fatalf("synced to a superseded head: %v", synced)
+	}
+	// nothing took effect since A was requested: synced
+	req = &headFetch{head: headA.Hash(), epoch: api.fetchEpoch}
+	api.syncFetchedHead(headA, req)
+	if len(synced) != 1 || synced[0] != headA.Hash() {
+		t.Fatalf("expected a sync to %x, got %v", headA.Hash(), synced)
+	}
+}
+
+// TestForkchoiceHeadFetchQueue tests the background fetch of unknown forkchoice heads through
+// forkchoice updates: the update returns while the fetch is in progress, a head requested
+// meanwhile replaces the waiting one, a fetched head is synced to while the later updates only
+// requested heads still being fetched, a head requested again during its fetch is fetched
+// once, and a fetched head is dropped once an update to a known head has taken effect.
+func TestForkchoiceHeadFetchQueue(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+	headers := make(map[common.Hash]*types.Header)
+	newHead := func(name string) common.Hash {
+		header := &types.Header{Number: big.NewInt(100), Extra: []byte(name)}
+		headers[header.Hash()] = header
+		return header.Hash()
+	}
+	var (
+		headA, headB, headC, headD = newHead("a"), newHead("b"), newHead("c"), newHead("d")
+
+		fetching = make(chan common.Hash, 4) // fetches started
+		release  = make(chan struct{})       // lets the fetch in progress finish
+		synced   = make(chan common.Hash, 4)
+		done     = make(chan struct{}) // releases the hooks when the test ends
+	)
+	defer func() {
+		// release the hooks and let the fetch worker stop before the node closes
+		close(done)
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			api.headFetchLock.Lock()
+			busy := api.headFetching
+			api.headFetchLock.Unlock()
+			if !busy {
+				return
+			}
+		}
+	}()
+	api.getHeader = func(hash common.Hash) (*types.Header, error) {
+		select {
+		case fetching <- hash:
+		case <-done:
+		}
+		select {
+		case <-release:
+			return headers[hash], nil
+		case <-done:
+			return nil, errors.New("test ended")
+		}
+	}
+	api.syncTo = func(head, finalized *types.Header) error {
+		select {
+		case synced <- head.Hash():
+		case <-done:
+		}
+		return nil
+	}
+	update := func(head common.Hash, want string) {
+		t.Helper()
+		result := make(chan error, 1)
+		go func() {
+			resp, err := api.ForkchoiceUpdatedV1(context.Background(), engine.ForkchoiceStateV1{HeadBlockHash: head}, nil)
+			if err == nil && resp.PayloadStatus.Status != want {
+				err = fmt.Errorf("status %s, want %s", resp.PayloadStatus.Status, want)
+			}
+			result <- err
+		}()
+		select {
+		case err := <-result:
+			if err != nil {
+				t.Fatalf("forkchoice update to %x: %v", head, err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("forkchoice update to %x blocked", head)
+		}
+	}
+	expect := func(ch chan common.Hash, want common.Hash, what string) {
+		t.Helper()
+		select {
+		case have := <-ch:
+			if have != want {
+				t.Fatalf("%s: have %x, want %x", what, have, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: timeout waiting for %x", what, want)
+		}
+	}
+	finish := func() { // lets the fetch in progress finish
+		t.Helper()
+		select {
+		case release <- struct{}{}:
+		case <-time.After(5 * time.Second):
+			t.Fatal("no fetch in progress")
+		}
+	}
+	idle := func() { // waits for the fetch worker to stop; no further fetch may start
+		t.Helper()
+		deadline := time.After(5 * time.Second)
+		for {
+			api.headFetchLock.Lock()
+			busy := api.headFetching
+			api.headFetchLock.Unlock()
+			if !busy {
+				return
+			}
+			select {
+			case hash := <-fetching:
+				t.Fatalf("unexpected fetch of %x", hash)
+			case <-deadline:
+				t.Fatal("background fetch didn't finish")
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+	}
+
+	// A is fetched; B and C are requested meanwhile, and C replaces B. No update has taken
+	// effect, so A is synced to once fetched (progress towards C), and C is fetched next.
+	update(headA, engine.SYNCING)
+	expect(fetching, headA, "fetch")
+	update(headB, engine.SYNCING)
+	update(headC, engine.SYNCING)
+	finish()
+	expect(synced, headA, "sync")
+	expect(fetching, headC, "fetch")
+
+	// C is requested again while it is being fetched: synced to, but not fetched again.
+	update(headC, engine.SYNCING)
+	finish()
+	expect(synced, headC, "sync")
+	idle()
+	for len(synced) > 0 { // the repeated request, served from the fetched header
+		if hash := <-synced; hash != headC {
+			t.Fatalf("synced to %x, want only %x", hash, headC)
+		}
+	}
+
+	// D is fetched, but an update to a known head takes effect meanwhile: D is dropped.
+	update(headD, engine.SYNCING)
+	expect(fetching, headD, "fetch")
+	update(blocks[len(blocks)-1].Hash(), engine.VALID)
+	finish()
+	idle()
+	select {
+	case hash := <-synced:
+		t.Fatalf("synced to %x after an update to a known head", hash)
+	default:
+	}
+}
