@@ -24,6 +24,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -51,6 +52,10 @@ type upnp struct {
 	mu          sync.Mutex
 	lastReqTime time.Time
 	rand        *rand.Rand
+
+	// permanentLease is set once the gateway has reported that it only
+	// supports permanent leases.
+	permanentLease atomic.Bool
 }
 
 type upnpClient interface {
@@ -106,12 +111,15 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 // addAnyPortMapping tries to add a port mapping with the specified external port.
 // If the external port is already in use, it will try to assign another port.
 func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.IP, desc string, lifetimeS uint32) (uint16, error) {
+	if n.permanentLease.Load() {
+		lifetimeS = 0
+	}
 	if client, ok := n.client.(*internetgateway2.WANIPConnection2); ok {
 		port, err := n.portWithRateLimit(func() (uint16, error) {
 			return client.AddAnyPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 		})
 		if err != nil && lifetimeS != 0 && isOnlyPermanentLeasesSupported(err) {
-			log.Debug("Gateway only supports permanent leases, retrying", "protocol", protocol, "extport", extport, "intport", intport)
+			n.setPermanentLease()
 			port, err = n.portWithRateLimit(func() (uint16, error) {
 				return client.AddAnyPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, 0)
 			})
@@ -149,12 +157,21 @@ func (n *upnp) addPortMapping(protocol string, extport, intport int, ip net.IP, 
 		return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 	})
 	if err != nil && lifetimeS != 0 && isOnlyPermanentLeasesSupported(err) {
-		log.Debug("Gateway only supports permanent leases, retrying", "protocol", protocol, "extport", extport, "intport", intport)
+		n.setPermanentLease()
 		err = n.withRateLimit(func() error {
 			return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, 0)
 		})
 	}
 	return err
+}
+
+// setPermanentLease records that the gateway only supports permanent leases.
+// Such mappings are not removed by the gateway if geth exits uncleanly, so
+// the user is warned once.
+func (n *upnp) setPermanentLease() {
+	if n.permanentLease.CompareAndSwap(false, true) {
+		log.Warn("UPnP gateway only supports permanent leases, port mappings will persist if geth exits uncleanly", "interface", n)
+	}
 }
 
 // isOnlyPermanentLeasesSupported reports whether err is the UPnP fault

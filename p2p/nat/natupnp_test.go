@@ -309,4 +309,13 @@ func TestUPNPOnlyPermanentLeasesSupported(t *testing.T) {
 	if want := []uint32{1200, 0}; !slices.Equal(client.leases, want) {
 		t.Errorf("wrong lease durations requested: %v, want %v", client.leases, want)
 	}
+
+	// Subsequent mappings (e.g. refreshes) should request a permanent lease directly.
+	client.leases = nil
+	if _, err := n.addAnyPortMapping("UDP", 30303, 30303, net.IPv4(192, 168, 1, 49), "test", 1200); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := []uint32{0}; !slices.Equal(client.leases, want) {
+		t.Errorf("wrong lease durations requested on refresh: %v, want %v", client.leases, want)
+	}
 }
