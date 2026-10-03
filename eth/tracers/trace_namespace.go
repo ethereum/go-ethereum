@@ -502,21 +502,8 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	if err := args.CallDefaults(api.api.backend.RPCGasCap(), vmctx.BaseFee, api.api.backend.ChainConfig().ChainID); err != nil {
 		return nil, traceInvalid("invalid call: %v", err)
 	}
-	// Message validation only sees an access list or fee fields, not the
-	// explicit type, which must still be active at the selected fork.
-	if input.Type != nil {
-		config, number, time := api.api.backend.ChainConfig(), vmctx.BlockNumber, vmctx.Time
-		active := map[uint64]bool{
-			types.LegacyTxType:     true,
-			types.AccessListTxType: config.IsBerlin(number),
-			types.DynamicFeeTxType: config.IsLondon(number),
-			types.BlobTxType:       config.IsCancun(number, time),
-			types.SetCodeTxType:    config.IsPrague(number, time),
-		}
-		if !active[uint64(*input.Type)] {
-			return nil, traceCallRejection(core.ErrTxTypeNotSupported)
-		}
-	}
+	// An explicit type adds no requirement of its own (H14): a supplied feature
+	// that is not active at the selected fork is rejected by message validation.
 	msg := args.ToMessage(vmctx.BaseFee, true)
 	tx := args.ToTransaction(types.DynamicFeeTxType)
 	// As in eth_call, a zero effective gas price runs with BASEFEE 0, and a
