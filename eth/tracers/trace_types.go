@@ -357,8 +357,8 @@ func (e *traceItemError) ErrorData() any { return map[string]int{"index": e.inde
 // validation codes. Nonce and sender-code checks are skipped for unsigned
 // calls, as in eth_call. Call objects invalid regardless of state are rejected
 // with -32602 before execution; any other rejection of a well-formed call at
-// the selected block, such as a blob fee cap below the blob base fee or a type
-// not active at that fork, is -32003 (Transaction rejected), as for
+// the selected block, such as a blob fee cap below the blob base fee or a
+// feature not active at that fork, is -32003 (Transaction rejected), as for
 // trace_rawTransaction.
 func traceCallRejection(err error) error {
 	code := -32003

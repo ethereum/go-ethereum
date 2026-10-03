@@ -278,6 +278,29 @@ func TestTraceNamespaceInactiveCallTypes(t *testing.T) {
 			t.Fatalf("rejected an access list at Berlin: %v", err)
 		}
 	}
+	// Dynamic fee fields, zero or not, are rejected before London (block 2) and run from it.
+	for _, fees := range []map[string]any{{"maxFeePerGas": "0x0", "maxPriorityFeePerGas": "0x0"}, {"maxFeePerGas": "0x77359400", "maxPriorityFeePerGas": "0x3b9aca00"}} {
+		for block := uint64(1); block <= 2; block++ {
+			args := map[string]any{"from": traceTestSender, "to": traceTestTarget, "gas": "0x5208"}
+			for k, v := range fees {
+				args[k] = v
+			}
+			var result json.RawMessage
+			for _, err := range []error{
+				client.Call(&result, "trace_call", args, TraceTypes{}, hexutil.EncodeUint64(block)),
+				client.Call(&result, "trace_callMany", []any{[]any{args, TraceTypes{}}}, hexutil.EncodeUint64(block)),
+			} {
+				if block < 2 {
+					requireTraceCode(t, err, -32003)
+				} else if err != nil {
+					t.Fatalf("rejected dynamic fees %v at London: %v", fees, err)
+				}
+			}
+		}
+	}
+	// An invalid parameter still takes precedence over the block-dependent London rejection.
+	var mismatch json.RawMessage
+	requireTraceCode(t, client.Call(&mismatch, "trace_call", map[string]any{"from": traceTestSender, "to": traceTestTarget, "maxFeePerGas": "0x0", "chainId": "0xffff"}, TraceTypes{}, "0x1"), -32602)
 	// Blob fields and an authorization list are supplied features this chain never activates.
 	for _, feature := range []map[string]any{
 		{"blobVersionedHashes": []common.Hash{{0: 1}}},
