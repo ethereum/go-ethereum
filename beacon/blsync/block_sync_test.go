@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/zrnt/eth2/beacon/deneb"
+	"github.com/protolambda/ztyp/view"
 )
 
 var (
@@ -67,7 +68,7 @@ func (t testServer) Name() string {
 
 func TestBlockSync(t *testing.T) {
 	ht := &testHeadTracker{}
-	blockSync := newBeaconBlockSync(ht)
+	blockSync := newBeaconBlockSync(ht, false)
 	headCh := make(chan types.ChainHeadEvent, 16)
 	blockSync.SubscribeChainHead(headCh)
 	ts := sync.NewTestScheduler(t, blockSync)
@@ -158,9 +159,152 @@ func TestBlockSync(t *testing.T) {
 	expHeadEvent(testBlock2, testFinal2)
 }
 
+// TestBlockSyncP2PBlocks tests that with p2pBlocks no blocks are requested and the head
+// events carry the execution block hash proven by the light client update.
+func TestBlockSyncP2PBlocks(t *testing.T) {
+	ht := &testHeadTracker{}
+	blockSync := newBeaconBlockSync(ht, true)
+	headCh := make(chan types.ChainHeadEvent, 16)
+	blockSync.SubscribeChainHead(headCh)
+	ts := sync.NewTestScheduler(t, blockSync)
+	ts.AddServer(testServer1, 1)
+
+	expHeadEvent := func(expHash, expFinal common.Hash) {
+		t.Helper()
+		var event types.ChainHeadEvent
+		select {
+		case event = <-headCh:
+		default:
+		}
+		if event.ExecHash != expHash {
+			t.Errorf("Wrong head hash, expected %064x, got %064x", expHash[:], event.ExecHash[:])
+		}
+		if event.Block != nil {
+			t.Errorf("Unexpected execution block in head event")
+		}
+		if event.Finalized != expFinal {
+			t.Errorf("Wrong finalized block, expected block hash %064x, got %064x", expFinal[:], event.Finalized[:])
+		}
+	}
+	payload := func(number uint64, hash string) *types.ExecutionHeader {
+		return types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
+			BlockNumber: view.Uint64View(number),
+			BlockHash:   zrntcommon.Hash32(common.HexToHash(hash)),
+		})
+	}
+	var (
+		head1    = types.Header{Slot: 127}
+		head2    = types.Header{Slot: 128, ParentRoot: head1.Hash()} // first slot of epoch 4
+		head3    = types.Header{Slot: 129, ParentRoot: head2.Hash()}
+		payload1 = payload(456, "905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")
+		payload2 = payload(457, "011703f39c664efc1c6cf5f49ca09b595581eec572d4dfddd3d6179a9e63e655")
+		payload3 = payload(458, "5d5b1f6a3e2c4b7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f50")
+	)
+
+	// an announced head doesn't trigger a block request
+	ht.prefetch = types.HeadInfo{Slot: head1.Slot, BlockRoot: head1.Hash()}
+	ts.ServerEvent(sync.EvNewHead, testServer1, ht.prefetch)
+	ts.Run(1)
+	expHeadEvent(common.Hash{}, common.Hash{})
+
+	// a validated head is sent right away, with its proven execution hash; no request
+	ht.validated.Header, ht.validatedPayload = head1, payload1
+	ht.finalized, ht.finalizedPayload = head1, testFinal1
+	ts.Run(2)
+	expHeadEvent(payload1.BlockHash(), testFinal1.BlockHash())
+
+	// the first block of the next epoch waits for the finality update
+	ht.validated.Header, ht.validatedPayload = head2, payload2
+	ts.Run(3)
+	expHeadEvent(common.Hash{}, common.Hash{})
+
+	// the next one doesn't: its parent's slot is known from the validated heads
+	ht.validated.Header, ht.validatedPayload = head3, payload3
+	ts.Run(4)
+	expHeadEvent(payload3.BlockHash(), common.Hash{})
+}
+
+// TestBlockSyncP2PBlocksFallback tests that with p2pBlocks the execution block of a head is
+// fetched when asked for (the execution client couldn't get it from its peers), and the head
+// sent again with it.
+func TestBlockSyncP2PBlocksFallback(t *testing.T) {
+	ht := &testHeadTracker{}
+	blockSync := newBeaconBlockSync(ht, true)
+	headCh := make(chan types.ChainHeadEvent, 16)
+	blockSync.SubscribeChainHead(headCh)
+	ts := sync.NewTestScheduler(t, blockSync)
+	ts.AddServer(testServer1, 1)
+
+	nextEvent := func() (types.ChainHeadEvent, bool) {
+		select {
+		case event := <-headCh:
+			return event, true
+		default:
+			return types.ChainHeadEvent{}, false
+		}
+	}
+	payload1, _ := testBlock1.ExecutionPayload()
+	head := testBlock1.Header()
+	ht.validated.Header = head
+	ht.validatedPayload = types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
+		BlockNumber: view.Uint64View(payload1.NumberU64()),
+		BlockHash:   zrntcommon.Hash32(payload1.Hash()),
+	})
+
+	// the validated head is sent without its block
+	ts.Run(1)
+	event, ok := nextEvent()
+	if !ok || event.Block != nil || event.ExecHash != payload1.Hash() {
+		t.Fatalf("expected the head without its block, got %v (event: %v)", event, ok)
+	}
+
+	// asked for its block: requested once, then the head is sent again with it, once
+	blockSync.fetchBlock(event)
+	ts.Run(2, testServer1, sync.ReqBeaconBlock(testBlock1.Root()))
+	ts.RequestEvent(request.EvResponse, ts.Request(2, 1), testBlock1)
+	ts.AddAllowance(testServer1, 1)
+	ts.Run(3)
+	again, ok := nextEvent()
+	if !ok || again.Block == nil || again.Block.Hash() != payload1.Hash() || again.ExecHash != payload1.Hash() ||
+		again.BeaconHead != testBlock1.Header() {
+		t.Fatalf("expected the head with its block, got %v (event: %v)", again, ok)
+	}
+	ts.Run(4)
+	if e, ok := nextEvent(); ok {
+		t.Fatalf("unexpected head event %v", e)
+	}
+
+	// a failed request is repeated (while it is still the latest head)
+	head2 := types.Header{Slot: head.Slot + 1, ParentRoot: head.Hash()}
+	ht.validated.Header = head2
+	ts.Run(5)
+	event2, _ := nextEvent()
+	blockSync.fetchBlock(event2)
+	ts.Run(6, testServer1, sync.ReqBeaconBlock(head2.Hash()))
+	ts.RequestEvent(request.EvFail, ts.Request(6, 1), nil)
+	ts.AddAllowance(testServer1, 1)
+	ts.Run(7, testServer1, sync.ReqBeaconBlock(head2.Hash()))
+
+	// a block that doesn't carry the head's execution block isn't sent, nor requested again
+	ts.RequestEvent(request.EvResponse, ts.Request(7, 1), testBlock2)
+	ts.AddAllowance(testServer1, 1)
+	ts.Run(8)
+	if e, ok := nextEvent(); ok {
+		t.Fatalf("unexpected head event %v", e)
+	}
+
+	// a request for a head older than the last one sent is dropped (its block is at hand)
+	blockSync.fetchBlock(event)
+	ts.Run(9)
+	if e, ok := nextEvent(); ok {
+		t.Fatalf("unexpected head event %v", e)
+	}
+}
+
 type testHeadTracker struct {
 	prefetch         types.HeadInfo
 	validated        types.SignedHeader
+	validatedPayload *types.ExecutionHeader
 	finalized        types.Header
 	finalizedPayload *types.ExecutionHeader
 }
@@ -170,8 +314,9 @@ func (h *testHeadTracker) PrefetchHead() types.HeadInfo {
 }
 
 func (h *testHeadTracker) ValidatedOptimistic() (types.OptimisticUpdate, bool) {
+	attested := types.HeaderWithExecProof{Header: h.validated.Header, PayloadHeader: h.validatedPayload}
 	return types.OptimisticUpdate{
-		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
+		Attested:      attested,
 		Signature:     h.validated.Signature,
 		SignatureSlot: h.validated.SignatureSlot,
 	}, h.validated.Header != (types.Header{})

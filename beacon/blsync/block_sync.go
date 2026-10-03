@@ -17,6 +17,8 @@
 package blsync
 
 import (
+	"sync/atomic"
+
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/params"
@@ -28,12 +30,25 @@ import (
 )
 
 // beaconBlockSync implements request.Module; it fetches the beacon blocks belonging
-// to the validated and prefetch heads.
+// to the validated and prefetch heads. With p2pBlocks it fetches no blocks: the head
+// events carry only the execution block hash proven by the light client update, and the
+// execution client retrieves the block from its own peers. If it can't, the engine client
+// asks for the block (fetchBlock), and it is fetched and sent after all.
 type beaconBlockSync struct {
 	recentBlocks *lru.Cache[common.Hash, *types.BeaconBlock]
+	recentSlots  *lru.Cache[common.Hash, uint64] // p2pBlocks: slots of recently validated heads, by block root
 	locked       map[common.Hash]request.ServerAndID
 	serverHeads  map[request.Server]common.Hash
 	headTracker  headTracker
+	p2pBlocks    bool
+
+	// p2pBlocks fallback: fallbackReq is set by fetchBlock; fallback is the head event
+	// whose execution block is being fetched, from the beacon block fallbackRoot.
+	fallbackReq  atomic.Pointer[types.ChainHeadEvent]
+	fallback     *types.ChainHeadEvent
+	fallbackRoot common.Hash
+	fallbackSent bool // requested (again after a failed request, until a newer head)
+	trigger      func()
 
 	lastHeadInfo  types.HeadInfo
 	chainHeadFeed event.FeedOf[types.ChainHeadEvent]
@@ -46,12 +61,14 @@ type headTracker interface {
 }
 
 // newBeaconBlockSync returns a new beaconBlockSync.
-func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
+func newBeaconBlockSync(headTracker headTracker, p2pBlocks bool) *beaconBlockSync {
 	return &beaconBlockSync{
 		headTracker:  headTracker,
 		recentBlocks: lru.NewCache[common.Hash, *types.BeaconBlock](10),
+		recentSlots:  lru.NewCache[common.Hash, uint64](10),
 		locked:       make(map[common.Hash]request.ServerAndID),
 		serverHeads:  make(map[request.Server]common.Hash),
+		p2pBlocks:    p2pBlocks,
 	}
 }
 
@@ -73,6 +90,9 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 			if s.locked[blockRoot] == sid {
 				delete(s.locked, blockRoot)
 			}
+			if resp == nil && s.fallback != nil && blockRoot == s.fallbackRoot {
+				s.fallbackSent = false // failed or timed out: ask again (maybe another server)
+			}
 		case sync.EvNewHead:
 			s.serverHeads[event.Server] = event.Data.(types.HeadInfo).BlockRoot
 		case request.EvUnregistered:
@@ -80,6 +100,10 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 		}
 	}
 	s.updateEventFeed()
+	if s.p2pBlocks {
+		s.updateFallback(requester)
+		return
+	}
 	// request validated head block if unavailable and not yet requested
 	if vh, ok := s.headTracker.ValidatedOptimistic(); ok {
 		s.tryRequestBlock(requester, vh.Attested.Hash(), false)
@@ -90,12 +114,56 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 	}
 }
 
-func (s *beaconBlockSync) tryRequestBlock(requester request.Requester, blockRoot common.Hash, needSameHead bool) {
-	if _, ok := s.recentBlocks.Get(blockRoot); ok {
+// fetchBlock asks for the execution block of a head event sent without it, which the
+// execution client couldn't get from its peers (p2pBlocks). It is fetched from the beacon
+// API and the event sent again with it, unless a newer head was sent meanwhile.
+func (s *beaconBlockSync) fetchBlock(head types.ChainHeadEvent) {
+	s.fallbackReq.Store(&head)
+	if s.trigger != nil {
+		s.trigger()
+	}
+}
+
+// updateFallback requests the beacon block carrying the execution block asked for by
+// fetchBlock (again if a request fails, until a newer head is sent), and sends the head
+// again with it when it arrives.
+func (s *beaconBlockSync) updateFallback(requester request.Requester) {
+	if head := s.fallbackReq.Swap(nil); head != nil {
+		s.fallback, s.fallbackRoot, s.fallbackSent = head, head.BeaconHead.Hash(), false
+	}
+	if s.fallback == nil {
 		return
 	}
-	if _, ok := s.locked[blockRoot]; ok {
+	if s.lastHeadInfo.BlockRoot != s.fallback.BeaconHead.Hash() {
+		s.fallback = nil // a newer head was sent
 		return
+	}
+	block, ok := s.recentBlocks.Get(s.fallbackRoot)
+	if !ok {
+		if !s.fallbackSent {
+			s.fallbackSent = s.tryRequestBlock(requester, s.fallbackRoot, false)
+		}
+		return
+	}
+	head := *s.fallback
+	s.fallback = nil
+	payload, err := block.ExecutionPayload()
+	if err != nil || payload.Hash() != head.ExecHash {
+		log.Warn("Beacon block doesn't carry the head's execution block", "root", s.fallbackRoot, "head", head.ExecHash, "error", err)
+		return
+	}
+	head.BeaconHead, head.Block, head.ExecRequests = block.Header(), payload, block.ExecutionRequestsList()
+	s.chainHeadFeed.Send(head)
+}
+
+// tryRequestBlock requests a beacon block unless it is at hand or already requested, and
+// returns whether it sent a request.
+func (s *beaconBlockSync) tryRequestBlock(requester request.Requester, blockRoot common.Hash, needSameHead bool) bool {
+	if _, ok := s.recentBlocks.Get(blockRoot); ok {
+		return false
+	}
+	if _, ok := s.locked[blockRoot]; ok {
+		return false
 	}
 	for _, server := range requester.CanSendTo() {
 		if needSameHead && (s.serverHeads[server] != blockRoot) {
@@ -103,8 +171,9 @@ func (s *beaconBlockSync) tryRequestBlock(requester request.Requester, blockRoot
 		}
 		id := requester.Send(server, sync.ReqBeaconBlock(blockRoot))
 		s.locked[blockRoot] = request.ServerAndID{Server: server, ID: id}
-		return
+		return true
 	}
+	return false
 }
 
 func blockHeadInfo(block *types.BeaconBlock) types.HeadInfo {
@@ -121,8 +190,10 @@ func (s *beaconBlockSync) updateEventFeed() {
 	}
 
 	validatedHead := optimistic.Attested.Hash()
-	headBlock, ok := s.recentBlocks.Get(validatedHead)
-	if !ok {
+	var headBlock *types.BeaconBlock
+	if s.p2pBlocks {
+		s.recentSlots.Add(validatedHead, optimistic.Attested.Slot)
+	} else if headBlock, ok = s.recentBlocks.Get(validatedHead); !ok {
 		return
 	}
 
@@ -136,19 +207,36 @@ func (s *beaconBlockSync) updateEventFeed() {
 		case he < fe:
 			return
 		case he == fe+1:
-			parent, ok := s.recentBlocks.Get(optimistic.Attested.ParentRoot)
-			if !ok || parent.Slot()/params.EpochLength == fe {
+			parentSlot, ok := s.parentSlot(optimistic.Attested.ParentRoot)
+			if !ok || parentSlot/params.EpochLength == fe {
 				return // head is at first slot of next epoch, wait for finality update
 			}
 		}
 	}
 
-	headInfo := blockHeadInfo(headBlock)
+	headInfo := types.HeadInfo{Slot: optimistic.Attested.Slot, BlockRoot: validatedHead}
 	if headInfo == s.lastHeadInfo {
 		return
 	}
 	s.lastHeadInfo = headInfo
 
+	if s.p2pBlocks {
+		// only the execution block hash, proven by the light client update
+		var execHash common.Hash
+		if optimistic.Attested.PayloadHeader != nil {
+			execHash = optimistic.Attested.PayloadHeader.BlockHash()
+		}
+		if execHash == (common.Hash{}) {
+			log.Error("Validated beacon head has no execution block hash", "slot", headInfo.Slot, "root", validatedHead)
+			return
+		}
+		s.chainHeadFeed.Send(types.ChainHeadEvent{
+			BeaconHead: optimistic.Attested.Header,
+			ExecHash:   execHash,
+			Finalized:  finalizedHash,
+		})
+		return
+	}
 	// new head block and finality info available; extract executable data and send event to feed
 	execBlock, err := headBlock.ExecutionPayload()
 	if err != nil {
@@ -157,8 +245,18 @@ func (s *beaconBlockSync) updateEventFeed() {
 	}
 	s.chainHeadFeed.Send(types.ChainHeadEvent{
 		BeaconHead:   optimistic.Attested.Header,
+		ExecHash:     execBlock.Hash(),
 		Block:        execBlock,
 		ExecRequests: headBlock.ExecutionRequestsList(),
 		Finalized:    finalizedHash,
 	})
+}
+
+// parentSlot returns the slot of a recent beacon block, from the fetched blocks or (with
+// p2pBlocks) the validated heads.
+func (s *beaconBlockSync) parentSlot(root common.Hash) (uint64, bool) {
+	if block, ok := s.recentBlocks.Get(root); ok {
+		return block.Slot(), true
+	}
+	return s.recentSlots.Get(root)
 }

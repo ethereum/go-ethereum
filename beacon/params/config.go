@@ -47,6 +47,7 @@ type ClientConfig struct {
 	CustomHeader map[string]string
 	Threshold    int
 	NoFilter     bool
+	P2PBlocks    bool // leave fetching execution blocks to the execution client (by hash)
 }
 
 // ChainConfig contains the beacon chain configuration.
