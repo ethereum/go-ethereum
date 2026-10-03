@@ -172,6 +172,71 @@ func TestServerUnsubscribe(t *testing.T) {
 	}
 }
 
+// TestServerCanRequestAgain tests that a server that refused new requests sends
+// EvCanRequestAgain once it can take them again.
+func TestServerCanRequestAgain(t *testing.T) {
+	rs := &testRequestServer{}
+	clock := &mclock.Simulated{}
+	srv := NewServer(rs, clock)
+	var events int
+	srv.subscribe(func(event Event) {
+		if event.Type == EvCanRequestAgain {
+			events++
+		}
+	})
+	expEvents := func(exp int) {
+		t.Helper()
+		if events != exp {
+			t.Fatalf("Wrong number of EvCanRequestAgain events (expected %d, got %d)", exp, events)
+		}
+	}
+	// refused during a failure delay: sent when the delay ends
+	srv.fail("")
+	clock.WaitForTimers(1)
+	if srv.canRequestNow() {
+		t.Fatal("Can request during a failure delay")
+	}
+	expEvents(0)
+	clock.Run(minFailureDelay)
+	expEvents(1)
+
+	// refused while a timed out request is pending: sent when it is answered
+	srv.sendRequest(testRequest)
+	clock.WaitForTimers(1)
+	clock.Run(softRequestTimeout)
+	if srv.canRequestNow() {
+		t.Fatal("Can request with a timed out request pending")
+	}
+	rs.eventCb(Event{Type: EvResponse, Data: RequestResponse{ID: 1, Request: testRequest, Response: testResponse}})
+	expEvents(2)
+
+	// refused while a timed out request is pending, which then fails: sent when the
+	// failure delay ends, not before
+	srv.sendRequest(testRequest)
+	clock.WaitForTimers(1)
+	clock.Run(softRequestTimeout)
+	if srv.canRequestNow() {
+		t.Fatal("Can request with a timed out request pending")
+	}
+	rs.eventCb(Event{Type: EvFail, Data: RequestResponse{ID: 2, Request: testRequest}})
+	expEvents(2)
+	if srv.canRequestNow() {
+		t.Fatal("Can request during a failure delay")
+	}
+	clock.Run(maxFailureDelay)
+	expEvents(3)
+
+	// not refused: nothing to send
+	if !srv.canRequestNow() {
+		t.Fatal("Can't request")
+	}
+	srv.fail("")
+	clock.WaitForTimers(1)
+	clock.Run(maxFailureDelay)
+	expEvents(3)
+	srv.unsubscribe()
+}
+
 type testRequestServer struct {
 	eventCb func(Event)
 }
