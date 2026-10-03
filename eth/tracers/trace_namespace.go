@@ -454,35 +454,13 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	if args.AuthorizationList != nil && args.IsEIP4844() {
 		return nil, traceInvalid("authorizationList conflicts with blob fields")
 	}
-	// A legacy gasPrice prices an authorization call as both fee caps (H14); blob calls keep their typed fees.
-	if args.GasPrice != nil && args.IsEIP4844() {
-		return nil, traceInvalid("gasPrice conflicts with blob fields")
+	// A legacy gasPrice serves as both fee caps, also for an authorization or blob call, but not beside
+	// dynamic fee fields. An explicit type never changes execution: the fields present decide (H14).
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return nil, traceInvalid("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	if input.Type != nil {
-		if *input.Type > types.SetCodeTxType {
-			return nil, traceInvalid("unsupported unsigned transaction type")
-		}
-		if *input.Type < types.DynamicFeeTxType && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-			return nil, traceInvalid("dynamic fee fields require transaction type 2 or later")
-		}
-		if *input.Type >= types.DynamicFeeTxType && args.GasPrice != nil {
-			return nil, traceInvalid("gasPrice conflicts with transaction type %d", *input.Type)
-		}
-		if *input.Type == types.LegacyTxType && args.AccessList != nil {
-			return nil, traceInvalid("accessList conflicts with transaction type 0")
-		}
-		if args.IsEIP4844() && *input.Type != types.BlobTxType {
-			return nil, traceInvalid("blob fields require transaction type 3")
-		}
-		if args.AuthorizationList != nil && *input.Type != types.SetCodeTxType {
-			return nil, traceInvalid("authorizationList requires transaction type 4")
-		}
-		if *input.Type == types.BlobTxType && args.BlobHashes == nil {
-			return nil, traceInvalid("transaction type 3 requires blobVersionedHashes")
-		}
-		if *input.Type == types.SetCodeTxType && args.AuthorizationList == nil {
-			return nil, traceInvalid("transaction type 4 requires authorizationList")
-		}
+	if input.Type != nil && *input.Type > types.SetCodeTxType {
+		return nil, traceInvalid("unsupported unsigned transaction type")
 	}
 	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
 		return nil, traceInvalid("data and input disagree")
@@ -525,25 +503,22 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 		return nil, traceInvalid("invalid call: %v", err)
 	}
 	// Message validation only sees an access list or fee fields, not the
-	// explicit type. An empty type 1 or type 2 call must still respect its
-	// activation fork instead of executing as a legacy call.
+	// explicit type, which must still be active at the selected fork.
 	if input.Type != nil {
-		config := api.api.backend.ChainConfig()
-		if (*input.Type == types.AccessListTxType && !config.IsBerlin(vmctx.BlockNumber)) ||
-			(*input.Type == types.DynamicFeeTxType && !config.IsLondon(vmctx.BlockNumber)) {
+		config, number, time := api.api.backend.ChainConfig(), vmctx.BlockNumber, vmctx.Time
+		active := map[uint64]bool{
+			types.LegacyTxType:     true,
+			types.AccessListTxType: config.IsBerlin(number),
+			types.DynamicFeeTxType: config.IsLondon(number),
+			types.BlobTxType:       config.IsCancun(number, time),
+			types.SetCodeTxType:    config.IsPrague(number, time),
+		}
+		if !active[uint64(*input.Type)] {
 			return nil, traceCallRejection(core.ErrTxTypeNotSupported)
 		}
 	}
 	msg := args.ToMessage(vmctx.BaseFee, true)
 	tx := args.ToTransaction(types.DynamicFeeTxType)
-	if input.Type != nil {
-		switch *input.Type {
-		case types.LegacyTxType:
-			tx = types.NewTx(&types.LegacyTx{Nonce: msg.Nonce, To: msg.To, Gas: msg.GasLimit, GasPrice: msg.GasPrice.ToBig(), Value: msg.Value.ToBig(), Data: msg.Data})
-		case types.AccessListTxType:
-			tx = types.NewTx(&types.AccessListTx{ChainID: api.api.backend.ChainConfig().ChainID, Nonce: msg.Nonce, To: msg.To, Gas: msg.GasLimit, GasPrice: msg.GasPrice.ToBig(), Value: msg.Value.ToBig(), Data: msg.Data, AccessList: msg.AccessList})
-		}
-	}
 	// As in eth_call, a zero effective gas price runs with BASEFEE 0, and a
 	// zero blob fee cap (supplied or defaulted) with BLOBBASEFEE 0. NoBaseFee
 	// skips fee validation only when both fee caps are zero.

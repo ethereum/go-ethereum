@@ -237,8 +237,9 @@ func TestTraceNamespaceCallRejectionFallback(t *testing.T) {
 }
 
 func TestTraceNamespaceInactiveCallTypes(t *testing.T) {
-	// Explicit type 1 and type 2 must not silently become legacy calls before
-	// their activation when no access list or dynamic fee fields are supplied.
+	// An explicit type must be active at the selected block even when no field
+	// of that type is supplied: types 1 and 2 activate at blocks 1 and 2, and
+	// this chain never reaches Cancun or Prague, so types 3 and 4 never activate.
 	config := *params.AllEthashProtocolChanges
 	config.BerlinBlock, config.LondonBlock = big.NewInt(1), big.NewInt(2)
 	config.ArrowGlacierBlock, config.GrayGlacierBlock = nil, nil
@@ -249,7 +250,7 @@ func TestTraceNamespaceInactiveCallTypes(t *testing.T) {
 	t.Cleanup(backend.teardown)
 	client := traceContractClient(t, NewTraceAPI(backend))
 	for block := uint64(0); block <= 2; block++ {
-		for kind := uint64(1); kind <= 2; kind++ {
+		for kind := uint64(1); kind <= 4; kind++ {
 			t.Run(hexutil.EncodeUint64(block)+"/"+hexutil.EncodeUint64(kind), func(t *testing.T) {
 				args := map[string]any{"from": traceTestSender, "to": traceTestTarget, "type": hexutil.EncodeUint64(kind)}
 				var result json.RawMessage
@@ -260,7 +261,7 @@ func TestTraceNamespaceInactiveCallTypes(t *testing.T) {
 					} else {
 						err = client.Call(&result, method, []any{[]any{args, TraceTypes{}}}, hexutil.EncodeUint64(block))
 					}
-					if block < kind {
+					if block < kind || kind > 2 {
 						requireTraceCode(t, err, -32003)
 					} else if err != nil {
 						t.Fatalf("%s rejected an active type: %v", method, err)
@@ -588,7 +589,7 @@ func TestTraceNamespaceAuthorizationCall(t *testing.T) {
 	client := traceContractClient(t, api)
 	// Untyped, typed, and priced with a legacy gasPrice, which serves as both fee caps (H14), in
 	// trace_call and trace_callMany.
-	for _, extra := range []map[string]any{{}, {"type": "0x04"}, {"gasPrice": "0x0"}, {"gasPrice": "0x77359400"}} {
+	for _, extra := range []map[string]any{{}, {"type": "0x04"}, {"type": "0x02"}, {"gasPrice": "0x0"}, {"gasPrice": "0x77359400"}, {"type": "0x04", "gasPrice": "0x77359400"}} {
 		args := map[string]any{"from": traceTestSender, "to": authority, "authorizationList": []types.SetCodeAuthorization{auth}}
 		for k, v := range extra {
 			args[k] = v
@@ -613,18 +614,50 @@ func TestTraceNamespaceConflictingCallFields(t *testing.T) {
 	api, _ := traceTestAPI(t, nil, nil)
 	client := traceContractClient(t, api)
 	for _, fields := range []map[string]any{
-		{"type": "0x03"},
-		{"type": "0x04"},
-		{"type": "0x02", "blobVersionedHashes": []common.Hash{}},
-		{"type": "0x03", "authorizationList": []types.SetCodeAuthorization{}},
-		{"gasPrice": "0x0", "blobVersionedHashes": []common.Hash{}},
-		{"blobVersionedHashes": []common.Hash{}, "authorizationList": []types.SetCodeAuthorization{}},
+		{"gasPrice": "0x0", "maxFeePerGas": "0x0"},
+		{"gasPrice": "0x0", "maxPriorityFeePerGas": "0x0"},
+		{"blobVersionedHashes": []common.Hash{}},
+		{"authorizationList": []types.SetCodeAuthorization{}},
+		{"blobVersionedHashes": []common.Hash{{0: 1}}, "authorizationList": []types.SetCodeAuthorization{{}}},
 		{"chainId": "0xffff"},
 		{"data": "0x01", "input": "0x02"},
 	} {
 		fields["to"] = traceTestTarget
 		var result json.RawMessage
 		requireTraceCode(t, client.Call(&result, "trace_call", fields, TraceTypes{}), -32602)
+	}
+}
+
+func TestTraceNamespaceTypeDoesNotChangeExecution(t *testing.T) {
+	// The target returns GASPRICE. An explicit type neither drops a supplied field nor rejects a combination
+	// of type and fields, and a legacy gasPrice also prices a blob call as both fee caps (H14).
+	api, _ := traceTestAPI(t, common.FromHex("3a60005260206000f3"), nil)
+	client := traceContractClient(t, api)
+	legacy, dynamic := big.NewInt(3_000_000_000), big.NewInt(2_000_000_000)
+	blob := []common.Hash{{0: 1}}
+	for _, tc := range []struct {
+		fields map[string]any
+		price  *big.Int
+	}{
+		{map[string]any{"type": "0x00", "maxFeePerGas": (*hexutil.Big)(dynamic), "maxPriorityFeePerGas": (*hexutil.Big)(dynamic)}, dynamic},
+		{map[string]any{"type": "0x01", "maxFeePerGas": (*hexutil.Big)(dynamic), "maxPriorityFeePerGas": (*hexutil.Big)(dynamic)}, dynamic},
+		{map[string]any{"type": "0x02", "gasPrice": (*hexutil.Big)(legacy)}, legacy},
+		{map[string]any{"type": "0x03", "gasPrice": (*hexutil.Big)(legacy)}, legacy},
+		{map[string]any{"gasPrice": (*hexutil.Big)(legacy), "blobVersionedHashes": blob}, legacy},
+		{map[string]any{"type": "0x02", "maxFeePerGas": (*hexutil.Big)(dynamic), "maxPriorityFeePerGas": (*hexutil.Big)(dynamic), "blobVersionedHashes": blob}, dynamic},
+		{map[string]any{"type": "0x03", "gasPrice": (*hexutil.Big)(legacy), "blobVersionedHashes": blob, "maxFeePerBlobGas": "0x1"}, legacy},
+	} {
+		args := map[string]any{"from": traceTestSender, "to": traceTestTarget}
+		for k, v := range tc.fields {
+			args[k] = v
+		}
+		var result TraceExecution
+		if err := client.Call(&result, "trace_call", args, TraceTypes{}); err != nil {
+			t.Fatalf("%v: %v", tc.fields, err)
+		}
+		if got := new(big.Int).SetBytes(result.Output); got.Cmp(tc.price) != 0 {
+			t.Fatalf("%v: GASPRICE %v, want %v", tc.fields, got, tc.price)
+		}
 	}
 }
 
