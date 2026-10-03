@@ -274,7 +274,7 @@ func TestBlockSyncP2PBlocksFallback(t *testing.T) {
 		t.Fatalf("unexpected head event %v", e)
 	}
 
-	// a failed request isn't repeated
+	// a failed request is repeated (while it is still the latest head)
 	head2 := types.Header{Slot: head.Slot + 1, ParentRoot: head.Hash()}
 	ht.validated.Header = head2
 	ts.Run(5)
@@ -283,11 +283,19 @@ func TestBlockSyncP2PBlocksFallback(t *testing.T) {
 	ts.Run(6, testServer1, sync.ReqBeaconBlock(head2.Hash()))
 	ts.RequestEvent(request.EvFail, ts.Request(6, 1), nil)
 	ts.AddAllowance(testServer1, 1)
-	ts.Run(7)
+	ts.Run(7, testServer1, sync.ReqBeaconBlock(head2.Hash()))
+
+	// a block that doesn't carry the head's execution block isn't sent, nor requested again
+	ts.RequestEvent(request.EvResponse, ts.Request(7, 1), testBlock2)
+	ts.AddAllowance(testServer1, 1)
+	ts.Run(8)
+	if e, ok := nextEvent(); ok {
+		t.Fatalf("unexpected head event %v", e)
+	}
 
 	// a request for a head older than the last one sent is dropped (its block is at hand)
 	blockSync.fetchBlock(event)
-	ts.Run(8)
+	ts.Run(9)
 	if e, ok := nextEvent(); ok {
 		t.Fatalf("unexpected head event %v", e)
 	}

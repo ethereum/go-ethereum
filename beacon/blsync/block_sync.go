@@ -36,7 +36,7 @@ import (
 // asks for the block (fetchBlock), and it is fetched and sent after all.
 type beaconBlockSync struct {
 	recentBlocks *lru.Cache[common.Hash, *types.BeaconBlock]
-	recentSlots  *lru.Cache[common.Hash, uint64] // slots of recently validated heads, by block root
+	recentSlots  *lru.Cache[common.Hash, uint64] // p2pBlocks: slots of recently validated heads, by block root
 	locked       map[common.Hash]request.ServerAndID
 	serverHeads  map[request.Server]common.Hash
 	headTracker  headTracker
@@ -47,7 +47,7 @@ type beaconBlockSync struct {
 	fallbackReq  atomic.Pointer[types.ChainHeadEvent]
 	fallback     *types.ChainHeadEvent
 	fallbackRoot common.Hash
-	fallbackSent bool // requested (one try per head)
+	fallbackSent bool // requested (again after a failed request, until a newer head)
 	trigger      func()
 
 	lastHeadInfo  types.HeadInfo
@@ -90,6 +90,9 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 			if s.locked[blockRoot] == sid {
 				delete(s.locked, blockRoot)
 			}
+			if resp == nil && s.fallback != nil && blockRoot == s.fallbackRoot {
+				s.fallbackSent = false // failed or timed out: ask again (maybe another server)
+			}
 		case sync.EvNewHead:
 			s.serverHeads[event.Server] = event.Data.(types.HeadInfo).BlockRoot
 		case request.EvUnregistered:
@@ -122,7 +125,8 @@ func (s *beaconBlockSync) fetchBlock(head types.ChainHeadEvent) {
 }
 
 // updateFallback requests the beacon block carrying the execution block asked for by
-// fetchBlock (once), and sends the head again with it when it arrives.
+// fetchBlock (again if a request fails, until a newer head is sent), and sends the head
+// again with it when it arrives.
 func (s *beaconBlockSync) updateFallback(requester request.Requester) {
 	if head := s.fallbackReq.Swap(nil); head != nil {
 		s.fallback, s.fallbackRoot, s.fallbackSent = head, head.BeaconHead.Hash(), false
@@ -186,12 +190,11 @@ func (s *beaconBlockSync) updateEventFeed() {
 	}
 
 	validatedHead := optimistic.Attested.Hash()
-	s.recentSlots.Add(validatedHead, optimistic.Attested.Slot)
 	var headBlock *types.BeaconBlock
-	if !s.p2pBlocks {
-		if headBlock, ok = s.recentBlocks.Get(validatedHead); !ok {
-			return
-		}
+	if s.p2pBlocks {
+		s.recentSlots.Add(validatedHead, optimistic.Attested.Slot)
+	} else if headBlock, ok = s.recentBlocks.Get(validatedHead); !ok {
+		return
 	}
 
 	var finalizedHash common.Hash
@@ -249,8 +252,8 @@ func (s *beaconBlockSync) updateEventFeed() {
 	})
 }
 
-// parentSlot returns the slot of a recent beacon block, from the fetched blocks or the
-// validated heads.
+// parentSlot returns the slot of a recent beacon block, from the fetched blocks or (with
+// p2pBlocks) the validated heads.
 func (s *beaconBlockSync) parentSlot(root common.Hash) (uint64, bool) {
 	if block, ok := s.recentBlocks.Get(root); ok {
 		return block.Slot(), true
