@@ -586,17 +586,25 @@ func TestTraceNamespaceAuthorizationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := traceContractClient(t, api)
-	for _, kind := range []string{"", "0x04"} {
+	// Untyped, typed, and priced with a legacy gasPrice, which serves as both fee caps (H14), in
+	// trace_call and trace_callMany.
+	for _, extra := range []map[string]any{{}, {"type": "0x04"}, {"gasPrice": "0x0"}, {"gasPrice": "0x77359400"}} {
 		args := map[string]any{"from": traceTestSender, "to": authority, "authorizationList": []types.SetCodeAuthorization{auth}}
-		if kind != "" {
-			args["type"] = kind
+		for k, v := range extra {
+			args[k] = v
 		}
 		var result TraceExecution
 		if err := client.Call(&result, "trace_call", args, TraceTypes{"trace", "stateDiff"}); err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(result.Output, common.LeftPadBytes([]byte{42}, 32)) || result.StateDiff[authority] == nil {
-			t.Fatalf("authorization did not execute: %+v", result)
+		var many []TraceExecution
+		if err := client.Call(&many, "trace_callMany", []any{[]any{args, TraceTypes{"trace", "stateDiff"}}}); err != nil {
+			t.Fatal(err)
+		}
+		for _, got := range []TraceExecution{result, many[0]} {
+			if !bytes.Equal(got.Output, common.LeftPadBytes([]byte{42}, 32)) || got.StateDiff[authority] == nil {
+				t.Fatalf("authorization did not execute with %v: %+v", extra, got)
+			}
 		}
 	}
 }
@@ -610,7 +618,6 @@ func TestTraceNamespaceConflictingCallFields(t *testing.T) {
 		{"type": "0x02", "blobVersionedHashes": []common.Hash{}},
 		{"type": "0x03", "authorizationList": []types.SetCodeAuthorization{}},
 		{"gasPrice": "0x0", "blobVersionedHashes": []common.Hash{}},
-		{"gasPrice": "0x0", "authorizationList": []types.SetCodeAuthorization{}},
 		{"blobVersionedHashes": []common.Hash{}, "authorizationList": []types.SetCodeAuthorization{}},
 		{"chainId": "0xffff"},
 		{"data": "0x01", "input": "0x02"},
