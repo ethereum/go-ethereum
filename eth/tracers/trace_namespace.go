@@ -454,8 +454,9 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	if args.AuthorizationList != nil && args.IsEIP4844() {
 		return nil, traceInvalid("authorizationList conflicts with blob fields")
 	}
-	if args.GasPrice != nil && (args.AuthorizationList != nil || args.IsEIP4844()) {
-		return nil, traceInvalid("gasPrice conflicts with blob or authorization fields")
+	// A legacy gasPrice prices an authorization call as both fee caps (H14); blob calls keep their typed fees.
+	if args.GasPrice != nil && args.IsEIP4844() {
+		return nil, traceInvalid("gasPrice conflicts with blob fields")
 	}
 	if input.Type != nil {
 		if *input.Type > types.SetCodeTxType {
