@@ -129,14 +129,16 @@ type ConsensusAPI struct {
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
 
 	// Unknown forkchoice heads are fetched from the network in the background, one at a
-	// time; a head requested meanwhile replaces the waiting one. A fetched head is only
-	// synced to if it is still the head of the latest forkchoice update (fcuHead).
+	// time; a head requested meanwhile replaces the waiting one. A fetch in progress is
+	// not cancelled: the waiting head is fetched after it. A fetched head is synced to
+	// unless a later forkchoice update was handled without a fetch (fetchEpoch).
 	headFetchLock sync.Mutex
 	headFetching  bool
 	headFetchNext *headFetch
-	fcuHead       common.Hash // head of the latest forkchoice update; protected by forkchoiceLock
+	fetchEpoch    uint64 // forkchoice updates handled without a fetch; protected by forkchoiceLock
 
-	syncTo func(head, finalized *types.Header) error // starts a beacon sync (replaced in tests)
+	syncTo    func(head, finalized *types.Header) error     // starts a beacon sync (replaced in tests)
+	getHeader func(hash common.Hash) (*types.Header, error) // fetches a header from peers (replaced in tests)
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -170,15 +172,16 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 // headFetch is an unknown forkchoice head to resolve from the network.
 type headFetch struct {
 	head, finalized common.Hash
+	epoch           uint64 // fetchEpoch of the forkchoice update that requested it
 }
 
 // fetchHead resolves an unknown forkchoice head from the network in the background and
 // starts syncing to it. Only the latest request waits while one is in flight.
-func (api *ConsensusAPI) fetchHead(head, finalized common.Hash) {
+func (api *ConsensusAPI) fetchHead(req *headFetch) {
 	api.headFetchLock.Lock()
 	defer api.headFetchLock.Unlock()
 
-	api.headFetchNext = &headFetch{head: head, finalized: finalized}
+	api.headFetchNext = req
 	if api.headFetching {
 		return
 	}
@@ -195,30 +198,48 @@ func (api *ConsensusAPI) fetchHead(head, finalized common.Hash) {
 			}
 			api.headFetchLock.Unlock()
 
-			header, err := api.eth.Downloader().GetHeader(req.head)
-			if err != nil {
-				log.Warn("Could not retrieve unknown head from peers", "hash", req.head)
-				continue
+			// A head requested again while it was being fetched is known by now:
+			// don't fetch it twice.
+			header := api.remoteBlocks.get(req.head)
+			if header == nil {
+				var err error
+				if header, err = api.fetchHeader(req.head); err != nil {
+					log.Warn("Could not retrieve unknown head from peers", "hash", req.head, "err", err)
+					continue
+				}
+				api.remoteBlocks.put(header.Hash(), header)
 			}
-			api.remoteBlocks.put(header.Hash(), header)
-			api.syncFetchedHead(header, req.finalized)
+			api.syncFetchedHead(header, req)
 		}
 	}()
 }
 
-// syncFetchedHead syncs to a head fetched in the background, unless a later forkchoice update
-// has moved to another head meanwhile: syncing to the old one would restart the sync onto an
-// abandoned branch. The check and the sync happen under the forkchoice lock, like a sync that
-// the update itself starts.
-func (api *ConsensusAPI) syncFetchedHead(header *types.Header, finalizedHash common.Hash) {
+// fetchHeader retrieves a header from the network.
+func (api *ConsensusAPI) fetchHeader(hash common.Hash) (*types.Header, error) {
+	if api.getHeader != nil {
+		return api.getHeader(hash)
+	}
+	return api.eth.Downloader().GetHeader(hash)
+}
+
+// syncFetchedHead syncs to a head fetched in the background, unless a forkchoice update has
+// been handled without a fetch since it was requested (applied, ignored or rejected): the
+// consensus client has moved on, maybe to another branch, and syncing to the old head would
+// restart the sync onto it (or replay an older finalized hash). Later updates that only
+// requested heads still being fetched don't count: the fetched head is usually progress
+// towards those (on another branch it's wasted work, as with a synchronous fetch), and
+// dropping it would stall the sync whenever fetches are slower than the heads change. The
+// check and the sync happen under the forkchoice lock, like a sync that an update starts
+// itself.
+func (api *ConsensusAPI) syncFetchedHead(header *types.Header, req *headFetch) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
 
-	if api.fcuHead != header.Hash() {
-		log.Debug("Dropping fetched forkchoice head, superseded", "hash", header.Hash(), "head", api.fcuHead)
+	if req.epoch != api.fetchEpoch {
+		log.Debug("Dropping fetched forkchoice head, superseded", "hash", header.Hash())
 		return
 	}
-	if err := api.beaconSync(header, finalizedHash); err != nil {
+	if err := api.beaconSync(header, req.finalized); err != nil {
 		log.Warn("Failed to sync to the forkchoice head", "hash", header.Hash(), "err", err)
 	}
 }
@@ -340,7 +361,15 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	defer api.forkchoiceLock.Unlock()
 
 	log.Trace("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
-	api.fcuHead = update.HeadBlockHash
+
+	// An update that doesn't fetch its head from the network is applied, ignored or
+	// rejected right here, which makes the heads fetched for earlier updates stale.
+	fetching := false
+	defer func() {
+		if !fetching {
+			api.fetchEpoch++
+		}
+	}()
 	if update.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")
 		return engine.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
@@ -363,7 +392,8 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 			// background (peers are asked one after another, which can take longer than
 			// the consensus client waits for this call), then sync to it.
 			log.Debug("Fetching the unknown forkchoice head from network", "hash", update.HeadBlockHash)
-			api.fetchHead(update.HeadBlockHash, update.FinalizedBlockHash)
+			fetching = true
+			api.fetchHead(&headFetch{head: update.HeadBlockHash, finalized: update.FinalizedBlockHash, epoch: api.fetchEpoch})
 			return engine.STATUS_SYNCING, nil
 		}
 		// Header advertised via a past newPayload request. Start syncing to it.
