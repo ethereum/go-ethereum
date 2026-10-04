@@ -235,11 +235,11 @@ func TestProtectedByPoolPerPoolIndependence(t *testing.T) {
 
 // TestProtectedByPoolRequestLatencyBasic verifies the latency protection
 // category: with no competing inclusion stats, the lowest-latency peers
-// (among those with enough samples) win top-N protection.
+// (among those meeting the activity threshold) win top-N protection.
 func TestProtectedByPoolRequestLatencyBasic(t *testing.T) {
 	dialed := makePeers(20) // frac=0.1 → n=2 per category
 	stats := make(map[string]peerstats.PeerStats)
-	// Three peers have enough samples; the two fastest should win.
+	// Three peers meet the activity threshold; the two fastest should win.
 	stats[dialed[0].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 50 * time.Millisecond,
 		LatencyActivity:   peerstats.MinLatencyActivity,
@@ -269,98 +269,31 @@ func TestProtectedByPoolRequestLatencyBasic(t *testing.T) {
 	}
 }
 
-// TestProtectedByPoolRequestLatencyBootstrapGuard verifies that peers whose
-// accepted-delivery activity rate is below MinLatencyActivity do not earn
-// latency-based protection, even if their few samples indicate very low
-// latency.
-func TestProtectedByPoolRequestLatencyBootstrapGuard(t *testing.T) {
+// TestProtectedByPoolRequestLatencyActivityGate verifies that latency
+// protection requires LatencyActivity >= MinLatencyActivity. A peer just
+// below the threshold is not protected even with the fastest EMA, whether it
+// never sustained activity or its activity has since decayed: a peer cannot
+// serve a burst of fast replies, go silent, and keep the protection.
+func TestProtectedByPoolRequestLatencyActivityGate(t *testing.T) {
 	dialed := makePeers(20)
 	stats := make(map[string]peerstats.PeerStats)
-	// A lucky-fast peer without sustained activity — must NOT be protected.
+	// Slower peer at the activity threshold — should be protected.
 	stats[dialed[0].ID().String()] = peerstats.PeerStats{
-		RequestLatencyEMA: 1 * time.Millisecond,
-		LatencyActivity:   peerstats.MinLatencyActivity / 2,
-	}
-	// A warmed-up but slower peer — should be protected on latency.
-	stats[dialed[1].ID().String()] = peerstats.PeerStats{
 		RequestLatencyEMA: 500 * time.Millisecond,
 		LatencyActivity:   peerstats.MinLatencyActivity,
 	}
-
-	protected := protectedPeersByPool(nil, dialed, stats)
-
-	if protected[dialed[0]] {
-		t.Error("under-sampled peer should not be protected (bootstrap guard)")
-	}
-	if !protected[dialed[1]] {
-		t.Error("warmed-up peer should be protected")
-	}
-}
-
-// TestProtectedByPoolRequestLatencyPerPool verifies that the latency
-// category selects top-N per pool independently, consistent with the
-// other categories. An inbound peer with lower latency does not prevent
-// a dialed peer from being protected as top of the dialed pool.
-func TestProtectedByPoolRequestLatencyPerPool(t *testing.T) {
-	inbound := makePeers(20)
-	dialed := makePeersOffset(20, 100)
-	stats := make(map[string]peerstats.PeerStats)
-	// All inbound peers are very fast (50ms).
-	for _, p := range inbound {
-		stats[p.ID().String()] = peerstats.PeerStats{
-			RequestLatencyEMA: 50 * time.Millisecond,
-			LatencyActivity:   peerstats.MinLatencyActivity,
-		}
-	}
-	// Dialed peers are slower (1s) — globally they would all lose, but
-	// per-pool top-N should still protect two of them.
-	for _, p := range dialed {
-		stats[p.ID().String()] = peerstats.PeerStats{
-			RequestLatencyEMA: 1 * time.Second,
-			LatencyActivity:   peerstats.MinLatencyActivity,
-		}
-	}
-
-	protected := protectedPeersByPool(inbound, dialed, stats)
-
-	// 2 from inbound + 2 from dialed = 4.
-	var dialedProtected int
-	for _, p := range dialed {
-		if protected[p] {
-			dialedProtected++
-		}
-	}
-	if dialedProtected != 2 {
-		t.Fatalf("expected 2 dialed peers protected by per-pool top-N, got %d", dialedProtected)
-	}
-}
-
-// TestProtectedByPoolRequestLatencyStale verifies that decayed activity
-// excludes peers whose latency EMA is fast but whose accepted-delivery
-// rate has since fallen below MinLatencyActivity. A peer cannot serve a
-// burst of fast replies, go silent on announcements, and keep
-// latency-based protection indefinitely.
-func TestProtectedByPoolRequestLatencyStale(t *testing.T) {
-	dialed := makePeers(20)
-	stats := make(map[string]peerstats.PeerStats)
-	// Active, fast peer — should be protected.
-	stats[dialed[0].ID().String()] = peerstats.PeerStats{
-		RequestLatencyEMA: 50 * time.Millisecond,
-		LatencyActivity:   peerstats.MinLatencyActivity,
-	}
-	// Formerly active, fast peer — same EMA, but its activity has decayed
-	// below the eligibility threshold.
+	// Faster peer whose activity is just below the threshold.
 	stats[dialed[1].ID().String()] = peerstats.PeerStats{
-		RequestLatencyEMA: 50 * time.Millisecond,
+		RequestLatencyEMA: 1 * time.Millisecond,
 		LatencyActivity:   peerstats.MinLatencyActivity * 0.9,
 	}
 
 	protected := protectedPeersByPool(nil, dialed, stats)
 
 	if !protected[dialed[0]] {
-		t.Error("active fast peer must be protected")
+		t.Error("peer meeting the activity threshold must be protected")
 	}
 	if protected[dialed[1]] {
-		t.Error("decayed-activity peer must NOT keep latency protection despite fast EMA")
+		t.Error("peer below the activity threshold must not be protected despite a faster EMA")
 	}
 }
