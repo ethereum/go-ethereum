@@ -19,6 +19,8 @@ package filtermaps
 import (
 	"context"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -86,6 +88,63 @@ func TestIndexerHistoryCutoff(t *testing.T) {
 	ts.setHistory(0, false)
 	ts.fm.WaitIdle()
 	ts.checkCutoffIndex(first, 1131)
+
+	// pruned while stopped: the epochs go at the restart
+	ts.historyCutoff.Store(900)
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+	first = ts.fm.indexedRange.blocks.First()
+	if first <= 900 || first > 1000 {
+		t.Fatalf("Invalid first indexed block after moving the cutoff to 900 while stopped: %d", first)
+	}
+	ts.checkCutoffIndex(first, 1131)
+
+	// history restored (cutoff back to 0): the dropped epochs are rendered again
+	// from their markers, down to the local base but not before it
+	ts.historyCutoff.Store(0)
+	ts.chain.addBlocks(1, 5, 2, 4, true)
+	ts.fm.WaitIdle()
+	ts.checkCutoffIndex(301, 1132)
+}
+
+// TestIndexerHistoryCutoffBlock tests a local base at a cutoff block without
+// logs and at one whose logs span several maps.
+func TestIndexerHistoryCutoffBlock(t *testing.T) {
+	for _, txs := range []int{0, 5} {
+		ts := newTestSetup(t)
+		ts.historyCutoff.Store(100)
+		ts.chain.addBlocks(99, 5, 2, 4, true)
+		ts.chain.addBlocks(1, txs, 2, 4, false) // the cutoff block
+		ts.chain.addBlocks(100, 5, 2, 4, true)
+		if n := len(ts.chain.receipts[ts.chain.getCanonicalChain()[100]]); n != txs {
+			t.Fatalf("Cutoff block has %d receipts, expected %d", n, txs)
+		}
+		ts.setHistory(0, false)
+		ts.fm.WaitIdle()
+		ts.checkCutoffIndex(101, 200)
+		ts.close()
+	}
+}
+
+// TestIndexerHistoryCutoffExport checks that no checkpoints are exported from an
+// index with a local base.
+func TestIndexerHistoryCutoffExport(t *testing.T) {
+	ts := newTestSetup(t)
+	defer ts.close()
+
+	ts.historyCutoff.Store(100)
+	ts.chain.addBlocks(300, 5, 2, 4, true)
+	chain := ts.chain.getCanonicalChain()
+	file := filepath.Join(t.TempDir(), "checkpoints.json")
+	ts.fm, _ = NewFilterMaps(ts.db, NewChainView(ts.chain, 299, chain[299]), 100, 0, ts.params, Config{ExportFileName: file})
+	ts.fm.Start()
+	// export runs at the next head after the finalized block changed
+	ts.fm.SetTarget(NewChainView(ts.chain, 300, chain[300]), 100, 250)
+	ts.fm.WaitIdle()
+	ts.checkCutoffIndex(101, 300)
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Fatalf("Checkpoints exported from a local base (stat error: %v)", err)
+	}
 }
 
 // TestIndexerHistoryCutoffRandom changes the head of a chain with a history
