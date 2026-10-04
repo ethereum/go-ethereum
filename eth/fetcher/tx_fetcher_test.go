@@ -2370,13 +2370,26 @@ func (r *resultRecorder) snapshot() []resultSample {
 }
 
 // TestTransactionFetcherRequestResultOnDelivery asserts that an in-time
-// direct delivery fires the onRequestResult callback with timeout=false.
+// direct delivery fires the onRequestResult callback with timeout=false and
+// the round trip to the reply's arrival: the time spent processing the reply
+// is not charged to the peer.
 func TestTransactionFetcherRequestResultOnDelivery(t *testing.T) {
 	rec := &resultRecorder{}
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
-			f := newTestTxFetcher()
-			f.onRequestResult = rec.record
+			var f *TxFetcher
+			f = NewTxFetcher(
+				nil,
+				func(common.Hash, byte) error { return nil },
+				func(txs []*types.Transaction) []error {
+					// Model slow local processing of the reply.
+					f.clock.(*mclock.Simulated).Run(time.Second)
+					return make([]error, len(txs))
+				},
+				func(string, []common.Hash) error { return nil },
+				nil, nil, rec.record,
+				newTestBlobBuffer(),
+			)
 			return f
 		},
 		steps: []interface{}{
@@ -2397,6 +2410,46 @@ func TestTransactionFetcherRequestResultOnDelivery(t *testing.T) {
 				}
 				if samples[0].timeout {
 					t.Error("expected timeout=false for delivery")
+				}
+			}),
+		},
+	})
+}
+
+// TestTransactionFetcherRequestResultProcessingPastTimeout asserts that a reply
+// which arrives in time, but whose processing outlasts the fetch timeout, is
+// recorded once, as a timeout: the timeout fires while the reply is still being
+// processed, and the eventual delivery adds no success sample on top.
+func TestTransactionFetcherRequestResultProcessingPastTimeout(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			var f *TxFetcher
+			f = NewTxFetcher(
+				nil,
+				func(common.Hash, byte) error { return nil },
+				func(txs []*types.Transaction) []error {
+					// Processing runs past the fetch timeout, which fires
+					// meanwhile; wait for the fetcher to handle it.
+					f.clock.(*mclock.Simulated).Run(txFetchTimeout)
+					<-f.step
+					return make([]error, len(txs))
+				},
+				func(string, []common.Hash) error { return nil },
+				nil, nil, rec.record,
+				newTestBlobBuffer(),
+			)
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: 200 * time.Millisecond, step: false},
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			doFunc(func() {
+				samples := rec.snapshot()
+				if len(samples) != 1 || !samples[0].timeout {
+					t.Fatalf("expected exactly one timeout sample, got %v", samples)
 				}
 			}),
 		},

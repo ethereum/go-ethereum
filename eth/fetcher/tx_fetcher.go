@@ -152,6 +152,7 @@ type txDelivery struct {
 	metas     []txDeliveryMeta // Batch of metadata associated with the delivered hashes
 	direct    bool             // Whether this is a direct reply or a broadcast
 	accepted  []common.Hash    // Delivered tx hashes newly accepted by the pool
+	arrival   mclock.AbsTime   // When the batch reached Enqueue, before local processing
 	violation error            // Whether we encountered a protocol violation
 }
 
@@ -361,6 +362,10 @@ type deliveryMetrics struct {
 // direct request replies. The differentiation is important so the fetcher can
 // re-schedule missing transactions as soon as possible.
 func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction, direct bool) error {
+	// Note the arrival before validating and inserting the transactions, so
+	// a request's latency sample does not include our own processing time.
+	arrival := f.clock.Now()
+
 	var violation error
 
 	metrics := deliveryMetrics{
@@ -479,7 +484,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 		}
 	}
 	select {
-	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct, accepted: acceptedAll, violation: violation}:
+	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct, accepted: acceptedAll, arrival: arrival, violation: violation}:
 		return nil
 	case <-f.quit:
 		return errTerminated
@@ -937,11 +942,14 @@ func (f *TxFetcher) loop() {
 					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - req.time).Nanoseconds())
 					// Already counted as a timeout sample at the timeout site;
 					// don't double-record on eventual delivery.
-				} else if f.onRequestResult != nil && acceptedRequested {
+				} else if f.onRequestResult != nil && acceptedRequested && delivery.arrival > req.time {
 					// In-time delivery that answered our request with at least
-					// one pool-accepted requested tx. Record the actual
-					// round-trip.
-					f.onRequestResult(delivery.origin, time.Duration(f.clock.Now()-req.time), false)
+					// one pool-accepted requested tx. Measure the round trip to
+					// the reply's arrival in Enqueue, so the time spent
+					// validating and inserting it is not charged to the peer.
+					// A reply cannot arrive before its request, and peerstats
+					// expects positive samples, so anything else is skipped.
+					f.onRequestResult(delivery.origin, time.Duration(delivery.arrival-req.time), false)
 				}
 				delete(f.requests, delivery.origin)
 
