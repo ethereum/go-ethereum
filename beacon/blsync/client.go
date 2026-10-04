@@ -93,7 +93,7 @@ func (c *Client) Start() error {
 
 	c.scheduler.Start()
 	for _, url := range c.urls {
-		beaconApi := api.NewBeaconLightApi(url, c.customHeader)
+		beaconApi := api.NewBeaconLightApi(url, c.customHeader, &c.config.ChainConfig)
 		c.scheduler.RegisterServer(request.NewServer(api.NewApiServer(beaconApi), &mclock.System{}))
 	}
 	return nil

@@ -41,13 +41,31 @@ const (
 	StateIndexNextSyncCommitteeElectra = 87
 	StateIndexNextSyncCommitteeGloas   = 2946
 
-	BodyIndexExecPayload        = 25
-	BodyIndexExecBlockHashGloas = 2856
+	BodyIndexExecPayload          = 25
+	BodyIndexExecBlockHashCapella = 412
+	BodyIndexExecBlockHashDeneb   = 812
+	BodyIndexExecBlockHashGloas   = 2856
 )
+
+// BodyIndexExecBlockHash returns the generalized index of the execution block hash in
+// the beacon block body of a fork (Gloas light client headers prove it, for blocks of
+// earlier forks too), or 0 for a fork without one.
+func BodyIndexExecBlockHash(forkName string) uint64 {
+	switch forkName {
+	case "capella":
+		return BodyIndexExecBlockHashCapella
+	case "deneb", "electra", "fulu":
+		return BodyIndexExecBlockHashDeneb
+	case "gloas":
+		return BodyIndexExecBlockHashGloas
+	default:
+		return 0
+	}
+}
 
 func StateIndexFinalBlock(forkName string) uint64 {
 	switch forkName {
-	case "bellatrix", "capella", "deneb":
+	case "altair", "bellatrix", "capella", "deneb":
 		return StateIndexFinalBlockLegacy
 	case "electra", "fulu":
 		return StateIndexFinalBlockElectra
@@ -59,7 +77,7 @@ func StateIndexFinalBlock(forkName string) uint64 {
 }
 func StateIndexSyncCommittee(forkName string) uint64 {
 	switch forkName {
-	case "bellatrix", "capella", "deneb":
+	case "altair", "bellatrix", "capella", "deneb":
 		return StateIndexSyncCommitteeLegacy
 	case "electra", "fulu":
 		return StateIndexSyncCommitteeElectra
@@ -71,7 +89,7 @@ func StateIndexSyncCommittee(forkName string) uint64 {
 }
 func StateIndexNextSyncCommittee(forkName string) uint64 {
 	switch forkName {
-	case "bellatrix", "capella", "deneb":
+	case "altair", "bellatrix", "capella", "deneb":
 		return StateIndexNextSyncCommitteeLegacy
 	case "electra", "fulu":
 		return StateIndexNextSyncCommitteeElectra

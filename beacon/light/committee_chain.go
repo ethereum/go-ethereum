@@ -202,7 +202,7 @@ func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
-	if err := bootstrap.Validate(); err != nil {
+	if err := bootstrap.Validate(s.config); err != nil {
 		return err
 	}
 	period := bootstrap.Header.SyncPeriod()

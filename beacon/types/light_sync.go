@@ -19,6 +19,7 @@ package types
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
@@ -43,12 +44,14 @@ type BootstrapData struct {
 	CommitteeBranch merkle.Values
 }
 
-// Validate verifies the proof included in BootstrapData.
-func (c *BootstrapData) Validate() error {
+// Validate verifies the proof included in BootstrapData. The proof is checked at the
+// generalized index of the header's fork; the branch may be normalized to the depth of
+// a later fork (data served in a later fork's format).
+func (c *BootstrapData) Validate(config *params.ChainConfig) error {
 	if c.CommitteeRoot != c.Committee.Root() {
 		return errors.New("wrong committee root")
 	}
-	return merkle.VerifyProof(c.Header.StateRoot, params.StateIndexSyncCommittee(c.Version), c.CommitteeBranch, merkle.Value(c.CommitteeRoot))
+	return merkle.VerifyNormalizedProof(c.Header.StateRoot, params.StateIndexSyncCommittee(config.ForkNameAtSlot(c.Header.Slot)), c.CommitteeBranch, merkle.Value(c.CommitteeRoot))
 }
 
 // LightClientUpdate is a proof of the next sync committee root based on a header
@@ -71,21 +74,24 @@ type LightClientUpdate struct {
 	score *UpdateScore // Weight of the update to compare between competing ones
 }
 
-// Validate verifies the validity of the update.
-func (update *LightClientUpdate) Validate() error {
+// Validate verifies the validity of the update. The state proofs are checked at the
+// generalized indices of the attested header's fork; the branches may be normalized to
+// the depth of a later fork (an update served in a later fork's format).
+func (update *LightClientUpdate) Validate(config *params.ChainConfig) error {
 	period := update.AttestedHeader.Header.SyncPeriod()
 	if SyncPeriod(update.AttestedHeader.SignatureSlot) != period {
 		return errors.New("signature slot and signed header are from different periods")
 	}
+	fork := config.ForkNameAtSlot(update.AttestedHeader.Header.Slot)
 	if update.FinalizedHeader != nil {
 		if update.FinalizedHeader.SyncPeriod() != period {
 			return errors.New("finalized header is from different period")
 		}
-		if err := merkle.VerifyProof(update.AttestedHeader.Header.StateRoot, params.StateIndexFinalBlock(update.Version), update.FinalityBranch, merkle.Value(update.FinalizedHeader.Hash())); err != nil {
+		if err := merkle.VerifyNormalizedProof(update.AttestedHeader.Header.StateRoot, params.StateIndexFinalBlock(fork), update.FinalityBranch, merkle.Value(update.FinalizedHeader.Hash())); err != nil {
 			return fmt.Errorf("invalid finalized header proof: %w", err)
 		}
 	}
-	if err := merkle.VerifyProof(update.AttestedHeader.Header.StateRoot, params.StateIndexNextSyncCommittee(update.Version), update.NextSyncCommitteeBranch, merkle.Value(update.NextSyncCommitteeRoot)); err != nil {
+	if err := merkle.VerifyNormalizedProof(update.AttestedHeader.Header.StateRoot, params.StateIndexNextSyncCommittee(fork), update.NextSyncCommitteeBranch, merkle.Value(update.NextSyncCommitteeRoot)); err != nil {
 		return fmt.Errorf("invalid next sync committee proof: %w", err)
 	}
 	return nil
@@ -148,7 +154,8 @@ func (u UpdateScore) BetterThan(w UpdateScore) bool {
 // body. Its concrete form is fork-specific.
 type ExecutionProof interface {
 	BlockHash() common.Hash
-	Validate(common.Hash) error
+	// Validate checks the proof against the body root of a block of the given fork.
+	Validate(bodyRoot common.Hash, fork string) error
 }
 
 // LegacyHeaderProof is the pre-Gloas proof format. It commits to the complete
@@ -162,7 +169,7 @@ func (p *LegacyHeaderProof) BlockHash() common.Hash {
 	return p.PayloadHeader.BlockHash()
 }
 
-func (p *LegacyHeaderProof) Validate(bodyRoot common.Hash) error {
+func (p *LegacyHeaderProof) Validate(bodyRoot common.Hash, _ string) error {
 	return merkle.VerifyProof(bodyRoot, params.BodyIndexExecPayload, p.Branch, p.PayloadHeader.PayloadRoot())
 }
 
@@ -177,8 +184,23 @@ func (p *GloasExecutionProof) BlockHash() common.Hash {
 	return p.ExecutionBlockHash
 }
 
-func (p *GloasExecutionProof) Validate(bodyRoot common.Hash) error {
-	return merkle.VerifyProof(bodyRoot, params.BodyIndexExecBlockHashGloas, p.Branch, merkle.Value(p.ExecutionBlockHash))
+// Validate checks the execution block hash against the body root of a block of the
+// given fork. Gloas headers carry blocks of earlier forks too (around the fork): those
+// prove the block hash at their fork's index, with the branch normalized to the Gloas
+// depth, and have none before Capella.
+func (p *GloasExecutionProof) Validate(bodyRoot common.Hash, fork string) error {
+	switch fork {
+	case "genesis", "phase0", "altair", "bellatrix":
+		if p.ExecutionBlockHash != (common.Hash{}) || slices.ContainsFunc(p.Branch, func(v merkle.Value) bool { return v != merkle.Value{} }) {
+			return errors.New("execution block hash before Capella")
+		}
+		return nil
+	}
+	index := params.BodyIndexExecBlockHash(fork)
+	if index == 0 {
+		return fmt.Errorf("unknown fork %q", fork)
+	}
+	return merkle.VerifyNormalizedProof(bodyRoot, index, p.Branch, merkle.Value(p.ExecutionBlockHash))
 }
 
 // HeaderWithExecProof contains a beacon header and its fork-specific execution
@@ -197,11 +219,11 @@ func (h *HeaderWithExecProof) BlockHash() common.Hash {
 }
 
 // Validate verifies the fork-specific execution proof.
-func (h *HeaderWithExecProof) Validate() error {
+func (h *HeaderWithExecProof) Validate(config *params.ChainConfig) error {
 	if h.Proof == nil {
 		return errors.New("missing execution proof")
 	}
-	return h.Proof.Validate(h.BodyRoot)
+	return h.Proof.Validate(h.BodyRoot, config.ForkNameAtSlot(h.Slot))
 }
 
 // OptimisticUpdate proves sync committee commitment on the attested beacon header.
@@ -232,8 +254,8 @@ func (u *OptimisticUpdate) SignedHeader() SignedHeader {
 // Validate verifies the Merkle proof proving the execution payload header.
 // Note that the sync committee signature of the attested header should be
 // verified separately by a synced committee chain.
-func (u *OptimisticUpdate) Validate() error {
-	return u.Attested.Validate()
+func (u *OptimisticUpdate) Validate(config *params.ChainConfig) error {
+	return u.Attested.Validate(config)
 }
 
 // FinalityUpdate proves a finalized beacon header by a sync committee commitment
@@ -266,16 +288,18 @@ func (u *FinalityUpdate) SignedHeader() SignedHeader {
 
 // Validate verifies the Merkle proofs proving the finalized beacon header and
 // the execution payload headers belonging to the attested and finalized headers.
+// The finality proof is checked at the index of the attested header's fork; its
+// branch may be normalized to the depth of a later fork.
 // Note that the sync committee signature of the attested header should be
 // verified separately by a synced committee chain.
-func (u *FinalityUpdate) Validate() error {
-	if err := u.Attested.Validate(); err != nil {
+func (u *FinalityUpdate) Validate(config *params.ChainConfig) error {
+	if err := u.Attested.Validate(config); err != nil {
 		return err
 	}
-	if err := u.Finalized.Validate(); err != nil {
+	if err := u.Finalized.Validate(config); err != nil {
 		return err
 	}
-	return merkle.VerifyProof(u.Attested.StateRoot, params.StateIndexFinalBlock(u.Version), u.FinalityBranch, merkle.Value(u.Finalized.Hash()))
+	return merkle.VerifyNormalizedProof(u.Attested.StateRoot, params.StateIndexFinalBlock(config.ForkNameAtSlot(u.Attested.Slot)), u.FinalityBranch, merkle.Value(u.Finalized.Hash()))
 }
 
 // ChainHeadEvent returns an authenticated execution payload associated with the

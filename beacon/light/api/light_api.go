@@ -137,15 +137,17 @@ type BeaconLightApi struct {
 	url           string
 	client        fetcher
 	customHeaders map[string]string
+	config        *params.ChainConfig // the forks, for validating the proofs served
 }
 
-func NewBeaconLightApi(url string, customHeaders map[string]string) *BeaconLightApi {
+func NewBeaconLightApi(url string, customHeaders map[string]string, config *params.ChainConfig) *BeaconLightApi {
 	return &BeaconLightApi{
 		url: url,
 		client: &http.Client{
 			Timeout: time.Second * 10,
 		},
 		customHeaders: customHeaders,
+		config:        config,
 	}
 }
 
@@ -205,7 +207,7 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 		if d.Update.AttestedHeader.Header.SyncPeriod() != firstPeriod+uint64(i) {
 			return nil, nil, errors.New("wrong committee update header period")
 		}
-		if err := d.Update.Validate(); err != nil {
+		if err := d.Update.Validate(api.config); err != nil {
 			return nil, nil, err
 		}
 		if d.NextSyncCommittee.Root() != d.Update.NextSyncCommitteeRoot {
@@ -397,7 +399,7 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 		CommitteeRoot:   data.Data.Committee.Root(),
 		Committee:       data.Data.Committee,
 	}
-	if err := checkpoint.Validate(); err != nil {
+	if err := checkpoint.Validate(api.config); err != nil {
 		return nil, fmt.Errorf("invalid checkpoint: %w", err)
 	}
 	if checkpoint.Header.Hash() != checkpointHash {

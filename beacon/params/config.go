@@ -68,6 +68,12 @@ func (c *ChainConfig) ForkAtEpoch(epoch uint64) Fork {
 	return Fork{}
 }
 
+// ForkNameAtSlot returns the name of the latest active fork at the given slot, in
+// lower case (as the beacon API names versions).
+func (c *ChainConfig) ForkNameAtSlot(slot uint64) string {
+	return strings.ToLower(c.ForkAtEpoch(slot / EpochLength).Name)
+}
+
 // AddFork adds a new item to the list of forks.
 func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainConfig {
 	knownIndex := slices.Index(knownForks, name)
