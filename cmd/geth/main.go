@@ -285,6 +285,9 @@ func init() {
 }
 
 func main() {
+	// Drop env vars for flags set on the command line before urfave parses
+	// them. See DropEnvVarsShadowedByArgs and #28216.
+	flags.DropEnvVarsShadowedByArgs(app.Flags, os.Args)
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
