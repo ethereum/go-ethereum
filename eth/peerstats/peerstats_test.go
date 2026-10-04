@@ -31,86 +31,40 @@ func newStats(ids ...string) *Stats {
 	return s
 }
 
-// TestNotifyPeerConnectCreatesEntry verifies registration creates a zeroed
-// entry and is idempotent (re-registering keeps accumulated stats).
-func TestNotifyPeerConnectCreatesEntry(t *testing.T) {
+// TestPeerLifecycle verifies that an entry exists only between
+// NotifyPeerConnect and NotifyPeerDrop: connecting creates it, reconnecting
+// keeps its stats, dropping removes it, and signals for a peer without an
+// entry never create one, so a peer that has disconnected cannot be
+// resurrected by a late signal.
+func TestPeerLifecycle(t *testing.T) {
 	s := New()
+
+	// Signals for a peer that never connected are ignored.
+	s.NotifyBlock(map[string]int{"ghost": 3}, map[string]int{"ghost": 5})
+	if n := len(s.GetAllPeerStats()); n != 0 {
+		t.Fatalf("signals for unregistered peer must not create entries, got %d", n)
+	}
+
+	// Connecting creates an entry; reconnecting keeps its stats.
 	s.NotifyPeerConnect("peerA")
 	if _, ok := s.GetAllPeerStats()["peerA"]; !ok {
 		t.Fatal("expected peerA entry after connect")
 	}
-	// Accumulate some state, then re-connect: stats must be preserved.
 	s.NotifyBlock(map[string]int{"peerA": 3}, nil)
 	before := s.GetAllPeerStats()["peerA"].RecentIncluded
 	s.NotifyPeerConnect("peerA")
 	if got := s.GetAllPeerStats()["peerA"].RecentIncluded; got != before {
 		t.Fatalf("re-connect wiped stats: got RecentIncluded %f, want %f", got, before)
 	}
-}
 
-// TestNotifyBlockUpdatesRegisteredPeer verifies that inclusions update the
-// EMA of a registered peer.
-func TestNotifyBlockUpdatesRegisteredPeer(t *testing.T) {
-	s := newStats("peerA")
-	s.NotifyBlock(map[string]int{"peerA": 3}, nil)
-
-	ps := s.GetAllPeerStats()["peerA"]
-	// EMA after first block: (1-0.05)*0 + 0.05*3 = 0.15
-	if ps.RecentIncluded <= 0 {
-		t.Fatalf("expected RecentIncluded > 0 after inclusion, got %f", ps.RecentIncluded)
-	}
-}
-
-// TestNotifyBlockIgnoresUnregisteredPeer verifies that inclusions (and
-// finalization credits) for a peer with no entry never create one — a tx
-// delivered by a peer that has since disconnected cannot resurrect its stats.
-func TestNotifyBlockIgnoresUnregisteredPeer(t *testing.T) {
-	s := New()
-	s.NotifyBlock(map[string]int{"ghost": 3}, map[string]int{"ghost": 5})
-	if n := len(s.GetAllPeerStats()); n != 0 {
-		t.Fatalf("signals for unregistered peer must not create entries, got %d", n)
-	}
-}
-
-// TestNotifyBlockDecaysKnownPeers verifies that registered peers get their
-// RecentIncluded EMA decayed when they have no inclusions in a block.
-func TestNotifyBlockDecaysKnownPeers(t *testing.T) {
-	s := newStats("peerA")
-	s.NotifyBlock(map[string]int{"peerA": 3}, nil)
-	initial := s.GetAllPeerStats()["peerA"].RecentIncluded
-
-	// Empty block — peerA should decay.
-	s.NotifyBlock(nil, nil)
-	after := s.GetAllPeerStats()["peerA"].RecentIncluded
-
-	if after >= initial {
-		t.Fatalf("expected decay, got %f >= %f", after, initial)
-	}
-}
-
-// TestNotifyBlockDropThenFinalizeNoResurrect verifies the full drop→finalize
-// sequence: a dropped peer doesn't come back via finalization credits.
-func TestNotifyBlockDropThenFinalizeNoResurrect(t *testing.T) {
-	s := newStats("peerA")
-	s.NotifyBlock(map[string]int{"peerA": 1}, nil)
+	// Dropping removes the entry, and a late signal does not recreate it.
 	s.NotifyPeerDrop("peerA")
-	s.NotifyBlock(nil, map[string]int{"peerA": 10})
-
-	if stats := s.GetAllPeerStats(); len(stats) != 0 {
-		t.Fatalf("dropped peer must not be resurrected, got %d peers", len(stats))
+	if _, ok := s.GetAllPeerStats()["peerA"]; ok {
+		t.Fatal("NotifyPeerDrop should remove the entry")
 	}
-}
-
-// TestNotifyBlockFinalizationCredits an existing peer.
-func TestNotifyBlockFinalizationCredits(t *testing.T) {
-	s := newStats("peerA")
-	s.NotifyBlock(map[string]int{"peerA": 1}, nil)
-	s.NotifyBlock(nil, map[string]int{"peerA": 3})
-
-	// RecentFinalized is a slow EMA, not a cumulative count: assert it
-	// moved in the positive direction, not the exact value.
-	if got := s.GetAllPeerStats()["peerA"].RecentFinalized; got <= 0 {
-		t.Fatalf("expected RecentFinalized>0 after credits, got %f", got)
+	s.NotifyBlock(map[string]int{"peerA": 1}, map[string]int{"peerA": 10})
+	if _, ok := s.GetAllPeerStats()["peerA"]; ok {
+		t.Fatal("late signal after drop must not recreate the entry")
 	}
 }
 
@@ -136,7 +90,8 @@ func TestNotifyBlockDecaysFinalized(t *testing.T) {
 	}
 }
 
-// TestNotifyBlockInclusionEMAUpdate verifies the EMA formula (1-α)·old + α·count.
+// TestNotifyBlockInclusionEMAUpdate verifies the EMA formula (1-α)·old + α·count,
+// including the pure decay of a peer absent from a block.
 func TestNotifyBlockInclusionEMAUpdate(t *testing.T) {
 	s := newStats("peerA")
 	// Three inclusions: EMA = 0.05 * 3 = 0.15
@@ -153,16 +108,11 @@ func TestNotifyBlockInclusionEMAUpdate(t *testing.T) {
 	if diff := got - want; diff < -1e-9 || diff > 1e-9 {
 		t.Fatalf("EMA after two samples: got %f, want %f", got, want)
 	}
-}
-
-// TestNotifyPeerDropClearsStats verifies disconnect cleanup removes the
-// peer's entry.
-func TestNotifyPeerDropClearsStats(t *testing.T) {
-	s := newStats("peerA")
-	s.NotifyBlock(map[string]int{"peerA": 1}, nil)
-	s.NotifyPeerDrop("peerA")
-
-	if _, ok := s.GetAllPeerStats()["peerA"]; ok {
-		t.Fatal("NotifyPeerDrop should remove the entry")
+	// Block without peerA: pure decay, EMA = 0.95*0.6425 = 0.610375
+	s.NotifyBlock(nil, nil)
+	got = s.GetAllPeerStats()["peerA"].RecentIncluded
+	want = 0.610375
+	if diff := got - want; diff < -1e-9 || diff > 1e-9 {
+		t.Fatalf("EMA after a block without peerA: got %f, want %f", got, want)
 	}
 }

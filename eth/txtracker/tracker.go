@@ -111,8 +111,7 @@ func New() *Tracker {
 }
 
 // Start begins listening for chain head events. `consumer` receives
-// per-block signals; if nil, signals are computed but discarded
-// (useful in tests that exercise only the tx-lifecycle surface).
+// per-block signals.
 func (t *Tracker) Start(chain Chain, consumer StatsConsumer) {
 	t.chain = chain
 	t.consumer = consumer
@@ -212,9 +211,7 @@ func (t *Tracker) handleChainHead(ev core.ChainHeadEvent) {
 	finalized := t.collectFinalizationCredits()
 	t.mu.Unlock()
 
-	if t.consumer != nil {
-		t.consumer.NotifyBlock(inclusions, finalized)
-	}
+	t.consumer.NotifyBlock(inclusions, finalized)
 }
 
 // collectFinalizationCredits accumulates per-peer finalization credits for

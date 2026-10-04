@@ -135,14 +135,6 @@ func (c *mockChain) sendHeadBlock(block *types.Block) {
 	c.headFeed.Send(core.ChainHeadEvent{Header: block.Header()})
 }
 
-func hashTxs(txs []*types.Transaction) []common.Hash {
-	hashes := make([]common.Hash, len(txs))
-	for i, tx := range txs {
-		hashes[i] = tx.Hash()
-	}
-	return hashes
-}
-
 func makeTx(nonce uint64) *types.Transaction {
 	return types.NewTx(&types.LegacyTx{Nonce: nonce, GasPrice: big.NewInt(1), Gas: 21000})
 }
@@ -167,11 +159,15 @@ func (c *mockConsumer) NotifyBlock(inclusions, finalized map[string]int) {
 	c.signals = append(c.signals, signal{maps.Clone(inclusions), maps.Clone(finalized)})
 }
 
-func (c *mockConsumer) last() signal {
+// last returns the most recent signal. It fails the test if the tracker has
+// emitted none, so an "expect zero" assertion cannot pass just because no
+// signal was sent.
+func (c *mockConsumer) last(t *testing.T) signal {
+	t.Helper()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if len(c.signals) == 0 {
-		return signal{}
+		t.Fatal("tracker emitted no signal")
 	}
 	return c.signals[len(c.signals)-1]
 }
@@ -183,39 +179,6 @@ func waitStep(t *testing.T, tr *Tracker) {
 	case <-tr.step:
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for tracker step")
-	}
-}
-
-// TestNotifyAcceptedRecordsMapping verifies the tx-lifecycle surface:
-// NotifyAccepted records tx→peer mappings in insertion order, with
-// first-deliverer-wins semantics on duplicates.
-func TestNotifyAcceptedRecordsMapping(t *testing.T) {
-	tr := New()
-
-	txs := []*types.Transaction{makeTx(1), makeTx(2), makeTx(3)}
-	hashes := hashTxs(txs)
-	tr.NotifyAccepted("peerA", hashes)
-
-	tr.mu.Lock()
-	defer tr.mu.Unlock()
-	if tr.txs.Len() != 3 {
-		t.Fatalf("expected 3 tracked txs, got %d", tr.txs.Len())
-	}
-	// Keys() walks the internal list from the least-recently-added end,
-	// which for the tracker's add-once/Peek-only usage is insertion order.
-	for i, h := range tr.txs.Keys() {
-		if hashes[i] != h {
-			t.Fatalf("insertion order mismatch at %d", i)
-		}
-	}
-	for i, h := range hashes {
-		ti, ok := tr.txs.Peek(h)
-		if !ok {
-			t.Fatalf("tx %d: not tracked", i)
-		}
-		if ti.Deliverer != "peerA" {
-			t.Fatalf("tx %d: expected deliverer=peerA, got %q", i, ti.Deliverer)
-		}
 	}
 }
 
@@ -259,7 +222,7 @@ func TestHandleChainHeadEmitsInclusions(t *testing.T) {
 	chain.sendHead(1)
 	waitStep(t, tr)
 
-	sig := consumer.last()
+	sig := consumer.last(t)
 	if sig.inclusions["peerA"] != 1 {
 		t.Errorf("peerA inclusions: got %d, want 1", sig.inclusions["peerA"])
 	}
@@ -284,7 +247,7 @@ func TestHandleChainHeadEmptyBlock(t *testing.T) {
 	chain.sendHead(1)
 	waitStep(t, tr)
 
-	sig := consumer.last()
+	sig := consumer.last(t)
 	if len(sig.inclusions) != 0 {
 		t.Errorf("expected empty inclusions, got %v", sig.inclusions)
 	}
@@ -292,7 +255,7 @@ func TestHandleChainHeadEmptyBlock(t *testing.T) {
 
 // TestHandleChainHeadEmitsFinalization verifies that when finalization
 // advances, the consumer receives per-peer finalization credits
-// accumulated over the newly-finalized range.
+// accumulated over the newly-finalized range, exactly once.
 func TestHandleChainHeadEmitsFinalization(t *testing.T) {
 	tr := New()
 	chain := newMockChain()
@@ -308,7 +271,7 @@ func TestHandleChainHeadEmitsFinalization(t *testing.T) {
 	chain.sendHead(1)
 	waitStep(t, tr)
 
-	if credits := consumer.last().finalized["peerA"]; credits != 0 {
+	if credits := consumer.last(t).finalized["peerA"]; credits != 0 {
 		t.Fatalf("expected no finalization credits before finalization, got %d", credits)
 	}
 
@@ -318,8 +281,17 @@ func TestHandleChainHeadEmitsFinalization(t *testing.T) {
 	chain.sendHead(2)
 	waitStep(t, tr)
 
-	if credits := consumer.last().finalized["peerA"]; credits != 1 {
+	if credits := consumer.last(t).finalized["peerA"]; credits != 1 {
 		t.Fatalf("expected 1 finalization credit, got %d", credits)
+	}
+
+	// The next head must not re-credit the already-finalized range.
+	chain.addBlock(3, nil)
+	chain.sendHead(3)
+	waitStep(t, tr)
+
+	if credits := consumer.last(t).finalized["peerA"]; credits != 0 {
+		t.Fatalf("finalization credit re-emitted on a later head: got %d", credits)
 	}
 }
 
@@ -354,7 +326,7 @@ func TestFinalizationSkipsOrphanedInclusion(t *testing.T) {
 	chain.sendHead(2)
 	waitStep(t, tr)
 
-	if credits := consumer.last().finalized["peerA"]; credits != 0 {
+	if credits := consumer.last(t).finalized["peerA"]; credits != 0 {
 		t.Fatalf("expected no credit for orphaned inclusion, got %d", credits)
 	}
 }
@@ -382,14 +354,14 @@ func TestReorgSafety(t *testing.T) {
 	// Head announces sibling B — emit must contain no peerA inclusions.
 	chain.sendHeadBlock(blockB)
 	waitStep(t, tr)
-	if incl := consumer.last().inclusions["peerA"]; incl != 0 {
+	if incl := consumer.last(t).inclusions["peerA"]; incl != 0 {
 		t.Fatalf("sibling-B head should emit 0 peerA inclusions, got %d", incl)
 	}
 
 	// Head announces canonical A — emit must contain 1 peerA inclusion.
 	chain.sendHeadBlock(blockA)
 	waitStep(t, tr)
-	if incl := consumer.last().inclusions["peerA"]; incl != 1 {
+	if incl := consumer.last(t).inclusions["peerA"]; incl != 1 {
 		t.Fatalf("canonical-A head should emit 1 peerA inclusion, got %d", incl)
 	}
 }
@@ -422,7 +394,7 @@ func TestPreSlotGate(t *testing.T) {
 	chain.sendHead(1)
 	waitStep(t, tr)
 
-	if incl := consumer.last().inclusions["peerA"]; incl != 1 {
+	if incl := consumer.last(t).inclusions["peerA"]; incl != 1 {
 		t.Fatalf("expected 1 inclusion for pre-slot delivery, got %d", incl)
 	}
 
@@ -431,20 +403,7 @@ func TestPreSlotGate(t *testing.T) {
 	chain.sendHead(2)
 	waitStep(t, tr)
 
-	if incl := consumer.last().inclusions["peerA"]; incl != 0 {
+	if incl := consumer.last(t).inclusions["peerA"]; incl != 0 {
 		t.Fatalf("expected 0 inclusions for post-slot delivery, got %d", incl)
 	}
-}
-
-// TestHandleChainHeadNilConsumer verifies the tracker tolerates a nil
-// consumer (useful for tests that only exercise tx-lifecycle behavior).
-func TestHandleChainHeadNilConsumer(t *testing.T) {
-	tr := New()
-	chain := newMockChain()
-	tr.Start(chain, nil)
-	defer tr.Stop()
-
-	chain.addBlock(1, nil)
-	chain.sendHead(1)
-	waitStep(t, tr) // should not panic
 }
