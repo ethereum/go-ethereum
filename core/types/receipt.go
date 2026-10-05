@@ -183,13 +183,6 @@ type frameTxReceiptRLP struct {
 	FrameReceipts     []frameReceiptRLP
 }
 
-// storedReceiptRLP is the storage encoding of a receipt.
-type storedReceiptRLP struct {
-	PostStateOrStatus []byte
-	CumulativeGasUsed uint64
-	Logs              []*Log
-}
-
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
 // Deprecated: create receipts using a struct literal instead.
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
@@ -484,25 +477,59 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
 // fields of a receipt from an RLP stream.
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
-	raw, err := s.Raw()
+	if _, err := s.List(); err != nil {
+		return err
+	}
+	// The first field holds the status or post-state root of a regular receipt,
+	// and the cumulative gas used of a frame transaction receipt. Only frame
+	// transaction receipts have a 20-byte payer in the second field.
+	first, err := s.Raw()
 	if err != nil {
 		return err
 	}
-	var stored storedReceiptRLP
-	if err := rlp.DecodeBytes(raw, &stored); err == nil {
-		if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err == nil {
-			r.CumulativeGasUsed = stored.CumulativeGasUsed
-			r.Logs = stored.Logs
-			return nil
-		}
+	if kind, size, err := s.Kind(); err == nil && kind == rlp.String && size == common.AddressLength {
+		return r.decodeFrame(s, first)
 	}
-	// Frame transaction receipts are stored in their consensus shape.
-	var frameStored frameTxReceiptRLP
-	if err := rlp.DecodeBytes(raw, &frameStored); err != nil {
+	status, _, err := rlp.SplitString(first)
+	if err != nil {
+		return err
+	}
+	if err := (*Receipt)(r).setStatus(status); err != nil {
+		return err
+	}
+	if r.CumulativeGasUsed, err = s.Uint64(); err != nil {
+		return err
+	}
+	// Decode into a local so that r itself does not escape to the heap.
+	var logs []*Log
+	if err := s.Decode(&logs); err != nil {
+		return err
+	}
+	r.Logs = logs
+	return s.ListEnd()
+}
+
+// decodeFrame loads the remaining fields of a stored frame transaction receipt,
+// [cumulativeGasUsed, payer, frameReceipts], whose first field is already read.
+func (r *ReceiptForStorage) decodeFrame(s *rlp.Stream, cumulativeGasUsed rlp.RawValue) error {
+	var (
+		data frameTxReceiptRLP
+		err  error
+	)
+	if data.CumulativeGasUsed, _, err = rlp.SplitUint64(cumulativeGasUsed); err != nil {
+		return err
+	}
+	if err := s.Decode(&data.Payer); err != nil {
+		return err
+	}
+	if err := s.Decode(&data.FrameReceipts); err != nil {
+		return err
+	}
+	if err := s.ListEnd(); err != nil {
 		return err
 	}
 	r.Type = FrameTxType
-	return (*Receipt)(r).setFromFrameRLP(frameStored)
+	return (*Receipt)(r).setFromFrameRLP(data)
 }
 
 // Receipts implements DerivableList for receipts.
