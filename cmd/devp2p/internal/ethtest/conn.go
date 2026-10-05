@@ -301,6 +301,26 @@ func (s *Suite) dialAndPeer(status *eth.StatusPacket) (*Conn, error) {
 	return c, err
 }
 
+// dialPeers creates n connections and peers each of them with the node.
+func (s *Suite) dialPeers(n int) ([]*Conn, error) {
+	conns := make([]*Conn, 0, n)
+	for i := 0; i < n; i++ {
+		c, err := s.dialAndPeer(nil)
+		if err != nil {
+			closeConns(conns)
+			return nil, fmt.Errorf("peering failed: %v", err)
+		}
+		conns = append(conns, c)
+	}
+	return conns, nil
+}
+
+func closeConns(conns []*Conn) {
+	for _, c := range conns {
+		c.Close()
+	}
+}
+
 // peer performs both the protocol handshake and the status message
 // exchange with the node in order to peer with it.
 func (c *Conn) peer(chain *Chain, status *eth.StatusPacket) error {
