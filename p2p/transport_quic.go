@@ -39,7 +39,7 @@ const (
 	// quicExporterLabel and quicExporterLen parameterize the TLS exporter
 	// (RFC 5705) used as the channel binding for node-to-node mutual
 	// authentication.
-	quicExporterLabel = "devp2p-quic-id-proof-v1"
+	quicExporterLabel = "ENR key binding v1"
 	quicExporterLen   = 32
 )
 
