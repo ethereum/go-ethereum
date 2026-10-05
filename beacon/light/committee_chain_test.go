@@ -18,11 +18,16 @@ package light
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"fmt"
+	"math/bits"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
@@ -126,6 +131,74 @@ func TestCommitteeChainCheckpointSync(t *testing.T) {
 			c.verifyRange(tcBase, 2, 7)
 		}
 	}
+}
+
+// TestCommitteeChainCheckpointInit initializes the chain from bootstraps of different
+// forks. Before Gloas the next committee is the current one's sibling in the state and
+// the bootstrap fixes it too; from Gloas on, the first update brings it.
+func TestCommitteeChainCheckpointInit(t *testing.T) {
+	config := newTestForks(testGenesis, params.Forks{
+		&params.Fork{Name: "ALTAIR", Epoch: 0, Version: []byte{1}},
+		&params.Fork{Name: "FULU", Epoch: 0x200, Version: []byte{2}},
+		&params.Fork{Name: "GLOAS", Epoch: 0x600, Version: []byte{3}},
+	})
+	// bootstrap returns the bootstrap of a period of a test chain in the given format.
+	bootstrap := func(tc *testCommitteeChain, period uint64, version string) types.BootstrapData {
+		slot := types.SyncPeriodStart(period) + 200
+		fork := config.ForkNameAtSlot(slot)
+		index, nextIndex := params.StateIndexSyncCommittee(fork), params.StateIndexNextSyncCommittee(fork)
+		committee := tc.periods[period].committee
+		root, branch := makeTestState(map[uint64]merkle.Value{
+			index:     merkle.Value(committee.Root()),
+			nextIndex: merkle.Value(tc.periods[period+1].committee.Root()),
+		}, index)
+		depth := bits.Len64(params.StateIndexSyncCommittee(version)) - 1
+		return types.BootstrapData{
+			Version:         version,
+			Header:          types.Header{Slot: slot, StateRoot: root},
+			Committee:       committee,
+			CommitteeRoot:   committee.Root(),
+			CommitteeBranch: append(make(merkle.Values, depth-len(branch)), branch...),
+		}
+	}
+	tc := newTestCommitteeChain(nil, config, true, 0, 10, 400, false)
+	for _, test := range []struct {
+		period    uint64
+		version   string // the bootstrap's format
+		nextFixed bool
+	}{
+		{1, "altair", true},
+		{4, "fulu", true},
+		{4, "gloas", true}, // a Fulu bootstrap in the Gloas format
+		{8, "gloas", false},
+	} {
+		t.Run(fmt.Sprintf("%s/%d", test.version, test.period), func(t *testing.T) {
+			c := newCommitteeChainTest(t, config, 300, false)
+			if err := c.chain.CheckpointInit(bootstrap(tc, test.period, test.version)); err != nil {
+				t.Fatalf("CheckpointInit failed: %v", err)
+			}
+			if test.nextFixed {
+				other := newTestCommitteeChain(tc, config, true, int(test.period), int(test.period), 400, false)
+				c.insertUpdate(other, test.period, true, ErrCannotReorg) // another next committee
+			}
+			c.insertUpdate(tc, test.period, true, nil)
+			c.verifyRange(tc, test.period, test.period+1)
+		})
+	}
+	// A Gloas checkpoint leaves the next committee to the first update, so it also
+	// drops the one fixed by an earlier checkpoint (here of another chain).
+	t.Run("gloas/reinit", func(t *testing.T) {
+		other := newTestCommitteeChain(tc, config, true, 8, 9, 400, false)
+		c := newCommitteeChainTest(t, config, 300, false)
+		if err := c.chain.CheckpointInit(bootstrap(other, 9, "gloas")); err != nil {
+			t.Fatalf("CheckpointInit failed: %v", err)
+		}
+		if err := c.chain.CheckpointInit(bootstrap(tc, 8, "gloas")); err != nil {
+			t.Fatalf("CheckpointInit failed: %v", err)
+		}
+		c.insertUpdate(tc, 8, true, nil)
+		c.verifyRange(tc, 8, 9)
+	})
 }
 
 func TestCommitteeChainReorg(t *testing.T) {
@@ -296,6 +369,28 @@ func (c *committeeChainTest) verifyRange(tc *testCommitteeChain, begin, end uint
 		c.verifySignedHeader(tc, float64(period)+0.5, true)
 	}
 	c.verifySignedHeader(tc, float64(end)+1.5, false)
+}
+
+// makeTestState returns the root of a state tree with the given leaves (all at the
+// same depth, the other leaves random) and the proof of the leaf at index.
+func makeTestState(leaves map[uint64]merkle.Value, index uint64) (common.Hash, merkle.Values) {
+	depth := bits.Len64(index) - 1
+	nodes := make([]merkle.Value, 2<<depth)
+	for i := 1 << depth; i < len(nodes); i++ {
+		if v, ok := leaves[uint64(i)]; ok {
+			nodes[i] = v
+		} else {
+			rand.Read(nodes[i][:])
+		}
+	}
+	for i := 1<<depth - 1; i > 0; i-- {
+		nodes[i] = sha256.Sum256(append(nodes[2*i][:], nodes[2*i+1][:]...))
+	}
+	var branch merkle.Values
+	for i := index; i > 1; i >>= 1 {
+		branch = append(branch, nodes[i^1])
+	}
+	return common.Hash(nodes[1]), branch
 }
 
 func newTestGenesis() params.ChainConfig {
