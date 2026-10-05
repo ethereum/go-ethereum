@@ -215,9 +215,15 @@ func (evm *EVM) SetPrecompiles(precompiles PrecompiledContracts) {
 	evm.precompileCache = nil
 }
 
-// SetJumpDestCache configures the analysis cache.
+// SetJumpDestCache configures a shared analysis cache. It is fronted by a
+// per-EVM map, so that eviction from the shared cache never causes the same
+// code to be re-analysed during this EVM's lifetime.
 func (evm *EVM) SetJumpDestCache(jumpDests JumpDestCache) {
-	evm.jumpDests = jumpDests
+	if jumpDests == nil {
+		evm.jumpDests = newMapJumpDests()
+		return
+	}
+	evm.jumpDests = newLayeredJumpDests(jumpDests)
 }
 
 // SetPrecompileCache configures the precompile result cache.
