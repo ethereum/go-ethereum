@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -985,7 +986,7 @@ the transactions using a GetPooledTransactions request.`)
 
 	// Send announcement.
 	ann := eth.NewPooledTransactionHashesPacket72{Types: txTypes, Sizes: sizes, Hashes: hashes}
-	err = conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann)
+	err = conn.WriteAnnounce(ann)
 	if err != nil {
 		t.Fatalf("failed to write to connection: %v", err)
 	}
@@ -1051,11 +1052,23 @@ func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs typ
 			panic("blob tx signing failed")
 		}
 		blobs = append(blobs, sidecar.Blobs)
-		scNoBlob := sidecar.Copy()
-		scNoBlob.Blobs = nil
-		txs = append(txs, tx.WithBlobTxSidecar(scNoBlob))
+		txs = append(txs, tx)
 	}
 	return txs, blobs
+}
+
+// blobAvailabilityPeers is the number of peers that announce full availability
+// of a blob transaction on the eth72 partial fetch
+const blobAvailabilityPeers = 2
+
+func blobTxForProtocol(tx *types.Transaction, version uint) *types.Transaction {
+	sidecar := tx.BlobTxSidecar()
+	if version < eth.ETH72 || sidecar == nil {
+		return tx
+	}
+	sidecar = sidecar.Copy()
+	sidecar.Blobs = nil
+	return tx.WithBlobTxSidecar(sidecar)
 }
 
 func (s *Suite) TestBlobViolations(t *utesting.T) {
@@ -1094,18 +1107,24 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 			resp: eth.PooledTransactionsResponse(t2),
 		},
 	} {
-		conn, err := s.dial()
+		conns, err := s.dialPeers(blobAvailabilityPeers)
 		if err != nil {
-			t.Fatalf("dial fail: %v", err)
+			t.Fatalf("%v", err)
 		}
-		if err := conn.peer(s.chain, nil); err != nil {
-			t.Fatalf("peering failed: %v", err)
+		for i, tx := range test.resp {
+			wireTx := blobTxForProtocol(tx, conns[0].negotiatedProtoVersion)
+			test.ann.Sizes[i] -= uint32(tx.Size() - wireTx.Size())
+			test.resp[i] = wireTx
 		}
-		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, test.ann); err != nil {
-			t.Fatalf("sending announcement failed: %v", err)
+		for _, conn := range conns {
+			if err := conn.WriteAnnounce(test.ann); err != nil {
+				t.Fatalf("sending announcement failed: %v", err)
+			}
 		}
-		req := new(eth.GetPooledTransactionsPacket)
-		if err := conn.ReadMsg(ethProto, eth.GetPooledTransactionsMsg, req); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		req, conn, err := readAnyFrom[eth.GetPooledTransactionsPacket](ctx, conns...)
+		cancel()
+		if err != nil {
 			t.Fatalf("reading pooled tx request failed: %v", err)
 		}
 
@@ -1134,7 +1153,7 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 				}
 			}
 		}
-		conn.Close()
+		closeConns(conns)
 	}
 }
 
@@ -1203,138 +1222,64 @@ func readUntilDisconnect(conn *Conn) (disconnected bool) {
 }
 
 func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types.Transaction) {
-	stage1, stage2, stage3 := new(sync.WaitGroup), new(sync.WaitGroup), new(sync.WaitGroup)
-	stage1.Add(1)
-	stage2.Add(1)
-	stage3.Add(1)
-
-	errc := make(chan error)
-
-	badPeer := func() {
-		// announce the correct hash from the bad peer.
-		// when the transaction is first requested before transmitting it from the bad peer,
-		// trigger step 2: connection and announcement by good peers
-
-		conn, err := s.dial()
-		if err != nil {
-			errc <- fmt.Errorf("dial fail: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		if err := conn.peer(s.chain, nil); err != nil {
-			errc <- fmt.Errorf("bad peer: peering failed: %v", err)
-			return
-		}
-
-		ann := eth.NewPooledTransactionHashesPacket72{
-			Types:  []byte{types.BlobTxType},
-			Sizes:  []uint32{uint32(badTx.Size())},
-			Hashes: []common.Hash{badTx.Hash()},
-			Mask:   types.CustodyBitmapAll,
-		}
-
-		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
-			errc <- fmt.Errorf("sending announcement failed: %v", err)
-			return
-		}
-
-		req, err := readUntil[eth.GetPooledTransactionsPacket](context.Background(), conn)
-		if err != nil {
-			errc <- fmt.Errorf("failed to read GetPooledTransactions message: %v", err)
-			return
-		}
-
-		stage1.Done()
-		stage2.Wait()
-
-		// the good peer is connected, and has announced the tx.
-		// proceed to send the incorrect one from the bad peer.
-
-		encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{badTx})
-		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, List: encTxs}
-		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
-			errc <- fmt.Errorf("writing pooled tx response failed: %v", err)
-			return
-		}
-		if !readUntilDisconnect(conn) {
-			errc <- errors.New("expected bad peer to be disconnected")
-			return
-		}
-		stage3.Done()
-	}
-
-	goodPeer := func() {
-		stage1.Wait()
-
-		conn, err := s.dial()
-		if err != nil {
-			errc <- fmt.Errorf("dial fail: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		if err := conn.peer(s.chain, nil); err != nil {
-			errc <- fmt.Errorf("peering failed: %v", err)
-			return
-		}
-
-		ann := eth.NewPooledTransactionHashesPacket72{
-			Types:  []byte{types.BlobTxType},
-			Sizes:  []uint32{uint32(tx.Size())},
-			Hashes: []common.Hash{tx.Hash()},
-			Mask:   types.CustodyBitmapAll,
-		}
-
-		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
-			errc <- fmt.Errorf("sending first announcement failed: %v", err)
-			return
-		}
-
-		// wait until the bad peer has transmitted the incorrect transaction
-		stage2.Done()
-		stage3.Wait()
-
-		// the bad peer has transmitted the bad tx, and been disconnected.
-		// transmit the same tx but with correct sidecar from the good peer.
-
-		var req *eth.GetPooledTransactionsPacket
-		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-		defer cancel()
-
-		req, err = readUntil[eth.GetPooledTransactionsPacket](ctx, conn)
-		if err != nil {
-			errc <- fmt.Errorf("reading pooled tx request failed: %v", err)
-			return
-		}
-
-		if req.GetPooledTransactionsRequest[0] != tx.Hash() {
-			errc <- errors.New("requested unknown tx hash")
-			return
-		}
-
-		encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{tx})
-		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, List: encTxs}
-		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
-			errc <- fmt.Errorf("writing pooled tx response failed: %v", err)
-			return
-		}
-		if readUntilDisconnect(conn) {
-			errc <- errors.New("unexpected disconnect")
-			return
-		}
-		close(errc)
-	}
-
 	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
-
-	go goodPeer()
-	go badPeer()
-	err := <-errc
+	// One extra peer keeps enough announcers alive after the bad one is dropped.
+	conns, err := s.dialPeers(blobAvailabilityPeers + 1)
 	if err != nil {
 		t.Fatalf("%v", err)
+	}
+	defer closeConns(conns)
+
+	version := conns[0].negotiatedProtoVersion
+	wireTx := blobTxForProtocol(tx, version)
+	wireBadTx := blobTxForProtocol(badTx, version)
+	ann := eth.NewPooledTransactionHashesPacket72{
+		Types:  []byte{types.BlobTxType},
+		Sizes:  []uint32{uint32(wireTx.Size())},
+		Hashes: []common.Hash{wireTx.Hash()},
+		Mask:   types.CustodyBitmapAll,
+	}
+	for _, conn := range conns {
+		if err := conn.WriteAnnounce(ann); err != nil {
+			t.Fatalf("sending announcement failed: %v", err)
+		}
+	}
+
+	// The first requested peer serves the bad transaction and must be dropped.
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	req, badPeer, err := readAnyFrom[eth.GetPooledTransactionsPacket](ctx, conns...)
+	if err != nil {
+		t.Fatalf("reading pooled tx request failed: %v", err)
+	}
+	encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{wireBadTx})
+	resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, List: encTxs}
+	if err := badPeer.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
+		t.Fatalf("writing pooled tx response failed: %v", err)
+	}
+	if !readUntilDisconnect(badPeer) {
+		t.Fatalf("expected bad peer to be disconnected")
+	}
+	conns = slices.DeleteFunc(slices.Clone(conns), func(c *Conn) bool { return c == badPeer })
+
+	// The transaction must then be requested from one of the remaining peers,
+	// which serves the correct one and must stay connected.
+	req, goodPeer, err := readAnyFrom[eth.GetPooledTransactionsPacket](ctx, conns...)
+	if err != nil {
+		t.Fatalf("reading pooled tx request failed: %v", err)
+	}
+	if req.GetPooledTransactionsRequest[0] != wireTx.Hash() {
+		t.Fatalf("requested unknown tx hash")
+	}
+	encTxs, _ = rlp.EncodeToRawList([]*types.Transaction{wireTx})
+	resp = eth.PooledTransactionsPacket{RequestId: req.RequestId, List: encTxs}
+	if err := goodPeer.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
+		t.Fatalf("writing pooled tx response failed: %v", err)
+	}
+	if readUntilDisconnect(goodPeer) {
+		t.Fatalf("unexpected disconnect")
 	}
 }
 
@@ -1367,7 +1312,9 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 
 	txs, _ := s.makeBlobTxs(10, 2, 0x30)
 	txsByHash := make(map[common.Hash]*types.Transaction, len(txs))
-	for _, tx := range txs {
+	for i, tx := range txs {
+		tx = blobTxForProtocol(tx, eth.ETH72)
+		txs[i] = tx
 		txsByHash[tx.Hash()] = tx
 	}
 
@@ -1395,7 +1342,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 		Hashes: hashes,
 		Mask:   types.CustodyBitmapAll,
 	}
-	if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn.WriteAnnounce(ann); err != nil {
 		t.Fatalf("announce failed: %v", err)
 	}
 
@@ -1466,8 +1413,8 @@ func encodeCells(cells [][]kzg4844.Cell) rlp.RawList[rlp.RawList[kzg4844.Cell]] 
 
 // readAnyFrom waits for a message of type T on any of the given conns
 // and returns the packet and the conn it came from.
-func readAnyFrom[T any](conns ...*Conn) (*T, *Conn, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+func readAnyFrom[T any](ctx context.Context, conns ...*Conn) (*T, *Conn, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	type result struct {
@@ -1499,6 +1446,8 @@ func readAnyFrom[T any](conns ...*Conn) (*T, *Conn, error) {
 	select {
 	case r = <-ch:
 	case err = <-errCh:
+	case <-ctx.Done():
+		err = ctx.Err()
 	}
 	cancel()
 	wg.Wait()
@@ -1521,7 +1470,7 @@ and that providing valid cells causes the tx to enter the pool.`)
 	}
 
 	txs, blobs := s.makeBlobTxs(1, 1, 0x31)
-	tx := txs[0]
+	tx := blobTxForProtocol(txs[0], eth.ETH72)
 	blob := blobs[0]
 
 	// Two peers ensure GetCells arrives regardless of full/partial fetch path.
@@ -1549,15 +1498,15 @@ and that providing valid cells causes the tx to enter the pool.`)
 		Hashes: []common.Hash{tx.Hash()},
 		Mask:   types.CustodyBitmapAll,
 	}
-	if err := conn1.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn1.WriteAnnounce(ann); err != nil {
 		t.Fatalf("conn1 announce failed: %v", err)
 	}
-	if err := conn2.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn2.WriteAnnounce(ann); err != nil {
 		t.Fatalf("conn2 announce failed: %v", err)
 	}
 
 	// Wait for GetPooledTransactions on either conn, respond with tx (without blobs).
-	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](conn1, conn2)
+	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](context.Background(), conn1, conn2)
 	if err != nil {
 		t.Fatalf("failed to read GetPooledTransactions: %v", err)
 	}
@@ -1568,7 +1517,7 @@ and that providing valid cells causes the tx to enter the pool.`)
 	}
 
 	// Wait for GetCells request on either conn.
-	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](conn1, conn2)
+	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](context.Background(), conn1, conn2)
 	if err != nil {
 		t.Fatalf("failed to read GetCells: %v", err)
 	}
@@ -1607,7 +1556,7 @@ while the other peer is not.`)
 	}
 
 	txs, blobs := s.makeBlobTxs(1, 1, 0x32)
-	tx := txs[0]
+	tx := blobTxForProtocol(txs[0], eth.ETH72)
 	blob := blobs[0]
 
 	conn1, err := s.dial()
@@ -1634,14 +1583,14 @@ while the other peer is not.`)
 		Hashes: []common.Hash{tx.Hash()},
 		Mask:   types.CustodyBitmapAll,
 	}
-	if err := conn1.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn1.WriteAnnounce(ann); err != nil {
 		t.Fatalf("conn1 announce failed: %v", err)
 	}
-	if err := conn2.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+	if err := conn2.WriteAnnounce(ann); err != nil {
 		t.Fatalf("conn2 announce failed: %v", err)
 	}
 
-	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](conn1, conn2)
+	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](context.Background(), conn1, conn2)
 	if err != nil {
 		t.Fatalf("failed to read GetPooledTransactions: %v", err)
 	}
@@ -1651,7 +1600,7 @@ while the other peer is not.`)
 		t.Fatalf("writing pooled tx response failed: %v", err)
 	}
 
-	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](conn1, conn2)
+	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](context.Background(), conn1, conn2)
 	if err != nil {
 		t.Fatalf("failed to read GetCells: %v", err)
 	}

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
@@ -162,6 +163,16 @@ func (c *Conn) Write(proto Proto, code uint64, msg any) error {
 	return err
 }
 
+// WriteAnnounce encodes an announcement for the negotiated eth version.
+func (c *Conn) WriteAnnounce(ann eth.NewPooledTransactionHashesPacket72) error {
+	if c.negotiatedProtoVersion < eth.ETH72 {
+		return c.Write(ethProto, eth.NewPooledTransactionHashesMsg, eth.NewPooledTransactionHashesPacket71{
+			Types: ann.Types, Sizes: ann.Sizes, Hashes: ann.Hashes,
+		})
+	}
+	return c.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann)
+}
+
 var errDisc error = errors.New("disconnect")
 
 // ReadEth reads an Eth sub-protocol wire message.
@@ -200,7 +211,11 @@ func (c *Conn) ReadEth() (any, error) {
 		case eth.TransactionsMsg:
 			msg = new(eth.TransactionsPacket)
 		case eth.NewPooledTransactionHashesMsg:
-			msg = new(eth.NewPooledTransactionHashesPacket72)
+			if c.negotiatedProtoVersion < eth.ETH72 {
+				msg = new(eth.NewPooledTransactionHashesPacket71)
+			} else {
+				msg = new(eth.NewPooledTransactionHashesPacket72)
+			}
 		case eth.GetPooledTransactionsMsg:
 			msg = new(eth.GetPooledTransactionsPacket)
 		case eth.PooledTransactionsMsg:
@@ -214,6 +229,12 @@ func (c *Conn) ReadEth() (any, error) {
 		}
 		if err := rlp.DecodeBytes(data, msg); err != nil {
 			return nil, fmt.Errorf("unable to decode eth msg: %v", err)
+		}
+		if ann, ok := msg.(*eth.NewPooledTransactionHashesPacket71); ok {
+			// Test readers use one announcement type for all eth versions.
+			return &eth.NewPooledTransactionHashesPacket72{
+				Types: ann.Types, Sizes: ann.Sizes, Hashes: ann.Hashes, Mask: types.CustodyBitmapAll,
+			}, nil
 		}
 		return msg, nil
 	}
@@ -278,6 +299,26 @@ func (s *Suite) dialAndPeer(status *eth.StatusPacket) (*Conn, error) {
 		c.Close()
 	}
 	return c, err
+}
+
+// dialPeers creates n connections and peers each of them with the node.
+func (s *Suite) dialPeers(n int) ([]*Conn, error) {
+	conns := make([]*Conn, 0, n)
+	for i := 0; i < n; i++ {
+		c, err := s.dialAndPeer(nil)
+		if err != nil {
+			closeConns(conns)
+			return nil, fmt.Errorf("peering failed: %v", err)
+		}
+		conns = append(conns, c)
+	}
+	return conns, nil
+}
+
+func closeConns(conns []*Conn) {
+	for _, c := range conns {
+		c.Close()
+	}
 }
 
 // peer performs both the protocol handshake and the status message
