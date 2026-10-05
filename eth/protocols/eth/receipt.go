@@ -196,9 +196,12 @@ func (rl *ReceiptList) Derivable() types.DerivableList {
 	var bloomBuf [6]byte
 	return newDerivableRawList(&rl.items, func(data []byte, outbuf *bytes.Buffer) {
 		var r Receipt
-		if r.decode(data) == nil {
-			r.encodeForHash(&bloomBuf, outbuf)
+		if r.decode(data) != nil {
+			// Write invalid data to corrupt the receipt root
+			outbuf.WriteByte(0x00)
+			return
 		}
+		r.encodeForHash(&bloomBuf, outbuf)
 	})
 }
 
