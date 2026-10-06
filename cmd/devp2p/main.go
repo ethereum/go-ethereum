@@ -35,20 +35,14 @@ var app = flags.NewApp("go-ethereum devp2p tool")
 
 func init() {
 	app.Flags = append(app.Flags, debug.Flags...)
-	app.Flags = append(app.Flags, utils.MetricsEnabledFlag, utils.MetricsHTTPFlag, utils.MetricsPortFlag)
+	app.Flags = append(app.Flags, utils.MetricsFlags...)
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
 		if err := debug.Setup(ctx); err != nil {
 			return err
 		}
 		cfg := metrics.DefaultConfig
-		cfg.Enabled = ctx.Bool(utils.MetricsEnabledFlag.Name)
-		if ctx.IsSet(utils.MetricsHTTPFlag.Name) {
-			cfg.HTTP = ctx.String(utils.MetricsHTTPFlag.Name)
-		}
-		if ctx.IsSet(utils.MetricsPortFlag.Name) {
-			cfg.Port = ctx.Int(utils.MetricsPortFlag.Name)
-		}
+		utils.SetMetricsConfig(ctx, &cfg)
 		utils.SetupMetrics(&cfg)
 		return nil
 	}

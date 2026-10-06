@@ -91,7 +91,8 @@ Add the global `--metrics` flag to any listen command to collect metrics. They a
 at `/debug/metrics/prometheus` (and `/debug/metrics` as expvar JSON) on
 `--metrics.addr`:`--metrics.port`, default `127.0.0.1:6060`. The `discover/*` series
 report table size per bucket, bytes in and out, received packets per message type, and
-dropped packets per protocol version.
+dropped packets per protocol version. The `--metrics.influxdb*` flags also work and push the
+same series to InfluxDB, under the `geth.` prefix.
 
 ### Discovery Test Suites
 
