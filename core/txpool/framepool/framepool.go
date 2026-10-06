@@ -53,6 +53,7 @@ var (
 type BlockChain interface {
 	Config() *params.ChainConfig
 	CurrentBlock() *types.Header
+	GetBlock(hash common.Hash, number uint64) *types.Block
 	StateAt(header *types.Header) (*state.StateDB, error)
 }
 
@@ -87,8 +88,8 @@ type payerUsage struct {
 // canonical-paymaster exception. Blob-carrying frames are not supported.
 //
 // Capacity eviction prefers the nearest expiry, then the lowest next-block
-// effective tip. Deadline equality remains valid. Reset re-simulates all pending
-// prefixes, without selective invalidation or reorg reinjection.
+// effective tip. Deadline equality remains valid. Reset uses block access lists
+// to revalidate dependencies and recovers displaced transactions on bounded reorgs.
 type FramePool struct {
 	config         Config
 	chain          BlockChain
@@ -101,11 +102,12 @@ type FramePool struct {
 	state   *state.StateDB // Read state; never passed to simulation.
 	baseFee *big.Int       // Next-block fee used only for eviction pricing.
 
-	lock       sync.RWMutex
-	resetLock  sync.Mutex // Serializes Reset calls, not simulations with readers.
-	generation uint64
-	resetDone  chan struct{} // Non-nil while Reset is in flight.
-	closed     bool
+	lock        sync.RWMutex
+	resetLock   sync.Mutex // Serializes Reset calls, not simulations with readers.
+	generation  uint64
+	resetDone   chan struct{} // Non-nil while Reset is in flight.
+	closed      bool
+	simulations atomic.Uint64 // Counts prefix executions, including rejected ones.
 
 	txs       map[common.Address]*frameTx
 	all       map[common.Hash]*frameTx

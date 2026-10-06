@@ -63,7 +63,7 @@ func (p *FramePool) verifySignatures(tx *types.Transaction) error {
 func (p *FramePool) Add(txs []*types.Transaction, _ bool) []error {
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
-		errs[i] = p.add(tx)
+		errs[i] = p.add(tx, false)
 		if errs[i] != nil {
 			rejectedMeter.Mark(1)
 		}
@@ -71,7 +71,9 @@ func (p *FramePool) Add(txs []*types.Transaction, _ bool) []error {
 	return errs
 }
 
-func (p *FramePool) add(tx *types.Transaction) error {
+// reorg is used only by Reset while it owns the generation. It bypasses the
+// reset wait, but shares every validation and atomic admission check with Add.
+func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 	validatedHead := p.head.Load()
 	prefix, err := p.classify(tx, validatedHead)
 	if err != nil {
@@ -99,7 +101,7 @@ func (p *FramePool) add(tx *types.Transaction) error {
 		p.lock.RLock()
 		done := p.resetDone
 		p.lock.RUnlock()
-		if done != nil {
+		if done != nil && !reorg {
 			<-done
 		}
 		p.lock.RLock()
@@ -107,7 +109,7 @@ func (p *FramePool) add(tx *types.Transaction) error {
 			p.lock.RUnlock()
 			return ErrClosed
 		}
-		if p.resetDone != nil {
+		if p.resetDone != nil && !reorg {
 			p.lock.RUnlock()
 			continue
 		}
@@ -129,12 +131,12 @@ func (p *FramePool) add(tx *types.Transaction) error {
 			if stateErr != nil {
 				err = stateErr
 			} else {
-				result, err = simulate(p.chain.Config(), head, statedb, tx, prefix)
+				result, err = p.simulate(head, statedb, tx, prefix)
 				entry.simResult = result
 			}
 		}
 		p.lock.Lock()
-		if generation != p.generation || p.resetDone != nil {
+		if generation != p.generation || (p.resetDone != nil && !reorg) {
 			p.lock.Unlock()
 			continue
 		}
@@ -146,7 +148,7 @@ func (p *FramePool) add(tx *types.Transaction) error {
 			p.lock.Unlock()
 			return err
 		}
-		err = p.commit(entry)
+		err = p.commit(entry, reorg)
 		p.lock.Unlock()
 		return err
 	}
@@ -194,7 +196,7 @@ func (p *FramePool) checkReplacement(entry *frameTx) (*frameTx, error) {
 
 // commit computes all policy decisions before taking a new sender hold, then
 // performs only infallible mutations. A replacement retains its existing hold.
-func (p *FramePool) commit(entry *frameTx) error {
+func (p *FramePool) commit(entry *frameTx, reorg bool) error {
 	if p.all[entry.tx.Hash()] != nil {
 		return txpool.ErrAlreadyKnown
 	}
@@ -250,7 +252,9 @@ func (p *FramePool) commit(entry *frameTx) error {
 	p.updateMetrics()
 	acceptedMeter.Mark(1)
 	accepted := core.NewTxsEvent{Txs: []*types.Transaction{entry.tx}}
-	p.discoverFeed.Send(accepted)
+	if !reorg {
+		p.discoverFeed.Send(accepted)
+	}
 	p.insertFeed.Send(accepted)
 	return nil
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/program"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -49,6 +50,7 @@ type testBlockChain struct {
 	lock   sync.Mutex
 	head   *types.Header
 	states map[common.Hash]*state.StateDB
+	blocks map[common.Hash]*types.Block
 	hook   func(*types.Header)
 }
 
@@ -57,6 +59,14 @@ func (c *testBlockChain) CurrentBlock() *types.Header {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	return c.head
+}
+func (c *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if block := c.blocks[hash]; block != nil && block.NumberU64() == number {
+		return block
+	}
+	return nil
 }
 func (c *testBlockChain) StateAt(head *types.Header) (*state.StateDB, error) {
 	c.lock.Lock()
@@ -86,6 +96,7 @@ func (c *testBlockChain) advance(timestamp uint64, change func(*state.StateDB)) 
 		change(statedb)
 	}
 	c.states[next.Root], c.head = statedb, next
+	c.blocks[next.Hash()] = types.NewBlockWithHeader(next)
 	return next
 }
 
@@ -118,7 +129,10 @@ func setupFramePool(t *testing.T, slots uint64, change func(*state.StateDB)) (*F
 		change(statedb)
 	}
 	head := &types.Header{Root: common.BigToHash(big.NewInt(1)), Number: big.NewInt(1), Time: 100, GasLimit: 30_000_000, GasUsed: 15_000_000, BaseFee: big.NewInt(10), Difficulty: new(big.Int)}
-	chain := &testBlockChain{config: &config, head: head, states: map[common.Hash]*state.StateDB{head.Root: statedb}}
+	chain := &testBlockChain{
+		config: &config, head: head, states: map[common.Hash]*state.StateDB{head.Root: statedb},
+		blocks: map[common.Hash]*types.Block{head.Hash(): types.NewBlockWithHeader(head)},
+	}
 	tracker := txpool.NewReservationTracker()
 	pool := New(Config{GlobalSlots: slots, PriceBump: 10}, chain, nil)
 	if err := pool.Init(1, head, tracker.NewHandle(0)); err != nil {
@@ -551,19 +565,37 @@ func TestResetPayerShortfallAndCode(t *testing.T) {
 }
 
 func TestResetRefreshesEffectiveTips(t *testing.T) {
-	pool, chain, _ := setupFramePool(t, 2, nil)
-	capped := signedPoolTx(t, 1, 0, 0, 20, 10, nil, nil)
-	uncapped := signedPoolTx(t, 2, 0, 0, 100, 5, nil, nil)
-	addPoolTx(t, pool, capped, nil)
-	addPoolTx(t, pool, uncapped, nil)
-	old := chain.CurrentBlock()
-	next := chain.advance(101, nil)
-	next.BaseFee = big.NewInt(19)
-	pool.Reset(old, next)
-	addPoolTx(t, pool, signedPoolTx(t, 3, 0, 0, 100, 6, nil, nil), nil)
-	assertLive(t, pool, capped, false)
-	assertLive(t, pool, uncapped, true)
-	assertFramePoolConsistent(t, pool)
+	for _, selective := range []bool{false, true} {
+		t.Run(fmt.Sprintf("selective=%v", selective), func(t *testing.T) {
+			pool, chain, _ := setupFramePool(t, 2, nil)
+			capped := signedPoolTx(t, 1, 0, 0, 20, 10, nil, nil)
+			uncapped := signedPoolTx(t, 2, 0, 0, 100, 5, nil, nil)
+			addPoolTx(t, pool, capped, nil)
+			addPoolTx(t, pool, uncapped, nil)
+			assertSimulations(t, pool, 2)
+			old := chain.CurrentBlock()
+			next := chain.advance(101, nil)
+			next.BaseFee = big.NewInt(19)
+			if selective {
+				list := bal.NewConstructionBlockAccessList().ToEncodingObj()
+				hash := list.Hash()
+				next.BlockAccessListHash = &hash
+				chain.lock.Lock()
+				chain.blocks[next.Hash()] = types.NewBlockWithHeader(next).WithAccessList(list)
+				chain.lock.Unlock()
+			}
+			pool.Reset(old, next)
+			want := uint64(2)
+			if selective {
+				want = 0
+			}
+			assertSimulations(t, pool, want)
+			addPoolTx(t, pool, signedPoolTx(t, 3, 0, 0, 100, 6, nil, nil), nil)
+			assertLive(t, pool, capped, false)
+			assertLive(t, pool, uncapped, true)
+			assertFramePoolConsistent(t, pool)
+		})
+	}
 }
 
 func TestPendingFiltersAndLiveRetrieval(t *testing.T) {

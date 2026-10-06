@@ -62,6 +62,12 @@ type simResult struct {
 	expiryDeadline *uint64
 }
 
+// simulate is the common pool execution path for admission and revalidation.
+func (p *FramePool) simulate(head *types.Header, statedb *state.StateDB, tx *types.Transaction, prefix Prefix) (*simResult, error) {
+	p.simulations.Add(1)
+	return simulate(p.chain.Config(), head, statedb, tx, prefix)
+}
+
 // simulate consumes a fresh disposable StateDB at head.Root. Signatures must
 // already have been verified and prefix classified. The full transaction is
 // retained for introspection and maximum-cost approval accounting.

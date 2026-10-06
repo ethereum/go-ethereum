@@ -27,5 +27,10 @@ var (
 	rejectedMeter = metrics.NewRegisteredMeter("framepool/add/rejected", nil)
 	replacedMeter = metrics.NewRegisteredMeter("framepool/add/replaced", nil)
 	evictedMeter  = metrics.NewRegisteredMeter("framepool/evicted", nil)
-	resettimeHist = metrics.NewRegisteredHistogram("framepool/reset/time", nil, metrics.NewExpDecaySample(1028, 0.015))
+
+	resetselectiveMeter   = metrics.NewRegisteredMeter("framepool/reset/selective", nil)
+	resetfullMeter        = metrics.NewRegisteredMeter("framepool/reset/full", nil)
+	resetresimulatedMeter = metrics.NewRegisteredMeter("framepool/reset/resimulated", nil)
+	resetreinjectedMeter  = metrics.NewRegisteredMeter("framepool/reset/reinjected", nil)
+	resettimeHist         = metrics.NewRegisteredHistogram("framepool/reset/time", nil, metrics.NewExpDecaySample(1028, 0.015))
 )
