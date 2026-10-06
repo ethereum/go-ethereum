@@ -16,7 +16,12 @@
 
 package vm
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+var jumpDestLocalHitMeter = metrics.NewRegisteredMeter("chain/cache/jumpdest/local/hit", nil)
 
 // JumpDestCache represents the cache of jumpdest analysis results.
 type JumpDestCache interface {
@@ -44,4 +49,40 @@ func (j mapJumpDests) Load(codeHash common.Hash) (BitVec, bool) {
 
 func (j mapJumpDests) Store(codeHash common.Hash, vec BitVec) {
 	j[codeHash] = vec
+}
+
+// layeredJumpDests sits in front of a shared JumpDestCache.
+// During a single tx, an eviction from the shared cache can never cause the
+// same code to be analyzed twice. The local layer is reset on every new tx.
+// Thus the jumpdest analysis gets charged correctly, once per cold account load.
+type layeredJumpDests struct {
+	local  mapJumpDests
+	shared JumpDestCache
+}
+
+// newLayeredJumpDests creates a per-transaction layer on top of the shared cache.
+func newLayeredJumpDests(shared JumpDestCache) *layeredJumpDests {
+	return &layeredJumpDests{local: make(mapJumpDests), shared: shared}
+}
+
+// reset drops the analyses retained by the local layer.
+func (j *layeredJumpDests) reset() {
+	clear(j.local)
+}
+
+func (j *layeredJumpDests) Load(codeHash common.Hash) (BitVec, bool) {
+	if vec, ok := j.local[codeHash]; ok {
+		jumpDestLocalHitMeter.Mark(1)
+		return vec, true
+	}
+	vec, ok := j.shared.Load(codeHash)
+	if ok {
+		j.local[codeHash] = vec
+	}
+	return vec, ok
+}
+
+func (j *layeredJumpDests) Store(codeHash common.Hash, vec BitVec) {
+	j.local[codeHash] = vec
+	j.shared.Store(codeHash, vec)
 }
