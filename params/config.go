@@ -36,116 +36,17 @@ var (
 func newUint64(val uint64) *uint64 { return &val }
 
 var (
-	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_750_000_000_000_000_000_000", 0)
-
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
-	MainnetChainConfig = &ChainConfig{
-		ChainID:                 big.NewInt(1),
-		HomesteadBlock:          big.NewInt(1_150_000),
-		DAOForkBlock:            big.NewInt(1_920_000),
-		DAOForkSupport:          true,
-		EIP150Block:             big.NewInt(2_463_000),
-		EIP155Block:             big.NewInt(2_675_000),
-		EIP158Block:             big.NewInt(2_675_000),
-		ByzantiumBlock:          big.NewInt(4_370_000),
-		ConstantinopleBlock:     big.NewInt(7_280_000),
-		PetersburgBlock:         big.NewInt(7_280_000),
-		IstanbulBlock:           big.NewInt(9_069_000),
-		MuirGlacierBlock:        big.NewInt(9_200_000),
-		BerlinBlock:             big.NewInt(12_244_000),
-		LondonBlock:             big.NewInt(12_965_000),
-		ArrowGlacierBlock:       big.NewInt(13_773_000),
-		GrayGlacierBlock:        big.NewInt(15_050_000),
-		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000_000
-		ShanghaiTime:            newUint64(1681338455),
-		CancunTime:              newUint64(1710338135),
-		PragueTime:              newUint64(1746612311),
-		OsakaTime:               newUint64(1764798551),
-		BPO1Time:                newUint64(1765290071),
-		BPO2Time:                newUint64(1767747671),
-		BogotaTime:              nil,
-		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"),
-		Ethash:                  new(EthashConfig),
-		BlobScheduleConfig: &BlobScheduleConfig{
-			Cancun: DefaultCancunBlobConfig,
-			Prague: DefaultPragueBlobConfig,
-			BPO1:   DefaultBPO1BlobConfig,
-			BPO2:   DefaultBPO2BlobConfig,
-		},
-	}
+	MainnetChainConfig = readChainSpec("chainspecs/mainnet.json")
+
+	MainnetTerminalTotalDifficulty = MainnetChainConfig.TerminalTotalDifficulty // 58_750_000_000_000_000_000_000
+
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
-	SepoliaChainConfig = &ChainConfig{
-		ChainID:                 big.NewInt(11155111),
-		HomesteadBlock:          big.NewInt(0),
-		DAOForkBlock:            nil,
-		DAOForkSupport:          true,
-		EIP150Block:             big.NewInt(0),
-		EIP155Block:             big.NewInt(0),
-		EIP158Block:             big.NewInt(0),
-		ByzantiumBlock:          big.NewInt(0),
-		ConstantinopleBlock:     big.NewInt(0),
-		PetersburgBlock:         big.NewInt(0),
-		IstanbulBlock:           big.NewInt(0),
-		MuirGlacierBlock:        big.NewInt(0),
-		BerlinBlock:             big.NewInt(0),
-		LondonBlock:             big.NewInt(0),
-		ArrowGlacierBlock:       nil,
-		GrayGlacierBlock:        nil,
-		TerminalTotalDifficulty: big.NewInt(17_000_000_000_000_000),
-		MergeNetsplitBlock:      big.NewInt(1735371),
-		ShanghaiTime:            newUint64(1677557088),
-		CancunTime:              newUint64(1706655072),
-		PragueTime:              newUint64(1741159776),
-		OsakaTime:               newUint64(1760427360),
-		BPO1Time:                newUint64(1761017184),
-		BPO2Time:                newUint64(1761607008),
-		AmsterdamTime:           newUint64(1791294816),
-		BogotaTime:              nil,
-		DepositContractAddress:  common.HexToAddress("0x7f02c3e3c98b133055b8b348b2ac625669ed295d"),
-		Ethash:                  new(EthashConfig),
-		BlobScheduleConfig: &BlobScheduleConfig{
-			Cancun: DefaultCancunBlobConfig,
-			Prague: DefaultPragueBlobConfig,
-			BPO1:   DefaultBPO1BlobConfig,
-			BPO2:   DefaultBPO2BlobConfig,
-		},
-	}
+	SepoliaChainConfig = readChainSpec("chainspecs/sepolia.json")
+
 	// HoodiChainConfig contains the chain parameters to run a node on the Hoodi test network.
-	HoodiChainConfig = &ChainConfig{
-		ChainID:                 big.NewInt(560048),
-		HomesteadBlock:          big.NewInt(0),
-		DAOForkBlock:            nil,
-		DAOForkSupport:          true,
-		EIP150Block:             big.NewInt(0),
-		EIP155Block:             big.NewInt(0),
-		EIP158Block:             big.NewInt(0),
-		ByzantiumBlock:          big.NewInt(0),
-		ConstantinopleBlock:     big.NewInt(0),
-		PetersburgBlock:         big.NewInt(0),
-		IstanbulBlock:           big.NewInt(0),
-		MuirGlacierBlock:        big.NewInt(0),
-		BerlinBlock:             big.NewInt(0),
-		LondonBlock:             big.NewInt(0),
-		ArrowGlacierBlock:       nil,
-		GrayGlacierBlock:        nil,
-		TerminalTotalDifficulty: big.NewInt(0),
-		MergeNetsplitBlock:      big.NewInt(0),
-		ShanghaiTime:            newUint64(0),
-		CancunTime:              newUint64(0),
-		PragueTime:              newUint64(1742999832),
-		OsakaTime:               newUint64(1761677592),
-		BPO1Time:                newUint64(1762365720),
-		BPO2Time:                newUint64(1762955544),
-		BogotaTime:              nil,
-		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cBB839Cbe05303d7705Fa"),
-		Ethash:                  new(EthashConfig),
-		BlobScheduleConfig: &BlobScheduleConfig{
-			Cancun: DefaultCancunBlobConfig,
-			Prague: DefaultPragueBlobConfig,
-			BPO1:   DefaultBPO1BlobConfig,
-			BPO2:   DefaultBPO2BlobConfig,
-		},
-	}
+	HoodiChainConfig = readChainSpec("chainspecs/hoodi.json")
+
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	AllEthashProtocolChanges = &ChainConfig{

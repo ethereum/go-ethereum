@@ -1,0 +1,50 @@
+{
+  "chainName": "sepolia",
+  "chainId": 11155111,
+  "consensus": "ethash",
+  "homesteadBlock": 0,
+  "daoForkSupport": true,
+  "eip150Block": 0,
+  "eip155Block": 0,
+  "eip158Block": 0,
+  "byzantiumBlock": 0,
+  "constantinopleBlock": 0,
+  "petersburgBlock": 0,
+  "istanbulBlock": 0,
+  "muirGlacierBlock": 0,
+  "berlinBlock": 0,
+  "londonBlock": 0,
+  "terminalTotalDifficulty": 17000000000000000,
+  "mergeNetsplitBlock": 1735371,
+  "shanghaiTime": 1677557088,
+  "cancunTime": 1706655072,
+  "pragueTime": 1741159776,
+  "osakaTime": 1760427360,
+  "bpo1Time": 1761017184,
+  "bpo2Time": 1761607008,
+  "amsterdamTime": 1791294816,
+  "blobSchedule": {
+    "cancun": {
+      "target": 3,
+      "max": 6,
+      "baseFeeUpdateFraction": 3338477
+    },
+    "prague": {
+      "target": 6,
+      "max": 9,
+      "baseFeeUpdateFraction": 5007716
+    },
+    "bpo1": {
+      "target": 10,
+      "max": 15,
+      "baseFeeUpdateFraction": 8346193
+    },
+    "bpo2": {
+      "target": 14,
+      "max": 21,
+      "baseFeeUpdateFraction": 11684671
+    }
+  },
+  "depositContractAddress": "0x7f02c3e3c98b133055b8b348b2ac625669ed295d",
+  "ethash": {}
+}
