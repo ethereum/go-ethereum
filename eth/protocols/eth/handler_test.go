@@ -991,6 +991,58 @@ func TestGetPooledTransactionsLookupCap(t *testing.T) {
 	}
 }
 
+// cellsTestPool is a blob pool stub that only knows the blob of one transaction.
+type cellsTestPool struct {
+	BlobPool
+	known common.Hash
+}
+
+func (p *cellsTestPool) GetBlobHashes(hash common.Hash) []common.Hash {
+	if hash != p.known {
+		return nil
+	}
+	return []common.Hash{{0x01}}
+}
+
+func (p *cellsTestPool) GetBlobCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*kzg4844.Cell, [][]*kzg4844.Proof, error) {
+	cells := make([][]*kzg4844.Cell, len(vhashes))
+	for i := range cells {
+		cells[i] = []*kzg4844.Cell{new(kzg4844.Cell)}
+	}
+	return cells, nil, nil
+}
+
+// cellsTestBackend is a backend stub that only serves a blob pool.
+type cellsTestBackend struct {
+	Backend
+	pool BlobPool
+}
+
+func (b *cellsTestBackend) BlobPool() BlobPool { return b.pool }
+
+// Tests that cell retrievals stop after maxPooledTxServe lookups, even if the
+// requested hashes are unknown and the response stays empty.
+func TestGetCellsLookupCap(t *testing.T) {
+	known := common.Hash{0xff}
+	backend := &cellsTestBackend{pool: &cellsTestPool{known: known}}
+
+	// Pad the request with unknown hashes so the known one lands at the given index
+	request := func(index int) GetCellsRequest {
+		query := GetCellsRequest{Hashes: make([]common.Hash, index+1), Mask: types.CustodyBitmapAll}
+		for i := range index {
+			query.Hashes[i] = common.BigToHash(big.NewInt(int64(i + 1)))
+		}
+		query.Hashes[index] = known
+		return query
+	}
+	if hashes, _, _ := answerGetCells(backend, request(maxPooledTxServe-1)); len(hashes) != 1 {
+		t.Errorf("cells within lookup cap not served: have %d, want 1", len(hashes))
+	}
+	if hashes, _, _ := answerGetCells(backend, request(maxPooledTxServe)); len(hashes) != 0 {
+		t.Errorf("cells beyond lookup cap served: have %d, want 0", len(hashes))
+	}
+}
+
 func encodeRL[T any](slice []T) rlp.RawList[T] {
 	rl, err := rlp.EncodeToRawList(slice)
 	if err != nil {
