@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
+	"github.com/ethereum/go-ethereum/core/txpool/framepool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -71,6 +72,7 @@ var Defaults = Config{
 	Miner:                   miner.DefaultConfig,
 	TxPool:                  legacypool.DefaultConfig,
 	BlobPool:                blobpool.DefaultConfig,
+	FramePool:               framepool.DefaultConfig,
 	RPCGasCap:               50000000,
 	RPCEVMTimeout:           5 * time.Second,
 	GPO:                     FullNodeGPO,
@@ -166,9 +168,11 @@ type Config struct {
 	// Mining options
 	Miner miner.Config
 
-	// Transaction pool options
-	TxPool   legacypool.Config
-	BlobPool blobpool.Config
+	// Transaction pool options. FramePool controls the dedicated EIP-8141
+	// public-mempool subpool; it is configurable through TOML, not CLI flags.
+	TxPool    legacypool.Config
+	BlobPool  blobpool.Config
+	FramePool framepool.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config
