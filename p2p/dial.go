@@ -521,7 +521,15 @@ func (d *dialScheduler) dnsResolveHostname(n *enode.Node) (*enode.Node, error) {
 	// dial target. And nodes will usually only have a DNS hostname if they came from a
 	// enode:// URL, which has no signature anyway. If it ever becomes a problem, the
 	// resolved IP could also be stored into dialTask instead of the node.
-	rec := n.Record()
+	// Copy non-IP entries so address families absent from DNS are removed.
+	rec := new(enr.Record)
+	entries := n.Record().AppendElements(nil)
+	for i := 1; i < len(entries); i += 2 {
+		key := entries[i].(string)
+		if key != "ip" && key != "ip6" {
+			rec.Set(enr.WithEntry(key, entries[i+1]))
+		}
+	}
 	if foundIP4.IsValid() {
 		rec.Set(enr.IPv4Addr(foundIP4))
 	}
