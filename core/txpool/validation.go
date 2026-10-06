@@ -87,6 +87,12 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if !rules.IsBogota && tx.Type() == types.FrameTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in Bogota", core.ErrTxTypeNotSupported, tx.Type())
 	}
+	// Frame transactions may reference blobs, but the pool can't carry their
+	// sidecars and the miner doesn't count their blob gas. Admitting one would
+	// get it into a payload that fails validation.
+	if tx.Type() == types.FrameTxType && len(tx.BlobHashes()) > 0 {
+		return fmt.Errorf("%w: frame transaction with %d blob hashes", core.ErrTxTypeNotSupported, len(tx.BlobHashes()))
+	}
 	// Check whether the init code size has been exceeded
 	if tx.To() == nil {
 		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(tx.Data()))); err != nil {
