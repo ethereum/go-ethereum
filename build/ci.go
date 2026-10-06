@@ -157,11 +157,12 @@ var (
 
 	// Distros for which packages are created
 	debDistros = []string{
-		"xenial", // 16.04, EOL: 04/2026
-		"bionic", // 18.04, EOL: 04/2028
-		"focal",  // 20.04, EOL: 04/2030
-		"jammy",  // 22.04, EOL: 04/2032
-		"noble",  // 24.04, EOL: 04/2034
+		"xenial",    // 16.04, EOL: 04/2026
+		"bionic",    // 18.04, EOL: 04/2028
+		"focal",     // 20.04, EOL: 04/2030
+		"jammy",     // 22.04, EOL: 04/2032
+		"noble",     // 24.04, EOL: 04/2034
+		"resolute",  // 26.04, EOL: 04/2036
 	}
 
 	// COPR chroots the source RPM is built for. The builder Go is shipped in the
