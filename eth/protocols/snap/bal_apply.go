@@ -32,13 +32,13 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// verifyAccessList checks that the given block access list matches the hash
-// committed in the block header.
-func verifyAccessList(b *bal.BlockAccessList, header *types.Header) error {
+// verifyAccessList checks that the raw RLP encoding of a block access list
+// matches the hash committed in the block header.
+func verifyAccessList(raw rlp.RawValue, header *types.Header) error {
 	if header.BlockAccessListHash == nil {
 		return fmt.Errorf("header %d has no access list hash", header.Number)
 	}
-	have := b.Hash()
+	have := crypto.Keccak256Hash(raw)
 	if have != *header.BlockAccessListHash {
 		return fmt.Errorf("access list hash mismatch for block %d: have %v, want %v", header.Number, have, *header.BlockAccessListHash)
 	}

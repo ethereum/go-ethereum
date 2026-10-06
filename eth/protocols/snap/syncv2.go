@@ -1196,13 +1196,7 @@ func (s *syncerV2) processAccessListResponse(res *accessListResponse, headers ma
 			refused[h][res.req.peer] = struct{}{}
 			continue
 		}
-		var b bal.BlockAccessList
-		if err := rlp.DecodeBytes(raw, &b); err != nil {
-			log.Warn("Peer sent unparseable BAL", "peer", res.req.peer, "block", h, "err", err)
-			stateless = true
-			continue
-		}
-		if err := verifyAccessList(&b, headers[h]); err != nil {
+		if err := verifyAccessList(raw, headers[h]); err != nil {
 			log.Warn("Peer sent invalid BAL", "peer", res.req.peer, "block", h, "err", err)
 			stateless = true
 			continue

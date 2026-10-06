@@ -69,30 +69,31 @@ func TestAccessListVerification(t *testing.T) {
 	cb.BalanceChange(0, addr, uint256.NewInt(100))
 
 	b := buildTestBAL(t, cb)
-	correctHash := b.Hash()
+	raw, err := rlp.EncodeToBytes(b)
+	if err != nil {
+		t.Fatalf("failed to encode BAL: %v", err)
+	}
+	correctHash := crypto.Keccak256Hash(raw)
 
-	// Valid: hash matches header
+	// Valid: raw encoding matches the hash committed in the header.
 	header := &types.Header{
 		Number:              big.NewInt(1),
 		BlockAccessListHash: &correctHash,
 	}
-	if err := verifyAccessList(b, header); err != nil {
+	if err := verifyAccessList(raw, header); err != nil {
 		t.Fatalf("valid access list rejected: %v", err)
 	}
-	// Invalid: wrong hash in header
-	wrongHash := common.HexToHash("0xdead")
-	badHeader := &types.Header{
-		Number:              big.NewInt(1),
-		BlockAccessListHash: &wrongHash,
-	}
-	if err := verifyAccessList(b, badHeader); err == nil {
+	// Invalid: any mutation of the raw bytes changes the committed hash.
+	tampered := bytes.Clone(raw)
+	tampered[len(tampered)-1] ^= 0x01
+	if err := verifyAccessList(tampered, header); err == nil {
 		t.Fatal("tampered access list accepted")
 	}
 	// Invalid: no hash in header
 	noHashHeader := &types.Header{
 		Number: big.NewInt(1),
 	}
-	if err := verifyAccessList(b, noHashHeader); err == nil {
+	if err := verifyAccessList(raw, noHashHeader); err == nil {
 		t.Fatal("header without access list hash accepted")
 	}
 }
