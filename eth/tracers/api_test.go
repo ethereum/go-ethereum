@@ -529,6 +529,51 @@ func TestTraceCall(t *testing.T) {
 	}
 }
 
+// TestTraceCallExecutionGasCapAmsterdam checks that after Amsterdam (EIP-8037),
+// debug_traceCall may spend more than params.MaxTxGas on execution, as eth_call.
+func TestTraceCallExecutionGasCapAmsterdam(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts = newAccounts(1)
+		contract = common.HexToAddress("0x000000000000000000000000000000000000c0de")
+		config   = *params.MergedTestChainConfig
+		genesis  = &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			GasLimit:   60_000_000,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+				// Returns the gas left at entry if it is at least 20M, reverts otherwise:
+				//   GAS PUSH4 20000000 DUP2 LT PUSH1 0x11 JUMPI
+				//   PUSH0 MSTORE PUSH1 0x20 PUSH0 RETURN
+				//   JUMPDEST PUSH0 PUSH0 REVERT
+				contract: {Code: common.FromHex("0x5a6301312d0081106011575f5260205ff35b5f5ffd")},
+			},
+		}
+	)
+	config.AmsterdamTime = new(uint64)
+	backend := newTestBackend(t, 0, genesis, nil)
+	defer backend.teardown()
+	api := NewAPI(backend)
+
+	gas := hexutil.Uint64(backend.RPCGasCap())
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	result, err := api.TraceCall(context.Background(), ethapi.TransactionArgs{From: &accounts[0].addr, To: &contract, Gas: &gas}, &latest, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var have struct {
+		Failed bool `json:"failed"`
+	}
+	if err := json.Unmarshal(result.(json.RawMessage), &have); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if have.Failed {
+		t.Fatalf("execution failed, want execution gas above params.MaxTxGas: %s", result)
+	}
+}
+
 func TestTraceTransaction(t *testing.T) {
 	t.Parallel()
 

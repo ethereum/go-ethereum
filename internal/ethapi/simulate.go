@@ -345,6 +345,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// EoA check is always skipped, even in validation mode.
 		sim.state.SetTxContext(txHash, i, uint32(i+1))
 		msg := call.ToMessage(header.BaseFee, !sim.validate)
+		if !sim.validate {
+			msg.SkipExecutionGasCapCheck()
+		}
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, gp)
 		if err != nil {
 			txErr := txValidationError(err)
@@ -441,7 +444,13 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, head
 		call.Nonce = (*hexutil.Uint64)(&nonce)
 	}
 	// Let the call run wild unless explicitly specified.
-	remaining := gp.Available(sim.chainConfig.IsAmsterdam(header.Number, header.Time))
+	amsterdam := sim.chainConfig.IsAmsterdam(header.Number, header.Time)
+	remaining := gp.Available(amsterdam)
+	if amsterdam && !sim.validate {
+		// The execution gas is not capped in non-strict mode (see processBlock),
+		// so the whole gas limit is reserved in the execution dimension too.
+		remaining = min(remaining, header.GasLimit-gp.CumulativeExecution())
+	}
 	if call.Gas == nil {
 		call.Gas = (*hexutil.Uint64)(&remaining)
 	}
