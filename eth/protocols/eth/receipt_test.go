@@ -38,6 +38,8 @@ var receiptsTestLogs2 = []*types.Log{
 	{Address: common.Address{3}, Topics: []common.Hash{{31}, {32}}, Data: []byte{3, 3, 32, 32}},
 }
 
+var receiptsTestPayer = common.Address{0xaa}
+
 var receiptsTests = []struct {
 	input []types.ReceiptForStorage
 	txs   []*types.Transaction
@@ -75,6 +77,55 @@ var receiptsTests = []struct {
 			types.NewTx(&types.DynamicFeeTx{}),
 		},
 	},
+	{
+		input: []types.ReceiptForStorage{
+			{CumulativeGasUsed: 21000, Status: 1, Logs: receiptsTestLogs1},
+			{
+				CumulativeGasUsed: 90000,
+				Payer:             &receiptsTestPayer,
+				FrameReceipts: []types.FrameReceipt{
+					{Status: types.ReceiptStatusSuccessful, GasUsed: 30000, StateGasUsed: 100, Logs: receiptsTestLogs1},
+					{Status: types.ReceiptStatusFailed, GasUsed: 20000, Logs: receiptsTestLogs2},
+					{Status: types.ReceiptStatusSuccessful, GasUsed: 19000},
+				},
+			},
+			{CumulativeGasUsed: 111000, Status: 0, Logs: receiptsTestLogs2},
+		},
+		txs: []*types.Transaction{
+			types.NewTx(&types.DynamicFeeTx{}),
+			types.NewTx(&types.FrameTx{}),
+			types.NewTx(&types.LegacyTx{}),
+		},
+	},
+	{
+		input: []types.ReceiptForStorage{
+			{CumulativeGasUsed: 50000, Payer: &receiptsTestPayer, FrameReceipts: []types.FrameReceipt{}},
+		},
+		txs: []*types.Transaction{types.NewTx(&types.FrameTx{})},
+	},
+}
+
+// receiptsLogsSize returns the expected ReceiptList.LogsSize of receipts.
+func receiptsLogsSize(receipts []types.ReceiptForStorage) uint64 {
+	contentSize := func(logs []*types.Log) uint64 {
+		if logs == nil {
+			logs = []*types.Log{}
+		}
+		enc, _ := rlp.EncodeToBytes(logs)
+		content, _, _ := rlp.SplitList(enc)
+		return uint64(len(content))
+	}
+	var size uint64
+	for _, r := range receipts {
+		if r.Type != types.FrameTxType {
+			size += contentSize(r.Logs)
+			continue
+		}
+		for _, fr := range r.FrameReceipts {
+			size += contentSize(fr.Logs)
+		}
+	}
+	return size
 }
 
 func init() {
@@ -130,10 +181,52 @@ func TestReceiptList(t *testing.T) {
 			t.Fatalf("test[%d]: re-encoded network receipt list not equal\nhave: %x\nwant: %x", i, rlNetworkEnc, network)
 		}
 
+		// check log size accounting.
+		if size, err := rl.LogsSize(); err != nil || size != receiptsLogsSize(test.input) {
+			t.Fatalf("test[%d]: wrong logs size: have %d (err %v), want %d", i, size, err, receiptsLogsSize(test.input))
+		}
+
 		// compute root hash from ReceiptList and compare.
 		responseHash := types.DeriveSha(rl.Derivable(), trie.NewStackTrie(nil))
 		if responseHash != test.root {
 			t.Fatalf("test[%d]: wrong root hash from ReceiptList\nhave: %v\nwant: %v", i, responseHash, test.root)
+		}
+	}
+}
+
+func TestFrameReceiptDecodeMalformed(t *testing.T) {
+	validFrame := []any{types.ReceiptStatusSuccessful, []uint64{30000, 100}, receiptsTestLogs1}
+	tests := []struct {
+		name   string
+		payer  []byte
+		frames []any
+	}{
+		{"short payer", receiptsTestPayer[:19], []any{validFrame}},
+		{"status is a list", receiptsTestPayer[:], []any{validFrame, []any{[]uint64{1}, []uint64{30000, 100}, receiptsTestLogs1}}},
+		{"gas is a scalar", receiptsTestPayer[:], []any{validFrame, []any{uint64(1), uint64(30000), receiptsTestLogs1}}},
+		{"gas has one item", receiptsTestPayer[:], []any{validFrame, []any{uint64(1), []uint64{30000}, receiptsTestLogs1}}},
+		{"gas has 3 items", receiptsTestPayer[:], []any{validFrame, []any{uint64(1), []uint64{30000, 100, 7}, receiptsTestLogs1}}},
+		{"logs is a string", receiptsTestPayer[:], []any{validFrame, []any{uint64(1), []uint64{30000, 100}, []byte{1}}}},
+		{"missing logs", receiptsTestPayer[:], []any{validFrame, []any{uint64(1), []uint64{30000, 100}}}},
+		{"junk after logs", receiptsTestPayer[:], []any{validFrame, []any{uint64(1), []uint64{30000, 100}, receiptsTestLogs1, uint64(9)}}},
+		{"frame is a string", receiptsTestPayer[:], []any{validFrame, []byte{1}}},
+	}
+	for _, test := range tests {
+		encoded, _ := rlp.EncodeToBytes([]any{uint64(types.FrameTxType), uint64(90000), test.payer, test.frames})
+		var r Receipt
+		if err := r.decode(encoded); err == nil {
+			t.Errorf("%s: decode accepted malformed frame receipt", test.name)
+		}
+		if test.name == "short payer" {
+			continue // LogsSize does not inspect the payer
+		}
+		list, _ := rlp.EncodeToBytes([]rlp.RawValue{encoded})
+		var rl ReceiptList
+		if err := rlp.DecodeBytes(list, &rl); err != nil {
+			t.Fatalf("%s: can't decode receipt list: %v", test.name, err)
+		}
+		if _, err := rl.LogsSize(); err == nil {
+			t.Errorf("%s: LogsSize accepted malformed frame receipt", test.name)
 		}
 	}
 }

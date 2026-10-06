@@ -21,29 +21,26 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Receipt is the representation of receipts for networking purposes.
+//
+// Most receipts use the network shape [txType, postStateOrStatus, gasUsed, logs].
+// Frame transaction receipts (EIP-8141) use [txType, gasUsed, payer, frameReceipts],
+// where frameReceipts is the list of [status, [executionGas, stateGas], logs].
 type Receipt struct {
 	TxType            byte
 	PostStateOrStatus []byte
 	GasUsed           uint64
 	Logs              rlp.RawValue
-}
 
-func newReceipt(tr *types.Receipt) Receipt {
-	r := Receipt{TxType: tr.Type, GasUsed: tr.CumulativeGasUsed}
-	if tr.PostState != nil {
-		r.PostStateOrStatus = tr.PostState
-	} else {
-		r.PostStateOrStatus = new(big.Int).SetUint64(tr.Status).Bytes()
-	}
-	r.Logs, _ = rlp.EncodeToBytes(tr.Logs)
-	return r
+	// Frame transaction receipt fields.
+	Payer         []byte       `rlp:"-"`
+	FrameReceipts rlp.RawValue `rlp:"-"`
 }
 
 // encodeForHash encodes a receipt for the block receiptsRoot derivation.
@@ -52,14 +49,21 @@ func (r *Receipt) encodeForHash(bloomBuf *[6]byte, out *bytes.Buffer) {
 	if r.TxType != 0 {
 		out.WriteByte(r.TxType)
 	}
-	// Encode list = [postStateOrStatus, gasUsed, bloom, logs].
 	w := rlp.NewEncoderBuffer(out)
 	l := w.List()
-	w.WriteBytes(r.PostStateOrStatus)
-	w.WriteUint64(r.GasUsed)
-	bloom := r.bloom(bloomBuf)
-	w.WriteBytes(bloom[:])
-	w.Write(r.Logs)
+	if r.TxType == types.FrameTxType {
+		// Frame receipts carry no bloom: list = [gasUsed, payer, frameReceipts].
+		w.WriteUint64(r.GasUsed)
+		w.WriteBytes(r.Payer)
+		w.Write(r.FrameReceipts)
+	} else {
+		// Encode list = [postStateOrStatus, gasUsed, bloom, logs].
+		w.WriteBytes(r.PostStateOrStatus)
+		w.WriteUint64(r.GasUsed)
+		bloom := r.bloom(bloomBuf)
+		w.WriteBytes(bloom[:])
+		w.Write(r.Logs)
+	}
 	w.ListEnd(l)
 	w.Flush()
 }
@@ -108,6 +112,10 @@ func (r *Receipt) decode(input []byte) error {
 	}
 	r.TxType = byte(txType)
 
+	if r.TxType == types.FrameTxType {
+		return r.decodeFrame(input)
+	}
+
 	// status
 	r.PostStateOrStatus, input, err = rlp.SplitString(input)
 	if err != nil {
@@ -135,6 +143,75 @@ func (r *Receipt) decode(input []byte) error {
 	return nil
 }
 
+// decodeFrame assigns the frame receipt fields of r from the network format
+// content following the txType.
+func (r *Receipt) decodeFrame(input []byte) (err error) {
+	r.GasUsed, input, err = rlp.SplitUint64(input)
+	if err != nil {
+		return fmt.Errorf("invalid gasUsed: %w", err)
+	}
+	r.Payer, input, err = rlp.SplitString(input)
+	if err != nil {
+		return fmt.Errorf("invalid payer: %w", err)
+	}
+	if len(r.Payer) != common.AddressLength {
+		return fmt.Errorf("invalid payer length %d", len(r.Payer))
+	}
+	_, rest, err := rlp.SplitList(input)
+	if err != nil {
+		return fmt.Errorf("invalid frame receipts: %w", err)
+	}
+	if len(rest) != 0 {
+		return fmt.Errorf("junk at end of receipt")
+	}
+	if _, err := frameReceiptsLogsSize(input); err != nil {
+		return fmt.Errorf("invalid frame receipts: %w", err)
+	}
+	r.FrameReceipts = input
+	return nil
+}
+
+// frameReceiptsLogsSize validates the structure of an encoded frame receipt list
+// and returns the total size of log data across all frames.
+func frameReceiptsLogsSize(frameReceipts []byte) (uint64, error) {
+	it, err := rlp.NewListIterator(frameReceipts)
+	if err != nil {
+		return 0, err
+	}
+	var size uint64
+	for i := 0; it.Next(); i++ {
+		frame, _, err := rlp.SplitList(it.Value())
+		if err != nil {
+			return 0, fmt.Errorf("frame receipt %d: %v", i, err)
+		}
+		if _, frame, err = rlp.SplitUint64(frame); err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid status: %w", i, err)
+		}
+		gasUsed, frame, err := rlp.SplitList(frame)
+		if err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid gasUsed: %w", i, err)
+		}
+		if _, gasUsed, err = rlp.SplitUint64(gasUsed); err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid execution gasUsed: %w", i, err)
+		}
+		if _, gasUsed, err = rlp.SplitUint64(gasUsed); err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid state gasUsed: %w", i, err)
+		}
+		if len(gasUsed) != 0 {
+			return 0, fmt.Errorf("frame receipt %d: junk at end of gasUsed", i)
+		}
+		logs, rest, err := rlp.SplitList(frame)
+		if err != nil {
+			return 0, fmt.Errorf("frame receipt %d: invalid logs: %w", i, err)
+		}
+		if len(rest) != 0 {
+			return 0, fmt.Errorf("frame receipt %d: junk at end of frame receipt", i)
+		}
+		size += uint64(len(logs))
+	}
+	return size, it.Err()
+}
+
 // ReceiptList is the block receipt list as downloaded by eth/69.
 type ReceiptList struct {
 	items rlp.RawList[Receipt]
@@ -145,9 +222,17 @@ type ReceiptList struct {
 func NewReceiptList(trs []*types.Receipt) *ReceiptList {
 	rl := new(ReceiptList)
 	for _, tr := range trs {
-		r := newReceipt(tr)
-		encoded, _ := rlp.EncodeToBytes(&r)
-		rl.items.AppendRaw(encoded)
+		// The network encoding is the storage encoding with the tx type prepended.
+		stored, _ := rlp.EncodeToBytes((*types.ReceiptForStorage)(tr))
+		content, _, _ := rlp.SplitList(stored)
+		var buf bytes.Buffer
+		w := rlp.NewEncoderBuffer(&buf)
+		l := w.List()
+		w.WriteUint64(uint64(tr.Type))
+		w.Write(content)
+		w.ListEnd(l)
+		w.Flush()
+		rl.items.AppendRaw(buf.Bytes())
 	}
 	return rl
 }
@@ -215,6 +300,7 @@ func (rl *ReceiptList) LogsSize() (uint64, error) {
 		// The encoded receipts are of the form:
 		//
 		//   [txType, status, cumulativeGasUsed, [logs...]]
+		//   [txType, cumulativeGasUsed, payer, [[status, gasUsed, [logs...]]...]]  (frame tx)
 		//
 		// We want to count the size of logs.
 		// So we strip the outer list first:
@@ -222,13 +308,24 @@ func (rl *ReceiptList) LogsSize() (uint64, error) {
 		if err != nil {
 			return 0, fmt.Errorf("invalid receipt structure: %v", err)
 		}
-		// then skip over txType, status, cumulativeGasUsed:
-		rest := content
-		for range 3 {
+		// then read txType and skip over the next two fields:
+		txType, rest, err := rlp.SplitUint64(content)
+		if err != nil {
+			return 0, fmt.Errorf("invalid receipt structure: %v", err)
+		}
+		for range 2 {
 			_, _, rest, err = rlp.Split(rest)
 			if err != nil {
 				return 0, fmt.Errorf("invalid receipt structure: %v", err)
 			}
+		}
+		if txType == types.FrameTxType {
+			frameLogsSize, err := frameReceiptsLogsSize(rest)
+			if err != nil {
+				return 0, fmt.Errorf("invalid frame receipts: %v", err)
+			}
+			size += frameLogsSize
+			continue
 		}
 		// and finally access the logs list to get its inner size:
 		logsContent, _, err := rlp.SplitList(rest)

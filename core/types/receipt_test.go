@@ -644,6 +644,83 @@ func TestFrameReceiptStatus(t *testing.T) {
 	}
 }
 
+// TestReceiptForStorageDecode checks the storage decoding of regular and frame
+// transaction receipts, which are told apart by the shape of their fields.
+func TestReceiptForStorageDecode(t *testing.T) {
+	payer := common.Address{0x3}
+	logs := []*Log{{Address: common.Address{0x1}, Topics: []common.Hash{{0x2}}, Data: []byte{0x3}}}
+	valid := []struct {
+		receipt  *Receipt
+		wantType uint8 // the type is only recoverable for frame transaction receipts
+		wantLogs []*Log
+	}{
+		{&Receipt{Status: ReceiptStatusSuccessful, CumulativeGasUsed: 21000, Logs: logs}, LegacyTxType, logs},
+		{&Receipt{Type: FrameTxType, CumulativeGasUsed: 90000, Payer: &payer, FrameReceipts: []FrameReceipt{
+			{Status: ReceiptStatusSuccessful, GasUsed: 10, Logs: logs},
+			{Status: ReceiptStatusFailed, GasUsed: 20, StateGasUsed: 5, Logs: []*Log{}},
+		}}, FrameTxType, logs},
+		{&Receipt{Type: DynamicFeeTxType, Status: ReceiptStatusFailed, Logs: []*Log{}}, LegacyTxType, nil},
+		{&Receipt{PostState: common.Hash{0x4}.Bytes(), CumulativeGasUsed: 1, Logs: []*Log{}}, LegacyTxType, nil},
+	}
+	// Decode all receipts as one block's list, like rawdb does, so that a decoder
+	// leaving the stream in the wrong position breaks the following receipts.
+	stored := make([]*ReceiptForStorage, len(valid))
+	for i, tt := range valid {
+		stored[i] = (*ReceiptForStorage)(tt.receipt)
+	}
+	enc, err := rlp.EncodeToBytes(stored)
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+	var decoded []*ReceiptForStorage
+	if err := rlp.DecodeBytes(enc, &decoded); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if len(decoded) != len(valid) {
+		t.Fatalf("decoded %d receipts, want %d", len(decoded), len(valid))
+	}
+	for i, tt := range valid {
+		got, want := decoded[i], tt.receipt
+		if want.Type == FrameTxType {
+			want.Status = FrameTxStatus(want.FrameReceipts)
+		}
+		if got.Type != tt.wantType || got.Status != want.Status || !bytes.Equal(got.PostState, want.PostState) || got.CumulativeGasUsed != want.CumulativeGasUsed {
+			t.Errorf("test %d: decoded (type %d, status %d, postState %x, cumulativeGas %d), want (%d, %d, %x, %d)", i,
+				got.Type, got.Status, got.PostState, got.CumulativeGasUsed, tt.wantType, want.Status, want.PostState, want.CumulativeGasUsed)
+		}
+		if len(got.Logs) != len(tt.wantLogs) || (len(tt.wantLogs) > 0 && !reflect.DeepEqual(got.Logs, tt.wantLogs)) {
+			t.Errorf("test %d: logs %v, want %v", i, got.Logs, tt.wantLogs)
+		}
+		if !reflect.DeepEqual(got.Payer, want.Payer) || !reflect.DeepEqual(got.FrameReceipts, want.FrameReceipts) {
+			t.Errorf("test %d: frame fields (payer %v, frames %+v), want (%v, %+v)", i, got.Payer, got.FrameReceipts, want.Payer, want.FrameReceipts)
+		}
+	}
+
+	malformed := []struct {
+		name   string
+		fields []any
+	}{
+		{"invalid status", []any{[]byte{2}, uint64(1), []any{}}},
+		{"status is a list", []any{[]any{}, uint64(1), []any{}}},
+		{"missing logs", []any{[]byte{1}, uint64(1)}},
+		{"junk after logs", []any{[]byte{1}, uint64(1), []any{}, uint64(9)}},
+		{"junk after frames", []any{uint64(1), payer, []any{}, uint64(9)}},
+		{"non-canonical frame gas", []any{[]byte{0, 1}, payer, []any{}}},
+		{"frame gas overflows", []any{[]byte{1, 0, 0, 0, 0, 0, 0, 0, 0}, payer, []any{}}},
+	}
+	regular := []any{[]byte{1}, uint64(1), []any{}}
+	for _, tt := range malformed {
+		enc, err := rlp.EncodeToBytes([]any{tt.fields, regular})
+		if err != nil {
+			t.Fatalf("%s: encode error: %v", tt.name, err)
+		}
+		var got []*ReceiptForStorage
+		if err := rlp.DecodeBytes(enc, &got); err == nil {
+			t.Errorf("%s: decode accepted malformed receipt", tt.name)
+		}
+	}
+}
+
 // TestFrameReceiptUnmarshalJSON checks that frame receipts decode from both
 // the t8n encoding and the JSON-RPC one, where gasUsed spans both dimensions.
 func TestFrameReceiptUnmarshalJSON(t *testing.T) {
