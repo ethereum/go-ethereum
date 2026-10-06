@@ -216,8 +216,8 @@ func (evm *EVM) SetPrecompiles(precompiles PrecompiledContracts) {
 }
 
 // SetJumpDestCache configures a shared analysis cache. It is fronted by a
-// per-EVM map, so that eviction from the shared cache never causes the same
-// code to be re-analysed during this EVM's lifetime.
+// per-transaction map, so that eviction from the shared cache never causes the
+// same code to be re-analysed within a transaction.
 func (evm *EVM) SetJumpDestCache(jumpDests JumpDestCache) {
 	if jumpDests == nil {
 		evm.jumpDests = newMapJumpDests()
@@ -243,6 +243,11 @@ func (evm *EVM) SetTxContext(txCtx TxContext) {
 		txCtx.AccessEvents = state.NewAccessEvents()
 	}
 	evm.TxContext = txCtx
+
+	// Reset the per-tx jumpdest map
+	if jumpDests, ok := evm.jumpDests.(*layeredJumpDests); ok {
+		jumpDests.reset()
+	}
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and

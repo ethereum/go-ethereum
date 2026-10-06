@@ -48,16 +48,21 @@ func (j mapJumpDests) Store(codeHash common.Hash, vec BitVec) {
 
 // layeredJumpDests sits in front of a shared JumpDestCache.
 // During a single tx, an eviction from the shared cache can never cause the
-// same code to be analyzed twice during the live of the EVM.
+// same code to be analyzed twice. The local layer is reset on every new tx.
 // Thus the jumpdest analysis gets charged correctly, once per cold account load.
 type layeredJumpDests struct {
 	local  mapJumpDests
 	shared JumpDestCache
 }
 
-// newLayeredJumpDests creates a per-EVM layer on top of the shared cache.
-func newLayeredJumpDests(shared JumpDestCache) JumpDestCache {
+// newLayeredJumpDests creates a per-transaction layer on top of the shared cache.
+func newLayeredJumpDests(shared JumpDestCache) *layeredJumpDests {
 	return &layeredJumpDests{local: make(mapJumpDests), shared: shared}
+}
+
+// reset drops the analyses retained by the local layer.
+func (j *layeredJumpDests) reset() {
+	clear(j.local)
 }
 
 func (j *layeredJumpDests) Load(codeHash common.Hash) (BitVec, bool) {
