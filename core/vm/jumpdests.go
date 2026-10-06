@@ -16,7 +16,12 @@
 
 package vm
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+var jumpDestLocalHitMeter = metrics.NewRegisteredMeter("chain/cache/jumpdest/local/hit", nil)
 
 // JumpDestCache represents the cache of jumpdest analysis results.
 type JumpDestCache interface {
@@ -67,6 +72,7 @@ func (j *layeredJumpDests) reset() {
 
 func (j *layeredJumpDests) Load(codeHash common.Hash) (BitVec, bool) {
 	if vec, ok := j.local[codeHash]; ok {
+		jumpDestLocalHitMeter.Mark(1)
 		return vec, true
 	}
 	vec, ok := j.shared.Load(codeHash)
