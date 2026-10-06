@@ -93,6 +93,7 @@ type StateDB interface {
 	Snapshot() int
 
 	AddLog(*types.Log)
+	GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash, blockTime uint64) []*types.Log
 	AddPreimage(common.Hash, []byte)
 
 	Witness() *stateless.Witness

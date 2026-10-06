@@ -1441,14 +1441,8 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		precompiles[addr] = struct{}{}
 	}
 
-	logProvider, _ := st.state.(interface {
-		GetLogs(common.Hash, uint64, common.Hash, uint64) []*types.Log
-	})
 	countLogs := func() int {
-		if logProvider == nil {
-			return 0
-		}
-		return len(logProvider.GetLogs(msg.TxHash, 0, common.Hash{}, 0))
+		return len(st.state.GetLogs(msg.TxHash, 0, common.Hash{}, 0))
 	}
 
 	var (
@@ -1561,10 +1555,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 	}
 
 	// Materialize the per-frame logs from the final log journal.
-	var logs []*types.Log
-	if logProvider != nil {
-		logs = logProvider.GetLogs(msg.TxHash, 0, common.Hash{}, 0)
-	}
+	logs := st.state.GetLogs(msg.TxHash, 0, common.Hash{}, 0)
 	for i := range frameCtx.Receipts {
 		frameLogs := []*types.Log{}
 		if r := logRanges[i]; r.end > r.start && r.end <= len(logs) {

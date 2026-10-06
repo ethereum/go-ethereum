@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/program"
@@ -4392,6 +4393,75 @@ func TestEIP8141(t *testing.T) {
 	}
 	if receipt.Status != types.ReceiptStatusFailed {
 		t.Fatalf("stored receipt status wrong: expected %d, got %d", types.ReceiptStatusFailed, receipt.Status)
+	}
+}
+
+// TestEIP8141FrameLogsWithTracer checks that a frame transaction emitting logs
+// is processed identically when a tracer wraps the state, so a tracing node
+// derives the same frame receipt logs and accepts the block.
+func TestEIP8141FrameLogsWithTracer(t *testing.T) {
+	var (
+		config  = *params.MergedTestChainConfig
+		engine  = beacon.New(ethash.NewFaker())
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		aa      = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		zero    = uint64(0)
+	)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	alloc := SystemContractAllocs()
+	alloc[addr1] = types.Account{Balance: big.NewInt(params.Ether)}
+	alloc[aa] = types.Account{Code: program.New().Push(0).Push(0).Op(vm.LOG0).Bytes()}
+	alloc[params.FrameTxExpiryVerifier] = types.Account{Code: params.FrameTxExpiryVerifierCode, Balance: big.NewInt(0)}
+	gspec := &Genesis{Config: &config, Alloc: alloc}
+	signer := types.LatestSigner(&config)
+
+	frametx := &types.FrameTx{
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  addr1,
+		Frames: []types.Frame{
+			{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 100_000}, Value: uint256.NewInt(0)},
+			{Mode: types.ModeSender, Target: &aa, GasLimits: types.Limits{Execution: 100_000}, Value: uint256.NewInt(0)},
+		},
+		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: addr1.Bytes()}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(2),
+			MaxFeePerGas:         uint256.MustFromBig(newGwei(5)),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
+	}
+	sigHash := signer.Hash(types.NewTx(frametx))
+	sig, err := crypto.Sign(sigHash[:], key1)
+	if err != nil {
+		t.Fatalf("failed to sign frame transaction: %v", err)
+	}
+	frametx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetParentBeaconRoot(common.Hash{})
+		b.AddTx(types.NewTx(frametx))
+	})
+	var traced int
+	options := DefaultConfig()
+	options.VmConfig.Tracer = &tracing.Hooks{OnLog: func(*types.Log) { traced++ }}
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, options)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	if traced != 1 {
+		t.Fatalf("tracer saw %d logs, want 1", traced)
+	}
+	receipt := chain.GetReceiptsByHash(blocks[0].Hash())[0]
+	if n := len(receipt.FrameReceipts[0].Logs); n != 0 {
+		t.Fatalf("VERIFY frame has %d logs, want 0", n)
+	}
+	if logs := receipt.FrameReceipts[1].Logs; len(logs) != 1 || logs[0].Address != aa {
+		t.Fatalf("SENDER frame logs wrong: %v", logs)
 	}
 }
 
