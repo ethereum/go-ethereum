@@ -93,6 +93,12 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if tx.Type() == types.FrameTxType && len(tx.BlobHashes()) > 0 {
 		return fmt.Errorf("%w: frame transaction with %d blob hashes", core.ErrTxTypeNotSupported, len(tx.BlobHashes()))
 	}
+	// Reject malformed frames before sender recovery or intrinsic gas calculation.
+	if tx.Type() == types.FrameTxType {
+		if err := tx.FrameTxValidateStatic(); err != nil {
+			return err
+		}
+	}
 	// Check whether the init code size has been exceeded
 	if tx.To() == nil {
 		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(tx.Data()))); err != nil {
