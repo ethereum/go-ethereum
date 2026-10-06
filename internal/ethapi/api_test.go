@@ -4107,6 +4107,73 @@ func TestExecutionGasCapAmsterdam(t *testing.T) {
 	}
 }
 
+// TestSimulateGasLimitAmsterdam checks that after Amsterdam (EIP-8037), the
+// default and the maximum gas of a call in non-strict eth_simulateV1 account
+// for the uncapped execution gas reservation of the preceding calls.
+func TestSimulateGasLimitAmsterdam(t *testing.T) {
+	t.Parallel()
+
+	const gasLimit = 30_000_000 // Block gas limit, above params.MaxTxGas
+	var (
+		accounts = newAccounts(1)
+		config   = *params.MergedTestChainConfig
+		genesis  = &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			GasLimit:   gasLimit,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	config.AmsterdamTime = new(uint64)
+	backend := newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil)
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+	simulate := func(calls ...TransactionArgs) ([]*simBlockResult, error) {
+		state, base, err := backend.StateAndHeaderByNumberOrHash(context.Background(), latest)
+		if err != nil {
+			t.Fatalf("failed to retrieve state: %v", err)
+		}
+		sim := &simulator{
+			b:           backend,
+			state:       state,
+			base:        base,
+			chainConfig: backend.ChainConfig(),
+			budget:      newGasBudget(50_000_000),
+		}
+		return sim.execute(context.Background(), []simBlock{{Calls: calls}})
+	}
+	newArgs := func(gas *hexutil.Uint64) TransactionArgs {
+		return TransactionArgs{
+			From:         &accounts[0].addr,
+			To:           &accounts[0].addr,
+			Gas:          gas,
+			MaxFeePerGas: (*hexutil.Big)(big.NewInt(params.GWei)),
+		}
+	}
+
+	// A call without gas following another call defaults to the gas left.
+	results, err := simulate(newArgs(nil), newArgs(nil))
+	if err != nil {
+		t.Fatalf("default gas: unexpected error: %v", err)
+	}
+	for i, call := range results[0].Calls {
+		if call.Status != hexutil.Uint64(types.ReceiptStatusSuccessful) {
+			t.Errorf("default gas: call %d failed: %v", i, call.Error)
+		}
+	}
+
+	// A call with more gas than left in the execution dimension is rejected
+	// with the block gas limit error.
+	gas := hexutil.Uint64(gasLimit)
+	_, err = simulate(newArgs(nil), newArgs(&gas))
+	var gasErr *blockGasLimitReachedError
+	if !errors.As(err, &gasErr) {
+		t.Fatalf("explicit gas: want block gas limit error, have %v", err)
+	}
+}
+
 func TestEstimateGasWithMovePrecompile(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
