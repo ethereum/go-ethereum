@@ -268,6 +268,18 @@ func (s *stateObject) finalise() {
 			s.uncommittedStorage[key] = s.GetCommittedState(key)
 			slotsToPrefetch = append(slotsToPrefetch, key) // Copy needed for closure
 		}
+		// Aggregate storage writes into the block-level access list.
+		// All slots in the dirtyStorage set must have post-transaction
+		// values that differ from their pre-transaction values.
+		if s.db.stateAccessList != nil {
+			if s.db.sharesAccessIndex() {
+				// The committed value is the value before this scope until
+				// the slot is moved to the pending area below.
+				s.db.stateAccessList.StorageWriteFrom(s.db.blockAccessIndex, s.address, key, s.GetCommittedState(key), value)
+			} else {
+				s.db.stateAccessList.StorageWrite(s.db.blockAccessIndex, s.address, key, value)
+			}
+		}
 		// Aggregate the dirty storage slots into the pending area. It might
 		// be possible that the value of tracked slot here is same with the
 		// one in originStorage (e.g. the slot was modified in tx_a and then
@@ -275,13 +287,6 @@ func (s *stateObject) finalise() {
 		// map as the dirty slot might have been committed already (before the
 		// byzantium fork) and entry is necessary to modify the value back.
 		s.pendingStorage[key] = value
-
-		// Aggregate storage writes into the block-level access list.
-		// All slots in the dirtyStorage set must have post-transaction
-		// values that differ from their pre-transaction values.
-		if s.db.stateAccessList != nil {
-			s.db.stateAccessList.StorageWrite(s.db.blockAccessIndex, s.address, key, value)
-		}
 	}
 	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
 		if err := s.db.prefetcher.prefetch(s.addrHash(), s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {

@@ -1567,6 +1567,62 @@ func TestBALWithdrawalNonZeroAmountRecordsBalance(t *testing.T) {
 	}
 }
 
+// TestBALWithdrawalForwardedAtLastIndexNotRecorded: withdrawals and the
+// post-execution system calls share the last block access index, so a
+// withdrawal that the recipient's own system call forwards away again leaves
+// the recipient's balance unchanged and records no balance change.
+func TestBALWithdrawalForwardedAtLastIndexNotRecorded(t *testing.T) {
+	sink := common.HexToAddress("0x5151")
+	// CALL(gas, sink, SELFBALANCE, 0, 0, 0, 0); STOP
+	forward := append(common.FromHex("600060006000600047"+"73"), sink.Bytes()...)
+	forward = append(forward, common.FromHex("5af15000")...)
+	env := newBALTestEnv(types.GenesisAlloc{
+		params.WithdrawalQueueAddress: {Nonce: 1, Code: forward, Balance: common.Big0},
+	})
+
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+		g.AddWithdrawal(&types.Withdrawal{Validator: 1, Address: params.WithdrawalQueueAddress, Amount: 1})
+	})
+
+	r := assertPresent(t, b, params.WithdrawalQueueAddress)
+	if len(r.BalanceChanges) != 0 {
+		t.Fatalf("forwarded withdrawal must not record balance: %+v", r.BalanceChanges)
+	}
+	if s := assertPresent(t, b, sink); len(s.BalanceChanges) != 1 {
+		t.Fatalf("sink must record one balance change: %+v", s.BalanceChanges)
+	}
+}
+
+// TestBALStorageRestoredAtLastIndexIsRead: a slot that two post-execution
+// system calls set and restore at the last block access index is unchanged,
+// so it is recorded as a read, not a write.
+func TestBALStorageRestoredAtLastIndexIsRead(t *testing.T) {
+	slot := common.BigToHash(common.Big1)
+	// SSTORE(1, ISZERO(SLOAD(1))); STOP
+	toggle := common.FromHex("6001541560015500")
+	// CALL(gas, ConsolidationQueueAddress, 0, 0, 0, 0, 0); STOP
+	call := append(common.FromHex("60006000600060006000"+"73"), params.ConsolidationQueueAddress.Bytes()...)
+	call = append(call, common.FromHex("5af15000")...)
+	env := newBALTestEnv(types.GenesisAlloc{
+		// The withdrawal queue runs first and calls the consolidation queue,
+		// whose own system call then toggles the slot back.
+		params.WithdrawalQueueAddress:    {Nonce: 1, Code: call, Balance: common.Big0},
+		params.ConsolidationQueueAddress: {Nonce: 1, Code: toggle, Balance: common.Big0},
+	})
+
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+	})
+
+	if hasStorageWrite(b, params.ConsolidationQueueAddress, slot) {
+		t.Fatal("restored slot must not be recorded as a write")
+	}
+	if r := assertPresent(t, b, params.ConsolidationQueueAddress); !hasSlotIn(r.StorageReads, slot) {
+		t.Fatalf("restored slot must be recorded as a read: %+v", r.StorageReads)
+	}
+}
+
 // ============================== EIP-7702 authority ==============================
 
 // TestBALAuthorityIncludedOnSetCodeTx: the authority of an EIP-7702 set-code

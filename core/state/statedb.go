@@ -822,6 +822,15 @@ func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList 
 	return nil
 }
 
+// sharesAccessIndex reports whether the current scope shares its block access
+// index with other scopes. Only scopes without a transaction do: withdrawals
+// and the pre- and post-execution system calls. Their changes keep the value
+// from before the change, so ones undone by a later scope can be dropped (see
+// bal.ConstructionBlockAccessList.DropUnchanged).
+func (s *StateDB) sharesAccessIndex() bool {
+	return s.thash == (common.Hash{})
+}
+
 func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMutationState) {
 	// No list means we are outside a transaction scope (e.g, PostExecution
 	// without a preceding Prepare), skip BAL recording.
@@ -837,7 +846,11 @@ func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMut
 		balance, nonce = obj.Balance(), obj.Nonce()
 	}
 	if state.balanceSet && balance.Cmp(state.balance) != 0 {
-		s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+		if s.sharesAccessIndex() {
+			s.stateAccessList.BalanceChangeFrom(s.blockAccessIndex, addr, state.balance, balance)
+		} else {
+			s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+		}
 	}
 	if state.nonceSet && nonce != state.nonce {
 		s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)

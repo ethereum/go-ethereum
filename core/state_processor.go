@@ -226,6 +226,12 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 			return nil, nil, fmt.Errorf("failed to process builder exit queue: %w", err)
 		}
 	}
+	// Withdrawals and the post-execution system calls share one block access
+	// index but are recorded in separate scopes. Drop the changes they undo
+	// between them, e.g. a withdrawal forwarded away by a system call.
+	if blockAccessList != nil {
+		blockAccessList.DropUnchanged(blockAccessIndex)
+	}
 	return requests, blockAccessList, nil
 }
 

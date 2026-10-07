@@ -51,6 +51,12 @@ type ConstructionAccountAccess struct {
 	// CodeChange contains the post-state contract code of an account keyed
 	// by tx index.
 	CodeChange map[uint32][]byte `json:"codeChange,omitempty"`
+
+	// balancePre and storagePre hold the balance and slot values from before
+	// the first change recorded at an index, so changes recorded in separate
+	// scopes of one index can be netted (see DropUnchanged).
+	balancePre map[uint32]*uint256.Int
+	storagePre map[common.Hash]map[uint32]common.Hash
 }
 
 // NewConstructionAccountAccess initializes the account access object.
@@ -109,6 +115,13 @@ func (b *ConstructionBlockAccessList) StorageWrite(txIdx uint32, address common.
 	delete(b.Accounts[address].StorageReads, key)
 }
 
+// StorageWriteFrom is StorageWrite for a slot whose value was prev before
+// the write.
+func (b *ConstructionBlockAccessList) StorageWriteFrom(txIdx uint32, address common.Address, key, prev, value common.Hash) {
+	b.StorageWrite(txIdx, address, key, value)
+	b.Accounts[address].setStoragePre(key, txIdx, prev)
+}
+
 // CodeChange records the code of a newly-created contract.
 func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint32, code []byte) {
 	if _, ok := b.Accounts[address]; !ok {
@@ -136,6 +149,13 @@ func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint32, address common
 	b.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
 }
 
+// BalanceChangeFrom is BalanceChange for an account whose balance was prev
+// before the change.
+func (b *ConstructionBlockAccessList) BalanceChangeFrom(txIdx uint32, address common.Address, prev, balance *uint256.Int) {
+	b.BalanceChange(txIdx, address, balance)
+	b.Accounts[address].setBalancePre(txIdx, prev)
+}
+
 // PrettyPrint returns a human-readable representation of the access list
 func (b *ConstructionBlockAccessList) PrettyPrint() string {
 	enc := b.ToEncodingObj()
@@ -152,6 +172,8 @@ func (b *ConstructionBlockAccessList) PrettyPrint() string {
 // not expected; the exception is pre/post-transition system calls, which
 // share a single tx index. In that case callers must pass block-accessList
 // in order strictly.
+//
+// Values from before a change (see DropUnchanged) keep the earliest one.
 //
 // other is referenced (not deep copied), after the call both lists share
 // inner maps and other must not be mutated.
@@ -174,6 +196,9 @@ func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) 
 					existing[txIdx] = value
 				}
 			}
+			for txIdx, pre := range otherAcc.storagePre[key] {
+				acc.setStoragePre(key, txIdx, pre)
+			}
 			delete(acc.StorageReads, key)
 		}
 		for key := range otherAcc.StorageReads {
@@ -184,6 +209,9 @@ func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) 
 		}
 		for txIdx, balance := range otherAcc.BalanceChanges {
 			acc.BalanceChanges[txIdx] = balance
+		}
+		for txIdx, pre := range otherAcc.balancePre {
+			acc.setBalancePre(txIdx, pre)
 		}
 		for txIdx, nonce := range otherAcc.NonceChanges {
 			acc.NonceChanges[txIdx] = nonce
@@ -219,7 +247,63 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 			codes[index] = bytes.Clone(code)
 		}
 		aaCopy.CodeChange = codes
+
+		for index, balance := range aa.balancePre {
+			aaCopy.setBalancePre(index, balance)
+		}
+		for key, m := range aa.storagePre {
+			for index, value := range m {
+				aaCopy.setStoragePre(key, index, value)
+			}
+		}
 		res.Accounts[addr] = &aaCopy
 	}
 	return res
+}
+
+// DropUnchanged removes the balance changes and storage writes recorded at
+// index that restore the value from before the index. A slot left without
+// writes stays in the list as a read.
+func (b *ConstructionBlockAccessList) DropUnchanged(index uint32) {
+	for _, acc := range b.Accounts {
+		if pre, ok := acc.balancePre[index]; ok {
+			if balance, ok := acc.BalanceChanges[index]; ok && balance.Eq(pre) {
+				delete(acc.BalanceChanges, index)
+			}
+		}
+		for key, writes := range acc.StorageWrites {
+			pre, ok := acc.storagePre[key][index]
+			if value, written := writes[index]; !ok || !written || value != pre {
+				continue
+			}
+			delete(writes, index)
+			if len(writes) == 0 {
+				delete(acc.StorageWrites, key)
+				acc.StorageReads[key] = struct{}{}
+			}
+		}
+	}
+}
+
+// setBalancePre records the balance from before the first change at index.
+func (a *ConstructionAccountAccess) setBalancePre(index uint32, balance *uint256.Int) {
+	if a.balancePre == nil {
+		a.balancePre = make(map[uint32]*uint256.Int)
+	}
+	if _, ok := a.balancePre[index]; !ok {
+		a.balancePre[index] = balance.Clone()
+	}
+}
+
+// setStoragePre records the slot value from before the first write at index.
+func (a *ConstructionAccountAccess) setStoragePre(key common.Hash, index uint32, value common.Hash) {
+	if a.storagePre == nil {
+		a.storagePre = make(map[common.Hash]map[uint32]common.Hash)
+	}
+	if a.storagePre[key] == nil {
+		a.storagePre[key] = make(map[uint32]common.Hash)
+	}
+	if _, ok := a.storagePre[key][index]; !ok {
+		a.storagePre[key][index] = value
+	}
 }
