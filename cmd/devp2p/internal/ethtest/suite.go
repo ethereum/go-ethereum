@@ -1469,7 +1469,7 @@ and that providing valid cells causes the tx to enter the pool.`)
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	txs, blobs := s.makeBlobTxs(1, 1, 0x31)
+	txs, blobs := s.makeBlobTxs(1, 2, 0x31)
 	tx := blobTxForProtocol(txs[0], eth.ETH72)
 	blob := blobs[0]
 
