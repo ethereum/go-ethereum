@@ -50,6 +50,8 @@ type tracer struct {
 	// logs keeps logs for all open call frames.
 	// This lets us clear logs for failed calls.
 	logs           [][]*types.Log
+	frameIndex     func() int
+	frameLogs      map[int][]*types.Log
 	count          int
 	traceTransfers bool
 	blockNumber    uint64
@@ -87,6 +89,13 @@ func (t *tracer) onEnter(depth int, typ byte, from common.Address, to common.Add
 
 func (t *tracer) onExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth == 0 {
+		if t.frameIndex != nil && t.frameIndex() >= 0 {
+			if !reverted {
+				t.frameLogs[t.frameIndex()] = t.logs[0]
+			}
+			t.logs = nil
+			return
+		}
 		t.onEnd(reverted)
 		return
 	}
@@ -145,6 +154,7 @@ func (t *tracer) captureTransfer(from, to common.Address, value *big.Int) {
 // reset prepares the tracer for the next transaction.
 func (t *tracer) reset(txHash common.Hash, txIdx uint) {
 	t.logs = nil
+	t.frameLogs = make(map[int][]*types.Log)
 	t.txHash = txHash
 	t.txIdx = txIdx
 }

@@ -66,12 +66,20 @@ type simBlock struct {
 
 // simCallResult is the result of a simulated call.
 type simCallResult struct {
-	ReturnValue hexutil.Bytes  `json:"returnData"`
-	Logs        []*types.Log   `json:"logs"`
-	GasUsed     hexutil.Uint64 `json:"gasUsed"`
-	MaxUsedGas  hexutil.Uint64 `json:"maxUsedGas"`
-	Status      hexutil.Uint64 `json:"status"`
-	Error       *callError     `json:"error,omitempty"`
+	Payer        *common.Address  `json:"payer,omitempty"`
+	FrameResults []simFrameResult `json:"frameResults,omitempty"`
+	ReturnValue  hexutil.Bytes    `json:"returnData"`
+	Logs         []*types.Log     `json:"logs"`
+	GasUsed      hexutil.Uint64   `json:"gasUsed"`
+	MaxUsedGas   hexutil.Uint64   `json:"maxUsedGas"`
+	Status       hexutil.Uint64   `json:"status"`
+	Error        *callError       `json:"error,omitempty"`
+}
+
+type simFrameResult struct {
+	rpcFrameReceipt
+	ReturnData hexutil.Bytes `json:"returnData"`
+	Error      *callError    `json:"error,omitempty"`
 }
 
 func (r *simCallResult) MarshalJSON() ([]byte, error) {
@@ -315,6 +323,12 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	evm := vm.NewEVM(blockContext, tracingStateDB, sim.chainConfig, *vmConfig)
 	defer evm.Release()
+	tracer.frameIndex = func() int {
+		if evm.TxContext.FrameContext == nil {
+			return -1
+		}
+		return evm.TxContext.FrameContext.CurrentFrame
+	}
 
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
@@ -329,6 +343,15 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// Terminate if the context is cancelled
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, err
+		}
+		if call.isFrame() {
+			if call.Nonce == nil {
+				nonce := hexutil.Uint64(sim.state.GetNonce(call.from()))
+				call.Nonce = &nonce
+			}
+			if err := call.prepareFrames(ctx, sim.b, sim.state, header, &blockContext, precompiles, sim.budget.cap(gp.Gas())); err != nil {
+				return nil, nil, nil, err
+			}
 		}
 		gasCapped, err := sim.sanitizeCall(&call, sim.state, header, gp)
 		if err != nil {
@@ -345,6 +368,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// EoA check is always skipped, even in validation mode.
 		sim.state.SetTxContext(txHash, i, uint32(i+1))
 		msg := call.ToMessage(header.BaseFee, !sim.validate)
+		msg.TxHash = txHash
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, gp)
 		if err != nil {
 			txErr := txValidationError(err)
@@ -366,7 +390,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			return nil, nil, nil, err
 		}
 
-		logs := tracer.Logs()
+		var logs []*types.Log
+		if !call.isFrame() {
+			logs = tracer.Logs()
+		}
 		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas), MaxUsedGas: hexutil.Uint64(result.MaxUsedGas)}
 		if result.Failed() {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
@@ -383,6 +410,59 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			}
 		} else {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
+			if !call.isFrame() {
+				allLogs = append(allLogs, callRes.Logs...)
+			}
+		}
+		if call.isFrame() {
+			callRes.Payer = result.FramePayer
+			callRes.ReturnValue = result.ReturnData
+			callRes.Status = hexutil.Uint64(types.FrameTxStatus(result.FrameReceipts))
+			callRes.Logs = []*types.Log{}
+			callRes.FrameResults = make([]simFrameResult, len(result.FrameReceipts))
+			// Native transfer logs must follow the same atomic rollback as receipt logs.
+			for start := 0; start < len(call.Frames); start++ {
+				if uint64(call.Frames[start].Flags)&types.AtomicBatchFlag == 0 {
+					continue
+				}
+				end := start
+				failed := false
+				for {
+					failed = failed || result.FrameReceipts[end].Status != types.ReceiptStatusSuccessful
+					if uint64(call.Frames[end].Flags)&types.AtomicBatchFlag == 0 {
+						break
+					}
+					end++
+				}
+				if failed {
+					for j := start; j <= end; j++ {
+						delete(tracer.frameLogs, j)
+					}
+				}
+				start = end
+			}
+			for j, receipt := range result.FrameReceipts {
+				logs := receipt.Logs
+				if sim.traceTransfers {
+					logs = tracer.frameLogs[j]
+				}
+				if logs == nil {
+					logs = []*types.Log{}
+				}
+				frame := simFrameResult{rpcFrameReceipt: rpcFrameReceipt{Status: hexutil.Uint64(receipt.Status), GasUsed: hexutil.Uint64(receipt.GasUsed + receipt.StateGasUsed), ExecutionGasUsed: hexutil.Uint64(receipt.GasUsed), StateGasUsed: hexutil.Uint64(receipt.StateGasUsed), Logs: logs}, ReturnData: result.FrameResults[j].ReturnData}
+				if err := result.FrameResults[j].Err; err != nil {
+					if errors.Is(err, vm.ErrExecutionReverted) {
+						revert := newRevertError(frame.ReturnData)
+						frame.Error = &callError{Code: revert.ErrorCode(), Message: revert.Error(), Data: revert.ErrorData().(string)}
+					} else {
+						frame.Error = &callError{Code: errCodeVMError, Message: err.Error()}
+					}
+				}
+				callRes.FrameResults[j] = frame
+				callRes.Logs = append(callRes.Logs, logs...)
+			}
+		}
+		if call.isFrame() {
 			allLogs = append(allLogs, callRes.Logs...)
 		}
 		callResults[i] = callRes
