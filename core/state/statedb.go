@@ -600,8 +600,18 @@ func (s *StateDB) deleteStateObject(addr common.Address) {
 // getStateObject retrieves a state object given by the address, returning nil if
 // the object is not found or was deleted in this execution context.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
+	return s.getStateObjectWithAccess(addr, true)
+}
+
+// getStateObjectNoAccess retrieves a state object without recording an account
+// read in the block access list. It is used by the read-only tracer view.
+func (s *StateDB) getStateObjectNoAccess(addr common.Address) *stateObject {
+	return s.getStateObjectWithAccess(addr, false)
+}
+
+func (s *StateDB) getStateObjectWithAccess(addr common.Address, recordAccess bool) *stateObject {
 	// Record state access regardless of whether the account exists.
-	if s.stateAccessList != nil {
+	if recordAccess && s.stateAccessList != nil {
 		s.stateAccessList.AccountRead(addr)
 	}
 	// Prefer live objects if any is available

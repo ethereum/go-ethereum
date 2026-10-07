@@ -183,8 +183,12 @@ func (s *stateObject) getState(key common.Hash) (common.Hash, common.Hash) {
 // GetCommittedState retrieves the value associated with the specific key
 // without any mutations caused in the current execution.
 func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
+	return s.getCommittedState(key, true)
+}
+
+func (s *stateObject) getCommittedState(key common.Hash, recordAccess bool) common.Hash {
 	// Record slot access regardless of whether the storage slot exists.
-	if s.db.stateAccessList != nil {
+	if recordAccess && s.db.stateAccessList != nil {
 		s.db.stateAccessList.StorageRead(s.address, key)
 	}
 	// If we have a pending write or clean cached, return that

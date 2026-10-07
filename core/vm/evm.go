@@ -97,6 +97,8 @@ type EVM struct {
 
 	// StateDB gives access to the underlying state
 	StateDB StateDB
+	// tracingStateDB gives tracers read-only access without affecting the block access list.
+	tracingStateDB tracing.StateDB
 
 	// table holds the opcode specific handlers
 	table *JumpTable
@@ -149,6 +151,10 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 		jumpDests:   newMapJumpDests(),
 		arena:       newArena(),
+	}
+	evm.tracingStateDB = statedb
+	if tracingStateDB, ok := state.NewTracingStateDB(statedb); ok {
+		evm.tracingStateDB = tracingStateDB
 	}
 	evm.precompiles = *activePrecompiledContracts(evm.chainRules)
 
@@ -234,6 +240,7 @@ func (evm *EVM) SetPrecompileCache(cache *PrecompileCache) {
 // SetStateDB configures the state for interaction.
 func (evm *EVM) SetStateDB(statedb *state.StateDB) {
 	evm.StateDB = statedb
+	evm.tracingStateDB, _ = state.NewTracingStateDB(statedb)
 }
 
 // SetTxContext resets the EVM with a new transaction context.
@@ -778,7 +785,7 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		Time:        evm.Context.Time,
 		Random:      evm.Context.Random,
 		BaseFee:     evm.Context.BaseFee,
-		StateDB:     evm.StateDB,
+		StateDB:     evm.tracingStateDB,
 	}
 }
 
