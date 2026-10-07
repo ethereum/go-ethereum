@@ -102,12 +102,13 @@ type FramePool struct {
 	state   *state.StateDB // Read state; never passed to simulation.
 	baseFee *big.Int       // Next-block fee used only for eviction pricing.
 
-	lock        sync.RWMutex
-	resetLock   sync.Mutex // Serializes Reset calls, not simulations with readers.
-	generation  uint64
-	resetDone   chan struct{} // Non-nil while Reset is in flight.
-	closed      bool
-	simulations atomic.Uint64 // Counts prefix executions, including rejected ones.
+	lock         sync.RWMutex
+	resetLock    sync.Mutex // Serializes Reset calls, not simulations with readers.
+	generation   uint64
+	resetDone    chan struct{} // Non-nil while Reset is in flight.
+	unreconciled bool          // The last Reset could not open the new head state.
+	closed       bool
+	simulations  atomic.Uint64 // Counts prefix executions, including rejected ones.
 
 	txs       map[common.Address]*frameTx
 	all       map[common.Hash]*frameTx
@@ -117,9 +118,27 @@ type FramePool struct {
 	byAccount map[common.Address]map[common.Hash]accountFields
 	bySlot    map[common.Address]map[common.Hash]map[common.Hash]struct{}
 
+	// Acceptances are queued under lock in commit order and published by a
+	// single dispatcher, so neither admission nor Reset waits on subscribers.
+	// Subscribers are in-process and must keep draining their channels; if one
+	// stalls, the queue keeps only the newest announceLimit acceptances.
+	announces    []announcement
+	enqueued     uint64        // Acceptances queued so far, guarded by lock.
+	published    atomic.Uint64 // Acceptances published or dropped so far.
+	overflowing  bool          // Dropping since the queue last drained, guarded by lock.
+	announceWake chan struct{}
+	quit         chan struct{} // Closed by Close to stop the dispatcher.
+	dispatched   chan struct{} // Closed when the dispatcher exits.
 	discoverFeed event.Feed
 	insertFeed   event.Feed
 	scope        event.SubscriptionScope
+}
+
+// announcement is an accepted transaction awaiting publication. Transactions
+// recovered from displaced blocks are insertions, not new discoveries.
+type announcement struct {
+	tx    *types.Transaction
+	reorg bool
 }
 
 var _ txpool.SubPool = (*FramePool)(nil)
@@ -130,9 +149,10 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		config: config.sanitize(), chain: chain, signer: types.LatestSigner(chain.Config()),
 		hasPendingAuth: hasPendingAuth,
 		txs:            make(map[common.Address]*frameTx), all: make(map[common.Hash]*frameTx),
-		payers:    make(map[common.Address]*payerUsage),
-		byAccount: make(map[common.Address]map[common.Hash]accountFields),
-		bySlot:    make(map[common.Address]map[common.Hash]map[common.Hash]struct{}),
+		payers:       make(map[common.Address]*payerUsage),
+		byAccount:    make(map[common.Address]map[common.Hash]accountFields),
+		bySlot:       make(map[common.Address]map[common.Hash]map[common.Hash]struct{}),
+		announceWake: make(chan struct{}, 1),
 	}
 	p.gasTip.Store(new(uint256.Int))
 	return p
@@ -144,7 +164,8 @@ func (p *FramePool) Filter(tx *types.Transaction) bool { return p.FilterType(tx.
 // FilterType reports whether this pool handles the transaction type.
 func (p *FramePool) FilterType(kind byte) bool { return kind == types.FrameTxType }
 
-// Init installs the reconciled head, read state and address reservation handle.
+// Init installs the reconciled head, read state and address reservation handle,
+// and starts the acceptance dispatcher.
 func (p *FramePool) Init(gasTip uint64, head *types.Header, reserver txpool.Reserver) error {
 	if head == nil {
 		head = p.chain.CurrentBlock()
@@ -161,17 +182,99 @@ func (p *FramePool) Init(gasTip uint64, head *types.Header, reserver txpool.Rese
 	p.gasTip.Store(uint256.NewInt(gasTip))
 	pooltipGauge.Update(int64(gasTip))
 	p.updateMetrics()
+	if p.quit == nil {
+		p.quit, p.dispatched = make(chan struct{}), make(chan struct{})
+		go p.dispatch(p.quit, p.dispatched)
+	}
 	return nil
 }
 
-// Close releases every sender reservation and terminates event subscriptions.
+// Close releases every sender reservation, terminates event subscriptions and
+// stops the dispatcher. Acceptances not yet published are dropped, since no
+// subscription remains to receive them.
 func (p *FramePool) Close() error {
 	p.scope.Close()
 	p.lock.Lock()
-	defer p.lock.Unlock()
+	if p.closed {
+		p.lock.Unlock()
+		return nil
+	}
 	p.closed = true
 	p.clear()
+	p.published.Add(uint64(len(p.announces)))
+	p.announces = nil
+	announceQueueGauge.Update(0)
+	quit := p.quit
+	p.lock.Unlock()
+	if quit != nil {
+		close(quit)
+		<-p.dispatched
+	}
 	return nil
+}
+
+// announceLimit bounds the acceptances awaiting publication.
+func (p *FramePool) announceLimit() int {
+	return int(4 * min(p.config.GlobalSlots, (1<<20)/4))
+}
+
+// announce queues an acceptance in commit order. When a stalled subscriber
+// lets the queue reach its bound, the oldest acceptances are dropped instead
+// of blocking admission. The caller holds the lock.
+func (p *FramePool) announce(tx *types.Transaction, reorg bool) {
+	if len(p.announces) >= p.announceLimit() {
+		if !p.overflowing {
+			p.overflowing = true
+			log.Warn("Framepool subscriber stalled, dropping oldest acceptance events", "queued", len(p.announces))
+		}
+		p.announces[0] = announcement{}
+		p.announces = p.announces[1:]
+		p.published.Add(1)
+		announceDroppedMeter.Mark(1)
+	}
+	p.announces = append(p.announces, announcement{tx: tx, reorg: reorg})
+	p.enqueued++
+	announceQueueGauge.Update(int64(len(p.announces)))
+	select {
+	case p.announceWake <- struct{}{}:
+	default:
+	}
+}
+
+// dispatch publishes queued acceptances in commit order, one event per
+// transaction: a discovery, unless recovered from a reorg, then an insertion.
+// It never holds the pool lock while sending, so subscribers may read the pool.
+// Acceptances are taken one at a time, so a stalled send holds back only one
+// and everything else stays subject to the queue bound.
+func (p *FramePool) dispatch(quit, done chan struct{}) {
+	defer close(done)
+	for {
+		select {
+		case <-p.announceWake:
+		case <-quit:
+			return
+		}
+		for {
+			p.lock.Lock()
+			if len(p.announces) == 0 {
+				p.announces, p.overflowing = nil, false
+				p.lock.Unlock()
+				break
+			}
+			announced := p.announces[0]
+			p.announces[0] = announcement{}
+			p.announces = p.announces[1:]
+			announceQueueGauge.Update(int64(len(p.announces)))
+			p.lock.Unlock()
+
+			event := core.NewTxsEvent{Txs: []*types.Transaction{announced.tx}}
+			if !announced.reorg {
+				p.discoverFeed.Send(event)
+			}
+			p.insertFeed.Send(event)
+			p.published.Add(1)
+		}
+	}
 }
 
 // SetGasTip updates the tip-cap floor and releases transactions below it.
@@ -273,12 +376,20 @@ func (p *FramePool) Pending(filter txpool.PendingFilter) (map[common.Address][]*
 }
 
 // SubscribeTransactions separates first discovery from reorg-inclusive insertion
-// notifications, as in the blob pool. This phase does not reinject reorged txs.
+// notifications, as in the blob pool. Recovered reorg transactions are inserted
+// but not rediscovered. Events are published asynchronously, in commit order.
 func (p *FramePool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
+	feed := &p.discoverFeed
 	if reorgs {
-		return p.scope.Track(p.insertFeed.Subscribe(ch))
+		feed = &p.insertFeed
 	}
-	return p.scope.Track(p.discoverFeed.Subscribe(ch))
+	sub := feed.Subscribe(ch)
+	tracked := p.scope.Track(sub)
+	if tracked == nil {
+		// Closed: an untracked subscription could block the final dispatch.
+		sub.Unsubscribe()
+	}
+	return tracked
 }
 
 // Nonce returns the next nonce after the sender's pending transaction, or the

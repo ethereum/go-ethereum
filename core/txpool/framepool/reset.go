@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
@@ -30,9 +31,15 @@ import (
 
 // Reset revalidates prefixes affected by a linear head advance, falling back to
 // all pending prefixes when dependencies cannot safely describe the transition.
-// Admission commits are generation-gated until revalidation and reorg recovery
-// finish, while all prefix execution runs outside the pool lock.
-func (p *FramePool) Reset(oldHead, newHead *types.Header) {
+// Prefixes whose dependencies changed only in balance keep their simulation and
+// are revalidated by payer accounting alone. Admission commits are generation-
+// gated until revalidation and reorg recovery finish, while all prefix execution
+// runs outside the pool lock.
+//
+// The caller's old head is ignored: changes are always traversed from the last
+// head the pool reconciled, which a failed Reset does not advance. Until a later
+// Reset succeeds, admissions are rejected as stale.
+func (p *FramePool) Reset(_, newHead *types.Header) {
 	p.resetLock.Lock()
 	defer p.resetLock.Unlock()
 	start := time.Now()
@@ -47,9 +54,7 @@ func (p *FramePool) Reset(oldHead, newHead *types.Header) {
 	}
 	p.generation++
 	p.resetDone = make(chan struct{})
-	if oldHead == nil {
-		oldHead = p.head.Load()
-	}
+	oldHead := p.head.Load()
 	snapshot := make([]*frameTx, 0, len(p.txs))
 	for _, entry := range p.txs {
 		snapshot = append(snapshot, entry)
@@ -61,7 +66,7 @@ func (p *FramePool) Reset(oldHead, newHead *types.Header) {
 		p.resetDone = nil
 		p.lock.Unlock()
 	}()
-	affected, reinject := p.headChanges(oldHead, newHead)
+	affected, displaced := p.headChanges(oldHead, newHead)
 	path, affectedCount := "selective", len(affected)
 	if affected == nil {
 		path, affectedCount = "full", len(snapshot)
@@ -69,16 +74,17 @@ func (p *FramePool) Reset(oldHead, newHead *types.Header) {
 	} else {
 		resetselectiveMeter.Mark(1)
 	}
-	var resimulated, removed, recovered int64
+	var resimulated, accounted, removed, recovered int64
 	defer func() {
 		resetresimulatedMeter.Mark(resimulated)
+		resetaccountedMeter.Mark(accounted)
 		resetreinjectedMeter.Mark(recovered)
 		var oldNumber any
 		if oldHead != nil {
 			oldNumber = oldHead.Number
 		}
 		log.Debug("Reset framepool", "old", oldNumber, "new", newHead.Number, "path", path,
-			"affected", affectedCount, "resimulated", resimulated, "removed", removed)
+			"affected", affectedCount, "resimulated", resimulated, "accounted", accounted, "removed", removed)
 	}()
 
 	// This pristine handle becomes the pool's read state only after all of its
@@ -86,8 +92,13 @@ func (p *FramePool) Reset(oldHead, newHead *types.Header) {
 	statedb, err := p.chain.StateAt(newHead)
 	if err != nil {
 		log.Error("Failed to reset framepool state", "err", err)
+		p.lock.Lock()
+		p.unreconciled = true
+		p.lock.Unlock()
 		return
 	}
+	reinject := p.recoverable(displaced, statedb)
+	p.checkEmptiness(affected, statedb)
 	results := make([]*simResult, len(snapshot))
 	for i, entry := range snapshot {
 		if entry.expiryDeadline != nil && *entry.expiryDeadline < newHead.Time {
@@ -96,8 +107,18 @@ func (p *FramePool) Reset(oldHead, newHead *types.Header) {
 		if p.validatePolicy(entry.tx, newHead) != nil {
 			continue
 		}
-		if _, changed := affected[entry.tx.Hash()]; affected != nil && !changed {
+		change, changed := affected[entry.tx.Hash()]
+		if affected != nil && !changed {
 			results[i] = entry.simResult
+			continue
+		}
+		if change != nil && !change.simulate {
+			// The shared result is immutable; only the payer balance moved.
+			// The accounting rebuild below evicts payers' lowest priorities.
+			accounted++
+			result := *entry.simResult
+			result.payerBalance = new(uint256.Int).Set(statedb.GetBalance(result.payer))
+			results[i] = &result
 			continue
 		}
 		// The nil result marks a rejected prefix. Immutable signatures have
@@ -166,6 +187,7 @@ func (p *FramePool) Reset(oldHead, newHead *types.Header) {
 	}
 	p.state, p.baseFee = statedb, baseFee
 	p.head.Store(newHead)
+	p.unreconciled = false
 	p.updateMetrics()
 	p.lock.Unlock()
 
@@ -181,10 +203,71 @@ func (p *FramePool) Reset(oldHead, newHead *types.Header) {
 	}
 }
 
+// recoverable selects the displaced transactions worth recovering: per sender,
+// only the oldest one at the sender's new-head nonce, since the pool holds a
+// single transaction per sender. A sender's nonce need not advance with each
+// inclusion (EIP-6780: an account created and destroyed in one transaction
+// stays at nonce 0), so senders are deduplicated explicitly. Neither later
+// nonces nor such repeats spend the bound of at most GlobalSlots attempts,
+// which limits how long recovery holds the generation against admissions.
+func (p *FramePool) recoverable(displaced []*types.Transaction, statedb *state.StateDB) []*types.Transaction {
+	var selected []*types.Transaction
+	seen := make(map[common.Address]struct{})
+	for i, tx := range displaced {
+		if uint64(len(selected)) == p.config.GlobalSlots {
+			log.Debug("Truncated framepool reorg recovery", "recovering", len(selected), "skipped", len(displaced)-i)
+			break
+		}
+		sender := *tx.FrameSender()
+		if _, ok := seen[sender]; ok || tx.Nonce() != statedb.GetNonce(sender) {
+			continue
+		}
+		seen[sender] = struct{}{}
+		selected = append(selected, tx)
+	}
+	return selected
+}
+
+// revalidation describes how a block access list touched one pending prefix.
+// balances lists dependency accounts whose only touched field was the balance;
+// it is irrelevant once simulate is set.
+type revalidation struct {
+	simulate bool
+	balances []common.Address
+}
+
+// checkEmptiness requires simulation for balance-only changes that flip any
+// account's EIP-161 emptiness between the pool's read state and the new head.
+// A balance alone cannot otherwise change a passing prefix: balance opcodes are
+// banned and prefix frames carry no value. Payer solvency is rechecked by the
+// accounting rebuild, but emptiness affects account-creation charges and
+// EXTCODEHASH. The read state is at the head every pending prefix passed at.
+func (p *FramePool) checkEmptiness(affected map[common.Hash]*revalidation, statedb *state.StateDB) {
+	if len(affected) == 0 {
+		return
+	}
+	flipped := make(map[common.Address]bool)
+	p.lock.Lock() // StateDB reads populate its caches.
+	defer p.lock.Unlock()
+	for _, change := range affected {
+		for _, addr := range change.balances {
+			if change.simulate {
+				break
+			}
+			flip, ok := flipped[addr]
+			if !ok {
+				flip = p.state.Empty(addr) != statedb.Empty(addr)
+				flipped[addr] = flip
+			}
+			change.simulate = flip
+		}
+	}
+}
+
 // headChanges returns nil for the full fallback, or a (possibly empty) affected
 // set for a linear advance. Historical traversal is bounded independently from
 // both heads; missing history or an excessive depth disables recovery entirely.
-func (p *FramePool) headChanges(oldHead, newHead *types.Header) (map[common.Hash]struct{}, []*types.Transaction) {
+func (p *FramePool) headChanges(oldHead, newHead *types.Header) (map[common.Hash]*revalidation, []*types.Transaction) {
 	if oldHead == nil || newHead == nil {
 		log.Debug("Full framepool reset", "reason", "missing head")
 		return nil, nil
@@ -242,17 +325,18 @@ func (p *FramePool) headChanges(oldHead, newHead *types.Header) (map[common.Hash
 				inclusions[tx.Hash()] = struct{}{}
 			}
 		}
-		var reinject []*types.Transaction
-		// Recover in block order. Every candidate still needs public validation,
-		// including signatures; block inclusion is not a mempool endorsement.
+		// Candidates are in block order, from the common ancestor. Every one
+		// still needs public validation, including signatures; block inclusion
+		// is not a mempool endorsement.
+		var displaced []*types.Transaction
 		for _, block := range slices.Backward(discarded) {
 			for _, tx := range block.Transactions() {
 				if _, ok := inclusions[tx.Hash()]; !ok && tx.Type() == types.FrameTxType {
-					reinject = append(reinject, tx)
+					displaced = append(displaced, tx)
 				}
 			}
 		}
-		return nil, reinject
+		return nil, displaced
 	}
 	config := p.chain.Config()
 	merged := func(head *types.Header) bool { return head.Difficulty == nil || head.Difficulty.Sign() == 0 }
@@ -266,7 +350,15 @@ func (p *FramePool) headChanges(oldHead, newHead *types.Header) (map[common.Hash
 			return nil, nil
 		}
 	}
-	affected := make(map[common.Hash]struct{})
+	affected := make(map[common.Hash]*revalidation)
+	mark := func(hash common.Hash) *revalidation {
+		change := affected[hash]
+		if change == nil {
+			change = new(revalidation)
+			affected[hash] = change
+		}
+		return change
+	}
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	for _, block := range included {
@@ -282,13 +374,17 @@ func (p *FramePool) headChanges(oldHead, newHead *types.Header) (map[common.Hash
 				fields |= dependencyCode
 			}
 			for hash, deps := range p.byAccount[account.Address] {
-				if deps&fields != 0 {
-					affected[hash] = struct{}{}
+				switch touched := deps & fields; {
+				case touched == dependencyBalance:
+					change := mark(hash)
+					change.balances = append(change.balances, account.Address)
+				case touched != 0:
+					mark(hash).simulate = true
 				}
 			}
 			for _, change := range account.StorageChanges {
 				for hash := range p.bySlot[account.Address][common.Hash(change.Slot.Bytes32())] {
-					affected[hash] = struct{}{}
+					mark(hash).simulate = true
 				}
 			}
 		}

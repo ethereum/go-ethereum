@@ -19,18 +19,123 @@ package framepool
 import (
 	"errors"
 	"math/big"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm/program"
+	"github.com/ethereum/go-ethereum/eth/fetcher"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
+
+// A peer delivering a transaction whose prefix executed before pool policy
+// rejected it at commit is throttled by the transaction fetcher. The same
+// policy rejection decided from the read state, before execution, is not.
+func TestFetcherThrottlesExecutedRejections(t *testing.T) {
+	winner := signedPoolTx(t, 2, 20, 0, 40, 4, nil, nil)
+	for _, tc := range []struct {
+		name  string
+		setup func(*state.StateDB)
+		want  error
+	}{
+		{"coded paymaster", func(s *state.StateDB) {
+			s.SetCode(poolAddress(t, 20), approveCode(program.New(), types.ApprovePayment), tracing.CodeChangeUnspecified)
+		}, txpool.ErrInflightTxLimitReached},
+		{"payer exposure", func(s *state.StateDB) {
+			s.SetBalance(poolAddress(t, 20), txCost(winner), tracing.BalanceChangeUnspecified)
+		}, core.ErrInsufficientFunds},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool, chain, _ := setupFramePool(t, 10, tc.setup)
+			var (
+				lock sync.Mutex
+				errs []error
+			)
+			f := fetcher.NewTxFetcher(nil,
+				func(common.Hash, byte) error { return nil },
+				func(txs []*types.Transaction) []error {
+					added := pool.Add(txs, false)
+					lock.Lock()
+					errs = append(errs, added...)
+					lock.Unlock()
+					return added
+				},
+				func(string, []common.Hash) error { return nil },
+				func(peer string) { t.Errorf("peer %s dropped", peer) },
+				nil,
+				blobpool.NewBlobBuffer(blobpool.BlobBufferFunctions{
+					ValidateTx: func(*types.Transaction) error { return nil },
+					AddToPool:  func(*blobpool.BlobTxForPool) error { return nil },
+					DropPeer:   func(string) {},
+				}),
+			)
+			f.Start()
+			defer f.Stop()
+			deliver := func(tx *types.Transaction) (time.Duration, error) {
+				start := time.Now()
+				if err := f.Enqueue("peer", eth.ETH70, []*types.Transaction{tx}, false); err != nil {
+					t.Error(err)
+				}
+				lock.Lock()
+				defer lock.Unlock()
+				return time.Since(start), errs[len(errs)-1]
+			}
+
+			// The candidate passes every read-state check, then waits before
+			// simulation while the winner takes the payer's capacity.
+			entered, release := make(chan struct{}), make(chan struct{})
+			var statesOpened atomic.Int32
+			chain.setHook(func(*types.Header) {
+				if statesOpened.Add(1) == 1 {
+					close(entered)
+					<-release
+				}
+			})
+			type outcome struct {
+				elapsed time.Duration
+				err     error
+			}
+			result := make(chan outcome, 1)
+			go func() {
+				elapsed, err := deliver(signedPoolTx(t, 1, 20, 0, 22, 3, nil, nil))
+				result <- outcome{elapsed, err}
+			}()
+			<-entered
+			addPoolTx(t, pool, winner, nil)
+			close(release)
+			executed := <-result
+			if !errors.Is(executed.err, tc.want) || !errors.Is(executed.err, txpool.ErrValidationExecuted) {
+				t.Fatalf("commit rejection: got %v, want executed %v", executed.err, tc.want)
+			}
+			const throttle = 40 * time.Millisecond
+			if executed.elapsed < throttle {
+				t.Fatalf("executed rejection throttled %v, want at least %v", executed.elapsed, throttle)
+			}
+			cheap, err := deliver(signedPoolTx(t, 3, 20, 0, 20, 2, nil, nil))
+			if !errors.Is(err, tc.want) || errors.Is(err, txpool.ErrValidationExecuted) {
+				t.Fatalf("read-state rejection: got %v, want unexecuted %v", err, tc.want)
+			}
+			if cheap >= throttle {
+				t.Fatalf("unexecuted rejection throttled %v", cheap)
+			}
+			assertFramePoolConsistent(t, pool)
+		})
+	}
+}
 
 func TestCrossPoolRoutingAndReservations(t *testing.T) {
 	config := *params.AllDevChainProtocolChanges

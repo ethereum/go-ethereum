@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,6 +36,13 @@ import (
 // ErrTraceViolation marks validation prefixes forbidden by public mempool policy.
 var ErrTraceViolation = errors.New("frame validation trace violation")
 
+// creatorNonceMargin bounds how far below 2^64-1 a creator's nonce must be for
+// no single block to reach the creation nonce-overflow precheck.
+const creatorNonceMargin = 1 << 32
+
+// frameParamGasUsed is the FRAMEPARAM selector of a frame's execution gas usage.
+const frameParamGasUsed = 0x0a
+
 type accountFields uint8
 
 const (
@@ -44,7 +52,8 @@ const (
 )
 
 // dependencies stores keys only. Each field is independently invalidated by
-// block access list changes; storage reads are always in the sender's account.
+// block access list changes; read and written storage slots are always in the
+// sender's account.
 type dependencies struct {
 	accounts map[common.Address]accountFields
 	slots    map[common.Hash]struct{}
@@ -87,8 +96,18 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 	deps := &result.dependencies
 	deps.add(sender, dependencyNonce|dependencyBalance|dependencyCode)
 	senderHadCode := len(statedb.GetCode(sender)) != 0
-	if prefix.DeployFrame >= 0 && senderHadCode {
-		return nil, fmt.Errorf("%w: deploy sender already has code", ErrTraceViolation)
+	if prefix.DeployFrame >= 0 {
+		if senderHadCode {
+			return nil, fmt.Errorf("%w: deploy sender already has code", ErrTraceViolation)
+		}
+		// Stricter than the pinned EIP-8141 deploy rules: a single
+		// authorization per block could re-delegate a shared factory, making
+		// every pending deploy through it re-simulate. Nested delegated
+		// targets are rejected during execution.
+		factory := msg.Frames[prefix.DeployFrame].ResolvedTarget(sender)
+		if _, delegated := types.ParseDelegation(statedb.GetCode(factory)); delegated {
+			return nil, fmt.Errorf("%w: delegated deploy factory", ErrTraceViolation)
+		}
 	}
 	if prefix.PayFrame >= 0 {
 		target := msg.Frames[prefix.PayFrame].ResolvedTarget(sender)
@@ -151,24 +170,18 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 	}
 	hooks := &tracing.Hooks{
 		OnEnter: func(depth int, typ byte, from, to common.Address, input []byte, gas uint64, value *big.Int) {
-			op := vm.OpCode(typ)
-			switch op {
-			case vm.CALL, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL, vm.CREATE, vm.CREATE2:
-				if value != nil && value.Sign() != 0 {
-					reject("value-bearing call or creation")
-				}
-			default:
-				return
-			}
-			if op == vm.CREATE || op == vm.CREATE2 {
+			switch op := vm.OpCode(typ); op {
+			case vm.CREATE, vm.CREATE2:
 				if evm.TxContext.FrameContext.CurrentFrame != prefix.DeployFrame || to != sender {
 					reject("creation outside sender deploy")
 				}
 				if op == vm.CREATE {
 					deps.add(from, dependencyNonce)
 				}
-			} else if depth >= 1 {
-				checkTarget(to)
+			case vm.CALL, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL:
+				if depth >= 1 {
+					checkTarget(to)
+				}
 			}
 		},
 		OnOpcode: func(pc uint64, raw byte, gas, cost uint64, scope tracing.OpContext, data []byte, depth int, opcodeErr error) {
@@ -192,24 +205,66 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 				default:
 					reject("gas not followed by call")
 				}
+			case vm.CALL, vm.CALLCODE:
+				// Values are checked before execution, see CREATE.
+				if stack := scope.StackData(); len(stack) >= 3 && !stack[len(stack)-3].IsZero() {
+					reject("value-bearing call or creation")
+				}
 			case vm.CREATE, vm.CREATE2:
 				if frame != prefix.DeployFrame {
 					reject("creation outside deploy frame")
 				}
-			case vm.SSTORE:
-				if frame != prefix.DeployFrame || scope.Address() != sender {
-					reject("storage write outside sender deploy")
+				// A creator unable to afford the endowment fails the creation
+				// without entering it, which would leave its balance an
+				// unrecorded input.
+				if stack := scope.StackData(); len(stack) > 0 && !stack[len(stack)-1].IsZero() {
+					reject("value-bearing call or creation")
 				}
-			case vm.SLOAD:
-				if scope.Address() != sender {
+				// A creation fails its precheck, before entering, at the
+				// creator's maximum nonce. Nonces grow by one per creation,
+				// transaction or authorization, so no block advances one by
+				// creatorNonceMargin; only creators this close to the limit
+				// depend on their nonce. Shared CREATE2 factories, whose nonce
+				// every deployment bumps, otherwise stay untracked.
+				if creator := scope.Address(); math.MaxUint64-statedb.GetNonce(creator) <= creatorNonceMargin {
+					deps.add(creator, dependencyNonce)
+				}
+			case vm.SSTORE, vm.SLOAD:
+				if op == vm.SSTORE && (frame != prefix.DeployFrame || scope.Address() != sender) {
+					reject("storage write outside sender deploy")
+				} else if scope.Address() != sender {
 					reject("foreign storage read")
 				} else if stack := scope.StackData(); len(stack) > 0 {
+					// SSTORE gas depends on the slot's head value too.
 					deps.slots[common.Hash(stack[len(stack)-1].Bytes32())] = struct{}{}
 				}
 			case vm.EXTCODESIZE, vm.EXTCODECOPY, vm.EXTCODEHASH:
 				if stack := scope.StackData(); len(stack) > 0 {
-					checkTarget(common.Address(stack[len(stack)-1].Bytes20()))
+					target := common.Address(stack[len(stack)-1].Bytes20())
+					checkTarget(target)
+					// EXTCODEHASH of a codeless account, such as a precompile,
+					// is zero exactly when the account is EIP-161 empty.
+					if op == vm.EXTCODEHASH && len(statedb.GetCode(target)) == 0 {
+						deps.add(target, dependencyNonce|dependencyBalance)
+					}
 				}
+			case vm.FRAMEPARAM:
+				// An earlier frame's gas usage reveals gas, see OnExit.
+				if stack := scope.StackData(); len(stack) >= 2 && stack[len(stack)-2].IsUint64() && stack[len(stack)-2].Uint64() == frameParamGasUsed {
+					reject("frame gas usage read")
+				}
+			}
+		},
+		// Stricter than the pinned EIP-8141 trace rules, like ERC-7562 OP-020:
+		// execution gas depends on the block author, whose account is warm
+		// during inclusion (EIP-3651) but not during simulation, so a prefix
+		// observing gas may pass here and fail for some builders. GAS is
+		// banned except before *CALL; a nested frame running out of gas and
+		// FRAMEPARAM's gas usage of an earlier frame are the other channels.
+		// A failed top-level frame already rejects the prefix.
+		OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+			if depth >= 1 && (errors.Is(err, vm.ErrOutOfGas) || errors.Is(err, vm.ErrCodeStoreOutOfGas)) {
+				reject("out of gas in nested call")
 			}
 		},
 	}

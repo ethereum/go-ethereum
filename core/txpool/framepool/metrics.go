@@ -31,6 +31,10 @@ var (
 	resetselectiveMeter   = metrics.NewRegisteredMeter("framepool/reset/selective", nil)
 	resetfullMeter        = metrics.NewRegisteredMeter("framepool/reset/full", nil)
 	resetresimulatedMeter = metrics.NewRegisteredMeter("framepool/reset/resimulated", nil)
+	resetaccountedMeter   = metrics.NewRegisteredMeter("framepool/reset/accounted", nil)
 	resetreinjectedMeter  = metrics.NewRegisteredMeter("framepool/reset/reinjected", nil)
 	resettimeHist         = metrics.NewRegisteredHistogram("framepool/reset/time", nil, metrics.NewExpDecaySample(1028, 0.015))
+
+	announceQueueGauge   = metrics.NewRegisteredGauge("framepool/announce/queued", nil)
+	announceDroppedMeter = metrics.NewRegisteredMeter("framepool/announce/dropped", nil)
 )

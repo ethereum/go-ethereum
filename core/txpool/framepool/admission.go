@@ -17,8 +17,11 @@
 package framepool
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -73,6 +76,7 @@ func (p *FramePool) Add(txs []*types.Transaction, _ bool) []error {
 
 // reorg is used only by Reset while it owns the generation. It bypasses the
 // reset wait, but shares every validation and atomic admission check with Add.
+// Rejections after any prefix execution carry txpool.ErrValidationExecuted.
 func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 	validatedHead := p.head.Load()
 	prefix, err := p.classify(tx, validatedHead)
@@ -95,6 +99,7 @@ func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 	if p.hasPendingAuth != nil && p.hasPendingAuth(entry.sender) {
 		return txpool.ErrInflightTxLimitReached
 	}
+	var executed bool
 	for range 2 {
 		// A Reset owns the generation until its fresh results are committed.
 		// Wait without the pool lock before taking a reconciled head snapshot.
@@ -104,21 +109,28 @@ func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 		if done != nil && !reorg {
 			<-done
 		}
-		p.lock.RLock()
+		// Read-state checks populate StateDB caches, so take a write lock.
+		p.lock.Lock()
 		if p.closed {
-			p.lock.RUnlock()
+			p.lock.Unlock()
 			return ErrClosed
 		}
 		if p.resetDone != nil && !reorg {
-			p.lock.RUnlock()
+			p.lock.Unlock()
 			continue
 		}
+		if p.unreconciled {
+			p.lock.Unlock()
+			return rejected(errUnreconciled, executed)
+		}
 		head, generation := p.head.Load(), p.generation
-		p.lock.RUnlock()
-
+		err = p.precheckState(entry)
+		p.lock.Unlock()
+		if err != nil {
+			return rejected(err, executed)
+		}
 		// Fork rules and the block gas limit may have changed since the basics
 		// check. Recheck only on a head change, without verifying signatures.
-		err = nil
 		if head != validatedHead {
 			err = p.validatePolicy(tx, head)
 			if err == nil {
@@ -131,6 +143,7 @@ func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 			if stateErr != nil {
 				err = stateErr
 			} else {
+				executed = true
 				result, err = p.simulate(head, statedb, tx, prefix)
 				entry.simResult = result
 			}
@@ -144,15 +157,71 @@ func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 			p.lock.Unlock()
 			return ErrClosed
 		}
-		if err != nil {
-			p.lock.Unlock()
-			return err
+		if err == nil {
+			err = p.commit(entry)
 		}
-		err = p.commit(entry, reorg)
+		if err == nil {
+			p.announce(tx, reorg)
+		}
 		p.lock.Unlock()
+		return rejected(err, executed)
+	}
+	return rejected(ErrHeadChanged, executed)
+}
+
+// errUnreconciled rejects admissions while the pool's read state is stale.
+var errUnreconciled = fmt.Errorf("%w: head state unavailable", ErrHeadChanged)
+
+// rejected marks a rejection reached after executing the validation prefix,
+// keeping the cause matchable. Duplicates of accepted transactions, which only
+// concurrent deliveries can reach after execution, stay unmarked.
+func rejected(err error, executed bool) error {
+	if err == nil || !executed || errors.Is(err, txpool.ErrAlreadyKnown) {
 		return err
 	}
-	return ErrHeadChanged
+	return fmt.Errorf("%w (%w)", err, txpool.ErrValidationExecuted)
+}
+
+// precheckState rejects, before any prefix execution, a transaction whose
+// sender nonce or payer capacity already fails at the pool's read state. The
+// payer is static: the target of the payment-approving prefix frame. commit
+// rechecks the payer against the simulated approval. The caller holds the
+// write lock.
+func (p *FramePool) precheckState(entry *frameTx) error {
+	nonce, next := p.state.GetNonce(entry.sender), entry.tx.Nonce()
+	if next < nonce {
+		return fmt.Errorf("%w: address %v, tx: %d state: %d", core.ErrNonceTooLow, entry.sender, next, nonce)
+	}
+	if next > nonce {
+		return fmt.Errorf("%w: address %v, tx: %d state: %d", core.ErrNonceTooHigh, entry.sender, next, nonce)
+	}
+	payer := entry.tx.Frames()[entry.prefix.End].ResolvedTarget(entry.sender)
+	coded := entry.prefix.PayFrame >= 0 && p.state.GetCodeSize(payer) != 0
+	return p.checkPayer(entry, p.txs[entry.sender], payer, p.state.GetBalance(payer), coded)
+}
+
+// checkPayer checks aggregate payer exposure and the non-canonical paymaster
+// cap, crediting a same-payer replacement. The caller holds at least a read lock.
+func (p *FramePool) checkPayer(entry, old *frameTx, payer common.Address, balance *uint256.Int, coded bool) error {
+	var exposure uint256.Int
+	var count int
+	if usage := p.payers[payer]; usage != nil {
+		exposure.Set(&usage.reserved)
+		count = usage.coded
+	}
+	if old != nil && old.payer == payer {
+		exposure.Sub(&exposure, &old.maxCost)
+		if old.codedPaymaster {
+			count--
+		}
+	}
+	if _, overflow := exposure.AddOverflow(&exposure, &entry.maxCost); overflow || exposure.Gt(balance) {
+		return core.ErrInsufficientFunds
+	}
+	if coded && count >= MaxPendingTxsUsingNonCanonicalPaymaster {
+		return txpool.ErrInflightTxLimitReached
+	}
+	return nil
 }
 
 // precheck cheaply rejects gossip duplicates and uncompetitive transactions
@@ -196,7 +265,8 @@ func (p *FramePool) checkReplacement(entry *frameTx) (*frameTx, error) {
 
 // commit computes all policy decisions before taking a new sender hold, then
 // performs only infallible mutations. A replacement retains its existing hold.
-func (p *FramePool) commit(entry *frameTx, reorg bool) error {
+// The caller queues the acceptance announcement under the same lock.
+func (p *FramePool) commit(entry *frameTx) error {
 	if p.all[entry.tx.Hash()] != nil {
 		return txpool.ErrAlreadyKnown
 	}
@@ -210,23 +280,8 @@ func (p *FramePool) commit(entry *frameTx, reorg bool) error {
 	if err != nil {
 		return err
 	}
-	var exposure uint256.Int
-	var coded int
-	if usage := p.payers[entry.payer]; usage != nil {
-		exposure.Set(&usage.reserved)
-		coded = usage.coded
-	}
-	if old != nil && old.payer == entry.payer {
-		exposure.Sub(&exposure, &old.maxCost)
-		if old.codedPaymaster {
-			coded--
-		}
-	}
-	if _, overflow := exposure.AddOverflow(&exposure, &entry.maxCost); overflow || exposure.Gt(entry.payerBalance) {
-		return core.ErrInsufficientFunds
-	}
-	if entry.codedPaymaster && coded >= MaxPendingTxsUsingNonCanonicalPaymaster {
-		return txpool.ErrInflightTxLimitReached
+	if err := p.checkPayer(entry, old, entry.payer, entry.payerBalance, entry.codedPaymaster); err != nil {
+		return err
 	}
 	entry.effectiveTip = entry.tx.EffectiveGasTipValue(p.baseFee)
 	victims, err := p.capacityVictims(entry, old, true)
@@ -251,11 +306,6 @@ func (p *FramePool) commit(entry *frameTx, reorg bool) error {
 	p.insert(entry)
 	p.updateMetrics()
 	acceptedMeter.Mark(1)
-	accepted := core.NewTxsEvent{Txs: []*types.Transaction{entry.tx}}
-	if !reorg {
-		p.discoverFeed.Send(accepted)
-	}
-	p.insertFeed.Send(accepted)
 	return nil
 }
 

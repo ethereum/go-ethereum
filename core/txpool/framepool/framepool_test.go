@@ -24,9 +24,11 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -70,11 +72,17 @@ func (c *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block 
 }
 func (c *testBlockChain) StateAt(head *types.Header) (*state.StateDB, error) {
 	c.lock.Lock()
-	statedb := c.states[head.Root].Copy()
+	var statedb *state.StateDB
+	if template := c.states[head.Root]; template != nil {
+		statedb = template.Copy()
+	}
 	hook := c.hook
 	c.lock.Unlock()
 	if hook != nil {
 		hook(head)
+	}
+	if statedb == nil {
+		return nil, fmt.Errorf("missing state %v", head.Root)
 	}
 	return statedb, nil
 }
@@ -197,6 +205,23 @@ func addPoolTx(t *testing.T, pool *FramePool, tx *types.Transaction, want error)
 	t.Helper()
 	if err := pool.Add([]*types.Transaction{tx}, true)[0]; !errors.Is(err, want) {
 		t.Fatalf("Add %s: got %v, want %v", tx.Hash(), err, want)
+	}
+}
+
+// waitAnnounced waits until the dispatcher has published every acceptance
+// queued so far, after which buffered subscriptions hold all their events.
+func waitAnnounced(t *testing.T, p *FramePool) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		p.lock.RLock()
+		queued := p.enqueued
+		p.lock.RUnlock()
+		if p.published.Load() == queued {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("dispatcher published %d of %d acceptances", p.published.Load(), queued)
+		}
 	}
 }
 func assertLive(t *testing.T, pool *FramePool, tx *types.Transaction, want bool) {
@@ -374,7 +399,8 @@ func TestPayerReplacementAccounting(t *testing.T) {
 	})
 	addPoolTx(t, pool, initial, nil)
 	addPoolTx(t, pool, same, nil) // Fits only after crediting the replaced cost.
-	addPoolTx(t, pool, signedPoolTx(t, 1, 22, 0, 25, 4, nil, nil), core.ErrFrameTxInvalidExecution)
+	// A payer that cannot cover the cost at head is rejected before execution.
+	addPoolTx(t, pool, signedPoolTx(t, 1, 22, 0, 25, 4, nil, nil), core.ErrInsufficientFunds)
 	assertLive(t, pool, same, true)
 	assertFramePoolConsistent(t, pool)
 	addPoolTx(t, pool, moved, nil)
@@ -453,6 +479,7 @@ func TestCapacityEffectiveTipAndFailedHold(t *testing.T) {
 	otherTx := signedPoolTx(t, 2, 0, 0, 100, 2, nil, nil)
 	addPoolTx(t, pool, lowEffective, nil)
 	addPoolTx(t, pool, otherTx, nil)
+	waitAnnounced(t, pool)
 	discover, insert := make(chan core.NewTxsEvent, 1), make(chan core.NewTxsEvent, 1)
 	subDiscover := pool.SubscribeTransactions(discover, false)
 	subInsert := pool.SubscribeTransactions(insert, true)
@@ -466,6 +493,7 @@ func TestCapacityEffectiveTipAndFailedHold(t *testing.T) {
 	assertLive(t, pool, lowEffective, true)
 	assertLive(t, pool, otherTx, true)
 	assertFramePoolConsistent(t, pool)
+	waitAnnounced(t, pool)
 	for _, events := range []chan core.NewTxsEvent{discover, insert} {
 		select {
 		case got := <-events:
@@ -661,6 +689,7 @@ func TestAcceptedEventsAndRemoval(t *testing.T) {
 	replacement := signedPoolTx(t, 1, 0, 0, 22, 3, nil, nil)
 	addPoolTx(t, pool, replacement, nil)
 	pool.SetGasTip(big.NewInt(4))
+	waitAnnounced(t, pool)
 	assertLive(t, pool, replacement, false)
 	assertReleased(t, other, poolAddress(t, 1))
 	for _, events := range []chan core.NewTxsEvent{discover, insert} {
@@ -686,6 +715,192 @@ func TestAcceptedEventsAndRemoval(t *testing.T) {
 	pool.Clear()
 	assertReleased(t, other, poolAddress(t, 1))
 	assertFramePoolConsistent(t, pool)
+}
+
+// Acceptance events must be sent without holding the pool lock: subscribers
+// such as the broadcast loop read the pool before draining their channel.
+func TestAcceptedEventsSubscriberReadsPool(t *testing.T) {
+	for _, reorg := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reorg=%v", reorg), func(t *testing.T) {
+			pool, chain, _ := setupFramePool(t, 10, nil)
+			tx := signedPoolTx(t, 1, 0, 0, 20, 2, nil, nil)
+			ancestor := chain.CurrentBlock()
+			var old *types.Header
+			if reorg {
+				old = chain.extend(ancestor, 101, []*types.Transaction{tx}, nil, nil)
+				pool.Reset(ancestor, old)
+			}
+			discover, insert := make(chan core.NewTxsEvent), make(chan core.NewTxsEvent)
+			subDiscover := pool.SubscribeTransactions(discover, false)
+			subInsert := pool.SubscribeTransactions(insert, true)
+			defer subDiscover.Unsubscribe()
+			defer subInsert.Unsubscribe()
+
+			// The transaction becomes visible only after its commit, so every
+			// event is sent after the subscriber has read the pool.
+			received := make(chan []*types.Transaction, 1)
+			go func() {
+				for pool.Get(tx.Hash()) == nil {
+					time.Sleep(time.Millisecond)
+				}
+				var got []*types.Transaction
+				if !reorg {
+					got = append(got, (<-discover).Txs...)
+				}
+				received <- append(got, (<-insert).Txs...)
+			}()
+			done := make(chan error, 1)
+			go func() {
+				if reorg {
+					pool.Reset(old, chain.extend(ancestor, 102, nil, bal.NewConstructionBlockAccessList(), nil))
+					done <- nil
+				} else {
+					done <- pool.Add([]*types.Transaction{tx}, true)[0]
+				}
+			}()
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("admission deadlocked with a subscriber reading the pool")
+			}
+			want := []*types.Transaction{tx, tx}
+			if reorg {
+				want = want[:1]
+			}
+			if got := <-received; !slices.Equal(got, want) {
+				t.Fatalf("acceptance events: got %v, want %v", got, want)
+			}
+			assertFramePoolConsistent(t, pool)
+		})
+	}
+}
+
+// Admissions never wait on subscribers, and events are published in commit
+// order: a replaced transaction is never announced after its replacement.
+func TestAcceptedEventsCommitOrder(t *testing.T) {
+	pool, _, _ := setupFramePool(t, 10, nil)
+	discover, insert := make(chan core.NewTxsEvent), make(chan core.NewTxsEvent)
+	subDiscover := pool.SubscribeTransactions(discover, false)
+	subInsert := pool.SubscribeTransactions(insert, true)
+	defer subDiscover.Unsubscribe()
+	defer subInsert.Unsubscribe()
+
+	txs := []*types.Transaction{
+		signedPoolTx(t, 1, 0, 0, 20, 2, nil, nil),
+		signedPoolTx(t, 1, 0, 0, 22, 3, nil, nil), // Replaces the first.
+		signedPoolTx(t, 2, 0, 0, 20, 2, nil, nil),
+	}
+	added := make(chan []error, 1)
+	go func() { added <- pool.Add(txs, true) }() // Subscribers are not reading.
+	select {
+	case errs := <-added:
+		for i, err := range errs {
+			if err != nil {
+				t.Fatalf("Add %d: %v", i, err)
+			}
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("admission waited on a subscriber")
+	}
+	receive := func(events chan core.NewTxsEvent) *types.Transaction {
+		select {
+		case event := <-events:
+			return event.Txs[0]
+		case <-time.After(5 * time.Second):
+			t.Fatal("missing acceptance event")
+			return nil
+		}
+	}
+	for i, want := range txs {
+		if got := receive(discover); got != want {
+			t.Fatalf("discovery %d: got %v, want %v", i, got.Hash(), want.Hash())
+		}
+		if got := receive(insert); got != want {
+			t.Fatalf("insertion %d: got %v, want %v", i, got.Hash(), want.Hash())
+		}
+	}
+}
+
+// A huge configured capacity must not wrap the announcement bound to zero,
+// which would drop or index an empty queue on the first acceptance.
+func TestAcceptedEventsHugeCapacity(t *testing.T) {
+	pool, _, _ := setupFramePool(t, 1<<62, nil)
+	discover := make(chan core.NewTxsEvent, 1)
+	sub := pool.SubscribeTransactions(discover, false)
+	defer sub.Unsubscribe()
+	tx := signedPoolTx(t, 1, 0, 0, 20, 2, nil, nil)
+	addPoolTx(t, pool, tx, nil)
+	select {
+	case ev := <-discover:
+		if len(ev.Txs) != 1 || ev.Txs[0].Hash() != tx.Hash() {
+			t.Fatalf("unexpected event %v", ev.Txs)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("accepted transaction was not announced")
+	}
+}
+
+// A stalled subscriber never blocks admission. The announcement queue keeps
+// only the newest 4*GlobalSlots acceptances, and what is published once the
+// subscriber resumes is still in commit order, ending with the latest.
+func TestAcceptedEventsStalledSubscriber(t *testing.T) {
+	pool, _, _ := setupFramePool(t, 2, nil)
+	limit := pool.announceLimit()
+	discover := make(chan core.NewTxsEvent)
+	sub := pool.SubscribeTransactions(discover, false)
+	defer sub.Unsubscribe()
+
+	// Successive replacements, each accepted and announced.
+	txs := make([]*types.Transaction, 3*limit)
+	for i := range txs {
+		txs[i] = signedPoolTx(t, 1, 0, 0, 20<<i, 2<<i, nil, nil)
+	}
+	added := make(chan struct{})
+	go func() {
+		defer close(added)
+		for _, tx := range txs {
+			if err := pool.Add([]*types.Transaction{tx}, true)[0]; err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+	select {
+	case <-added:
+	case <-time.After(5 * time.Second):
+		t.Fatal("admission blocked on a stalled subscriber")
+	}
+	pool.lock.RLock()
+	queued := len(pool.announces)
+	pool.lock.RUnlock()
+	if queued > limit {
+		t.Fatalf("%d acceptances queued, bound %d", queued, limit)
+	}
+	order := make(map[*types.Transaction]int, len(txs))
+	for i, tx := range txs {
+		order[tx] = i
+	}
+	last, received := -1, 0
+	for last != len(txs)-1 {
+		select {
+		case event := <-discover:
+			i := order[event.Txs[0]]
+			if i <= last {
+				t.Fatalf("acceptance %d published after %d", i, last)
+			}
+			last = i
+			received++
+		case <-time.After(5 * time.Second):
+			t.Fatalf("latest acceptance not published, last %d", last)
+		}
+	}
+	// At most one acceptance was taken by the dispatcher before it stalled.
+	if received > limit+1 {
+		t.Fatalf("published %d of %d acceptances, bound %d", received, len(txs), limit+1)
+	}
+	waitAnnounced(t, pool)
 }
 
 func TestAdmissionHeadChangeRetry(t *testing.T) {
@@ -869,6 +1084,7 @@ func TestAdmissionCheapPoolRejections(t *testing.T) {
 			pool, chain, other := setupFramePool(t, 1, nil)
 			victim := signedPoolTx(t, 1, 0, 0, 20, 2, nil, nil)
 			addPoolTx(t, pool, victim, nil)
+			waitAnnounced(t, pool)
 			tx := tc.makeTx(t, victim)
 			if tc.want != txpool.ErrAlreadyKnown {
 				inner := poolTxData(tx)
@@ -886,6 +1102,7 @@ func TestAdmissionCheapPoolRejections(t *testing.T) {
 			sub := pool.SubscribeTransactions(events, false)
 			defer sub.Unsubscribe()
 			addPoolTx(t, pool, tx, tc.want)
+			waitAnnounced(t, pool)
 			if statesOpened != 0 {
 				t.Fatalf("cheap rejection opened %d simulation states", statesOpened)
 			}
@@ -901,26 +1118,41 @@ func TestAdmissionCheapPoolRejections(t *testing.T) {
 	}
 }
 
+// Pool policy rechecked at commit can reject a candidate after its prefix ran.
+// Such rejections carry the execution marker, except duplicates.
 func TestAdmissionPoolPrechecksRecheckedAtCommit(t *testing.T) {
+	exposed := signedPoolTx(t, 2, 20, 0, 40, 4, nil, nil)
 	for _, tc := range []struct {
 		name        string
+		payer       int
+		setup       func(*state.StateDB)
 		replacement bool
 		duplicate   bool
 		want        error
 	}{
-		{"known", false, true, txpool.ErrAlreadyKnown},
-		{"replacement", true, false, txpool.ErrReplaceUnderpriced},
-		{"capacity", false, false, txpool.ErrUnderpriced},
+		{"known", 0, nil, false, true, txpool.ErrAlreadyKnown},
+		{"replacement", 0, nil, true, false, txpool.ErrReplaceUnderpriced},
+		{"capacity", 0, nil, false, false, txpool.ErrUnderpriced},
+		{"coded paymaster", 20, func(s *state.StateDB) {
+			s.SetCode(poolAddress(t, 20), approveCode(program.New(), types.ApprovePayment), tracing.CodeChangeUnspecified)
+		}, false, false, txpool.ErrInflightTxLimitReached},
+		{"payer exposure", 20, func(s *state.StateDB) {
+			s.SetBalance(poolAddress(t, 20), txCost(exposed), tracing.BalanceChangeUnspecified)
+		}, false, false, core.ErrInsufficientFunds},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			pool, chain, other := setupFramePool(t, 1, nil)
-			candidate := signedPoolTx(t, 1, 0, 0, 22, 3, nil, nil)
+			slots := uint64(1)
+			if tc.payer != 0 {
+				slots = 10
+			}
+			pool, chain, other := setupFramePool(t, slots, tc.setup)
+			candidate := signedPoolTx(t, 1, tc.payer, 0, 22, 3, nil, nil)
 			winner := candidate
 			if tc.replacement {
 				addPoolTx(t, pool, signedPoolTx(t, 1, 0, 0, 20, 2, nil, nil), nil)
 				winner = signedPoolTx(t, 1, 0, 0, 40, 4, nil, nil)
 			} else if !tc.duplicate {
-				winner = signedPoolTx(t, 2, 0, 0, 40, 4, nil, nil)
+				winner = signedPoolTx(t, 2, tc.payer, 0, 40, 4, nil, nil)
 			}
 			entered, release := make(chan struct{}), make(chan struct{})
 			var statesOpened atomic.Int32
@@ -935,8 +1167,12 @@ func TestAdmissionPoolPrechecksRecheckedAtCommit(t *testing.T) {
 			<-entered // The candidate passed all early checks.
 			addPoolTx(t, pool, winner, nil)
 			close(release)
-			if err := <-result; !errors.Is(err, tc.want) {
+			err := <-result
+			if !errors.Is(err, tc.want) {
 				t.Fatalf("stale pool precheck committed: got %v, want %v", err, tc.want)
+			}
+			if marked := errors.Is(err, txpool.ErrValidationExecuted); marked == tc.duplicate {
+				t.Fatalf("rejection %v: execution marker %v", err, marked)
 			}
 			assertLive(t, pool, winner, true)
 			if !tc.duplicate {
@@ -945,6 +1181,52 @@ func TestAdmissionPoolPrechecksRecheckedAtCommit(t *testing.T) {
 			if !tc.replacement && !tc.duplicate {
 				assertReleased(t, other, poolAddress(t, 1))
 			}
+			assertFramePoolConsistent(t, pool)
+		})
+	}
+}
+
+// Nonce, payer exposure and coded paymaster rejections known from the read
+// state precede execution and are unmarked; failed prefixes are marked.
+func TestAdmissionExecutionMarker(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		payer    int
+		setup    func(*state.StateDB)
+		nonce    uint64
+		want     error
+		executed bool
+	}{
+		{"nonce", 0, nil, 1, core.ErrNonceTooHigh, false},
+		{"payer exposure", 20, func(s *state.StateDB) {
+			s.SetBalance(poolAddress(t, 20), txCost(signedPoolTx(t, 1, 20, 0, 20, 2, nil, nil)), tracing.BalanceChangeUnspecified)
+		}, 0, core.ErrInsufficientFunds, false},
+		{"coded paymaster", 20, func(s *state.StateDB) {
+			s.SetCode(poolAddress(t, 20), approveCode(program.New(), types.ApprovePayment), tracing.CodeChangeUnspecified)
+		}, 0, txpool.ErrInflightTxLimitReached, false},
+		{"trace violation", 0, func(s *state.StateDB) {
+			s.SetCode(poolAddress(t, 2), approveCode(program.New().Op(vm.NUMBER, vm.POP), types.ApproveExecutionAndPayment), tracing.CodeChangeUnspecified)
+		}, 0, ErrTraceViolation, true},
+		{"failed verify", 0, func(s *state.StateDB) {
+			s.SetCode(poolAddress(t, 2), []byte{byte(vm.PUSH0), byte(vm.DUP1), byte(vm.REVERT)}, tracing.CodeChangeUnspecified)
+		}, 0, core.ErrFrameTxInvalidExecution, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool, _, _ := setupFramePool(t, 10, tc.setup)
+			if tc.payer != 0 {
+				// Occupies the coded paymaster's single slot.
+				addPoolTx(t, pool, signedPoolTx(t, 1, tc.payer, 0, 20, 2, nil, nil), nil)
+			}
+			pool.simulations.Store(0)
+			err := pool.Add([]*types.Transaction{signedPoolTx(t, 2, tc.payer, tc.nonce, 20, 2, nil, nil)}, true)[0]
+			if !errors.Is(err, tc.want) || errors.Is(err, txpool.ErrValidationExecuted) != tc.executed {
+				t.Fatalf("got %v, want %v with execution marker %v", err, tc.want, tc.executed)
+			}
+			want := uint64(0)
+			if tc.executed {
+				want = 1
+			}
+			assertSimulations(t, pool, want)
 			assertFramePoolConsistent(t, pool)
 		})
 	}

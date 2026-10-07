@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 	"testing"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/program"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -133,7 +135,12 @@ func TestSelectiveResetPayerChanges(t *testing.T) {
 				}
 			})
 			pool.Reset(old, next)
-			assertSimulations(t, pool, 3)
+			// A sponsor balance change is revalidated by payer accounting alone.
+			sims := uint64(0)
+			if coded {
+				sims = 3
+			}
+			assertSimulations(t, pool, sims)
 			for i, tx := range sponsored {
 				want := i >= 1
 				if coded {
@@ -145,6 +152,84 @@ func TestSelectiveResetPayerChanges(t *testing.T) {
 				}
 			}
 			assertLive(t, pool, unrelated, true)
+			assertFramePoolConsistent(t, pool)
+		})
+	}
+}
+
+// Balance changes to a codeless sponsor shared by many pending transactions are
+// revalidated by payer accounting alone, never by re-executing their prefixes.
+func TestSelectiveResetSharedSponsorBalance(t *testing.T) {
+	pool, chain, other := setupFramePool(t, 32, nil)
+	sponsor := poolAddress(t, 20)
+	var sponsored []*types.Transaction
+	for id := 1; id <= 16; id++ {
+		tx := signedPoolTx(t, id, 20, 0, 20, uint64(id), nil, nil)
+		sponsored = append(sponsored, tx)
+		addPoolTx(t, pool, tx, nil)
+	}
+	assertSimulations(t, pool, 16)
+	setBalance := func(parent *types.Header, timestamp uint64, balance *uint256.Int) *types.Header {
+		accesses := bal.NewConstructionBlockAccessList()
+		accesses.BalanceChange(1, sponsor, balance)
+		return chain.extend(parent, timestamp, nil, accesses, func(s *state.StateDB) {
+			s.SetBalance(sponsor, balance, tracing.BalanceChangeUnspecified)
+		})
+	}
+	old := chain.CurrentBlock()
+	next := setBalance(old, 101, uint256.NewInt(1e18+1))
+	pool.Reset(old, next)
+	assertSimulations(t, pool, 0)
+	for _, tx := range sponsored {
+		assertLive(t, pool, tx, true)
+	}
+	assertFramePoolConsistent(t, pool)
+
+	// The sponsor now covers only the ten highest priorities.
+	balance := new(uint256.Int)
+	for _, tx := range sponsored[6:] {
+		balance.Add(balance, txCost(tx))
+	}
+	last := setBalance(next, 102, balance)
+	pool.Reset(next, last)
+	assertSimulations(t, pool, 0)
+	for i, tx := range sponsored {
+		assertLive(t, pool, tx, i >= 6)
+		if i < 6 {
+			assertReleased(t, other, *tx.FrameSender())
+		}
+	}
+	assertFramePoolConsistent(t, pool)
+}
+
+// A balance-only change that flips a dependency account's EIP-161 emptiness can
+// change account-creation charges and EXTCODEHASH, so it requires simulation.
+func TestSelectiveResetBalanceEmptiness(t *testing.T) {
+	for _, fund := range []bool{false, true} {
+		t.Run(fmt.Sprintf("fund=%v", fund), func(t *testing.T) {
+			pool, chain, _ := setupFramePool(t, 10, nil)
+			// Sender 40 is unfunded and empty; sender 1 holds a balance.
+			flipping, balance := poolAddress(t, 1), new(uint256.Int)
+			flipped := signedPoolTx(t, 1, 20, 0, 20, 2, nil, nil)
+			if fund {
+				flipping, balance = poolAddress(t, 40), uint256.NewInt(1)
+				flipped = signedPoolTx(t, 40, 20, 0, 20, 2, nil, nil)
+			}
+			steady := signedPoolTx(t, 2, 20, 0, 20, 2, nil, nil)
+			addPoolTx(t, pool, flipped, nil)
+			addPoolTx(t, pool, steady, nil)
+			assertSimulations(t, pool, 2)
+			accesses := bal.NewConstructionBlockAccessList()
+			accesses.BalanceChange(1, flipping, balance)
+			accesses.BalanceChange(1, poolAddress(t, 2), uint256.NewInt(1))
+			old := chain.CurrentBlock()
+			next := chain.extend(old, 101, nil, accesses, func(s *state.StateDB) {
+				s.SetBalance(flipping, balance, tracing.BalanceChangeUnspecified)
+				s.SetBalance(poolAddress(t, 2), uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+			})
+			pool.Reset(old, next)
+			assertSimulations(t, pool, 1)
+			assertLive(t, pool, steady, true)
 			assertFramePoolConsistent(t, pool)
 		})
 	}
@@ -266,12 +351,10 @@ func TestSelectiveResetExpiry(t *testing.T) {
 	assertSimulations(t, pool, 1)
 	old := chain.CurrentBlock()
 	// Force equality through an affected dependency, not merely the cached path.
+	// The verifier's code is rewritten unchanged, which still requires simulation.
 	accesses := bal.NewConstructionBlockAccessList()
-	balance := uint256.NewInt(1e18 - 1)
-	accesses.BalanceChange(1, poolAddress(t, 1), balance)
-	next := chain.extend(old, deadline, nil, accesses, func(s *state.StateDB) {
-		s.SetBalance(poolAddress(t, 1), balance, tracing.BalanceChangeUnspecified)
-	})
+	accesses.CodeChange(params.FrameTxExpiryVerifier, 1, params.FrameTxExpiryVerifierCode)
+	next := chain.extend(old, deadline, nil, accesses, nil)
 	pool.Reset(old, next)
 	assertSimulations(t, pool, 1)
 	assertLive(t, pool, tx, true)
@@ -312,12 +395,14 @@ func TestResetReorgPublicReinjection(t *testing.T) {
 	assertLive(t, pool, good, false)
 	assertReleased(t, other, poolAddress(t, 1))
 	newHead := chain.extend(ancestor, 102, []*types.Transaction{included}, bal.NewConstructionBlockAccessList(), nil)
+	waitAnnounced(t, pool)
 	discover, insert := make(chan core.NewTxsEvent, 10), make(chan core.NewTxsEvent, 10)
 	subDiscover := pool.SubscribeTransactions(discover, false)
 	subInsert := pool.SubscribeTransactions(insert, true)
 	defer subDiscover.Unsubscribe()
 	defer subInsert.Unsubscribe()
 	pool.Reset(old, newHead)
+	waitAnnounced(t, pool)
 	assertLive(t, pool, good, true)
 	for _, tx := range []*types.Transaction{private, included, forged, overbudget, replaced, cleared} {
 		assertLive(t, pool, tx, false)
@@ -383,6 +468,96 @@ func TestResetReorgRecoveryBound(t *testing.T) {
 			})
 		}
 	}
+}
+
+// Reorg recovery attempts at most GlobalSlots candidates, oldest blocks first,
+// and only one per sender: the one at the sender's new-head nonce. Later nonces
+// of one sender cannot starve other senders.
+func TestResetReorgRecoveryCap(t *testing.T) {
+	pool, chain, _ := setupFramePool(t, 2, nil)
+	ancestor := chain.CurrentBlock()
+	// Each later candidate outranks the earlier ones and could displace them.
+	var saturating, others []*types.Transaction
+	for nonce := range uint64(3) {
+		saturating = append(saturating, signedPoolTx(t, 1, 0, nonce, 20, nonce+2, nil, nil))
+	}
+	for id := 2; id <= 3; id++ {
+		others = append(others, signedPoolTx(t, id, 0, 0, 20, uint64(id+4), nil, nil))
+	}
+	old := chain.extend(ancestor, 101, append(slices.Clone(saturating), others[0]), nil, nil)
+	old = chain.extend(old, 102, others[1:], nil, nil)
+	pool.Reset(ancestor, old)
+	assertSimulations(t, pool, 0)
+	pool.Reset(old, chain.extend(ancestor, 103, nil, bal.NewConstructionBlockAccessList(), nil))
+	assertSimulations(t, pool, 2)
+	for nonce, tx := range saturating {
+		assertLive(t, pool, tx, nonce == 0)
+	}
+	assertLive(t, pool, others[0], true)
+	assertLive(t, pool, others[1], false)
+	assertFramePoolConsistent(t, pool)
+}
+
+// A sender's nonce need not advance with each inclusion: an account created
+// and destroyed in one transaction (EIP-6780) stays at nonce 0. Its repeated
+// displaced transactions spend one recovery attempt, the oldest.
+func TestResetReorgRecoverySenderRepeats(t *testing.T) {
+	pool, chain, _ := setupFramePool(t, 2, nil)
+	ancestor := chain.CurrentBlock()
+	var repeated []*types.Transaction
+	for i := range uint64(3) {
+		repeated = append(repeated, signedPoolTx(t, 1, 0, 0, 20+10*i, 2+i, nil, nil))
+	}
+	other := signedPoolTx(t, 2, 0, 0, 20, 2, nil, nil)
+	old := chain.extend(ancestor, 101, append(slices.Clone(repeated), other), nil, nil)
+	pool.Reset(ancestor, old)
+	assertSimulations(t, pool, 0)
+	pool.Reset(old, chain.extend(ancestor, 102, nil, bal.NewConstructionBlockAccessList(), nil))
+	assertSimulations(t, pool, 2)
+	for i, tx := range repeated {
+		assertLive(t, pool, tx, i == 0)
+	}
+	assertLive(t, pool, other, true)
+	assertFramePoolConsistent(t, pool)
+}
+
+// A Reset that cannot open the new head state leaves the pool at its last
+// reconciled head. Admissions are refused until a later Reset succeeds, and that
+// Reset revalidates the skipped interval although the caller moved past it.
+func TestResetAfterFailedState(t *testing.T) {
+	pool, chain, other := setupFramePool(t, 10, nil)
+	valid := signedPoolTx(t, 1, 0, 0, 20, 2, nil, nil)
+	invalidated := signedPoolTx(t, 2, 0, 0, 20, 2, nil, nil)
+	addPoolTx(t, pool, valid, nil)
+	addPoolTx(t, pool, invalidated, nil)
+	assertSimulations(t, pool, 2)
+	old := chain.CurrentBlock()
+	accesses := bal.NewConstructionBlockAccessList()
+	accesses.NonceChange(poolAddress(t, 2), 1, 1)
+	skipped := chain.extend(old, 101, nil, accesses, func(s *state.StateDB) {
+		s.SetNonce(poolAddress(t, 2), 1, tracing.NonceChangeUnspecified)
+	})
+	next := chain.extend(skipped, 102, nil, bal.NewConstructionBlockAccessList(), nil)
+	chain.lock.Lock()
+	delete(chain.states, skipped.Root)
+	chain.lock.Unlock()
+	pool.Reset(old, skipped)
+	assertSimulations(t, pool, 0)
+	if head := pool.head.Load(); head != old {
+		t.Fatalf("failed reset advanced the pool head to %d", head.Number)
+	}
+	fresh := signedPoolTx(t, 3, 0, 0, 20, 2, nil, nil)
+	addPoolTx(t, pool, fresh, ErrHeadChanged)
+	assertSimulations(t, pool, 0)
+	assertReleased(t, other, poolAddress(t, 3))
+
+	pool.Reset(skipped, next)
+	assertSimulations(t, pool, 1)
+	assertLive(t, pool, valid, true)
+	assertLive(t, pool, invalidated, false)
+	assertReleased(t, other, poolAddress(t, 2))
+	addPoolTx(t, pool, fresh, nil)
+	assertFramePoolConsistent(t, pool)
 }
 
 func TestAddDuringSelectiveReset(t *testing.T) {
