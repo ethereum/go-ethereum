@@ -63,6 +63,9 @@ const (
 	// response size, so this number is there to bound the work done on requests
 	// stuffed with junk hashes.
 	maxPooledTxServe = 4096
+
+	// maxCellsServe is the maximum number of cell lookups to perform per request.
+	maxCellsServe = 4096
 )
 
 // Handler is a callback to invoke from an outside runner after the boilerplate
