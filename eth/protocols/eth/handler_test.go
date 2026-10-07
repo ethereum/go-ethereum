@@ -543,6 +543,44 @@ func TestHashBody(t *testing.T) {
 	}
 }
 
+func TestCheckBodyItemCounts(t *testing.T) {
+	// The smallest possible encodings must be accepted.
+	txs := []*types.Transaction{
+		types.NewTx(&types.LegacyTx{}),
+		types.NewTx(&types.AccessListTx{}),
+		types.NewTx(&types.DynamicFeeTx{}),
+	}
+	wds := []*types.Withdrawal{{}, {}}
+	for _, tx := range txs {
+		enc, _ := tx.MarshalBinary()
+		if tx.Type() == types.LegacyTxType && len(enc) != minTxEncodedSize {
+			t.Fatalf("minimal legacy tx has size %d, want %d", len(enc), minTxEncodedSize)
+		}
+	}
+	if enc, _ := rlp.EncodeToBytes(wds[0]); len(enc) != minWithdrawalEncodedSize {
+		t.Fatalf("minimal withdrawal has size %d, want %d", len(enc), minWithdrawalEncodedSize)
+	}
+	wdList := encodeRL(wds)
+	body := BlockBody{Transactions: encodeRL(txs), Withdrawals: &wdList}
+	if err := checkBodyItemCounts(&body); err != nil {
+		t.Fatalf("valid body rejected: %v", err)
+	}
+
+	// Lists of elements too small to be valid must be rejected.
+	var tinyTxs rlp.RawList[*types.Transaction]
+	var tinyWds rlp.RawList[*types.Withdrawal]
+	for range 1000 {
+		tinyTxs.AppendRaw([]byte{0x01})
+		tinyWds.AppendRaw([]byte{0x01})
+	}
+	if err := checkBodyItemCounts(&BlockBody{Transactions: tinyTxs}); err == nil {
+		t.Fatal("body with tiny transactions accepted")
+	}
+	if err := checkBodyItemCounts(&BlockBody{Withdrawals: &tinyWds}); err == nil {
+		t.Fatal("body with tiny withdrawals accepted")
+	}
+}
+
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetBlockReceipts69(t *testing.T) { testGetBlockReceipts(t, ETH69) }
 
