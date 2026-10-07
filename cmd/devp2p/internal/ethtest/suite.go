@@ -1394,8 +1394,8 @@ func buildCells(blobs []kzg4844.Blob, mask types.CustodyBitmap) []kzg4844.Cell {
 	allCells, _ := kzg4844.ComputeCells(blobs)
 	indices := mask.Indices()
 	result := make([]kzg4844.Cell, 0, len(blobs)*len(indices))
-	for b := 0; b < len(blobs); b++ {
-		for _, idx := range indices {
+	for _, idx := range indices {
+		for b := 0; b < len(blobs); b++ {
 			result = append(result, allCells[b*kzg4844.CellsPerBlob+int(idx)])
 		}
 	}
