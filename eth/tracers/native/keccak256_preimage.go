@@ -40,8 +40,7 @@ func init() {
 // especially when debugging storage access in Solidity mappings and dynamic arrays.
 type keccak256PreimageTracer struct {
 	computedHashes map[common.Hash]hexutil.Bytes
-	interrupt      atomic.Bool           // Atomic flag to signal execution interruption
-	reason         atomic.Pointer[error] // Reason for the interruption, populated by Stop
+	stopErr        atomic.Pointer[error] // Reason for the interruption, populated by Stop
 }
 
 // newKeccak256PreimageTracer returns a new keccak256PreimageTracer instance.
@@ -60,7 +59,7 @@ func newKeccak256PreimageTracer(ctx *tracers.Context, cfg json.RawMessage, chain
 
 func (t *keccak256PreimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Skip if tracing was interrupted
-	if t.interrupt.Load() {
+	if t.stopErr.Load() != nil {
 		return
 	}
 	if op == byte(vm.KECCAK256) {
@@ -90,14 +89,13 @@ func (t *keccak256PreimageTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p := t.reason.Load(); p != nil {
-		return msg, *p
+	if errp := t.stopErr.Load(); errp != nil {
+		return msg, *errp
 	}
 	return msg, nil
 }
 
 // Stop terminates execution of the tracer.
 func (t *keccak256PreimageTracer) Stop(err error) {
-	t.reason.Store(&err)
-	t.interrupt.Store(true)
+	t.stopErr.Store(&err)
 }
