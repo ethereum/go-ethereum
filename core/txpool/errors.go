@@ -77,4 +77,10 @@ var (
 
 	// ErrSidecarFormatError is returned when sidecar is malformed
 	ErrSidecarFormatError = errors.New("Wrong sidecar format")
+
+	// ErrValidationExecuted marks a rejection reached only after executing the
+	// transaction's validation code, such as an EIP-8141 validation prefix. The
+	// marked error also matches its underlying cause. Peers delivering such
+	// rejections cost far more than other invalid transactions.
+	ErrValidationExecuted = errors.New("validation code executed")
 )
