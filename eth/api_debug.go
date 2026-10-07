@@ -64,7 +64,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		if stateDb == nil {
 			return state.Dump{}, errors.New("pending state is not available")
 		}
-		return stateDb.RawDump(opts), nil
+		return dumpState(stateDb, opts)
 	}
 	var header *types.Header
 	switch blockNr {
@@ -88,7 +88,19 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if err != nil {
 		return state.Dump{}, err
 	}
-	return stateDb.RawDump(opts), nil
+	return dumpState(stateDb, opts)
+}
+
+// dumpState collects the state like StateDB.RawDump, but returns the errors hit
+// while iterating the state instead of silently returning a truncated dump.
+func dumpState(stateDb *state.StateDB, opts *state.DumpConfig) (state.Dump, error) {
+	dump := state.Dump{Accounts: make(map[string]state.DumpAccount)}
+	next, err := stateDb.DumpToCollector(&dump, opts)
+	if err != nil {
+		return state.Dump{}, err
+	}
+	dump.Next = next
+	return dump, nil
 }
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
@@ -241,7 +253,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 	if maxResults > AccountRangeMaxResults || maxResults <= 0 {
 		opts.Max = AccountRangeMaxResults
 	}
-	return stateDb.RawDump(opts), nil
+	return dumpState(stateDb, opts)
 }
 
 // StorageRangeResult is the result of a debug_storageRangeAt API call.
