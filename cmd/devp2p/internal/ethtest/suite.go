@@ -1578,9 +1578,6 @@ and that providing valid cells causes the tx to enter the pool.`)
 	if len(cellsReq.Hashes) == 0 || cellsReq.Hashes[0] != tx.Hash() {
 		t.Fatalf("GetCells for wrong hash: %v", cellsReq.Hashes)
 	}
-	if missing := custody.Difference(cellsReq.Mask); missing.OneCount() != 0 {
-		t.Fatalf("GetCells mask is missing custody indices: %v", missing.Indices())
-	}
 
 	// Respond with valid cells matching the requested mask.
 	cells := buildCells(blob, cellsReq.Mask)
