@@ -706,7 +706,7 @@ func answerGetCells(backend Backend, query GetCellsRequest) ([]common.Hash, [][]
 	)
 	maxCells := softResponseLimit / 2048
 	for i, hash := range query.Hashes {
-		if cellCounts >= maxCells || i >= maxPooledTxServe {
+		if cellCounts >= maxCells || i >= maxCellsServe {
 			break
 		}
 		// Look up the blob versioned hashes for this transaction
