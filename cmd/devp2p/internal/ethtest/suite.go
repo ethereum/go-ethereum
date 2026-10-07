@@ -1518,7 +1518,8 @@ and that providing valid cells causes the tx to enter the pool.`)
 		return
 	}
 
-	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
+	custody := types.NewCustodyBitmap([]uint64{5, 21, 40, 58})
+	if err := s.engine.sendForkchoiceUpdated(&custody); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
@@ -1577,6 +1578,9 @@ and that providing valid cells causes the tx to enter the pool.`)
 	if len(cellsReq.Hashes) == 0 || cellsReq.Hashes[0] != tx.Hash() {
 		t.Fatalf("GetCells for wrong hash: %v", cellsReq.Hashes)
 	}
+	if missing := custody.Difference(cellsReq.Mask); missing.OneCount() != 0 {
+		t.Fatalf("GetCells mask is missing custody indices: %v", missing.Indices())
+	}
 
 	// Respond with valid cells matching the requested mask.
 	cells := buildCells(blob, cellsReq.Mask)
@@ -1604,7 +1608,8 @@ while the other peer is not.`)
 		return
 	}
 
-	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
+	custody := types.NewCustodyBitmap([]uint64{5, 21, 40, 58})
+	if err := s.engine.sendForkchoiceUpdated(&custody); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
@@ -1658,9 +1663,10 @@ while the other peer is not.`)
 		t.Fatalf("failed to read GetCells: %v", err)
 	}
 
-	// Respond with corrupted cells (all zero bytes).
-	blobCount := len(blob)
-	corrupted := make([]kzg4844.Cell, blobCount*cellsReq.Mask.OneCount())
+	corrupted := buildCells(blob, cellsReq.Mask)
+	for i := range corrupted {
+		corrupted[i][31] ^= 0x01
+	}
 	badResp := eth.CellsPacket{
 		RequestId: cellsReq.RequestId,
 		Hashes:    []common.Hash{tx.Hash()},
