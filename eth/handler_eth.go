@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ethHandler implements the eth.Backend interface to handle the various network
@@ -105,19 +106,23 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 			count = packet.Mask.OneCount()
 		)
 		for i := range outer {
-			if outer[i].Len() > params.BlobTxMaxBlobs*kzg4844.CellsPerBlob {
+			n := outer[i].Len()
+			if n == 0 {
+				continue
+			}
+			if n > params.BlobTxMaxBlobs*kzg4844.CellsPerBlob {
 				return fmt.Errorf("Cells: cells per tx exceeded the possible maximum")
 			}
-			if cells[i], err = outer[i].Items(); err != nil {
-				return fmt.Errorf("Cells: %v", err)
+			if count == 0 || n%count != 0 {
+				return fmt.Errorf("Cells: %d cells inconsistent with %d custody indices", n, count)
 			}
-			if count > 0 && len(cells[i])%count == 0 {
-				blobs := len(cells[i]) / count
-				reordered := make([]kzg4844.Cell, len(cells[i]))
-				for j, cell := range cells[i] {
-					reordered[(j%blobs)*count+j/blobs] = cell
+			cells[i] = make([]kzg4844.Cell, n)
+			blobs := n / count
+			it := outer[i].ContentIterator()
+			for j := 0; it.Next(); j++ {
+				if err := rlp.DecodeBytes(it.Value(), &cells[i][(j%blobs)*count+j/blobs]); err != nil {
+					return fmt.Errorf("Cells: %v", err)
 				}
-				cells[i] = reordered
 			}
 		}
 		return h.blobFetcher.Enqueue(peer.ID(), packet.Hashes, cells, packet.Mask)
