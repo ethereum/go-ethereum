@@ -730,13 +730,20 @@ func answerGetCells(backend Backend, query GetCellsRequest) ([]common.Hash, [][]
 					skip = true
 					break
 				}
-				flat = append(flat, *c)
 			}
 			if skip {
 				break
 			}
 		}
-		if skip || len(flat) == 0 {
+		if skip {
+			continue
+		}
+		for i := range blobCells[0] {
+			for _, bc := range blobCells {
+				flat = append(flat, *bc[i])
+			}
+		}
+		if len(flat) == 0 {
 			continue
 		}
 		hashes = append(hashes, hash)
