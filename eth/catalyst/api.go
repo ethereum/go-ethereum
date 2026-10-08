@@ -1241,11 +1241,10 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 func (api *ConsensusAPI) ExchangeCapabilities(caps []string) []string {
 	valueT := reflect.TypeOf(api)
 
-	// If the CL supports getBlobsV4, we call EnableCell() on the
-	// blob cache to skip the blob recovery process. This is a
-	// one-directional toggle, which assumes that once the CL
-	// supports getBlobsV4, it will not fall back to getBlobsV3
-	// again.
+	// If the CL supports getBlobsV4, switch the blob cache into cell
+	// mode to skip the blob recovery process. The mode follows the
+	// latest capability exchange, so it is switched off again if the
+	// CL stops advertising getBlobsV4.
 	cellmode := slices.Contains(caps, "engine_getBlobsV4")
 	api.eth.BlobCache().SetCellMode(cellmode)
 

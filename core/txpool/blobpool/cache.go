@@ -85,7 +85,7 @@ type Cache struct {
 	topkRequest chan struct{}
 	topkTimer   mclock.Timer
 	hasBlobsCh  chan []common.Hash // list of tx hashes that should be pinned
-	cellModeCh  chan bool          // signals the loop to switch cell mode on/offo
+	cellModeCh  chan bool          // signals the loop to switch cell mode on/off
 
 	step func() // test hook fired after each loop iteration
 
@@ -314,10 +314,10 @@ func (c *Cache) GetCells(vhashes []common.Hash, mask types.CustodyBitmap) ([][]*
 	return cells, proofs, nil
 }
 
-// EnableCell allows the cache to store only cells without recovering
-// blobs. This means we can also cache cells that lack enough blobs to
-// recover. It signals the loop to switch to cell mode and re-select
-// transactions from this wider pool.
+// SetCellMode switches the cache in or out of cell mode. In cell mode the
+// cache stores only cells without recovering blobs, which means it can also
+// cache cells that lack enough blobs to recover. It signals the loop to switch
+// mode and re-select transactions.
 func (c *Cache) SetCellMode(on bool) {
 	select {
 	case c.cellModeCh <- on:
