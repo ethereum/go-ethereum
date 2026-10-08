@@ -322,7 +322,12 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		}
 	}
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
-		// Block is not canonical, set head.
+		// Block is not canonical, set head. All updates resulting from this call
+		// have to be applied atomically, so the finalized and safe blocks are
+		// checked against the chain of the new head before it is moved.
+		if status, err := api.validateForkchoiceState(block.Header(), update); err != nil {
+			return status, err
+		}
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
 			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
 		}
@@ -343,6 +348,9 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		if !api.eth.Synced() {
 			log.Info("Ignoring beacon update to old head while syncing", "number", block.NumberU64(), "hash", update.HeadBlockHash)
 			return valid(nil), nil
+		}
+		if status, err := api.validateForkchoiceState(block.Header(), update); err != nil {
+			return status, err
 		}
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
 			log.Error("Error setting canonical", "number", block.NumberU64(), "hash", update.HeadBlockHash, "error", err)
@@ -410,6 +418,71 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		return valid(&id), nil
 	}
 	return valid(nil), nil
+}
+
+// validateForkchoiceState checks that the finalized and safe blocks of an update
+// belong to the chain defined by head. It exists because the equivalent checks
+// further down run against rawdb.ReadCanonicalHash, which only answers for the
+// chain that is canonical at the time of the call. Before a reorg that is the
+// old chain, so those checks cannot decide whether the update is consistent
+// with the head it is about to install.
+func (api *ConsensusAPI) validateForkchoiceState(head *types.Header, update engine.ForkchoiceStateV1) (engine.ForkChoiceResponse, error) {
+	for _, check := range []struct {
+		kind string
+		hash common.Hash
+	}{
+		{"final", update.FinalizedBlockHash},
+		{"safe", update.SafeBlockHash},
+	} {
+		if check.hash == (common.Hash{}) {
+			continue
+		}
+		header := api.eth.BlockChain().GetHeaderByHash(check.hash)
+		if header == nil {
+			log.Warn("Forkchoice block not available in database", "kind", check.kind, "hash", check.hash)
+			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(fmt.Errorf("%s block not available in database", check.kind))
+		}
+		ok, err := api.isAncestorOf(head, check.hash, header.Number.Uint64())
+		if err != nil {
+			log.Error("Failed to resolve forkchoice ancestry", "kind", check.kind, "hash", check.hash, "err", err)
+			return engine.STATUS_INVALID, err
+		}
+		if !ok {
+			log.Warn("Forkchoice block not in chain of requested head", "kind", check.kind, "number", header.Number, "hash", check.hash)
+			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(fmt.Errorf("%s block not in canonical chain", check.kind))
+		}
+	}
+	return engine.ForkChoiceResponse{}, nil
+}
+
+// isAncestorOf reports whether the block identified by hash and number is head
+// itself or one of its ancestors. It walks back over the parent links until it
+// reaches a block that is already canonical, from where the canonical mapping
+// answers the remaining distance in one lookup, so it reads one header per block
+// between head and the point where its branch rejoins the canonical chain.
+//
+// BlockChain.GetAncestor is not used for this. It stops after a bounded number
+// of non-canonical steps and then returns the zero hash, which the caller cannot
+// tell apart from an absent ancestor, so an aborted search would read as a
+// forkchoice state to reject. A header that cannot be read is returned as an
+// error here instead.
+func (api *ConsensusAPI) isAncestorOf(head *types.Header, hash common.Hash, number uint64) (bool, error) {
+	chain := api.eth.BlockChain()
+	if number > head.Number.Uint64() {
+		return false, nil
+	}
+	for head.Number.Uint64() > number {
+		if chain.GetCanonicalHash(head.Number.Uint64()) == head.Hash() {
+			// head is canonical, so every ancestor of it is too
+			return chain.GetCanonicalHash(number) == hash, nil
+		}
+		parent := chain.GetHeader(head.ParentHash, head.Number.Uint64()-1)
+		if parent == nil {
+			return false, fmt.Errorf("header %d (%x) unavailable while walking back from the requested head", head.Number.Uint64()-1, head.ParentHash)
+		}
+		head = parent
+	}
+	return head.Hash() == hash, nil
 }
 
 // ExchangeTransitionConfigurationV1 checks the given configuration against
