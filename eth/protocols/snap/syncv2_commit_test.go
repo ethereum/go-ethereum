@@ -34,11 +34,15 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var errCommittedBatch = errors.New("injected error after durable batch write")
+var (
+	errCommittedBatch   = errors.New("injected error after durable batch write")
+	errUncommittedBatch = errors.New("injected error before durable batch write")
+)
 
 type committedErrorDB struct {
 	ethdb.Database
-	armed atomic.Bool
+	armed      atomic.Bool
+	failBefore atomic.Bool
 }
 
 func (db *committedErrorDB) NewBatch() ethdb.Batch {
@@ -66,6 +70,9 @@ func (b *committedErrorBatch) Write() error {
 	if !b.journal || !b.db.armed.CompareAndSwap(true, false) {
 		return b.Batch.Write()
 	}
+	if b.db.failBefore.Load() {
+		return errUncommittedBatch
+	}
 	if err := b.Batch.Write(); err != nil {
 		return err
 	}
@@ -73,6 +80,16 @@ func (b *committedErrorBatch) Write() error {
 }
 
 func TestCatchUpCommittedWriteErrorPreservesJournal(t *testing.T) {
+	testCatchUpFaultedWriteRestart(t, false)
+}
+
+func TestCatchUpUncommittedWriteErrorPreservesJournal(t *testing.T) {
+	testCatchUpFaultedWriteRestart(t, true)
+}
+
+// testCatchUpFaultedWriteRestart covers both possible storage-engine
+// outcomes of a failed journaled write, using the same path-state fixture.
+func testCatchUpFaultedWriteRestart(t *testing.T, failBefore bool) {
 	nodeScheme, sourceTrie, elems, addrs := makeAccountTrieWithAddresses(100, rawdb.PathScheme)
 	rootA := sourceTrie.Hash()
 	numA := uint64(100)
@@ -137,7 +154,14 @@ func TestCatchUpCommittedWriteErrorPreservesJournal(t *testing.T) {
 
 	// Simulate the ambiguous storage-engine outcome: the catch-up batch,
 	// including the next-pivot journal, is durable but Write returns an error.
+	db.failBefore.Store(failBefore)
 	db.armed.Store(true)
+	wantErr := errCommittedBatch
+	wantJournal := pivotB
+	if failBefore {
+		wantErr = errUncommittedBatch
+		wantJournal = pivotA
+	}
 	{
 		var (
 			once   sync.Once
@@ -151,9 +175,17 @@ func TestCatchUpCommittedWriteErrorPreservesJournal(t *testing.T) {
 		src.accessLists = bals
 		syncer.Register(src)
 		src.remote = syncer
-		if err := syncer.Sync(pivotB, cancel); !errors.Is(err, errCommittedBatch) {
-			t.Fatalf("faulted sync error = %v, want %v", err, errCommittedBatch)
+		if err := syncer.Sync(pivotB, cancel); !errors.Is(err, wantErr) {
+			t.Fatalf("faulted sync error = %v, want %v", err, wantErr)
 		}
+	}
+
+	// Whichever atomic outcome actually occurred must remain in the journal,
+	// even if the in-memory pivot was not advanced after the reported error.
+	beforeRestart := newSyncerV2(db, nodeScheme)
+	beforeRestart.loadSyncStatus()
+	if beforeRestart.pivot == nil || beforeRestart.pivot.Hash() != wantJournal.Hash() {
+		t.Fatalf("persisted pivot after failed write = %v, want %v", beforeRestart.pivot, wantJournal.Hash())
 	}
 
 	// A new process must trust the atomic journal already on disk. Before the
