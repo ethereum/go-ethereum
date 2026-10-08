@@ -763,7 +763,19 @@ func (s *skeleton) assignTasks(success chan *headerResponse, fail chan *headerRe
 	var (
 		depths    = make(map[string]int)
 		targetRTT = s.peers.rates.TargetRoundTrip()
+		idlePeers []*peerConnection
 	)
+	defer func() {
+		var filled int
+		for _, task := range s.scratchSpace {
+			if task.headers != nil {
+				filled++
+			}
+		}
+		skeletonFilledGauge.Update(int64(filled))
+		skeletonInflightGauge.Update(int64(len(s.requests)))
+		skeletonIdlePeersGauge.Update(int64(len(idlePeers)))
+	}()
 	idlers := &peerCapacitySort{
 		peers: make([]*peerConnection, 0, len(s.idles)),
 		caps:  make([]int, 0, len(s.idles)),
@@ -781,7 +793,7 @@ func (s *skeleton) assignTasks(success chan *headerResponse, fail chan *headerRe
 		return
 	}
 	sort.Sort(idlers)
-	idlePeers := idlers.peers
+	idlePeers = idlers.peers
 
 	// Find header batches not yet downloading and fill them. If all of them are
 	// taken, request the ones held by much slower peers from a second peer,
@@ -819,6 +831,7 @@ func (s *skeleton) assignTasks(success chan *headerResponse, fail chan *headerRe
 				if pcap < 2*ocap {
 					continue
 				}
+				skeletonDuplicateMeter.Mark(1)
 			}
 			idlePeers = append(idlePeers[:pick:pick], idlePeers[pick+1:]...)
 
@@ -976,6 +989,7 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 			}:
 			case <-req.cancel:
 			case <-req.stale:
+				skeletonHeaderWasteMeter.Mark(int64(len(headers)))
 			}
 		}
 	}
@@ -1107,6 +1121,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 	req, ok := s.requests[res.reqid]
 	if !ok {
 		res.peer.log.Debug("Discarding stale header packet")
+		skeletonHeaderWasteMeter.Mark(int64(len(res.headers)))
 		return false, false
 	}
 	delete(s.requests, res.reqid)
@@ -1117,13 +1132,18 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 	// request for the same batch is not needed any more.
 	head := res.headers[0].Number.Uint64()
 	if head > s.scratchHead {
+		skeletonHeaderWasteMeter.Mark(int64(len(res.headers)))
 		return false, false
 	}
 	task := s.scratchSpace[(s.scratchHead-head)/requestHeaders]
 	if task.headers != nil {
+		skeletonHeaderWasteMeter.Mark(int64(len(res.headers)))
 		return false, false
 	}
 	task.headers, task.owner = res.headers, res.peer.id
+	skeletonHeaderInMeter.Mark(int64(len(res.headers)))
+
+	// Abort the siding requests for the same header segment
 	for len(task.requests) > 0 {
 		s.abortRequest(task.requests[0])
 	}
