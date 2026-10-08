@@ -352,6 +352,10 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		}, {
 			&GetBlockHeadersRequest{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().Number.Uint64() + 1}, Amount: 1},
 			[]common.Hash{},
+		}, {
+			// A forward range near MaxUint64 must not wrap around to genesis.
+			&GetBlockHeadersRequest{Origin: HashOrNumber{Number: math.MaxUint64 - 1}, Amount: 3},
+			[]common.Hash{},
 		},
 	}
 	// Run each of the tests and verify the results against the chain
