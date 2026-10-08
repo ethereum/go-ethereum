@@ -4033,6 +4033,168 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	require.Equal(t, expected, result.Accesslist)
 }
 
+func TestCreateAccessListWithMovePrecompile(t *testing.T) {
+	t.Parallel()
+	var (
+		accounts = newAccounts(1)
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+
+	var (
+		sha256Addr    = common.BytesToAddress([]byte{0x2})
+		newSha256Addr = common.BytesToAddress([]byte{0x10, 0})
+		sha256Input   = hexutil.Bytes([]byte("hello"))
+		gas           = hexutil.Uint64(100000)
+		args          = TransactionArgs{
+			From: &accounts[0].addr,
+			To:   &newSha256Addr,
+			Data: &sha256Input,
+			Gas:  &gas,
+		}
+		overrides = &override.StateOverride{
+			sha256Addr: override.OverrideAccount{
+				MovePrecompileTo: &newSha256Addr,
+			},
+		}
+	)
+	result, err := api.CreateAccessList(context.Background(), args, nil, overrides)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Empty(t, result.Error)
+	// The EIP-7623 calldata floor of 21000 + 10*(5 non-zero bytes * 4 tokens)
+	// is charged, as it exceeds the 21152 spent executing the call (21080
+	// intrinsic plus 72 for SHA-256 over one word).
+	require.Equal(t, hexutil.Uint64(21200), result.GasUsed)
+	require.NotNil(t, result.Accesslist)
+	require.Empty(t, *result.Accesslist)
+}
+
+func TestCreateAccessListMovedPrecompileExclusion(t *testing.T) {
+	t.Parallel()
+	var (
+		accounts = newAccounts(1)
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+
+	var (
+		contractAddr  = common.HexToAddress("0x1111111111111111111111111111111111111111")
+		sha256Addr    = common.BytesToAddress([]byte{0x2})
+		newSha256Addr = common.HexToAddress("0x1000000000000000000000000000000000000002")
+	)
+
+	// Contract bytecode that:
+	// 1. Calls newSha256Addr via STATICCALL
+	// 2. Checks BALANCE of old sha256Addr
+	var contractCode []byte
+	// STATICCALL(gas=0xffff, addr=newSha256Addr, inOff=0, inSize=0, retOff=0, retSize=0)
+	contractCode = append(contractCode, 0x60, 0x00) // PUSH1 0 (retSize)
+	contractCode = append(contractCode, 0x60, 0x00) // PUSH1 0 (retOff)
+	contractCode = append(contractCode, 0x60, 0x00) // PUSH1 0 (inSize)
+	contractCode = append(contractCode, 0x60, 0x00) // PUSH1 0 (inOff)
+	contractCode = append(contractCode, 0x73)       // PUSH20
+	contractCode = append(contractCode, newSha256Addr.Bytes()...)
+	contractCode = append(contractCode, 0x61, 0xff, 0xff) // PUSH2 0xffff (gas)
+	contractCode = append(contractCode, 0xfa)             // STATICCALL
+	contractCode = append(contractCode, 0x50)             // POP
+
+	// BALANCE(sha256Addr)
+	contractCode = append(contractCode, 0x73) // PUSH20
+	contractCode = append(contractCode, sha256Addr.Bytes()...)
+	contractCode = append(contractCode, 0x31) // BALANCE
+	contractCode = append(contractCode, 0x50) // POP
+	contractCode = append(contractCode, 0x00) // STOP
+
+	gas := hexutil.Uint64(200000)
+	args := TransactionArgs{
+		From: &accounts[0].addr,
+		To:   &contractAddr,
+		Gas:  &gas,
+	}
+	codeHex := hexutil.Bytes(contractCode)
+	overrides := &override.StateOverride{
+		contractAddr: override.OverrideAccount{
+			Code: &codeHex,
+		},
+		sha256Addr: override.OverrideAccount{
+			MovePrecompileTo: &newSha256Addr,
+		},
+	}
+
+	result, err := api.CreateAccessList(context.Background(), args, nil, overrides)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Empty(t, result.Error)
+
+	// The moved precompile (newSha256Addr) is excluded from the access list.
+	// The vacated address (sha256Addr) is no longer a precompile and must be present.
+	expected := &types.AccessList{{
+		Address:     sha256Addr,
+		StorageKeys: []common.Hash{},
+	}}
+	require.Equal(t, expected, result.Accesslist)
+}
+
+func TestCreateAccessListWithPrecompileCodeOverride(t *testing.T) {
+	t.Parallel()
+	var (
+		accounts = newAccounts(1)
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+
+	// Bytecode that executes SSTORE(slot 0x42, value 1):
+	// PUSH1 0x01 PUSH1 0x42 SSTORE STOP (600160425500)
+	code := hexutil.Bytes(common.Hex2Bytes("600160425500"))
+	precompileAddr := common.BytesToAddress([]byte{0x1}) // ecrecover
+	gas := hexutil.Uint64(100000)
+	args := TransactionArgs{
+		From: &accounts[0].addr,
+		To:   &precompileAddr,
+		Gas:  &gas,
+	}
+	overrides := &override.StateOverride{
+		precompileAddr: override.OverrideAccount{
+			Code: &code,
+		},
+	}
+	result, err := api.CreateAccessList(context.Background(), args, nil, overrides)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Accesslist)
+
+	expected := &types.AccessList{{
+		Address:     precompileAddr,
+		StorageKeys: []common.Hash{common.HexToHash("0x42")},
+	}}
+	require.Equal(t, expected, result.Accesslist)
+}
+
 func TestCreateAccessListFeeDefaults(t *testing.T) {
 	t.Parallel()
 	funded := newAccounts(1)[0]
