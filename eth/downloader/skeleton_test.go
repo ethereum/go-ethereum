@@ -1050,3 +1050,86 @@ func checkSkeletonProgress(db ethdb.KeyValueReader, unpredictable bool, peers []
 	}
 	return nil
 }
+
+// genesisChainReader reports the genesis as the local head, as during the
+// initial sync of a fresh node.
+type genesisChainReader struct{ genesis *types.Header }
+
+func (r *genesisChainReader) CurrentSnapBlock() *types.Header { return r.genesis }
+
+// stallingSkeletonTestPeer accepts header requests but never answers them.
+type stallingSkeletonTestPeer struct {
+	*skeletonTestPeer
+	requested chan uint64
+}
+
+func (p *stallingSkeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool, sink chan *eth.Response) (*eth.Request, error) {
+	select {
+	case p.requested <- origin:
+	default:
+	}
+	return &eth.Request{Peer: p.id}, nil
+}
+
+// Tests that a batch stalling at the head of the scratch space is requested from
+// another peer, instead of blocking the sync until the request times out.
+func TestSkeletonSyncHedgesStalledBatch(t *testing.T) {
+	chain := []*types.Header{{Number: big.NewInt(0)}}
+	for i := 1; i < 4*requestHeaders; i++ {
+		chain = append(chain, &types.Header{
+			ParentHash: chain[i-1].Hash(),
+			Number:     big.NewInt(int64(i)),
+		})
+	}
+	db := rawdb.NewMemoryDatabase()
+	rawdb.WriteBlock(db, types.NewBlockWithHeader(chain[0]))
+	rawdb.WriteReceipts(db, chain[0].Hash(), 0, types.Receipts{})
+	rawdb.WriteCanonicalHash(db, chain[0].Hash(), 0)
+
+	var (
+		peerset = newPeerSet()
+		dropped atomic.Uint32
+		linked  = make(chan struct{})
+		filler  = &hookedBackfiller{resumeHook: func() {
+			select {
+			case <-linked:
+			default:
+				close(linked)
+			}
+		}}
+		stalling = &stallingSkeletonTestPeer{newSkeletonTestPeer("stalling", chain), make(chan uint64, 1)}
+		healthy  = newSkeletonTestPeer("healthy", chain)
+	)
+	if err := peerset.Register(newPeerConnection(stalling.id, eth.ETH69, stalling, log.New("id", stalling.id))); err != nil {
+		t.Fatalf("failed to register stalling peer: %v", err)
+	}
+	skeleton := newSkeleton(db, peerset, func(string) { dropped.Add(1) }, filler, &genesisChainReader{chain[0]})
+	skeleton.Sync(chain[len(chain)-1], nil, true)
+	defer skeleton.Terminate()
+
+	// Wait for the stalling peer to take the head batch, then bring in a peer
+	// which can serve everything.
+	select {
+	case origin := <-stalling.requested:
+		if origin != uint64(len(chain)-2) {
+			t.Fatalf("stalling peer requested batch at %d, want the one below the head %d", origin, len(chain)-2)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stalling peer was not assigned a batch")
+	}
+	if err := peerset.Register(newPeerConnection(healthy.id, eth.ETH69, healthy, log.New("id", healthy.id))); err != nil {
+		t.Fatalf("failed to register healthy peer: %v", err)
+	}
+	// The sync must link up well before the stalled request would time out.
+	select {
+	case <-linked:
+	case <-time.After(skeleton.peers.rates.TargetTimeout() / 2):
+		t.Fatal("stalled head batch blocked the sync")
+	}
+	if n := healthy.served.Load(); n < uint64(len(chain)-2) {
+		t.Errorf("healthy peer served %d headers, want at least %d", n, len(chain)-2)
+	}
+	if n := dropped.Load(); n != 0 {
+		t.Errorf("%d peers dropped, want none as the stalled request was superseded", n)
+	}
+}
