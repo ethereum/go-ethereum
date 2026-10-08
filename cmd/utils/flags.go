@@ -325,7 +325,7 @@ var (
 	}
 	TransactionHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.transactions",
-		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
+		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, entire chain for archive nodes, 0 = entire chain)",
 		Value:    ethconfig.Defaults.TransactionHistory,
 		Category: flags.StateCategory,
 	}
@@ -1741,6 +1741,33 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
+// setTransactionHistory configures the number of recent blocks whose
+// transactions are indexed.
+//
+// Archive nodes index the entire chain by default. An explicitly configured
+// range, either via the command line or the config file, is honored though,
+// as the transaction index is maintained independently of the retained state.
+func setTransactionHistory(ctx *cli.Context, cfg *ethconfig.Config) {
+	// If user is still using legacy config file with 'TxLookupLimit' configured,
+	// copy the value to 'TransactionHistory'.
+	if cfg.TransactionHistory == ethconfig.Defaults.TransactionHistory && cfg.TxLookupLimit != ethconfig.Defaults.TxLookupLimit {
+		log.Warn("The config option 'TxLookupLimit' is deprecated and will be removed, please use 'TransactionHistory'")
+		cfg.TransactionHistory = cfg.TxLookupLimit
+	}
+	// A value other than the default can only originate from the config file.
+	// Note that configuring the default value in the config file can't be told
+	// apart from omitting it.
+	explicit := cfg.TransactionHistory != ethconfig.Defaults.TransactionHistory
+	if ctx.IsSet(TransactionHistoryFlag.Name) {
+		cfg.TransactionHistory = ctx.Uint64(TransactionHistoryFlag.Name)
+		explicit = true
+	}
+	if cfg.NoPruning && !explicit {
+		cfg.TransactionHistory = 0
+		log.Warn("Disabled transaction unindexing for archive node")
+	}
+}
+
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
@@ -1852,21 +1879,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
-	// Parse transaction history flag, if user is still using legacy config
-	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
-	if cfg.TransactionHistory == ethconfig.Defaults.TransactionHistory && cfg.TxLookupLimit != ethconfig.Defaults.TxLookupLimit {
-		log.Warn("The config option 'TxLookupLimit' is deprecated and will be removed, please use 'TransactionHistory'")
-		cfg.TransactionHistory = cfg.TxLookupLimit
-	}
-	if ctx.IsSet(TransactionHistoryFlag.Name) {
-		cfg.TransactionHistory = ctx.Uint64(TransactionHistoryFlag.Name)
-	}
-	if cfg.NoPruning {
-		if cfg.TransactionHistory != 0 {
-			cfg.TransactionHistory = 0
-			log.Warn("Disabled transaction unindexing for archive node")
-		}
-	}
+	setTransactionHistory(ctx, cfg)
 	if ctx.IsSet(LogHistoryFlag.Name) {
 		cfg.LogHistory = ctx.Uint64(LogHistoryFlag.Name)
 	}
