@@ -994,12 +994,13 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		}
 	}
 	tracingStateDB := state.NewHookedState(statedb, tracer.Hooks)
+
 	evm := vm.NewEVM(vmctx, tracingStateDB, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
 	defer evm.Release()
+
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-
 	// Define a meaningful timeout of a single transaction trace
 	if config.Timeout != nil {
 		if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
