@@ -90,6 +90,12 @@ var errAccessListPeersExhausted = errors.New("all peers exhausted for BAL reques
 // block's access list cannot be retrieved against the current peerset.
 var errAccessListUnavailable = errors.New("block access lists unavailable")
 
+// errCatchUpCommitFailed marks an ambiguous catch-up commit boundary. If a
+// journaled batch Write returns an error, callers must not overwrite the
+// existing sync journal: the atomic batch may either have remained unapplied
+// or become durable before the error was reported.
+var errCatchUpCommitFailed = errors.New("BAL catch-up batch commit failed")
+
 // accountRequestV2 tracks a pending account range request to ensure responses are
 // to actual requests and to validate any security constraints.
 //
@@ -569,6 +575,10 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 		return nil
 	}
 
+	// A journaled catch-up batch may have become durable even if Write reports
+	// an error. In that case, preserve whichever atomic journal is on disk
+	// instead of overwriting it from stale in-memory state in the deferred save.
+	suppressFinalStatusSave := false
 	defer func() {
 		// Whether sync completed or not, disregard any future packets
 		log.Debug("Terminating snapshot sync cycle", "root", root)
@@ -584,7 +594,9 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 			s.forwardAccountTask(task)
 		}
 		s.cleanAccountTasks()
-		s.saveSyncStatus()
+		if !suppressFinalStatusSave {
+			s.saveSyncStatus()
+		}
 
 		// Log final progress.
 		s.report(true)
@@ -635,6 +647,9 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 				log.Warn("Frozen pivot moved unexpectedly, rolling forward", "frozen", prevPivot.Number, "new", target.Number)
 			}
 			if err := s.catchUp(target, cancel); err != nil {
+				if errors.Is(err, errCatchUpCommitFailed) {
+					suppressFinalStatusSave = true
+				}
 				return err
 			}
 			// A completed sync is rolled forward in full by the catch-up. There is
@@ -952,7 +967,7 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 
 			// Commit the state transition alongside the sync progress atomically.
 			if err := batch.Write(); err != nil {
-				return err
+				return errors.Join(errCatchUpCommitFailed, err)
 			}
 			s.lock.Lock()
 			s.pivot = nextPivot
