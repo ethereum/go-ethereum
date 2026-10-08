@@ -380,16 +380,6 @@ func (s *skeleton) Sync(head *types.Header, final *types.Header, force bool) err
 // linked returns the flag indicating whether the skeleton has been linked with
 // the local chain.
 func (s *skeleton) linked(number uint64, hash common.Hash) bool {
-	// Require the canonical mapping, not just presence by hash. A block present
-	// only by hash (side chain or orphan from an unclean shutdown) must not be
-	// used as the link-up point, otherwise it's left in place forever without its
-	// canonical mapping ever being rewritten. Keep descending to a real canonical
-	// block.
-	linked := rawdb.ReadCanonicalHash(s.db, number) == hash &&
-		rawdb.HasHeader(s.db, hash, number) &&
-		rawdb.HasBody(s.db, hash, number) &&
-		rawdb.HasReceipts(s.db, hash, number)
-
 	// Ensure the skeleton chain links to the local chain below the chain head.
 	// This accounts for edge cases where leftover chain segments above the head
 	// may still link to the skeleton chain. In such cases, synchronization is
@@ -400,10 +390,20 @@ func (s *skeleton) linked(number uint64, hash common.Hash) bool {
 	// - debug.setHead(`0x1`)
 	// - kill the geth process (the chain segment will be left with chain head rewound)
 	// - restart
-	if s.chain.CurrentSnapBlock() != nil {
-		linked = linked && s.chain.CurrentSnapBlock().Number.Uint64() >= number
+	//
+	// It's checked first as it's cheap and rules out most of the synced headers.
+	if head := s.chain.CurrentSnapBlock(); head != nil && head.Number.Uint64() < number {
+		return false
 	}
-	return linked
+	// Require the canonical mapping, not just presence by hash. A block present
+	// only by hash (side chain or orphan from an unclean shutdown) must not be
+	// used as the link-up point, otherwise it's left in place forever without its
+	// canonical mapping ever being rewritten. Keep descending to a real canonical
+	// block.
+	return rawdb.ReadCanonicalHash(s.db, number) == hash &&
+		rawdb.HasHeader(s.db, hash, number) &&
+		rawdb.HasBody(s.db, hash, number) &&
+		rawdb.HasReceipts(s.db, hash, number)
 }
 
 // sync is the internal version of Sync that executes a single sync cycle, either
