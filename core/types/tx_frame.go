@@ -232,8 +232,10 @@ func (tx *FrameTx) ValidateStatic() error {
 	if tx.NonceKeys[0].IsZero() && len(tx.NonceKeys) > 1 {
 		return fmt.Errorf("%w: zero nonce key alongside other keys", ErrFrameTxInvalidFormat)
 	}
+	// The texts below match core.ErrNonceMax and core.ErrGasLimitTooHigh,
+	// the failures EIP-8141 classifies these as.
 	if tx.NonceSeq == gomath.MaxUint64 {
-		return fmt.Errorf("%w: nonce overflow", ErrFrameTxInvalidFormat)
+		return fmt.Errorf("%w: nonce has max value", ErrFrameTxInvalidFormat)
 	}
 	// The per-transaction gas cap of EIP-7825 bounds the execution
 	// dimension alone: the intrinsic cost plus the frames' execution
@@ -252,8 +254,8 @@ func (tx *FrameTx) ValidateStatic() error {
 	if gomath.MaxUint64-intrinsicGas < executionGas {
 		return fmt.Errorf("%w: total frame gas too high", ErrFrameTxInvalidFormat)
 	}
-	if max(intrinsicGas+executionGas, floorGas) > params.MaxTxGas {
-		return fmt.Errorf("%w: derived execution gas limit exceeds the transaction gas cap", ErrFrameTxInvalidFormat)
+	if derived := max(intrinsicGas+executionGas, floorGas); derived > params.MaxTxGas {
+		return fmt.Errorf("%w: transaction gas limit too high (cap: %d, derived execution gas: %d)", ErrFrameTxInvalidFormat, params.MaxTxGas, derived)
 	}
 	return nil
 }
@@ -756,18 +758,23 @@ func FrameTxGasReservation(frames []Frame, sigs SignatureList, sender common.Add
 	return max(intrinsicGas+executionGas, floorGas), stateGas, nil
 }
 
+// ErrFrameTxSignerMismatch reports a well-formed signature entry that
+// authenticates a different signer than its resolved signer. EIP-8141
+// classifies it as a malformed transaction, not an invalid signature.
+var ErrFrameTxSignerMismatch = fmt.Errorf("%w: signer mismatch", ErrFrameTxInvalidFormat)
+
 // ValidateFrameTxSignatures validates all signature entries of a frame
 // transaction against the canonical signature hash, per EIP-8141.
 func ValidateFrameTxSignatures(sigs SignatureList, sender common.Address, sigHash common.Hash) error {
 	for i := range sigs {
-		if !validateFrameTxSignature(&sigs[i], sender, sigHash) {
-			return fmt.Errorf("%w: entry %d", ErrFrameTxInvalidSignature, i)
+		if err := validateFrameTxSignature(&sigs[i], sender, sigHash); err != nil {
+			return fmt.Errorf("%w: entry %d", err, i)
 		}
 	}
 	return nil
 }
 
-func validateFrameTxSignature(sig *SignatureEntry, sender common.Address, sigHash common.Hash) bool {
+func validateFrameTxSignature(sig *SignatureEntry, sender common.Address, sigHash common.Hash) error {
 	var msg common.Hash
 	switch len(sig.Msg) {
 	case 0:
@@ -775,22 +782,22 @@ func validateFrameTxSignature(sig *SignatureEntry, sender common.Address, sigHas
 	case common.HashLength:
 		msg = common.Hash(sig.Msg)
 		if msg == (common.Hash{}) {
-			return false
+			return ErrFrameTxInvalidFormat
 		}
 	default:
-		return false
+		return ErrFrameTxInvalidFormat
 	}
 
 	switch sig.Scheme {
 	case FrameTxSchemeSecp256k1:
 		if len(sig.Signature) != 65 {
-			return false
+			return ErrFrameTxInvalidSignature
 		}
 		v := sig.Signature[0]
 		r := new(big.Int).SetBytes(sig.Signature[1:33])
 		s := new(big.Int).SetBytes(sig.Signature[33:65])
 		if !crypto.ValidateSignatureValues(v, r, s, true) {
-			return false
+			return ErrFrameTxInvalidSignature
 		}
 		// Ecrecover expects the signature as r || s || v.
 		rsv := make([]byte, 65)
@@ -798,19 +805,18 @@ func validateFrameTxSignature(sig *SignatureEntry, sender common.Address, sigHas
 		rsv[64] = v
 		pub, err := crypto.Ecrecover(msg[:], rsv)
 		if err != nil {
-			return false
+			return ErrFrameTxInvalidSignature
 		}
 		var signer common.Address
 		copy(signer[:], crypto.Keccak256(pub[1:])[12:])
-		return sig.ResolvedSigner(sender) == signer
+		if sig.ResolvedSigner(sender) != signer {
+			return ErrFrameTxSignerMismatch
+		}
+		return nil
 
 	case FrameTxSchemeP256:
 		if len(sig.Signature) != 128 {
-			return false
-		}
-		resolved := sig.ResolvedSigner(sender)
-		if !bytes.Equal(resolved[:], crypto.Keccak256(sig.Signature[64:128])[12:]) {
-			return false
+			return ErrFrameTxInvalidSignature
 		}
 		r := new(big.Int).SetBytes(sig.Signature[0:32])
 		s := new(big.Int).SetBytes(sig.Signature[32:64])
@@ -819,14 +825,24 @@ func validateFrameTxSignature(sig *SignatureEntry, sender common.Address, sigHas
 		// r and s must be canonical, with low-s, so each signature has one
 		// encoding. P256 verification itself accepts high-s values.
 		if r.Sign() <= 0 || s.Sign() <= 0 || r.Cmp(secp256r1N) >= 0 || s.Cmp(secp256r1HalfN) > 0 {
-			return false
+			return ErrFrameTxInvalidSignature
 		}
-		return secp256r1.Verify(msg[:], r, s, x, y)
+		resolved := sig.ResolvedSigner(sender)
+		if !bytes.Equal(resolved[:], crypto.Keccak256(sig.Signature[64:128])[12:]) {
+			return ErrFrameTxSignerMismatch
+		}
+		if !secp256r1.Verify(msg[:], r, s, x, y) {
+			return ErrFrameTxInvalidSignature
+		}
+		return nil
 
 	case FrameTxSchemeArbitrary:
-		return len(sig.Signer) == 0
+		if len(sig.Signer) != 0 {
+			return ErrFrameTxInvalidFormat
+		}
+		return nil
 
 	default:
-		return false
+		return ErrFrameTxInvalidFormat
 	}
 }

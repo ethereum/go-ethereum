@@ -73,7 +73,7 @@ var stressAddErrors = []error{
 	txpool.ErrReplaceUnderpriced, txpool.ErrTxGasPriceTooLow, txpool.ErrUnderpriced,
 	ErrSenderPending, ErrHeadChanged, ErrClosed, ErrTraceViolation,
 	core.ErrInsufficientFunds, core.ErrNonceTooLow, core.ErrNonceTooHigh, core.ErrFrameTxInvalidExecution,
-	types.ErrFrameTxInvalidSignature,
+	types.ErrFrameTxInvalidSignature, types.ErrFrameTxSignerMismatch,
 }
 
 // auditReserver records double holds and releases of the pool's own senders,
