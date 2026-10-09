@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -145,7 +146,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 // ValidateState validates the various changes that happen after a state transition,
 // such as amount of used gas, the receipt roots and the state root itself.
-func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool) error {
+func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool, stats *ValidateStats) error {
+	start := time.Now()
 	if res == nil {
 		return errors.New("nil ProcessResult value")
 	}
@@ -196,9 +198,24 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	rules := v.config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
+	var (
+		hashStart = time.Now()
+		rules     = v.config.Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
+	)
 	if root := statedb.IntermediateRoot(rules); header.Root != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
+	}
+	if stats != nil {
+		stats.Validation = time.Since(start) - time.Since(hashStart)
+		stats.AccountHashes = statedb.AccountHashes
+		stats.AccountUpdates = statedb.AccountUpdates
+		stats.StorageUpdates = statedb.StorageUpdates
+		stats.AccountUpdated = statedb.AccountUpdated
+		stats.AccountDeleted = statedb.AccountDeleted
+		stats.StorageUpdated = int(statedb.StorageUpdated.Load())
+		stats.StorageDeleted = int(statedb.StorageDeleted.Load())
+		stats.CodeUpdated = statedb.CodeUpdated
+		stats.CodeUpdateBytes = statedb.CodeUpdateBytes
 	}
 	return nil
 }

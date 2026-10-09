@@ -2190,8 +2190,8 @@ type ExecuteConfig struct {
 	EnableWitnessStats bool
 }
 
-// overrideTracerActivation returns the EVM configuration to execute a block with, honoring the
-// caller's tracing intent.
+// overrideTracerActivation returns the EVM configuration to execute a block with,
+// honoring the caller's tracing intent.
 func (bc *BlockChain) overrideTracerActivation(tracerOn bool) vm.Config {
 	vmConfig := bc.cfg.VmConfig
 	if !tracerOn {
@@ -2247,7 +2247,17 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 			stop()
 			return nil, nil, err
 		}
-		return statedb, func(*blockProcessingResult) { stop() }, nil
+		return statedb, func(result *blockProcessingResult) {
+			stop()
+
+			// Upload the statistics of reader at the end.
+			if result == nil {
+				return
+			}
+			if stater, ok := reader.(state.ReaderStater); ok {
+				result.stats.StateReadCacheStats = stater.GetStats()
+			}
+		}, nil
 
 	case bc.cfg.NoPrefetch || !ok:
 		statedb, err := state.New(parentRoot, sdb)
@@ -2328,13 +2338,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	defer interrupt.Store(true) // terminate the prefetch at the end
 	execIndex.Store(-1)         // no transaction executed yet
 
-	// Resolve the EVM config for this execution before any component consults
-	// it. The live tracer stored in bc.cfg.VmConfig is a stateful, node-wide
-	// singleton whose hooks are only safe to drive from the chain-insertion
-	// goroutine, so it is attached only when the caller opts in via
-	// EnableTracer. Both the reader topology (setupExecutionState) and the
-	// execution strategy (StateProcessor.Process) key off this resolved
-	// config, keeping the BAL-parallel/sequential decision consistent.
+	// Resolve the EVM config for this execution before any component consults it.
 	vmConfig := bc.overrideTracerActivation(config.EnableTracer)
 
 	// Set up the state reader feeding execution, along with a cleanup to run once
@@ -2384,26 +2388,22 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	}
 
 	// Process block using the parent state as reference point
-	pstart := time.Now()
+	stats := new(ExecuteStats)
 	pctx, _, spanEnd := telemetry.StartSpan(ctx, "bc.processor.Process")
-	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.precompileCache, vmConfig, &execIndex)
+	res, err := bc.processor.Process(pctx, block, statedb, bc.jumpDestCache, bc.precompileCache, vmConfig, &execIndex, &stats.Process)
 	spanEnd(&err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
 		return nil, err
 	}
-	ptime := time.Since(pstart)
 
-	vstart := time.Now()
 	_, _, spanEnd = telemetry.StartSpan(ctx, "bc.validator.ValidateState")
-	err = bc.validator.ValidateState(block, statedb, res, false)
+	err = bc.validator.ValidateState(block, statedb, res, false, &stats.Validate)
 	spanEnd(&err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
 		return nil, err
 	}
-	vtime := time.Since(vstart)
-
 	// If witnesses was generated and stateless self-validation requested, do
 	// that now. Self validation should *never* run in production, it's more of
 	// a tight integration to enable running *all* consensus tests through the
@@ -2432,35 +2432,8 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
 		}
 	}
-
-	var (
-		xvtime   = time.Since(xvstart)
-		proctime = time.Since(startTime) // processing + validation + cross validation
-		stats    = &ExecuteStats{}
-	)
-	// Update the metrics touched during block processing and validation
-	stats.AccountReads = statedb.AccountReads     // Account reads are complete(in processing)
-	stats.StorageReads = statedb.StorageReads     // Storage reads are complete(in processing)
-	stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete(in validation)
-	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
-	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
-	stats.CodeReads = statedb.CodeReads
-
-	stats.AccountLoaded = statedb.AccountLoaded
-	stats.AccountUpdated = statedb.AccountUpdated
-	stats.AccountDeleted = statedb.AccountDeleted
-	stats.StorageLoaded = statedb.StorageLoaded
-	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
-	stats.StorageDeleted = int(statedb.StorageDeleted.Load())
-
-	stats.CodeLoaded = statedb.CodeLoaded
-	stats.CodeLoadBytes = statedb.CodeLoadBytes
-	stats.CodeUpdated = statedb.CodeUpdated
-	stats.CodeUpdateBytes = statedb.CodeUpdateBytes
-
-	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
-	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
-	stats.CrossValidation = xvtime                                                                       // The time spent on stateless cross validation
+	stats.CrossValidation = time.Since(xvstart)
+	proctime := time.Since(startTime) // processing + validation + cross validation
 
 	// Attach the computed block access list so it gets persisted alongside the
 	// block. The validator has already verified the hash matches the header.
@@ -2483,9 +2456,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 			return nil, err
 		}
 		// Update the metrics touched during block commit
-		stats.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
-		stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
-		stats.DatabaseCommit = statedb.DatabaseCommits // Database commits are complete, we can mark them
+		stats.Commit.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
+		stats.Commit.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
+		stats.Commit.DatabaseCommit = statedb.DatabaseCommits // Database commits are complete, we can mark them
 	}
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed
