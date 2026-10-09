@@ -90,7 +90,7 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 		return nil, err
 	}
 	sender := msg.From
-	expectedPayer := msg.Frames[prefix.End].ResolvedTarget(sender)
+	expectedPayer := prefix.Payer
 	result := &simResult{dependencies: dependencies{accounts: make(map[common.Address]accountFields), slots: make(map[common.Hash]struct{})}}
 	result.payerBalance = new(uint256.Int).Set(statedb.GetBalance(expectedPayer))
 	deps := &result.dependencies

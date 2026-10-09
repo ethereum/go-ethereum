@@ -74,9 +74,12 @@ func (p *FramePool) Add(txs []*types.Transaction, _ bool) []error {
 	return errs
 }
 
-// reorg is used only by Reset while it owns the generation. It bypasses the
-// reset wait, but shares every validation and atomic admission check with Add.
-// Rejections after any prefix execution carry txpool.ErrValidationExecuted.
+// add validates a frame transaction and, if it passes, inserts it into the
+// pool, replacing the sender's pending transaction when the fees are bumped.
+// Reset sets reorg when reinjecting transactions from displaced blocks: it
+// already owns the generation, so the call skips the reset wait, and the
+// acceptance is announced only to reorg-inclusive subscribers. Rejections
+// after any prefix execution carry txpool.ErrValidationExecuted.
 func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 	validatedHead := p.head.Load()
 	prefix, err := p.classify(tx, validatedHead)
@@ -100,7 +103,10 @@ func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 		return txpool.ErrInflightTxLimitReached
 	}
 	var executed bool
-	for range 2 {
+	// The simulation runs without the pool lock, so a Reset can land meanwhile
+	// and make its result stale. Retry against the new head once, then give up
+	// with a retryable error rather than chase a moving head indefinitely.
+	for range admitAttempts {
 		// A Reset owns the generation until its fresh results are committed.
 		// Wait without the pool lock before taking a reconciled head snapshot.
 		p.lock.RLock()
@@ -169,6 +175,10 @@ func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 	return rejected(ErrHeadChanged, executed)
 }
 
+// admitAttempts bounds how many times add simulates a transaction when a
+// Reset invalidates the head it was simulated against.
+const admitAttempts = 2
+
 // errUnreconciled rejects admissions while the pool's read state is stale.
 var errUnreconciled = fmt.Errorf("%w: head state unavailable", ErrHeadChanged)
 
@@ -195,7 +205,7 @@ func (p *FramePool) precheckState(entry *frameTx) error {
 	if next > nonce {
 		return fmt.Errorf("%w: address %v, tx: %d state: %d", core.ErrNonceTooHigh, entry.sender, next, nonce)
 	}
-	payer := entry.tx.Frames()[entry.prefix.End].ResolvedTarget(entry.sender)
+	payer := entry.prefix.Payer
 	coded := entry.prefix.PayFrame >= 0 && p.state.GetCodeSize(payer) != 0
 	return p.checkPayer(entry, p.txs[entry.sender], payer, p.state.GetBalance(payer), coded)
 }

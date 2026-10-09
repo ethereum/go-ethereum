@@ -68,7 +68,7 @@ type frameTx struct {
 	feeCap       uint256.Int
 	tipCap       uint256.Int
 	effectiveTip *big.Int
-	index        int
+	index        int // Position in the eviction heap, -1 when not in it
 }
 
 type payerUsage struct {

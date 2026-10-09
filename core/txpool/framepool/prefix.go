@@ -40,10 +40,12 @@ var (
 )
 
 // Prefix describes a recognized validation prefix. Optional frame indexes are
-// -1 when absent. End is the inclusive index of the payment-approving frame.
-// ExecutionGas includes all signature-validation gas, while StateGas includes
-// only the declared prefix state budgets. ExpiryDeadline is meaningful only
-// when ExpiryFrame is present; equality with the head timestamp is valid.
+// -1 when absent. End is the inclusive index of the payment-approving frame,
+// always within the classified frame list, and Payer is that frame's resolved
+// target, which APPROVE makes the payer. ExecutionGas includes all
+// signature-validation gas, while StateGas includes only the declared prefix
+// state budgets. ExpiryDeadline is meaningful only when ExpiryFrame is present;
+// equality with the head timestamp is valid.
 type Prefix struct {
 	ExpiryFrame    int
 	ExpiryDeadline uint64
@@ -51,6 +53,7 @@ type Prefix struct {
 	VerifyFrame    int
 	PayFrame       int
 	End            int
+	Payer          common.Address
 	ExecutionGas   uint64
 	StateGas       uint64
 }
@@ -99,6 +102,7 @@ func ClassifyPrefix(frames []types.Frame, sender common.Address, signatures type
 	default:
 		return invalid("invalid sender verification flags")
 	}
+	prefix.Payer = frames[prefix.End].ResolvedTarget(sender)
 	for i := range frames {
 		if i <= prefix.End {
 			if frames[i].Flags&types.AtomicBatchFlag != 0 {
