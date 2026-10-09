@@ -37,14 +37,10 @@ import (
 
 // Per-phase timers for BAL-driven parallel block execution.
 var (
-	parallelSystemExecTimer       = metrics.NewRegisteredResettingTimer("chain/execution/parallel/system", nil)
-	parallelTxExecTimer           = metrics.NewRegisteredResettingTimer("chain/execution/parallel/transactions", nil)
-	parallelStateHashTimer        = metrics.NewRegisteredResettingTimer("chain/execution/parallel/statehash", nil)
-	parallelTotalTimer            = metrics.NewRegisteredResettingTimer("chain/execution/parallel/total", nil)
-	parallelAccountCacheHitMeter  = metrics.NewRegisteredMeter("chain/execution/parallel/reads/account/cache/hit", nil)
-	parallelAccountCacheMissMeter = metrics.NewRegisteredMeter("chain/execution/parallel/reads/account/cache/miss", nil)
-	parallelStorageCacheHitMeter  = metrics.NewRegisteredMeter("chain/execution/parallel/reads/storage/cache/hit", nil)
-	parallelStorageCacheMissMeter = metrics.NewRegisteredMeter("chain/execution/parallel/reads/storage/cache/miss", nil)
+	parallelSystemExecTimer = metrics.NewRegisteredResettingTimer("chain/execution/parallel/system", nil)
+	parallelTxExecTimer     = metrics.NewRegisteredResettingTimer("chain/execution/parallel/transactions", nil)
+	parallelStateHashTimer  = metrics.NewRegisteredResettingTimer("chain/execution/parallel/statehash", nil)
+	parallelTotalTimer      = metrics.NewRegisteredResettingTimer("chain/execution/parallel/total", nil)
 )
 
 // supportsParallelExecution reports whether the block can be executed using the
@@ -84,6 +80,9 @@ type txExecResult struct {
 	// preimages are the SHA3 preimages the transaction's EVM recorded into its
 	// ephemeral state.
 	preimages map[common.Hash][]byte
+
+	// stats holds the state reads performed through the ephemeral state.
+	stats ProcessStats
 }
 
 // parallelExecution is a block's transactions executing across a pool of
@@ -130,7 +129,7 @@ func (e *parallelExecution) abort() {
 
 // processParallel executes the block's transactions concurrently using the
 // block-level access list.
-func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config) (*ProcessResult, error) {
+func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config, stats *ProcessStats) (*ProcessResult, error) {
 	var (
 		config = p.chainConfig()
 		header = block.Header()
@@ -261,6 +260,10 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		pipeline.feedReceipt(receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 		blockAccessList.Merge(res.accessList)
+
+		if stats != nil {
+			stats.mergeReads(&res.stats)
+		}
 	}
 
 	// Every transaction has been gathered, join the workers for their errors.
@@ -269,7 +272,6 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	}
 	// The gather overlaps the workers, so this covers both.
 	txExec = time.Since(txStart)
-	reportParallelReadStats(block, base)
 
 	// Post-execution system calls against an ephemeral access-list state at
 	// index n+1.
@@ -315,6 +317,13 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	}
 	statedb.AddPreimages(postState.Preimages())
 
+	// The state reads of the background root computation are left out, only
+	// the ones performed by the execution are reported.
+	if stats != nil {
+		stats.addReads(preState)
+		stats.addReads(postState)
+		stats.Execution = systemExec + txExec
+	}
 	parallelSystemExecTimer.Update(systemExec)
 	parallelTxExecTimer.Update(txExec)
 	parallelStateHashTimer.Update(stateHash)
@@ -456,6 +465,8 @@ func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block 
 					state:      gp.CumulativeState(),
 					preimages:  sdb.Preimages(),
 				}
+				results[i].stats.addReads(sdb)
+
 				// Release the result, the gather may be waiting on it.
 				close(done[i])
 				spent.add(gp.CumulativeExecution(), gp.CumulativeState())
@@ -469,32 +480,6 @@ func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block 
 		gctx:    gctx,
 		cancel:  cancel,
 	}
-}
-
-// reportParallelReadStats reports the state read statistics. TODO(rjl) integrate
-// it into blockchain stats.
-func reportParallelReadStats(block *types.Block, reader state.Reader) {
-	stater, ok := reader.(state.ReaderStater)
-	if !ok {
-		return
-	}
-	var (
-		stats       = stater.GetStats().StateStats
-		accountHit  = stats.AccountCacheHit
-		accountMiss = stats.AccountCacheMiss
-		storageHit  = stats.StorageCacheHit
-		storageMiss = stats.StorageCacheMiss
-	)
-	parallelAccountCacheHitMeter.Mark(accountHit)
-	parallelAccountCacheMissMeter.Mark(accountMiss)
-	parallelStorageCacheHitMeter.Mark(storageHit)
-	parallelStorageCacheMissMeter.Mark(storageMiss)
-
-	log.Debug("Parallel execution read statistics", "number", block.Number(),
-		"account.hit", accountHit, "account.miss", accountMiss,
-		"account.hitrate", stats.AccountCacheHitRate(),
-		"storage.hit", storageHit, "storage.miss", storageMiss,
-		"storage.hitrate", stats.StorageCacheHitRate())
 }
 
 // prefetchHint returns a set of storage slots alongside their account address
