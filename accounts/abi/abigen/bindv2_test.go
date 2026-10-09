@@ -330,6 +330,69 @@ func TestNormalizeArgs(t *testing.T) {
 	}
 }
 
+func TestBindV2ConstructorArguments(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		inputs     []string
+		normalized []string
+		contract   string
+	}{
+		{"empty", nil, nil, ""},
+		{"named", []string{"value"}, []string{"value"}, ""},
+		{"keyword", []string{"range"}, []string{"arg0"}, ""},
+		{"keyword variants", []string{"_range", "Range", "range_"}, []string{"_range", "Range", "range_"}, ""},
+		{"unnamed", []string{"", ""}, []string{"arg0", "arg1"}, ""},
+		{"underscores", []string{"_", "__"}, []string{"arg0", "__"}, ""},
+		{"snake case", []string{"_token_value"}, []string{"_token_value"}, ""},
+		{"similar names", []string{"_value", "Value"}, []string{"_value", "Value"}, ""},
+		{"keyword collision", []string{"arg1", "range"}, []string{"arg1", "arg10"}, ""},
+		{"unnamed collision", []string{"arg1", ""}, []string{"arg1", "arg10"}, ""},
+		{"later name collision", []string{"", "arg0"}, []string{"arg00", "arg0"}, ""},
+		{"numeric suffix", []string{"_1foo"}, []string{"_1foo"}, ""},
+		{"body name variants", []string{"_enc", "_err", "_panic", "_constructor_args"}, []string{"_enc", "_err", "_panic", "_constructor_args"}, ""},
+		{"receiver collision", []string{""}, []string{"arg00"}, "Arg0"},
+		{"normalized receiver collision", []string{""}, []string{"arg00"}, "arg_0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var inputs []string
+			for _, name := range tc.inputs {
+				inputs = append(inputs, fmt.Sprintf(`{"name":%q,"type":"uint256"}`, name))
+			}
+			definition := fmt.Sprintf(`[{"inputs":[%s],"stateMutability":"nonpayable","type":"constructor"}]`, strings.Join(inputs, ","))
+			contract := tc.contract
+			if contract == "" {
+				contract = "ConstructorArgs"
+			}
+			code, err := BindV2([]string{contract}, []string{definition}, []string{""}, "bindtests", nil, nil)
+			if err != nil {
+				t.Fatalf("failed to generate binding: %v", err)
+			}
+			if len(tc.inputs) == 0 {
+				if strings.Contains(code, "PackConstructor") {
+					t.Fatal("generated PackConstructor for a constructor without inputs")
+				}
+				return
+			}
+			var params []string
+			for _, name := range tc.normalized {
+				params = append(params, name+" *big.Int")
+			}
+			declaration := "PackConstructor(" + strings.Join(params, ", ") + ") []byte"
+			if !strings.Contains(code, declaration) {
+				t.Fatalf("missing constructor declaration %q", declaration)
+			}
+			call := `.abi.Pack("", ` + strings.Join(tc.normalized, ", ") + ")"
+			if !strings.Contains(code, call) {
+				t.Fatalf("missing constructor packing call %q", call)
+			}
+			metadata := `ABI: "` + strings.ReplaceAll(definition, `"`, `\"`) + `"`
+			if !strings.Contains(code, metadata) {
+				t.Fatal("constructor argument names changed in ABI metadata")
+			}
+		})
+	}
+}
+
 // returns a "pretty diff" on two strings. Useful if the strings are large.
 func prettyDiff(have, want string) string {
 	if have == want {
