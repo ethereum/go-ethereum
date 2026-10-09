@@ -301,13 +301,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
-	var nodesWithOrigins *nodeSetWithOrigin
-	if db.config.TrienodeHistory >= 0 {
-		nodesWithOrigins = NewNodeSetWithOrigin(nodes.NodeAndOrigins())
-	} else {
-		nodesWithOrigins = NewNodeSetWithOrigin(nodes.Nodes(), nil)
-	}
-	if err := db.tree.add(root, parentRoot, block, nodesWithOrigins, states); err != nil {
+	if err := db.add(root, parentRoot, block, nodes, states); err != nil {
 		return err
 	}
 	// Keep 128 diff layers in the memory, persistent layer is 129th.
@@ -316,6 +310,45 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 	// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
 	// - head-128 layer(disk layer) is paired with HEAD-128 state
 	return db.tree.cap(root, maxDiffLayers)
+}
+
+// Add adds a new layer into the tree like Update, but leaves the flattening to Cap.
+func (db *Database) Add(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *StateSetWithOrigin) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if err := db.modifyAllowed(); err != nil {
+		return err
+	}
+	return db.add(root, parentRoot, block, nodes, states)
+}
+
+// Cap makes room for a new layer on top of parent, flattening the diff layers that would be too far below it into the disk layer.
+func (db *Database) Cap(parent common.Hash) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if err := db.modifyAllowed(); err != nil {
+		return err
+	}
+	// Nothing sits below the disk layer, so there's no room to make
+	if _, ok := db.tree.get(parent).(*diskLayer); ok {
+		return nil
+	}
+	// Keep one layer less than Update does, the new one makes up for it. The
+	// layers already added on top of parent aren't counted, they stay in memory.
+	return db.tree.cap(parent, maxDiffLayers-1)
+}
+
+// add links a new layer into the tree. It assumes the db.lock is held.
+func (db *Database) add(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *StateSetWithOrigin) error {
+	var nodesWithOrigins *nodeSetWithOrigin
+	if db.config.TrienodeHistory >= 0 {
+		nodesWithOrigins = NewNodeSetWithOrigin(nodes.NodeAndOrigins())
+	} else {
+		nodesWithOrigins = NewNodeSetWithOrigin(nodes.Nodes(), nil)
+	}
+	return db.tree.add(root, parentRoot, block, nodesWithOrigins, states)
 }
 
 // Commit traverses downwards the layer tree from a specified layer with the
