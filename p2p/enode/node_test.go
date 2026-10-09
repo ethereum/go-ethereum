@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/netip"
+	"reflect"
 	"testing"
 	"testing/quick"
 
@@ -416,5 +417,52 @@ func TestID_logdistEqual(t *testing.T) {
 	x := ID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	if LogDist(x, x) != 0 {
 		t.Errorf("LogDist(x, x) != 0")
+	}
+}
+
+func TestNodeWithAlternateFamily(t *testing.T) {
+	id := HexID("00000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
+
+	var r enr.Record
+	r.Set(enr.IPv4Addr(netip.MustParseAddr("192.0.2.1")))
+	r.Set(enr.IPv6Addr(netip.MustParseAddr("2001:db8::1")))
+	r.Set(enr.TCP(30303))
+	r.Set(enr.TCP6(30304))
+	r.Set(enr.UDP(30305))
+	r.Set(enr.UDP6(30306))
+	n := SignNull(&r, id)
+	if n.IPAddr() != netip.MustParseAddr("192.0.2.1") {
+		t.Fatalf("preferred endpoint %v, want IPv4", n.IPAddr())
+	}
+
+	alt, ok := n.WithAlternateFamily()
+	if !ok {
+		t.Fatal("no alternate for dual-stack record")
+	}
+	if alt.IPAddr() != netip.MustParseAddr("2001:db8::1") || alt.TCP() != 30304 || alt.UDP() != 30306 {
+		t.Fatalf("alternate endpoint %v tcp %d udp %d", alt.IPAddr(), alt.TCP(), alt.UDP())
+	}
+	if alt.ID() != n.ID() || !reflect.DeepEqual(alt.Record(), n.Record()) {
+		t.Fatal("alternate node changed identity or record")
+	}
+	if n.IPAddr() != netip.MustParseAddr("192.0.2.1") {
+		t.Fatal("original node modified")
+	}
+
+	back, ok := alt.WithAlternateFamily()
+	if !ok || back.IPAddr() != n.IPAddr() || back.TCP() != 30303 {
+		t.Fatalf("alternate of alternate = %v %d, want original IPv4 endpoint", back.IPAddr(), back.TCP())
+	}
+
+	var r4 enr.Record
+	r4.Set(enr.IPv4Addr(netip.MustParseAddr("192.0.2.1")))
+	r4.Set(enr.TCP(30303))
+	if _, ok := SignNull(&r4, id).WithAlternateFamily(); ok {
+		t.Fatal("single-family record has an alternate")
+	}
+
+	var r0 enr.Record
+	if _, ok := SignNull(&r0, id).WithAlternateFamily(); ok {
+		t.Fatal("record without address has an alternate")
 	}
 }
