@@ -86,6 +86,9 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	StateAtBlock(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (*types.Transaction, vm.BlockContext, *state.StateDB, StateReleaseFunc, error)
+	// Pending returns the pending block built on the head from pending
+	// transactions, its receipts and its post-state, or nils without one.
+	Pending() (*types.Block, types.Receipts, *state.StateDB)
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -1034,6 +1037,10 @@ func APIs(backend Backend) []rpc.API {
 		{
 			Namespace: "debug",
 			Service:   NewAPI(backend),
+		},
+		{
+			Namespace: "trace",
+			Service:   NewTraceAPI(backend),
 		},
 	}
 }
