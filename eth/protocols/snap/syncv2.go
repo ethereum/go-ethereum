@@ -608,7 +608,7 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 		// progress is still usable. If yes, roll forward via BAL catch-up. If not,
 		// wipe everything and restart fresh.
 		switch {
-		case isPivotReorged(s.db, prevPivot, target):
+		case s.isPivotReorged(prevPivot, target):
 			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
 			s.resetSyncState()
 		case catchUpExceedsRetention(prevPivot, target):
@@ -812,28 +812,19 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 }
 
 // isPivotReorged reports whether the previous pivot is no longer usable
-// as a starting point for forward catch-up. Either it was reorged out
-// of the canonical chain, or the new pivot doesn't advance past it.
-func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
+// as a starting point for forward catch-up. Either the new pivot doesn't
+// advance past it, or it is not an ancestor of the new pivot.
+func (s *syncerV2) isPivotReorged(prev, curr *types.Header) bool {
 	// If the new pivot is at or below the old one, there's nothing for
 	// catchUp to roll forward.
 	if curr.Number.Cmp(prev.Number) <= 0 {
 		return true
 	}
-	// If there's no canonical hash at the old pivot's height, something
-	// is wrong. Headers up to the new pivot should already be indexed,
-	// so a missing entry at an earlier block means the chain state is
-	// broken. The most common cause is a chain rewind across the
-	// snap-synced pivot, which resets head to genesis and deletes
-	// canonical entries above it (see rewindPathHead in core/blockchain.go).
-	// Bail and let the fresh sync recover.
-	canonical := rawdb.ReadCanonicalHash(db, prev.Number.Uint64())
-	if canonical == (common.Hash{}) {
-		return true
-	}
-	// If canonical at the old pivot's height has a different hash, the
-	// old pivot was reorged out.
-	return canonical != prev.Hash()
+	// Walk the header chain back from the new pivot. The canonical index
+	// can't answer this, it only covers the blocks the downloader has
+	// committed so far, and those trail the pivot.
+	_, err := s.gapHashChain(prev, curr)
+	return err != nil
 }
 
 // catchUpExceedsRetention reports whether rolling the flat state forward from
