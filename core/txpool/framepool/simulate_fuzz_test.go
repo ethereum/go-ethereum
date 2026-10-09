@@ -536,7 +536,7 @@ func (env *fuzzEnv) generate(data []byte) *fuzzCase {
 		world.account(params.FrameTxExpiryVerifier).code = []byte{byte(vm.STOP)}
 	}
 
-	verifyFlags := uint64(types.ApproveExecutionAndPayment)
+	verifyFlags := types.ApproveExecutionAndPayment
 	if sponsored {
 		verifyFlags = types.ApproveExecution
 	}
