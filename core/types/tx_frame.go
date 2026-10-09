@@ -736,6 +736,26 @@ func FrameTxMaxGas(frames []Frame, sigs SignatureList, sender common.Address, no
 	return max(standard, floorGas+stateGas), nil
 }
 
+// FrameTxGasReservation computes the block gas a frame transaction reserves
+// in each EIP-8037 dimension before it executes: the execution reservation
+// is the larger of its intrinsic cost plus the frames' execution budgets and
+// its calldata floor, the state reservation is the frames' state budget.
+func FrameTxGasReservation(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (execution, state uint64, err error) {
+	intrinsicGas, err := FrameTxIntrinsicGas(frames, sigs, sender, nonceKeys, nonceSeq)
+	if err != nil {
+		return 0, 0, err
+	}
+	floorGas, err := FrameTxFloorGas(frames, sigs, sender, nonceKeys, nonceSeq)
+	if err != nil {
+		return 0, 0, err
+	}
+	executionGas, stateGas := FrameTxBudgetTotals(frames)
+	if gomath.MaxUint64-intrinsicGas < executionGas {
+		return 0, 0, errors.New("gas uint64 overflow")
+	}
+	return max(intrinsicGas+executionGas, floorGas), stateGas, nil
+}
+
 // ValidateFrameTxSignatures validates all signature entries of a frame
 // transaction against the canonical signature hash, per EIP-8141.
 func ValidateFrameTxSignatures(sigs SignatureList, sender common.Address, sigHash common.Hash) error {

@@ -514,19 +514,12 @@ func (st *stateTransition) buyGas() error {
 	if st.msg.Frames != nil {
 		// Frame transactions have no upfront gas purchase: the payer is
 		// charged during execution via APPROVE. Only reserve room in the
-		// block gas pool, exactly per dimension: the execution reservation
-		// carries the calldata floor, which binds the execution dimension,
-		// and the state reservation is the frames' declared state budget.
-		intrinsicGas, err := types.FrameTxIntrinsicGas(st.msg.Frames, st.msg.FrameSignatures, st.msg.From, st.msg.FrameNonceKeys, st.msg.Nonce)
+		// block gas pool, exactly per dimension.
+		execution, state, err := types.FrameTxGasReservation(st.msg.Frames, st.msg.FrameSignatures, st.msg.From, st.msg.FrameNonceKeys, st.msg.Nonce)
 		if err != nil {
 			return ErrGasUintOverflow
 		}
-		floorGas, err := types.FrameTxFloorGas(st.msg.Frames, st.msg.FrameSignatures, st.msg.From, st.msg.FrameNonceKeys, st.msg.Nonce)
-		if err != nil {
-			return ErrGasUintOverflow
-		}
-		executionGrant, stateGrant := types.FrameTxBudgetTotals(st.msg.Frames)
-		return st.gp.CheckGasAmsterdam(max(intrinsicGas+executionGrant, floorGas), stateGrant)
+		return st.gp.CheckGasAmsterdam(execution, state)
 	}
 	mgval := new(uint256.Int).SetUint64(st.msg.GasLimit)
 	_, overflow := mgval.MulOverflow(mgval, st.msg.GasPrice)

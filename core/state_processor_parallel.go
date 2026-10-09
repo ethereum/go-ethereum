@@ -187,14 +187,20 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		gp       = NewGasPool(block.GasLimit())
 		logIndex uint
 	)
-	for i := range txs {
+	for i, tx := range txs {
 		receipt := results[i].receipt
-		gasLimit := txs[i].Gas()
-		if err := gp.CheckGasAmsterdam(min(gasLimit, params.MaxTxGas), gasLimit); err != nil {
-			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
+		executionReservation, stateReservation := min(tx.Gas(), params.MaxTxGas), tx.Gas()
+		if tx.Type() == types.FrameTxType {
+			executionReservation, stateReservation, err = types.FrameTxGasReservation(tx.Frames(), tx.FrameSignatures(), *tx.FrameSender(), tx.FrameNonceKeys(), tx.Nonce())
+			if err != nil {
+				return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), ErrGasUintOverflow)
+			}
+		}
+		if err := gp.CheckGasAmsterdam(executionReservation, stateReservation); err != nil {
+			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		if err := gp.ChargeGasAmsterdam(results[i].execution, results[i].state, receipt.GasUsed); err != nil {
-			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
+			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		// Correct the receipt object with block-level fields
 		receipt.CumulativeGasUsed = gp.CumulativeUsed()

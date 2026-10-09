@@ -4392,6 +4392,62 @@ func TestEIP8141FrameLogsWithTracer(t *testing.T) {
 	}
 }
 
+// Tests that block-access-list driven parallel execution reserves block gas
+// for a frame transaction per dimension, like sequential execution: a frame
+// transaction whose state budget fills the whole block gas limit is valid.
+func TestEIP8141ParallelStateReservation(t *testing.T) {
+	var (
+		config  = *params.MergedTestChainConfig
+		engine  = beacon.New(ethash.NewFaker())
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		zero    = uint64(0)
+	)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &zero
+	alloc := SystemContractAllocs()
+	alloc[addr1] = types.Account{Balance: big.NewInt(params.Ether)}
+	gspec := &Genesis{Config: &config, Alloc: alloc, GasLimit: 1_000_000}
+	signer := types.LatestSigner(&config)
+
+	frametx := &types.FrameTx{
+		ChainID:   uint256.MustFromBig(config.ChainID),
+		NonceKeys: []uint256.Int{{}},
+		Sender:    addr1,
+		Frames: []types.Frame{
+			{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 50_000, State: gspec.GasLimit}, Value: uint256.NewInt(0)},
+		},
+		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: addr1.Bytes()}},
+		Fees: types.Fees{
+			MaxPriorityFeePerGas: uint256.NewInt(2),
+			MaxFeePerGas:         uint256.MustFromBig(newGwei(5)),
+			MaxFeePerBlobGas:     uint256.NewInt(0),
+		},
+	}
+	sigHash := signer.Hash(types.NewTx(frametx))
+	sig, err := crypto.Sign(sigHash[:], key1)
+	if err != nil {
+		t.Fatalf("failed to sign frame transaction: %v", err)
+	}
+	frametx.Signatures[0].Signature = append([]byte{sig[64]}, sig[:64]...)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetParentBeaconRoot(common.Hash{})
+		b.AddTx(types.NewTx(frametx))
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if !chain.useBALExecution(blocks[0], chain.cfg.VmConfig, false) {
+		t.Fatal("block does not take the parallel execution path")
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+}
+
 // Tests the scenario that the synchronization target in snap sync has been changed
 // with a chain reorg at the tip. In this case the reorg'd segment should be unmarked
 // with canonical flags.
