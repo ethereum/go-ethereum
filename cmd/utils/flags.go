@@ -1169,6 +1169,24 @@ var (
 		StateSchemeFlag,
 		HttpHeaderFlag,
 	}
+
+	// MetricsFlags is the flag group of all metrics flags.
+	MetricsFlags = []cli.Flag{
+		MetricsEnabledFlag,
+		MetricsHTTPFlag,
+		MetricsPortFlag,
+		MetricsEnableInfluxDBFlag,
+		MetricsInfluxDBEndpointFlag,
+		MetricsInfluxDBDatabaseFlag,
+		MetricsInfluxDBUsernameFlag,
+		MetricsInfluxDBPasswordFlag,
+		MetricsInfluxDBTagsFlag,
+		MetricsInfluxDBIntervalFlag,
+		MetricsEnableInfluxDBV2Flag,
+		MetricsInfluxDBTokenFlag,
+		MetricsInfluxDBBucketFlag,
+		MetricsInfluxDBOrganizationFlag,
+	}
 )
 
 // default account to prefund when running Geth in dev mode
@@ -2266,6 +2284,73 @@ func RegisterSyncOverrideService(stack *node.Node, eth *eth.Ethereum, config syn
 		log.Info("Registered sync override service")
 	}
 	syncer.Register(stack, eth, config)
+}
+
+// SetMetricsConfig applies metrics-related command line flags to the config.
+func SetMetricsConfig(ctx *cli.Context, cfg *metrics.Config) {
+	if ctx.IsSet(MetricsEnabledFlag.Name) {
+		cfg.Enabled = ctx.Bool(MetricsEnabledFlag.Name)
+	}
+	if ctx.IsSet(MetricsHTTPFlag.Name) {
+		cfg.HTTP = ctx.String(MetricsHTTPFlag.Name)
+	}
+	if ctx.IsSet(MetricsPortFlag.Name) {
+		cfg.Port = ctx.Int(MetricsPortFlag.Name)
+	}
+	if ctx.IsSet(MetricsEnableInfluxDBFlag.Name) {
+		cfg.EnableInfluxDB = ctx.Bool(MetricsEnableInfluxDBFlag.Name)
+	}
+	if ctx.IsSet(MetricsInfluxDBEndpointFlag.Name) {
+		cfg.InfluxDBEndpoint = ctx.String(MetricsInfluxDBEndpointFlag.Name)
+	}
+	if ctx.IsSet(MetricsInfluxDBDatabaseFlag.Name) {
+		cfg.InfluxDBDatabase = ctx.String(MetricsInfluxDBDatabaseFlag.Name)
+	}
+	if ctx.IsSet(MetricsInfluxDBUsernameFlag.Name) {
+		cfg.InfluxDBUsername = ctx.String(MetricsInfluxDBUsernameFlag.Name)
+	}
+	if ctx.IsSet(MetricsInfluxDBPasswordFlag.Name) {
+		cfg.InfluxDBPassword = ctx.String(MetricsInfluxDBPasswordFlag.Name)
+	}
+	if ctx.IsSet(MetricsInfluxDBTagsFlag.Name) {
+		cfg.InfluxDBTags = ctx.String(MetricsInfluxDBTagsFlag.Name)
+	}
+	if ctx.IsSet(MetricsInfluxDBIntervalFlag.Name) {
+		cfg.InfluxDBInterval = ctx.Duration(MetricsInfluxDBIntervalFlag.Name)
+	}
+	if ctx.IsSet(MetricsEnableInfluxDBV2Flag.Name) {
+		cfg.EnableInfluxDBV2 = ctx.Bool(MetricsEnableInfluxDBV2Flag.Name)
+	}
+	if ctx.IsSet(MetricsInfluxDBTokenFlag.Name) {
+		cfg.InfluxDBToken = ctx.String(MetricsInfluxDBTokenFlag.Name)
+	}
+	if ctx.IsSet(MetricsInfluxDBBucketFlag.Name) {
+		cfg.InfluxDBBucket = ctx.String(MetricsInfluxDBBucketFlag.Name)
+	}
+	if ctx.IsSet(MetricsInfluxDBOrganizationFlag.Name) {
+		cfg.InfluxDBOrganization = ctx.String(MetricsInfluxDBOrganizationFlag.Name)
+	}
+	// Sanity-check the commandline flags. It is fine if some unused fields is part
+	// of the toml-config, but we expect the commandline to only contain relevant
+	// arguments, otherwise it indicates an error.
+	var (
+		enableExport   = ctx.Bool(MetricsEnableInfluxDBFlag.Name)
+		enableExportV2 = ctx.Bool(MetricsEnableInfluxDBV2Flag.Name)
+	)
+	if enableExport || enableExportV2 {
+		v1FlagIsSet := ctx.IsSet(MetricsInfluxDBUsernameFlag.Name) ||
+			ctx.IsSet(MetricsInfluxDBPasswordFlag.Name)
+
+		v2FlagIsSet := ctx.IsSet(MetricsInfluxDBTokenFlag.Name) ||
+			ctx.IsSet(MetricsInfluxDBOrganizationFlag.Name) ||
+			ctx.IsSet(MetricsInfluxDBBucketFlag.Name)
+
+		if enableExport && v2FlagIsSet {
+			Fatalf("Flags --%s, --%s, --%s are only available for influxdb-v2", MetricsInfluxDBOrganizationFlag.Name, MetricsInfluxDBTokenFlag.Name, MetricsInfluxDBBucketFlag.Name)
+		} else if enableExportV2 && v1FlagIsSet {
+			Fatalf("Flags --%s, --%s are only available for influxdb-v1", MetricsInfluxDBUsernameFlag.Name, MetricsInfluxDBPasswordFlag.Name)
+		}
+	}
 }
 
 // SetupMetrics configures the metrics system.
