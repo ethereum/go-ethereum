@@ -51,12 +51,16 @@ const (
 	dependencyCode
 )
 
-// dependencies stores keys only. Each field is independently invalidated by
-// block access list changes; read and written storage slots are always in the
-// sender's account.
+// dependencies records account fields and storage locations independently.
+// System storage values also retain the expected recent-root entry hashes.
 type dependencies struct {
 	accounts map[common.Address]accountFields
-	slots    map[common.Hash]struct{}
+	slots    map[storageLocation]common.Hash
+}
+
+type storageLocation struct {
+	address common.Address
+	slot    common.Hash
 }
 
 func (d *dependencies) add(address common.Address, fields accountFields) {
@@ -85,16 +89,30 @@ func (p *FramePool) simulate(head *types.Header, statedb *state.StateDB, tx *typ
 // head-state inputs, including native default VERIFY and delegated frame targets.
 // Coded paymasters use the generic trace policy, with no canonical exception.
 func simulate(config *params.ChainConfig, head *types.Header, statedb *state.StateDB, tx *types.Transaction, prefix Prefix) (*simResult, error) {
+	if err := checkNonces(statedb, tx); err != nil {
+		return nil, err
+	}
+	if !prefix.validRootAge(head) {
+		return nil, fmt.Errorf("%w: recent root outside usable window", ErrTraceViolation)
+	}
 	msg, err := core.TransactionToMessage(tx, types.MakeSigner(config, head.Number, head.Time), head.BaseFee)
 	if err != nil {
 		return nil, err
 	}
 	sender := msg.From
 	expectedPayer := prefix.Payer
-	result := &simResult{dependencies: dependencies{accounts: make(map[common.Address]accountFields), slots: make(map[common.Hash]struct{})}}
+	result := &simResult{dependencies: dependencies{accounts: make(map[common.Address]accountFields), slots: make(map[storageLocation]common.Hash)}}
 	result.payerBalance = new(uint256.Int).Set(statedb.GetBalance(expectedPayer))
 	deps := &result.dependencies
-	deps.add(sender, dependencyNonce|dependencyBalance|dependencyCode)
+	deps.add(sender, dependencyBalance|dependencyCode)
+	keys := tx.FrameNonceKeys()
+	for i := range keys {
+		if keys[i].IsZero() {
+			deps.add(sender, dependencyNonce)
+		} else {
+			deps.slots[storageLocation{params.NonceManagerAddress, types.FrameTxNonceSlot(sender, &keys[i])}] = common.Hash{}
+		}
+	}
 	senderHadCode := len(statedb.GetCode(sender)) != 0
 	if prefix.DeployFrame >= 0 {
 		if senderHadCode {
@@ -127,6 +145,16 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 		deadline := prefix.ExpiryDeadline
 		result.expiryDeadline = &deadline
 	}
+	if prefix.RecentRootFrame >= 0 {
+		if !bytes.Equal(statedb.GetCode(params.RecentRootAddress), params.RecentRootCode) {
+			return nil, fmt.Errorf("%w: non-canonical recent root verifier", ErrTraceViolation)
+		}
+		data := msg.Frames[prefix.RecentRootFrame].Data
+		for offset := 0; offset < len(data); offset += recentRootTupleBytes {
+			key, entry := recentRootDependency(data[offset : offset+recentRootTupleBytes])
+			deps.slots[storageLocation{params.RecentRootAddress, key}] = entry
+		}
+	}
 	// Only head number/time and merge status affect fork selection. Other block
 	// reads are banned, but safe values let execution finish after a violation.
 	ctx := vm.BlockContext{
@@ -135,6 +163,9 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 		BlockNumber: new(big.Int).Set(head.Number), Time: head.Time,
 		Difficulty: new(big.Int), BaseFee: new(big.Int), BlobBaseFee: new(big.Int),
 		GasLimit: head.GasLimit, CostPerStateByte: params.CostPerStateByte,
+	}
+	if head.SlotNumber != nil {
+		ctx.SlotNum = *head.SlotNumber + 1
 	}
 	if head.BaseFee != nil {
 		ctx.BaseFee.Set(head.BaseFee)
@@ -188,8 +219,12 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 			frame := evm.TxContext.FrameContext.CurrentFrame
 			op := vm.OpCode(raw)
 			switch op {
-			case vm.GASPRICE, vm.BLOCKHASH, vm.COINBASE, vm.NUMBER, vm.PREVRANDAO, vm.GASLIMIT, vm.BASEFEE, vm.BLOBBASEFEE, vm.SLOTNUM, vm.INVALID, vm.SELFDESTRUCT, vm.BALANCE, vm.SELFBALANCE:
+			case vm.GASPRICE, vm.BLOCKHASH, vm.COINBASE, vm.NUMBER, vm.PREVRANDAO, vm.GASLIMIT, vm.BASEFEE, vm.BLOBBASEFEE, vm.INVALID, vm.SELFDESTRUCT, vm.BALANCE, vm.SELFBALANCE:
 				reject("banned opcode " + op.String())
+			case vm.SLOTNUM:
+				if frame != prefix.RecentRootFrame || depth != 1 || scope.Address() != params.RecentRootAddress || !bytes.Equal(scope.ContractCode(), params.RecentRootCode) {
+					reject("slot number outside canonical recent root verifier")
+				}
 			case vm.TIMESTAMP:
 				if frame != prefix.ExpiryFrame || scope.Address() != params.FrameTxExpiryVerifier || !bytes.Equal(scope.ContractCode(), params.FrameTxExpiryVerifierCode) {
 					reject("timestamp outside canonical expiry verifier")
@@ -230,13 +265,21 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 					deps.add(creator, dependencyNonce)
 				}
 			case vm.SSTORE, vm.SLOAD:
+				if op == vm.SLOAD && frame == prefix.RecentRootFrame && depth == 1 && scope.Address() == params.RecentRootAddress && bytes.Equal(scope.ContractCode(), params.RecentRootCode) {
+					if stack := scope.StackData(); len(stack) > 0 {
+						if _, ok := deps.slots[storageLocation{params.RecentRootAddress, common.Hash(stack[len(stack)-1].Bytes32())}]; !ok {
+							reject("undeclared recent root storage read")
+						}
+					}
+					break
+				}
 				if op == vm.SSTORE && (frame != prefix.DeployFrame || scope.Address() != sender) {
 					reject("storage write outside sender deploy")
 				} else if scope.Address() != sender {
 					reject("foreign storage read")
 				} else if stack := scope.StackData(); len(stack) > 0 {
 					// SSTORE gas depends on the slot's head value too.
-					deps.slots[common.Hash(stack[len(stack)-1].Bytes32())] = struct{}{}
+					deps.slots[storageLocation{sender, common.Hash(stack[len(stack)-1].Bytes32())}] = common.Hash{}
 				}
 			case vm.EXTCODESIZE, vm.EXTCODECOPY, vm.EXTCODEHASH:
 				if stack := scope.StackData(); len(stack) > 0 {
@@ -247,6 +290,10 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 					if op == vm.EXTCODEHASH && len(statedb.GetCode(target)) == 0 {
 						deps.add(target, dependencyNonce|dependencyBalance)
 					}
+				}
+			case vm.TXPARAM:
+				if stack := scope.StackData(); len(stack) > 0 && stack[len(stack)-1].IsUint64() && stack[len(stack)-1].Uint64() == 0x0d {
+					deps.add(sender, dependencyNonce)
 				}
 			case vm.FRAMEPARAM:
 				// An earlier frame's gas usage reveals gas, see OnExit.

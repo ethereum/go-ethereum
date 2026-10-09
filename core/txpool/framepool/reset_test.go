@@ -47,6 +47,9 @@ func (c *testBlockChain) extend(parent *types.Header, timestamp uint64, txs []*t
 	next.Number.Add(next.Number, common.Big1)
 	next.Root = common.BigToHash(new(big.Int).SetUint64(uint64(len(c.states) + 1)))
 	next.Time = timestamp
+	if next.SlotNumber != nil {
+		*next.SlotNumber++
+	}
 	statedb := c.states[parent.Root].Copy()
 	if change != nil {
 		change(statedb)

@@ -45,25 +45,29 @@ var (
 // target, which APPROVE makes the payer. ExecutionGas includes all
 // signature-validation gas, while StateGas includes only the declared prefix
 // state budgets. ExpiryDeadline is meaningful only when ExpiryFrame is present;
-// equality with the head timestamp is valid.
+// equality with the head timestamp is valid. Recent roots expire at
+// OldestRootSlot + recentRootLength; NewestRootSlot also bounds rollback validity.
 type Prefix struct {
-	ExpiryFrame    int
-	ExpiryDeadline uint64
-	DeployFrame    int
-	VerifyFrame    int
-	PayFrame       int
-	End            int
-	Payer          common.Address
-	ExecutionGas   uint64
-	StateGas       uint64
+	ExpiryFrame     int
+	ExpiryDeadline  uint64
+	RecentRootFrame int
+	OldestRootSlot  uint64
+	NewestRootSlot  uint64
+	DeployFrame     int
+	VerifyFrame     int
+	PayFrame        int
+	End             int
+	Payer           common.Address
+	ExecutionGas    uint64
+	StateGas        uint64
 }
 
 // ClassifyPrefix recognizes the public-mempool validation shapes without state
 // access or signature verification. Consensus static validation is separate.
-// A deploy must be the first shape frame: index 0, or index 1 immediately after
-// an optional expiry frame. Later DEFAULT frames are post-ops, not deploys.
+// A deploy follows the optional expiry and recent-root verifiers. Later DEFAULT
+// frames are post-ops, not deploys.
 func ClassifyPrefix(frames []types.Frame, sender common.Address, signatures types.SignatureList) (Prefix, error) {
-	prefix := Prefix{ExpiryFrame: -1, DeployFrame: -1, VerifyFrame: -1, PayFrame: -1, End: -1}
+	prefix := Prefix{ExpiryFrame: -1, RecentRootFrame: -1, DeployFrame: -1, VerifyFrame: -1, PayFrame: -1, End: -1}
 	invalid := func(reason string) (Prefix, error) {
 		return Prefix{}, fmt.Errorf("%w: %s", ErrInvalidPrefix, reason)
 	}
@@ -77,6 +81,24 @@ func ClassifyPrefix(frames []types.Frame, sender common.Address, signatures type
 			prefix.ExpiryDeadline = binary.BigEndian.Uint64(frames[i].Data)
 			start = 1
 		}
+	}
+	for i := range frames {
+		frame := &frames[i]
+		if frame.Mode != types.ModeVerify || frame.ResolvedTarget(sender) != params.RecentRootAddress {
+			continue
+		}
+		if prefix.RecentRootFrame >= 0 || i != start || frame.Flags != 0 || (frame.Value != nil && !frame.Value.IsZero()) || frame.GasLimits.State != 0 ||
+			len(frame.Data) == 0 || len(frame.Data)%recentRootTupleBytes != 0 || len(frame.Data) > maxRecentRootReferences*recentRootTupleBytes {
+			return invalid("invalid recent root verifier shape or position")
+		}
+		prefix.RecentRootFrame = i
+		prefix.OldestRootSlot = ^uint64(0)
+		for offset := 0; offset < len(frame.Data); offset += recentRootTupleBytes {
+			slot := binary.BigEndian.Uint64(frame.Data[offset+32 : offset+40])
+			prefix.OldestRootSlot = min(prefix.OldestRootSlot, slot)
+			prefix.NewestRootSlot = max(prefix.NewestRootSlot, slot)
+		}
+		start++
 	}
 	if start < len(frames) && frames[start].Mode == types.ModeDefault && frames[start].Flags == 0 {
 		prefix.DeployFrame = start
@@ -103,7 +125,13 @@ func ClassifyPrefix(frames []types.Frame, sender common.Address, signatures type
 		return invalid("invalid sender verification flags")
 	}
 	prefix.Payer = frames[prefix.End].ResolvedTarget(sender)
+	postTx := false
 	for i := range frames {
+		if frames[i].Mode == types.ModePostTx {
+			postTx = true
+		} else if postTx {
+			return invalid("execution frame after POST_TX")
+		}
 		if i <= prefix.End {
 			if frames[i].Flags&types.AtomicBatchFlag != 0 {
 				return invalid("atomic batch in validation prefix")

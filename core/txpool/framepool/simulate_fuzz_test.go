@@ -942,10 +942,10 @@ func (c *fuzzCase) mutations(in *fuzzInput, covered func(common.Address, account
 }
 
 // covers reports whether result's dependencies include the field.
-func covers(result *simResult, sender, addr common.Address, field accountFields, slot common.Hash) bool {
+func covers(result *simResult, addr common.Address, field accountFields, slot common.Hash) bool {
 	if field == fuzzStorage {
-		_, ok := result.dependencies.slots[slot]
-		return addr == sender && ok
+		_, ok := result.dependencies.slots[storageLocation{addr, slot}]
+		return ok
 	}
 	return result.dependencies.accounts[addr]&field != 0
 }
@@ -1040,7 +1040,7 @@ func FuzzSimulationDependencies(f *testing.F) {
 			var undo []*fuzzMutation
 			for _, m := range muts {
 				// Restoring a grown nonce is no reachable change.
-				if m.field != dependencyNonce && !covers(accepted, c.sender, m.addr, m.field, m.slot) {
+				if m.field != dependencyNonce && !covers(accepted, m.addr, m.field, m.slot) {
 					undo = append(undo, c.restore(m))
 				}
 			}
@@ -1052,7 +1052,7 @@ func FuzzSimulationDependencies(f *testing.F) {
 		}
 		// Dependency completeness.
 		c.checkUnchanged(t, "dependency completeness", base, c.world, c.mutations(c.rest, func(addr common.Address, field accountFields, slot common.Hash) bool {
-			return covers(base, c.sender, addr, field, slot)
+			return covers(base, addr, field, slot)
 		}), true)
 
 		// Balance-only premise: emptiness and payer solvency are preserved.

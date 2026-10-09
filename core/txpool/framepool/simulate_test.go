@@ -140,7 +140,7 @@ func TestSimulationStorageAndTargets(t *testing.T) {
 				return
 			}
 			if tc.slot {
-				if _, ok := result.dependencies.slots[slot]; !ok {
+				if _, ok := result.dependencies.slots[storageLocation{simulationSender, slot}]; !ok {
 					t.Fatal("missing sender slot")
 				}
 			}
@@ -347,7 +347,7 @@ func TestSimulationDeploy(t *testing.T) {
 			}
 			// The SSTORE's gas, and so the frame's outcome, depends on the
 			// slot's head value.
-			if _, ok := result.dependencies.slots[common.BigToHash(big.NewInt(7))]; !ok {
+			if _, ok := result.dependencies.slots[storageLocation{tc.sender, common.BigToHash(big.NewInt(7))}]; !ok {
 				t.Fatal("missing written sender slot")
 			}
 		})

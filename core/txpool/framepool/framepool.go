@@ -392,12 +392,13 @@ func (p *FramePool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs boo
 	return tracked
 }
 
-// Nonce returns the next nonce after the sender's pending transaction, or the
-// sender's head-state nonce. StateDB reads may populate its cache, so take a write lock.
+// Nonce returns the pending legacy account nonce. A keyed pending transaction
+// does not consume that nonce, so RPC callers still see the head-state value.
+// StateDB reads may populate its cache, so take a write lock.
 func (p *FramePool) Nonce(addr common.Address) uint64 {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	if entry := p.txs[addr]; entry != nil {
+	if entry := p.txs[addr]; entry != nil && types.HasLegacyNonceKeys(entry.tx.FrameNonceKeys()) {
 		return entry.tx.Nonce() + 1
 	}
 	return p.state.GetNonce(addr)
@@ -504,14 +505,15 @@ func (p *FramePool) indexDependencies(entry *frameTx) {
 		}
 		p.byAccount[addr][hash] = fields
 	}
-	for slot := range entry.dependencies.slots {
-		if p.bySlot[entry.sender] == nil {
-			p.bySlot[entry.sender] = make(map[common.Hash]map[common.Hash]struct{})
+	for location := range entry.dependencies.slots {
+		addr, slot := location.address, location.slot
+		if p.bySlot[addr] == nil {
+			p.bySlot[addr] = make(map[common.Hash]map[common.Hash]struct{})
 		}
-		if p.bySlot[entry.sender][slot] == nil {
-			p.bySlot[entry.sender][slot] = make(map[common.Hash]struct{})
+		if p.bySlot[addr][slot] == nil {
+			p.bySlot[addr][slot] = make(map[common.Hash]struct{})
 		}
-		p.bySlot[entry.sender][slot][hash] = struct{}{}
+		p.bySlot[addr][slot][hash] = struct{}{}
 	}
 }
 
@@ -523,14 +525,15 @@ func (p *FramePool) unindexDependencies(entry *frameTx) {
 			delete(p.byAccount, addr)
 		}
 	}
-	for slot := range entry.dependencies.slots {
-		delete(p.bySlot[entry.sender][slot], hash)
-		if len(p.bySlot[entry.sender][slot]) == 0 {
-			delete(p.bySlot[entry.sender], slot)
+	for location := range entry.dependencies.slots {
+		addr, slot := location.address, location.slot
+		delete(p.bySlot[addr][slot], hash)
+		if len(p.bySlot[addr][slot]) == 0 {
+			delete(p.bySlot[addr], slot)
 		}
-	}
-	if len(p.bySlot[entry.sender]) == 0 {
-		delete(p.bySlot, entry.sender)
+		if len(p.bySlot[addr]) == 0 {
+			delete(p.bySlot, addr)
+		}
 	}
 }
 

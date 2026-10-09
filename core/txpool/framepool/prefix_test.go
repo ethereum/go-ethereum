@@ -75,7 +75,7 @@ func TestClassifyPrefixShapes(t *testing.T) {
 				if shape.pay >= 0 {
 					payer = sponsor
 				}
-				want := Prefix{ExpiryFrame: expiryIndex, DeployFrame: shifted(shape.deploy), VerifyFrame: shifted(shape.verify), PayFrame: shifted(shape.pay), End: end, Payer: payer, ExecutionGas: uint64(end+1) * 100, StateGas: uint64(end+1) * 200}
+				want := Prefix{ExpiryFrame: expiryIndex, RecentRootFrame: -1, DeployFrame: shifted(shape.deploy), VerifyFrame: shifted(shape.verify), PayFrame: shifted(shape.pay), End: end, Payer: payer, ExecutionGas: uint64(end+1) * 100, StateGas: uint64(end+1) * 200}
 				if withExpiry {
 					want.ExpiryDeadline = 0x123456789abcdef0
 				}

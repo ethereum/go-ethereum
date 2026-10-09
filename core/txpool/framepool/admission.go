@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -198,12 +199,8 @@ func rejected(err error, executed bool) error {
 // rechecks the payer against the simulated approval. The caller holds the
 // write lock.
 func (p *FramePool) precheckState(entry *frameTx) error {
-	nonce, next := p.state.GetNonce(entry.sender), entry.tx.Nonce()
-	if next < nonce {
-		return fmt.Errorf("%w: address %v, tx: %d state: %d", core.ErrNonceTooLow, entry.sender, next, nonce)
-	}
-	if next > nonce {
-		return fmt.Errorf("%w: address %v, tx: %d state: %d", core.ErrNonceTooHigh, entry.sender, next, nonce)
+	if err := checkNonces(p.state, entry.tx); err != nil {
+		return err
 	}
 	payer := entry.prefix.Payer
 	coded := entry.prefix.PayFrame >= 0 && p.state.GetCodeSize(payer) != 0
@@ -263,7 +260,7 @@ func (p *FramePool) precheck(entry *frameTx) error {
 func (p *FramePool) checkReplacement(entry *frameTx) (*frameTx, error) {
 	old := p.txs[entry.sender]
 	if old != nil {
-		if old.tx.Nonce() != entry.tx.Nonce() {
+		if old.tx.Nonce() != entry.tx.Nonce() || !slices.Equal(old.tx.FrameNonceKeys(), entry.tx.FrameNonceKeys()) {
 			return nil, ErrSenderPending
 		}
 		if !p.bumped(&old.feeCap, &entry.feeCap) || !p.bumped(&old.tipCap, &entry.tipCap) {

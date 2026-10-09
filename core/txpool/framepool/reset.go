@@ -104,6 +104,9 @@ func (p *FramePool) Reset(_, newHead *types.Header) {
 		if entry.expiryDeadline != nil && *entry.expiryDeadline < newHead.Time {
 			continue
 		}
+		if !entry.prefix.validRootAge(newHead) {
+			continue
+		}
 		if p.validatePolicy(entry.tx, newHead) != nil {
 			continue
 		}
@@ -203,12 +206,10 @@ func (p *FramePool) Reset(_, newHead *types.Header) {
 	}
 }
 
-// recoverable selects the displaced transactions worth recovering: per sender,
-// only the oldest one at the sender's new-head nonce, since the pool holds a
-// single transaction per sender. A sender's nonce need not advance with each
-// inclusion (EIP-6780: an account created and destroyed in one transaction
-// stays at nonce 0), so senders are deduplicated explicitly. Neither later
-// nonces nor such repeats spend the bound of at most GlobalSlots attempts,
+// recoverable selects the oldest displaced transaction per sender whose selected
+// nonce sequences all match the new head. Keyed transactions may share a sender
+// without consuming its legacy nonce, so senders are deduplicated explicitly.
+// Neither stale identities nor repeats spend the GlobalSlots attempt bound,
 // which limits how long recovery holds the generation against admissions.
 func (p *FramePool) recoverable(displaced []*types.Transaction, statedb *state.StateDB) []*types.Transaction {
 	var selected []*types.Transaction
@@ -219,7 +220,7 @@ func (p *FramePool) recoverable(displaced []*types.Transaction, statedb *state.S
 			break
 		}
 		sender := *tx.FrameSender()
-		if _, ok := seen[sender]; ok || tx.Nonce() != statedb.GetNonce(sender) {
+		if _, ok := seen[sender]; ok || checkNonces(statedb, tx) != nil {
 			continue
 		}
 		seen[sender] = struct{}{}

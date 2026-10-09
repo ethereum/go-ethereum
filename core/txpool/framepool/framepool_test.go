@@ -98,6 +98,9 @@ func (c *testBlockChain) advance(timestamp uint64, change func(*state.StateDB)) 
 	next.ParentHash = c.head.Hash()
 	next.Number.Add(next.Number, common.Big1)
 	next.Root = common.BigToHash(next.Number)
+	if next.SlotNumber != nil {
+		*next.SlotNumber++
+	}
 	next.Time = timestamp
 	statedb := c.states[c.head.Root].Copy()
 	if change != nil {
@@ -136,7 +139,7 @@ func setupFramePool(t *testing.T, slots uint64, change func(*state.StateDB)) (*F
 	if change != nil {
 		change(statedb)
 	}
-	head := &types.Header{Root: common.BigToHash(big.NewInt(1)), Number: big.NewInt(1), Time: 100, GasLimit: 30_000_000, GasUsed: 15_000_000, BaseFee: big.NewInt(10), Difficulty: new(big.Int)}
+	head := &types.Header{Root: common.BigToHash(big.NewInt(1)), Number: big.NewInt(1), Time: 100, GasLimit: 30_000_000, GasUsed: 15_000_000, BaseFee: big.NewInt(10), Difficulty: new(big.Int), SlotNumber: new(uint64)}
 	chain := &testBlockChain{
 		config: &config, head: head, states: map[common.Hash]*state.StateDB{head.Root: statedb},
 		blocks: map[common.Hash]*types.Block{head.Hash(): types.NewBlockWithHeader(head)},
@@ -250,7 +253,7 @@ func assertFramePoolConsistent(t *testing.T, p *FramePool) {
 	slots := make(map[common.Address]map[common.Hash]map[common.Hash]struct{})
 	usages := make(map[common.Address]*payerUsage)
 	var used uint64
-	for sender, entry := range p.txs {
+	for _, entry := range p.txs {
 		hash := entry.tx.Hash()
 		if p.all[hash] != entry || p.evict[entry.index] != entry {
 			t.Fatal("live transaction missing from lookup or eviction heap")
@@ -277,14 +280,15 @@ func assertFramePoolConsistent(t *testing.T, p *FramePool) {
 			}
 			accounts[addr][hash] = fields
 		}
-		for slot := range entry.dependencies.slots {
-			if slots[sender] == nil {
-				slots[sender] = make(map[common.Hash]map[common.Hash]struct{})
+		for location := range entry.dependencies.slots {
+			addr, slot := location.address, location.slot
+			if slots[addr] == nil {
+				slots[addr] = make(map[common.Hash]map[common.Hash]struct{})
 			}
-			if slots[sender][slot] == nil {
-				slots[sender][slot] = make(map[common.Hash]struct{})
+			if slots[addr][slot] == nil {
+				slots[addr][slot] = make(map[common.Hash]struct{})
 			}
-			slots[sender][slot][hash] = struct{}{}
+			slots[addr][slot][hash] = struct{}{}
 		}
 	}
 	if used != p.slots || len(p.all) != len(p.txs) || len(p.evict) != len(p.txs) || !reflect.DeepEqual(usages, p.payers) || !reflect.DeepEqual(accounts, p.byAccount) || !reflect.DeepEqual(slots, p.bySlot) {
