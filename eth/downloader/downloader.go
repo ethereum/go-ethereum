@@ -1042,17 +1042,22 @@ func (d *Downloader) processSnapSyncContent() error {
 		if oldPivot != nil {
 			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
 		}
-		// The pivot moved, retarget the state sync
+		P, beforeP, afterP := splitAroundPivot(d.pivotHeader.Number.Uint64(), results)
+		// Insert downloaded blocks before starting the next state-sync
+		// cycle. The snap/2 syncer checks the old pivot's canonical hash
+		// when retargeting; if the next cycle starts first, it can observe
+		// an unindexed but valid old pivot and reset all sync progress.
+		if err := d.commitSnapSyncData(beforeP, sync); err != nil {
+			return err
+		}
+		// The pivot moved; the old pivot's pending canonical entries have
+		// now been committed, so the next state-sync cycle can inspect them.
 		if !d.committed.Load() && d.pivotHeader.Root != sync.pivot.Root {
 			oldPivot, oldTail = nil, nil
 
 			sync.Cancel()
 			sync = d.syncState(d.pivotHeader)
 			go closeOnErr(sync)
-		}
-		P, beforeP, afterP := splitAroundPivot(d.pivotHeader.Number.Uint64(), results)
-		if err := d.commitSnapSyncData(beforeP, sync); err != nil {
-			return err
 		}
 		if P != nil {
 			oldPivot = P
