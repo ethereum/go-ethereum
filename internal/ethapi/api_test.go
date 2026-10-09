@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -4063,8 +4064,20 @@ func TestCreateAccessListFeeDefaults(t *testing.T) {
 		},
 		{
 			name:    "explicit zero blob fee cap rejected",
-			args:    TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big)},
+			args:    TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big), BlobHashes: []common.Hash{{0x01}}},
 			wantErr: true,
+		},
+		{
+			name: "blob fee cap without blob hashes, unfunded sender",
+			args: TransactionArgs{From: &common.Address{0xaa}, To: &to, BlobFeeCap: (*hexutil.Big)(big.NewInt(1))},
+		},
+		{
+			name: "zero blob fee cap without blob hashes",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big)},
+		},
+		{
+			name: "zero blob fee cap without blob hashes, with gas price",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big), GasPrice: (*hexutil.Big)(big.NewInt(params.GWei))},
 		},
 	}
 	for _, tt := range tests {
@@ -4084,6 +4097,96 @@ func TestCreateAccessListFeeDefaults(t *testing.T) {
 			}
 			if uint64(result.GasUsed) != params.TxGas {
 				t.Fatalf("unexpected gasUsed (got %d want %d)", uint64(result.GasUsed), params.TxGas)
+			}
+		})
+	}
+}
+
+// TestCreateAccessListBlobFeeDefault tests that eth_createAccessList keeps the
+// default blob fee cap for a request with blob hashes, so BLOBBASEFEE reads the
+// block's blob base fee.
+func TestCreateAccessListBlobFeeDefault(t *testing.T) {
+	t.Parallel()
+	var (
+		funded = newAccounts(1)[0]
+		// BLOBBASEFEE SLOAD POP STOP
+		contract = common.Address{0xcc}
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				funded.addr: {Balance: big.NewInt(params.Ether)},
+				contract:    {Code: common.FromHex("0x4a545000")},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+	args := TransactionArgs{
+		From:       &funded.addr,
+		To:         &contract,
+		GasPrice:   (*hexutil.Big)(big.NewInt(params.GWei)),
+		BlobHashes: []common.Hash{{0x01}},
+	}
+	result, err := api.CreateAccessList(context.Background(), args, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateAccessList failed: %v", err)
+	}
+	blobBaseFee := eip4844.CalcBlobFee(params.MergedTestChainConfig, backend.CurrentHeader())
+	want := types.AccessList{{Address: contract, StorageKeys: []common.Hash{common.BigToHash(blobBaseFee)}}}
+	if !reflect.DeepEqual(*result.Accesslist, want) {
+		t.Fatalf("unexpected access list: have %v, want %v", *result.Accesslist, want)
+	}
+}
+
+// TestCallBlobFeeCapPreCancun tests that eth_call and eth_estimateGas reject
+// maxFeePerBlobGas on a block before Cancun, even without blob hashes.
+func TestCallBlobFeeCapPreCancun(t *testing.T) {
+	t.Parallel()
+	funded := newAccounts(1)[0]
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			funded.addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	api := NewBlockChainAPI(newTestBackend(t, 1, genesis, ethash.NewFaker(), nil))
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+	to := common.Address{0xbb}
+	tests := []struct {
+		name    string
+		args    TransactionArgs
+		wantErr bool
+	}{
+		{
+			name: "no blob fee cap",
+			args: TransactionArgs{From: &funded.addr, To: &to},
+		},
+		{
+			name:    "blob fee cap",
+			args:    TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: (*hexutil.Big)(big.NewInt(1))},
+			wantErr: true,
+		},
+		{
+			name:    "zero blob fee cap",
+			args:    TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big)},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, callErr := api.Call(context.Background(), tt.args, &latest, nil, nil)
+			_, estimateErr := api.EstimateGas(context.Background(), tt.args, &latest, nil, nil)
+			for _, err := range []error{callErr, estimateErr} {
+				if tt.wantErr {
+					if !errors.Is(err, core.ErrTxTypeNotSupported) {
+						t.Fatalf("expected %v, got %v", core.ErrTxTypeNotSupported, err)
+					}
+				} else if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
 			}
 		})
 	}
