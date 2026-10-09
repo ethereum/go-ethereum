@@ -396,6 +396,15 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 	return nil
 }
 
+// checkBlobFeeCap rejects a blob fee cap without blob hashes. It is not part of
+// CallDefaults, because eth_simulateV1 and the tracers accept a lone cap from Cancun.
+func (args *TransactionArgs) checkBlobFeeCap() error {
+	if args.BlobFeeCap != nil && len(args.BlobHashes) == 0 {
+		return errors.New("maxFeePerBlobGas specified without blobVersionedHashes")
+	}
+	return nil
+}
+
 // CallDefaults sanitizes the transaction arguments, often filling in zero values,
 // for the purpose of eth_call class of RPC methods.
 func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int) error {
