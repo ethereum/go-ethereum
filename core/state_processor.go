@@ -168,28 +168,7 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 	if config.IsPrague(number, time) || config.IsUBT(number, time) {
 		ProcessParentBlockHash(parent.Hash(), evm, blockAccessList)
 	}
-	// EIP-8141: install the expiry verifier at the Bogota transition block.
-	if config.BogotaTime != nil && time >= *config.BogotaTime && parent.Time < *config.BogotaTime {
-		ProcessExpiryVerifierDeploy(evm, blockAccessList)
-	}
 	return blockAccessList
-}
-
-// ProcessExpiryVerifierDeploy installs the canonical EIP-8141 expiry verifier
-// runtime code at EXPIRY_VERIFIER on the Bogota transition block. Only the
-// code is installed; the account's nonce and balance are left untouched.
-// Networks that activate Bogota at genesis must carry the code in the
-// genesis allocation instead.
-//
-// Like the other pre-execution system operations, the install runs at block
-// access index 0 so the code change lands in the block-level access list;
-// the preceding system call's Finalise has already detached the state's
-// access list, so without a fresh Prepare the change would be dropped.
-func ProcessExpiryVerifierDeploy(evm *vm.EVM, blockAccessList *bal.ConstructionBlockAccessList) {
-	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
-	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
-	evm.StateDB.SetCode(params.FrameTxExpiryVerifier, params.FrameTxExpiryVerifierCode, tracing.CodeChangeUnspecified)
-	blockAccessList.Merge(evm.StateDB.Finalise(evm.GetRules()))
 }
 
 // PostExecution processes the withdrawals and then the post-execution system

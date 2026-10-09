@@ -257,11 +257,12 @@ var (
 	// FrameTxEntryPoint is the caller of DEFAULT and VERIFY mode frames (EIP-8141).
 	FrameTxEntryPoint = common.HexToAddress("0x00000000000000000000000000000000000000aa")
 
-	// FrameTxExpiryVerifier is the expiry verifier contract address (EIP-8141).
-	FrameTxExpiryVerifier = common.HexToAddress("0x0000000000000000000000000000000000008141")
+	// FrameTxExpiryVerifier is the expiry verifier contract address
+	// (EIP-8141). The verifier is an ordinary contract deployed by a keyless
+	// transaction; the protocol does not install it.
+	FrameTxExpiryVerifier = common.HexToAddress("0x81413f0cF12e9b6a49B1D0439E081c577D57FfFf")
 
 	// FrameTxExpiryVerifierCode is the canonical expiry verifier runtime code
-	// installed at FrameTxExpiryVerifier on the Bogota transition block
 	// (EIP-8141).
 	FrameTxExpiryVerifierCode = common.FromHex("0x60083614600a575f5ffd5b5f3560c01c4211601657005b5f5ffd")
 
