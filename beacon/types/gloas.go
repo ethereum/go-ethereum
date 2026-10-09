@@ -104,6 +104,14 @@ func decodeGloasBeaconBlock(enc []byte) (*BeaconBlock, error) {
 	}}, nil
 }
 
+// HasPayloadEnvelope reports whether the block's execution payload is published
+// apart from the block, as from the Gloas fork on. Such a block is only complete
+// once its header and payload envelope are attached.
+func (b *BeaconBlock) HasPayloadEnvelope() bool {
+	_, ok := b.data.(*gloasBeaconBlock)
+	return ok
+}
+
 // SetGloasPayloadEnvelope attaches the execution payload envelope to a Gloas
 // beacon block. The envelope must be bound to the requested beacon block and
 // its payload hash must match the block's signed execution payload bid.

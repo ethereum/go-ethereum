@@ -67,10 +67,11 @@ func VerifyProof(root common.Hash, index uint64, branch Values, value Value) err
 	return nil
 }
 
-// VerifyNormalizedProof verifies a Merkle proof branch that may have more items than
-// the depth of index: a proof normalized to the depth of a later fork (where the
-// structure grew deeper) starts with one zero item per extra level. See
-// is_valid_normalized_merkle_branch in the consensus specs.
+// VerifyNormalizedProof verifies a Merkle proof branch that may have more items
+// than the depth of index: a proof normalized to the depth of a later fork
+// (where the structure grew deeper) starts with one zero item per extra level.
+//
+// See is_valid_normalized_merkle_branch in the consensus specs.
 func VerifyNormalizedProof(root common.Hash, index uint64, branch Values, value Value) error {
 	depth := bits.Len64(index) - 1
 	if depth < 0 || len(branch) < depth {

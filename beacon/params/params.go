@@ -75,6 +75,7 @@ func StateIndexFinalBlock(forkName string) uint64 {
 		return 0 // unknown fork
 	}
 }
+
 func StateIndexSyncCommittee(forkName string) uint64 {
 	switch forkName {
 	case "altair", "bellatrix", "capella", "deneb":
@@ -87,6 +88,7 @@ func StateIndexSyncCommittee(forkName string) uint64 {
 		return 0 // unknown fork
 	}
 }
+
 func StateIndexNextSyncCommittee(forkName string) uint64 {
 	switch forkName {
 	case "altair", "bellatrix", "capella", "deneb":

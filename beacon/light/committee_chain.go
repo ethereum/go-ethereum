@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/bits"
 	"sync"
 	"time"
 
@@ -207,32 +206,15 @@ func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
 		return err
 	}
 	period := bootstrap.Header.SyncPeriod()
-	// Before Gloas the next committee is the current one's sibling in the state, so
-	// the first item of the proof (after any normalization items) is its root. From
-	// Gloas on it is not, and the next committee comes with the first update.
-	fork := s.config.ForkNameAtSlot(bootstrap.Header.Slot)
-	index := params.StateIndexSyncCommittee(fork)
-	var nextRoot common.Hash
-	if params.StateIndexNextSyncCommittee(fork) == index^1 {
-		nextRoot = common.Hash(bootstrap.CommitteeBranch[len(bootstrap.CommitteeBranch)-bits.Len64(index)+1])
-	}
-	fixedEnd := period + 1
-	if nextRoot != (common.Hash{}) {
-		fixedEnd++
-	}
-	if err := s.deleteFixedCommitteeRootsFrom(fixedEnd); err != nil {
+
+	// The next committee is taken from the first update, signed by the current one.
+	if err := s.deleteFixedCommitteeRootsFrom(period + 1); err != nil {
 		s.resetLocked()
 		return err
 	}
 	if s.addFixedCommitteeRoot(period, bootstrap.CommitteeRoot) != nil {
 		s.resetLocked()
 		if err := s.addFixedCommitteeRoot(period, bootstrap.CommitteeRoot); err != nil {
-			s.resetLocked()
-			return err
-		}
-	}
-	if nextRoot != (common.Hash{}) {
-		if err := s.addFixedCommitteeRoot(period+1, nextRoot); err != nil {
 			s.resetLocked()
 			return err
 		}

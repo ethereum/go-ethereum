@@ -163,30 +163,25 @@ func TestCommitteeChainCheckpointInit(t *testing.T) {
 	}
 	tc := newTestCommitteeChain(nil, config, true, 0, 10, 400, false)
 	for _, test := range []struct {
-		period    uint64
-		version   string // the bootstrap's format
-		nextFixed bool
+		period  uint64
+		version string // the bootstrap's format
 	}{
-		{1, "altair", true},
-		{4, "fulu", true},
-		{4, "gloas", true}, // a Fulu bootstrap in the Gloas format
-		{8, "gloas", false},
+		{1, "altair"},
+		{4, "fulu"},
+		{4, "gloas"}, // a Fulu bootstrap in the Gloas format
+		{8, "gloas"},
 	} {
 		t.Run(fmt.Sprintf("%s/%d", test.version, test.period), func(t *testing.T) {
 			c := newCommitteeChainTest(t, config, 300, false)
 			if err := c.chain.CheckpointInit(bootstrap(tc, test.period, test.version)); err != nil {
 				t.Fatalf("CheckpointInit failed: %v", err)
 			}
-			if test.nextFixed {
-				other := newTestCommitteeChain(tc, config, true, int(test.period), int(test.period), 400, false)
-				c.insertUpdate(other, test.period, true, ErrCannotReorg) // another next committee
-			}
 			c.insertUpdate(tc, test.period, true, nil)
 			c.verifyRange(tc, test.period, test.period+1)
 		})
 	}
-	// A Gloas checkpoint leaves the next committee to the first update, so it also
-	// drops the one fixed by an earlier checkpoint (here of another chain).
+	// A checkpoint leaves the next committee to the first update, so it also drops
+	// the one fixed by an earlier checkpoint (here of another chain).
 	t.Run("gloas/reinit", func(t *testing.T) {
 		other := newTestCommitteeChain(tc, config, true, 8, 9, 400, false)
 		c := newCommitteeChainTest(t, config, 300, false)
