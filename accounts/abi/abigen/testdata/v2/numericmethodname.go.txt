@@ -148,10 +148,8 @@ func (numericMethodName *NumericMethodName) UnpackE1TestEventEvent(log *types.Lo
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(NumericMethodNameE1TestEvent)
-	if len(log.Data) > 0 {
-		if err := numericMethodName.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := numericMethodName.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range numericMethodName.abi.Events[event].Inputs {
