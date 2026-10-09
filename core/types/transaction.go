@@ -582,6 +582,16 @@ func (tx *Transaction) FrameSender() *common.Address {
 	return &sender
 }
 
+// FrameNonceKeys returns the EIP-8250 nonce keys of a frame transaction, nil
+// otherwise. Nonce() returns the transaction's nonce sequence.
+func (tx *Transaction) FrameNonceKeys() []uint256.Int {
+	frametx, ok := tx.inner.(*FrameTx)
+	if !ok {
+		return nil
+	}
+	return frametx.NonceKeys
+}
+
 // SetCodeAuthorities returns a list of unique authorities from the
 // authorization list.
 func (tx *Transaction) SetCodeAuthorities() []common.Address {

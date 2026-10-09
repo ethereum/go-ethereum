@@ -170,7 +170,7 @@ func signedPoolTx(t *testing.T, senderID, payerID int, nonce, fee, tip uint64, d
 		frames = append([]types.Frame{{Mode: types.ModeVerify, Target: &target, Data: data, GasLimits: types.Limits{Execution: 10_000}, Value: new(uint256.Int)}}, frames...)
 	}
 	inner := &types.FrameTx{
-		ChainID: uint256.MustFromBig(params.AllDevChainProtocolChanges.ChainID), Sender: sender, Nonce: nonce, Frames: frames,
+		ChainID: uint256.MustFromBig(params.AllDevChainProtocolChanges.ChainID), Sender: sender, NonceKeys: []uint256.Int{{}}, NonceSeq: nonce, Frames: frames,
 		Fees: types.Fees{MaxFeePerGas: uint256.NewInt(fee), MaxPriorityFeePerGas: uint256.NewInt(tip), MaxFeePerBlobGas: new(uint256.Int)},
 	}
 	for _, key := range keys {
@@ -192,7 +192,7 @@ func signedPoolTx(t *testing.T, senderID, payerID int, nonce, fee, tip uint64, d
 
 func poolTxData(tx *types.Transaction) *types.FrameTx {
 	return &types.FrameTx{
-		ChainID: uint256.MustFromBig(tx.ChainId()), Nonce: tx.Nonce(), Sender: *tx.FrameSender(),
+		ChainID: uint256.MustFromBig(tx.ChainId()), NonceKeys: tx.FrameNonceKeys(), NonceSeq: tx.Nonce(), Sender: *tx.FrameSender(),
 		Frames: tx.Frames(), Signatures: append(types.SignatureList(nil), tx.FrameSignatures()...),
 		Fees: types.Fees{MaxFeePerGas: uint256.MustFromBig(tx.GasFeeCap()), MaxPriorityFeePerGas: uint256.MustFromBig(tx.GasTipCap()), MaxFeePerBlobGas: new(uint256.Int)},
 	}

@@ -52,15 +52,46 @@ const (
 	FrameTxSchemeP256      uint64 = 0x2
 )
 
-// FrameTx represents an EIP-8141 frame transaction.
+// FrameTx represents an EIP-8141 frame transaction with the EIP-8250 keyed
+// nonce fields in place of the single nonce.
 type FrameTx struct {
 	ChainID             *uint256.Int
-	Nonce               uint64
+	NonceKeys           []uint256.Int // nonce domains consumed together, see HasLegacyNonceKeys
+	NonceSeq            uint64        // sequence every selected nonce key must hold
 	Sender              common.Address
 	Frames              []Frame
 	Signatures          SignatureList
 	Fees                Fees
 	BlobVersionedHashes []common.Hash
+}
+
+// HasLegacyNonceKeys reports whether the nonce key set is the legacy set
+// [0], which selects the sender's account nonce instead of a keyed nonce
+// sequence held by the nonce manager (EIP-8250).
+func HasLegacyNonceKeys(keys []uint256.Int) bool {
+	return len(keys) == 1 && keys[0].IsZero()
+}
+
+// FrameTxNonceSlot returns the nonce manager storage slot holding sender's
+// sequence for a non-zero nonce key: keccak256(left_pad_32(sender) || key)
+// (EIP-8250).
+func FrameTxNonceSlot(sender common.Address, key *uint256.Int) common.Hash {
+	var buf [64]byte
+	copy(buf[12:32], sender[:])
+	key.WriteToSlice(buf[32:])
+	return crypto.Keccak256Hash(buf[:])
+}
+
+// FrameTxNonceKeysHash returns the commitment to a nonce key set exposed by
+// TXPARAM: keccak256 of the key count followed by every key, each encoded as
+// a 32-byte big-endian word (EIP-8250).
+func FrameTxNonceKeysHash(keys []uint256.Int) common.Hash {
+	buf := make([]byte, 32*(len(keys)+1))
+	new(uint256.Int).SetUint64(uint64(len(keys))).WriteToSlice(buf[:32])
+	for i := range keys {
+		keys[i].WriteToSlice(buf[32*(i+1) : 32*(i+2)])
+	}
+	return crypto.Keccak256Hash(buf)
 }
 
 // FrameTxValidateStatic runs the EIP-8141 static-constraint checks if tx is
@@ -185,7 +216,21 @@ func (tx *FrameTx) ValidateStatic() error {
 	if len(tx.BlobVersionedHashes) == 0 && !tx.Fees.MaxFeePerBlobGas.IsZero() {
 		return fmt.Errorf("%w: max fee per blob gas must be zero without blobs", ErrFrameTxInvalidFormat)
 	}
-	if tx.Nonce == gomath.MaxUint64 {
+	// EIP-8250: the nonce key set holds one to MAX_NONCE_KEYS keys in
+	// strictly increasing order, the zero key only alone, and the sequence
+	// stays below MAX_NONCE_SEQ = 2^64-1.
+	if len(tx.NonceKeys) == 0 || len(tx.NonceKeys) > params.FrameTxMaxNonceKeys {
+		return fmt.Errorf("%w: invalid nonce key count", ErrFrameTxInvalidFormat)
+	}
+	for i := 1; i < len(tx.NonceKeys); i++ {
+		if tx.NonceKeys[i].Cmp(&tx.NonceKeys[i-1]) <= 0 {
+			return fmt.Errorf("%w: nonce keys not strictly increasing", ErrFrameTxInvalidFormat)
+		}
+	}
+	if tx.NonceKeys[0].IsZero() && len(tx.NonceKeys) > 1 {
+		return fmt.Errorf("%w: zero nonce key alongside other keys", ErrFrameTxInvalidFormat)
+	}
+	if tx.NonceSeq == gomath.MaxUint64 {
 		return fmt.Errorf("%w: nonce overflow", ErrFrameTxInvalidFormat)
 	}
 	// The per-transaction gas cap of EIP-7825 bounds the execution
@@ -193,11 +238,11 @@ func (tx *FrameTx) ValidateStatic() error {
 	// budgets, with the calldata floor checked against the same cap. State
 	// gas is bounded only by the encoding limit and the block's state gas
 	// capacity.
-	intrinsicGas, err := FrameTxIntrinsicGas(tx.Frames, tx.Signatures, tx.Sender)
+	intrinsicGas, err := FrameTxIntrinsicGas(tx.Frames, tx.Signatures, tx.Sender, tx.NonceKeys, tx.NonceSeq)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
 	}
-	floorGas, err := FrameTxFloorGas(tx.Frames, tx.Signatures, tx.Sender)
+	floorGas, err := FrameTxFloorGas(tx.Frames, tx.Signatures, tx.Sender, tx.NonceKeys, tx.NonceSeq)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
 	}
@@ -228,7 +273,8 @@ func (tx *FrameTx) sigHash(chainID *big.Int) common.Hash {
 		FrameTxType,
 		[]any{
 			chainID,
-			tx.Nonce,
+			tx.NonceKeys,
+			tx.NonceSeq,
 			tx.Sender,
 			tx.Frames,
 			sigs,
@@ -240,7 +286,8 @@ func (tx *FrameTx) sigHash(chainID *big.Int) common.Hash {
 
 func (tx *FrameTx) copy() TxData {
 	cpy := &FrameTx{
-		Nonce:               tx.Nonce,
+		NonceKeys:           make([]uint256.Int, len(tx.NonceKeys)),
+		NonceSeq:            tx.NonceSeq,
 		Sender:              tx.Sender,
 		Frames:              make([]Frame, len(tx.Frames)),
 		Signatures:          make(SignatureList, len(tx.Signatures)),
@@ -280,6 +327,7 @@ func (tx *FrameTx) copy() TxData {
 			Signature: common.CopyBytes(sig.Signature),
 		}
 	}
+	copy(cpy.NonceKeys, tx.NonceKeys)
 	copy(cpy.BlobVersionedHashes, tx.BlobVersionedHashes)
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
@@ -303,7 +351,7 @@ func (tx *FrameTx) chainID() *big.Int {
 	}
 	return tx.ChainID.ToBig()
 }
-func (tx *FrameTx) nonce() uint64          { return tx.Nonce }
+func (tx *FrameTx) nonce() uint64          { return tx.NonceSeq }
 func (tx *FrameTx) to() *common.Address    { return nil }
 func (tx *FrameTx) value() *big.Int        { return common.Big0 }
 func (tx *FrameTx) data() []byte           { return nil }
@@ -330,7 +378,7 @@ func (tx *FrameTx) gasPrice() *big.Int {
 // gas returns the inclusion-facing derived gas limit of the frame
 // transaction: its max_gas anchor.
 func (tx *FrameTx) gas() uint64 {
-	total, err := FrameTxMaxGas(tx.Frames, tx.Signatures, tx.Sender)
+	total, err := FrameTxMaxGas(tx.Frames, tx.Signatures, tx.Sender, tx.NonceKeys, tx.NonceSeq)
 	if err != nil {
 		return 0
 	}
@@ -368,7 +416,7 @@ func (tx *FrameTx) decode(input []byte) error {
 	return nil
 }
 
-// Frame execution modes (EIP-8141).
+// Frame execution modes (EIP-8141, POST_TX from EIP-7906).
 const (
 	ModeDefault uint64 = 0
 	ModeVerify  uint64 = 1
@@ -552,12 +600,13 @@ func FrameTxSignatureGas(sig *SignatureEntry) uint64 {
 	}
 }
 
-// FrameTxChargedData returns the byte fields of a frame transaction that are
-// priced as calldata: the data of each frame and the signer, msg and
-// signature bytes of each signature entry. The fixed-size fields are covered
-// by the intrinsic and per-frame costs.
-func FrameTxChargedData(frames []Frame, sigs SignatureList) [][]byte {
-	charged := make([][]byte, 0, len(frames)+3*len(sigs))
+// FrameTxChargedData returns the nonce RLP, frame data and signature fields
+// priced as calldata. Other fields are covered by the fixed intrinsic costs.
+func FrameTxChargedData(frames []Frame, sigs SignatureList, nonceKeys []uint256.Int, nonceSeq uint64) [][]byte {
+	charged := make([][]byte, 0, len(frames)+3*len(sigs)+2)
+	keys, _ := rlp.EncodeToBytes(nonceKeys)
+	seq, _ := rlp.EncodeToBytes(nonceSeq)
+	charged = append(charged, keys, seq)
 	for i := range frames {
 		charged = append(charged, frames[i].Data)
 	}
@@ -601,10 +650,10 @@ func frameTxMandatoryGas(frames []Frame, sigs SignatureList, sender common.Addre
 // the frame and signature byte fields. Unlike other transaction types there
 // is no recipient component: target access is paid during frame execution
 // from each frame's own execution gas budget.
-func FrameTxIntrinsicGas(frames []Frame, sigs SignatureList, sender common.Address) (uint64, error) {
+func FrameTxIntrinsicGas(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (uint64, error) {
 	gas := frameTxMandatoryGas(frames, sigs, sender)
 	var dataLen, z uint64
-	for _, d := range FrameTxChargedData(frames, sigs) {
+	for _, d := range FrameTxChargedData(frames, sigs, nonceKeys, nonceSeq) {
 		dataLen += uint64(len(d))
 		z += uint64(bytes.Count(d, []byte{0}))
 	}
@@ -629,9 +678,9 @@ func FrameTxIntrinsicGas(frames []Frame, sigs SignatureList, sender common.Addre
 // priced at the floor token cost, uniformly and independently of its value.
 // The floor is anchored on the mandatory costs, so it never undercuts the
 // transaction's own intrinsic base.
-func FrameTxFloorGas(frames []Frame, sigs SignatureList, sender common.Address) (uint64, error) {
+func FrameTxFloorGas(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (uint64, error) {
 	var dataLen uint64
-	for _, data := range FrameTxChargedData(frames, sigs) {
+	for _, data := range FrameTxChargedData(frames, sigs, nonceKeys, nonceSeq) {
 		dataLen += uint64(len(data))
 	}
 	if gomath.MaxUint64/(params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976) < dataLen {
@@ -648,8 +697,8 @@ func FrameTxFloorGas(frames []Frame, sigs SignatureList, sender common.Address) 
 // FrameTxStandardGasLimit computes the settlement anchor of a frame
 // transaction: its intrinsic execution gas plus the sum of the frames' gas
 // budgets in both dimensions.
-func FrameTxStandardGasLimit(frames []Frame, sigs SignatureList, sender common.Address) (uint64, error) {
-	intrinsicGas, err := FrameTxIntrinsicGas(frames, sigs, sender)
+func FrameTxStandardGasLimit(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (uint64, error) {
+	intrinsicGas, err := FrameTxIntrinsicGas(frames, sigs, sender, nonceKeys, nonceSeq)
 	if err != nil {
 		return 0, err
 	}
@@ -668,12 +717,12 @@ func FrameTxStandardGasLimit(frames []Frame, sigs SignatureList, sender common.A
 // larger of its standard gas limit and its calldata floor plus the frames'
 // total state gas budget. The maximum transaction cost escrowed from the
 // payer prices this anchor at the fee cap.
-func FrameTxMaxGas(frames []Frame, sigs SignatureList, sender common.Address) (uint64, error) {
-	standard, err := FrameTxStandardGasLimit(frames, sigs, sender)
+func FrameTxMaxGas(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (uint64, error) {
+	standard, err := FrameTxStandardGasLimit(frames, sigs, sender, nonceKeys, nonceSeq)
 	if err != nil {
 		return 0, err
 	}
-	floorGas, err := FrameTxFloorGas(frames, sigs, sender)
+	floorGas, err := FrameTxFloorGas(frames, sigs, sender, nonceKeys, nonceSeq)
 	if err != nil {
 		return 0, err
 	}

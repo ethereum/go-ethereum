@@ -755,8 +755,9 @@ func TestFrameReceiptUnmarshalJSON(t *testing.T) {
 func TestFrameTxUnmarshalRPCNames(t *testing.T) {
 	target := common.Address{0xbb}
 	tx := NewTx(&FrameTx{
-		ChainID: uint256.NewInt(1),
-		Sender:  common.Address{0xaa},
+		ChainID:   uint256.NewInt(1),
+		NonceKeys: []uint256.Int{{}},
+		Sender:    common.Address{0xaa},
 		Frames: []Frame{{
 			Mode:      ModeSender,
 			Target:    &target,
@@ -775,7 +776,7 @@ func TestFrameTxUnmarshalRPCNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := `{"type":"0x6","chainId":"0x1","nonce":"0x0","from":"0xaa00000000000000000000000000000000000000",` +
+	rpc := `{"type":"0x6","chainId":"0x1","nonce":"0x0","nonceKeys":["0x0"],"from":"0xaa00000000000000000000000000000000000000",` +
 		`"frames":[{"mode":"0x2","flags":"0x0","target":"0xbb00000000000000000000000000000000000000","executionGas":"0x7530","stateGas":"0x64","value":"0x0","data":"0x01"}],` +
 		`"signatures":[],"maxPriorityFeePerGas":"0x2","maxFeePerGas":"0x64","maxFeePerBlobGas":"0x0","blobVersionedHashes":[]}`
 	for _, input := range []string{string(own), rpc} {

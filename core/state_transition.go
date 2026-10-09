@@ -169,8 +169,8 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 // verification, and value transfer — plus the standard calldata cost of the
 // frame and signature byte fields. Frame transactions carry no intrinsic
 // state gas; state charges draw from the per-frame state budgets at runtime.
-func FrameTxIntrinsicGas(frames []types.Frame, frameSigs types.SignatureList, sender common.Address) (uint64, error) {
-	gas, err := types.FrameTxIntrinsicGas(frames, frameSigs, sender)
+func FrameTxIntrinsicGas(frames []types.Frame, frameSigs types.SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (uint64, error) {
+	gas, err := types.FrameTxIntrinsicGas(frames, frameSigs, sender, nonceKeys, nonceSeq)
 	if err != nil {
 		return 0, ErrGasUintOverflow
 	}
@@ -299,6 +299,7 @@ type Message struct {
 
 	// Frame transaction fields (EIP-8141).
 	Frames                []types.Frame
+	FrameNonceKeys        []uint256.Int
 	FrameSignatures       types.SignatureList
 	FrameSigHash          common.Hash
 	BlobHashes            []common.Hash
@@ -376,6 +377,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 			return nil, err
 		}
 		msg.Frames = tx.Frames()
+		msg.FrameNonceKeys = tx.FrameNonceKeys()
 		msg.FrameSignatures = tx.FrameSignatures()
 		msg.FrameSigHash = s.Hash(tx)
 		msg.To = nil
@@ -515,11 +517,11 @@ func (st *stateTransition) buyGas() error {
 		// block gas pool, exactly per dimension: the execution reservation
 		// carries the calldata floor, which binds the execution dimension,
 		// and the state reservation is the frames' declared state budget.
-		intrinsicGas, err := types.FrameTxIntrinsicGas(st.msg.Frames, st.msg.FrameSignatures, st.msg.From)
+		intrinsicGas, err := types.FrameTxIntrinsicGas(st.msg.Frames, st.msg.FrameSignatures, st.msg.From, st.msg.FrameNonceKeys, st.msg.Nonce)
 		if err != nil {
 			return ErrGasUintOverflow
 		}
-		floorGas, err := types.FrameTxFloorGas(st.msg.Frames, st.msg.FrameSignatures, st.msg.From)
+		floorGas, err := types.FrameTxFloorGas(st.msg.Frames, st.msg.FrameSignatures, st.msg.From, st.msg.FrameNonceKeys, st.msg.Nonce)
 		if err != nil {
 			return ErrGasUintOverflow
 		}
@@ -637,7 +639,19 @@ func (st *stateTransition) initRuntimeGasBudget(rules params.Rules, intrinsicGas
 func (st *stateTransition) preCheck(rules params.Rules) error {
 	// Only check transactions that are not fake
 	msg := st.msg
-	if !msg.SkipNonceChecks {
+	if !msg.SkipNonceChecks && msg.Frames != nil && !types.HasLegacyNonceKeys(msg.FrameNonceKeys) {
+		for i := range msg.FrameNonceKeys {
+			slot := types.FrameTxNonceSlot(msg.From, &msg.FrameNonceKeys[i])
+			current := st.state.GetState(params.NonceManagerAddress, slot)
+			seq := new(uint256.Int).SetBytes(current[:])
+			if seq.CmpUint64(msg.Nonce) > 0 {
+				return fmt.Errorf("%w: address %v, key %s", ErrNonceTooLow, msg.From, msg.FrameNonceKeys[i].Hex())
+			}
+			if seq.CmpUint64(msg.Nonce) < 0 {
+				return fmt.Errorf("%w: address %v, key %s", ErrNonceTooHigh, msg.From, msg.FrameNonceKeys[i].Hex())
+			}
+		}
+	} else if !msg.SkipNonceChecks {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(msg.From)
 		if msgNonce := msg.Nonce; stNonce < msgNonce {
@@ -803,7 +817,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		err          error
 	)
 	if isFrameTx {
-		intrinsicGas, err = FrameTxIntrinsicGas(msg.Frames, msg.FrameSignatures, msg.From)
+		intrinsicGas, err = FrameTxIntrinsicGas(msg.Frames, msg.FrameSignatures, msg.From, msg.FrameNonceKeys, msg.Nonce)
 	} else {
 		intrinsicGas, err = IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules)
 	}
@@ -817,7 +831,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
 	if rules.IsPrague {
 		if isFrameTx {
-			floorDataGas, err = types.FrameTxFloorGas(msg.Frames, msg.FrameSignatures, msg.From)
+			floorDataGas, err = types.FrameTxFloorGas(msg.Frames, msg.FrameSignatures, msg.From, msg.FrameNonceKeys, msg.Nonce)
 		} else {
 			floorDataGas, err = FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		}
@@ -1199,7 +1213,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 // everything beyond the actual fee.
 func (st *stateTransition) settleFrameGas(receipts []types.FrameReceipt, floorDataGas uint64) (gasUsed, peakUsed uint64, err error) {
 	msg := st.msg
-	standardGasLimit, err := types.FrameTxStandardGasLimit(msg.Frames, msg.FrameSignatures, msg.From)
+	standardGasLimit, err := types.FrameTxStandardGasLimit(msg.Frames, msg.FrameSignatures, msg.From, msg.FrameNonceKeys, msg.Nonce)
 	if err != nil {
 		return 0, 0, ErrGasUintOverflow
 	}
@@ -1467,7 +1481,9 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 	}
 	frameCtx := &vm.FrameContext{
 		Sender:               msg.From,
-		Nonce:                msg.Nonce,
+		NonceSeq:             msg.Nonce,
+		NonceKeys:            msg.FrameNonceKeys,
+		LegacyNonce:          st.state.GetNonce(msg.From),
 		MaxPriorityFeePerGas: msg.GasTipCap,
 		MaxFeePerGas:         msg.GasFeeCap,
 		MaxFeePerBlobGas:     msg.BlobGasFeeCap,

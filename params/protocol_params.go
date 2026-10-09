@@ -38,6 +38,7 @@ const (
 	FrameTxP256SigGas      uint64 = 6700  // Gas charged for validating a P-256 signature entry (EIP-8141).
 	FrameTxArbitrarySigGas uint64 = 100   // Gas charged per ARBITRARY signature entry (EIP-8141).
 	FrameTxExpiryDataLen          = 8     // Required calldata length of an expiry verifier frame (EIP-8141).
+	FrameTxMaxNonceKeys           = 16    // Maximum number of nonce keys a frame transaction may select (EIP-8250).
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
 	CallValueTransferGas  uint64 = 9000  // Paid for CALL when the value transfer is non-zero.
@@ -265,6 +266,16 @@ var (
 	// FrameTxExpiryVerifierCode is the canonical expiry verifier runtime code
 	// (EIP-8141).
 	FrameTxExpiryVerifierCode = common.FromHex("0x60083614600a575f5ffd5b5f3560c01c4211601657005b5f5ffd")
+
+	// NonceManagerAddress is the contract whose storage holds the keyed nonce
+	// sequences of frame transaction senders (EIP-8250). It is an ordinary
+	// contract deployed by a keyless transaction; only the protocol writes
+	// its storage.
+	NonceManagerAddress = common.HexToAddress("0x8250968C12e01A19d6F667b9B2F3b3A4d0e51cB7")
+
+	// NonceManagerCode is the canonical nonce manager runtime code, which
+	// reverts on every call (EIP-8250).
+	NonceManagerCode = common.FromHex("0x60006000fd")
 
 	// EIP-4788 - Beacon block root in the EVM
 	BeaconRootsAddress = common.HexToAddress("0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02")

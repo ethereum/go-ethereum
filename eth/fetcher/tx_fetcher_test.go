@@ -2378,7 +2378,7 @@ func newThrottleTestFetcher(t *testing.T, addTxs func([]*types.Transaction) []er
 
 func testFrameTx(nonce uint64) *types.Transaction {
 	return types.NewTx(&types.FrameTx{
-		ChainID: uint256.NewInt(1), Nonce: nonce,
+		ChainID: uint256.NewInt(1), NonceKeys: []uint256.Int{{}}, NonceSeq: nonce,
 		Fees: types.Fees{MaxFeePerGas: new(uint256.Int), MaxPriorityFeePerGas: new(uint256.Int), MaxFeePerBlobGas: new(uint256.Int)},
 	})
 }

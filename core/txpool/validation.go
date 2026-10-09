@@ -149,7 +149,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	// the transaction metadata
 	var intrGas uint64
 	if tx.Type() == types.FrameTxType {
-		intrGas, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures(), from)
+		intrGas, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures(), from, tx.FrameNonceKeys(), tx.Nonce())
 	} else {
 		intrGas, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), value, rules)
 	}

@@ -32,6 +32,7 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 		BlobGasFeeCap        *stBig                `json:"maxFeePerBlobGas,omitempty"`
 		AuthorizationList    []*stAuthorization    `json:"authorizationList,omitempty"`
 		ChainID              *math.HexOrDecimal256 `json:"chainId,omitempty"`
+		NonceKeys            []*stBig              `json:"nonceKeys,omitempty"`
 		Frames               []stFrame             `json:"frames,omitempty"`
 		Signatures           []stFrameSignature    `json:"signatures,omitempty"`
 	}
@@ -56,6 +57,12 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 	enc.BlobGasFeeCap = (*stBig)(s.BlobGasFeeCap)
 	enc.AuthorizationList = s.AuthorizationList
 	enc.ChainID = (*math.HexOrDecimal256)(s.ChainID)
+	if s.NonceKeys != nil {
+		enc.NonceKeys = make([]*stBig, len(s.NonceKeys))
+		for k, v := range s.NonceKeys {
+			enc.NonceKeys[k] = (*stBig)(v)
+		}
+	}
 	enc.Frames = s.Frames
 	enc.Signatures = s.Signatures
 	return json.Marshal(&enc)
@@ -79,6 +86,7 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 		BlobGasFeeCap        *stBig                `json:"maxFeePerBlobGas,omitempty"`
 		AuthorizationList    []*stAuthorization    `json:"authorizationList,omitempty"`
 		ChainID              *math.HexOrDecimal256 `json:"chainId,omitempty"`
+		NonceKeys            []*stBig              `json:"nonceKeys,omitempty"`
 		Frames               []stFrame             `json:"frames,omitempty"`
 		Signatures           []stFrameSignature    `json:"signatures,omitempty"`
 	}
@@ -133,6 +141,12 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ChainID != nil {
 		s.ChainID = (*big.Int)(dec.ChainID)
+	}
+	if dec.NonceKeys != nil {
+		s.NonceKeys = make([]*big.Int, len(dec.NonceKeys))
+		for k, v := range dec.NonceKeys {
+			s.NonceKeys[k] = (*big.Int)(v)
+		}
 	}
 	if dec.Frames != nil {
 		s.Frames = dec.Frames

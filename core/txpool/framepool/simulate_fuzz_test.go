@@ -741,7 +741,7 @@ func (env *fuzzEnv) generate(data []byte) *fuzzCase {
 
 	maxFee := fuzzPick(in, uint64(10), 1, 1000, 1_000_000_000)
 	inner := &types.FrameTx{
-		ChainID: uint256.MustFromBig(env.config.ChainID), Nonce: txNonce, Sender: sender, Frames: frames, Signatures: signatures,
+		ChainID: uint256.MustFromBig(env.config.ChainID), NonceKeys: []uint256.Int{{}}, NonceSeq: txNonce, Sender: sender, Frames: frames, Signatures: signatures,
 		Fees: types.Fees{MaxFeePerGas: uint256.NewInt(maxFee), MaxPriorityFeePerGas: uint256.NewInt(min(maxFee, fuzzPick(in, uint64(1), 0, maxFee))), MaxFeePerBlobGas: new(uint256.Int)},
 	}
 	head := &types.Header{

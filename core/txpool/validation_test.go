@@ -126,8 +126,9 @@ func TestValidateFrameTransactionBlobs(t *testing.T) {
 			blobFeeCap.SetUint64(100)
 		}
 		return types.NewTx(&types.FrameTx{
-			ChainID: uint256.MustFromBig(config.ChainID),
-			Sender:  sender,
+			ChainID:   uint256.MustFromBig(config.ChainID),
+			NonceKeys: []uint256.Int{{}},
+			Sender:    sender,
 			Frames: []types.Frame{
 				{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 5000}, Value: uint256.NewInt(0)},
 				{Mode: types.ModeSender, Target: &target, GasLimits: types.Limits{Execution: 30000}, Value: uint256.NewInt(0)},
@@ -205,8 +206,9 @@ func TestValidateFrameTransactionStatic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tx := &types.FrameTx{
-				ChainID: uint256.MustFromBig(config.ChainID),
-				Sender:  common.Address{0xaa},
+				ChainID:   uint256.MustFromBig(config.ChainID),
+				NonceKeys: []uint256.Int{{}},
+				Sender:    common.Address{0xaa},
 				Frames: []types.Frame{
 					{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 5000}, Value: uint256.NewInt(0)},
 					{Mode: types.ModeSender, GasLimits: types.Limits{Execution: 30000}, Value: uint256.NewInt(0)},

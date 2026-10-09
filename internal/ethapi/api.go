@@ -1076,6 +1076,7 @@ type RPCTransaction struct {
 	Hash                common.Hash                  `json:"hash"`
 	Input               hexutil.Bytes                `json:"input"`
 	Nonce               hexutil.Uint64               `json:"nonce"`
+	NonceKeys           []hexutil.U256               `json:"nonceKeys,omitempty"`
 	To                  *common.Address              `json:"to"`
 	TransactionIndex    *hexutil.Uint64              `json:"transactionIndex"`
 	Value               *hexutil.Big                 `json:"value"`
@@ -1205,6 +1206,9 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 
 	case types.FrameTxType:
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		for _, key := range tx.FrameNonceKeys() {
+			result.NonceKeys = append(result.NonceKeys, hexutil.U256(key))
+		}
 		for _, f := range tx.Frames() {
 			result.Frames = append(result.Frames, rpcFrame{
 				Mode:         hexutil.Uint64(f.Mode),

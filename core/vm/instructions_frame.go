@@ -43,7 +43,9 @@ type FrameChargeKey struct {
 // frame transaction. It is shared by all frames of the transaction.
 type FrameContext struct {
 	Sender               common.Address
-	Nonce                uint64
+	NonceSeq             uint64
+	NonceKeys            []uint256.Int
+	LegacyNonce          uint64
 	MaxPriorityFeePerGas *uint256.Int
 	MaxFeePerGas         *uint256.Int
 	MaxFeePerBlobGas     *uint256.Int
@@ -140,12 +142,9 @@ func (fc *FrameContext) CreditStateRefund(budget *GasBudget, owner int, amount u
 }
 
 // FrameApprove validates and performs an APPROVE of the given scope for the
-// currently executing frame, per EIP-8141. On payment approval the sender's
-// nonce is incremented and the transaction's maximum cost is collected from
-// the frame's resolved target; a sender account created by the nonce
-// increment is charged from the executing frame's state gas pool through
-// budget. ErrExecutionReverted is returned when the request is not allowed,
-// ErrOutOfGas when the pool cannot cover the sender-creation charge.
+// currently executing frame. Payment approval consumes the selected nonce
+// domains and escrows the maximum cost. State growth is charged to budget;
+// protocol nonce accesses neither warm slots nor use SSTORE pricing.
 func FrameApprove(statedb StateDB, fc *FrameContext, budget *GasBudget, scope uint64) error {
 	frame := &fc.Frames[fc.CurrentFrame]
 	target := frame.ResolvedTarget(fc.Sender)
@@ -176,17 +175,34 @@ func FrameApprove(statedb StateDB, fc *FrameContext, budget *GasBudget, scope ui
 		fc.SenderApproved = true
 	}
 	if scope&types.ApprovePayment != 0 {
-		// Incrementing the nonce of a non-existent sender creates the
-		// account: charge the creation from the frame's state gas pool
-		// immediately before the increment. A pool that cannot cover the
-		// charge halts the current call frame, discarding every approval
-		// effect with the halt's rollback.
-		if statedb.Empty(fc.Sender) {
-			if _, ok := budget.Charge(GasCosts{StateGas: params.AccountCreationSize * params.CostPerStateByte}); !ok {
+		if types.HasLegacyNonceKeys(fc.NonceKeys) {
+			nonce := statedb.GetNonce(fc.Sender)
+			if nonce == stdmath.MaxUint64 {
+				return ErrNonceUintOverflow
+			}
+			if statedb.Empty(fc.Sender) {
+				if _, ok := budget.Charge(GasCosts{StateGas: params.AccountCreationSize * params.CostPerStateByte}); !ok {
+					return ErrOutOfGas
+				}
+			}
+			statedb.SetNonce(fc.Sender, nonce+1, tracing.NonceChangeEoACall)
+		} else {
+			var slots [params.FrameTxMaxNonceKeys]common.Hash
+			var stateGas uint64
+			for i := range fc.NonceKeys {
+				slots[i] = types.FrameTxNonceSlot(fc.Sender, &fc.NonceKeys[i])
+				if statedb.GetState(params.NonceManagerAddress, slots[i]) == (common.Hash{}) {
+					stateGas += params.StorageCreationSize * params.CostPerStateByte
+				}
+			}
+			if _, ok := budget.Charge(GasCosts{StateGas: stateGas}); !ok {
 				return ErrOutOfGas
 			}
+			seq := common.Hash(new(uint256.Int).SetUint64(fc.NonceSeq + 1).Bytes32())
+			for i := range fc.NonceKeys {
+				statedb.SetState(params.NonceManagerAddress, slots[i], seq)
+			}
 		}
-		statedb.SetNonce(fc.Sender, statedb.GetNonce(fc.Sender)+1, tracing.NonceChangeEoACall)
 		statedb.SubBalance(target, fc.MaxCost, tracing.BalanceDecreaseGasBuy)
 		payer := target
 		fc.Payer = &payer
@@ -256,7 +272,7 @@ func opTxParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	case 0x00:
 		pushUint(scope, types.FrameTxType)
 	case 0x01:
-		pushUint(scope, fc.Nonce)
+		pushUint(scope, fc.NonceSeq)
 	case 0x02:
 		pushAddress(scope, fc.Sender)
 	case 0x03:
@@ -280,6 +296,15 @@ func opTxParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	case 0x0c:
 		// State gas remaining in the executing frame's pool.
 		pushUint(scope, scope.Contract.Gas.StateGas)
+	case 0x0d:
+		pushUint(scope, fc.LegacyNonce)
+	case 0x0e:
+		pushUint(scope, uint64(len(fc.NonceKeys)))
+	case 0x0f:
+		hash := types.FrameTxNonceKeysHash(fc.NonceKeys)
+		pushWord(scope, hash[:])
+	case 0x10:
+		scope.Stack.push(&fc.NonceKeys[0])
 	default:
 		return nil, errInvalidTxParam
 	}

@@ -4223,9 +4223,9 @@ func TestEIP8141(t *testing.T) {
 	signer := types.LatestSigner(&config)
 
 	frametx := &types.FrameTx{
-		ChainID: uint256.MustFromBig(config.ChainID),
-		Nonce:   0,
-		Sender:  addr1,
+		ChainID:   uint256.MustFromBig(config.ChainID),
+		NonceKeys: []uint256.Int{{}},
+		Sender:    addr1,
 		Frames: []types.Frame{
 			{
 				Mode:      types.ModeVerify,
@@ -4348,8 +4348,9 @@ func TestEIP8141FrameLogsWithTracer(t *testing.T) {
 	signer := types.LatestSigner(&config)
 
 	frametx := &types.FrameTx{
-		ChainID: uint256.MustFromBig(config.ChainID),
-		Sender:  addr1,
+		ChainID:   uint256.MustFromBig(config.ChainID),
+		NonceKeys: []uint256.Int{{}},
+		Sender:    addr1,
 		Frames: []types.Frame{
 			{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 100_000}, Value: uint256.NewInt(0)},
 			{Mode: types.ModeSender, Target: &aa, GasLimits: types.Limits{Execution: 100_000}, Value: uint256.NewInt(0)},

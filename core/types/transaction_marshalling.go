@@ -33,6 +33,7 @@ type txJSON struct {
 
 	ChainID              *hexutil.Big           `json:"chainId,omitempty"`
 	Nonce                *hexutil.Uint64        `json:"nonce"`
+	NonceKeys            []hexutil.U256         `json:"nonceKeys,omitempty"` // EIP-8250 nonce keys of a frame transaction
 	Sender               *common.Address        `json:"sender,omitempty"`
 	From                 *common.Address        `json:"from,omitempty"` // JSON-RPC name for a frame transaction's sender
 	Frames               []Frame                `json:"frames,omitempty"`
@@ -176,7 +177,11 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.YParity = (*hexutil.Uint64)(&yparity)
 	case *FrameTx:
 		enc.ChainID = (*hexutil.Big)(itx.ChainID.ToBig())
-		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Nonce = (*hexutil.Uint64)(&itx.NonceSeq)
+		enc.NonceKeys = make([]hexutil.U256, len(itx.NonceKeys))
+		for i, key := range itx.NonceKeys {
+			enc.NonceKeys[i] = hexutil.U256(key)
+		}
 		sender := itx.Sender
 		enc.Sender = &sender
 		enc.Frames = itx.Frames
@@ -539,7 +544,14 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
-		itx.Nonce = uint64(*dec.Nonce)
+		itx.NonceSeq = uint64(*dec.Nonce)
+		if dec.NonceKeys == nil {
+			return errors.New("missing required field 'nonceKeys' in transaction")
+		}
+		itx.NonceKeys = make([]uint256.Int, len(dec.NonceKeys))
+		for i, key := range dec.NonceKeys {
+			itx.NonceKeys[i] = uint256.Int(key)
+		}
 		switch {
 		case dec.Sender != nil:
 			itx.Sender = *dec.Sender

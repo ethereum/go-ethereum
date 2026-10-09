@@ -128,8 +128,9 @@ type stTransaction struct {
 	BlobGasFeeCap        *big.Int            `json:"maxFeePerBlobGas,omitempty"`
 	AuthorizationList    []*stAuthorization  `json:"authorizationList,omitempty"`
 
-	// Frame transaction fields (EIP-8141).
+	// Frame transaction fields (EIP-8141, EIP-8250).
 	ChainID    *big.Int           `json:"chainId,omitempty"`
+	NonceKeys  []*big.Int         `json:"nonceKeys,omitempty"`
 	Frames     []stFrame          `json:"frames,omitempty"`
 	Signatures []stFrameSignature `json:"signatures,omitempty"`
 }
@@ -143,6 +144,7 @@ type stTransactionMarshaling struct {
 	PrivateKey           hexutil.Bytes
 	BlobGasFeeCap        *stBig
 	ChainID              *math.HexOrDecimal256
+	NonceKeys            []*stBig
 }
 
 // stBig is an arbitrary-precision hex or decimal integer. Unlike
@@ -564,9 +566,19 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, signer type
 		if blobHashes == nil {
 			blobHashes = []common.Hash{}
 		}
+		if tx.NonceKeys == nil {
+			return nil, errors.New("frame transaction without nonce keys")
+		}
+		nonceKeys := make([]uint256.Int, len(tx.NonceKeys))
+		for i, key := range tx.NonceKeys {
+			if key == nil || key.Sign() < 0 || nonceKeys[i].SetFromBig(key) {
+				return nil, fmt.Errorf("nonce key %d exceeds 256 bits", i)
+			}
+		}
 		ftx := &types.FrameTx{
 			ChainID:    chainID,
-			Nonce:      nonce,
+			NonceKeys:  nonceKeys,
+			NonceSeq:   nonce,
 			Sender:     from,
 			Frames:     frames,
 			Signatures: signatures,

@@ -45,7 +45,7 @@ func prefixTestEVM(sdb *state.StateDB, baseFee int64, timestamp uint64) *vm.EVM 
 func prefixTestTx(t *testing.T, frames []types.Frame, feeCap, tip uint64) *types.Transaction {
 	t.Helper()
 	ftx := &types.FrameTx{
-		ChainID: uint256.MustFromBig(cfg8037.ChainID), Sender: senderAddr,
+		ChainID: uint256.MustFromBig(cfg8037.ChainID), NonceKeys: []uint256.Int{{}}, Sender: senderAddr,
 		Frames:     frames,
 		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1}},
 		Fees:       types.Fees{MaxFeePerGas: uint256.NewInt(feeCap), MaxPriorityFeePerGas: uint256.NewInt(tip), MaxFeePerBlobGas: new(uint256.Int)},

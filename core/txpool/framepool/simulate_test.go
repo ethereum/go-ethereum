@@ -80,7 +80,7 @@ func runSimulationAlter(t *testing.T, sender common.Address, frames []types.Fram
 		sdb.SetBalance(payer, uint256.NewInt(1e18), tracing.BalanceChangeUnspecified)
 		signatures = append(signatures, types.SignatureEntry{Scheme: types.FrameTxSchemeSecp256k1, Signer: payer.Bytes(), Signature: make([]byte, 65)})
 	}
-	tx := types.NewTx(&types.FrameTx{ChainID: uint256.MustFromBig(config.ChainID), Sender: sender, Frames: frames, Signatures: signatures, Fees: types.Fees{MaxFeePerGas: uint256.NewInt(1), MaxPriorityFeePerGas: new(uint256.Int), MaxFeePerBlobGas: new(uint256.Int)}})
+	tx := types.NewTx(&types.FrameTx{ChainID: uint256.MustFromBig(config.ChainID), NonceKeys: []uint256.Int{{}}, Sender: sender, Frames: frames, Signatures: signatures, Fees: types.Fees{MaxFeePerGas: uint256.NewInt(1), MaxPriorityFeePerGas: new(uint256.Int), MaxFeePerBlobGas: new(uint256.Int)}})
 	prefix, err := ClassifyPrefix(frames, sender, signatures)
 	if err != nil {
 		t.Fatal(err)
@@ -240,7 +240,7 @@ func TestSimulationAuthorIndependence(t *testing.T) {
 				frames = []types.Frame{verifyFrame(types.ApproveExecution), pay}
 			}
 			signatures := types.SignatureList{{Scheme: types.FrameTxSchemeArbitrary}}
-			tx := types.NewTx(&types.FrameTx{ChainID: uint256.MustFromBig(config.ChainID), Sender: simulationSender, Frames: frames, Signatures: signatures, Fees: types.Fees{MaxFeePerGas: uint256.NewInt(10), MaxPriorityFeePerGas: uint256.NewInt(1), MaxFeePerBlobGas: new(uint256.Int)}})
+			tx := types.NewTx(&types.FrameTx{ChainID: uint256.MustFromBig(config.ChainID), NonceKeys: []uint256.Int{{}}, Sender: simulationSender, Frames: frames, Signatures: signatures, Fees: types.Fees{MaxFeePerGas: uint256.NewInt(10), MaxPriorityFeePerGas: uint256.NewInt(1), MaxFeePerBlobGas: new(uint256.Int)}})
 			prefix, err := ClassifyPrefix(frames, simulationSender, signatures)
 			if err != nil {
 				t.Fatal(err)
