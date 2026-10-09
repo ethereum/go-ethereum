@@ -1050,6 +1050,21 @@ func (d *Downloader) processSnapSyncContent() error {
 		if err := d.commitSnapSyncData(beforeP, sync); err != nil {
 			return err
 		}
+		// A forward pivot retarget may overtake the receipt downloader.
+		// Even after committing everything available, the old pivot block
+		// can still be pending. In that case, its absent canonical hash
+		// does NOT establish a reorg: keep the old state-sync cycle until
+		// the queue has delivered and imported the old pivot's receipt block.
+		//
+		// If the queue has already passed that height, a missing index is
+		// no longer explained by the download lag, so leave reorg detection
+		// to the snap/2 syncer as usual. This guard applies to snap/2 only.
+		if !d.committed.Load() && d.pivotHeader.Root != sync.pivot.Root &&
+			d.snapSyncer.Version() == snap.SNAP2 &&
+			rawdb.ReadCanonicalHash(d.stateDB, sync.pivot.Number.Uint64()) == (common.Hash{}) &&
+			d.queue.resultCache.Offset() <= sync.pivot.Number.Uint64() {
+			continue
+		}
 		// The pivot moved; the old pivot's pending canonical entries have
 		// now been committed, so the next state-sync cycle can inspect them.
 		if !d.committed.Load() && d.pivotHeader.Root != sync.pivot.Root {
