@@ -22,6 +22,7 @@ import (
 	"math"
 	mrand "math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -81,7 +82,43 @@ const (
 	// re-fetching them soon after they are mined.
 	// Approx 1MB for 30 minutes of transactions at 18 tps
 	txOnChainCacheLimit = 32768
+
+	// frameRejectThrottle is the debt a peer incurs per transaction rejected
+	// only after executing its validation code (txpool.ErrValidationExecuted).
+	// Within the frame policy's 100k gas cap, a worst-case rejection (BLS12-381
+	// MSM precompile, cold DELEGATECALLs into large contracts) costs ~3.4-3.9ms
+	// of CPU. Debt decays with wall time, so ten times that bounds a peer to
+	// roughly 9% of one core.
+	frameRejectThrottle = 40 * time.Millisecond
+
+	// maxFrameThrottleChunk bounds the debt one Enqueue call pays by sleeping,
+	// after its delivery has been handed back to the fetcher loop. It stays
+	// below txFetchTimeout and well below p2p timeouts; the rest carries over.
+	maxFrameThrottleChunk = 2 * time.Second
+
+	// frameDebtCeiling is the outstanding debt above which a peer's frame
+	// transactions are withheld from the pool, leaving them undelivered for
+	// other announcers. It admits one full response of rejections, and bounds
+	// the validation work of oversized deliveries. Peers are never dropped.
+	frameDebtCeiling = 10 * time.Second
+
+	// maxFrameDebtors bounds the peers whose validation debt is remembered.
+	// Debt is keyed by node ID and outlives disconnects until fully decayed,
+	// so reconnecting does not discard it; least recently charged peers are
+	// forgotten first.
+	maxFrameDebtors = 4096
 )
+
+// frameDebt is a peer's unpaid validation throttle, decaying with wall time.
+type frameDebt struct {
+	owed    time.Duration
+	updated mclock.AbsTime
+}
+
+// remaining returns the debt left at now.
+func (d *frameDebt) remaining(now mclock.AbsTime) time.Duration {
+	return max(0, d.owed-time.Duration(now-d.updated))
+}
 
 var (
 	// txFetchTimeout is the maximum allotted time to return an explicitly
@@ -215,10 +252,14 @@ type TxFetcher struct {
 
 	buffer *blobpool.BlobBuffer
 
-	step     chan struct{}    // Notification channel when the fetcher loop iterates
-	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
-	realTime func() time.Time // Real system time or simulated time for tests
-	rand     *mrand.Rand      // Randomizer to use in tests instead of map range loops (soft-random)
+	step     chan struct{}       // Notification channel when the fetcher loop iterates
+	clock    mclock.Clock        // Monotonic clock or simulated clock for tests
+	realTime func() time.Time    // Real system time or simulated time for tests
+	rand     *mrand.Rand         // Randomizer to use in tests instead of map range loops (soft-random)
+	sleep    func(time.Duration) // Delivery throttle, replaced in tests to avoid real sleeping
+
+	debtLock sync.Mutex                       // Protects debts, used outside the fetcher loop
+	debts    lru.BasicLRU[string, *frameDebt] // Validation throttle debt per peer ID, kept across disconnects
 }
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
@@ -260,6 +301,8 @@ func NewTxFetcherForTests(
 		clock:          clock,
 		realTime:       realTime,
 		rand:           rand,
+		sleep:          time.Sleep,
+		debts:          lru.NewBasicLRU[string, *frameDebt](maxFrameDebtors),
 	}
 }
 
@@ -381,6 +424,9 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 	var (
 		added = make([]common.Hash, 0, len(txs))
 		metas = make([]txDeliveryMeta, 0, len(txs))
+
+		delay    time.Duration // Generic throttle for stale or invalid batches
+		withheld int           // Frame transactions not passed to the pool
 	)
 	// proceed in batches
 	for i := 0; i < len(txs); i += addTxsBatchSize {
@@ -389,6 +435,19 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 			end = len(txs)
 		}
 		batch := txs[i:end]
+		// A peer deep in validation debt gets no further validation work, and
+		// its frame transactions stay undelivered, so others may supply them.
+		if f.chargeFrameDebt(peer, 0) > frameDebtCeiling {
+			kept := make([]*types.Transaction, 0, len(batch))
+			for _, tx := range batch {
+				if tx.Type() == types.FrameTxType {
+					withheld++
+				} else {
+					kept = append(kept, tx)
+				}
+			}
+			batch = kept
+		}
 		var (
 			poolTxs []*types.Transaction
 			blobTxs []*types.Transaction
@@ -446,7 +505,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 				break
 			}
 		}
-		otherreject := f.handleAddErrors(hashes, errs, metrics)
+		otherreject, executed := f.handleAddErrors(hashes, errs, metrics)
 
 		// Notify the tracker which txs from this peer were accepted.
 		if f.onAccepted != nil && len(accepted) > 0 {
@@ -456,7 +515,13 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 		// to throttle the misbehaving peer.
 		if otherreject > int64((len(hashes)+3)/4) {
 			log.Debug("Peer delivering stale or invalid transactions", "rejected", otherreject)
-			time.Sleep(200 * time.Millisecond)
+			delay += 200 * time.Millisecond
+		}
+		// Rejections after executing validation code are far costlier than
+		// other invalid transactions, so charge the peer proportionally.
+		if executed > 0 {
+			log.Debug("Peer delivering transactions failing validation", "rejected", executed)
+			f.chargeFrameDebt(peer, time.Duration(executed)*frameRejectThrottle)
 		}
 		// If we encountered a protocol violation, disconnect this peer.
 		if violation != nil {
@@ -465,18 +530,62 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 	}
 	select {
 	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct, violation: violation}:
-		return nil
 	case <-f.quit:
 		return errTerminated
 	}
+	if withheld > 0 {
+		log.Debug("Withholding frame transactions from indebted peer", "peer", peer, "withheld", withheld)
+		txFrameWithheldMeter.Mark(int64(withheld))
+	}
+	// Throttle only after the delivery is accounted for, so the stall never
+	// delays request bookkeeping. Mempool rules may legitimately differ between
+	// clients, so peers are throttled, never dropped.
+	if delay += min(f.chargeFrameDebt(peer, 0), maxFrameThrottleChunk); delay > 0 {
+		f.sleep(delay)
+	}
+	return nil
 }
 
-func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics deliveryMetrics) (otherreject int64) {
+// chargeFrameDebt decays the peer's validation debt by the time elapsed since
+// its last update, adds charge, and returns the outstanding debt. Time spent
+// sleeping for the peer pays its debt like any other elapsed time. Fully
+// decayed entries are forgotten.
+func (f *TxFetcher) chargeFrameDebt(peer string, charge time.Duration) time.Duration {
+	f.debtLock.Lock()
+	defer f.debtLock.Unlock()
+
+	now := f.clock.Now()
+	if _, oldest, ok := f.debts.GetOldest(); ok && oldest.remaining(now) == 0 {
+		f.debts.RemoveOldest()
+	}
+	debt, ok := f.debts.Peek(peer)
+	if !ok {
+		if charge == 0 {
+			return 0
+		}
+		debt = &frameDebt{updated: now}
+	}
+	debt.owed = debt.remaining(now) + charge
+	debt.updated = now
+	if debt.owed == 0 {
+		f.debts.Remove(peer)
+	} else if charge != 0 {
+		f.debts.Add(peer, debt)
+	}
+	return debt.owed
+}
+
+// handleAddErrors tracks pool rejections. Rejections reached after executing
+// validation code are additionally counted in executed.
+func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics deliveryMetrics) (otherreject, executed int64) {
 	var (
 		duplicate   int64
 		underpriced int64
 	)
 	for i, err := range errs {
+		if errors.Is(err, txpool.ErrValidationExecuted) {
+			executed++
+		}
 		// Track a few interesting failure types
 		switch {
 		case err == nil: // Noop, but need to handle to not count these
@@ -498,11 +607,12 @@ func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics del
 	metrics.knownMeter.Mark(duplicate)
 	metrics.underpricedMeter.Mark(underpriced)
 	metrics.otherRejectMeter.Mark(otherreject)
-	return otherreject
+	return otherreject, executed
 }
 
 // Drop should be called when a peer disconnects. It cleans up all the internal
-// data structures of the given node.
+// data structures of the given node, except its validation debt, which must
+// survive a reconnect.
 func (f *TxFetcher) Drop(peer string) error {
 	select {
 	case f.drop <- &txDrop{peer: peer}:

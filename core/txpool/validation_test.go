@@ -121,6 +121,10 @@ func TestValidateFrameTransactionBlobs(t *testing.T) {
 	frameTx := func(blobHashes []common.Hash) *types.Transaction {
 		sender := common.Address{0xaa}
 		target := common.Address{0xbb}
+		blobFeeCap := uint256.NewInt(0)
+		if len(blobHashes) > 0 {
+			blobFeeCap.SetUint64(100)
+		}
 		return types.NewTx(&types.FrameTx{
 			ChainID: uint256.MustFromBig(config.ChainID),
 			Sender:  sender,
@@ -132,7 +136,7 @@ func TestValidateFrameTransactionBlobs(t *testing.T) {
 			Fees: types.Fees{
 				MaxPriorityFeePerGas: uint256.NewInt(1),
 				MaxFeePerGas:         uint256.NewInt(100),
-				MaxFeePerBlobGas:     uint256.NewInt(100),
+				MaxFeePerBlobGas:     blobFeeCap,
 			},
 			BlobVersionedHashes: blobHashes,
 		})
@@ -143,6 +147,90 @@ func TestValidateFrameTransactionBlobs(t *testing.T) {
 	blobHash := common.Hash{0x01}
 	if err := ValidateTransaction(frameTx([]common.Hash{blobHash}), head, signer, opts); !errors.Is(err, core.ErrTxTypeNotSupported) {
 		t.Fatalf("frame tx with blobs: have %v, want %v", err, core.ErrTxTypeNotSupported)
+	}
+}
+
+func TestValidateFrameTransactionStatic(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	config.AmsterdamTime = new(uint64)
+	config.BogotaTime = new(uint64)
+	head := &types.Header{
+		Number:     big.NewInt(1),
+		GasLimit:   60_000_000,
+		Time:       1,
+		Difficulty: common.Big0,
+	}
+	signer := types.LatestSigner(&config)
+	opts := &ValidationOptions{
+		Config:  &config,
+		Accept:  1 << types.FrameTxType,
+		MaxSize: 128 * 1024,
+		MinTip:  big.NewInt(0),
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*types.FrameTx)
+		wantErr bool
+	}{
+		{name: "valid"},
+		{
+			name:    "zero frames",
+			mutate:  func(tx *types.FrameTx) { tx.Frames = nil },
+			wantErr: true,
+		},
+		{
+			name:    "unknown mode",
+			mutate:  func(tx *types.FrameTx) { tx.Frames[0].Mode = 3 },
+			wantErr: true,
+		},
+		{
+			name:    "reserved flags",
+			mutate:  func(tx *types.FrameTx) { tx.Frames[0].Flags = types.FlagsLimit },
+			wantErr: true,
+		},
+		{
+			name: "foreign execution approval",
+			mutate: func(tx *types.FrameTx) {
+				target := common.Address{0xbb}
+				tx.Frames[0].Target = &target
+			},
+			wantErr: true,
+		},
+		{
+			name:    "unterminated atomic batch",
+			mutate:  func(tx *types.FrameTx) { tx.Frames[1].Flags = types.AtomicBatchFlag },
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := &types.FrameTx{
+				ChainID: uint256.MustFromBig(config.ChainID),
+				Sender:  common.Address{0xaa},
+				Frames: []types.Frame{
+					{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 5000}, Value: uint256.NewInt(0)},
+					{Mode: types.ModeSender, GasLimits: types.Limits{Execution: 30000}, Value: uint256.NewInt(0)},
+				},
+				Fees: types.Fees{
+					MaxPriorityFeePerGas: uint256.NewInt(1),
+					MaxFeePerGas:         uint256.NewInt(100),
+					MaxFeePerBlobGas:     uint256.NewInt(0),
+				},
+			}
+			if tt.mutate != nil {
+				tt.mutate(tx)
+			}
+			err := ValidateTransaction(types.NewTx(tx), head, signer, opts)
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("valid frame transaction rejected: %v", err)
+				}
+				return
+			}
+			if !errors.Is(err, types.ErrFrameTxInvalidFormat) {
+				t.Fatalf("have %v, want %v", err, types.ErrFrameTxInvalidFormat)
+			}
+		})
 	}
 }
 

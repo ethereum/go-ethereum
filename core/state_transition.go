@@ -413,6 +413,40 @@ func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, err
 	return newStateTransition(evm, msg, gp).execute()
 }
 
+// FramePrefixResult identifies the payment approval reached during simulation.
+type FramePrefixResult struct {
+	Payer common.Address
+	// PayerFrame is the index of the frame that approved payment.
+	PayerFrame int
+}
+
+// ApplyFramePrefix executes at most the validation prefix ending at prefixEnd,
+// stopping after a successful frame sets the payer. Callers must have validated
+// all transaction signatures and classified the prefix before calling this entry.
+// The complete message is retained for introspection and maximum-cost accounting.
+// Unlike ApplyMessage, the fee cap may be below the block base fee. No settlement,
+// refunds, receipt logs or coinbase payment are performed.
+// Any failed prefix frame invalidates the simulation, regardless of its mode.
+//
+// Execution mutates the supplied StateDB and gas pool, including the APPROVE
+// nonce increment and maximum-cost debit. Callers must discard the simulation
+// state and gas pool on every exit.
+func ApplyFramePrefix(evm *vm.EVM, msg *Message, gp *GasPool, prefixEnd int) (*FramePrefixResult, error) {
+	if prefixEnd < 0 || prefixEnd >= len(msg.Frames) {
+		return nil, fmt.Errorf("%w: invalid validation prefix end", ErrFrameTxInvalidExecution)
+	}
+	if gp == nil {
+		gp = NewGasPool(msg.GasLimit)
+	}
+	evm.SetTxContext(NewEVMTxContext(msg))
+	st := newStateTransition(evm, msg, gp)
+	st.prefixOnly, st.prefixEnd = true, prefixEnd
+	if _, err := st.execute(); err != nil {
+		return nil, err
+	}
+	return &st.prefixResult, nil
+}
+
 // stateTransition represents a state transition.
 //
 // == The State Transitioning Model
@@ -441,6 +475,9 @@ type stateTransition struct {
 	gasRemaining vm.GasBudget
 	state        vm.StateDB
 	evm          *vm.EVM
+	prefixOnly   bool
+	prefixEnd    int
+	prefixResult FramePrefixResult
 }
 
 // newStateTransition initialises and returns a new state transition object.
@@ -642,7 +679,7 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 			}
 			// This will panic if baseFee is nil, but basefee presence is verified
 			// as part of header validation.
-			if msg.GasFeeCap.CmpBig(st.evm.Context.BaseFee) < 0 {
+			if !st.prefixOnly && msg.GasFeeCap.CmpBig(st.evm.Context.BaseFee) < 0 {
 				return fmt.Errorf("%w: address %v, maxFeePerGas: %s, baseFee: %s", ErrFeeCapTooLow,
 					msg.From.Hex(), msg.GasFeeCap, st.evm.Context.BaseFee)
 			}
@@ -749,7 +786,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if err := st.preCheck(rules); err != nil {
 		return nil, err
 	}
-	if isFrameTx {
+	if isFrameTx && !st.prefixOnly {
 		// The protocol signature entries are validated against the
 		// canonical signature hash before any frame executes.
 		if err := types.ValidateFrameTxSignatures(msg.FrameSignatures, msg.From, msg.FrameSigHash); err != nil {
@@ -852,6 +889,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		framePayer, frameReceipts, err = st.applyFrames(rules)
 		if err != nil {
 			return nil, err
+		}
+		if st.prefixOnly {
+			return nil, nil
 		}
 	case contractCreation:
 		ret, vmerr = st.executeCreate(rules, value)
@@ -1442,11 +1482,18 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 	}
 
 	countLogs := func() int {
+		if st.prefixOnly {
+			return 0 // Prefix simulation never materializes receipt logs.
+		}
 		return len(st.state.GetLogs(msg.TxHash, 0, common.Hash{}, 0))
+	}
+	frameCount := len(msg.Frames)
+	if st.prefixOnly {
+		frameCount = st.prefixEnd + 1
 	}
 
 	var (
-		logRanges = make([]frameLogRange, 0, len(msg.Frames))
+		logRanges = make([]frameLogRange, 0, frameCount)
 
 		inBatch       bool
 		skipBatch     bool
@@ -1455,7 +1502,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		batchCtx      vm.FrameContextSnapshot
 		batchLogCount int
 	)
-	for i := range msg.Frames {
+	for i := range msg.Frames[:frameCount] {
 		frame := &msg.Frames[i]
 		frameCtx.CurrentFrame = i
 		hasBatchFlag := frame.Flags&types.AtomicBatchFlag != 0
@@ -1512,6 +1559,11 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 			// frame's resolved target, and roll back the frame context.
 			st.state.RevertToSnapshot(frameSnapshot)
 			frameCtx.RestoreSnapshot(entryCtx)
+			// Public-mempool validation rejects every failed prefix frame,
+			// including a DEFAULT deploy that block execution can tolerate.
+			if st.prefixOnly {
+				return nil, nil, fmt.Errorf("%w: validation prefix frame failed", ErrFrameTxInvalidExecution)
+			}
 			// A failing VERIFY frame — reverting or halting exceptionally —
 			// invalidates the whole transaction.
 			if frame.Mode == types.ModeVerify {
@@ -1547,6 +1599,18 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 			}
 		} else if terminatesBatch {
 			inBatch = false
+		}
+		if st.prefixOnly {
+			// Check only after failure handling has restored any reverted
+			// approvals. Never let an incomplete approval escape the
+			// classifier's bounded validation prefix.
+			if frameCtx.Payer != nil {
+				st.prefixResult = FramePrefixResult{Payer: *frameCtx.Payer, PayerFrame: i}
+				return frameCtx.Payer, nil, nil
+			}
+			if i == st.prefixEnd {
+				return nil, nil, fmt.Errorf("%w: validation prefix did not approve gas payment", ErrFrameTxInvalidExecution)
+			}
 		}
 	}
 

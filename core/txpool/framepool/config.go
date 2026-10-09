@@ -1,0 +1,59 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package framepool
+
+import "github.com/ethereum/go-ethereum/log"
+
+// Slot accounting and the size cap match the legacy pool. Prefix simulation
+// charges the frame data through the signature hash, so the cap also bounds
+// that cost: a 128 KiB transaction adds about 1 ms to a ~3.5 ms worst case.
+const (
+	txSlotSize = 32 * 1024
+	txMaxSize  = 4 * txSlotSize
+)
+
+// Config contains the resource limits of the frame transaction pool. The pool
+// keeps one executable transaction per sender and no queue, so the legacy
+// pool's per-account and queue limits have no counterpart here. The minimum
+// tip is shared with the other subpools through txpool.New.
+type Config struct {
+	GlobalSlots uint64 // Maximum number of 32 KiB transaction slots
+	PriceBump   uint64 // Minimum percentage increase of both replacement fees
+}
+
+// DefaultConfig contains the default frame pool limits. GlobalSlots bounds the
+// CPU of a full revalidation, which re-simulates every pending transaction:
+// at the measured worst case of ~4 ms per 100k-gas prefix, 1024 transactions
+// take about 4 s on one core. Pending transactions occupy at most 32 MiB.
+// PriceBump is the conventional 10% from EIP-8141 and the legacy pool.
+var DefaultConfig = Config{
+	GlobalSlots: 1024,
+	PriceBump:   10,
+}
+
+func (config *Config) sanitize() Config {
+	conf := *config
+	if conf.GlobalSlots < 1 {
+		log.Warn("Sanitizing invalid framepool slot cap", "provided", conf.GlobalSlots, "updated", DefaultConfig.GlobalSlots)
+		conf.GlobalSlots = DefaultConfig.GlobalSlots
+	}
+	if conf.PriceBump < 1 {
+		log.Warn("Sanitizing invalid framepool price bump", "provided", conf.PriceBump, "updated", DefaultConfig.PriceBump)
+		conf.PriceBump = DefaultConfig.PriceBump
+	}
+	return conf
+}

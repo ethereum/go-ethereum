@@ -19,6 +19,7 @@ package fetcher
 import (
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"slices"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -2339,5 +2341,242 @@ func TestTransactionForgotten(t *testing.T) {
 	// Verify final cache state
 	if size := fetcher.underpriced.Len(); size != 1 {
 		t.Errorf("wrong final underpriced cache size: got %d, want 1", size)
+	}
+}
+
+// errValidationExecuted is a pool rejection reached after executing validation.
+var errValidationExecuted = fmt.Errorf("%w (%w)", core.ErrFrameTxInvalidExecution, txpool.ErrValidationExecuted)
+
+// newThrottleTestFetcher starts a fetcher on a simulated clock. Throttle sleeps
+// are recorded and advance the clock, paying debt like real sleeping. A non-nil
+// step channel receives a notification per fetcher loop iteration.
+func newThrottleTestFetcher(t *testing.T, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, step chan struct{}) (*TxFetcher, *mclock.Simulated, *[]time.Duration) {
+	t.Helper()
+	clock := new(mclock.Simulated)
+	f := NewTxFetcherForTests(
+		nil,
+		func(common.Hash, byte) error { return nil },
+		addTxs,
+		fetchTxs,
+		func(peer string) { t.Errorf("peer %s dropped", peer) },
+		nil,
+		newTestBlobBuffer(),
+		clock,
+		func() time.Time { return time.Unix(0, int64(clock.Now())) },
+		rand.New(rand.NewSource(0)),
+	)
+	sleeps := new([]time.Duration)
+	f.sleep = func(d time.Duration) {
+		*sleeps = append(*sleeps, d)
+		clock.Run(d)
+	}
+	f.step = step
+	f.Start()
+	t.Cleanup(f.Stop)
+	return f, clock, sleeps
+}
+
+func testFrameTx(nonce uint64) *types.Transaction {
+	return types.NewTx(&types.FrameTx{
+		ChainID: uint256.NewInt(1), Nonce: nonce,
+		Fees: types.Fees{MaxFeePerGas: new(uint256.Int), MaxPriorityFeePerGas: new(uint256.Int), MaxFeePerBlobGas: new(uint256.Int)},
+	})
+}
+
+// Tests that rejections after executing validation code charge the delivering
+// peer 40ms each, in addition to the generic throttle for other rejections.
+func TestTransactionFetcherValidationThrottle(t *testing.T) {
+	t.Parallel()
+
+	ms := time.Millisecond
+	tests := []struct {
+		name   string
+		count  int
+		reject func(i int) error
+		sleeps []time.Duration
+	}{
+		{"executed rejections", 4, func(int) error { return errValidationExecuted }, []time.Duration{360 * ms}},
+		{"single executed rejection", 8, func(i int) error {
+			if i == 0 {
+				return errValidationExecuted
+			}
+			return nil
+		}, []time.Duration{40 * ms}},
+		{"executed rejections below other-reject ratio", 32, func(i int) error {
+			if i < 8 {
+				return errValidationExecuted
+			}
+			return nil
+		}, []time.Duration{320 * ms}},
+		{"executed underpriced rejections", 4, func(int) error {
+			return fmt.Errorf("%w (%w)", txpool.ErrReplaceUnderpriced, txpool.ErrValidationExecuted)
+		}, []time.Duration{160 * ms}},
+		{"unexecuted frame rejections", 4, func(int) error {
+			return fmt.Errorf("%w: VERIFY frame failed", core.ErrFrameTxInvalidExecution)
+		}, []time.Duration{200 * ms}},
+		{"other rejections", 4, func(int) error { return core.ErrNonceTooLow }, []time.Duration{200 * ms}},
+		{"few other rejections", 8, func(i int) error {
+			if i == 0 {
+				return core.ErrNonceTooLow
+			}
+			return nil
+		}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, _, sleeps := newThrottleTestFetcher(t, func(txs []*types.Transaction) []error {
+				errs := make([]error, len(txs))
+				for i, tx := range txs {
+					errs[i] = tt.reject(int(tx.Nonce()))
+				}
+				return errs
+			}, func(string, []common.Hash) error { return nil }, nil)
+
+			txs := make([]*types.Transaction, tt.count)
+			for i := range txs {
+				txs[i] = testFrameTx(uint64(i))
+			}
+			if err := f.Enqueue("peer", eth.ETH70, txs, false); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(*sleeps, tt.sleeps) {
+				t.Fatalf("throttle mismatch: have %v, want %v", *sleeps, tt.sleeps)
+			}
+		})
+	}
+}
+
+// Tests that validation debt carries across deliveries and is paid at most 2s
+// per delivery, that a peer above the 10s ceiling gets its frame transactions
+// withheld from the pool until the debt decays, and that disconnecting and
+// reconnecting does not discard the debt.
+func TestTransactionFetcherValidationDebt(t *testing.T) {
+	t.Parallel()
+
+	var passed int // Frame transactions handed to the pool
+	f, _, sleeps := newThrottleTestFetcher(t, func(txs []*types.Transaction) []error {
+		errs := make([]error, len(txs))
+		for i, tx := range txs {
+			if tx.Type() == types.FrameTxType {
+				passed++
+				errs[i] = errValidationExecuted
+			}
+		}
+		return errs
+	}, func(string, []common.Hash) error { return nil }, nil)
+
+	var nonce uint64
+	frames := func(n int) []*types.Transaction {
+		txs := make([]*types.Transaction, n)
+		for i := range txs {
+			txs[i] = testFrameTx(nonce)
+			nonce++
+		}
+		return txs
+	}
+	legacy := []*types.Transaction{types.NewTransaction(0, common.Address{}, new(big.Int), 0, new(big.Int), nil)}
+	ms := time.Millisecond
+	for i, step := range []struct {
+		peer   string
+		txs    []*types.Transaction
+		passed int
+		sleep  time.Duration
+		drop   bool // Disconnect the peer before delivering
+	}{
+		// Two full batches owe 10.24s. Two generic 200ms delays and a 2s chunk
+		// are slept, leaving 7.84s.
+		{"A", frames(256), 256, 2400 * ms, false},
+		// One more batch owes 12.96s, so the second is withheld. 10.76s remain.
+		{"A", frames(256), 128, 2200 * ms, false},
+		// Above the ceiling: nothing reaches the pool. 8.76s remain.
+		{"A", frames(128), 0, 2000 * ms, false},
+		// Below the ceiling again. 8.80s owed, 6.80s remain.
+		{"A", frames(1), 1, 2000 * ms, false},
+		// The rest is charged on later deliveries, even valid ones.
+		{"A", legacy, 0, 2000 * ms, false},
+		{"A", legacy, 0, 2000 * ms, false},
+		{"A", legacy, 0, 2000 * ms, false},
+		{"A", legacy, 0, 800 * ms, false},
+		{"A", legacy, 0, 0, false},
+		// Debt survives reconnects: B disconnects before each later delivery,
+		// yet reaches the ceiling exactly as A did and is withheld from at 10.76s.
+		{"B", frames(256), 256, 2400 * ms, false},
+		{"B", frames(384), 128, 2200 * ms, true},
+		{"B", frames(128), 0, 2000 * ms, true},
+		{"B", legacy, 0, 2000 * ms, true},
+	} {
+		if step.drop {
+			if err := f.Drop(step.peer); err != nil {
+				t.Fatal(err)
+			}
+		}
+		passed, *sleeps = 0, nil
+		if err := f.Enqueue(step.peer, eth.ETH70, step.txs, false); err != nil {
+			t.Fatal(err)
+		}
+		if passed != step.passed {
+			t.Errorf("step %d: %d frame transactions reached the pool, want %d", i, passed, step.passed)
+		}
+		var want []time.Duration
+		if step.sleep != 0 {
+			want = []time.Duration{step.sleep}
+		}
+		if !slices.Equal(*sleeps, want) {
+			t.Errorf("step %d: slept %v, want %v", i, *sleeps, want)
+		}
+	}
+}
+
+// Tests that a throttled direct response is accounted for before the stall, so
+// a stall beyond the fetch timeout does not reschedule delivered transactions.
+func TestTransactionFetcherThrottleAfterDelivery(t *testing.T) {
+	t.Parallel()
+
+	requests, steps := make(chan string, 4), make(chan struct{}, 64)
+	f, clock, _ := newThrottleTestFetcher(t, func(txs []*types.Transaction) []error {
+		errs := make([]error, len(txs))
+		for i := range errs {
+			errs[i] = errValidationExecuted
+		}
+		return errs
+	}, func(peer string, _ []common.Hash) error {
+		requests <- peer
+		return nil
+	}, steps)
+
+	txs := []*types.Transaction{testTxs[0], testTxs[1]}
+	kinds, sizes := []byte{types.LegacyTxType, types.LegacyTxType}, []uint32{uint32(txs[0].Size()), uint32(txs[1].Size())}
+	hashes := []common.Hash{txs[0].Hash(), txs[1].Hash()}
+	for _, peer := range []string{"A", "B"} {
+		if _, err := f.Notify(peer, eth.ETH70, kinds, sizes, hashes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clock.Run(txArriveTimeout)
+	var origin string
+	select {
+	case origin = <-requests:
+	case <-time.After(5 * time.Second):
+		t.Fatal("transactions not requested")
+	}
+	for len(steps) > 0 {
+		<-steps
+	}
+	f.sleep = func(d time.Duration) {
+		// The fetcher loop must already be processing the delivery.
+		select {
+		case <-steps:
+		case <-time.After(time.Second):
+			t.Error("throttled before the delivery was accounted for")
+		}
+		clock.Run(d + txFetchTimeout) // A stall beyond the fetch timeout.
+	}
+	if err := f.Enqueue(origin, eth.ETH70, txs, true); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case peer := <-requests:
+		t.Fatalf("delivered transactions rescheduled to %s", peer)
+	case <-time.After(50 * time.Millisecond):
 	}
 }
