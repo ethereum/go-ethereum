@@ -137,6 +137,7 @@ func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) 
 
 	ctx, cancel := context.WithTimeout(ec.rootCtx, time.Second*5)
 	defer cancel()
+
 	var resp engine.PayloadStatusV1
 	err := ec.rpc.CallContext(ctx, &resp, method, params...)
 	return resp.Status, err

@@ -64,8 +64,10 @@ func NewClient(config params.ClientConfig) *Client {
 	scheduler := request.NewScheduler()
 	checkpointInit := sync.NewCheckpointInit(committeeChain, config.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
+
 	beaconBlockSync := newBeaconBlockSync(headTracker)
 	beaconBlockSync.prefetch = beforeGloas(&config.ChainConfig)
+
 	scheduler.RegisterTarget(headTracker)
 	scheduler.RegisterTarget(committeeChain)
 	scheduler.RegisterModule(checkpointInit, "checkpointInit")

@@ -154,6 +154,7 @@ func (u UpdateScore) BetterThan(w UpdateScore) bool {
 // body. Its concrete form is fork-specific.
 type ExecutionProof interface {
 	BlockHash() common.Hash
+
 	// Validate checks the proof against the body root of a block of the given fork.
 	Validate(bodyRoot common.Hash, fork string) error
 }
@@ -270,8 +271,10 @@ type FinalityUpdate struct {
 	Version             string
 	Attested, Finalized HeaderWithExecProof
 	FinalityBranch      merkle.Values
+
 	// Sync committee BLS signature aggregate
 	Signature SyncAggregate
+
 	// Slot in which the signature has been created (newer than Header.Slot,
 	// determines the signing sync committee)
 	SignatureSlot uint64

@@ -34,10 +34,11 @@ type beaconBlockSync struct {
 	locked       map[common.Hash]request.ServerAndID
 	serverHeads  map[request.Server]common.Hash
 	headTracker  headTracker
-	// prefetch reports whether the block at a slot may be fetched before it is validated
-	// (nil: always). From Gloas on, the execution payload envelope is published later in the
-	// slot than the block: fetching it at the head announcement fails, and each failure also
-	// delays the server.
+
+	// prefetch reports whether the block at a slot may be fetched before it is
+	// validated. From Gloas on, the execution payload envelope is published later
+	// in the slot than the block: fetching it at the head announcement fails,
+	// and each failure also delays the server.
 	prefetch func(slot uint64) bool
 
 	lastHeadInfo  types.HeadInfo
@@ -85,6 +86,7 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 		}
 	}
 	s.updateEventFeed()
+
 	// request validated head block if unavailable and not yet requested
 	if vh, ok := s.headTracker.ValidatedOptimistic(); ok {
 		s.tryRequestBlock(requester, vh.Attested.Hash(), false)
