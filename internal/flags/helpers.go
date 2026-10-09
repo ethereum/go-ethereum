@@ -262,6 +262,96 @@ func AutoEnvVars(flags []cli.Flag, prefix string) {
 	}
 }
 
+// DropEnvVarsShadowedByArgs unsets environment variables for flags that are
+// present on the command line.
+//
+// urfave/cli validates an environment variable while applying the flag, before
+// the command-line value can replace it. An unparsable value therefore aborts
+// startup even when the flag is set explicitly (for example GETH_PORT=tcp://...
+// together with --port). Command-line flags are defined to take precedence, so
+// drop the shadowed variables before the app is run. Variables for flags that
+// are not set on the command line are left alone.
+func DropEnvVarsShadowedByArgs(flags []cli.Flag, args []string) {
+	present := flagsPresentInArgs(flags, args)
+	if len(present) == 0 {
+		return
+	}
+	for _, flag := range flags {
+		doc, ok := flag.(cli.DocGenerationFlag)
+		if !ok {
+			continue
+		}
+		shadowed := false
+		for _, name := range flag.Names() {
+			if _, ok := present[name]; ok {
+				shadowed = true
+				break
+			}
+		}
+		if !shadowed {
+			continue
+		}
+		for _, envvar := range doc.GetEnvVars() {
+			os.Unsetenv(envvar)
+		}
+	}
+}
+
+// flagsPresentInArgs returns the names of known flags that appear in args.
+// The program name in args[0] is ignored. A flag's value is not itself scanned,
+// so a value that looks like another flag (for example --datadir --port) does
+// not count as setting that flag. Scanning stops at "--".
+func flagsPresentInArgs(flags []cli.Flag, args []string) map[string]struct{} {
+	takesValue := make(map[string]bool)
+	for _, flag := range flags {
+		value := true
+		if doc, ok := flag.(cli.DocGenerationFlag); ok {
+			value = doc.TakesValue()
+		}
+		for _, name := range flag.Names() {
+			takesValue[name] = value
+		}
+	}
+	present := make(map[string]struct{})
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			break
+		}
+		name, attached, ok := splitFlagArg(arg)
+		if !ok {
+			continue
+		}
+		takes, known := takesValue[name]
+		if !known {
+			continue
+		}
+		present[name] = struct{}{}
+		// Value-taking flags consume the next argument even when it looks like
+		// a flag, matching package flag. --datadir --port sets datadir, not port.
+		if !attached && takes && i+1 < len(args) {
+			i++
+		}
+	}
+	return present
+}
+
+// splitFlagArg reports the flag name in arg. attached is true when the value
+// is in the same argument (--name=value). ok is false when arg is not a flag.
+func splitFlagArg(arg string) (name string, attached bool, ok bool) {
+	if arg == "-" || !strings.HasPrefix(arg, "-") {
+		return "", false, false
+	}
+	body := strings.TrimLeft(arg, "-")
+	if body == "" || body == arg {
+		return "", false, false
+	}
+	if i := strings.IndexByte(body, '='); i >= 0 {
+		return body[:i], true, body[:i] != ""
+	}
+	return body, false, true
+}
+
 // CheckEnvVars iterates over all the environment variables and checks if any of
 // them look like a CLI flag but is not consumed. This can be used to detect old
 // or mistyped names.
