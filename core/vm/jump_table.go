@@ -101,6 +101,7 @@ func newVerkleInstructionSet() JumpTable {
 func newBogotaInstructionSet() JumpTable {
 	instructionSet := newAmsterdamInstructionSet()
 	enable8141(&instructionSet) // EIP-8141 frame transaction opcodes
+	enable7906(&instructionSet) // EIP-7906 transaction assertions
 	return validate(instructionSet)
 }
 

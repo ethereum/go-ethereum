@@ -73,6 +73,8 @@ type FrameContext struct {
 	// owner is still executing, its receipt entry otherwise — and clears
 	// the entry either way.
 	ChargeOwners map[FrameChargeKey]int
+
+	assertionDiff *assertionDiffCache
 }
 
 // CurrentTarget returns the resolved target of the currently executing frame.
@@ -221,6 +223,9 @@ func opApprove(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	offset := scope.Stack.pop()
 	length := scope.Stack.pop()
 	scopeArg := scope.Stack.pop()
+	if fc.Frames[fc.CurrentFrame].Mode == types.ModePostTx {
+		return nil, ErrWriteProtection
+	}
 
 	if scope.Contract.Address() != fc.CurrentTarget() {
 		return nil, ErrExecutionReverted

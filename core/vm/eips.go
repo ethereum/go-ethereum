@@ -665,3 +665,29 @@ func enable8141(jt *JumpTable) {
 		memorySize:  memoryFrameDataCopy,
 	}
 }
+
+// enable7906 enables transaction assertions within POST_TX frames.
+func enable7906(jt *JumpTable) {
+	jt[TXTRACE] = &operation{
+		execute:     opTxTrace,
+		constantGas: params.WarmAccountAccessAmsterdam,
+		minStack:    minStack(2, 1),
+		maxStack:    maxStack(2, 1),
+	}
+	jt[TXDIFF] = &operation{
+		execute:    opTxDiff,
+		dynamicGas: gasTxDiff,
+		minStack:   minStack(3, 1),
+		maxStack:   maxStack(3, 1),
+	}
+	jt[EVENTDATACOPY] = &operation{
+		execute:     opEventDataCopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  memoryCopierGas(3),
+		minStack:    minStack(4, 0),
+		maxStack:    maxStack(4, 0),
+		memorySize: func(stack *Stack) (uint64, bool) {
+			return calcMemSize64(stack.back(1), stack.back(3))
+		},
+	}
+}

@@ -222,6 +222,9 @@ const (
 	FRAMEPARAM    OpCode = 0xb3
 	SIGPARAM      OpCode = 0xb4
 	SIGDATACOPY   OpCode = 0xb5
+	TXTRACE       OpCode = 0xb6
+	TXDIFF        OpCode = 0xb7
+	EVENTDATACOPY OpCode = 0xb8
 )
 
 // 0xd0 range - eof operations.
@@ -437,6 +440,9 @@ var opCodeToString = [256]string{
 	FRAMEPARAM:    "FRAMEPARAM",
 	SIGPARAM:      "SIGPARAM",
 	SIGDATACOPY:   "SIGDATACOPY",
+	TXTRACE:       "TXTRACE",
+	TXDIFF:        "TXDIFF",
+	EVENTDATACOPY: "EVENTDATACOPY",
 
 	// 0xd range - eof ops.
 	DATALOAD:  "DATALOAD",
@@ -634,6 +640,9 @@ var stringToOp = map[string]OpCode{
 	"FRAMEPARAM":      FRAMEPARAM,
 	"SIGPARAM":        SIGPARAM,
 	"SIGDATACOPY":     SIGDATACOPY,
+	"TXTRACE":         TXTRACE,
+	"TXDIFF":          TXDIFF,
+	"EVENTDATACOPY":   EVENTDATACOPY,
 	"DATALOAD":        DATALOAD,
 	"DATALOADN":       DATALOADN,
 	"DATASIZE":        DATASIZE,

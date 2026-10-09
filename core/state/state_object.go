@@ -166,7 +166,7 @@ func (s *stateObject) GetState(key common.Hash) common.Hash {
 	if dirty {
 		return value
 	}
-	return s.GetCommittedState(key)
+	return s.getCommittedState(key)
 }
 
 // getState retrieves a value associated with the given storage key, along with
@@ -187,6 +187,11 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	if s.db.stateAccessList != nil {
 		s.db.stateAccessList.StorageRead(s.address, key)
 	}
+	return s.getCommittedState(key)
+}
+
+// getCommittedState reads transaction prestate without recording a BAL access.
+func (s *stateObject) getCommittedState(key common.Hash) common.Hash {
 	// If we have a pending write or clean cached, return that
 	if value, pending := s.pendingStorage[key]; pending {
 		return value
@@ -595,7 +600,7 @@ func (s *stateObject) CodeSize() int {
 }
 
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
-	prev = slices.Clone(s.code)
+	prev = slices.Clone(s.Code())
 	s.db.journal.setCode(s.address, prev)
 	s.setCode(codeHash, code)
 	return prev

@@ -96,6 +96,28 @@ var (
 	gasFrameDataCopy  = memoryCopierGas(2)
 )
 
+func gasTxDiff(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	cost := params.WarmAccountAccessAmsterdam
+	param := stack.back(0)
+	if param.IsUint64() {
+		address := common.Address(stack.back(1).Bytes20())
+		switch param.Uint64() {
+		case 0, 1:
+			key := common.Hash(stack.back(2).Bytes32())
+			if _, warm := evm.StateDB.SlotInAccessList(address, key); !warm {
+				evm.StateDB.AddSlotToAccessListOnly(address, key)
+				cost = params.ColdStorageAccessAmsterdam
+			}
+		case 2, 3, 4, 5:
+			if !evm.StateDB.AddressInAccessList(address) {
+				evm.StateDB.AddAddressToAccessList(address)
+				cost = params.ColdAccountAccessAmsterdam
+			}
+		}
+	}
+	return GasCosts{ExecutionGas: cost}, nil
+}
+
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	if evm.readOnly {
 		return GasCosts{}, ErrWriteProtection

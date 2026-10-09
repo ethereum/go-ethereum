@@ -28,6 +28,43 @@ import (
 	"github.com/holiman/uint256"
 )
 
+func TestFramePostTxBodyRollback(t *testing.T) {
+	target := common.HexToAddress("0xcafe")
+	assertion := common.HexToAddress("0xdead")
+	for _, code := range [][]byte{
+		program.New().Push(0).Push(0).Op(vm.REVERT).Bytes(),
+		program.New().Push(types.ApprovePayment).Push(0).Push(0).Op(vm.APPROVE).Bytes(),
+	} {
+		sdb := mkState(senderAlloc(types.GenesisAlloc{
+			target:    {Code: program.New().Sstore(42, 42).Push(0).Push(0).Op(vm.LOG0).Bytes()},
+			assertion: {Code: code},
+		}))
+		evm := prefixTestEVM(sdb, 5, 0)
+		tx := prefixTestTx(t, []types.Frame{
+			prefixVerifyFrame(),
+			{Mode: types.ModeSender, Target: &target, GasLimits: types.Limits{Execution: 100_000, State: 200_000}, Value: new(uint256.Int)},
+			{Mode: types.ModePostTx, Target: &assertion, Flags: types.ApprovePayment, GasLimits: types.Limits{Execution: 10_000}, Value: new(uint256.Int)},
+			{Mode: types.ModePostTx, GasLimits: types.Limits{Execution: 10_000}, Value: new(uint256.Int)},
+		}, 10, 2)
+		result, err := ApplyMessage(evm, prefixTestMessage(t, evm, tx), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, status := range []uint64{frameStatusSuccess, frameStatusSuccess, frameStatusFailed, frameStatusSkipped} {
+			receipt := result.FrameReceipts[i]
+			if receipt.Status != status || receipt.StateGasUsed != 0 || len(receipt.Logs) != 0 {
+				t.Fatalf("frame %d: unexpected receipt %+v", i, receipt)
+			}
+		}
+		if result.FrameReceipts[1].GasUsed == 0 || result.FrameReceipts[3].GasUsed != 0 {
+			t.Fatal("body gas was refunded or skipped frame was charged")
+		}
+		if sdb.GetState(target, common.BigToHash(big.NewInt(42))) != (common.Hash{}) || sdb.GetNonce(senderAddr) != 1 {
+			t.Fatal("body survived or validation prefix was reverted")
+		}
+	}
+}
+
 func TestFrameKeyedNoncePrefix(t *testing.T) {
 	keys := []uint256.Int{*uint256.NewInt(1), *uint256.NewInt(2)}
 	approve := program.New().Push(types.ApproveExecutionAndPayment).Push(0).Push(0).Op(vm.APPROVE).Bytes()

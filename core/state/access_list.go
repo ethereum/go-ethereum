@@ -28,6 +28,8 @@ import (
 type accessList struct {
 	addresses map[common.Address]int
 	slots     []map[common.Hash]struct{}
+	// Assertion slot reads do not warm the containing account.
+	slotOnly map[accessListSlot]struct{}
 }
 
 // ContainsAddress returns true if the address is in the access list.
@@ -41,14 +43,18 @@ func (al *accessList) ContainsAddress(address common.Address) bool {
 func (al *accessList) Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	idx, ok := al.addresses[address]
 	if !ok {
-		// no such address (and hence zero slots)
-		return false, false
+		_, slotPresent = al.slotOnly[accessListSlot{address, slot}]
+		return false, slotPresent
 	}
 	if idx == -1 {
 		// address yes, but no slots
-		return true, false
+		_, slotPresent = al.slotOnly[accessListSlot{address, slot}]
+		return true, slotPresent
 	}
 	_, slotPresent = al.slots[idx][slot]
+	if !slotPresent {
+		_, slotPresent = al.slotOnly[accessListSlot{address, slot}]
+	}
 	return true, slotPresent
 }
 
@@ -64,6 +70,7 @@ func (al *accessList) Copy() *accessList {
 	cp := &accessList{
 		addresses: maps.Clone(al.addresses),
 		slots:     make([]map[common.Hash]struct{}, len(al.slots)),
+		slotOnly:  maps.Clone(al.slotOnly),
 	}
 	for i, slotMap := range al.slots {
 		cp.slots[i] = maps.Clone(slotMap)
@@ -137,7 +144,7 @@ func (al *accessList) DeleteAddress(address common.Address) {
 
 // Equal returns true if the two access lists are identical
 func (al *accessList) Equal(other *accessList) bool {
-	if !maps.Equal(al.addresses, other.addresses) {
+	if !maps.Equal(al.addresses, other.addresses) || !maps.Equal(al.slotOnly, other.slotOnly) {
 		return false
 	}
 	return slices.EqualFunc(al.slots, other.slots, maps.Equal)

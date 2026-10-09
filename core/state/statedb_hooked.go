@@ -99,6 +99,22 @@ func (s *hookedStateDB) GetState(addr common.Address, hash common.Hash) common.H
 	return s.inner.GetState(addr, hash)
 }
 
+func (s *hookedStateDB) GetTransactionAccount(addr common.Address) TransactionAccount {
+	return s.inner.GetTransactionAccount(addr)
+}
+
+func (s *hookedStateDB) GetTransactionState(addr common.Address, key common.Hash) common.Hash {
+	return s.inner.GetTransactionState(addr, key)
+}
+
+func (s *hookedStateDB) GetTransactionDiff() *TransactionDiff {
+	return s.inner.GetTransactionDiff()
+}
+
+func (s *hookedStateDB) AddSlotToAccessListOnly(addr common.Address, slot common.Hash) {
+	s.inner.AddSlotToAccessListOnly(addr, slot)
+}
+
 func (s *hookedStateDB) GetTransientState(addr common.Address, key common.Hash) common.Hash {
 	return s.inner.GetTransientState(addr, key)
 }

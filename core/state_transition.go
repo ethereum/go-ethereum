@@ -1520,6 +1520,12 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		batchSnapshot int
 		batchCtx      vm.FrameContextSnapshot
 		batchLogCount int
+
+		prefixCaptured bool
+		bodyStart      int
+		prefixSnapshot int
+		prefixCtx      vm.FrameContextSnapshot
+		prefixLogCount int
 	)
 	for i := range msg.Frames[:frameCount] {
 		frame := &msg.Frames[i]
@@ -1592,6 +1598,26 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		frameCtx.Receipts = append(frameCtx.Receipts, receipt)
 		logRanges = append(logRanges, frameLogRange{logStart, countLogs()})
 
+		if frame.Mode == types.ModePostTx && receipt.Status == frameStatusFailed {
+			if prefixCaptured {
+				// Keep the validation prefix and execution gas, but discard
+				// all body state, logs and state-gas charges.
+				st.state.RevertToSnapshot(prefixSnapshot)
+				executed := frameCtx.Receipts[bodyStart:]
+				frameCtx.RestoreSnapshot(prefixCtx)
+				for j, r := range executed {
+					frameCtx.Receipts = append(frameCtx.Receipts, types.FrameReceipt{Status: r.Status, GasUsed: r.GasUsed})
+					logRanges[bodyStart+j] = frameLogRange{prefixLogCount, prefixLogCount}
+				}
+			}
+			logCount := countLogs()
+			for j := i + 1; j < frameCount; j++ {
+				frameCtx.Receipts = append(frameCtx.Receipts, types.FrameReceipt{Status: frameStatusSkipped})
+				logRanges = append(logRanges, frameLogRange{logCount, logCount})
+			}
+			break
+		}
+
 		if receipt.Status == frameStatusFailed && inBatch {
 			// Unroll the atomic batch: restore the state and the frame
 			// context to the condition immediately before the batch began —
@@ -1630,6 +1656,13 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 			if i == st.prefixEnd {
 				return nil, nil, fmt.Errorf("%w: validation prefix did not approve gas payment", ErrFrameTxInvalidExecution)
 			}
+		}
+		if !prefixCaptured && frameCtx.Payer != nil {
+			prefixCaptured = true
+			bodyStart = i + 1
+			prefixSnapshot = st.state.Snapshot()
+			prefixCtx = frameCtx.Snapshot()
+			prefixLogCount = countLogs()
 		}
 	}
 
@@ -1749,8 +1782,8 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 		leftover vm.GasBudget
 		vmerr    error
 	)
-	if frame.Mode == types.ModeVerify {
-		// VERIFY frames execute as static calls: only APPROVE may mutate.
+	if frame.Mode == types.ModeVerify || frame.Mode == types.ModePostTx {
+		// Only VERIFY's APPROVE may bypass write protection.
 		_, leftover, vmerr = st.evm.StaticCall(caller, target, frame.Data, budget)
 	} else {
 		_, leftover, vmerr = st.evm.Call(caller, target, frame.Data, budget, value)

@@ -54,6 +54,10 @@ type StateDB interface {
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash) common.Hash
 
+	GetTransactionAccount(common.Address) state.TransactionAccount
+	GetTransactionState(common.Address, common.Hash) common.Hash
+	GetTransactionDiff() *state.TransactionDiff
+
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)
 	ClearTransientStorage()
@@ -86,6 +90,7 @@ type StateDB interface {
 	// AddSlotToAccessList adds the given (address,slot) to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
 	AddSlotToAccessList(addr common.Address, slot common.Hash)
+	AddSlotToAccessListOnly(addr common.Address, slot common.Hash)
 
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 

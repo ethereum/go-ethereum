@@ -407,6 +407,11 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 
 // GetState retrieves the value associated with the specific key.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
+	// Assertion reads can name a missing account, and dirty slots bypass
+	// GetCommittedState. Both must still be represented in the BAL.
+	if s.stateAccessList != nil {
+		s.stateAccessList.StorageRead(addr, hash)
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.GetState(hash)
