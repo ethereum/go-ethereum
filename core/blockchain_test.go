@@ -4213,9 +4213,6 @@ func TestEIP8141(t *testing.T) {
 		Nonce:   0,
 		Balance: big.NewInt(0),
 	}
-	// Genesis-activated Bogota networks carry the expiry verifier code in
-	// the genesis allocation.
-	alloc[params.FrameTxExpiryVerifier] = types.Account{Code: params.FrameTxExpiryVerifierCode, Balance: big.NewInt(0)}
 	gspec := &Genesis{
 		Config: &config,
 		Alloc:  alloc,
@@ -4343,7 +4340,6 @@ func TestEIP8141FrameLogsWithTracer(t *testing.T) {
 	alloc := SystemContractAllocs()
 	alloc[addr1] = types.Account{Balance: big.NewInt(params.Ether)}
 	alloc[aa] = types.Account{Code: program.New().Push(0).Push(0).Op(vm.LOG0).Bytes()}
-	alloc[params.FrameTxExpiryVerifier] = types.Account{Code: params.FrameTxExpiryVerifierCode, Balance: big.NewInt(0)}
 	gspec := &Genesis{Config: &config, Alloc: alloc}
 	signer := types.LatestSigner(&config)
 

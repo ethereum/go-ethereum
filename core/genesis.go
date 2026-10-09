@@ -675,7 +675,7 @@ func DefaultHoodiGenesisBlock() *Genesis {
 }
 
 // SystemContractAllocs returns the genesis allocation of the system contracts
-// that the post-shanghai forks issue system calls into.
+// used by the post-Shanghai forks.
 func SystemContractAllocs() types.GenesisAlloc {
 	return types.GenesisAlloc{
 		// EIP-4788 - Beacon block root in the EVM
@@ -694,6 +694,11 @@ func SystemContractAllocs() types.GenesisAlloc {
 
 		// EIP-7997 - Deterministic deployment factory
 		params.DeterministicFactoryAddress: {Nonce: 1, Code: params.DeterministicFactoryCode, Balance: common.Big0},
+
+		// EIP-8141 / EIP-8250 / EIP-8272 - Frame transaction validation
+		params.FrameTxExpiryVerifier: {Nonce: 1, Code: params.FrameTxExpiryVerifierCode, Balance: common.Big0},
+		params.NonceManagerAddress:   {Nonce: 1, Code: params.NonceManagerCode, Balance: common.Big0},
+		params.RecentRootAddress:     {Nonce: 1, Code: params.RecentRootCode, Balance: common.Big0},
 	}
 }
 
