@@ -67,6 +67,15 @@ func (srv *Server) setupPortMapping() {
 		srv.loopWG.Add(1)
 		go srv.consumePortMappingRequests()
 
+	case nat.ExtIPs:
+		// Pin both families. An unspecified address removes that family from
+		// the record and disables its endpoint prediction.
+		n := srv.NAT.(nat.ExtIPs)
+		srv.localnode.SetStaticIP(n.IPv4)
+		srv.localnode.SetStaticIP(n.IPv6)
+		srv.loopWG.Add(1)
+		go srv.consumePortMappingRequests()
+
 	default:
 		srv.loopWG.Add(1)
 		go srv.portMappingLoop()
