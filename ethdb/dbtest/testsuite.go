@@ -650,6 +650,66 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		checkKeys(58, 60, true)
 	})
 
+	t.Run("BatchDeleteRangeOrdering", func(t *testing.T) {
+		for _, replay := range []bool{false, true} {
+			name := "Write"
+			if replay {
+				name = "Replay"
+			}
+			t.Run(name, func(t *testing.T) {
+				db := New()
+				defer db.Close()
+
+				write := func(batch ethdb.Batch) error {
+					if !replay {
+						return batch.Write()
+					}
+					replayed := db.NewBatch()
+					defer replayed.Close()
+					if err := batch.Replay(replayed); err != nil {
+						return err
+					}
+					return replayed.Write()
+				}
+				check := func(want bool) {
+					has, err := db.Has([]byte("b"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if has != want {
+						t.Fatalf("key existence mismatch: have %t, want %t", has, want)
+					}
+				}
+
+				batch := db.NewBatch()
+				if err := batch.Put([]byte("b"), []byte("value")); err != nil {
+					t.Fatal(err)
+				}
+				if err := batch.DeleteRange([]byte("a"), []byte("c")); err != nil {
+					t.Fatal(err)
+				}
+				if err := write(batch); err != nil {
+					t.Fatal(err)
+				}
+				batch.Close()
+				check(false)
+
+				batch = db.NewBatch()
+				if err := batch.DeleteRange([]byte("a"), []byte("c")); err != nil {
+					t.Fatal(err)
+				}
+				if err := batch.Put([]byte("b"), []byte("value")); err != nil {
+					t.Fatal(err)
+				}
+				if err := write(batch); err != nil {
+					t.Fatal(err)
+				}
+				batch.Close()
+				check(true)
+			})
+		}
+	})
+
 	t.Run("BatchReplayWithDeleteRange", func(t *testing.T) {
 		db := New()
 		defer db.Close()

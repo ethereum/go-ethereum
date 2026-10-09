@@ -472,6 +472,10 @@ func (b *batch) Delete(key []byte) error {
 // support range deletion in batches. It iterates through the database to find
 // keys in the range and adds them to the batch for deletion.
 func (b *batch) DeleteRange(start, end []byte) error {
+	puts := make(pendingPuts)
+	if err := b.b.Replay(puts); err != nil {
+		return err
+	}
 	// Create an iterator to scan through the keys in the range
 	slice := &util.Range{
 		Start: start, // If nil, it represents the key before all keys
@@ -489,10 +493,18 @@ func (b *batch) DeleteRange(start, end []byte) error {
 		}
 		// Add this key to the batch for deletion
 		b.b.Delete(key)
+		delete(puts, string(key))
 		b.size += len(key)
 	}
 	if err := it.Error(); err != nil {
 		return err
+	}
+	startKey, endKey := string(start), string(end)
+	for key := range puts {
+		if (start == nil || key >= startKey) && (end == nil || key < endKey) {
+			b.b.Delete([]byte(key))
+			b.size += len(key)
+		}
 	}
 	return nil
 }
@@ -520,6 +532,17 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 
 // Close closes the batch and releases all associated resources.
 func (b *batch) Close() {}
+
+// pendingPuts tracks keys whose latest point operation in a batch is a put.
+type pendingPuts map[string]struct{}
+
+func (p pendingPuts) Put(key, _ []byte) {
+	p[string(key)] = struct{}{}
+}
+
+func (p pendingPuts) Delete(key []byte) {
+	delete(p, string(key))
+}
 
 // replayer is a small wrapper to implement the correct replay methods.
 type replayer struct {
