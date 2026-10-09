@@ -132,6 +132,35 @@ func (n *Node) setIP6(ip netip.Addr) {
 	}
 }
 
+// WithAlternateFamily returns a copy of n whose preferred endpoint is the address
+// of the other IP family in the record. The second return value is false when the
+// record does not advertise a usable address of the other family.
+func (n *Node) WithAlternateFamily() (*Node, bool) {
+	var ip4, ip6 netip.Addr
+	n.Load((*enr.IPv4Addr)(&ip4))
+	n.Load((*enr.IPv6Addr)(&ip6))
+
+	cpy := *n
+	switch {
+	case n.ip.Is4() || n.ip.Is4In6():
+		if !validIP(ip6) || ip6.Is4In6() {
+			return nil, false
+		}
+		cpy.setIP6(ip6)
+	case n.ip.Is6():
+		if !validIP(ip4) {
+			return nil, false
+		}
+		cpy.setIP4(ip4)
+	default:
+		return nil, false
+	}
+	if cpy.ip == n.ip {
+		return nil, false
+	}
+	return &cpy, true
+}
+
 // MustParse parses a node record or enode:// URL. It panics if the input is invalid.
 func MustParse(rawurl string) *Node {
 	n, err := Parse(ValidSchemes, rawurl)
