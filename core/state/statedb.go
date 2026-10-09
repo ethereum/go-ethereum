@@ -1527,6 +1527,17 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	}
 }
 
+// SuspendAccessList disables the recording of state accesses into the
+// block-level access list until the returned function is invoked. It exists for
+// tracers: since Amsterdam (EIP-7928) every account and slot read is part of the
+// access list, so a tracer reading state that execution never touched would
+// otherwise make a valid block fail validation.
+func (s *StateDB) SuspendAccessList() func() {
+	list := s.stateAccessList
+	s.stateAccessList = nil
+	return func() { s.stateAccessList = list }
+}
+
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
 	if s.accessList.AddAddress(addr) {

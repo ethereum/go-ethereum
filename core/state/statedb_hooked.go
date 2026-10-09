@@ -163,6 +163,12 @@ func (s *hookedStateDB) AccessEvents() *AccessEvents {
 	return s.inner.AccessEvents()
 }
 
+// SuspendAccessList disables block-level access list recording, see
+// StateDB.SuspendAccessList.
+func (s *hookedStateDB) SuspendAccessList() func() {
+	return s.inner.SuspendAccessList()
+}
+
 func (s *hookedStateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
 	prev := s.inner.SubBalance(addr, amount, reason)
 	if s.hooks.OnBalanceChange != nil && !amount.IsZero() {
