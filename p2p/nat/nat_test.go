@@ -85,3 +85,54 @@ func TestParseStun(t *testing.T) {
 		assert.Equal(t, stun.serverList, tc.want.serverList)
 	}
 }
+
+func TestParseExtIP(t *testing.T) {
+	tests := []struct {
+		spec string
+		want Interface
+	}{
+		{"extip:77.12.33.4", ExtIP(net.ParseIP("77.12.33.4"))},
+		{"extip:2001:db8::1", ExtIP(net.ParseIP("2001:db8::1"))},
+		{"extip:77.12.33.4,2001:db8::1", ExtIPs{IPv4: net.ParseIP("77.12.33.4").To4(), IPv6: net.ParseIP("2001:db8::1")}},
+		{"extip:2001:db8::1,77.12.33.4", ExtIPs{IPv4: net.ParseIP("77.12.33.4").To4(), IPv6: net.ParseIP("2001:db8::1")}},
+		{"extip:0.0.0.0,2001:db8::1", ExtIPs{IPv4: net.IPv4zero.To4(), IPv6: net.ParseIP("2001:db8::1")}},
+		{"extip:77.12.33.4,::", ExtIPs{IPv4: net.ParseIP("77.12.33.4").To4(), IPv6: net.IPv6unspecified}},
+	}
+	for _, tc := range tests {
+		got, err := Parse(tc.spec)
+		if err != nil {
+			t.Errorf("%q: unexpected error %v", tc.spec, err)
+			continue
+		}
+		assert.Equal(t, tc.want, got, tc.spec)
+	}
+
+	bad := []string{
+		"extip:",
+		"extip:77.12.33.4,",
+		"extip:77.12.33.4,10.0.0.1",
+		"extip:2001:db8::1,2001:db8::2",
+		"extip:0.0.0.0,::",
+		"extip:77.12.33.4,2001:db8::1,::",
+	}
+	for _, spec := range bad {
+		if _, err := Parse(spec); err == nil {
+			t.Errorf("%q: expected error", spec)
+		}
+	}
+
+	n, _ := Parse("extip:0.0.0.0,2001:db8::1")
+	text, _ := n.(ExtIPs).MarshalText()
+	assert.Equal(t, "extip:0.0.0.0,2001:db8::1", string(text))
+	ip, _ := n.ExternalIP()
+	assert.Equal(t, net.ParseIP("2001:db8::1"), ip)
+}
+
+func TestParseRejectsAddressPairForOtherMechanisms(t *testing.T) {
+	for _, mech := range []string{"none", "off", "any", "auto", "on", "upnp", "pmp", "natpmp", "nat-pmp"} {
+		spec := mech + ":192.0.2.1,2001:db8::1"
+		if _, err := Parse(spec); err == nil {
+			t.Errorf("%q: expected invalid IP address", spec)
+		}
+	}
+}
