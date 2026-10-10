@@ -127,6 +127,18 @@ type ConsensusAPI struct {
 
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
+
+	// Unknown forkchoice heads are fetched from the network in the background, one at a
+	// time; a head requested meanwhile replaces the waiting one. A fetch in progress is
+	// not cancelled: the waiting head is fetched after it. A fetched head is synced to
+	// unless a later forkchoice update was handled without a fetch (fetchEpoch).
+	headFetchLock sync.Mutex
+	headFetching  bool
+	headFetchNext *headFetch
+	fetchEpoch    uint64 // forkchoice updates handled without a fetch; protected by forkchoiceLock
+
+	syncTo    func(head, finalized *types.Header) error     // starts a beacon sync (replaced in tests)
+	getHeader func(hash common.Hash) (*types.Header, error) // fetches a header from peers (replaced in tests)
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -155,6 +167,104 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 	}
 	eth.Downloader().SetBadBlockCallback(api.setInvalidAncestor)
 	return api
+}
+
+// headFetch is an unknown forkchoice head to resolve from the network.
+type headFetch struct {
+	head, finalized common.Hash
+	epoch           uint64 // fetchEpoch of the forkchoice update that requested it
+}
+
+// fetchHead resolves an unknown forkchoice head from the network in the background and
+// starts syncing to it. Only the latest request waits while one is in flight.
+func (api *ConsensusAPI) fetchHead(req *headFetch) {
+	api.headFetchLock.Lock()
+	defer api.headFetchLock.Unlock()
+
+	api.headFetchNext = req
+	if api.headFetching {
+		return
+	}
+	api.headFetching = true
+	go func() {
+		for {
+			api.headFetchLock.Lock()
+			req := api.headFetchNext
+			api.headFetchNext = nil
+			if req == nil {
+				api.headFetching = false
+				api.headFetchLock.Unlock()
+				return
+			}
+			api.headFetchLock.Unlock()
+
+			// A head requested again while it was being fetched is known by now:
+			// don't fetch it twice.
+			header := api.remoteBlocks.get(req.head)
+			if header == nil {
+				var err error
+				if header, err = api.fetchHeader(req.head); err != nil {
+					log.Warn("Could not retrieve unknown head from peers", "hash", req.head, "err", err)
+					continue
+				}
+				api.remoteBlocks.put(header.Hash(), header)
+			}
+			api.syncFetchedHead(header, req)
+		}
+	}()
+}
+
+// fetchHeader retrieves a header from the network.
+func (api *ConsensusAPI) fetchHeader(hash common.Hash) (*types.Header, error) {
+	if api.getHeader != nil {
+		return api.getHeader(hash)
+	}
+	return api.eth.Downloader().GetHeader(hash)
+}
+
+// syncFetchedHead syncs to a head fetched in the background, unless a forkchoice update has
+// been handled without a fetch since it was requested (applied, ignored or rejected): the
+// consensus client has moved on, maybe to another branch, and syncing to the old head would
+// restart the sync onto it (or replay an older finalized hash). Later updates that only
+// requested heads still being fetched don't count: the fetched head is usually progress
+// towards those (on another branch it's wasted work, as with a synchronous fetch), and
+// dropping it would stall the sync whenever fetches are slower than the heads change. The
+// check and the sync happen under the forkchoice lock, like a sync that an update starts
+// itself.
+func (api *ConsensusAPI) syncFetchedHead(header *types.Header, req *headFetch) {
+	api.forkchoiceLock.Lock()
+	defer api.forkchoiceLock.Unlock()
+
+	if req.epoch != api.fetchEpoch {
+		log.Debug("Dropping fetched forkchoice head, superseded", "hash", header.Hash())
+		return
+	}
+	if err := api.beaconSync(header, req.finalized); err != nil {
+		log.Warn("Failed to sync to the forkchoice head", "hash", header.Hash(), "err", err)
+	}
+}
+
+// beaconSync starts syncing to a forkchoice head whose header is known.
+func (api *ConsensusAPI) beaconSync(header *types.Header, finalizedHash common.Hash) error {
+	// If the finalized hash is known, we can direct the downloader to move
+	// potentially more data to the freezer from the get go.
+	finalized := api.remoteBlocks.get(finalizedHash)
+	if finalized == nil {
+		finalized = api.eth.BlockChain().GetHeaderByHash(finalizedHash)
+	}
+	context := []interface{}{"number", header.Number, "hash", header.Hash()}
+	if finalizedHash != (common.Hash{}) {
+		if finalized == nil {
+			context = append(context, []interface{}{"finalized", "unknown"}...)
+		} else {
+			context = append(context, []interface{}{"finalized", finalized.Number}...)
+		}
+	}
+	log.Info("Forkchoice requested sync to new head", context...)
+	if api.syncTo != nil {
+		return api.syncTo(header, finalized)
+	}
+	return api.eth.Downloader().BeaconSync(header, finalized)
 }
 
 // ForkchoiceUpdatedV1 has several responsibilities:
@@ -251,6 +361,15 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	defer api.forkchoiceLock.Unlock()
 
 	log.Trace("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
+
+	// An update that doesn't fetch its head from the network is applied, ignored or
+	// rejected right here, which makes the heads fetched for earlier updates stale.
+	fetching := false
+	defer func() {
+		if !fetching {
+			api.fetchEpoch++
+		}
+	}()
 	if update.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")
 		return engine.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
@@ -269,33 +388,16 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		}
 		header := api.remoteBlocks.get(update.HeadBlockHash)
 		if header == nil {
-			// The head hash is unknown locally, try to resolve it from the `eth` network
-			log.Warn("Fetching the unknown forkchoice head from network", "hash", update.HeadBlockHash)
-			retrievedHead, err := api.eth.Downloader().GetHeader(update.HeadBlockHash)
-			if err != nil {
-				log.Warn("Could not retrieve unknown head from peers")
-				return engine.STATUS_SYNCING, nil
-			}
-			api.remoteBlocks.put(retrievedHead.Hash(), retrievedHead)
-			header = retrievedHead
-		}
-		// If the finalized hash is known, we can direct the downloader to move
-		// potentially more data to the freezer from the get go.
-		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
-		if finalized == nil {
-			finalized = api.eth.BlockChain().GetHeaderByHash(update.FinalizedBlockHash)
+			// The head hash is unknown locally: resolve it from the `eth` network in the
+			// background (peers are asked one after another, which can take longer than
+			// the consensus client waits for this call), then sync to it.
+			log.Debug("Fetching the unknown forkchoice head from network", "hash", update.HeadBlockHash)
+			fetching = true
+			api.fetchHead(&headFetch{head: update.HeadBlockHash, finalized: update.FinalizedBlockHash, epoch: api.fetchEpoch})
+			return engine.STATUS_SYNCING, nil
 		}
 		// Header advertised via a past newPayload request. Start syncing to it.
-		context := []interface{}{"number", header.Number, "hash", header.Hash()}
-		if update.FinalizedBlockHash != (common.Hash{}) {
-			if finalized == nil {
-				context = append(context, []interface{}{"finalized", "unknown"}...)
-			} else {
-				context = append(context, []interface{}{"finalized", finalized.Number}...)
-			}
-		}
-		log.Info("Forkchoice requested sync to new head", context...)
-		if err := api.eth.Downloader().BeaconSync(header, finalized); err != nil {
+		if err := api.beaconSync(header, update.FinalizedBlockHash); err != nil {
 			return engine.STATUS_SYNCING, err
 		}
 		return engine.STATUS_SYNCING, nil
