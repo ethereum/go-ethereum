@@ -608,9 +608,6 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 		// progress is still usable. If yes, roll forward via BAL catch-up. If not,
 		// wipe everything and restart fresh.
 		switch {
-		case s.isPivotReorged(prevPivot, target):
-			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
-			s.resetSyncState()
 		case catchUpExceedsRetention(prevPivot, target):
 			// The pivot moved further than the BAL retention window. The access
 			// lists required for catch-up are almost certainly unavailable from
@@ -618,6 +615,11 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 			// instead of starting a catch-up doomed to stall.
 			log.Warn("Catch-up gap exceeds BAL retention, restarting snap sync from scratch", "oldnumber", prevPivot.Number, "newnumber", target.Number, "gap", new(big.Int).Sub(target.Number, prevPivot.Number), "limit", maxCatchUpBlocks)
 			s.resetSyncState()
+
+		case s.isPivotReorged(prevPivot, target):
+			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
+			s.resetSyncState()
+
 		default:
 			// An unclean shutdown may have left flushed snapshot data the journal
 			// doesn't cover.
