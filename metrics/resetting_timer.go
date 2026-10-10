@@ -36,6 +36,9 @@ type ResettingTimer struct {
 	values []int64
 	sum    int64 // sum is a running count of the total sum, used later to calculate mean
 
+	totalCount int64 // cumulative count across all snapshots
+	totalSum   int64 // cumulative sum across all snapshots
+
 	mutex sync.Mutex
 }
 
@@ -43,7 +46,15 @@ type ResettingTimer struct {
 func (t *ResettingTimer) Snapshot() *ResettingTimerSnapshot {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	snapshot := &ResettingTimerSnapshot{}
+
+	// Accumulate cumulative totals before resetting.
+	t.totalCount += int64(len(t.values))
+	t.totalSum += t.sum
+
+	snapshot := &ResettingTimerSnapshot{
+		totalCount: t.totalCount,
+		totalSum:   t.totalSum,
+	}
 	if len(t.values) > 0 {
 		snapshot.mean = float64(t.sum) / float64(len(t.values))
 		snapshot.values = t.values
@@ -84,11 +95,23 @@ type ResettingTimerSnapshot struct {
 	min                 int64
 	thresholdBoundaries []float64
 	calculated          bool
+	totalCount          int64 // cumulative count across all snapshots
+	totalSum            int64 // cumulative sum across all snapshots
 }
 
 // Count return the length of the values from snapshot.
 func (t *ResettingTimerSnapshot) Count() int {
 	return len(t.values)
+}
+
+// TotalCount returns the cumulative count of events across all snapshots.
+func (t *ResettingTimerSnapshot) TotalCount() int64 {
+	return t.totalCount
+}
+
+// TotalSum returns the cumulative sum of event durations across all snapshots.
+func (t *ResettingTimerSnapshot) TotalSum() int64 {
+	return t.totalSum
 }
 
 // Percentiles returns the boundaries for the input percentiles.
