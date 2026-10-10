@@ -683,6 +683,9 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 			return err
 		}
 	}
+	if err := it.Error(); err != nil {
+		return err
+	}
 	log.Info("Exported preimages", "file", fn)
 	return nil
 }
@@ -769,6 +772,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, stateIt *StateIterator, fn 
 		Size int
 	}
 	hashCh := make(chan hashAndPreimageSize)
+	errCh := make(chan error, 1)
 
 	var (
 		start     = time.Now()
@@ -779,7 +783,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, stateIt *StateIterator, fn 
 		defer close(hashCh)
 		accIt, err := stateIt.AccountIterator(root, common.Hash{})
 		if err != nil {
-			log.Error("Failed to create account iterator", "error", err)
+			errCh <- err
 			return
 		}
 		defer accIt.Release()
@@ -787,7 +791,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, stateIt *StateIterator, fn 
 		for accIt.Next() {
 			acc, err := types.FullAccount(accIt.Account())
 			if err != nil {
-				log.Error("Failed to get full account", "error", err)
+				errCh <- err
 				return
 			}
 			preimages += 1
@@ -796,7 +800,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, stateIt *StateIterator, fn 
 			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
 				stIt, err := stateIt.StorageIterator(root, accIt.Hash(), common.Hash{})
 				if err != nil {
-					log.Error("Failed to create storage iterator", "error", err)
+					errCh <- err
 					return
 				}
 				for stIt.Next() {
@@ -808,12 +812,21 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, stateIt *StateIterator, fn 
 						log.Info("Exporting preimages", "count", preimages, "elapsed", common.PrettyDuration(time.Since(start)))
 					}
 				}
+				if err := stIt.Error(); err != nil {
+					stIt.Release()
+					errCh <- err
+					return
+				}
 				stIt.Release()
 			}
 			if time.Since(logged) > time.Second*8 {
 				logged = time.Now()
 				log.Info("Exporting preimages", "count", preimages, "elapsed", common.PrettyDuration(time.Since(start)))
 			}
+		}
+		if err := accIt.Error(); err != nil {
+			errCh <- err
+			return
 		}
 	}()
 
@@ -832,6 +845,11 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, stateIt *StateIterator, fn 
 		if _, err := writer.Write(rlpenc); err != nil {
 			return fmt.Errorf("failed to write preimage: %w", err)
 		}
+	}
+	select {
+	case err := <-errCh:
+		return err
+	default:
 	}
 	log.Info("Exported preimages", "count", preimages, "elapsed", common.PrettyDuration(time.Since(start)), "file", fn)
 	return nil
