@@ -76,6 +76,36 @@ func (e *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// NormalizeJSON ensures all change lists are non-nil so that JSON encoding
+// emits empty arrays instead of nulls. RLP decoding leaves empty lists as
+// nil slices, which would otherwise marshal as null. It does not affect the
+// RLP or hash encodings, where nil and empty lists are identical.
+func (e *BlockAccessList) NormalizeJSON() {
+	for i := range *e {
+		a := &(*e)[i]
+		if a.StorageChanges == nil {
+			a.StorageChanges = []encodingSlotChanges{}
+		}
+		if a.StorageReads == nil {
+			a.StorageReads = []*uint256.Int{}
+		}
+		if a.BalanceChanges == nil {
+			a.BalanceChanges = []encodingBalanceChange{}
+		}
+		if a.NonceChanges == nil {
+			a.NonceChanges = []encodingAccountNonce{}
+		}
+		if a.CodeChanges == nil {
+			a.CodeChanges = []encodingCodeChange{}
+		}
+		for j := range a.StorageChanges {
+			if a.StorageChanges[j].SlotChanges == nil {
+				a.StorageChanges[j].SlotChanges = []encodingStorageWrite{}
+			}
+		}
+	}
+}
+
 // Validate returns an error if the contents of the access list are not ordered
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
