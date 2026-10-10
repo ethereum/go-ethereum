@@ -99,14 +99,17 @@ func (t *tracer) onExit(depth int, output []byte, gasUsed uint64, err error, rev
 	t.logs = t.logs[:size-1]
 	size--
 
-	// Clear logs if call failed.
-	if !reverted {
+	// Clear logs if call failed. They are the latest logs, so their indices are free again.
+	if reverted {
+		t.count -= len(call)
+	} else {
 		t.logs[size-1] = append(t.logs[size-1], call...)
 	}
 }
 
 func (t *tracer) onEnd(reverted bool) {
 	if reverted {
+		t.count -= len(t.logs[0])
 		t.logs[0] = nil
 	}
 }
