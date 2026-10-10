@@ -5,6 +5,11 @@
 # https://github.com/ethereum/execution-specs/releases/download/tests%40v21.0.1
 b9b14391ed1a625e4ca9a058c055d0eacd98a42b76c7a6127c640cdc2d3c9439  fixtures.tar.gz
 
+# version:consensus-spec-tests v1.7.0-alpha.12
+# https://github.com/ethereum/consensus-specs/releases
+# https://github.com/ethereum/consensus-specs/releases/download/v1.7.0-alpha.12
+329f3cf58927df2614ecafbce78eb3c5258a13e8731d2f410bb31d8e4a5b9eaf  general.tar.gz
+
 # version:golang 1.27.1
 # https://go.dev/dl/
 4e408abae126d916b6164627193f2c54f0e3ca1312d693b86db45f862ab238b1  go1.27.1.src.tar.gz
