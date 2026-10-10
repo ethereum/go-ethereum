@@ -1451,6 +1451,13 @@ func readAnyFrom[T any](ctx context.Context, conns ...*Conn) (*T, *Conn, error) 
 	}
 	cancel()
 	wg.Wait()
+	close(ch)
+
+	// Stash the packets read from the other conns so that later reads can
+	// still consume them.
+	for other := range ch {
+		other.c.pending = append(other.c.pending, other.pkt)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
