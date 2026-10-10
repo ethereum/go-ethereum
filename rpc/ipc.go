@@ -26,6 +26,10 @@ import (
 
 // ServeListener accepts connections on l, serving JSON-RPC on them.
 func (s *Server) ServeListener(l net.Listener) error {
+	var sem chan struct{}
+	if s.maxConns > 0 {
+		sem = make(chan struct{}, s.maxConns)
+	}
 	for {
 		conn, err := l.Accept()
 		if netutil.IsTemporaryError(err) {
@@ -34,8 +38,22 @@ func (s *Server) ServeListener(l net.Listener) error {
 		} else if err != nil {
 			return err
 		}
+		if sem != nil {
+			select {
+			case sem <- struct{}{}:
+			default:
+				log.Warn("RPC connection limit reached, rejecting", "conn", conn.RemoteAddr())
+				conn.Close()
+				continue
+			}
+		}
 		log.Trace("Accepted RPC connection", "conn", conn.RemoteAddr())
-		go s.ServeCodec(NewCodec(conn), 0)
+		go func() {
+			s.ServeCodec(NewCodec(conn), 0)
+			if sem != nil {
+				<-sem
+			}
+		}()
 	}
 }
 
