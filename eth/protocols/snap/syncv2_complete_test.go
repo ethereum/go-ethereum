@@ -171,6 +171,8 @@ func newCompleteFixture(t *testing.T, scheme string) *completeFixture {
 	balC.BalanceChange(1, f.newAddr, uint256.NewInt(6000))
 
 	// Headers, linked by parent hash as the catch-up walks them backward.
+	// They are only in the skeleton, the blocks of a pivot that is still
+	// syncing are not committed yet.
 	var (
 		emptyH = common.Hash{}
 		zero   = uint64(0)
@@ -202,8 +204,7 @@ func newCompleteFixture(t *testing.T, scheme string) *completeFixture {
 			header.BlockAccessListHash = &balHash
 			f.bals[header.Hash()] = buf.Bytes()
 		}
-		rawdb.WriteHeader(f.db, header)
-		rawdb.WriteCanonicalHash(f.db, header.Hash(), num)
+		rawdb.WriteSkeletonHeader(f.db, header)
 		return header
 	}
 	f.hdrA = mkHeader(numA, common.Hash{}, rootA, nil)
@@ -518,8 +519,7 @@ func testCompletePhaseRootMismatch(t *testing.T, scheme string) {
 	bad := *f.hdrC
 	bad.Root = common.HexToHash("0xbad")
 	f.bals[bad.Hash()] = f.bals[f.hdrC.Hash()]
-	rawdb.WriteHeader(f.db, &bad)
-	rawdb.WriteCanonicalHash(f.db, bad.Hash(), bad.Number.Uint64())
+	rawdb.WriteSkeletonHeader(f.db, &bad)
 
 	err, reqs := f.move(t, &bad)
 	if err == nil {

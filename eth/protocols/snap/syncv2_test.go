@@ -1477,66 +1477,96 @@ func withLeafBalance(t *testing.T, elems []*kv, hash common.Hash, balance uint64
 	return out
 }
 
-// TestIsPivotReorged verifies the four conditions isPivotReorged covers:
-// reorged out, non-advancing pivot, missing canonical, and the happy path
-// where the previous pivot is still canonical and the new pivot advances.
+// TestIsPivotReorged verifies the conditions isPivotReorged covers:
+// non-advancing pivot, a different block at the old pivot's height, a
+// broken header chain, and the happy paths where the old pivot is an
+// ancestor of the new one, whether or not its block is committed yet.
 func TestIsPivotReorged(t *testing.T) {
 	t.Parallel()
 
-	// Reorged: canonical hash at prev's height differs from prev. The
-	// previous pivot was reorged out by an alternate chain at the same
-	// (or higher) height.
-	t.Run("Reorged_DifferentHash", func(t *testing.T) {
-		db := rawdb.NewMemoryDatabase()
-		prev := mkPivot(100, common.HexToHash("0xaaaa"))
-		curr := mkPivot(105, common.HexToHash("0xcccc"))
-		canonical := mkPivot(100, common.HexToHash("0xbbbb"))
-		rawdb.WriteHeader(db, canonical)
-		rawdb.WriteCanonicalHash(db, canonical.Hash(), canonical.Number.Uint64())
-
-		if !isPivotReorged(db, prev, curr) {
-			t.Fatal("expected reorg detection when canonical hash differs")
+	// chain links count headers on top of parent, starting at parent+1.
+	chain := func(parent *types.Header, count int) []*types.Header {
+		headers := make([]*types.Header, count)
+		for i := range headers {
+			headers[i] = &types.Header{
+				ParentHash: parent.Hash(),
+				Number:     new(big.Int).Add(parent.Number, common.Big1),
+				Difficulty: common.Big0,
+			}
+			parent = headers[i]
 		}
-	})
+		return headers
+	}
+	var (
+		prev  = mkPivot(100, common.HexToHash("0xaaaa"))
+		other = mkPivot(100, common.HexToHash("0xbbbb"))
+	)
 
-	// NonAdvancingPivot: new pivot is at or below the old one. There's
-	// nothing for catchUp to roll forward, regardless of canonical state.
+	// The new pivot is at or below the old one, nothing to roll forward.
 	t.Run("NonAdvancingPivot", func(t *testing.T) {
-		db := rawdb.NewMemoryDatabase()
-		prev := mkPivot(100, common.HexToHash("0xaaaa"))
-		curr := mkPivot(95, common.HexToHash("0xcccc"))
-		rawdb.WriteHeader(db, prev)
-		rawdb.WriteCanonicalHash(db, prev.Hash(), prev.Number.Uint64())
-
-		if !isPivotReorged(db, prev, curr) {
+		s := newSyncerV2(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
+		if !s.isPivotReorged(prev, mkPivot(95, common.HexToHash("0xcccc"))) {
 			t.Fatal("expected reorg detection when new pivot is at or below the old one")
 		}
 	})
 
-	// MissingCanonical: canonical hash at prev's height is absent while
-	// curr advances past it. By the time Sync is called, headers up to
-	// curr should be indexed, so this implies broken chain state.
-	t.Run("MissingCanonical", func(t *testing.T) {
+	// The new pivot descends from a different block at the old pivot's
+	// height, the old pivot was reorged out.
+	t.Run("Reorged", func(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
-		prev := mkPivot(100, common.HexToHash("0xaaaa"))
-		curr := mkPivot(105, common.HexToHash("0xcccc"))
-
-		if !isPivotReorged(db, prev, curr) {
-			t.Fatal("expected reorg detection when canonical hash is missing at prev's height")
+		headers := chain(other, 5)
+		for _, h := range headers {
+			rawdb.WriteSkeletonHeader(db, h)
+		}
+		s := newSyncerV2(db, rawdb.HashScheme)
+		if !s.isPivotReorged(prev, headers[4]) {
+			t.Fatal("expected reorg detection when the new pivot descends from another block")
 		}
 	})
 
-	// NotReorged_SameHash: prev is still canonical and curr advances past
-	// it. Catch-up is feasible.
-	t.Run("NotReorged_SameHash", func(t *testing.T) {
+	// A gap header is missing, the ancestry can't be established.
+	t.Run("MissingHeader", func(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
-		prev := mkPivot(100, common.HexToHash("0xaaaa"))
-		curr := mkPivot(105, common.HexToHash("0xcccc"))
-		rawdb.WriteHeader(db, prev)
-		rawdb.WriteCanonicalHash(db, prev.Hash(), prev.Number.Uint64())
+		headers := chain(prev, 5)
+		for _, h := range headers[1:] {
+			rawdb.WriteSkeletonHeader(db, h)
+		}
+		s := newSyncerV2(db, rawdb.HashScheme)
+		if !s.isPivotReorged(prev, headers[4]) {
+			t.Fatal("expected reorg detection when the header chain is broken")
+		}
+	})
 
-		if isPivotReorged(db, prev, curr) {
-			t.Fatal("should not detect reorg when prev is canonical and curr advances")
+	// The old pivot and the gap are not committed yet, so the canonical
+	// index is empty and the headers only live in the skeleton.
+	t.Run("Ancestor_Skeleton", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		headers := chain(prev, 5)
+		rawdb.WriteSkeletonHeader(db, prev)
+		for _, h := range headers {
+			rawdb.WriteSkeletonHeader(db, h)
+		}
+		s := newSyncerV2(db, rawdb.HashScheme)
+		if s.isPivotReorged(prev, headers[4]) {
+			t.Fatal("should not detect reorg when the old pivot is an unindexed ancestor")
+		}
+	})
+
+	// The lower part of the gap is committed already, the rest is still
+	// in the skeleton.
+	t.Run("Ancestor_Mixed", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		headers := chain(prev, 5)
+		for _, h := range headers[:2] {
+			rawdb.WriteHeader(db, h)
+			rawdb.WriteCanonicalHash(db, h.Hash(), h.Number.Uint64())
+		}
+		for _, h := range headers[2:] {
+			rawdb.WriteSkeletonHeader(db, h)
+		}
+		s := newSyncerV2(db, rawdb.HashScheme)
+		if s.isPivotReorged(prev, headers[4]) {
+			t.Fatal("should not detect reorg when the old pivot is an ancestor")
 		}
 	})
 }
@@ -1763,7 +1793,8 @@ func TestSyncPersistsPivotDuringDownload(t *testing.T) {
 
 // TestPivotMovement verifies the full pivot move flow: download with rootA,
 // cancel+restart with rootB, catch-up applies BAL diffs, download resumes
-// and completes against the new state.
+// and completes against the new state. The headers past pivot A are only in
+// the skeleton, as in a real sync where the block download trails the pivot.
 func TestPivotMovement(t *testing.T) {
 	t.Parallel()
 	testPivotMovement(t, rawdb.HashScheme, 1)
@@ -1788,12 +1819,11 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 	targetHash := crypto.Keccak256Hash(targetAddr[:])
 
 	type pivotMove struct {
-		blockNum uint64
-		trie     *trie.Trie
-		elems    []*kv
-		root     common.Hash
-		bals     map[common.Hash]rlp.RawValue // header hash -> encoded BAL
-		balance  *uint256.Int
+		header  *types.Header
+		trie    *trie.Trie
+		elems   []*kv
+		bals    map[common.Hash]rlp.RawValue // header hash -> encoded BAL
+		balance *uint256.Int
 	}
 
 	// Build each pivot move: update account 50's balance in both the trie
@@ -1803,6 +1833,8 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 	moves := make([]pivotMove, pivotMoves)
 	emptyHash := common.Hash{}
 	zero := uint64(0)
+	pivotA := mkPivot(numA, sourceAccountTrie.Hash())
+	parent := pivotA
 	for m := 0; m < pivotMoves; m++ {
 		blockNum := numA + uint64(m) + 1
 		balance := uint256.NewInt(uint64(1000 * (m + 1)))
@@ -1842,28 +1874,26 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 		}
 		balHash := b.Hash()
 		header := &types.Header{
+			ParentHash: parent.Hash(), Root: newRoot,
 			Number: new(big.Int).SetUint64(blockNum), Difficulty: common.Big0,
 			BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
 			BlobGasUsed: &zero, ExcessBlobGas: &zero,
 			ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
 			BlockAccessListHash: &balHash,
 		}
-		rawdb.WriteHeader(db, header)
-		headerHash := header.Hash()
-		rawdb.WriteCanonicalHash(db, headerHash, blockNum)
+		rawdb.WriteSkeletonHeader(db, header)
 		moves[m] = pivotMove{
-			blockNum: blockNum,
-			trie:     resultTrie,
-			elems:    newElems,
-			root:     newRoot,
-			bals:     map[common.Hash]rlp.RawValue{headerHash: buf.Bytes()},
-			balance:  balance,
+			header:  header,
+			trie:    resultTrie,
+			elems:   newElems,
+			bals:    map[common.Hash]rlp.RawValue{header.Hash(): buf.Bytes()},
+			balance: balance,
 		}
 		currentElems = newElems
+		parent = header
 	}
 
 	// First run: download against rootA, cancel after 2 responses
-	rootA := sourceAccountTrie.Hash()
 	var (
 		once1     sync.Once
 		cancel1   = make(chan struct{})
@@ -1883,7 +1913,7 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 	}
 	syncer1.Register(src1)
 	src1.remote = syncer1
-	syncer1.Sync(mkPivot(numA, rootA), cancel1)
+	syncer1.Sync(pivotA, cancel1)
 
 	// Subsequent runs: each move triggers catch-up then resumes download
 	for i, move := range moves {
@@ -1899,8 +1929,12 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 		src.accessLists = move.bals
 		syncer.Register(src)
 		src.remote = syncer
-		if err := syncer.Sync(mkPivot(move.blockNum, move.root), cancel); err != nil {
+		if err := syncer.Sync(move.header, cancel); err != nil {
 			t.Fatalf("pivot move %d: sync failed: %v", i+1, err)
+		}
+		// A move must roll forward through the BAL, not restart the sync.
+		if src.nAccessListRequests.Load() == 0 {
+			t.Fatalf("pivot move %d: sync restarted instead of catching up", i+1)
 		}
 
 		// Verify account 50's balance was updated by catch-up
@@ -1945,17 +1979,12 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 	emptyHash := common.Hash{}
 	zero := uint64(0)
 
-	// Write the header and canonical hash for block A so the reorg-detection
-	// canonical-lookup in Sync passes (otherwise it'd treat A as reorged out
-	// and reset instead of running catchUp).
 	pivotAHeader := &types.Header{
 		Number: new(big.Int).SetUint64(numA), Root: rootA, Difficulty: common.Big0,
 		BaseFee: common.Big0, WithdrawalsHash: &emptyHash,
 		BlobGasUsed: &zero, ExcessBlobGas: &zero,
 		ParentBeaconRoot: &emptyHash, RequestsHash: &emptyHash,
 	}
-	rawdb.WriteHeader(db, pivotAHeader)
-	rawdb.WriteCanonicalHash(db, pivotAHeader.Hash(), numA)
 	pivotA := pivotAHeader
 
 	// Build three sequential BAL blocks (A+1, A+2, A+3). The first two touch
@@ -1997,7 +2026,6 @@ func testCatchUpPersistsIncrementally(t *testing.T, scheme string) {
 			BlockAccessListHash: &balHash,
 		}
 		rawdb.WriteHeader(db, header)
-		rawdb.WriteCanonicalHash(db, header.Hash(), blockNum)
 		blocks[i] = balBlock{header: header, bal: buf.Bytes()}
 		parent = header.Hash()
 	}
