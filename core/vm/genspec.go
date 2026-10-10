@@ -81,31 +81,33 @@ func genFnName(fn any) string {
 	return full
 }
 
-// GenForks returns per-fork opcode metadata for the interpreter code generator
-// (core/vm/gen), one entry per fork that changes the opcode table, oldest to
-// newest. It derives the progression from params.Rules and LookupInstructionSet
-// (in params.Rules declaration order, which is chronological) so new forks are
-// picked up without restating a list here. Which of these forks the generated
-// switch gives a lane is the generator's call, not this file's.
+// GenForks returns per-fork opcode metadata for the interpreter code generator,
+// one entry per fork that changes any opcode metadata, including the handler,
+// dynamic-gas and memory-size function names, oldest to newest.
 func GenForks() []GenFork {
 	// Frontier is always active and carries no rule gate.
 	frontier, _ := LookupInstructionSet(params.Rules{})
 	out := []GenFork{genFork("Frontier", "", &frontier)}
 
-	rt := reflect.TypeOf(params.Rules{})
-	for i := range rt.NumField() {
-		field := rt.Field(i)
+	var (
+		rules params.Rules
+		rv    = reflect.ValueOf(&rules).Elem()
+	)
+	for i := range rv.NumField() {
+		field := rv.Type().Field(i)
 		if field.Type.Kind() != reflect.Bool {
 			continue
 		}
-		// Activate only this field so the fork resolves to the table it gates.
-		var rules params.Rules
-		reflect.ValueOf(&rules).Elem().Field(i).SetBool(true)
+		// Activate this field on top of all earlier ones, as a chain does.
+		rv.Field(i).SetBool(true)
 		set, _ := LookupInstructionSet(rules)
-		if sameOps(&set, &frontier) {
-			continue // this rule does not change the opcode table
+		fork := genFork(strings.TrimPrefix(field.Name, "Is"), field.Name, &set)
+
+		// Skip forks that change nothing over the previous one.
+		if fork.Ops == out[len(out)-1].Ops {
+			continue
 		}
-		out = append(out, genFork(strings.TrimPrefix(field.Name, "Is"), field.Name, &set))
+		out = append(out, fork)
 	}
 	return out
 }
@@ -131,27 +133,4 @@ func genFork(name, rule string, set *JumpTable) GenFork {
 		}
 	}
 	return gf
-}
-
-// sameOps reports whether two instruction sets carry identical per-opcode static
-// metadata: which slots are defined, and their static gas and stack bounds. It
-// is used to tell whether a fork actually changes the opcode table. Handler,
-// dynamic-gas and memory-size functions are ignored (they cannot be compared for
-// equality and are reached through the table at runtime).
-func sameOps(a, b *JumpTable) bool {
-	for code := range 256 {
-		oa, ob := a[code], b[code]
-		undefA := oa == nil || oa.undefined
-		undefB := ob == nil || ob.undefined
-		if undefA != undefB {
-			return false
-		}
-		if undefA {
-			continue
-		}
-		if oa.constantGas != ob.constantGas || oa.minStack != ob.minStack || oa.maxStack != ob.maxStack {
-			return false
-		}
-	}
-	return true
 }
