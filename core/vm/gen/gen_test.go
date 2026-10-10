@@ -19,8 +19,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/format"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -256,6 +258,13 @@ func TestGuards(t *testing.T) {
 			want: "no name to call",
 			fn:   func() { g.handlerCall(byte(vm.LOG0)) },
 		},
+		{
+			// A case is only gated on the introducing fork, so an opcode a later
+			// fork removes would keep running past the removal.
+			name: "hotOps entry that a later fork removes",
+			want: "removes it",
+			fn:   func() { g.assignTiers([]vm.OpCode{vm.ADD}, forksRemoving(vm.ADD)) },
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tripped(t, tc.fn)
@@ -268,3 +277,69 @@ func TestGuards(t *testing.T) {
 		})
 	}
 }
+
+// forksRemoving returns the real fork progression with one more fork appended
+// that no longer defines op.
+func forksRemoving(op vm.OpCode) []vm.GenFork {
+	forks := genForks()
+	removal := forks[len(forks)-1]
+	removal.Name, removal.RuleField = "Removal", "IsRemoval"
+	removal.Ops[op] = vm.GenOp{}
+	return append(forks, removal)
+}
+
+// TestDynamicCaseForkGated checks that a dynamic-gas case for an opcode introduced
+// after Frontier is gated on its fork, falling back to undefined before it, the
+// same as a static case. Without the gate it would run on every fork.
+func TestDynamicCaseForkGated(t *testing.T) {
+	forks := genForks()
+	g := &generator{buf: new(bytes.Buffer)}
+	g.deriveSpecs(forks)
+	g.assignTiers([]vm.OpCode{vm.MCOPY}, forks)
+	if got := g.tierOf(byte(vm.MCOPY)); got != tierDynamic {
+		t.Fatalf("MCOPY tier = %v, want %v", got, tierDynamic)
+	}
+	g.createFile()
+
+	src, err := format.Source(g.buf.Bytes())
+	if err != nil {
+		t.Fatalf("generated dispatch does not parse: %v", err)
+	}
+	for _, tc := range []struct {
+		op   vm.OpCode
+		gate string
+	}{
+		{vm.MCOPY, "if rules.IsCancun {"},
+		{vm.MLOAD, ""}, // Frontier, so no gate
+	} {
+		body := caseBody(string(src), tc.op)
+		if body == "" {
+			t.Fatalf("no case for %s in the generated dispatch", tc.op)
+		}
+		if tc.gate == "" {
+			if strings.Contains(body, "if rules.") {
+				t.Errorf("%s case is fork-gated, want none:\n%s", tc.op, body)
+			}
+			continue
+		}
+		if !strings.Contains(body, tc.gate) || !strings.Contains(body, "opUndefined(") {
+			t.Errorf("%s case is not gated by %q with an undefined fallback:\n%s", tc.op, tc.gate, body)
+		}
+	}
+}
+
+// caseBody returns the text of op's case in the generated dispatch, up to the
+// next case or the default.
+func caseBody(src string, op vm.OpCode) string {
+	start := strings.Index(src, "case "+op.String()+":")
+	if start < 0 {
+		return ""
+	}
+	rest := src[start+1:]
+	if loc := nextCase.FindStringIndex(rest); loc != nil {
+		rest = rest[:loc[0]]
+	}
+	return src[start:start+1] + rest
+}
+
+var nextCase = regexp.MustCompile(`\n\s*(case |default:)`)

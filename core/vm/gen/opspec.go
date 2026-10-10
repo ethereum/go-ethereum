@@ -84,10 +84,11 @@ var hotOps = []vm.OpCode{
 
 // tierFor returns the tier an opcode can be dispatched by. tierTable comes back
 // with the reason the opcode cannot take its own case, which is what the abort in
-// deriveSpecs reports. An opcode qualifies when it is defined, every fork that
-// defines it agrees on its metadata, and its handler is a named top-level function.
-// A fork-varying opcode cannot have its gas and stack bounds emitted as constants,
-// and a closure-built handler has no name to write a call to.
+// deriveSpecs reports.
+//
+// An opcode qualifies when it is defined, every fork from its introduction on
+// defines it and agrees on its metadata, and its handler is a named top-level
+// function.
 func (g *generator) tierFor(code byte, forks []vm.GenFork) (tier, string) {
 	spec := g.specs[code]
 	if !spec.Defined {
@@ -96,8 +97,17 @@ func (g *generator) tierFor(code byte, forks []vm.GenFork) (tier, string) {
 	if strings.Contains(spec.ExecuteFn, ".") {
 		return tierTable, fmt.Sprintf("its handler is the closure %q, which has no name to call", spec.ExecuteFn)
 	}
+	var introduced bool
 	for _, fork := range forks {
-		if o := fork.Ops[code]; o.Defined && o != spec.GenOp {
+		o := fork.Ops[code]
+		if !o.Defined {
+			if introduced {
+				return tierTable, fmt.Sprintf("fork %s removes it, which a case gated on its introducing fork cannot express", fork.Name)
+			}
+			continue
+		}
+		introduced = true
+		if o != spec.GenOp {
 			return tierTable, fmt.Sprintf("fork %s changes its gas, stack bounds or functions, so they cannot be emitted as constants", fork.Name)
 		}
 	}

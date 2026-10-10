@@ -194,10 +194,13 @@ func (g *generator) emitStaticOp(code byte) {
 // emitDynamicOp emits a case for a fork-invariant opcode that carries dynamic gas.
 // It differs from the table path only in calling the handler by name rather than
 // through a table pointer, and in emitting its static gas and stack bounds as
-// constants.
+// constants. Like emitStaticOp, it is gated on the introducing fork.
 func (g *generator) emitDynamicOp(code byte) {
 	spec := g.specs[code]
 	g.p("case %s:\n", spec.Name)
+	if spec.fork != "" {
+		g.p("if rules.%s {\n", spec.fork)
+	}
 	g.emitStackChecks(spec.stackGuards())
 	if spec.ConstantGas != 0 {
 		g.emitStaticGas(spec.ConstantGas)
@@ -206,6 +209,13 @@ func (g *generator) emitDynamicOp(code byte) {
 	g.emitCallHandler(g.handlerCall(code))
 	g.emitStackStep(spec.stackDelta())
 	g.emitAdvance()
+
+	// Close the fork gate opened above, then the branch taken while the fork is
+	// still inactive.
+	if spec.fork != "" {
+		g.p("}\n")
+		g.emitUndefinedFallback()
+	}
 }
 
 // emitTableOp emits the switch's default case, which walks the table exactly as the
