@@ -1359,11 +1359,20 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 	}
 
+	// A blob fee cap without blob hashes does not make the request a blob call,
+	// so keep it out of the fee defaults and their validation.
+	var blobFeeCap *hexutil.Big
+	if args.BlobHashes == nil {
+		blobFeeCap, args.BlobFeeCap = args.BlobFeeCap, nil
+	}
 	// Leave fees at zero when all fee fields are omitted so simulation does not require funds for gas.
 	if args.GasPrice != nil || args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.BlobFeeCap != nil {
 		if err = args.setFeeDefaults(ctx, b, header); err != nil {
 			return nil, 0, nil, err
 		}
+	}
+	if args.BlobHashes == nil {
+		args.BlobFeeCap = blobFeeCap
 	}
 	if args.Nonce == nil {
 		nonce := hexutil.Uint64(db.GetNonce(args.from()))
