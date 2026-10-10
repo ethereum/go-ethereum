@@ -252,12 +252,18 @@ type FeeHistoryReader interface {
 }
 
 // FeeHistory provides recent fee market data that consumers can use to determine
-// a reasonable maxPriorityFeePerGas value.
+// reasonable execution and blob gas fee caps.
 type FeeHistory struct {
 	OldestBlock  *big.Int     // block corresponding to first response value
 	Reward       [][]*big.Int // list every txs priority fee per block
 	BaseFee      []*big.Int   // list of each block's base fee
 	GasUsedRatio []float64    // ratio of gas used out of the total available limit
+	// BlobBaseFee contains the base fee per blob gas in wei for each returned
+	// block and the next block. It is nil if the server omits blob fee history.
+	BlobBaseFee []*big.Int
+	// BlobGasUsedRatio contains the fraction of the maximum blob gas used in
+	// each returned block. It is nil if the server omits blob usage history.
+	BlobGasUsedRatio []float64
 }
 
 // A PendingStateReader provides access to the pending state, which is the result of all
