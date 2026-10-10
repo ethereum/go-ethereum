@@ -140,17 +140,29 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		return a.reward.Cmp(b.reward)
 	})
 
+	// Percentile rewards are weighted by per-tx receipt gas. Under EIP-8037
+	// block gas used is max(cumulative regular, cumulative state) and can exceed
+	// the sum of receipt gas, so base thresholds on the receipt total.
+	totalGasUsed := bf.receipts[len(bf.receipts)-1].CumulativeGasUsed
+	bf.results.reward = percentileRewards(sorter, totalGasUsed, percentiles)
+}
+
+// percentileRewards returns the effective priority-fee reward at each requested
+// percentile, with transactions sorted by ascending tip and weighted by gas used.
+func percentileRewards(sorter []txGasAndReward, totalGasUsed uint64, percentiles []float64) []*big.Int {
+	reward := make([]*big.Int, len(percentiles))
 	var txIndex int
 	sumGasUsed := sorter[0].gasUsed
 
 	for i, p := range percentiles {
-		thresholdGasUsed := uint64(float64(bf.block.GasUsed()) * p / 100)
-		for sumGasUsed < thresholdGasUsed && txIndex < len(bf.block.Transactions())-1 {
+		thresholdGasUsed := uint64(float64(totalGasUsed) * p / 100)
+		for sumGasUsed < thresholdGasUsed && txIndex < len(sorter)-1 {
 			txIndex++
 			sumGasUsed += sorter[txIndex].gasUsed
 		}
-		bf.results.reward[i] = sorter[txIndex].reward
+		reward[i] = sorter[txIndex].reward
 	}
+	return reward
 }
 
 // resolveBlockRange resolves the specified block range to absolute block numbers while also
