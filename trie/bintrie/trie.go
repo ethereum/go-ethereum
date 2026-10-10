@@ -382,7 +382,7 @@ func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration
 // starts at the key after the given start key.
 func (t *BinaryTrie) NodeIterator(startKey []byte) (trie.NodeIterator, error) {
-	return newBinaryNodeIterator(t, nil)
+	return newBinaryNodeIterator(t, startKey)
 }
 
 // Prove constructs a Merkle proof for key. The result contains all encoded nodes
