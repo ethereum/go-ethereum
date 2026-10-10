@@ -38,7 +38,7 @@ import (
 // across signing different data structures.
 const syncCommitteeDomain = 7
 
-var knownForks = []string{"GENESIS", "ALTAIR", "BELLATRIX", "CAPELLA", "DENEB", "ELECTRA", "FULU"}
+var knownForks = []string{"GENESIS", "ALTAIR", "BELLATRIX", "CAPELLA", "DENEB", "ELECTRA", "FULU", "GLOAS"}
 
 // ClientConfig contains beacon light client configuration.
 type ClientConfig struct {
@@ -66,6 +66,12 @@ func (c *ChainConfig) ForkAtEpoch(epoch uint64) Fork {
 		}
 	}
 	return Fork{}
+}
+
+// ForkNameAtSlot returns the name of the latest active fork at the given slot, in
+// lower case (as the beacon API names versions).
+func (c *ChainConfig) ForkNameAtSlot(slot uint64) string {
+	return strings.ToLower(c.ForkAtEpoch(slot / EpochLength).Name)
 }
 
 // AddFork adds a new item to the list of forks.
