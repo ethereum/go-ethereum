@@ -160,6 +160,36 @@ func TestTracer(t *testing.T) {
 	}
 }
 
+func TestCyclicArrayJoin(t *testing.T) {
+	chainConfig := params.TestChainConfig
+	tracer, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { var a = []; a.push(a); return a.join(','); }}", nil, nil, chainConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = runTrace(tracer, testCtx(), chainConfig, nil)
+	if err == nil {
+		t.Fatal("expected self-referential array join to fail")
+	}
+	if !strings.Contains(err.Error(), "result") {
+		t.Fatalf("expected failure from result(), got %v", err)
+	}
+}
+
+func TestArrayJoin(t *testing.T) {
+	chainConfig := params.TestChainConfig
+	tracer, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return ['a','b'].join('-'); }}", nil, nil, chainConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ret, err := runTrace(tracer, testCtx(), chainConfig, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(ret) != `"a-b"` {
+		t.Fatalf("got %s", ret)
+	}
+}
+
 func TestHalt(t *testing.T) {
 	timeout := errors.New("stahp")
 	chainConfig := params.TestChainConfig

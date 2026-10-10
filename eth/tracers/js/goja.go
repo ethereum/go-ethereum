@@ -39,6 +39,26 @@ import (
 	jsassets "github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
 )
 
+// jsMaxCallStackSize caps how deep a tracer may recurse inside the JS VM.
+// goja's default is MaxInt32, which is large enough for a single goroutine to
+// hit the Go runtime stack limit and fatal the process. Native Array join and
+// toString call each other directly in Go and never pass through that counter,
+// so the builtins are wrapped below to force the cycle back into JS frames.
+const jsMaxCallStackSize = 10000
+
+// jsBuiltinRecursionGuard re-enters Array toString/join through JS so a
+// self-referential array (a = [a]; a.join()) is stopped by jsMaxCallStackSize
+// instead of growing the Go stack until the runtime aborts the process.
+const jsBuiltinRecursionGuard = `(function () {
+  var proto = Array.prototype;
+  var nativeJoin = proto.join;
+  var nativeToString = proto.toString;
+  var nativeToLocaleString = proto.toLocaleString;
+  proto.join = function () { return nativeJoin.apply(this, arguments); };
+  proto.toString = function () { return nativeToString.call(this); };
+  proto.toLocaleString = function () { return nativeToLocaleString.call(this); };
+})();`
+
 var assetTracers = make(map[string]string)
 
 // init retrieves the JavaScript transaction tracers included in go-ethereum.
@@ -151,8 +171,12 @@ type jsTracer struct {
 // `enter` and `exit` always go together.
 func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	vm := goja.New()
+	vm.SetMaxCallStackSize(jsMaxCallStackSize)
 	// By default field names are exported to JS as is, i.e. capitalized.
 	vm.SetFieldNameMapper(goja.UncapFieldNameMapper())
+	if _, err := vm.RunString(jsBuiltinRecursionGuard); err != nil {
+		return nil, fmt.Errorf("failed to install JS recursion guard: %w", err)
+	}
 	t := &jsTracer{
 		vm:          vm,
 		ctx:         make(map[string]goja.Value),
