@@ -142,6 +142,13 @@ func (db *Database) HistoricStateReader(root common.Hash) (*pathdb.HistoricalSta
 	return pdb.HistoricReader(root)
 }
 
+// PathDB returns the underlying pathdb-backed database if this database is
+// using the path-based scheme. Returns nil for hashdb or other backends.
+func (db *Database) PathDB() *pathdb.Database {
+	pdb, _ := db.backend.(*pathdb.Database)
+	return pdb
+}
+
 // HistoricNodeReader constructs a reader for accessing the historical trie node.
 func (db *Database) HistoricNodeReader(root common.Hash) (*pathdb.HistoricalNodeReader, error) {
 	pdb, ok := db.backend.(*pathdb.Database)

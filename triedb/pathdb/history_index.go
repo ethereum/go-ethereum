@@ -124,6 +124,51 @@ func (r *indexReader) refresh() error {
 	return nil
 }
 
+// count returns the total number of indexed entries across all descriptor
+// blocks.
+func (r *indexReader) count() int {
+	var n int
+	for _, d := range r.descList {
+		n += int(d.entries)
+	}
+	return n
+}
+
+// at returns the i-th indexed history id in ascending order. The caller must
+// guarantee 0 <= i < r.count().
+func (r *indexReader) at(i int) (uint64, error) {
+	if i < 0 {
+		return 0, fmt.Errorf("negative ordinal %d", i)
+	}
+	remaining := i
+	for _, desc := range r.descList {
+		n := int(desc.entries)
+		if remaining < n {
+			br, err := r.blockReader(desc.id)
+			if err != nil {
+				return 0, err
+			}
+			return br.readAt(remaining, n)
+		}
+		remaining -= n
+	}
+	return 0, fmt.Errorf("ordinal out of range, i: %d, total: %d", i, r.count())
+}
+
+// blockReader returns a cached block reader for the given block id, loading it
+// from disk on first access.
+func (r *indexReader) blockReader(id uint32) (*blockReader, error) {
+	if br, ok := r.readers[id]; ok {
+		return br, nil
+	}
+	br, err := newBlockReader(readStateIndexBlock(r.state, r.db, id), r.bitmapSize != 0)
+	if err != nil {
+		return nil, err
+	}
+	r.readers[id] = br
+	return br, nil
+}
+
 // readGreaterThan locates the first element that is greater than the specified
 // id. If no such element is found, MaxUint64 is returned.
 func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {

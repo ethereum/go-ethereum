@@ -208,6 +208,52 @@ func testIndexWriterWithLimit(t *testing.T, bitmapSize int) {
 	}
 }
 
+func TestIndexReaderOrdinalAccess(t *testing.T) {
+	testIndexReaderOrdinalAccess(t, 0)
+	testIndexReaderOrdinalAccess(t, 2)
+	testIndexReaderOrdinalAccess(t, 34)
+}
+
+func testIndexReaderOrdinalAccess(t *testing.T, bitmapSize int) {
+	// Build a sequence long enough to span multiple restart sections and
+	// index blocks, with varying gaps to exercise the delta decoding.
+	var (
+		elements []uint64
+		id       uint64
+	)
+	for i := 0; i < 10_000; i++ {
+		id += uint64(i%7) + 1
+		elements = append(elements, id)
+	}
+	db := rawdb.NewMemoryDatabase()
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0, bitmapSize)
+	for _, v := range elements {
+		if err := iw.append(v, randomExt(bitmapSize, 5)); err != nil {
+			t.Fatalf("Failed to append %d: %v", v, err)
+		}
+	}
+	batch := db.NewBatch()
+	iw.finish(batch)
+	batch.Write()
+
+	r, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}), bitmapSize)
+	if err != nil {
+		t.Fatalf("Failed to construct index reader: %v", err)
+	}
+	if got, want := r.count(), len(elements); got != want {
+		t.Fatalf("count mismatch: got %d, want %d", got, want)
+	}
+	for i, want := range elements {
+		got, err := r.at(i)
+		if err != nil {
+			t.Fatalf("at(%d) returned error: %v", i, err)
+		}
+		if got != want {
+			t.Fatalf("at(%d) = %d, want %d", i, got, want)
+		}
+	}
+}
+
 func TestIndexDeleterBasic(t *testing.T) {
 	testIndexDeleterBasic(t, 0)
 	testIndexDeleterBasic(t, 2)
