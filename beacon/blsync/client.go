@@ -62,7 +62,8 @@ func NewClient(config params.ClientConfig) *Client {
 	scheduler := request.NewScheduler()
 	checkpointInit := sync.NewCheckpointInit(committeeChain, config.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
-	beaconBlockSync := newBeaconBlockSync(headTracker)
+	beaconBlockSync := newBeaconBlockSync(headTracker, config.P2PBlocks)
+	beaconBlockSync.trigger = scheduler.Trigger
 	scheduler.RegisterTarget(headTracker)
 	scheduler.RegisterTarget(committeeChain)
 	scheduler.RegisterModule(checkpointInit, "checkpointInit")
@@ -86,7 +87,11 @@ func (c *Client) SetEngineRPC(engine *rpc.Client) {
 func (c *Client) Start() error {
 	headCh := make(chan types.ChainHeadEvent, 16)
 	c.chainHeadSub = c.blockSync.SubscribeChainHead(headCh)
-	c.engineClient = startEngineClient(c.config, c.engineRPC, headCh)
+	var fetchBlock func(types.ChainHeadEvent)
+	if c.config.P2PBlocks {
+		fetchBlock = c.blockSync.fetchBlock
+	}
+	c.engineClient = startEngineClient(c.config, c.engineRPC, headCh, fetchBlock)
 
 	c.scheduler.Start()
 	for _, url := range c.urls {
