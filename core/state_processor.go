@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -65,11 +66,12 @@ func (p *StateProcessor) chainConfig() *params.ChainConfig {
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config, execIndex *atomic.Int64) (*ProcessResult, error) {
+func (p *StateProcessor) Process(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config, execIndex *atomic.Int64, stats *ProcessStats) (*ProcessResult, error) {
 	if supportsParallelExecution(block, p.chainConfig(), statedb.Witness() != nil, cfg.Tracer != nil, cfg.DisableParallelExecution) {
-		return p.processParallel(ctx, block, statedb, jumpDestCache, precompileCache, cfg)
+		return p.processParallel(ctx, block, statedb, jumpDestCache, precompileCache, cfg, stats)
 	}
 	var (
+		start       = time.Now()
 		config      = p.chainConfig()
 		receipts    = make(types.Receipts, 0, len(block.Transactions()))
 		header      = block.Header()
@@ -155,6 +157,10 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	// the pipeline has filled in their blooms.
 	pipeline.joinReceipts()
 
+	if stats != nil {
+		stats.addReads(statedb)
+		stats.Execution = time.Since(start) - stats.stateReads()
+	}
 	return &ProcessResult{
 		Receipts: receipts,
 		Requests: requests,
