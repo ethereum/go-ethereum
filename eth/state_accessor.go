@@ -268,10 +268,12 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		// Not yet the searched for transaction, execute on top of the current state
 		statedb.SetTxContext(tx.Hash(), idx, uint32(idx+1))
 		if _, err := core.ApplyMessage(evm, msg, nil); err != nil {
+			release()
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
 		statedb.Finalise(evm.GetRules())
 	}
+	release()
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }
