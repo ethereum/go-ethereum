@@ -498,6 +498,97 @@ func TestChainFreezerBALAlignment(t *testing.T) {
 	}
 }
 
+// TestFreezerReadonlyEmptyGroup covers a freezer whose tables all belong to
+// one tail group and have never held any data (e.g. a state history freezer
+// right after `geth bintrie import`, which seeds flat state but writes no
+// history). validate() used to skip every table via its items==0 guard
+// before ever registering the group, so Tail() failed with "unknown tail
+// group" on the very first read-only open.
+func TestFreezerReadonlyEmptyGroup(t *testing.T) {
+	t.Parallel()
+	tables := map[string]freezerTableConfig{
+		"a": {noSnappy: true, tailGroup: "g"},
+		"b": {noSnappy: true, tailGroup: "g"},
+	}
+	dir := t.TempDir()
+	f, err := NewFreezer(dir, "", false, 2048, tables)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	ro, err := NewFreezer(dir, "", true, 2048, tables)
+	if err != nil {
+		t.Fatalf("read-only open of an all-empty freezer failed: %v", err)
+	}
+	defer ro.Close()
+	if tail, err := ro.Tail("g"); err != nil {
+		t.Fatalf("Tail(g): %v", err)
+	} else if tail != 0 {
+		t.Fatalf("Tail(g): got %d, want 0", tail)
+	}
+}
+
+// TestFreezerReadonlyUnalignedGroup covers a freezer with two tail groups
+// where one group already has data (head > 0) and the other's tables were
+// created but never aligned by repair() (e.g. a table added by a new
+// version, opened read-only before the node ever ran read-write once).
+// validate() must report the unaligned group's tail as the common head, not
+// 0: tail 0 would claim the group holds full history from record zero, when
+// read-only validate() cannot write the alignment repair() would perform
+// and genuinely has no data at all.
+func TestFreezerReadonlyUnalignedGroup(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// "a" (group ga) gets written and holds data; "b" (group gb) is created
+	// empty and never shares a repair() pass with "a".
+	fa, err := NewFreezer(dir, "", false, 2048, map[string]freezerTableConfig{"a": {noSnappy: true, tailGroup: "ga"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fa.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		for i := uint64(0); i < 5; i++ {
+			if err := op.AppendRaw("a", i, []byte{1}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := fa.Close(); err != nil {
+		t.Fatal(err)
+	}
+	fb, err := NewFreezer(dir, "", false, 2048, map[string]freezerTableConfig{"b": {noSnappy: true, tailGroup: "gb"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fb.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	both := map[string]freezerTableConfig{
+		"a": {noSnappy: true, tailGroup: "ga"},
+		"b": {noSnappy: true, tailGroup: "gb"},
+	}
+	ro, err := NewFreezer(dir, "", true, 2048, both)
+	if err != nil {
+		t.Fatalf("read-only open with an unaligned group failed: %v", err)
+	}
+	defer ro.Close()
+	if head, _ := ro.Ancients(); head != 5 {
+		t.Fatalf("head: got %d, want 5", head)
+	}
+	if tail, err := ro.Tail("gb"); err != nil {
+		t.Fatalf("Tail(gb): %v", err)
+	} else if tail != 5 {
+		t.Fatalf("Tail(gb): got %d, want 5 (the common head, not 0)", tail)
+	}
+}
+
 func TestFreezerCloseSync(t *testing.T) {
 	t.Parallel()
 	f, _ := newFreezerForTesting(t, map[string]freezerTableConfig{"a": {noSnappy: true}, "b": {noSnappy: true}})
