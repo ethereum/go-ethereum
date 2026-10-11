@@ -33,7 +33,8 @@ import (
 // to the validated and prefetch heads. With p2pBlocks it fetches no blocks: the head
 // events carry only the execution block hash proven by the light client update, and the
 // execution client retrieves the block from its own peers. If it can't, the engine client
-// asks for the block (fetchBlock), and it is fetched and sent after all.
+// asks for the block (fetchBlock), and it is fetched and sent after all; so are blocks
+// before it that the execution client lacks too.
 type beaconBlockSync struct {
 	recentBlocks *lru.Cache[common.Hash, *types.BeaconBlock]
 	recentSlots  *lru.Cache[common.Hash, uint64] // p2pBlocks: slots of recently validated heads, by block root
@@ -42,16 +43,22 @@ type beaconBlockSync struct {
 	headTracker  headTracker
 	p2pBlocks    bool
 
-	// p2pBlocks fallback: fallbackReq is set by fetchBlock; fallback is the head event
-	// whose execution block is being fetched, from the beacon block fallbackRoot.
-	fallbackReq  atomic.Pointer[types.ChainHeadEvent]
-	fallback     *types.ChainHeadEvent
-	fallbackRoot common.Hash
+	// p2pBlocks fallback: fallbackReq is set by fetchBlock; fallback is the block being
+	// fetched.
+	fallbackReq  atomic.Pointer[blockRequest]
+	fallback     *blockRequest
 	fallbackSent bool // requested (again after a failed request, until a newer head)
 	trigger      func()
 
 	lastHeadInfo  types.HeadInfo
 	chainHeadFeed event.FeedOf[types.ChainHeadEvent]
+}
+
+// blockRequest is an execution block asked for by the engine client (p2pBlocks): the one
+// with the hash execHash, in the beacon block root, while the head with the beacon block
+// root head is the latest.
+type blockRequest struct {
+	head, root, execHash common.Hash
 }
 
 type headTracker interface {
@@ -62,9 +69,15 @@ type headTracker interface {
 
 // newBeaconBlockSync returns a new beaconBlockSync.
 func newBeaconBlockSync(headTracker headTracker, p2pBlocks bool) *beaconBlockSync {
+	cached := 10
+	if p2pBlocks {
+		// only the fallback's blocks: a head's and the ones before it, which a new head
+		// may ask for again
+		cached = p2pFallbackDepth + 1
+	}
 	return &beaconBlockSync{
 		headTracker:  headTracker,
-		recentBlocks: lru.NewCache[common.Hash, *types.BeaconBlock](10),
+		recentBlocks: lru.NewCache[common.Hash, *types.BeaconBlock](cached),
 		recentSlots:  lru.NewCache[common.Hash, uint64](10),
 		locked:       make(map[common.Hash]request.ServerAndID),
 		serverHeads:  make(map[request.Server]common.Hash),
@@ -90,7 +103,7 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 			if s.locked[blockRoot] == sid {
 				delete(s.locked, blockRoot)
 			}
-			if resp == nil && s.fallback != nil && blockRoot == s.fallbackRoot {
+			if resp == nil && s.fallback != nil && blockRoot == s.fallback.root {
 				s.fallbackSent = false // failed or timed out: ask again (maybe another server)
 			}
 		case sync.EvNewHead:
@@ -114,46 +127,50 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 	}
 }
 
-// fetchBlock asks for the execution block of a head event sent without it, which the
-// execution client couldn't get from its peers (p2pBlocks). It is fetched from the beacon
-// API and the event sent again with it, unless a newer head was sent meanwhile.
-func (s *beaconBlockSync) fetchBlock(head types.ChainHeadEvent) {
-	s.fallbackReq.Store(&head)
+// fetchBlock asks for an execution block that the execution client couldn't get from its
+// peers (p2pBlocks): the one with the hash execHash, in the beacon block root. It is fetched
+// from the beacon API and sent as a head event with the block, unless a head newer than head
+// was sent meanwhile.
+func (s *beaconBlockSync) fetchBlock(head types.ChainHeadEvent, root, execHash common.Hash) {
+	s.fallbackReq.Store(&blockRequest{head: head.BeaconHead.Hash(), root: root, execHash: execHash})
 	if s.trigger != nil {
 		s.trigger()
 	}
 }
 
-// updateFallback requests the beacon block carrying the execution block asked for by
-// fetchBlock (again if a request fails, until a newer head is sent), and sends the head
-// again with it when it arrives.
+// updateFallback requests the beacon block asked for by fetchBlock (again if a request
+// fails, until a newer head is sent), and sends its execution block when it arrives.
 func (s *beaconBlockSync) updateFallback(requester request.Requester) {
-	if head := s.fallbackReq.Swap(nil); head != nil {
-		s.fallback, s.fallbackRoot, s.fallbackSent = head, head.BeaconHead.Hash(), false
+	if req := s.fallbackReq.Swap(nil); req != nil {
+		s.fallback, s.fallbackSent = req, false
 	}
 	if s.fallback == nil {
 		return
 	}
-	if s.lastHeadInfo.BlockRoot != s.fallback.BeaconHead.Hash() {
+	if s.lastHeadInfo.BlockRoot != s.fallback.head {
 		s.fallback = nil // a newer head was sent
 		return
 	}
-	block, ok := s.recentBlocks.Get(s.fallbackRoot)
+	block, ok := s.recentBlocks.Get(s.fallback.root)
 	if !ok {
 		if !s.fallbackSent {
-			s.fallbackSent = s.tryRequestBlock(requester, s.fallbackRoot, false)
+			s.fallbackSent = s.tryRequestBlock(requester, s.fallback.root, false)
 		}
 		return
 	}
-	head := *s.fallback
+	req := *s.fallback
 	s.fallback = nil
 	payload, err := block.ExecutionPayload()
-	if err != nil || payload.Hash() != head.ExecHash {
-		log.Warn("Beacon block doesn't carry the head's execution block", "root", s.fallbackRoot, "head", head.ExecHash, "error", err)
+	if err != nil || payload.Hash() != req.execHash {
+		log.Warn("Beacon block doesn't carry the execution block asked for", "root", req.root, "hash", req.execHash, "error", err)
 		return
 	}
-	head.BeaconHead, head.Block, head.ExecRequests = block.Header(), payload, block.ExecutionRequestsList()
-	s.chainHeadFeed.Send(head)
+	s.chainHeadFeed.Send(types.ChainHeadEvent{
+		BeaconHead:   block.Header(),
+		ExecHash:     req.execHash,
+		Block:        payload,
+		ExecRequests: block.ExecutionRequestsList(),
+	})
 }
 
 // tryRequestBlock requests a beacon block unless it is at hand or already requested, and

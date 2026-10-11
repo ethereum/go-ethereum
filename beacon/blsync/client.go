@@ -87,7 +87,7 @@ func (c *Client) SetEngineRPC(engine *rpc.Client) {
 func (c *Client) Start() error {
 	headCh := make(chan types.ChainHeadEvent, 16)
 	c.chainHeadSub = c.blockSync.SubscribeChainHead(headCh)
-	var fetchBlock func(types.ChainHeadEvent)
+	var fetchBlock blockFetcher
 	if c.config.P2PBlocks {
 		fetchBlock = c.blockSync.fetchBlock
 	}

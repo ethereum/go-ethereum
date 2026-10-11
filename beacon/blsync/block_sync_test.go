@@ -259,7 +259,7 @@ func TestBlockSyncP2PBlocksFallback(t *testing.T) {
 	}
 
 	// asked for its block: requested once, then the head is sent again with it, once
-	blockSync.fetchBlock(event)
+	blockSync.fetchBlock(event, event.BeaconHead.Hash(), event.ExecHash)
 	ts.Run(2, testServer1, sync.ReqBeaconBlock(testBlock1.Root()))
 	ts.RequestEvent(request.EvResponse, ts.Request(2, 1), testBlock1)
 	ts.AddAllowance(testServer1, 1)
@@ -279,7 +279,7 @@ func TestBlockSyncP2PBlocksFallback(t *testing.T) {
 	ht.validated.Header = head2
 	ts.Run(5)
 	event2, _ := nextEvent()
-	blockSync.fetchBlock(event2)
+	blockSync.fetchBlock(event2, event2.BeaconHead.Hash(), event2.ExecHash)
 	ts.Run(6, testServer1, sync.ReqBeaconBlock(head2.Hash()))
 	ts.RequestEvent(request.EvFail, ts.Request(6, 1), nil)
 	ts.AddAllowance(testServer1, 1)
@@ -294,11 +294,93 @@ func TestBlockSyncP2PBlocksFallback(t *testing.T) {
 	}
 
 	// a request for a head older than the last one sent is dropped (its block is at hand)
-	blockSync.fetchBlock(event)
+	blockSync.fetchBlock(event, event.BeaconHead.Hash(), event.ExecHash)
 	ts.Run(9)
 	if e, ok := nextEvent(); ok {
 		t.Fatalf("unexpected head event %v", e)
 	}
+}
+
+// TestBlockSyncP2PBlocksAncestor tests that with p2pBlocks a block before the head asked for
+// (the execution client lacked the head block's parent) is fetched by its beacon block root
+// and sent with its own beacon header; and that one arriving after a newer head was sent
+// isn't, but is at hand when asked for again.
+func TestBlockSyncP2PBlocksAncestor(t *testing.T) {
+	ht := &testHeadTracker{}
+	blockSync := newBeaconBlockSync(ht, true)
+	headCh := make(chan types.ChainHeadEvent, 16)
+	blockSync.SubscribeChainHead(headCh)
+	ts := sync.NewTestScheduler(t, blockSync)
+	ts.AddServer(testServer1, 1)
+
+	nextEvent := func() (types.ChainHeadEvent, bool) {
+		select {
+		case event := <-headCh:
+			return event, true
+		default:
+			return types.ChainHeadEvent{}, false
+		}
+	}
+	expectBlock := func(want *types.BeaconBlock) {
+		t.Helper()
+		payload, _ := want.ExecutionPayload()
+		event, ok := nextEvent()
+		if !ok || event.Block == nil || event.Block.Hash() != payload.Hash() || event.ExecHash != payload.Hash() ||
+			event.BeaconHead != want.Header() || event.Finalized != (common.Hash{}) {
+			t.Fatalf("expected the block in %x, got %v (event: %v)", want.Root(), event, ok)
+		}
+		if e, ok := nextEvent(); ok {
+			t.Fatalf("unexpected head event %v", e)
+		}
+	}
+	payload1, _ := testBlock1.ExecutionPayload()
+	payload2, _ := testBlock2.ExecutionPayload()
+	ht.validated.Header = testBlock2.Header()
+	ht.validatedPayload = types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
+		BlockNumber: view.Uint64View(payload2.NumberU64()),
+		BlockHash:   zrntcommon.Hash32(payload2.Hash()),
+	})
+	ht.finalized, ht.finalizedPayload = testBlock2.Header(), testFinal1
+	ts.Run(1)
+	head, ok := nextEvent()
+	if !ok || head.Block != nil || head.Finalized != testFinal1.BlockHash() {
+		t.Fatalf("expected the head without its block, got %v (event: %v)", head, ok)
+	}
+
+	// a block before the head: requested by its root, sent with its own header, once
+	blockSync.fetchBlock(head, testBlock1.Root(), payload1.Hash())
+	ts.Run(2, testServer1, sync.ReqBeaconBlock(testBlock1.Root()))
+	ts.RequestEvent(request.EvResponse, ts.Request(2, 1), testBlock1)
+	ts.AddAllowance(testServer1, 1)
+	ts.Run(3)
+	expectBlock(testBlock1)
+
+	// one asked for by a head, arriving after a newer head was sent: not sent
+	ht.validated.Header = types.Header{Slot: testBlock2.Slot() + 1, ParentRoot: testBlock2.Root()}
+	ts.Run(4)
+	head2, ok := nextEvent()
+	if !ok || head2.BeaconHead != ht.validated.Header {
+		t.Fatalf("expected the newer head, got %v (event: %v)", head2, ok)
+	}
+	blockSync.fetchBlock(head2, testBlock2.Root(), payload2.Hash())
+	ts.Run(5, testServer1, sync.ReqBeaconBlock(testBlock2.Root()))
+	ht.validated.Header = types.Header{Slot: testBlock2.Slot() + 2, ParentRoot: head2.BeaconHead.Hash()}
+	ts.Run(6)
+	head3, ok := nextEvent()
+	if !ok || head3.BeaconHead != ht.validated.Header {
+		t.Fatalf("expected the newer head, got %v (event: %v)", head3, ok)
+	}
+	ts.RequestEvent(request.EvResponse, ts.Request(5, 1), testBlock2)
+	ts.AddAllowance(testServer1, 1)
+	ts.Run(7)
+	if e, ok := nextEvent(); ok {
+		t.Fatalf("unexpected head event %v", e)
+	}
+
+	// asked for by the newer head: at hand, not requested again
+	blockSync.fetchBlock(head3, testBlock2.Root(), payload2.Hash())
+	ts.Run(8)
+	expectBlock(testBlock2)
 }
 
 type testHeadTracker struct {
