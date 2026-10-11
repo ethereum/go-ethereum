@@ -414,6 +414,20 @@ func (f *Freezer) validate() error {
 	}
 	f.head.Store(head)
 
+	// A table whose group registered no tail above is empty and has not yet
+	// been aligned to the common head (mirrors repair()'s own rule for a
+	// freshly added table: it starts fresh exactly at head). Its correct
+	// tail is therefore head, not 0: defaulting to 0 would claim the group
+	// holds full history down to record 0, when read-only validate() cannot
+	// write the alignment repair() would perform and genuinely has none.
+	for _, table := range f.tables {
+		if g := table.config.tailGroup; g != "" {
+			if _, ok := tails[g]; !ok {
+				tails[g] = head
+			}
+		}
+	}
+
 	for group, tail := range tails {
 		counter := new(atomic.Uint64)
 		counter.Store(tail)
