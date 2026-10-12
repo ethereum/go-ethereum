@@ -347,11 +347,7 @@ func purgeHistory(store ethdb.ResettableAncientStore, disk ethdb.KeyValueStore, 
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to purge history index", "type", typ, "err", err)
 	}
-	// Explicitly sync the key-value store before resetting the freezer. A crash
-	// can keep the reset but lose recent key-value writes: the index removal
-	// above and, after a state sync, the persistent state id reset. The state
-	// id would then point past an empty history, which the database refuses to
-	// open, and the stale index would be taken for the new histories.
+	// Explicitly sync the key-value store before resetting the freezer.
 	if err := disk.SyncKeyValue(); err != nil {
 		log.Crit("Failed to sync key-value store", "type", typ, "err", err)
 	}

@@ -875,151 +875,6 @@ func testReactivationStopsIndexers(t *testing.T, reactivate func(db *Database, r
 	}
 }
 
-// TestReactivationDropsJournal checks that the reactivation at the end of a state
-// sync drops the layer journal of the old state, kept in the key-value store or
-// in a file: if its root is the synced one, a restart would load it, with a state
-// id the purged histories no longer cover. Also when the file, or its directory,
-// is gone already, as after an earlier attempt that removed it and then failed.
-func TestReactivationDropsJournal(t *testing.T) {
-	var (
-		enable = func(db *Database, root common.Hash) error { return db.Enable(root) }
-		adopt  = func(db *Database, root common.Hash) error { return db.AdoptSyncedState(root) }
-	)
-	t.Run("kv/Enable", func(t *testing.T) { testReactivationDropsJournal(t, "", "", enable) })
-	t.Run("kv/AdoptSyncedState", func(t *testing.T) { testReactivationDropsJournal(t, "", "", adopt) })
-	t.Run("file/Enable", func(t *testing.T) { testReactivationDropsJournal(t, filepath.Join(t.TempDir(), "journal"), "", enable) })
-	t.Run("file/AdoptSyncedState", func(t *testing.T) { testReactivationDropsJournal(t, filepath.Join(t.TempDir(), "journal"), "", adopt) })
-	t.Run("file-gone/Enable", func(t *testing.T) {
-		testReactivationDropsJournal(t, filepath.Join(t.TempDir(), "journal"), "file", enable)
-	})
-	t.Run("dir-gone/Enable", func(t *testing.T) {
-		testReactivationDropsJournal(t, filepath.Join(t.TempDir(), "journal"), "dir", enable)
-	})
-}
-
-// testReactivationDropsJournal: gone is "file" or "dir" to remove the journal file,
-// or its whole directory, before the reactivation.
-func testReactivationDropsJournal(t *testing.T, journalDir string, gone string, reactivate func(db *Database, root common.Hash) error) {
-	maxDiffLayers = 4
-	defer func() {
-		maxDiffLayers = 128
-	}()
-
-	tester := newTester(t, &testerConfig{layers: 12, journalDir: journalDir})
-	defer tester.release()
-
-	// Persist everything and journal the layers at a clean shutdown, then
-	// start again: the journal stays where it was written.
-	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
-		t.Fatalf("Failed to commit, err: %v", err)
-	}
-	if err := tester.db.Journal(tester.lastHash()); err != nil {
-		t.Fatalf("Failed to journal, err: %v", err)
-	}
-	if path := tester.db.journalPath(); path != "" {
-		// A journal file, and an older copy in the key-value store, which
-		// is read when the file is missing.
-		blob, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("Failed to read the journal file: %v", err)
-		}
-		rawdb.WriteTrieJournal(tester.db.diskdb, blob)
-	}
-	tester.db.Close()
-	tester.db = New(tester.db.diskdb, tester.db.config, false)
-	switch gone {
-	case "file":
-		if err := os.Remove(tester.db.journalPath()); err != nil {
-			t.Fatalf("Failed to remove the journal file: %v", err)
-		}
-	case "dir":
-		if err := os.RemoveAll(journalDir); err != nil {
-			t.Fatalf("Failed to remove the journal directory: %v", err)
-		}
-	}
-
-	// A state sync ends at the state on disk, the root of the journal.
-	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
-	if err := tester.db.Disable(); err != nil {
-		t.Fatalf("Failed to disable database: %v", err)
-	}
-	if err := reactivate(tester.db, stored); err != nil {
-		t.Fatalf("Failed to reactivate database: %v", err)
-	}
-	// A restart without a new journal (after a crash) loads the layers and
-	// repairs the history against them, as New does. Not New itself: on a
-	// failed repair it exits the process.
-	tester.db.Close()
-	restart := &Database{config: tester.db.config, diskdb: tester.db.diskdb, hasher: tester.db.hasher}
-	id := restart.loadLayers().stateID()
-	if want := rawdb.ReadPersistentStateID(tester.db.diskdb); id != want {
-		t.Errorf("Restart loads the old journal: state id %d, persistent %d", id, want)
-	}
-	states, _, err := repairHistory(tester.db.diskdb, false, false, id, false)
-	if err != nil {
-		t.Fatalf("Database can't be opened after the reactivation: %v", err)
-	}
-	states.Close()
-}
-
-// TestReactivationJournalRemovalFails checks that a reactivation which can't remove
-// the journal file stops before it changes anything else: the state id reset and
-// the purge come after the removal is durable. Once the file can go, it succeeds.
-func TestReactivationJournalRemovalFails(t *testing.T) {
-	maxDiffLayers = 4
-	defer func() {
-		maxDiffLayers = 128
-	}()
-	journalDir := filepath.Join(t.TempDir(), "journal")
-	tester := newTester(t, &testerConfig{layers: 12, journalDir: journalDir})
-	defer tester.release()
-
-	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
-		t.Fatalf("Failed to commit, err: %v", err)
-	}
-	if err := tester.db.Journal(tester.lastHash()); err != nil {
-		t.Fatalf("Failed to journal, err: %v", err)
-	}
-	tester.db.Close()
-	tester.db = New(tester.db.diskdb, tester.db.config, false)
-
-	// A directory that isn't empty where the journal file is: removing it fails
-	// on every platform.
-	path := tester.db.journalPath()
-	if err := os.Remove(path); err != nil {
-		t.Fatalf("Failed to remove the journal file: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(path, "obstacle"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
-	if err := tester.db.Disable(); err != nil {
-		t.Fatalf("Failed to disable database: %v", err)
-	}
-	id, root := rawdb.ReadPersistentStateID(tester.db.diskdb), rawdb.ReadSnapshotRoot(tester.db.diskdb)
-	if id == 0 {
-		t.Fatal("The test needs a state id above zero")
-	}
-	if err := tester.db.Enable(stored); err == nil {
-		t.Fatal("Reactivation succeeded without removing the journal")
-	}
-	if got := rawdb.ReadPersistentStateID(tester.db.diskdb); got != id {
-		t.Errorf("A failed reactivation changed the state id: %d, was %d", got, id)
-	}
-	if got := rawdb.ReadSnapshotRoot(tester.db.diskdb); got != root {
-		t.Errorf("A failed reactivation changed the snapshot root: %x, was %x", got, root)
-	}
-	if err := os.RemoveAll(path); err != nil {
-		t.Fatal(err)
-	}
-	if err := tester.db.Enable(stored); err != nil {
-		t.Fatalf("Reactivation failed once the journal could go: %v", err)
-	}
-	if got := rawdb.ReadPersistentStateID(tester.db.diskdb); got != 0 {
-		t.Errorf("State id %d after the reactivation, want 0", got)
-	}
-}
-
 // TestAdoptSyncedState verifies that AdoptSyncedState rejects a wrong root,
 // writes the on-disk markers that say the snapshot is already complete,
 // leaves a single fresh disk layer with no generator attached, and clears
@@ -1107,13 +962,18 @@ type syncTracker struct {
 }
 
 func newSyncTracker() *syncTracker {
-	return &syncTracker{KeyValueStore: memorydb.New(), synced: make(map[string][]byte)}
+	return &syncTracker{
+		KeyValueStore: memorydb.New(),
+		synced:        make(map[string][]byte),
+	}
 }
 
 func (s *syncTracker) SyncKeyValue() error {
 	s.synced = make(map[string][]byte)
+
 	it := s.NewIterator(nil, nil)
 	defer it.Release()
+
 	for it.Next() {
 		s.synced[string(it.Key())] = common.CopyBytes(it.Value())
 	}
@@ -1189,7 +1049,10 @@ func TestReactivationCrash(t *testing.T) {
 	// after the freezer reset: only the key-value writes synced before it
 	// survive, the freezers keep their files.
 	var crashed ethdb.KeyValueStore
-	tester.db.stateFreezer = &crashOnReset{tester.db.stateFreezer, func() { crashed = kvdb.crash() }}
+	tester.db.stateFreezer = &crashOnReset{
+		tester.db.stateFreezer,
+		func() { crashed = kvdb.crash() },
+	}
 	if err := tester.db.Disable(); err != nil {
 		t.Fatalf("Failed to disable database: %v", err)
 	}

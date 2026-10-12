@@ -381,20 +381,14 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	}
 	// Stop the history indexers before the histories are purged: they work in
 	// the background, and one still indexing the old histories would write
-	// their index back after the purge. Enable and AdoptSyncedState replace
-	// them afterwards.
+	// their index back after the purge.
 	if db.stateIndexer != nil {
 		db.stateIndexer.close()
 	}
 	if db.trienodeIndexer != nil {
 		db.trienodeIndexer.close()
 	}
-	// Drop the layer journal of the old state: its root can be the synced one,
-	// and loading it at the next start would bring back its state id, which
-	// the purged histories no longer cover. The journal file goes first, and
-	// its removal is made durable before anything else changes: the directory
-	// is synced even if the file is gone already, since an earlier attempt may
-	// have removed it and then failed, or crashed, before the sync.
+	// Drop the layer journal of the old state if exists.
 	if path := db.journalPath(); path != "" {
 		err := os.Remove(path)
 		if err != nil && !os.IsNotExist(err) {
@@ -412,7 +406,6 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	batch := db.diskdb.NewBatch()
 	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)
-	rawdb.DeleteTrieJournal(batch)
 	if err := batch.Write(); err != nil {
 		return err
 	}
