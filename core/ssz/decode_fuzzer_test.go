@@ -55,6 +55,13 @@ func FuzzSSZDecode(f *testing.F) {
 		D: yamlBitlist{bits: []byte{0x2a}, nbits: 6},
 		E: hexBlob{0xff},
 	}))
+	f.Add(seed(&progComplexTestStruct{
+		A: 1, B: []uint16{2, 3}, C: yamlBitlist{bits: []byte{0x05}, nbits: 3}, D: []uint64{4},
+		E: []smallTestStruct{{A: 5, B: 6}},
+		F: []progVarList{{{A: 7, B: []uint16{8}, C: 9}}},
+		G: []progSingleFieldContainer{{A: 10}},
+		H: []progVarTestStruct{{A: 11, B: []uint16{12}, C: yamlBitlist{bits: []byte{0x01}, nbits: 1}}},
+	}))
 	// Adversarial seeds: truncated fixed part, offset out of range, first
 	// offset not equal to the fixed size.
 	f.Add([]byte{0x07, 0x00, 0x00})
@@ -67,6 +74,10 @@ func FuzzSSZDecode(f *testing.F) {
 			new(varTestStruct),
 			new(complexTestStruct),
 			new(bitsStruct),
+			new(progSingleFieldContainer),
+			new(progSingleListContainer),
+			new(progVarTestStruct),
+			new(progComplexTestStruct),
 			&testBitlist{limit: 64},
 			&testBasicVector{kind: kindUint64, length: 3},
 		}
