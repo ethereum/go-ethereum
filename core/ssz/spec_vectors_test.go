@@ -25,10 +25,10 @@ package ssz_test
 // an error wrapping a named sentinel of the package, and where the case name
 // pins down the failure, with that specific sentinel.
 //
-// The six classic handlers are covered. The progressive handlers, and the
-// ProgressiveTestStruct and ProgressiveBitsStruct cases inside the containers
-// handler, need the progressive merkleization of EIP-7916 and are skipped
-// until it lands.
+// Eight of the ten handlers are covered, including the two progressive list
+// handlers of EIP-7916 and the ProgressiveTestStruct and ProgressiveBitsStruct
+// cases of the containers handler. progressive_containers and
+// compatible_unions need EIP-7495 progressive containers and unions.
 //
 // The vectors are not committed. CI downloads them through build/ci.go into
 // tests/consensus-spec-tests, pinned and checksummed in build/checksums.txt.
@@ -55,8 +55,11 @@ import (
 // against.
 const specTestVersion = "v1.7.0-alpha.12"
 
-// classicHandlers are the ssz_generic handlers without progressive types.
-var classicHandlers = []string{"boolean", "uints", "bitvector", "basic_vector", "bitlist", "containers"}
+// handlers are the ssz_generic handlers the package covers.
+var handlers = []string{
+	"boolean", "uints", "bitvector", "basic_vector", "bitlist", "containers",
+	"basic_progressive_list", "progressive_bitlist",
+}
 
 // sentinels is the complete rejection contract of the package: every decode
 // error wraps exactly one of these.
@@ -99,6 +102,17 @@ func makeSpecObject(handler, name string) (specObject, error) {
 		}
 		return &testBasicVector{kind: kind, length: length}, nil
 
+	case "basic_progressive_list":
+		// proglist_<type>_<variant>
+		if len(tokens) < 2 {
+			return nil, fmt.Errorf("bad basic_progressive_list case %q", name)
+		}
+		kind, err := parseBasicKind(tokens[1])
+		if err != nil {
+			return nil, err
+		}
+		return &testBasicProgList{kind: kind}, nil
+
 	case "bitvector":
 		// bitvec_<N>_<variant>
 		if len(tokens) < 2 {
@@ -121,6 +135,10 @@ func makeSpecObject(handler, name string) (specObject, error) {
 		}
 		return &testBitlist{limit: limit}, nil
 
+	case "progressive_bitlist":
+		// progbitlist_<variant>
+		return new(testProgBitlist), nil
+
 	case "containers":
 		// <StructName>_<variant>
 		switch tokens[0] {
@@ -136,6 +154,10 @@ func makeSpecObject(handler, name string) (specObject, error) {
 			return new(complexTestStruct), nil
 		case "BitsStruct":
 			return new(bitsStruct), nil
+		case "ProgressiveTestStruct":
+			return new(progressiveTestStruct), nil
+		case "ProgressiveBitsStruct":
+			return new(progressiveBitsStruct), nil
 		}
 		return nil, fmt.Errorf("unknown container in case %q", name)
 	}
@@ -202,6 +224,23 @@ func expectedError(handler, name string) (error, error) {
 		}
 		return ssz.ErrSize, nil
 
+	case "basic_progressive_list":
+		// proglist_bool_<N>_<mode>_<byte> (a byte that is not a boolean), or
+		// proglist_<T>_<N>_<mode>_one_byte_<less|more> (not a multiple of the
+		// element size, generated only for elements wider than a byte).
+		for _, bad := range []string{"_0x80", "_0xff", "_2", "_rev_nibble"} {
+			if strings.HasSuffix(name, bad) {
+				return ssz.ErrBadBoolean, nil
+			}
+		}
+		return ssz.ErrSize, nil
+
+	case "progressive_bitlist":
+		// progbitlist_no_delimiter_<empty|zero_byte|zeroes>.
+		if strings.Contains(name, "no_delimiter") {
+			return ssz.ErrBadBitlist, nil
+		}
+
 	case "containers":
 		if !strings.HasSuffix(name, "_extra_byte") {
 			return nil, nil // offset mutation
@@ -214,6 +253,10 @@ func expectedError(handler, name string) (error, error) {
 			return ssz.ErrSize, nil // lands in the last uint16 list, an odd byte count
 		case "BitsStruct":
 			return ssz.ErrBadBitlist, nil // lands in the last bitlist, whose last byte is now zero
+		case "ProgressiveTestStruct":
+			return ssz.ErrSize, nil // lands in the last nested list, an odd byte count in its last uint16 list
+		case "ProgressiveBitsStruct":
+			return ssz.ErrBadBitlist, nil // lands in the last progressive bitlist
 		}
 	}
 	return nil, fmt.Errorf("no expectation for %s/%s", handler, name)
@@ -362,7 +405,7 @@ func runInvalidCase(t *testing.T, handler, name, dir string) {
 
 func TestSpecVectors(t *testing.T) {
 	root := vectorsDir(t)
-	for _, handler := range classicHandlers {
+	for _, handler := range handlers {
 		t.Run(handler, func(t *testing.T) {
 			for _, suite := range []string{"valid", "invalid"} {
 				t.Run(suite, func(t *testing.T) {
@@ -380,9 +423,6 @@ func TestSpecVectors(t *testing.T) {
 						name := c.Name()
 						dir := filepath.Join(root, handler, suite, name)
 						t.Run(name, func(t *testing.T) {
-							if strings.HasPrefix(name, "Progressive") {
-								t.Skip("needs EIP-7916 progressive merkleization")
-							}
 							if suite == "valid" {
 								runValidCase(t, handler, name, dir)
 							} else {
