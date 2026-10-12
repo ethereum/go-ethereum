@@ -25,10 +25,9 @@ package ssz_test
 // an error wrapping a named sentinel of the package, and where the case name
 // pins down the failure, with that specific sentinel.
 //
-// Eight of the ten handlers are covered, including the two progressive list
-// handlers of EIP-7916 and the ProgressiveTestStruct and ProgressiveBitsStruct
-// cases of the containers handler. progressive_containers and
-// compatible_unions need EIP-7495 progressive containers and unions.
+// Nine of the ten handlers are covered: the six classic ones, the two
+// progressive list handlers of EIP-7916 and the progressive_containers handler
+// of EIP-7495. compatible_unions needs unions.
 //
 // The vectors are not committed. CI downloads them through build/ci.go into
 // tests/consensus-spec-tests, pinned and checksummed in build/checksums.txt.
@@ -58,7 +57,7 @@ const specTestVersion = "v1.7.0-alpha.12"
 // handlers are the ssz_generic handlers the package covers.
 var handlers = []string{
 	"boolean", "uints", "bitvector", "basic_vector", "bitlist", "containers",
-	"basic_progressive_list", "progressive_bitlist",
+	"basic_progressive_list", "progressive_bitlist", "progressive_containers",
 }
 
 // sentinels is the complete rejection contract of the package: every decode
@@ -160,6 +159,20 @@ func makeSpecObject(handler, name string) (specObject, error) {
 			return new(progressiveBitsStruct), nil
 		}
 		return nil, fmt.Errorf("unknown container in case %q", name)
+
+	case "progressive_containers":
+		// <StructName>_<variant>
+		switch tokens[0] {
+		case "ProgressiveSingleFieldContainerTestStruct":
+			return new(progSingleFieldContainer), nil
+		case "ProgressiveSingleListContainerTestStruct":
+			return new(progSingleListContainer), nil
+		case "ProgressiveVarTestStruct":
+			return new(progVarTestStruct), nil
+		case "ProgressiveComplexTestStruct":
+			return new(progComplexTestStruct), nil
+		}
+		return nil, fmt.Errorf("unknown progressive container in case %q", name)
 	}
 	return nil, fmt.Errorf("unknown handler %q", handler)
 }
@@ -257,6 +270,22 @@ func expectedError(handler, name string) (error, error) {
 			return ssz.ErrSize, nil // lands in the last nested list, an odd byte count in its last uint16 list
 		case "ProgressiveBitsStruct":
 			return ssz.ErrBadBitlist, nil // lands in the last progressive bitlist
+		}
+
+	case "progressive_containers":
+		// Offset mutations as for containers, and <StructName>_<mode>_modded_<i>:
+		// the serialization of a type with a different field layout, kept only
+		// when the reference decoder rejects it. Neither pins the sentinel.
+		if !strings.HasSuffix(name, "_extra_byte") {
+			return nil, nil
+		}
+		switch tokens[0] {
+		case "ProgressiveSingleFieldContainerTestStruct":
+			return ssz.ErrTrailing, nil // no variable part to absorb it
+		case "ProgressiveSingleListContainerTestStruct", "ProgressiveVarTestStruct":
+			return ssz.ErrBadBitlist, nil // lands in the last progressive bitlist
+		case "ProgressiveComplexTestStruct":
+			return ssz.ErrBadBitlist, nil // lands in the last element of H, in its progressive bitlist
 		}
 	}
 	return nil, fmt.Errorf("no expectation for %s/%s", handler, name)

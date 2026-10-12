@@ -1043,3 +1043,251 @@ func (s *progressiveBitsStruct) HashTreeRoot() [32]byte {
 	return ssz.Merkleize(roots, 12)
 }
 func (s *progressiveBitsStruct) fromYAML(node *yaml.Node) error { return node.Decode(s) }
+
+// ---------------------------------------------------------------------------
+// The pre-defined ProgressiveContainer structures of the test format
+// (EIP-7495). Each declares its active_fields next to the type, as the EIP
+// spells it, and lists its field roots in declaration order.
+
+var (
+	afProgSingleField = ssz.MustActiveFields(1)
+	afProgSingleList  = ssz.MustActiveFields(0, 0, 0, 0, 1)
+	afProgVar         = ssz.MustActiveFields(1, 0, 1, 0, 1)
+	afProgComplex     = ssz.MustActiveFields(1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1)
+)
+
+// elemPtrs returns pointers to the elements of a slice, the form the list
+// helpers take so that the pointer receivers of the element type apply.
+func elemPtrs[T any](elems []T) []*T {
+	out := make([]*T, len(elems))
+	for i := range elems {
+		out[i] = &elems[i]
+	}
+	return out
+}
+
+// elemRoots returns the hash tree roots of the elements of a slice.
+func elemRoots[T any, PT interface {
+	*T
+	ssz.Object
+}](elems []T) [][32]byte {
+	roots := make([][32]byte, len(elems))
+	for i := range elems {
+		roots[i] = PT(&elems[i]).HashTreeRoot()
+	}
+	return roots
+}
+
+// ProgressiveSingleFieldContainerTestStruct(active_fields=[1]) { A: byte }
+type progSingleFieldContainer struct {
+	A uint8 `yaml:"A"`
+}
+
+func (s *progSingleFieldContainer) SizeSSZ() int { return 1 }
+func (s *progSingleFieldContainer) MarshalSSZTo(dst []byte) ([]byte, error) {
+	return ssz.AppendUint8(dst, s.A), nil
+}
+func (s *progSingleFieldContainer) UnmarshalSSZ(data []byte) error {
+	d := ssz.NewDecoder(data)
+	s.A = d.Uint8()
+	return d.Close()
+}
+func (s *progSingleFieldContainer) HashTreeRoot() [32]byte {
+	roots := [][32]byte{ssz.Merkleize(ssz.Pack([]byte{s.A}), 1)}
+	return ssz.HashTreeRootProgressiveContainer(afProgSingleField, roots)
+}
+func (s *progSingleFieldContainer) fromYAML(node *yaml.Node) error { return node.Decode(s) }
+
+// ProgressiveSingleListContainerTestStruct(active_fields=[0, 0, 0, 0, 1]) { C: ProgressiveBitlist }
+type progSingleListContainer struct {
+	C yamlBitlist `yaml:"C"`
+}
+
+func (s *progSingleListContainer) SizeSSZ() int { return 4 + ssz.BitlistSize(s.C.nbits) }
+func (s *progSingleListContainer) MarshalSSZTo(dst []byte) ([]byte, error) {
+	dst = ssz.AppendOffset(dst, 4)
+	return ssz.AppendBitlist(dst, s.C.bits, s.C.nbits), nil
+}
+func (s *progSingleListContainer) UnmarshalSSZ(data []byte) error {
+	d := ssz.NewDecoder(data)
+	d.Offset()
+	sections, err := d.Sections()
+	if err != nil {
+		return err
+	}
+	s.C.bits, s.C.nbits, err = ssz.DecodeBitlist(sections[0], ssz.NoLimit)
+	return err
+}
+func (s *progSingleListContainer) HashTreeRoot() [32]byte {
+	roots := [][32]byte{ssz.HashTreeRootProgressiveBitlist(s.C.bits, s.C.nbits)}
+	return ssz.HashTreeRootProgressiveContainer(afProgSingleList, roots)
+}
+func (s *progSingleListContainer) fromYAML(node *yaml.Node) error { return node.Decode(s) }
+
+//	ProgressiveVarTestStruct(active_fields=[1, 0, 1, 0, 1]) {
+//	  A: byte, B: List[uint16, 123], C: ProgressiveBitlist,
+//	}
+type progVarTestStruct struct {
+	A uint8       `yaml:"A"`
+	B []uint16    `yaml:"B"`
+	C yamlBitlist `yaml:"C"`
+}
+
+const (
+	progVarBLimit = 123
+	// A(1) + offB(4) + offC(4)
+	progVarFixedSize = 1 + 4 + 4
+)
+
+func (s *progVarTestStruct) SizeSSZ() int {
+	return progVarFixedSize + sizeUint16List(s.B) + ssz.BitlistSize(s.C.nbits)
+}
+func (s *progVarTestStruct) MarshalSSZTo(dst []byte) ([]byte, error) {
+	offset := progVarFixedSize
+	dst = ssz.AppendUint8(dst, s.A)
+	dst = ssz.AppendOffset(dst, offset)
+	offset += sizeUint16List(s.B)
+	dst = ssz.AppendOffset(dst, offset)
+	// Variable part.
+	dst, err := appendUint16List(dst, s.B, progVarBLimit)
+	if err != nil {
+		return nil, err
+	}
+	return ssz.AppendBitlist(dst, s.C.bits, s.C.nbits), nil
+}
+func (s *progVarTestStruct) UnmarshalSSZ(data []byte) error {
+	d := ssz.NewDecoder(data)
+	s.A = d.Uint8()
+	d.Offset() // B
+	d.Offset() // C
+	sections, err := d.Sections()
+	if err != nil {
+		return err
+	}
+	if s.B, err = decodeUint16List(sections[0], progVarBLimit); err != nil {
+		return err
+	}
+	s.C.bits, s.C.nbits, err = ssz.DecodeBitlist(sections[1], ssz.NoLimit)
+	return err
+}
+func (s *progVarTestStruct) HashTreeRoot() [32]byte {
+	roots := [][32]byte{
+		ssz.Merkleize(ssz.Pack([]byte{s.A}), 1),
+		htrUint16List(s.B, progVarBLimit),
+		ssz.HashTreeRootProgressiveBitlist(s.C.bits, s.C.nbits),
+	}
+	return ssz.HashTreeRootProgressiveContainer(afProgVar, roots)
+}
+func (s *progVarTestStruct) fromYAML(node *yaml.Node) error { return node.Decode(s) }
+
+//	ProgressiveComplexTestStruct(active_fields=[1,0,1,0,1,0,0,0,1,0,0,0,1,1,0,0,0,0,0,0,1,1]) {
+//	  A: byte, B: List[uint16, 123], C: ProgressiveBitlist, D: ProgressiveList[uint64],
+//	  E: ProgressiveList[SmallTestStruct], F: ProgressiveList[ProgressiveList[VarTestStruct]],
+//	  G: List[ProgressiveSingleFieldContainerTestStruct, 10], H: ProgressiveList[ProgressiveVarTestStruct],
+//	}
+//
+// G is a classic List of progressive containers and H a ProgressiveList of
+// them, so both nesting directions are exercised.
+type progComplexTestStruct struct {
+	A uint8                      `yaml:"A"`
+	B []uint16                   `yaml:"B"`
+	C yamlBitlist                `yaml:"C"`
+	D []uint64                   `yaml:"D"`
+	E []smallTestStruct          `yaml:"E"`
+	F []progVarList              `yaml:"F"`
+	G []progSingleFieldContainer `yaml:"G"`
+	H []progVarTestStruct        `yaml:"H"`
+}
+
+const (
+	progComplexGLimit = 10
+	// A(1) + offsets of B, C, D, E, F, G and H
+	progComplexFixedSize = 1 + 7*4
+)
+
+func (s *progComplexTestStruct) SizeSSZ() int {
+	return progComplexFixedSize + sizeUint16List(s.B) + ssz.BitlistSize(s.C.nbits) + 8*len(s.D) +
+		4*len(s.E) + ssz.SizeVariableSlice(elemPtrs(s.F)) + len(s.G) + ssz.SizeVariableSlice(elemPtrs(s.H))
+}
+func (s *progComplexTestStruct) MarshalSSZTo(dst []byte) ([]byte, error) {
+	if uint64(len(s.G)) > progComplexGLimit {
+		return nil, errListTooLong(len(s.G), progComplexGLimit)
+	}
+	offset := progComplexFixedSize
+	dst = ssz.AppendUint8(dst, s.A)
+	dst = ssz.AppendOffset(dst, offset)
+	offset += sizeUint16List(s.B)
+	dst = ssz.AppendOffset(dst, offset)
+	offset += ssz.BitlistSize(s.C.nbits)
+	dst = ssz.AppendOffset(dst, offset)
+	offset += 8 * len(s.D)
+	dst = ssz.AppendOffset(dst, offset)
+	offset += 4 * len(s.E)
+	dst = ssz.AppendOffset(dst, offset)
+	offset += ssz.SizeVariableSlice(elemPtrs(s.F))
+	dst = ssz.AppendOffset(dst, offset)
+	offset += len(s.G)
+	dst = ssz.AppendOffset(dst, offset)
+	// Variable part.
+	dst, err := appendUint16List(dst, s.B, progVarBLimit)
+	if err != nil {
+		return nil, err
+	}
+	dst = ssz.AppendBitlist(dst, s.C.bits, s.C.nbits)
+	dst = appendUint64List(dst, s.D)
+	if dst, err = ssz.MarshalFixedSlice(dst, elemPtrs(s.E)); err != nil {
+		return nil, err
+	}
+	if dst, err = ssz.MarshalVariableSlice(dst, elemPtrs(s.F)); err != nil {
+		return nil, err
+	}
+	if dst, err = ssz.MarshalFixedSlice(dst, elemPtrs(s.G)); err != nil {
+		return nil, err
+	}
+	return ssz.MarshalVariableSlice(dst, elemPtrs(s.H))
+}
+func (s *progComplexTestStruct) UnmarshalSSZ(data []byte) error {
+	d := ssz.NewDecoder(data)
+	s.A = d.Uint8()
+	for range 7 {
+		d.Offset() // B, C, D, E, F, G, H
+	}
+	sections, err := d.Sections()
+	if err != nil {
+		return err
+	}
+	if s.B, err = decodeUint16List(sections[0], progVarBLimit); err != nil {
+		return err
+	}
+	if s.C.bits, s.C.nbits, err = ssz.DecodeBitlist(sections[1], ssz.NoLimit); err != nil {
+		return err
+	}
+	if s.D, err = decodeUint64List(sections[2]); err != nil {
+		return err
+	}
+	if s.E, err = ssz.UnmarshalFixedSlice[smallTestStruct, *smallTestStruct](sections[3], 4, ssz.NoLimit); err != nil {
+		return err
+	}
+	if s.F, err = ssz.UnmarshalVariableSlice[progVarList, *progVarList](sections[4], ssz.NoLimit); err != nil {
+		return err
+	}
+	if s.G, err = ssz.UnmarshalFixedSlice[progSingleFieldContainer, *progSingleFieldContainer](sections[5], 1, progComplexGLimit); err != nil {
+		return err
+	}
+	s.H, err = ssz.UnmarshalVariableSlice[progVarTestStruct, *progVarTestStruct](sections[6], ssz.NoLimit)
+	return err
+}
+func (s *progComplexTestStruct) HashTreeRoot() [32]byte {
+	roots := [][32]byte{
+		ssz.Merkleize(ssz.Pack([]byte{s.A}), 1),
+		htrUint16List(s.B, progVarBLimit),
+		ssz.HashTreeRootProgressiveBitlist(s.C.bits, s.C.nbits),
+		htrProgUint64List(s.D),
+		ssz.HashTreeRootProgressiveRoots(elemRoots(s.E)),
+		ssz.HashTreeRootProgressiveRoots(elemRoots(s.F)),
+		ssz.MixInLength(ssz.Merkleize(elemRoots(s.G), progComplexGLimit), uint64(len(s.G))),
+		ssz.HashTreeRootProgressiveRoots(elemRoots(s.H)),
+	}
+	return ssz.HashTreeRootProgressiveContainer(afProgComplex, roots)
+}
+func (s *progComplexTestStruct) fromYAML(node *yaml.Node) error { return node.Decode(s) }
