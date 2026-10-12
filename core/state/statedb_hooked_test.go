@@ -144,6 +144,7 @@ func TestHooks_OnCodeChangeV2(t *testing.T) {
 	var wants = []string{
 		"0xaa00000000000000000000000000000000000000.code:  (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) ->0x1325 (0xa12ae05590de0c93a00bc7ac773c2fdb621e44f814985e72194f921c0050f728) ContractCreation",
 		"0xbb00000000000000000000000000000000000000.code:  (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) ->0x1326 (0x3c54516221d604e623f358bc95996ca3242aaa109bddabcebda13db9b3f90dcb) ContractCreation",
+		"0xCc00000000000000000000000000000000000000.code:  (0x0000000000000000000000000000000000000000000000000000000000000000) ->0x1326 (0x3c54516221d604e623f358bc95996ca3242aaa109bddabcebda13db9b3f90dcb) SetCodeFrom",
 		"0xaa00000000000000000000000000000000000000.code: 0x1325 (0xa12ae05590de0c93a00bc7ac773c2fdb621e44f814985e72194f921c0050f728) -> (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) SelfDestruct",
 		"0xbb00000000000000000000000000000000000000.code: 0x1326 (0x3c54516221d604e623f358bc95996ca3242aaa109bddabcebda13db9b3f90dcb) -> (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) SelfDestruct",
 	}
@@ -159,6 +160,9 @@ func TestHooks_OnCodeChangeV2(t *testing.T) {
 	sdb.SelfDestruct(common.Address{0xaa})
 
 	sdb.SetCode(common.Address{0xbb}, []byte{0x13, 38}, tracing.CodeChangeContractCreation)
+	sdb.SetCodeFrom(common.Address{0xcc}, common.Address{0xbb})
+	sdb.SetCodeFrom(common.Address{0xcc}, common.Address{0xbb})
+	sdb.SetCodeFrom(common.Address{0xcc}, common.Address{0xdd})
 	sdb.CreateContract(common.Address{0xbb})
 	sdb.SelfDestruct(common.Address{0xbb})
 	sdb.Finalise(params.Rules{IsEIP158: true})

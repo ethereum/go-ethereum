@@ -381,6 +381,13 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			args: make([]int64, 2),
 		},
 		{
+			name: "SetCodeFrom",
+			fn: func(a testAction, s *StateDB) {
+				s.SetCodeFrom(addr, common.Address{byte(a.args[0] % 50)})
+			},
+			args: make([]int64, 1),
+		},
+		{
 			name: "CreateAccount",
 			fn: func(a testAction, s *StateDB) {
 				if !s.Exist(addr) {

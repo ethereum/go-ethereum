@@ -499,6 +499,20 @@ func (s *StateDB) SetCode(addr common.Address, code []byte, reason tracing.CodeC
 	return nil
 }
 
+// SetCodeFrom sets the code of addr to the code of source, as the SETCODEFROM
+// instruction does (EIP-8298), and returns the previous code.
+func (s *StateDB) SetCodeFrom(addr, source common.Address) (prev []byte) {
+	src := s.getStateObject(source)
+	if src == nil {
+		return nil
+	}
+	obj := s.getOrNewStateObject(addr)
+	obj.Code() // load the replaced code, the journal stashes it for the BAL
+	prev = obj.SetCode(common.BytesToHash(src.CodeHash()), src.Code())
+	obj.codeAdopted = true
+	return prev
+}
+
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) common.Hash {
 	if stateObject := s.getOrNewStateObject(addr); stateObject != nil {
 		return stateObject.SetState(key, value)
@@ -848,7 +862,11 @@ func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMut
 			code = obj.Code()
 		}
 		if !bytes.Equal(code, state.code) {
-			s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
+			if obj != nil && obj.codeAdopted {
+				s.stateAccessList.CodeHashChange(addr, s.blockAccessIndex, common.BytesToHash(obj.CodeHash()))
+			} else {
+				s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
+			}
 		}
 	}
 }
