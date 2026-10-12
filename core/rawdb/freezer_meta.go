@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"os"
@@ -198,6 +199,9 @@ func (m *freezerTableMeta) write(sync bool) error {
 	enc, err := rlp.EncodeToBytes(&o)
 	if err != nil {
 		return err
+	}
+	if len(enc) > freezerMetaSize {
+		return fmt.Errorf("metadata encoding %d bytes exceeds the fixed size %d", len(enc), freezerMetaSize)
 	}
 	buf := make([]byte, freezerMetaSize)
 	copy(buf, enc)
