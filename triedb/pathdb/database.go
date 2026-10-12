@@ -201,9 +201,7 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 }
 
 // setHistoryIndexer initializes the indexers for both state history and
-// trienode history if available. At a reactivation (Enable, AdoptSyncedState),
-// the indexers of the old state were stopped already, before the histories were
-// purged; closing them again here is harmless.
+// trienode history if available.
 func (db *Database) setHistoryIndexer() {
 	// TODO (rjl493456442) disable the background indexing in read-only mode
 	if !db.config.EnableStateIndexing {
@@ -411,10 +409,7 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	}
 	// Clean up all state histories in the freezer. Theoretically all root->id
 	// mappings should be removed as well; since those can be huge, leave them
-	// on disk and let them be overwritten. Before it resets a freezer,
-	// purgeHistory syncs the key-value store, which makes the batch above
-	// durable too. (A freezer without histories isn't reset, but then the
-	// state id was zero already.)
+	// on disk and let them be overwritten.
 	purgeHistory(db.stateFreezer, db.diskdb, typeStateHistory)
 	purgeHistory(db.trienodeFreezer, db.diskdb, typeTrienodeHistory)
 

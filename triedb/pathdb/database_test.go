@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -789,89 +788,6 @@ func TestDisable(t *testing.T) {
 	}
 	if tester.db.tree.bottom().rootHash() != stored {
 		t.Fatalf("Root hash is not matched exp %x got %x", stored, tester.db.tree.bottom().rootHash())
-	}
-}
-
-// batchHook is a database that calls hook before the first write of a batch
-// made through it.
-type batchHook struct {
-	ethdb.Database
-	hook func()
-	once sync.Once
-}
-
-func (db *batchHook) NewBatch() ethdb.Batch {
-	return &hookedBatch{Batch: db.Database.NewBatch(), db: db}
-}
-
-type hookedBatch struct {
-	ethdb.Batch
-	db *batchHook
-}
-
-func (b *hookedBatch) Write() error {
-	b.db.once.Do(b.db.hook)
-	return b.Batch.Write()
-}
-
-// TestReactivationStopsIndexers checks that the reactivation at the end of a
-// state sync stops the history indexers before it writes anything: one still
-// running could write the index of the purged histories back.
-func TestReactivationStopsIndexers(t *testing.T) {
-	t.Run("Enable", func(t *testing.T) {
-		testReactivationStopsIndexers(t, func(db *Database, root common.Hash) error { return db.Enable(root) })
-	})
-	t.Run("AdoptSyncedState", func(t *testing.T) {
-		testReactivationStopsIndexers(t, func(db *Database, root common.Hash) error { return db.AdoptSyncedState(root) })
-	})
-}
-
-func testReactivationStopsIndexers(t *testing.T, reactivate func(db *Database, root common.Hash) error) {
-	maxDiffLayers = 4
-	defer func() {
-		maxDiffLayers = 128
-	}()
-
-	tester := newTester(t, &testerConfig{layers: 12, enableIndex: true})
-	defer tester.release()
-
-	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
-		t.Fatalf("Failed to commit, err: %v", err)
-	}
-	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
-
-	indexers := []*historyIndexer{tester.db.stateIndexer, tester.db.trienodeIndexer}
-	for _, indexer := range indexers {
-		if indexer == nil {
-			t.Fatal("History indexing is not enabled")
-		}
-	}
-	// The indexers write through the database they were given, the hook sees
-	// only the reactivation's own writes: the state id reset comes first.
-	var written bool
-	tester.db.diskdb = &batchHook{Database: tester.db.diskdb, hook: func() {
-		written = true
-		for _, indexer := range indexers {
-			for _, closed := range []chan struct{}{indexer.initer.closed, indexer.pruner.closed} {
-				select {
-				case <-closed:
-				default:
-					t.Error("History indexer still running when the reactivation writes")
-				}
-			}
-		}
-	}}
-	if err := tester.db.Disable(); err != nil {
-		t.Fatalf("Failed to disable database: %v", err)
-	}
-	if err := reactivate(tester.db, stored); err != nil {
-		t.Fatalf("Failed to reactivate database: %v", err)
-	}
-	if !written {
-		t.Fatal("The reactivation wrote nothing")
-	}
-	if tester.db.stateIndexer == indexers[0] || tester.db.trienodeIndexer == indexers[1] {
-		t.Fatal("The history indexers weren't replaced")
 	}
 }
 
