@@ -21,6 +21,11 @@ import (
 	"fmt"
 )
 
+// NoLimit is the limit to pass when decoding a progressive list or bitlist
+// (EIP-7916), which has no type-level capacity: its only bound is the SSZ
+// size envelope that Decode enforces on the whole input.
+const NoLimit = ^uint64(0)
+
 // SizeVariableSlice returns the serialized size of a slice of variable-size
 // elements: one 4-byte offset per element plus the element payloads.
 func SizeVariableSlice[T Object](elems []T) int {
@@ -72,7 +77,8 @@ func MarshalFixedSlice[T Object](dst []byte, elems []T) ([]byte, error) {
 
 // UnmarshalVariableSlice strictly decodes a list of variable-size elements.
 // The element count is implied by the first offset (the fixed part is pure
-// offset table, so first/4 == count). limit is the type's capacity.
+// offset table, so first/4 == count). limit is the type's capacity, or
+// NoLimit for a progressive list.
 func UnmarshalVariableSlice[T any, PT interface {
 	*T
 	Object
@@ -115,7 +121,8 @@ func UnmarshalVariableSlice[T any, PT interface {
 }
 
 // UnmarshalFixedSlice strictly decodes a list of fixed-size elements of
-// elemSize bytes each. limit is the type's capacity.
+// elemSize bytes each. limit is the type's capacity, or NoLimit for a
+// progressive list.
 func UnmarshalFixedSlice[T any, PT interface {
 	*T
 	Object
