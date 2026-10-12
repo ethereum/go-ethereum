@@ -17,11 +17,29 @@
 package logger
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
+
+func TestAccessListTracerSetCodeFrom(t *testing.T) {
+	source := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	tracer := NewAccessListTracer(nil, nil)
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := vm.NewEVM(vm.BlockContext{BlockNumber: new(big.Int), Random: new(common.Hash)}, statedb, params.AllDevChainProtocolChanges, vm.Config{Tracer: tracer.Hooks()})
+	contract := vm.NewContract(common.Address{}, common.Address{}, new(uint256.Int), vm.NewGasBudget(100000, 0), nil)
+	contract.Code = append(append([]byte{byte(vm.PUSH20)}, source.Bytes()...), byte(vm.SETCODEFROM), byte(vm.STOP))
+	_, err := evm.Run(contract, nil, false)
+	if got := tracer.AccessList(); err != nil || len(got) != 1 || got[0].Address != source {
+		t.Fatalf("execution error %v, access list %+v, want only %x", err, got, source)
+	}
+}
 
 func TestNewAccessListTracerExcludedAddress(t *testing.T) {
 	excluded := common.HexToAddress("0x2222222222222222222222222222222222222222")
