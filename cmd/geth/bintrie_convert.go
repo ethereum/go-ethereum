@@ -40,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
@@ -55,7 +54,7 @@ var (
 	}
 	tmpDirFlag = &cli.StringFlag{
 		Name:  "tmpdir",
-		Usage: "Directory for scratch files, the sort spills and on import a copy of every tree node; needs disk, not tmpfs (default: the OS temp dir)",
+		Usage: "Directory for scratch files, the sort spills and a copy of every tree node; needs disk, not tmpfs (default: the OS temp dir)",
 	}
 	forceConvertFlag = &cli.BoolFlag{
 		Name:  "force",
@@ -265,10 +264,9 @@ func (s *conversionStats) report(force bool) {
 // convertState converts the MPT state at root into the binary tree namespace
 // per EIP-8347: one scan, split by account hash across workers, derives
 // every leaf, an external sort orders the leaves in tree-key order, and the
-// tree builds bottom-up in one pass. Three checks gate the result: the scan
-// against the source state root, the tree and the flat store against the
-// converted one. The attestation lands last, so an interrupted run refuses
-// to open.
+// tree builds bottom-up in one pass. The scan must re-derive the source
+// state root, and both stores must read back exactly what was written. The
+// attestation lands last, so an interrupted run refuses to open.
 func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 
@@ -353,37 +351,31 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}
 	}
 
-	// Check 1, before the build: the other two checks are fed by this same
-	// record set, so only this one ties the output to the source state. The
-	// fold writes the flat state as it goes.
-	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), opts.tmpDir, stats.start); err != nil {
+	// Check 1, before the build: everything written is fed by this same
+	// record set, so only this check ties the output to the source state.
+	// The fold writes the flat state as it goes, digesting what it writes.
+	written := newWrittenState()
+	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, stats.start); err != nil {
 		return common.Hash{}, err
 	}
 	accounts.Close()
 	slots.Close()
 
-	// Phase 2+3: sort and build, streaming records to disk.
+	// Phase 2+3: sort and build. Tree nodes are staged per depth and written
+	// once the tree is built, in key order (see nodeStager).
 	stream, err := sorter.Sort()
 	if err != nil {
 		return common.Hash{}, err
 	}
-	var (
-		batch      = pbtdb.NewBatch()
-		written    uint64
-		builderErr error
-	)
+	nodes, err := newNodeStager(opts.tmpDir)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer nodes.close()
+	var builderErr error
 	builder := bintrie.NewStackBuilder(func(path []byte, hash common.Hash, blob []byte) {
-		if builderErr != nil {
-			return
-		}
-		rawdb.WriteAccountTrieNode(batch, path, blob)
-		written++
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				builderErr = err
-				return
-			}
-			batch.Reset()
+		if builderErr == nil {
+			builderErr = nodes.add(path, blob)
 		}
 	})
 	for {
@@ -407,17 +399,15 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	if builderErr != nil {
 		return common.Hash{}, builderErr
 	}
-	if err := batch.Write(); err != nil {
+	if err := writeStagedNodes(pbtdb, nodes, written.nodes); err != nil {
 		return common.Hash{}, err
 	}
-	log.Info("Built binary tree", "nodes", written, "leaves", stats.leaves.Load())
+	log.Info("Built binary tree", "nodes", written.nodes.count, "leaves", stats.leaves.Load())
 
-	// Verify both stores before anything becomes publishable or openable.
-	if err := verifyConvertedState(chaindb, binRoot); err != nil {
-		return common.Hash{}, fmt.Errorf("converted tree failed verification: %w", err)
-	}
-	if err := verifyFlatState(chaindb, pbtdb, srcTriedb, binRoot, opts); err != nil {
-		return common.Hash{}, fmt.Errorf("converted flat state failed verification: %w", err)
+	// Both stores must hold exactly what was written before anything becomes
+	// publishable or openable.
+	if err := verifyWritten(pbtdb, written); err != nil {
+		return common.Hash{}, err
 	}
 
 	if snapshot != nil {
@@ -694,7 +684,7 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 
 // checkPreimage rejects a preimage of the wrong length or one that does not
 // hash back to its key: the store has no integrity of its own, and a corrupt
-// entry would convert into a wrong-stem tree the verifiers confirm.
+// entry would convert into a wrong-stem tree.
 func checkPreimage(preimage []byte, hash common.Hash, wantLen int) error {
 	if len(preimage) != wantLen {
 		return fmt.Errorf("corrupt preimage for %x: %d bytes, want %d", hash, len(preimage), wantLen)
@@ -846,27 +836,10 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 	return nil
 }
 
-// rawBinaryNodes reads tree records straight from the namespace: a path
-// database would demand the attestation the verifiers gate, and history
-// freezers a conversion never creates.
-type rawBinaryNodes struct {
-	pbtdb ethdb.Database
-}
-
-func (r rawBinaryNodes) NodeReader(common.Hash) (database.NodeReader, error) {
-	return r, nil
-}
-
-// Node returns the record at path, unverified: the walk re-derives the root
-// from the leaves, which subsumes per-node hash checks.
-func (r rawBinaryNodes) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
-	return rawdb.ReadAccountTrieNode(r.pbtdb, path), nil
-}
-
 // verifySourceRoot demands that the scanned records re-derive the state root
 // they were read from, the converter's counterpart to the importer's anchor
 // check. With a batch it also writes the flat state, see rederiveMerkleRoot.
-func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, tmpDir string, start time.Time) error {
+func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, written *writtenState, tmpDir string, start time.Time) error {
 	acctStream, err := accounts.Sort()
 	if err != nil {
 		return err
@@ -875,7 +848,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, tmpDir, start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, written, tmpDir, start)
 	if err != nil {
 		return err
 	}
@@ -884,206 +857,6 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	}
 	log.Info("Verified the scan against the source state root", "stateRoot", want)
 	return nil
-}
-
-// verifyConvertedState refolds every persisted leaf and requires the rebuilt
-// root to match. Gates the completion marker.
-func verifyConvertedState(chaindb ethdb.Database, root common.Hash) error {
-	tr, err := bintrie.NewBinaryTrie(root, rawBinaryNodes{pbtdb: rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))})
-	if err != nil {
-		return fmt.Errorf("cannot open the converted tree at %x: %w", root, err)
-	}
-	it, err := tr.NodeIterator(nil)
-	if err != nil {
-		return err
-	}
-	rebuild := bintrie.NewStackBuilder(nil)
-	leaves := 0
-	for it.Next(true) {
-		if !it.Leaf() {
-			continue
-		}
-		if err := rebuild.Add(common.CopyBytes(it.LeafKey()), common.CopyBytes(it.LeafBlob())); err != nil {
-			return fmt.Errorf("leaf %x: %w", it.LeafKey(), err)
-		}
-		leaves++
-	}
-	if err := it.Error(); err != nil {
-		return err
-	}
-	if got := rebuild.Finish(); got != root && !(leaves == 0 && root == types.EmptyBinaryHash) {
-		return fmt.Errorf("disk leaves rebuild to %x, converted root is %x", got, root)
-	}
-	log.Info("Verified converted tree", "leaves", leaves, "root", root)
-	return nil
-}
-
-// verifyFlatState re-derives the whole leaf set from the flat records and
-// requires it to rebuild to the converted root. Flat state is the
-// authoritative read path - a miss is an absent account - so the tree walk
-// alone would bless a database that reads as empty. Like the scan, it splits
-// the account hashes across workers.
-func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) error {
-	var (
-		ranges  = splitHashSpace(max(opts.workers, 1))
-		share   = splitBudget(opts.sortBudget, len(ranges))
-		sorters = make([]*bintrie.RecordSorter, len(ranges))
-		codes   = newCodeSet()
-		leaves  atomic.Uint64
-	)
-	g, ctx := errgroup.WithContext(context.Background())
-	for i, r := range ranges {
-		sorters[i] = bintrie.NewLeafSorter(opts.tmpDir, share)
-		defer sorters[i].Close()
-		g.Go(func() error {
-			var n uint64
-			defer func() { leaves.Add(n) }()
-			emit := func(key []byte, value [32]byte) error {
-				if value == ([32]byte{}) {
-					return nil
-				}
-				n++
-				return sorters[i].Add(key, value[:])
-			}
-			if err := flatAccountLeaves(ctx, chaindb, pbtdb, srcTriedb, r, codes, emit); err != nil {
-				return err
-			}
-			return flatStorageLeaves(ctx, pbtdb, srcTriedb, r, emit)
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return err
-	}
-	for _, s := range sorters[1:] {
-		if err := sorters[0].Absorb(s); err != nil {
-			return err
-		}
-	}
-	stream, err := sorters[0].Sort()
-	if err != nil {
-		return err
-	}
-	rebuild := bintrie.NewStackBuilder(nil)
-	for {
-		key, value, err := stream.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		if err := rebuild.Add(key, value); err != nil {
-			return err
-		}
-	}
-	if got := rebuild.Finish(); got != root && !(leaves.Load() == 0 && root == types.EmptyBinaryHash) {
-		return fmt.Errorf("flat state re-derives to %x, converted root is %x", got, root)
-	}
-	log.Info("Verified converted flat state", "leaves", leaves.Load(), "root", root)
-	return nil
-}
-
-// flatAccountLeaves derives the header and code leaves of the flat accounts
-// in r.
-func flatAccountLeaves(ctx context.Context, chaindb, pbtdb ethdb.Database, srcTriedb *triedb.Database, r hashRange, codes *codeSet, emit func([]byte, [32]byte) error) error {
-	it := pbtdb.NewIterator(rawdb.SnapshotAccountPrefix, r.start[:])
-	defer it.Release()
-	for it.Next() {
-		accountHash := common.BytesToHash(it.Key()[len(rawdb.SnapshotAccountPrefix):])
-		if r.past(accountHash) {
-			break
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		addrBytes := srcTriedb.Preimage(accountHash)
-		if addrBytes == nil {
-			return fmt.Errorf("missing preimage for flat account %x", accountHash)
-		}
-		if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
-			return err
-		}
-		addr := common.BytesToAddress(addrBytes)
-
-		var slim types.SlimAccount
-		if err := rlp.DecodeBytes(it.Value(), &slim); err != nil {
-			return fmt.Errorf("invalid flat account %x: %w", accountHash, err)
-		}
-		// Converted flat accounts never carry a storage root.
-		if len(slim.Root) != 0 {
-			return fmt.Errorf("flat account %x carries a storage root %x", accountHash, slim.Root)
-		}
-		codeHash := types.EmptyCodeHash
-		if len(slim.CodeHash) != 0 {
-			codeHash = common.BytesToHash(slim.CodeHash)
-		}
-		balance := slim.Balance
-		if balance == nil {
-			balance = new(uint256.Int)
-		}
-		if err := emitAccountHeader(chaindb, addr, slim.Nonce, balance, codeHash, codes, nil, emit); err != nil {
-			return err
-		}
-	}
-	return it.Error()
-}
-
-// flatStorageLeaves derives the storage leaves of the flat slots of the
-// accounts in r.
-func flatStorageLeaves(ctx context.Context, pbtdb ethdb.Database, srcTriedb *triedb.Database, r hashRange, emit func([]byte, [32]byte) error) error {
-	it := pbtdb.NewIterator(rawdb.SnapshotStoragePrefix, r.start[:])
-	defer it.Release()
-
-	// Slots are ordered by account hash: the address resolves once per account.
-	var (
-		lastHash common.Hash
-		lastAddr common.Address
-	)
-	for it.Next() {
-		key := it.Key()
-		if len(key) != len(rawdb.SnapshotStoragePrefix)+2*common.HashLength {
-			return fmt.Errorf("malformed flat storage key %x", key)
-		}
-		accountHash := common.BytesToHash(key[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength])
-		slotHash := common.BytesToHash(key[len(key)-common.HashLength:])
-
-		if accountHash != lastHash || lastHash == (common.Hash{}) {
-			if r.past(accountHash) {
-				break
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			addrBytes := srcTriedb.Preimage(accountHash)
-			if addrBytes == nil {
-				return fmt.Errorf("missing preimage for flat account %x", accountHash)
-			}
-			if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
-				return err
-			}
-			lastHash, lastAddr = accountHash, common.BytesToAddress(addrBytes)
-		}
-		slotKey := srcTriedb.Preimage(slotHash)
-		if slotKey == nil {
-			return fmt.Errorf("missing preimage for flat storage key %x (account %x)", slotHash, lastAddr)
-		}
-		if err := checkPreimage(slotKey, slotHash, common.HashLength); err != nil {
-			return err
-		}
-		_, content, rest, err := rlp.Split(it.Value())
-		if err != nil {
-			return fmt.Errorf("invalid flat storage value for key %x (account %x): %w", slotHash, lastAddr, err)
-		}
-		if len(rest) != 0 || len(content) > 32 {
-			return fmt.Errorf("malformed flat storage value for key %x (account %x)", slotHash, lastAddr)
-		}
-		var padded [32]byte
-		copy(padded[32-len(content):], content)
-		if err := emit(bintrie.StorageSlotKey(lastAddr, slotKey), padded); err != nil {
-			return err
-		}
-	}
-	return it.Error()
 }
 
 // wipePreimages deletes the preimage store, which a binary tree never

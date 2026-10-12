@@ -383,14 +383,10 @@ func TestConvertedStateOutlivesMerkleDisposal(t *testing.T) {
 		if err := core.DisposeMerkleState(chaindb, "", nil); err != nil {
 			t.Fatalf("deletion failed: %v", err)
 		}
-		// Converted bytes alone must verify.
-		pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
-		if err := verifyConvertedState(chaindb, binRoot); err != nil {
-			t.Fatalf("tree verification fails after source deletion: %v", err)
-		}
-		if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err != nil {
-			t.Fatalf("flat verification fails after source deletion: %v", err)
-		}
+		// Converted bytes alone must hold: the whole tree resolves through the
+		// node's path database, and the flat state is byte-exact.
+		assertConvertedTreeClean(t, chaindb, binRoot)
+		assertFlatStateMatchesAlloc(t, chaindb, alloc)
 		// A contract reads through the node's stack.
 		var contract common.Address
 		var acct types.Account

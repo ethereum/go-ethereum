@@ -714,12 +714,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
 	}
 	log.Info("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves.Load(), "digest", snap.digest())
+	written := newWrittenState()
 	if nodes != nil {
-		err := nodes.replay(func(path, blob []byte) error {
-			rawdb.WriteAccountTrieNode(pbtBatch, path, blob)
-			return flush(false)
-		})
-		if err != nil {
+		if err := writeStagedNodes(pbtdb, nodes, written.nodes); err != nil {
 			return common.Hash{}, err
 		}
 	}
@@ -784,7 +781,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err != nil {
 		return common.Hash{}, err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, opts.tmpDir, stats.start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, written, opts.tmpDir, stats.start)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -799,6 +796,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return snap.root, nil
 	}
 	if err := flush(true); err != nil {
+		return common.Hash{}, err
+	}
+	if err := verifyWritten(pbtdb, written); err != nil {
 		return common.Hash{}, err
 	}
 	// The anchor rides with the root: the tree does not say which block it

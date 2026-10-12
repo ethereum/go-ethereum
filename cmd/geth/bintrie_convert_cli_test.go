@@ -90,10 +90,8 @@ func TestBintrieConvertCLI(t *testing.T) {
 	snapPath := filepath.Join(outdir, "snapshot.bin")
 	prePath := filepath.Join(outdir, "preimages.bin")
 	out := runCmd(false, "bintrie", "convert", "--snapshot-out", snapPath, "--preimages-out", prePath)
-	for _, want := range []string{"Verified converted tree", "Verified converted flat state", "Conversion complete"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("conversion output lacks %q:\n%s", want, out)
-		}
+	if !strings.Contains(out, "Conversion complete") {
+		t.Fatalf("conversion output lacks completion:\n%s", out)
 	}
 	if fi, err := os.Stat(snapPath); err != nil || fi.Size() <= snapshotOverhead {
 		t.Fatalf("snapshot artifact missing or empty: %v", err)
