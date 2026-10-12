@@ -74,7 +74,7 @@ var (
 	}
 	convertWorkersFlag = &cli.IntFlag{
 		Name:  "convert-workers",
-		Usage: "Workers scanning the state in parallel, each over its own share of the accounts. The scan waits on disk reads, so more workers finish sooner but leave less CPU and disk to other processes. --memory-limit is split among them, so each spills more runs, 1 MB apiece while they merge. --preimages-out scans with one",
+		Usage: "Workers scanning the state in parallel, each over its own share of the accounts. The scan waits on disk reads, so more workers finish sooner but leave less CPU and disk to other processes. --memory-limit is split among them, so each spills more runs, 1 MB apiece while they merge",
 		Value: 4,
 	}
 
@@ -306,13 +306,8 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}()
 	}
 	// Phase 1: scan, deriving leaves. Each worker scans its own range of
-	// account hashes into sorters of its own; the preimage file is written
-	// in scan order, so it takes a single worker.
+	// account hashes into sorters of its own.
 	workers := max(opts.workers, 1)
-	if workers > 1 && preimages != nil {
-		log.Info("Scanning with one worker: the preimage file is written in scan order", "requested", workers)
-		workers = 1
-	}
 	// Every worker's three sorters are alive at once, and a sealed one keeps
 	// its buffer while its stream drains, so the budget is split rather than
 	// reused.
@@ -330,16 +325,35 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		defer parts[i].accounts.Close()
 		defer parts[i].slots.Close()
 	}
+	// Every worker writes its range of the preimage file: the first straight
+	// into the artifact, the others into fragments joined after it.
+	writers := make([]*preimageFile, workers)
+	writers[0] = preimages
+	if preimages != nil {
+		for i := 1; i < workers; i++ {
+			frag, err := newPreimageFragment(opts.tmpDir)
+			if err != nil {
+				return common.Hash{}, err
+			}
+			defer frag.abort()
+			writers[i] = frag
+		}
+	}
 	src := leafSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
 	codes := newCodeSet()
 	g, gctx := errgroup.WithContext(context.Background())
 	for i := range parts {
 		g.Go(func() error {
-			return deriveLeaves(gctx, chaindb, src, &parts[i], codes, preimages, stats)
+			return deriveLeaves(gctx, chaindb, src, &parts[i], codes, writers[i], stats)
 		})
 	}
 	if err := g.Wait(); err != nil {
 		return common.Hash{}, err
+	}
+	if preimages != nil {
+		if err := preimages.join(writers[1:]); err != nil {
+			return common.Hash{}, err
+		}
 	}
 	stats.report(true)
 

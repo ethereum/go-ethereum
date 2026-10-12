@@ -320,8 +320,11 @@ func TestConvertParallelMatchesSerial(t *testing.T) {
 		}
 	}
 
+	// Every worker writes its range of the preimage file; the joined file,
+	// like the snapshot, must not depend on how many there were. The small
+	// allocation leaves most of eight ranges, and their fragments, empty.
 	t.Run("artifacts", func(t *testing.T) {
-		artifacts := func(workers int) (snap, pre []byte) {
+		artifacts := func(alloc types.GenesisAlloc, workers int) (snap, pre []byte) {
 			opts := artifactOptions(t)
 			opts.workers = workers
 			convertAllocOpts(t, alloc, opts)
@@ -335,10 +338,14 @@ func TestConvertParallelMatchesSerial(t *testing.T) {
 			}
 			return snap, pre
 		}
-		snap1, pre1 := artifacts(1)
-		snap4, pre4 := artifacts(4)
-		if !bytes.Equal(snap1, snap4) || !bytes.Equal(pre1, pre4) {
-			t.Fatal("artifacts differ between one and four workers")
+		for _, alloc := range []types.GenesisAlloc{alloc, artifactAlloc()} {
+			snap1, pre1 := artifacts(alloc, 1)
+			for _, workers := range []int{4, 8} {
+				snap, pre := artifacts(alloc, workers)
+				if !bytes.Equal(snap1, snap) || !bytes.Equal(pre1, pre) {
+					t.Fatalf("%d accounts: artifacts differ between one and %d workers", len(alloc), workers)
+				}
+			}
 		}
 	})
 
