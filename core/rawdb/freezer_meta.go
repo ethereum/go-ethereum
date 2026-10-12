@@ -32,9 +32,7 @@ const (
 	freezerVersion = freezerTableV2 // The current used version
 
 	// freezerMetaSize is the size the metadata is written at, padded with zeros,
-	// which decoding ignores; the encoding takes at most 20 bytes. A rewrite then
-	// never changes the file's length: if a rewrite grew it, a crash could keep
-	// the new content at the old length, cut short, which doesn't decode.
+	// which decoding ignores; A rewrite should never changes the file's length.
 	freezerMetaSize = 32
 )
 
@@ -43,10 +41,8 @@ const (
 // them to be automatically corrected after an error occurs without significantly
 // impacting overall correctness.
 type freezerTableMeta struct {
-	file     *os.File // file handler of metadata
-	size     int64    // file size when loaded, 0 for a new file
-	prepared bool     // whether the file is ready for rewrites (see write)
-	version  uint16   // version descriptor of the freezer table
+	file    *os.File // file handler of metadata
+	version uint16   // version descriptor of the freezer table
 
 	// virtualTail represents the number of items marked as deleted. It is
 	// calculated as the sum of items removed from the table and the items
@@ -133,7 +129,7 @@ func decodeV2(file *os.File) *freezerTableMeta {
 
 // newMetadata initializes the metadata object, either by loading it from the file
 // or by constructing a new one from scratch.
-func newMetadata(file *os.File) (*freezerTableMeta, error) {
+func newMetadata(file *os.File, readonly bool) (*freezerTableMeta, error) {
 	stat, err := file.Stat()
 	if err != nil {
 		return nil, err
@@ -150,15 +146,29 @@ func newMetadata(file *os.File) (*freezerTableMeta, error) {
 		}
 		return m, nil
 	}
-	if m := decodeV2(file); m != nil {
-		m.size = stat.Size()
+	m := decodeV2(file)
+	if m == nil {
+		m = decodeV1(file) // legacy metadata
+	}
+	if m == nil {
+		return nil, errors.New("failed to decode metadata")
+	}
+	if readonly {
 		return m, nil
 	}
-	if m := decodeV1(file); m != nil {
-		m.size = stat.Size()
-		return m, nil // legacy metadata
+	// Make the fixed size durable before any rewrite, so that rewrites never
+	// change the length on disk. A file an earlier version wrote is shorter and
+	// is extended first; the sync is needed at that size too, as an extension
+	// by a process killed before its sync may not be on disk.
+	if stat.Size() < freezerMetaSize {
+		if err := file.Truncate(freezerMetaSize); err != nil {
+			return nil, err
+		}
 	}
-	return nil, errors.New("failed to decode metadata")
+	if err := file.Sync(); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // setVirtualTail sets the virtual tail and flushes the metadata if sync is true.
@@ -189,23 +199,6 @@ func (m *freezerTableMeta) write(sync bool) error {
 	if err != nil {
 		return err
 	}
-	// Before the first rewrite of a loaded file, make its fixed size durable,
-	// so that the writes don't change the length on disk: a file an earlier
-	// version wrote is shorter, and is extended with zeros after its content
-	// first. The sync is needed at that size too, as an extension by a process
-	// killed before its sync may not be on disk. (Here rather than at open:
-	// read-only opens don't write.)
-	if !m.prepared && m.size > 0 {
-		if m.size < freezerMetaSize {
-			if _, err := m.file.WriteAt(make([]byte, freezerMetaSize-m.size), m.size); err != nil {
-				return err
-			}
-		}
-		if err := m.file.Sync(); err != nil {
-			return err
-		}
-	}
-	m.prepared = true
 	buf := make([]byte, freezerMetaSize)
 	copy(buf, enc)
 	if _, err := m.file.WriteAt(buf, 0); err != nil {

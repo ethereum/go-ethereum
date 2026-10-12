@@ -30,13 +30,13 @@ func TestReadWriteFreezerTableMeta(t *testing.T) {
 	}
 	defer f.Close()
 
-	meta, err := newMetadata(f)
+	meta, err := newMetadata(f, false)
 	if err != nil {
 		t.Fatalf("Failed to new metadata %v", err)
 	}
 	meta.setVirtualTail(100, false)
 
-	meta, err = newMetadata(f)
+	meta, err = newMetadata(f, false)
 	if err != nil {
 		t.Fatalf("Failed to reload metadata %v", err)
 	}
@@ -69,7 +69,7 @@ func TestUpgradeMetadata(t *testing.T) {
 	}
 
 	// Reload the metadata, a silent upgrade is expected
-	meta, err := newMetadata(f)
+	meta, err := newMetadata(f, false)
 	if err != nil {
 		t.Fatalf("Failed to read metadata %v", err)
 	}
@@ -85,7 +85,7 @@ func TestUpgradeMetadata(t *testing.T) {
 
 	meta.setFlushOffset(100, true)
 
-	meta, err = newMetadata(f)
+	meta, err = newMetadata(f, false)
 	if err != nil {
 		t.Fatalf("Failed to read metadata %v", err)
 	}
@@ -119,7 +119,7 @@ func TestInvalidMetadata(t *testing.T) {
 	if err := rlp.Encode(f, &o); err != nil {
 		t.Fatalf("Failed to encode %v", err)
 	}
-	_, err = newMetadata(f)
+	_, err = newMetadata(f, false)
 	if err == nil {
 		t.Fatal("Unexpected success")
 	}
@@ -151,7 +151,7 @@ func TestMetadataFixedSize(t *testing.T) {
 			if _, err := f.Write(tt.blob); err != nil {
 				t.Fatal(err)
 			}
-			meta, err := newMetadata(f)
+			meta, err := newMetadata(f, false)
 			if err != nil {
 				t.Fatalf("Failed to new metadata %v", err)
 			}
@@ -169,7 +169,7 @@ func TestMetadataFixedSize(t *testing.T) {
 				if stat.Size() != freezerMetaSize {
 					t.Fatalf("Metadata file size %d, want %d", stat.Size(), freezerMetaSize)
 				}
-				reloaded, err := newMetadata(f)
+				reloaded, err := newMetadata(f, false)
 				if err != nil {
 					t.Fatalf("Failed to reload metadata %v", err)
 				}
@@ -213,7 +213,7 @@ func TestMetadataPadding(t *testing.T) {
 				if _, err := f.Write(append(tt.enc, suffix.bytes...)); err != nil {
 					t.Fatal(err)
 				}
-				m, err := newMetadata(f)
+				m, err := newMetadata(f, false)
 				if err != nil {
 					t.Fatalf("Failed to read metadata %v", err)
 				}
