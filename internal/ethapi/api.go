@@ -942,12 +942,21 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if blockOverrides != nil && blockOverrides.BlobBaseFee != nil {
 		blobBaseFee = blockOverrides.BlobBaseFee.ToInt()
 	}
+	// Thread prevRandao through Options. NewEVMBlockContext only sets Random
+	// when difficulty is zero, so MakeHeader alone is not enough on pre-merge
+	// (or otherwise non-zero-difficulty) headers; eth_call already applies it
+	// directly to the block context.
+	var random *common.Hash
+	if blockOverrides != nil && blockOverrides.PrevRandao != nil {
+		random = blockOverrides.PrevRandao
+	}
 	opts := &gasestimator.Options{
 		Config:      b.ChainConfig(),
 		Chain:       NewChainContext(ctx, b),
 		Header:      header,
 		State:       state,
 		BlobBaseFee: blobBaseFee,
+		Random:      random,
 		ErrorRatio:  estimateGasErrorRatio,
 	}
 	// Set any required transaction default, but make sure the gas cap itself is not messed with

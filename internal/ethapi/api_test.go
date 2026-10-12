@@ -1037,6 +1037,59 @@ func TestEstimateGas(t *testing.T) {
 	}
 }
 
+// TestEstimateGasPrevRandaoOverride checks that eth_estimateGas honours a
+// prevRandao block override on a non-zero-difficulty header. eth_call applies
+// the override to the block context directly, but the estimator rebuilds the
+// context from the header via NewEVMBlockContext, which only sets Random when
+// difficulty is zero. Without threading the override through Options.Random,
+// PREVRANDAO would still see the header difficulty (see #35913).
+func TestEstimateGasPrevRandaoOverride(t *testing.T) {
+	t.Parallel()
+	var (
+		accounts = newAccounts(1)
+		helper   = common.HexToAddress("0x0000000000000000000000000000000000003333")
+		// PREVRANDAO; DUP1; PUSH1 0; MSTORE; PUSH2 0x1234; EQ; PUSH2 0x12; JUMPI;
+		// PUSH1 32; PUSH1 0; REVERT; JUMPDEST; PUSH1 32; PUSH1 0; RETURN
+		helperCode = hex2Bytes("4480600052611234146100125760206000fd5b60206000f3")
+		wantRandom = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000001234")
+		genesis    = &core.Genesis{
+			Config:     params.TestChainConfig,
+			Difficulty: big.NewInt(1),
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	api := NewBlockChainAPI(newTestBackend(t, 0, genesis, ethash.NewFaker(), nil))
+	args := TransactionArgs{
+		From: &accounts[0].addr,
+		To:   &helper,
+	}
+	overrides := &override.StateOverride{
+		helper: {Code: helperCode},
+	}
+	blockOverrides := &override.BlockOverrides{PrevRandao: &wantRandom}
+
+	// Without the override, PREVRANDAO returns difficulty (1) and the helper reverts.
+	if _, err := api.EstimateGas(context.Background(), args, nil, overrides, nil); err == nil {
+		t.Fatal("EstimateGas without prevRandao override succeeded; want revert")
+	}
+
+	// With the override, PREVRANDAO is 0x1234 and estimation succeeds.
+	gas, err := api.EstimateGas(context.Background(), args, nil, overrides, blockOverrides)
+	if err != nil {
+		t.Fatalf("EstimateGas with prevRandao override failed: %v", err)
+	}
+	if gas == 0 {
+		t.Fatal("EstimateGas returned zero gas")
+	}
+
+	// eth_call with the same args must also succeed (control that the helper works).
+	if _, err := api.Call(context.Background(), args, nil, overrides, blockOverrides); err != nil {
+		t.Fatalf("Call with prevRandao override failed: %v", err)
+	}
+}
+
 func TestCall(t *testing.T) {
 	t.Parallel()
 

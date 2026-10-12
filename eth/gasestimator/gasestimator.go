@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -43,6 +44,12 @@ type Options struct {
 	State  *state.StateDB      // Pre-state on top of which to estimate the gas
 
 	BlobBaseFee *big.Int // BlobBaseFee optionally overrides the blob base fee in the execution context.
+
+	// Random optionally overrides the PREVRANDAO / RANDOM value in the execution
+	// context. Needed because NewEVMBlockContext only sets Random when the header
+	// difficulty is zero, so a prevRandao block override on a non-zero-difficulty
+	// header would otherwise be lost when the estimator rebuilds the context.
+	Random *common.Hash
 
 	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
@@ -235,6 +242,9 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	)
 	if opts.BlobBaseFee != nil {
 		evmContext.BlobBaseFee = new(big.Int).Set(opts.BlobBaseFee)
+	}
+	if opts.Random != nil {
+		evmContext.Random = opts.Random
 	}
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
