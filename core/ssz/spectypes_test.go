@@ -248,6 +248,47 @@ func (t *testBasicVector) fromYAML(node *yaml.Node) error {
 	return nil
 }
 
+// testBasicProgList covers basic_progressive_list: ProgressiveList[elem].
+// Runtime form and serialization are those of a List; only the root differs.
+type testBasicProgList struct {
+	kind basicKind
+	vals []uint256.Int
+}
+
+func (t *testBasicProgList) SizeSSZ() int { return t.kind.size() * len(t.vals) }
+func (t *testBasicProgList) MarshalSSZTo(dst []byte) ([]byte, error) {
+	for i := range t.vals {
+		dst = t.kind.append(dst, &t.vals[i])
+	}
+	return dst, nil
+}
+func (t *testBasicProgList) UnmarshalSSZ(data []byte) error {
+	size := t.kind.size()
+	if len(data)%size != 0 {
+		return fmt.Errorf("list of %d bytes is not a multiple of element size %d: %w", len(data), size, ssz.ErrSize)
+	}
+	t.vals = make([]uint256.Int, len(data)/size)
+	for i := range t.vals {
+		if err := t.kind.decode(data[i*size:(i+1)*size], &t.vals[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (t *testBasicProgList) HashTreeRoot() [32]byte {
+	buf, _ := t.MarshalSSZTo(nil)
+	return ssz.MixInLength(ssz.MerkleizeProgressive(ssz.Pack(buf)), uint64(len(t.vals)))
+}
+func (t *testBasicProgList) fromYAML(node *yaml.Node) error {
+	t.vals = make([]uint256.Int, len(node.Content))
+	for i, c := range node.Content {
+		if err := t.kind.fromYAML(c, &t.vals[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // testBitvector covers bitvector: Bitvector[N]. Runtime form: packed bytes.
 type testBitvector struct {
 	nbits uint64
@@ -315,6 +356,36 @@ func (t *testBitlist) fromYAML(node *yaml.Node) error {
 	return t.UnmarshalSSZ(ser)
 }
 
+// testProgBitlist covers progressive_bitlist: ProgressiveBitlist. Runtime
+// form and serialization are those of a Bitlist; only the root differs.
+type testProgBitlist struct {
+	bits  []byte
+	nbits uint64
+}
+
+func (t *testProgBitlist) SizeSSZ() int { return ssz.BitlistSize(t.nbits) }
+func (t *testProgBitlist) MarshalSSZTo(dst []byte) ([]byte, error) {
+	return ssz.AppendBitlist(dst, t.bits, t.nbits), nil
+}
+func (t *testProgBitlist) UnmarshalSSZ(data []byte) error {
+	bits, nbits, err := ssz.DecodeBitlist(data, ssz.NoLimit)
+	if err != nil {
+		return err
+	}
+	t.bits, t.nbits = bits, nbits
+	return nil
+}
+func (t *testProgBitlist) HashTreeRoot() [32]byte {
+	return ssz.HashTreeRootProgressiveBitlist(t.bits, t.nbits)
+}
+func (t *testProgBitlist) fromYAML(node *yaml.Node) error {
+	ser, err := yamlHex(node)
+	if err != nil {
+		return err
+	}
+	return t.UnmarshalSSZ(ser)
+}
+
 // Field helpers shared by the containers below.
 
 // List[uint16, limit]
@@ -353,6 +424,31 @@ func htrUint16List(vals []uint16, limit uint64) [32]byte {
 // ByteList[limit]
 func htrByteList(data []byte, limit uint64) [32]byte {
 	return ssz.MixInLength(ssz.Merkleize(ssz.Pack(data), (limit+31)/32), uint64(len(data)))
+}
+
+// ProgressiveList[uint64]
+func appendUint64List(dst []byte, vals []uint64) []byte {
+	for _, v := range vals {
+		dst = ssz.AppendUint64(dst, v)
+	}
+	return dst
+}
+func decodeUint64List(data []byte) ([]uint64, error) {
+	if len(data)%8 != 0 {
+		return nil, fmt.Errorf("uint64 list of %d bytes: %w", len(data), ssz.ErrSize)
+	}
+	vals := make([]uint64, len(data)/8)
+	for i := range vals {
+		d := ssz.NewDecoder(data[8*i : 8*i+8])
+		vals[i] = d.Uint64()
+		if err := d.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return vals, nil
+}
+func htrProgUint64List(vals []uint64) [32]byte {
+	return ssz.MixInLength(ssz.MerkleizeProgressive(ssz.Pack(appendUint64List(nil, vals))), uint64(len(vals)))
 }
 
 // hexBlob is a []byte YAML-decoded from 0x-hex.
@@ -622,6 +718,122 @@ func (s *complexTestStruct) HashTreeRoot() [32]byte {
 }
 func (s *complexTestStruct) fromYAML(node *yaml.Node) error { return node.Decode(s) }
 
+// progVarList is ProgressiveList[VarTestStruct], the element type of
+// ProgressiveTestStruct.D.
+type progVarList []varTestStruct
+
+func (p *progVarList) ptrs() []*varTestStruct {
+	elems := make([]*varTestStruct, len(*p))
+	for i := range *p {
+		elems[i] = &(*p)[i]
+	}
+	return elems
+}
+func (p *progVarList) SizeSSZ() int { return ssz.SizeVariableSlice(p.ptrs()) }
+func (p *progVarList) MarshalSSZTo(dst []byte) ([]byte, error) {
+	return ssz.MarshalVariableSlice(dst, p.ptrs())
+}
+func (p *progVarList) UnmarshalSSZ(data []byte) error {
+	elems, err := ssz.UnmarshalVariableSlice[varTestStruct, *varTestStruct](data, ssz.NoLimit)
+	if err != nil {
+		return err
+	}
+	*p = elems
+	return nil
+}
+func (p *progVarList) HashTreeRoot() [32]byte {
+	roots := make([][32]byte, len(*p))
+	for i := range *p {
+		roots[i] = (*p)[i].HashTreeRoot()
+	}
+	return ssz.HashTreeRootProgressiveRoots(roots)
+}
+
+//	ProgressiveTestStruct {
+//	  A: ProgressiveList[byte], B: ProgressiveList[uint64],
+//	  C: ProgressiveList[SmallTestStruct], D: ProgressiveList[ProgressiveList[VarTestStruct]],
+//	}
+type progressiveTestStruct struct {
+	A hexBlob           `yaml:"A"`
+	B []uint64          `yaml:"B"`
+	C []smallTestStruct `yaml:"C"`
+	D []progVarList     `yaml:"D"`
+}
+
+// offA(4) + offB(4) + offC(4) + offD(4)
+const progressiveFixedSize = 4 * 4
+
+func (s *progressiveTestStruct) dPtrs() []*progVarList {
+	elems := make([]*progVarList, len(s.D))
+	for i := range s.D {
+		elems[i] = &s.D[i]
+	}
+	return elems
+}
+func (s *progressiveTestStruct) SizeSSZ() int {
+	return progressiveFixedSize + len(s.A) + 8*len(s.B) + 4*len(s.C) + ssz.SizeVariableSlice(s.dPtrs())
+}
+func (s *progressiveTestStruct) MarshalSSZTo(dst []byte) ([]byte, error) {
+	offset := progressiveFixedSize
+	dst = ssz.AppendOffset(dst, offset)
+	offset += len(s.A)
+	dst = ssz.AppendOffset(dst, offset)
+	offset += 8 * len(s.B)
+	dst = ssz.AppendOffset(dst, offset)
+	offset += 4 * len(s.C)
+	dst = ssz.AppendOffset(dst, offset)
+	// Variable part.
+	dst = append(dst, s.A...)
+	dst = appendUint64List(dst, s.B)
+	cPtrs := make([]*smallTestStruct, len(s.C))
+	for i := range s.C {
+		cPtrs[i] = &s.C[i]
+	}
+	dst, err := ssz.MarshalFixedSlice(dst, cPtrs)
+	if err != nil {
+		return nil, err
+	}
+	return ssz.MarshalVariableSlice(dst, s.dPtrs())
+}
+func (s *progressiveTestStruct) UnmarshalSSZ(data []byte) error {
+	d := ssz.NewDecoder(data)
+	d.Offset() // A
+	d.Offset() // B
+	d.Offset() // C
+	d.Offset() // D
+	sections, err := d.Sections()
+	if err != nil {
+		return err
+	}
+	s.A = append(hexBlob(nil), sections[0]...)
+	if s.B, err = decodeUint64List(sections[1]); err != nil {
+		return err
+	}
+	if s.C, err = ssz.UnmarshalFixedSlice[smallTestStruct, *smallTestStruct](sections[2], 4, ssz.NoLimit); err != nil {
+		return err
+	}
+	s.D, err = ssz.UnmarshalVariableSlice[progVarList, *progVarList](sections[3], ssz.NoLimit)
+	return err
+}
+func (s *progressiveTestStruct) HashTreeRoot() [32]byte {
+	cRoots := make([][32]byte, len(s.C))
+	for i := range s.C {
+		cRoots[i] = s.C[i].HashTreeRoot()
+	}
+	dRoots := make([][32]byte, len(s.D))
+	for i := range s.D {
+		dRoots[i] = s.D[i].HashTreeRoot()
+	}
+	roots := [][32]byte{
+		ssz.HashTreeRootProgressiveBytes(s.A),
+		htrProgUint64List(s.B),
+		ssz.HashTreeRootProgressiveRoots(cRoots),
+		ssz.HashTreeRootProgressiveRoots(dRoots),
+	}
+	return ssz.Merkleize(roots, 4)
+}
+func (s *progressiveTestStruct) fromYAML(node *yaml.Node) error { return node.Decode(s) }
+
 //	BitsStruct {
 //	  A: Bitlist[5], B: Bitvector[2], C: Bitvector[1], D: Bitlist[6], E: Bitvector[8]
 //	}
@@ -699,3 +911,135 @@ func (s *bitsStruct) HashTreeRoot() [32]byte {
 	return ssz.Merkleize(roots, 5)
 }
 func (s *bitsStruct) fromYAML(node *yaml.Node) error { return node.Decode(s) }
+
+//	ProgressiveBitsStruct {
+//	  A: Bitvector[256], B: Bitlist[256], C: ProgressiveBitlist,
+//	  D: Bitvector[257], E: Bitlist[257], F: ProgressiveBitlist,
+//	  G: Bitvector[1280], H: Bitlist[1280], I: ProgressiveBitlist,
+//	  J: Bitvector[1281], K: Bitlist[1281], L: ProgressiveBitlist,
+//	}
+//
+// Bitfields at and one past the 256-bit chunk boundary, each classic pair
+// alongside a progressive bitlist of the same content.
+type progressiveBitsStruct struct {
+	A hexBlob     `yaml:"A"`
+	B yamlBitlist `yaml:"B"`
+	C yamlBitlist `yaml:"C"`
+	D hexBlob     `yaml:"D"`
+	E yamlBitlist `yaml:"E"`
+	F yamlBitlist `yaml:"F"`
+	G hexBlob     `yaml:"G"`
+	H yamlBitlist `yaml:"H"`
+	I yamlBitlist `yaml:"I"`
+	J hexBlob     `yaml:"J"`
+	K yamlBitlist `yaml:"K"`
+	L yamlBitlist `yaml:"L"`
+}
+
+// A(32) + offB + offC + D(33) + offE + offF + G(160) + offH + offI + J(161) + offK + offL
+const progressiveBitsFixedSize = 32 + 33 + 160 + 161 + 8*4
+
+// progressiveBitsLimits are the capacities of the bitlists in lists() order;
+// NoLimit marks the progressive ones.
+var progressiveBitsLimits = []uint64{256, ssz.NoLimit, 257, ssz.NoLimit, 1280, ssz.NoLimit, 1281, ssz.NoLimit}
+
+func (s *progressiveBitsStruct) lists() []*yamlBitlist {
+	return []*yamlBitlist{&s.B, &s.C, &s.E, &s.F, &s.H, &s.I, &s.K, &s.L}
+}
+func (s *progressiveBitsStruct) SizeSSZ() int {
+	size := progressiveBitsFixedSize
+	for _, l := range s.lists() {
+		size += ssz.BitlistSize(l.nbits)
+	}
+	return size
+}
+func (s *progressiveBitsStruct) MarshalSSZTo(dst []byte) ([]byte, error) {
+	lists := s.lists()
+	offsets := make([]int, len(lists))
+	offset := progressiveBitsFixedSize
+	for i, l := range lists {
+		if l.nbits > progressiveBitsLimits[i] {
+			return nil, errListTooLong(int(l.nbits), progressiveBitsLimits[i])
+		}
+		offsets[i] = offset
+		offset += ssz.BitlistSize(l.nbits)
+	}
+	dst = append(dst, s.A...)
+	dst = ssz.AppendOffset(dst, offsets[0])
+	dst = ssz.AppendOffset(dst, offsets[1])
+	dst = append(dst, s.D...)
+	dst = ssz.AppendOffset(dst, offsets[2])
+	dst = ssz.AppendOffset(dst, offsets[3])
+	dst = append(dst, s.G...)
+	dst = ssz.AppendOffset(dst, offsets[4])
+	dst = ssz.AppendOffset(dst, offsets[5])
+	dst = append(dst, s.J...)
+	dst = ssz.AppendOffset(dst, offsets[6])
+	dst = ssz.AppendOffset(dst, offsets[7])
+	for _, l := range lists {
+		dst = ssz.AppendBitlist(dst, l.bits, l.nbits)
+	}
+	return dst, nil
+}
+func (s *progressiveBitsStruct) UnmarshalSSZ(data []byte) error {
+	d := ssz.NewDecoder(data)
+	var a [32]byte
+	var dd [33]byte
+	var g [160]byte
+	var j [161]byte
+	d.Bytes(a[:])
+	d.Offset() // B
+	d.Offset() // C
+	d.Bytes(dd[:])
+	d.Offset() // E
+	d.Offset() // F
+	d.Bytes(g[:])
+	d.Offset() // H
+	d.Offset() // I
+	d.Bytes(j[:])
+	d.Offset() // K
+	d.Offset() // L
+	sections, err := d.Sections()
+	if err != nil {
+		return err
+	}
+	for _, v := range []struct {
+		data  []byte
+		nbits uint64
+	}{{a[:], 256}, {dd[:], 257}, {g[:], 1280}, {j[:], 1281}} {
+		if err := ssz.ValidateBitvector(v.data, v.nbits); err != nil {
+			return err
+		}
+	}
+	s.A, s.D, s.G, s.J = a[:], dd[:], g[:], j[:]
+	for i, l := range s.lists() {
+		if l.bits, l.nbits, err = ssz.DecodeBitlist(sections[i], progressiveBitsLimits[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (s *progressiveBitsStruct) HashTreeRoot() [32]byte {
+	htrBitvector := func(data []byte, nbits uint64) [32]byte {
+		return ssz.Merkleize(ssz.PackBits(data), (nbits+255)/256)
+	}
+	htrBitlist := func(l yamlBitlist, limit uint64) [32]byte {
+		return ssz.MixInLength(ssz.Merkleize(ssz.PackBits(l.bits), (limit+255)/256), l.nbits)
+	}
+	roots := [][32]byte{
+		htrBitvector(s.A, 256),
+		htrBitlist(s.B, 256),
+		ssz.HashTreeRootProgressiveBitlist(s.C.bits, s.C.nbits),
+		htrBitvector(s.D, 257),
+		htrBitlist(s.E, 257),
+		ssz.HashTreeRootProgressiveBitlist(s.F.bits, s.F.nbits),
+		htrBitvector(s.G, 1280),
+		htrBitlist(s.H, 1280),
+		ssz.HashTreeRootProgressiveBitlist(s.I.bits, s.I.nbits),
+		htrBitvector(s.J, 1281),
+		htrBitlist(s.K, 1281),
+		ssz.HashTreeRootProgressiveBitlist(s.L.bits, s.L.nbits),
+	}
+	return ssz.Merkleize(roots, 12)
+}
+func (s *progressiveBitsStruct) fromYAML(node *yaml.Node) error { return node.Decode(s) }
