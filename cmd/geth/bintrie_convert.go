@@ -77,9 +77,9 @@ var (
 		Name:  "drop-preimages",
 		Usage: "Delete the preimage store after the conversion verifies",
 	}
-	convertWorkersFlag = &cli.IntFlag{
-		Name:  "convert-workers",
-		Usage: "Workers scanning the state in parallel, each over its own share of the accounts. The scan waits on disk reads, so more workers finish sooner but leave less CPU and disk to other processes. --memory-limit is split among them, so each spills more runs, 1 MB apiece while they merge",
+	workersFlag = &cli.IntFlag{
+		Name:  "workers",
+		Usage: "Parallel workers: convert splits its scan among them by account hash, import its candidate key derivation; --memory-limit is split among them",
 		Value: 4,
 	}
 
@@ -102,7 +102,7 @@ var (
 					preimagesOutFlag,
 					preimagesInFlag,
 					dropPreimagesFlag,
-					convertWorkersFlag,
+					workersFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth bintrie convert [flags] [state-root]
@@ -112,7 +112,7 @@ EIP-8347 pipeline, and verifies the result before marking it complete.
 Defaults to the head root. The addresses and slot keys behind the state's
 hashes come from the node's preimage store (--cache.preimages) or from an
 EIP-8347 preimage file of the same state (--preimages). The scan runs on
---convert-workers workers. --snapshot-out and --preimages-out emit the
+--workers workers. --snapshot-out and --preimages-out emit the
 EIP-8347 distribution artifacts. --drop-preimages deletes the preimage store
 afterwards, which also rules out a re-conversion from it.
 `,
@@ -187,9 +187,9 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	if (snapshotPath == "") != (preimagePath == "") {
 		log.Warn("Emitting one distribution artifact without the other; EIP-8347 distributes the snapshot and the preimage file together")
 	}
-	workers := ctx.Int(convertWorkersFlag.Name)
+	workers := ctx.Int(workersFlag.Name)
 	if workers < 1 {
-		return errors.New("--convert-workers must be at least 1")
+		return errors.New("--workers must be at least 1")
 	}
 	// MB to bytes without wrapping the platform int.
 	budgetMB := ctx.Uint64(memoryLimitFlag.Name)
@@ -251,7 +251,7 @@ type conversionOptions struct {
 	snapshotPath string        // PBT snapshot artifact destination; empty writes none
 	preimagePath string        // preimage file destination; empty writes none
 	anchor       *types.Header // block committing root; nil leaves the namespace unbootable
-	workers      int           // parallel scan workers; below 1 means one
+	workers      int           // parallel workers; below 1 means one
 	preimageIn   string        // EIP-8347 preimage file to resolve keys from; empty reads the node's store
 }
 

@@ -89,18 +89,7 @@ func TestImportRoundTrip(t *testing.T) {
 	}
 	// The namespace must be byte-identical: tree nodes, flat accounts, flat
 	// slots.
-	for _, family := range [][]byte{rawdb.TrieNodeAccountPrefix, rawdb.SnapshotAccountPrefix, rawdb.SnapshotStoragePrefix} {
-		want := namespaceFamily(t, convDB, family)
-		got := namespaceFamily(t, impDB, family)
-		if len(got) != len(want) {
-			t.Fatalf("family %x holds %d records imported, %d converted", family, len(got), len(want))
-		}
-		for key, value := range want {
-			if !bytes.Equal(got[key], value) {
-				t.Fatalf("family %x record %x diverges", family, key)
-			}
-		}
-	}
+	assertNamespaceEqual(t, convDB, impDB)
 	// The anchor must be recoverable: catching up from an imported state
 	// starts at the block it commits, and the tree does not say which.
 	pbtdb := rawdb.NewTable(impDB, string(rawdb.PBTPrefix))
@@ -142,6 +131,46 @@ func TestImportRoundTrip(t *testing.T) {
 	if checked == 0 {
 		t.Fatal("the fixture held no accounts")
 	}
+}
+
+// assertNamespaceEqual requires the tree-node and flat-state families of two
+// databases to hold the same records, byte for byte.
+func assertNamespaceEqual(t *testing.T, want, got ethdb.Database) {
+	t.Helper()
+	for _, family := range [][]byte{rawdb.TrieNodeAccountPrefix, rawdb.SnapshotAccountPrefix, rawdb.SnapshotStoragePrefix} {
+		w, g := namespaceFamily(t, want, family), namespaceFamily(t, got, family)
+		if len(g) != len(w) {
+			t.Fatalf("family %x holds %d records, want %d", family, len(g), len(w))
+		}
+		for key, value := range w {
+			if !bytes.Equal(g[key], value) {
+				t.Fatalf("family %x record %x diverges", family, key)
+			}
+		}
+	}
+}
+
+// TestImportWorkersAgree: with the preimage records spread over several
+// workers and the snapshot pipeline cycling its batches, the import lands on
+// the converter's root and namespace, byte for byte.
+func TestImportWorkersAgree(t *testing.T) {
+	convDB, root, binRoot, snapPath, prePath := importFixture(t, mixedAlloc(8347))
+	defer func(p, l int) { preimageBatchSize, leafBatchSize = p, l }(preimageBatchSize, leafBatchSize)
+	preimageBatchSize, leafBatchSize = 4, 64
+
+	impDB := rawdb.NewMemoryDatabase()
+	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+		anchor: &types.Header{Number: big.NewInt(7), Root: root},
+		// A tiny budget makes every worker's candidates spill, so the
+		// merge runs over absorbed runs.
+		conversionOptions: conversionOptions{tmpDir: t.TempDir(), sortBudget: 512, workers: 4}})
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	if imported != binRoot {
+		t.Fatalf("imported root %x, the converter built %x", imported, binRoot)
+	}
+	assertNamespaceEqual(t, convDB, impDB)
 }
 
 // TestImportVerifyOnly runs the whole pipeline with the writers disarmed:

@@ -65,6 +65,7 @@ var (
 			forceConvertFlag,
 			memoryLimitFlag,
 			tmpDirFlag,
+			workersFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `
 geth bintrie import [flags] <snapshot> <preimages> <anchor block-number-or-hash>
@@ -75,6 +76,7 @@ are re-derived into the merkle root the anchor block commits, resolved from
 the local header chain - the artifacts never vouch for themselves. Code is
 reassembled from its chunks and pinned to each code hash. A failed check
 leaves nothing openable. --verify-only runs both checks and writes nothing.
+--workers derive the preimage file's candidate keys in parallel.
 
 Preimages are not persisted unless --keep-preimages is given: nothing on a
 binary-tree node reads them.
@@ -164,6 +166,10 @@ func importBinaryTrie(ctx *cli.Context) error {
 	if budgetMB > math.MaxInt>>20 {
 		budgetMB = math.MaxInt >> 20
 	}
+	workers := ctx.Int(workersFlag.Name)
+	if workers < 1 {
+		return errors.New("--workers must be at least 1")
+	}
 	if _, err := importState(chaindb, importOptions{
 		snapshot:      ctx.Args().Get(0),
 		preimages:     ctx.Args().Get(1),
@@ -173,6 +179,7 @@ func importBinaryTrie(ctx *cli.Context) error {
 		conversionOptions: conversionOptions{
 			sortBudget: int(budgetMB << 20),
 			tmpDir:     ctx.String(tmpDirFlag.Name),
+			workers:    workers,
 		},
 	}); err != nil {
 		return err
@@ -252,8 +259,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			return common.Hash{}, errors.New("binary tree namespace already holds state, whether a finished import or the debris of one; re-run with --force to wipe it")
 		}
 	}
-	// cand accumulates alone in Phase 1 - it fully drains via Sort() before
-	// Phase 2's other sorters fill in earnest, so it gets the whole budget.
+	// The candidate sorters accumulate alone in Phase 1 - they fully drain
+	// via Sort() before Phase 2's other sorters fill in earnest, so they
+	// share the whole budget.
 	// Phase 2 runs four sorters concurrently (accounts, slots, chunks and,
 	// briefly at the account/code-zone boundary, the code stems), so they
 	// split the same budget four ways: either phase's peak sorter RAM stays
@@ -297,71 +305,97 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	}
 
 	// Phase 1: derive every candidate tree key the preimages can stand for.
-
-	cand := bintrie.NewRecordSorter(opts.tmpDir, opts.sortBudget, nil)
-	defer cand.Close() // a second Close is a no-op; this one covers the error paths
+	// The reader stays sequential, checking the file's order and hashing it;
+	// workers derive the candidates into sorters of their own, which the
+	// first then absorbs into one merge.
+	workers := max(opts.workers, 1)
+	cands := make([]*bintrie.RecordSorter, workers)
+	for i := range cands {
+		cands[i] = bintrie.NewRecordSorter(opts.tmpDir, splitBudget(opts.sortBudget, workers), nil)
+		defer cands[i].Close() // a second Close is a no-op; this one covers the error paths
+	}
 	var (
 		start        = time.Now()
 		preAccounts  uint64
 		prePreimages uint64
+		records      = make(chan []preimageRecord, 2*workers)
+		g, gctx      = errgroup.WithContext(context.Background())
 	)
-	for {
-		addr, addrHash, slots, err := pre.next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return common.Hash{}, err
-		}
-		// The preimage file is keccak-ordered, which its reader enforces, so
-		// the preimage store is written in that order.
-		if rawBatch != nil && opts.keepPreimages {
-			if err := putPreimage(rawBatch, addrHash, addr.Bytes()); err != nil {
-				return common.Hash{}, err
-			}
-			for _, slot := range slots {
-				if err := putPreimage(rawBatch, crypto.Keccak256Hash(slot[:]), slot[:]); err != nil {
-					return common.Hash{}, err
+	for _, cand := range cands {
+		g.Go(func() error {
+			for batch := range records {
+				for _, rec := range batch {
+					if err := addCandidates(cand, rec.addr, rec.slots); err != nil {
+						return err
+					}
 				}
 			}
-			if err := flush(false); err != nil {
-				return common.Hash{}, err
+			return nil
+		})
+	}
+	readErr := func() error {
+		defer close(records)
+		batch := make([]preimageRecord, 0, preimageBatchSize)
+		send := func() error {
+			select {
+			case records <- batch:
+			case <-gctx.Done():
+				return gctx.Err() // a worker failed; its error is the one reported
+			}
+			batch = make([]preimageRecord, 0, preimageBatchSize)
+			return nil
+		}
+		for {
+			addr, addrHash, slots, err := pre.next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			// The preimage file is keccak-ordered, which its reader enforces,
+			// so the preimage store is written in that order.
+			if rawBatch != nil && opts.keepPreimages {
+				if err := putPreimage(rawBatch, addrHash, addr.Bytes()); err != nil {
+					return err
+				}
+				for i, slot := range slots {
+					if err := putPreimage(rawBatch, pre.slotHashes[i], slot[:]); err != nil {
+						return err
+					}
+				}
+				if err := flush(false); err != nil {
+					return err
+				}
+			}
+			batch = append(batch, preimageRecord{addr, slots})
+			if len(batch) == cap(batch) {
+				if err := send(); err != nil {
+					return err
+				}
+			}
+			preAccounts++
+			prePreimages += 1 + uint64(len(slots))
+			if preAccounts%50_000 == 0 {
+				log.Info("Indexing preimage file", "accounts", preAccounts, "preimages", prePreimages,
+					"elapsed", common.PrettyDuration(time.Since(start)))
 			}
 		}
-		// One candidate per header stem, carrying the address and a bitmap of
-		// the header-range slots this record claims. A header-range slot's
-		// number is its sub-index minus the offset, so it needs no candidate
-		// of its own - unlike an overflow slot, whose stem is a one-way hash
-		// of the slot number and can only be matched by deriving it forward.
-		var (
-			headerSlots   uint64
-			storagePrefix [32]byte // blake3(address32), hashed once and reused for every overflow slot
-			havePrefix    bool
-		)
-		for _, slot := range slots {
-			inHeader, treeIndex, sub := bintrie.StorageIndex(slot[:])
-			if inHeader {
-				headerSlots |= 1 << (sub - bintrie.HeaderStorageOffset)
-				continue
-			}
-			if !havePrefix {
-				a32 := bintrie.Address32(addr)
-				storagePrefix, havePrefix = bintrie.KeyHash(a32[:]), true
-			}
-			key := append(bintrie.StorageStemWithPrefix(addr, storagePrefix[:], &treeIndex), sub)
-			if err := cand.Add(key, append(addr.Bytes(), slot[:]...)); err != nil {
-				return common.Hash{}, err
-			}
+		if len(batch) > 0 {
+			return send()
 		}
-		value := binary.BigEndian.AppendUint64(addr.Bytes(), headerSlots)
-		if err := cand.Add(bintrie.HeaderStem(addr), value); err != nil {
+		return nil
+	}()
+	if err := g.Wait(); err != nil {
+		return common.Hash{}, err
+	}
+	if readErr != nil {
+		return common.Hash{}, readErr
+	}
+	cand := cands[0]
+	for _, c := range cands[1:] {
+		if err := cand.Absorb(c); err != nil {
 			return common.Hash{}, err
-		}
-		preAccounts++
-		prePreimages += 1 + uint64(len(slots))
-		if preAccounts%50_000 == 0 {
-			log.Info("Indexing preimage file", "accounts", preAccounts, "preimages", prePreimages,
-				"elapsed", common.PrettyDuration(time.Since(start)))
 		}
 	}
 	log.Info("Indexed preimage file", "accounts", preAccounts, "preimages", prePreimages,
@@ -833,9 +867,50 @@ func putPreimage(w ethdb.KeyValueWriter, hash common.Hash, preimage []byte) erro
 	return w.Put(append(append([]byte{}, rawdb.PreimagePrefix...), hash[:]...), preimage)
 }
 
+// preimageRecord is one account record of a preimage file.
+type preimageRecord struct {
+	addr  common.Address
+	slots []common.Hash
+}
+
+// preimageBatchSize is how many records the import's reader hands a
+// candidate worker at a time.
+var preimageBatchSize = 1024
+
+// addCandidates derives the candidate tree keys one preimage record stands
+// for: one per header stem, carrying the address and a bitmap of the
+// header-range slots the record claims, and one per overflow slot. A
+// header-range slot's number is its sub-index minus the offset, so it needs
+// no candidate of its own - unlike an overflow slot, whose stem is a one-way
+// hash of the slot number and can only be matched by deriving it forward.
+func addCandidates(cand *bintrie.RecordSorter, addr common.Address, slots []common.Hash) error {
+	var (
+		headerSlots   uint64
+		storagePrefix [32]byte // blake3(address32), hashed once and reused for every overflow slot
+		havePrefix    bool
+	)
+	for _, slot := range slots {
+		inHeader, treeIndex, sub := bintrie.StorageIndex(slot[:])
+		if inHeader {
+			headerSlots |= 1 << (sub - bintrie.HeaderStorageOffset)
+			continue
+		}
+		if !havePrefix {
+			a32 := bintrie.Address32(addr)
+			storagePrefix, havePrefix = bintrie.KeyHash(a32[:]), true
+		}
+		key := append(bintrie.StorageStemWithPrefix(addr, storagePrefix[:], &treeIndex), sub)
+		if err := cand.Add(key, append(addr.Bytes(), slot[:]...)); err != nil {
+			return err
+		}
+	}
+	value := binary.BigEndian.AppendUint64(addr.Bytes(), headerSlots)
+	return cand.Add(bintrie.HeaderStem(addr), value)
+}
+
 // leafBatchSize and leafBatches size the snapshot pipeline: leaves per batch,
 // and batches in flight.
-const (
+var (
 	leafBatchSize = 4096
 	leafBatches   = 8
 )
