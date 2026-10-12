@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -266,6 +267,102 @@ func TestConvertMatchesEmbedding(t *testing.T) {
 		assertConvertedTreeClean(t, chaindb, binRoot)
 		assertFlatStateMatchesAlloc(t, chaindb, alloc)
 	}
+}
+
+// TestConvertParallelMatchesSerial: a scan split across workers converts the
+// mixed allocation to the typed writers' root from either source, with code
+// held by accounts in different ranges; the artifacts come out byte-identical
+// to a serial run's, and one failing worker fails the conversion.
+func TestConvertParallelMatchesSerial(t *testing.T) {
+	alloc := mixedAlloc(8347)
+	want := embedAlloc(t, alloc)
+
+	// The case the shared code set exists for: one code in two ranges.
+	ranges, holders := splitHashSpace(4), make(map[common.Hash]map[int]bool)
+	for addr, acct := range alloc {
+		if len(acct.Code) == 0 {
+			continue
+		}
+		hash, codeHash := crypto.Keccak256Hash(addr[:]), crypto.Keccak256Hash(acct.Code)
+		i := 0
+		for ranges[i].past(hash) {
+			i++
+		}
+		if holders[codeHash] == nil {
+			holders[codeHash] = make(map[int]bool)
+		}
+		holders[codeHash][i] = true
+	}
+	shared := false
+	for _, in := range holders {
+		shared = shared || len(in) > 1
+	}
+	if !shared {
+		t.Fatal("fixture holds no code in more than one of four ranges")
+	}
+
+	for _, pathScheme := range []bool{true, false} {
+		for _, budget := range []int{0, 512} {
+			for _, workers := range []int{2, 4, 8} {
+				chaindb, _, binRoot, err := convertGenesis(t, alloc, pathScheme, conversionOptions{
+					sortBudget: budget,
+					tmpDir:     t.TempDir(),
+					workers:    workers,
+				})
+				if err != nil {
+					t.Fatalf("path scheme %v, budget %d, %d workers: %v", pathScheme, budget, workers, err)
+				}
+				if binRoot != want {
+					t.Fatalf("path scheme %v, budget %d, %d workers: root %x, want %x", pathScheme, budget, workers, binRoot, want)
+				}
+				assertFlatStateMatchesAlloc(t, chaindb, alloc)
+			}
+		}
+	}
+
+	t.Run("artifacts", func(t *testing.T) {
+		artifacts := func(workers int) (snap, pre []byte) {
+			opts := artifactOptions(t)
+			opts.workers = workers
+			convertAllocOpts(t, alloc, opts)
+			snap, err := os.ReadFile(opts.snapshotPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pre, err = os.ReadFile(opts.preimagePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return snap, pre
+		}
+		snap1, pre1 := artifacts(1)
+		snap4, pre4 := artifacts(4)
+		if !bytes.Equal(snap1, snap4) || !bytes.Equal(pre1, pre4) {
+			t.Fatal("artifacts differ between one and four workers")
+		}
+	})
+
+	t.Run("failing worker", func(t *testing.T) {
+		chaindb := rawdb.NewMemoryDatabase()
+		srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.Defaults})
+		gspec := &core.Genesis{Config: params.TestChainConfig, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: alloc}
+		root := gspec.MustCommit(chaindb, srcTriedb).Root()
+		srcTriedb.Close()
+
+		// Slot 1 is in {0xed, 3}'s storage; 33 bytes is no slot key.
+		slot := common.BigToHash(big.NewInt(1))
+		rawdb.WritePreimages(chaindb, map[common.Hash][]byte{crypto.Keccak256Hash(slot[:]): make([]byte, 33)})
+
+		src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
+		defer src.Close()
+		_, err := convertState(chaindb, src, root, conversionOptions{tmpDir: t.TempDir(), workers: 4})
+		if err == nil || !strings.Contains(err.Error(), "corrupt preimage") {
+			t.Fatalf("a corrupt slot preimage converted on four workers; err = %v", err)
+		}
+		if rawdb.HasPBTState(chaindb) {
+			t.Fatal("a failed parallel conversion attested its namespace")
+		}
+	})
 }
 
 // mixedAlloc builds a deterministic randomized allocation: shared code,
