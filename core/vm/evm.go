@@ -653,6 +653,12 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	if err != nil {
 		return ret, err
 	}
+	// Code adopted through SETCODEFROM (EIP-8298) during initcode is the code
+	// deployed: the returned data is neither validated, charged nor installed.
+	// The code hash cannot be set otherwise, the collision check left it empty.
+	if hash := evm.StateDB.GetCodeHash(address); hash != types.EmptyCodeHash && hash != (common.Hash{}) {
+		return evm.StateDB.GetCode(address), nil
+	}
 	// Check prefix before gas calculation.
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {

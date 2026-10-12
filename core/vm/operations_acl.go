@@ -207,6 +207,37 @@ func gasEip8038AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	return GasCosts{}, nil
 }
 
+// gasSetCodeFrom prices SETCODEFROM (EIP-8298). The source is accessed only
+// once SETCODEFROM_SOURCE_GAS is affordable, which decides whether it enters
+// the access list and the BAL. The warm access to the source is constantGas.
+func gasSetCodeFrom(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
+	if evm.readOnly || isSystemContract(contract.Address()) {
+		return GasCosts{}, ErrWriteProtection
+	}
+	var (
+		source = common.Address(stack.peek().Bytes20())
+		gas    = params.WarmAccountAccessAmsterdam // reading the source code
+	)
+	if !evm.StateDB.AddressInAccessList(source) {
+		// If the caller cannot afford the cost, this change will be rolled back.
+		evm.StateDB.AddAddressToAccessList(source)
+		gas += params.ColdAccountAccessAmsterdam - params.WarmAccountAccessAmsterdam
+	}
+	// Check we have enough execution gas before we read the source.
+	if contract.Gas.ExecutionGas < gas {
+		return GasCosts{}, ErrOutOfGas
+	}
+	hash, ok := setCodeFromSource(evm, source)
+	if !ok {
+		return GasCosts{ExecutionGas: gas}, nil
+	}
+	gas += params.WarmAccountAccessAmsterdam // comparing with the current code hash
+	if hash != evm.StateDB.GetCodeHash(contract.Address()) {
+		gas += params.AccountWriteAmsterdam
+	}
+	return GasCosts{ExecutionGas: gas}, nil
+}
+
 // gasExtCodeSize8038 prices EXTCODESIZE under EIP-8038: the gasEip8038AccountCheck
 // surcharge plus an additional WARM_ACCESS for the second database read (code size).
 func gasExtCodeSize8038(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
