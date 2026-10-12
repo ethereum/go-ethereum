@@ -237,10 +237,19 @@ func validateCellsOsaka(sidecar *types.BlobTxCellSidecar) error {
 	return nil
 }
 
+// IsEOA reports whether an account holds no code other than an EIP-7702
+// delegation, so that it may send transactions (EIP-3607). An EOA loses this
+// by adopting code with SETCODEFROM (EIP-8298).
+func IsEOA(statedb *state.StateDB, addr common.Address) bool {
+	code := statedb.GetCode(addr)
+	_, delegated := types.ParseDelegation(code)
+	return len(code) == 0 || delegated
+}
+
 // ValidationOptionsWithState define certain differences between stateful transaction
 // validation across the different pools without having to duplicate those checks.
 type ValidationOptionsWithState struct {
-	State *state.StateDB // State database to check nonces and balances against
+	State *state.StateDB // State database to check nonces, balances and sender code against
 
 	// FirstNonceGap is an optional callback to retrieve the first nonce gap in
 	// the list of pooled transactions of a specific account. If this method is
@@ -263,7 +272,8 @@ type ValidationOptionsWithState struct {
 }
 
 // ValidateTransactionWithState is a helper method to check whether a transaction
-// is valid according to the pool's internal state checks (balance, nonce, gaps).
+// is valid according to the pool's internal state checks (balance, nonce, gaps,
+// sender code).
 //
 // This check is public to allow different transaction pools to check the stateful
 // rules without duplicating code and running the risk of missed updates.
@@ -284,6 +294,10 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		if gap := opts.FirstNonceGap(from); gap < tx.Nonce() {
 			return fmt.Errorf("%w: tx nonce %v, gapped nonce %v", core.ErrNonceTooHigh, tx.Nonce(), gap)
 		}
+	}
+	// Ensure the sender holds no code, other than a delegation
+	if !IsEOA(opts.State, from) {
+		return fmt.Errorf("%w: address %v", core.ErrSenderNoEOA, from)
 	}
 	// Ensure the transactor has enough funds to cover the transaction costs
 	var (

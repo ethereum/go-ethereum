@@ -172,12 +172,16 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 		if list == nil {
 			continue // Just in case someone calls with a non existing account
 		}
-		// Drop all transactions that are deemed too old (low nonce)
+		// Drop all transactions that are deemed too old (low nonce), and all of
+		// them if the sender holds code by now
 		forwards := list.Forward(currentState.GetNonce(addr))
+		if !txpool.IsEOA(currentState, addr) {
+			forwards = append(forwards, list.Cap(0)...)
+		}
 		for _, tx := range forwards {
 			dropped = append(dropped, tx.Hash())
 		}
-		log.Trace("Removing old queued transactions", "count", len(forwards))
+		log.Trace("Removing unexecutable queued transactions", "count", len(forwards))
 
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(currentState.GetBalance(addr), gasLimit)

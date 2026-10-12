@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/internal/testrand"
@@ -2006,6 +2007,79 @@ func TestAdd(t *testing.T) {
 		}
 		// Close down the test
 		pool.Close()
+	}
+}
+
+// TestSenderWithCode checks that the transactions of a sender holding code,
+// e.g. adopted with SETCODEFROM (EIP-8298), are rejected, and dropped once a
+// block changes its code, whether or not it sent a transaction in that block;
+// the included ones move to the limbo. A sender delegating its code (EIP-7702)
+// is unaffected.
+func TestSenderWithCode(t *testing.T) {
+	storage := t.TempDir()
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+
+	var (
+		key, _    = crypto.GenerateKey() // adopts code without transacting
+		keyI, _   = crypto.GenerateKey() // adopts code in its included transaction
+		keyD, _   = crypto.GenerateKey() // delegates
+		sender    = crypto.PubkeyToAddress(key.PublicKey)
+		included  = crypto.PubkeyToAddress(keyI.PublicKey)
+		delegated = crypto.PubkeyToAddress(keyD.PublicKey)
+	)
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	for _, addr := range []common.Address{sender, included, delegated} {
+		statedb.AddBalance(addr, uint256.NewInt(params.Ether), tracing.BalanceChangeUnspecified)
+	}
+	chain := &testBlockChain{config: params.MainnetChainConfig, basefee: uint256.NewInt(1), blobfee: uint256.NewInt(1), statedb: statedb}
+
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	txs := []*types.Transaction{
+		makeTx(0, 1, 1, 1, key), makeTx(1, 1, 1, 1, key),
+		makeTx(0, 1, 1, 1, keyI), makeTx(1, 1, 1, 1, keyI),
+		makeTx(0, 1, 1, 1, keyD),
+	}
+	for i, err := range pool.Add(txs, true) {
+		if err != nil {
+			t.Fatalf("tx %d: %v", i, err)
+		}
+	}
+	// The next block includes the first transaction of one adopter.
+	code, delegation := []byte{0x00}, types.AddressToDelegation(common.Address{0xaa})
+	statedb.SetCode(sender, code, tracing.CodeChangeUnspecified)
+	statedb.SetCode(included, code, tracing.CodeChangeUnspecified)
+	statedb.SetNonce(included, 1, tracing.NonceChangeUnspecified)
+	statedb.SetCode(delegated, delegation, tracing.CodeChangeUnspecified)
+
+	changes := bal.NewConstructionBlockAccessList()
+	changes.CodeHashChange(sender, 1, crypto.Keccak256Hash(code))
+	changes.CodeHashChange(included, 1, crypto.Keccak256Hash(code))
+	changes.CodeChange(delegated, 1, delegation)
+	head := chain.CurrentBlock()
+	header := types.CopyHeader(head)
+	header.Number = new(big.Int).Add(head.Number, common.Big1)
+	body := types.Body{Transactions: []*types.Transaction{txs[2].WithoutBlobTxSidecar()}}
+	chain.blocks = map[uint64]*types.Block{
+		header.Number.Uint64(): types.NewBlockWithHeader(header).WithBody(body).WithAccessList(changes.ToEncodingObj()),
+	}
+	pool.Reset(head, header)
+	verifyPoolInternals(t, pool)
+
+	for i, want := range []bool{false, false, false, false, true} {
+		if have := pool.Has(txs[i].Hash()); have != want {
+			t.Errorf("tx %d: pooled %v, want %v", i, have, want)
+		}
+	}
+	if _, ok := pool.limbo.index[txs[2].Hash()]; !ok {
+		t.Error("included transaction not moved to the limbo")
+	}
+	if err := pool.Add([]*types.Transaction{makeTx(0, 1, 1, 1, key)}, true)[0]; !errors.Is(err, core.ErrSenderNoEOA) {
+		t.Errorf("adding a transaction of the sender: error %v, want %v", err, core.ErrSenderNoEOA)
 	}
 }
 
