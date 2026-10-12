@@ -1465,7 +1465,8 @@ and that providing valid cells causes the tx to enter the pool.`)
 		return
 	}
 
-	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
+	custody := types.NewCustodyBitmap([]uint64{5, 21, 40, 58})
+	if err := s.engine.sendForkchoiceUpdated(&custody); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
@@ -1551,7 +1552,8 @@ while the other peer is not.`)
 		return
 	}
 
-	if err := s.engine.sendForkchoiceUpdated(nil); err != nil {
+	custody := types.NewCustodyBitmap([]uint64{5, 21, 40, 58})
+	if err := s.engine.sendForkchoiceUpdated(&custody); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
@@ -1605,9 +1607,10 @@ while the other peer is not.`)
 		t.Fatalf("failed to read GetCells: %v", err)
 	}
 
-	// Respond with corrupted cells (all zero bytes).
-	blobCount := len(blob)
-	corrupted := make([]kzg4844.Cell, blobCount*cellsReq.Mask.OneCount())
+	corrupted := buildCells(blob, cellsReq.Mask)
+	for i := range corrupted {
+		corrupted[i][31] ^= 0x01
+	}
 	badResp := eth.CellsPacket{
 		RequestId: cellsReq.RequestId,
 		Hashes:    []common.Hash{tx.Hash()},
