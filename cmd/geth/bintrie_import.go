@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"math/bits"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -39,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -554,23 +557,30 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		haveStorageHash bool
 	)
 
+	// The pass is a pipeline: a decoder goroutine reads the snapshot into
+	// batches, which the tree builder's goroutine and this loop each consume
+	// in order, so decoding, hashing and joining overlap.
+	pipe := startLeafPipeline(snap, builder, &builderErr)
+	defer pipe.stop()
+	var (
+		batch *leafBatch
+		next  int
+	)
 	for {
-		key, value, err := snap.next()
-		if err == io.EOF {
-			break
+		if batch == nil || next == len(batch.values) {
+			if batch != nil {
+				pipe.release(batch)
+			}
+			var ok bool
+			if batch, ok = <-pipe.leaves; !ok {
+				break
+			}
+			next = 0
+			stats.leaves.Add(uint64(len(batch.values)))
+			stats.report(false)
 		}
-		if err != nil {
-			return common.Hash{}, err
-		}
-		if err := builder.Add(key, value[:]); err != nil {
-			return common.Hash{}, err
-		}
-		if builderErr != nil {
-			return common.Hash{}, builderErr
-		}
-		stats.leaves.Add(1)
-		stats.report(false)
-
+		key, value := batch.key(next), batch.values[next]
+		next++
 		// Zone boundary: the account zone ends where anything else begins.
 		if key[0] != bintrie.AccountZone && !pastAccounts {
 			if err := enterCodeZone(); err != nil {
@@ -678,6 +688,11 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			group.slots = append(group.slots, importSlot{slot: slot, value: leaf})
 			group.headerSeen |= 1 << (sub - bintrie.HeaderStorageOffset)
 		}
+	}
+	// A pipeline that stopped early leaves the join incomplete: its own
+	// error is the one to report.
+	if err := pipe.wait(); err != nil {
+		return common.Hash{}, err
 	}
 	if group != nil {
 		if err := sealGroup(group); err != nil {
@@ -816,4 +831,128 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 // putPreimage writes one preimage store entry under its keccak hash.
 func putPreimage(w ethdb.KeyValueWriter, hash common.Hash, preimage []byte) error {
 	return w.Put(append(append([]byte{}, rawdb.PreimagePrefix...), hash[:]...), preimage)
+}
+
+// leafBatchSize and leafBatches size the snapshot pipeline: leaves per batch,
+// and batches in flight.
+const (
+	leafBatchSize = 4096
+	leafBatches   = 8
+)
+
+// leafBatch carries snapshot leaves from the decoder to its two consumers,
+// copied out of the reader's reused buffers.
+type leafBatch struct {
+	keys   []byte
+	ends   []int // each key's end in keys
+	values [][32]byte
+	refs   atomic.Int32 // consumers yet to release it
+}
+
+func (b *leafBatch) add(key []byte, value [32]byte) {
+	b.keys = append(b.keys, key...)
+	b.ends = append(b.ends, len(b.keys))
+	b.values = append(b.values, value)
+}
+
+func (b *leafBatch) key(i int) []byte {
+	start := 0
+	if i > 0 {
+		start = b.ends[i-1]
+	}
+	return b.keys[start:b.ends[i]:b.ends[i]]
+}
+
+// leafPipeline streams a snapshot's leaves from a decoder goroutine to a
+// tree-building goroutine and to the caller, both in snapshot order.
+type leafPipeline struct {
+	leaves chan *leafBatch // the caller's
+	free   chan *leafBatch
+	cancel context.CancelFunc
+	g      *errgroup.Group
+}
+
+// startLeafPipeline starts decoding snap and feeding builder; *builderErr is
+// the error builder's node callback records.
+func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, builderErr *error) *leafPipeline {
+	ctx, cancel := context.WithCancel(context.Background())
+	g, ctx := errgroup.WithContext(ctx)
+	p := &leafPipeline{
+		leaves: make(chan *leafBatch, leafBatches),
+		free:   make(chan *leafBatch, leafBatches),
+		cancel: cancel,
+		g:      g,
+	}
+	for range leafBatches {
+		p.free <- new(leafBatch)
+	}
+	toBuilder := make(chan *leafBatch, leafBatches)
+	g.Go(func() error {
+		defer close(p.leaves)
+		defer close(toBuilder)
+		for eof := false; !eof; {
+			var b *leafBatch
+			select {
+			case b = <-p.free:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			b.keys, b.ends, b.values = b.keys[:0], b.ends[:0], b.values[:0]
+			for len(b.values) < leafBatchSize {
+				key, value, err := snap.next()
+				if err == io.EOF {
+					eof = true
+					break
+				}
+				if err != nil {
+					return err
+				}
+				b.add(key, value)
+			}
+			if len(b.values) == 0 {
+				return nil
+			}
+			b.refs.Store(2)
+			for _, ch := range []chan *leafBatch{toBuilder, p.leaves} {
+				select {
+				case ch <- b:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+		}
+		return nil
+	})
+	g.Go(func() error {
+		for b := range toBuilder {
+			for i := range b.values {
+				if err := builder.Add(b.key(i), b.values[i][:]); err != nil {
+					return err
+				}
+				if *builderErr != nil {
+					return *builderErr
+				}
+			}
+			p.release(b)
+		}
+		return nil
+	})
+	return p
+}
+
+// release hands a batch back once both consumers are done with it.
+func (p *leafPipeline) release(b *leafBatch) {
+	if b.refs.Add(-1) == 0 {
+		p.free <- b
+	}
+}
+
+// wait returns once the decoder and the builder are done, with the first
+// error either met.
+func (p *leafPipeline) wait() error { return p.g.Wait() }
+
+// stop cancels the pipeline and waits for it, for a caller leaving early.
+func (p *leafPipeline) stop() {
+	p.cancel()
+	p.g.Wait()
 }
