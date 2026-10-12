@@ -17,16 +17,18 @@
 // Package ssz implements the Simple Serialize (SSZ) specification of the
 // Ethereum consensus layer. The specification is maintained as an executable
 // reference at github.com/ethereum/ssz-specs; the progressive types are
-// specified by EIP-7916.
+// specified by EIP-7916 and EIP-7495.
 //
 // The package covers serialization, strict deserialization and merkleization
-// of the classic SSZ types and of the progressive list types ProgressiveList,
-// ProgressiveByteList and ProgressiveBitlist, which serialize exactly like
-// their classic counterparts and differ only in how their chunks merkleize.
+// of the classic SSZ types and of the progressive types ProgressiveList,
+// ProgressiveByteList, ProgressiveBitlist and ProgressiveContainer, which
+// serialize exactly like their classic counterparts and differ only in how
+// their chunks merkleize.
 // Types implement the Object interface with hand-written methods built from
 // the primitives here: the Append* encoders, the Decoder cursor, the list and
-// bitfield helpers, Pack, Merkleize and MerkleizeProgressive. There is no
-// reflection and no code generation.
+// bitfield helpers, Pack, Merkleize and MerkleizeProgressive, and the
+// ActiveFields descriptor of a ProgressiveContainer. There is no reflection
+// and no code generation.
 package ssz
 
 import "fmt"
