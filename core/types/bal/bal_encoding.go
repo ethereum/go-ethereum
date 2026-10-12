@@ -217,9 +217,12 @@ type encodingAccountNonceMarshaling struct {
 }
 
 // encodingCodeChange is one transaction's deployed runtime bytecode for an account.
+// A code hash adopted through SETCODEFROM (EIP-8298) is recorded as the hash
+// alone, with empty NewCode.
 type encodingCodeChange struct {
-	BlockAccessIndex uint32 `json:"blockAccessIndex"`
-	NewCode          []byte `json:"newCode"`
+	BlockAccessIndex uint32       `json:"blockAccessIndex"`
+	NewCode          []byte       `json:"newCode"`
+	NewCodeHash      *common.Hash `json:"newCodeHash,omitempty" rlp:"optional"`
 }
 
 type encodingCodeChangeMarshaling struct {
@@ -325,6 +328,10 @@ func (e *AccountAccess) validate(maxBALIndex int) error {
 		if len(change.NewCode) > params.MaxCodeSizeAmsterdam {
 			return errors.New("code change contained oversized code")
 		}
+		// An adopted code hash (EIP-8298) is recorded without the code.
+		if change.NewCodeHash != nil && len(change.NewCode) != 0 {
+			return errors.New("code change contained both code and code hash")
+		}
 	}
 	return nil
 }
@@ -362,10 +369,15 @@ func (e *AccountAccess) Copy() AccountAccess {
 		})
 	}
 	for _, codeChange := range e.CodeChanges {
-		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
+		change := encodingCodeChange{
 			BlockAccessIndex: codeChange.BlockAccessIndex,
 			NewCode:          bytes.Clone(codeChange.NewCode),
-		})
+		}
+		if codeChange.NewCodeHash != nil {
+			hash := *codeChange.NewCodeHash
+			change.NewCodeHash = &hash
+		}
+		res.CodeChanges = append(res.CodeChanges, change)
 	}
 	return res
 }
@@ -386,7 +398,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 		StorageReads:   make([]*uint256.Int, 0, len(a.StorageReads)),
 		BalanceChanges: make([]encodingBalanceChange, 0, len(a.BalanceChanges)),
 		NonceChanges:   make([]encodingAccountNonce, 0, len(a.NonceChanges)),
-		CodeChanges:    make([]encodingCodeChange, 0, len(a.CodeChange)),
+		CodeChanges:    make([]encodingCodeChange, 0, len(a.CodeChange)+len(a.CodeHashChange)),
 	}
 
 	// Convert write slots
@@ -438,10 +450,18 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 		})
 	}
 
-	// Convert code change
+	// Convert code change, the adopted code hashes included
 	codeIndices := slices.Collect(maps.Keys(a.CodeChange))
+	codeIndices = slices.AppendSeq(codeIndices, maps.Keys(a.CodeHashChange))
 	slices.SortFunc(codeIndices, cmp.Compare)
 	for _, idx := range codeIndices {
+		if hash, ok := a.CodeHashChange[idx]; ok {
+			res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
+				BlockAccessIndex: idx,
+				NewCodeHash:      &hash,
+			})
+			continue
+		}
 		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
 			BlockAccessIndex: idx,
 
@@ -499,6 +519,10 @@ func (e *BlockAccessList) PrettyPrint() string {
 		}
 		printWithIndent(1, "code changes:")
 		for _, change := range accountDiff.CodeChanges {
+			if change.NewCodeHash != nil {
+				printWithIndent(2, fmt.Sprintf("%d: adopted %x", change.BlockAccessIndex, *change.NewCodeHash))
+				continue
+			}
 			printWithIndent(2, fmt.Sprintf("%d: %x", change.BlockAccessIndex, change.NewCode))
 		}
 	}
