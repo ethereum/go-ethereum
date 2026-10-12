@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -286,7 +287,8 @@ func (s *conversionStats) report(force bool) {
 // per EIP-8347: one scan, split by account hash across workers, derives
 // every leaf, an external sort orders the leaves in tree-key order, and the
 // tree builds bottom-up in one pass. The scan must re-derive the source
-// state root, and both stores must read back exactly what was written. The
+// state root, both stores must read back exactly what was written, and the
+// leaves must pass EIP-8347's dual-check as an import's would. The
 // attestation lands last, so an interrupted run refuses to open.
 func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
@@ -298,28 +300,30 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, errors.New("binary tree namespace is not empty; re-run with --force to wipe it")
 	}
 	stats := newStats("Converting state")
-	var (
-		snapshot  *snapshotWriter
-		preimages *preimageFile
-	)
-	if opts.snapshotPath != "" {
-		sw, err := newSnapshotWriter(opts.snapshotPath)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		snapshot = sw
-		defer func() {
-			if snapshot != nil {
-				snapshot.abort()
-			}
-		}()
+	// EIP-8347 has every node, self-converters too, run the dual-check on the
+	// leaves it adopts. The check reads the artifacts, so those not asked for
+	// go to scratch files; a preimage file given as input is read as is.
+	scratch, err := os.MkdirTemp(opts.tmpDir, "bintrie-convert-")
+	if err != nil {
+		return common.Hash{}, err
 	}
-	if opts.preimagePath != "" {
-		pf, err := newPreimageFile(opts.preimagePath)
-		if err != nil {
+	defer os.RemoveAll(scratch)
+	snapPath := cmp.Or(opts.snapshotPath, filepath.Join(scratch, "snapshot"))
+	snapshot, err := newSnapshotWriter(snapPath)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer func() {
+		if snapshot != nil {
+			snapshot.abort()
+		}
+	}()
+	prePath := cmp.Or(opts.preimagePath, opts.preimageIn, filepath.Join(scratch, "preimages"))
+	var preimages *preimageFile
+	if prePath != opts.preimageIn {
+		if preimages, err = newPreimageFile(prePath); err != nil {
 			return common.Hash{}, err
 		}
-		preimages = pf
 		defer func() {
 			if preimages != nil {
 				preimages.abort()
@@ -455,10 +459,8 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		if err != nil {
 			return common.Hash{}, err
 		}
-		if snapshot != nil {
-			if err := snapshot.add(key, value); err != nil {
-				return common.Hash{}, err
-			}
+		if err := snapshot.add(key, value); err != nil {
+			return common.Hash{}, err
 		}
 		if err := builder.Add(key, value); err != nil {
 			return common.Hash{}, err
@@ -468,9 +470,11 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	if builderErr != nil {
 		return common.Hash{}, builderErr
 	}
+	sorter.Close()
 	if err := writeStagedNodes(pbtdb, nodes, written.nodes); err != nil {
 		return common.Hash{}, err
 	}
+	nodes.close()
 	log.Info("Built binary tree", "nodes", written.nodes.count, "leaves", stats.leaves.Load())
 
 	// Both stores must hold exactly what was written before anything becomes
@@ -479,23 +483,30 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, err
 	}
 
-	if snapshot != nil {
-		digest, err := snapshot.finalize(binRoot)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		log.Info("Wrote PBT snapshot artifact", "path", opts.snapshotPath,
-			"leaves", snapshot.count, "digest", digest)
-		snapshot = nil // finalized; disarm the abort
+	snapDigest, err := snapshot.finalize(binRoot)
+	if err != nil {
+		return common.Hash{}, err
 	}
+	var preDigest common.Hash
 	if preimages != nil {
-		digest, err := preimages.finalize()
-		if err != nil {
+		if preDigest, err = preimages.finalize(); err != nil {
 			return common.Hash{}, err
 		}
-		log.Info("Wrote preimage file", "path", opts.preimagePath,
-			"accounts", preimages.accounts, "digest", digest)
-		preimages = nil // finalized; disarm the abort
+	}
+	// The check re-reads the artifacts and rebuilds the tree once more;
+	// streaming the leaves into it would save that pass.
+	if _, err := importState(chaindb, importOptions{snapshot: snapPath, preimages: prePath,
+		anchor: &types.Header{Root: root}, verifyOnly: true, conversionOptions: opts}); err != nil {
+		return common.Hash{}, err
+	}
+	// Keep the artifacts asked for; the aborts remove the scratch ones.
+	if opts.snapshotPath != "" {
+		log.Info("Wrote PBT snapshot artifact", "path", opts.snapshotPath, "leaves", snapshot.count, "digest", snapDigest)
+		snapshot = nil
+	}
+	if opts.preimagePath != "" {
+		log.Info("Wrote preimage file", "path", opts.preimagePath, "accounts", preimages.accounts, "digest", preDigest)
+		preimages = nil
 	}
 
 	// No state id: the tree bases an empty history and live commits number

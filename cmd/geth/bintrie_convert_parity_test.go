@@ -243,6 +243,9 @@ func assertConvertedTreeClean(t *testing.T, chaindb ethdb.Database, root common.
 func TestConvertMatchesReference(t *testing.T) {
 	for _, sv := range loadStateVectors(t) {
 		t.Run(sv.Name, func(t *testing.T) {
+			if sv.Name == "zero_basic_data_with_storage" {
+				t.Skip("EIP-7523: no anchor state holds an empty account; TestImportMatchesReference pins the refusal")
+			}
 			binRoot, chaindb := convertAlloc(t, allocOf(t, sv))
 			if want := common.HexToHash(sv.Root); binRoot != want {
 				t.Fatalf("converted root %x, reference says %s", binRoot, sv.Root)

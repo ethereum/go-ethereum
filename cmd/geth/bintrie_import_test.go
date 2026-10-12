@@ -201,10 +201,9 @@ func TestImportMatchesReference(t *testing.T) {
 	for _, sv := range loadStateVectors(t) {
 		t.Run(sv.Name, func(t *testing.T) {
 			if sv.Name == "zero_basic_data_with_storage" {
-				// EIP-7523: a snapshot cannot carry an empty account. The
-				// writer refuses it rather than silently drop it; DB-only
-				// conversion (no snapshot requested) is unaffected, which is
-				// why this vector still exists for the tree-parity tests.
+				// EIP-7523: a snapshot cannot carry an empty account, and the
+				// converter writes one for its dual-check, so it refuses the
+				// state rather than silently drop the account.
 				_, _, _, err := convertGenesis(t, allocOf(t, sv), true, artifactOptions(t))
 				if err == nil {
 					t.Fatal("converting an EIP-7523 empty account into a snapshot succeeded")

@@ -369,6 +369,34 @@ func TestWrittenStateCatchesBadWrites(t *testing.T) {
 	}
 }
 
+// TestConvertRejectsCorruptCode: the code store has no integrity of its own,
+// so code whose bytes do not hash to its key must fail the dual-check rather
+// than convert into wrong code leaves.
+func TestConvertRejectsCorruptCode(t *testing.T) {
+	alloc := artifactAlloc()
+	chaindb := rawdb.NewMemoryDatabase()
+	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.Defaults})
+	gspec := &core.Genesis{Config: params.TestChainConfig, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: alloc}
+	root := gspec.MustCommit(chaindb, srcTriedb).Root()
+	srcTriedb.Close()
+	for _, a := range alloc {
+		if _, delegated := types.ParseDelegation(a.Code); len(a.Code) > 0 && !delegated {
+			code := bytes.Clone(a.Code)
+			code[len(code)-1] ^= 0xff
+			rawdb.WriteCode(chaindb, crypto.Keccak256Hash(a.Code), code)
+			break
+		}
+	}
+	src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
+	defer src.Close()
+	if _, err := convertState(chaindb, src, root, conversionOptions{tmpDir: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "assembled code hashes to") {
+		t.Fatalf("converted corrupt code; err = %v", err)
+	}
+	if rawdb.HasPBTState(chaindb) {
+		t.Fatal("a conversion of corrupt code attested its namespace")
+	}
+}
+
 // TestWipeRestoresVirginNamespace: the wipe restores the exact
 // pre-conversion key set (pinning rawdb.PBTKeyFamilies against drift) and
 // re-conversion reproduces identical root and artifacts.
