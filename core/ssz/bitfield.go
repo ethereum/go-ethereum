@@ -74,7 +74,7 @@ func AppendBitlist(dst []byte, bits []byte, nbits uint64) []byte {
 
 // DecodeBitlist strictly decodes a bitlist serialization, returning the
 // packed data bits (delimiter stripped) and the bit length. limit is the
-// type's capacity in bits.
+// type's capacity in bits, or NoLimit for a ProgressiveBitlist.
 func DecodeBitlist(data []byte, limit uint64) (bits []byte, nbits uint64, err error) {
 	if len(data) == 0 {
 		return nil, 0, fmt.Errorf("ssz: empty bitlist (delimiter bit is mandatory): %w", ErrBadBitlist)
