@@ -21,7 +21,35 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/holiman/uint256"
 )
+
+// opContext is a tracing.OpContext exposing only a stack and an address.
+type opContext struct {
+	stack []uint256.Int
+	addr  common.Address
+}
+
+func (c *opContext) MemoryData() []byte       { return nil }
+func (c *opContext) StackData() []uint256.Int { return c.stack }
+func (c *opContext) Caller() common.Address   { return common.Address{} }
+func (c *opContext) Address() common.Address  { return c.addr }
+func (c *opContext) CallValue() *uint256.Int  { return new(uint256.Int) }
+func (c *opContext) CallInput() []byte        { return nil }
+func (c *opContext) ContractCode() []byte     { return nil }
+
+// TestAccessListTracerSetCodeFrom checks that the source account read by
+// SETCODEFROM (EIP-8298) enters the generated access list.
+func TestAccessListTracerSetCodeFrom(t *testing.T) {
+	source := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	tracer := NewAccessListTracer(nil, nil)
+	scope := &opContext{stack: []uint256.Int{*new(uint256.Int).SetBytes(source.Bytes())}}
+	tracer.OnOpcode(0, byte(vm.SETCODEFROM), 0, 0, scope, nil, 1, nil)
+	if got := tracer.AccessList(); len(got) != 1 || got[0].Address != source {
+		t.Fatalf("access list %+v, want only %x", got, source)
+	}
+}
 
 func TestNewAccessListTracerExcludedAddress(t *testing.T) {
 	excluded := common.HexToAddress("0x2222222222222222222222222222222222222222")
