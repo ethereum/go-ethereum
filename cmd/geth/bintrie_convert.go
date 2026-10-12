@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -42,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -70,6 +73,11 @@ var (
 		Name:  "drop-preimages",
 		Usage: "Delete the preimage store after the conversion verifies",
 	}
+	convertWorkersFlag = &cli.IntFlag{
+		Name:  "convert-workers",
+		Usage: "Workers scanning the state in parallel, each over its own share of the accounts. The scan waits on disk reads, so more workers finish sooner but leave less CPU and disk to other processes. --memory-limit is split among them, so each spills more runs, 1 MB apiece while they merge. --preimages-out scans with one",
+		Value: 4,
+	}
 
 	bintrieCommand = &cli.Command{
 		Name:        "bintrie",
@@ -89,6 +97,7 @@ var (
 					snapshotOutFlag,
 					preimagesOutFlag,
 					dropPreimagesFlag,
+					convertWorkersFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth bintrie convert [flags] [state-root]
@@ -96,9 +105,10 @@ geth bintrie convert [flags] [state-root]
 Converts the MPT state into the EIP-8297 binary tree offline, following the
 EIP-8347 pipeline, and verifies the result before marking it complete.
 Defaults to the head root. The source must hold preimages
-(--cache.preimages). --snapshot-out and --preimages-out emit the EIP-8347
-distribution artifacts. --drop-preimages deletes the preimage store
-afterwards, which also rules out a re-conversion.
+(--cache.preimages). The scan runs on --convert-workers workers.
+--snapshot-out and --preimages-out emit the EIP-8347 distribution
+artifacts. --drop-preimages deletes the preimage store afterwards, which
+also rules out a re-conversion.
 `,
 			},
 		},
@@ -159,6 +169,10 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	if (snapshotPath == "") != (preimagePath == "") {
 		log.Warn("Emitting one distribution artifact without the other; EIP-8347 distributes the snapshot and the preimage file together")
 	}
+	workers := ctx.Int(convertWorkersFlag.Name)
+	if workers < 1 {
+		return errors.New("--convert-workers must be at least 1")
+	}
 	// MB to bytes without wrapping the platform int.
 	budgetMB := ctx.Uint64(memoryLimitFlag.Name)
 	if budgetMB > math.MaxInt>>20 {
@@ -192,6 +206,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		snapshotPath: snapshotPath,
 		preimagePath: preimagePath,
 		anchor:       anchor,
+		workers:      workers,
 	})
 	if err != nil {
 		return err
@@ -217,39 +232,43 @@ type conversionOptions struct {
 	snapshotPath string        // PBT snapshot artifact destination; empty writes none
 	preimagePath string        // preimage file destination; empty writes none
 	anchor       *types.Header // block committing root; nil leaves the namespace unbootable
+	workers      int           // parallel scan workers; below 1 means one
 }
 
 // conversionStats tracks progress for the periodic report. The message names
-// the work, since the converter and the importer share the counters.
+// the work, since the converter and the importer share the counters. Every
+// method is safe for concurrent use: the converter's scan workers share it.
 type conversionStats struct {
-	what       string
-	accounts   uint64
-	slots      uint64
-	codes      uint64
-	leaves     uint64
-	start      time.Time
-	lastReport time.Time
+	what                           string
+	accounts, slots, codes, leaves atomic.Uint64
+	start                          time.Time
+	lastReport                     atomic.Int64 // unix nanoseconds
 }
 
 func newStats(what string) *conversionStats {
-	return &conversionStats{what: what, start: time.Now(), lastReport: time.Now()}
+	s := &conversionStats{what: what, start: time.Now()}
+	s.lastReport.Store(s.start.UnixNano())
+	return s
 }
 
+// report logs progress, unforced at most every 8 seconds across callers.
 func (s *conversionStats) report(force bool) {
-	if !force && time.Since(s.lastReport) < 8*time.Second {
+	now, last := time.Now().UnixNano(), s.lastReport.Load()
+	if !force && (now-last < int64(8*time.Second) || !s.lastReport.CompareAndSwap(last, now)) {
 		return
 	}
-	s.lastReport = time.Now()
-	log.Info(s.what, "accounts", s.accounts, "slots", s.slots,
-		"codes", s.codes, "leaves", s.leaves, "elapsed", common.PrettyDuration(time.Since(s.start)))
+	s.lastReport.Store(now)
+	log.Info(s.what, "accounts", s.accounts.Load(), "slots", s.slots.Load(),
+		"codes", s.codes.Load(), "leaves", s.leaves.Load(), "elapsed", common.PrettyDuration(time.Since(s.start)))
 }
 
 // convertState converts the MPT state at root into the binary tree namespace
-// per EIP-8347: one scan derives every leaf and streams flat state, an
-// external sort orders the leaves in tree-key order, and the tree builds
-// bottom-up in one pass. Three checks gate the result: the scan against the
-// source state root, the tree and the flat store against the converted one.
-// The attestation lands last, so an interrupted run refuses to open.
+// per EIP-8347: one scan, split by account hash across workers, derives
+// every leaf, an external sort orders the leaves in tree-key order, and the
+// tree builds bottom-up in one pass. Three checks gate the result: the scan
+// against the source state root, the tree and the flat store against the
+// converted one. The attestation lands last, so an interrupted run refuses
+// to open.
 func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 
@@ -260,20 +279,6 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, errors.New("binary tree namespace is not empty; re-run with --force to wipe it")
 	}
 	stats := newStats("Converting state")
-
-	// Three sorters can be alive at once, and a sealed one keeps its buffer
-	// while its stream drains, so the budget is split rather than reused.
-	share := opts.sortBudget / 3
-
-	sorter := bintrie.NewLeafSorter(opts.tmpDir, share)
-	defer sorter.Close()
-
-	// The re-derivation limbs, keyed by account hash and by account‖slot.
-	accounts := bintrie.NewRecordSorter(opts.tmpDir, share, nil)
-	defer accounts.Close()
-	slots := bintrie.NewRecordSorter(opts.tmpDir, share, nil)
-	defer slots.Close()
-
 	var (
 		snapshot  *snapshotWriter
 		preimages *preimageFile
@@ -302,12 +307,51 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 			}
 		}()
 	}
-	// Phase 1: scan, deriving leaves.
+	// Phase 1: scan, deriving leaves. Each worker scans its own range of
+	// account hashes into sorters of its own; the preimage file is written
+	// in scan order, so it takes a single worker.
+	workers := max(opts.workers, 1)
+	if workers > 1 && preimages != nil {
+		log.Info("Scanning with one worker: the preimage file is written in scan order", "requested", workers)
+		workers = 1
+	}
+	// Every worker's three sorters are alive at once, and a sealed one keeps
+	// its buffer while its stream drains, so the budget is split rather than
+	// reused.
+	share := splitBudget(opts.sortBudget, 3*workers)
+	parts := make([]scanPart, workers)
+	for i, r := range splitHashSpace(workers) {
+		parts[i] = scanPart{
+			hashRange: r,
+			leaves:    bintrie.NewLeafSorter(opts.tmpDir, share),
+			// The re-derivation limbs, keyed by account hash and by account‖slot.
+			accounts: bintrie.NewRecordSorter(opts.tmpDir, share, nil),
+			slots:    bintrie.NewRecordSorter(opts.tmpDir, share, nil),
+		}
+		defer parts[i].leaves.Close()
+		defer parts[i].accounts.Close()
+		defer parts[i].slots.Close()
+	}
 	src := leafSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
-	if err := deriveLeaves(chaindb, src, sorter, accounts, slots, preimages, stats); err != nil {
+	codes := newCodeSet()
+	g, gctx := errgroup.WithContext(context.Background())
+	for i := range parts {
+		g.Go(func() error {
+			return deriveLeaves(gctx, chaindb, src, &parts[i], codes, preimages, stats)
+		})
+	}
+	if err := g.Wait(); err != nil {
 		return common.Hash{}, err
 	}
 	stats.report(true)
+
+	// One merge serves every worker's records.
+	sorter, accounts, slots := parts[0].leaves, parts[0].accounts, parts[0].slots
+	for _, p := range parts[1:] {
+		if err := errors.Join(sorter.Absorb(p.leaves), accounts.Absorb(p.accounts), slots.Absorb(p.slots)); err != nil {
+			return common.Hash{}, err
+		}
+	}
 
 	// Check 1, before the build: the other two checks are fed by this same
 	// record set, so only this one ties the output to the source state. The
@@ -366,7 +410,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	if err := batch.Write(); err != nil {
 		return common.Hash{}, err
 	}
-	log.Info("Built binary tree", "nodes", written, "leaves", stats.leaves)
+	log.Info("Built binary tree", "nodes", written, "leaves", stats.leaves.Load())
 
 	// Verify both stores before anything becomes publishable or openable.
 	if err := verifyConvertedState(chaindb, binRoot); err != nil {
@@ -407,38 +451,38 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	return binRoot, nil
 }
 
-// leafSource yields the source state's accounts, then each account's
-// storage, in keccak order, as RLP the way the state stores it. flat reads
-// pathdb's flat state, which its iterators allow only once complete;
-// otherwise the trie nodes are walked: a hash-scheme source, or a pathdb
-// still syncing or generating. Either way verifySourceRoot authenticates
-// the scanned leaves against root.
+// leafSource yields the source state's accounts from a seek hash on, then
+// each account's storage, in keccak order, as RLP the way the state stores
+// it. flat reads pathdb's flat state, which its iterators allow only once
+// complete; otherwise the trie nodes are walked: a hash-scheme source, or a
+// pathdb still syncing or generating. Either way verifySourceRoot
+// authenticates the scanned leaves against root.
 type leafSource struct {
 	db   *triedb.Database
 	root common.Hash
 	flat bool // flat accounts are slim RLP, trie leaves full RLP
 }
 
-func (s leafSource) accounts() (pathdb.AccountIterator, error) {
+func (s leafSource) accounts(seek common.Hash) (pathdb.AccountIterator, error) {
 	if s.flat {
-		return s.db.AccountIterator(s.root, common.Hash{})
+		return s.db.AccountIterator(s.root, seek)
 	}
-	return s.walk(trie.StateTrieID(s.root))
+	return s.walk(trie.StateTrieID(s.root), seek[:])
 }
 
 func (s leafSource) storage(accountHash, storageRoot common.Hash) (pathdb.StorageIterator, error) {
 	if s.flat {
 		return s.db.StorageIterator(s.root, accountHash, common.Hash{})
 	}
-	return s.walk(trie.StorageTrieID(s.root, accountHash, storageRoot))
+	return s.walk(trie.StorageTrieID(s.root, accountHash, storageRoot), nil)
 }
 
-func (s leafSource) walk(id *trie.ID) (*trieLeafIterator, error) {
+func (s leafSource) walk(id *trie.ID, start []byte) (*trieLeafIterator, error) {
 	tr, err := trie.New(id, s.db)
 	if err != nil {
 		return nil, err
 	}
-	it, err := tr.NodeIterator(nil)
+	it, err := tr.NodeIterator(start)
 	if err != nil {
 		return nil, err
 	}
@@ -455,29 +499,100 @@ func (t *trieLeafIterator) Release()          {}
 func (t *trieLeafIterator) Account() []byte   { return t.it.Value }
 func (t *trieLeafIterator) Slot() []byte      { return t.it.Value }
 
-// deriveLeaves scans the source state at root, deriving every tree leaf into
-// the sorter and recording the merkle re-derivation limbs the source-root
-// check folds back up.
-func deriveLeaves(chaindb ethdb.Database, src leafSource, sorter, accounts, slots *bintrie.RecordSorter, preimages *preimageFile, stats *conversionStats) error {
-	// ponytail: a flat scan holds one pebble read snapshot throughout,
-	// pinning a memtable and every table compacted meanwhile (the old flat
-	// state on a --force reconvert). Reopen from the last hash every 30s, as
-	// pathdb's index pruner does, if producer RAM or disk gets tight.
-	accIter, err := src.accounts()
+// hashRange is one worker's share of the account hashes, [start, end); the
+// zero end stands for the top of the hash space.
+type hashRange struct {
+	start, end common.Hash
+}
+
+// past reports whether hash lies beyond the range, in the next one.
+func (r hashRange) past(hash common.Hash) bool {
+	return r.end != (common.Hash{}) && hash.Cmp(r.end) >= 0
+}
+
+// splitHashSpace splits the account hashes into n ascending ranges of equal
+// width. Hashes are uniform, so the ranges hold about equal state, bar one
+// outsized contract's storage.
+func splitHashSpace(n int) []hashRange {
+	width := new(uint256.Int).Div(new(uint256.Int).SetAllOne(), uint256.NewInt(uint64(n)))
+	ranges := make([]hashRange, n)
+	for i := range ranges {
+		ranges[i].start = new(uint256.Int).Mul(width, uint256.NewInt(uint64(i))).Bytes32()
+		if i > 0 {
+			ranges[i-1].end = ranges[i].start
+		}
+	}
+	return ranges
+}
+
+// splitBudget divides a sort budget among n sorters. A positive budget stays
+// positive: a non-positive one never spills.
+func splitBudget(budget, n int) int {
+	if budget <= 0 {
+		return budget
+	}
+	return max(budget/n, 1)
+}
+
+// scanPart is one scan worker's share: its range of account hashes and the
+// sorters it derives into.
+type scanPart struct {
+	hashRange
+	leaves, accounts, slots *bintrie.RecordSorter
+}
+
+// codeSet records the code hashes whose chunks have been emitted. The scan
+// workers share one: accounts with the same code fall in different ranges,
+// and chunks emitted twice are a duplicate key.
+type codeSet struct {
+	mu   sync.Mutex
+	seen map[common.Hash]struct{}
+}
+
+func newCodeSet() *codeSet {
+	return &codeSet{seen: make(map[common.Hash]struct{})}
+}
+
+// claim records hash and reports whether it was new: of all callers claiming
+// one hash, exactly one wins.
+func (s *codeSet) claim(hash common.Hash) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.seen[hash]; ok {
+		return false
+	}
+	s.seen[hash] = struct{}{}
+	return true
+}
+
+// deriveLeaves scans part's range of the source state at root, deriving
+// every tree leaf into the part's sorter and recording the merkle
+// re-derivation limbs the source-root check folds back up. It gives up once
+// ctx is cancelled, by another worker failing.
+func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, part *scanPart, codes *codeSet, preimages *preimageFile, stats *conversionStats) error {
+	// ponytail: a flat scan holds one pebble read snapshot per worker
+	// throughout, pinning a memtable and every table compacted meanwhile
+	// (the old flat state on a --force reconvert). Reopen from the last hash
+	// every 30s, as pathdb's index pruner does, if producer RAM or disk gets
+	// tight.
+	accIter, err := src.accounts(part.start)
 	if err != nil {
 		return fmt.Errorf("failed to open source accounts: %w", err)
 	}
 	defer accIter.Release()
-	seenCode := make(map[common.Hash]struct{})
-	// RecordSorter.Add copies its inputs, so one key buffer serves every slot.
-	var slotKeyBuf [2 * common.HashLength]byte
+	var (
+		// RecordSorter.Add copies its inputs, so one key buffer serves every slot.
+		slotKeyBuf [2 * common.HashLength]byte
+		// The current account's counts, published to stats with it.
+		leaves, slots uint64
+	)
 	emit := func(key []byte, value [32]byte) error {
 		// Zero values resolve to absence and are never written.
 		if value == ([32]byte{}) {
 			return nil
 		}
-		stats.leaves++
-		return sorter.Add(key, value[:])
+		leaves++
+		return part.leaves.Add(key, value[:])
 	}
 	// scanStorage derives one account's slots; the deferred release keeps
 	// the iterator from leaking on any error path.
@@ -516,10 +631,10 @@ func deriveLeaves(chaindb ethdb.Database, src leafSource, sorter, accounts, slot
 			}
 			copy(slotKeyBuf[:common.HashLength], accountHash[:])
 			copy(slotKeyBuf[common.HashLength:], slotHash[:])
-			if err := slots.Add(slotKeyBuf[:], slotVal); err != nil {
+			if err := part.slots.Add(slotKeyBuf[:], slotVal); err != nil {
 				return err
 			}
-			stats.slots++
+			slots++
 		}
 		if err := storageIter.Error(); err != nil {
 			return fmt.Errorf("storage iteration failed for %x: %w", addr, err)
@@ -527,12 +642,18 @@ func deriveLeaves(chaindb ethdb.Database, src leafSource, sorter, accounts, slot
 		return nil
 	}
 	for accIter.Next() {
+		accountHash := accIter.Hash()
+		if part.past(accountHash) {
+			break
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		// Full and slim account RLP both decode here.
 		acc, err := types.FullAccount(accIter.Account())
 		if err != nil {
 			return fmt.Errorf("invalid account RLP: %w", err)
 		}
-		accountHash := accIter.Hash()
 		addrBytes := src.db.Preimage(accountHash)
 		if addrBytes == nil {
 			return fmt.Errorf("missing preimage for account hash %x (the source node must have synced with --cache.preimages)", accountHash)
@@ -547,10 +668,10 @@ func deriveLeaves(chaindb ethdb.Database, src leafSource, sorter, accounts, slot
 			}
 		}
 
-		if err := emitAccountHeader(chaindb, addr, acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash), seenCode, stats, emit); err != nil {
+		if err := emitAccountHeader(chaindb, addr, acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash), codes, stats, emit); err != nil {
 			return err
 		}
-		if err := accounts.Add(accountHash.Bytes(), merkleAccountRecord(acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash))); err != nil {
+		if err := part.accounts.Add(accountHash.Bytes(), merkleAccountRecord(acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash))); err != nil {
 			return err
 		}
 
@@ -559,7 +680,10 @@ func deriveLeaves(chaindb ethdb.Database, src leafSource, sorter, accounts, slot
 				return err
 			}
 		}
-		stats.accounts++
+		stats.accounts.Add(1)
+		stats.slots.Add(slots)
+		stats.leaves.Add(leaves)
+		leaves, slots = 0, 0
 		stats.report(false)
 	}
 	if err := accIter.Error(); err != nil {
@@ -584,7 +708,7 @@ func checkPreimage(preimage []byte, hash common.Hash, wantLen int) error {
 // emitAccountHeader derives an account's header and code-zone leaves. Shared
 // by the scan and the flat-state verifier; the derivation rules stay pinned
 // by the reference-vector parity tests.
-func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64, balance *uint256.Int, codeHash common.Hash, seenCode map[common.Hash]struct{}, stats *conversionStats, emit func([]byte, [32]byte) error) error {
+func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64, balance *uint256.Int, codeHash common.Hash, codes *codeSet, stats *conversionStats, emit func([]byte, [32]byte) error) error {
 	var code []byte
 	if codeHash != types.EmptyCodeHash {
 		code = rawdb.ReadCode(chaindb, codeHash)
@@ -607,14 +731,11 @@ func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64
 		return err
 	}
 	// Code once per distinct hash: the leaves are content-addressed.
-	if len(code) > 0 {
-		if _, seen := seenCode[codeHash]; !seen {
-			seenCode[codeHash] = struct{}{}
-			if stats != nil {
-				stats.codes++
-			}
-			return emitCodeChunks(codeHash, code, emit)
+	if len(code) > 0 && codes.claim(codeHash) {
+		if stats != nil {
+			stats.codes.Add(1)
 		}
+		return emitCodeChunks(codeHash, code, emit)
 	}
 	return nil
 }
@@ -800,124 +921,45 @@ func verifyConvertedState(chaindb ethdb.Database, root common.Hash) error {
 // verifyFlatState re-derives the whole leaf set from the flat records and
 // requires it to rebuild to the converted root. Flat state is the
 // authoritative read path - a miss is an absent account - so the tree walk
-// alone would bless a database that reads as empty.
+// alone would bless a database that reads as empty. Like the scan, it splits
+// the account hashes across workers.
 func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) error {
-	sorter := bintrie.NewLeafSorter(opts.tmpDir, opts.sortBudget)
-	defer sorter.Close()
-
 	var (
-		leaves   uint64
-		seenCode = make(map[common.Hash]struct{})
-		emit     = func(key []byte, value [32]byte) error {
-			if value == ([32]byte{}) {
-				return nil
-			}
-			leaves++
-			return sorter.Add(key, value[:])
-		}
+		ranges  = splitHashSpace(max(opts.workers, 1))
+		share   = splitBudget(opts.sortBudget, len(ranges))
+		sorters = make([]*bintrie.RecordSorter, len(ranges))
+		codes   = newCodeSet()
+		leaves  atomic.Uint64
 	)
-	acctIt := pbtdb.NewIterator(rawdb.SnapshotAccountPrefix, nil)
-	for acctIt.Next() {
-		accountHash := common.BytesToHash(acctIt.Key()[len(rawdb.SnapshotAccountPrefix):])
-		addrBytes := srcTriedb.Preimage(accountHash)
-		if addrBytes == nil {
-			acctIt.Release()
-			return fmt.Errorf("missing preimage for flat account %x", accountHash)
-		}
-		if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
-			acctIt.Release()
-			return err
-		}
-		addr := common.BytesToAddress(addrBytes)
-
-		var slim types.SlimAccount
-		if err := rlp.DecodeBytes(acctIt.Value(), &slim); err != nil {
-			acctIt.Release()
-			return fmt.Errorf("invalid flat account %x: %w", accountHash, err)
-		}
-		// Converted flat accounts never carry a storage root.
-		if len(slim.Root) != 0 {
-			acctIt.Release()
-			return fmt.Errorf("flat account %x carries a storage root %x", accountHash, slim.Root)
-		}
-		codeHash := types.EmptyCodeHash
-		if len(slim.CodeHash) != 0 {
-			codeHash = common.BytesToHash(slim.CodeHash)
-		}
-		balance := slim.Balance
-		if balance == nil {
-			balance = new(uint256.Int)
-		}
-		if err := emitAccountHeader(chaindb, addr, slim.Nonce, balance, codeHash, seenCode, nil, emit); err != nil {
-			acctIt.Release()
-			return err
-		}
-	}
-	if err := acctIt.Error(); err != nil {
-		acctIt.Release()
-		return err
-	}
-	acctIt.Release()
-
-	// Slots are ordered by account hash: the address resolves once per account.
-	var (
-		slotIt   = pbtdb.NewIterator(rawdb.SnapshotStoragePrefix, nil)
-		lastHash common.Hash
-		lastAddr common.Address
-	)
-	for slotIt.Next() {
-		key := slotIt.Key()
-		if len(key) != len(rawdb.SnapshotStoragePrefix)+2*common.HashLength {
-			slotIt.Release()
-			return fmt.Errorf("malformed flat storage key %x", key)
-		}
-		accountHash := common.BytesToHash(key[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength])
-		slotHash := common.BytesToHash(key[len(key)-common.HashLength:])
-
-		if accountHash != lastHash || lastHash == (common.Hash{}) {
-			addrBytes := srcTriedb.Preimage(accountHash)
-			if addrBytes == nil {
-				slotIt.Release()
-				return fmt.Errorf("missing preimage for flat account %x", accountHash)
+	g, ctx := errgroup.WithContext(context.Background())
+	for i, r := range ranges {
+		sorters[i] = bintrie.NewLeafSorter(opts.tmpDir, share)
+		defer sorters[i].Close()
+		g.Go(func() error {
+			var n uint64
+			defer func() { leaves.Add(n) }()
+			emit := func(key []byte, value [32]byte) error {
+				if value == ([32]byte{}) {
+					return nil
+				}
+				n++
+				return sorters[i].Add(key, value[:])
 			}
-			if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
-				slotIt.Release()
+			if err := flatAccountLeaves(ctx, chaindb, pbtdb, srcTriedb, r, codes, emit); err != nil {
 				return err
 			}
-			lastHash, lastAddr = accountHash, common.BytesToAddress(addrBytes)
-		}
-		slotKey := srcTriedb.Preimage(slotHash)
-		if slotKey == nil {
-			slotIt.Release()
-			return fmt.Errorf("missing preimage for flat storage key %x (account %x)", slotHash, lastAddr)
-		}
-		if err := checkPreimage(slotKey, slotHash, common.HashLength); err != nil {
-			slotIt.Release()
-			return err
-		}
-		_, content, rest, err := rlp.Split(slotIt.Value())
-		if err != nil {
-			slotIt.Release()
-			return fmt.Errorf("invalid flat storage value for key %x (account %x): %w", slotHash, lastAddr, err)
-		}
-		if len(rest) != 0 || len(content) > 32 {
-			slotIt.Release()
-			return fmt.Errorf("malformed flat storage value for key %x (account %x)", slotHash, lastAddr)
-		}
-		var padded [32]byte
-		copy(padded[32-len(content):], content)
-		if err := emit(bintrie.StorageSlotKey(lastAddr, slotKey), padded); err != nil {
-			slotIt.Release()
-			return err
-		}
+			return flatStorageLeaves(ctx, pbtdb, srcTriedb, r, emit)
+		})
 	}
-	if err := slotIt.Error(); err != nil {
-		slotIt.Release()
+	if err := g.Wait(); err != nil {
 		return err
 	}
-	slotIt.Release()
-
-	stream, err := sorter.Sort()
+	for _, s := range sorters[1:] {
+		if err := sorters[0].Absorb(s); err != nil {
+			return err
+		}
+	}
+	stream, err := sorters[0].Sort()
 	if err != nil {
 		return err
 	}
@@ -934,11 +976,114 @@ func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *tr
 			return err
 		}
 	}
-	if got := rebuild.Finish(); got != root && !(leaves == 0 && root == types.EmptyBinaryHash) {
+	if got := rebuild.Finish(); got != root && !(leaves.Load() == 0 && root == types.EmptyBinaryHash) {
 		return fmt.Errorf("flat state re-derives to %x, converted root is %x", got, root)
 	}
-	log.Info("Verified converted flat state", "leaves", leaves, "root", root)
+	log.Info("Verified converted flat state", "leaves", leaves.Load(), "root", root)
 	return nil
+}
+
+// flatAccountLeaves derives the header and code leaves of the flat accounts
+// in r.
+func flatAccountLeaves(ctx context.Context, chaindb, pbtdb ethdb.Database, srcTriedb *triedb.Database, r hashRange, codes *codeSet, emit func([]byte, [32]byte) error) error {
+	it := pbtdb.NewIterator(rawdb.SnapshotAccountPrefix, r.start[:])
+	defer it.Release()
+	for it.Next() {
+		accountHash := common.BytesToHash(it.Key()[len(rawdb.SnapshotAccountPrefix):])
+		if r.past(accountHash) {
+			break
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		addrBytes := srcTriedb.Preimage(accountHash)
+		if addrBytes == nil {
+			return fmt.Errorf("missing preimage for flat account %x", accountHash)
+		}
+		if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
+			return err
+		}
+		addr := common.BytesToAddress(addrBytes)
+
+		var slim types.SlimAccount
+		if err := rlp.DecodeBytes(it.Value(), &slim); err != nil {
+			return fmt.Errorf("invalid flat account %x: %w", accountHash, err)
+		}
+		// Converted flat accounts never carry a storage root.
+		if len(slim.Root) != 0 {
+			return fmt.Errorf("flat account %x carries a storage root %x", accountHash, slim.Root)
+		}
+		codeHash := types.EmptyCodeHash
+		if len(slim.CodeHash) != 0 {
+			codeHash = common.BytesToHash(slim.CodeHash)
+		}
+		balance := slim.Balance
+		if balance == nil {
+			balance = new(uint256.Int)
+		}
+		if err := emitAccountHeader(chaindb, addr, slim.Nonce, balance, codeHash, codes, nil, emit); err != nil {
+			return err
+		}
+	}
+	return it.Error()
+}
+
+// flatStorageLeaves derives the storage leaves of the flat slots of the
+// accounts in r.
+func flatStorageLeaves(ctx context.Context, pbtdb ethdb.Database, srcTriedb *triedb.Database, r hashRange, emit func([]byte, [32]byte) error) error {
+	it := pbtdb.NewIterator(rawdb.SnapshotStoragePrefix, r.start[:])
+	defer it.Release()
+
+	// Slots are ordered by account hash: the address resolves once per account.
+	var (
+		lastHash common.Hash
+		lastAddr common.Address
+	)
+	for it.Next() {
+		key := it.Key()
+		if len(key) != len(rawdb.SnapshotStoragePrefix)+2*common.HashLength {
+			return fmt.Errorf("malformed flat storage key %x", key)
+		}
+		accountHash := common.BytesToHash(key[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength])
+		slotHash := common.BytesToHash(key[len(key)-common.HashLength:])
+
+		if accountHash != lastHash || lastHash == (common.Hash{}) {
+			if r.past(accountHash) {
+				break
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			addrBytes := srcTriedb.Preimage(accountHash)
+			if addrBytes == nil {
+				return fmt.Errorf("missing preimage for flat account %x", accountHash)
+			}
+			if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
+				return err
+			}
+			lastHash, lastAddr = accountHash, common.BytesToAddress(addrBytes)
+		}
+		slotKey := srcTriedb.Preimage(slotHash)
+		if slotKey == nil {
+			return fmt.Errorf("missing preimage for flat storage key %x (account %x)", slotHash, lastAddr)
+		}
+		if err := checkPreimage(slotKey, slotHash, common.HashLength); err != nil {
+			return err
+		}
+		_, content, rest, err := rlp.Split(it.Value())
+		if err != nil {
+			return fmt.Errorf("invalid flat storage value for key %x (account %x): %w", slotHash, lastAddr, err)
+		}
+		if len(rest) != 0 || len(content) > 32 {
+			return fmt.Errorf("malformed flat storage value for key %x (account %x)", slotHash, lastAddr)
+		}
+		var padded [32]byte
+		copy(padded[32-len(content):], content)
+		if err := emit(bintrie.StorageSlotKey(lastAddr, slotKey), padded); err != nil {
+			return err
+		}
+	}
+	return it.Error()
 }
 
 // wipePreimages deletes the preimage store, which a binary tree never

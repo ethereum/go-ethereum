@@ -189,6 +189,104 @@ func TestLeafSorterRejects(t *testing.T) {
 	})
 }
 
+// TestLeafSorterAbsorb: records split across sorters, spilled or in memory,
+// come out of the absorbing one as a single ascending, complete stream, and a
+// key present in two of them is a duplicate.
+func TestLeafSorterAbsorb(t *testing.T) {
+	t.Run("merges", func(t *testing.T) {
+		recs := randomLeafRecords(t, rand.New(rand.NewSource(7748)), 500)
+		parts := []*RecordSorter{
+			NewLeafSorter(t.TempDir(), 0),    // in memory
+			NewLeafSorter(t.TempDir(), 512),  // many runs plus a pending tail
+			NewLeafSorter(t.TempDir(), 0),    // never fed
+			NewLeafSorter(t.TempDir(), 4096), // a few runs
+		}
+		for _, p := range parts {
+			defer p.Close()
+		}
+		for i, r := range recs {
+			if err := parts[[]int{0, 1, 3}[i%3]].Add(r.key, r.value); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, p := range parts[1:] {
+			if err := parts[0].Absorb(p); err != nil {
+				t.Fatal(err)
+			}
+		}
+		stream, err := parts[0].Sort()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := make(map[string][]byte, len(recs))
+		for _, r := range recs {
+			want[string(r.key)] = r.value
+		}
+		var prev []byte
+		for {
+			k, v, err := stream.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if prev != nil && bytes.Compare(prev, k) >= 0 {
+				t.Fatalf("record %x out of order after %x", k, prev)
+			}
+			if w, ok := want[string(k)]; !ok || !bytes.Equal(w, v) {
+				t.Fatalf("record %x came out with the wrong value or twice", k)
+			}
+			delete(want, string(k))
+			prev = k
+		}
+		if len(want) != 0 {
+			t.Fatalf("%d records lost in the merge", len(want))
+		}
+	})
+	t.Run("duplicate across sorters", func(t *testing.T) {
+		key, value := HeaderKey(commonAddress(1), 0), bytes.Repeat([]byte{1}, 32)
+		a, b := NewLeafSorter(t.TempDir(), 0), NewLeafSorter(t.TempDir(), 0)
+		defer a.Close()
+		defer b.Close()
+		if err := a.Add(key, value); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.Add(key, value); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.Absorb(b); err != nil {
+			t.Fatal(err)
+		}
+		stream, err := a.Sort()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for {
+			if _, _, err = stream.Next(); err != nil {
+				break
+			}
+		}
+		if err == io.EOF {
+			t.Fatal("a key in two absorbed sorters survived the merge")
+		}
+	})
+	t.Run("sorted sorters refuse", func(t *testing.T) {
+		a, b := NewLeafSorter(t.TempDir(), 0), NewLeafSorter(t.TempDir(), 0)
+		defer a.Close()
+		defer b.Close()
+		if _, err := b.Sort(); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.Absorb(b); err == nil {
+			t.Fatal("absorbed a sorter whose records were already handed out")
+		}
+		if err := b.Absorb(a); err == nil {
+			t.Fatal("a sorted sorter took in more records")
+		}
+	})
+}
+
 // TestLeafSorterEdges: empty input, single record, temp-file cleanup.
 func TestLeafSorterEdges(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {

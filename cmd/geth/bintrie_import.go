@@ -413,7 +413,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			slotHash = crypto.Keccak256Hash(slot[:])
 			enc, _   = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 		)
-		stats.slots++
+		stats.slots.Add(1)
 		return slotSorter.Add(append(accountHash.Bytes(), slotHash.Bytes()...), enc)
 	}
 
@@ -471,7 +471,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			}
 		}
 		accountHash := crypto.Keccak256Hash(g.addr.Bytes())
-		stats.accounts++
+		stats.accounts.Add(1)
 
 		value := merkleAccountRecord(nonce, balance, codeHash)
 		if err := acctSorter.Add(accountHash.Bytes(), value); err != nil {
@@ -568,7 +568,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		if builderErr != nil {
 			return common.Hash{}, builderErr
 		}
-		stats.leaves++
+		stats.leaves.Add(1)
 		stats.report(false)
 
 		// Zone boundary: the account zone ends where anything else begins.
@@ -713,7 +713,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if rebuilt != snap.root {
 		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
 	}
-	log.Info("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves, "digest", snap.digest())
+	log.Info("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves.Load(), "digest", snap.digest())
 	if nodes != nil {
 		err := nodes.replay(func(path, blob []byte) error {
 			rawdb.WriteAccountTrieNode(pbtBatch, path, blob)
@@ -766,14 +766,14 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 				return common.Hash{}, err
 			}
 		}
-		stats.codes++
+		stats.codes.Add(1)
 	}
 	if ckey, _, err := chunkHeld.current(); err != nil {
 		return common.Hash{}, err
 	} else if ckey != nil {
 		return common.Hash{}, fmt.Errorf("code chunks left over for unclaimed hash %x", ckey[:32])
 	}
-	log.Info("Verified code against its hashes", "codes", stats.codes)
+	log.Info("Verified code against its hashes", "codes", stats.codes.Load())
 
 	// Check 2: re-derive the MPT and demand the anchor root.
 	acctStream, err := acctSorter.Sort()
@@ -791,7 +791,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if got != anchorRoot {
 		return common.Hash{}, fmt.Errorf("the leaves re-derive merkle root %x, the anchor commits %x", got, anchorRoot)
 	}
-	log.Info("Verified consensus anchoring", "stateRoot", anchorRoot, "accounts", stats.accounts, "slots", stats.slots)
+	log.Info("Verified consensus anchoring", "stateRoot", anchorRoot, "accounts", stats.accounts.Load(), "slots", stats.slots.Load())
 
 	if verifyOnly {
 		log.Info("Verification complete, nothing written", "binaryRoot", snap.root,

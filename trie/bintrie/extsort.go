@@ -177,6 +177,24 @@ func (s *RecordSorter) sortPending() error {
 	return nil
 }
 
+// Absorb moves other's records into s: other's pending run spills and its
+// runs join s's, so s.Sort merges both record sets into one stream, with
+// duplicates across them rejected like any other. It lets parallel producers
+// sort into sorters of their own and share one merge. other holds nothing
+// afterwards and only Close remains valid on it.
+func (s *RecordSorter) Absorb(other *RecordSorter) error {
+	if s.sealed || other.sealed {
+		return errors.New("bintrie: sorter already sorted")
+	}
+	if err := other.spill(); err != nil {
+		return err
+	}
+	s.runs = append(s.runs, other.runs...)
+	other.runs, other.arena, other.index = nil, nil, nil
+	other.sealed = true
+	return nil
+}
+
 // Sort seals the sorter and returns the merged, ascending record stream.
 // Close on the sorter releases the temporary files.
 func (s *RecordSorter) Sort() (*RecordStream, error) {
