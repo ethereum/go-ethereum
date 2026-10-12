@@ -17,6 +17,8 @@
 package main
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -40,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
@@ -55,7 +56,7 @@ var (
 	}
 	tmpDirFlag = &cli.StringFlag{
 		Name:  "tmpdir",
-		Usage: "Directory for scratch files, the sort spills and on import a copy of every tree node; needs disk, not tmpfs (default: the OS temp dir)",
+		Usage: "Directory for scratch files, the sort spills and a copy of every tree node; needs disk, not tmpfs (default: the OS temp dir)",
 	}
 	forceConvertFlag = &cli.BoolFlag{
 		Name:  "force",
@@ -69,13 +70,17 @@ var (
 		Name:  "preimages-out",
 		Usage: "File to write the EIP-8347 preimage file to",
 	}
+	preimagesInFlag = &cli.StringFlag{
+		Name:  "preimages",
+		Usage: "EIP-8347 preimage file to take the state's keys from instead of the node's preimage store; it must hold exactly the state's keys",
+	}
 	dropPreimagesFlag = &cli.BoolFlag{
 		Name:  "drop-preimages",
 		Usage: "Delete the preimage store after the conversion verifies",
 	}
-	convertWorkersFlag = &cli.IntFlag{
-		Name:  "convert-workers",
-		Usage: "Workers scanning the state in parallel, each over its own share of the accounts. The scan waits on disk reads, so more workers finish sooner but leave less CPU and disk to other processes. --memory-limit is split among them, so each spills more runs, 1 MB apiece while they merge. --preimages-out scans with one",
+	workersFlag = &cli.IntFlag{
+		Name:  "workers",
+		Usage: "Parallel workers: convert splits its scan among them by account hash, import its candidate key derivation; --memory-limit is split among them",
 		Value: 4,
 	}
 
@@ -96,19 +101,21 @@ var (
 					forceConvertFlag,
 					snapshotOutFlag,
 					preimagesOutFlag,
+					preimagesInFlag,
 					dropPreimagesFlag,
-					convertWorkersFlag,
+					workersFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth bintrie convert [flags] [state-root]
 
 Converts the MPT state into the EIP-8297 binary tree offline, following the
 EIP-8347 pipeline, and verifies the result before marking it complete.
-Defaults to the head root. The source must hold preimages
-(--cache.preimages). The scan runs on --convert-workers workers.
---snapshot-out and --preimages-out emit the EIP-8347 distribution
-artifacts. --drop-preimages deletes the preimage store afterwards, which
-also rules out a re-conversion.
+Defaults to the head root. The addresses and slot keys behind the state's
+hashes come from the node's preimage store (--cache.preimages) or from an
+EIP-8347 preimage file of the same state (--preimages). The scan runs on
+--workers workers. --snapshot-out and --preimages-out emit the
+EIP-8347 distribution artifacts. --drop-preimages deletes the preimage store
+afterwards, which also rules out a re-conversion from it.
 `,
 			},
 		},
@@ -157,8 +164,20 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	}
 	// Without preimages the scan fails, and only after --force has wiped. An
 	// empty state has nothing to resolve.
-	if root != types.EmptyRootHash && !hasPreimages(chaindb) {
-		return errors.New("no preimages to convert from; the source must sync with --cache.preimages")
+	preimageIn := ctx.String(preimagesInFlag.Name)
+	if preimageIn != "" {
+		in, err := os.Stat(preimageIn)
+		if err != nil {
+			return fmt.Errorf("--preimages: %w", err)
+		}
+		// The outputs are created, and truncated, before the input is read.
+		for _, out := range []string{ctx.String(snapshotOutFlag.Name), ctx.String(preimagesOutFlag.Name)} {
+			if fi, err := os.Stat(out); err == nil && os.SameFile(in, fi) {
+				return errors.New("--preimages must not name an output file")
+			}
+		}
+	} else if root != types.EmptyRootHash && !hasPreimages(chaindb) {
+		return errors.New("no preimages to convert from; the source must sync with --cache.preimages, or pass an EIP-8347 preimage file with --preimages")
 	}
 	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
 
@@ -169,9 +188,9 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	if (snapshotPath == "") != (preimagePath == "") {
 		log.Warn("Emitting one distribution artifact without the other; EIP-8347 distributes the snapshot and the preimage file together")
 	}
-	workers := ctx.Int(convertWorkersFlag.Name)
+	workers := ctx.Int(workersFlag.Name)
 	if workers < 1 {
-		return errors.New("--convert-workers must be at least 1")
+		return errors.New("--workers must be at least 1")
 	}
 	// MB to bytes without wrapping the platform int.
 	budgetMB := ctx.Uint64(memoryLimitFlag.Name)
@@ -207,6 +226,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		preimagePath: preimagePath,
 		anchor:       anchor,
 		workers:      workers,
+		preimageIn:   preimageIn,
 	})
 	if err != nil {
 		return err
@@ -232,7 +252,8 @@ type conversionOptions struct {
 	snapshotPath string        // PBT snapshot artifact destination; empty writes none
 	preimagePath string        // preimage file destination; empty writes none
 	anchor       *types.Header // block committing root; nil leaves the namespace unbootable
-	workers      int           // parallel scan workers; below 1 means one
+	workers      int           // parallel workers; below 1 means one
+	preimageIn   string        // EIP-8347 preimage file to resolve keys from; empty reads the node's store
 }
 
 // conversionStats tracks progress for the periodic report. The message names
@@ -265,10 +286,10 @@ func (s *conversionStats) report(force bool) {
 // convertState converts the MPT state at root into the binary tree namespace
 // per EIP-8347: one scan, split by account hash across workers, derives
 // every leaf, an external sort orders the leaves in tree-key order, and the
-// tree builds bottom-up in one pass. Three checks gate the result: the scan
-// against the source state root, the tree and the flat store against the
-// converted one. The attestation lands last, so an interrupted run refuses
-// to open.
+// tree builds bottom-up in one pass. The scan must re-derive the source
+// state root, both stores must read back exactly what was written, and the
+// leaves must pass EIP-8347's dual-check as an import's would. The
+// attestation lands last, so an interrupted run refuses to open.
 func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 
@@ -279,28 +300,30 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, errors.New("binary tree namespace is not empty; re-run with --force to wipe it")
 	}
 	stats := newStats("Converting state")
-	var (
-		snapshot  *snapshotWriter
-		preimages *preimageFile
-	)
-	if opts.snapshotPath != "" {
-		sw, err := newSnapshotWriter(opts.snapshotPath)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		snapshot = sw
-		defer func() {
-			if snapshot != nil {
-				snapshot.abort()
-			}
-		}()
+	// EIP-8347 has every node, self-converters too, run the dual-check on the
+	// leaves it adopts. The check reads the artifacts, so those not asked for
+	// go to scratch files; a preimage file given as input is read as is.
+	scratch, err := os.MkdirTemp(opts.tmpDir, "bintrie-convert-")
+	if err != nil {
+		return common.Hash{}, err
 	}
-	if opts.preimagePath != "" {
-		pf, err := newPreimageFile(opts.preimagePath)
-		if err != nil {
+	defer os.RemoveAll(scratch)
+	snapPath := cmp.Or(opts.snapshotPath, filepath.Join(scratch, "snapshot"))
+	snapshot, err := newSnapshotWriter(snapPath)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer func() {
+		if snapshot != nil {
+			snapshot.abort()
+		}
+	}()
+	prePath := cmp.Or(opts.preimagePath, opts.preimageIn, filepath.Join(scratch, "preimages"))
+	var preimages *preimageFile
+	if prePath != opts.preimageIn {
+		if preimages, err = newPreimageFile(prePath); err != nil {
 			return common.Hash{}, err
 		}
-		preimages = pf
 		defer func() {
 			if preimages != nil {
 				preimages.abort()
@@ -308,19 +331,48 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}()
 	}
 	// Phase 1: scan, deriving leaves. Each worker scans its own range of
-	// account hashes into sorters of its own; the preimage file is written
-	// in scan order, so it takes a single worker.
+	// account hashes into sorters of its own, resolving keys from the node's
+	// preimage store or from its own piece of a preimage file.
 	workers := max(opts.workers, 1)
-	if workers > 1 && preimages != nil {
-		log.Info("Scanning with one worker: the preimage file is written in scan order", "requested", workers)
-		workers = 1
+	ranges := splitHashSpace(workers)
+	keys := make([]keySource, workers)
+	for i := range keys {
+		keys[i] = storeKeys{srcTriedb}
+	}
+	if opts.preimageIn != "" {
+		f, err := os.Open(opts.preimageIn)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil {
+			return common.Hash{}, err
+		}
+		// The file's pieces set the ranges, so the work splits by data volume;
+		// a small file may make fewer pieces than workers.
+		offsets, starts, err := splitPreimageFile(f, info.Size(), workers)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		workers = len(offsets)
+		ranges, keys = make([]hashRange, workers), make([]keySource, workers)
+		for i := range offsets {
+			end := info.Size()
+			if i+1 < workers {
+				end = offsets[i+1]
+				ranges[i].end = starts[i+1]
+			}
+			ranges[i].start = starts[i]
+			keys[i] = &fileKeys{r: preimagePiece(f, offsets[i], end-offsets[i])}
+		}
 	}
 	// Every worker's three sorters are alive at once, and a sealed one keeps
 	// its buffer while its stream drains, so the budget is split rather than
 	// reused.
 	share := splitBudget(opts.sortBudget, 3*workers)
 	parts := make([]scanPart, workers)
-	for i, r := range splitHashSpace(workers) {
+	for i, r := range ranges {
 		parts[i] = scanPart{
 			hashRange: r,
 			leaves:    bintrie.NewLeafSorter(opts.tmpDir, share),
@@ -332,16 +384,35 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		defer parts[i].accounts.Close()
 		defer parts[i].slots.Close()
 	}
+	// Every worker writes its range of the preimage file: the first straight
+	// into the artifact, the others into fragments joined after it.
+	writers := make([]*preimageFile, workers)
+	writers[0] = preimages
+	if preimages != nil {
+		for i := 1; i < workers; i++ {
+			frag, err := newPreimageFragment(opts.tmpDir)
+			if err != nil {
+				return common.Hash{}, err
+			}
+			defer frag.abort()
+			writers[i] = frag
+		}
+	}
 	src := leafSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
 	codes := newCodeSet()
 	g, gctx := errgroup.WithContext(context.Background())
 	for i := range parts {
 		g.Go(func() error {
-			return deriveLeaves(gctx, chaindb, src, &parts[i], codes, preimages, stats)
+			return deriveLeaves(gctx, chaindb, src, &parts[i], keys[i], codes, writers[i], stats)
 		})
 	}
 	if err := g.Wait(); err != nil {
 		return common.Hash{}, err
+	}
+	if preimages != nil {
+		if err := preimages.join(writers[1:]); err != nil {
+			return common.Hash{}, err
+		}
 	}
 	stats.report(true)
 
@@ -353,37 +424,31 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}
 	}
 
-	// Check 1, before the build: the other two checks are fed by this same
-	// record set, so only this one ties the output to the source state. The
-	// fold writes the flat state as it goes.
-	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), opts.tmpDir, stats.start); err != nil {
+	// Check 1, before the build: everything written is fed by this same
+	// record set, so only this check ties the output to the source state.
+	// The fold writes the flat state as it goes, digesting what it writes.
+	written := newWrittenState()
+	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, stats.start); err != nil {
 		return common.Hash{}, err
 	}
 	accounts.Close()
 	slots.Close()
 
-	// Phase 2+3: sort and build, streaming records to disk.
+	// Phase 2+3: sort and build. Tree nodes are staged per depth and written
+	// once the tree is built, in key order (see nodeStager).
 	stream, err := sorter.Sort()
 	if err != nil {
 		return common.Hash{}, err
 	}
-	var (
-		batch      = pbtdb.NewBatch()
-		written    uint64
-		builderErr error
-	)
+	nodes, err := newNodeStager(opts.tmpDir)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer nodes.close()
+	var builderErr error
 	builder := bintrie.NewStackBuilder(func(path []byte, hash common.Hash, blob []byte) {
-		if builderErr != nil {
-			return
-		}
-		rawdb.WriteAccountTrieNode(batch, path, blob)
-		written++
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				builderErr = err
-				return
-			}
-			batch.Reset()
+		if builderErr == nil {
+			builderErr = nodes.add(path, blob)
 		}
 	})
 	for {
@@ -394,10 +459,8 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		if err != nil {
 			return common.Hash{}, err
 		}
-		if snapshot != nil {
-			if err := snapshot.add(key, value); err != nil {
-				return common.Hash{}, err
-			}
+		if err := snapshot.add(key, value); err != nil {
+			return common.Hash{}, err
 		}
 		if err := builder.Add(key, value); err != nil {
 			return common.Hash{}, err
@@ -407,36 +470,43 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	if builderErr != nil {
 		return common.Hash{}, builderErr
 	}
-	if err := batch.Write(); err != nil {
+	sorter.Close()
+	if err := writeStagedNodes(pbtdb, nodes, written.nodes); err != nil {
 		return common.Hash{}, err
 	}
-	log.Info("Built binary tree", "nodes", written, "leaves", stats.leaves.Load())
+	nodes.close()
+	log.Info("Built binary tree", "nodes", written.nodes.count, "leaves", stats.leaves.Load())
 
-	// Verify both stores before anything becomes publishable or openable.
-	if err := verifyConvertedState(chaindb, binRoot); err != nil {
-		return common.Hash{}, fmt.Errorf("converted tree failed verification: %w", err)
-	}
-	if err := verifyFlatState(chaindb, pbtdb, srcTriedb, binRoot, opts); err != nil {
-		return common.Hash{}, fmt.Errorf("converted flat state failed verification: %w", err)
+	// Both stores must hold exactly what was written before anything becomes
+	// publishable or openable.
+	if err := verifyWritten(pbtdb, written); err != nil {
+		return common.Hash{}, err
 	}
 
-	if snapshot != nil {
-		digest, err := snapshot.finalize(binRoot)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		log.Info("Wrote PBT snapshot artifact", "path", opts.snapshotPath,
-			"leaves", snapshot.count, "digest", digest)
-		snapshot = nil // finalized; disarm the abort
+	snapDigest, err := snapshot.finalize(binRoot)
+	if err != nil {
+		return common.Hash{}, err
 	}
+	var preDigest common.Hash
 	if preimages != nil {
-		digest, err := preimages.finalize()
-		if err != nil {
+		if preDigest, err = preimages.finalize(); err != nil {
 			return common.Hash{}, err
 		}
-		log.Info("Wrote preimage file", "path", opts.preimagePath,
-			"accounts", preimages.accounts, "digest", digest)
-		preimages = nil // finalized; disarm the abort
+	}
+	// The check re-reads the artifacts and rebuilds the tree once more;
+	// streaming the leaves into it would save that pass.
+	if _, err := importState(chaindb, importOptions{snapshot: snapPath, preimages: prePath,
+		anchor: &types.Header{Root: root}, verifyOnly: true, conversionOptions: opts}); err != nil {
+		return common.Hash{}, err
+	}
+	// Keep the artifacts asked for; the aborts remove the scratch ones.
+	if opts.snapshotPath != "" {
+		log.Info("Wrote PBT snapshot artifact", "path", opts.snapshotPath, "leaves", snapshot.count, "digest", snapDigest)
+		snapshot = nil
+	}
+	if opts.preimagePath != "" {
+		log.Info("Wrote preimage file", "path", opts.preimagePath, "accounts", preimages.accounts, "digest", preDigest)
+		preimages = nil
 	}
 
 	// No state id: the tree bases an empty history and live commits number
@@ -541,35 +611,146 @@ type scanPart struct {
 	leaves, accounts, slots *bintrie.RecordSorter
 }
 
-// codeSet records the code hashes whose chunks have been emitted. The scan
-// workers share one: accounts with the same code fall in different ranges,
-// and chunks emitted twice are a duplicate key.
+// codeInfo is what an account header needs of its code: the size, and the
+// designator when the code is an EIP-7702 delegation.
+type codeInfo struct {
+	size       uint32
+	delegation []byte
+}
+
+// codeSet caches each distinct code's info across the scan workers, so the
+// store is read once per code, and lets one worker emit its chunks: a chunk
+// emitted twice is a duplicate key.
 type codeSet struct {
 	mu   sync.Mutex
-	seen map[common.Hash]struct{}
+	seen map[common.Hash]codeInfo
 }
 
 func newCodeSet() *codeSet {
-	return &codeSet{seen: make(map[common.Hash]struct{})}
+	return &codeSet{seen: make(map[common.Hash]codeInfo)}
 }
 
-// claim records hash and reports whether it was new: of all callers claiming
-// one hash, exactly one wins.
-func (s *codeSet) claim(hash common.Hash) bool {
+// lookup returns the info of a code already met.
+func (s *codeSet) lookup(hash common.Hash) (codeInfo, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	info, ok := s.seen[hash]
+	return info, ok
+}
+
+// claim records hash and its info and reports whether it was new: of all
+// callers claiming one hash, exactly one wins.
+func (s *codeSet) claim(hash common.Hash, info codeInfo) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.seen[hash]; ok {
 		return false
 	}
-	s.seen[hash] = struct{}{}
+	s.seen[hash] = info
 	return true
+}
+
+// keySource resolves one scan worker's hashed keys to the addresses and slot
+// keys behind them, in scan order.
+type keySource interface {
+	account(hash common.Hash) (common.Address, error)
+	slot(addr common.Address, hash common.Hash) (common.Hash, error)
+	// done rejects anything the source holds for addr beyond the slots the
+	// scan resolved; close, anything left once the worker's range is done.
+	done(addr common.Address) error
+	close() error
+}
+
+// storeKeys looks keys up in the node's preimage store, which may hold more
+// than the state, as EIP-8347 allows.
+type storeKeys struct{ db *triedb.Database }
+
+func (s storeKeys) account(hash common.Hash) (common.Address, error) {
+	preimage := s.db.Preimage(hash)
+	if preimage == nil {
+		return common.Address{}, fmt.Errorf("missing preimage for account hash %x (the source node must have synced with --cache.preimages, or pass --preimages)", hash)
+	}
+	if err := checkPreimage(preimage, hash, common.AddressLength); err != nil {
+		return common.Address{}, err
+	}
+	return common.BytesToAddress(preimage), nil
+}
+
+func (s storeKeys) slot(addr common.Address, hash common.Hash) (common.Hash, error) {
+	preimage := s.db.Preimage(hash)
+	if preimage == nil {
+		return common.Hash{}, fmt.Errorf("missing preimage for storage key %x (account %x)", hash, addr)
+	}
+	if err := checkPreimage(preimage, hash, common.HashLength); err != nil {
+		return common.Hash{}, err
+	}
+	return common.BytesToHash(preimage), nil
+}
+
+func (storeKeys) done(common.Address) error { return nil }
+func (storeKeys) close() error              { return nil }
+
+// fileKeys merges one piece of an EIP-8347 preimage file against the
+// worker's scan range, as the EIP's converter step 2 does: both run in keccak
+// order, so each record must match the next account and each slot key the
+// next slot. The reader hashes every key, which proves the preimages.
+type fileKeys struct {
+	r     *preimageReader
+	slots []common.Hash
+	next  int
+}
+
+func (f *fileKeys) account(hash common.Hash) (common.Address, error) {
+	addr, addrHash, slots, err := f.r.next()
+	switch {
+	case err == io.EOF:
+		return common.Address{}, fmt.Errorf("missing preimage for account hash %x: the preimage file holds no record for it", hash)
+	case err != nil:
+		return common.Address{}, err
+	case addrHash == hash:
+		f.slots, f.next = slots, 0
+		return addr, nil
+	case bytes.Compare(addrHash[:], hash[:]) < 0:
+		return common.Address{}, fmt.Errorf("preimage file names address %x, which the state does not hold", addr)
+	default:
+		return common.Address{}, fmt.Errorf("missing preimage for account hash %x: the preimage file holds no record for it", hash)
+	}
+}
+
+func (f *fileKeys) slot(addr common.Address, hash common.Hash) (common.Hash, error) {
+	if f.next < len(f.slots) && f.r.slotHashes[f.next] == hash {
+		f.next++
+		return f.slots[f.next-1], nil
+	}
+	if f.next < len(f.slots) && bytes.Compare(f.r.slotHashes[f.next][:], hash[:]) < 0 {
+		return common.Hash{}, fmt.Errorf("preimage file names slot %x of %x, which the state does not hold", f.slots[f.next], addr)
+	}
+	return common.Hash{}, fmt.Errorf("missing preimage for storage key %x (account %x)", hash, addr)
+}
+
+func (f *fileKeys) done(addr common.Address) error {
+	if f.next < len(f.slots) {
+		return fmt.Errorf("preimage file names slot %x of %x, which the state does not hold", f.slots[f.next], addr)
+	}
+	return nil
+}
+
+func (f *fileKeys) close() error {
+	addr, _, _, err := f.r.next()
+	if err == io.EOF {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("preimage file names address %x, which the state does not hold", addr)
 }
 
 // deriveLeaves scans part's range of the source state at root, deriving
 // every tree leaf into the part's sorter and recording the merkle
 // re-derivation limbs the source-root check folds back up. It gives up once
 // ctx is cancelled, by another worker failing.
-func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, part *scanPart, codes *codeSet, preimages *preimageFile, stats *conversionStats) error {
+func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, part *scanPart, keys keySource, codes *codeSet, preimages *preimageFile, stats *conversionStats) error {
 	// ponytail: a flat scan holds one pebble read snapshot per worker
 	// throughout, pinning a memtable and every table compacted meanwhile
 	// (the old flat state on a --force reconvert). Reopen from the last hash
@@ -604,15 +785,12 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 		defer storageIter.Release()
 		for storageIter.Next() {
 			slotHash := storageIter.Hash()
-			slotKey := src.db.Preimage(slotHash)
-			if slotKey == nil {
-				return fmt.Errorf("missing preimage for storage key %x (account %x)", slotHash, addr)
-			}
-			if err := checkPreimage(slotKey, slotHash, common.HashLength); err != nil {
+			slotKey, err := keys.slot(addr, slotHash)
+			if err != nil {
 				return err
 			}
 			if preimages != nil {
-				if err := preimages.addSlot(common.BytesToHash(slotKey), slotHash); err != nil {
+				if err := preimages.addSlot(slotKey, slotHash); err != nil {
 					return err
 				}
 			}
@@ -626,7 +804,7 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 			}
 			var padded [32]byte
 			copy(padded[32-len(content):], content)
-			if err := emit(bintrie.StorageSlotKey(addr, slotKey), padded); err != nil {
+			if err := emit(bintrie.StorageSlotKey(addr, slotKey[:]), padded); err != nil {
 				return err
 			}
 			copy(slotKeyBuf[:common.HashLength], accountHash[:])
@@ -654,14 +832,10 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 		if err != nil {
 			return fmt.Errorf("invalid account RLP: %w", err)
 		}
-		addrBytes := src.db.Preimage(accountHash)
-		if addrBytes == nil {
-			return fmt.Errorf("missing preimage for account hash %x (the source node must have synced with --cache.preimages)", accountHash)
-		}
-		if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
+		addr, err := keys.account(accountHash)
+		if err != nil {
 			return err
 		}
-		addr := common.BytesToAddress(addrBytes)
 		if preimages != nil {
 			if err := preimages.beginAccount(addr, accountHash); err != nil {
 				return err
@@ -680,6 +854,9 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 				return err
 			}
 		}
+		if err := keys.done(addr); err != nil {
+			return err
+		}
 		stats.accounts.Add(1)
 		stats.slots.Add(slots)
 		stats.leaves.Add(leaves)
@@ -689,12 +866,12 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 	if err := accIter.Error(); err != nil {
 		return fmt.Errorf("account iteration failed: %w", err)
 	}
-	return nil
+	return keys.close()
 }
 
 // checkPreimage rejects a preimage of the wrong length or one that does not
 // hash back to its key: the store has no integrity of its own, and a corrupt
-// entry would convert into a wrong-stem tree the verifiers confirm.
+// entry would convert into a wrong-stem tree.
 func checkPreimage(preimage []byte, hash common.Hash, wantLen int) error {
 	if len(preimage) != wantLen {
 		return fmt.Errorf("corrupt preimage for %x: %d bytes, want %d", hash, len(preimage), wantLen)
@@ -705,18 +882,29 @@ func checkPreimage(preimage []byte, hash common.Hash, wantLen int) error {
 	return nil
 }
 
-// emitAccountHeader derives an account's header and code-zone leaves. Shared
-// by the scan and the flat-state verifier; the derivation rules stay pinned
-// by the reference-vector parity tests.
+// emitAccountHeader derives an account's header and code-zone leaves; the
+// derivation rules stay pinned by the reference-vector parity tests.
 func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64, balance *uint256.Int, codeHash common.Hash, codes *codeSet, stats *conversionStats, emit func([]byte, [32]byte) error) error {
-	var code []byte
+	var (
+		info  codeInfo
+		code  []byte
+		first bool // this account's code is new to the scan, and its chunks this worker's to emit
+	)
 	if codeHash != types.EmptyCodeHash {
-		code = rawdb.ReadCode(chaindb, codeHash)
-		if code == nil {
-			return fmt.Errorf("missing code for hash %x (account %x)", codeHash, addr)
+		var known bool
+		if info, known = codes.lookup(codeHash); !known {
+			code = rawdb.ReadCode(chaindb, codeHash)
+			if code == nil {
+				return fmt.Errorf("missing code for hash %x (account %x)", codeHash, addr)
+			}
+			info.size = uint32(len(code))
+			if _, isDelegation := types.ParseDelegation(code); isDelegation {
+				info.delegation = code
+			}
+			first = codes.claim(codeHash, info)
 		}
 	}
-	basic, err := bintrie.EncodeBasicData(uint32(len(code)), nonce, balance)
+	basic, err := bintrie.EncodeBasicData(info.size, nonce, balance)
 	if err != nil {
 		return fmt.Errorf("account %x: %w", addr, err)
 	}
@@ -724,17 +912,15 @@ func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64
 		return err
 	}
 	// A delegation replaces the code-hash leaf and has no code-zone leaves.
-	if _, isDelegation := types.ParseDelegation(code); isDelegation {
-		return emit(bintrie.DelegationKey(addr), [32]byte(bintrie.EncodeDelegation(code)))
+	if info.delegation != nil {
+		return emit(bintrie.DelegationKey(addr), [32]byte(bintrie.EncodeDelegation(info.delegation)))
 	}
 	if err := emit(bintrie.CodeHashKey(addr), codeHash); err != nil {
 		return err
 	}
 	// Code once per distinct hash: the leaves are content-addressed.
-	if len(code) > 0 && codes.claim(codeHash) {
-		if stats != nil {
-			stats.codes.Add(1)
-		}
+	if first && info.size > 0 {
+		stats.codes.Add(1)
 		return emitCodeChunks(codeHash, code, emit)
 	}
 	return nil
@@ -846,27 +1032,10 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 	return nil
 }
 
-// rawBinaryNodes reads tree records straight from the namespace: a path
-// database would demand the attestation the verifiers gate, and history
-// freezers a conversion never creates.
-type rawBinaryNodes struct {
-	pbtdb ethdb.Database
-}
-
-func (r rawBinaryNodes) NodeReader(common.Hash) (database.NodeReader, error) {
-	return r, nil
-}
-
-// Node returns the record at path, unverified: the walk re-derives the root
-// from the leaves, which subsumes per-node hash checks.
-func (r rawBinaryNodes) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
-	return rawdb.ReadAccountTrieNode(r.pbtdb, path), nil
-}
-
 // verifySourceRoot demands that the scanned records re-derive the state root
 // they were read from, the converter's counterpart to the importer's anchor
 // check. With a batch it also writes the flat state, see rederiveMerkleRoot.
-func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, tmpDir string, start time.Time) error {
+func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, written *writtenState, tmpDir string, start time.Time) error {
 	acctStream, err := accounts.Sort()
 	if err != nil {
 		return err
@@ -875,7 +1044,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, tmpDir, start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, written, tmpDir, start)
 	if err != nil {
 		return err
 	}
@@ -884,206 +1053,6 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	}
 	log.Info("Verified the scan against the source state root", "stateRoot", want)
 	return nil
-}
-
-// verifyConvertedState refolds every persisted leaf and requires the rebuilt
-// root to match. Gates the completion marker.
-func verifyConvertedState(chaindb ethdb.Database, root common.Hash) error {
-	tr, err := bintrie.NewBinaryTrie(root, rawBinaryNodes{pbtdb: rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))})
-	if err != nil {
-		return fmt.Errorf("cannot open the converted tree at %x: %w", root, err)
-	}
-	it, err := tr.NodeIterator(nil)
-	if err != nil {
-		return err
-	}
-	rebuild := bintrie.NewStackBuilder(nil)
-	leaves := 0
-	for it.Next(true) {
-		if !it.Leaf() {
-			continue
-		}
-		if err := rebuild.Add(common.CopyBytes(it.LeafKey()), common.CopyBytes(it.LeafBlob())); err != nil {
-			return fmt.Errorf("leaf %x: %w", it.LeafKey(), err)
-		}
-		leaves++
-	}
-	if err := it.Error(); err != nil {
-		return err
-	}
-	if got := rebuild.Finish(); got != root && !(leaves == 0 && root == types.EmptyBinaryHash) {
-		return fmt.Errorf("disk leaves rebuild to %x, converted root is %x", got, root)
-	}
-	log.Info("Verified converted tree", "leaves", leaves, "root", root)
-	return nil
-}
-
-// verifyFlatState re-derives the whole leaf set from the flat records and
-// requires it to rebuild to the converted root. Flat state is the
-// authoritative read path - a miss is an absent account - so the tree walk
-// alone would bless a database that reads as empty. Like the scan, it splits
-// the account hashes across workers.
-func verifyFlatState(chaindb ethdb.Database, pbtdb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) error {
-	var (
-		ranges  = splitHashSpace(max(opts.workers, 1))
-		share   = splitBudget(opts.sortBudget, len(ranges))
-		sorters = make([]*bintrie.RecordSorter, len(ranges))
-		codes   = newCodeSet()
-		leaves  atomic.Uint64
-	)
-	g, ctx := errgroup.WithContext(context.Background())
-	for i, r := range ranges {
-		sorters[i] = bintrie.NewLeafSorter(opts.tmpDir, share)
-		defer sorters[i].Close()
-		g.Go(func() error {
-			var n uint64
-			defer func() { leaves.Add(n) }()
-			emit := func(key []byte, value [32]byte) error {
-				if value == ([32]byte{}) {
-					return nil
-				}
-				n++
-				return sorters[i].Add(key, value[:])
-			}
-			if err := flatAccountLeaves(ctx, chaindb, pbtdb, srcTriedb, r, codes, emit); err != nil {
-				return err
-			}
-			return flatStorageLeaves(ctx, pbtdb, srcTriedb, r, emit)
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return err
-	}
-	for _, s := range sorters[1:] {
-		if err := sorters[0].Absorb(s); err != nil {
-			return err
-		}
-	}
-	stream, err := sorters[0].Sort()
-	if err != nil {
-		return err
-	}
-	rebuild := bintrie.NewStackBuilder(nil)
-	for {
-		key, value, err := stream.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		if err := rebuild.Add(key, value); err != nil {
-			return err
-		}
-	}
-	if got := rebuild.Finish(); got != root && !(leaves.Load() == 0 && root == types.EmptyBinaryHash) {
-		return fmt.Errorf("flat state re-derives to %x, converted root is %x", got, root)
-	}
-	log.Info("Verified converted flat state", "leaves", leaves.Load(), "root", root)
-	return nil
-}
-
-// flatAccountLeaves derives the header and code leaves of the flat accounts
-// in r.
-func flatAccountLeaves(ctx context.Context, chaindb, pbtdb ethdb.Database, srcTriedb *triedb.Database, r hashRange, codes *codeSet, emit func([]byte, [32]byte) error) error {
-	it := pbtdb.NewIterator(rawdb.SnapshotAccountPrefix, r.start[:])
-	defer it.Release()
-	for it.Next() {
-		accountHash := common.BytesToHash(it.Key()[len(rawdb.SnapshotAccountPrefix):])
-		if r.past(accountHash) {
-			break
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		addrBytes := srcTriedb.Preimage(accountHash)
-		if addrBytes == nil {
-			return fmt.Errorf("missing preimage for flat account %x", accountHash)
-		}
-		if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
-			return err
-		}
-		addr := common.BytesToAddress(addrBytes)
-
-		var slim types.SlimAccount
-		if err := rlp.DecodeBytes(it.Value(), &slim); err != nil {
-			return fmt.Errorf("invalid flat account %x: %w", accountHash, err)
-		}
-		// Converted flat accounts never carry a storage root.
-		if len(slim.Root) != 0 {
-			return fmt.Errorf("flat account %x carries a storage root %x", accountHash, slim.Root)
-		}
-		codeHash := types.EmptyCodeHash
-		if len(slim.CodeHash) != 0 {
-			codeHash = common.BytesToHash(slim.CodeHash)
-		}
-		balance := slim.Balance
-		if balance == nil {
-			balance = new(uint256.Int)
-		}
-		if err := emitAccountHeader(chaindb, addr, slim.Nonce, balance, codeHash, codes, nil, emit); err != nil {
-			return err
-		}
-	}
-	return it.Error()
-}
-
-// flatStorageLeaves derives the storage leaves of the flat slots of the
-// accounts in r.
-func flatStorageLeaves(ctx context.Context, pbtdb ethdb.Database, srcTriedb *triedb.Database, r hashRange, emit func([]byte, [32]byte) error) error {
-	it := pbtdb.NewIterator(rawdb.SnapshotStoragePrefix, r.start[:])
-	defer it.Release()
-
-	// Slots are ordered by account hash: the address resolves once per account.
-	var (
-		lastHash common.Hash
-		lastAddr common.Address
-	)
-	for it.Next() {
-		key := it.Key()
-		if len(key) != len(rawdb.SnapshotStoragePrefix)+2*common.HashLength {
-			return fmt.Errorf("malformed flat storage key %x", key)
-		}
-		accountHash := common.BytesToHash(key[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength])
-		slotHash := common.BytesToHash(key[len(key)-common.HashLength:])
-
-		if accountHash != lastHash || lastHash == (common.Hash{}) {
-			if r.past(accountHash) {
-				break
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			addrBytes := srcTriedb.Preimage(accountHash)
-			if addrBytes == nil {
-				return fmt.Errorf("missing preimage for flat account %x", accountHash)
-			}
-			if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
-				return err
-			}
-			lastHash, lastAddr = accountHash, common.BytesToAddress(addrBytes)
-		}
-		slotKey := srcTriedb.Preimage(slotHash)
-		if slotKey == nil {
-			return fmt.Errorf("missing preimage for flat storage key %x (account %x)", slotHash, lastAddr)
-		}
-		if err := checkPreimage(slotKey, slotHash, common.HashLength); err != nil {
-			return err
-		}
-		_, content, rest, err := rlp.Split(it.Value())
-		if err != nil {
-			return fmt.Errorf("invalid flat storage value for key %x (account %x): %w", slotHash, lastAddr, err)
-		}
-		if len(rest) != 0 || len(content) > 32 {
-			return fmt.Errorf("malformed flat storage value for key %x (account %x)", slotHash, lastAddr)
-		}
-		var padded [32]byte
-		copy(padded[32-len(content):], content)
-		if err := emit(bintrie.StorageSlotKey(lastAddr, slotKey), padded); err != nil {
-			return err
-		}
-	}
-	return it.Error()
 }
 
 // wipePreimages deletes the preimage store, which a binary tree never

@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -95,10 +96,6 @@ func TestBintrieConvert(t *testing.T) {
 		t.Fatalf("conversion failed: %v", err)
 	}
 	t.Logf("Binary trie root: %x", currentRoot)
-
-	if err := verifyConvertedState(chaindb, currentRoot); err != nil {
-		t.Fatalf("verification failed: %v", err)
-	}
 
 	// The conversion finalized the namespace on disk; a database opened over
 	// it afterwards - the way a converted node starts - must pick the root up
@@ -273,12 +270,8 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	if err := wipeBinaryTrieState(chaindb, ""); err != nil {
 		t.Fatalf("wipe failed: %v", err)
 	}
-	binRoot, err := convertState(chaindb, src, root, conversionOptions{})
-	if err != nil {
+	if _, err := convertState(chaindb, src, root, conversionOptions{}); err != nil {
 		t.Fatalf("conversion failed after wipe: %v", err)
-	}
-	if err := verifyConvertedState(chaindb, binRoot); err != nil {
-		t.Fatalf("verification failed after wipe: %v", err)
 	}
 	if got := rawdb.ReadAccountSnapshot(pbtdb, common.Hash{0x01}); len(got) != 0 {
 		t.Fatal("the wipe left the debris record in place")
@@ -294,87 +287,113 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	}
 }
 
-// TestConvertVerifiers pins that each verifier catches its failure class:
-// every tamper turns verification red, undoing it green.
-func TestConvertVerifiers(t *testing.T) {
-	chaindb := rawdb.NewMemoryDatabase()
-	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.Defaults,
-	})
-	gspec := &core.Genesis{
-		Config:  params.TestChainConfig,
-		BaseFee: big.NewInt(params.InitialBaseFee),
-		Alloc:   artifactAlloc(),
+// tamperDB passes every write through except the first record of one key
+// family, which it drops, corrupts or doubles with a stray neighbour: a store
+// that loses or mangles a write on its way in.
+type tamperDB struct {
+	ethdb.Database
+	family []byte // full key prefix, the namespace's table prefix included
+	mode   string // "drop", "corrupt" or "stray"
+	done   atomic.Bool
+}
+
+func newTamperDB(db ethdb.Database, family []byte, mode string) *tamperDB {
+	return &tamperDB{Database: db, family: append(common.CopyBytes(rawdb.PBTPrefix), family...), mode: mode}
+}
+
+func (db *tamperDB) NewBatch() ethdb.Batch { return tamperBatch{db.Database.NewBatch(), db} }
+
+type tamperBatch struct {
+	ethdb.Batch
+	db *tamperDB
+}
+
+func (b tamperBatch) Put(key, value []byte) error {
+	if !bytes.HasPrefix(key, b.db.family) || !b.db.done.CompareAndSwap(false, true) {
+		return b.Batch.Put(key, value)
 	}
+	switch b.db.mode {
+	case "drop":
+		return nil
+	case "corrupt":
+		value = append(common.CopyBytes(value[:len(value)-1]), value[len(value)-1]^0xff)
+	case "stray":
+		if err := b.Batch.Put(append(common.CopyBytes(key), 0xff), value); err != nil {
+			return err
+		}
+	}
+	return b.Batch.Put(key, value)
+}
+
+// TestWrittenStateCatchesBadWrites pins both commands' read-back check: a
+// record of any family that the store drops, corrupts or doubles on its way
+// in fails the run, naming the family, and nothing is attested.
+func TestWrittenStateCatchesBadWrites(t *testing.T) {
+	_, root, _, snapPath, prePath := importFixture(t, artifactAlloc())
+	caught := func(t *testing.T, err error, chaindb ethdb.Database, family string) {
+		t.Helper()
+		if err == nil || !strings.Contains(err.Error(), family) {
+			t.Fatalf("a bad %s write went through; err = %v", family, err)
+		}
+		if rawdb.HasPBTState(chaindb) {
+			t.Fatal("a run with a bad write attested its namespace")
+		}
+	}
+	for _, f := range []struct {
+		name   string
+		prefix []byte
+	}{
+		{"tree node", rawdb.TrieNodeAccountPrefix},
+		{"flat account", rawdb.SnapshotAccountPrefix},
+		{"flat storage", rawdb.SnapshotStoragePrefix},
+	} {
+		for _, mode := range []string{"drop", "corrupt", "stray"} {
+			t.Run("convert/"+f.name+"/"+mode, func(t *testing.T) {
+				chaindb := rawdb.NewMemoryDatabase()
+				srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.Defaults})
+				gspec := &core.Genesis{Config: params.TestChainConfig, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: artifactAlloc()}
+				root := gspec.MustCommit(chaindb, srcTriedb).Root()
+				srcTriedb.Close()
+				src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
+				defer src.Close()
+				_, err := convertState(newTamperDB(chaindb, f.prefix, mode), src, root, conversionOptions{tmpDir: t.TempDir()})
+				caught(t, err, chaindb, f.name)
+			})
+			t.Run("import/"+f.name+"/"+mode, func(t *testing.T) {
+				chaindb := rawdb.NewMemoryDatabase()
+				_, err := importState(newTamperDB(chaindb, f.prefix, mode), importOptions{snapshot: snapPath, preimages: prePath,
+					anchor: &types.Header{Number: big.NewInt(1), Root: root}, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
+				caught(t, err, chaindb, f.name)
+			})
+		}
+	}
+}
+
+// TestConvertRejectsCorruptCode: the code store has no integrity of its own,
+// so code whose bytes do not hash to its key must fail the dual-check rather
+// than convert into wrong code leaves.
+func TestConvertRejectsCorruptCode(t *testing.T) {
+	alloc := artifactAlloc()
+	chaindb := rawdb.NewMemoryDatabase()
+	srcTriedb := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.Defaults})
+	gspec := &core.Genesis{Config: params.TestChainConfig, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: alloc}
 	root := gspec.MustCommit(chaindb, srcTriedb).Root()
 	srcTriedb.Close()
-
-	src := triedb.NewDatabase(chaindb, &triedb.Config{
-		Preimages: true,
-		PathDB:    pathdb.ReadOnly,
-	})
+	for _, a := range alloc {
+		if _, delegated := types.ParseDelegation(a.Code); len(a.Code) > 0 && !delegated {
+			code := bytes.Clone(a.Code)
+			code[len(code)-1] ^= 0xff
+			rawdb.WriteCode(chaindb, crypto.Keccak256Hash(a.Code), code)
+			break
+		}
+	}
+	src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
 	defer src.Close()
-
-	binRoot, err := convertState(chaindb, src, root, conversionOptions{})
-	if err != nil {
-		t.Fatalf("conversion failed: %v", err)
+	if _, err := convertState(chaindb, src, root, conversionOptions{tmpDir: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "assembled code hashes to") {
+		t.Fatalf("converted corrupt code; err = %v", err)
 	}
-	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
-
-	// tamper removes a family's first record, returning the undo.
-	tamper := func(prefix []byte) (key, value []byte) {
-		t.Helper()
-		it := pbtdb.NewIterator(prefix, nil)
-		defer it.Release()
-		if !it.Next() {
-			t.Fatalf("no records under family %x to tamper with", prefix)
-		}
-		key, value = common.CopyBytes(it.Key()), common.CopyBytes(it.Value())
-		if err := pbtdb.Delete(key); err != nil {
-			t.Fatal(err)
-		}
-		return key, value
-	}
-	restore := func(key, value []byte) {
-		t.Helper()
-		if err := pbtdb.Put(key, value); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// A missing tree record must fail the tree walk.
-	key, value := tamper(rawdb.TrieNodeAccountPrefix)
-	if err := verifyConvertedState(chaindb, binRoot); err == nil {
-		t.Fatal("a missing tree record survived tree verification")
-	}
-	restore(key, value)
-	if err := verifyConvertedState(chaindb, binRoot); err != nil {
-		t.Fatalf("restored tree fails verification: %v", err)
-	}
-
-	// A missing flat account fails only the flat pass - why it exists.
-	key, value = tamper(rawdb.SnapshotAccountPrefix)
-	if err := verifyConvertedState(chaindb, binRoot); err != nil {
-		t.Fatalf("a flat-only gap failed the tree walk: %v", err)
-	}
-	if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err == nil {
-		t.Fatal("a missing flat account survived flat-state verification")
-	}
-	restore(key, value)
-	if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err != nil {
-		t.Fatalf("restored flat state fails verification: %v", err)
-	}
-
-	// A corrupt flat slot value must fail the flat re-derivation.
-	key, value = tamper(rawdb.SnapshotStoragePrefix)
-	restore(key, []byte{0x01}) // rlp("") of a different value
-	if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err == nil {
-		t.Fatal("a corrupt flat slot survived flat-state verification")
-	}
-	restore(key, value)
-	if err := verifyFlatState(chaindb, pbtdb, src, binRoot, conversionOptions{}); err != nil {
-		t.Fatalf("restored flat state fails verification: %v", err)
+	if rawdb.HasPBTState(chaindb) {
+		t.Fatal("a conversion of corrupt code attested its namespace")
 	}
 }
 
@@ -655,7 +674,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 
 	t.Run("complete set", func(t *testing.T) {
 		accounts, slots := scan(t, nil)
-		if err := verifySourceRoot(accounts, slots, root, nil, "", time.Now()); err != nil {
+		if err := verifySourceRoot(accounts, slots, root, nil, nil, "", time.Now()); err != nil {
 			t.Fatalf("the complete record set failed the source-root check: %v", err)
 		}
 	})
@@ -664,7 +683,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, _ *common.Hash) bool {
 			return addr == victim
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, "", time.Now())
+		err := verifySourceRoot(accounts, slots, root, nil, nil, "", time.Now())
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
 			t.Fatalf("a dropped account survived the source-root check; err = %v", err)
 		}
@@ -674,7 +693,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot != nil && *slot == slotOne
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, "", time.Now())
+		err := verifySourceRoot(accounts, slots, root, nil, nil, "", time.Now())
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
 			t.Fatalf("a dropped storage slot survived the source-root check; err = %v", err)
 		}
@@ -684,7 +703,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot == nil
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, "", time.Now())
+		err := verifySourceRoot(accounts, slots, root, nil, nil, "", time.Now())
 		if err == nil || !strings.Contains(err.Error(), "which holds no account") {
 			t.Fatalf("orphaned storage survived the source-root check; err = %v", err)
 		}

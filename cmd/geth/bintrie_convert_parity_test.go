@@ -19,10 +19,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -125,11 +127,13 @@ func convertAllocOpts(t *testing.T, alloc types.GenesisAlloc, opts conversionOpt
 }
 
 // convertGenesis commits alloc as a merkle genesis, under the path scheme or
-// else the hash scheme, and converts it under opts. It returns the source
+// else the hash scheme, and converts it under opts. The source keeps a
+// preimage store unless opts names a preimage file. It returns the source
 // database, its merkle root and the conversion's outcome.
 func convertGenesis(t *testing.T, alloc types.GenesisAlloc, pathScheme bool, opts conversionOptions) (chaindb ethdb.Database, root, binRoot common.Hash, err error) {
 	t.Helper()
-	cfg, roCfg := &triedb.Config{Preimages: true}, &triedb.Config{Preimages: true}
+	keep := opts.preimageIn == ""
+	cfg, roCfg := &triedb.Config{Preimages: keep}, &triedb.Config{Preimages: keep}
 	if pathScheme {
 		cfg.PathDB, roCfg.PathDB = pathdb.Defaults, pathdb.ReadOnly
 	}
@@ -239,6 +243,9 @@ func assertConvertedTreeClean(t *testing.T, chaindb ethdb.Database, root common.
 func TestConvertMatchesReference(t *testing.T) {
 	for _, sv := range loadStateVectors(t) {
 		t.Run(sv.Name, func(t *testing.T) {
+			if sv.Name == "zero_basic_data_with_storage" {
+				t.Skip("EIP-7523: no anchor state holds an empty account; TestImportMatchesReference pins the refusal")
+			}
 			binRoot, chaindb := convertAlloc(t, allocOf(t, sv))
 			if want := common.HexToHash(sv.Root); binRoot != want {
 				t.Fatalf("converted root %x, reference says %s", binRoot, sv.Root)
@@ -320,8 +327,11 @@ func TestConvertParallelMatchesSerial(t *testing.T) {
 		}
 	}
 
+	// Every worker writes its range of the preimage file; the joined file,
+	// like the snapshot, must not depend on how many there were. The small
+	// allocation leaves most of eight ranges, and their fragments, empty.
 	t.Run("artifacts", func(t *testing.T) {
-		artifacts := func(workers int) (snap, pre []byte) {
+		artifacts := func(alloc types.GenesisAlloc, workers int) (snap, pre []byte) {
 			opts := artifactOptions(t)
 			opts.workers = workers
 			convertAllocOpts(t, alloc, opts)
@@ -335,10 +345,14 @@ func TestConvertParallelMatchesSerial(t *testing.T) {
 			}
 			return snap, pre
 		}
-		snap1, pre1 := artifacts(1)
-		snap4, pre4 := artifacts(4)
-		if !bytes.Equal(snap1, snap4) || !bytes.Equal(pre1, pre4) {
-			t.Fatal("artifacts differ between one and four workers")
+		for _, alloc := range []types.GenesisAlloc{alloc, artifactAlloc()} {
+			snap1, pre1 := artifacts(alloc, 1)
+			for _, workers := range []int{4, 8} {
+				snap, pre := artifacts(alloc, workers)
+				if !bytes.Equal(snap1, snap) || !bytes.Equal(pre1, pre) {
+					t.Fatalf("%d accounts: artifacts differ between one and %d workers", len(alloc), workers)
+				}
+			}
 		}
 	})
 
@@ -363,6 +377,101 @@ func TestConvertParallelMatchesSerial(t *testing.T) {
 			t.Fatal("a failed parallel conversion attested its namespace")
 		}
 	})
+}
+
+// TestConvertFromPreimageFile: a source holding no preimages converts from a
+// preimage file, read in step with the scan, to the root, flat state and
+// artifacts a conversion from the node's store produces, at any worker
+// count and from either source walk; a file that names a key the state does
+// not hold, or lacks one it does, is refused.
+func TestConvertFromPreimageFile(t *testing.T) {
+	alloc := mixedAlloc(8347)
+	want := embedAlloc(t, alloc)
+	_, _, _, snapPath, prePath := importFixture(t, alloc)
+	wantSnap, wantPre := mustReadFile(t, snapPath), mustReadFile(t, prePath)
+
+	for _, pathScheme := range []bool{true, false} {
+		for _, workers := range []int{1, 4} {
+			opts := artifactOptions(t)
+			opts.workers, opts.preimageIn = workers, prePath
+			chaindb, _, binRoot, err := convertGenesis(t, alloc, pathScheme, opts)
+			if err != nil {
+				t.Fatalf("path scheme %v, %d workers: %v", pathScheme, workers, err)
+			}
+			if binRoot != want {
+				t.Fatalf("path scheme %v, %d workers: root %x, want %x", pathScheme, workers, binRoot, want)
+			}
+			assertFlatStateMatchesAlloc(t, chaindb, alloc)
+			if !bytes.Equal(mustReadFile(t, opts.snapshotPath), wantSnap) || !bytes.Equal(mustReadFile(t, opts.preimagePath), wantPre) {
+				t.Fatalf("path scheme %v, %d workers: artifacts differ from a conversion from the store", pathScheme, workers)
+			}
+		}
+	}
+
+	t.Run("more workers than records", func(t *testing.T) {
+		small := artifactAlloc()
+		_, _, smallRoot, _, smallPre := importFixture(t, small)
+		if _, _, binRoot, err := convertGenesis(t, small, true, conversionOptions{tmpDir: t.TempDir(), workers: 8, preimageIn: smallPre}); err != nil || binRoot != smallRoot {
+			t.Fatalf("root %x, err %v; a conversion from the store builds %x", binRoot, err, smallRoot)
+		}
+	})
+
+	t.Run("rejects", func(t *testing.T) {
+		recs := readPreimageRecords(t, prePath)
+		withSlots := slices.IndexFunc(recs, func(r preRecord) bool { return len(r.slots) > 0 })
+		if withSlots < 0 {
+			t.Fatal("the fixture's preimage file holds no slot keys")
+		}
+		edit := func(f func(recs []preRecord) []preRecord) []preRecord {
+			cloned := make([]preRecord, len(recs))
+			for i, r := range recs {
+				cloned[i] = preRecord{addr: r.addr, slots: slices.Clone(r.slots)}
+			}
+			return f(cloned)
+		}
+		for _, tc := range []struct {
+			name string
+			recs []preRecord
+			want string
+		}{
+			{"missing account", edit(func(r []preRecord) []preRecord { return slices.Delete(r, 0, 1) }),
+				"missing preimage for account hash"},
+			{"surplus account", edit(func(r []preRecord) []preRecord {
+				return append(r, preRecord{addr: common.HexToAddress("0xdeadbeef00000000000000000000000000000001")})
+			}), "which the state does not hold"},
+			{"missing slot", edit(func(r []preRecord) []preRecord {
+				r[withSlots].slots = r[withSlots].slots[1:]
+				return r
+			}), "missing preimage for storage key"},
+			{"surplus slot", edit(func(r []preRecord) []preRecord {
+				r[withSlots].slots = append(r[withSlots].slots, common.Hash{0xde, 0xad})
+				return r
+			}), "which the state does not hold"},
+		} {
+			for _, workers := range []int{1, 4} {
+				t.Run(fmt.Sprintf("%s/%d workers", tc.name, workers), func(t *testing.T) {
+					bad := filepath.Join(t.TempDir(), "preimages.bin")
+					writePreimageRecords(t, bad, tc.recs)
+					chaindb, _, _, err := convertGenesis(t, alloc, true, conversionOptions{tmpDir: t.TempDir(), workers: workers, preimageIn: bad})
+					if err == nil || !strings.Contains(err.Error(), tc.want) {
+						t.Fatalf("err = %v, want %q", err, tc.want)
+					}
+					if rawdb.HasPBTState(chaindb) {
+						t.Fatal("a refused conversion attested its namespace")
+					}
+				})
+			}
+		}
+	})
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	blob, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return blob
 }
 
 // mixedAlloc builds a deterministic randomized allocation: shared code,

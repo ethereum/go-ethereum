@@ -475,20 +475,23 @@ const preimageRecordHeaderSize = common.AddressLength + 4
 
 // preimageFile streams the EIP-8347 preimage file: fixed-width per-account
 // records in MPT-path order, keccak256(address) across records and
-// keccak256(slotKey) within one. The scan already walks in that order; the
+// keccak256(slotKey) within one. Each scan worker walks its range in that
+// order and writes it to a preimageFile of its own: the first worker into the
+// artifact, the others into fragments the artifact joins in range order. The
 // writer checks the paths it is handed for strict ascent and buffers only the
 // open account's slot keys, since slotCount precedes them.
 type preimageFile struct {
-	path     string
-	f        *os.File
-	w        *bufio.Writer
-	hasher   crypto.KeccakState
-	addr     common.Address
-	slots    []byte
-	prevAddr common.Hash
-	prevSlot common.Hash
-	open     bool
-	accounts uint64
+	path      string
+	f         *os.File
+	w         *bufio.Writer
+	hasher    crypto.KeccakState // nil for a fragment
+	addr      common.Address
+	slots     []byte
+	firstAddr common.Hash
+	prevAddr  common.Hash
+	prevSlot  common.Hash
+	open      bool
+	accounts  uint64
 }
 
 // newPreimageFile creates the artifact file.
@@ -502,6 +505,17 @@ func newPreimageFile(path string) (*preimageFile, error) {
 	return pf, nil
 }
 
+// newPreimageFragment creates a fragment under dir: one worker's range of
+// records, for an artifact to join. It is unhashed; the artifact hashes it
+// as it copies it in.
+func newPreimageFragment(dir string) (*preimageFile, error) {
+	f, err := os.CreateTemp(dir, "bintrie-preimages-*")
+	if err != nil {
+		return nil, err
+	}
+	return &preimageFile{path: f.Name(), f: f, w: bufio.NewWriterSize(f, 1<<20)}, nil
+}
+
 // beginAccount seals the previous account's record and opens the next one.
 // hash is the account's MPT path, keccak256(addr).
 func (pf *preimageFile) beginAccount(addr common.Address, hash common.Hash) error {
@@ -510,6 +524,9 @@ func (pf *preimageFile) beginAccount(addr common.Address, hash common.Hash) erro
 	}
 	if pf.accounts > 0 && bytes.Compare(pf.prevAddr[:], hash[:]) >= 0 {
 		return fmt.Errorf("preimage records out of hashed-key order at account %x", addr)
+	}
+	if pf.accounts == 0 {
+		pf.firstAddr = hash
 	}
 	pf.addr, pf.prevAddr, pf.open = addr, hash, true
 	pf.accounts++
@@ -545,6 +562,42 @@ func (pf *preimageFile) sealAccount() error {
 	return nil
 }
 
+// join appends the fragments' records to the artifact's own, in the order
+// given: each fragment must hold the next range of accounts, which the join
+// checks where the ranges meet.
+func (pf *preimageFile) join(fragments []*preimageFile) error {
+	if err := pf.sealAccount(); err != nil {
+		return err
+	}
+	for _, frag := range fragments {
+		if err := frag.sealAccount(); err != nil {
+			return err
+		}
+		if err := frag.w.Flush(); err != nil {
+			return err
+		}
+		if frag.accounts == 0 {
+			continue
+		}
+		if pf.accounts > 0 && bytes.Compare(pf.prevAddr[:], frag.firstAddr[:]) >= 0 {
+			return fmt.Errorf("preimage fragments out of hashed-key order at account hash %x", frag.firstAddr)
+		}
+		if _, err := frag.f.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		if _, err := io.Copy(pf.w, frag.f); err != nil {
+			return err
+		}
+		frag.abort()
+		if pf.accounts == 0 {
+			pf.firstAddr = frag.firstAddr
+		}
+		pf.prevAddr = frag.prevAddr
+		pf.accounts += frag.accounts
+	}
+	return nil
+}
+
 // finalize seals the last account and returns the file's digest, hashed in
 // the same pass that wrote it.
 func (pf *preimageFile) finalize() (common.Hash, error) {
@@ -565,7 +618,7 @@ func (pf *preimageFile) finalize() (common.Hash, error) {
 	return digest, nil
 }
 
-// abort removes a partially written artifact after a failed conversion.
+// abort closes and removes the file.
 func (pf *preimageFile) abort() {
 	pf.f.Close()
 	os.Remove(pf.path)
@@ -733,14 +786,16 @@ func (sr *snapshotReader) close() { sr.f.Close() }
 
 // preimageReader streams the EIP-8347 preimage file, hashing it as it reads:
 // records strictly ascending by keccak256(address), slot keys strictly
-// ascending by keccak256(slotKey), nothing after the last record.
+// ascending by keccak256(slotKey), nothing after the last record. A piece
+// (see preimagePiece) reads one span of records and hashes nothing.
 type preimageReader struct {
-	f        *os.File
-	hasher   crypto.KeccakState
-	r        *bufio.Reader
-	left     int64
-	prevAddr common.Hash
-	records  uint64
+	f          *os.File
+	hasher     crypto.KeccakState
+	r          *bufio.Reader
+	left       int64
+	prevAddr   common.Hash
+	records    uint64
+	slotHashes []common.Hash // the last record's slot-key hashes, overwritten by next
 }
 
 // openPreimages opens the preimage file.
@@ -757,6 +812,47 @@ func openPreimages(path string) (*preimageReader, error) {
 	pr := &preimageReader{f: f, hasher: crypto.NewKeccakState(), left: size.Size()}
 	pr.r = bufio.NewReaderSize(io.TeeReader(f, pr.hasher), 1<<20)
 	return pr, nil
+}
+
+// preimagePiece reads length bytes of a preimage file from offset, which
+// must lie on a record boundary. Pieces share the file, which stays open
+// for as long as they are read.
+func preimagePiece(f *os.File, offset, length int64) *preimageReader {
+	return &preimageReader{r: bufio.NewReaderSize(io.NewSectionReader(f, offset, length), 1<<20), left: length}
+}
+
+// splitPreimageFile cuts a preimage file of size bytes into at most n pieces
+// of about equal size on record boundaries, parsing record headers and
+// streaming past the slot keys. It
+// returns each piece's offset and the account hash its range of the state
+// starts at: the first record's for every piece but the first, whose range
+// starts at the bottom of the hash space.
+func splitPreimageFile(f *os.File, size int64, n int) ([]int64, []common.Hash, error) {
+	var (
+		r       = bufio.NewReaderSize(io.NewSectionReader(f, 0, size), 1<<20)
+		offsets = []int64{0}
+		starts  = []common.Hash{{}}
+		header  [preimageRecordHeaderSize]byte
+		pos     int64
+	)
+	for pos < size && len(offsets) < n {
+		if _, err := io.ReadFull(r, header[:]); err != nil {
+			return nil, nil, fmt.Errorf("preimage file is truncated at offset %d: %w", pos, err)
+		}
+		if target := size * int64(len(offsets)) / int64(n); pos > 0 && pos >= target {
+			offsets = append(offsets, pos)
+			starts = append(starts, crypto.Keccak256Hash(header[:common.AddressLength]))
+		}
+		skip := int64(binary.BigEndian.Uint32(header[common.AddressLength:])) * common.HashLength
+		if skip > size-pos-preimageRecordHeaderSize {
+			return nil, nil, fmt.Errorf("preimage record at offset %d runs past the end of the file", pos)
+		}
+		if _, err := r.Discard(int(skip)); err != nil {
+			return nil, nil, err
+		}
+		pos += preimageRecordHeaderSize + skip
+	}
+	return offsets, starts, nil
 }
 
 // next returns the following account record: the address, its keccak digest,
@@ -787,6 +883,7 @@ func (pr *preimageReader) next() (common.Address, common.Hash, []common.Hash, er
 		slots    = make([]common.Hash, count)
 		prevSlot common.Hash
 	)
+	pr.slotHashes = pr.slotHashes[:0]
 	for i := range slots {
 		if _, err := io.ReadFull(pr.r, slots[i][:]); err != nil {
 			return common.Address{}, common.Hash{}, nil, fmt.Errorf("preimage record %d is truncated: %w", pr.records, err)
@@ -796,6 +893,7 @@ func (pr *preimageReader) next() (common.Address, common.Hash, []common.Hash, er
 			return common.Address{}, common.Hash{}, nil, fmt.Errorf("preimage record %d slot keys are out of hashed-key order", pr.records)
 		}
 		prevSlot = slotHash
+		pr.slotHashes = append(pr.slotHashes, slotHash)
 	}
 	pr.left -= count * common.HashLength
 	pr.records++
