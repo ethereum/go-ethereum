@@ -980,13 +980,13 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 	})
 	// If there is a gap between the chain state and the blob pool, drop
 	// all the transactions as they are non-executable. Similarly, if the
-	// entire tx range was included, drop all.
+	// entire tx range was included, or the sender holds code by now, drop all.
 	var (
 		next   = p.state.GetNonce(addr)
 		gapped = txs[0].nonce > next
 		filled = txs[len(txs)-1].nonce < next
 	)
-	if gapped || filled {
+	if gapped || filled || !txpool.IsEOA(p.state, addr) {
 		var (
 			ids    []uint64
 			nonces []uint64
@@ -999,7 +999,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			p.lookup.untrack(txs[i])
 
 			// Included transactions blobs need to be moved to the limbo
-			if filled && inclusions != nil {
+			if txs[i].nonce < next && inclusions != nil {
 				p.offload(addr, txs[i].nonce, txs[i].id, inclusions)
 			}
 		}
@@ -1014,9 +1014,12 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		if gapped {
 			log.Warn("Dropping dangling blob transactions", "from", addr, "missing", next, "drop", nonces, "ids", ids)
 			dropDanglingMeter.Mark(int64(len(ids)))
-		} else {
+		} else if filled {
 			log.Trace("Dropping filled blob transactions", "from", addr, "filled", nonces, "ids", ids)
 			dropFilledMeter.Mark(int64(len(ids)))
+		} else {
+			log.Trace("Dropping blob transactions of a sender with code", "from", addr, "drop", nonces, "ids", ids)
+			dropSenderCodeMeter.Mark(int64(len(ids)))
 		}
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
@@ -1452,6 +1455,7 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 			inclusions[tx.Hash()] = add.NumberU64()
 			transactors[from] = struct{}{}
 		}
+		markCodeChanges(add, transactors)
 		if add = p.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
 			log.Error("Unrooted new chain seen by blobpool", "block", newHead.Number, "hash", newHead.Hash())
 			return nil, nil
@@ -1475,6 +1479,7 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 			inclusions[tx.Hash()] = add.NumberU64()
 			transactors[from] = struct{}{}
 		}
+		markCodeChanges(add, transactors)
 		if add = p.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
 			log.Error("Unrooted new chain seen by blobpool", "block", newHead.Number, "hash", newHead.Hash())
 			return nil, nil
@@ -1501,6 +1506,18 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 		}
 	}
 	return reinject, inclusions
+}
+
+// markCodeChanges adds the accounts whose code the block changed to the ones to
+// recheck: an EOA that adopted code (EIP-8298) can no longer send transactions.
+func markCodeChanges(block *types.Block, accounts map[common.Address]struct{}) {
+	if al := block.AccessList(); al != nil {
+		for _, account := range *al {
+			if len(account.CodeChanges) > 0 {
+				accounts[account.Address] = struct{}{}
+			}
+		}
+	}
 }
 
 // reinject blindly pushes a transaction previously included in the chain - and
