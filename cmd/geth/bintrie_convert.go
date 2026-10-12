@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -68,6 +69,10 @@ var (
 		Name:  "preimages-out",
 		Usage: "File to write the EIP-8347 preimage file to",
 	}
+	preimagesInFlag = &cli.StringFlag{
+		Name:  "preimages",
+		Usage: "EIP-8347 preimage file to take the state's keys from instead of the node's preimage store; it must hold exactly the state's keys",
+	}
 	dropPreimagesFlag = &cli.BoolFlag{
 		Name:  "drop-preimages",
 		Usage: "Delete the preimage store after the conversion verifies",
@@ -95,6 +100,7 @@ var (
 					forceConvertFlag,
 					snapshotOutFlag,
 					preimagesOutFlag,
+					preimagesInFlag,
 					dropPreimagesFlag,
 					convertWorkersFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
@@ -103,11 +109,12 @@ geth bintrie convert [flags] [state-root]
 
 Converts the MPT state into the EIP-8297 binary tree offline, following the
 EIP-8347 pipeline, and verifies the result before marking it complete.
-Defaults to the head root. The source must hold preimages
-(--cache.preimages). The scan runs on --convert-workers workers.
---snapshot-out and --preimages-out emit the EIP-8347 distribution
-artifacts. --drop-preimages deletes the preimage store afterwards, which
-also rules out a re-conversion.
+Defaults to the head root. The addresses and slot keys behind the state's
+hashes come from the node's preimage store (--cache.preimages) or from an
+EIP-8347 preimage file of the same state (--preimages). The scan runs on
+--convert-workers workers. --snapshot-out and --preimages-out emit the
+EIP-8347 distribution artifacts. --drop-preimages deletes the preimage store
+afterwards, which also rules out a re-conversion from it.
 `,
 			},
 		},
@@ -156,8 +163,20 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	}
 	// Without preimages the scan fails, and only after --force has wiped. An
 	// empty state has nothing to resolve.
-	if root != types.EmptyRootHash && !hasPreimages(chaindb) {
-		return errors.New("no preimages to convert from; the source must sync with --cache.preimages")
+	preimageIn := ctx.String(preimagesInFlag.Name)
+	if preimageIn != "" {
+		in, err := os.Stat(preimageIn)
+		if err != nil {
+			return fmt.Errorf("--preimages: %w", err)
+		}
+		// The outputs are created, and truncated, before the input is read.
+		for _, out := range []string{ctx.String(snapshotOutFlag.Name), ctx.String(preimagesOutFlag.Name)} {
+			if fi, err := os.Stat(out); err == nil && os.SameFile(in, fi) {
+				return errors.New("--preimages must not name an output file")
+			}
+		}
+	} else if root != types.EmptyRootHash && !hasPreimages(chaindb) {
+		return errors.New("no preimages to convert from; the source must sync with --cache.preimages, or pass an EIP-8347 preimage file with --preimages")
 	}
 	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
 
@@ -206,6 +225,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		preimagePath: preimagePath,
 		anchor:       anchor,
 		workers:      workers,
+		preimageIn:   preimageIn,
 	})
 	if err != nil {
 		return err
@@ -232,6 +252,7 @@ type conversionOptions struct {
 	preimagePath string        // preimage file destination; empty writes none
 	anchor       *types.Header // block committing root; nil leaves the namespace unbootable
 	workers      int           // parallel scan workers; below 1 means one
+	preimageIn   string        // EIP-8347 preimage file to resolve keys from; empty reads the node's store
 }
 
 // conversionStats tracks progress for the periodic report. The message names
@@ -306,14 +327,48 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		}()
 	}
 	// Phase 1: scan, deriving leaves. Each worker scans its own range of
-	// account hashes into sorters of its own.
+	// account hashes into sorters of its own, resolving keys from the node's
+	// preimage store or from its own piece of a preimage file.
 	workers := max(opts.workers, 1)
+	ranges := splitHashSpace(workers)
+	keys := make([]keySource, workers)
+	for i := range keys {
+		keys[i] = storeKeys{srcTriedb}
+	}
+	if opts.preimageIn != "" {
+		f, err := os.Open(opts.preimageIn)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil {
+			return common.Hash{}, err
+		}
+		// The file's pieces set the ranges, so the work splits by data volume;
+		// a small file may make fewer pieces than workers.
+		offsets, starts, err := splitPreimageFile(f, info.Size(), workers)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		workers = len(offsets)
+		ranges, keys = make([]hashRange, workers), make([]keySource, workers)
+		for i := range offsets {
+			end := info.Size()
+			if i+1 < workers {
+				end = offsets[i+1]
+				ranges[i].end = starts[i+1]
+			}
+			ranges[i].start = starts[i]
+			keys[i] = &fileKeys{r: preimagePiece(f, offsets[i], end-offsets[i])}
+		}
+	}
 	// Every worker's three sorters are alive at once, and a sealed one keeps
 	// its buffer while its stream drains, so the budget is split rather than
 	// reused.
 	share := splitBudget(opts.sortBudget, 3*workers)
 	parts := make([]scanPart, workers)
-	for i, r := range splitHashSpace(workers) {
+	for i, r := range ranges {
 		parts[i] = scanPart{
 			hashRange: r,
 			leaves:    bintrie.NewLeafSorter(opts.tmpDir, share),
@@ -344,7 +399,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	g, gctx := errgroup.WithContext(context.Background())
 	for i := range parts {
 		g.Go(func() error {
-			return deriveLeaves(gctx, chaindb, src, &parts[i], codes, writers[i], stats)
+			return deriveLeaves(gctx, chaindb, src, &parts[i], keys[i], codes, writers[i], stats)
 		})
 	}
 	if err := g.Wait(); err != nil {
@@ -545,35 +600,146 @@ type scanPart struct {
 	leaves, accounts, slots *bintrie.RecordSorter
 }
 
-// codeSet records the code hashes whose chunks have been emitted. The scan
-// workers share one: accounts with the same code fall in different ranges,
-// and chunks emitted twice are a duplicate key.
+// codeInfo is what an account header needs of its code: the size, and the
+// designator when the code is an EIP-7702 delegation.
+type codeInfo struct {
+	size       uint32
+	delegation []byte
+}
+
+// codeSet caches each distinct code's info across the scan workers, so the
+// store is read once per code, and lets one worker emit its chunks: a chunk
+// emitted twice is a duplicate key.
 type codeSet struct {
 	mu   sync.Mutex
-	seen map[common.Hash]struct{}
+	seen map[common.Hash]codeInfo
 }
 
 func newCodeSet() *codeSet {
-	return &codeSet{seen: make(map[common.Hash]struct{})}
+	return &codeSet{seen: make(map[common.Hash]codeInfo)}
 }
 
-// claim records hash and reports whether it was new: of all callers claiming
-// one hash, exactly one wins.
-func (s *codeSet) claim(hash common.Hash) bool {
+// lookup returns the info of a code already met.
+func (s *codeSet) lookup(hash common.Hash) (codeInfo, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	info, ok := s.seen[hash]
+	return info, ok
+}
+
+// claim records hash and its info and reports whether it was new: of all
+// callers claiming one hash, exactly one wins.
+func (s *codeSet) claim(hash common.Hash, info codeInfo) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.seen[hash]; ok {
 		return false
 	}
-	s.seen[hash] = struct{}{}
+	s.seen[hash] = info
 	return true
+}
+
+// keySource resolves one scan worker's hashed keys to the addresses and slot
+// keys behind them, in scan order.
+type keySource interface {
+	account(hash common.Hash) (common.Address, error)
+	slot(addr common.Address, hash common.Hash) (common.Hash, error)
+	// done rejects anything the source holds for addr beyond the slots the
+	// scan resolved; close, anything left once the worker's range is done.
+	done(addr common.Address) error
+	close() error
+}
+
+// storeKeys looks keys up in the node's preimage store, which may hold more
+// than the state, as EIP-8347 allows.
+type storeKeys struct{ db *triedb.Database }
+
+func (s storeKeys) account(hash common.Hash) (common.Address, error) {
+	preimage := s.db.Preimage(hash)
+	if preimage == nil {
+		return common.Address{}, fmt.Errorf("missing preimage for account hash %x (the source node must have synced with --cache.preimages, or pass --preimages)", hash)
+	}
+	if err := checkPreimage(preimage, hash, common.AddressLength); err != nil {
+		return common.Address{}, err
+	}
+	return common.BytesToAddress(preimage), nil
+}
+
+func (s storeKeys) slot(addr common.Address, hash common.Hash) (common.Hash, error) {
+	preimage := s.db.Preimage(hash)
+	if preimage == nil {
+		return common.Hash{}, fmt.Errorf("missing preimage for storage key %x (account %x)", hash, addr)
+	}
+	if err := checkPreimage(preimage, hash, common.HashLength); err != nil {
+		return common.Hash{}, err
+	}
+	return common.BytesToHash(preimage), nil
+}
+
+func (storeKeys) done(common.Address) error { return nil }
+func (storeKeys) close() error              { return nil }
+
+// fileKeys merges one piece of an EIP-8347 preimage file against the
+// worker's scan range, as the EIP's converter step 2 does: both run in keccak
+// order, so each record must match the next account and each slot key the
+// next slot. The reader hashes every key, which proves the preimages.
+type fileKeys struct {
+	r     *preimageReader
+	slots []common.Hash
+	next  int
+}
+
+func (f *fileKeys) account(hash common.Hash) (common.Address, error) {
+	addr, addrHash, slots, err := f.r.next()
+	switch {
+	case err == io.EOF:
+		return common.Address{}, fmt.Errorf("missing preimage for account hash %x: the preimage file holds no record for it", hash)
+	case err != nil:
+		return common.Address{}, err
+	case addrHash == hash:
+		f.slots, f.next = slots, 0
+		return addr, nil
+	case bytes.Compare(addrHash[:], hash[:]) < 0:
+		return common.Address{}, fmt.Errorf("preimage file names address %x, which the state does not hold", addr)
+	default:
+		return common.Address{}, fmt.Errorf("missing preimage for account hash %x: the preimage file holds no record for it", hash)
+	}
+}
+
+func (f *fileKeys) slot(addr common.Address, hash common.Hash) (common.Hash, error) {
+	if f.next < len(f.slots) && f.r.slotHashes[f.next] == hash {
+		f.next++
+		return f.slots[f.next-1], nil
+	}
+	if f.next < len(f.slots) && bytes.Compare(f.r.slotHashes[f.next][:], hash[:]) < 0 {
+		return common.Hash{}, fmt.Errorf("preimage file names slot %x of %x, which the state does not hold", f.slots[f.next], addr)
+	}
+	return common.Hash{}, fmt.Errorf("missing preimage for storage key %x (account %x)", hash, addr)
+}
+
+func (f *fileKeys) done(addr common.Address) error {
+	if f.next < len(f.slots) {
+		return fmt.Errorf("preimage file names slot %x of %x, which the state does not hold", f.slots[f.next], addr)
+	}
+	return nil
+}
+
+func (f *fileKeys) close() error {
+	addr, _, _, err := f.r.next()
+	if err == io.EOF {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("preimage file names address %x, which the state does not hold", addr)
 }
 
 // deriveLeaves scans part's range of the source state at root, deriving
 // every tree leaf into the part's sorter and recording the merkle
 // re-derivation limbs the source-root check folds back up. It gives up once
 // ctx is cancelled, by another worker failing.
-func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, part *scanPart, codes *codeSet, preimages *preimageFile, stats *conversionStats) error {
+func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, part *scanPart, keys keySource, codes *codeSet, preimages *preimageFile, stats *conversionStats) error {
 	// ponytail: a flat scan holds one pebble read snapshot per worker
 	// throughout, pinning a memtable and every table compacted meanwhile
 	// (the old flat state on a --force reconvert). Reopen from the last hash
@@ -608,15 +774,12 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 		defer storageIter.Release()
 		for storageIter.Next() {
 			slotHash := storageIter.Hash()
-			slotKey := src.db.Preimage(slotHash)
-			if slotKey == nil {
-				return fmt.Errorf("missing preimage for storage key %x (account %x)", slotHash, addr)
-			}
-			if err := checkPreimage(slotKey, slotHash, common.HashLength); err != nil {
+			slotKey, err := keys.slot(addr, slotHash)
+			if err != nil {
 				return err
 			}
 			if preimages != nil {
-				if err := preimages.addSlot(common.BytesToHash(slotKey), slotHash); err != nil {
+				if err := preimages.addSlot(slotKey, slotHash); err != nil {
 					return err
 				}
 			}
@@ -630,7 +793,7 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 			}
 			var padded [32]byte
 			copy(padded[32-len(content):], content)
-			if err := emit(bintrie.StorageSlotKey(addr, slotKey), padded); err != nil {
+			if err := emit(bintrie.StorageSlotKey(addr, slotKey[:]), padded); err != nil {
 				return err
 			}
 			copy(slotKeyBuf[:common.HashLength], accountHash[:])
@@ -658,14 +821,10 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 		if err != nil {
 			return fmt.Errorf("invalid account RLP: %w", err)
 		}
-		addrBytes := src.db.Preimage(accountHash)
-		if addrBytes == nil {
-			return fmt.Errorf("missing preimage for account hash %x (the source node must have synced with --cache.preimages)", accountHash)
-		}
-		if err := checkPreimage(addrBytes, accountHash, common.AddressLength); err != nil {
+		addr, err := keys.account(accountHash)
+		if err != nil {
 			return err
 		}
-		addr := common.BytesToAddress(addrBytes)
 		if preimages != nil {
 			if err := preimages.beginAccount(addr, accountHash); err != nil {
 				return err
@@ -684,6 +843,9 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 				return err
 			}
 		}
+		if err := keys.done(addr); err != nil {
+			return err
+		}
 		stats.accounts.Add(1)
 		stats.slots.Add(slots)
 		stats.leaves.Add(leaves)
@@ -693,7 +855,7 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 	if err := accIter.Error(); err != nil {
 		return fmt.Errorf("account iteration failed: %w", err)
 	}
-	return nil
+	return keys.close()
 }
 
 // checkPreimage rejects a preimage of the wrong length or one that does not
@@ -709,18 +871,29 @@ func checkPreimage(preimage []byte, hash common.Hash, wantLen int) error {
 	return nil
 }
 
-// emitAccountHeader derives an account's header and code-zone leaves. Shared
-// by the scan and the flat-state verifier; the derivation rules stay pinned
-// by the reference-vector parity tests.
+// emitAccountHeader derives an account's header and code-zone leaves; the
+// derivation rules stay pinned by the reference-vector parity tests.
 func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64, balance *uint256.Int, codeHash common.Hash, codes *codeSet, stats *conversionStats, emit func([]byte, [32]byte) error) error {
-	var code []byte
+	var (
+		info  codeInfo
+		code  []byte
+		first bool // this account's code is new to the scan, and its chunks this worker's to emit
+	)
 	if codeHash != types.EmptyCodeHash {
-		code = rawdb.ReadCode(chaindb, codeHash)
-		if code == nil {
-			return fmt.Errorf("missing code for hash %x (account %x)", codeHash, addr)
+		var known bool
+		if info, known = codes.lookup(codeHash); !known {
+			code = rawdb.ReadCode(chaindb, codeHash)
+			if code == nil {
+				return fmt.Errorf("missing code for hash %x (account %x)", codeHash, addr)
+			}
+			info.size = uint32(len(code))
+			if _, isDelegation := types.ParseDelegation(code); isDelegation {
+				info.delegation = code
+			}
+			first = codes.claim(codeHash, info)
 		}
 	}
-	basic, err := bintrie.EncodeBasicData(uint32(len(code)), nonce, balance)
+	basic, err := bintrie.EncodeBasicData(info.size, nonce, balance)
 	if err != nil {
 		return fmt.Errorf("account %x: %w", addr, err)
 	}
@@ -728,17 +901,15 @@ func emitAccountHeader(chaindb ethdb.Database, addr common.Address, nonce uint64
 		return err
 	}
 	// A delegation replaces the code-hash leaf and has no code-zone leaves.
-	if _, isDelegation := types.ParseDelegation(code); isDelegation {
-		return emit(bintrie.DelegationKey(addr), [32]byte(bintrie.EncodeDelegation(code)))
+	if info.delegation != nil {
+		return emit(bintrie.DelegationKey(addr), [32]byte(bintrie.EncodeDelegation(info.delegation)))
 	}
 	if err := emit(bintrie.CodeHashKey(addr), codeHash); err != nil {
 		return err
 	}
 	// Code once per distinct hash: the leaves are content-addressed.
-	if len(code) > 0 && codes.claim(codeHash) {
-		if stats != nil {
-			stats.codes.Add(1)
-		}
+	if first && info.size > 0 {
+		stats.codes.Add(1)
 		return emitCodeChunks(codeHash, code, emit)
 	}
 	return nil

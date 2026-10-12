@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
@@ -168,16 +169,7 @@ func TestBintrieImportCLI(t *testing.T) {
 	if err := os.WriteFile(json, []byte(bintrieCLIGenesis), 0600); err != nil {
 		t.Fatal(err)
 	}
-	run := func(datadir string, expectFail bool, args ...string) string {
-		t.Helper()
-		geth := runGeth(t, append([]string{"--datadir", datadir}, args...)...)
-		geth.WaitExit()
-		if failed := geth.ExitStatus() != 0; failed != expectFail {
-			t.Fatalf("geth %v: exit status %d, expected failure %v\nstderr:\n%s",
-				args, geth.ExitStatus(), expectFail, geth.StderrText())
-		}
-		return geth.StderrText()
-	}
+	run := gethRunner(t)
 
 	// The producer converts and exports.
 	outdir := t.TempDir()
@@ -264,5 +256,56 @@ func TestBintrieEmptyStateCLI(t *testing.T) {
 	run(consumer, "init", json)
 	if out := run(consumer, "bintrie", "import", "--verify-only", snapPath, prePath, "0"); !strings.Contains(out, "nothing written") {
 		t.Fatalf("verify-only did not accept the empty pair:\n%s", out)
+	}
+}
+
+// TestBintrieConvertFromPreimageFileCLI: a node that never kept preimages
+// self-converts by taking its keys from a preimage file of the same state,
+// and lands on the producer's root.
+func TestBintrieConvertFromPreimageFileCLI(t *testing.T) {
+	t.Parallel()
+	producer, node, outdir := t.TempDir(), t.TempDir(), t.TempDir()
+	json := filepath.Join(outdir, "genesis.json")
+	if err := os.WriteFile(json, []byte(bintrieCLIGenesis), 0600); err != nil {
+		t.Fatal(err)
+	}
+	run := gethRunner(t)
+	prePath := filepath.Join(outdir, "preimages.bin")
+	run(producer, false, "--cache.preimages", "init", json)
+	run(producer, false, "bintrie", "convert", "--preimages-out", prePath)
+
+	run(node, false, "init", json)
+	if out := run(node, true, "bintrie", "convert"); !strings.Contains(out, "no preimages") {
+		t.Fatalf("a conversion with no preimages was not refused:\n%s", out)
+	}
+	// Another spelling of the input as an output would truncate it unread.
+	if out := run(node, true, "bintrie", "convert", "--preimages", prePath, "--preimages-out", outdir+"/./preimages.bin"); !strings.Contains(out, "must not name an output file") {
+		t.Fatalf("an output aliasing the input was not refused:\n%s", out)
+	}
+	run(node, false, "bintrie", "convert", "--preimages", prePath)
+
+	root := func(datadir string) common.Hash {
+		t.Helper()
+		db := mustOpenChainDB(t, datadir)
+		defer db.Close()
+		return rawdb.ReadSnapshotRoot(rawdb.NewTable(rawdb.NewDatabase(db), string(rawdb.PBTPrefix)))
+	}
+	if got, want := root(node), root(producer); got != want || got == (common.Hash{}) {
+		t.Fatalf("converted from the file to %x, the producer to %x", got, want)
+	}
+}
+
+// gethRunner returns a runner of geth on a datadir that fails t unless the
+// exit status matches expectFail, and returns stderr.
+func gethRunner(t *testing.T) func(datadir string, expectFail bool, args ...string) string {
+	return func(datadir string, expectFail bool, args ...string) string {
+		t.Helper()
+		geth := runGeth(t, append([]string{"--datadir", datadir}, args...)...)
+		geth.WaitExit()
+		if failed := geth.ExitStatus() != 0; failed != expectFail {
+			t.Fatalf("geth %v: exit status %d, expected failure %v\nstderr:\n%s",
+				args, geth.ExitStatus(), expectFail, geth.StderrText())
+		}
+		return geth.StderrText()
 	}
 }

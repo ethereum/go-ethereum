@@ -786,14 +786,16 @@ func (sr *snapshotReader) close() { sr.f.Close() }
 
 // preimageReader streams the EIP-8347 preimage file, hashing it as it reads:
 // records strictly ascending by keccak256(address), slot keys strictly
-// ascending by keccak256(slotKey), nothing after the last record.
+// ascending by keccak256(slotKey), nothing after the last record. A piece
+// (see preimagePiece) reads one span of records and hashes nothing.
 type preimageReader struct {
-	f        *os.File
-	hasher   crypto.KeccakState
-	r        *bufio.Reader
-	left     int64
-	prevAddr common.Hash
-	records  uint64
+	f          *os.File
+	hasher     crypto.KeccakState
+	r          *bufio.Reader
+	left       int64
+	prevAddr   common.Hash
+	records    uint64
+	slotHashes []common.Hash // the last record's slot-key hashes, overwritten by next
 }
 
 // openPreimages opens the preimage file.
@@ -810,6 +812,47 @@ func openPreimages(path string) (*preimageReader, error) {
 	pr := &preimageReader{f: f, hasher: crypto.NewKeccakState(), left: size.Size()}
 	pr.r = bufio.NewReaderSize(io.TeeReader(f, pr.hasher), 1<<20)
 	return pr, nil
+}
+
+// preimagePiece reads length bytes of a preimage file from offset, which
+// must lie on a record boundary. Pieces share the file, which stays open
+// for as long as they are read.
+func preimagePiece(f *os.File, offset, length int64) *preimageReader {
+	return &preimageReader{r: bufio.NewReaderSize(io.NewSectionReader(f, offset, length), 1<<20), left: length}
+}
+
+// splitPreimageFile cuts a preimage file of size bytes into at most n pieces
+// of about equal size on record boundaries, parsing record headers and
+// streaming past the slot keys. It
+// returns each piece's offset and the account hash its range of the state
+// starts at: the first record's for every piece but the first, whose range
+// starts at the bottom of the hash space.
+func splitPreimageFile(f *os.File, size int64, n int) ([]int64, []common.Hash, error) {
+	var (
+		r       = bufio.NewReaderSize(io.NewSectionReader(f, 0, size), 1<<20)
+		offsets = []int64{0}
+		starts  = []common.Hash{{}}
+		header  [preimageRecordHeaderSize]byte
+		pos     int64
+	)
+	for pos < size && len(offsets) < n {
+		if _, err := io.ReadFull(r, header[:]); err != nil {
+			return nil, nil, fmt.Errorf("preimage file is truncated at offset %d: %w", pos, err)
+		}
+		if target := size * int64(len(offsets)) / int64(n); pos > 0 && pos >= target {
+			offsets = append(offsets, pos)
+			starts = append(starts, crypto.Keccak256Hash(header[:common.AddressLength]))
+		}
+		skip := int64(binary.BigEndian.Uint32(header[common.AddressLength:])) * common.HashLength
+		if skip > size-pos-preimageRecordHeaderSize {
+			return nil, nil, fmt.Errorf("preimage record at offset %d runs past the end of the file", pos)
+		}
+		if _, err := r.Discard(int(skip)); err != nil {
+			return nil, nil, err
+		}
+		pos += preimageRecordHeaderSize + skip
+	}
+	return offsets, starts, nil
 }
 
 // next returns the following account record: the address, its keccak digest,
@@ -840,6 +883,7 @@ func (pr *preimageReader) next() (common.Address, common.Hash, []common.Hash, er
 		slots    = make([]common.Hash, count)
 		prevSlot common.Hash
 	)
+	pr.slotHashes = pr.slotHashes[:0]
 	for i := range slots {
 		if _, err := io.ReadFull(pr.r, slots[i][:]); err != nil {
 			return common.Address{}, common.Hash{}, nil, fmt.Errorf("preimage record %d is truncated: %w", pr.records, err)
@@ -849,6 +893,7 @@ func (pr *preimageReader) next() (common.Address, common.Hash, []common.Hash, er
 			return common.Address{}, common.Hash{}, nil, fmt.Errorf("preimage record %d slot keys are out of hashed-key order", pr.records)
 		}
 		prevSlot = slotHash
+		pr.slotHashes = append(pr.slotHashes, slotHash)
 	}
 	pr.left -= count * common.HashLength
 	pr.records++
