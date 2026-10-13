@@ -151,6 +151,9 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		arena:       newArena(),
 	}
 	evm.precompiles = *activePrecompiledContracts(evm.chainRules)
+	if evm.chainRules.IsQuarkChain {
+		evm.precompiles = withQuarkChainPrecompiles(evm.precompiles)
+	}
 
 	switch {
 	case evm.chainRules.IsBogota:
@@ -325,6 +328,9 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 
 	if isPrecompile {
+		if sp, ok := p.(statefulPrecompiledContract); ok && !syscall {
+			p = sp.convertToStateful(evm, caller, addr, value)
+		}
 		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules, evm.precompileCache)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
