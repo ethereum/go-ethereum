@@ -772,13 +772,19 @@ func (evm *EVM) captureEnd(depth int, startGas GasBudget, leftOverGas GasBudget,
 // GetVMContext provides context about the block being executed as well as state
 // to the tracers.
 func (evm *EVM) GetVMContext() *tracing.VMContext {
+	// Tracers are handed a view of the state whose reads leave no trace in the
+	// execution, e.g. in the block-level access list.
+	var statedb tracing.StateDB
+	if evm.StateDB != nil {
+		statedb = state.NewTracerView(evm.StateDB)
+	}
 	return &tracing.VMContext{
 		Coinbase:    evm.Context.Coinbase,
 		BlockNumber: evm.Context.BlockNumber,
 		Time:        evm.Context.Time,
 		Random:      evm.Context.Random,
 		BaseFee:     evm.Context.BaseFee,
-		StateDB:     evm.StateDB,
+		StateDB:     statedb,
 	}
 }
 
