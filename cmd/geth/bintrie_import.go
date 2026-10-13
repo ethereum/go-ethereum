@@ -305,9 +305,12 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	}
 
 	// Phase 1: derive every candidate tree key the preimages can stand for.
-	// The reader stays sequential, checking the file's order and hashing it;
-	// workers derive the candidates into sorters of their own, which the
-	// first then absorbs into one merge.
+	// The reader stays sequential, digesting the file; workers check its
+	// order, a batch of records against the one before it, and derive the
+	// candidates into sorters of their own, which the first then absorbs into
+	// one merge. Keeping the preimages needs their hashes in order, so then
+	// the reader checks the order itself.
+	keep := rawBatch != nil && opts.keepPreimages
 	workers := max(opts.workers, 1)
 	cands := make([]*bintrie.RecordSorter, workers)
 	for i := range cands {
@@ -318,13 +321,22 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		start        = time.Now()
 		preAccounts  uint64
 		prePreimages uint64
-		records      = make(chan []preimageRecord, 2*workers)
+		records      = make(chan preimageBatch, 2*workers)
 		g, gctx      = errgroup.WithContext(context.Background())
 	)
 	for _, cand := range cands {
 		g.Go(func() error {
+			var hashes []common.Hash
 			for batch := range records {
-				for _, rec := range batch {
+				prev := batch.prev
+				for i, rec := range batch.records {
+					if !keep {
+						addrHash, hs, err := checkPreimageRecord(batch.first+uint64(i), prev, rec.addr, rec.slots, hashes[:0])
+						if err != nil {
+							return err
+						}
+						hashes, prev = hs, &addrHash
+					}
 					if err := addCandidates(cand, rec.addr, rec.slots); err != nil {
 						return err
 					}
@@ -335,27 +347,42 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	}
 	readErr := func() error {
 		defer close(records)
-		batch := make([]preimageRecord, 0, preimageBatchSize)
+		batch := preimageBatch{records: make([]preimageRecord, 0, preimageBatchSize)}
 		send := func() error {
 			select {
 			case records <- batch:
 			case <-gctx.Done():
 				return gctx.Err() // a worker failed; its error is the one reported
 			}
-			batch = make([]preimageRecord, 0, preimageBatchSize)
+			last := crypto.Keccak256Hash(batch.records[len(batch.records)-1].addr[:])
+			batch = preimageBatch{
+				first:   batch.first + uint64(len(batch.records)),
+				prev:    &last,
+				records: make([]preimageRecord, 0, preimageBatchSize),
+			}
 			return nil
 		}
 		for {
-			addr, addrHash, slots, err := pre.next()
+			var (
+				addr     common.Address
+				addrHash common.Hash
+				slots    []common.Hash
+				err      error
+			)
+			if keep {
+				addr, addrHash, slots, err = pre.next()
+			} else {
+				addr, slots, err = pre.nextRaw()
+			}
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
 				return err
 			}
-			// The preimage file is keccak-ordered, which its reader enforces,
-			// so the preimage store is written in that order.
-			if rawBatch != nil && opts.keepPreimages {
+			// The preimage file is keccak-ordered, which its reader enforces
+			// on this path, so the preimage store is written in that order.
+			if keep {
 				if err := putPreimage(rawBatch, addrHash, addr.Bytes()); err != nil {
 					return err
 				}
@@ -368,8 +395,8 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 					return err
 				}
 			}
-			batch = append(batch, preimageRecord{addr, slots})
-			if len(batch) == cap(batch) {
+			batch.records = append(batch.records, preimageRecord{addr, slots})
+			if len(batch.records) == cap(batch.records) {
 				if err := send(); err != nil {
 					return err
 				}
@@ -381,7 +408,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 					"elapsed", common.PrettyDuration(time.Since(start)))
 			}
 		}
-		if len(batch) > 0 {
+		if len(batch.records) > 0 {
 			return send()
 		}
 		return nil
@@ -871,6 +898,15 @@ func putPreimage(w ethdb.KeyValueWriter, hash common.Hash, preimage []byte) erro
 type preimageRecord struct {
 	addr  common.Address
 	slots []common.Hash
+}
+
+// preimageBatch is a run of records for a phase-1 worker, which checks their
+// order: first is the file index of records[0], and prev the address hash of
+// the record before it, if any.
+type preimageBatch struct {
+	first   uint64
+	prev    *common.Hash
+	records []preimageRecord
 }
 
 // preimageBatchSize is how many records the import's reader hands a

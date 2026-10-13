@@ -859,45 +859,66 @@ func splitPreimageFile(f *os.File, size int64, n int) ([]int64, []common.Hash, e
 // which the ordering check computes anyway, and its slot keys. io.EOF ends
 // the stream only on a record boundary.
 func (pr *preimageReader) next() (common.Address, common.Hash, []common.Hash, error) {
+	addr, slots, err := pr.nextRaw()
+	if err != nil {
+		return common.Address{}, common.Hash{}, nil, err
+	}
+	var prev *common.Hash
+	if pr.records > 1 {
+		prev = &pr.prevAddr
+	}
+	addrHash, hashes, err := checkPreimageRecord(pr.records-1, prev, addr, slots, pr.slotHashes[:0])
+	if err != nil {
+		return common.Address{}, common.Hash{}, nil, err
+	}
+	pr.prevAddr, pr.slotHashes = addrHash, hashes
+	return addr, addrHash, slots, nil
+}
+
+// nextRaw returns the following account record without hashing its keys,
+// leaving the order to checkPreimageRecord.
+func (pr *preimageReader) nextRaw() (common.Address, []common.Hash, error) {
 	var header [preimageRecordHeaderSize]byte
 	if _, err := io.ReadFull(pr.r, header[:]); err == io.EOF {
-		return common.Address{}, common.Hash{}, nil, io.EOF
+		return common.Address{}, nil, io.EOF
 	} else if err != nil {
-		return common.Address{}, common.Hash{}, nil, fmt.Errorf("preimage record %d is truncated: %w", pr.records, err)
+		return common.Address{}, nil, fmt.Errorf("preimage record %d is truncated: %w", pr.records, err)
 	}
 	pr.left -= preimageRecordHeaderSize
-
-	addr := common.BytesToAddress(header[:common.AddressLength])
-	addrHash := crypto.Keccak256Hash(addr[:])
-	if pr.records > 0 && bytes.Compare(pr.prevAddr[:], addrHash[:]) >= 0 {
-		return common.Address{}, common.Hash{}, nil, fmt.Errorf("preimage record %d is out of hashed-key order", pr.records)
-	}
-	pr.prevAddr = addrHash
 
 	// Bound the attacker-controlled count by the bytes left before allocating.
 	count := int64(binary.BigEndian.Uint32(header[common.AddressLength:]))
 	if count*common.HashLength > pr.left {
-		return common.Address{}, common.Hash{}, nil, fmt.Errorf("preimage record %d claims %d slots past the end of the file", pr.records, count)
+		return common.Address{}, nil, fmt.Errorf("preimage record %d claims %d slots past the end of the file", pr.records, count)
 	}
-	var (
-		slots    = make([]common.Hash, count)
-		prevSlot common.Hash
-	)
-	pr.slotHashes = pr.slotHashes[:0]
+	slots := make([]common.Hash, count)
 	for i := range slots {
 		if _, err := io.ReadFull(pr.r, slots[i][:]); err != nil {
-			return common.Address{}, common.Hash{}, nil, fmt.Errorf("preimage record %d is truncated: %w", pr.records, err)
+			return common.Address{}, nil, fmt.Errorf("preimage record %d is truncated: %w", pr.records, err)
 		}
-		slotHash := crypto.Keccak256Hash(slots[i][:])
-		if i > 0 && bytes.Compare(prevSlot[:], slotHash[:]) >= 0 {
-			return common.Address{}, common.Hash{}, nil, fmt.Errorf("preimage record %d slot keys are out of hashed-key order", pr.records)
-		}
-		prevSlot = slotHash
-		pr.slotHashes = append(pr.slotHashes, slotHash)
 	}
 	pr.left -= count * common.HashLength
 	pr.records++
-	return addr, addrHash, slots, nil
+	return common.BytesToAddress(header[:common.AddressLength]), slots, nil
+}
+
+// checkPreimageRecord hashes the keys of the index-th record and checks that
+// they ascend: its address after prev, the previous record's address hash if
+// any, and its slot keys among themselves. It returns the address hash and
+// the slot key hashes, appended to hashes.
+func checkPreimageRecord(index uint64, prev *common.Hash, addr common.Address, slots, hashes []common.Hash) (common.Hash, []common.Hash, error) {
+	addrHash := crypto.Keccak256Hash(addr[:])
+	if prev != nil && bytes.Compare(prev[:], addrHash[:]) >= 0 {
+		return common.Hash{}, nil, fmt.Errorf("preimage record %d is out of hashed-key order", index)
+	}
+	for i := range slots {
+		hash := crypto.Keccak256Hash(slots[i][:])
+		if i > 0 && bytes.Compare(hashes[len(hashes)-1][:], hash[:]) >= 0 {
+			return common.Hash{}, nil, fmt.Errorf("preimage record %d slot keys are out of hashed-key order", index)
+		}
+		hashes = append(hashes, hash)
+	}
+	return addrHash, hashes, nil
 }
 
 // digest returns the keccak of everything read; the whole file once next
