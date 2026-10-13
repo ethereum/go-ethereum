@@ -36,7 +36,7 @@ import (
 // keys are corruption and error out at sort or merge.
 type RecordSorter struct {
 	tmpDir    string
-	budget    int // bytes of buffered records that trigger a spill
+	budget    int // bytes of buffered records held at once, across both runs
 	validate  func(key, value []byte) error
 	buffered  int
 	arena     []byte        // pending run's keys and values, packed back to back
@@ -44,6 +44,20 @@ type RecordSorter struct {
 	runs      []*os.File
 	sealed    bool
 	discarded bool
+
+	// A full run is sorted and written on a goroutine of its own while Add
+	// fills the spare buffers; spilling delivers the file and the buffers.
+	spilling   chan spilled
+	spareArena []byte
+	spareIndex []arenaRecord
+}
+
+// spilled is the outcome of a background spill, with the buffers it held.
+type spilled struct {
+	run   *os.File
+	arena []byte
+	index []arenaRecord
+	err   error
 }
 
 // arenaRecord locates one record inside a RecordSorter's arena: its key at
@@ -118,34 +132,80 @@ func (s *RecordSorter) Add(key, value []byte) error {
 	s.arena = append(append(s.arena, key...), value...)
 	s.index = append(s.index, arenaRecord{off: off, klen: len(key), vlen: len(value)})
 	s.buffered += len(key) + len(value) + spillRecordOverhead
-	if s.budget > 0 && s.buffered >= s.budget {
-		return s.spill()
+	if s.budget > 0 && s.buffered >= max(s.budget/2, 1) {
+		return s.spillAsync()
 	}
 	return nil
 }
 
-// spill sorts the pending run and writes it to a temporary file.
+// spillAsync hands the pending run to a goroutine that sorts and writes it,
+// and carries on in the spare buffers. One spill runs at a time, so the two
+// runs held stay within the budget.
+func (s *RecordSorter) spillAsync() error {
+	if err := s.wait(); err != nil {
+		return err
+	}
+	tmpDir, arena, index := s.tmpDir, s.arena, s.index
+	s.arena, s.index, s.buffered = s.spareArena[:0], s.spareIndex[:0], 0
+	s.spilling = make(chan spilled, 1)
+	go func(done chan<- spilled) {
+		run, err := writeRun(tmpDir, arena, index)
+		done <- spilled{run, arena, index, err}
+	}(s.spilling)
+	return nil
+}
+
+// wait collects the background spill, if one runs.
+func (s *RecordSorter) wait() error {
+	if s.spilling == nil {
+		return nil
+	}
+	r := <-s.spilling
+	s.spilling = nil
+	s.spareArena, s.spareIndex = r.arena, r.index
+	if r.err != nil {
+		return r.err
+	}
+	s.runs = append(s.runs, r.run)
+	return nil
+}
+
+// spill writes the pending run out before returning.
 func (s *RecordSorter) spill() error {
+	if err := s.wait(); err != nil {
+		return err
+	}
 	if len(s.index) == 0 {
 		return nil
 	}
-	if err := s.sortPending(); err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(s.tmpDir, "bintrie-sort-*")
+	run, err := writeRun(s.tmpDir, s.arena, s.index)
 	if err != nil {
 		return err
 	}
-	// Until the run is registered this function owns the file; errors remove
+	s.runs = append(s.runs, run)
+	s.arena, s.index, s.buffered = s.arena[:0], s.index[:0], 0
+	return nil
+}
+
+// writeRun sorts a run and writes it to a temporary file, rewound for reading.
+func writeRun(tmpDir string, arena []byte, index []arenaRecord) (*os.File, error) {
+	if err := sortRun(arena, index); err != nil {
+		return nil, err
+	}
+	f, err := os.CreateTemp(tmpDir, "bintrie-sort-*")
+	if err != nil {
+		return nil, err
+	}
+	// Until the run is returned this function owns the file; errors remove
 	// it rather than orphan a spill on a full disk.
-	discard := func(err error) error {
+	discard := func(err error) (*os.File, error) {
 		f.Close()
 		os.Remove(f.Name())
-		return err
+		return nil, err
 	}
 	w := bufio.NewWriterSize(f, 1<<20)
-	for _, rec := range s.index {
-		if err := writeRunRecord(w, rec.key(s.arena), rec.value(s.arena)); err != nil {
+	for _, rec := range index {
+		if err := writeRunRecord(w, rec.key(arena), rec.value(arena)); err != nil {
 			return discard(err)
 		}
 	}
@@ -155,23 +215,17 @@ func (s *RecordSorter) spill() error {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return discard(err)
 	}
-	s.runs = append(s.runs, f)
-	s.arena = s.arena[:0]
-	s.index = s.index[:0]
-	s.buffered = 0
-	return nil
+	return f, nil
 }
 
-// sortPending orders the in-memory run and rejects duplicates, which sorting
-// makes adjacent.
-func (s *RecordSorter) sortPending() error {
-	arena := s.arena
-	slices.SortFunc(s.index, func(a, b arenaRecord) int {
+// sortRun orders a run and rejects duplicates, which sorting makes adjacent.
+func sortRun(arena []byte, index []arenaRecord) error {
+	slices.SortFunc(index, func(a, b arenaRecord) int {
 		return bytes.Compare(a.key(arena), b.key(arena))
 	})
-	for i := 1; i < len(s.index); i++ {
-		if bytes.Equal(s.index[i-1].key(arena), s.index[i].key(arena)) {
-			return fmt.Errorf("bintrie: duplicate key %x in sort input", s.index[i].key(arena))
+	for i := 1; i < len(index); i++ {
+		if bytes.Equal(index[i-1].key(arena), index[i].key(arena)) {
+			return fmt.Errorf("bintrie: duplicate key %x in sort input", index[i].key(arena))
 		}
 	}
 	return nil
@@ -190,7 +244,7 @@ func (s *RecordSorter) Absorb(other *RecordSorter) error {
 		return err
 	}
 	s.runs = append(s.runs, other.runs...)
-	other.runs, other.arena, other.index = nil, nil, nil
+	other.runs, other.arena, other.index, other.spareArena, other.spareIndex = nil, nil, nil, nil, nil
 	other.sealed = true
 	return nil
 }
@@ -202,23 +256,26 @@ func (s *RecordSorter) Sort() (*RecordStream, error) {
 		return nil, errors.New("bintrie: sorter already sorted")
 	}
 	s.sealed = true
+	if err := s.wait(); err != nil {
+		return nil, err
+	}
 
 	// Everything fit in memory: serve the pending run.
 	if len(s.runs) == 0 {
-		if err := s.sortPending(); err != nil {
+		if err := sortRun(s.arena, s.index); err != nil {
 			return nil, err
 		}
 		return &RecordStream{arena: s.arena, index: s.index}, nil
 	}
 	// Spill the tail so the merge reads uniform sources. Nothing is added
-	// after Sort, so the pending run's buffers go now rather than at Close.
+	// after Sort, so the run buffers go now rather than at Close.
 	if err := s.spill(); err != nil {
 		return nil, err
 	}
-	s.arena, s.index = nil, nil
+	s.arena, s.index, s.spareArena, s.spareIndex = nil, nil, nil, nil
 	stream := &RecordStream{}
 	for _, f := range s.runs {
-		src := &runReader{r: bufio.NewReaderSize(f, 1<<20)}
+		src := &runReader{r: bufio.NewReaderSize(f, 1<<19)}
 		if err := src.advance(); err != nil {
 			if err == io.EOF {
 				continue
@@ -237,14 +294,19 @@ func (s *RecordSorter) Close() {
 		return
 	}
 	s.discarded = true
+	if s.spilling != nil {
+		if r := <-s.spilling; r.run != nil {
+			s.runs = append(s.runs, r.run)
+		}
+		s.spilling = nil
+	}
 	for _, f := range s.runs {
 		name := f.Name()
 		f.Close()
 		os.Remove(name)
 	}
 	s.runs = nil
-	s.arena = nil
-	s.index = nil
+	s.arena, s.index, s.spareArena, s.spareIndex = nil, nil, nil, nil
 }
 
 // RecordStream yields the sorted records: the in-memory path serves the
