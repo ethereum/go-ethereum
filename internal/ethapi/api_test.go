@@ -2846,6 +2846,55 @@ func TestSimulateV1WithdrawalsByFork(t *testing.T) {
 	})
 }
 
+func TestSimulateV1DifficultyOverride(t *testing.T) {
+	t.Parallel()
+
+	run := func(t *testing.T, cfg *params.ChainConfig, genesisDifficulty *big.Int, n int) ([]*simBlockResult, error) {
+		t.Helper()
+		gspec := &core.Genesis{Config: cfg, Difficulty: genesisDifficulty, Alloc: types.GenesisAlloc{}}
+		backend := newTestBackend(t, n, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+		stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		if err != nil {
+			t.Fatalf("failed to get state and header: %v", err)
+		}
+		sim := &simulator{
+			b:           backend,
+			state:       stateDB,
+			base:        baseHeader,
+			chainConfig: backend.ChainConfig(),
+			budget:      newGasBudget(0),
+		}
+		block := simBlock{BlockOverrides: &override.BlockOverrides{Difficulty: (*hexutil.Big)(big.NewInt(1))}}
+		return sim.execute(context.Background(), []simBlock{block})
+	}
+
+	t.Run("pre-merge", func(t *testing.T) {
+		results, err := run(t, params.TestChainConfig, nil, 1)
+		if err != nil {
+			t.Fatalf("simulation execution failed: %v", err)
+		}
+		if diff := results[0].Block.Difficulty(); diff.Cmp(big.NewInt(1)) != 0 {
+			t.Fatalf("difficulty mismatch: have %v, want 1", diff)
+		}
+	})
+	t.Run("post-merge", func(t *testing.T) {
+		_, err := run(t, params.MergedTestChainConfig, nil, 1)
+		var paramsErr *invalidParamsError
+		if !errors.As(err, &paramsErr) {
+			t.Fatalf("expected invalid params error, have %v", err)
+		}
+	})
+	t.Run("zero-difficulty-base", func(t *testing.T) {
+		cfg := *params.TestChainConfig
+		cfg.TerminalTotalDifficulty = big.NewInt(1)
+		_, err := run(t, &cfg, common.Big0, 0)
+		var paramsErr *invalidParamsError
+		if !errors.As(err, &paramsErr) {
+			t.Fatalf("expected invalid params error, have %v", err)
+		}
+	})
+}
+
 // TestSimulateV1TransferLogs verifies that traceTransfers reports each ether
 // transfer exactly once across the Amsterdam boundary: before the fork the
 // tracer synthesizes an ERC-20 style log from the ERC-7528 sentinel address,
