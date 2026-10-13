@@ -66,9 +66,7 @@ type VMContext struct {
 	Random      *common.Hash
 	BaseFee     *big.Int
 
-	// StateDB provides read access to the state being executed on. Reads made
-	// through it are not recorded in the block-level access list (EIP-7928),
-	// so they cannot change the outcome or the validity of the block.
+	// StateDB provides read access to the state being executed on.
 	StateDB StateDB
 }
 
