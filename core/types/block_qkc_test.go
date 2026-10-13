@@ -40,8 +40,13 @@ import (
 // They cannot be cross-validated against the legacy QKC codec because the 2.0
 // header uses RLP: the same field set is encoded differently, so the legacy
 // bytes are irrelevant by construction (regenesis changes block identity). The
-// reference used instead is the explicit RLP field list in
-// qkcSealHashReference, which does not go through Header.EncodeRLP/Hash.
+// reference used instead is the explicit RLP field list in qkcSealHashReference,
+// which does not go through Header.EncodeRLP/Hash.
+//
+// Headers are built the way the design prescribes, through qkcShardHeader: the
+// QKC fields are assembled as a QKCExtra and encoded once into Extra, the PoW
+// difficulty is put in MixDigest, and the header's own Difficulty and Nonce are
+// left at zero. There is no setter for any of those header fields, by design.
 
 func TestQKCExtraEncoding(t *testing.T) {
 	want := &QKCExtra{
@@ -55,14 +60,14 @@ func TestQKCExtraEncoding(t *testing.T) {
 		MixHash:        common.BytesToHash(bytes.Repeat([]byte{0xbb}, 32)),
 	}
 	wantExtra := common.FromHex("0x" +
-		"00000001" + // version
-		"00010003" + // shardId
-		strings.Repeat("aa", 32) + // prevRootBlock
-		"0000000000000001" + "0000000000000002" + "0000000000000003" + // cursor
-		"0000000000005208" + // xShardGasUsed
-		"00000000000f4240" + // xShardGasLimit
-		"0102030405060708" + // nonce
-		strings.Repeat("bb", 32)) // mixHash
+		"00000001" + // version, offset 0
+		"00010003" + // shardId, offset 4
+		strings.Repeat("aa", 32) + // prevRootBlock, offset 8
+		"0000000000000001" + "0000000000000002" + "0000000000000003" + // cursor, offset 40
+		"0000000000005208" + // xShardGasUsed, offset 64
+		"00000000000f4240" + // xShardGasLimit, offset 72
+		"0102030405060708" + // nonce, offset 80, start of the PoW seal
+		strings.Repeat("bb", 32)) // mixHash, offset 88
 
 	extra := want.Encode()
 	if !bytes.Equal(extra, wantExtra) {
@@ -86,24 +91,9 @@ func TestQKCExtraInvalidLength(t *testing.T) {
 	}
 }
 
-func TestQKCExtraEncodeSize(t *testing.T) {
-	max := &QKCExtra{
-		Version:        ^uint32(0),
-		ShardID:        ^uint32(0),
-		PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xff}, 32)),
-		Cursor:         XShardCursor{RootBlockHeight: ^uint64(0), MinorBlockIndex: ^uint64(0), XShardDepositIndex: ^uint64(0)},
-		XShardGasUsed:  ^uint64(0),
-		XShardGasLimit: ^uint64(0),
-		Nonce:          EncodeNonce(^uint64(0)),
-		MixHash:        common.BytesToHash(bytes.Repeat([]byte{0xff}, 32)),
-	}
-	for _, extra := range []*QKCExtra{{}, max} {
-		if n := len(extra.Encode()); n != QKCExtraSize {
-			t.Fatalf("encoded to %d bytes, want %d", n, QKCExtraSize)
-		}
-	}
-}
-
+// TestQKCExtraRoundTrip checks that every field survives a round trip and that
+// the encoding is always exactly QKCExtraSize bytes long, including for the
+// extreme value of every field.
 func TestQKCExtraRoundTrip(t *testing.T) {
 	cases := []*QKCExtra{
 		{},
@@ -129,7 +119,11 @@ func TestQKCExtraRoundTrip(t *testing.T) {
 		},
 	}
 	for i, want := range cases {
-		have, err := DecodeQKCExtra(want.Encode())
+		enc := want.Encode()
+		if len(enc) != QKCExtraSize {
+			t.Fatalf("case %d: encoded to %d bytes, want %d", i, len(enc), QKCExtraSize)
+		}
+		have, err := DecodeQKCExtra(enc)
 		if err != nil {
 			t.Fatalf("case %d: failed to decode: %v", i, err)
 		}
@@ -155,166 +149,126 @@ func TestQKCExtraDecodeCopiesInput(t *testing.T) {
 	}
 }
 
-// TestQKCDifficultyConsistency checks that the PoW difficulty round-trips
-// through MixDigest, that the header's own Difficulty stays zero, and that a
-// difficulty change is visible in both the seal hash and the block hash.
-func TestQKCDifficultyConsistency(t *testing.T) {
-	diff := big.NewInt(1_000_000)
-	header := &Header{}
-	header.SetQKCDifficulty(diff)
-	if have := header.QKCDifficulty(); have.Cmp(diff) != 0 {
-		t.Fatalf("difficulty mismatch: have %v, want %v", have, diff)
+// TestQKCDifficulty checks that the PoW difficulty is carried by MixDigest and
+// not by the geth Difficulty field, which a shard block has to leave at zero.
+func TestQKCDifficulty(t *testing.T) {
+	difficulties := []*big.Int{
+		nil,
+		big.NewInt(0),
+		big.NewInt(1),
+		big.NewInt(1_000_000),
+		new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)),
 	}
-	// The header's own Difficulty must stay zero: a non-zero value would flip
-	// the EVM into the pre-Merge path and contradict the design.
-	if header.Difficulty == nil || header.Difficulty.Sign() != 0 {
-		t.Fatalf("header difficulty must stay zero, have %v", header.Difficulty)
-	}
-	if want := common.BigToHash(diff); header.MixDigest != want {
-		t.Fatalf("difficulty not stored in MixDigest: have %x, want %x", header.MixDigest, want)
-	}
-	// A nil difficulty means a zero PoW difficulty.
-	header.SetQKCDifficulty(nil)
-	if have := header.QKCDifficulty(); have.Sign() != 0 {
-		t.Fatalf("nil difficulty: have %v, want 0", have)
-	}
-	if header.Difficulty == nil || header.Difficulty.Sign() != 0 {
-		t.Fatalf("header difficulty must stay zero, have %v", header.Difficulty)
-	}
-	// Setting a difficulty after a previous one must not leave the old value.
-	header.SetQKCDifficulty(big.NewInt(7))
-	header.SetQKCDifficulty(big.NewInt(9))
-	if have := header.QKCDifficulty(); have.Cmp(big.NewInt(9)) != 0 {
-		t.Fatalf("difficulty was not replaced: have %v, want 9", have)
+	for _, difficulty := range difficulties {
+		want := new(big.Int)
+		if difficulty != nil {
+			want = difficulty
+		}
+		h := qkcShardHeader(qkcBaseExtra(EncodeNonce(1), common.Hash{}), difficulty)
+
+		if have := h.QKCDifficulty(); have.Cmp(want) != 0 {
+			t.Errorf("difficulty %v: have %v", want, have)
+		}
+		if wantHash := common.BigToHash(want); h.MixDigest != wantHash {
+			t.Errorf("difficulty %v: MixDigest is %x, want %x", want, h.MixDigest, wantHash)
+		}
+		// The two geth fields a post-Merge block has to zero stay untouched.
+		if h.Difficulty == nil || h.Difficulty.Sign() != 0 {
+			t.Errorf("difficulty %v: header Difficulty is %v, want 0", want, h.Difficulty)
+		}
+		if h.Nonce != (BlockNonce{}) {
+			t.Errorf("difficulty %v: header Nonce is %x, want zero", want, h.Nonce)
+		}
 	}
 }
 
-func TestQKCSeal(t *testing.T) {
-	header := &Header{Extra: (&QKCExtra{Version: 1, ShardID: 3, Cursor: XShardCursor{RootBlockHeight: 7}}).Encode()}
-	header.SetQKCDifficulty(big.NewInt(11))
-
-	nonce := EncodeNonce(0x0102030405060708)
-	mixHash := common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32))
-	if err := header.SetQKCSeal(nonce, mixHash); err != nil {
-		t.Fatalf("failed to set seal: %v", err)
-	}
-	if len(header.Extra) != QKCExtraSize {
-		t.Fatalf("seal changed the extra size: %d", len(header.Extra))
-	}
-	have, err := header.QKCExtra()
-	if err != nil {
-		t.Fatalf("failed to decode: %v", err)
-	}
-	if have.Nonce != nonce || have.MixHash != mixHash {
-		t.Fatalf("seal mismatch: have %x/%x, want %x/%x", have.Nonce, have.MixHash, nonce, mixHash)
-	}
-	if have.Version != 1 || have.ShardID != 3 || have.Cursor.RootBlockHeight != 7 {
-		t.Fatalf("seal overwrote other fields: %+v", have)
-	}
-	// Setting the seal must not touch the geth header fields that have to stay
-	// zero after the Merge.
-	if header.Nonce != EncodeNonce(0) {
-		t.Fatalf("seal set the header nonce: %x", header.Nonce)
-	}
-	if header.Difficulty == nil || header.Difficulty.Sign() != 0 {
-		t.Fatalf("seal changed the header difficulty: %v", header.Difficulty)
-	}
-	if header.QKCDifficulty().Cmp(big.NewInt(11)) != 0 {
-		t.Fatalf("seal changed the PoW difficulty: %v", header.QKCDifficulty())
-	}
-	// Writing a seal into a header that carries no QuarkChain extra must fail.
-	if err := (&Header{Extra: []byte{1, 2, 3}}).SetQKCSeal(nonce, mixHash); err == nil {
-		t.Fatal("expected error for a header without a QuarkChain extra")
-	}
-}
-
-// sealHeader builds a minimal QuarkChain shard header with the given seal and
-// difficulty.
-func sealHeader(nonce BlockNonce, mixHash common.Hash, difficulty int64) *Header {
-	header := &Header{
-		Number: big.NewInt(1),
-		Extra:  (&QKCExtra{ShardID: 3, Nonce: nonce, MixHash: mixHash}).Encode(),
-	}
-	header.SetQKCDifficulty(big.NewInt(difficulty))
-	return header
-}
-
-// TestQKCSealHashSealMatrix checks the seal hash is invariant to the seal while
-// the block hash is not, for every zero / non-zero combination of the seal.
+// TestQKCSealHashSealMatrix checks that the seal hash is invariant to the seal
+// while the block hash is not, for every zero / non-zero combination of the two
+// seal fields.
 func TestQKCSealHashSealMatrix(t *testing.T) {
-	zeroHash := common.Hash{}
 	mix := common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32))
-
 	cases := []struct {
 		name  string
 		nonce BlockNonce
 		mix   common.Hash
 	}{
-		{"zero seal", BlockNonce{}, zeroHash},
-		{"nonce only", EncodeNonce(1), zeroHash},
+		{"zero seal", BlockNonce{}, common.Hash{}},
+		{"nonce only", EncodeNonce(1), common.Hash{}},
 		{"mixhash only", BlockNonce{}, mix},
 		{"both set", EncodeNonce(1), mix},
 	}
-	var sealHashes []common.Hash
-	var blockHashes []common.Hash
-	for _, c := range cases {
-		h := sealHeader(c.nonce, c.mix, 1000)
-		sealHashes = append(sealHashes, h.QKCSealHash())
-		blockHashes = append(blockHashes, h.Hash())
+	sealHashes := make([]common.Hash, len(cases))
+	blockHashes := make([]common.Hash, len(cases))
+	for i, c := range cases {
+		h := qkcShardHeader(qkcBaseExtra(c.nonce, c.mix), big.NewInt(1000))
+		sealHashes[i] = h.QKCSealHash()
+		blockHashes[i] = h.Hash()
+	}
+	// The zero seal is hashed as it stands, so the two hashes coincide for it.
+	if blockHashes[0] != sealHashes[0] {
+		t.Errorf("%s: block hash and seal hash differ", cases[0].name)
 	}
 	for i := 1; i < len(cases); i++ {
 		if sealHashes[i] != sealHashes[0] {
-			t.Errorf("%s: seal hash depends on the seal: have %x, want %x", cases[i].name, sealHashes[i], sealHashes[0])
+			t.Errorf("%s: seal hash depends on the seal:\nhave %x\nwant %x", cases[i].name, sealHashes[i], sealHashes[0])
+		}
+		if blockHashes[i] == blockHashes[0] {
+			t.Errorf("%s: block hash ignores the seal", cases[i].name)
 		}
 	}
-	for i := range blockHashes {
+	// The three sealed cases must also be distinguishable from each other.
+	for i := 1; i < len(blockHashes); i++ {
 		for j := i + 1; j < len(blockHashes); j++ {
 			if blockHashes[i] == blockHashes[j] {
-				t.Errorf("%s and %s: block hash ignores the seal", cases[i].name, cases[j].name)
+				t.Errorf("%s and %s: block hash does not distinguish the seals", cases[i].name, cases[j].name)
 			}
 		}
 	}
 }
 
-// TestQKCSealHashSensitivity checks the seal hash commits to the difficulty and
-// to every other consensus field.
+// TestQKCSealHashSensitivity checks that the seal hash commits to the PoW
+// difficulty and to every other field that has to take part in it.
 func TestQKCSealHashSensitivity(t *testing.T) {
-	base := sealHeader(EncodeNonce(1), common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32)), 1000)
+	nonce := EncodeNonce(1)
+	mix := common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32))
+	base := qkcShardHeader(qkcBaseExtra(nonce, mix), big.NewInt(1000))
 	baseSeal := base.QKCSealHash()
 	baseBlock := base.Hash()
 
-	// The PoW difficulty is committed by the seal hash, in place of Difficulty.
-	harder := sealHeader(EncodeNonce(1), common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32)), 2000)
+	// The PoW difficulty participates through MixDigest, in place of Difficulty.
+	harder := qkcShardHeader(qkcBaseExtra(nonce, mix), big.NewInt(2000))
 	if harder.QKCSealHash() == baseSeal {
 		t.Error("seal hash ignores the difficulty")
 	}
 	if harder.Hash() == baseBlock {
 		t.Error("block hash ignores the difficulty")
 	}
-	// The non-seal part of the QuarkChain extra is committed too.
-	otherShard := &Header{
-		Number: big.NewInt(1),
-		Extra:  (&QKCExtra{ShardID: 4, Nonce: EncodeNonce(1), MixHash: common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32))}).Encode(),
-	}
-	otherShard.SetQKCDifficulty(big.NewInt(1000))
+	// The QKC fields outside the seal region participate as well.
+	other := qkcBaseExtra(nonce, mix)
+	other.ShardID = 4
+	otherShard := qkcShardHeader(other, big.NewInt(1000))
 	if otherShard.QKCSealHash() == baseSeal {
-		t.Error("seal hash ignores the QuarkChain extra")
+		t.Error("seal hash ignores the QuarkChain fields outside the seal")
 	}
-	// And so are the plain geth consensus fields.
+	if otherShard.Hash() == baseBlock {
+		t.Error("block hash ignores the QuarkChain fields outside the seal")
+	}
+	// And so do the plain geth consensus fields.
 	mutations := map[string]func(*Header){
-		"number":     func(h *Header) { h.Number = big.NewInt(2) },
-		"time":       func(h *Header) { h.Time = 1 },
-		"gasLimit":   func(h *Header) { h.GasLimit = 1 },
-		"gasUsed":    func(h *Header) { h.GasUsed = 1 },
-		"coinbase":   func(h *Header) { h.Coinbase = common.BytesToAddress([]byte{1}) },
-		"root":       func(h *Header) { h.Root = common.BytesToHash([]byte{1}) },
-		"txhash":     func(h *Header) { h.TxHash = common.BytesToHash([]byte{1}) },
-		"parenthash": func(h *Header) { h.ParentHash = common.BytesToHash([]byte{1}) },
-		"unclehash":  func(h *Header) { h.UncleHash = common.BytesToHash([]byte{1}) },
-		"bloom":      func(h *Header) { h.Bloom[0] = 1 },
+		"number":      func(h *Header) { h.Number = big.NewInt(2) },
+		"time":        func(h *Header) { h.Time = 1 },
+		"gasLimit":    func(h *Header) { h.GasLimit = 1 },
+		"gasUsed":     func(h *Header) { h.GasUsed = 1 },
+		"coinbase":    func(h *Header) { h.Coinbase = common.BytesToAddress([]byte{1}) },
+		"root":        func(h *Header) { h.Root = common.BytesToHash([]byte{1}) },
+		"txHash":      func(h *Header) { h.TxHash = common.BytesToHash([]byte{1}) },
+		"receiptHash": func(h *Header) { h.ReceiptHash = common.BytesToHash([]byte{1}) },
+		"parentHash":  func(h *Header) { h.ParentHash = common.BytesToHash([]byte{1}) },
+		"uncleHash":   func(h *Header) { h.UncleHash = common.BytesToHash([]byte{1}) },
+		"bloom":       func(h *Header) { h.Bloom[0] = 1 },
 	}
 	for name, mutate := range mutations {
-		h := sealHeader(EncodeNonce(1), common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32)), 1000)
+		h := CopyHeader(base)
 		mutate(h)
 		if h.QKCSealHash() == baseSeal {
 			t.Errorf("seal hash ignores the %s field", name)
@@ -325,33 +279,42 @@ func TestQKCSealHashSensitivity(t *testing.T) {
 	}
 }
 
-// TestQKCSealHashDoesNotMutate checks computing the seal hash never modifies the
-// header it is called on, including on a header that already carries a seal.
+// TestQKCSealHashDoesNotMutate checks that computing the seal hash never changes
+// the header it is called on, whether that header carries a seal or not.
 func TestQKCSealHashDoesNotMutate(t *testing.T) {
-	for _, h := range []*Header{
+	headers := []*Header{
 		qkcReferenceHeader(),
-		sealHeader(EncodeNonce(9), common.BytesToHash(bytes.Repeat([]byte{0xee}, 32)), 12345),
-	} {
-		before := CopyHeader(h)
+		qkcShardHeader(qkcBaseExtra(EncodeNonce(9), common.BytesToHash(bytes.Repeat([]byte{0xee}, 32))), big.NewInt(12345)),
+	}
+	for i, h := range headers {
 		extraBefore := common.CopyBytes(h.Extra)
+		hashBefore := h.Hash()
 		_ = h.QKCSealHash()
 		if !bytes.Equal(h.Extra, extraBefore) {
-			t.Fatalf("seal hash mutated the extra data:\nhave %x\nwant %x", h.Extra, extraBefore)
+			t.Fatalf("case %d: seal hash mutated the extra data:\nhave %x\nwant %x", i, h.Extra, extraBefore)
 		}
-		if h.Hash() != before.Hash() {
-			t.Fatal("seal hash mutated the header")
+		if h.Hash() != hashBefore {
+			t.Fatalf("case %d: seal hash mutated the header", i)
 		}
 	}
 }
 
 // TestQKCSealHashNonQKCHeader pins the fallback: a header whose extra data is
-// not a QuarkChain extra is hashed unchanged. Rejecting such a header is the
-// job of DecodeQKCExtra and the consensus engine, not of the hashing helper.
+// not exactly a QuarkChain extra is hashed as it stands, however long it is.
+// Rejecting such a header is the job of DecodeQKCExtra and of the consensus
+// engine, not of the hashing helper.
 func TestQKCSealHashNonQKCHeader(t *testing.T) {
-	for _, extra := range [][]byte{nil, {}, {1, 2, 3}, make([]byte, QKCExtraSize-1)} {
+	extras := [][]byte{
+		nil,
+		{},
+		{1, 2, 3},
+		bytes.Repeat([]byte{0xaa}, QKCExtraSize-1),
+		bytes.Repeat([]byte{0xaa}, QKCExtraSize+1),
+	}
+	for _, extra := range extras {
 		plain := &Header{Number: big.NewInt(1), Difficulty: common.Big0, Extra: extra}
 		if plain.QKCSealHash() != plain.Hash() {
-			t.Fatalf("seal hash changed a header without a QuarkChain extra: %x", extra)
+			t.Errorf("seal hash changed a header without a QuarkChain extra: %x", extra)
 		}
 	}
 }
@@ -405,16 +368,18 @@ func qkcSealHashReference(h *Header) (common.Hash, error) {
 }
 
 func TestQKCSealHashReference(t *testing.T) {
+	mix := common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32))
+
+	// A header that also carries geth state, not just the QKC fields.
+	state := qkcShardHeader(qkcBaseExtra(EncodeNonce(1), common.Hash{}), big.NewInt(1000))
+	state.ParentHash = common.BytesToHash(bytes.Repeat([]byte{0x11}, 32))
+	state.Time = 42
+
 	cases := []*Header{
 		qkcReferenceHeader(),
-		sealHeader(EncodeNonce(0xdeadbeef), common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32)), 1000),
-		sealHeader(BlockNonce{}, common.Hash{}, 0),
-		func() *Header {
-			h := sealHeader(EncodeNonce(1), common.Hash{}, 1000)
-			h.ParentHash = common.BytesToHash(bytes.Repeat([]byte{0x11}, 32))
-			h.Time = 42
-			return h
-		}(),
+		qkcShardHeader(qkcBaseExtra(EncodeNonce(0xdeadbeef), mix), big.NewInt(1000)),
+		qkcShardHeader(qkcBaseExtra(BlockNonce{}, common.Hash{}), nil),
+		state,
 	}
 	for i, h := range cases {
 		want, err := qkcSealHashReference(h)
@@ -424,19 +389,41 @@ func TestQKCSealHashReference(t *testing.T) {
 		if have := h.QKCSealHash(); have != want {
 			t.Fatalf("case %d: seal hash mismatch:\nhave %x\nwant %x", i, have, want)
 		}
-		// Block hash must differ from the seal hash whenever the seal is set.
-		if extra, err := h.QKCExtra(); err == nil {
-			sealed := extra.Nonce != EncodeNonce(0) || extra.MixHash != (common.Hash{})
-			if sealed && h.Hash() == want {
-				t.Fatalf("case %d: block hash equals the seal hash despite a non-zero seal", i)
-			}
-		}
 	}
 }
 
-// qkcReferenceHeader is a fully specified header used by the golden vector test.
-func qkcReferenceHeader() *Header {
+// qkcBaseExtra returns a QKC extra with the given seal, plus a version and a
+// shard id so that the region in front of the seal is non-zero too.
+func qkcBaseExtra(nonce BlockNonce, mixHash common.Hash) *QKCExtra {
+	return &QKCExtra{
+		Version: 1,
+		ShardID: 3,
+		Nonce:   nonce,
+		MixHash: mixHash,
+	}
+}
+
+// qkcShardHeader builds a shard block header the way the design prescribes:
+// assemble the QKC fields as a QKCExtra, encode it once into Extra, then
+// initialise the header. The PoW difficulty goes into MixDigest; the header's
+// own Difficulty and Nonce are left at zero, as a post-Merge block requires. A
+// nil difficulty means no work, i.e. a zero difficulty.
+func qkcShardHeader(fields *QKCExtra, difficulty *big.Int) *Header {
 	h := &Header{
+		Number:     big.NewInt(1),
+		Difficulty: new(big.Int),
+		Extra:      fields.Encode(),
+	}
+	if difficulty != nil {
+		h.MixDigest = common.BigToHash(difficulty)
+	}
+	return h
+}
+
+// qkcReferenceHeader is the fully specified shard header used by the golden
+// vector test. It carries a zero seal, so its block hash and seal hash coincide.
+func qkcReferenceHeader() *Header {
+	return &Header{
 		ParentHash:  common.BytesToHash(bytes.Repeat([]byte{0x11}, 32)),
 		UncleHash:   common.BytesToHash(bytes.Repeat([]byte{0x22}, 32)),
 		Coinbase:    common.BytesToAddress(bytes.Repeat([]byte{0x33}, 20)),
@@ -444,6 +431,7 @@ func qkcReferenceHeader() *Header {
 		TxHash:      common.BytesToHash(bytes.Repeat([]byte{0x55}, 32)),
 		ReceiptHash: common.BytesToHash(bytes.Repeat([]byte{0x66}, 32)),
 		Bloom:       BytesToBloom(bytes.Repeat([]byte{0x77}, 256)),
+		Difficulty:  new(big.Int),
 		Number:      big.NewInt(12345),
 		GasLimit:    30_000_000,
 		GasUsed:     21_000,
@@ -456,14 +444,15 @@ func qkcReferenceHeader() *Header {
 			XShardGasUsed:  21_000,
 			XShardGasLimit: 1_000_000,
 		}).Encode(),
+		MixDigest: common.BigToHash(big.NewInt(1000)),
 	}
-	h.SetQKCDifficulty(big.NewInt(1000))
-	return h
 }
 
-// TestQKCBlockHashGolden pins the exact bytes of the block hash and the seal
+// TestQKCBlockHashGolden freezes the exact bytes of the block hash and the seal
 // hash of a fully specified header, so that any change to the field coverage,
-// the ordering or the encoding is caught.
+// the ordering or the encoding is caught. What checks that the frozen value is
+// the correct one is the independent reference formula in
+// TestQKCSealHashReference; this test only checks that it does not move.
 func TestQKCBlockHashGolden(t *testing.T) {
 	const golden = "0xd6e3701b3d314251b417461c44a0e45575965606f523aff1309279f0ebff770b"
 	h := qkcReferenceHeader()
@@ -474,11 +463,16 @@ func TestQKCBlockHashGolden(t *testing.T) {
 	if have := h.QKCSealHash(); have != common.HexToHash(golden) {
 		t.Fatalf("seal hash mismatch:\nhave %x\nwant %s", have, golden)
 	}
-	// Writing a seal must leave the seal hash alone.
+	// Writing a seal must leave the seal hash alone and move the block hash.
 	sealed := CopyHeader(h)
-	if err := sealed.SetQKCSeal(EncodeNonce(0x0102030405060708), common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32))); err != nil {
-		t.Fatalf("failed to set seal: %v", err)
+	fields, err := sealed.QKCExtra()
+	if err != nil {
+		t.Fatalf("failed to decode the extra data: %v", err)
 	}
+	fields.Nonce = EncodeNonce(0x0102030405060708)
+	fields.MixHash = common.BytesToHash(bytes.Repeat([]byte{0xcc}, 32))
+	sealed.Extra = fields.Encode()
+
 	if have := sealed.QKCSealHash(); have != common.HexToHash(golden) {
 		t.Fatalf("seal hash changed after sealing:\nhave %x\nwant %s", have, golden)
 	}
