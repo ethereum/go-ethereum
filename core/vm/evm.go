@@ -773,15 +773,10 @@ func (evm *EVM) captureEnd(depth int, startGas GasBudget, leftOverGas GasBudget,
 // to the tracers.
 func (evm *EVM) GetVMContext() *tracing.VMContext {
 	// Tracers are handed a view of the state whose reads leave no trace in the
-	// execution, e.g. in the block-level access list. State databases without
-	// access list recording have nothing to suspend.
+	// execution, e.g. in the block-level access list.
 	var statedb tracing.StateDB
 	if evm.StateDB != nil {
-		suspend := func() func() { return func() {} }
-		if db, ok := evm.StateDB.(interface{ SuspendAccessList() func() }); ok {
-			suspend = db.SuspendAccessList
-		}
-		statedb = state.NewTracerView(evm.StateDB, suspend)
+		statedb = state.NewTracerView(evm.StateDB)
 	}
 	return &tracing.VMContext{
 		Coinbase:    evm.Context.Coinbase,
