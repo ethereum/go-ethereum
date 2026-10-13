@@ -234,7 +234,8 @@ func (u *FinalityUpdate) Validate() error {
 // finalized execution block.
 type ChainHeadEvent struct {
 	BeaconHead   Header
-	Block        *ctypes.Block
-	ExecRequests [][]byte    // execution layer requests (added in Electra)
-	Finalized    common.Hash // latest finalized block hash
+	ExecHash     common.Hash   // execution block hash of the head
+	Block        *ctypes.Block // the execution block; nil if only its hash is known (P2PBlocks)
+	ExecRequests [][]byte      // execution layer requests (added in Electra)
+	Finalized    common.Hash   // latest finalized block hash
 }
