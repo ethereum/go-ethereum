@@ -822,6 +822,14 @@ func TestTraceRequestNullMembersAreOmitted(t *testing.T) {
 	if !reflect.DeepEqual(filterNulls, filterOmitted) {
 		t.Fatalf("null filter members: have %+v, want %+v", filterNulls, filterOmitted)
 	}
+	// Member names match case-insensitively, as in encoding/json, for null values too.
+	var foldedNulls TraceFilter
+	if err := json.Unmarshal([]byte(`{"FromBlock":null,"TOADDRESS":null,"Mode":null,"COUNT":null}`), &foldedNulls); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(foldedNulls, filterOmitted) {
+		t.Fatalf("null filter members in another case: have %+v, want %+v", foldedNulls, filterOmitted)
+	}
 	// Unknown members and invalid values are still rejected.
 	for _, input := range []string{`{"mode":"garbage"}`, `{"count":-1}`, `{"extra":1}`, `{"extra":null}`} {
 		if err := json.Unmarshal([]byte(input), new(TraceFilter)); err == nil {

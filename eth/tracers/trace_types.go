@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -199,6 +201,10 @@ func (m *TraceFilterMode) UnmarshalJSON(input []byte) error {
 	return fmt.Errorf("unknown filter mode %q", value)
 }
 
+// traceFilterMembers are the TraceFilter member names, which encoding/json
+// matches case-insensitively.
+var traceFilterMembers = []string{"blockHash", "fromBlock", "toBlock", "fromAddress", "toAddress", "mode", "after", "count"}
+
 func (f *TraceFilter) UnmarshalJSON(input []byte) error {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(input, &fields); err != nil {
@@ -210,11 +216,9 @@ func (f *TraceFilter) UnmarshalJSON(input []byte) error {
 	// An explicit null is an omitted member: a null mode is intersection and
 	// null address lists are unrestricted, like omitted or empty lists.
 	for key, value := range fields {
-		switch key {
-		case "blockHash", "fromBlock", "toBlock", "fromAddress", "toAddress", "mode", "after", "count":
-			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-				delete(fields, key)
-			}
+		member := slices.ContainsFunc(traceFilterMembers, func(name string) bool { return strings.EqualFold(name, key) })
+		if member && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			delete(fields, key)
 		}
 	}
 	filtered, err := json.Marshal(fields)
