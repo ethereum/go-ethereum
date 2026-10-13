@@ -634,9 +634,10 @@ func FrameTxBudgetTotals(frames []Frame) (execution, state uint64) {
 
 // frameTxMandatoryGas computes the costs a frame transaction always pays
 // regardless of execution: the base cost, the per-frame cost, the signature
-// verification cost, and the value transfer cost of each value-bearing frame
-// with an explicit target other than the sender.
-func frameTxMandatoryGas(frames []Frame, sigs SignatureList, sender common.Address) uint64 {
+// verification cost, the value transfer cost of each value-bearing frame
+// with an explicit target other than the sender, and the access cost of each
+// non-zero nonce key (EIP-8250).
+func frameTxMandatoryGas(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int) uint64 {
 	gas := params.FrameTxIntrinsicGas + uint64(len(frames))*params.FrameTxPerFrameGas
 	for i := range sigs {
 		gas += FrameTxSignatureGas(&sigs[i])
@@ -647,6 +648,10 @@ func frameTxMandatoryGas(frames []Frame, sigs SignatureList, sender common.Addre
 			gas += params.TxValueCost2780
 		}
 	}
+	// The legacy key set uses the account nonce instead of a nonce manager slot.
+	if !HasLegacyNonceKeys(nonceKeys) {
+		gas += uint64(len(nonceKeys)) * params.FrameTxKeyedNonceAccessGas
+	}
 	return gas
 }
 
@@ -656,7 +661,7 @@ func frameTxMandatoryGas(frames []Frame, sigs SignatureList, sender common.Addre
 // is no recipient component: target access is paid during frame execution
 // from each frame's own execution gas budget.
 func FrameTxIntrinsicGas(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (uint64, error) {
-	gas := frameTxMandatoryGas(frames, sigs, sender)
+	gas := frameTxMandatoryGas(frames, sigs, sender, nonceKeys)
 	var dataLen, z uint64
 	for _, d := range FrameTxChargedData(frames, sigs, nonceKeys, nonceSeq) {
 		dataLen += uint64(len(d))
@@ -691,7 +696,7 @@ func FrameTxFloorGas(frames []Frame, sigs SignatureList, sender common.Address, 
 	if gomath.MaxUint64/(params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976) < dataLen {
 		return 0, errors.New("gas uint64 overflow")
 	}
-	floorGas := frameTxMandatoryGas(frames, sigs, sender)
+	floorGas := frameTxMandatoryGas(frames, sigs, sender, nonceKeys)
 	dataGas := dataLen * params.TxTokenPerNonZeroByte * params.TxCostFloorPerToken7976
 	if gomath.MaxUint64-floorGas < dataGas {
 		return 0, errors.New("gas uint64 overflow")

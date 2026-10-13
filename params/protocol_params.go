@@ -40,6 +40,12 @@ const (
 	FrameTxExpiryDataLen          = 8     // Required calldata length of an expiry verifier frame (EIP-8141).
 	FrameTxMaxNonceKeys           = 16    // Maximum number of nonce keys a frame transaction may select (EIP-8250).
 
+	// FrameTxKeyedNonceAccessGas is the intrinsic cost of each non-zero nonce
+	// key of a frame transaction: the cold read and the write of its nonce
+	// manager slot, which the protocol performs outside the access lists and
+	// SSTORE pricing (EIP-8250, COLD_STORAGE_ACCESS + STORAGE_WRITE).
+	FrameTxKeyedNonceAccessGas = ColdStorageAccessAmsterdam + StorageWriteAmsterdam
+
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
 	CallValueTransferGas  uint64 = 9000  // Paid for CALL when the value transfer is non-zero.
 	CallNewAccountGas     uint64 = 25000 // Paid for CALL when the destination address didn't exist prior.
