@@ -482,6 +482,24 @@ func newWrittenState() *writtenState {
 	return &writtenState{nodes: newWriteDigest(), accounts: newWriteDigest(), storage: newWriteDigest()}
 }
 
+// writtenFamily is one key family a command writes, with the digest of what
+// it wrote.
+type writtenFamily struct {
+	name   string
+	prefix []byte
+	want   *writeDigest
+}
+
+// families lists the key families written: tree nodes, flat accounts, flat
+// storage.
+func (w *writtenState) families() []writtenFamily {
+	return []writtenFamily{
+		{"tree node", rawdb.TrieNodeAccountPrefix, w.nodes},
+		{"flat account", rawdb.SnapshotAccountPrefix, w.accounts},
+		{"flat storage", rawdb.SnapshotStoragePrefix, w.storage},
+	}
+}
+
 // writeStagedNodes writes the staged tree nodes into the namespace in key
 // order, digesting each.
 func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDigest) error {
@@ -509,16 +527,7 @@ func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDige
 // verifyWritten re-reads each family in key order, concurrently, and
 // requires it to match what was written. The namespace was empty when the
 // command began, so a family holding anything more is a mismatch as well.
-func verifyWritten(pbtdb ethdb.Database, written *writtenState) error {
-	families := []struct {
-		name   string
-		prefix []byte
-		want   *writeDigest
-	}{
-		{"tree node", rawdb.TrieNodeAccountPrefix, written.nodes},
-		{"flat account", rawdb.SnapshotAccountPrefix, written.accounts},
-		{"flat storage", rawdb.SnapshotStoragePrefix, written.storage},
-	}
+func verifyWritten(pbtdb ethdb.Database, families ...writtenFamily) error {
 	var g errgroup.Group
 	for _, f := range families {
 		g.Go(func() error {
@@ -539,10 +548,11 @@ func verifyWritten(pbtdb ethdb.Database, written *writtenState) error {
 			return nil
 		})
 	}
-	if err := g.Wait(); err != nil {
-		return err
-	}
+	return g.Wait()
+}
+
+// logWritten reports a verified write-back.
+func logWritten(written *writtenState) {
 	log.Info("Verified the written state", "nodes", written.nodes.count,
 		"accounts", written.accounts.count, "slots", written.storage.count)
-	return nil
 }

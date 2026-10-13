@@ -790,11 +790,19 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
 	}
 	log.Info("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves.Load(), "digest", snap.digest())
-	written := newWrittenState()
+	var (
+		written   = newWrittenState()
+		families  = written.families()
+		readNodes errgroup.Group
+	)
+	defer readNodes.Wait()
 	if nodes != nil {
 		if err := writeStagedNodes(pbtdb, nodes, written.nodes); err != nil {
 			return common.Hash{}, err
 		}
+		// The tree nodes are all written: read them back while the code
+		// limb and check 2 run. Reading puts nothing in the memtable.
+		readNodes.Go(func() error { return verifyWritten(pbtdb, families[0]) })
 	}
 
 	// The code limb: every claimed code hash must reassemble from its
@@ -874,9 +882,13 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
 	}
-	if err := verifyWritten(pbtdb, written); err != nil {
+	if err := verifyWritten(pbtdb, families[1:]...); err != nil {
 		return common.Hash{}, err
 	}
+	if err := readNodes.Wait(); err != nil {
+		return common.Hash{}, err
+	}
+	logWritten(written)
 	// The anchor rides with the root: the tree does not say which block it
 	// commits, and catching up from here has to start somewhere. The
 	// attestation is the completion marker and comes last; the imported tree

@@ -479,9 +479,10 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 
 	// Both stores must hold exactly what was written before anything becomes
 	// publishable or openable.
-	if err := verifyWritten(pbtdb, written); err != nil {
+	if err := verifyWritten(pbtdb, written.families()...); err != nil {
 		return common.Hash{}, err
 	}
+	logWritten(written)
 
 	snapDigest, err := snapshot.finalize(binRoot)
 	if err != nil {
