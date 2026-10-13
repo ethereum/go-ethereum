@@ -164,12 +164,13 @@ type foldAccount struct {
 func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, start time.Time,
 	jobs []chan *foldBatch, free chan *foldBatch, accts, acctsFree chan []foldAccount) error {
 	var (
-		slotHeld  = &heldStream{stream: slots}
-		rederived uint64
-		acctRows  *spillFile
-		worker    int
-		cur       *foldBatch
-		pending   []foldAccount
+		slotHeld   = &heldStream{stream: slots}
+		rederived  uint64
+		acctRows   *spillFile
+		storageSum *digestAhead
+		worker     int
+		cur        *foldBatch
+		pending    []foldAccount
 	)
 	if batch != nil {
 		var err error
@@ -177,6 +178,8 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 			return err
 		}
 		defer acctRows.close()
+		storageSum = written.storage.ahead()
+		defer storageSum.finish()
 	}
 	flush := func() error {
 		if batch.ValueSize() < ethdb.IdealBatchSize {
@@ -265,9 +268,7 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 				cur.vals = append(cur.vals, svalue...)
 				cur.ends = append(cur.ends, len(cur.vals))
 				if batch != nil {
-					if err := written.storage.add(skey, svalue); err != nil {
-						return err
-					}
+					storageSum.add(skey, svalue)
 					rawdb.WriteStorageSnapshot(batch, acct.hash, common.BytesToHash(skey[common.HashLength:]), svalue)
 					if err := flush(); err != nil {
 						return err
@@ -336,14 +337,20 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 	if batch == nil {
 		return nil
 	}
+	if err := storageSum.finish(); err != nil {
+		return err
+	}
+	accountSum := written.accounts.ahead()
+	defer accountSum.finish()
 	err := acctRows.replay(bufio.NewReaderSize(nil, 256<<10), func(hash, row []byte) error {
-		if err := written.accounts.add(hash, row); err != nil {
-			return err
-		}
+		accountSum.add(hash, row)
 		rawdb.WriteAccountSnapshot(batch, common.BytesToHash(hash), row)
 		return flush()
 	})
 	if err != nil {
+		return err
+	}
+	if err := accountSum.finish(); err != nil {
 		return err
 	}
 	if err := batch.Write(); err != nil {
@@ -473,6 +480,75 @@ func (d *writeDigest) sum() common.Hash {
 	return common.BytesToHash(d.hasher.Sum(nil))
 }
 
+// digestAhead digests records on a goroutine of its own, so that a writer on
+// the critical path only copies them.
+type digestAhead struct {
+	work, free chan *digestBatch
+	cur        *digestBatch
+	done       chan error
+	err        error
+}
+
+// digestBatch packs records back to back: ends holds each record's key end,
+// then its value end.
+type digestBatch struct {
+	buf  []byte
+	ends []int
+}
+
+// digestBatchSize is how many records a digest batch carries.
+const digestBatchSize = 4096
+
+// ahead starts digesting records handed to the returned digestAhead, in
+// order. Its finish returns what add would have.
+func (d *writeDigest) ahead() *digestAhead {
+	a := &digestAhead{work: make(chan *digestBatch, 4), free: make(chan *digestBatch, 5), done: make(chan error, 1)}
+	for range cap(a.free) {
+		a.free <- new(digestBatch)
+	}
+	a.cur = <-a.free
+	go func() {
+		var err error
+		for b := range a.work {
+			for i, start := 0, 0; err == nil && i < len(b.ends); i += 2 {
+				err = d.add(b.buf[start:b.ends[i]], b.buf[b.ends[i]:b.ends[i+1]])
+				start = b.ends[i+1]
+			}
+			b.buf, b.ends = b.buf[:0], b.ends[:0]
+			a.free <- b
+		}
+		a.done <- err
+	}()
+	return a
+}
+
+// add copies one record for the digest.
+func (a *digestAhead) add(key, value []byte) {
+	b := a.cur
+	b.buf = append(b.buf, key...)
+	b.ends = append(b.ends, len(b.buf))
+	b.buf = append(b.buf, value...)
+	b.ends = append(b.ends, len(b.buf))
+	if len(b.ends) == 2*digestBatchSize {
+		a.work <- b
+		a.cur = <-a.free
+	}
+}
+
+// finish waits for every record to be digested and returns the first error
+// the digest met. Later calls return the same.
+func (a *digestAhead) finish() error {
+	if a.work == nil {
+		return a.err
+	}
+	if len(a.cur.ends) > 0 {
+		a.work <- a.cur
+	}
+	close(a.work)
+	a.err, a.work = <-a.done, nil
+	return a.err
+}
+
 // writtenState digests the three key families a command writes.
 type writtenState struct {
 	nodes, accounts, storage *writeDigest
@@ -504,10 +580,10 @@ func (w *writtenState) families() []writtenFamily {
 // order, digesting each.
 func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDigest) error {
 	batch := pbtdb.NewBatch()
+	ahead := digest.ahead()
+	defer ahead.finish()
 	err := nodes.replay(func(path, blob []byte) error {
-		if err := digest.add(path, blob); err != nil {
-			return err
-		}
+		ahead.add(path, blob)
 		rawdb.WriteAccountTrieNode(batch, path, blob)
 		if batch.ValueSize() < ethdb.IdealBatchSize {
 			return nil
@@ -519,6 +595,9 @@ func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDige
 		return nil
 	})
 	if err != nil {
+		return err
+	}
+	if err := ahead.finish(); err != nil {
 		return err
 	}
 	return batch.Write()
