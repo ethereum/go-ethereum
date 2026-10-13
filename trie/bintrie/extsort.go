@@ -42,6 +42,7 @@ type RecordSorter struct {
 	arena     []byte        // pending run's keys and values, packed back to back
 	index     []arenaRecord // pending run, offsets into arena
 	runs      []*os.File
+	merging   *RecordStream // merged stream, its goroutine stopped at Close
 	sealed    bool
 	discarded bool
 
@@ -273,7 +274,7 @@ func (s *RecordSorter) Sort() (*RecordStream, error) {
 		return nil, err
 	}
 	s.arena, s.index, s.spareArena, s.spareIndex = nil, nil, nil, nil
-	stream := &RecordStream{}
+	var h runHeap
 	for _, f := range s.runs {
 		src := &runReader{r: bufio.NewReaderSize(f, 1<<19)}
 		if err := src.advance(); err != nil {
@@ -282,10 +283,11 @@ func (s *RecordSorter) Sort() (*RecordStream, error) {
 			}
 			return nil, err
 		}
-		stream.heap = append(stream.heap, src)
+		h = append(h, src)
 	}
-	heap.Init(&stream.heap)
-	return stream, nil
+	heap.Init(&h)
+	s.merging = newMergeStream(h)
+	return s.merging, nil
 }
 
 // Close removes the temporary files; call after any returned stream drains.
@@ -300,6 +302,9 @@ func (s *RecordSorter) Close() {
 		}
 		s.spilling = nil
 	}
+	if s.merging != nil {
+		s.merging.stop()
+	}
 	for _, f := range s.runs {
 		name := f.Name()
 		f.Close()
@@ -310,59 +315,135 @@ func (s *RecordSorter) Close() {
 }
 
 // RecordStream yields the sorted records: the in-memory path serves the
-// pending arena, the merged path pops the run heap.
+// pending arena, the merged path batches a goroutine merges ahead of Next.
 type RecordStream struct {
 	arena []byte
 	index []arenaRecord
 	next  int
 
-	heap    runHeap
-	lastKey []byte
+	batch   *mergeBatch // being read, recycled when the next one starts
+	batches chan *mergeBatch
+	free    chan *mergeBatch
+	quit    chan struct{}
+	done    chan struct{}
+}
+
+// mergeBatch carries merged records, then the merge's end or error.
+type mergeBatch struct {
+	arena []byte
+	index []arenaRecord
+	err   error
+}
+
+// mergeBatchSize and mergeBatches size the read-ahead: records per batch and
+// batches in flight.
+var (
+	mergeBatchSize = 4096
+	mergeBatches   = 4
+)
+
+// newMergeStream starts merging the run heap ahead of the reader.
+func newMergeStream(h runHeap) *RecordStream {
+	ls := &RecordStream{
+		batches: make(chan *mergeBatch, mergeBatches),
+		free:    make(chan *mergeBatch, mergeBatches),
+		quit:    make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+	for range mergeBatches {
+		ls.free <- new(mergeBatch)
+	}
+	go ls.merge(h)
+	return ls
+}
+
+// merge pops the run heap into batches until the runs end, fail or stop.
+func (ls *RecordStream) merge(h runHeap) {
+	defer close(ls.done)
+	defer close(ls.batches)
+	var lastKey []byte
+	for {
+		var b *mergeBatch
+		select {
+		case b = <-ls.free:
+		case <-ls.quit:
+			return
+		}
+		b.arena, b.index, b.err = b.arena[:0], b.index[:0], nil
+		for len(b.index) < mergeBatchSize && b.err == nil {
+			if len(h) == 0 {
+				b.err = io.EOF
+				break
+			}
+			src := h[0]
+			if lastKey != nil && bytes.Compare(src.key, lastKey) <= 0 {
+				// Equal keys across runs; within-run duplicates died at spill time.
+				b.err = fmt.Errorf("bintrie: duplicate key %x across sort runs", src.key)
+				break
+			}
+			lastKey = append(lastKey[:0], src.key...)
+			off := len(b.arena)
+			b.arena = append(append(b.arena, src.key...), src.value...)
+			b.index = append(b.index, arenaRecord{off: off, klen: len(src.key), vlen: len(src.value)})
+			if err := src.advance(); err == io.EOF {
+				heap.Pop(&h)
+			} else if err != nil {
+				b.err = err
+			} else {
+				heap.Fix(&h, 0)
+			}
+		}
+		select {
+		case ls.batches <- b:
+		case <-ls.quit:
+			return
+		}
+		if b.err != nil {
+			return
+		}
+	}
+}
+
+// stop ends the merge, so the runs can be released.
+func (ls *RecordStream) stop() {
+	close(ls.quit)
+	<-ls.done
 }
 
 // Next returns the next record in ascending key order, io.EOF at the end.
-// The returned slices are the caller's.
+// The returned slices are valid until the following call.
 func (ls *RecordStream) Next() (key, value []byte, err error) {
-	if ls.heap == nil {
-		if ls.next >= len(ls.index) {
+	for ls.next >= len(ls.index) {
+		if ls.batches == nil {
 			return nil, nil, io.EOF
 		}
-		rec := ls.index[ls.next]
-		ls.next++
-		return rec.key(ls.arena), rec.value(ls.arena), nil
-	}
-	if len(ls.heap) == 0 {
-		return nil, nil, io.EOF
-	}
-	src := ls.heap[0]
-	key, value = src.key, src.value
-	if ls.lastKey != nil && bytes.Compare(key, ls.lastKey) <= 0 {
-		// Equal keys across runs; within-run duplicates died at spill time.
-		return nil, nil, fmt.Errorf("bintrie: duplicate key %x across sort runs", key)
-	}
-	ls.lastKey = bytes.Clone(key)
-	if err := src.advance(); err != nil {
-		if err != io.EOF {
-			return nil, nil, err
+		if b := ls.batch; b != nil {
+			if b.err != nil {
+				return nil, nil, b.err
+			}
+			ls.free <- b
 		}
-		heap.Pop(&ls.heap)
-	} else {
-		heap.Fix(&ls.heap, 0)
+		b, ok := <-ls.batches
+		if !ok {
+			return nil, nil, errors.New("bintrie: sort stream closed")
+		}
+		ls.batch, ls.arena, ls.index, ls.next = b, b.arena, b.index, 0
 	}
-	return key, value, nil
+	rec := ls.index[ls.next]
+	ls.next++
+	return rec.key(ls.arena), rec.value(ls.arena), nil
 }
 
 // runReader streams one spilled run.
 type runReader struct {
-	r     *bufio.Reader
-	key   []byte
-	value []byte
+	r          *bufio.Reader
+	buf        []byte
+	key, value []byte
 }
 
-// advance reads the next record into the reader, io.EOF at the end. Key and
-// value share one allocation: the run encoding puts both lengths ahead of
-// both payloads, so the combined size is known before any payload byte is
-// read.
+// advance reads the next record into the reader's buffer, overwriting the
+// last, io.EOF at the end. The run encoding puts both lengths ahead of both
+// payloads, so the buffer is sized before any payload byte is read.
 func (rr *runReader) advance() error {
 	klen, err := rr.r.ReadByte()
 	if err != nil {
@@ -372,8 +453,11 @@ func (rr *runReader) advance() error {
 	if _, err := io.ReadFull(rr.r, vlenBuf[:]); err != nil {
 		return fmt.Errorf("bintrie: truncated sort run value length: %w", err)
 	}
-	vlen := binary.BigEndian.Uint32(vlenBuf[:])
-	buf := make([]byte, int(klen)+int(vlen))
+	n := int(klen) + int(binary.BigEndian.Uint32(vlenBuf[:]))
+	if cap(rr.buf) < n {
+		rr.buf = make([]byte, n)
+	}
+	buf := rr.buf[:n]
 	if _, err := io.ReadFull(rr.r, buf); err != nil {
 		return fmt.Errorf("bintrie: truncated sort run record: %w", err)
 	}
