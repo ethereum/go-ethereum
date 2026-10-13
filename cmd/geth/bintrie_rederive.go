@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -84,23 +85,96 @@ func (h *heldStream) advance() { h.key, h.value = nil, nil }
 // the sorters guarantee. Storage under no account is the loss this check
 // exists to catch, so it errors rather than being skipped.
 //
-// With a batch, the fold also writes the flat state in the keccak order it
-// walks: storage rows as it goes, account rows spilled to a file under tmpDir
-// and written after the last storage row, so no flushed table mixes the two
-// key families. Everything is written by return, batch included, and digested
+// The calling goroutine walks both streams in keccak order; workers fold the
+// storage tries and one more goroutine the account trie, taking the storage
+// roots in account order. With a batch, the walk also writes the flat state:
+// storage rows as it goes, account rows spilled to a file under tmpDir and
+// written after the last storage row, so no flushed table mixes the two key
+// families. Everything is written by return, batch included, and digested
 // into written.
-func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, start time.Time) (common.Hash, error) {
+func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, start time.Time) (common.Hash, error) {
+	workers = max(workers, 1)
 	var (
-		slotHeld    = &heldStream{stream: slots}
-		accountTrie = trie.NewStackTrie(nil)
-		storageTrie = trie.NewStackTrie(nil)
-		rederived   uint64
-		acctRows    *spillFile
+		g, ctx    = errgroup.WithContext(context.Background())
+		jobs      = make([]chan *foldBatch, workers)
+		roots     = make([]chan []common.Hash, workers)
+		free      = make(chan *foldBatch, 3*workers)
+		accts     = make(chan []foldAccount, 4)
+		acctsFree = make(chan []foldAccount, 6)
+		root      common.Hash
+	)
+	for range cap(free) {
+		free <- new(foldBatch)
+	}
+	for range cap(acctsFree) {
+		acctsFree <- make([]foldAccount, 0, foldBatchSize)
+	}
+	for i := range workers {
+		jobs[i], roots[i] = make(chan *foldBatch, 2), make(chan []common.Hash, 2)
+		g.Go(func() error { return foldStorage(ctx, jobs[i], roots[i], free) })
+	}
+	g.Go(func() error {
+		var err error
+		root, err = foldAccounts(ctx, accts, acctsFree, roots)
+		return err
+	})
+	g.Go(func() error {
+		defer func() {
+			for _, ch := range jobs {
+				close(ch)
+			}
+			close(accts)
+		}()
+		return walkMerkleRecords(ctx, accounts, slots, batch, written, tmpDir, start, jobs, free, accts, acctsFree)
+	})
+	if err := g.Wait(); err != nil {
+		return common.Hash{}, err
+	}
+	return root, nil
+}
+
+// foldBatchSize is how many slots, or accounts, a fold batch carries.
+var foldBatchSize = 4096
+
+// foldBatch carries storage slots to a fold worker, the value of keys[i]
+// ending at vals[ends[i]]. Each of accounts closes one account's slots, at
+// that index; slots past the last close continue into the worker's next
+// batch. done ends the worker's job, after a close.
+type foldBatch struct {
+	keys     []common.Hash
+	vals     []byte
+	ends     []int
+	accounts []int
+	done     bool
+}
+
+// foldAccount is an account on its way to the account trie.
+type foldAccount struct {
+	hash     common.Hash
+	nonce    uint64
+	balance  uint256.Int
+	codeHash common.Hash
+	storage  bool
+}
+
+// walkMerkleRecords joins the account and slot streams in keccak order,
+// writing the flat state if batch is set, and hands the slots to the fold
+// workers and the accounts to the account trie: a job of whole accounts to
+// one worker, the next job to the next.
+func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, start time.Time,
+	jobs []chan *foldBatch, free chan *foldBatch, accts, acctsFree chan []foldAccount) error {
+	var (
+		slotHeld  = &heldStream{stream: slots}
+		rederived uint64
+		acctRows  *spillFile
+		worker    int
+		cur       *foldBatch
+		pending   []foldAccount
 	)
 	if batch != nil {
 		var err error
 		if acctRows, err = newSpillFile(tmpDir, "bintrie-acctrows-*"); err != nil {
-			return common.Hash{}, err
+			return err
 		}
 		defer acctRows.close()
 	}
@@ -114,81 +188,128 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch
 		batch.Reset()
 		return nil
 	}
+	take := func() error {
+		select {
+		case cur = <-free:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		cur.keys, cur.vals, cur.ends, cur.accounts, cur.done = cur.keys[:0], cur.vals[:0], cur.ends[:0], cur.accounts[:0], false
+		return nil
+	}
+	send := func(done bool) error {
+		cur.done = done
+		select {
+		case jobs[worker] <- cur:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		if done {
+			worker = (worker + 1) % len(jobs)
+		}
+		return take()
+	}
+	sendAccounts := func() error {
+		select {
+		case accts <- pending:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		select {
+		case pending = <-acctsFree:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		pending = pending[:0]
+		return nil
+	}
+	if err := take(); err != nil {
+		return err
+	}
+	select {
+	case pending = <-acctsFree:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	for {
 		akey, avalue, err := accounts.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return common.Hash{}, err
+			return err
 		}
 		if len(avalue) != merkleAccountRecordLen {
-			return common.Hash{}, fmt.Errorf("account record for %x is %d bytes, want %d", akey, len(avalue), merkleAccountRecordLen)
+			return fmt.Errorf("account record for %x is %d bytes, want %d", akey, len(avalue), merkleAccountRecordLen)
 		}
-		var (
-			accountHash = common.BytesToHash(akey)
-			nonce       = binary.BigEndian.Uint64(avalue[:8])
-			balance     = new(uint256.Int).SetBytes(avalue[8:40])
-			codeHash    = common.CopyBytes(avalue[40:merkleAccountRecordLen])
-		)
-		storageTrie.Reset()
-		storageRoot := types.EmptyRootHash
-		hasStorage := false
+		acct := foldAccount{
+			hash:     common.BytesToHash(akey),
+			nonce:    binary.BigEndian.Uint64(avalue[:8]),
+			codeHash: common.BytesToHash(avalue[40:merkleAccountRecordLen]),
+		}
+		acct.balance.SetBytes(avalue[8:40])
 		for {
 			skey, svalue, err := slotHeld.current()
 			if err != nil {
-				return common.Hash{}, err
+				return err
 			}
 			if skey == nil {
 				break
 			}
-			switch bytes.Compare(skey[:common.HashLength], akey) {
+			switch bytes.Compare(skey[:common.HashLength], acct.hash[:]) {
 			case -1:
-				return common.Hash{}, fmt.Errorf("storage under account hash %x, which holds no account", skey[:common.HashLength])
+				return fmt.Errorf("storage under account hash %x, which holds no account", skey[:common.HashLength])
 			case 1:
 			default:
-				if err := storageTrie.Update(skey[common.HashLength:], svalue); err != nil {
-					return common.Hash{}, err
-				}
+				cur.keys = append(cur.keys, common.Hash(skey[common.HashLength:]))
+				cur.vals = append(cur.vals, svalue...)
+				cur.ends = append(cur.ends, len(cur.vals))
 				if batch != nil {
 					if err := written.storage.add(skey, svalue); err != nil {
-						return common.Hash{}, err
+						return err
 					}
-					rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(skey[common.HashLength:]), svalue)
+					rawdb.WriteStorageSnapshot(batch, acct.hash, common.BytesToHash(skey[common.HashLength:]), svalue)
 					if err := flush(); err != nil {
-						return common.Hash{}, err
+						return err
 					}
 				}
-				hasStorage = true
+				acct.storage = true
 				slotHeld.advance()
+				// A storage trie past a batch goes on in the same worker's next.
+				if len(cur.keys) == 2*foldBatchSize {
+					if err := send(false); err != nil {
+						return err
+					}
+				}
 				continue
 			}
 			break
 		}
-		if hasStorage {
-			storageRoot = storageTrie.Hash()
-		}
-		full, err := rlp.EncodeToBytes(&types.StateAccount{
-			Nonce:    nonce,
-			Balance:  balance,
-			Root:     storageRoot,
-			CodeHash: codeHash,
-		})
-		if err != nil {
-			return common.Hash{}, err
-		}
-		if err := accountTrie.Update(akey, full); err != nil {
-			return common.Hash{}, err
+		if acct.storage {
+			cur.accounts = append(cur.accounts, len(cur.keys))
 		}
 		if acctRows != nil {
 			slim := types.SlimAccountRLP(types.StateAccount{
-				Nonce:    nonce,
-				Balance:  balance,
+				Nonce:    acct.nonce,
+				Balance:  &acct.balance,
 				Root:     types.EmptyRootHash,
-				CodeHash: codeHash,
+				CodeHash: acct.codeHash[:],
 			})
 			if err := acctRows.add(akey, slim); err != nil {
-				return common.Hash{}, err
+				return err
+			}
+		}
+		// Accounts reach the account trie only after their storage job is
+		// out, so it never waits on roots no worker has.
+		pending = append(pending, acct)
+		if len(pending) == cap(pending) || len(cur.keys) >= foldBatchSize {
+			if len(cur.accounts) > 0 {
+				if err := send(true); err != nil {
+					return err
+				}
+			}
+			if err := sendAccounts(); err != nil {
+				return err
 			}
 		}
 		rederived++
@@ -198,12 +319,22 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch
 		}
 	}
 	if skey, _, err := slotHeld.current(); err != nil {
-		return common.Hash{}, err
+		return err
 	} else if skey != nil {
-		return common.Hash{}, fmt.Errorf("storage under account hash %x, which holds no account", skey[:common.HashLength])
+		return fmt.Errorf("storage under account hash %x, which holds no account", skey[:common.HashLength])
+	}
+	if len(cur.accounts) > 0 {
+		if err := send(true); err != nil {
+			return err
+		}
+	}
+	if len(pending) > 0 {
+		if err := sendAccounts(); err != nil {
+			return err
+		}
 	}
 	if batch == nil {
-		return accountTrie.Hash(), nil
+		return nil
 	}
 	err := acctRows.replay(bufio.NewReaderSize(nil, 256<<10), func(hash, row []byte) error {
 		if err := written.accounts.add(hash, row); err != nil {
@@ -213,13 +344,97 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch
 		return flush()
 	})
 	if err != nil {
-		return common.Hash{}, err
+		return err
 	}
 	if err := batch.Write(); err != nil {
-		return common.Hash{}, err
+		return err
 	}
 	batch.Reset()
-	return accountTrie.Hash(), nil
+	return nil
+}
+
+// foldStorage hashes the storage tries of the accounts it is sent and
+// reports the roots of each job's accounts, in their order.
+func foldStorage(ctx context.Context, in <-chan *foldBatch, out chan<- []common.Hash, free chan<- *foldBatch) error {
+	var (
+		st    = trie.NewStackTrie(nil)
+		found []common.Hash
+	)
+	for b := range in {
+		var next, val int
+		update := func(to int) error {
+			for ; next < to; next++ {
+				if err := st.Update(b.keys[next][:], b.vals[val:b.ends[next]]); err != nil {
+					return err
+				}
+				val = b.ends[next]
+			}
+			return nil
+		}
+		for _, end := range b.accounts {
+			if err := update(end); err != nil {
+				return err
+			}
+			found = append(found, st.Hash())
+			st.Reset()
+		}
+		if err := update(len(b.keys)); err != nil {
+			return err
+		}
+		done := b.done
+		free <- b
+		if done {
+			select {
+			case out <- found:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			found = nil
+		}
+	}
+	return nil
+}
+
+// foldAccounts builds the account trie from the accounts in order, taking
+// each one's storage root from the workers' jobs, in the order they were
+// handed out.
+func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []foldAccount, roots []chan []common.Hash) (common.Hash, error) {
+	var (
+		tr   = trie.NewStackTrie(nil)
+		have []common.Hash
+		job  int
+	)
+	for accounts := range in {
+		for i := range accounts {
+			acct := &accounts[i]
+			root := types.EmptyRootHash
+			if acct.storage {
+				for len(have) == 0 {
+					select {
+					case have = <-roots[job%len(roots)]:
+						job++
+					case <-ctx.Done():
+						return common.Hash{}, ctx.Err()
+					}
+				}
+				root, have = have[0], have[1:]
+			}
+			full, err := rlp.EncodeToBytes(&types.StateAccount{
+				Nonce:    acct.nonce,
+				Balance:  &acct.balance,
+				Root:     root,
+				CodeHash: acct.codeHash[:],
+			})
+			if err != nil {
+				return common.Hash{}, err
+			}
+			if err := tr.Update(acct.hash[:], full); err != nil {
+				return common.Hash{}, err
+			}
+		}
+		free <- accounts
+	}
+	return tr.Hash(), nil
 }
 
 // Both commands prove what they wrote into the binary tree namespace: each

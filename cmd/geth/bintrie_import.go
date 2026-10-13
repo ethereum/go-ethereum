@@ -857,7 +857,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err != nil {
 		return common.Hash{}, err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, written, opts.tmpDir, stats.start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.start)
 	if err != nil {
 		return common.Hash{}, err
 	}

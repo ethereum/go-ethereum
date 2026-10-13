@@ -152,12 +152,13 @@ func assertNamespaceEqual(t *testing.T, want, got ethdb.Database) {
 }
 
 // TestImportWorkersAgree: with the preimage records spread over several
-// workers and the snapshot pipeline cycling its batches, the import lands on
-// the converter's root and namespace, byte for byte.
+// workers, the snapshot pipeline cycling its batches and check 2 folding
+// storage tries across many jobs, some split over several batches, the import
+// lands on the converter's root and namespace, byte for byte.
 func TestImportWorkersAgree(t *testing.T) {
 	convDB, root, binRoot, snapPath, prePath := importFixture(t, mixedAlloc(8347))
-	defer func(p, l int) { preimageBatchSize, leafBatchSize = p, l }(preimageBatchSize, leafBatchSize)
-	preimageBatchSize, leafBatchSize = 4, 64
+	defer func(p, l, f int) { preimageBatchSize, leafBatchSize, foldBatchSize = p, l, f }(preimageBatchSize, leafBatchSize, foldBatchSize)
+	preimageBatchSize, leafBatchSize, foldBatchSize = 4, 64, 2
 
 	impDB := rawdb.NewMemoryDatabase()
 	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
