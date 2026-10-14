@@ -1,18 +1,18 @@
-// Copyright 2026 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2026-2027 The QuarkChain Authors
+// This file is part of the QuarkChain library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The QuarkChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The QuarkChain library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the QuarkChain library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package types contains the data types of the QuarkChain root chain.
 package types
@@ -20,6 +20,7 @@ package types
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"fmt"
 	"reflect"
 	"sync/atomic"
 
@@ -49,6 +50,16 @@ type RootBlockHeader struct {
 	Signature       [65]byte       `json:"signature"        gencodec:"required"`
 }
 
+const (
+	// unsealedFixedSize is the size of the fixed part of the SSZ encoding of
+	// the header without the seal, the offset of Extra included.
+	unsealedFixedSize = 4 + 4 + 32 + 32 + 20 + 32 + 8 + 32 + 32 + 4
+
+	// sealedFixedSize is the size of the fixed part of the SSZ encoding of the
+	// header with the seal.
+	sealedFixedSize = unsealedFixedSize + 8 + 32 + 65
+)
+
 // Hash returns the block hash of the header, which is the keccak256 hash of its
 // SSZ encoding.
 func (h *RootBlockHeader) Hash() common.Hash {
@@ -62,16 +73,6 @@ func (h *RootBlockHeader) SealHash() common.Hash {
 	enc := make([]byte, 0, unsealedFixedSize+len(h.Extra))
 	return crypto.Keccak256Hash(h.appendSSZ(enc, false))
 }
-
-const (
-	// unsealedFixedSize is the size of the fixed part of the SSZ encoding of
-	// the header without the seal, the offset of Extra included.
-	unsealedFixedSize = 4 + 4 + 32 + 32 + 20 + 32 + 8 + 32 + 32 + 4
-
-	// sealedFixedSize is the size of the fixed part of the SSZ encoding of the
-	// header with the seal.
-	sealedFixedSize = unsealedFixedSize + 8 + 32 + 65
-)
 
 // appendSSZ appends the SSZ encoding of the header as the container below.
 // Without the seal, Nonce, MixDigest and Signature are left out.
@@ -242,11 +243,21 @@ func (s MinorBlockHeaders) EncodeIndex(i int, w *bytes.Buffer) {
 }
 
 // CalcMinorHeaderHash returns the trie root of the given shard block headers.
+// It panics if the list contains a nil header.
 func CalcMinorHeaderHash(headers MinorBlockHeaders) common.Hash {
+	for i, header := range headers {
+		if header == nil {
+			panic(fmt.Sprintf("nil shard block header at index %d", i))
+		}
+	}
 	return ctypes.DeriveSha(headers, trie.NewStackTrie(nil))
 }
 
 // RootBlock represents an entire root block in the QuarkChain.
+//
+// The block owns its data: constructors and mutators copy their inputs, so
+// later changes to the arguments never affect the block. Shard block headers
+// must be non-nil; a nil element is a programming error and fails fast.
 type RootBlock struct {
 	header            *RootBlockHeader
 	minorBlockHeaders MinorBlockHeaders
@@ -256,6 +267,10 @@ type RootBlock struct {
 	hash atomic.Pointer[common.Hash]
 	size atomic.Uint64
 }
+
+// rootBlockFixedSize is the size of the fixed part of the SSZ encoding of a
+// root block, i.e. the offsets of its three fields.
+const rootBlockFixedSize = 3 * 4
 
 // NewRootBlock creates a new root block. The input data is copied, changes to
 // header and to the field values will not affect the block.
@@ -280,10 +295,6 @@ func NewRootBlockWithHeader(header *RootBlockHeader) *RootBlock {
 	return &RootBlock{header: CopyRootBlockHeader(header)}
 }
 
-// rootBlockFixedSize is the size of the fixed part of the SSZ encoding of a
-// root block, i.e. the offsets of its three fields.
-const rootBlockFixedSize = 3 * 4
-
 // MarshalSSZ returns the SSZ encoding of the block as the container below. The
 // shard block headers keep their RLP encoding, which their hashes are computed
 // over.
@@ -292,6 +303,11 @@ const rootBlockFixedSize = 3 * 4
 //	MinorBlockHeaders List[List[byte]]
 //	TrackingData      List[byte]
 func (b *RootBlock) MarshalSSZ() ([]byte, error) {
+	for i, header := range b.minorBlockHeaders {
+		if header == nil {
+			return nil, fmt.Errorf("nil shard block header at index %d", i)
+		}
+	}
 	headers := make([][]byte, len(b.minorBlockHeaders))
 	headersSize := 0
 	for i, header := range b.minorBlockHeaders {
@@ -346,6 +362,11 @@ func (b *RootBlock) UnmarshalSSZ(buf []byte) error {
 	if err != nil {
 		return err
 	}
+	// fastssz truncates the uint32 offset to a negative int on 32-bit
+	// platforms and returns it without error.
+	if n < 0 {
+		return ssz.ErrSize
+	}
 	headers := make(MinorBlockHeaders, n)
 	err = ssz.UnmarshalDynamic(headersBuf, n, func(i int, enc []byte) error {
 		headers[i] = new(ctypes.Header)
@@ -355,6 +376,7 @@ func (b *RootBlock) UnmarshalSSZ(buf []byte) error {
 		return err
 	}
 	b.header, b.minorBlockHeaders, b.trackingData = header, headers, common.CopyBytes(buf[trackingOffset:])
+	b.hash.Store(nil)
 	b.size.Store(uint64(len(buf)))
 	return nil
 }
@@ -374,6 +396,8 @@ func (b *RootBlock) MinorBlockHeader(hash common.Hash) *ctypes.Header {
 	return nil
 }
 
+// TrackingData returns the tracking data of the block. Note the returned data
+// is not an independent copy.
 func (b *RootBlock) TrackingData() []byte { return b.trackingData }
 
 func (b *RootBlock) Version() uint32               { return b.header.Version }
@@ -394,13 +418,28 @@ func (b *RootBlock) Signature() [65]byte           { return b.header.Signature }
 // Header returns a deep-copy of the entire root block header.
 func (b *RootBlock) Header() *RootBlockHeader { return CopyRootBlockHeader(b.header) }
 
+// Hash returns the keccak256 hash of b's header.
+// The hash is computed on the first call and cached thereafter.
+func (b *RootBlock) Hash() common.Hash {
+	if hash := b.hash.Load(); hash != nil {
+		return *hash
+	}
+	h := b.header.Hash()
+	b.hash.Store(&h)
+	return h
+}
+
 // Size returns the true SSZ encoded storage size of the block, either by
 // encoding and returning it, or returning a previously cached value.
+// It panics if the block cannot be encoded.
 func (b *RootBlock) Size() uint64 {
 	if size := b.size.Load(); size > 0 {
 		return size
 	}
-	enc, _ := b.MarshalSSZ()
+	enc, err := b.MarshalSSZ()
+	if err != nil {
+		panic(fmt.Sprintf("cannot encode root block %s: %v", b.Hash(), err))
+	}
 	b.size.Store(uint64(len(enc)))
 	return uint64(len(enc))
 }
@@ -418,13 +457,17 @@ func (b *RootBlock) WithMiningResult(nonce uint64, mixDigest common.Hash, signat
 }
 
 // WithSeal returns a new block with the data from b but the header replaced with
-// the sealed one.
+// the sealed one. The body and tracking data are copied.
 func (b *RootBlock) WithSeal(header *RootBlockHeader) *RootBlock {
-	return &RootBlock{
+	block := &RootBlock{
 		header:            CopyRootBlockHeader(header),
-		minorBlockHeaders: b.minorBlockHeaders,
-		trackingData:      b.trackingData,
+		minorBlockHeaders: make(MinorBlockHeaders, len(b.minorBlockHeaders)),
+		trackingData:      common.CopyBytes(b.trackingData),
 	}
+	for i := range b.minorBlockHeaders {
+		block.minorBlockHeaders[i] = ctypes.CopyHeader(b.minorBlockHeaders[i])
+	}
+	return block
 }
 
 // WithBody returns a new block with the original header and a deep copy of the
@@ -439,17 +482,6 @@ func (b *RootBlock) WithBody(minorBlockHeaders MinorBlockHeaders, trackingData [
 		block.minorBlockHeaders[i] = ctypes.CopyHeader(minorBlockHeaders[i])
 	}
 	return block
-}
-
-// Hash returns the keccak256 hash of b's header.
-// The hash is computed on the first call and cached thereafter.
-func (b *RootBlock) Hash() common.Hash {
-	if hash := b.hash.Load(); hash != nil {
-		return *hash
-	}
-	h := b.header.Hash()
-	b.hash.Store(&h)
-	return h
 }
 
 // Finalize sets the minor header hash and the coinbase of the block in place.
@@ -471,19 +503,19 @@ func (b *RootBlock) Finalize(coinbaseAmount *uint256.Int, coinbaseAddress *commo
 }
 
 // AddMinorBlockHeader appends a shard block header to the block in place. The
-// minor header hash is updated by Finalize.
+// header is copied, and the minor header hash is updated by Finalize.
 func (b *RootBlock) AddMinorBlockHeader(header *ctypes.Header) {
-	b.minorBlockHeaders = append(b.minorBlockHeaders, header)
+	b.minorBlockHeaders = append(b.minorBlockHeaders, ctypes.CopyHeader(header))
 	b.size.Store(0)
 }
 
 // ExtendMinorBlockHeaderList appends the shard block headers created no later
-// than createTime to the block in place. The minor header hash is updated by
-// Finalize.
+// than createTime to the block in place. The matching headers are copied, and
+// the minor header hash is updated by Finalize.
 func (b *RootBlock) ExtendMinorBlockHeaderList(headers []*ctypes.Header, createTime uint64) {
 	for _, header := range headers {
 		if header.Time <= createTime {
-			b.minorBlockHeaders = append(b.minorBlockHeaders, header)
+			b.minorBlockHeaders = append(b.minorBlockHeaders, ctypes.CopyHeader(header))
 		}
 	}
 	b.size.Store(0)
