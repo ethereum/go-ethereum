@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/bits"
 	"slices"
 	"strconv"
@@ -62,7 +61,6 @@ var (
 			verifyOnlyFlag,
 			keepPreimagesFlag,
 			forceConvertFlag,
-			memoryLimitFlag,
 			tmpDirFlag,
 			workersFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
@@ -80,12 +78,11 @@ leaves nothing openable. --verify-only runs both checks and writes nothing.
 Preimages are not persisted unless --keep-preimages is given: nothing on a
 binary-tree node reads them.
 
-Memory: the sorters hold at most --memory-limit of records, and the database
-its cache plus memtables, about 1.5 x (--cache x --cache.database / 100). Go's
-collector can hold as much again before it runs, so budget about twice their
-sum, or cap it with GOMEMLIMIT. Draining a sorter also takes 1 MB per spilled
-run, and a smaller --memory-limit means more runs, so setting it far below the
-state size stops saving memory.
+Memory: the sorters hold at most 4 GB of records, and the database its cache
+plus memtables, about 1.5 x (--cache x --cache.database / 100). Go's collector
+can hold as much again before it runs, so budget about twice their sum, or cap
+it with GOMEMLIMIT. Merging the sorters' spilled runs takes 512 KiB per run on
+top.
 
 Disk: --tmpdir holds the sort spills and a copy of every tree node until the
 import ends, so it needs disk space, not a tmpfs.
@@ -161,10 +158,6 @@ func importBinaryTrie(ctx *cli.Context) error {
 			}
 		}
 	}
-	budgetMB := ctx.Uint64(memoryLimitFlag.Name)
-	if budgetMB > math.MaxInt>>20 {
-		budgetMB = math.MaxInt >> 20
-	}
 	workers := ctx.Int(workersFlag.Name)
 	if workers < 1 {
 		return errors.New("--workers must be at least 1")
@@ -176,7 +169,7 @@ func importBinaryTrie(ctx *cli.Context) error {
 		verifyOnly:    verifyOnly,
 		keepPreimages: ctx.Bool(keepPreimagesFlag.Name),
 		conversionOptions: conversionOptions{
-			sortBudget: int(budgetMB << 20),
+			sortBudget: sortBudget,
 			tmpDir:     ctx.String(tmpDirFlag.Name),
 			workers:    workers,
 		},

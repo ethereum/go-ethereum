@@ -48,12 +48,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// sortBudget is the bytes of records the sorters hold, together, before they
+// spill sorted runs to disk: 4 GB, or what a 32-bit int holds.
+const sortBudget = min(4096<<20, math.MaxInt)
+
 var (
-	memoryLimitFlag = &cli.Uint64Flag{
-		Name:  "memory-limit",
-		Usage: "Total sort-buffer budget in MB before records spill to disk",
-		Value: 4096,
-	}
 	tmpDirFlag = &cli.StringFlag{
 		Name:  "tmpdir",
 		Usage: "Directory for scratch files, the sort spills and a copy of every tree node; needs disk, not tmpfs (default: the OS temp dir)",
@@ -80,7 +79,7 @@ var (
 	}
 	workersFlag = &cli.IntFlag{
 		Name:  "workers",
-		Usage: "Parallel workers: convert splits its scan among them by account hash, import its candidate key derivation; --memory-limit is split among them",
+		Usage: "Parallel workers: convert splits its scan among them by account hash, import its candidate key derivation; the 4 GB sort budget is split among them",
 		Value: 4,
 	}
 
@@ -96,7 +95,6 @@ var (
 				ArgsUsage: "[state-root]",
 				Action:    convertToBinaryTrie,
 				Flags: slices.Concat([]cli.Flag{
-					memoryLimitFlag,
 					tmpDirFlag,
 					forceConvertFlag,
 					snapshotOutFlag,
@@ -192,11 +190,6 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	if workers < 1 {
 		return errors.New("--workers must be at least 1")
 	}
-	// MB to bytes without wrapping the platform int.
-	budgetMB := ctx.Uint64(memoryLimitFlag.Name)
-	if budgetMB > math.MaxInt>>20 {
-		budgetMB = math.MaxInt >> 20
-	}
 	// Probe before MakeTrieDatabase: its guard fatals on a completed
 	// conversion and cannot see interrupted debris.
 	if ctx.Bool(forceConvertFlag.Name) {
@@ -220,7 +213,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	defer closeSource()
 
 	binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{
-		sortBudget:   int(budgetMB << 20),
+		sortBudget:   sortBudget,
 		tmpDir:       ctx.String(tmpDirFlag.Name),
 		snapshotPath: snapshotPath,
 		preimagePath: preimagePath,

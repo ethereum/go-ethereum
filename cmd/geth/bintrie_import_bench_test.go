@@ -75,7 +75,7 @@ func BenchmarkImport(b *testing.B) {
 	}
 	dir = filepath.Join(dir, fmt.Sprintf("accounts-%d", accounts))
 	root := benchArtifacts(b, dir, accounts)
-	budget := int(4096 << 20 * int64(accounts) / 424_160_000)
+	budget := int(sortBudget * int64(accounts) / 424_160_000)
 
 	defer debug.SetGCPercent(debug.SetGCPercent(50)) // the command's --gogc
 	defer log.SetDefault(log.Root())
@@ -172,7 +172,7 @@ func benchArtifacts(b *testing.B, dir string, n int) common.Hash {
 	ro := triedb.NewDatabase(db, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
 	_, err := convertState(db, ro, root, conversionOptions{
 		tmpDir:       tmp,
-		sortBudget:   4096 << 20,
+		sortBudget:   sortBudget,
 		workers:      runtime.NumCPU(),
 		snapshotPath: filepath.Join(dir, "snapshot.bin"),
 		preimagePath: filepath.Join(dir, "preimages.bin"),
