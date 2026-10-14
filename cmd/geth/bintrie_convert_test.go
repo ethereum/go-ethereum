@@ -92,7 +92,7 @@ func TestBintrieConvert(t *testing.T) {
 	})
 	defer srcTriedb2.Close()
 
-	currentRoot, err := convertState(chaindb, srcTriedb2, root, conversionOptions{})
+	currentRoot, err := convertState(context.Background(), chaindb, srcTriedb2, root, conversionOptions{})
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	} else if !dirty {
 		t.Fatal("conversion debris is invisible to the namespace probe")
 	}
-	if _, err := convertState(chaindb, src, root, conversionOptions{}); err == nil {
+	if _, err := convertState(context.Background(), chaindb, src, root, conversionOptions{}); err == nil {
 		t.Fatal("conversion ran over the debris of a previous run")
 	}
 
@@ -271,7 +271,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	if err := wipeBinaryTrieState(chaindb, ""); err != nil {
 		t.Fatalf("wipe failed: %v", err)
 	}
-	if _, err := convertState(chaindb, src, root, conversionOptions{}); err != nil {
+	if _, err := convertState(context.Background(), chaindb, src, root, conversionOptions{}); err != nil {
 		t.Fatalf("conversion failed after wipe: %v", err)
 	}
 	if got := rawdb.ReadAccountSnapshot(pbtdb, common.Hash{0x01}); len(got) != 0 {
@@ -283,7 +283,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	}
 
 	// A completed conversion also refuses without --force.
-	if _, err := convertState(chaindb, src, root, conversionOptions{}); err == nil {
+	if _, err := convertState(context.Background(), chaindb, src, root, conversionOptions{}); err == nil {
 		t.Fatal("conversion ran over a completed conversion")
 	}
 }
@@ -357,7 +357,7 @@ func TestWrittenStateCatchesBadWrites(t *testing.T) {
 				srcTriedb.Close()
 				src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
 				defer src.Close()
-				_, err := convertState(newTamperDB(chaindb, f.prefix, mode), src, root, conversionOptions{tmpDir: t.TempDir()})
+				_, err := convertState(context.Background(), newTamperDB(chaindb, f.prefix, mode), src, root, conversionOptions{tmpDir: t.TempDir()})
 				caught(t, err, chaindb, f.name)
 			})
 			t.Run("import/"+f.name+"/"+mode, func(t *testing.T) {
@@ -456,7 +456,7 @@ func TestConvertRejectsCorruptCode(t *testing.T) {
 	}
 	src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
 	defer src.Close()
-	if _, err := convertState(chaindb, src, root, conversionOptions{tmpDir: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "assembled code hashes to") {
+	if _, err := convertState(context.Background(), chaindb, src, root, conversionOptions{tmpDir: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "assembled code hashes to") {
 		t.Fatalf("converted corrupt code; err = %v", err)
 	}
 	if rawdb.HasPBTState(chaindb) {
@@ -501,7 +501,7 @@ func TestWipeRestoresVirginNamespace(t *testing.T) {
 
 	convert := func(dir string) (common.Hash, []byte, []byte) {
 		t.Helper()
-		binRoot, err := convertState(chaindb, src, root, conversionOptions{
+		binRoot, err := convertState(context.Background(), chaindb, src, root, conversionOptions{
 			tmpDir:       dir,
 			snapshotPath: filepath.Join(dir, "snapshot.bin"),
 			preimagePath: filepath.Join(dir, "preimages.bin"),
@@ -619,7 +619,7 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 		t.Helper()
 		dir := t.TempDir()
 		snapPath, prePath := filepath.Join(dir, "snapshot.bin"), filepath.Join(dir, "preimages.bin")
-		_, err := convertState(chaindb, src, root, conversionOptions{
+		_, err := convertState(context.Background(), chaindb, src, root, conversionOptions{
 			tmpDir:       dir,
 			snapshotPath: snapPath,
 			preimagePath: prePath,
@@ -741,7 +741,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 
 	t.Run("complete set", func(t *testing.T) {
 		accounts, slots := scan(t, nil)
-		if err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0); err != nil {
+		if err := verifySourceRoot(context.Background(), accounts, slots, root, nil, nil, "", 4, 0); err != nil {
 			t.Fatalf("the complete record set failed the source-root check: %v", err)
 		}
 	})
@@ -750,7 +750,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, _ *common.Hash) bool {
 			return addr == victim
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
+		err := verifySourceRoot(context.Background(), accounts, slots, root, nil, nil, "", 4, 0)
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
 			t.Fatalf("a dropped account survived the source-root check; err = %v", err)
 		}
@@ -760,7 +760,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot != nil && *slot == slotOne
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
+		err := verifySourceRoot(context.Background(), accounts, slots, root, nil, nil, "", 4, 0)
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
 			t.Fatalf("a dropped storage slot survived the source-root check; err = %v", err)
 		}
@@ -770,7 +770,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot == nil
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
+		err := verifySourceRoot(context.Background(), accounts, slots, root, nil, nil, "", 4, 0)
 		if err == nil || !strings.Contains(err.Error(), "which holds no account") {
 			t.Fatalf("orphaned storage survived the source-root check; err = %v", err)
 		}

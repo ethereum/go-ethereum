@@ -170,7 +170,7 @@ func benchArtifacts(b *testing.B, dir string, n int) common.Hash {
 	db := openBenchDB(b, src)
 	root := commitMainnetShape(b, db, n)
 	ro := triedb.NewDatabase(db, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
-	_, err := convertState(db, ro, root, conversionOptions{
+	_, err := convertState(context.Background(), db, ro, root, conversionOptions{
 		tmpDir:       tmp,
 		sortBudget:   sortBudget,
 		workers:      runtime.NumCPU(),

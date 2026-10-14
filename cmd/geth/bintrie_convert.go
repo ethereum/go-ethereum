@@ -212,7 +212,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	closeSource := sync.OnceValue(srcTriedb.Close)
 	defer closeSource()
 
-	binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{
+	binRoot, err := convertState(context.Background(), chaindb, srcTriedb, root, conversionOptions{
 		sortBudget:   sortBudget,
 		tmpDir:       ctx.String(tmpDirFlag.Name),
 		snapshotPath: snapshotPath,
@@ -352,8 +352,9 @@ func (p *progress) finish(msg string, ctx ...any) {
 // tree builds bottom-up in one pass. The scan must re-derive the source
 // state root, both stores must read back exactly what was written, and the
 // leaves must pass EIP-8347's dual-check as an import's would. The
-// attestation lands last, so an interrupted run refuses to open.
-func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
+// attestation lands last, so an interrupted run refuses to open. Cancelling
+// ctx stops it between batches, before anything is attested.
+func convertState(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 
 	// A non-virgin namespace, completed or debris, needs --force.
@@ -463,7 +464,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	src := leafSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
 	codes := newCodeSet()
-	g, gctx := errgroup.WithContext(context.Background())
+	g, gctx := errgroup.WithContext(ctx)
 	for i := range parts {
 		g.Go(func() error {
 			return deriveLeaves(gctx, chaindb, src, &parts[i], keys[i], codes, writers[i], stats)
@@ -492,7 +493,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	// The fold writes the flat state as it goes, digesting what it writes.
 	written := newWrittenState(workers)
 	defer written.close()
-	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, workers, stats.accounts.Load()+stats.slots.Load()); err != nil {
+	if err := verifySourceRoot(ctx, accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, workers, stats.accounts.Load()+stats.slots.Load()); err != nil {
 		return common.Hash{}, err
 	}
 	accounts.Close()
@@ -535,7 +536,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, builderErr
 	}
 	sorter.Close()
-	if err := writeStagedNodes(context.Background(), pbtdb, nodes, written.nodes, nil); err != nil {
+	if err := writeStagedNodes(ctx, pbtdb, nodes, written.nodes, nil); err != nil {
 		return common.Hash{}, err
 	}
 	nodes.close()
@@ -543,7 +544,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 
 	// Both stores must hold exactly what was written before anything becomes
 	// publishable or openable.
-	if err := verifyWritten(context.Background(), pbtdb, nil, written.families()...); err != nil {
+	if err := verifyWritten(ctx, pbtdb, nil, written.families()...); err != nil {
 		return common.Hash{}, err
 	}
 	logWritten(written)
@@ -560,7 +561,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	// The check re-reads the artifacts and rebuilds the tree once more;
 	// streaming the leaves into it would save that pass.
-	if _, err := importState(context.Background(), chaindb, importOptions{snapshot: snapPath, preimages: prePath,
+	if _, err := importState(ctx, chaindb, importOptions{snapshot: snapPath, preimages: prePath,
 		anchor: &types.Header{Root: root}, verifyOnly: true, conversionOptions: opts}); err != nil {
 		return common.Hash{}, err
 	}
@@ -1121,7 +1122,7 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 // verifySourceRoot demands that the scanned records re-derive the state root
 // they were read from, the converter's counterpart to the importer's anchor
 // check. With a batch it also writes the flat state, see rederiveMerkleRoot.
-func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) error {
+func verifySourceRoot(ctx context.Context, accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) error {
 	acctStream, err := accounts.Sort()
 	if err != nil {
 		return err
@@ -1130,7 +1131,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(context.Background(), acctStream, slotStream, batch, written, tmpDir, workers, total, nil)
+	got, err := rederiveMerkleRoot(ctx, acctStream, slotStream, batch, written, tmpDir, workers, total, nil)
 	if err != nil {
 		return err
 	}
