@@ -32,6 +32,10 @@ const (
 	// XShardSendGas is the fixed cost of a cross-shard message. The destination
 	// shard charges it out of the message's gas limit, so the limit must cover it.
 	XShardSendGas uint64 = 9000
+
+	// MaxCrossShardTxGas caps a message's destination gas budget, including
+	// XShardSendGas. It matches half of QuarkChain's default 12,000,000 block gas limit.
+	MaxCrossShardTxGas uint64 = 6_000_000
 )
 
 // QuarkChainConfig is the configuration of a QuarkChain shard chain. Its

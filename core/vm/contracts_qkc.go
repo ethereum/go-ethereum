@@ -204,7 +204,7 @@ func (c *xShardOutboxCall) Run(input []byte) ([]byte, error) {
 		return nil, errXShardInvalidShard
 	}
 	// The destination charges XShardSendGas out of the gas limit.
-	if toMsg.gasLimit < params.XShardSendGas || toMsg.gasLimit > params.MaxTxGas {
+	if toMsg.gasLimit < params.XShardSendGas || toMsg.gasLimit > params.MaxCrossShardTxGas {
 		return nil, errXShardInvalidGasLimit
 	}
 	// The destination runs the message at the gas price of this transaction,

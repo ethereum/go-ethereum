@@ -115,7 +115,7 @@ func TestXShardOutboxSend(t *testing.T) {
 		{name: "word sized data", data: bytes.Repeat([]byte{0xaa}, 64)},
 		{name: "excess value", data: []byte{1, 2, 3}, excess: 12345},
 		{name: "minimum gas limit", gasLimit: params.XShardSendGas},
-		{name: "maximum gas limit", gasLimit: params.MaxTxGas},
+		{name: "maximum gas limit", gasLimit: params.MaxCrossShardTxGas},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			evm, statedb := newXShardEVM()
@@ -257,8 +257,11 @@ func TestXShardOutboxInvalid(t *testing.T) {
 			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.XShardSendGas-1, nil)
 		}, want: errXShardInvalidGasLimit},
 		{name: "gas limit above max", input: func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.MaxTxGas+1, nil)
-		}, want: errXShardInvalidGasLimit},
+			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.MaxCrossShardTxGas+1, nil)
+		}, value: xShardValue + (params.MaxCrossShardTxGas+1)*xShardGasPrice, want: errXShardInvalidGasLimit},
+		{name: "ethereum maximum gas limit", input: func(t *testing.T) []byte {
+			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.MaxTxGas, nil)
+		}, value: xShardValue + params.MaxTxGas*xShardGasPrice, want: errXShardInvalidGasLimit},
 		{name: "insufficient value", input: input, value: cost - 1, want: errXShardInsufficientValue},
 		{name: "cost overflow", input: func(t *testing.T) []byte {
 			return packXShardSend(t, xShardDst, xShardRecipient, maxUint256, xShardGasLimit, nil)
