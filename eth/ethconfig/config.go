@@ -233,8 +233,9 @@ type Config struct {
 	RangeLimit uint64 `toml:",omitempty"`
 }
 
-// PBTImportConfig names an EIP-8347 snapshot import that runs inside the
-// node. Snapshot, Preimages and Anchor (a block number or hash) go together.
+// PBTImportConfig names an EIP-8347 snapshot import, or a self-conversion
+// with a preimage file, that runs inside the node. Preimages and Anchor (a
+// block number or hash) go together; with Snapshot it is an import.
 type PBTImportConfig struct {
 	Snapshot  string `toml:",omitempty"`
 	Preimages string `toml:",omitempty"`

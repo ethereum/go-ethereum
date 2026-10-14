@@ -1037,6 +1037,8 @@ func TestImportFlagsRefused(t *testing.T) {
 		want string
 	}{
 		{[]string{"--pbt.import.snapshot", present}, "go together"},
+		{[]string{"--pbt.import.preimages", present}, "go together"},
+		{[]string{"--pbt.import.preimages", filepath.Join(dir, "missing"), "--pbt.import.anchor", "7"}, "no such file"},
 		{[]string{"--pbt.import.snapshot", present, "--pbt.import.preimages", filepath.Join(dir, "missing"), "--pbt.import.anchor", "7"}, "no such file"},
 		{[]string{"--pbt.import.snapshot", present, "--pbt.import.preimages", present, "--pbt.import.anchor", "7", "--pbt.import.workers", "0"}, "at least 1"},
 	} {

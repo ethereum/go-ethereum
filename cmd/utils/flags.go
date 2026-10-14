@@ -282,12 +282,12 @@ var (
 	}
 	PBTImportPreimagesFlag = &cli.StringFlag{
 		Name:     "pbt.import.preimages",
-		Usage:    "EIP-8347 preimage file paired with --pbt.import.snapshot",
+		Usage:    "EIP-8347 preimage file: imported with --pbt.import.snapshot, or alone, the keys the node converts its own state with in the background",
 		Category: flags.EthCategory,
 	}
 	PBTImportAnchorFlag = &cli.StringFlag{
 		Name:     "pbt.import.anchor",
-		Usage:    "Block number or hash the imported snapshot commits; the import waits until it is canonical and finalized",
+		Usage:    "Block number or hash the snapshot and preimage file commit; the node waits until it is canonical and finalized",
 		Category: flags.EthCategory,
 	}
 	PBTImportWorkersFlag = &cli.IntFlag{
@@ -1875,8 +1875,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
-	// An import inside the node names its pair and anchor together, and both
-	// files must be there before the node starts working on them.
+	// An import inside the node names its pair and anchor together; a
+	// self-conversion, the preimage file and its anchor. The files must be
+	// there before the node starts working on them.
 	if ctx.IsSet(PBTImportSnapshotFlag.Name) {
 		cfg.PBTImport.Snapshot = ctx.String(PBTImportSnapshotFlag.Name)
 	}
@@ -1895,11 +1896,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.PBTImport.Force = ctx.Bool(PBTImportForceFlag.Name)
 	}
 	if imp := cfg.PBTImport; imp.Snapshot != "" || imp.Preimages != "" || imp.Anchor != "" {
-		if imp.Snapshot == "" || imp.Preimages == "" || imp.Anchor == "" {
-			Fatalf("--%s, --%s and --%s go together", PBTImportSnapshotFlag.Name, PBTImportPreimagesFlag.Name, PBTImportAnchorFlag.Name)
+		if imp.Preimages == "" || imp.Anchor == "" {
+			Fatalf("--%s and --%s go together, with --%s to import a snapshot rather than convert the node's own state", PBTImportPreimagesFlag.Name, PBTImportAnchorFlag.Name, PBTImportSnapshotFlag.Name)
 		}
 		for _, path := range []string{imp.Snapshot, imp.Preimages} {
-			if _, err := os.Stat(path); err != nil {
+			if _, err := os.Stat(path); path != "" && err != nil {
 				Fatalf("Binary tree import: %v", err)
 			}
 		}

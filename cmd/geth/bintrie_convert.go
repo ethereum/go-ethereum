@@ -381,7 +381,7 @@ func convertState(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb
 	for range plan.ranges {
 		plan.sources = append(plan.sources, src)
 	}
-	return convertPlan(ctx, chaindb, root, plan, opts)
+	return convertPlan(ctx, chaindb, root, plan, nil, opts)
 }
 
 // scanPlan is what a conversion scans: per worker, a range of account
@@ -426,8 +426,9 @@ func splitPreimages(path string, n int) (*os.File, []hashRange, []*preimageReade
 }
 
 // convertPlan runs a conversion of the state at root over plan; see
-// convertState.
-func convertPlan(ctx context.Context, chaindb ethdb.Database, root common.Hash, plan scanPlan, opts conversionOptions) (common.Hash, error) {
+// convertState. The tree's build, write and check 2 pause while the node
+// processes a block (yield, when set); the scan does not.
+func convertPlan(ctx context.Context, chaindb ethdb.Database, root common.Hash, plan scanPlan, yield *blockYield, opts conversionOptions) (common.Hash, error) {
 	if plan.release != nil {
 		defer plan.release()
 	}
@@ -576,7 +577,7 @@ func convertPlan(ctx context.Context, chaindb ethdb.Database, root common.Hash, 
 	if anchor == nil {
 		anchor = &types.Header{Root: root}
 	}
-	return importState(ctx, chaindb, importOptions{anchor: anchor, own: own, conversionOptions: opts})
+	return importState(ctx, chaindb, importOptions{anchor: anchor, own: own, yield: yield, conversionOptions: opts})
 }
 
 // leafSource yields the source state's accounts from a seek hash on, then

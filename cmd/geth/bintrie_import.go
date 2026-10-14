@@ -244,7 +244,7 @@ func (p *pbtImporter) Start() error {
 	}
 	num, hash, anchored := rawdb.ReadPBTAnchor(rawdb.NewTable(p.db, string(rawdb.PBTPrefix)))
 	finished := anchored && rawdb.HasPBTState(p.db)
-	if finished && ref.matches(num, hash) {
+	if finished && (ref.matches(num, hash) || p.cfg.Snapshot == "" && p.convertedPast(ref, num)) {
 		log.Info("Binary tree already imported", "anchor", num, "hash", hash)
 		p.chain.FinishPBTImport(nil) // releases a --pbt.import.force hold
 		return nil
@@ -299,7 +299,7 @@ func (p *pbtImporter) awaitAnchor(ctx context.Context, ref anchorRef) (*types.He
 			return header, err
 		}
 		if time.Since(logged) >= time.Minute {
-			log.Info("Binary tree import waiting for its anchor", "anchor", p.cfg.Anchor, "state", waiting)
+			log.Info("Binary tree import waiting for its anchor", "anchor", ref, "state", waiting)
 			logged = time.Now()
 		}
 		select {
@@ -350,8 +350,9 @@ func (p *pbtImporter) anchorState(ref anchorRef) (*types.Header, string, error) 
 	return header, "", nil
 }
 
-// importAt imports the pair at the anchor. The namespace is the import's
-// while the chain holds it: whatever a stopped or failed run, or the tree
+// importAt imports the pair at the anchor, or self-converts with the
+// preimage file anchored there. The namespace is the import's while the
+// chain holds it: whatever a stopped or failed run, or the tree
 // --pbt.import.force replaces, left there is wiped first, and a failure
 // wipes its own writes.
 func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error {
@@ -370,29 +371,34 @@ func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error 
 			return err
 		}
 	}
-	log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
-		"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
 	yield := newBlockYield()
 	defer followBlockProcessing(p.chain, yield)()
-	_, err := importState(ctx, p.db, importOptions{
-		snapshot:  p.cfg.Snapshot,
-		preimages: p.cfg.Preimages,
-		anchor:    anchor,
-		yield:     yield,
-		conversionOptions: conversionOptions{
-			sortBudget: onlineSortBudget,
-			tmpDir:     p.tmpDir,
-			workers:    cmp.Or(p.cfg.Workers, utils.PBTImportWorkersFlag.Value),
-			// Finalized blocks do not reorg, but an attested tree anchored off
-			// the canonical chain is refused by the follower anyway: say so now.
-			beforeAttest: func() error {
-				if rawdb.ReadCanonicalHash(p.db, anchor.Number.Uint64()) != anchor.Hash() {
-					return fmt.Errorf("anchor block %d (%x) left the canonical chain during the import", anchor.Number, anchor.Hash())
-				}
-				return nil
+	var err error
+	if p.cfg.Snapshot == "" {
+		err = p.convertAt(ctx, anchor, yield)
+	} else {
+		log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
+			"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
+		_, err = importState(ctx, p.db, importOptions{
+			snapshot:  p.cfg.Snapshot,
+			preimages: p.cfg.Preimages,
+			anchor:    anchor,
+			yield:     yield,
+			conversionOptions: conversionOptions{
+				sortBudget: onlineSortBudget,
+				tmpDir:     p.tmpDir,
+				workers:    cmp.Or(p.cfg.Workers, utils.PBTImportWorkersFlag.Value),
+				// Finalized blocks do not reorg, but an attested tree anchored off
+				// the canonical chain is refused by the follower anyway: say so now.
+				beforeAttest: func() error {
+					if rawdb.ReadCanonicalHash(p.db, anchor.Number.Uint64()) != anchor.Hash() {
+						return fmt.Errorf("anchor block %d (%x) left the canonical chain during the import", anchor.Number, anchor.Hash())
+					}
+					return nil
+				},
 			},
-		},
-	})
+		})
+	}
 	if err != nil && ctx.Err() == nil {
 		if werr := wipeBinaryTrieState(p.db, p.triedbDir); werr != nil {
 			log.Error("Failed to wipe a failed binary tree import", "err", werr)
@@ -425,6 +431,24 @@ func (r anchorRef) matches(number uint64, hash common.Hash) bool {
 		return r.hash == hash
 	}
 	return r.number == number
+}
+
+func (r anchorRef) String() string {
+	if r.byHash {
+		return r.hash.Hex()
+	}
+	return strconv.FormatUint(r.number, 10)
+}
+
+// convertedPast reports whether a tree attested at the given block could be
+// a self-conversion's with the preimage file anchored at ref: those attest
+// the block the node had persisted, at or past ref.
+func (p *pbtImporter) convertedPast(ref anchorRef, number uint64) bool {
+	if ref.byHash {
+		n, ok := rawdb.ReadHeaderNumber(p.db, ref.hash)
+		return ok && number >= n
+	}
+	return number >= ref.number
 }
 
 // The EIP-8347 consumer: importState ingests a distributed PBT snapshot and

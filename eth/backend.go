@@ -246,7 +246,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:               config.Preimages,
 			StateHistory:            config.StateHistory,
 			MigrationWindowBlocks:   config.MigrationWindowBlocks,
-			PBTImport:               config.PBTImport.Snapshot != "",
+			PBTImport:               config.PBTImport.Anchor != "",
 			PBTImportForce:          config.PBTImport.Force,
 			TrienodeHistory:         config.TrienodeHistory,
 			NodeFullValueCheckpoint: config.NodeFullValueCheckpoint,
