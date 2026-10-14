@@ -33,13 +33,13 @@ func TestServerPortMapping(t *testing.T) {
 	mockNAT := &mockNAT{mappedPort: 30000}
 	srv := Server{
 		Config: Config{
-			PrivateKey: newkey(),
-			NoDial:     true,
-			ListenAddr: ":0",
-			DiscAddr:   ":0",
-			NAT:        mockNAT,
-			Logger:     testlog.Logger(t, log.LvlTrace),
-			clock:      clock,
+			PrivateKey:    newkey(),
+			NoDial:        true,
+			ListenTCPAddr: ":0",
+			DiscAddr:      ":0",
+			NAT:           mockNAT,
+			Logger:        testlog.Logger(t, log.LvlTrace),
+			clock:         clock,
 		},
 	}
 	err := srv.Start()
