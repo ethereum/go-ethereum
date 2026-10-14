@@ -6,7 +6,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.0
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/VictoriaMetrics/fastcache v1.13.0
-	github.com/attestantio/go-eth2-client v0.29.0
+	github.com/attestantio/go-eth2-client v0.30.1
 	github.com/aws/aws-sdk-go-v2 v1.21.2
 	github.com/aws/aws-sdk-go-v2/config v1.18.45
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.43
@@ -85,7 +85,6 @@ require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506 // indirect
 	github.com/RaduBerinde/axisds v0.1.0 // indirect
 	github.com/RaduBerinde/btreemap v0.0.0-20250419174037-3d62b7205d54 // indirect
-	github.com/casbin/govaluate v1.10.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cockroachdb/crlib v0.0.0-20241112164430-1264a2edc35b // indirect
 	github.com/cockroachdb/swiss v0.0.0-20260820225851-333444432258 // indirect
@@ -97,8 +96,8 @@ require (
 	github.com/minio/minlz v1.0.1-0.20250507153514-87eb42fe8882 // indirect
 	github.com/pion/dtls/v3 v3.1.5 // indirect
 	github.com/pion/transport/v4 v4.1.0 // indirect
-	github.com/pk910/dynamic-ssz v1.3.2 // indirect
-	github.com/pk910/hashtree-bindings v0.2.2 // indirect
+	github.com/pk910/dynamic-ssz v1.4.0 // indirect
+	github.com/pk910/hashtree-bindings v0.2.6 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/metric v1.46.0 // indirect
