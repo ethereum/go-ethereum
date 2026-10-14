@@ -966,6 +966,18 @@ var (
 		Value:    30303,
 		Category: flags.NetworkingCategory,
 	}
+	QUICPortFlag = &cli.IntFlag{
+		Name:     "quic.port",
+		Usage:    "UDP listening port for the experimental QUIC/WebTransport transport (0 = OS-assigned). Setting this enables QUIC.",
+		Value:    0,
+		Category: flags.NetworkingCategory,
+	}
+	QUICMaxBrowsersFlag = &cli.IntFlag{
+		Name:     "quic.maxbrowsers",
+		Usage:    "Maximum number of browser peers connected over QUIC, budgeted separately from maxpeers",
+		Value:    node.DefaultConfig.P2P.MaxBrowserPeers,
+		Category: flags.NetworkingCategory,
+	}
 
 	// Console
 	JSpathFlag = &flags.DirectoryFlag{
@@ -1317,10 +1329,13 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 // line flags
 func setListenAddress(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.IsSet(ListenPortFlag.Name) {
-		cfg.ListenAddr = fmt.Sprintf(":%d", ctx.Int(ListenPortFlag.Name))
+		cfg.ListenTCPAddr = fmt.Sprintf(":%d", ctx.Int(ListenPortFlag.Name))
 	}
 	if ctx.IsSet(DiscoveryPortFlag.Name) {
 		cfg.DiscAddr = fmt.Sprintf(":%d", ctx.Int(DiscoveryPortFlag.Name))
+	}
+	if ctx.IsSet(QUICPortFlag.Name) {
+		cfg.ListenQUICAddr = fmt.Sprintf(":%d", ctx.Int(QUICPortFlag.Name))
 	}
 }
 
@@ -1513,6 +1528,9 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.IsSet(MaxPendingPeersFlag.Name) {
 		cfg.MaxPendingPeers = ctx.Int(MaxPendingPeersFlag.Name)
 	}
+	if ctx.IsSet(QUICMaxBrowsersFlag.Name) {
+		cfg.MaxBrowserPeers = ctx.Int(QUICMaxBrowsersFlag.Name)
+	}
 	if ctx.IsSet(NoDiscoverFlag.Name) {
 		cfg.NoDiscovery = ctx.Bool(NoDiscoverFlag.Name)
 	}
@@ -1537,7 +1555,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.Bool(DeveloperFlag.Name) {
 		// --dev mode can't use p2p networking.
 		cfg.MaxPeers = 0
-		cfg.ListenAddr = ""
+		cfg.ListenTCPAddr = ""
 		cfg.NoDial = true
 		cfg.NoDiscovery = true
 		cfg.DiscoveryV5 = false

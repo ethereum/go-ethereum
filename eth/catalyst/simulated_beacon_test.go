@@ -40,9 +40,9 @@ func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis, period 
 
 	n, err := node.New(&node.Config{
 		P2P: p2p.Config{
-			ListenAddr:  "127.0.0.1:0",
-			NoDiscovery: true,
-			MaxPeers:    0,
+			ListenTCPAddr: "127.0.0.1:0",
+			NoDiscovery:   true,
+			MaxPeers:      0,
 		},
 	})
 	if err != nil {

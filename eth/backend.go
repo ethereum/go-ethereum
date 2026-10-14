@@ -467,6 +467,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 		advertiseV2 := dl.SnapSyncVersion() == snap.SNAP2 || dl.ConfigSyncMode() != ethconfig.SnapSync
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), advertiseV2)...)
 	}
+	protos = append(protos, makeBrowserTxProtocol(s.handler.txpool))
 	return protos
 }
 
