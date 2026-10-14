@@ -48,12 +48,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// sortBudget is the bytes of records the sorters hold, together, before they
+// spill sorted runs to disk: 4 GB, or what a 32-bit int holds.
+const sortBudget = min(4096<<20, math.MaxInt)
+
 var (
-	memoryLimitFlag = &cli.Uint64Flag{
-		Name:  "memory-limit",
-		Usage: "Total sort-buffer budget in MB before records spill to disk",
-		Value: 4096,
-	}
 	tmpDirFlag = &cli.StringFlag{
 		Name:  "tmpdir",
 		Usage: "Directory for scratch files, the sort spills and a copy of every tree node; needs disk, not tmpfs (default: the OS temp dir)",
@@ -80,7 +79,7 @@ var (
 	}
 	workersFlag = &cli.IntFlag{
 		Name:  "workers",
-		Usage: "Parallel workers: convert splits its scan among them by account hash, import its candidate key derivation; --memory-limit is split among them",
+		Usage: "Parallel workers: convert splits its scan among them by account hash, import its candidate key derivation; the 4 GB sort budget is split among them",
 		Value: 4,
 	}
 
@@ -96,7 +95,6 @@ var (
 				ArgsUsage: "[state-root]",
 				Action:    convertToBinaryTrie,
 				Flags: slices.Concat([]cli.Flag{
-					memoryLimitFlag,
 					tmpDirFlag,
 					forceConvertFlag,
 					snapshotOutFlag,
@@ -192,11 +190,6 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	if workers < 1 {
 		return errors.New("--workers must be at least 1")
 	}
-	// MB to bytes without wrapping the platform int.
-	budgetMB := ctx.Uint64(memoryLimitFlag.Name)
-	if budgetMB > math.MaxInt>>20 {
-		budgetMB = math.MaxInt >> 20
-	}
 	// Probe before MakeTrieDatabase: its guard fatals on a completed
 	// conversion and cannot see interrupted debris.
 	if ctx.Bool(forceConvertFlag.Name) {
@@ -220,7 +213,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	defer closeSource()
 
 	binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{
-		sortBudget:   int(budgetMB << 20),
+		sortBudget:   sortBudget,
 		tmpDir:       ctx.String(tmpDirFlag.Name),
 		snapshotPath: snapshotPath,
 		preimagePath: preimagePath,
@@ -281,6 +274,76 @@ func (s *conversionStats) report(force bool) {
 	s.lastReport.Store(now)
 	log.Info(s.what, "accounts", s.accounts.Load(), "slots", s.slots.Load(),
 		"codes", s.codes.Load(), "leaves", s.leaves.Load(), "elapsed", common.PrettyDuration(time.Since(s.start)))
+}
+
+// progressInterval is how often a running phase reports.
+var progressInterval = 8 * time.Second
+
+// progress reports one phase of a long command: a line when it starts, then
+// its share of a known total and the time left every progressInterval. done
+// is called from the reporting goroutine.
+type progress struct {
+	what   string
+	unit   string // the log key for done; "bytes" prints as a size
+	total  uint64 // zero when not known up front
+	done   func() uint64
+	start  time.Time
+	quit   chan struct{}
+	exited chan struct{}
+}
+
+func startProgress(what, unit string, total uint64, done func() uint64) *progress {
+	p := &progress{what: what, unit: unit, total: total, done: done, start: time.Now(),
+		quit: make(chan struct{}), exited: make(chan struct{})}
+	p.report()
+	go func() {
+		defer close(p.exited)
+		tick := time.NewTicker(progressInterval)
+		defer tick.Stop()
+		for {
+			select {
+			case <-tick.C:
+				p.report()
+			case <-p.quit:
+				return
+			}
+		}
+	}()
+	return p
+}
+
+func (p *progress) report() {
+	done, elapsed := p.done(), time.Since(p.start)
+	ctx := []any{p.unit, p.amount(done)}
+	if p.total > 0 {
+		ctx = append(ctx, "total", p.amount(p.total), "progress", fmt.Sprintf("%.2f%%", 100*float64(done)/float64(p.total)))
+		if done > 0 && done < p.total {
+			ctx = append(ctx, "eta", common.PrettyDuration(time.Duration(float64(elapsed)*float64(p.total-done)/float64(done))))
+		}
+	}
+	log.Info(p.what, append(ctx, "elapsed", common.PrettyDuration(elapsed))...)
+}
+
+func (p *progress) amount(n uint64) any {
+	if p.unit == "bytes" {
+		return common.StorageSize(n)
+	}
+	return n
+}
+
+// stop ends the reports. Later calls do nothing.
+func (p *progress) stop() {
+	if p.quit != nil {
+		close(p.quit)
+		<-p.exited
+		p.quit = nil
+	}
+}
+
+// finish ends the reports and logs msg with ctx and the phase's duration.
+func (p *progress) finish(msg string, ctx ...any) {
+	p.stop()
+	log.Info(msg, append(ctx, "elapsed", common.PrettyDuration(time.Since(p.start)))...)
 }
 
 // convertState converts the MPT state at root into the binary tree namespace
@@ -428,7 +491,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	// record set, so only this check ties the output to the source state.
 	// The fold writes the flat state as it goes, digesting what it writes.
 	written := newWrittenState()
-	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, stats.start); err != nil {
+	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, workers, stats.accounts.Load()+stats.slots.Load()); err != nil {
 		return common.Hash{}, err
 	}
 	accounts.Close()
@@ -479,9 +542,10 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 
 	// Both stores must hold exactly what was written before anything becomes
 	// publishable or openable.
-	if err := verifyWritten(pbtdb, written); err != nil {
+	if err := verifyWritten(pbtdb, written.families()...); err != nil {
 		return common.Hash{}, err
 	}
+	logWritten(written)
 
 	snapDigest, err := snapshot.finalize(binRoot)
 	if err != nil {
@@ -1035,7 +1099,7 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 // verifySourceRoot demands that the scanned records re-derive the state root
 // they were read from, the converter's counterpart to the importer's anchor
 // check. With a batch it also writes the flat state, see rederiveMerkleRoot.
-func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, written *writtenState, tmpDir string, start time.Time) error {
+func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) error {
 	acctStream, err := accounts.Sort()
 	if err != nil {
 		return err
@@ -1044,7 +1108,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, written, tmpDir, start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, written, tmpDir, workers, total)
 	if err != nil {
 		return err
 	}

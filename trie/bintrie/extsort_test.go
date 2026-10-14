@@ -59,7 +59,7 @@ func drainSorted(t *testing.T, budget int, recs []sortRecord) []sortRecord {
 		if err != nil {
 			t.Fatal(err)
 		}
-		out = append(out, sortRecord{key: k, value: v})
+		out = append(out, sortRecord{key: bytes.Clone(k), value: bytes.Clone(v)})
 	}
 }
 
@@ -238,7 +238,7 @@ func TestLeafSorterAbsorb(t *testing.T) {
 				t.Fatalf("record %x came out with the wrong value or twice", k)
 			}
 			delete(want, string(k))
-			prev = k
+			prev = bytes.Clone(k)
 		}
 		if len(want) != 0 {
 			t.Fatalf("%d records lost in the merge", len(want))
@@ -347,6 +347,59 @@ func TestLeafSorterEdges(t *testing.T) {
 	})
 }
 
+// TestRecordStreamReadAhead: records merged ahead of the reader come out
+// complete and in order across many recycled batches, and Close mid-stream
+// stops the merge and removes the runs.
+func TestRecordStreamReadAhead(t *testing.T) {
+	defer func(size, n int) { mergeBatchSize, mergeBatches = size, n }(mergeBatchSize, mergeBatches)
+	mergeBatchSize, mergeBatches = 3, 2
+	recs := randomLeafRecords(t, rand.New(rand.NewSource(8297)), 500)
+
+	out := drainSorted(t, 512, recs)
+	if len(out) != len(recs) {
+		t.Fatalf("drained %d records, put in %d", len(out), len(recs))
+	}
+	want := make(map[string][]byte, len(recs))
+	for _, r := range recs {
+		want[string(r.key)] = r.value
+	}
+	for i, r := range out {
+		if i > 0 && bytes.Compare(out[i-1].key, r.key) >= 0 {
+			t.Fatalf("record %d out of order: %x after %x", i, r.key, out[i-1].key)
+		}
+		if !bytes.Equal(want[string(r.key)], r.value) {
+			t.Fatalf("record %x came out with the wrong value", r.key)
+		}
+	}
+
+	t.Run("close mid-stream", func(t *testing.T) {
+		dir := t.TempDir()
+		s := NewLeafSorter(dir, 512)
+		for _, r := range recs {
+			if err := s.Add(r.key, r.value); err != nil {
+				t.Fatal(err)
+			}
+		}
+		stream, err := s.Sort()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for range 10 {
+			if _, _, err := stream.Next(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		s.Close()
+		leftovers, err := filepath.Glob(filepath.Join(dir, "bintrie-sort-*"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(leftovers) != 0 {
+			t.Fatalf("%d spill files survived Close", len(leftovers))
+		}
+	})
+}
+
 // commonAddress builds a deterministic address for tests.
 func commonAddress(i byte) (a [20]byte) {
 	a[0] = i
@@ -437,7 +490,7 @@ func TestRecordSorterVarlen(t *testing.T) {
 		if prev != nil && bytes.Compare(prev, k) >= 0 {
 			t.Fatalf("key %x out of order after %x", k, prev)
 		}
-		prev = k
+		prev = bytes.Clone(k)
 		if wv, ok := want[string(k)]; !ok || !bytes.Equal(wv, v) {
 			t.Fatalf("key %x drained with the wrong value", k)
 		}

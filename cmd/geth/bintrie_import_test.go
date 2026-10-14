@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math/big"
 	"os"
@@ -151,12 +152,13 @@ func assertNamespaceEqual(t *testing.T, want, got ethdb.Database) {
 }
 
 // TestImportWorkersAgree: with the preimage records spread over several
-// workers and the snapshot pipeline cycling its batches, the import lands on
-// the converter's root and namespace, byte for byte.
+// workers, the snapshot pipeline cycling its batches and check 2 folding
+// storage tries across many jobs, some split over several batches, the import
+// lands on the converter's root and namespace, byte for byte.
 func TestImportWorkersAgree(t *testing.T) {
 	convDB, root, binRoot, snapPath, prePath := importFixture(t, mixedAlloc(8347))
-	defer func(p, l int) { preimageBatchSize, leafBatchSize = p, l }(preimageBatchSize, leafBatchSize)
-	preimageBatchSize, leafBatchSize = 4, 64
+	defer func(p, l, f int) { preimageBatchSize, leafBatchSize, foldBatchSize = p, l, f }(preimageBatchSize, leafBatchSize, foldBatchSize)
+	preimageBatchSize, leafBatchSize, foldBatchSize = 4, 64, 2
 
 	impDB := rawdb.NewMemoryDatabase()
 	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
@@ -171,6 +173,38 @@ func TestImportWorkersAgree(t *testing.T) {
 		t.Fatalf("imported root %x, the converter built %x", imported, binRoot)
 	}
 	assertNamespaceEqual(t, convDB, impDB)
+}
+
+// TestImportChecksPreimageOrder: with phase 1's order check spread over its
+// workers, a record out of hashed-key order is refused wherever it sits,
+// inside a batch or first in one, where only the check against the batch
+// before sees it.
+func TestImportChecksPreimageOrder(t *testing.T) {
+	_, root, _, snapPath, prePath := importFixture(t, mixedAlloc(8347))
+	var recs []rawPreRecord
+	for _, rec := range readPreimageRecords(t, prePath) {
+		raw := rawPreRecord{addr: rec.addr.Bytes(), count: -1}
+		for _, slot := range rec.slots {
+			raw.slots = append(raw.slots, slot.Bytes())
+		}
+		recs = append(recs, raw)
+	}
+	defer func(n int) { preimageBatchSize = n }(preimageBatchSize)
+	preimageBatchSize = 4
+
+	for _, at := range []int{5, 8} {
+		t.Run(fmt.Sprintf("record %d", at), func(t *testing.T) {
+			bad := slices.Clone(recs)
+			bad[at-1], bad[at] = bad[at], bad[at-1]
+			path := rawPreimages(t, bad)
+			_, err := importState(rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: path,
+				anchor:            &types.Header{Number: new(big.Int), Root: root},
+				conversionOptions: conversionOptions{tmpDir: t.TempDir(), workers: 4}})
+			if want := fmt.Sprintf("preimage record %d is out of hashed-key order", at); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("err = %v, want %q", err, want)
+			}
+		})
+	}
 }
 
 // TestImportVerifyOnly runs the whole pipeline with the writers disarmed:

@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"math/big"
 	"os"
@@ -25,7 +26,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -369,6 +369,27 @@ func TestWrittenStateCatchesBadWrites(t *testing.T) {
 	}
 }
 
+// TestConvertFoldsSparseStorage: storage spread thin, most of a fold batch's
+// accounts holding none, still folds to the source root; the account trie
+// never waits on storage roots no worker was handed.
+func TestConvertFoldsSparseStorage(t *testing.T) {
+	defer func(n int) { foldBatchSize = n }(foldBatchSize)
+	foldBatchSize = 4
+	alloc := make(types.GenesisAlloc)
+	for i := range 300 {
+		var addr common.Address
+		binary.BigEndian.PutUint64(addr[12:], uint64(i)+1)
+		acct := types.Account{Balance: big.NewInt(1)}
+		if i%60 == 0 {
+			acct.Storage = map[common.Hash]common.Hash{{31: 1}: {31: 1}}
+		}
+		alloc[addr] = acct
+	}
+	if _, _, _, err := convertGenesis(t, alloc, true, conversionOptions{workers: 4}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestConvertRejectsCorruptCode: the code store has no integrity of its own,
 // so code whose bytes do not hash to its key must fail the dual-check rather
 // than convert into wrong code leaves.
@@ -674,7 +695,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 
 	t.Run("complete set", func(t *testing.T) {
 		accounts, slots := scan(t, nil)
-		if err := verifySourceRoot(accounts, slots, root, nil, nil, "", time.Now()); err != nil {
+		if err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0); err != nil {
 			t.Fatalf("the complete record set failed the source-root check: %v", err)
 		}
 	})
@@ -683,7 +704,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, _ *common.Hash) bool {
 			return addr == victim
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", time.Now())
+		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
 			t.Fatalf("a dropped account survived the source-root check; err = %v", err)
 		}
@@ -693,7 +714,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot != nil && *slot == slotOne
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", time.Now())
+		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
 			t.Fatalf("a dropped storage slot survived the source-root check; err = %v", err)
 		}
@@ -703,7 +724,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot == nil
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", time.Now())
+		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
 		if err == nil || !strings.Contains(err.Error(), "which holds no account") {
 			t.Fatalf("orphaned storage survived the source-root check; err = %v", err)
 		}
