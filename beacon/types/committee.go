@@ -17,7 +17,6 @@
 package types
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math/bits"
@@ -25,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/ssz"
 	bls "github.com/protolambda/bls12-381-util"
 )
 
@@ -81,39 +81,15 @@ func (s *SerializedSyncCommittee) UnmarshalJSON(input []byte) error {
 
 // Root calculates the root hash of the binary tree representation of a sync
 // committee provided in serialized format.
-//
-// TODO(zsfelfoldi): Get rid of this when SSZ encoding lands.
 func (s *SerializedSyncCommittee) Root() common.Hash {
-	var (
-		hasher  = sha256.New()
-		padding [64 - params.BLSPubkeySize]byte
-		data    [params.SyncCommitteeSize]common.Hash
-		l       = params.SyncCommitteeSize
-	)
-	for i := range data {
-		hasher.Reset()
-		hasher.Write(s[i*params.BLSPubkeySize : (i+1)*params.BLSPubkeySize])
-		hasher.Write(padding[:])
-		hasher.Sum(data[i][:0])
+	var leaves [params.SyncCommitteeSize][32]byte
+	for i := range leaves {
+		key := s[i*params.BLSPubkeySize : (i+1)*params.BLSPubkeySize]
+		leaves[i] = ssz.Merkleize(ssz.Pack(key), 2)
 	}
-	for l > 1 {
-		for i := 0; i < l/2; i++ {
-			hasher.Reset()
-			hasher.Write(data[i*2][:])
-			hasher.Write(data[i*2+1][:])
-			hasher.Sum(data[i][:0])
-		}
-		l /= 2
-	}
-	hasher.Reset()
-	hasher.Write(s[SerializedSyncCommitteeSize-params.BLSPubkeySize : SerializedSyncCommitteeSize])
-	hasher.Write(padding[:])
-	hasher.Sum(data[1][:0])
-	hasher.Reset()
-	hasher.Write(data[0][:])
-	hasher.Write(data[1][:])
-	hasher.Sum(data[0][:0])
-	return data[0]
+	pubkeys := ssz.Merkleize(leaves[:], params.SyncCommitteeSize)
+	agg := ssz.Merkleize(ssz.Pack(s[SerializedSyncCommitteeSize-params.BLSPubkeySize:]), 2)
+	return common.Hash(ssz.Merkleize([][32]byte{pubkeys, agg}, 2))
 }
 
 // Deserialize splits open the pubkeys into proper BLS key types.
