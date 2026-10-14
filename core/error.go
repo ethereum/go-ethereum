@@ -32,6 +32,11 @@ var (
 	// ErrBlockOversized is returned if the size of the RLP-encoded block
 	// exceeds the cap established by EIP 7934
 	ErrBlockOversized = errors.New("block RLP-encoded size exceeds maximum")
+
+	// ErrActivationWait is returned when a block crossing the binary tree
+	// activation cannot execute yet: the shadow tree has not reached its
+	// parent. The block is not invalid, and importing it later can succeed.
+	ErrActivationWait = errors.New("activation waits on the shadow tree")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will

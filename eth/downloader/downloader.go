@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -937,6 +938,11 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	// transition. Because the downloaded chain is guided by the
 	// consensus-layer.
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
+		// A shadow tree short of the activation boundary is no fault in the
+		// chain: report no bad block, and let the next cycle retry.
+		if errors.Is(err, core.ErrActivationWait) {
+			return err
+		}
 		if index < len(results) {
 			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 

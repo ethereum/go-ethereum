@@ -18,6 +18,9 @@ package downloader
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -1093,5 +1096,40 @@ func TestInvalidBodyPeerDrop(t *testing.T) {
 	case <-peer.dropped:
 	case <-time.After(1 * time.Minute):
 		t.Fatal("peer was not dropped")
+	}
+}
+
+// activationWaitChain is a local chain whose shadow tree has not reached the
+// binary tree activation boundary yet.
+type activationWaitChain struct{ BlockChain }
+
+func (activationWaitChain) InsertChain(types.Blocks) (int, error) {
+	return 0, fmt.Errorf("%w: shadow has not reached block 0", core.ErrActivationWait)
+}
+
+// TestActivationWaitReportsNoBadBlock: blocks waiting on the shadow tree are
+// no bad chain. The cycle ends with the wait, to be retried, and the engine
+// API hears of no bad block that would turn the canonical chain INVALID.
+func TestActivationWaitReportsNoBadBlock(t *testing.T) {
+	tester := newTester(t, FullSync)
+	defer tester.terminate()
+
+	// A beacon sync in progress, so a bad block would be reported.
+	head := &types.Header{Number: big.NewInt(1)}
+	rawdb.WriteSkeletonHeader(tester.db, head)
+	status, err := json.Marshal(&skeletonProgress{Subchains: []*subchain{{Head: 1, Tail: 1, Next: head.ParentHash}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawdb.WriteSkeletonSyncStatus(tester.db, status)
+
+	d := tester.downloader
+	d.blockchain = activationWaitChain{d.blockchain}
+	d.SetBadBlockCallback(func(invalid, origin *types.Header) {
+		t.Errorf("bad block %d reported for a wait on the shadow tree", invalid.Number)
+	})
+	err = d.importBlockResults([]*fetchResult{newFetchResult(head, false, false)})
+	if !errors.Is(err, core.ErrActivationWait) || errors.Is(err, errInvalidChain) {
+		t.Fatalf("err = %v, want the activation wait, not an invalid chain", err)
 	}
 }

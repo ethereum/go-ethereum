@@ -18,6 +18,7 @@ package catalyst
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -420,7 +421,9 @@ func TestMigrationSurvivesRestartPreFork(t *testing.T) {
 
 // TestBatchImportAcrossTheFork pins full sync: one InsertChain spanning the
 // boundary must drive the shadow itself - the head event only fires after
-// the batch.
+// the batch. With the tree held by an import, the batch stops at the boundary
+// with core.ErrActivationWait instead: a wait the downloader retries, never a
+// bad chain.
 func TestBatchImportAcrossTheFork(t *testing.T) {
 	genesis := migrationTestGenesis()
 	n, ethservice := startEthService(t, genesis, nil)
@@ -445,6 +448,20 @@ func TestBatchImportAcrossTheFork(t *testing.T) {
 	}
 	if head := importer.CurrentBlock(); head.Number.Uint64() != 5 {
 		t.Fatalf("imported head %d, want 5", head.Number)
+	}
+
+	cfg := core.DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	cfg.PBTImport = true
+	held, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, beacon.New(ethash.NewFaker()), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Stop()
+	if _, err := held.InsertChain(blocks); !errors.Is(err, core.ErrActivationWait) {
+		t.Fatalf("batch import across a held tree: %v, want core.ErrActivationWait", err)
+	}
+	if head := held.CurrentBlock(); head.Number.Uint64() != 3 {
+		t.Fatalf("held import's head %d, want 3, the last merkle block", head.Number)
 	}
 }
 
