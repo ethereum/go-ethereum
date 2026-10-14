@@ -1,4 +1,4 @@
-// Copyright 2026 The go-ethereum Authors
+// Copyright 2026-2027 The QuarkChain Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -163,17 +163,16 @@ func (h *Header) QKCDifficulty() *big.Int {
 // forces that.
 //
 // The header is not modified: the zeroing happens on a copy. A header whose
-// Extra is not exactly QKCExtraSize is not a QuarkChain shard block and is
-// hashed as it stands. The length is the only discriminator, so an Extra of
-// exactly QKCExtraSize bytes is taken to be a QuarkChain extra; rejecting a
-// header that is not one at all is the caller's job (DecodeQKCExtra, and the
-// consensus engine for headers arriving from the network).
-func (h *Header) QKCSealHash() common.Hash {
-	header := CopyHeader(h)
-	if len(header.Extra) == QKCExtraSize {
-		for i := qkcExtraNonceOffset; i < QKCExtraSize; i++ {
-			header.Extra[i] = 0
-		}
+// Extra is not exactly QKCExtraSize bytes is not a QuarkChain shard block and
+// is rejected: zeroing its tail would silently exclude bytes that are not a
+// seal from the hash.
+func (h *Header) QKCSealHash() (common.Hash, error) {
+	if len(h.Extra) != QKCExtraSize {
+		return common.Hash{}, fmt.Errorf("invalid qkc extra data length: have %d, want %d", len(h.Extra), QKCExtraSize)
 	}
-	return header.Hash()
+	header := CopyHeader(h)
+	for i := qkcExtraNonceOffset; i < QKCExtraSize; i++ {
+		header.Extra[i] = 0
+	}
+	return header.Hash(), nil
 }
