@@ -648,6 +648,53 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			t.Fatalf("empty key should be deleted via replay")
 		}
 		checkKeys(58, 60, true)
+
+		// Test 9: Put followed by DeleteRange in the same batch. The range
+		// deletion must observe keys that were only added to the batch.
+		batch = db.NewBatch()
+		if err := batch.Put([]byte("61"), []byte("pending-61")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.DeleteRange([]byte("60"), []byte("62")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+		has, err = db.Has([]byte("61"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("key 61 should be deleted by the range deletion")
+		}
+
+		// Test 10: DeleteRange followed by Put in the same batch.
+		batch = db.NewBatch()
+		if err := batch.DeleteRange([]byte("58"), []byte("60")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Put([]byte("59"), []byte("pending-59")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+		// Key 58 is deleted, key 59 is re-added after the range deletion.
+		has, err = db.Has([]byte("58"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("key 58 should be deleted")
+		}
+		val, err = db.Get([]byte("59"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(val, []byte("pending-59")) {
+			t.Fatalf("key 59 has wrong value: got %s, want %s", val, "pending-59")
+		}
 	})
 
 	t.Run("BatchReplayWithDeleteRange", func(t *testing.T) {

@@ -470,8 +470,31 @@ func (b *batch) Delete(key []byte) error {
 //
 // Note that this is a fallback implementation as leveldb does not natively
 // support range deletion in batches. It iterates through the database to find
-// keys in the range and adds them to the batch for deletion.
+// keys in the range and adds them to the batch for deletion. Keys that were
+// added to the batch itself before this call are considered as well.
 func (b *batch) DeleteRange(start, end []byte) error {
+	var count int
+
+	// The database iterator below cannot see keys added to this batch, so
+	// replay the pending operations and delete earlier Puts in the range.
+	pending := make(map[string]struct{})
+	if err := b.b.Replay(&pendingKeys{keys: pending}); err != nil {
+		return err
+	}
+	for key := range pending {
+		if start != nil && bytes.Compare([]byte(key), start) < 0 {
+			continue
+		}
+		if end != nil && bytes.Compare([]byte(key), end) >= 0 {
+			continue
+		}
+		count++
+		if count > 10000 { // should not block for more than a second
+			return ethdb.ErrTooManyKeys
+		}
+		b.b.Delete([]byte(key))
+		b.size += len(key)
+	}
 	// Create an iterator to scan through the keys in the range
 	slice := &util.Range{
 		Start: start, // If nil, it represents the key before all keys
@@ -480,7 +503,6 @@ func (b *batch) DeleteRange(start, end []byte) error {
 	it := b.db.NewIterator(slice, nil)
 	defer it.Release()
 
-	var count int
 	for it.Next() {
 		count++
 		key := it.Key()
@@ -495,6 +517,22 @@ func (b *batch) DeleteRange(start, end []byte) error {
 		return err
 	}
 	return nil
+}
+
+// pendingKeys tracks the keys present in a batch while replaying its operations
+// in order. It implements the leveldb.BatchReplay interface.
+type pendingKeys struct {
+	keys map[string]struct{}
+}
+
+// Put marks the key as present in the batch.
+func (p *pendingKeys) Put(key, value []byte) {
+	p.keys[string(key)] = struct{}{}
+}
+
+// Delete marks the key as absent from the batch.
+func (p *pendingKeys) Delete(key []byte) {
+	delete(p.keys, string(key))
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
