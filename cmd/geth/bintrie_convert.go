@@ -358,6 +358,79 @@ func (p *progress) finish(msg string, ctx ...any) {
 // attestation lands last, so an interrupted run refuses to open. Cancelling
 // ctx stops it between batches, before anything is attested.
 func convertState(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
+	// Each worker scans its own range of account hashes, resolving keys from
+	// the node's preimage store or from its own piece of a preimage file.
+	workers := max(opts.workers, 1)
+	plan := scanPlan{ranges: splitHashSpace(workers)}
+	if opts.preimageIn != "" {
+		f, ranges, pieces, err := splitPreimages(opts.preimageIn, workers)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		defer f.Close()
+		plan.ranges = ranges
+		for _, piece := range pieces {
+			plan.keys = append(plan.keys, &fileKeys{r: piece, hasher: newKeccakHasher()})
+		}
+	} else {
+		for range plan.ranges {
+			plan.keys = append(plan.keys, storeKeys{srcTriedb})
+		}
+	}
+	src := triedbSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
+	for range plan.ranges {
+		plan.sources = append(plan.sources, src)
+	}
+	return convertPlan(ctx, chaindb, root, plan, opts)
+}
+
+// scanPlan is what a conversion scans: per worker, a range of account
+// hashes, the source to read it from and the keys behind its hashes.
+type scanPlan struct {
+	ranges  []hashRange
+	sources []leafSource
+	keys    []keySource
+	release func() // frees the sources once the scan is done, if they hold anything
+}
+
+// splitPreimages opens a preimage file and cuts it into at most n pieces of
+// about equal bytes on record boundaries, returning each piece's reader and
+// the range of account hashes it covers: the work splits by data volume, and
+// a small file may make fewer pieces than workers.
+func splitPreimages(path string, n int) (*os.File, []hashRange, []*preimageReader, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, nil, nil, err
+	}
+	offsets, starts, err := splitPreimageFile(f, info.Size(), n)
+	if err != nil {
+		f.Close()
+		return nil, nil, nil, err
+	}
+	ranges, pieces := make([]hashRange, len(offsets)), make([]*preimageReader, len(offsets))
+	for i := range offsets {
+		end := info.Size()
+		if i+1 < len(offsets) {
+			end = offsets[i+1]
+			ranges[i].end = starts[i+1]
+		}
+		ranges[i].start = starts[i]
+		pieces[i] = preimagePiece(f, offsets[i], end-offsets[i])
+	}
+	return f, ranges, pieces, nil
+}
+
+// convertPlan runs a conversion of the state at root over plan; see
+// convertState.
+func convertPlan(ctx context.Context, chaindb ethdb.Database, root common.Hash, plan scanPlan, opts conversionOptions) (common.Hash, error) {
+	if plan.release != nil {
+		defer plan.release()
+	}
 	// A non-virgin namespace, completed or debris, needs --force.
 	if dirty, err := hasBinaryTrieState(chaindb); err != nil {
 		return common.Hash{}, err
@@ -403,48 +476,14 @@ func convertState(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb
 		}
 	}
 	// Phase 1: scan, deriving leaves. Each worker scans its own range of
-	// account hashes into sorters of its own, resolving keys from the node's
-	// preimage store or from its own piece of a preimage file.
-	workers := max(opts.workers, 1)
-	ranges := splitHashSpace(workers)
-	keys := make([]keySource, workers)
-	for i := range keys {
-		keys[i] = storeKeys{srcTriedb}
-	}
-	if opts.preimageIn != "" {
-		f, err := os.Open(opts.preimageIn)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		defer f.Close()
-		info, err := f.Stat()
-		if err != nil {
-			return common.Hash{}, err
-		}
-		// The file's pieces set the ranges, so the work splits by data volume;
-		// a small file may make fewer pieces than workers.
-		offsets, starts, err := splitPreimageFile(f, info.Size(), workers)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		workers = len(offsets)
-		ranges, keys = make([]hashRange, workers), make([]keySource, workers)
-		for i := range offsets {
-			end := info.Size()
-			if i+1 < workers {
-				end = offsets[i+1]
-				ranges[i].end = starts[i+1]
-			}
-			ranges[i].start = starts[i]
-			keys[i] = &fileKeys{r: preimagePiece(f, offsets[i], end-offsets[i]), hasher: newKeccakHasher()}
-		}
-	}
+	// account hashes into sorters of its own.
+	workers := len(plan.ranges)
 	// Every worker's two sorters are alive at once, and a sealed one keeps
 	// its buffer while its stream drains, so the budget is split rather than
 	// reused.
 	share := splitBudget(opts.sortBudget, 2*workers)
 	parts := make([]scanPart, workers)
-	for i, r := range ranges {
+	for i, r := range plan.ranges {
 		parts[i] = scanPart{
 			hashRange: r,
 			leaves:    bintrie.NewLeafSorter(opts.tmpDir, share),
@@ -468,16 +507,19 @@ func convertState(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb
 			writers[i] = frag
 		}
 	}
-	src := leafSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
 	codes := newCodeSet()
 	g, gctx := errgroup.WithContext(ctx)
 	for i := range parts {
 		g.Go(func() error {
-			return deriveLeaves(gctx, chaindb, src, &parts[i], keys[i], codes, writers[i], stats)
+			return deriveLeaves(gctx, chaindb, plan.sources[i], &parts[i], plan.keys[i], codes, writers[i], stats)
 		})
 	}
 	if err := g.Wait(); err != nil {
 		return common.Hash{}, err
+	}
+	// Nothing reads the source past the scan.
+	if plan.release != nil {
+		plan.release()
 	}
 	if preimages != nil {
 		if err := preimages.join(writers[1:]); err != nil {
@@ -539,31 +581,38 @@ func convertState(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb
 
 // leafSource yields the source state's accounts from a seek hash on, then
 // each account's storage, in keccak order, as RLP the way the state stores
-// it. flat reads pathdb's flat state, which its iterators allow only once
-// complete; otherwise the trie nodes are walked: a hash-scheme source, or a
-// pathdb still syncing or generating. Either way check 2 authenticates the
-// leaves derived from the scan against root.
-type leafSource struct {
+// it. Whatever the source, check 2 authenticates the leaves derived from the
+// scan against the root.
+type leafSource interface {
+	accounts(seek common.Hash) (pathdb.AccountIterator, error)
+	storage(accountHash, storageRoot common.Hash) (pathdb.StorageIterator, error)
+}
+
+// triedbSource reads the state at root through a trie database. flat reads
+// pathdb's flat state, which its iterators allow only once complete;
+// otherwise the trie nodes are walked: a hash-scheme source, or a pathdb
+// still syncing or generating.
+type triedbSource struct {
 	db   *triedb.Database
 	root common.Hash
 	flat bool // flat accounts are slim RLP, trie leaves full RLP
 }
 
-func (s leafSource) accounts(seek common.Hash) (pathdb.AccountIterator, error) {
+func (s triedbSource) accounts(seek common.Hash) (pathdb.AccountIterator, error) {
 	if s.flat {
 		return s.db.AccountIterator(s.root, seek)
 	}
 	return s.walk(trie.StateTrieID(s.root), seek[:])
 }
 
-func (s leafSource) storage(accountHash, storageRoot common.Hash) (pathdb.StorageIterator, error) {
+func (s triedbSource) storage(accountHash, storageRoot common.Hash) (pathdb.StorageIterator, error) {
 	if s.flat {
 		return s.db.StorageIterator(s.root, accountHash, common.Hash{})
 	}
 	return s.walk(trie.StorageTrieID(s.root, accountHash, storageRoot), nil)
 }
 
-func (s leafSource) walk(id *trie.ID, start []byte) (*trieLeafIterator, error) {
+func (s triedbSource) walk(id *trie.ID, start []byte) (*trieLeafIterator, error) {
 	tr, err := trie.New(id, s.db)
 	if err != nil {
 		return nil, err
