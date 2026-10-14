@@ -18,13 +18,17 @@ package core
 
 import (
 	"crypto/ecdsa"
+	"errors"
+	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -291,5 +295,162 @@ func TestDisposedDatadirRefusesAMerkleHead(t *testing.T) {
 		DefaultConfig().WithStateScheme(rawdb.PathScheme))
 	if err == nil || !strings.Contains(err.Error(), "disposed") {
 		t.Fatalf("err = %v, want disposal refusal", err)
+	}
+}
+
+// openImportChain opens a migration chain whose binary tree belongs to an
+// import running beside it.
+func openImportChain(t *testing.T, db ethdb.Database, genesis *Genesis, force bool) *BlockChain {
+	t.Helper()
+	cfg := DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	cfg.PBTImport, cfg.PBTImportForce = true, force
+	chain, err := NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return chain
+}
+
+// awaitShadowRecord polls for a block's shadow root, whatever the follower
+// latched before.
+func awaitShadowRecord(t *testing.T, db ethdb.Database, block *types.Block) common.Hash {
+	t.Helper()
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(10 * time.Millisecond) {
+		if root, ok := rawdb.ReadShadowStateRoot(db, block.Hash(), block.NumberU64()); ok {
+			return root
+		}
+	}
+	t.Fatalf("shadow never recorded block %d", block.NumberU64())
+	return common.Hash{}
+}
+
+// TestPBTImportNeedsAScheduledTree: an import seeds the tree the follower
+// carries to the fork, so it needs a scheduled fork and a pre-fork head.
+func TestPBTImportNeedsAScheduledTree(t *testing.T) {
+	cfg := DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	cfg.PBTImport = true
+	engine := beacon.New(ethash.NewFaker())
+	if _, err := NewBlockChain(rawdb.NewMemoryDatabase(), merkleGenesis(t), engine, cfg); err == nil || !strings.Contains(err.Error(), "binaryTrieTime") {
+		t.Fatalf("err = %v, want the missing schedule", err)
+	}
+	db := rawdb.NewMemoryDatabase()
+	head := types.NewBlockWithHeader(&types.Header{Number: big.NewInt(1), Time: migrationForkTime, Difficulty: common.Big0})
+	rawdb.WriteBlock(db, head)
+	rawdb.WriteCanonicalHash(db, head.Hash(), 1)
+	rawdb.WriteHeadBlockHash(db, head.Hash())
+	if _, err := NewBlockChain(db, migrationGenesis(t), engine, cfg); err == nil || !strings.Contains(err.Error(), "already commits") {
+		t.Fatalf("err = %v, want the post-fork refusal", err)
+	}
+}
+
+// TestPBTImportHoldsTheTree: while an import owns the binary tree, blocks keep
+// importing and nothing opens the namespace, neither the follower nor a state
+// probe falling through to it; the release hands the tree to the follower.
+func TestPBTImportHoldsTheTree(t *testing.T) {
+	genesis, db, blocks, u := generateMigrationChain(t, 3)
+	universeWithAlloc(u, genesis)
+	chain := openImportChain(t, db, genesis, false)
+	defer chain.Stop()
+	advance(t, chain, blocks)
+	head := blocks[len(blocks)-1]
+
+	if err := chain.follower.waitCaughtUp(head.NumberU64(), head.Hash(), 10*time.Second); !errors.Is(err, errPBTImportPending) {
+		t.Fatalf("follower stall %v, want the import hold", err)
+	}
+	if chain.HasState(common.Hash{0x01}) {
+		t.Fatal("unknown root reported present")
+	}
+	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+	if _, _, ok := rawdb.ReadPBTAnchor(pbtdb); ok || rawdb.ReadPBTFlatState(pbtdb) {
+		t.Fatal("the held namespace was seeded or attested")
+	}
+	if p := chain.MigrationProgress(); p.Phase != "importing" {
+		t.Fatalf("progress phase %q, want importing", p.Phase)
+	}
+
+	chain.FinishPBTImport(nil)
+	if rawdb.ReadPBTImportPending(db) {
+		t.Fatal("hold survived the release")
+	}
+	if root, want := awaitShadowRecord(t, db, head), convertCanonical(t, chain, head.Header(), u); root != want {
+		t.Fatalf("shadow root %x after the release, converting the canonical state says %x", root, want)
+	}
+}
+
+// TestPBTImportFailureKeepsTheHold: a failed import leaves the tree held and
+// says why.
+func TestPBTImportFailureKeepsTheHold(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 2)
+	chain := openImportChain(t, db, genesis, false)
+	defer chain.Stop()
+	advance(t, chain, blocks)
+
+	chain.FinishPBTImport(errors.New("snapshot leaves rebuild to the wrong root"))
+	p := chain.MigrationProgress()
+	if p.Phase != "importFailed" || p.Binary == nil || !strings.Contains(p.Binary.Error, "wrong root") {
+		t.Fatalf("progress %+v, want importFailed with the cause", p)
+	}
+	if !rawdb.ReadPBTImportPending(db) {
+		t.Fatal("a failed import released the tree")
+	}
+	head := blocks[len(blocks)-1]
+	if err := chain.follower.waitCaughtUp(head.NumberU64(), head.Hash(), 10*time.Second); !errors.Is(err, errPBTImportPending) {
+		t.Fatalf("follower stall %v, want the import hold", err)
+	}
+}
+
+// TestUnfinishedPBTImportHeldWithoutFlags: a restart without the import
+// flags must neither open nor crash on what an unfinished import wrote -
+// pathdb refuses an unattested namespace fatally - and keeps importing blocks.
+func TestUnfinishedPBTImportHeldWithoutFlags(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 2)
+	pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+	rawdb.WriteAccountTrieNode(pbtdb, nil, []byte{0x01, 0x02})
+	rawdb.WritePBTImportPending(db)
+
+	chain := openMigrationChain(t, db, genesis)
+	defer chain.Stop()
+	advance(t, chain, blocks)
+	head := blocks[len(blocks)-1]
+	if err := chain.follower.waitCaughtUp(head.NumberU64(), head.Hash(), 10*time.Second); !errors.Is(err, errPBTImportPending) {
+		t.Fatalf("follower stall %v, want the import hold", err)
+	}
+	if chain.HasState(common.Hash{0x01}) {
+		t.Fatal("unknown root reported present")
+	}
+	p := chain.MigrationProgress()
+	if p.Phase != "importFailed" || p.Binary == nil || p.Binary.Error != errPBTImportUnfinished.Error() {
+		t.Fatalf("progress %+v, want importFailed asking for the flags", p)
+	}
+}
+
+// TestFinishedPBTImportHold: an attested, anchored tree is finished. A hold
+// left over from a run that died before releasing is cleared, an import of
+// the same tree is not held for, and only force holds it for a replacement.
+func TestFinishedPBTImportHold(t *testing.T) {
+	finished := func() ethdb.Database {
+		db := rawdb.NewMemoryDatabase()
+		pbtdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+		rawdb.WritePBTAnchor(pbtdb, 7, common.Hash{0x07})
+		rawdb.WritePBTFlatState(pbtdb)
+		rawdb.WritePBTImportPending(db)
+		return db
+	}
+	genesis := migrationGenesis(t)
+
+	db := finished()
+	openMigrationChain(t, db, genesis).Stop()
+	if rawdb.ReadPBTImportPending(db) {
+		t.Fatal("stale hold kept on a finished tree")
+	}
+	db = finished()
+	openImportChain(t, db, genesis, false).Stop()
+	if rawdb.ReadPBTImportPending(db) {
+		t.Fatal("an import without force held a finished tree")
+	}
+	db = finished()
+	openImportChain(t, db, genesis, true).Stop()
+	if !rawdb.ReadPBTImportPending(db) {
+		t.Fatal("a forced import did not hold the tree it replaces")
 	}
 }
