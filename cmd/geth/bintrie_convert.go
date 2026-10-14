@@ -283,6 +283,76 @@ func (s *conversionStats) report(force bool) {
 		"codes", s.codes.Load(), "leaves", s.leaves.Load(), "elapsed", common.PrettyDuration(time.Since(s.start)))
 }
 
+// progressInterval is how often a running phase reports.
+var progressInterval = 8 * time.Second
+
+// progress reports one phase of a long command: a line when it starts, then
+// its share of a known total and the time left every progressInterval. done
+// is called from the reporting goroutine.
+type progress struct {
+	what   string
+	unit   string // the log key for done; "bytes" prints as a size
+	total  uint64 // zero when not known up front
+	done   func() uint64
+	start  time.Time
+	quit   chan struct{}
+	exited chan struct{}
+}
+
+func startProgress(what, unit string, total uint64, done func() uint64) *progress {
+	p := &progress{what: what, unit: unit, total: total, done: done, start: time.Now(),
+		quit: make(chan struct{}), exited: make(chan struct{})}
+	p.report()
+	go func() {
+		defer close(p.exited)
+		tick := time.NewTicker(progressInterval)
+		defer tick.Stop()
+		for {
+			select {
+			case <-tick.C:
+				p.report()
+			case <-p.quit:
+				return
+			}
+		}
+	}()
+	return p
+}
+
+func (p *progress) report() {
+	done, elapsed := p.done(), time.Since(p.start)
+	ctx := []any{p.unit, p.amount(done)}
+	if p.total > 0 {
+		ctx = append(ctx, "total", p.amount(p.total), "progress", fmt.Sprintf("%.2f%%", 100*float64(done)/float64(p.total)))
+		if done > 0 && done < p.total {
+			ctx = append(ctx, "eta", common.PrettyDuration(time.Duration(float64(elapsed)*float64(p.total-done)/float64(done))))
+		}
+	}
+	log.Info(p.what, append(ctx, "elapsed", common.PrettyDuration(elapsed))...)
+}
+
+func (p *progress) amount(n uint64) any {
+	if p.unit == "bytes" {
+		return common.StorageSize(n)
+	}
+	return n
+}
+
+// stop ends the reports. Later calls do nothing.
+func (p *progress) stop() {
+	if p.quit != nil {
+		close(p.quit)
+		<-p.exited
+		p.quit = nil
+	}
+}
+
+// finish ends the reports and logs msg with ctx and the phase's duration.
+func (p *progress) finish(msg string, ctx ...any) {
+	p.stop()
+	log.Info(msg, append(ctx, "elapsed", common.PrettyDuration(time.Since(p.start)))...)
+}
+
 // convertState converts the MPT state at root into the binary tree namespace
 // per EIP-8347: one scan, split by account hash across workers, derives
 // every leaf, an external sort orders the leaves in tree-key order, and the
@@ -428,7 +498,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	// record set, so only this check ties the output to the source state.
 	// The fold writes the flat state as it goes, digesting what it writes.
 	written := newWrittenState()
-	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, workers, stats.start); err != nil {
+	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, workers, stats.accounts.Load()+stats.slots.Load()); err != nil {
 		return common.Hash{}, err
 	}
 	accounts.Close()
@@ -1036,7 +1106,7 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 // verifySourceRoot demands that the scanned records re-derive the state root
 // they were read from, the converter's counterpart to the importer's anchor
 // check. With a batch it also writes the flat state, see rederiveMerkleRoot.
-func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, start time.Time) error {
+func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) error {
 	acctStream, err := accounts.Sort()
 	if err != nil {
 		return err
@@ -1045,7 +1115,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, written, tmpDir, workers, start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, written, tmpDir, workers, total)
 	if err != nil {
 		return err
 	}

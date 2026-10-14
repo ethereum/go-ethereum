@@ -28,7 +28,6 @@ import (
 	"slices"
 	"strconv"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -318,12 +317,17 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		defer cands[i].Close() // a second Close is a no-op; this one covers the error paths
 	}
 	var (
-		start        = time.Now()
 		preAccounts  uint64
 		prePreimages uint64
 		records      = make(chan preimageBatch, 2*workers)
 		g, gctx      = errgroup.WithContext(context.Background())
 	)
+	what, verified := "Verifying preimage file", "Verified preimage file"
+	if keep {
+		what, verified = "Verifying and storing preimages", "Verified and stored preimages"
+	}
+	prog := startProgress(what, "bytes", uint64(pre.size), pre.read.Load)
+	defer prog.stop()
 	for _, cand := range cands {
 		g.Go(func() error {
 			var hashes []common.Hash
@@ -403,10 +407,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			}
 			preAccounts++
 			prePreimages += 1 + uint64(len(slots))
-			if preAccounts%50_000 == 0 {
-				log.Info("Indexing preimage file", "accounts", preAccounts, "preimages", prePreimages,
-					"elapsed", common.PrettyDuration(time.Since(start)))
-			}
 		}
 		if len(batch.records) > 0 {
 			return send()
@@ -425,12 +425,13 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			return common.Hash{}, err
 		}
 	}
-	log.Info("Indexed preimage file", "accounts", preAccounts, "preimages", prePreimages,
-		"digest", pre.digest(), "elapsed", common.PrettyDuration(time.Since(start)))
+	prog.finish(verified, "accounts", preAccounts, "preimages", prePreimages, "digest", pre.digest())
 
 	// Phase 2: stream the snapshot; rebuild the tree; join every account and
 	// storage leaf to its preimage candidate; collect the MPT re-derivation
 	// inputs.
+	prog = startProgress("Verifying snapshot", "bytes", uint64(snap.size), snap.read.Load)
+	defer prog.stop()
 	candStream, err := cand.Sort()
 	if err != nil {
 		return common.Hash{}, err
@@ -638,7 +639,6 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 			}
 			next = 0
 			stats.leaves.Add(uint64(len(batch.values)))
-			stats.report(false)
 		}
 		key, value := batch.key(next), batch.values[next]
 		next++
@@ -789,7 +789,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if rebuilt != snap.root {
 		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
 	}
-	log.Info("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves.Load(), "digest", snap.digest())
+	prog.finish("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves.Load(), "digest", snap.digest())
 	var (
 		written   = newWrittenState()
 		families  = written.families()
@@ -817,6 +817,8 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		hashes = append(hashes, hash)
 	}
 	slices.SortFunc(hashes, func(a, b common.Hash) int { return bytes.Compare(a[:], b[:]) })
+	prog = startProgress("Verifying code", "codes", uint64(len(hashes)), stats.codes.Load)
+	defer prog.stop()
 	for _, hash := range hashes {
 		var chunks []bintrie.IndexedChunk
 		for {
@@ -854,7 +856,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	} else if ckey != nil {
 		return common.Hash{}, fmt.Errorf("code chunks left over for unclaimed hash %x", ckey[:32])
 	}
-	log.Info("Verified code against its hashes", "codes", stats.codes.Load())
+	prog.finish("Verified code against its hashes", "codes", stats.codes.Load())
 
 	// Check 2: re-derive the MPT and demand the anchor root.
 	acctStream, err := acctSorter.Sort()
@@ -865,7 +867,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err != nil {
 		return common.Hash{}, err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.start)
+	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.accounts.Load()+stats.slots.Load())
 	if err != nil {
 		return common.Hash{}, err
 	}

@@ -23,7 +23,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"time"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -92,7 +92,7 @@ func (h *heldStream) advance() { h.key, h.value = nil, nil }
 // written after the last storage row, so no flushed table mixes the two key
 // families. Everything is written by return, batch included, and digested
 // into written.
-func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, start time.Time) (common.Hash, error) {
+func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) (common.Hash, error) {
 	workers = max(workers, 1)
 	var (
 		g, ctx    = errgroup.WithContext(context.Background())
@@ -125,7 +125,7 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch
 			}
 			close(accts)
 		}()
-		return walkMerkleRecords(ctx, accounts, slots, batch, written, tmpDir, start, jobs, free, accts, acctsFree)
+		return walkMerkleRecords(ctx, accounts, slots, batch, written, tmpDir, total, jobs, free, accts, acctsFree)
 	})
 	if err := g.Wait(); err != nil {
 		return common.Hash{}, err
@@ -160,18 +160,22 @@ type foldAccount struct {
 // walkMerkleRecords joins the account and slot streams in keccak order,
 // writing the flat state if batch is set, and hands the slots to the fold
 // workers and the accounts to the account trie: a job of whole accounts to
-// one worker, the next job to the next.
-func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, start time.Time,
+// one worker, the next job to the next. total is the accounts and slots
+// expected, for progress reports.
+func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, total uint64,
 	jobs []chan *foldBatch, free chan *foldBatch, accts, acctsFree chan []foldAccount) error {
 	var (
 		slotHeld   = &heldStream{stream: slots}
-		rederived  uint64
+		walked     atomic.Uint64 // accounts and slots
+		walkedAccs uint64
 		acctRows   *spillFile
 		storageSum *digestAhead
 		worker     int
 		cur        *foldBatch
 		pending    []foldAccount
 	)
+	prog := startProgress("Re-deriving merkle state", "records", total, walked.Load)
+	defer prog.stop()
 	if batch != nil {
 		var err error
 		if acctRows, err = newSpillFile(tmpDir, "bintrie-acctrows-*"); err != nil {
@@ -276,6 +280,7 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 				}
 				acct.storage = true
 				slotHeld.advance()
+				walked.Add(1)
 				// A storage trie past a batch goes on in the same worker's next.
 				if len(cur.keys) == 2*foldBatchSize {
 					if err := send(false); err != nil {
@@ -313,11 +318,8 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 				return err
 			}
 		}
-		rederived++
-		if rederived%100_000 == 0 {
-			log.Info("Re-deriving merkle state", "accounts", rederived,
-				"elapsed", common.PrettyDuration(time.Since(start)))
-		}
+		walked.Add(1)
+		walkedAccs++
 	}
 	if skey, _, err := slotHeld.current(); err != nil {
 		return err
@@ -334,17 +336,22 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 			return err
 		}
 	}
+	prog.stop()
 	if batch == nil {
 		return nil
 	}
 	if err := storageSum.finish(); err != nil {
 		return err
 	}
+	var rows atomic.Uint64
+	prog = startProgress("Writing flat accounts", "accounts", walkedAccs, rows.Load)
+	defer prog.stop()
 	accountSum := written.accounts.ahead()
 	defer accountSum.finish()
 	err := acctRows.replay(bufio.NewReaderSize(nil, 256<<10), func(hash, row []byte) error {
 		accountSum.add(hash, row)
 		rawdb.WriteAccountSnapshot(batch, common.BytesToHash(hash), row)
+		rows.Add(1)
 		return flush()
 	})
 	if err != nil {
@@ -357,6 +364,7 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 		return err
 	}
 	batch.Reset()
+	prog.finish("Wrote flat accounts", "accounts", rows.Load())
 	return nil
 }
 
@@ -579,12 +587,19 @@ func (w *writtenState) families() []writtenFamily {
 // writeStagedNodes writes the staged tree nodes into the namespace in key
 // order, digesting each.
 func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDigest) error {
-	batch := pbtdb.NewBatch()
-	ahead := digest.ahead()
+	var (
+		batch   = pbtdb.NewBatch()
+		ahead   = digest.ahead()
+		staged  uint64
+		flushed atomic.Uint64
+		prog    = startProgress("Writing tree nodes", "nodes", nodes.count, flushed.Load)
+	)
 	defer ahead.finish()
+	defer prog.stop()
 	err := nodes.replay(func(path, blob []byte) error {
 		ahead.add(path, blob)
 		rawdb.WriteAccountTrieNode(batch, path, blob)
+		staged++
 		if batch.ValueSize() < ethdb.IdealBatchSize {
 			return nil
 		}
@@ -592,6 +607,7 @@ func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDige
 			return err
 		}
 		batch.Reset()
+		flushed.Store(staged)
 		return nil
 	})
 	if err != nil {
@@ -600,7 +616,11 @@ func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDige
 	if err := ahead.finish(); err != nil {
 		return err
 	}
-	return batch.Write()
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	prog.finish("Wrote tree nodes", "nodes", staged)
+	return nil
 }
 
 // verifyWritten re-reads each family in key order, concurrently, and
@@ -610,12 +630,18 @@ func verifyWritten(pbtdb ethdb.Database, families ...writtenFamily) error {
 	var g errgroup.Group
 	for _, f := range families {
 		g.Go(func() error {
+			var read atomic.Uint64
+			prog := startProgress("Reading back "+f.name+" records", "records", f.want.count, read.Load)
+			defer prog.stop()
 			got := newWriteDigest()
 			it := pbtdb.NewIterator(f.prefix, nil)
 			defer it.Release()
 			for it.Next() {
 				if err := got.add(it.Key()[len(f.prefix):], it.Value()); err != nil {
 					return err
+				}
+				if got.count%4096 == 0 {
+					read.Store(got.count)
 				}
 			}
 			if err := it.Error(); err != nil {

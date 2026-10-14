@@ -26,7 +26,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -696,7 +695,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 
 	t.Run("complete set", func(t *testing.T) {
 		accounts, slots := scan(t, nil)
-		if err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, time.Now()); err != nil {
+		if err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0); err != nil {
 			t.Fatalf("the complete record set failed the source-root check: %v", err)
 		}
 	})
@@ -705,7 +704,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, _ *common.Hash) bool {
 			return addr == victim
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, time.Now())
+		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
 			t.Fatalf("a dropped account survived the source-root check; err = %v", err)
 		}
@@ -715,7 +714,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot != nil && *slot == slotOne
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, time.Now())
+		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
 			t.Fatalf("a dropped storage slot survived the source-root check; err = %v", err)
 		}
@@ -725,7 +724,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot == nil
 		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, time.Now())
+		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
 		if err == nil || !strings.Contains(err.Error(), "which holds no account") {
 			t.Fatalf("orphaned storage survived the source-root check; err = %v", err)
 		}

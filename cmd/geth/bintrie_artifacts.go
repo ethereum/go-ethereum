@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -633,6 +634,8 @@ func (pf *preimageFile) abort() {
 // which one strictly-ascending check over the derived keys covers.
 type snapshotReader struct {
 	f      *os.File
+	size   int64
+	read   atomic.Uint64 // bytes read from f, for progress reports
 	hasher crypto.KeccakState
 	br     *bufio.Reader
 	root   common.Hash // the claimed pbtRoot, known once next has returned io.EOF
@@ -661,9 +664,26 @@ func openSnapshot(path string) (*snapshotReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	sr := &snapshotReader{f: f, hasher: crypto.NewKeccakState(), zone: -1}
-	sr.br = bufio.NewReaderSize(io.TeeReader(f, sr.hasher), 1<<20)
+	info, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	sr := &snapshotReader{f: f, size: info.Size(), hasher: crypto.NewKeccakState(), zone: -1}
+	sr.br = bufio.NewReaderSize(io.TeeReader(countingReader{f, &sr.read}, sr.hasher), 1<<20)
 	return sr, nil
+}
+
+// countingReader counts the bytes read through it.
+type countingReader struct {
+	r io.Reader
+	n *atomic.Uint64
+}
+
+func (c countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n.Add(uint64(n))
+	return n, err
 }
 
 // fill reads the next record. A header record or a group decodes into
@@ -790,6 +810,8 @@ func (sr *snapshotReader) close() { sr.f.Close() }
 // (see preimagePiece) reads one span of records and hashes nothing.
 type preimageReader struct {
 	f          *os.File
+	size       int64
+	read       atomic.Uint64 // bytes read from f, for progress reports
 	hasher     crypto.KeccakState
 	r          *bufio.Reader
 	left       int64
@@ -809,8 +831,8 @@ func openPreimages(path string) (*preimageReader, error) {
 		f.Close()
 		return nil, err
 	}
-	pr := &preimageReader{f: f, hasher: crypto.NewKeccakState(), left: size.Size()}
-	pr.r = bufio.NewReaderSize(io.TeeReader(f, pr.hasher), 1<<20)
+	pr := &preimageReader{f: f, size: size.Size(), hasher: crypto.NewKeccakState(), left: size.Size()}
+	pr.r = bufio.NewReaderSize(io.TeeReader(countingReader{f, &pr.read}, pr.hasher), 1<<20)
 	return pr, nil
 }
 

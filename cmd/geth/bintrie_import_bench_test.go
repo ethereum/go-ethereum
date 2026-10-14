@@ -49,7 +49,7 @@ import (
 
 // importMarks are the log lines closing each import phase, in order.
 var importMarks = []struct{ msg, name string }{
-	{"Indexed preimage file", "preimages"},
+	{"Verified preimage file", "preimages"},
 	{"Verified snapshot consistency", "snapshot"},
 	{"Verified code against its hashes", "replay"},
 	{"Verified consensus anchoring", "check2"},

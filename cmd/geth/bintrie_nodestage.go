@@ -38,6 +38,7 @@ import (
 type nodeStager struct {
 	dir    string
 	depths map[int]*spillFile
+	count  uint64 // nodes added
 }
 
 // newNodeStager stages its files in a fresh directory under tmpDir.
@@ -70,6 +71,7 @@ func (s *nodeStager) add(path, blob []byte) error {
 		}
 		s.depths[depth] = d
 	}
+	s.count++
 	return d.add(path, blob)
 }
 
