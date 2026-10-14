@@ -18,6 +18,7 @@ package override
 
 import (
 	"maps"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -127,4 +128,95 @@ func TestStateOverrideMovePrecompile(t *testing.T) {
 func hex2Bytes(str string) *hexutil.Bytes {
 	rpcBytes := hexutil.Bytes(common.FromHex(str))
 	return &rpcBytes
+}
+
+func TestStateOverrideKeepsPrecompileWithoutCode(t *testing.T) {
+	db := state.NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
+	statedb, err := state.New(types.EmptyRootHash, db)
+	if err != nil {
+		t.Fatalf("failed to create statedb: %v", err)
+	}
+	precompiles := map[common.Address]vm.PrecompiledContract{
+		common.BytesToAddress([]byte{0x1}): &precompileContract{},
+		common.BytesToAddress([]byte{0x2}): &precompileContract{},
+	}
+	bytes2Addr := func(b []byte) *common.Address {
+		a := common.BytesToAddress(b)
+		return &a
+	}
+	one := hexutil.Uint64(1)
+	balance := (*hexutil.Big)(big.NewInt(1))
+
+	var testSuite = []struct {
+		name                string
+		overrides           StateOverride
+		expectedPrecompiles map[common.Address]struct{}
+	}{
+		{
+			name: "balance-only",
+			overrides: StateOverride{
+				common.BytesToAddress([]byte{0x1}): {Balance: balance},
+			},
+			expectedPrecompiles: map[common.Address]struct{}{
+				common.BytesToAddress([]byte{0x1}): {},
+				common.BytesToAddress([]byte{0x2}): {},
+			},
+		},
+		{
+			name: "nonce-only",
+			overrides: StateOverride{
+				common.BytesToAddress([]byte{0x1}): {Nonce: &one},
+			},
+			expectedPrecompiles: map[common.Address]struct{}{
+				common.BytesToAddress([]byte{0x1}): {},
+				common.BytesToAddress([]byte{0x2}): {},
+			},
+		},
+		{
+			name: "empty-entry",
+			overrides: StateOverride{
+				common.BytesToAddress([]byte{0x1}): {},
+			},
+			expectedPrecompiles: map[common.Address]struct{}{
+				common.BytesToAddress([]byte{0x1}): {},
+				common.BytesToAddress([]byte{0x2}): {},
+			},
+		},
+		{
+			name: "code-replaces-precompile",
+			overrides: StateOverride{
+				common.BytesToAddress([]byte{0x1}): {Code: hex2Bytes("0xff")},
+			},
+			expectedPrecompiles: map[common.Address]struct{}{
+				common.BytesToAddress([]byte{0x2}): {},
+			},
+		},
+		{
+			name: "move-precompile",
+			overrides: StateOverride{
+				common.BytesToAddress([]byte{0x1}): {MovePrecompileTo: bytes2Addr([]byte{0xff})},
+			},
+			expectedPrecompiles: map[common.Address]struct{}{
+				common.BytesToAddress([]byte{0x2}):  {},
+				common.BytesToAddress([]byte{0xff}): {},
+			},
+		},
+	}
+
+	for _, tt := range testSuite {
+		t.Run(tt.name, func(t *testing.T) {
+			cpy := maps.Clone(precompiles)
+			if err := tt.overrides.Apply(statedb, cpy); err != nil {
+				t.Fatalf("want no error, have %v", err)
+			}
+			if len(cpy) != len(tt.expectedPrecompiles) {
+				t.Fatalf("precompile count mismatch, want %d, have %d", len(tt.expectedPrecompiles), len(cpy))
+			}
+			for k := range tt.expectedPrecompiles {
+				if _, ok := cpy[k]; !ok {
+					t.Fatalf("precompile not found: %s", k.String())
+				}
+			}
+		})
+	}
 }

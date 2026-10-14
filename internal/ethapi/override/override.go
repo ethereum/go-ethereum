@@ -89,7 +89,10 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 			precompiles[*account.MovePrecompileTo] = p
 			dirtyAddrs[*account.MovePrecompileTo] = struct{}{}
 		}
-		if isPrecompile {
+		// Drop the precompile only when the override changes what executes at
+		// this address (move or replace with EVM code). Balance-, nonce-, or
+		// storage-only overrides must leave the precompile in place.
+		if isPrecompile && (account.MovePrecompileTo != nil || account.Code != nil) {
 			delete(precompiles, addr)
 		}
 		// Override account nonce.
