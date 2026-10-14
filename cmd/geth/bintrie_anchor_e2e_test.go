@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -293,11 +294,12 @@ func TestOnlineImportFollowsTheChain(t *testing.T) {
 	}
 	chain.Stop()
 
-	// ...and replaces the tree with it.
+	// ...and replaces the tree with it, named by number this time.
 	chain = f.node(t, db, true)
 	defer chain.Stop()
 	chain.SetFinalized(head.Header())
 	p = f.importer(t, chain, db, 4, true)
+	p.cfg.Anchor = strconv.FormatUint(f.blocks[4].NumberU64(), 10)
 	if err := p.Start(); err != nil {
 		t.Fatal(err)
 	}
