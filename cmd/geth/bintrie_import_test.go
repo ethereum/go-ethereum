@@ -903,3 +903,28 @@ func TestImportCancels(t *testing.T) {
 		}
 	}
 }
+
+// TestImportFlagsRefused: a node given part of an import, or files that are
+// not there, refuses to start rather than run without it.
+func TestImportFlagsRefused(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	present := filepath.Join(dir, "snapshot")
+	if err := os.WriteFile(present, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--pbt.import.snapshot", present}, "go together"},
+		{[]string{"--pbt.import.snapshot", present, "--pbt.import.preimages", filepath.Join(dir, "missing"), "--pbt.import.anchor", "7"}, "no such file"},
+		{[]string{"--pbt.import.snapshot", present, "--pbt.import.preimages", present, "--pbt.import.anchor", "7", "--pbt.import.workers", "0"}, "at least 1"},
+	} {
+		geth := runGeth(t, append([]string{"--datadir", t.TempDir(), "--nodiscover", "--port", "0", "--ipcdisable"}, tc.args...)...)
+		geth.WaitExit()
+		if geth.ExitStatus() == 0 || !strings.Contains(geth.StderrText(), tc.want) {
+			t.Fatalf("geth %v: exit status %d, want a refusal naming %q\nstderr:\n%s", tc.args, geth.ExitStatus(), tc.want, geth.StderrText())
+		}
+	}
+}

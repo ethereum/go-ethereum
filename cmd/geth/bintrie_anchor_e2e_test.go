@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -349,4 +350,69 @@ func TestOnlineImportNeverCanonicalAnchor(t *testing.T) {
 	if head := chain.CurrentBlock(); head.Number.Uint64() != f.blocks[len(f.blocks)-1].NumberU64() {
 		t.Fatalf("head %d after the failed import, want %d", head.Number, f.blocks[len(f.blocks)-1].NumberU64())
 	}
+}
+
+// TestOnlineImportStopAndFailure: stopping a waiting import keeps the hold for
+// the next start; an anchor that leaves the canonical chain before the
+// attestation is refused; and a pair that fails verification after writing
+// leaves the tree held and its namespace clean, scratch included, while the
+// chain keeps inserting blocks.
+func TestOnlineImportStopAndFailure(t *testing.T) {
+	f := newOnlineFixture(t, 3)
+	db := rawdb.NewMemoryDatabase()
+	chain := f.node(t, db, false)
+	defer chain.Stop()
+	insertBlocks(t, chain, f.blocks[:5])
+
+	p := f.importer(t, chain, db, 3, false)
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if !rawdb.ReadPBTImportPending(db) {
+		t.Fatal("a stopped import released the tree")
+	}
+
+	anchor := f.blocks[3]
+	rawdb.WriteCanonicalHash(db, common.Hash{0x0b, 0xad}, anchor.NumberU64())
+	err := p.importAt(context.Background(), anchor.Header())
+	rawdb.WriteCanonicalHash(db, anchor.Hash(), anchor.NumberU64())
+	if err == nil || !strings.Contains(err.Error(), "left the canonical chain") {
+		t.Fatalf("err = %v, want the anchor's re-check to refuse", err)
+	}
+	if rawdb.HasPBTState(db) {
+		t.Fatal("an import whose anchor left the chain attested")
+	}
+
+	// The pair converted at block 4 claimed as block 5's state: the tree
+	// rebuilds and is written, then the merkle re-derivation refuses it.
+	chain.SetFinalized(f.blocks[4].Header())
+	p = f.importer(t, chain, db, 3, false)
+	p.cfg.Anchor = f.blocks[4].Hash().Hex()
+	if err := os.MkdirAll(p.tmpDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(p.tmpDir, "killed-run-spill"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+	<-p.done
+	prog := chain.MigrationProgress()
+	if prog.Phase != "importFailed" || prog.Binary == nil || !strings.Contains(prog.Binary.Error, "anchor commits") {
+		t.Fatalf("progress %+v, want importFailed on the merkle re-derivation", prog)
+	}
+	if dirty, err := hasBinaryTrieState(db); err != nil || dirty {
+		t.Fatalf("the failed import's writes survived (err %v)", err)
+	}
+	if _, err := os.Stat(p.tmpDir); !os.IsNotExist(err) {
+		t.Fatalf("scratch survived the import: %v", err)
+	}
+	if !rawdb.ReadPBTImportPending(db) {
+		t.Fatal("a failed import released the tree")
+	}
+	insertBlocks(t, chain, f.blocks[5:])
 }
