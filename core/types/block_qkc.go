@@ -1,4 +1,4 @@
-// Copyright 2026 The go-ethereum Authors
+// Copyright 2026-2027 The QuarkChain Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -24,13 +24,33 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// A QuarkChain shard block is a post-Merge block. Its header carries the
-// QuarkChain fields without changing the header format:
+// QKCExtraSize is the size of the QuarkChain extra data carried in the
+// Header.Extra of a shard block. The layout is a fixed protocol format.
 //
-//   - Difficulty and Nonce stay zero, as the Merge requires.
-//   - MixDigest holds the PoW difficulty. It replaces Difficulty in the seal hash.
-//   - Extra holds the other fields, packed with the fixed layout below. The PoW
-//     seal (nonce and mix hash) is written into it after mining.
+// A QuarkChain shard block is a post-Merge geth block: the header format is
+// left unchanged and the QuarkChain fields are packed into Header.Extra. Three
+// geth header fields then take on QuarkChain semantics:
+//
+//   - Difficulty stays zero, as the Merge requires. A zero Difficulty is what
+//     makes the EVM treat the block as post-Merge and read the block randomness
+//     (PREVRANDAO) from MixDigest (see core/evm.go), so PoW cannot reuse
+//     Difficulty.
+//   - Nonce stays zero, as the Merge requires. The real PoW nonce lives in the
+//     extra data below.
+//   - MixDigest carries the PoW difficulty, which stands in for Difficulty in
+//     the seal hash. MixDigest is not zero, so it is also the value the EVM sees
+//     as the block randomness.
+//
+// The PoW seal (nonce and mix hash) occupies the tail of the extra data and is
+// excluded from the seal hash, while everything before it is covered. See
+// Header.QKCSealHash.
+//
+// Note that 120 bytes exceeds the 32-byte cap stock geth puts on Header.Extra
+// (params.MaximumExtraDataSize, enforced on the block import path and on the
+// Engine API path), so this layout cannot reach a chain until that cap is
+// raised.
+//
+// The extra data is laid out as:
 //
 //	offset  size  field
 //	0       4     version
@@ -39,13 +59,19 @@ import (
 //	40      24    cursor (rootBlockHeight, minorBlockIndex, xShardDepositIndex)
 //	64      8     xShardGasUsed
 //	72      8     xShardGasLimit
-//	80      8     nonce
+//	80      8     nonce       <- start of the PoW seal
 //	88      32    mixHash
 //
 // Integers are big-endian.
-
-// QKCExtraSize is the size of the extra data of a QuarkChain shard block.
 const QKCExtraSize = 120
+
+// Offsets of the PoW seal inside the extra data: the nonce followed by the mix
+// hash, together the tail region that Header.QKCSealHash zeroes. The seal is
+// covered by the block hash but not by the seal hash.
+const (
+	qkcExtraNonceOffset   = 80 // nonce, 8 bytes
+	qkcExtraMixHashOffset = 88 // mix hash, 32 bytes
+)
 
 // XShardCursor is a position in the stream of cross-shard messages confirmed by
 // the root chain, as in QuarkChain's XshardTxCursorInfo. The cursor of a shard
@@ -57,7 +83,11 @@ type XShardCursor struct {
 }
 
 // QKCExtra holds the QuarkChain fields packed into the extra data of a shard
-// block header.
+// block header. See QKCExtraSize for the byte layout.
+//
+// Nonce and MixHash are the real PoW seal of the shard block. They are not the
+// geth Header fields of the same name: Header.Nonce is always zero, and
+// Header.MixDigest carries the QuarkChain difficulty rather than a mix hash.
 type QKCExtra struct {
 	Version        uint32
 	ShardID        uint32
@@ -70,7 +100,7 @@ type QKCExtra struct {
 }
 
 // DecodeQKCExtra decodes the QuarkChain fields from the extra data of a shard
-// block header.
+// block header. It fails unless the extra data is exactly QKCExtraSize bytes.
 func DecodeQKCExtra(extra []byte) (*QKCExtra, error) {
 	if len(extra) != QKCExtraSize {
 		return nil, fmt.Errorf("invalid qkc extra data length: have %d, want %d", len(extra), QKCExtraSize)
@@ -87,8 +117,8 @@ func DecodeQKCExtra(extra []byte) (*QKCExtra, error) {
 		XShardGasLimit: binary.BigEndian.Uint64(extra[72:80]),
 	}
 	copy(e.PrevRootBlock[:], extra[8:40])
-	copy(e.Nonce[:], extra[80:88])
-	copy(e.MixHash[:], extra[88:120])
+	copy(e.Nonce[:], extra[qkcExtraNonceOffset:qkcExtraMixHashOffset])
+	copy(e.MixHash[:], extra[qkcExtraMixHashOffset:QKCExtraSize])
 	return e, nil
 }
 
@@ -114,8 +144,35 @@ func (h *Header) QKCExtra() (*QKCExtra, error) {
 	return DecodeQKCExtra(h.Extra)
 }
 
-// QKCDifficulty returns the PoW difficulty of a QuarkChain shard block, which
-// is stored in MixDigest.
+// QKCDifficulty returns the PoW difficulty of a QuarkChain shard block. It is
+// stored in MixDigest, not in the header's own Difficulty, which stays zero.
 func (h *Header) QKCDifficulty() *big.Int {
 	return new(big.Int).SetBytes(h.MixDigest[:])
+}
+
+// QKCSealHash returns the hash a QuarkChain shard block is sealed against: the
+// block hash with the PoW seal zeroed out.
+//
+// The seal the miner searches for is the nonce and the mix hash stored inside
+// the extra data, so the seal region documented on QKCExtraSize is zeroed here
+// and the seal is thereby excluded from the hash. Nothing else is zeroed:
+// Header.MixDigest keeps carrying the PoW difficulty, which therefore still
+// takes part in the seal hash in place of Difficulty, while Header.Nonce and
+// Header.Difficulty are hashed as they stand. A shard block must already carry
+// those two at zero, as the Merge requires; this function neither checks nor
+// forces that.
+//
+// The header is not modified: the zeroing happens on a copy. A header whose
+// Extra is not exactly QKCExtraSize bytes is not a QuarkChain shard block and
+// is rejected: zeroing its tail would silently exclude bytes that are not a
+// seal from the hash.
+func (h *Header) QKCSealHash() (common.Hash, error) {
+	if len(h.Extra) != QKCExtraSize {
+		return common.Hash{}, fmt.Errorf("invalid qkc extra data length: have %d, want %d", len(h.Extra), QKCExtraSize)
+	}
+	header := CopyHeader(h)
+	for i := qkcExtraNonceOffset; i < QKCExtraSize; i++ {
+		header.Extra[i] = 0
+	}
+	return header.Hash(), nil
 }
