@@ -275,6 +275,32 @@ var (
 		Usage:    "Load genesis block and configuration from file at this path",
 		Category: flags.EthCategory,
 	}
+	PBTImportSnapshotFlag = &cli.StringFlag{
+		Name:     "pbt.import.snapshot",
+		Usage:    "EIP-8347 PBT snapshot to verify and import in the background while the node follows the chain; needs a config that schedules binaryTrieTime (e.g. --override.genesis)",
+		Category: flags.EthCategory,
+	}
+	PBTImportPreimagesFlag = &cli.StringFlag{
+		Name:     "pbt.import.preimages",
+		Usage:    "EIP-8347 preimage file paired with --pbt.import.snapshot",
+		Category: flags.EthCategory,
+	}
+	PBTImportAnchorFlag = &cli.StringFlag{
+		Name:     "pbt.import.anchor",
+		Usage:    "Block number or hash the imported snapshot commits; the import waits until it is canonical and finalized",
+		Category: flags.EthCategory,
+	}
+	PBTImportWorkersFlag = &cli.IntFlag{
+		Name:     "pbt.import.workers",
+		Usage:    "Parallel workers of the background snapshot import",
+		Value:    4,
+		Category: flags.EthCategory,
+	}
+	PBTImportForceFlag = &cli.BoolFlag{
+		Name:     "pbt.import.force",
+		Usage:    "Let the snapshot import replace a binary tree the database holds at another anchor",
+		Category: flags.EthCategory,
+	}
 	SyncModeFlag = &cli.StringFlag{
 		Name:     "syncmode",
 		Usage:    `Blockchain sync mode ("snap" or "full")`,
@@ -1848,6 +1874,35 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
+	}
+	// An import inside the node names its pair and anchor together, and both
+	// files must be there before the node starts working on them.
+	if ctx.IsSet(PBTImportSnapshotFlag.Name) {
+		cfg.PBTImport.Snapshot = ctx.String(PBTImportSnapshotFlag.Name)
+	}
+	if ctx.IsSet(PBTImportPreimagesFlag.Name) {
+		cfg.PBTImport.Preimages = ctx.String(PBTImportPreimagesFlag.Name)
+	}
+	if ctx.IsSet(PBTImportAnchorFlag.Name) {
+		cfg.PBTImport.Anchor = ctx.String(PBTImportAnchorFlag.Name)
+	}
+	if ctx.IsSet(PBTImportWorkersFlag.Name) {
+		if cfg.PBTImport.Workers = ctx.Int(PBTImportWorkersFlag.Name); cfg.PBTImport.Workers < 1 {
+			Fatalf("--%s must be at least 1", PBTImportWorkersFlag.Name)
+		}
+	}
+	if ctx.IsSet(PBTImportForceFlag.Name) {
+		cfg.PBTImport.Force = ctx.Bool(PBTImportForceFlag.Name)
+	}
+	if imp := cfg.PBTImport; imp.Snapshot != "" || imp.Preimages != "" || imp.Anchor != "" {
+		if imp.Snapshot == "" || imp.Preimages == "" || imp.Anchor == "" {
+			Fatalf("--%s, --%s and --%s go together", PBTImportSnapshotFlag.Name, PBTImportPreimagesFlag.Name, PBTImportAnchorFlag.Name)
+		}
+		for _, path := range []string{imp.Snapshot, imp.Preimages} {
+			if _, err := os.Stat(path); err != nil {
+				Fatalf("Binary tree import: %v", err)
+			}
+		}
 	}
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.

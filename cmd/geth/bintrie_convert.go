@@ -534,7 +534,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, builderErr
 	}
 	sorter.Close()
-	if err := writeStagedNodes(pbtdb, nodes, written.nodes); err != nil {
+	if err := writeStagedNodes(context.Background(), pbtdb, nodes, written.nodes); err != nil {
 		return common.Hash{}, err
 	}
 	nodes.close()
@@ -542,7 +542,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 
 	// Both stores must hold exactly what was written before anything becomes
 	// publishable or openable.
-	if err := verifyWritten(pbtdb, written.families()...); err != nil {
+	if err := verifyWritten(context.Background(), pbtdb, written.families()...); err != nil {
 		return common.Hash{}, err
 	}
 	logWritten(written)
@@ -559,7 +559,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	// The check re-reads the artifacts and rebuilds the tree once more;
 	// streaming the leaves into it would save that pass.
-	if _, err := importState(chaindb, importOptions{snapshot: snapPath, preimages: prePath,
+	if _, err := importState(context.Background(), chaindb, importOptions{snapshot: snapPath, preimages: prePath,
 		anchor: &types.Header{Root: root}, verifyOnly: true, conversionOptions: opts}); err != nil {
 		return common.Hash{}, err
 	}
@@ -1035,40 +1035,15 @@ func hasMerkleSource(chaindb ethdb.Database, root common.Hash) bool {
 
 // wipeBinaryTrieState clears the binary tree state: the key families (the
 // bare prefix is shared with block bodies), the PBT history freezers, and
-// the journal file in triedbDir.
+// the journal file in triedbDir. Nothing may hold the namespace open.
 func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 	// Anchor, then bookkeeping, then state: any crash prefix leaves state the
 	// follower refuses, never an anchor or a position it would bind to it.
-	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
-	rawdb.DeletePBTAnchor(pbtdb)
+	rawdb.DeletePBTAnchor(rawdb.NewTable(chaindb, string(rawdb.PBTPrefix)))
 	if err := rawdb.WipeMigrationState(chaindb); err != nil {
 		return err
 	}
-	batch := pbtdb.NewBatch()
-	wiped := 0
-	for _, family := range rawdb.PBTKeyFamilies {
-		it := pbtdb.NewIterator(family, nil)
-		for it.Next() {
-			if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
-				it.Release()
-				return err
-			}
-			wiped++
-			if batch.ValueSize() >= ethdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					it.Release()
-					return err
-				}
-				batch.Reset()
-			}
-		}
-		err := it.Error()
-		it.Release()
-		if err != nil {
-			return err
-		}
-	}
-	if err := batch.Write(); err != nil {
+	if err := rawdb.DeletePBTState(chaindb, nil); err != nil {
 		return err
 	}
 	if ancient, err := chaindb.AncientDatadir(); err == nil {
@@ -1092,7 +1067,7 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 			return err
 		}
 	}
-	log.Info("Wiped binary tree state", "records", wiped)
+	log.Info("Wiped binary tree state")
 	return nil
 }
 
@@ -1108,7 +1083,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, written, tmpDir, workers, total)
+	got, err := rederiveMerkleRoot(context.Background(), acctStream, slotStream, batch, written, tmpDir, workers, total)
 	if err != nil {
 		return err
 	}

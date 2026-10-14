@@ -18,23 +18,30 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"math/bits"
+	"os"
 	"slices"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/holiman/uint256"
@@ -86,6 +93,14 @@ top.
 
 Disk: --tmpdir holds the sort spills and a copy of every tree node until the
 import ends, so it needs disk space, not a tmpfs.
+
+This command needs the node stopped. To import while the node keeps
+following the chain, start geth with --pbt.import.snapshot, --pbt.import.preimages
+and --pbt.import.anchor instead: the same checks run in the background once the
+anchor is canonical and finalized, scratch goes to <datadir>/geth/pbt-import,
+and the migration follower adopts the anchor when the import attests. That
+needs a chain config that schedules the binary tree (e.g. --override.genesis);
+debug_migrationProgress reports "importing" until then.
 `,
 	}
 )
@@ -162,7 +177,7 @@ func importBinaryTrie(ctx *cli.Context) error {
 	if workers < 1 {
 		return errors.New("--workers must be at least 1")
 	}
-	if _, err := importState(chaindb, importOptions{
+	if _, err := importState(context.Background(), chaindb, importOptions{
 		snapshot:      ctx.Args().Get(0),
 		preimages:     ctx.Args().Get(1),
 		anchor:        header,
@@ -184,6 +199,222 @@ func importBinaryTrie(ctx *cli.Context) error {
 		}
 	}
 	return nil
+}
+
+// pbtImporter runs an EIP-8347 import inside the node, in the background,
+// while the chain keeps following its head (--pbt.import.*). The chain holds
+// the binary tree for it from construction (BlockChainConfig.PBTImport) until
+// FinishPBTImport releases it to the follower.
+type pbtImporter struct {
+	chain     *core.BlockChain
+	db        ethdb.Database
+	cfg       ethconfig.PBTImportConfig
+	triedbDir string        // the PBT journal's directory, for wipes
+	tmpDir    string        // scratch, owned by the import
+	poll      time.Duration // how often the anchor wait looks again
+
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+func newPBTImporter(stack *node.Node, backend *eth.Ethereum, cfg ethconfig.PBTImportConfig) *pbtImporter {
+	return &pbtImporter{
+		chain:     backend.BlockChain(),
+		db:        backend.ChainDb(),
+		cfg:       cfg,
+		triedbDir: stack.ResolvePath("triedb"),
+		tmpDir:    stack.ResolvePath("pbt-import"),
+		poll:      5 * time.Second,
+	}
+}
+
+// Start refuses what a restart cannot fix and leaves the import to run in
+// the background.
+func (p *pbtImporter) Start() error {
+	ref, err := parseAnchorRef(p.cfg.Anchor)
+	if err != nil {
+		return err
+	}
+	num, hash, anchored := rawdb.ReadPBTAnchor(rawdb.NewTable(p.db, string(rawdb.PBTPrefix)))
+	finished := anchored && rawdb.HasPBTState(p.db)
+	if finished && ref.matches(num, hash) {
+		log.Info("Binary tree already imported", "anchor", num, "hash", hash)
+		p.chain.FinishPBTImport(nil) // releases a --pbt.import.force hold
+		return nil
+	}
+	if !rawdb.ReadPBTImportPending(p.db) {
+		return fmt.Errorf("binary tree import refused: the database holds a tree anchored at block %d (%x); --%s replaces it", num, hash, utils.PBTImportForceFlag.Name)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel, p.done = cancel, make(chan struct{})
+	go func() {
+		defer close(p.done)
+		p.run(ctx, ref)
+	}()
+	return nil
+}
+
+// Stop cancels a running import and waits for it, before the chain closes
+// the database under it.
+func (p *pbtImporter) Stop() error {
+	if p.cancel != nil {
+		p.cancel()
+		<-p.done
+	}
+	return nil
+}
+
+// run waits for the anchor, imports at it and hands the outcome to the
+// chain. An interrupted run leaves the hold and its writes to the next start.
+func (p *pbtImporter) run(ctx context.Context, ref anchorRef) {
+	anchor, err := p.awaitAnchor(ctx, ref)
+	if err == nil {
+		err = p.importAt(ctx, anchor)
+	}
+	switch {
+	case err == nil:
+		p.chain.FinishPBTImport(nil)
+	case ctx.Err() != nil:
+		log.Info("Binary tree import interrupted; restart with the same flags to redo it")
+	default:
+		log.Error("Binary tree import failed", "err", err)
+		p.chain.FinishPBTImport(err)
+	}
+}
+
+// awaitAnchor waits until the anchor is canonical and finalized, the blocks
+// EIP-8347 anchors at, and fails once it never can be.
+func (p *pbtImporter) awaitAnchor(ctx context.Context, ref anchorRef) (*types.Header, error) {
+	var logged time.Time
+	for {
+		header, waiting, err := p.anchorState(ref)
+		if err != nil || header != nil {
+			return header, err
+		}
+		if time.Since(logged) >= time.Minute {
+			log.Info("Binary tree import waiting for its anchor", "anchor", p.cfg.Anchor, "state", waiting)
+			logged = time.Now()
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(p.poll):
+		}
+	}
+}
+
+// anchorState returns the anchor's header once it is canonical and
+// finalized, else what it still waits for, or why it never will qualify: a
+// finalized height holding another block, or a block past the fork.
+func (p *pbtImporter) anchorState(ref anchorRef) (*types.Header, string, error) {
+	number, hash := ref.number, ref.hash
+	if ref.byHash {
+		n, ok := rawdb.ReadHeaderNumber(p.db, hash)
+		if !ok {
+			return nil, "unknown block", nil
+		}
+		number = n
+	}
+	var (
+		canonical = rawdb.ReadCanonicalHash(p.db, number)
+		final     = p.chain.CurrentFinalBlock()
+		finalized = final != nil && final.Number.Uint64() >= number
+	)
+	if !ref.byHash {
+		hash = canonical
+	}
+	switch {
+	case canonical == (common.Hash{}):
+		return nil, "not in the canonical chain yet", nil
+	case canonical != hash && finalized:
+		return nil, "", fmt.Errorf("anchor block %x can never be canonical: height %d is finalized at %x", hash, number, canonical)
+	case canonical != hash:
+		return nil, "not canonical", nil
+	case !finalized:
+		return nil, "not finalized", nil
+	}
+	header := rawdb.ReadHeader(p.db, hash, number)
+	if header == nil {
+		return nil, "", fmt.Errorf("anchor header %d (%x) missing", number, hash)
+	}
+	if p.chain.Config().IsBinaryTrie(header.Number, header.Time) {
+		return nil, "", fmt.Errorf("anchor block %d is past the binary tree fork", number)
+	}
+	return header, "", nil
+}
+
+// importAt imports the pair at the anchor. The namespace is the import's
+// while the chain holds it: whatever a stopped or failed run, or the tree
+// --pbt.import.force replaces, left there is wiped first, and a failure
+// wipes its own writes.
+func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error {
+	if err := os.RemoveAll(p.tmpDir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(p.tmpDir, 0o700); err != nil {
+		return err
+	}
+	defer os.RemoveAll(p.tmpDir)
+
+	if dirty, err := hasBinaryTrieState(p.db); err != nil {
+		return err
+	} else if dirty {
+		if err := wipeBinaryTrieState(p.db, p.triedbDir); err != nil {
+			return err
+		}
+	}
+	log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
+		"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
+	_, err := importState(ctx, p.db, importOptions{
+		snapshot:  p.cfg.Snapshot,
+		preimages: p.cfg.Preimages,
+		anchor:    anchor,
+		// Finalized blocks do not reorg, but an attested tree anchored off
+		// the canonical chain is refused by the follower anyway: say so now.
+		beforeAttest: func() error {
+			if rawdb.ReadCanonicalHash(p.db, anchor.Number.Uint64()) != anchor.Hash() {
+				return fmt.Errorf("anchor block %d (%x) left the canonical chain during the import", anchor.Number, anchor.Hash())
+			}
+			return nil
+		},
+		conversionOptions: conversionOptions{
+			sortBudget: sortBudget,
+			tmpDir:     p.tmpDir,
+			workers:    cmp.Or(p.cfg.Workers, utils.PBTImportWorkersFlag.Value),
+		},
+	})
+	if err != nil && ctx.Err() == nil {
+		if werr := wipeBinaryTrieState(p.db, p.triedbDir); werr != nil {
+			log.Error("Failed to wipe a failed binary tree import", "err", werr)
+		}
+	}
+	return err
+}
+
+// anchorRef is an anchor argument: a block hash, or else a block number.
+type anchorRef struct {
+	hash   common.Hash
+	number uint64
+	byHash bool
+}
+
+func parseAnchorRef(arg string) (anchorRef, error) {
+	if common.IsHexHash(arg) {
+		return anchorRef{hash: common.HexToHash(arg), byHash: true}, nil
+	}
+	number, err := strconv.ParseUint(arg, 10, 64)
+	if err != nil {
+		return anchorRef{}, fmt.Errorf("invalid binary tree import anchor %q: want a block number or hash", arg)
+	}
+	return anchorRef{number: number}, nil
+}
+
+// matches reports whether the ref names the given block.
+func (r anchorRef) matches(number uint64, hash common.Hash) bool {
+	if r.byHash {
+		return r.hash == hash
+	}
+	return r.number == number
 }
 
 // The EIP-8347 consumer: importState ingests a distributed PBT snapshot and
@@ -231,12 +462,16 @@ type importOptions struct {
 	anchor        *types.Header
 	verifyOnly    bool
 	keepPreimages bool
+	// beforeAttest, when set, runs once everything is written and verified,
+	// right before the attestation: an error leaves the state unattested.
+	beforeAttest func() error
 	conversionOptions
 }
 
 // importState verifies and ingests the artifacts, returning the imported
-// root. With verifyOnly the database is never touched.
-func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error) {
+// root. With verifyOnly the database is never touched. Cancelling ctx stops
+// it between batches, before anything is attested.
+func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions) (common.Hash, error) {
 	var (
 		anchorRoot   = opts.anchor.Root
 		snapshotPath = opts.snapshot
@@ -313,7 +548,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 		preAccounts  uint64
 		prePreimages uint64
 		records      = make(chan preimageBatch, 2*workers)
-		g, gctx      = errgroup.WithContext(context.Background())
+		g, gctx      = errgroup.WithContext(ctx)
 	)
 	what, verified := "Verifying preimage file", "Verified preimage file"
 	if keep {
@@ -623,6 +858,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	)
 	for {
 		if batch == nil || next == len(batch.values) {
+			if err := ctx.Err(); err != nil {
+				return common.Hash{}, err
+			}
 			if batch != nil {
 				pipe.release(batch)
 			}
@@ -790,12 +1028,12 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	)
 	defer readNodes.Wait()
 	if nodes != nil {
-		if err := writeStagedNodes(pbtdb, nodes, written.nodes); err != nil {
+		if err := writeStagedNodes(ctx, pbtdb, nodes, written.nodes); err != nil {
 			return common.Hash{}, err
 		}
 		// The tree nodes are all written: read them back while the code
 		// limb and check 2 run. Reading puts nothing in the memtable.
-		readNodes.Go(func() error { return verifyWritten(pbtdb, families[0]) })
+		readNodes.Go(func() error { return verifyWritten(ctx, pbtdb, families[0]) })
 	}
 
 	// The code limb: every claimed code hash must reassemble from its
@@ -813,6 +1051,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	prog = startProgress("Verifying code", "codes", uint64(len(hashes)), stats.codes.Load)
 	defer prog.stop()
 	for _, hash := range hashes {
+		if err := ctx.Err(); err != nil {
+			return common.Hash{}, err
+		}
 		var chunks []bintrie.IndexedChunk
 		for {
 			ckey, cvalue, err := chunkHeld.current()
@@ -860,7 +1101,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err != nil {
 		return common.Hash{}, err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.accounts.Load()+stats.slots.Load())
+	got, err := rederiveMerkleRoot(ctx, acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.accounts.Load()+stats.slots.Load())
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -877,13 +1118,23 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
 	}
-	if err := verifyWritten(pbtdb, families[1:]...); err != nil {
+	if err := verifyWritten(ctx, pbtdb, families[1:]...); err != nil {
 		return common.Hash{}, err
 	}
 	if err := readNodes.Wait(); err != nil {
 		return common.Hash{}, err
 	}
 	logWritten(written)
+	// A cancelled import never attests, however far it got: an interrupted
+	// run is redone from scratch, never half-trusted.
+	if err := ctx.Err(); err != nil {
+		return common.Hash{}, err
+	}
+	if opts.beforeAttest != nil {
+		if err := opts.beforeAttest(); err != nil {
+			return common.Hash{}, err
+		}
+	}
 	// The anchor rides with the root: the tree does not say which block it
 	// commits, and catching up from here has to start somewhere. The
 	// attestation is the completion marker and comes last; the imported tree

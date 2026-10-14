@@ -119,6 +119,10 @@ type Config struct {
 	MigrationWindowBlocks uint64 `toml:",omitempty"`
 	TrienodeHistory       int64  `toml:",omitempty"` // Number of blocks from the chain head for which trienode histories are retained
 
+	// PBTImport imports an EIP-8347 PBT snapshot and preimage file in the
+	// background while the node follows the chain.
+	PBTImport PBTImportConfig
+
 	// The frequency of full-value encoding. For example, a value of 16 means
 	// that, on average, for a given trie node across its 16 consecutive historical
 	// versions, only one version is stored in full format, while the others
@@ -227,6 +231,16 @@ type Config struct {
 
 	// RangeLimit restricts the maximum range (end - start) for range queries.
 	RangeLimit uint64 `toml:",omitempty"`
+}
+
+// PBTImportConfig names an EIP-8347 snapshot import that runs inside the
+// node. Snapshot, Preimages and Anchor (a block number or hash) go together.
+type PBTImportConfig struct {
+	Snapshot  string `toml:",omitempty"`
+	Preimages string `toml:",omitempty"`
+	Anchor    string `toml:",omitempty"`
+	Workers   int    `toml:",omitempty"` // 0 picks the importer's default
+	Force     bool   `toml:",omitempty"` // replace a tree anchored elsewhere
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

@@ -93,7 +93,7 @@ func BenchmarkImport(b *testing.B) {
 				db := openBenchDB(b, dest)
 				start := time.Now()
 				b.StartTimer()
-				_, err := importState(db, importOptions{
+				_, err := importState(context.Background(), db, importOptions{
 					snapshot:          filepath.Join(dir, "snapshot.bin"),
 					preimages:         filepath.Join(dir, "preimages.bin"),
 					anchor:            &types.Header{Number: new(big.Int), Root: root},

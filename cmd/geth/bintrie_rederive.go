@@ -92,10 +92,10 @@ func (h *heldStream) advance() { h.key, h.value = nil, nil }
 // written after the last storage row, so no flushed table mixes the two key
 // families. Everything is written by return, batch included, and digested
 // into written.
-func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) (common.Hash, error) {
+func rederiveMerkleRoot(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) (common.Hash, error) {
 	workers = max(workers, 1)
 	var (
-		g, ctx    = errgroup.WithContext(context.Background())
+		g, gctx   = errgroup.WithContext(ctx)
 		jobs      = make([]chan *foldBatch, workers)
 		roots     = make([]chan []common.Hash, workers)
 		free      = make(chan *foldBatch, 3*workers)
@@ -111,11 +111,11 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch
 	}
 	for i := range workers {
 		jobs[i], roots[i] = make(chan *foldBatch, 2), make(chan []common.Hash, 2)
-		g.Go(func() error { return foldStorage(ctx, jobs[i], roots[i], free) })
+		g.Go(func() error { return foldStorage(gctx, jobs[i], roots[i], free) })
 	}
 	g.Go(func() error {
 		var err error
-		root, err = foldAccounts(ctx, accts, acctsFree, roots)
+		root, err = foldAccounts(gctx, accts, acctsFree, roots)
 		return err
 	})
 	g.Go(func() error {
@@ -125,7 +125,7 @@ func rederiveMerkleRoot(accounts, slots *bintrie.RecordStream, batch ethdb.Batch
 			}
 			close(accts)
 		}()
-		return walkMerkleRecords(ctx, accounts, slots, batch, written, tmpDir, total, jobs, free, accts, acctsFree)
+		return walkMerkleRecords(gctx, accounts, slots, batch, written, tmpDir, total, jobs, free, accts, acctsFree)
 	})
 	if err := g.Wait(); err != nil {
 		return common.Hash{}, err
@@ -320,6 +320,11 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 		}
 		walked.Add(1)
 		walkedAccs++
+		if walkedAccs%uint64(foldBatchSize) == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
 	}
 	if skey, _, err := slotHeld.current(); err != nil {
 		return err
@@ -351,7 +356,11 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 	err := acctRows.replay(bufio.NewReaderSize(nil, 256<<10), func(hash, row []byte) error {
 		accountSum.add(hash, row)
 		rawdb.WriteAccountSnapshot(batch, common.BytesToHash(hash), row)
-		rows.Add(1)
+		if rows.Add(1)%uint64(foldBatchSize) == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
 		return flush()
 	})
 	if err != nil {
@@ -586,7 +595,7 @@ func (w *writtenState) families() []writtenFamily {
 
 // writeStagedNodes writes the staged tree nodes into the namespace in key
 // order, digesting each.
-func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDigest) error {
+func writeStagedNodes(ctx context.Context, pbtdb ethdb.Database, nodes *nodeStager, digest *writeDigest) error {
 	var (
 		batch   = pbtdb.NewBatch()
 		ahead   = digest.ahead()
@@ -602,6 +611,9 @@ func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDige
 		staged++
 		if batch.ValueSize() < ethdb.IdealBatchSize {
 			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if err := batch.Write(); err != nil {
 			return err
@@ -626,7 +638,7 @@ func writeStagedNodes(pbtdb ethdb.Database, nodes *nodeStager, digest *writeDige
 // verifyWritten re-reads each family in key order, concurrently, and
 // requires it to match what was written. The namespace was empty when the
 // command began, so a family holding anything more is a mismatch as well.
-func verifyWritten(pbtdb ethdb.Database, families ...writtenFamily) error {
+func verifyWritten(ctx context.Context, pbtdb ethdb.Database, families ...writtenFamily) error {
 	var g errgroup.Group
 	for _, f := range families {
 		g.Go(func() error {
@@ -642,6 +654,9 @@ func verifyWritten(pbtdb ethdb.Database, families ...writtenFamily) error {
 				}
 				if got.count%4096 == 0 {
 					read.Store(got.count)
+					if err := ctx.Err(); err != nil {
+						return err
+					}
 				}
 			}
 			if err := it.Error(); err != nil {

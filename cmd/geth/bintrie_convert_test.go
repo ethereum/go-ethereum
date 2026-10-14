@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"math/big"
@@ -361,7 +362,7 @@ func TestWrittenStateCatchesBadWrites(t *testing.T) {
 			})
 			t.Run("import/"+f.name+"/"+mode, func(t *testing.T) {
 				chaindb := rawdb.NewMemoryDatabase()
-				_, err := importState(newTamperDB(chaindb, f.prefix, mode), importOptions{snapshot: snapPath, preimages: prePath,
+				_, err := importState(context.Background(), newTamperDB(chaindb, f.prefix, mode), importOptions{snapshot: snapPath, preimages: prePath,
 					anchor: &types.Header{Number: big.NewInt(1), Root: root}, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 				caught(t, err, chaindb, f.name)
 			})

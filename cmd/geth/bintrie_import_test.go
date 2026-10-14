@@ -18,7 +18,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -26,6 +28,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -80,7 +83,7 @@ func TestImportRoundTrip(t *testing.T) {
 
 	impDB := rawdb.NewMemoryDatabase()
 	anchor := &types.Header{Number: big.NewInt(7), Root: root}
-	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+	imported, err := importState(context.Background(), impDB, importOptions{snapshot: snapPath, preimages: prePath,
 		anchor: anchor, keepPreimages: true, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 	if err != nil {
 		t.Fatalf("import failed: %v", err)
@@ -161,7 +164,7 @@ func TestImportWorkersAgree(t *testing.T) {
 	preimageBatchSize, leafBatchSize, foldBatchSize = 4, 64, 2
 
 	impDB := rawdb.NewMemoryDatabase()
-	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+	imported, err := importState(context.Background(), impDB, importOptions{snapshot: snapPath, preimages: prePath,
 		anchor: &types.Header{Number: big.NewInt(7), Root: root},
 		// A tiny budget makes every worker's candidates spill, so the
 		// merge runs over absorbed runs.
@@ -197,7 +200,7 @@ func TestImportChecksPreimageOrder(t *testing.T) {
 			bad := slices.Clone(recs)
 			bad[at-1], bad[at] = bad[at], bad[at-1]
 			path := rawPreimages(t, bad)
-			_, err := importState(rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: path,
+			_, err := importState(context.Background(), rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: path,
 				anchor:            &types.Header{Number: new(big.Int), Root: root},
 				conversionOptions: conversionOptions{tmpDir: t.TempDir(), workers: 4}})
 			if want := fmt.Sprintf("preimage record %d is out of hashed-key order", at); err == nil || !strings.Contains(err.Error(), want) {
@@ -213,7 +216,7 @@ func TestImportVerifyOnly(t *testing.T) {
 	_, root, binRoot, snapPath, prePath := importFixture(t, artifactAlloc())
 
 	impDB := rawdb.NewMemoryDatabase()
-	imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+	imported, err := importState(context.Background(), impDB, importOptions{snapshot: snapPath, preimages: prePath,
 		anchor: &types.Header{Number: new(big.Int), Root: root}, verifyOnly: true, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 	if err != nil {
 		t.Fatalf("verification failed: %v", err)
@@ -250,7 +253,7 @@ func TestImportMatchesReference(t *testing.T) {
 			_, root, _, snapPath, prePath := importFixture(t, allocOf(t, sv))
 
 			impDB := rawdb.NewMemoryDatabase()
-			imported, err := importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+			imported, err := importState(context.Background(), impDB, importOptions{snapshot: snapPath, preimages: prePath,
 				anchor: &types.Header{Number: new(big.Int), Root: root}, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 			if err != nil {
 				t.Fatalf("import failed: %v", err)
@@ -290,7 +293,7 @@ func TestImportEmptyState(t *testing.T) {
 	}
 
 	// verify-only accepts the empty state's own root.
-	imported, err := importState(rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: prePath,
+	imported, err := importState(context.Background(), rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: prePath,
 		anchor: &types.Header{Number: new(big.Int), Root: mptRoot}, verifyOnly: true, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 	if err != nil {
 		t.Fatalf("verify-only rejected the empty state against its own anchor: %v", err)
@@ -300,7 +303,7 @@ func TestImportEmptyState(t *testing.T) {
 	}
 
 	// verify-only rejects a non-empty anchor.
-	if _, err := importState(rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: prePath,
+	if _, err := importState(context.Background(), rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: prePath,
 		anchor: &types.Header{Number: new(big.Int), Root: common.HexToHash("0xdead")}, verifyOnly: true, conversionOptions: conversionOptions{tmpDir: t.TempDir()}}); err == nil {
 		t.Fatal("verify-only accepted the empty state against a mismatched anchor")
 	}
@@ -308,7 +311,7 @@ func TestImportEmptyState(t *testing.T) {
 	// A full import writes the attestation and reopens.
 	impDB := rawdb.NewMemoryDatabase()
 	anchor := &types.Header{Number: big.NewInt(1), Root: mptRoot}
-	imported, err = importState(impDB, importOptions{snapshot: snapPath, preimages: prePath,
+	imported, err = importState(context.Background(), impDB, importOptions{snapshot: snapPath, preimages: prePath,
 		anchor: anchor, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 	if err != nil {
 		t.Fatalf("full import of the empty state failed: %v", err)
@@ -826,7 +829,7 @@ func TestImportRejects(t *testing.T) {
 				anchor = tc.anchor
 			}
 			impDB := rawdb.NewMemoryDatabase()
-			_, err := importState(impDB, importOptions{snapshot: badSnap, preimages: badPre,
+			_, err := importState(context.Background(), impDB, importOptions{snapshot: badSnap, preimages: badPre,
 				anchor: &types.Header{Number: new(big.Int), Root: anchor}, conversionOptions: conversionOptions{tmpDir: dir}})
 			if err == nil {
 				t.Fatal("a tampered artifact was imported")
@@ -838,5 +841,65 @@ func TestImportRejects(t *testing.T) {
 				t.Fatal("a rejected import attested its namespace")
 			}
 		})
+	}
+}
+
+// cancelAfter is a context cancelled by its n-th Err call: run with each n in
+// turn, an import is cut at every one of its cancellation checks.
+type cancelAfter struct {
+	context.Context // background: no deadline, no values
+	mu              sync.Mutex
+	left            int
+	done            chan struct{}
+}
+
+func newCancelAfter(n int) *cancelAfter {
+	return &cancelAfter{Context: context.Background(), left: n, done: make(chan struct{})}
+}
+
+func (c *cancelAfter) Done() <-chan struct{} { return c.done }
+
+func (c *cancelAfter) Err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.left > 0 {
+		if c.left--; c.left == 0 {
+			close(c.done)
+		}
+	}
+	if c.left == 0 {
+		return context.Canceled
+	}
+	return nil
+}
+
+// TestImportCancels cuts an import at each of its cancellation checks: every
+// cut returns context.Canceled with nothing attested and no scratch left, and
+// the run that outlasts the countdown imports.
+func TestImportCancels(t *testing.T) {
+	_, root, binRoot, snapPath, prePath := importFixture(t, mixedAlloc(8347))
+	anchor := &types.Header{Number: big.NewInt(7), Root: root}
+	for n := 1; ; n++ {
+		db, tmp := rawdb.NewMemoryDatabase(), t.TempDir()
+		imported, err := importState(newCancelAfter(n), db, importOptions{snapshot: snapPath, preimages: prePath,
+			anchor: anchor, conversionOptions: conversionOptions{tmpDir: tmp}})
+		if left, _ := os.ReadDir(tmp); len(left) > 0 {
+			t.Fatalf("cut %d left %d scratch entries behind", n, len(left))
+		}
+		if err == nil {
+			if n == 1 {
+				t.Fatal("the import never checked for cancellation")
+			}
+			if imported != binRoot {
+				t.Fatalf("imported root %x, the converter built %x", imported, binRoot)
+			}
+			return
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cut %d failed with %v, want context.Canceled", n, err)
+		}
+		if rawdb.HasPBTState(db) {
+			t.Fatalf("cut %d attested the namespace", n)
+		}
 	}
 }
