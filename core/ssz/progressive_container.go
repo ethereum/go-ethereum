@@ -124,6 +124,13 @@ func MixInActiveFields(root [32]byte, af ActiveFields) [32]byte {
 // one field too few or too many, so it panics, as Merkleize does for a limit
 // below its chunk count.
 func HashTreeRootProgressiveContainer(af ActiveFields, roots [][32]byte) [32]byte {
+	return MixInActiveFields(MerkleizeProgressive(layoutChunks(af, roots)), af)
+}
+
+// layoutChunks lays the field roots out over the configuration, the root of a
+// field at each set position and a zero chunk at each cleared one. It is the
+// one place the gaps are expanded, for the root and for the proofs alike.
+func layoutChunks(af ActiveFields, roots [][32]byte) [][32]byte {
 	if af.width == 0 {
 		panic("ssz: progressive container with an uninitialized ActiveFields")
 	}
@@ -138,5 +145,5 @@ func HashTreeRootProgressiveContainer(af ActiveFields, roots [][32]byte) [32]byt
 			k++
 		}
 	}
-	return MixInActiveFields(MerkleizeProgressive(chunks), af)
+	return chunks
 }
