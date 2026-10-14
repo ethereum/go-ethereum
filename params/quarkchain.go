@@ -1,4 +1,4 @@
-// Copyright 2026 The go-ethereum Authors
+// Copyright 2026 The quarkchain Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -48,6 +48,6 @@ func (c QuarkChainConfig) String() string {
 
 // IsXShardDestination reports whether this shard can send a cross-shard
 // message to the given shard.
-func (c *QuarkChainConfig) IsXShardDestination(shard uint32) bool {
-	return c != nil && shard != c.ShardID && slices.Contains(c.ShardIDs, shard)
+func (c *QuarkChainConfig) IsXShardDestination(shardID uint32) bool {
+	return c != nil && shardID != c.ShardID && slices.Contains(c.ShardIDs, shardID)
 }
