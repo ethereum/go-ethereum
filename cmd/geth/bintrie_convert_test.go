@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
@@ -669,9 +668,11 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 
 // raw-namespace cursors and records must not outlive the state they name.
 
-// TestConvertDetectsLostRecords pins the only check that ties a conversion's
-// output to its input: the other two are fed by the same scan, so a lossy
-// one verifies green against its own loss.
+// TestConvertDetectsLostRecords pins the check that ties a conversion's
+// output to its input. The converter's dual-check joins its own leaves to
+// candidates from the same scan, so a record the scan loses goes missing from
+// both and the join stays consistent: only check 2, re-deriving the source
+// root from the leaves, can catch it.
 func TestConvertDetectsLostRecords(t *testing.T) {
 	alloc := artifactAlloc()
 
@@ -688,91 +689,109 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 	root := gspec.MustCommit(chaindb, srcTriedb).Root()
 	srcTriedb.Close()
 
-	// scan rebuilds the records deriveLeaves emits, minus what drop rejects:
-	// the account row for (addr, nil), a storage row for (addr, &key).
-	scan := func(t *testing.T, drop func(addr common.Address, slot *common.Hash) bool) (*bintrie.RecordSorter, *bintrie.RecordSorter) {
+	// scan derives the leaves and candidates deriveLeaves would, minus what
+	// drop rejects: the account for (addr, nil), a slot for (addr, &key).
+	scan := func(t *testing.T, drop func(addr common.Address, slot *common.Hash) bool) *ownLeaves {
 		t.Helper()
-		accounts := bintrie.NewRecordSorter(t.TempDir(), 0, nil)
-		slots := bintrie.NewRecordSorter(t.TempDir(), 0, nil)
+		leaves := bintrie.NewLeafSorter(t.TempDir(), 0)
+		cands := bintrie.NewRecordSorter(t.TempDir(), 0, nil)
 		t.Cleanup(func() {
-			accounts.Close()
-			slots.Close()
+			leaves.Close()
+			cands.Close()
 		})
-		for addr, account := range alloc {
-			addrHash := crypto.Keccak256Hash(addr.Bytes())
-			if drop == nil || !drop(addr, nil) {
-				codeHash := types.EmptyCodeHash
-				if len(account.Code) != 0 {
-					codeHash = crypto.Keccak256Hash(account.Code)
-				}
-				balance := new(uint256.Int)
-				if account.Balance != nil {
-					balance = uint256.MustFromBig(account.Balance)
-				}
-				if err := accounts.Add(addrHash.Bytes(), appendMerkleAccountRecord(nil, account.Nonce, balance, codeHash)); err != nil {
-					t.Fatal(err)
-				}
+		emit := func(key []byte, value [32]byte) error {
+			if value == ([32]byte{}) {
+				return nil
 			}
+			return leaves.Add(key, value[:])
+		}
+		codes, stats := newCodeSet(), newStats("Scanning")
+		for addr, account := range alloc {
+			if drop != nil && drop(addr, nil) {
+				continue
+			}
+			codeHash := types.EmptyCodeHash
+			if len(account.Code) != 0 {
+				codeHash = crypto.Keccak256Hash(account.Code)
+			}
+			balance := new(uint256.Int)
+			if account.Balance != nil {
+				balance = uint256.MustFromBig(account.Balance)
+			}
+			if err := emitAccountHeader(chaindb, addr, account.Nonce, balance, codeHash, codes, stats, emit); err != nil {
+				t.Fatal(err)
+			}
+			c := accountCandidates{cand: cands, buf: new(candidateBuf), addr: addr}
 			for key, value := range account.Storage {
-				if drop != nil && drop(addr, &key) {
+				if (drop != nil && drop(addr, &key)) || value == (common.Hash{}) {
 					continue
 				}
-				enc, err := rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-				if err != nil {
+				if err := emit(bintrie.StorageSlotKey(addr, key[:]), value); err != nil {
 					t.Fatal(err)
 				}
-				if err := slots.Add(append(addrHash.Bytes(), crypto.Keccak256(key[:])...), enc); err != nil {
+				if err := c.slot(key); err != nil {
 					t.Fatal(err)
 				}
 			}
+			if err := c.finish(); err != nil {
+				t.Fatal(err)
+			}
 		}
-		return accounts, slots
+		stream, err := leaves.Sort()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &ownLeaves{leaves: stream, candidates: cands}
+	}
+	convert := func(t *testing.T, own *ownLeaves) (ethdb.Database, error) {
+		db := rawdb.NewMemoryDatabase()
+		_, err := importState(context.Background(), db, importOptions{own: own,
+			anchor:            &types.Header{Number: big.NewInt(1), Root: root},
+			conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
+		return db, err
 	}
 
 	// The account holding storage, so both loss cases land on it.
 	var (
 		victim   = common.HexToAddress("0x2000000000000000000000000000000000000002")
 		slotOne  = common.BigToHash(big.NewInt(1))
-		mismatch = "re-derives merkle root"
+		mismatch = "re-derive merkle root"
 	)
 	if _, ok := alloc[victim]; !ok {
 		t.Fatalf("fixture no longer holds %x", victim)
 	}
 
 	t.Run("complete set", func(t *testing.T) {
-		accounts, slots := scan(t, nil)
-		if err := verifySourceRoot(context.Background(), accounts, slots, root, nil, nil, "", 4, 0); err != nil {
-			t.Fatalf("the complete record set failed the source-root check: %v", err)
+		db, err := convert(t, scan(t, nil))
+		if err != nil {
+			t.Fatalf("the complete leaf set failed the dual-check: %v", err)
+		}
+		if !rawdb.HasPBTState(db) {
+			t.Fatal("a passing conversion attested nothing")
 		}
 	})
 
 	t.Run("lost account", func(t *testing.T) {
-		accounts, slots := scan(t, func(addr common.Address, _ *common.Hash) bool {
+		db, err := convert(t, scan(t, func(addr common.Address, _ *common.Hash) bool {
 			return addr == victim
-		})
-		err := verifySourceRoot(context.Background(), accounts, slots, root, nil, nil, "", 4, 0)
+		}))
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
-			t.Fatalf("a dropped account survived the source-root check; err = %v", err)
+			t.Fatalf("a dropped account survived check 2; err = %v", err)
+		}
+		if rawdb.HasPBTState(db) {
+			t.Fatal("a refused conversion attested its namespace")
 		}
 	})
 
 	t.Run("lost slot", func(t *testing.T) {
-		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
+		db, err := convert(t, scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot != nil && *slot == slotOne
-		})
-		err := verifySourceRoot(context.Background(), accounts, slots, root, nil, nil, "", 4, 0)
+		}))
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
-			t.Fatalf("a dropped storage slot survived the source-root check; err = %v", err)
+			t.Fatalf("a dropped storage slot survived check 2; err = %v", err)
 		}
-	})
-
-	t.Run("orphaned storage", func(t *testing.T) {
-		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
-			return addr == victim && slot == nil
-		})
-		err := verifySourceRoot(context.Background(), accounts, slots, root, nil, nil, "", 4, 0)
-		if err == nil || !strings.Contains(err.Error(), "which holds no account") {
-			t.Fatalf("orphaned storage survived the source-root check; err = %v", err)
+		if rawdb.HasPBTState(db) {
+			t.Fatal("a refused conversion attested its namespace")
 		}
 	})
 }
