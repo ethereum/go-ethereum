@@ -20,8 +20,6 @@ package types
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"io"
-	"math/big"
 	"reflect"
 	"sync/atomic"
 
@@ -30,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	ssz "github.com/ferranbt/fastssz"
+	"github.com/holiman/uint256"
 )
 
 // RootBlockHeader represents a root block header in the QuarkChain.
@@ -39,10 +39,10 @@ type RootBlockHeader struct {
 	ParentHash      common.Hash    `json:"parentHash"       gencodec:"required"`
 	MinorHeaderHash common.Hash    `json:"headerHash"       gencodec:"required"`
 	Coinbase        common.Address `json:"miner"            gencodec:"required"`
-	CoinbaseAmount  *big.Int       `json:"coinbaseAmount"   gencodec:"required"`
+	CoinbaseAmount  uint256.Int    `json:"coinbaseAmount"   gencodec:"required"`
 	Time            uint64         `json:"timestamp"        gencodec:"required"`
-	Difficulty      *big.Int       `json:"difficulty"       gencodec:"required"`
-	TotalDifficulty *big.Int       `json:"total_difficulty" gencodec:"required"`
+	Difficulty      uint256.Int    `json:"difficulty"       gencodec:"required"`
+	TotalDifficulty uint256.Int    `json:"total_difficulty" gencodec:"required"`
 	Nonce           uint64         `json:"nonce"`
 	Extra           []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest       common.Hash    `json:"mixHash"`
@@ -50,26 +50,108 @@ type RootBlockHeader struct {
 }
 
 // Hash returns the block hash of the header, which is the keccak256 hash of its
-// RLP encoding.
+// SSZ encoding.
 func (h *RootBlockHeader) Hash() common.Hash {
-	return rlpHash(h)
+	enc, _ := h.MarshalSSZ()
+	return crypto.Keccak256Hash(enc)
 }
 
 // SealHash returns the hash of the header without the seal (nonce and mix
 // digest) and the signature. It is the hash mined and signed.
 func (h *RootBlockHeader) SealHash() common.Hash {
-	return rlpHash([]any{
-		h.Version,
-		h.Number,
-		h.ParentHash,
-		h.MinorHeaderHash,
-		h.Coinbase,
-		h.CoinbaseAmount,
-		h.Time,
-		h.Difficulty,
-		h.TotalDifficulty,
-		h.Extra,
-	})
+	enc := make([]byte, 0, unsealedFixedSize+len(h.Extra))
+	return crypto.Keccak256Hash(h.appendSSZ(enc, false))
+}
+
+const (
+	// unsealedFixedSize is the size of the fixed part of the SSZ encoding of
+	// the header without the seal, the offset of Extra included.
+	unsealedFixedSize = 4 + 4 + 32 + 32 + 20 + 32 + 8 + 32 + 32 + 4
+
+	// sealedFixedSize is the size of the fixed part of the SSZ encoding of the
+	// header with the seal.
+	sealedFixedSize = unsealedFixedSize + 8 + 32 + 65
+)
+
+// appendSSZ appends the SSZ encoding of the header as the container below.
+// Without the seal, Nonce, MixDigest and Signature are left out.
+//
+//	Version         uint32
+//	Number          uint32
+//	ParentHash      Bytes32
+//	MinorHeaderHash Bytes32
+//	Coinbase        Bytes20
+//	CoinbaseAmount  uint256
+//	Time            uint64
+//	Difficulty      uint256
+//	TotalDifficulty uint256
+//	Nonce           uint64     (seal)
+//	Extra           List[byte]
+//	MixDigest       Bytes32    (seal)
+//	Signature       Bytes65    (seal)
+func (h *RootBlockHeader) appendSSZ(enc []byte, withSeal bool) []byte {
+	fixedSize := unsealedFixedSize
+	if withSeal {
+		fixedSize = sealedFixedSize
+	}
+	enc = ssz.MarshalUint32(enc, h.Version)
+	enc = ssz.MarshalUint32(enc, h.Number)
+	enc = append(enc, h.ParentHash[:]...)
+	enc = append(enc, h.MinorHeaderHash[:]...)
+	enc = append(enc, h.Coinbase[:]...)
+	enc, _ = h.CoinbaseAmount.MarshalSSZAppend(enc)
+	enc = ssz.MarshalUint64(enc, h.Time)
+	enc, _ = h.Difficulty.MarshalSSZAppend(enc)
+	enc, _ = h.TotalDifficulty.MarshalSSZAppend(enc)
+	if withSeal {
+		enc = ssz.MarshalUint64(enc, h.Nonce)
+	}
+	enc = ssz.WriteOffset(enc, fixedSize)
+	if withSeal {
+		enc = append(enc, h.MixDigest[:]...)
+		enc = append(enc, h.Signature[:]...)
+	}
+	enc = append(enc, h.Extra...)
+	return enc
+}
+
+// SizeSSZ returns the size of the SSZ encoding of the header.
+func (h *RootBlockHeader) SizeSSZ() int {
+	return sealedFixedSize + len(h.Extra)
+}
+
+// MarshalSSZTo appends the SSZ encoding of the header to dst.
+func (h *RootBlockHeader) MarshalSSZTo(dst []byte) ([]byte, error) {
+	return h.appendSSZ(dst, true), nil
+}
+
+// MarshalSSZ returns the SSZ encoding of the header.
+func (h *RootBlockHeader) MarshalSSZ() ([]byte, error) {
+	return h.MarshalSSZTo(make([]byte, 0, h.SizeSSZ()))
+}
+
+// UnmarshalSSZ decodes the header from its SSZ encoding.
+func (h *RootBlockHeader) UnmarshalSSZ(buf []byte) error {
+	if len(buf) < sealedFixedSize {
+		return ssz.ErrSize
+	}
+	if ssz.ReadOffset(buf[204:208]) != sealedFixedSize {
+		return ssz.ErrOffset
+	}
+	h.Version = ssz.UnmarshallUint32(buf[0:4])
+	h.Number = ssz.UnmarshallUint32(buf[4:8])
+	copy(h.ParentHash[:], buf[8:40])
+	copy(h.MinorHeaderHash[:], buf[40:72])
+	copy(h.Coinbase[:], buf[72:92])
+	h.CoinbaseAmount.UnmarshalSSZ(buf[92:124]) // 32 bytes, cannot fail
+	h.Time = ssz.UnmarshallUint64(buf[124:132])
+	h.Difficulty.UnmarshalSSZ(buf[132:164])
+	h.TotalDifficulty.UnmarshalSSZ(buf[164:196])
+	h.Nonce = ssz.UnmarshallUint64(buf[196:204])
+	copy(h.MixDigest[:], buf[208:240])
+	copy(h.Signature[:], buf[240:305])
+	h.Extra = common.CopyBytes(buf[sealedFixedSize:])
+	return nil
 }
 
 var rootBlockHeaderSize = common.StorageSize(reflect.TypeFor[RootBlockHeader]().Size())
@@ -77,7 +159,7 @@ var rootBlockHeaderSize = common.StorageSize(reflect.TypeFor[RootBlockHeader]().
 // Size returns the approximate memory used by all internal contents. It is used
 // to approximate and limit the memory consumption of various caches.
 func (h *RootBlockHeader) Size() common.StorageSize {
-	return rootBlockHeaderSize + common.StorageSize(len(h.Extra)+h.Difficulty.BitLen()/8)
+	return rootBlockHeaderSize + common.StorageSize(len(h.Extra))
 }
 
 // NumberU64 returns the block number as a uint64.
@@ -102,13 +184,13 @@ func (h *RootBlockHeader) VerifySignature(key *ecdsa.PublicKey) bool {
 // CreateBlockToAppend creates an empty block on top of the header. Nil
 // arguments take default values: the parent time plus one, the parent
 // difficulty, the zero address, a zero nonce and empty extra data.
-func (h *RootBlockHeader) CreateBlockToAppend(createTime *uint64, difficulty *big.Int, address *common.Address, nonce *uint64, extraData []byte) *RootBlock {
+func (h *RootBlockHeader) CreateBlockToAppend(createTime *uint64, difficulty *uint256.Int, address *common.Address, nonce *uint64, extraData []byte) *RootBlock {
 	if createTime == nil {
 		preTime := h.Time + 1
 		createTime = &preTime
 	}
 	if difficulty == nil {
-		difficulty = h.Difficulty
+		difficulty = &h.Difficulty
 	}
 	if address == nil {
 		address = new(common.Address)
@@ -120,17 +202,18 @@ func (h *RootBlockHeader) CreateBlockToAppend(createTime *uint64, difficulty *bi
 		extraData = []byte{}
 	}
 	header := &RootBlockHeader{
-		Version:         h.Version,
-		Number:          h.Number + 1,
-		ParentHash:      h.Hash(),
-		Coinbase:        *address,
-		CoinbaseAmount:  new(big.Int),
-		Time:            *createTime,
-		Difficulty:      new(big.Int).Set(difficulty),
-		TotalDifficulty: new(big.Int).Add(h.TotalDifficulty, difficulty),
-		Nonce:           *nonce,
-		Extra:           common.CopyBytes(extraData),
+		Version:    h.Version,
+		Number:     h.Number + 1,
+		ParentHash: h.Hash(),
+		Coinbase:   *address,
+		Time:       *createTime,
+		Difficulty: *difficulty,
+		Nonce:      *nonce,
+		Extra:      common.CopyBytes(extraData),
 	}
+	// The total difficulty cannot overflow in practice. Block validation must
+	// still reject an overflow, as Add wraps around.
+	header.TotalDifficulty.Add(&h.TotalDifficulty, difficulty)
 	return &RootBlock{
 		header:            header,
 		minorBlockHeaders: MinorBlockHeaders{},
@@ -141,15 +224,6 @@ func (h *RootBlockHeader) CreateBlockToAppend(createTime *uint64, difficulty *bi
 // CopyRootBlockHeader creates a deep copy of a root block header.
 func CopyRootBlockHeader(h *RootBlockHeader) *RootBlockHeader {
 	cpy := *h
-	if cpy.CoinbaseAmount = new(big.Int); h.CoinbaseAmount != nil {
-		cpy.CoinbaseAmount.Set(h.CoinbaseAmount)
-	}
-	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
-		cpy.Difficulty.Set(h.Difficulty)
-	}
-	if cpy.TotalDifficulty = new(big.Int); h.TotalDifficulty != nil {
-		cpy.TotalDifficulty.Set(h.TotalDifficulty)
-	}
 	if len(h.Extra) > 0 {
 		cpy.Extra = common.CopyBytes(h.Extra)
 	}
@@ -183,13 +257,6 @@ type RootBlock struct {
 	size atomic.Uint64
 }
 
-// "external" root block encoding. used for p2p, etc.
-type extRootBlock struct {
-	Header            *RootBlockHeader
-	MinorBlockHeaders MinorBlockHeaders
-	TrackingData      []byte
-}
-
 // NewRootBlock creates a new root block. The input data is copied, changes to
 // header and to the field values will not affect the block.
 //
@@ -213,25 +280,83 @@ func NewRootBlockWithHeader(header *RootBlockHeader) *RootBlock {
 	return &RootBlock{header: CopyRootBlockHeader(header)}
 }
 
-// DecodeRLP decodes a root block from RLP.
-func (b *RootBlock) DecodeRLP(s *rlp.Stream) error {
-	var eb extRootBlock
-	_, size, _ := s.Kind()
-	if err := s.Decode(&eb); err != nil {
-		return err
+// rootBlockFixedSize is the size of the fixed part of the SSZ encoding of a
+// root block, i.e. the offsets of its three fields.
+const rootBlockFixedSize = 3 * 4
+
+// MarshalSSZ returns the SSZ encoding of the block as the container below. The
+// shard block headers keep their RLP encoding, which their hashes are computed
+// over.
+//
+//	Header            RootBlockHeader
+//	MinorBlockHeaders List[List[byte]]
+//	TrackingData      List[byte]
+func (b *RootBlock) MarshalSSZ() ([]byte, error) {
+	headers := make([][]byte, len(b.minorBlockHeaders))
+	headersSize := 0
+	for i, header := range b.minorBlockHeaders {
+		enc, err := rlp.EncodeToBytes(header)
+		if err != nil {
+			return nil, err
+		}
+		headers[i] = enc
+		headersSize += 4 + len(enc)
 	}
-	b.header, b.minorBlockHeaders, b.trackingData = eb.Header, eb.MinorBlockHeaders, eb.TrackingData
-	b.size.Store(rlp.ListSize(size))
-	return nil
+	var (
+		headerOffset   = rootBlockFixedSize
+		headersOffset  = headerOffset + b.header.SizeSSZ()
+		trackingOffset = headersOffset + headersSize
+	)
+	enc := make([]byte, 0, trackingOffset+len(b.trackingData))
+	enc = ssz.WriteOffset(enc, headerOffset)
+	enc = ssz.WriteOffset(enc, headersOffset)
+	enc = ssz.WriteOffset(enc, trackingOffset)
+	enc, _ = b.header.MarshalSSZTo(enc)
+	offset := 4 * len(headers)
+	for _, header := range headers {
+		enc = ssz.WriteOffset(enc, offset)
+		offset += len(header)
+	}
+	for _, header := range headers {
+		enc = append(enc, header...)
+	}
+	enc = append(enc, b.trackingData...)
+	return enc, nil
 }
 
-// EncodeRLP serializes a root block as RLP.
-func (b *RootBlock) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &extRootBlock{
-		Header:            b.header,
-		MinorBlockHeaders: b.minorBlockHeaders,
-		TrackingData:      b.trackingData,
+// UnmarshalSSZ decodes the block from its SSZ encoding.
+func (b *RootBlock) UnmarshalSSZ(buf []byte) error {
+	if len(buf) < rootBlockFixedSize {
+		return ssz.ErrSize
+	}
+	var (
+		headerOffset   = ssz.ReadOffset(buf[0:4])
+		headersOffset  = ssz.ReadOffset(buf[4:8])
+		trackingOffset = ssz.ReadOffset(buf[8:12])
+	)
+	if headerOffset != rootBlockFixedSize || headerOffset > headersOffset || headersOffset > trackingOffset || trackingOffset > uint64(len(buf)) {
+		return ssz.ErrOffset
+	}
+	header := new(RootBlockHeader)
+	if err := header.UnmarshalSSZ(buf[headerOffset:headersOffset]); err != nil {
+		return err
+	}
+	headersBuf := buf[headersOffset:trackingOffset]
+	n, err := ssz.DecodeDynamicLength(headersBuf, len(headersBuf)/4)
+	if err != nil {
+		return err
+	}
+	headers := make(MinorBlockHeaders, n)
+	err = ssz.UnmarshalDynamic(headersBuf, n, func(i int, enc []byte) error {
+		headers[i] = new(ctypes.Header)
+		return rlp.DecodeBytes(enc, headers[i])
 	})
+	if err != nil {
+		return err
+	}
+	b.header, b.minorBlockHeaders, b.trackingData = header, headers, common.CopyBytes(buf[trackingOffset:])
+	b.size.Store(uint64(len(buf)))
+	return nil
 }
 
 // MinorBlockHeaders returns the shard block headers confirmed by the block.
@@ -251,31 +376,31 @@ func (b *RootBlock) MinorBlockHeader(hash common.Hash) *ctypes.Header {
 
 func (b *RootBlock) TrackingData() []byte { return b.trackingData }
 
-func (b *RootBlock) Version() uint32              { return b.header.Version }
-func (b *RootBlock) Number() uint32               { return b.header.Number }
-func (b *RootBlock) NumberU64() uint64            { return uint64(b.header.Number) }
-func (b *RootBlock) ParentHash() common.Hash      { return b.header.ParentHash }
-func (b *RootBlock) MinorHeaderHash() common.Hash { return b.header.MinorHeaderHash }
-func (b *RootBlock) Coinbase() common.Address     { return b.header.Coinbase }
-func (b *RootBlock) CoinbaseAmount() *big.Int     { return new(big.Int).Set(b.header.CoinbaseAmount) }
-func (b *RootBlock) Time() uint64                 { return b.header.Time }
-func (b *RootBlock) Difficulty() *big.Int         { return new(big.Int).Set(b.header.Difficulty) }
-func (b *RootBlock) TotalDifficulty() *big.Int    { return new(big.Int).Set(b.header.TotalDifficulty) }
-func (b *RootBlock) Nonce() uint64                { return b.header.Nonce }
-func (b *RootBlock) Extra() []byte                { return common.CopyBytes(b.header.Extra) }
-func (b *RootBlock) MixDigest() common.Hash       { return b.header.MixDigest }
-func (b *RootBlock) Signature() [65]byte          { return b.header.Signature }
+func (b *RootBlock) Version() uint32               { return b.header.Version }
+func (b *RootBlock) Number() uint32                { return b.header.Number }
+func (b *RootBlock) NumberU64() uint64             { return uint64(b.header.Number) }
+func (b *RootBlock) ParentHash() common.Hash       { return b.header.ParentHash }
+func (b *RootBlock) MinorHeaderHash() common.Hash  { return b.header.MinorHeaderHash }
+func (b *RootBlock) Coinbase() common.Address      { return b.header.Coinbase }
+func (b *RootBlock) CoinbaseAmount() *uint256.Int  { return b.header.CoinbaseAmount.Clone() }
+func (b *RootBlock) Time() uint64                  { return b.header.Time }
+func (b *RootBlock) Difficulty() *uint256.Int      { return b.header.Difficulty.Clone() }
+func (b *RootBlock) TotalDifficulty() *uint256.Int { return b.header.TotalDifficulty.Clone() }
+func (b *RootBlock) Nonce() uint64                 { return b.header.Nonce }
+func (b *RootBlock) Extra() []byte                 { return common.CopyBytes(b.header.Extra) }
+func (b *RootBlock) MixDigest() common.Hash        { return b.header.MixDigest }
+func (b *RootBlock) Signature() [65]byte           { return b.header.Signature }
 
 // Header returns a deep-copy of the entire root block header.
 func (b *RootBlock) Header() *RootBlockHeader { return CopyRootBlockHeader(b.header) }
 
-// Size returns the true RLP encoded storage size of the block, either by
+// Size returns the true SSZ encoded storage size of the block, either by
 // encoding and returning it, or returning a previously cached value.
 func (b *RootBlock) Size() uint64 {
 	if size := b.size.Load(); size > 0 {
 		return size
 	}
-	enc, _ := rlp.EncodeToBytes(b)
+	enc, _ := b.MarshalSSZ()
 	b.size.Store(uint64(len(enc)))
 	return uint64(len(enc))
 }
@@ -329,15 +454,15 @@ func (b *RootBlock) Hash() common.Hash {
 
 // Finalize sets the minor header hash and the coinbase of the block in place.
 // Nil arguments take default values: zero amount and the zero address.
-func (b *RootBlock) Finalize(coinbaseAmount *big.Int, coinbaseAddress *common.Address) *RootBlock {
+func (b *RootBlock) Finalize(coinbaseAmount *uint256.Int, coinbaseAddress *common.Address) *RootBlock {
 	if coinbaseAmount == nil {
-		coinbaseAmount = new(big.Int)
+		coinbaseAmount = new(uint256.Int)
 	}
 	if coinbaseAddress == nil {
 		coinbaseAddress = new(common.Address)
 	}
 	b.header.MinorHeaderHash = CalcMinorHeaderHash(b.minorBlockHeaders)
-	b.header.CoinbaseAmount = new(big.Int).Set(coinbaseAmount)
+	b.header.CoinbaseAmount = *coinbaseAmount
 	b.header.Coinbase = *coinbaseAddress
 	h := b.header.Hash()
 	b.hash.Store(&h)
@@ -362,12 +487,4 @@ func (b *RootBlock) ExtendMinorBlockHeaderList(headers []*ctypes.Header, createT
 		}
 	}
 	b.size.Store(0)
-}
-
-// rlpHash encodes x and hashes the encoded bytes.
-func rlpHash(x any) (h common.Hash) {
-	sha := crypto.NewKeccakState()
-	rlp.Encode(sha, x)
-	sha.Read(h[:])
-	return h
 }
