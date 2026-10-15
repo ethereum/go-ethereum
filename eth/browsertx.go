@@ -17,9 +17,13 @@
 package eth
 
 import (
+	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 )
@@ -41,11 +45,22 @@ const (
 	txResultMsg = 0x01
 )
 
-// TxResult reports the outcome of one submitted transaction. Error is empty if
-// the transaction was accepted into the pool.
+// Result codes reported in TxResult
+const (
+	txResultOK                = iota // accepted into the pool
+	txResultAlreadyKnown             // already in the pool
+	txResultInvalidNonce             // nonce too low or too high
+	txResultInvalidFee               // fee fields invalid or replacement underpriced
+	txResultGasPriceTooLow           // tip below the node's minimum
+	txResultInsufficientFunds        // balance can't cover value and fees
+	txResultInvalidGasLimit          // gas limit too low or too high
+	txResultPoolError                // rejected due to local pool state, may succeed if submitted elsewhere
+	txResultInvalidTx                // any other error
+)
+
+// TxResult reports the outcome of one submitted transaction.
 type TxResult struct {
-	Hash  common.Hash
-	Error string
+	Result uint8
 }
 
 // makeBrowserTxProtocol returns the browser tx-submission subprotocol.
@@ -86,13 +101,53 @@ func handleBrowserTx(pool txPool, rw p2p.MsgReadWriter) error {
 
 	errs := pool.Add(txs, false)
 	results := make([]TxResult, len(txs))
-	for i, tx := range txs {
-		results[i].Hash = tx.Hash()
-		if errs[i] != nil {
-			results[i].Error = errs[i].Error()
-		}
+	for i, err := range errs {
+		results[i].Result = txResultCode(err)
 	}
 	return p2p.Send(rw, txResultMsg, results)
+}
+
+// txResultCode maps a pool error to a result code.
+func txResultCode(err error) uint8 {
+	switch {
+	case err == nil:
+		return txResultOK
+	case errors.Is(err, txpool.ErrAlreadyKnown):
+		return txResultAlreadyKnown
+	case errors.Is(err, core.ErrNonceTooLow),
+		errors.Is(err, core.ErrNonceTooHigh),
+		errors.Is(err, core.ErrNonceMax):
+		return txResultInvalidNonce
+	case errors.Is(err, core.ErrTipAboveFeeCap),
+		errors.Is(err, core.ErrFeeCapVeryHigh),
+		errors.Is(err, core.ErrTipVeryHigh),
+		errors.Is(err, txpool.ErrReplaceUnderpriced):
+		return txResultInvalidFee
+	case errors.Is(err, txpool.ErrTxGasPriceTooLow):
+		return txResultGasPriceTooLow
+	case errors.Is(err, core.ErrInsufficientFunds),
+		errors.Is(err, txpool.ErrNegativeValue):
+		return txResultInsufficientFunds
+	case errors.Is(err, txpool.ErrGasLimit),
+		errors.Is(err, core.ErrGasLimitTooHigh),
+		errors.Is(err, core.ErrIntrinsicGas),
+		errors.Is(err, core.ErrFloorDataGas):
+		return txResultInvalidGasLimit
+	case errors.Is(err, txpool.ErrUnderpriced),
+		errors.Is(err, legacypool.ErrTxPoolOverflow),
+		errors.Is(err, txpool.ErrAlreadyReserved),
+		errors.Is(err, txpool.ErrInflightTxLimitReached),
+		errors.Is(err, legacypool.ErrAuthorityReserved),
+		errors.Is(err, legacypool.ErrOutOfOrderTxFromDelegated),
+		errors.Is(err, legacypool.ErrFutureReplacePending),
+		errors.Is(err, txpool.ErrAccountLimitExceeded),
+		errors.Is(err, blobpool.ErrConversionQueueClosed),
+		errors.Is(err, blobpool.ErrConversionInterrupted),
+		errors.Is(err, blobpool.ErrConversionQueueOverloaded):
+		return txResultPoolError
+	default:
+		return txResultInvalidTx
+	}
 }
 
 // readBrowserTx reads the submission message
