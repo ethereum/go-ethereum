@@ -21,32 +21,21 @@ package rawdb
 import "github.com/ethereum/go-ethereum/common"
 
 // The fields below define the QuarkChain specific database schema. All keys
-// start with qkcPrefix, keeping them apart from the geth ones.
+// start with qkc_, keeping them apart from the geth ones.
 var (
-	qkcPrefix = []byte("qkc_")
-
 	// rootHeadKey tracks the latest known root block, the root tip.
-	rootHeadKey = qkcKey([]byte("qkc_LastRoot"))
+	rootHeadKey = []byte("qkc_LastRoot")
 
-	rootBlockPrefix     = []byte("rb")  // qkcPrefix + rootBlockPrefix + hash -> root block
-	lastConfirmedPrefix = []byte("rLM") // qkcPrefix + lastConfirmedPrefix + root hash -> last confirmed shard block hash
+	rootBlockPrefix     = []byte("qkc_rb")  // rootBlockPrefix + hash -> root block
+	lastConfirmedPrefix = []byte("qkc_rLM") // lastConfirmedPrefix + root hash -> last confirmed shard block hash
 )
 
-// qkcKey prepends qkcPrefix to the concatenation of the given key parts.
-func qkcKey(parts ...[]byte) []byte {
-	key := common.CopyBytes(qkcPrefix)
-	for _, part := range parts {
-		key = append(key, part...)
-	}
-	return key
-}
-
-// rootBlockKey = qkcPrefix + rootBlockPrefix + hash
+// rootBlockKey = rootBlockPrefix + hash
 func rootBlockKey(hash common.Hash) []byte {
-	return qkcKey(rootBlockPrefix, hash.Bytes())
+	return append(common.CopyBytes(rootBlockPrefix), hash.Bytes()...)
 }
 
-// lastConfirmedKey = qkcPrefix + lastConfirmedPrefix + root hash
+// lastConfirmedKey = lastConfirmedPrefix + root hash
 func lastConfirmedKey(rootHash common.Hash) []byte {
-	return qkcKey(lastConfirmedPrefix, rootHash.Bytes())
+	return append(common.CopyBytes(lastConfirmedPrefix), rootHash.Bytes()...)
 }
