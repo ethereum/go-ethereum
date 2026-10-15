@@ -45,13 +45,13 @@ func TestXShardOutbox(t *testing.T) {
 		outbox = params.XShardOutboxAddress
 
 		value    = big.NewInt(12345)
-		gasLimit = uint64(100_000)
+		gasLimit = params.XShardSendGas
 		excess   = big.NewInt(1)
 	)
 	config.QuarkChain = &params.QuarkChainConfig{ShardID: 0, ShardIDs: []uint32{0, 1}}
 	sendABI, err := abi.JSON(strings.NewReader(`[{"type": "function", "name": "send", "stateMutability": "payable", "outputs": [], "inputs": [
 		{"name": "dstShard", "type": "uint32"}, {"name": "to", "type": "address"}, {"name": "value", "type": "uint256"},
-		{"name": "gasLimit", "type": "uint64"}, {"name": "data", "type": "bytes"}]}]`))
+		{"name": "gasLimit", "type": "uint64"}, {"name": "isMove", "type": "bool"}, {"name": "data", "type": "bytes"}]}]`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestXShardOutbox(t *testing.T) {
 	// unknown shard and fails.
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		for nonce, dst := range []uint32{1, 2} {
-			input, err := sendABI.Pack("send", dst, common.HexToAddress("0xdead"), value, gasLimit, []byte{0xca, 0xfe})
+			input, err := sendABI.Pack("send", dst, common.HexToAddress("0xdead"), value, gasLimit, true, []byte{})
 			if err != nil {
 				t.Fatal(err)
 			}

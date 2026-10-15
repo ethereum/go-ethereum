@@ -37,13 +37,11 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// xShardSend is a send to the outbox.
+// xShardSend is a move sent to the outbox.
 type xShardSend struct {
 	dstShard uint32
 	to       common.Address
 	value    int64
-	gasLimit uint64
-	data     []byte
 }
 
 // TestXShardDeposits sends cross-shard messages in a block of shard 0, and
@@ -62,7 +60,7 @@ func TestXShardDeposits(t *testing.T) {
 	config.QuarkChain = &params.QuarkChainConfig{ShardID: 0, ShardIDs: []uint32{0, 1, 2}}
 	sendABI, err := abi.JSON(strings.NewReader(`[{"type": "function", "name": "send", "stateMutability": "payable", "outputs": [], "inputs": [
 		{"name": "dstShard", "type": "uint32"}, {"name": "to", "type": "address"}, {"name": "value", "type": "uint256"},
-		{"name": "gasLimit", "type": "uint64"}, {"name": "data", "type": "bytes"}]}]`))
+		{"name": "gasLimit", "type": "uint64"}, {"name": "isMove", "type": "bool"}, {"name": "data", "type": "bytes"}]}]`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,11 +73,11 @@ func TestXShardDeposits(t *testing.T) {
 	// Block 1 sends messages to shards 1 and 2, between a SentMessage topic of
 	// the impostor and a send failing on an unknown shard. Block 2 sends none.
 	sends := []*xShardSend{
-		{dstShard: 1, to: common.HexToAddress("0xa1"), value: 100, gasLimit: 30000, data: []byte{0xca, 0xfe}},
+		{dstShard: 1, to: common.HexToAddress("0xa1"), value: 100},
 		nil, // the impostor
-		{dstShard: 9, to: common.HexToAddress("0xa9"), value: 900, gasLimit: 30000},
-		{dstShard: 2, to: common.HexToAddress("0xa2"), value: 200, gasLimit: 40000, data: bytes.Repeat([]byte{0xbb}, 33)},
-		{dstShard: 1, to: common.HexToAddress("0xa3"), value: 300, gasLimit: 50000, data: []byte{0x01}},
+		{dstShard: 9, to: common.HexToAddress("0xa9"), value: 900},
+		{dstShard: 2, to: common.HexToAddress("0xa2"), value: 200},
+		{dstShard: 1, to: common.HexToAddress("0xa3"), value: 300},
 	}
 	var nonce uint64
 	_, blocks, receipts := core.GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *core.BlockGen) {
@@ -96,13 +94,13 @@ func TestXShardDeposits(t *testing.T) {
 				GasTipCap: big.NewInt(2),
 			}
 			if send != nil {
-				input, err := sendABI.Pack("send", send.dstShard, send.to, big.NewInt(send.value), send.gasLimit, send.data)
+				input, err := sendABI.Pack("send", send.dstShard, send.to, big.NewInt(send.value), params.XShardSendGas, true, []byte{})
 				if err != nil {
 					t.Fatal(err)
 				}
 				// Pay for the gas at the fee cap, the excess comes back.
 				tx.To, tx.Data = &outbox, input
-				tx.Value = new(big.Int).Mul(new(big.Int).SetUint64(send.gasLimit), tx.GasFeeCap)
+				tx.Value = new(big.Int).Mul(new(big.Int).SetUint64(params.XShardSendGas), tx.GasFeeCap)
 				tx.Value.Add(tx.Value, big.NewInt(send.value))
 			}
 			b.AddTx(types.MustSignNewTx(key, signer, tx))
@@ -125,10 +123,6 @@ func TestXShardDeposits(t *testing.T) {
 	// shard 2 and the second send to shard 1, the failed send having none.
 	hash := blocks[0].Hash()
 	deposit := func(send *xShardSend, logIndex uint64) *types.DepositTx {
-		data := send.data
-		if data == nil {
-			data = []byte{}
-		}
 		return &types.DepositTx{
 			Version:         types.DepositTxVersion,
 			SourceBlockHash: hash,
@@ -137,8 +131,9 @@ func TestXShardDeposits(t *testing.T) {
 			To:              send.to,
 			Value:           uint256.NewInt(uint64(send.value)),
 			GasPrice:        uint256.MustFromBig(receipts[0][0].EffectiveGasPrice),
-			Gas:             send.gasLimit,
-			Data:            data,
+			Gas:             params.XShardSendGas,
+			IsMove:          true,
+			Data:            []byte{},
 		}
 	}
 	want := map[uint32][]*types.DepositTx{
@@ -167,16 +162,17 @@ func TestXShardDeposits(t *testing.T) {
 	}
 }
 
-// sentMessageLog returns a SentMessage log of the outbox sending 3 bytes of
-// data to the given shard, encoded as the outbox does.
+// sentMessageLog returns a SentMessage log of the outbox sending a move with
+// 3 bytes of data to the given shard, encoded as the outbox does.
 func sentMessageLog(dstShard byte) *types.Log {
-	data := make([]byte, 6*32)
+	data := make([]byte, 7*32)
 	data[31] = 0x0a                   // value
 	data[63] = 0x0b                   // gasPrice
 	data[95] = 0x0c                   // gasLimit
-	data[127] = 4 * 32                // data offset
-	data[159] = 3                     // data length
-	copy(data[160:], []byte{1, 2, 3}) // data, padded
+	data[127] = 1                     // isMove
+	data[159] = 5 * 32                // data offset
+	data[191] = 3                     // data length
+	copy(data[192:], []byte{1, 2, 3}) // data, padded
 	return &types.Log{
 		Address: params.XShardOutboxAddress,
 		Topics:  []common.Hash{vm.XShardSentMessageTopic, {31: dstShard}, {31: 0x0d}, {31: 0x0e}},
@@ -205,6 +201,7 @@ func TestXShardDepositsInvalid(t *testing.T) {
 		Value:           uint256.NewInt(0x0a),
 		GasPrice:        uint256.NewInt(0x0b),
 		Gas:             0x0c,
+		IsMove:          true,
 		Data:            []byte{1, 2, 3},
 	}}}
 	if !reflect.DeepEqual(have, want) {
@@ -220,12 +217,14 @@ func TestXShardDepositsInvalid(t *testing.T) {
 		{"dirty dstShard", func(log *types.Log) { log.Topics[1][0] = 1 }},
 		{"dirty from", func(log *types.Log) { log.Topics[2][0] = 1 }},
 		{"dirty to", func(log *types.Log) { log.Topics[3][0] = 1 }},
-		{"short data", func(log *types.Log) { log.Data = log.Data[:4*32] }},
+		{"short data", func(log *types.Log) { log.Data = log.Data[:5*32] }},
 		{"dirty gasLimit", func(log *types.Log) { log.Data[2*32] = 1 }},
-		{"non-canonical offset", func(log *types.Log) { log.Data[4*32-1] = 0xa0 }},
+		{"dirty isMove", func(log *types.Log) { log.Data[3*32] = 1 }},
+		{"non-bool isMove", func(log *types.Log) { log.Data[4*32-1] = 2 }},
+		{"non-canonical offset", func(log *types.Log) { log.Data[5*32-1] = 0xc0 }},
 		{"trailing bytes", func(log *types.Log) { log.Data = append(log.Data, make([]byte, 32)...) }},
 		{"missing padding", func(log *types.Log) { log.Data = log.Data[:len(log.Data)-1] }},
-		{"huge length", func(log *types.Log) { copy(log.Data[4*32+24:5*32], bytes.Repeat([]byte{0xff}, 8)) }},
+		{"huge length", func(log *types.Log) { copy(log.Data[5*32+24:6*32], bytes.Repeat([]byte{0xff}, 8)) }},
 	} {
 		log := sentMessageLog(1)
 		tt.edit(log)

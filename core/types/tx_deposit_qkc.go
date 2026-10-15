@@ -35,7 +35,9 @@ const DepositTxVersion uint8 = 0
 
 // DepositTx is a cross-shard deposit, a message sent to a shard by another shard
 // or by the root chain. The destination shard credits it to From and runs it as
-// a call to To, with Gas at GasPrice.
+// a call to To, with Gas at GasPrice. A move only transfers Value to To, running
+// no code: it has no Data, and its Gas is params.XShardSendGas. Only moves are
+// sent for now.
 //
 // A deposit is not signed: its sender is From, as the source shard checked it.
 // Only the consensus layer may include deposits in a block, as they mint the
@@ -53,6 +55,7 @@ type DepositTx struct {
 	Value           *uint256.Int
 	GasPrice        *uint256.Int // gas price of the sending transaction
 	Gas             uint64       // gas the deposit may use on the destination shard
+	IsMove          bool         // whether the deposit only transfers Value to To
 	Data            []byte
 }
 
