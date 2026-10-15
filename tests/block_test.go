@@ -114,9 +114,14 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
 		snapshotConf = []bool{snapshotConf[rand.Int()%2]}
 		dbschemeConf = []string{dbschemeConf[rand.Int()%2]}
 	}
+	// The binary tree exists in the path scheme only, without stateless support.
+	witness := true
+	if config, ok := Forks[test.Network()]; ok && config.BinaryTrieTime != nil {
+		dbschemeConf, witness = []string{rawdb.PathScheme}, false
+	}
 	for _, snapshot := range snapshotConf {
 		for _, dbscheme := range dbschemeConf {
-			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, true, nil, nil)); err != nil {
+			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, witness, nil, nil)); err != nil {
 				t.Errorf("test with config {snapshotter:%v, scheme:%v} failed: %v", snapshot, dbscheme, err)
 				return
 			}
