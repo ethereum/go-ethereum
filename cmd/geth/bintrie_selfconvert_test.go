@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -304,36 +306,66 @@ func TestOnlineSelfConvert(t *testing.T) {
 
 	// The node persists P, as a full write buffer would, and runs on while it
 	// converts.
-	db := rawdb.NewMemoryDatabase()
 	node := *cfg
 	node.PBTImport = true
-	chain, err = core.NewBlockChain(db, gspec, engine, &node)
-	if err != nil {
-		t.Fatal(err)
-	}
-	insertBlocks(t, chain, blocks[:5])
-	if err := chain.TrieDB().Commit(p.Root(), false); err != nil {
-		t.Fatal(err)
-	}
-	insertBlocks(t, chain, blocks[5:6])
-	chain.SetFinalized(blocks[5].Header())
-	importer := func(chain *core.BlockChain) *pbtImporter {
+	importer := func(chain *core.BlockChain, db ethdb.Database, preimages string) *pbtImporter {
 		return &pbtImporter{
 			chain:     chain,
 			db:        db,
-			cfg:       ethconfig.PBTImportConfig{Preimages: prePath, Anchor: a.Hash().Hex()},
+			cfg:       ethconfig.PBTImportConfig{Preimages: preimages, Anchor: a.Hash().Hex()},
 			triedbDir: t.TempDir(),
 			tmpDir:    filepath.Join(t.TempDir(), "pbt-import"),
 			poll:      10 * time.Millisecond,
 		}
 	}
-	imp := importer(chain)
-	if err := imp.Start(); err != nil {
+	convert := func(preimages string) (ethdb.Database, *core.BlockChain, *pbtImporter) {
+		db := rawdb.NewMemoryDatabase()
+		chain, err := core.NewBlockChain(db, gspec, engine, &node)
+		if err != nil {
+			t.Fatal(err)
+		}
+		insertBlocks(t, chain, blocks[:5])
+		if err := chain.TrieDB().Commit(p.Root(), false); err != nil {
+			t.Fatal(err)
+		}
+		insertBlocks(t, chain, blocks[5:6])
+		chain.SetFinalized(blocks[5].Header())
+		imp := importer(chain, db, preimages)
+		if err := imp.Start(); err != nil {
+			t.Fatal(err)
+		}
+		insertBlocks(t, chain, blocks[6:])
+		<-imp.done
+		return db, chain, imp
+	}
+
+	// Half the file, as the devnet's fault run cuts it: the conversion fails,
+	// leaves nothing behind and the tree held, and the node follows on.
+	whole, err := os.ReadFile(prePath)
+	if err != nil {
 		t.Fatal(err)
 	}
-	insertBlocks(t, chain, blocks[6:])
-	<-imp.done
+	half := filepath.Join(t.TempDir(), "half")
+	if err := os.WriteFile(half, whole[:len(whole)/2], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	db, chain, imp := convert(half)
+	if prog := chain.MigrationProgress(); prog.Phase != "importFailed" {
+		t.Fatalf("progress %+v after a conversion from half a file, want importFailed", prog)
+	}
+	if dirty, err := hasBinaryTrieState(db); err != nil || dirty {
+		t.Fatalf("the failed conversion's writes survived (err %v)", err)
+	}
+	if !rawdb.ReadPBTImportPending(db) {
+		t.Fatal("a failed conversion released the tree")
+	}
+	if got := chain.CurrentBlock().Number.Uint64(); got != head.NumberU64() {
+		t.Fatalf("head %d after the failed conversion, want %d", got, head.NumberU64())
+	}
+	imp.Stop()
+	chain.Stop()
 
+	db, chain, imp = convert(prePath)
 	if num, hash, _ := rawdb.ReadPBTAnchor(rawdb.NewTable(db, string(rawdb.PBTPrefix))); num != p.NumberU64() || hash != p.Hash() {
 		t.Fatalf("attested at block %d (%x), want the persisted block %d", num, hash, p.NumberU64())
 	}
@@ -351,7 +383,7 @@ func TestOnlineSelfConvert(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer chain.Stop()
-	imp = importer(chain)
+	imp = importer(chain, db, prePath)
 	if err := imp.Start(); err != nil {
 		t.Fatal(err)
 	}
