@@ -541,10 +541,13 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 
 	// Phase 1: derive every candidate tree key the preimages can stand for.
 	// The reader stays sequential, digesting the file; workers check its
-	// order, a batch of records against the one before it, and derive the
-	// candidates into sorters of their own, which the first then absorbs into
-	// one merge. Keeping the preimages needs their hashes in order, so then
-	// the reader checks the order itself.
+	// order, a batch against the one before it, and derive the candidates
+	// into sorters of their own, which the first then absorbs into one merge.
+	// Keeping the preimages needs their hashes in order, so then the reader
+	// checks the order itself. A record's slot keys go out in runs of at most
+	// a batch's worth, so a contract with many slots is spread over the
+	// workers rather than held whole; the reader counts its header-range
+	// slots, which only the record as a whole determines.
 	keep := rawBatch != nil && opts.keepPreimages
 	workers := max(opts.workers, 1)
 	cands := make([]*bintrie.RecordSorter, workers)
@@ -555,9 +558,14 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	var (
 		preAccounts  uint64
 		prePreimages uint64
-		records      = make(chan preimageBatch, 2*workers)
+		batches      = 3*workers + 1 // queued, at the workers and at the reader
+		records      = make(chan *preimageBatch, batches)
+		free         = make(chan *preimageBatch, batches)
 		g, gctx      = errgroup.WithContext(ctx)
 	)
+	for range batches {
+		free <- &preimageBatch{runs: make([]preimageRun, 0, preimageBatchSize), keys: make([]common.Hash, 0, preimageBatchSlots)}
+	}
 	what, verified := "Verifying preimage file", "Verified preimage file"
 	if keep {
 		what, verified = "Verifying and storing preimages", "Verified and stored preimages"
@@ -566,90 +574,130 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	defer prog.stop()
 	for _, cand := range cands {
 		g.Go(func() error {
-			var (
-				buf      candidateBuf
-				prevHash common.Hash
-			)
+			var buf candidateBuf
 			for batch := range records {
-				prev := batch.prev
-				for i := range batch.records {
-					rec := &batch.records[i]
+				order := batch.order
+				for i := range batch.runs {
+					run := &batch.runs[i]
 					if !keep {
-						addrHash, err := checkPreimageRecord(batch.first+uint64(i), prev, &rec.addr, rec.slots, nil)
-						if err != nil {
+						if run.first {
+							if _, err := order.record(run.index, run.addr); err != nil {
+								return err
+							}
+						}
+						if err := order.slots(run.slots, nil); err != nil {
 							return err
 						}
-						prevHash, prev = addrHash, &prevHash
 					}
-					if err := addCandidates(cand, &buf, rec.addr, rec.slots); err != nil {
+					if err := addSlotCandidates(cand, &buf, run.addr, run.slots); err != nil {
 						return err
 					}
+					if run.last {
+						if err := addHeaderCandidate(cand, &buf, run.addr, run.headerSlots); err != nil {
+							return err
+						}
+					}
 				}
+				batch.runs, batch.keys = batch.runs[:0], batch.keys[:0]
+				free <- batch
 			}
 			return nil
 		})
 	}
 	readErr := func() error {
 		defer close(records)
-		batch := preimageBatch{records: make([]preimageRecord, 0, preimageBatchSize)}
-		send := func() error {
+		var (
+			batch *preimageBatch
+			order preimageOrder // the reader's own check, when it keeps the preimages
+		)
+		take := func() error {
 			select {
-			case records <- batch:
+			case batch = <-free:
+				return nil
 			case <-gctx.Done():
 				return gctx.Err() // a worker failed; its error is the one reported
 			}
-			last := crypto.Keccak256Hash(batch.records[len(batch.records)-1].addr[:])
-			batch = preimageBatch{
-				first:   batch.first + uint64(len(batch.records)),
-				prev:    &last,
-				records: make([]preimageRecord, 0, preimageBatchSize),
+		}
+		// send hands the batch over and takes the next, which continues the
+		// order check from this one's last run.
+		send := func() error {
+			last := &batch.runs[len(batch.runs)-1]
+			next := preimageOrder{index: last.index, addr: crypto.Keccak256Hash(last.addr[:]), started: true}
+			if !last.last {
+				next.slot, next.slotted = crypto.Keccak256Hash(last.slots[len(last.slots)-1][:]), true
 			}
+			records <- batch // never blocks: the channel holds every batch
+			if err := take(); err != nil {
+				return err
+			}
+			batch.order = next
 			return nil
 		}
+		if err := take(); err != nil {
+			return err
+		}
+		batch.order = preimageOrder{}
 		for {
-			var (
-				addr     common.Address
-				addrHash common.Hash
-				slots    []common.Hash
-				err      error
-			)
-			if keep {
-				addr, addrHash, slots, err = pre.next()
-			} else {
-				addr, slots, err = pre.nextRaw()
-			}
+			addr, count, err := pre.nextRecord()
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
 				return err
 			}
-			// The preimage file is keccak-ordered, which its reader enforces
-			// on this path, so the preimage store is written in that order.
+			index := pre.records - 1
+			// The preimage file is keccak-ordered, which the reader checks on
+			// this path, so the preimage store is written in that order.
 			if keep {
+				addrHash, err := order.record(index, addr)
+				if err != nil {
+					return err
+				}
 				if err := putPreimage(rawBatch, addrHash, addr.Bytes()); err != nil {
 					return err
 				}
-				for i, slot := range slots {
-					if err := putPreimage(rawBatch, pre.slotHashes[i], slot[:]); err != nil {
+			}
+			var headerSlots uint64
+			for left, first := count, true; first || left > 0; first = false {
+				if len(batch.runs) == cap(batch.runs) || (left > 0 && len(batch.keys) == cap(batch.keys)) {
+					if err := send(); err != nil {
 						return err
 					}
 				}
-				if err := flush(false); err != nil {
+				n := min(left, cap(batch.keys)-len(batch.keys))
+				slots := batch.keys[len(batch.keys) : len(batch.keys)+n]
+				batch.keys = batch.keys[:len(batch.keys)+n]
+				if err := pre.readSlots(slots); err != nil {
 					return err
 				}
-			}
-			batch.records = append(batch.records, preimageRecord{addr, slots})
-			if len(batch.records) == cap(batch.records) {
-				if err := send(); err != nil {
-					return err
+				for i := range slots {
+					if sub, ok := bintrie.HeaderSlot((*[32]byte)(&slots[i])); ok {
+						headerSlots |= 1 << sub
+					}
 				}
+				if keep {
+					err := order.slots(slots, func(slot, hash common.Hash) error {
+						return putPreimage(rawBatch, hash, slot[:])
+					})
+					if err != nil {
+						return err
+					}
+					if err := flush(false); err != nil {
+						return err
+					}
+				}
+				left -= n
+				run := preimageRun{index: index, addr: addr, slots: slots, first: first, last: left == 0}
+				if run.last {
+					run.headerSlots = headerSlots
+				}
+				batch.runs = append(batch.runs, run)
 			}
 			preAccounts++
-			prePreimages += 1 + uint64(len(slots))
+			prePreimages += 1 + uint64(count)
 		}
-		if len(batch.records) > 0 {
-			return send()
+		if len(batch.runs) > 0 {
+			records <- batch
 		}
 		return nil
 	}()
@@ -1168,48 +1216,58 @@ func putPreimage(w ethdb.KeyValueWriter, hash common.Hash, preimage []byte) erro
 	return w.Put(append(append([]byte{}, rawdb.PreimagePrefix...), hash[:]...), preimage)
 }
 
-// preimageRecord is one account record of a preimage file.
-type preimageRecord struct {
-	addr  common.Address
-	slots []common.Hash
+// preimageRun is a record of the preimage file, or a run of its slot keys: a
+// batch holds at most preimageBatchSlots keys, so a record with more spans
+// batches, a run in each, and is never held whole. first marks the run a
+// record begins with, last the one it ends with.
+type preimageRun struct {
+	index       uint64 // the record's, in the file
+	addr        common.Address
+	slots       []common.Hash // a window of the batch's keys
+	first, last bool
+	headerSlots uint64 // the record's header-range slots, set on its last run
 }
 
-// preimageBatch is a run of records for a phase-1 worker, which checks their
-// order: first is the file index of records[0], and prev the address hash of
-// the record before it, if any.
+// preimageBatch is a stretch of the preimage file for a phase-1 worker. order
+// is the order check's state where the stretch starts, which the worker
+// checks the first run against: the record before or, if the run continues a
+// record, that record's last slot key before. Batches cycle between the
+// reader and the workers, so phase 1 holds a fixed number of slot keys,
+// however many one record has.
 type preimageBatch struct {
-	first   uint64
-	prev    *common.Hash
-	records []preimageRecord
+	order preimageOrder
+	runs  []preimageRun
+	keys  []common.Hash // the runs' slot keys, back to back
 }
 
-// preimageBatchSize is how many records the import's reader hands a
-// candidate worker at a time.
-var preimageBatchSize = 1024
+// preimageBatchSize and preimageBatchSlots bound a phase-1 batch: the records
+// it begins or continues, and their slot keys (2 MiB).
+var (
+	preimageBatchSize  = 1024
+	preimageBatchSlots = 1 << 16
+)
 
-// candidateBuf holds one candidate's key and value while addCandidates builds
-// it: the sorter copies them, so a worker reuses one buffer for every record.
+// candidateBuf holds one candidate's key and value while it is built: the
+// sorter copies them, so a worker reuses one buffer for every candidate.
 type candidateBuf struct {
 	key   [bintrie.StorageKeyLength]byte
 	value [common.AddressLength + common.HashLength]byte
 }
 
-// addCandidates derives the candidate tree keys one preimage record stands
-// for: one per header stem, carrying the address and a bitmap of the
-// header-range slots the record claims, and one per overflow slot. A
-// header-range slot's number is its sub-index minus the offset, so it needs
-// no candidate of its own - unlike an overflow slot, whose stem is a one-way
-// hash of the slot number and can only be matched by deriving it forward.
-func addCandidates(cand *bintrie.RecordSorter, buf *candidateBuf, addr common.Address, slots []common.Hash) error {
+// addSlotCandidates derives the candidate tree keys a run of one record's
+// slot keys stands for: one per overflow slot. A header-range slot's number
+// is its sub-index minus the offset, so it needs no candidate of its own -
+// unlike an overflow slot, whose stem is a one-way hash of the slot number
+// and can only be matched by deriving it forward. The record's header
+// candidate carries the header-range slots (addHeaderCandidate).
+func addSlotCandidates(cand *bintrie.RecordSorter, buf *candidateBuf, addr common.Address, slots []common.Hash) error {
 	var (
-		headerSlots   uint64
 		storagePrefix [32]byte // blake3(address32), hashed once and reused for every overflow slot
 		havePrefix    bool
 	)
 	for _, slot := range slots {
 		inHeader, treeIndex, sub := bintrie.StorageIndex(slot[:])
 		if inHeader {
-			headerSlots |= 1 << (sub - bintrie.HeaderStorageOffset)
 			continue
 		}
 		if !havePrefix {
@@ -1222,6 +1280,12 @@ func addCandidates(cand *bintrie.RecordSorter, buf *candidateBuf, addr common.Ad
 			return err
 		}
 	}
+	return nil
+}
+
+// addHeaderCandidate adds the candidate of addr's header stem: the address
+// and a bitmap of the header-range slots its record claims.
+func addHeaderCandidate(cand *bintrie.RecordSorter, buf *candidateBuf, addr common.Address, headerSlots uint64) error {
 	key := bintrie.AppendHeaderStem(buf.key[:0], addr)
 	value := binary.BigEndian.AppendUint64(append(buf.value[:0], addr[:]...), headerSlots)
 	return cand.Add(key, value)

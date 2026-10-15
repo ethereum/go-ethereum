@@ -155,13 +155,17 @@ func assertNamespaceEqual(t *testing.T, want, got ethdb.Database) {
 }
 
 // TestImportWorkersAgree: with the preimage records spread over several
-// workers, the snapshot pipeline cycling its batches and check 2 folding
-// storage tries across many jobs, some split over several batches, the import
-// lands on the converter's root and namespace, byte for byte.
+// workers, each split into a run per slot key, so an account's header-range
+// slots arrive in runs of their own, the snapshot pipeline cycling its batches
+// and check 2 folding storage tries across many jobs, some split over several
+// batches, the import lands on the converter's root and namespace, byte for
+// byte.
 func TestImportWorkersAgree(t *testing.T) {
 	convDB, root, binRoot, snapPath, prePath := importFixture(t, mixedAlloc(8347))
-	defer func(p, l, f int) { preimageBatchSize, leafBatchSize, foldBatchSize = p, l, f }(preimageBatchSize, leafBatchSize, foldBatchSize)
-	preimageBatchSize, leafBatchSize, foldBatchSize = 4, 64, 2
+	defer func(p, s, l, f int) {
+		preimageBatchSize, preimageBatchSlots, leafBatchSize, foldBatchSize = p, s, l, f
+	}(preimageBatchSize, preimageBatchSlots, leafBatchSize, foldBatchSize)
+	preimageBatchSize, preimageBatchSlots, leafBatchSize, foldBatchSize = 4, 1, 64, 2
 
 	impDB := rawdb.NewMemoryDatabase()
 	imported, err := importState(context.Background(), impDB, importOptions{snapshot: snapPath, preimages: prePath,
@@ -181,7 +185,8 @@ func TestImportWorkersAgree(t *testing.T) {
 // TestImportChecksPreimageOrder: with phase 1's order check spread over its
 // workers, a record out of hashed-key order is refused wherever it sits,
 // inside a batch or first in one, where only the check against the batch
-// before sees it.
+// before sees it, and so are slot keys out of order on the seam of a record
+// split into runs.
 func TestImportChecksPreimageOrder(t *testing.T) {
 	_, root, _, snapPath, prePath := importFixture(t, mixedAlloc(8347))
 	var recs []rawPreRecord
@@ -207,6 +212,23 @@ func TestImportChecksPreimageOrder(t *testing.T) {
 				t.Fatalf("err = %v, want %q", err, want)
 			}
 		})
+	}
+
+	// A run per slot key puts every pair of slot keys on a seam.
+	defer func(n int) { preimageBatchSlots = n }(preimageBatchSlots)
+	preimageBatchSlots = 1
+	at := slices.IndexFunc(recs, func(r rawPreRecord) bool { return len(r.slots) >= 2 })
+	if at < 0 {
+		t.Fatal("the fixture has no record with two slot keys")
+	}
+	bad := slices.Clone(recs)
+	bad[at].slots = slices.Clone(bad[at].slots)
+	bad[at].slots[0], bad[at].slots[1] = bad[at].slots[1], bad[at].slots[0]
+	_, err := importState(context.Background(), rawdb.NewMemoryDatabase(), importOptions{snapshot: snapPath, preimages: rawPreimages(t, bad),
+		anchor:            &types.Header{Number: new(big.Int), Root: root},
+		conversionOptions: conversionOptions{tmpDir: t.TempDir(), workers: 4}})
+	if want := fmt.Sprintf("preimage record %d slot keys are out of hashed-key order", at); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("err = %v, want %q", err, want)
 	}
 }
 
@@ -459,18 +481,42 @@ func readPreimageRecords(t *testing.T, path string) []preRecord {
 		t.Fatal(err)
 	}
 	defer pr.close()
-	var recs []preRecord
-	for {
-		addr, _, slots, err := pr.next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		recs = append(recs, preRecord{addr: addr, slots: slots})
+	recs, err := readPreimageFile(pr)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return recs
+}
+
+// readPreimageFile reads a whole preimage file, checking its order, a slot
+// key per read so the check crosses every read, and returns its records.
+func readPreimageFile(pr *preimageReader) ([]preRecord, error) {
+	var (
+		recs  []preRecord
+		order preimageOrder
+	)
+	for {
+		addr, count, err := pr.nextRecord()
+		if err == io.EOF {
+			return recs, nil
+		}
+		if err != nil {
+			return recs, err
+		}
+		if _, err := order.record(pr.records-1, addr); err != nil {
+			return recs, err
+		}
+		rec := preRecord{addr: addr, slots: make([]common.Hash, count)}
+		for i := range rec.slots {
+			if err := pr.readSlots(rec.slots[i : i+1]); err != nil {
+				return recs, err
+			}
+			if err := order.slots(rec.slots[i:i+1], nil); err != nil {
+				return recs, err
+			}
+		}
+		recs = append(recs, rec)
+	}
 }
 
 // encodePreimageRecords lays recs out in the EIP-8347 layout and hashed-key

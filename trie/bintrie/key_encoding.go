@@ -196,21 +196,21 @@ func StorageIndex(slot []byte) (inHeader bool, treeIndex uint256.Int, sub byte) 
 	var padded [32]byte
 	copy(padded[32-len(slot):], slot)
 
-	headerCandidate := padded[31] < HeaderStorageOffset
-	if headerCandidate {
-		for _, b := range padded[:31] {
-			if b != 0 {
-				headerCandidate = false
-				break
-			}
-		}
-	}
-	if headerCandidate {
-		return true, treeIndex, HeaderStorageOffset + padded[31]
+	if index, ok := HeaderSlot(&padded); ok {
+		return true, treeIndex, HeaderStorageOffset + index
 	}
 	treeIndex.SetBytes(padded[:])
 	treeIndex.Rsh(&treeIndex, 8) // slot / StemSubtreeWidth
 	return false, treeIndex, padded[31]
+}
+
+// HeaderSlot reports whether a storage slot key lives in its account's
+// header stem, a slot below 64, and its index among the header slots if so.
+func HeaderSlot(slot *[32]byte) (index byte, ok bool) {
+	if slot[31] >= HeaderStorageOffset || [31]byte(slot[:31]) != [31]byte{} {
+		return 0, false
+	}
+	return slot[31], true
 }
 
 // StorageSlotKey returns the tree key of a raw storage slot. Slots below 64

@@ -806,19 +806,21 @@ func (sr *snapshotReader) close() { sr.f.Close() }
 
 // preimageReader streams the EIP-8347 preimage file, hashing it as it reads:
 // records strictly ascending by keccak256(address), slot keys strictly
-// ascending by keccak256(slotKey), nothing after the last record. A piece
-// (see preimagePiece) reads one span of records and hashes nothing.
+// ascending by keccak256(slotKey), nothing after the last record. It hands a
+// record over as its header, then its slot keys in as many reads as the
+// caller likes: one contract can hold a large share of the state's slots, so
+// no record is ever read whole. The order is preimageOrder's to check. A
+// piece (see preimagePiece) reads one span of records and hashes nothing.
 type preimageReader struct {
-	f          *os.File
-	size       int64
-	read       atomic.Uint64 // bytes read from f, for progress reports
-	hasher     crypto.KeccakState
-	r          *bufio.Reader
-	left       int64
-	prevAddr   common.Hash
-	records    uint64
-	slotHashes []common.Hash                  // the last record's slot-key hashes, overwritten by next
-	header     [preimageRecordHeaderSize]byte // nextRaw's buffer: a local would be allocated per record
+	f       *os.File
+	size    int64
+	read    atomic.Uint64 // bytes read from f, for progress reports
+	hasher  crypto.KeccakState
+	r       *bufio.Reader
+	left    int64                          // bytes after the current record
+	records uint64                         // records begun
+	pending int64                          // slot keys of the current record not yet read
+	header  [preimageRecordHeaderSize]byte // nextRecord's buffer: a local would be allocated per record
 }
 
 // openPreimages opens the preimage file.
@@ -878,81 +880,89 @@ func splitPreimageFile(f *os.File, size int64, n int) ([]int64, []common.Hash, e
 	return offsets, starts, nil
 }
 
-// next returns the following account record: the address, its keccak digest,
-// which the ordering check computes anyway, and its slot keys. io.EOF ends
-// the stream only on a record boundary.
-func (pr *preimageReader) next() (common.Address, common.Hash, []common.Hash, error) {
-	addr, slots, err := pr.nextRaw()
-	if err != nil {
-		return common.Address{}, common.Hash{}, nil, err
+// nextRecord reads the following record's header: the address and how many
+// slot keys follow, which readSlots reads. io.EOF ends the stream only on a
+// record boundary.
+func (pr *preimageReader) nextRecord() (common.Address, int, error) {
+	if pr.pending > 0 {
+		return common.Address{}, 0, fmt.Errorf("preimage record %d has %d slot keys left unread", pr.records-1, pr.pending)
 	}
-	var prev *common.Hash
-	if pr.records > 1 {
-		prev = &pr.prevAddr
-	}
-	pr.slotHashes = pr.slotHashes[:0]
-	addrHash, err := checkPreimageRecord(pr.records-1, prev, &addr, slots, func(hash common.Hash) {
-		pr.slotHashes = append(pr.slotHashes, hash)
-	})
-	if err != nil {
-		return common.Address{}, common.Hash{}, nil, err
-	}
-	pr.prevAddr = addrHash
-	return addr, addrHash, slots, nil
-}
-
-// nextRaw returns the following account record without hashing its keys,
-// leaving the order to checkPreimageRecord.
-func (pr *preimageReader) nextRaw() (common.Address, []common.Hash, error) {
 	header := pr.header[:]
 	if _, err := io.ReadFull(pr.r, header); err == io.EOF {
-		return common.Address{}, nil, io.EOF
+		return common.Address{}, 0, io.EOF
 	} else if err != nil {
-		return common.Address{}, nil, fmt.Errorf("preimage record %d is truncated: %w", pr.records, err)
+		return common.Address{}, 0, fmt.Errorf("preimage record %d is truncated: %w", pr.records, err)
 	}
 	pr.left -= preimageRecordHeaderSize
 
-	// Bound the attacker-controlled count by the bytes left before allocating.
+	// Bound the attacker-controlled count by the bytes left.
 	count := int64(binary.BigEndian.Uint32(header[common.AddressLength:]))
 	if count*common.HashLength > pr.left {
-		return common.Address{}, nil, fmt.Errorf("preimage record %d claims %d slots past the end of the file", pr.records, count)
-	}
-	slots := make([]common.Hash, count)
-	for i := range slots {
-		if _, err := io.ReadFull(pr.r, slots[i][:]); err != nil {
-			return common.Address{}, nil, fmt.Errorf("preimage record %d is truncated: %w", pr.records, err)
-		}
+		return common.Address{}, 0, fmt.Errorf("preimage record %d claims %d slots past the end of the file", pr.records, count)
 	}
 	pr.left -= count * common.HashLength
+	pr.pending = count
 	pr.records++
-	return common.BytesToAddress(header[:common.AddressLength]), slots, nil
+	return common.BytesToAddress(header[:common.AddressLength]), int(count), nil
 }
 
-// checkPreimageRecord hashes the keys of the index-th record and checks that
-// they ascend: its address after prev, the previous record's address hash if
-// any, and its slot keys among themselves. It returns the address hash and
-// hands each slot key's hash to keep, if set.
-func checkPreimageRecord(index uint64, prev *common.Hash, addr *common.Address, slots []common.Hash, keep func(common.Hash)) (common.Hash, error) {
-	addrHash := crypto.Keccak256Hash(addr[:])
-	if prev != nil && bytes.Compare(prev[:], addrHash[:]) >= 0 {
+// readSlots reads the current record's next len(dst) slot keys into dst.
+func (pr *preimageReader) readSlots(dst []common.Hash) error {
+	if int64(len(dst)) > pr.pending {
+		return fmt.Errorf("preimage record %d has %d slot keys left, not %d", pr.records-1, pr.pending, len(dst))
+	}
+	for i := range dst {
+		if _, err := io.ReadFull(pr.r, dst[i][:]); err != nil {
+			return fmt.Errorf("preimage record %d is truncated: %w", pr.records-1, err)
+		}
+	}
+	pr.pending -= int64(len(dst))
+	return nil
+}
+
+// preimageOrder checks a preimage file's hashed-key order as its keys come,
+// a record's slot keys possibly over many calls: records strictly ascending
+// by keccak256(address), a record's slot keys by keccak256(slotKey). The zero
+// value expects a first record; a copy carries the check across a split.
+type preimageOrder struct {
+	index   uint64      // the current record's
+	addr    common.Hash // keccak of its address
+	slot    common.Hash // keccak of its last slot key checked
+	started bool        // a record has begun
+	slotted bool        // the current record has a slot key checked
+}
+
+// record begins the index-th record, checking that its address hash ascends
+// past the one before. It returns the hash.
+func (o *preimageOrder) record(index uint64, addr common.Address) (common.Hash, error) {
+	hash := crypto.Keccak256Hash(addr[:])
+	if o.started && bytes.Compare(o.addr[:], hash[:]) >= 0 {
 		return common.Hash{}, fmt.Errorf("preimage record %d is out of hashed-key order", index)
 	}
-	var last common.Hash
-	for i := range slots {
-		hash := crypto.Keccak256Hash(slots[i][:])
-		if i > 0 && bytes.Compare(last[:], hash[:]) >= 0 {
-			return common.Hash{}, fmt.Errorf("preimage record %d slot keys are out of hashed-key order", index)
-		}
-		last = hash
-		if keep != nil {
-			keep(hash)
-		}
-	}
-	return addrHash, nil
+	*o = preimageOrder{index: index, addr: hash, started: true}
+	return hash, nil
 }
 
-// digest returns the keccak of everything read; the whole file once next
-// returned io.EOF.
+// slots checks the current record's next slot keys, handing each with its
+// hash to each if set.
+func (o *preimageOrder) slots(slots []common.Hash, each func(slot, hash common.Hash) error) error {
+	for _, slot := range slots {
+		hash := crypto.Keccak256Hash(slot[:])
+		if o.slotted && bytes.Compare(o.slot[:], hash[:]) >= 0 {
+			return fmt.Errorf("preimage record %d slot keys are out of hashed-key order", o.index)
+		}
+		o.slot, o.slotted = hash, true
+		if each != nil {
+			if err := each(slot, hash); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// digest returns the keccak of everything read; the whole file once
+// nextRecord returned io.EOF.
 func (pr *preimageReader) digest() common.Hash {
 	return common.BytesToHash(pr.hasher.Sum(nil))
 }

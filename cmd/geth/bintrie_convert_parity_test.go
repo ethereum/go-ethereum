@@ -380,11 +380,13 @@ func TestConvertParallelMatchesSerial(t *testing.T) {
 }
 
 // TestConvertFromPreimageFile: a source holding no preimages converts from a
-// preimage file, read in step with the scan, to the root, flat state and
-// artifacts a conversion from the node's store produces, at any worker
-// count and from either source walk; a file that names a key the state does
-// not hold, or lacks one it does, is refused.
+// preimage file, read in step with the scan a slot key at a time, to the
+// root, flat state and artifacts a conversion from the node's store produces,
+// at any worker count and from either source walk; a file that names a key
+// the state does not hold, or lacks one it does, is refused.
 func TestConvertFromPreimageFile(t *testing.T) {
+	defer func(n int) { fileKeysWindow = n }(fileKeysWindow)
+	fileKeysWindow = 1
 	alloc := mixedAlloc(8347)
 	want := embedAlloc(t, alloc)
 	_, _, _, snapPath, prePath := importFixture(t, alloc)

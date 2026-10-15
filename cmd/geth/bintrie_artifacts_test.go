@@ -405,15 +405,11 @@ func TestArtifactReaders(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pr.close()
-	accounts := 0
-	for {
-		if _, _, _, err := pr.next(); err == io.EOF {
-			break
-		} else if err != nil {
-			t.Fatalf("preimage reader rejected the writer's output: %v", err)
-		}
-		accounts++
+	recs, err := readPreimageFile(pr)
+	if err != nil {
+		t.Fatalf("preimage reader rejected the writer's output: %v", err)
 	}
+	accounts := len(recs)
 	if accounts != len(artifactAlloc()) {
 		t.Fatalf("read %d preimage records, want %d", accounts, len(artifactAlloc()))
 	}
@@ -442,12 +438,8 @@ func TestArtifactReaders(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for {
-			if _, _, _, err := pr2.next(); err == io.EOF {
-				t.Fatalf("a %s preimage file was accepted", tamper.name)
-			} else if err != nil {
-				break
-			}
+		if _, err := readPreimageFile(pr2); err == nil {
+			t.Fatalf("a %s preimage file was accepted", tamper.name)
 		}
 		pr2.close()
 	}
@@ -745,15 +737,7 @@ func TestArtifactReadersReject(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer pr.close()
-				var lastErr error
-				for {
-					if _, _, _, err := pr.next(); err == io.EOF {
-						break
-					} else if err != nil {
-						lastErr = err
-						break
-					}
-				}
+				_, lastErr := readPreimageFile(pr)
 				if lastErr == nil {
 					t.Fatal("the reader accepted it")
 				}
