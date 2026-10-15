@@ -37,7 +37,16 @@ var (
 	bucketsCounter      []*metrics.Counter
 	ingressTrafficMeter = metrics.NewRegisteredMeter(ingressMeterName, nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter(egressMeterName, nil)
+	v4BadPacketMeter    = metrics.NewRegisteredMeter(moduleName+"/v4/bad", nil)
+	v5BadPacketMeter    = metrics.NewRegisteredMeter(moduleName+"/v5/bad", nil)
 )
+
+// markInbound counts a received packet by its wire name, e.g. discover/ingress/PING/v4.
+func markInbound(name string) {
+	if metrics.Enabled() {
+		metrics.GetOrRegisterMeter(ingressMeterName+"/"+name, nil).Mark(1)
+	}
+}
 
 func init() {
 	for i := 0; i < nBuckets; i++ {
@@ -49,6 +58,9 @@ func init() {
 // inbound and outbound network traffic.
 type meteredUdpConn struct {
 	udpConn UDPConn
+	// skipRead is set for SharedUDPConn: its reads replay packets already
+	// counted by the primary listener's socket read.
+	skipRead bool
 }
 
 func newMeteredConn(conn UDPConn) UDPConn {
@@ -56,7 +68,8 @@ func newMeteredConn(conn UDPConn) UDPConn {
 	if !metrics.Enabled() {
 		return conn
 	}
-	return &meteredUdpConn{udpConn: conn}
+	_, shared := conn.(*SharedUDPConn)
+	return &meteredUdpConn{udpConn: conn, skipRead: shared}
 }
 
 func (c *meteredUdpConn) Close() error {
@@ -70,7 +83,9 @@ func (c *meteredUdpConn) LocalAddr() net.Addr {
 // ReadFromUDPAddrPort delegates a network read to the underlying connection, bumping the udp ingress traffic meter along the way.
 func (c *meteredUdpConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
 	n, addr, err = c.udpConn.ReadFromUDPAddrPort(b)
-	ingressTrafficMeter.Mark(int64(n))
+	if !c.skipRead {
+		ingressTrafficMeter.Mark(int64(n))
+	}
 	return n, addr, err
 }
 
