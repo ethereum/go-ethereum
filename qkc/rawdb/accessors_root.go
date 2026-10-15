@@ -21,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/qkc/types"
-	ssz "github.com/ferranbt/fastssz"
 )
 
 // ReadRootHeadHash retrieves the hash of the root tip.
@@ -73,25 +72,8 @@ func ReadRootBlockHeader(db ethdb.KeyValueReader, hash common.Hash) *types.RootB
 	if len(data) == 0 {
 		return nil
 	}
-	// The header is the first field in the SSZ container. Decode it directly
-	// without decoding the shard block headers in the following field.
-	const rootBlockSSZFixedSize = 3 * 4
-	if len(data) < rootBlockSSZFixedSize {
-		log.Error("Invalid root block SSZ", "hash", hash, "err", ssz.ErrSize)
-		return nil
-	}
-	headerOffset := ssz.ReadOffset(data[0:4])
-	headersOffset := ssz.ReadOffset(data[4:8])
-	trackingOffset := ssz.ReadOffset(data[8:12])
-	if headerOffset != rootBlockSSZFixedSize ||
-		headerOffset > headersOffset ||
-		headersOffset > trackingOffset ||
-		trackingOffset > uint64(len(data)) {
-		log.Error("Invalid root block SSZ", "hash", hash, "err", ssz.ErrOffset)
-		return nil
-	}
-	header := new(types.RootBlockHeader)
-	if err := header.UnmarshalSSZ(data[headerOffset:headersOffset]); err != nil {
+	header, err := types.DecodeRootBlockHeaderFromBlockSSZ(data)
+	if err != nil {
 		log.Error("Invalid root block header SSZ", "hash", hash, "err", err)
 		return nil
 	}
