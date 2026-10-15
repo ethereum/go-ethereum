@@ -136,6 +136,7 @@ type Database struct {
 
 	trienodeFreezer ethdb.ResettableAncientStore // Freezer for storing trienode histories, nil possible in tests
 	trienodeIndexer *historyIndexer              // History indexer for historical trienode data
+	writer          *asyncWriter                 // Background writer off the commit path
 
 	lock sync.RWMutex // Lock to prevent mutations from happening at the same time
 }
@@ -155,6 +156,7 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
+		writer:   newAsyncWriter(),
 	}
 	// Establish a dedicated database namespace tailored for verkle-specific
 	// data, ensuring the isolation of both verkle and merkle tree data. It's
@@ -198,6 +200,20 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 	}
 	log.Info("Initialized path database", fields...)
 	return db
+}
+
+// waitWrites blocks until the writes scheduled so far are done.
+func (db *Database) waitWrites() error {
+	return db.writer.wait()
+}
+
+// persistHistory blocks until the writes scheduled so far are done and syncs
+// the history freezers, making the histories durable.
+func (db *Database) persistHistory() error {
+	if err := db.waitWrites(); err != nil {
+		return err
+	}
+	return syncHistory(db.stateFreezer, db.trienodeFreezer)
 }
 
 // setHistoryIndexer initializes the indexers for both state history and
@@ -360,6 +376,10 @@ func (db *Database) Disable() error {
 	disk.resetCache() // a stale layer can no longer release its caches
 	disk.markStale()
 
+	if err := db.waitWrites(); err != nil {
+		return err
+	}
+
 	// Write the initial sync flag to persist it across restarts.
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
 	log.Info("Disabled trie database due to state sync")
@@ -410,6 +430,9 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	// Clean up all state histories in the freezer. Theoretically all root->id
 	// mappings should be removed as well; since those can be huge, leave them
 	// on disk and let them be overwritten.
+	if err := db.waitWrites(); err != nil {
+		return err
+	}
 	purgeHistory(db.stateFreezer, db.diskdb, typeStateHistory)
 	purgeHistory(db.trienodeFreezer, db.diskdb, typeTrienodeHistory)
 
@@ -497,6 +520,9 @@ func (db *Database) Recover(root common.Hash) error {
 	if db.stateFreezer == nil {
 		return errors.New("state rollback is non-supported")
 	}
+	if err := db.waitWrites(); err != nil {
+		return err
+	}
 	// Short circuit if the target state is not recoverable
 	if !db.Recoverable(root) {
 		return errStateUnrecoverable
@@ -550,7 +576,11 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if db.waitSync {
 		return false
 	}
-	// Ensure the requested state is a known state.
+	// Ensure the requested state is a known state. The lookup and the history
+	// are written in background, wait for the scheduled writes first.
+	if err := db.waitWrites(); err != nil {
+		return false
+	}
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
 		return false
@@ -598,6 +628,10 @@ func (db *Database) Close() error {
 	}
 	dl.resetCache() // release the memory held by clean cache
 
+	// Terminate the background writer after the scheduled writes
+	if err := db.writer.close(); err != nil {
+		return err
+	}
 	// Terminate the background state history indexer
 	if db.stateIndexer != nil {
 		db.stateIndexer.close()

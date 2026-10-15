@@ -19,6 +19,7 @@ package pathdb
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -158,7 +159,7 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 	var (
 		roots = env.roots
 		dl    = env.db.tree.bottom()
-		hr    = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer)
+		hr    = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
 	)
 	for i, root := range roots {
 		if root == dl.rootHash() {
@@ -214,5 +215,77 @@ func TestHistoricalStateReader(t *testing.T) {
 	_, err = env.db.HistoricReader(realRoot)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
+	}
+}
+
+// TestHistoricalStateReaderPendingWrites ensures the historical reads wait for
+// the histories written in background, rather than failing while the disk layer
+// is ahead of the indexed histories, and are served correctly while the disk
+// layer is behind.
+func TestHistoricalStateReaderPendingWrites(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	// Disable the buffer flushes, which wait for the stalled writer below
+	writeBuffer := 64 * 1024 * 1024
+	env := newTester(t, &testerConfig{layers: 32, enableIndex: true, writeBuffer: &writeBuffer})
+	defer env.release()
+	waitIndexing(env.db)
+
+	root := env.roots[9]
+	reader, err := env.db.HistoricReader(root)
+	if err != nil {
+		t.Fatalf("Failed to construct the reader: %v", err)
+	}
+	// Stall the background writer and commit a new layer, leaving the disk layer
+	// ahead of the indexed histories.
+	var (
+		stall  = make(chan struct{})
+		resume = sync.OnceFunc(func() { close(stall) })
+	)
+	defer resume() // runs before the release, which waits for the writer
+
+	if err := env.db.writer.submit(func() error { <-stall; return nil }); err != nil {
+		t.Fatalf("Failed to stall the writer: %v", err)
+	}
+	env.extend(1)
+	if meta := loadIndexMetadata(env.db.diskdb, typeStateHistory); meta.Last >= env.db.tree.bottom().stateID() {
+		t.Fatalf("Unexpected indexed histories, indexed: %d, disk: %d", meta.Last, env.db.tree.bottom().stateID())
+	}
+	time.AfterFunc(100*time.Millisecond, resume)
+
+	for addrHash, want := range env.snapAccounts[root] {
+		blob, err := reader.AccountRLP(env.accountPreimage(addrHash))
+		if err != nil {
+			t.Fatalf("Failed to read the historical account: %v", err)
+		}
+		if !bytes.Equal(blob, want) {
+			t.Fatalf("Unexpected account data, want: %x, got: %x", want, blob)
+		}
+	}
+	// Commit more layers after resolving the latest values of the disk layer,
+	// leaving it behind the indexed histories.
+	var (
+		dl     = env.db.tree.bottom()
+		latest = make(map[common.Hash][]byte)
+	)
+	for addrHash := range env.snapAccounts[root] {
+		latest[addrHash], _ = dl.account(addrHash, 0)
+	}
+	env.extend(2)
+	if err := env.db.waitWrites(); err != nil {
+		t.Fatalf("Failed to write histories: %v", err)
+	}
+	hr := newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
+	for addrHash, want := range env.snapAccounts[root] {
+		blob, err := hr.read(newAccountIdentQuery(env.accountPreimage(addrHash), addrHash), reader.id, dl.stateID(), latest[addrHash])
+		if err != nil {
+			t.Fatalf("Failed to read the historical account: %v", err)
+		}
+		if !bytes.Equal(blob, want) {
+			t.Fatalf("Unexpected account data, want: %x, got: %x", want, blob)
+		}
 	}
 }

@@ -220,6 +220,10 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 		obj.nodes = append(obj.nodes, nodes)
 		obj.states = append(obj.states, states)
 	}
+	// Wait for the histories written in background
+	if err := db.waitWrites(); err != nil {
+		panic(fmt.Errorf("failed to write histories, err: %w", err))
+	}
 	return obj
 }
 
@@ -1206,7 +1210,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	var (
 		dIndex int
 		roots  = env.roots
-		hr     = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer)
+		hr     = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
 	)
 	for i, root := range roots {
 		if root == dRoot {
@@ -1256,6 +1260,9 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
 	}
+	if err := env.db.waitWrites(); err != nil {
+		t.Fatalf("Failed to write histories, %v", err)
+	}
 	remain, _, err = env.db.IndexProgress()
 	if err != nil {
 		t.Fatalf("Failed to obtain the progress, %v", err)
@@ -1267,7 +1274,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 
 	// Ensure the truncated state histories become accessible
 	bRoot = env.db.tree.bottom().rootHash()
-	hr = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer)
+	hr = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
 	for i, root := range roots {
 		if root == bRoot {
 			break
