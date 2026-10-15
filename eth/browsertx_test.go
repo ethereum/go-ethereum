@@ -27,16 +27,21 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// stubTxPool records submitted transactions and accepts all of them. Only Add is
-// exercised by the browser tx subprotocol.
+// stubTxPool records submitted transactions and returns err for each of them.
+// Only Add is exercised by the browser tx subprotocol.
 type stubTxPool struct {
 	txPool
 	added []*types.Transaction
+	err   error
 }
 
 func (s *stubTxPool) Add(txs []*types.Transaction, sync bool) []error {
 	s.added = append(s.added, txs...)
-	return make([]error, len(txs))
+	errs := make([]error, len(txs))
+	for i := range errs {
+		errs[i] = s.err
+	}
+	return errs
 }
 
 func TestBrowserTxSubprotocol(t *testing.T) {
@@ -83,5 +88,40 @@ func TestBrowserTxSubprotocol(t *testing.T) {
 	}
 	if err := <-runErr; err != nil {
 		t.Fatalf("Run returned error: %v", err)
+	}
+}
+
+func TestBrowserTxSubprotocolInvalid(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	signer := types.LatestSignerForChainID(big.NewInt(1))
+	tx, err := types.SignTx(types.NewTransaction(0, common.Address{1}, big.NewInt(0), params.TxGas, big.NewInt(1), nil), signer, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pool := &stubTxPool{err: types.ErrInvalidSig}
+	proto := makeBrowserTxProtocol(pool)
+
+	app, srv := p2p.MsgPipe()
+	defer app.Close()
+	runErr := make(chan error, 1)
+	go func() { runErr <- proto.Run(nil, srv) }()
+
+	if err := p2p.Send(app, txSubmitMsg, []*types.Transaction{tx}); err != nil {
+		t.Fatal(err)
+	}
+	msg, err := app.ReadMsg()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var results []TxResult
+	if err := msg.Decode(&results); err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Result != txResultInvalidTx {
+		t.Fatalf("got results %v, want [%d]", results, txResultInvalidTx)
+	}
+	if err := <-runErr; err != p2p.DiscSubprotocolError {
+		t.Fatalf("Run returned %v, want %v", err, p2p.DiscSubprotocolError)
 	}
 }

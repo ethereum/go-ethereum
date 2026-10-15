@@ -150,9 +150,7 @@ func (l *quicListener) handleSession(w http.ResponseWriter, r *http.Request) {
 
 // readConnect parses the WT-Available-Protocols header of the CONNECT request.
 // A browser lists the id-proof nonce ("ENR-key-proof-v1=<hex>") and its advertised
-// capabilities. If there is no nonce entry, it will be marked as a node peer. The
-// capabilities are returned as raw "name/version" tokens; parseCap turns them into
-// Cap values once the peer is set up.
+// capabilities. If there is no nonce entry, it will be marked as a node peer.
 func readConnect(r *http.Request) (nonce []byte, caps []string, err error) {
 	hdr := r.Header.Values("WT-Available-Protocols")
 	if len(hdr) == 0 {

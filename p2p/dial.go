@@ -417,9 +417,7 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 		// This check can trigger if a non-TCP node is found
 		// by discovery. If there is no IP, the node is a static
 		// node and the actual endpoint will be resolved later in dialTask.
-		if _, ok := n.QUICEndpoint(); !ok {
-			return errNoPort
-		}
+		return errNoPort
 	}
 	if _, ok := d.dialing[n.ID()]; ok {
 		return errAlreadyDialing
