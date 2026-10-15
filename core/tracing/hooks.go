@@ -494,7 +494,7 @@ const (
 	// QuarkChain shard, to be minted on the destination shard.
 	BalanceDecreaseXShardSend BalanceChangeReason = 200
 
-	// BalanceIncreaseXShardDeposit is ether minted to the sender of a
+	// BalanceIncreaseXShardDeposit is ether minted to the recipient of a
 	// cross-shard deposit on a QuarkChain shard, as burnt on the source shard.
 	BalanceIncreaseXShardDeposit BalanceChangeReason = 201
 )

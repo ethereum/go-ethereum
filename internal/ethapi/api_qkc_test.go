@@ -41,6 +41,7 @@ func TestRPCDepositTransaction(t *testing.T) {
 		Value:           uint256.NewInt(1000),
 		GasPrice:        uint256.NewInt(10),
 		Gas:             50000,
+		IsMove:          true,
 		Data:            []byte{0xca, 0xfe},
 	}
 	tx := types.NewTx(deposit)
@@ -52,8 +53,9 @@ func TestRPCDepositTransaction(t *testing.T) {
 	}
 	if rpcTx.Version == nil || uint64(*rpcTx.Version) != uint64(deposit.Version) ||
 		rpcTx.SourceBlockHash == nil || *rpcTx.SourceBlockHash != deposit.SourceBlockHash ||
-		rpcTx.SourceLogIndex == nil || uint64(*rpcTx.SourceLogIndex) != deposit.SourceLogIndex {
-		t.Errorf("deposit fields: version %v, source block %v, log index %v", rpcTx.Version, rpcTx.SourceBlockHash, rpcTx.SourceLogIndex)
+		rpcTx.SourceLogIndex == nil || uint64(*rpcTx.SourceLogIndex) != deposit.SourceLogIndex ||
+		rpcTx.IsMove == nil || !*rpcTx.IsMove {
+		t.Errorf("deposit fields: version %v, source block %v, log index %v, move %v", rpcTx.Version, rpcTx.SourceBlockHash, rpcTx.SourceLogIndex, rpcTx.IsMove)
 	}
 	if rpcTx.ChainID != nil || rpcTx.GasFeeCap != nil || rpcTx.YParity != nil {
 		t.Errorf("unexpected fields: chain id %v, fee cap %v, y parity %v", rpcTx.ChainID, rpcTx.GasFeeCap, rpcTx.YParity)

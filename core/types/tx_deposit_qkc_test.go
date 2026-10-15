@@ -87,6 +87,7 @@ func TestDepositTxTransaction(t *testing.T) {
 		Value:           uint256.NewInt(1000),
 		GasPrice:        uint256.NewInt(10),
 		Gas:             50000,
+		IsMove:          true,
 		Data:            []byte{0xca, 0xfe},
 	}
 	tx := NewTx(deposit)
@@ -103,6 +104,9 @@ func TestDepositTxTransaction(t *testing.T) {
 	}
 	if dec.Hash() != tx.Hash() || !reflect.DeepEqual(dec.inner, deposit) {
 		t.Fatalf("decoded %+v, want %+v", dec.inner, deposit)
+	}
+	if have := dec.Deposit(); !reflect.DeepEqual(have, deposit) {
+		t.Fatalf("deposit copy %+v, want %+v", have, deposit)
 	}
 	// The deposit pays its gas price, whatever the base fee.
 	if dec.Type() != DepositTxType || dec.Gas() != 50000 || dec.Nonce() != 0 || *dec.To() != deposit.To ||
@@ -171,6 +175,7 @@ func TestDepositTxJSON(t *testing.T) {
 		Value:           uint256.NewInt(1000),
 		GasPrice:        uint256.NewInt(10),
 		Gas:             50000,
+		IsMove:          true,
 		Data:            []byte{0xca, 0xfe},
 	})
 	enc, err := json.Marshal(tx)
@@ -188,6 +193,7 @@ func TestDepositTxJSON(t *testing.T) {
 		"version":         "0x0",
 		"sourceBlockHash": "0xaa00000000000000000000000000000000000000000000000000000000000000",
 		"sourceLogIndex":  "0x3",
+		"isMove":          true,
 		"gas":             "0xc350",
 		"gasPrice":        "0xa",
 		"value":           "0x3e8",
@@ -219,6 +225,7 @@ func TestDepositTxJSON(t *testing.T) {
 		"no version":      func(f map[string]any) { delete(f, "version") },
 		"no source":       func(f map[string]any) { delete(f, "sourceBlockHash") },
 		"no log index":    func(f map[string]any) { delete(f, "sourceLogIndex") },
+		"no move flag":    func(f map[string]any) { delete(f, "isMove") },
 		"no sender":       func(f map[string]any) { delete(f, "from") },
 		"no recipient":    func(f map[string]any) { delete(f, "to") },
 		"no gas price":    func(f map[string]any) { delete(f, "gasPrice") },

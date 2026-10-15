@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"maps"
-	"math"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -166,24 +165,6 @@ func xShardSentMessageLog(addr, from common.Address, msg *xShardMessage, gasPric
 	}
 }
 
-// DepositIntrinsicGas returns the intrinsic gas a cross-shard message is charged
-// on its destination shard, as a deposit: the fixed cost of a cross-shard
-// message, plus the cost of its calldata.
-func DepositIntrinsicGas(data []byte) (uint64, error) {
-	gas := params.XShardSendGas
-	z := uint64(bytes.Count(data, []byte{0}))
-	nz := uint64(len(data)) - z
-	if (math.MaxUint64-gas)/params.TxDataNonZeroGasEIP2028 < nz {
-		return 0, ErrGasUintOverflow
-	}
-	gas += nz * params.TxDataNonZeroGasEIP2028
-	if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
-		return 0, ErrGasUintOverflow
-	}
-	gas += z * params.TxDataZeroGas
-	return gas, nil
-}
-
 // xShardOutbox is the source side of cross-shard messaging. It takes a message
 // from an EOA, burns the value and the gas the destination may use, and emits
 // the message as an event, for the shard's CL to relay to the destination.
@@ -233,9 +214,8 @@ func (c *xShardOutboxCall) Run(input []byte) ([]byte, error) {
 	if !evm.chainConfig.QuarkChain.IsXShardDestination(toMsg.dstShard) {
 		return nil, errXShardInvalidShard
 	}
-	// The destination charges the intrinsic gas of the deposit out of the gas limit.
-	intrinsicGas, err := DepositIntrinsicGas(toMsg.data)
-	if err != nil || toMsg.gasLimit < intrinsicGas || toMsg.gasLimit > params.MaxCrossShardTxGas {
+	// The destination charges XShardSendGas out of the gas limit.
+	if toMsg.gasLimit < params.XShardSendGas || toMsg.gasLimit > params.MaxCrossShardTxGas {
 		return nil, errXShardInvalidGasLimit
 	}
 	// Only moves are enabled for now. A move only transfers the value to the

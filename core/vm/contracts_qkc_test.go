@@ -389,18 +389,3 @@ func TestXShardOutboxActivation(t *testing.T) {
 		t.Error("outbox is not a precompile of the QuarkChain EVM")
 	}
 }
-
-func TestDepositIntrinsicGas(t *testing.T) {
-	for _, tt := range []struct {
-		data []byte
-		want uint64
-	}{
-		{nil, params.XShardSendGas},
-		{[]byte{0, 0}, params.XShardSendGas + 2*params.TxDataZeroGas},
-		{[]byte{1, 0, 2}, params.XShardSendGas + 2*params.TxDataNonZeroGasEIP2028 + params.TxDataZeroGas},
-	} {
-		if have, err := DepositIntrinsicGas(tt.data); err != nil || have != tt.want {
-			t.Errorf("data %x: intrinsic gas %d (err %v), want %d", tt.data, have, err, tt.want)
-		}
-	}
-}

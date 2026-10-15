@@ -88,6 +88,7 @@ func TestDepositAfterTransaction(t *testing.T) {
 			Value:    uint256.NewInt(1),
 			GasPrice: uint256.NewInt(params.GWei),
 			Gas:      params.XShardSendGas,
+			IsMove:   true,
 		}))
 	})
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)

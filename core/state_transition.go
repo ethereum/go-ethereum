@@ -297,8 +297,10 @@ type Message struct {
 	// moving the remainder into the EIP-8037 state gas reservoir.
 	skipExecutionGasCap bool
 
-	// isDeposit marks a QuarkChain cross-shard deposit, see executeDeposit.
+	// isDeposit marks a QuarkChain cross-shard deposit, and isMove one only
+	// transferring its value, see executeDeposit.
 	isDeposit bool
+	isMove    bool
 }
 
 // SkipNonceCheck disables the check of the message nonce against the account
@@ -376,12 +378,8 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         blobGasFeeCap,
 	}
-	// A deposit is not sent from this shard: it has no nonce to check, and its
-	// sender is an EOA on the source shard.
-	if tx.Type() == types.DepositTxType {
-		msg.isDeposit = true
-		msg.skipNonceCheck = true
-		msg.skipEOACheck = true
+	if deposit := tx.Deposit(); deposit != nil {
+		msg.isDeposit, msg.isMove = true, deposit.IsMove
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -614,9 +612,8 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 			return fmt.Errorf("%w: address %v, len(code): %d", ErrSenderNoEOA, msg.From.Hex(), len(code))
 		}
 	}
-	// Make sure that transaction gasFeeCap is greater than the baseFee (post london).
-	// A deposit pays the gas price of its sending transaction instead.
-	if rules.IsLondon && !msg.isDeposit {
+	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
+	if rules.IsLondon {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
 		skipCheck := st.evm.Config.NoBaseFee && msg.GasFeeCap.BitLen() == 0 && msg.GasTipCap.BitLen() == 0
 		if !skipCheck {
@@ -894,11 +891,8 @@ func (st *stateTransition) executeCreate(rules params.Rules, value *uint256.Int)
 func (st *stateTransition) executeCall(rules params.Rules, value *uint256.Int) ([]byte, error) {
 	msg := st.msg
 
-	// Increment the nonce for the next transaction. A deposit is not sent from
-	// this shard, and leaves the nonce of its sender alone.
-	if !msg.isDeposit {
-		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
-	}
+	// Increment the nonce for the next transaction.
+	st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
 
 	if rules.IsAmsterdam {
 		snapshot := st.state.Snapshot()

@@ -34,10 +34,9 @@ const DepositTxType = 0x7e
 const DepositTxVersion uint8 = 0
 
 // DepositTx is a cross-shard deposit, a message sent to a shard by another shard
-// or by the root chain. The destination shard credits it to From and runs it as
-// a call to To, with Gas at GasPrice. A move only transfers Value to To, running
-// no code: it has no Data, and its Gas is params.XShardSendGas. Only moves are
-// sent for now.
+// or by the root chain. Only moves are sent for now: a move only transfers Value
+// to To, running no code even if To is a contract. It has no Data, and its Gas
+// is params.XShardSendGas, paid at GasPrice.
 //
 // A deposit is not signed: its sender is From, as the source shard checked it.
 // Only the consensus layer may include deposits in a block, as they mint the
@@ -77,6 +76,7 @@ func (tx *DepositTx) copy() TxData {
 		From:            tx.From,
 		To:              tx.To,
 		Gas:             tx.Gas,
+		IsMove:          tx.IsMove,
 		Data:            common.CopyBytes(tx.Data),
 		// These are copied below.
 		Value:    new(uint256.Int),

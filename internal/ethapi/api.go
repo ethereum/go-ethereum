@@ -1099,6 +1099,7 @@ type RPCTransaction struct {
 	Version         *hexutil.Uint64 `json:"version,omitempty"`
 	SourceBlockHash *common.Hash    `json:"sourceBlockHash,omitempty"`
 	SourceLogIndex  *hexutil.Uint64 `json:"sourceLogIndex,omitempty"`
+	IsMove          *bool           `json:"isMove,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1199,6 +1200,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.Version = &version
 		result.SourceBlockHash = &deposit.SourceBlockHash
 		result.SourceLogIndex = &logIndex
+		result.IsMove = &deposit.IsMove
 	}
 	return result
 }

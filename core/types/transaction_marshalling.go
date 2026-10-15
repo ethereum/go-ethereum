@@ -60,6 +60,7 @@ type txJSON struct {
 	Version         *hexutil.Uint64 `json:"version,omitempty"`
 	SourceBlockHash *common.Hash    `json:"sourceBlockHash,omitempty"`
 	SourceLogIndex  *hexutil.Uint64 `json:"sourceLogIndex,omitempty"`
+	IsMove          *bool           `json:"isMove,omitempty"`
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -189,6 +190,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Version = (*hexutil.Uint64)(&version)
 		enc.SourceBlockHash = &itx.SourceBlockHash
 		enc.SourceLogIndex = (*hexutil.Uint64)(&itx.SourceLogIndex)
+		enc.IsMove = &itx.IsMove
 		// Deposits are not signed, their nonce and signature show up as null.
 	}
 	return json.Marshal(&enc)
@@ -556,6 +558,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'sourceLogIndex' in transaction")
 		}
 		itx.SourceLogIndex = uint64(*dec.SourceLogIndex)
+		if dec.IsMove == nil {
+			return errors.New("missing required field 'isMove' in transaction")
+		}
+		itx.IsMove = *dec.IsMove
 		if dec.From == nil {
 			return errors.New("missing required field 'from' in transaction")
 		}
