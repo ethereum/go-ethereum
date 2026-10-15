@@ -18,9 +18,11 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -41,6 +43,43 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
+
+// convertState converts the MPT state at root in place, the self-converter's
+// way, over a trie database, attested at opts.anchor or else at a header
+// holding only root. With output paths in opts it first exports the
+// artifacts, as a producer would, and holds both runs to one root.
+func convertState(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
+	var exported common.Hash
+	if opts.snapshotPath != "" || opts.preimagePath != "" {
+		out := opts
+		if out.snapshotPath == "" || out.preimagePath == "" {
+			dir, err := os.MkdirTemp(opts.tmpDir, "convert-artifacts-")
+			if err != nil {
+				return common.Hash{}, err
+			}
+			defer os.RemoveAll(dir)
+			out.snapshotPath = cmp.Or(out.snapshotPath, filepath.Join(dir, "snapshot"))
+			out.preimagePath = cmp.Or(out.preimagePath, filepath.Join(dir, "preimages"))
+		}
+		var err error
+		if exported, err = exportArtifacts(ctx, chaindb, srcTriedb, root, out); err != nil {
+			return common.Hash{}, err
+		}
+	}
+	plan, file, err := triedbPlan(srcTriedb, root, opts)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer file.Close()
+	if opts.anchor == nil {
+		opts.anchor = &types.Header{Number: new(big.Int), Root: root}
+	}
+	converted, err := convertPlan(ctx, chaindb, plan, nil, opts)
+	if err == nil && exported != (common.Hash{}) && converted != exported {
+		return common.Hash{}, fmt.Errorf("export built %x, the conversion %x", exported, converted)
+	}
+	return converted, err
+}
 
 func TestBintrieConvert(t *testing.T) {
 	var (
@@ -567,27 +606,6 @@ func (db refusedBatchDB) NewBatch() ethdb.Batch { return refusedBatch{db.Databas
 type refusedBatch struct{ ethdb.Batch }
 
 func (refusedBatch) Write() error { return errors.New("batch refused") }
-
-// TestWipePreimages: --drop-preimages deletes the preimage store and no other
-// key under its prefix.
-func TestWipePreimages(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	hash := crypto.Keccak256Hash([]byte{1})
-	rawdb.WritePreimages(db, map[common.Hash][]byte{hash: {1}})
-	other := append(bytes.Clone(rawdb.PreimagePrefix), 0x01)
-	if err := db.Put(other, []byte{1}); err != nil {
-		t.Fatal(err)
-	}
-	if err := wipePreimages(db); err != nil {
-		t.Fatal(err)
-	}
-	if rawdb.ReadPreimage(db, hash) != nil {
-		t.Fatal("preimage survived")
-	}
-	if ok, _ := db.Has(other); !ok {
-		t.Fatal("wiped a key that is not a preimage")
-	}
-}
 
 // TestConvertCorruptPreimageRefused: a corrupt preimage store entry must
 // abort the conversion with nothing surviving - no artifacts, no

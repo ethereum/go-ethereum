@@ -67,7 +67,7 @@ var (
 		Flags: slices.Concat([]cli.Flag{
 			verifyOnlyFlag,
 			keepPreimagesFlag,
-			forceConvertFlag,
+			forceFlag,
 			tmpDirFlag,
 			workersFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
@@ -156,7 +156,7 @@ func importBinaryTrie(ctx *cli.Context) error {
 	}
 	log.Info("Importing binary tree state", "anchor", header.Number, "stateRoot", header.Root)
 
-	if ctx.Bool(forceConvertFlag.Name) {
+	if ctx.Bool(forceFlag.Name) {
 		if verifyOnly {
 			log.Warn("Ignoring --force: verification writes nothing")
 		} else {
@@ -509,12 +509,9 @@ type importOptions struct {
 // the tree, and the only claimed root is the one that build computes. Its
 // code store holds its code already, so none is written.
 type ownLeaves struct {
-	leaves     *bintrie.RecordStream         // in tree-key order
-	candidates *bintrie.RecordSorter         // derived by the scan, see accountCandidates
-	unanchored bool                          // no block names the root: attest no anchor
-	onLeaf     func(key, value []byte) error // also hands each leaf to a snapshot artifact
-	artifacts  func(root common.Hash) error  // finishes and checks the artifacts before attesting
-	count      atomic.Uint64                 // leaves handed out, for progress
+	leaves     *bintrie.RecordStream // in tree-key order
+	candidates *bintrie.RecordSorter // derived by the scan, see accountCandidates
+	count      atomic.Uint64         // leaves handed out, for progress
 }
 
 // next hands the leaf pipeline the conversion's next leaf.
@@ -522,11 +519,6 @@ func (o *ownLeaves) next() ([]byte, [32]byte, error) {
 	key, value, err := o.leaves.Next()
 	if err != nil {
 		return nil, [32]byte{}, err
-	}
-	if o.onLeaf != nil {
-		if err := o.onLeaf(key, value); err != nil {
-			return nil, [32]byte{}, err
-		}
 	}
 	o.count.Add(1)
 	return key, [32]byte(value), nil
@@ -1124,11 +1116,6 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	if err := ctx.Err(); err != nil {
 		return common.Hash{}, err
 	}
-	if own != nil && own.artifacts != nil {
-		if err := own.artifacts(root); err != nil {
-			return common.Hash{}, err
-		}
-	}
 	if opts.beforeAttest != nil {
 		if err := opts.beforeAttest(); err != nil {
 			return common.Hash{}, err
@@ -1139,11 +1126,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	// attestation is the completion marker and comes last; the imported tree
 	// bases an empty history, like a conversion.
 	rawdb.WriteSnapshotRoot(pbtdb, root)
-	if own != nil && own.unanchored {
-		log.Warn("Converted without an anchor: the namespace is not bootable; reconvert at the head root with --force before starting the node")
-	} else {
-		rawdb.WritePBTAnchor(pbtdb, opts.anchor.Number.Uint64(), opts.anchor.Hash())
-	}
+	rawdb.WritePBTAnchor(pbtdb, opts.anchor.Number.Uint64(), opts.anchor.Hash())
 	rawdb.WritePBTFlatState(pbtdb)
 	if own == nil {
 		log.Info("Import complete", "binaryRoot", root, "anchor", opts.anchor.Number,

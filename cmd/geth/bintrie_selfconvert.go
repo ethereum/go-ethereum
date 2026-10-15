@@ -90,7 +90,7 @@ func (p *pbtImporter) convertAt(ctx context.Context, a *types.Header, yield *blo
 	log.Info("Starting binary tree conversion in the background", "anchor", at.Number, "hash", at.Hash(),
 		"stateRoot", at.Root, "preimages", p.cfg.Preimages, "preimageAnchor", a.Number)
 	ref := anchorRef{hash: at.Hash(), byHash: true}
-	root, err := convertPlan(ctx, p.db, at.Root, plan, yield, conversionOptions{
+	root, err := convertPlan(ctx, p.db, plan, yield, conversionOptions{
 		sortBudget: onlineSortBudget,
 		tmpDir:     p.tmpDir,
 		workers:    workers,
