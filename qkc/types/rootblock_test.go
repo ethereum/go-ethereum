@@ -146,6 +146,42 @@ func TestCalcMinorHeaderHashTree(t *testing.T) {
 	}
 }
 
+// TestSszMerkleRootZeroPadding pins the zero padding value at every level for
+// leaf counts whose tree is even before it turns odd (6, 10, 11, 12, 14). In
+// pyquarkchain's calculate_merkle_root the padding hash doubles once per level,
+// while a count of that shape makes the padding lag by one level if it is only
+// doubled when a level turns out odd. TestCalcMinorHeaderHashTree cannot catch
+// such a regression: every odd level in its cases comes before any even one.
+// The values are from pyquarkchain's calculate_merkle_root.
+func TestSszMerkleRootZeroPadding(t *testing.T) {
+	distinctLeaves := func(n int) []common.Hash {
+		leaves := make([]common.Hash, n)
+		for i := range leaves {
+			leaves[i][0] = byte(i + 1)
+		}
+		return leaves
+	}
+
+	tests := []struct {
+		n    int
+		want common.Hash
+	}{
+		{6, common.HexToHash("0x92be719d6e9a3231883ba0dcef0e34b2efdda5cf3a28d38aca40debe7c218dfb")},
+		{7, common.HexToHash("0xe84f75438923b600a2c8301cbe4f71bce7c88dbbfe0eee11bd903b5030ab37ac")},
+		{10, common.HexToHash("0xac142a568af9208828b16d3e460340d4650171b97135efae7983bb6743d02d51")},
+		{11, common.HexToHash("0x16c7174d552b969841a00ac054a406c04d2aeaf52b7ea6a178590ae021b5abd3")},
+		{12, common.HexToHash("0x5994662588ff256d81e68a07f1acf77472fa71672052f8e4e9475a170d2ec610")},
+		{13, common.HexToHash("0x61244d521b09d3370888b9c2942dca8ea1e3240d0d25d559d583d36b3d8da913")},
+		{14, common.HexToHash("0x29b6156e3a1e23b250376567cb45bb5896719dbccafe10bbf8e7844550e94c7c")},
+		{16, common.HexToHash("0x77ed9f4eb93a2b1d06a7000f5f82618f56f61145aae120edbba2d70abd01d411")},
+	}
+	for _, tc := range tests {
+		if have := sszMerkleRoot(distinctLeaves(tc.n)); have != tc.want {
+			t.Errorf("%d leaves: sszMerkleRoot mismatch: have %s, want %s", tc.n, have.Hex(), tc.want.Hex())
+		}
+	}
+}
+
 func TestRootBlockMinorHeaderHash(t *testing.T) {
 	block := newTestRootBlock()
 	if have, want := block.MinorHeaderHash(), CalcMinorHeaderHash(block.MinorBlockHeaders()); have != want {
