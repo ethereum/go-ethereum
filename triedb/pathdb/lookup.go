@@ -17,268 +17,222 @@
 package pathdb
 
 import (
-	"fmt"
-	"sync"
+	"math/bits"
+	"sync/atomic"
 	"time"
-
-	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/sync/errgroup"
 )
 
-// storageKey returns a key for uniquely identifying the storage slot.
-func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
-	var key [64]byte
-	copy(key[:32], accountHash[:])
-	copy(key[32:], slotHash[:])
-	return key
+const (
+	// indexSlots is the number of the slots in the layer index, one per state
+	// id, reused in a ring. It must be a power of two above the maximum number
+	// of the diff layers.
+	indexSlots = 256
+
+	// indexMinRows and indexMaxRows bound the number of the rows in the layer
+	// index, each holding a bit per slot.
+	indexMinRows = 1 << 14
+	indexMaxRows = 1 << 20
+
+	// indexRowsPerKey is the number of the rows reserved per bloom key of a
+	// single layer, yielding ~0.5% false positive rate per slot with 3 bits.
+	indexRowsPerKey = 16
+)
+
+// indexRowCount returns the number of the rows required for indexing a layer
+// with the given number of bloom keys.
+func indexRowCount(keys int) int {
+	return min(max(1<<bits.Len(uint(keys*indexRowsPerKey)), indexMinRows), indexMaxRows)
 }
 
-// storageKeySlice returns a key for uniquely identifying the storage slot in
-// the slice format.
-func storageKeySlice(accountHash common.Hash, slotHash common.Hash) []byte {
-	key := storageKey(accountHash, slotHash)
-	return key[:]
+// indexRows is the transposed bloom filter of the layer index: the bloom filter
+// of a slot is a column of the rows, so the slots possibly holding a key are
+// resolved by intersecting the 3 rows of the key.
+type indexRows struct {
+	rows [][4]uint64
 }
 
-// lookup is an internal structure used to efficiently determine the layer in
-// which a state entry resides.
-type lookup struct {
-	// accounts represents the mutation history for specific accounts.
-	// The key is the account address hash, and the value is a slice
-	// of **diff layer** IDs indicating where the account was modified,
-	// with the order from oldest to newest.
-	accounts map[common.Hash][]common.Hash
-
-	// storages represents the mutation history for specific storage
-	// slot. The key is the account address hash and the storage key
-	// hash, the value is a slice of **diff layer** IDs indicating
-	// where the slot was modified, with the order from oldest to newest.
-	storages map[[64]byte][]common.Hash
-
-	// descendant is the callback indicating whether the layer with
-	// given root is a descendant of the one specified by `ancestor`.
-	descendant func(state common.Hash, ancestor common.Hash) bool
+// positions returns the rows of the given bloom key, picked by the disjoint
+// bit ranges of the key.
+func (r *indexRows) positions(key uint64) (uint64, uint64, uint64) {
+	mask := uint64(len(r.rows) - 1)
+	return key & mask, (key >> 21) & mask, (key >> 42) & mask
 }
 
-// newLookup initializes the lookup structure.
-func newLookup(head layer, descendant func(state common.Hash, ancestor common.Hash) bool) *lookup {
+// set marks the key in the column of the given slot, in a rows that isn't
+// probed yet.
+func (r *indexRows) set(key uint64, word uint64, bit uint64) {
+	p0, p1, p2 := r.positions(key)
+	r.rows[p0][word] |= bit
+	r.rows[p1][word] |= bit
+	r.rows[p2][word] |= bit
+}
+
+// indexEntry is a layer indexed in a slot.
+type indexEntry struct {
+	keys [][]uint64
+}
+
+// indexTask is a task of the layer indexer: either indexing the layer, or the
+// slots at or below the state id of the disk layer being cleared.
+type indexTask struct {
+	layer *diffLayer
+	base  uint64
+}
+
+// layerIndex locates the diff layers possibly holding an entry by its bloom key,
+// avoiding probing the layers one by one. The layers are indexed by a background
+// thread, strictly in the order of creation, thus the layers not indexed yet are
+// always on top of the indexed ones in any chain, probed by their own filters.
+type layerIndex struct {
+	rows  atomic.Pointer[indexRows] // nil if no layer is indexed yet
+	queue *taskQueue                // the indexer thread
+
+	// The states below are only accessed by the indexer thread
+	slots   [indexSlots][]indexEntry // the layers indexed in each slot
+	cleared uint64                   // the state id up to which the slots are cleared
+}
+
+// newLayerIndex constructs the index on top of the disk layer with given state id.
+func newLayerIndex(base uint64) *layerIndex {
+	return &layerIndex{queue: newTaskQueue(), cleared: base}
+}
+
+// schedule appends the task to the indexer.
+func (l *layerIndex) schedule(task indexTask) {
+	l.queue.schedule(func() {
+		if task.layer != nil {
+			l.insert(task.layer)
+		} else {
+			l.clear(task.base)
+		}
+	})
+}
+
+// wait blocks until the scheduled tasks are done.
+func (l *layerIndex) wait() {
+	l.queue.wait()
+}
+
+// slotBit returns the word and the bit of the slot hosting the given state id.
+func slotBit(id uint64) (uint64, uint64, uint64) {
+	slot := id % indexSlots
+	return slot, slot / 64, 1 << (slot % 64)
+}
+
+// insert indexes the layer, growing the rows if they're too few for the keys of
+// the layer. The layer is marked as indexed afterwards.
+func (l *layerIndex) insert(dl *diffLayer) {
+	// Construct the per-layer bloom filter beforehand
+	dl.prepare()
+
 	var (
-		current = head
-		layers  []layer
+		items int
+		start = time.Now()
 	)
-	for current != nil {
-		layers = append(layers, current)
-		current = current.parentLayer()
+	for _, part := range dl.keys {
+		items += len(part)
 	}
-	l := &lookup{
-		accounts:   make(map[common.Hash][]common.Hash),
-		storages:   make(map[[64]byte][]common.Hash),
-		descendant: descendant,
+	rows := l.rows.Load()
+	if want := indexRowCount(items); rows == nil || len(rows.rows) < want {
+		rows = l.grow(want)
 	}
-	// Apply the diff layers from bottom to top
-	for i := len(layers) - 1; i >= 0; i-- {
-		switch diff := layers[i].(type) {
-		case *diskLayer:
+	slot, word, bit := slotBit(dl.id)
+	for _, part := range dl.keys {
+		for _, key := range part {
+			p0, p1, p2 := rows.positions(key)
+			atomic.OrUint64(&rows.rows[p0][word], bit)
+			atomic.OrUint64(&rows.rows[p1][word], bit)
+			atomic.OrUint64(&rows.rows[p2][word], bit)
+		}
+	}
+	l.slots[slot] = append(l.slots[slot], indexEntry{keys: dl.keys})
+	dl.indexed.Store(l)
+	layerIndexTimer.UpdateSince(start)
+}
+
+// grow rebuilds the rows with the given number of rows, with all the indexed
+// layers reinserted. The readers loading the rows after observing the indexed
+// layers will always find them, either in the old rows or the new ones.
+func (l *layerIndex) grow(n int) *indexRows {
+	rows := &indexRows{
+		rows: make([][4]uint64, n),
+	}
+	for slot := range l.slots {
+		_, word, bit := slotBit(uint64(slot))
+		for _, entry := range l.slots[slot] {
+			for _, part := range entry.keys {
+				for _, key := range part {
+					rows.set(key, word, bit)
+				}
+			}
+		}
+	}
+	l.rows.Store(rows)
+	return rows
+}
+
+// clear clears the slots of the state ids at or below the given disk layer,
+// whose layers are all persisted.
+func (l *layerIndex) clear(base uint64) {
+	rows := l.rows.Load()
+	for ; l.cleared < base; l.cleared++ {
+		slot, word, bit := slotBit(l.cleared + 1)
+		for _, entry := range l.slots[slot] {
+			for _, part := range entry.keys {
+				for _, key := range part {
+					p0, p1, p2 := rows.positions(key)
+					atomic.AndUint64(&rows.rows[p0][word], ^bit)
+					atomic.AndUint64(&rows.rows[p1][word], ^bit)
+					atomic.AndUint64(&rows.rows[p2][word], ^bit)
+				}
+			}
+		}
+		l.slots[slot] = nil
+	}
+}
+
+// candidates returns the bitmap of the layers possibly holding the given key,
+// ordered by the distance from the given state id.
+func (l *layerIndex) candidates(key uint64, id uint64) (c [4]uint64) {
+	rows := l.rows.Load()
+	if rows == nil {
+		return c // no layer is indexed yet
+	}
+	// A slot is a candidate only if its bits in all the 3 rows of the key are set.
+	// The rows are loaded atomically as the indexer mutates them concurrently.
+	p0, p1, p2 := rows.positions(key)
+	for i := range c {
+		c[i] = atomic.LoadUint64(&rows.rows[p0][i]) &
+			atomic.LoadUint64(&rows.rows[p1][i]) &
+			atomic.LoadUint64(&rows.rows[p2][i])
+	}
+	// Rotate the slot of the state id to the highest bit
+	return rotateSlots(c, indexSlots-1-id%indexSlots)
+}
+
+// rotateSlots rotates the bitmap of the slots to the left by n bits, moving the
+// bit s to the bit (s+n)%indexSlots.
+func rotateSlots(c [4]uint64, n uint64) (r [4]uint64) {
+	words, shift := n/64, n%64
+	for i := uint64(0); i < 4; i++ {
+		// The word is shifted toward the higher bits, filled by the top bits of
+		// the preceding word (none if the shift is 0, as the right shift by 64
+		// yields 0).
+		r[(i+words)%4] = c[i]<<shift | c[(i+3)%4]>>(64-shift)
+	}
+	return r
+}
+
+// nextCandidate pops the nearest candidate from the bitmap returned by
+// candidates, returning its distance from the state id.
+func nextCandidate(c *[4]uint64) (uint64, bool) {
+	for w := 3; w >= 0; w-- {
+		if c[w] == 0 {
 			continue
-		case *diffLayer:
-			l.addLayer(diff)
 		}
+		b := 63 - bits.LeadingZeros64(c[w]) // the highest bit is the nearest
+		c[w] &^= 1 << b
+		return uint64(indexSlots - 1 - (w*64 + b)), true
 	}
-	return l
-}
-
-// accountTip traverses the layer list associated with the given account in
-// reverse order to locate the first entry that either matches the specified
-// stateID or is a descendant of it.
-//
-// If found, the account data corresponding to the supplied stateID resides
-// in the layer identified by the returned hash (ok=true). Otherwise,
-// (common.Hash{}, false) is returned to signal that the supplied stateID is
-// stale.
-//
-// Note the returned hash may itself be common.Hash{} when the disk layer's
-// root is zero — as is the case for a fresh verkle/bintrie database whose
-// empty trie hashes to EmptyVerkleHash. Callers must therefore consult the
-// boolean rather than comparing the returned hash against common.Hash{}
-// directly.
-func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base common.Hash) (common.Hash, bool) {
-	// Traverse the mutation history from latest to oldest one. Several
-	// scenarios are possible:
-	//
-	// Chain:
-	//     D->C1->C2->C3->C4 (HEAD)
-	//      ->C1'->C2'->C3'
-	// State:
-	//     x: [C1, C1', C3', C3]
-	//     y: []
-	//
-	// - (x, C4) => C3
-	// - (x, C3) => C3
-	// - (x, C2) => C1
-	// - (x, C3') => C3'
-	// - (x, C2') => C1'
-	// - (y, C4) => D
-	// - (y, C3') => D
-	// - (y, C0) => null
-	list := l.accounts[accountHash]
-	for i := len(list) - 1; i >= 0; i-- {
-		// If the current state matches the stateID, or the requested state is a
-		// descendant of it, return the current state as the most recent one
-		// containing the modified data. Otherwise, the current state may be ahead
-		// of the requested one or belong to a different branch.
-		if list[i] == stateID || l.descendant(stateID, list[i]) {
-			return list[i], true
-		}
-	}
-	// No layer matching the stateID or its descendants was found. Use the
-	// current disk layer as a fallback.
-	if base == stateID || l.descendant(stateID, base) {
-		return base, true
-	}
-	// The layer associated with 'stateID' is not the descendant of the current
-	// disk layer, it's already stale, return nothing.
-	return common.Hash{}, false
-}
-
-// storageTip traverses the layer list associated with the given account and
-// slot hash in reverse order to locate the first entry that either matches
-// the specified stateID or is a descendant of it.
-//
-// See accountTip for the returned-hash / ok convention — the same
-// bintrie-zero-root caveat applies here.
-func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, stateID common.Hash, base common.Hash) (common.Hash, bool) {
-	list := l.storages[storageKey(accountHash, slotHash)]
-	for i := len(list) - 1; i >= 0; i-- {
-		// If the current state matches the stateID, or the requested state is a
-		// descendant of it, return the current state as the most recent one
-		// containing the modified data. Otherwise, the current state may be ahead
-		// of the requested one or belong to a different branch.
-		if list[i] == stateID || l.descendant(stateID, list[i]) {
-			return list[i], true
-		}
-	}
-	// No layer matching the stateID or its descendants was found. Use the
-	// current disk layer as a fallback.
-	if base == stateID || l.descendant(stateID, base) {
-		return base, true
-	}
-	// The layer associated with 'stateID' is not the descendant of the current
-	// disk layer, it's already stale, return nothing.
-	return common.Hash{}, false
-}
-
-// addLayer traverses the state data retained in the specified diff layer and
-// integrates it into the lookup set.
-//
-// This function assumes that all layers older than the provided one have already
-// been processed, ensuring that layers are processed strictly in a bottom-to-top
-// order.
-func (l *lookup) addLayer(diff *diffLayer) {
-	defer func(now time.Time) {
-		lookupAddLayerTimer.UpdateSince(now)
-	}(time.Now())
-
-	var (
-		wg    sync.WaitGroup
-		state = diff.rootHash()
-	)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for accountHash := range diff.states.accountData {
-			list, exists := l.accounts[accountHash]
-			if !exists {
-				list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
-			}
-			list = append(list, state)
-			l.accounts[accountHash] = list
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for accountHash, slots := range diff.states.storageData {
-			for slotHash := range slots {
-				key := storageKey(accountHash, slotHash)
-				list, exists := l.storages[key]
-				if !exists {
-					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
-				}
-				list = append(list, state)
-				l.storages[key] = list
-			}
-		}
-	}()
-	wg.Wait()
-}
-
-// removeFromList removes the specified element from the provided list.
-// It returns a flag indicating whether the element was found and removed.
-func removeFromList(list []common.Hash, element common.Hash) (bool, []common.Hash) {
-	// Traverse the list from oldest to newest to quickly locate the element.
-	for i := 0; i < len(list); i++ {
-		if list[i] == element {
-			if i != 0 {
-				list = append(list[:i], list[i+1:]...)
-			} else {
-				// Remove the first element by shifting the slice forward.
-				// Pros: zero-copy.
-				// Cons: may retain large backing array, causing memory leaks.
-				// Mitigation: release the array if capacity exceeds threshold.
-				list = list[1:]
-				if cap(list) > 1024 {
-					list = append(make([]common.Hash, 0, len(list)), list...)
-				}
-			}
-			return true, list
-		}
-	}
-	return false, nil
-}
-
-// removeLayer traverses the state data retained in the specified diff layer and
-// unlink them from the lookup set.
-func (l *lookup) removeLayer(diff *diffLayer) error {
-	defer func(now time.Time) {
-		lookupRemoveLayerTimer.UpdateSince(now)
-	}(time.Now())
-
-	var (
-		eg    errgroup.Group
-		state = diff.rootHash()
-	)
-	eg.Go(func() error {
-		for accountHash := range diff.states.accountData {
-			found, list := removeFromList(l.accounts[accountHash], state)
-			if !found {
-				return fmt.Errorf("account lookup is not found, %x, state: %x", accountHash, state)
-			}
-			if len(list) != 0 {
-				l.accounts[accountHash] = list
-			} else {
-				delete(l.accounts, accountHash)
-			}
-		}
-		return nil
-	})
-
-	eg.Go(func() error {
-		for accountHash, slots := range diff.states.storageData {
-			for slotHash := range slots {
-				key := storageKey(accountHash, slotHash)
-				found, list := removeFromList(l.storages[key], state)
-				if !found {
-					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, slotHash, state)
-				}
-				if len(list) != 0 {
-					l.storages[key] = list
-				} else {
-					delete(l.storages, key)
-				}
-			}
-		}
-		return nil
-	})
-	return eg.Wait()
+	return 0, false
 }

@@ -50,6 +50,21 @@ func (c *counter) report(count, size *metrics.Meter) {
 	size.Mark(int64(c.size))
 }
 
+// storageKey returns a key for uniquely identifying the storage slot.
+func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
+	var key [64]byte
+	copy(key[:32], accountHash[:])
+	copy(key[32:], slotHash[:])
+	return key
+}
+
+// storageKeySlice returns a key for uniquely identifying the storage slot in
+// the slice format.
+func storageKeySlice(accountHash common.Hash, slotHash common.Hash) []byte {
+	key := storageKey(accountHash, slotHash)
+	return key[:]
+}
+
 // stateSet represents a collection of state modifications associated with a
 // transition (e.g., a block execution) or multiple aggregated transitions.
 //
