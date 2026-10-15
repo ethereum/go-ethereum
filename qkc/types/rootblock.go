@@ -43,8 +43,8 @@ type RootBlockHeader struct {
 	Time            uint64         `json:"timestamp"        gencodec:"required"`
 	Difficulty      uint256.Int    `json:"difficulty"       gencodec:"required"`
 	TotalDifficulty uint256.Int    `json:"total_difficulty" gencodec:"required"`
-	Nonce           uint64         `json:"nonce"`
 	Extra           []byte         `json:"extraData"        gencodec:"required"`
+	Nonce           uint64         `json:"nonce"`
 	MixDigest       common.Hash    `json:"mixHash"`
 	Signature       [65]byte       `json:"signature"        gencodec:"required"`
 }
@@ -77,20 +77,20 @@ func (h *RootBlockHeader) SealHash() common.Hash {
 // Without the seal, Nonce, MixDigest and Signature are left out.
 // Keep this encoder infallible: Hash and SealHash have no error return.
 //
-//	Version         uint32
-//	Number          uint32
-//	ParentHash      Bytes32
-//	MinorHeaderHash Bytes32
-//	Coinbase        Bytes20
-//	CoinbaseAmount  uint256
-//	Time            uint64
-//	Difficulty      uint256
-//	TotalDifficulty uint256
-//	Nonce           uint64     (seal)
-//	ExtraOffset     uint32     (offset of Extra, i.e. the fixed size)
-//	MixDigest       Bytes32    (seal)
-//	Signature       Bytes65    (seal)
-//	Extra           List[byte]
+//	Version         uint32      0
+//	Number          uint32      4
+//	ParentHash      Bytes32     8
+//	MinorHeaderHash Bytes32     40
+//	Coinbase        Bytes20     72
+//	CoinbaseAmount  uint256     92
+//	Time            uint64      124
+//	Difficulty      uint256     132
+//	TotalDifficulty uint256     164
+//	ExtraOffset     uint32      196  (offset of Extra, i.e. the fixed size)
+//	Nonce           uint64      200  (seal)
+//	MixDigest       Bytes32     208  (seal)
+//	Signature       Bytes65     240  (seal)
+//	Extra           List[byte]  305
 func (h *RootBlockHeader) appendSSZ(enc []byte, withSeal bool) []byte {
 	fixedSize := unsealedFixedSize
 	if withSeal {
@@ -105,11 +105,9 @@ func (h *RootBlockHeader) appendSSZ(enc []byte, withSeal bool) []byte {
 	enc = ssz.MarshalUint64(enc, h.Time)
 	enc, _ = h.Difficulty.MarshalSSZAppend(enc)
 	enc, _ = h.TotalDifficulty.MarshalSSZAppend(enc)
-	if withSeal {
-		enc = ssz.MarshalUint64(enc, h.Nonce)
-	}
 	enc = ssz.WriteOffset(enc, fixedSize)
 	if withSeal {
+		enc = ssz.MarshalUint64(enc, h.Nonce)
 		enc = append(enc, h.MixDigest[:]...)
 		enc = append(enc, h.Signature[:]...)
 	}
@@ -137,7 +135,7 @@ func (h *RootBlockHeader) UnmarshalSSZ(buf []byte) error {
 	if len(buf) < sealedFixedSize {
 		return ssz.ErrSize
 	}
-	if ssz.ReadOffset(buf[204:208]) != sealedFixedSize {
+	if ssz.ReadOffset(buf[196:200]) != sealedFixedSize {
 		return ssz.ErrOffset
 	}
 	// Decode into a temporary value so a future field decoder error cannot
@@ -158,7 +156,7 @@ func (h *RootBlockHeader) UnmarshalSSZ(buf []byte) error {
 	if err := decoded.TotalDifficulty.UnmarshalSSZ(buf[164:196]); err != nil {
 		return err
 	}
-	decoded.Nonce = ssz.UnmarshallUint64(buf[196:204])
+	decoded.Nonce = ssz.UnmarshallUint64(buf[200:208])
 	copy(decoded.MixDigest[:], buf[208:240])
 	copy(decoded.Signature[:], buf[240:305])
 	decoded.Extra = common.CopyBytes(buf[sealedFixedSize:])
