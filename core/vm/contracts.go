@@ -25,6 +25,7 @@ import (
 	"math"
 	"math/big"
 	"math/bits"
+	"slices"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
@@ -239,11 +240,20 @@ func activePrecompiledContracts(rules params.Rules) *PrecompiledContracts {
 
 // ActivePrecompiledContracts returns a copy of precompiled contracts enabled with the current configuration.
 func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
+	if rules.IsQuarkChain {
+		return withQuarkChainPrecompiles(*activePrecompiledContracts(rules))
+	}
 	return maps.Clone(*activePrecompiledContracts(rules))
 }
 
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
+	if rules.IsQuarkChain {
+		// Extend the Ethereum precompiles of the same fork.
+		ethRules := rules
+		ethRules.IsQuarkChain = false
+		return slices.Concat(ActivePrecompiles(ethRules), PrecompiledAddressesQuarkChain)
+	}
 	switch {
 	case rules.IsBogota:
 		return PrecompiledAddressesOsaka

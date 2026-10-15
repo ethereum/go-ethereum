@@ -353,6 +353,9 @@ type ChainConfig struct {
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
 	Clique             *CliqueConfig       `json:"clique,omitempty"`
 	BlobScheduleConfig *BlobScheduleConfig `json:"blobSchedule,omitempty"`
+
+	// QuarkChain marks a QuarkChain shard chain, nil on other networks
+	QuarkChain *QuarkChainConfig `json:"quarkchain,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -1281,6 +1284,7 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
 	IsAmsterdam, IsBogota, IsUBT                            bool
+	IsQuarkChain                                            bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1309,5 +1313,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsBogota:         isMerge && c.IsBogota(num, timestamp),
 		IsUBT:            isUBT,
 		IsEIP4762:        isUBT,
+		IsQuarkChain:     c.QuarkChain != nil,
 	}
 }
