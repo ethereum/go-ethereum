@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/qkc/types"
+	"github.com/holiman/uint256"
 )
 
 func TestRootBlockStorage(t *testing.T) {
@@ -32,10 +33,10 @@ func TestRootBlockStorage(t *testing.T) {
 		Number:          7,
 		ParentHash:      common.Hash{0x01},
 		Coinbase:        common.Address{0x02},
-		CoinbaseAmount:  big.NewInt(3),
+		CoinbaseAmount:  *uint256.NewInt(3),
 		Time:            1000,
-		Difficulty:      big.NewInt(4),
-		TotalDifficulty: big.NewInt(5),
+		Difficulty:      *uint256.NewInt(4),
+		TotalDifficulty: *uint256.NewInt(5),
 		Nonce:           6,
 		Extra:           []byte("root"),
 	}

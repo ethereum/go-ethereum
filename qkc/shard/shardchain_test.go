@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	qkcrawdb "github.com/ethereum/go-ethereum/qkc/rawdb"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
+	"github.com/holiman/uint256"
 )
 
 // noVerifyEngine is the beacon engine without header verification, as the
@@ -74,8 +75,8 @@ func newTestEnv(t *testing.T) *testEnv {
 		config: params.MergedTestChainConfig,
 		db:     rawdb.NewMemoryDatabase(),
 		rootGenesis: qkctypes.NewRootBlockWithHeader(&qkctypes.RootBlockHeader{
-			Difficulty:      big.NewInt(1),
-			TotalDifficulty: big.NewInt(1),
+			Difficulty:      *uint256.NewInt(1),
+			TotalDifficulty: *uint256.NewInt(1),
 		}),
 	}
 	env.addRoot(env.rootGenesis, nil)
