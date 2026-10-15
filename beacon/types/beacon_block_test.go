@@ -17,10 +17,14 @@
 package types
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -107,13 +111,29 @@ func TestBlockFromJSON(t *testing.T) {
 }
 
 func TestGloasBlockFromJSON(t *testing.T) {
-	data := []byte(`{
-		"slot":"144512",
-		"proposer_index":"780",
-		"parent_root":"0x0000000000000000000000000000000000000000000000000000000000000001",
-		"state_root":"0x0000000000000000000000000000000000000000000000000000000000000002",
-		"body":{"signed_execution_payload_bid":{"message":{"block_hash":"0x0000000000000000000000000000000000000000000000000000000000000002"}}}
-	}`)
+	bidHash := common.HexToHash("0x4")
+	obj := &gloas.BeaconBlock{
+		Slot:          144512,
+		ProposerIndex: 780,
+		ParentRoot:    phase0.Root(common.HexToHash("0x1")),
+		StateRoot:     phase0.Root(common.HexToHash("0x2")),
+		Body: &gloas.BeaconBlockBody{
+			ETH1Data:      &phase0.ETH1Data{BlockHash: make([]byte, 32)},
+			SyncAggregate: &altair.SyncAggregate{SyncCommitteeBits: make([]byte, 64)},
+			SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
+				Message: &gloas.ExecutionPayloadBid{
+					ParentBlockHash: phase0.Hash32(common.HexToHash("0x3")),
+					BlockHash:       phase0.Hash32(bidHash),
+					Slot:            144512,
+				},
+			},
+			ParentExecutionRequests: &gloas.ExecutionRequests{},
+		},
+	}
+	data, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
 	block, err := BlockFromJSON("gloas", data)
 	if err != nil {
 		t.Fatal(err)
@@ -121,28 +141,18 @@ func TestGloasBlockFromJSON(t *testing.T) {
 	if block.Slot() != 144512 {
 		t.Fatalf("slot = %d, want 144512", block.Slot())
 	}
+	root, _ := obj.HashTreeRoot()
+	if block.Root() != common.Hash(root) {
+		t.Fatalf("root = %x, want %x", block.Root(), root)
+	}
+	if header := block.Header(); header.Hash() != common.Hash(root) {
+		t.Fatalf("header root = %x, want %x", header.Hash(), root)
+	}
 	if _, err := block.ExecutionPayload(); err == nil {
 		t.Fatal("missing Gloas envelope accepted")
 	}
-	header := Header{
-		Slot:          144512,
-		ProposerIndex: 780,
-		ParentRoot:    common.HexToHash("0x1"),
-		StateRoot:     common.HexToHash("0x2"),
-		BodyRoot:      common.HexToHash("0x3"),
-	}
-	blockRoot := header.Hash()
-	if err := block.SetGloasHeader(blockRoot, header); err != nil {
-		t.Fatalf("set Gloas header: %v\nblock header: %+v\nwant: %+v", err, block.Header(), header)
-	}
-	if block.Root() != blockRoot {
-		t.Fatalf("root = %x, want %x", block.Root(), blockRoot)
-	}
-	wrongEnvelope := []byte(`{
-		"beacon_block_root":"0x0000000000000000000000000000000000000000000000000000000000000002",
-		"parent_beacon_block_root":"0x0000000000000000000000000000000000000000000000000000000000000001"
-	}`)
-	if err := block.SetGloasPayloadEnvelope(blockRoot, wrongEnvelope); err == nil {
+	wrongEnvelope := []byte(`{"beacon_block_root":"0x0000000000000000000000000000000000000000000000000000000000000002"}`)
+	if err := block.SetGloasPayloadEnvelope(wrongEnvelope); err == nil {
 		t.Fatal("envelope with wrong beacon root accepted")
 	}
 }

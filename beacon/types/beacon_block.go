@@ -87,7 +87,11 @@ func BlockFromJSON(forkName string, data []byte) (*BeaconBlock, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute block root: %v", err)
 	}
-	return &BeaconBlock{data: &legacyBeaconBlock{blockObj: obj, root: root}}, nil
+	return &BeaconBlock{
+		data: &legacyBeaconBlock{
+			blockObj: obj,
+			root:     root,
+		}}, nil
 }
 
 // NewBeaconBlock wraps a consensus layer block.

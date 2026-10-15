@@ -25,6 +25,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/electra"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	coretypes "github.com/ethereum/go-ethereum/core/types"
@@ -33,12 +34,11 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// gloasBeaconBlock implements beaconBlockData with the portion of a Gloas
-// block needed by blsync. Gloas moves the execution payload out of the beacon
-// block, into a separately retrieved execution payload envelope.
+// gloasBeaconBlock implements beaconBlockData for Gloas blocks. Gloas moves the
+// execution payload out of the beacon block, into a separately retrieved
+// execution payload envelope.
 type gloasBeaconBlock struct {
-	header   Header
-	bidHash  common.Hash
+	block    *gloas.BeaconBlock
 	root     common.Hash
 	payload  *coretypes.Block
 	requests [][]byte
@@ -46,17 +46,15 @@ type gloasBeaconBlock struct {
 
 // Slot returns the slot number of the block.
 func (g *gloasBeaconBlock) Slot() uint64 {
-	return g.header.Slot
+	return uint64(g.block.Slot)
 }
 
-// Header returns the block's header data. The body root is only available
-// after the header has been attached with SetGloasHeader.
+// Header returns the block's header data.
 func (g *gloasBeaconBlock) Header() Header {
-	return g.header
+	return makeHeader(uint64(g.block.Slot), uint64(g.block.ProposerIndex), g.block.ParentRoot, g.block.StateRoot, g.block.Body)
 }
 
-// Root returns the SSZ root hash of the block. It is only available after the
-// header has been attached with SetGloasHeader.
+// Root returns the SSZ root hash of the block.
 func (g *gloasBeaconBlock) Root() common.Hash {
 	return g.root
 }
@@ -77,95 +75,61 @@ func (g *gloasBeaconBlock) ExecutionRequestsList() [][]byte {
 }
 
 func decodeGloasBeaconBlock(enc []byte) (*BeaconBlock, error) {
-	var block struct {
-		Slot          common.Decimal `json:"slot"`
-		ProposerIndex common.Decimal `json:"proposer_index"`
-		ParentRoot    common.Hash    `json:"parent_root"`
-		StateRoot     common.Hash    `json:"state_root"`
-		Body          struct {
-			SignedExecutionPayloadBid struct {
-				Message struct {
-					BlockHash common.Hash `json:"block_hash"`
-				} `json:"message"`
-			} `json:"signed_execution_payload_bid"`
-		} `json:"body"`
-	}
-	if err := json.Unmarshal(enc, &block); err != nil {
+	block := new(gloas.BeaconBlock)
+	if err := json.Unmarshal(enc, block); err != nil {
 		return nil, err
 	}
-	return &BeaconBlock{data: &gloasBeaconBlock{
-		header: Header{
-			Slot:          uint64(block.Slot),
-			ProposerIndex: uint64(block.ProposerIndex),
-			ParentRoot:    block.ParentRoot,
-			StateRoot:     block.StateRoot,
-		},
-		bidHash: block.Body.SignedExecutionPayloadBid.Message.BlockHash,
-	}}, nil
+	if block.Body == nil || block.Body.SignedExecutionPayloadBid == nil {
+		return nil, errors.New("Gloas beacon block has no execution payload bid")
+	}
+	root, err := block.HashTreeRoot()
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute block root: %v", err)
+	}
+	return &BeaconBlock{
+		data: &gloasBeaconBlock{
+			block: block,
+			root:  root,
+		}}, nil
 }
 
 // HasPayloadEnvelope reports whether the block's execution payload is published
 // apart from the block, as from the Gloas fork on. Such a block is only complete
-// once its header and payload envelope are attached.
+// once its payload envelope is attached.
 func (b *BeaconBlock) HasPayloadEnvelope() bool {
 	_, ok := b.data.(*gloasBeaconBlock)
 	return ok
 }
 
 // SetGloasPayloadEnvelope attaches the execution payload envelope to a Gloas
-// beacon block. The envelope must be bound to the requested beacon block and
-// its payload hash must match the block's signed execution payload bid.
-func (b *BeaconBlock) SetGloasPayloadEnvelope(root common.Hash, enc []byte) error {
+// beacon block. The envelope must be bound to the block and its payload hash
+// must match the block's signed execution payload bid.
+func (b *BeaconBlock) SetGloasPayloadEnvelope(enc []byte) error {
 	g, ok := b.data.(*gloasBeaconBlock)
 	if !ok {
 		return errors.New("not a Gloas beacon block")
 	}
 	var envelope struct {
-		Payload               json.RawMessage `json:"payload"`
-		ExecutionRequests     json.RawMessage `json:"execution_requests"`
-		BeaconBlockRoot       common.Hash     `json:"beacon_block_root"`
-		ParentBeaconBlockRoot common.Hash     `json:"parent_beacon_block_root"`
+		Payload           json.RawMessage `json:"payload"`
+		ExecutionRequests json.RawMessage `json:"execution_requests"`
+		BeaconBlockRoot   common.Hash     `json:"beacon_block_root"`
 	}
 	if err := json.Unmarshal(enc, &envelope); err != nil {
 		return err
 	}
-	if envelope.BeaconBlockRoot != root {
-		return fmt.Errorf("Gloas payload envelope belongs to %x, want %x", envelope.BeaconBlockRoot, root)
+	if envelope.BeaconBlockRoot != g.root {
+		return fmt.Errorf("Gloas payload envelope belongs to %x, want %x", envelope.BeaconBlockRoot, g.root)
 	}
-	if envelope.ParentBeaconBlockRoot != g.header.ParentRoot {
-		return fmt.Errorf("Gloas payload envelope parent is %x, want %x", envelope.ParentBeaconBlockRoot, g.header.ParentRoot)
-	}
-	payload, requests, err := decodeGloasPayload(envelope.Payload, envelope.ExecutionRequests, envelope.ParentBeaconBlockRoot)
+	payload, requests, err := decodeGloasPayload(envelope.Payload, envelope.ExecutionRequests, common.Hash(g.block.ParentRoot))
 	if err != nil {
 		return err
 	}
-	if payload.Hash() != g.bidHash {
-		return fmt.Errorf("Gloas payload hash is %x, want %x", payload.Hash(), g.bidHash)
+	bidHash := common.Hash(g.block.Body.SignedExecutionPayloadBid.Message.BlockHash)
+	if payload.Hash() != bidHash {
+		return fmt.Errorf("Gloas payload hash is %x, want %x", payload.Hash(), bidHash)
 	}
 	g.payload = payload
 	g.requests = requests
-	return nil
-}
-
-// SetGloasHeader binds the parsed Gloas block to its beacon header. The beacon
-// API returns the body root through the header endpoint because the Gloas block
-// body is not represented by go-eth2-client yet.
-func (b *BeaconBlock) SetGloasHeader(root common.Hash, header Header) error {
-	g, ok := b.data.(*gloasBeaconBlock)
-	if !ok {
-		return errors.New("not a Gloas beacon block")
-	}
-	if header.Slot != g.header.Slot ||
-		header.ProposerIndex != g.header.ProposerIndex ||
-		header.ParentRoot != g.header.ParentRoot ||
-		header.StateRoot != g.header.StateRoot {
-		return errors.New("Gloas beacon block does not match its header")
-	}
-	if header.Hash() != root {
-		return fmt.Errorf("Gloas beacon header root is %x, want %x", header.Hash(), root)
-	}
-	g.header = header
-	g.root = root
 	return nil
 }
 

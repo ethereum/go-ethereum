@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -80,7 +79,20 @@ type jsonHeaderWithExecProof struct {
 // light-client header. Gloas replaces the execution payload header with the
 // execution block hash committed in the signed execution payload bid.
 func decodeHeaderWithExecProof(version string, enc jsonHeaderWithExecProof) (types.HeaderWithExecProof, error) {
-	if strings.EqualFold(version, "gloas") {
+	switch version {
+	case "capella", "deneb", "electra", "fulu":
+		payloadHeader, err := types.ExecutionHeaderFromJSON(version, enc.Execution)
+		if err != nil {
+			return types.HeaderWithExecProof{}, err
+		}
+		return types.HeaderWithExecProof{
+			Header: enc.Beacon,
+			Proof: &types.LegacyHeaderProof{
+				PayloadHeader: payloadHeader,
+				Branch:        enc.ExecutionBranch,
+			},
+		}, nil
+	default:
 		return types.HeaderWithExecProof{
 			Header: enc.Beacon,
 			Proof: &types.GloasExecutionProof{
@@ -89,17 +101,6 @@ func decodeHeaderWithExecProof(version string, enc jsonHeaderWithExecProof) (typ
 			},
 		}, nil
 	}
-	payloadHeader, err := types.ExecutionHeaderFromJSON(version, enc.Execution)
-	if err != nil {
-		return types.HeaderWithExecProof{}, err
-	}
-	return types.HeaderWithExecProof{
-		Header: enc.Beacon,
-		Proof: &types.LegacyHeaderProof{
-			PayloadHeader: payloadHeader,
-			Branch:        enc.ExecutionBranch,
-		},
-	}, nil
 }
 
 // UnmarshalJSON unmarshals from JSON.
@@ -427,43 +428,22 @@ func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconB
 	if err != nil {
 		return nil, err
 	}
-	if block.HasPayloadEnvelope() {
-		if err := api.completeBeaconBlock(blockRoot, block); err != nil {
-			return nil, err
-		}
-	}
 	computedRoot := block.Root()
 	if computedRoot != blockRoot {
 		return nil, fmt.Errorf("Beacon block root hash mismatch (expected: %x, got: %x)", blockRoot, computedRoot)
 	}
+	if block.HasPayloadEnvelope() {
+		if err := api.setPayloadEnvelope(blockRoot, block); err != nil {
+			return nil, err
+		}
+	}
 	return block, nil
 }
 
-// completeBeaconBlock attaches the header and the execution payload envelope to a
+// setPayloadEnvelope fetches and attaches the execution payload envelope of a
 // block whose execution payload is published apart from it.
-func (api *BeaconLightApi) completeBeaconBlock(blockRoot common.Hash, block *types.BeaconBlock) error {
-	resp, err := api.httpGet(fmt.Sprintf("/eth/v1/beacon/headers/0x%x", blockRoot), nil)
-	if err != nil {
-		return err
-	}
-	var header struct {
-		Data struct {
-			Root   common.Hash `json:"root"`
-			Header struct {
-				Message types.Header `json:"message"`
-			} `json:"header"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(resp, &header); err != nil {
-		return fmt.Errorf("invalid Gloas beacon header: %v", err)
-	}
-	if header.Data.Root != blockRoot {
-		return fmt.Errorf("Gloas beacon header root mismatch (expected: %x, got: %x)", blockRoot, header.Data.Root)
-	}
-	if err := block.SetGloasHeader(blockRoot, header.Data.Header.Message); err != nil {
-		return err
-	}
-	resp, err = api.httpGet(fmt.Sprintf("/eth/v1/beacon/execution_payload_envelopes/0x%x", blockRoot), nil)
+func (api *BeaconLightApi) setPayloadEnvelope(blockRoot common.Hash, block *types.BeaconBlock) error {
+	resp, err := api.httpGet(fmt.Sprintf("/eth/v1/beacon/execution_payload_envelopes/0x%x", blockRoot), nil)
 	if err != nil {
 		return err
 	}
@@ -475,7 +455,7 @@ func (api *BeaconLightApi) completeBeaconBlock(blockRoot common.Hash, block *typ
 	if err := json.Unmarshal(resp, &envelope); err != nil {
 		return fmt.Errorf("invalid Gloas execution payload envelope: %v", err)
 	}
-	return block.SetGloasPayloadEnvelope(blockRoot, envelope.Data.Message)
+	return block.SetGloasPayloadEnvelope(envelope.Data.Message)
 }
 
 func decodeHeadEvent(enc []byte) (uint64, common.Hash, error) {
