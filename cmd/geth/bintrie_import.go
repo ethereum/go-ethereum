@@ -85,11 +85,12 @@ leaves nothing openable. --verify-only runs both checks and writes nothing.
 Preimages are not persisted unless --keep-preimages is given: nothing on a
 binary-tree node reads them.
 
-Memory: the sorters hold at most 4 GB of records, and the database its cache
-plus memtables, about 1.5 x (--cache x --cache.database / 100). Go's collector
-can hold as much again before it runs, so budget about twice their sum, or cap
-it with GOMEMLIMIT. Merging the sorters' spilled runs takes 512 KiB per run on
-top.
+Memory: the sorters hold at most 4 GB of records, two run buffers each allocated
+once, and the database its cache plus memtables, about 1.5 x (--cache x
+--cache.database / 100). Go's collector can hold as much again before it runs,
+so budget about twice their sum, or cap it with GOMEMLIMIT. Merging the
+sorters' spilled runs takes up to 512 KiB per run on top, at most a quarter of
+the sorter's budget once runs are many.
 
 Disk: --tmpdir holds the sort spills and a copy of every tree node until the
 import ends, so it needs disk space, not a tmpfs.
@@ -98,7 +99,8 @@ This command needs the node stopped. To import while the node keeps
 following the chain, start geth with --pbt.import.snapshot, --pbt.import.preimages
 and --pbt.import.anchor instead: the same checks run in the background once the
 anchor is canonical and finalized, scratch goes to <datadir>/geth/pbt-import,
-and the migration follower adopts the anchor when the import attests. That
+its sorters hold 1 GB rather than 4 beside the node's own memory, and the
+migration follower adopts the anchor when the import attests. That
 needs a chain config that schedules the binary tree (e.g. --override.genesis);
 debug_migrationProgress reports "importing" until then.
 `,
@@ -200,6 +202,11 @@ func importBinaryTrie(ctx *cli.Context) error {
 	}
 	return nil
 }
+
+// onlineSortBudget is the sort budget of an import running inside the node:
+// a quarter of the offline command's, since the node keeps its caches and the
+// chain beside it. Nethermind holds 256 MiB per sort buffer in the same place.
+const onlineSortBudget = 1024 << 20
 
 // pbtImporter runs an EIP-8347 import inside the node, in the background,
 // while the chain keeps following its head (--pbt.import.*). The chain holds
@@ -378,7 +385,7 @@ func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error 
 			return nil
 		},
 		conversionOptions: conversionOptions{
-			sortBudget: sortBudget,
+			sortBudget: onlineSortBudget,
 			tmpDir:     p.tmpDir,
 			workers:    cmp.Or(p.cfg.Workers, utils.PBTImportWorkersFlag.Value),
 		},
@@ -492,7 +499,8 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	// Phase 2 runs four sorters concurrently (accounts, slots, chunks and,
 	// briefly at the account/code-zone boundary, the code stems), so they
 	// split the same budget four ways: either phase's peak sorter RAM stays
-	// within opts.sortBudget.
+	// within opts.sortBudget, a sorter's budget being the bytes its two run
+	// buffers hold.
 	quarter := opts.sortBudget / 4
 
 	// Open both artifacts before the expensive phase: a mistyped path should
@@ -558,18 +566,22 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	defer prog.stop()
 	for _, cand := range cands {
 		g.Go(func() error {
-			var hashes []common.Hash
+			var (
+				buf      candidateBuf
+				prevHash common.Hash
+			)
 			for batch := range records {
 				prev := batch.prev
-				for i, rec := range batch.records {
+				for i := range batch.records {
+					rec := &batch.records[i]
 					if !keep {
-						addrHash, hs, err := checkPreimageRecord(batch.first+uint64(i), prev, rec.addr, rec.slots, hashes[:0])
+						addrHash, err := checkPreimageRecord(batch.first+uint64(i), prev, &rec.addr, rec.slots, nil)
 						if err != nil {
 							return err
 						}
-						hashes, prev = hs, &addrHash
+						prevHash, prev = addrHash, &prevHash
 					}
-					if err := addCandidates(cand, rec.addr, rec.slots); err != nil {
+					if err := addCandidates(cand, &buf, rec.addr, rec.slots); err != nil {
 						return err
 					}
 				}
@@ -1171,13 +1183,20 @@ type preimageBatch struct {
 // candidate worker at a time.
 var preimageBatchSize = 1024
 
+// candidateBuf holds one candidate's key and value while addCandidates builds
+// it: the sorter copies them, so a worker reuses one buffer for every record.
+type candidateBuf struct {
+	key   [bintrie.StorageKeyLength]byte
+	value [common.AddressLength + common.HashLength]byte
+}
+
 // addCandidates derives the candidate tree keys one preimage record stands
 // for: one per header stem, carrying the address and a bitmap of the
 // header-range slots the record claims, and one per overflow slot. A
 // header-range slot's number is its sub-index minus the offset, so it needs
 // no candidate of its own - unlike an overflow slot, whose stem is a one-way
 // hash of the slot number and can only be matched by deriving it forward.
-func addCandidates(cand *bintrie.RecordSorter, addr common.Address, slots []common.Hash) error {
+func addCandidates(cand *bintrie.RecordSorter, buf *candidateBuf, addr common.Address, slots []common.Hash) error {
 	var (
 		headerSlots   uint64
 		storagePrefix [32]byte // blake3(address32), hashed once and reused for every overflow slot
@@ -1193,13 +1212,15 @@ func addCandidates(cand *bintrie.RecordSorter, addr common.Address, slots []comm
 			a32 := bintrie.Address32(addr)
 			storagePrefix, havePrefix = bintrie.KeyHash(a32[:]), true
 		}
-		key := append(bintrie.StorageStemWithPrefix(addr, storagePrefix[:], &treeIndex), sub)
-		if err := cand.Add(key, append(addr.Bytes(), slot[:]...)); err != nil {
+		key := append(bintrie.AppendStorageStem(buf.key[:0], addr, storagePrefix[:], &treeIndex), sub)
+		value := append(append(buf.value[:0], addr[:]...), slot[:]...)
+		if err := cand.Add(key, value); err != nil {
 			return err
 		}
 	}
-	value := binary.BigEndian.AppendUint64(addr.Bytes(), headerSlots)
-	return cand.Add(bintrie.HeaderStem(addr), value)
+	key := bintrie.AppendHeaderStem(buf.key[:0], addr)
+	value := binary.BigEndian.AppendUint64(append(buf.value[:0], addr[:]...), headerSlots)
+	return cand.Add(key, value)
 }
 
 // leafBatchSize and leafBatches size the snapshot pipeline: leaves per batch,

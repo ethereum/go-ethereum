@@ -501,6 +501,74 @@ func TestRecordSorterVarlen(t *testing.T) {
 	}
 }
 
+// TestSorterBuffersStayWithinBudget pins the sorter's memory to its budget:
+// each run buffer is allocated once at the spill size and never grows, and
+// the bytes counted are exactly the bytes held.
+func TestSorterBuffersStayWithinBudget(t *testing.T) {
+	const budget = 4096
+	recs := randomLeafRecords(t, rand.New(rand.NewSource(8297)), 400)
+	s := NewLeafSorter(t.TempDir(), budget)
+	defer s.Close()
+	for i, r := range recs {
+		if err := s.Add(r.key, r.value); err != nil {
+			t.Fatal(err)
+		}
+		for _, buf := range [][]byte{s.arena, s.spareArena} {
+			if c := cap(buf); c != 0 && c != budget/2 {
+				t.Fatalf("after record %d: a run buffer of %d bytes, want %d", i, c, budget/2)
+			}
+		}
+		if held := len(s.arena) + arenaRecordBytes*len(s.index); s.buffered != held {
+			t.Fatalf("after record %d: %d bytes counted, %d held", i, s.buffered, held)
+		}
+	}
+	if len(s.runs) < 2 {
+		t.Fatalf("%d runs spilled, want several", len(s.runs))
+	}
+	stream, err := s.Sort()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var (
+		prev    []byte
+		drained int
+	)
+	for {
+		k, _, err := stream.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if prev != nil && bytes.Compare(prev, k) >= 0 {
+			t.Fatalf("key %x out of order after %x", k, prev)
+		}
+		prev = bytes.Clone(k)
+		drained++
+	}
+	if drained != len(recs) {
+		t.Fatalf("drained %d records, put in %d", drained, len(recs))
+	}
+}
+
+// TestMergeBufSize pins the merge's read buffers: full size for a few runs,
+// a quarter of the budget shared out for many, a floor for very many.
+func TestMergeBufSize(t *testing.T) {
+	for _, tc := range []struct{ budget, runs, want int }{
+		{1 << 30, 100, 1 << 19},
+		{0, 7, 1 << 19},
+		{1 << 20, 1000, 64 << 10},
+	} {
+		if got := mergeBufSize(tc.budget, tc.runs); got != tc.want {
+			t.Errorf("mergeBufSize(%d, %d) = %d, want %d", tc.budget, tc.runs, got, tc.want)
+		}
+	}
+	if got := mergeBufSize(1<<30, 2800); got <= 64<<10 || got >= 1<<19 {
+		t.Errorf("mergeBufSize(1 GiB, 2800 runs) = %d, want between 64 KiB and 512 KiB", got)
+	}
+}
+
 // benchLeafRecords builds a state-shaped leaf set: every account a header
 // stem (basic data, code hash, a few header slots), every tenth account a
 // code group and a bigger storage group. Returned in random order. The fixed
@@ -542,7 +610,7 @@ func benchmarkLeafSorter(b *testing.B, spill bool) {
 	recs := benchLeafRecords(10_000)
 	budget := 0
 	if spill {
-		budget = len(recs) * (33 + 32 + spillRecordOverhead) / 8 // roughly eight runs
+		budget = len(recs) * (33 + 32 + arenaRecordBytes) / 8 // roughly eight runs
 	}
 	b.ReportAllocs()
 	for b.Loop() {
