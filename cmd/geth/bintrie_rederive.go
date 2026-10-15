@@ -348,6 +348,13 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 	if err := storageSum.finish(); err != nil {
 		return err
 	}
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	batch.Reset()
+	if written.storageWritten != nil {
+		written.storageWritten()
+	}
 	var rows atomic.Uint64
 	prog = startProgress("Writing flat accounts", "accounts", walkedAccs, rows.Load)
 	defer prog.stop()
@@ -638,8 +645,11 @@ func (a *digestAhead) finish() error {
 }
 
 // writtenState digests the three key families a command writes.
+// storageWritten, if set, runs once every flat storage row is in the
+// database and digested, before the flat accounts are written.
 type writtenState struct {
 	nodes, accounts, storage *writeDigest
+	storageWritten           func()
 }
 
 func newWrittenState() *writtenState {
