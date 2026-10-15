@@ -466,72 +466,144 @@ func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []fo
 // must reproduce the digest.
 
 // writeDigest hashes one key family's records in the order written. Keys are
-// the family-relative suffixes the namespace stores them under.
+// the family-relative suffixes the namespace stores them under. Records are
+// hashed in batches of recordBatchSize, on several goroutines (see ahead),
+// and the family's digest hashes the batch digests in order.
 type writeDigest struct {
-	hasher  crypto.KeccakState
-	count   uint64
-	lastKey []byte
+	top   crypto.KeccakState
+	count uint64
 }
 
 func newWriteDigest() *writeDigest {
-	return &writeDigest{hasher: crypto.NewKeccakState()}
-}
-
-// add digests one record. Keys must ascend: the re-read walks key order.
-func (d *writeDigest) add(key, value []byte) error {
-	if d.count > 0 && bytes.Compare(key, d.lastKey) <= 0 {
-		return fmt.Errorf("record %x written after %x, out of key order", key, d.lastKey)
-	}
-	d.lastKey = append(d.lastKey[:0], key...)
-	var lengths [8]byte
-	binary.BigEndian.PutUint32(lengths[:4], uint32(len(key)))
-	binary.BigEndian.PutUint32(lengths[4:], uint32(len(value)))
-	d.hasher.Write(lengths[:])
-	d.hasher.Write(key)
-	d.hasher.Write(value)
-	d.count++
-	return nil
+	return &writeDigest{top: crypto.NewKeccakState()}
 }
 
 func (d *writeDigest) sum() common.Hash {
-	return common.BytesToHash(d.hasher.Sum(nil))
+	return common.BytesToHash(d.top.Sum(nil))
 }
 
-// digestAhead digests records on a goroutine of its own, so that a writer on
+// digestAhead digests records on goroutines of its own, so that a writer on
 // the critical path only copies them.
 type digestAhead struct {
-	work, free chan *digestBatch
-	cur        *digestBatch
-	done       chan error
-	err        error
+	work, order, free chan *digestBatch
+	cur               *digestBatch
+	done              chan error
+	err               error
 }
 
-// digestBatch packs records back to back: ends holds each record's key end,
+// recordBatch packs records back to back: ends holds each record's key end,
 // then its value end.
-type digestBatch struct {
+type recordBatch struct {
 	buf  []byte
 	ends []int
 }
 
-// digestBatchSize is how many records a digest batch carries.
-const digestBatchSize = 4096
+// add copies one record into the batch.
+func (b *recordBatch) add(key, value []byte) {
+	b.buf = append(b.buf, key...)
+	b.ends = append(b.ends, len(b.buf))
+	b.buf = append(b.buf, value...)
+	b.ends = append(b.ends, len(b.buf))
+}
 
-// ahead starts digesting records handed to the returned digestAhead, in
-// order. Its finish returns what add would have.
+func (b *recordBatch) len() int { return len(b.ends) / 2 }
+
+func (b *recordBatch) key(i int) []byte {
+	start := 0
+	if i > 0 {
+		start = b.ends[2*i-1]
+	}
+	return b.buf[start:b.ends[2*i]]
+}
+
+func (b *recordBatch) value(i int) []byte { return b.buf[b.ends[2*i]:b.ends[2*i+1]] }
+
+func (b *recordBatch) reset() { b.buf, b.ends = b.buf[:0], b.ends[:0] }
+
+// full reports whether the batch is ready to hand over: it carries
+// recordBatchSize records, or recordBatchBytes, whichever comes first.
+func (b *recordBatch) full() bool {
+	return len(b.ends) == 2*recordBatchSize || len(b.buf) >= recordBatchBytes
+}
+
+const (
+	recordBatchSize  = 4096
+	recordBatchBytes = 256 << 10
+)
+
+// digestBatch is a batch of records on its way through a digestAhead.
+type digestBatch struct {
+	recordBatch
+	sum    common.Hash
+	err    error
+	hashed chan struct{}
+}
+
+// digestWorkers is how many goroutines hash one family's batches.
+const digestWorkers = 4
+
+// digest hashes the batch's records, whose keys must ascend.
+func (b *digestBatch) digest(hasher crypto.KeccakState) (common.Hash, error) {
+	hasher.Reset()
+	var lengths [8]byte
+	for i := range b.len() {
+		key, value := b.key(i), b.value(i)
+		if i > 0 && bytes.Compare(key, b.key(i-1)) <= 0 {
+			return common.Hash{}, fmt.Errorf("record %x written after %x, out of key order", key, b.key(i-1))
+		}
+		binary.BigEndian.PutUint32(lengths[:4], uint32(len(key)))
+		binary.BigEndian.PutUint32(lengths[4:], uint32(len(value)))
+		hasher.Write(lengths[:])
+		hasher.Write(key)
+		hasher.Write(value)
+	}
+	var sum common.Hash
+	hasher.Read(sum[:])
+	return sum, nil
+}
+
+// ahead starts digesting the records handed to the returned digestAhead, in
+// order. Its finish reports keys that do not ascend.
 func (d *writeDigest) ahead() *digestAhead {
-	a := &digestAhead{work: make(chan *digestBatch, 4), free: make(chan *digestBatch, 5), done: make(chan error, 1)}
+	a := &digestAhead{
+		work:  make(chan *digestBatch, 2*digestWorkers),
+		order: make(chan *digestBatch, 2*digestWorkers),
+		free:  make(chan *digestBatch, 2*digestWorkers+1),
+		done:  make(chan error, 1),
+	}
 	for range cap(a.free) {
-		a.free <- new(digestBatch)
+		a.free <- &digestBatch{hashed: make(chan struct{}, 1)}
 	}
 	a.cur = <-a.free
-	go func() {
-		var err error
-		for b := range a.work {
-			for i, start := 0, 0; err == nil && i < len(b.ends); i += 2 {
-				err = d.add(b.buf[start:b.ends[i]], b.buf[b.ends[i]:b.ends[i+1]])
-				start = b.ends[i+1]
+	work, order := a.work, a.order // finish clears a.work
+	for range digestWorkers {
+		go func() {
+			hasher := crypto.NewKeccakState()
+			for b := range work {
+				b.sum, b.err = b.digest(hasher)
+				b.hashed <- struct{}{}
 			}
-			b.buf, b.ends = b.buf[:0], b.ends[:0]
+		}()
+	}
+	go func() {
+		var (
+			err  error
+			last []byte // key of the last record folded
+		)
+		for b := range order {
+			<-b.hashed
+			if err == nil {
+				err = b.err
+			}
+			if err == nil && d.count > 0 && bytes.Compare(b.key(0), last) <= 0 {
+				err = fmt.Errorf("record %x written after %x, out of key order", b.key(0), last)
+			}
+			if err == nil {
+				d.top.Write(b.sum[:])
+				d.count += uint64(b.len())
+				last = append(last[:0], b.key(b.len()-1)...)
+			}
+			b.reset()
 			a.free <- b
 		}
 		a.done <- err
@@ -541,13 +613,10 @@ func (d *writeDigest) ahead() *digestAhead {
 
 // add copies one record for the digest.
 func (a *digestAhead) add(key, value []byte) {
-	b := a.cur
-	b.buf = append(b.buf, key...)
-	b.ends = append(b.ends, len(b.buf))
-	b.buf = append(b.buf, value...)
-	b.ends = append(b.ends, len(b.buf))
-	if len(b.ends) == 2*digestBatchSize {
-		a.work <- b
+	a.cur.add(key, value)
+	if a.cur.full() {
+		a.order <- a.cur
+		a.work <- a.cur
 		a.cur = <-a.free
 	}
 }
@@ -558,10 +627,12 @@ func (a *digestAhead) finish() error {
 	if a.work == nil {
 		return a.err
 	}
-	if len(a.cur.ends) > 0 {
+	if a.cur.len() > 0 {
+		a.order <- a.cur
 		a.work <- a.cur
 	}
 	close(a.work)
+	close(a.order)
 	a.err, a.work = <-a.done, nil
 	return a.err
 }
@@ -646,20 +717,23 @@ func verifyWritten(ctx context.Context, pbtdb ethdb.Database, families ...writte
 			prog := startProgress("Reading back "+f.name+" records", "records", f.want.count, read.Load)
 			defer prog.stop()
 			got := newWriteDigest()
+			ahead := got.ahead()
+			defer ahead.finish()
 			it := pbtdb.NewIterator(f.prefix, nil)
 			defer it.Release()
-			for it.Next() {
-				if err := got.add(it.Key()[len(f.prefix):], it.Value()); err != nil {
-					return err
-				}
-				if got.count%4096 == 0 {
-					read.Store(got.count)
+			for n := uint64(1); it.Next(); n++ {
+				ahead.add(it.Key()[len(f.prefix):], it.Value())
+				if n%4096 == 0 {
+					read.Store(n)
 					if err := ctx.Err(); err != nil {
 						return err
 					}
 				}
 			}
 			if err := it.Error(); err != nil {
+				return err
+			}
+			if err := ahead.finish(); err != nil {
 				return err
 			}
 			if got.count != f.want.count || got.sum() != f.want.sum() {
