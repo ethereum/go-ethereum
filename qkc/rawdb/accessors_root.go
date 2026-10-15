@@ -17,13 +17,11 @@
 package rawdb
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/qkc/types"
-	"github.com/ethereum/go-ethereum/rlp"
+	ssz "github.com/ferranbt/fastssz"
 )
 
 // ReadRootHeadHash retrieves the hash of the root tip.
@@ -48,21 +46,21 @@ func HasRootBlock(db ethdb.KeyValueReader, hash common.Hash) bool {
 	return has && err == nil
 }
 
-// ReadRootBlockRLP retrieves a root block in its raw RLP database encoding.
-func ReadRootBlockRLP(db ethdb.KeyValueReader, hash common.Hash) rlp.RawValue {
+// ReadRootBlockSSZ retrieves a root block in its raw SSZ database encoding.
+func ReadRootBlockSSZ(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(rootBlockKey(hash))
 	return data
 }
 
 // ReadRootBlock retrieves the root block corresponding to the hash.
 func ReadRootBlock(db ethdb.KeyValueReader, hash common.Hash) *types.RootBlock {
-	data := ReadRootBlockRLP(db, hash)
+	data := ReadRootBlockSSZ(db, hash)
 	if len(data) == 0 {
 		return nil
 	}
 	block := new(types.RootBlock)
-	if err := rlp.DecodeBytes(data, block); err != nil {
-		log.Error("Invalid root block RLP", "hash", hash, "err", err)
+	if err := block.UnmarshalSSZ(data); err != nil {
+		log.Error("Invalid root block SSZ", "hash", hash, "err", err)
 		return nil
 	}
 	return block
@@ -71,19 +69,30 @@ func ReadRootBlock(db ethdb.KeyValueReader, hash common.Hash) *types.RootBlock {
 // ReadRootBlockHeader retrieves the header of the root block corresponding to
 // the hash, without decoding the shard block headers it confirms.
 func ReadRootBlockHeader(db ethdb.KeyValueReader, hash common.Hash) *types.RootBlockHeader {
-	data := ReadRootBlockRLP(db, hash)
+	data := ReadRootBlockSSZ(db, hash)
 	if len(data) == 0 {
 		return nil
 	}
-	// The header is the first item of the encoded block.
-	header := new(types.RootBlockHeader)
-	s := rlp.NewStream(bytes.NewReader(data), uint64(len(data)))
-	if _, err := s.List(); err != nil {
-		log.Error("Invalid root block RLP", "hash", hash, "err", err)
+	// The header is the first field in the SSZ container. Decode it directly
+	// without decoding the shard block headers in the following field.
+	const rootBlockSSZFixedSize = 3 * 4
+	if len(data) < rootBlockSSZFixedSize {
+		log.Error("Invalid root block SSZ", "hash", hash, "err", ssz.ErrSize)
 		return nil
 	}
-	if err := s.Decode(header); err != nil {
-		log.Error("Invalid root block header RLP", "hash", hash, "err", err)
+	headerOffset := ssz.ReadOffset(data[0:4])
+	headersOffset := ssz.ReadOffset(data[4:8])
+	trackingOffset := ssz.ReadOffset(data[8:12])
+	if headerOffset != rootBlockSSZFixedSize ||
+		headerOffset > headersOffset ||
+		headersOffset > trackingOffset ||
+		trackingOffset > uint64(len(data)) {
+		log.Error("Invalid root block SSZ", "hash", hash, "err", ssz.ErrOffset)
+		return nil
+	}
+	header := new(types.RootBlockHeader)
+	if err := header.UnmarshalSSZ(data[headerOffset:headersOffset]); err != nil {
+		log.Error("Invalid root block header SSZ", "hash", hash, "err", err)
 		return nil
 	}
 	return header
@@ -91,9 +100,9 @@ func ReadRootBlockHeader(db ethdb.KeyValueReader, hash common.Hash) *types.RootB
 
 // WriteRootBlock stores a root block into the database.
 func WriteRootBlock(db ethdb.KeyValueWriter, block *types.RootBlock) {
-	data, err := rlp.EncodeToBytes(block)
+	data, err := block.MarshalSSZ()
 	if err != nil {
-		log.Crit("Failed to RLP encode root block", "err", err)
+		log.Crit("Failed to SSZ encode root block", "err", err)
 	}
 	if err := db.Put(rootBlockKey(block.Hash()), data); err != nil {
 		log.Crit("Failed to store root block", "err", err)
