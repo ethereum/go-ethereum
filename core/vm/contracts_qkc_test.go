@@ -111,18 +111,8 @@ func TestXShardOutboxSend(t *testing.T) {
 		name   string
 		excess uint64
 	}{
-<<<<<<< HEAD
-		{name: "no data"},
-		{name: "data", data: []byte{0xde, 0xad, 0xbe, 0xef}},
-		{name: "word sized data", data: bytes.Repeat([]byte{0xaa}, 64)},
-		{name: "excess value", data: []byte{1, 2, 3}, excess: 12345},
-		{name: "minimum gas limit", gasLimit: params.XShardSendGas},
-		{name: "minimum gas limit with data", data: []byte{1, 0, 2}, gasLimit: params.XShardSendGas + 2*params.TxDataNonZeroGasEIP2028 + params.TxDataZeroGas},
-		{name: "maximum gas limit", gasLimit: params.MaxCrossShardTxGas},
-=======
 		{name: "move"},
 		{name: "excess value", excess: 12345},
->>>>>>> xshard-deposit-tx-1
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			evm, statedb := newXShardEVM()
@@ -304,20 +294,6 @@ func TestXShardOutboxInvalid(t *testing.T) {
 		{name: "unknown shard", input: func(t *testing.T) []byte {
 			return packXShardSend(t, 3, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, true, nil)
 		}, want: errXShardInvalidShard},
-<<<<<<< HEAD
-		{name: "gas limit below minimum", input: func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.XShardSendGas-1, nil)
-		}, want: errXShardInvalidGasLimit},
-		{name: "gas limit below calldata cost", input: func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.XShardSendGas+2*params.TxDataNonZeroGasEIP2028+params.TxDataZeroGas-1, []byte{1, 0, 2})
-		}, want: errXShardInvalidGasLimit},
-		{name: "gas limit above max", input: func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.MaxCrossShardTxGas+1, nil)
-		}, value: xShardValue + (params.MaxCrossShardTxGas+1)*xShardGasPrice, want: errXShardInvalidGasLimit},
-		{name: "ethereum maximum gas limit", input: func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.MaxTxGas, nil)
-		}, value: xShardValue + params.MaxTxGas*xShardGasPrice, want: errXShardInvalidGasLimit},
-=======
 		{name: "gas limit below minimum", input: pack(params.XShardSendGas-1, true, nil), want: errXShardInvalidGasLimit},
 		{name: "gas limit above max", input: pack(params.MaxCrossShardTxGas+1, true, nil),
 			value: xShardValue + (params.MaxCrossShardTxGas+1)*xShardGasPrice, want: errXShardInvalidGasLimit},
@@ -328,7 +304,6 @@ func TestXShardOutboxInvalid(t *testing.T) {
 		{name: "move with data", input: withData, want: errXShardInvalidMove},
 		{name: "move with more gas", input: pack(xShardGasLimit+1, true, nil),
 			value: xShardValue + (xShardGasLimit+1)*xShardGasPrice, want: errXShardInvalidMove},
->>>>>>> xshard-deposit-tx-1
 		{name: "insufficient value", input: input, value: cost - 1, want: errXShardInsufficientValue},
 		{name: "cost overflow", input: func(t *testing.T) []byte {
 			return packXShardSend(t, xShardDst, xShardRecipient, maxUint256, xShardGasLimit, true, nil)
