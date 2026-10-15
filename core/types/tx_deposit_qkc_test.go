@@ -37,8 +37,9 @@ func TestDepositTxRLP(t *testing.T) {
 			To:              common.Address{0x02},
 			Value:           uint256.NewInt(1000),
 			GasPrice:        uint256.NewInt(10),
-			Gas:             50000,
-			Data:            []byte{0xca, 0xfe},
+			Gas:             9000,
+			IsMove:          true,
+			Data:            []byte{},
 		},
 		{
 			Version:         DepositTxVersion,
@@ -64,9 +65,9 @@ func TestDepositTxRLP(t *testing.T) {
 		t.Errorf("decoded %+v, want %+v", dec, deposits)
 	}
 	// Pin the encoding: the fields, in order, as an RLP list.
-	want := common.FromHex("0xf857" + "80" + "a0" + "aa" + "00000000000000000000000000000000000000000000000000000000000000" + "07" +
+	want := common.FromHex("0xf856" + "80" + "a0" + "aa" + "00000000000000000000000000000000000000000000000000000000000000" + "07" +
 		"94" + "0100000000000000000000000000000000000000" + "94" + "0200000000000000000000000000000000000000" +
-		"8203e8" + "0a" + "82c350" + "82cafe")
+		"8203e8" + "0a" + "822328" + "01" + "80")
 	if enc, _ := rlp.EncodeToBytes(deposits[0]); !bytes.Equal(enc, want) {
 		t.Errorf("encoding %x, want %x", enc, want)
 	}

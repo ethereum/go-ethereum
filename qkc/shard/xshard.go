@@ -91,7 +91,7 @@ func depositsFromLogs(config *params.QuarkChainConfig, blockHash common.Hash, lo
 // outbox emits is accepted:
 //
 //	topics: SentMessage, dstShard, from, to
-//	data:   value, gasPrice, gasLimit, data offset (0x80), data length, data padded to words
+//	data:   value, gasPrice, gasLimit, isMove, data offset (0xa0), data length, data padded to words
 func unpackSentMessage(log *types.Log) (uint32, *types.DepositTx, error) {
 	if len(log.Topics) != 4 {
 		return 0, nil, errInvalidSentMessage
@@ -101,15 +101,15 @@ func unpackSentMessage(log *types.Log) (uint32, *types.DepositTx, error) {
 		return 0, nil, errInvalidSentMessage
 	}
 	data := log.Data
-	if len(data) < 5*32 || bitutil.TestBytes(data[64:88]) {
+	if len(data) < 6*32 || bitutil.TestBytes(data[64:88]) || bitutil.TestBytes(data[96:127]) || data[127] > 1 {
 		return 0, nil, errInvalidSentMessage
 	}
-	if offset := new(uint256.Int).SetBytes(data[96:128]); !offset.Eq(uint256.NewInt(4 * 32)) {
+	if offset := new(uint256.Int).SetBytes(data[128:160]); !offset.Eq(uint256.NewInt(5 * 32)) {
 		return 0, nil, errInvalidSentMessage
 	}
 	// Bound the length by the data first, so that padding it cannot overflow.
-	size := new(uint256.Int).SetBytes(data[128:160])
-	if !size.IsUint64() || size.Uint64() > uint64(len(data)) || uint64(len(data)) != 5*32+(size.Uint64()+31)/32*32 {
+	size := new(uint256.Int).SetBytes(data[160:192])
+	if !size.IsUint64() || size.Uint64() > uint64(len(data)) || uint64(len(data)) != 6*32+(size.Uint64()+31)/32*32 {
 		return 0, nil, errInvalidSentMessage
 	}
 	return binary.BigEndian.Uint32(dstShard[28:]), &types.DepositTx{
@@ -119,6 +119,7 @@ func unpackSentMessage(log *types.Log) (uint32, *types.DepositTx, error) {
 		Value:    new(uint256.Int).SetBytes(data[0:32]),
 		GasPrice: new(uint256.Int).SetBytes(data[32:64]),
 		Gas:      binary.BigEndian.Uint64(data[88:96]),
-		Data:     common.CopyBytes(data[160 : 160+size.Uint64()]),
+		IsMove:   data[127] == 1,
+		Data:     common.CopyBytes(data[192 : 192+size.Uint64()]),
 	}, nil
 }

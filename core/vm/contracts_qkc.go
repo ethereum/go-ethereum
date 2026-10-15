@@ -70,20 +70,22 @@ var (
 	errXShardInvalidShard      = errors.New("xshard: invalid destination shard")
 	errXShardInvalidGasLimit   = errors.New("xshard: invalid gas limit")
 	errXShardInsufficientValue = errors.New("xshard: call value below value plus gas cost")
+	errXShardNotMove           = errors.New("xshard: only moves are enabled")
+	errXShardInvalidMove       = errors.New("xshard: move with data or a gas limit other than the send gas")
 )
 
 var (
 	// xShardSendSelector is the selector of the outbox's only method:
 	//
-	//	send(uint32 dstShard, address to, uint256 value, uint64 gasLimit, bytes data)
-	xShardSendSelector = crypto.Keccak256([]byte("send(uint32,address,uint256,uint64,bytes)"))[:4]
+	//	send(uint32 dstShard, address to, uint256 value, uint64 gasLimit, bool isMove, bytes data)
+	xShardSendSelector = crypto.Keccak256([]byte("send(uint32,address,uint256,uint64,bool,bytes)"))[:4]
 
 	// XShardSentMessageTopic is the topic of the event the outbox emits for
 	// every message:
 	//
 	//	SentMessage(uint32 indexed dstShard, address indexed from, address indexed to,
-	//	            uint256 value, uint256 gasPrice, uint64 gasLimit, bytes data)
-	XShardSentMessageTopic = crypto.Keccak256Hash([]byte("SentMessage(uint32,address,address,uint256,uint256,uint64,bytes)"))
+	//	            uint256 value, uint256 gasPrice, uint64 gasLimit, bool isMove, bytes data)
+	XShardSentMessageTopic = crypto.Keccak256Hash([]byte("SentMessage(uint32,address,address,uint256,uint256,uint64,bool,bytes)"))
 )
 
 // xShardMessage is a cross-shard message, as given to the outbox.
@@ -92,6 +94,7 @@ type xShardMessage struct {
 	to       common.Address
 	value    *uint256.Int
 	gasLimit uint64
+	isMove   bool // only transfers value to the address, running no code
 	data     []byte
 }
 
@@ -101,19 +104,22 @@ func decodeXShardSend(input []byte) (*xShardMessage, error) {
 	if len(input) < 4 || !bytes.Equal(input[:4], xShardSendSelector) {
 		return nil, errXShardInvalidInput
 	}
-	// The five head words, then the data length and the data padded to words.
+	// The six head words, then the data length and the data padded to words.
 	args := input[4:]
-	if len(args) < 6*32 {
+	if len(args) < 7*32 {
 		return nil, errXShardInvalidInput
 	}
 	if bitutil.TestBytes(args[0:28]) || bitutil.TestBytes(args[32:44]) || bitutil.TestBytes(args[96:120]) {
 		return nil, errXShardInvalidInput
 	}
-	if offset := new(uint256.Int).SetBytes(args[128:160]); !offset.Eq(uint256.NewInt(5 * 32)) {
+	if bitutil.TestBytes(args[128:159]) || args[159] > 1 {
 		return nil, errXShardInvalidInput
 	}
-	size := new(uint256.Int).SetBytes(args[160:192])
-	if !size.IsUint64() || size.Uint64() > uint64(len(args)) || uint64(len(args)) != 6*32+toWordSize(size.Uint64())*32 {
+	if offset := new(uint256.Int).SetBytes(args[160:192]); !offset.Eq(uint256.NewInt(6 * 32)) {
+		return nil, errXShardInvalidInput
+	}
+	size := new(uint256.Int).SetBytes(args[192:224])
+	if !size.IsUint64() || size.Uint64() > uint64(len(args)) || uint64(len(args)) != 7*32+toWordSize(size.Uint64())*32 {
 		return nil, errXShardInvalidInput
 	}
 	return &xShardMessage{
@@ -121,23 +127,28 @@ func decodeXShardSend(input []byte) (*xShardMessage, error) {
 		to:       common.BytesToAddress(args[44:64]),
 		value:    new(uint256.Int).SetBytes(args[64:96]),
 		gasLimit: binary.BigEndian.Uint64(args[120:128]),
-		data:     common.CopyBytes(args[192 : 192+size.Uint64()]),
+		isMove:   args[159] == 1,
+		data:     common.CopyBytes(args[224 : 224+size.Uint64()]),
 	}, nil
 }
 
 // xShardSentMessageLog returns the SentMessage event of a message.
 func xShardSentMessageLog(addr, from common.Address, msg *xShardMessage, gasPrice *uint256.Int) *types.Log {
-	var dstShard, gasLimit, offset, size common.Hash
+	var dstShard, gasLimit, isMove, offset, size common.Hash
 	binary.BigEndian.PutUint32(dstShard[28:], msg.dstShard)
 	binary.BigEndian.PutUint64(gasLimit[24:], msg.gasLimit)
-	offset[31] = 4 * 32
+	if msg.isMove {
+		isMove[31] = 1
+	}
+	offset[31] = 5 * 32
 	binary.BigEndian.PutUint64(size[24:], uint64(len(msg.data)))
 
 	value, price := msg.value.Bytes32(), gasPrice.Bytes32()
-	data := make([]byte, 0, 5*32+toWordSize(uint64(len(msg.data)))*32)
+	data := make([]byte, 0, 6*32+toWordSize(uint64(len(msg.data)))*32)
 	data = append(data, value[:]...)
 	data = append(data, price[:]...)
 	data = append(data, gasLimit[:]...)
+	data = append(data, isMove[:]...)
 	data = append(data, offset[:]...)
 	data = append(data, size[:]...)
 	data = append(data, common.RightPadBytes(msg.data, int(toWordSize(uint64(len(msg.data)))*32))...)
@@ -206,6 +217,15 @@ func (c *xShardOutboxCall) Run(input []byte) ([]byte, error) {
 	// The destination charges XShardSendGas out of the gas limit.
 	if toMsg.gasLimit < params.XShardSendGas || toMsg.gasLimit > params.MaxCrossShardTxGas {
 		return nil, errXShardInvalidGasLimit
+	}
+	// Only moves are enabled for now. A move only transfers the value to the
+	// address on the destination, which runs no code and charges nothing but
+	// XShardSendGas for it.
+	if !toMsg.isMove {
+		return nil, errXShardNotMove
+	}
+	if len(toMsg.data) != 0 || toMsg.gasLimit != params.XShardSendGas {
+		return nil, errXShardInvalidMove
 	}
 	// The destination runs the message at the gas price of this transaction,
 	// so the sender pays for the value and all of the gas up front.
