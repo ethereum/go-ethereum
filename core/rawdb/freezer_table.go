@@ -908,10 +908,12 @@ func (t *freezerTable) Close() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	if err := t.doSync(); err != nil {
-		return err
-	}
 	var errs []error
+	if err := t.doSync(); err != nil {
+		// Keep going: the file handles must be released even if the
+		// final sync failed (e.g. after a write error).
+		errs = append(errs, err)
+	}
 	doClose := func(f *os.File) {
 		if err := f.Close(); err != nil {
 			errs = append(errs, err)
