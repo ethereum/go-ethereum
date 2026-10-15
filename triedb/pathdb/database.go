@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
+	"github.com/ethereum/go-ethereum/trie/pbt"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
@@ -125,6 +126,7 @@ type Database struct {
 	readOnly bool       // Flag if database is opened in read only mode
 	waitSync bool       // Flag if database is deactivated due to initial state sync
 	isUBT    bool       // Flag if database is used for verkle tree
+	isPBT    bool       // Flag if database is used for partitioned binary tree
 	hasher   nodeHasher // Trie node hasher
 
 	config *Config        // Configuration for database
@@ -144,6 +146,16 @@ type Database struct {
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
 func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
+	return newDatabase(diskdb, config, isUBT, false)
+}
+
+// NewPBT is New for an EIP-8297 partitioned binary tree, kept in its own
+// namespace.
+func NewPBT(diskdb ethdb.Database, config *Config) *Database {
+	return newDatabase(diskdb, config, false, true)
+}
+
+func newDatabase(diskdb ethdb.Database, config *Config, isUBT, isPBT bool) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -152,6 +164,7 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 	db := &Database{
 		readOnly: config.ReadOnly,
 		isUBT:    isUBT,
+		isPBT:    isPBT,
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
@@ -165,17 +178,25 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
 		db.hasher = binaryNodeHasher
 	}
+	if isPBT {
+		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.PBTPrefix))
+		db.hasher = pbt.DeserializeAndHash
+	}
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.
 	db.tree = newLayerTree(db.loadLayers())
 
 	// Repair the history, which might not be aligned with the persistent
-	// state in the key-value store due to an unclean shutdown.
-	states, trienodes, err := repairHistory(db.diskdb, isUBT, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
-	if err != nil {
-		log.Crit("Failed to repair history", "err", err)
+	// state in the key-value store due to an unclean shutdown. The partitioned
+	// binary tree keeps none: rolling back replays history through a
+	// merkle-patricia trie, which cannot revert it.
+	if !isPBT {
+		states, trienodes, err := repairHistory(db.diskdb, isUBT, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
+		if err != nil {
+			log.Crit("Failed to repair history", "err", err)
+		}
+		db.stateFreezer, db.trienodeFreezer = states, trienodes
 	}
-	db.stateFreezer, db.trienodeFreezer = states, trienodes
 
 	// Disable database in case node is still in the initial state sync stage.
 	if rawdb.ReadSnapSyncStatusFlag(diskdb) == rawdb.StateSyncRunning && !db.readOnly {
@@ -232,6 +253,14 @@ func (db *Database) setStateGenerator() error {
 	if err != nil {
 		return err
 	}
+	// The partitioned binary tree cannot be walked back into flat state: it is
+	// complete only if accumulated from the empty tree, so mark that as done.
+	if generator == nil && db.isPBT && root == types.EmptyBinaryHash {
+		generator = &journalGenerator{Done: true}
+		if !db.readOnly {
+			journalProgress(db.diskdb, nil, nil)
+		}
+	}
 	if generator == nil {
 		// Initialize an empty generator to rebuild the state snapshot from scratch
 		generator = &journalGenerator{
@@ -261,7 +290,7 @@ func (db *Database) setStateGenerator() error {
 	// - the database is opened in read only mode
 	// - the snapshot build is explicitly disabled
 	// - the database is opened in verkle tree mode
-	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isUBT
+	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isUBT || db.isPBT
 
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
@@ -651,7 +680,9 @@ func (db *Database) journalPath() string {
 		return ""
 	}
 	var fname string
-	if db.isUBT {
+	if db.isPBT {
+		fname = "pbt.journal"
+	} else if db.isUBT {
 		fname = fmt.Sprintf("verkle.journal")
 	} else {
 		fname = fmt.Sprintf("merkle.journal")
