@@ -147,11 +147,11 @@ func TestCommonPrefixLen(t *testing.T) {
 	}
 }
 
-func TestEncodePathRoot(t *testing.T) {
-	if got := encodePath([]byte{0xff}, 0); len(got) != 0 {
+func TestAppendPathRoot(t *testing.T) {
+	if got := appendPath(nil, []byte{0xff}, 0); len(got) != 0 {
 		t.Fatalf("root path must be empty, got %x", got)
 	}
-	if got := encodePath([]byte{0b10100000}, 3); !bytes.Equal(got, []byte{0x00, 0x03, 0xa0}) {
+	if got := appendPath(nil, []byte{0b10111111}, 3); !bytes.Equal(got, []byte{0x00, 0x03, 0xa0}) {
 		t.Fatalf("path encoding mismatch: %x", got)
 	}
 }

@@ -29,7 +29,7 @@ import (
 
 // nodeStager holds the tree nodes StackBuilder emits until the tree is built,
 // then hands them back in database key order. A node's key sorts by depth
-// first (encodePath leads with the path's bit count) and the builder emits
+// first (appendPath leads with the path's bit count) and the builder emits
 // each depth in ascending order, but children before parents, so consecutive
 // nodes jump between depths. Written as they come, every flushed table spans
 // the node keys of every depth and overlaps the tables before it, so the
@@ -69,7 +69,7 @@ func newNodeStager(tmpDir string) (*nodeStager, error) {
 	return s, nil
 }
 
-// nodeDepth is the bit count encodePath leads a node's path with. The root's
+// nodeDepth is the bit count appendPath leads a node's path with. The root's
 // empty path sorts before every other one and gets depth -1.
 func nodeDepth(path []byte) int {
 	if len(path) < 2 {

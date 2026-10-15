@@ -57,10 +57,12 @@ type StackBuilder struct {
 	// Scratch reused across every emitted record: each node is built,
 	// hashed and handed to onNode once, so one instance of each serves the
 	// whole build, marked dirty before every use. valViews slices valArena
-	// into the [][]byte groupNode.vals wants.
+	// into the [][]byte groupNode.vals wants; path and blob back the record
+	// handed to onNode.
 	groupScratch  groupNode
 	branchScratch branchNode
 	valViews      [][]byte
+	path, blob    []byte
 }
 
 type builderFrame struct {
@@ -146,7 +148,9 @@ func (b *StackBuilder) flushStem(div int) common.Hash {
 	b.groupScratch.dirty = true
 	h := b.groupScratch.hashAt(pos)
 	if b.onNode != nil {
-		b.onNode(encodePath(b.stem, pos), h, serializeNode(&b.groupScratch, pos))
+		b.path = appendPath(b.path[:0], b.stem, pos)
+		b.blob = appendNode(b.blob[:0], &b.groupScratch, pos)
+		b.onNode(b.path, h, b.blob)
 	}
 	return h
 }
@@ -169,7 +173,9 @@ func (b *StackBuilder) closeBelow(div int) common.Hash {
 		b.branchScratch.dirty = true
 		right = b.branchScratch.hashAt(parentPos)
 		if b.onNode != nil {
-			b.onNode(encodePath(b.lastKey, parentPos), right, serializeNode(&b.branchScratch, parentPos))
+			b.path = appendPath(b.path[:0], b.lastKey, parentPos)
+			b.blob = appendNode(b.blob[:0], &b.branchScratch, parentPos)
+			b.onNode(b.path, right, b.blob)
 		}
 	}
 	return right
