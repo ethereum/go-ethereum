@@ -960,7 +960,7 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
-	if s.db.Type().Is(TypeUBT) {
+	if s.db.Type().Is(TypeUBT) || s.db.Type().Is(TypePBT) {
 		// Bypass per-account updateTrie() for binary trie. In binary trie mode
 		// there is only one unified trie (OpenStorageTrie returns self), so the
 		// per-account trie setup in updateTrie() (getPrefetchedTrie, getTrie,
