@@ -280,12 +280,12 @@ func sszMerkleRoot(leaves []common.Hash) common.Hash {
 	for len(tree) > 1 {
 		if len(tree)%2 != 0 {
 			tree = append(tree, zero)
-			zero = crypto.Keccak256Hash(zero[:], zero[:])
 		}
 		for i := range tree[:len(tree)/2] {
 			tree[i] = crypto.Keccak256Hash(tree[2*i][:], tree[2*i+1][:])
 		}
 		tree = tree[:len(tree)/2]
+		zero = crypto.Keccak256Hash(zero[:], zero[:])
 	}
 	var length [8]byte
 	binary.BigEndian.PutUint64(length[:], uint64(len(leaves)))
