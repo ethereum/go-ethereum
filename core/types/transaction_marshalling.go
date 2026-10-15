@@ -19,6 +19,7 @@ package types
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -53,6 +54,12 @@ type txJSON struct {
 	Blobs       []kzg4844.Blob       `json:"blobs,omitempty"`
 	Commitments []kzg4844.Commitment `json:"commitments,omitempty"`
 	Proofs      []kzg4844.Proof      `json:"proofs,omitempty"`
+
+	// Cross-shard deposit fields:
+	From            *common.Address `json:"from,omitempty"`
+	Version         *hexutil.Uint64 `json:"version,omitempty"`
+	SourceBlockHash *common.Hash    `json:"sourceBlockHash,omitempty"`
+	SourceLogIndex  *hexutil.Uint64 `json:"sourceLogIndex,omitempty"`
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -170,6 +177,19 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(itx.S.ToBig())
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
+
+	case *DepositTx:
+		enc.To = tx.To()
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.GasPrice = (*hexutil.Big)(itx.GasPrice.ToBig())
+		enc.Value = (*hexutil.Big)(itx.Value.ToBig())
+		enc.Input = (*hexutil.Bytes)(&itx.Data)
+		enc.From = &itx.From
+		version := uint64(itx.Version)
+		enc.Version = (*hexutil.Uint64)(&version)
+		enc.SourceBlockHash = &itx.SourceBlockHash
+		enc.SourceLogIndex = (*hexutil.Uint64)(&itx.SourceLogIndex)
+		// Deposits are not signed, their nonce and signature show up as null.
 	}
 	return json.Marshal(&enc)
 }
@@ -509,6 +529,62 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
+
+	case DepositTxType:
+		if dec.ChainID != nil || dec.AccessList != nil || dec.MaxFeePerGas != nil || dec.MaxPriorityFeePerGas != nil {
+			return errors.New("unexpected field(s) in deposit transaction")
+		}
+		for _, sig := range []*hexutil.Big{dec.V, dec.R, dec.S} {
+			if sig != nil && sig.ToInt().Sign() != 0 {
+				return errors.New("deposit transaction signature must be 0 or unset")
+			}
+		}
+		var itx DepositTx
+		inner = &itx
+		if dec.Version == nil {
+			return errors.New("missing required field 'version' in transaction")
+		}
+		if uint64(*dec.Version) != uint64(DepositTxVersion) {
+			return fmt.Errorf("unsupported deposit version %d", uint64(*dec.Version))
+		}
+		itx.Version = DepositTxVersion
+		if dec.SourceBlockHash == nil {
+			return errors.New("missing required field 'sourceBlockHash' in transaction")
+		}
+		itx.SourceBlockHash = *dec.SourceBlockHash
+		if dec.SourceLogIndex == nil {
+			return errors.New("missing required field 'sourceLogIndex' in transaction")
+		}
+		itx.SourceLogIndex = uint64(*dec.SourceLogIndex)
+		if dec.From == nil {
+			return errors.New("missing required field 'from' in transaction")
+		}
+		itx.From = *dec.From
+		if dec.To == nil {
+			return errors.New("missing required field 'to' in transaction")
+		}
+		itx.To = *dec.To
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in transaction")
+		}
+		itx.Gas = uint64(*dec.Gas)
+		var overflow bool
+		if dec.GasPrice == nil {
+			return errors.New("missing required field 'gasPrice' in transaction")
+		}
+		if itx.GasPrice, overflow = uint256.FromBig(dec.GasPrice.ToInt()); overflow {
+			return errors.New("'gasPrice' value overflows uint256")
+		}
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		if itx.Value, overflow = uint256.FromBig(dec.Value.ToInt()); overflow {
+			return errors.New("'value' value overflows uint256")
+		}
+		if dec.Input == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		itx.Data = *dec.Input
 
 	default:
 		return ErrTxTypeNotSupported

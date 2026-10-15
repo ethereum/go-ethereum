@@ -30,7 +30,8 @@ var XShardOutboxAddress = common.HexToAddress("0x0000000000000000000000000000005
 
 const (
 	// XShardSendGas is the fixed cost of a cross-shard message. The destination
-	// shard charges it out of the message's gas limit, so the limit must cover it.
+	// shard charges it with the calldata cost of the message out of the message's
+	// gas limit, so the limit must cover both.
 	XShardSendGas uint64 = 9000
 
 	// MaxCrossShardTxGas caps a message's destination gas budget, including

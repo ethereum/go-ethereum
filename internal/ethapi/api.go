@@ -1094,6 +1094,11 @@ type RPCTransaction struct {
 	R                   *hexutil.Big                 `json:"r"`
 	S                   *hexutil.Big                 `json:"s"`
 	YParity             *hexutil.Uint64              `json:"yParity,omitempty"`
+
+	// Cross-shard deposit fields
+	Version         *hexutil.Uint64 `json:"version,omitempty"`
+	SourceBlockHash *common.Hash    `json:"sourceBlockHash,omitempty"`
+	SourceLogIndex  *hexutil.Uint64 `json:"sourceLogIndex,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1185,6 +1190,15 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 		result.AuthorizationList = tx.SetCodeAuthorizations()
+
+	case types.DepositTxType:
+		// The sender and gas price are those of the deposit, which is not signed.
+		deposit := tx.Deposit()
+		version := hexutil.Uint64(deposit.Version)
+		logIndex := hexutil.Uint64(deposit.SourceLogIndex)
+		result.Version = &version
+		result.SourceBlockHash = &deposit.SourceBlockHash
+		result.SourceLogIndex = &logIndex
 	}
 	return result
 }

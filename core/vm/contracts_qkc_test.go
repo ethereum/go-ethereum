@@ -115,6 +115,7 @@ func TestXShardOutboxSend(t *testing.T) {
 		{name: "word sized data", data: bytes.Repeat([]byte{0xaa}, 64)},
 		{name: "excess value", data: []byte{1, 2, 3}, excess: 12345},
 		{name: "minimum gas limit", gasLimit: params.XShardSendGas},
+		{name: "minimum gas limit with data", data: []byte{1, 0, 2}, gasLimit: params.XShardSendGas + 2*params.TxDataNonZeroGasEIP2028 + params.TxDataZeroGas},
 		{name: "maximum gas limit", gasLimit: params.MaxCrossShardTxGas},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -256,6 +257,9 @@ func TestXShardOutboxInvalid(t *testing.T) {
 		{name: "gas limit below minimum", input: func(t *testing.T) []byte {
 			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.XShardSendGas-1, nil)
 		}, want: errXShardInvalidGasLimit},
+		{name: "gas limit below calldata cost", input: func(t *testing.T) []byte {
+			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.XShardSendGas+2*params.TxDataNonZeroGasEIP2028+params.TxDataZeroGas-1, []byte{1, 0, 2})
+		}, want: errXShardInvalidGasLimit},
 		{name: "gas limit above max", input: func(t *testing.T) []byte {
 			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.MaxCrossShardTxGas+1, nil)
 		}, value: xShardValue + (params.MaxCrossShardTxGas+1)*xShardGasPrice, want: errXShardInvalidGasLimit},
@@ -345,5 +349,20 @@ func TestXShardOutboxActivation(t *testing.T) {
 	evm, _ := newXShardEVM()
 	if _, ok := evm.precompile(params.XShardOutboxAddress); !ok {
 		t.Error("outbox is not a precompile of the QuarkChain EVM")
+	}
+}
+
+func TestDepositIntrinsicGas(t *testing.T) {
+	for _, tt := range []struct {
+		data []byte
+		want uint64
+	}{
+		{nil, params.XShardSendGas},
+		{[]byte{0, 0}, params.XShardSendGas + 2*params.TxDataZeroGas},
+		{[]byte{1, 0, 2}, params.XShardSendGas + 2*params.TxDataNonZeroGasEIP2028 + params.TxDataZeroGas},
+	} {
+		if have, err := DepositIntrinsicGas(tt.data); err != nil || have != tt.want {
+			t.Errorf("data %x: intrinsic gas %d (err %v), want %d", tt.data, have, err, tt.want)
+		}
 	}
 }
