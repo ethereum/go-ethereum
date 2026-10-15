@@ -301,12 +301,11 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
-	var nodesWithOrigins *nodeSetWithOrigin
+	var origins map[common.Hash]map[string][]byte
 	if db.config.TrienodeHistory >= 0 {
-		nodesWithOrigins = NewNodeSetWithOrigin(nodes.NodeAndOrigins())
-	} else {
-		nodesWithOrigins = NewNodeSetWithOrigin(nodes.Nodes(), nil)
+		_, origins = nodes.NodeAndOrigins()
 	}
+	nodesWithOrigins := newNodeSetWithOrigin(newMergedNodeSet(nodes), origins)
 	if err := db.tree.add(root, parentRoot, block, nodesWithOrigins, states); err != nil {
 		return err
 	}
