@@ -26,7 +26,7 @@ var (
 	qkcPrefix = []byte("qkc_")
 
 	// rootHeadKey tracks the latest known root block, the root tip.
-	rootHeadKey = qkcKey([]byte("LastRoot"))
+	rootHeadKey = qkcKey([]byte("qkc_LastRoot"))
 
 	rootBlockPrefix     = []byte("rb")  // qkcPrefix + rootBlockPrefix + hash -> root block
 	lastConfirmedPrefix = []byte("rLM") // qkcPrefix + lastConfirmedPrefix + root hash -> last confirmed shard block hash
