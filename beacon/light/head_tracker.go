@@ -73,7 +73,7 @@ func (h *HeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 // slot or same slot and more signers) then ValidatedOptimistic is updated.
 // The boolean return flag signals if ValidatedOptimistic has been changed.
 func (h *HeadTracker) ValidateOptimistic(update types.OptimisticUpdate) (bool, error) {
-	if err := update.Validate(); err != nil {
+	if err := update.Validate(h.committeeChain.config); err != nil {
 		return false, err
 	}
 
@@ -93,7 +93,7 @@ func (h *HeadTracker) ValidateOptimistic(update types.OptimisticUpdate) (bool, e
 // slot or same slot and more signers) then ValidatedFinality is updated.
 // The boolean return flag signals if ValidatedFinality has been changed.
 func (h *HeadTracker) ValidateFinality(update types.FinalityUpdate) (bool, error) {
-	if err := update.Validate(); err != nil {
+	if err := update.Validate(h.committeeChain.config); err != nil {
 		return false, err
 	}
 

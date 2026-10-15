@@ -202,11 +202,13 @@ func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
-	if err := bootstrap.Validate(); err != nil {
+	if err := bootstrap.Validate(s.config); err != nil {
 		return err
 	}
 	period := bootstrap.Header.SyncPeriod()
-	if err := s.deleteFixedCommitteeRootsFrom(period + 2); err != nil {
+
+	// The next committee is taken from the first update, signed by the current one.
+	if err := s.deleteFixedCommitteeRootsFrom(period + 1); err != nil {
 		s.resetLocked()
 		return err
 	}
@@ -216,10 +218,6 @@ func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
 			s.resetLocked()
 			return err
 		}
-	}
-	if err := s.addFixedCommitteeRoot(period+1, common.Hash(bootstrap.CommitteeBranch[0])); err != nil {
-		s.resetLocked()
-		return err
 	}
 	if err := s.addCommittee(period, bootstrap.Committee); err != nil {
 		s.resetLocked()

@@ -22,20 +22,19 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/common"
-	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
-	"github.com/protolambda/ztyp/tree"
 
 	// beacon chain forks
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	"github.com/protolambda/zrnt/eth2/beacon/deneb"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 )
 
 type headerObject interface {
-	HashTreeRoot(hFn tree.HashFn) zrntcommon.Root
+	HashTreeRoot() ([32]byte, error)
 }
 
 type ExecutionHeader struct {
-	obj headerObject
+	obj  headerObject
+	root merkle.Value
 }
 
 // ExecutionHeaderFromJSON decodes an execution header from JSON data provided by
@@ -53,7 +52,11 @@ func ExecutionHeaderFromJSON(forkName string, data []byte) (*ExecutionHeader, er
 	if err := json.Unmarshal(data, obj); err != nil {
 		return nil, err
 	}
-	return &ExecutionHeader{obj: obj}, nil
+	root, err := obj.HashTreeRoot()
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute payload header root: %v", err)
+	}
+	return &ExecutionHeader{obj: obj, root: merkle.Value(root)}, nil
 }
 
 func NewExecutionHeader(obj headerObject) *ExecutionHeader {
@@ -63,11 +66,15 @@ func NewExecutionHeader(obj headerObject) *ExecutionHeader {
 	default:
 		panic(fmt.Errorf("unsupported ExecutionPayloadHeader type %T", obj))
 	}
-	return &ExecutionHeader{obj: obj}
+	root, err := obj.HashTreeRoot()
+	if err != nil {
+		panic(fmt.Errorf("failed to compute payload header root: %v", err))
+	}
+	return &ExecutionHeader{obj: obj, root: merkle.Value(root)}
 }
 
 func (eh *ExecutionHeader) PayloadRoot() merkle.Value {
-	return merkle.Value(eh.obj.HashTreeRoot(tree.GetHashFn()))
+	return eh.root
 }
 
 func (eh *ExecutionHeader) BlockHash() common.Hash {

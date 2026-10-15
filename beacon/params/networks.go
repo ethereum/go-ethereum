@@ -56,7 +56,8 @@ var (
 		AddFork("CAPELLA", 56832, common.FromHex("0x90000072")).
 		AddFork("DENEB", 132608, common.FromHex("0x90000073")).
 		AddFork("ELECTRA", 222464, common.FromHex("0x90000074")).
-		AddFork("FULU", 272640, common.FromHex("0x90000075"))
+		AddFork("FULU", 272640, common.FromHex("0x90000075")).
+		AddFork("GLOAS", 353024, common.FromHex("0x90000076"))
 
 	HoodiLightConfig = (&ChainConfig{
 		GenesisValidatorsRoot: common.HexToHash("0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"),
