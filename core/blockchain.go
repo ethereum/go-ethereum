@@ -396,7 +396,9 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if err != nil {
 		return nil, err
 	}
-	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle))
+	tconfig := cfg.triedbConfig(enableVerkle)
+	tconfig.IsPBT = pbtAtGenesis(db, genesis)
+	triedb := triedb.NewDatabase(db, tconfig)
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the
@@ -405,6 +407,9 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, genesis, cfg.Overrides, cfg.VmConfig.Tracer)
 	if err != nil {
 		return nil, err
+	}
+	if chainConfig.BinaryTrieTime != nil && !triedb.IsPBT() {
+		return nil, errors.New("binary tree activation after genesis is not supported")
 	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
@@ -2222,7 +2227,9 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 	noop := func(*blockProcessingResult) {}
 
 	var sdb state.Database
-	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
+	if bc.triedb.IsPBT() {
+		sdb = state.NewPBTDatabase(bc.triedb, bc.codedb)
+	} else if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
 		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
 	} else {
 		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
