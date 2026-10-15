@@ -75,11 +75,8 @@ func TestBrowserTxSubprotocol(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("got %d results, want 1", len(results))
 	}
-	if results[0].Hash != tx.Hash() {
-		t.Fatalf("result hash %x, want %x", results[0].Hash, tx.Hash())
-	}
-	if results[0].Error != "" {
-		t.Fatalf("unexpected result error: %s", results[0].Error)
+	if results[0].Result != txResultOK {
+		t.Fatalf("got result %d, want %d", results[0].Result, txResultOK)
 	}
 	if len(pool.added) != 1 || pool.added[0].Hash() != tx.Hash() {
 		t.Fatal("transaction was not added to the pool")
