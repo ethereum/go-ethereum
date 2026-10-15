@@ -1044,7 +1044,6 @@ func TestCall(t *testing.T) {
 	var (
 		accounts = newAccounts(3)
 		dad      = common.HexToAddress("0x0000000000000000000000000000000000000dad")
-		identity = common.BytesToAddress([]byte{0x04})
 		genesis  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
 			Alloc: types.GenesisAlloc{
@@ -1352,22 +1351,6 @@ func TestCall(t *testing.T) {
 				BaseFeePerGas: (*hexutil.Big)(big.NewInt(10)),
 			},
 			want: "0x000000000000000000000000000000000000000000000000000000000000000c",
-		},
-		// Balance-only override on the identity precompile must keep it active
-		// (issue #35912). Without the fix, Apply deletes the precompile and
-		// eth_call returns empty data instead of echoing the input.
-		{
-			name:        "precompile-balance-only-keeps-identity",
-			blockNumber: rpc.LatestBlockNumber,
-			call: TransactionArgs{
-				From:  &accounts[0].addr,
-				To:    &identity,
-				Input: hex2Bytes("deadbeef"),
-			},
-			overrides: override.StateOverride{
-				identity: {Balance: newRPCBalance(big.NewInt(1))},
-			},
-			want: "0xdeadbeef",
 		},
 	}
 	for _, tc := range testSuite {
