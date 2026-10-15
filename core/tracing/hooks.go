@@ -489,6 +489,10 @@ const (
 	// BalanceChangeRevert reverts the balance to a previous value on call
 	// failure. Emitted only when the tracer opts into WrapWithJournal.
 	BalanceChangeRevert BalanceChangeReason = 15
+
+	// BalanceDecreaseXShardSend is ether burnt by the cross-shard outbox of a
+	// QuarkChain shard, to be minted on the destination shard.
+	BalanceDecreaseXShardSend BalanceChangeReason = 200
 )
 
 // Gas represents a multi-dimensional gas budget introduced by EIP-8037.

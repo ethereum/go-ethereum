@@ -24,16 +24,25 @@ func _() {
 	_ = x[BalanceDecreaseSelfdestruct-13]
 	_ = x[BalanceDecreaseSelfdestructBurn-14]
 	_ = x[BalanceChangeRevert-15]
+	_ = x[BalanceDecreaseXShardSend-200]
 }
 
-const _BalanceChangeReason_name = "UnspecifiedBalanceIncreaseRewardMineUncleBalanceIncreaseRewardMineBlockBalanceIncreaseWithdrawalBalanceIncreaseGenesisBalanceBalanceIncreaseRewardTransactionFeeBalanceDecreaseGasBuyBalanceIncreaseGasReturnBalanceIncreaseDaoContractBalanceDecreaseDaoAccountTransferTouchAccountBalanceIncreaseSelfdestructBalanceDecreaseSelfdestructBalanceDecreaseSelfdestructBurnRevert"
+const (
+	_BalanceChangeReason_name_0 = "UnspecifiedBalanceIncreaseRewardMineUncleBalanceIncreaseRewardMineBlockBalanceIncreaseWithdrawalBalanceIncreaseGenesisBalanceBalanceIncreaseRewardTransactionFeeBalanceDecreaseGasBuyBalanceIncreaseGasReturnBalanceIncreaseDaoContractBalanceDecreaseDaoAccountTransferTouchAccountBalanceIncreaseSelfdestructBalanceDecreaseSelfdestructBalanceDecreaseSelfdestructBurnRevert"
+	_BalanceChangeReason_name_1 = "BalanceDecreaseXShardSend"
+)
 
-var _BalanceChangeReason_index = [...]uint16{0, 11, 41, 71, 96, 125, 160, 181, 205, 231, 256, 264, 276, 303, 330, 361, 367}
+var (
+	_BalanceChangeReason_index_0 = [...]uint16{0, 11, 41, 71, 96, 125, 160, 181, 205, 231, 256, 264, 276, 303, 330, 361, 367}
+)
 
 func (i BalanceChangeReason) String() string {
-	idx := int(i) - 0
-	if i < 0 || idx >= len(_BalanceChangeReason_index)-1 {
+	switch {
+	case i <= 15:
+		return _BalanceChangeReason_name_0[_BalanceChangeReason_index_0[i]:_BalanceChangeReason_index_0[i+1]]
+	case i == 200:
+		return _BalanceChangeReason_name_1
+	default:
 		return "BalanceChangeReason(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _BalanceChangeReason_name[_BalanceChangeReason_index[idx]:_BalanceChangeReason_index[idx+1]]
 }
