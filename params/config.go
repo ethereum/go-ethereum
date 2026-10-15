@@ -330,6 +330,8 @@ type ChainConfig struct {
 	BogotaTime    *uint64 `json:"bogotaTime,omitempty"`    // Bogota switch time (nil = no fork, 0 = already on bogota)
 	UBTTime       *uint64 `json:"ubtTime,omitempty"`       // UBT switch time (nil = no fork, 0 = already on UBT)
 
+	BinaryTrieTime *uint64 `json:"binaryTrieTime,omitempty"` // EIP-8297 binary tree switch time (nil = no fork, 0 = already on the binary tree)
+
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
 	TerminalTotalDifficulty *big.Int `json:"terminalTotalDifficulty,omitempty"`
@@ -471,6 +473,9 @@ func (c *ChainConfig) String() string {
 	if c.UBTTime != nil {
 		result += fmt.Sprintf(", UBTTime: %v", *c.UBTTime)
 	}
+	if c.BinaryTrieTime != nil {
+		result += fmt.Sprintf(", BinaryTrieTime: %v", *c.BinaryTrieTime)
+	}
 	result += "}"
 	return result
 }
@@ -568,6 +573,9 @@ func (c *ChainConfig) Description() string {
 	}
 	if c.UBTTime != nil {
 		banner += fmt.Sprintf(" - UBT:                         @%-10v\n", *c.UBTTime)
+	}
+	if c.BinaryTrieTime != nil {
+		banner += fmt.Sprintf(" - BinaryTrie:                  @%-10v\n", *c.BinaryTrieTime)
 	}
 	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
@@ -751,6 +759,12 @@ func (c *ChainConfig) IsBogota(num *big.Int, time uint64) bool {
 // IsUBT returns whether time is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsUBT(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.UBTTime, time)
+}
+
+// IsBinaryTrie returns whether time is either equal to the EIP-8297 binary tree
+// fork time or greater.
+func (c *ChainConfig) IsBinaryTrie(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.BinaryTrieTime, time)
 }
 
 // IsUBTGenesis checks whether the verkle fork is activated at the genesis block.
@@ -1008,6 +1022,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	}
 	if isForkTimestampIncompatible(c.BogotaTime, newcfg.BogotaTime, headTimestamp) {
 		return newTimestampCompatError("Bogota fork timestamp", c.BogotaTime, newcfg.BogotaTime)
+	}
+	if isForkTimestampIncompatible(c.BinaryTrieTime, newcfg.BinaryTrieTime, headTimestamp) {
+		return newTimestampCompatError("BinaryTrie fork timestamp", c.BinaryTrieTime, newcfg.BinaryTrieTime)
 	}
 	return nil
 }
