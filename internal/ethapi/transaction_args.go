@@ -441,6 +441,9 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 	}
 	if baseFee == nil {
 		// If there's no basefee, then it must be a non-1559 execution
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
+		}
 		if args.GasPrice == nil {
 			args.GasPrice = new(hexutil.Big)
 		}
