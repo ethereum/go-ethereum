@@ -574,6 +574,76 @@ func TestTraceCallExecutionGasCapAmsterdam(t *testing.T) {
 	}
 }
 
+// TestTraceTransactionGasDimensionsAmsterdam checks that after Amsterdam
+// (EIP-8037) the struct logger reports the transaction's block gas
+// contributions and refund. The second transaction's calldata floor binds the
+// execution dimension but not the receipt.
+func TestTraceTransactionGasDimensionsAmsterdam(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts = newAccounts(1)
+		config   = *params.MergedTestChainConfig
+		genesis  = &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			GasLimit:   60_000_000,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr:                 {Balance: big.NewInt(params.Ether)},
+				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
+				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
+				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
+				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
+				params.BuilderDepositAddress:     {Nonce: 1, Code: params.BuilderDepositCode, Balance: common.Big0},
+				params.BuilderExitAddress:        {Nonce: 1, Code: params.BuilderExitCode, Balance: common.Big0},
+			},
+		}
+		signer = types.LatestSigner(&config)
+		hashes []common.Hash
+	)
+	config.AmsterdamTime = new(uint64)
+	backend := newTestMergedBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		// Value transfers to non-existent accounts, without and with calldata.
+		for j, data := range [][]byte{nil, bytes.Repeat([]byte{0xff}, 64)} {
+			to := common.BigToAddress(big.NewInt(int64(0xc0ffe + j)))
+			tx, _ := types.SignNewTx(accounts[0].key, signer, &types.DynamicFeeTx{
+				ChainID:   config.ChainID,
+				Nonce:     uint64(j),
+				To:        &to,
+				Value:     big.NewInt(1),
+				Gas:       0x40000,
+				GasFeeCap: b.BaseFee(),
+				Data:      data,
+			})
+			b.AddTx(tx)
+			hashes = append(hashes, tx.Hash())
+		}
+	})
+	defer backend.teardown()
+	api := NewAPI(backend)
+
+	for i, want := range [][4]uint64{
+		// gas, regularGasUsed, stateGasUsed, gasRefund
+		{204600, 21000, 183600, 0},
+		{205624, 25096, 183600, 0},
+	} {
+		res, err := api.TraceTransaction(context.Background(), hashes[i], nil)
+		if err != nil {
+			t.Fatalf("tx %d: failed to trace transaction: %v", i, err)
+		}
+		var have logger.ExecutionResult
+		if err := json.Unmarshal(res.(json.RawMessage), &have); err != nil {
+			t.Fatalf("tx %d: failed to unmarshal result: %v", i, err)
+		}
+		if have.RegularGasUsed == nil || have.StateGasUsed == nil || have.GasRefund == nil {
+			t.Fatalf("tx %d: missing gas dimensions: %s", i, res)
+		}
+		if got := [4]uint64{have.Gas, *have.RegularGasUsed, *have.StateGasUsed, *have.GasRefund}; got != want {
+			t.Errorf("tx %d: gas mismatch: have %v, want %v", i, got, want)
+		}
+	}
+}
+
 func TestTraceTransaction(t *testing.T) {
 	t.Parallel()
 

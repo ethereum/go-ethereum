@@ -267,16 +267,23 @@ func applyTransactionWithEVM(ctx context.Context, msg *Message, gp *GasPool, sta
 	)
 	defer spanEnd(&err)
 
+	var result *ExecutionResult
 	if hooks := evm.Config.Tracer; hooks != nil {
 		if hooks.OnTxStart != nil {
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
-		if hooks.OnTxEnd != nil {
-			defer func() { hooks.OnTxEnd(receipt, err) }()
+		if hooks.HasTxEndHook() {
+			defer func() {
+				var usage *tracing.TxGasUsage
+				if err == nil {
+					usage = result.GasUsage
+				}
+				hooks.EmitTxEnd(receipt, usage, err)
+			}()
 		}
 	}
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, msg, gp)
+	result, err = ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return nil, nil, err
 	}
