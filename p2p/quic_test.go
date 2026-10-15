@@ -279,6 +279,7 @@ func TestPenalizeBrowser(t *testing.T) {
 	}{
 		{"invalid message", DiscProtocolError, true},
 		{"idle timeout", DiscReadTimeout, true},
+		{"invalid subprotocol input", DiscSubprotocolError, true},
 		{"clean single-shot", errProtocolReturned, false},
 		{"quitting", DiscQuitting, false},
 		{"remote requested", DiscRequested, false},

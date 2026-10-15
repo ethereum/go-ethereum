@@ -101,10 +101,21 @@ func handleBrowserTx(pool txPool, rw p2p.MsgReadWriter) error {
 
 	errs := pool.Add(txs, false)
 	results := make([]TxResult, len(txs))
+	invalid := false
 	for i, err := range errs {
 		results[i].Result = txResultCode(err)
+		if results[i].Result != txResultOK {
+			invalid = true
+		}
 	}
-	return p2p.Send(rw, txResultMsg, results)
+	if err := p2p.Send(rw, txResultMsg, results); err != nil {
+		return err
+	}
+	// Submitting an invalid transaction penalizes the peer.
+	if invalid {
+		return p2p.DiscSubprotocolError
+	}
+	return nil
 }
 
 // txResultCode maps a pool error to a result code.

@@ -980,12 +980,12 @@ func (srv *Server) checkInboundConn(remoteIP netip.Addr) error {
 	return nil
 }
 
-// penalizeBrowser reports whether a browser peer's disconnect reason warrants a
-// longer reconnection cooldown. Only protocol-level misbehavior counts; clean
-// disconnects and dropped connections do not.
+// penalizeBrowser reports whether a browser peer's disconnect reason requires a
+// longer reconnection cooldown. DiscSubprotocolError is returned by a subprotocol
+// that rejects the peer's input as invalid.
 func penalizeBrowser(err error) bool {
 	r, ok := err.(DiscReason)
-	return ok && (r == DiscProtocolError || r == DiscReadTimeout)
+	return ok && (r == DiscProtocolError || r == DiscReadTimeout || r == DiscSubprotocolError)
 }
 
 // penalizeInbound records a longer reconnection cooldown for a connection's
