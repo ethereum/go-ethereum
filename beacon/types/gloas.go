@@ -209,9 +209,7 @@ func decodeGloasRequests(enc json.RawMessage) ([][]byte, error) {
 	}
 	// The records of a request type are delivered as a single request entry:
 	// the request type byte followed by the concatenation of the SSZ
-	// serializations of the type's records, matching the EIP-8282 system calls
-	// which return every record of a type in one call (see
-	// get_execution_requests_list in the consensus specs).
+	// serializations of the type's records.
 	var deposits []byte
 	for _, request := range builders.Deposits {
 		if len(request.Pubkey) != 48 || len(request.WithdrawalCredentials) != 32 || len(request.Signature) != 96 {
