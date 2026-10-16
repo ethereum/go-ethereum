@@ -34,7 +34,7 @@ func TestDepositTxRLP(t *testing.T) {
 			SourceBlockHash: common.Hash{0xaa},
 			SourceLogIndex:  7,
 			From:            common.Address{0x01},
-			To:              common.Address{0x02},
+			To:              &common.Address{0x02},
 			Value:           uint256.NewInt(1000),
 			GasPrice:        uint256.NewInt(10),
 			Gas:             9000,
@@ -46,11 +46,24 @@ func TestDepositTxRLP(t *testing.T) {
 			SourceBlockHash: common.Hash{0xbb},
 			SourceLogIndex:  math.MaxUint64,
 			From:            common.Address{0x03},
-			To:              common.Address{0x04},
+			To:              &common.Address{0x04},
 			Value:           new(uint256.Int).SetAllOne(),
 			GasPrice:        new(uint256.Int),
 			Gas:             math.MaxUint64,
 			Data:            bytes.Repeat([]byte{0xff}, 100),
+		},
+		{
+			// A deposit creating a contract: a nil To, which no source shard
+			// sends for now.
+			Version:         DepositTxVersion,
+			SourceBlockHash: common.Hash{0xcc},
+			SourceLogIndex:  1,
+			From:            common.Address{0x05},
+			To:              nil,
+			Value:           uint256.NewInt(1),
+			GasPrice:        uint256.NewInt(1),
+			Gas:             9000,
+			Data:            []byte{0x60, 0x00},
 		},
 	}
 	enc, err := rlp.EncodeToBytes(deposits)

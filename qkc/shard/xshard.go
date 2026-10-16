@@ -96,8 +96,8 @@ func unpackSentMessage(log *types.Log) (uint32, *types.DepositTx, error) {
 	if len(log.Topics) != 4 {
 		return 0, nil, errInvalidSentMessage
 	}
-	dstShard, from, to := log.Topics[1], log.Topics[2], log.Topics[3]
-	if bitutil.TestBytes(dstShard[:28]) || bitutil.TestBytes(from[:12]) || bitutil.TestBytes(to[:12]) {
+	dstShard, from, toTopic := log.Topics[1], log.Topics[2], log.Topics[3]
+	if bitutil.TestBytes(dstShard[:28]) || bitutil.TestBytes(from[:12]) || bitutil.TestBytes(toTopic[:12]) {
 		return 0, nil, errInvalidSentMessage
 	}
 	data := log.Data
@@ -112,10 +112,11 @@ func unpackSentMessage(log *types.Log) (uint32, *types.DepositTx, error) {
 	if !size.IsUint64() || size.Uint64() > uint64(len(data)) || uint64(len(data)) != 6*32+(size.Uint64()+31)/32*32 {
 		return 0, nil, errInvalidSentMessage
 	}
+	to := common.BytesToAddress(toTopic[12:])
 	return binary.BigEndian.Uint32(dstShard[28:]), &types.DepositTx{
 		Version:  types.DepositTxVersion,
 		From:     common.BytesToAddress(from[12:]),
-		To:       common.BytesToAddress(to[12:]),
+		To:       &to,
 		Value:    new(uint256.Int).SetBytes(data[0:32]),
 		GasPrice: new(uint256.Int).SetBytes(data[32:64]),
 		Gas:      binary.BigEndian.Uint64(data[88:96]),

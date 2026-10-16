@@ -38,7 +38,7 @@ type DepositTx struct {
 	SourceBlockHash common.Hash
 	SourceLogIndex  uint64
 	From            common.Address
-	To              common.Address
+	To              *common.Address `rlp:"nil"` // nil means contract creation
 	Value           *uint256.Int
 	GasPrice        *uint256.Int // gas price of the sending transaction
 	Gas             uint64       // gas the deposit may use on the destination shard
