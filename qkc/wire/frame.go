@@ -31,6 +31,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 )
 
 // Frame is a complete protocol frame.
@@ -132,10 +133,10 @@ func WriteFrameNoMeta(w io.Writer, f *Frame) error {
 
 // writeFrameWithMetaSize serializes f with the given metadata size and writes it to w.
 func writeFrameWithMetaSize(w io.Writer, f *Frame, metaSize int) error {
-	payloadLen := uint32(len(f.Payload))
-	if int(payloadLen) != len(f.Payload) {
+	if uint64(len(f.Payload)) > math.MaxUint32 {
 		return errors.New("payload too large")
 	}
+	payloadLen := uint32(len(f.Payload))
 
 	total := frameHeader + metaSize + opcodeSize + rpcIDSize + int(payloadLen)
 	buf := make([]byte, total)
