@@ -490,7 +490,8 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	// Check 1, before the build: everything written is fed by this same
 	// record set, so only this check ties the output to the source state.
 	// The fold writes the flat state as it goes, digesting what it writes.
-	written := newWrittenState()
+	written := newWrittenState(workers)
+	defer written.close()
 	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, workers, stats.accounts.Load()+stats.slots.Load()); err != nil {
 		return common.Hash{}, err
 	}

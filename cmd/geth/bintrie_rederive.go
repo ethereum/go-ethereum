@@ -503,22 +503,48 @@ func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []fo
 
 // writeDigest hashes one key family's records in the order written. Keys are
 // the family-relative suffixes the namespace stores them under. Records are
-// hashed in batches of recordBatchSize, on several goroutines (see ahead),
+// hashed in batches of recordBatchSize, on pool's goroutines (see ahead),
 // and the family's digest hashes the batch digests in order.
 type writeDigest struct {
 	top   crypto.KeccakState
 	count uint64
+	pool  *digestPool
 }
 
-func newWriteDigest() *writeDigest {
-	return &writeDigest{top: crypto.NewKeccakState()}
+func newWriteDigest(pool *digestPool) *writeDigest {
+	return &writeDigest{top: crypto.NewKeccakState(), pool: pool}
 }
 
 func (d *writeDigest) sum() common.Hash {
 	return common.BytesToHash(d.top.Sum(nil))
 }
 
-// digestAhead digests records on goroutines of its own, so that a writer on
+// digestPool hashes the batches of every digestAhead of a command, on as
+// many goroutines as the command has workers: the families written and read
+// back at once share them.
+type digestPool struct {
+	work chan *digestBatch
+}
+
+func newDigestPool(workers int) *digestPool {
+	workers = max(workers, 1)
+	p := &digestPool{work: make(chan *digestBatch, 2*workers)}
+	for range workers {
+		go func() {
+			hasher := crypto.NewKeccakState()
+			for b := range p.work {
+				b.sum, b.err = b.digest(hasher)
+				b.hashed <- struct{}{}
+			}
+		}()
+	}
+	return p
+}
+
+// close stops the pool, once every digestAhead on it has finished.
+func (p *digestPool) close() { close(p.work) }
+
+// digestAhead digests records on its pool's goroutines, so that a writer on
 // the critical path only copies them.
 type digestAhead struct {
 	work, order, free chan *digestBatch
@@ -575,8 +601,8 @@ type digestBatch struct {
 	hashed chan struct{}
 }
 
-// digestWorkers is how many goroutines hash one family's batches.
-const digestWorkers = 4
+// digestDepth is how many batches one family has hashing or queued at once.
+const digestDepth = 8
 
 // digest hashes the batch's records, whose keys must ascend.
 func (b *digestBatch) digest(hasher crypto.KeccakState) (common.Hash, error) {
@@ -599,28 +625,19 @@ func (b *digestBatch) digest(hasher crypto.KeccakState) (common.Hash, error) {
 }
 
 // ahead starts digesting the records handed to the returned digestAhead, in
-// order. Its finish reports keys that do not ascend.
+// order, on d's pool. Its finish reports keys that do not ascend.
 func (d *writeDigest) ahead() *digestAhead {
 	a := &digestAhead{
-		work:  make(chan *digestBatch, 2*digestWorkers),
-		order: make(chan *digestBatch, 2*digestWorkers),
-		free:  make(chan *digestBatch, 2*digestWorkers+1),
+		work:  d.pool.work,
+		order: make(chan *digestBatch, digestDepth),
+		free:  make(chan *digestBatch, digestDepth+1),
 		done:  make(chan error, 1),
 	}
 	for range cap(a.free) {
 		a.free <- &digestBatch{hashed: make(chan struct{}, 1)}
 	}
 	a.cur = <-a.free
-	work, order := a.work, a.order // finish clears a.work
-	for range digestWorkers {
-		go func() {
-			hasher := crypto.NewKeccakState()
-			for b := range work {
-				b.sum, b.err = b.digest(hasher)
-				b.hashed <- struct{}{}
-			}
-		}()
-	}
+	order := a.order // finish clears a.order
 	go func() {
 		var (
 			err  error
@@ -660,30 +677,33 @@ func (a *digestAhead) add(key, value []byte) {
 // finish waits for every record to be digested and returns the first error
 // the digest met. Later calls return the same.
 func (a *digestAhead) finish() error {
-	if a.work == nil {
+	if a.order == nil {
 		return a.err
 	}
 	if a.cur.len() > 0 {
 		a.order <- a.cur
 		a.work <- a.cur
 	}
-	close(a.work)
 	close(a.order)
-	a.err, a.work = <-a.done, nil
+	a.err, a.order = <-a.done, nil
 	return a.err
 }
 
-// writtenState digests the three key families a command writes.
-// storageWritten, if set, runs once every flat storage row is in the
-// database and digested, before the flat accounts are written.
+// writtenState digests the three key families a command writes, on a pool it
+// stops on close. storageWritten, if set, runs once every flat storage row
+// is in the database and digested, before the flat accounts are written.
 type writtenState struct {
 	nodes, accounts, storage *writeDigest
 	storageWritten           func()
+	pool                     *digestPool
 }
 
-func newWrittenState() *writtenState {
-	return &writtenState{nodes: newWriteDigest(), accounts: newWriteDigest(), storage: newWriteDigest()}
+func newWrittenState(workers int) *writtenState {
+	pool := newDigestPool(workers)
+	return &writtenState{nodes: newWriteDigest(pool), accounts: newWriteDigest(pool), storage: newWriteDigest(pool), pool: pool}
 }
+
+func (w *writtenState) close() { w.pool.close() }
 
 // writtenFamily is one key family a command writes, with the digest of what
 // it wrote.
@@ -759,7 +779,7 @@ func verifyWritten(ctx context.Context, pbtdb ethdb.Database, y *blockYield, fam
 			var read atomic.Uint64
 			prog := startProgress("Reading back "+f.name+" records", "records", f.want.count, read.Load)
 			defer prog.stop()
-			got := newWriteDigest()
+			got := newWriteDigest(f.want.pool)
 			ahead := got.ahead()
 			defer ahead.finish()
 			it := pbtdb.NewIterator(f.prefix, nil)

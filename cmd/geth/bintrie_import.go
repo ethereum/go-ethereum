@@ -1113,11 +1113,15 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
 	}
 	prog.finish("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves.Load(), "digest", snap.digest())
+	// One knob for the parallelism: the digests share opts.workers hashing
+	// goroutines, and as many families are read back at once.
 	var (
-		written  = newWrittenState()
+		written  = newWrittenState(opts.workers)
 		families = written.families()
 		readBack errgroup.Group
 	)
+	defer written.close() // after the read-back below
+	readBack.SetLimit(max(opts.workers, 1))
 	defer readBack.Wait()
 	if nodes != nil {
 		if err := writeStagedNodes(ctx, pbtdb, nodes, written.nodes, opts.yield); err != nil {
@@ -1215,9 +1219,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
 	}
-	if err := verifyWritten(ctx, pbtdb, opts.yield, families[1]); err != nil {
-		return common.Hash{}, err
-	}
+	readBack.Go(func() error { return verifyWritten(ctx, pbtdb, opts.yield, families[1]) })
 	if err := readBack.Wait(); err != nil {
 		return common.Hash{}, err
 	}

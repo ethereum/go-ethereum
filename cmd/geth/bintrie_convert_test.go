@@ -375,8 +375,10 @@ func TestWrittenStateCatchesBadWrites(t *testing.T) {
 // fail it, at a batch's first record as well as inside one.
 func TestWriteDigestSpansBatches(t *testing.T) {
 	n := 2*recordBatchSize + 5
+	pool := newDigestPool(4)
+	defer pool.close()
 	digest := func(key func(i int) []byte, value func(i int) []byte) (*writeDigest, error) {
-		d := newWriteDigest()
+		d := newWriteDigest(pool)
 		a := d.ahead()
 		for i := range n {
 			a.add(key(i), value(i))
