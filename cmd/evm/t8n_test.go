@@ -31,6 +31,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
 	"github.com/ethereum/go-ethereum/internal/reexec"
 	"github.com/ethereum/go-ethereum/tests"
@@ -1059,6 +1061,47 @@ func TestRunnersSkipMetaDirectory(t *testing.T) {
 		}
 		if len(results) == 0 {
 			t.Errorf("%s: no results for the fixture beside .meta", tc.runner)
+		}
+	}
+}
+
+// TestRunnersDisablePrecompileCache checks that blocktest and enginetest give
+// the chain the shared precompile result cache unless --cache.noprecompile
+// turns it off.
+func TestRunnersDisablePrecompileCache(t *testing.T) {
+	t.Parallel()
+	load := func(path string, into any) {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(src, into); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, noPrecompileCache := range []bool{false, true} {
+		// One entry per run whose chain was built, true if it had the cache.
+		var cached []bool
+		record := func(_ error, chain *core.BlockChain) {
+			cached = append(cached, chain.PrecompileCache() != nil)
+		}
+		var blockTests map[string]*tests.BlockTest
+		load("./testdata/blocktest_bal.json", &blockTests)
+		for name, test := range blockTests {
+			if err := test.Run(false, rawdb.PathScheme, false, nil, tests.RunConfig{NoPrecompileCache: noPrecompileCache}, record); err != nil {
+				t.Fatalf("blocktest %s: %v", name, err)
+			}
+		}
+		var engineTests map[string]*tests.EngineTest
+		load("./testdata/enginetest_bal.json", &engineTests)
+		for name, test := range engineTests {
+			if err := test.Run(rawdb.PathScheme, nil, tests.RunConfig{NoPrecompileCache: noPrecompileCache}, attachEngineAPI, record); err != nil {
+				t.Fatalf("enginetest %s: %v", name, err)
+			}
+		}
+		want := []bool{!noPrecompileCache, !noPrecompileCache}
+		if !reflect.DeepEqual(cached, want) {
+			t.Errorf("noPrecompileCache %v: cache present in blocktest, enginetest: have %v, want %v", noPrecompileCache, cached, want)
 		}
 	}
 }

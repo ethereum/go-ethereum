@@ -84,6 +84,10 @@ var (
 		Name:  "bal-withhold",
 		Usage: "Never deliver the fixture's block access list, so every block executes without one, as a block received without its list does.",
 	}
+	CacheNoPrecompileFlag = &cli.BoolFlag{
+		Name:  "cache.noprecompile",
+		Usage: "Disable precompile result caching",
+	}
 	BALReportFlag = &cli.BoolFlag{
 		Name:  "bal-report",
 		Usage: "Print one JSON line per executed block on stderr, naming the processor that ran it (EIP-7928 parallel or sequential) and why parallel was ruled out.",
@@ -296,6 +300,7 @@ func runConfig(ctx *cli.Context) tests.RunConfig {
 	return tests.RunConfig{
 		Sequential:         ctx.Bool(BALSequentialFlag.Name),
 		WithholdAccessList: ctx.Bool(BALWithholdFlag.Name),
+		NoPrecompileCache:  ctx.Bool(CacheNoPrecompileFlag.Name),
 	}
 }
 
