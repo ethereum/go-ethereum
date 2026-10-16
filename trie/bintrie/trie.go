@@ -415,6 +415,9 @@ func (t *BinaryTrie) IsUBT() bool {
 	return true
 }
 
+// IsPBT returns false: this is not the EIP-8297 tree.
+func (t *BinaryTrie) IsPBT() bool { return false }
+
 // UpdateContractCode updates the contract code into the trie.
 //
 // Note: the basic data leaf needs to have been previously created for this to work
