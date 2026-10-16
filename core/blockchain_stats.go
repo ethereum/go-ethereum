@@ -28,31 +28,11 @@ import (
 
 // ExecuteStats includes all the statistics of a block execution in details.
 type ExecuteStats struct {
-	// State read times
-	AccountReads   time.Duration // Time spent on the account reads
-	StorageReads   time.Duration // Time spent on the storage reads
-	AccountHashes  time.Duration // Time spent on the account trie hash
-	AccountUpdates time.Duration // Time spent on the account trie update
-	AccountCommits time.Duration // Time spent on the account trie commit
-	StorageUpdates time.Duration // Time spent on the storage trie update
-	StorageCommits time.Duration // Time spent on the storage trie commit
-	CodeReads      time.Duration // Time spent on the contract code read
+	Process  ProcessStats  // Statistics of the block processing
+	Validate ValidateStats // Statistics of the block validation
+	Commit   CommitStats   // Statistics of the state commit
 
-	AccountLoaded   int // Number of accounts loaded
-	AccountUpdated  int // Number of accounts updated
-	AccountDeleted  int // Number of accounts deleted
-	StorageLoaded   int // Number of storage slots loaded
-	StorageUpdated  int // Number of storage slots updated
-	StorageDeleted  int // Number of storage slots deleted
-	CodeLoaded      int // Number of contract code loaded
-	CodeLoadBytes   int // Number of bytes read from contract code
-	CodeUpdated     int // Number of contract code written (CREATE/CREATE2 + EIP-7702)
-	CodeUpdateBytes int // Total bytes of code written
-
-	Execution       time.Duration // Time spent on the EVM execution
-	Validation      time.Duration // Time spent on the block validation
 	CrossValidation time.Duration // Optional, time spent on the block cross validation
-	DatabaseCommit  time.Duration // Time spent on database commit
 	TotalTime       time.Duration // The total time spent on block execution
 	MgasPerSecond   float64       // The million gas processed per second
 
@@ -61,31 +41,103 @@ type ExecuteStats struct {
 	StatePrefetchCacheStats state.ReaderStats
 }
 
+// ProcessStats contains the statistics recorded by the Processor. The times are
+// spent on the critical path, while the state reads are summed over all the states
+// used for execution, which run concurrently in the parallel execution.
+type ProcessStats struct {
+	Execution     time.Duration // Time spent on the system calls and transactions
+	AccountReads  time.Duration // Time spent on the account reads
+	StorageReads  time.Duration // Time spent on the storage reads
+	CodeReads     time.Duration // Time spent on the contract code reads
+	AccountLoaded int           // Number of accounts loaded
+	StorageLoaded int           // Number of storage slots loaded
+	CodeLoaded    int           // Number of contract code loaded
+	CodeLoadBytes int           // Number of bytes read from contract code
+}
+
+// stateReads returns the total time spent on state reading.
+func (s *ProcessStats) stateReads() time.Duration {
+	return s.AccountReads + s.StorageReads + s.CodeReads
+}
+
+// addReads accumulates the state reads performed through the given state.
+func (s *ProcessStats) addReads(db *state.StateDB) {
+	s.AccountReads += db.AccountReads
+	s.StorageReads += db.StorageReads
+	s.CodeReads += db.CodeReads
+	s.AccountLoaded += db.AccountLoaded
+	s.StorageLoaded += db.StorageLoaded
+	s.CodeLoaded += db.CodeLoaded
+	s.CodeLoadBytes += db.CodeLoadBytes
+}
+
+// mergeReads accumulates the state reads of another set of statistics.
+func (s *ProcessStats) mergeReads(o *ProcessStats) {
+	s.AccountReads += o.AccountReads
+	s.StorageReads += o.StorageReads
+	s.CodeReads += o.CodeReads
+	s.AccountLoaded += o.AccountLoaded
+	s.StorageLoaded += o.StorageLoaded
+	s.CodeLoaded += o.CodeLoaded
+	s.CodeLoadBytes += o.CodeLoadBytes
+}
+
+// ValidateStats contains the statistics recorded by the Validator.
+type ValidateStats struct {
+	Validation time.Duration // Time spent on the block validation, excluding the state hashing
+
+	// Trie hashing of the state, including the part done ahead of the validation
+	AccountHashes  time.Duration // Time spent on the account trie hash
+	AccountUpdates time.Duration // Time spent on the account trie update
+	StorageUpdates time.Duration // Time spent on the storage trie update
+
+	AccountUpdated  int // Number of accounts updated
+	AccountDeleted  int // Number of accounts deleted
+	StorageUpdated  int // Number of storage slots updated
+	StorageDeleted  int // Number of storage slots deleted
+	CodeUpdated     int // Number of contract code written (CREATE/CREATE2 + EIP-7702)
+	CodeUpdateBytes int // Total bytes of code written
+}
+
+// stateHashes returns the total time spent on state hashing.
+func (s *ValidateStats) stateHashes() time.Duration {
+	return s.AccountHashes + s.AccountUpdates + s.StorageUpdates
+}
+
+// CommitStats contains the statistics of the state commit, gathered from the
+// canonical state.
+type CommitStats struct {
+	AccountCommits time.Duration // Time spent on the account trie commit
+	StorageCommits time.Duration // Time spent on the storage trie commit
+	DatabaseCommit time.Duration // Time spent on database commit
+}
+
 // reportMetrics uploads execution statistics to the metrics system.
 func (s *ExecuteStats) reportMetrics() {
-	if s.AccountLoaded != 0 {
-		accountReadTimer.Update(s.AccountReads)
-		accountReadSingleTimer.Update(s.AccountReads / time.Duration(s.AccountLoaded))
+	p, v, c := &s.Process, &s.Validate, &s.Commit
+	if p.AccountLoaded != 0 {
+		accountReadTimer.Update(p.AccountReads)
+		accountReadSingleTimer.Update(p.AccountReads / time.Duration(p.AccountLoaded))
 	}
-	if s.StorageLoaded != 0 {
-		storageReadTimer.Update(s.StorageReads)
-		storageReadSingleTimer.Update(s.StorageReads / time.Duration(s.StorageLoaded))
+	if p.StorageLoaded != 0 {
+		storageReadTimer.Update(p.StorageReads)
+		storageReadSingleTimer.Update(p.StorageReads / time.Duration(p.StorageLoaded))
 	}
-	if s.CodeLoaded != 0 {
-		codeReadTimer.Update(s.CodeReads)
-		codeReadSingleTimer.Update(s.CodeReads / time.Duration(s.CodeLoaded))
-		codeReadBytesTimer.Update(time.Duration(s.CodeLoadBytes))
+	if p.CodeLoaded != 0 {
+		codeReadTimer.Update(p.CodeReads)
+		codeReadSingleTimer.Update(p.CodeReads / time.Duration(p.CodeLoaded))
+		codeReadBytesTimer.Update(time.Duration(p.CodeLoadBytes))
 	}
-	accountUpdateTimer.Update(s.AccountUpdates) // Account updates are complete(in validation)
-	storageUpdateTimer.Update(s.StorageUpdates) // Storage updates are complete(in validation)
-	accountHashTimer.Update(s.AccountHashes)    // Account hashes are complete(in validation)
-	accountCommitTimer.Update(s.AccountCommits) // Account commits are complete, we can mark them
-	storageCommitTimer.Update(s.StorageCommits) // Storage commits are complete, we can mark them
+	accountUpdateTimer.Update(v.AccountUpdates) // Account updates are complete(in validation)
+	storageUpdateTimer.Update(v.StorageUpdates) // Storage updates are complete(in validation)
+	accountHashTimer.Update(v.AccountHashes)    // Account hashes are complete(in validation)
+	accountCommitTimer.Update(c.AccountCommits) // Account commits are complete, we can mark them
+	storageCommitTimer.Update(c.StorageCommits) // Storage commits are complete, we can mark them
 
-	blockExecutionTimer.Update(s.Execution)                 // The time spent on EVM processing
-	blockValidationTimer.Update(s.Validation)               // The time spent on block validation
+	blockExecutionTimer.Update(p.Execution)                 // The time spent on EVM processing
+	blockValidationTimer.Update(v.Validation)               // The time spent on block validation
 	blockCrossValidationTimer.Update(s.CrossValidation)     // The time spent on stateless cross validation
-	triedbCommitTimer.Update(s.DatabaseCommit)              // Trie database commits are complete, we can mark them
+	triedbCommitTimer.Update(c.DatabaseCommit)              // Trie database commits are complete, we can mark them
 	blockInsertTimer.Update(s.TotalTime)                    // The total time spent on block execution
 	chainMgaspsMeter.Update(time.Duration(s.MgasPerSecond)) // TODO(rjl493456442) generalize the ResettingTimer
 
@@ -205,28 +257,28 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			TxCount: len(block.Transactions()),
 		},
 		Timing: slowBlockTime{
-			ExecutionMs: durationToMs(s.Execution),
-			StateReadMs: durationToMs(s.AccountReads + s.StorageReads + s.CodeReads),
-			StateHashMs: durationToMs(s.AccountHashes + s.AccountUpdates + s.StorageUpdates),
-			CommitMs:    durationToMs(max(s.AccountCommits, s.StorageCommits) + s.DatabaseCommit),
+			ExecutionMs: durationToMs(s.Process.Execution),
+			StateReadMs: durationToMs(s.Process.stateReads()),
+			StateHashMs: durationToMs(s.Validate.stateHashes()),
+			CommitMs:    durationToMs(max(s.Commit.AccountCommits, s.Commit.StorageCommits) + s.Commit.DatabaseCommit),
 			TotalMs:     durationToMs(s.TotalTime),
 		},
 		Throughput: slowBlockThru{
 			MgasPerSec: s.MgasPerSecond,
 		},
 		StateReads: slowBlockReads{
-			Accounts:     s.AccountLoaded,
-			StorageSlots: s.StorageLoaded,
-			Code:         s.CodeLoaded,
-			CodeBytes:    s.CodeLoadBytes,
+			Accounts:     s.Process.AccountLoaded,
+			StorageSlots: s.Process.StorageLoaded,
+			Code:         s.Process.CodeLoaded,
+			CodeBytes:    s.Process.CodeLoadBytes,
 		},
 		StateWrites: slowBlockWrites{
-			Accounts:            s.AccountUpdated,
-			AccountsDeleted:     s.AccountDeleted,
-			StorageSlots:        s.StorageUpdated,
-			StorageSlotsDeleted: s.StorageDeleted,
-			Code:                s.CodeUpdated,
-			CodeBytes:           s.CodeUpdateBytes,
+			Accounts:            s.Validate.AccountUpdated,
+			AccountsDeleted:     s.Validate.AccountDeleted,
+			StorageSlots:        s.Validate.StorageUpdated,
+			StorageSlotsDeleted: s.Validate.StorageDeleted,
+			Code:                s.Validate.CodeUpdated,
+			CodeBytes:           s.Validate.CodeUpdateBytes,
 		},
 		Cache: slowBlockCache{
 			Account: slowBlockCacheEntry{
