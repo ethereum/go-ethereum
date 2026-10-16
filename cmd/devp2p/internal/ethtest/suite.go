@@ -98,6 +98,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "BlobViolations", Fn: s.TestBlobViolations},
 		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
 		{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
+		{Name: "TestBlobTxWithExtraProofs", Fn: s.TestBlobTxWithExtraProofs},
 		// test eth/72 blob txs
 		{Name: "BlobTxAvailabilityFailure", Fn: s.TestBlobTxAvailabilityFailure},
 		{Name: "GetCells", Fn: s.TestGetCells},
@@ -1179,6 +1180,14 @@ func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
 	tx, _ := s.makeBlobTxs(1, 2, 43)
 	badTx := mangleSidecar(tx[0])
 	s.testBadBlobTx(t, tx[0], badTx)
+}
+
+func (s *Suite) TestBlobTxWithExtraProofs(t *utesting.T) {
+	t.Log(`This test checks that a blob transaction transmitted with more cell proofs than its commitments require will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
+	tx, _ := s.makeBlobTxs(1, 2, 44)
+	sidecar := tx[0].BlobTxSidecar().Copy()
+	sidecar.Proofs = append(sidecar.Proofs, make([]kzg4844.Proof, kzg4844.CellProofsPerBlob)...)
+	s.testBadBlobTx(t, tx[0], tx[0].WithBlobTxSidecar(sidecar))
 }
 
 // readUntil reads eth protocol messages until a message of the target type is

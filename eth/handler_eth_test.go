@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"math/big"
 	"testing"
@@ -27,12 +28,15 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // testEthHandler is a mock event handler to listen for inbound network requests
@@ -423,6 +427,54 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 				t.Errorf("sink %d: transaction propagation timed out: have %d, want %d", i, arrived, len(txs))
 				timeout = true
 			}
+		}
+	}
+}
+
+// Tests that blob transactions whose sidecar does not have the required version
+// and proof count are rejected before reaching the fetcher.
+func TestHandleTransactionsBlobProofs(t *testing.T) {
+	t.Parallel()
+
+	key, _ := crypto.GenerateKey()
+	signer := types.LatestSigner(params.MainnetChainConfig)
+
+	makeTx := func(version byte, blobs []kzg4844.Blob, proofs int) *types.Transaction {
+		commitment := kzg4844.Commitment{0x1}
+		sidecar := types.NewBlobTxSidecar(version, blobs, []kzg4844.Commitment{commitment}, make([]kzg4844.Proof, proofs))
+		return types.MustSignNewTx(key, signer, &types.BlobTx{
+			ChainID:    uint256.MustFromBig(params.MainnetChainConfig.ChainID),
+			GasTipCap:  uint256.NewInt(100),
+			GasFeeCap:  uint256.NewInt(200),
+			Gas:        21000,
+			BlobFeeCap: uint256.NewInt(200),
+			BlobHashes: []common.Hash{kzg4844.CalcBlobHashV1(sha256.New(), &commitment)},
+			Sidecar:    sidecar,
+		})
+	}
+	tests := []struct {
+		version uint
+		tx      *types.Transaction
+		valid   bool
+	}{
+		{eth.ETH71, makeTx(types.BlobSidecarVersion1, make([]kzg4844.Blob, 1), kzg4844.CellProofsPerBlob), true},
+		{eth.ETH71, makeTx(types.BlobSidecarVersion1, make([]kzg4844.Blob, 1), kzg4844.CellProofsPerBlob+1), false},
+		{eth.ETH71, makeTx(types.BlobSidecarVersion1, make([]kzg4844.Blob, 1), kzg4844.CellProofsPerBlob-1), false},
+		{eth.ETH71, makeTx(types.BlobSidecarVersion0, make([]kzg4844.Blob, 1), kzg4844.CellProofsPerBlob), false},
+		{eth.ETH72, makeTx(types.BlobSidecarVersion1, nil, kzg4844.CellProofsPerBlob), true},
+		{eth.ETH72, makeTx(types.BlobSidecarVersion1, nil, kzg4844.CellProofsPerBlob+1), false},
+		{eth.ETH72, makeTx(types.BlobSidecarVersion1, nil, 0), false},
+		{eth.ETH72, makeTx(types.BlobSidecarVersion0, nil, kzg4844.CellProofsPerBlob), false},
+	}
+	for i, tt := range tests {
+		peer := eth.NewPeer(tt.version, p2p.NewPeer(enode.ID{byte(i)}, "", nil), nil, nil, nil, nil)
+		err := handleTransactions(peer, []*types.Transaction{tt.tx}, false)
+		peer.Close()
+		if tt.valid && err != nil {
+			t.Errorf("test %d: valid transaction rejected: %v", i, err)
+		}
+		if !tt.valid && err == nil {
+			t.Errorf("test %d: invalid transaction accepted", i)
 		}
 	}
 }
