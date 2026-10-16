@@ -53,6 +53,9 @@ type Trie struct {
 
 // New opens the tree with the given root.
 func New(root common.Hash, db database.NodeDatabase) (*Trie, error) {
+	if root == types.EmptyRootHash {
+		return nil, errors.New("pbt: the merkle-patricia empty root is not a tree root")
+	}
 	reader, err := trie.NewReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
@@ -64,7 +67,7 @@ func New(root common.Hash, db database.NodeDatabase) (*Trie, error) {
 		inserts: make(map[string]struct{}),
 		deletes: make(map[string]struct{}),
 	}
-	if root != types.EmptyBinaryHash && root != types.EmptyRootHash {
+	if root != types.EmptyBinaryHash {
 		if t.root, err = t.resolve(hashedNode(root), bitstr{}); err != nil {
 			return nil, err
 		}
