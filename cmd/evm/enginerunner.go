@@ -39,8 +39,8 @@ import (
 var engineTestCommand = &cli.Command{
 	Action:    engineTestCmd,
 	Name:      "enginetest",
-	Usage:     "Executes the given engine API tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
-	ArgsUsage: "<path>",
+	Usage:     "Executes the given engine API tests. Filenames can be fed via standard input (batch mode) or as arguments.",
+	ArgsUsage: "<path>...",
 	Flags: slices.Concat([]cli.Flag{
 		DumpFlag,
 		HumanReadableFlag,
@@ -57,16 +57,18 @@ func engineTestCmd(ctx *cli.Context) error {
 		reportExecution(log.Root().Handler(), false)
 	}
 
-	path := ctx.Args().First()
-
-	// If path is provided, run the tests at that path.
-	if len(path) != 0 {
-		results, err := runFiles(ctx, collectFiles(path), runEngineTest)
+	// If paths are provided, run the tests at those paths.
+	if ctx.Args().Present() {
+		files, err := collectFixtures(ctx.Args().Slice()...)
 		if err != nil {
-			return err
+			return cli.Exit(err, exitIncomplete)
 		}
+		results, err := runFiles(ctx, files, runEngineTest)
 		report(ctx, results)
-		return nil
+		if err != nil {
+			return cli.Exit(err, exitIncomplete)
+		}
+		return failures(results)
 	}
 	// Otherwise, read filenames from stdin and execute back-to-back.
 	scanner := bufio.NewScanner(os.Stdin)
@@ -93,7 +95,7 @@ func runEngineTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	}
 	var testsByName map[string]*tests.EngineTest
 	if err = json.Unmarshal(src, &testsByName); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to read test file %s: %w", fname, err)
 	}
 	re, err := regexp.Compile(ctx.String(RunFlag.Name))
 	if err != nil {
@@ -125,6 +127,7 @@ func runEngineTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		}
 
 		result.Fork = test.Network()
+		result.Rejections = test.Rejections
 
 		if ctx.Bool(FuzzFlag.Name) {
 			report(ctx, []testResult{*result})

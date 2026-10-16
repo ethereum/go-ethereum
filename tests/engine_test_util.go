@@ -41,6 +41,10 @@ import (
 // EngineTest checks processing of engine API payloads.
 type EngineTest struct {
 	json etJSON
+
+	// Rejections lists every payload the engine API rejected during Run, as
+	// INVALID or with a JSON-RPC error, so a consumer can check why.
+	Rejections []Rejection
 }
 
 func (t *EngineTest) UnmarshalJSON(in []byte) error {
@@ -133,6 +137,7 @@ type EngineAPIFunc func(chain *core.BlockChain, db ethdb.Database) (*rpc.Client,
 // fixture's genesis. attach puts the engine API on that chain, and payloads and
 // forkchoice updates go through it at the method versions the fixture names.
 func (t *EngineTest) Run(scheme string, tracer *tracing.Hooks, cfg RunConfig, attach EngineAPIFunc, postCheck func(error, *core.BlockChain)) (result error) {
+	t.Rejections = []Rejection{}
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -194,9 +199,19 @@ func (t *EngineTest) Run(scheme string, tracer *tracing.Hooks, cfg RunConfig, at
 			params[j] = param
 		}
 		err := client.CallContext(context.Background(), &status, fmt.Sprintf("engine_newPayloadV%d", payload.Version), params...)
+		var rpcErr rpc.Error
+		isRPCErr := errors.As(err, &rpcErr)
+		if isRPCErr {
+			t.Rejections = append(t.Rejections, Rejection{Index: i, Error: rpcRejection(rpcErr)})
+		} else if err == nil && status.Status == engine.INVALID {
+			r := Rejection{Index: i}
+			if status.ValidationError != nil {
+				r.Error = *status.ValidationError
+			}
+			t.Rejections = append(t.Rejections, r)
+		}
 		if payload.ErrorCode != nil {
-			var rpcErr rpc.Error
-			if !errors.As(err, &rpcErr) {
+			if !isRPCErr {
 				return fmt.Errorf("payload %d: expected error code %d, got err=%v", i, *payload.ErrorCode, err)
 			}
 			if rpcErr.ErrorCode() != *payload.ErrorCode {
@@ -250,6 +265,25 @@ func (t *EngineTest) Run(scheme string, tracer *tracing.Hooks, cfg RunConfig, at
 		}
 	}
 	return nil
+}
+
+// rpcRejection formats a JSON-RPC error as "<code>: <message>", followed by
+// ": <data>" when the error carries data. Data that is not a string, such as
+// the engine API's {"err": ...} object, is written as JSON.
+func rpcRejection(err rpc.Error) string {
+	msg := fmt.Sprintf("%d: %s", err.ErrorCode(), err.Error())
+	var dataErr rpc.DataError
+	if !errors.As(err, &dataErr) || dataErr.ErrorData() == nil {
+		return msg
+	}
+	if data, ok := dataErr.ErrorData().(string); ok {
+		return msg + ": " + data
+	}
+	data, jsonErr := json.Marshal(dataErr.ErrorData())
+	if jsonErr != nil {
+		return msg
+	}
+	return msg + ": " + string(data)
 }
 
 // forkchoiceUpdated moves the node's head to the given block, as consume
