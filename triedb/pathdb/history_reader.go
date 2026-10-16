@@ -64,13 +64,13 @@ func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit
 // Note: It is possible that additional histories have been indexed since the
 // reader was created. The reader should be refreshed as needed to load the
 // latest indexed data from disk.
-func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uint64, error) {
+func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastIndexed uint64) (uint64, error) {
 	// Mark the index reader as stale if the tracked indexing position moves
 	// backward. This can occur if the pathdb is reverted and certain state
 	// histories are unindexed. For simplicity, the reader is marked as stale
 	// instead of being refreshed, as this scenario is highly unlikely.
-	if r.limit > lastID {
-		return 0, fmt.Errorf("index reader is stale, limit: %d, last-state-id: %d", r.limit, lastID)
+	if r.limit > lastIndexed {
+		return 0, fmt.Errorf("index reader is stale, limit: %d, last-indexed: %d", r.limit, lastIndexed)
 	}
 	// Try to find the element which is greater than the specified target
 	res, err := r.reader.readGreaterThan(id)
@@ -83,18 +83,17 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 	}
 	// The element was not found, and no additional histories have been indexed.
 	// Return a not-found result.
-	if r.limit == lastID {
+	if r.limit == lastIndexed {
 		return res, nil
 	}
 	// Refresh the index reader and attempt again. If the latest indexed position
-	// is even below the ID of the disk layer, it indicates that state histories
-	// are being removed. In this case, it would theoretically be better to block
+	// moves backward, it indicates that state histories are being removed. In this case, it would theoretically be better to block
 	// the state rollback operation synchronously until all readers are released.
 	// Given that it's very unlikely to occur and users try to perform historical
 	// state queries while reverting the states at the same time. Simply returning
 	// an error should be sufficient for now.
 	metadata := loadIndexMetadata(r.db, toHistoryType(r.reader.state.typ))
-	if metadata == nil || metadata.Last < lastID {
+	if metadata == nil || metadata.Last < lastIndexed {
 		return 0, errors.New("state history hasn't been indexed yet")
 	}
 	if err := r.reader.refresh(); err != nil {
@@ -109,15 +108,17 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 type stateHistoryReader struct {
 	disk    ethdb.KeyValueReader
 	freezer ethdb.AncientReader
+	wait    func() error // Waits for the histories written in background, nil if not needed
 	readers map[string]*indexReaderWithLimitTag
 }
 
 // newStateHistoryReader constructs the history reader with the supplied db
 // for accessing historical states.
-func newStateHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *stateHistoryReader {
+func newStateHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader, wait func() error) *stateHistoryReader {
 	return &stateHistoryReader{
 		disk:    disk,
 		freezer: freezer,
+		wait:    wait,
 		readers: make(map[string]*indexReaderWithLimitTag),
 	}
 }
@@ -232,7 +233,7 @@ func (r *stateHistoryReader) readStorage(address common.Address, storageKey comm
 // lastID: represents the ID of the latest/newest state history;
 // latestValue: represents the state value at the current disk layer with ID == lastID;
 func (r *stateHistoryReader) read(state stateIdentQuery, stateID uint64, lastID uint64, latestValue []byte) ([]byte, error) {
-	lastIndexed, err := checkStateAvail(state.stateIdent, typeStateHistory, r.freezer, stateID, lastID, r.disk)
+	lastIndexed, err := checkStateAvail(state.stateIdent, typeStateHistory, r.freezer, stateID, lastID, r.disk, r.wait)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +247,7 @@ func (r *stateHistoryReader) read(state stateIdentQuery, stateID uint64, lastID 
 		}
 		r.readers[state.String()] = ir
 	}
-	historyID, err := ir.readGreaterThan(stateID, lastID)
+	historyID, err := ir.readGreaterThan(stateID, lastIndexed)
 	if err != nil {
 		return nil, err
 	}
@@ -270,15 +271,17 @@ func (r *stateHistoryReader) read(state stateIdentQuery, stateID uint64, lastID 
 type trienodeReader struct {
 	disk            ethdb.KeyValueReader
 	freezer         ethdb.AncientReader
-	readConcurrency int // The concurrency used to load trie node data from history
+	wait            func() error // Waits for the histories written in background, nil if not needed
+	readConcurrency int          // The concurrency used to load trie node data from history
 }
 
 // newTrienodeReader constructs the history reader with the supplied db
 // for accessing historical trie nodes.
-func newTrienodeReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader, readConcurrency int) *trienodeReader {
+func newTrienodeReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader, wait func() error, readConcurrency int) *trienodeReader {
 	return &trienodeReader{
 		disk:            disk,
 		freezer:         freezer,
+		wait:            wait,
 		readConcurrency: readConcurrency,
 	}
 }
@@ -416,7 +419,7 @@ func (r *trienodeReader) readOptimized(state stateIdent, it HistoryIndexIterator
 // lastID: represents the ID of the latest/newest trie node history;
 // latestValue: represents the trie node value at the current disk layer with ID == lastID;
 func (r *trienodeReader) read(state stateIdent, stateID uint64, lastID uint64, latestValue []byte) ([]byte, error) {
-	_, err := checkStateAvail(state, typeTrienodeHistory, r.freezer, stateID, lastID, r.disk)
+	_, err := checkStateAvail(state, typeTrienodeHistory, r.freezer, stateID, lastID, r.disk, r.wait)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +468,7 @@ func (r *trienodeReader) read(state stateIdent, stateID uint64, lastID uint64, l
 //
 // TODO(rjl493456442) it's really expensive to perform the check for every state
 // retrieval, please rework this later.
-func checkStateAvail(state stateIdent, exptyp historyType, freezer ethdb.AncientReader, stateID uint64, lastID uint64, db ethdb.KeyValueReader) (uint64, error) {
+func checkStateAvail(state stateIdent, exptyp historyType, freezer ethdb.AncientReader, stateID uint64, lastID uint64, db ethdb.KeyValueReader, wait func() error) (uint64, error) {
 	if toHistoryType(state.typ) != exptyp {
 		return 0, fmt.Errorf("unsupported history type: %d, want: %v", toHistoryType(state.typ), exptyp)
 	}
@@ -480,9 +483,15 @@ func checkStateAvail(state stateIdent, exptyp historyType, freezer ethdb.Ancient
 		return 0, fmt.Errorf("historical state has been pruned, first: %d, state: %d", tail+1, stateID)
 	}
 	// To serve the request, all history entries from stateID+1 to lastID
-	// must be indexed. It's not supposed to happen unless system is very
-	// wrong.
+	// must be indexed. The histories are written in background, wait for the
+	// scheduled writes covering lastID if they are not indexed yet.
 	metadata := loadIndexMetadata(db, exptyp)
+	if (metadata == nil || metadata.Last < lastID) && wait != nil {
+		if err := wait(); err != nil {
+			return 0, err
+		}
+		metadata = loadIndexMetadata(db, exptyp)
+	}
 	if metadata == nil || metadata.Last < lastID {
 		indexed := "null"
 		if metadata != nil {
