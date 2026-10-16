@@ -17,6 +17,7 @@
 package netutil
 
 import (
+	"container/list"
 	"net/netip"
 	"time"
 
@@ -26,19 +27,29 @@ import (
 // IPTracker predicts the external endpoint, i.e. IP address and port, of the local host
 // based on statements made by other hosts.
 type IPTracker struct {
-	window          time.Duration
-	contactWindow   time.Duration
-	minStatements   int
-	clock           mclock.Clock
-	statements      map[netip.Addr]ipStatement
-	contact         map[netip.Addr]mclock.AbsTime
-	lastStatementGC mclock.AbsTime
-	lastContactGC   mclock.AbsTime
+	window        time.Duration
+	contactWindow time.Duration
+	minStatements int
+	clock         mclock.Clock
+	statements    map[netip.Addr]*list.Element // of *ipStatement, in order
+	order         list.List                    // statements, oldest first
+	votes         map[netStatement]int         // hosts per network and endpoint
+	counts        endpointCounts               // networks per endpoint
+	predicted     netip.AddrPort
+	contact       map[netip.Addr]mclock.AbsTime
+	lastContactGC mclock.AbsTime
 }
 
 type ipStatement struct {
+	host     netip.Addr
 	endpoint netip.AddrPort
 	time     mclock.AbsTime
+}
+
+// netStatement is an endpoint stated by the hosts of one network.
+type netStatement struct {
+	network  netip.Prefix
+	endpoint netip.AddrPort
 }
 
 // NewIPTracker creates an IP tracker.
@@ -52,7 +63,9 @@ func NewIPTracker(window, contactWindow time.Duration, minStatements int) *IPTra
 	return &IPTracker{
 		window:        window,
 		contactWindow: contactWindow,
-		statements:    make(map[netip.Addr]ipStatement),
+		statements:    make(map[netip.Addr]*list.Element),
+		votes:         make(map[netStatement]int),
+		counts:        newEndpointCounts(),
 		minStatements: minStatements,
 		contact:       make(map[netip.Addr]mclock.AbsTime),
 		clock:         mclock.System{},
@@ -66,8 +79,9 @@ func (it *IPTracker) PredictFullConeNAT() bool {
 	now := it.clock.Now()
 	it.gcContact(now)
 	it.gcStatements(now)
-	for host, st := range it.statements {
-		if c, ok := it.contact[host]; !ok || c > st.time {
+	for el := it.order.Front(); el != nil; el = el.Next() {
+		st := el.Value.(*ipStatement)
+		if c, ok := it.contact[st.host]; !ok || c > st.time {
 			return true
 		}
 	}
@@ -79,30 +93,16 @@ func (it *IPTracker) PredictEndpoint() netip.AddrPort {
 	it.gcStatements(it.clock.Now())
 
 	// The current strategy is simple: find the endpoint with most statements.
-	// Hosts in the same network count as one.
-	type netStatement struct {
-		network  netip.Prefix
-		endpoint netip.AddrPort
+	// Hosts in the same network count as one. The counts are kept up to date as
+	// statements are added and removed, so this does not scan the statements.
+	max, maxcount := it.counts.max()
+	if maxcount == 0 || maxcount < it.minStatements {
+		return netip.AddrPort{}
 	}
-	var (
-		counts   = make(map[netip.AddrPort]int, len(it.statements))
-		counted  = make(map[netStatement]struct{}, len(it.statements))
-		maxcount int
-		max      netip.AddrPort
-	)
-	for host, s := range it.statements {
-		key := netStatement{statementNetwork(host), s.endpoint}
-		if _, ok := counted[key]; ok {
-			continue
-		}
-		counted[key] = struct{}{}
-		c := counts[s.endpoint] + 1
-		counts[s.endpoint] = c
-		if c > maxcount && c >= it.minStatements {
-			maxcount, max = c, s.endpoint
-		}
+	if it.counts.count[it.predicted] != maxcount {
+		it.predicted = max
 	}
-	return max
+	return it.predicted
 }
 
 // statementNetwork returns the network of a host making statements. Hosts in
@@ -130,10 +130,15 @@ func (it *IPTracker) AddStatement(host netip.Addr, endpoint netip.AddrPort) {
 		return
 	}
 	now := it.clock.Now()
-	it.statements[host] = ipStatement{endpoint, now}
-	if time.Duration(now-it.lastStatementGC) >= it.window {
-		it.gcStatements(now)
+	if el, ok := it.statements[host]; ok {
+		it.removeStatement(el)
 	}
+	it.statements[host] = it.order.PushBack(&ipStatement{host, endpoint, now})
+	key := netStatement{statementNetwork(host), endpoint}
+	if it.votes[key]++; it.votes[key] == 1 {
+		it.counts.inc(endpoint)
+	}
+	it.gcStatements(now)
 }
 
 // AddContact records that a packet containing our endpoint information has been sent to a
@@ -147,13 +152,26 @@ func (it *IPTracker) AddContact(host netip.Addr) {
 	}
 }
 
+// gcStatements removes statements older than the window. Statements are kept in
+// the order they were made, so this only visits the ones it removes.
 func (it *IPTracker) gcStatements(now mclock.AbsTime) {
-	it.lastStatementGC = now
 	cutoff := now.Add(-it.window)
-	for host, s := range it.statements {
-		if s.time < cutoff {
-			delete(it.statements, host)
+	for {
+		el := it.order.Front()
+		if el == nil || el.Value.(*ipStatement).time >= cutoff {
+			return
 		}
+		it.removeStatement(el)
+	}
+}
+
+func (it *IPTracker) removeStatement(el *list.Element) {
+	st := it.order.Remove(el).(*ipStatement)
+	delete(it.statements, st.host)
+	key := netStatement{statementNetwork(st.host), st.endpoint}
+	if it.votes[key]--; it.votes[key] == 0 {
+		delete(it.votes, key)
+		it.counts.dec(st.endpoint)
 	}
 }
 
@@ -165,4 +183,77 @@ func (it *IPTracker) gcContact(now mclock.AbsTime) {
 			delete(it.contact, host)
 		}
 	}
+}
+
+// endpointCounts counts the networks stating each endpoint. Counts change by one
+// at a time, and endpoints are kept in sets by count, so an endpoint with the
+// highest count is found in constant time.
+type endpointCounts struct {
+	count   map[netip.AddrPort]int // networks stating the endpoint
+	pos     map[netip.AddrPort]int // index of the endpoint in byCount[count]
+	byCount [][]netip.AddrPort     // endpoints by count; byCount[0] is unused
+}
+
+func newEndpointCounts() endpointCounts {
+	return endpointCounts{
+		count:   make(map[netip.AddrPort]int),
+		pos:     make(map[netip.AddrPort]int),
+		byCount: make([][]netip.AddrPort, 1),
+	}
+}
+
+// max returns an endpoint with the highest count, and the count.
+func (ec *endpointCounts) max() (netip.AddrPort, int) {
+	top := len(ec.byCount) - 1
+	if top == 0 {
+		return netip.AddrPort{}, 0
+	}
+	return ec.byCount[top][0], top
+}
+
+func (ec *endpointCounts) inc(ep netip.AddrPort) {
+	c := ec.count[ep]
+	if c > 0 {
+		ec.remove(ep, c)
+	}
+	c++
+	if c == len(ec.byCount) {
+		ec.byCount = append(ec.byCount, nil)
+	}
+	ec.add(ep, c)
+}
+
+func (ec *endpointCounts) dec(ep netip.AddrPort) {
+	c := ec.count[ep]
+	ec.remove(ep, c)
+	if c--; c > 0 {
+		ec.add(ep, c)
+	} else {
+		delete(ec.count, ep)
+		delete(ec.pos, ep)
+	}
+	if top := len(ec.byCount) - 1; top > 0 && len(ec.byCount[top]) == 0 {
+		ec.byCount[top] = nil
+		ec.byCount = ec.byCount[:top]
+	}
+}
+
+func (ec *endpointCounts) add(ep netip.AddrPort, c int) {
+	ec.count[ep] = c
+	ec.pos[ep] = len(ec.byCount[c])
+	ec.byCount[c] = append(ec.byCount[c], ep)
+}
+
+func (ec *endpointCounts) remove(ep netip.AddrPort, c int) {
+	set, i := ec.byCount[c], ec.pos[ep]
+	last := set[len(set)-1]
+	set[i] = last
+	ec.pos[last] = i
+	set = set[:len(set)-1]
+	// Release the space of sets that have shrunk, so the sets don't keep their
+	// largest size.
+	if len(set) < cap(set)/4 {
+		set = append([]netip.AddrPort(nil), set...)
+	}
+	ec.byCount[c] = set
 }
