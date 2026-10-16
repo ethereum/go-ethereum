@@ -2227,7 +2227,7 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 	noop := func(*blockProcessingResult) {}
 
 	var sdb state.Database
-	if bc.triedb.IsPBT() {
+	if bc.chainConfig.IsPBT(block.Number(), block.Time()) {
 		sdb = state.NewPBTDatabase(bc.triedb, bc.codedb)
 	} else if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
 		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
