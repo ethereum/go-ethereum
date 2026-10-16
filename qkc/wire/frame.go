@@ -22,7 +22,7 @@
 //
 // payload_len is the length of payload bytes only.
 // metadata size depends on metaSize parameter:
-//   - 12 bytes: ClusterMetadata (branch uint32 + cluster_peer_id uint64) for master↔slave
+//   - 12 bytes: ClusterMetadata (chain_id uint32 + cluster_peer_id uint64) for master↔slave
 //   - 0 bytes:  no metadata for slave↔slave traffic
 package wire
 
@@ -43,7 +43,7 @@ type Frame struct {
 }
 
 const (
-	metaSize    = 12 // ClusterMetadata.get_byte_size() = 12 (branch 4B + cluster_peer_id 8B)
+	metaSize    = 12 // ClusterMetadata.get_byte_size() = 12 (chain_id 4B + cluster_peer_id 8B)
 	opcodeSize  = 1
 	rpcIDSize   = 8
 	frameHeader = 4 // payload_len prefix
@@ -84,7 +84,7 @@ func readFrame(r io.Reader, metaSize int, maxPayloadLen uint32) (*Frame, error) 
 			return nil, fmt.Errorf("reading metadata: %w", normalizeTruncatedEOF(err))
 		}
 		meta = ClusterMetadata{
-			Branch:        binary.BigEndian.Uint32(metaBuf[0:4]),
+			ChainID:       binary.BigEndian.Uint32(metaBuf[0:4]),
 			ClusterPeerID: binary.BigEndian.Uint64(metaBuf[4:12]),
 		}
 	}
@@ -144,7 +144,7 @@ func writeFrameWithMetaSize(w io.Writer, f *Frame, metaSize int) error {
 
 	// Metadata
 	if metaSize > 0 {
-		binary.BigEndian.PutUint32(buf[frameHeader:frameHeader+4], f.Meta.Branch)
+		binary.BigEndian.PutUint32(buf[frameHeader:frameHeader+4], f.Meta.ChainID)
 		binary.BigEndian.PutUint64(buf[frameHeader+4:frameHeader+metaSize], f.Meta.ClusterPeerID)
 	}
 

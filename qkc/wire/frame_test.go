@@ -49,7 +49,7 @@ func TestWireCompat_Meta(t *testing.T) {
 	if f.Opcode != 0x81 || f.RPCID != 1 {
 		t.Fatalf("unexpected header: opcode=0x%02x rpcid=%d", f.Opcode, f.RPCID)
 	}
-	if f.Meta.Branch != 1 || f.Meta.ClusterPeerID != 12345 {
+	if f.Meta.ChainID != 1 || f.Meta.ClusterPeerID != 12345 {
 		t.Fatalf("unexpected meta: %+v", f.Meta)
 	}
 	var out bytes.Buffer
@@ -90,7 +90,7 @@ func TestRoundTrip(t *testing.T) {
 		payload []byte
 	}{
 		{"nil_payload", ClusterMetadata{}, 0x01, 0, nil},
-		{"with_meta", ClusterMetadata{Branch: 5, ClusterPeerID: 999}, 0x10, 7, []byte("hello")},
+		{"with_meta", ClusterMetadata{ChainID: 5, ClusterPeerID: 999}, 0x10, 7, []byte("hello")},
 		{"max_rpc_id", ClusterMetadata{}, 0xC4, 0xFFFFFFFFFFFFFFFF, []byte("x")},
 		{"empty_payload", ClusterMetadata{}, 0x81, 1, []byte{}},
 	}
@@ -115,7 +115,7 @@ func TestRoundTrip(t *testing.T) {
 
 func TestWireFormatLayout(t *testing.T) {
 	f := &Frame{
-		Meta:    ClusterMetadata{Branch: 1, ClusterPeerID: 0x1122334455667788},
+		Meta:    ClusterMetadata{ChainID: 1, ClusterPeerID: 0x1122334455667788},
 		Opcode:  0x42,
 		RPCID:   0xDEADBEEFCAFEBABE,
 		Payload: []byte{0xAA, 0xBB, 0xCC},
@@ -126,7 +126,7 @@ func TestWireFormatLayout(t *testing.T) {
 		t.Errorf("payload_len: got %d, want 3", got)
 	}
 	if got := binary.BigEndian.Uint32(wire[4:8]); got != 1 {
-		t.Errorf("branch: got %d, want 1", got)
+		t.Errorf("chain_id: got %d, want 1", got)
 	}
 	if got := binary.BigEndian.Uint64(wire[8:16]); got != 0x1122334455667788 {
 		t.Errorf("cluster_peer_id: got 0x%x", got)
@@ -146,9 +146,9 @@ func TestWireFormatLayout(t *testing.T) {
 
 func TestMultiFrameStream(t *testing.T) {
 	frames := []*Frame{
-		{Meta: ClusterMetadata{Branch: 0, ClusterPeerID: 0}, Opcode: 0x81, RPCID: 0, Payload: []byte("ping")},
-		{Meta: ClusterMetadata{Branch: 2, ClusterPeerID: 999}, Opcode: 0x05, RPCID: 100, Payload: []byte("block_data")},
-		{Meta: ClusterMetadata{Branch: 1, ClusterPeerID: 0}, Opcode: 0x03, RPCID: 200, Payload: nil},
+		{Meta: ClusterMetadata{ChainID: 0, ClusterPeerID: 0}, Opcode: 0x81, RPCID: 0, Payload: []byte("ping")},
+		{Meta: ClusterMetadata{ChainID: 2, ClusterPeerID: 999}, Opcode: 0x05, RPCID: 100, Payload: []byte("block_data")},
+		{Meta: ClusterMetadata{ChainID: 1, ClusterPeerID: 0}, Opcode: 0x03, RPCID: 200, Payload: nil},
 	}
 	var stream bytes.Buffer
 	for _, f := range frames {
@@ -240,7 +240,7 @@ func TestReadFrame_EOFSemantics(t *testing.T) {
 
 func TestReadFrame_PayloadLimit(t *testing.T) {
 	payload := bytes.Repeat([]byte{0xAB}, 100)
-	frame := &Frame{Meta: ClusterMetadata{Branch: 1, ClusterPeerID: 2}, Opcode: 0x81, RPCID: 1, Payload: payload}
+	frame := &Frame{Meta: ClusterMetadata{ChainID: 1, ClusterPeerID: 2}, Opcode: 0x81, RPCID: 1, Payload: payload}
 
 	// limit == 0: unbounded — full frame with 100-byte payload is accepted.
 	{
@@ -311,9 +311,9 @@ func TestReadFrameNoMeta_PayloadLimit(t *testing.T) {
 func TestClusterMetadata(t *testing.T) {
 	// Round-trip: edge cases.
 	cases := []ClusterMetadata{
-		{Branch: 0, ClusterPeerID: 0},
-		{Branch: 1, ClusterPeerID: 12345},
-		{Branch: 0xFFFFFFFF, ClusterPeerID: 0xFFFFFFFFFFFFFFFF},
+		{ChainID: 0, ClusterPeerID: 0},
+		{ChainID: 1, ClusterPeerID: 12345},
+		{ChainID: 0xFFFFFFFF, ClusterPeerID: 0xFFFFFFFFFFFFFFFF},
 	}
 	for _, m := range cases {
 		wire := MarshalClusterMetadata(m)
