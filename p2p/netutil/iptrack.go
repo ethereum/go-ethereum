@@ -79,12 +79,23 @@ func (it *IPTracker) PredictEndpoint() netip.AddrPort {
 	it.gcStatements(it.clock.Now())
 
 	// The current strategy is simple: find the endpoint with most statements.
+	// Hosts in the same network count as one.
+	type netStatement struct {
+		network  netip.Prefix
+		endpoint netip.AddrPort
+	}
 	var (
 		counts   = make(map[netip.AddrPort]int, len(it.statements))
+		counted  = make(map[netStatement]struct{}, len(it.statements))
 		maxcount int
 		max      netip.AddrPort
 	)
-	for _, s := range it.statements {
+	for host, s := range it.statements {
+		key := netStatement{statementNetwork(host), s.endpoint}
+		if _, ok := counted[key]; ok {
+			continue
+		}
+		counted[key] = struct{}{}
 		c := counts[s.endpoint] + 1
 		counts[s.endpoint] = c
 		if c > maxcount && c >= it.minStatements {
@@ -94,8 +105,30 @@ func (it *IPTracker) PredictEndpoint() netip.AddrPort {
 	return max
 }
 
+// statementNetwork returns the network of a host making statements. Hosts in
+// the same public /24 (IPv4) or /48 (IPv6) network are likely controlled by
+// the same party, so their statements count as one. Hosts on the LAN, e.g. of
+// a local test network, count individually.
+func statementNetwork(host netip.Addr) netip.Prefix {
+	bits := 48
+	if host.Is4() {
+		bits = 24
+	}
+	if AddrIsLAN(host) {
+		bits = host.BitLen()
+	}
+	network, _ := host.Prefix(bits)
+	return network
+}
+
 // AddStatement records that a certain host thinks our external endpoint is the one given.
+// Statements about an endpoint of a different address family than the host are ignored.
 func (it *IPTracker) AddStatement(host netip.Addr, endpoint netip.AddrPort) {
+	host = host.Unmap()
+	endpoint = netip.AddrPortFrom(endpoint.Addr().Unmap(), endpoint.Port())
+	if !host.IsValid() || !endpoint.IsValid() || host.Is4() != endpoint.Addr().Is4() {
+		return
+	}
 	now := it.clock.Now()
 	it.statements[host] = ipStatement{endpoint, now}
 	if time.Duration(now-it.lastStatementGC) >= it.window {
@@ -106,6 +139,7 @@ func (it *IPTracker) AddStatement(host netip.Addr, endpoint netip.AddrPort) {
 // AddContact records that a packet containing our endpoint information has been sent to a
 // certain host.
 func (it *IPTracker) AddContact(host netip.Addr) {
+	host = host.Unmap()
 	now := it.clock.Now()
 	it.contact[host] = now
 	if time.Duration(now-it.lastContactGC) >= it.contactWindow {

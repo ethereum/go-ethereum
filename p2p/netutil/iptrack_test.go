@@ -59,6 +59,56 @@ func TestIPTracker(t *testing.T) {
 			{opStatement, 10100, "127.0.0.1:8000", "127.0.0.2"},
 			{opPredict, 10200, "127.0.0.1:8000", ""},
 		},
+		"sameNetwork": {
+			{opStatement, 0, "1.2.3.4:8000", "5.6.7.1"},
+			{opStatement, 0, "1.2.3.4:8000", "5.6.7.2"},
+			{opStatement, 0, "1.2.3.4:8000", "5.6.7.3"},
+			{opStatement, 0, "1.2.3.4:8000", "5.6.7.4"},
+			{opPredict, 0, "", ""},
+			{opStatement, 0, "1.2.3.4:8000", "5.6.8.1"},
+			{opStatement, 0, "1.2.3.4:8000", "5.6.9.1"},
+			{opPredict, 0, "1.2.3.4:8000", ""},
+		},
+		"sameNetworkIPv6": {
+			{opStatement, 0, "[2001:db8::1]:8000", "2001:db9::1"},
+			{opStatement, 0, "[2001:db8::1]:8000", "2001:db9::2"},
+			{opStatement, 0, "[2001:db8::1]:8000", "2001:db9:0:1::1"},
+			{opPredict, 0, "", ""},
+			{opStatement, 0, "[2001:db8::1]:8000", "2001:dba::1"},
+			{opStatement, 0, "[2001:db8::1]:8000", "2001:dbb::1"},
+			{opPredict, 0, "[2001:db8::1]:8000", ""},
+		},
+		"networkIPv6": {
+			{opStatement, 0, "[2001:db8::1]:8000", "2001:db9:1::1"},
+			{opStatement, 0, "[2001:db8::1]:8000", "2001:db9:2::1"},
+			{opStatement, 0, "[2001:db8::1]:8000", "2001:db9:3::1"},
+			{opPredict, 0, "[2001:db8::1]:8000", ""},
+		},
+		"lan": {
+			{opStatement, 0, "1.2.3.4:8000", "192.168.0.1"},
+			{opStatement, 0, "1.2.3.4:8000", "192.168.0.2"},
+			{opStatement, 0, "1.2.3.4:8000", "192.168.0.3"},
+			{opPredict, 0, "1.2.3.4:8000", ""},
+		},
+		"fullconeMapped": {
+			{opContact, 0, "", "127.0.0.2"},
+			{opStatement, 10, "127.0.0.1:8000", "::ffff:127.0.0.2"},
+			{opCheckFullCone, 20, "false", ""},
+		},
+		"otherFamily": {
+			{opStatement, 0, "1.2.3.4:8000", "2001:db9::1"},
+			{opStatement, 0, "1.2.3.4:8000", "2001:dba::1"},
+			{opStatement, 0, "1.2.3.4:8000", "2001:dbb::1"},
+			{opPredict, 0, "", ""},
+			{opStatement, 0, "[2001:db8::1]:8000", "5.6.7.1"},
+			{opStatement, 0, "[2001:db8::1]:8000", "5.6.8.1"},
+			{opStatement, 0, "[2001:db8::1]:8000", "5.6.9.1"},
+			{opPredict, 0, "", ""},
+			{opStatement, 0, "1.2.3.4:8000", "::ffff:5.6.7.1"},
+			{opStatement, 0, "1.2.3.4:8000", "::ffff:5.6.8.1"},
+			{opStatement, 0, "1.2.3.4:8000", "::ffff:5.6.9.1"},
+			{opPredict, 0, "1.2.3.4:8000", ""},
+		},
 		"fullcone": {
 			{opContact, 0, "", "127.0.0.2"},
 			{opStatement, 10, "127.0.0.1:8000", "127.0.0.2"},
@@ -141,5 +191,15 @@ func TestIPTrackerForceGC(t *testing.T) {
 	}
 	if len(it.statements) > 2*max {
 		t.Errorf("statements not GCed, have %d", len(it.statements))
+	}
+}
+
+// This checks that statements with an invalid host or endpoint are ignored.
+func TestIPTrackerInvalidStatement(t *testing.T) {
+	it := NewIPTracker(10*time.Second, 10*time.Second, 1)
+	it.AddStatement(netip.Addr{}, netip.MustParseAddrPort("[2001:db8::1]:8000"))
+	it.AddStatement(netip.MustParseAddr("2001:db9::1"), netip.AddrPort{})
+	if len(it.statements) != 0 {
+		t.Fatalf("invalid statements recorded: %v", it.statements)
 	}
 }
