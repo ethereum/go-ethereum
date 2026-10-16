@@ -133,11 +133,19 @@ type ConsensusAPI struct {
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 //
 // This function creates a long-lived object with an attached background thread.
-// For testing or other short-term use cases, please use newConsensusAPIWithoutHeartbeat.
+// For testing or other short-term use cases, please use NewConsensusAPIWithoutHeartbeat.
 func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	api := newConsensusAPIWithoutHeartbeat(eth)
 	go api.heartbeat()
 	return api
+}
+
+// NewConsensusAPIWithoutHeartbeat creates a new consensus api for the given
+// backend without the background thread that watches for a beacon client, so
+// it can be dropped together with a short-lived backend, such as one built to
+// run an engine test fixture.
+func NewConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
+	return newConsensusAPIWithoutHeartbeat(eth)
 }
 
 // newConsensusAPIWithoutHeartbeat creates a new consensus api for the SimulatedBeacon Node.
