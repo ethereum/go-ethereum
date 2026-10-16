@@ -24,12 +24,8 @@ import (
 	"github.com/zeebo/blake3"
 )
 
-// Database records. Leaf and branch records are their hash preimages; a group
-// record packs a stem's values with the position it hashes at:
-//
-//	leaf:   0x00 ‖ key ‖ value
-//	branch: 0x01 ‖ encode_bit_prefix(prefix) ‖ left ‖ right
-//	group:  0x02 ‖ u16 pos ‖ stem length ‖ stem ‖ 256-bit sub-index bitmap ‖ values
+// serializeNode returns the database record of n at bit position pos. Leaf and
+// branch records are their hash preimages.
 func serializeNode(n node, pos int) []byte {
 	switch n := n.(type) {
 	case *groupNode:
