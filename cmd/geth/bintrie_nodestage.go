@@ -25,6 +25,8 @@ import (
 	"os"
 	"slices"
 	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/internal/pagecache"
 )
 
 // nodeStager holds the tree nodes StackBuilder emits until the tree is built,
@@ -175,13 +177,14 @@ type spillFile struct {
 }
 
 // newSpillFile creates a spill file in dir, named from pattern as
-// os.CreateTemp does.
+// os.CreateTemp does. It is written and read behind the page cache
+// (pagecache), the node's pages staying cached.
 func newSpillFile(dir, pattern string) (*spillFile, error) {
 	f, err := os.CreateTemp(dir, pattern)
 	if err != nil {
 		return nil, err
 	}
-	return &spillFile{f: f, w: bufio.NewWriterSize(f, 256<<10)}, nil
+	return &spillFile{f: f, w: bufio.NewWriterSize(pagecache.NewWriter(f), 256<<10)}, nil
 }
 
 // add appends one record, both fields length-prefixed. Neither needs to
@@ -208,7 +211,7 @@ func (s *spillFile) replay(r *bufio.Reader, fn func(a, b []byte) error) error {
 	if _, err := s.f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	r.Reset(s.f)
+	r.Reset(pagecache.NewReader(s.f))
 	var buf []byte
 	for {
 		alen, err := binary.ReadUvarint(r)

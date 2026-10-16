@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/pagecache"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
@@ -670,7 +671,7 @@ func openSnapshot(path string) (*snapshotReader, error) {
 		return nil, err
 	}
 	sr := &snapshotReader{f: f, size: info.Size(), hasher: crypto.NewKeccakState(), zone: -1}
-	sr.br = bufio.NewReaderSize(io.TeeReader(countingReader{f, &sr.read}, sr.hasher), 1<<20)
+	sr.br = bufio.NewReaderSize(io.TeeReader(countingReader{pagecache.NewReader(f), &sr.read}, sr.hasher), 1<<20)
 	return sr, nil
 }
 
@@ -835,7 +836,7 @@ func openPreimages(path string) (*preimageReader, error) {
 		return nil, err
 	}
 	pr := &preimageReader{f: f, size: size.Size(), hasher: crypto.NewKeccakState(), left: size.Size()}
-	pr.r = bufio.NewReaderSize(io.TeeReader(countingReader{f, &pr.read}, pr.hasher), 1<<20)
+	pr.r = bufio.NewReaderSize(io.TeeReader(countingReader{pagecache.NewReader(f), &pr.read}, pr.hasher), 1<<20)
 	return pr, nil
 }
 
