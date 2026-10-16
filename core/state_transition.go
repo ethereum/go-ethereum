@@ -39,6 +39,9 @@ type ExecutionResult struct {
 	MaxUsedGas uint64 // Maximum gas consumed during execution, excluding gas refunds.
 	Err        error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
+
+	// GasUsage is the EIP-8037 gas settlement reported to tracers, nil before Amsterdam.
+	GasUsage *tracing.TxGasUsage
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -789,7 +792,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	// Settle down the gas usage and refund the ETH back if any remaining
-	gasUsed, peakUsed, err := st.settleGas(rules, floorDataGas)
+	gasUsed, peakUsed, gasUsage, err := st.settleGas(rules, floorDataGas)
 	if err != nil {
 		return nil, err
 	}
@@ -823,6 +826,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		MaxUsedGas: peakUsed,
 		Err:        vmerr,
 		ReturnData: ret,
+		GasUsage:   gasUsage,
 	}, nil
 }
 
@@ -1039,9 +1043,11 @@ func (st *stateTransition) chargeCallRecipientEIP2780(value *uint256.Int) bool {
 //     refund and the EIP-7623 calldata floor.
 //   - Charges the block gas pool (2D under Amsterdam, scalar pre-Amsterdam).
 //   - Refunds the leftover gas to the sender as ETH.
-func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (gasUsed, peakUsed uint64, err error) {
+//
+// Under Amsterdam it also returns the settlement for tracers.
+func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (gasUsed, peakUsed uint64, usage *tracing.TxGasUsage, err error) {
 	if st.gasRemaining.UsedStateGas < 0 {
-		return 0, 0, fmt.Errorf("negative topmost frame state gas usage, %d", st.gasRemaining.UsedStateGas)
+		return 0, 0, nil, fmt.Errorf("negative topmost frame state gas usage, %d", st.gasRemaining.UsedStateGas)
 	}
 	txStateGas := uint64(st.gasRemaining.UsedStateGas)
 
@@ -1057,7 +1063,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	gasUsedBeforeRefund := st.msg.GasLimit - gasLeft
 
 	if gasUsedBeforeRefund < txStateGas {
-		return 0, 0, fmt.Errorf("negative topmost frame execution gas usage, total: %d, state: %d", gasUsedBeforeRefund, txStateGas)
+		return 0, 0, nil, fmt.Errorf("negative topmost frame execution gas usage, total: %d, state: %d", gasUsedBeforeRefund, txStateGas)
 	}
 	txExecutionGas := max(gasUsedBeforeRefund-txStateGas, floorDataGas)
 
@@ -1084,11 +1090,15 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 	// Settle down the final gas consumption in the block-level pool
 	if rules.IsAmsterdam {
 		if err = st.gp.ChargeGasAmsterdam(txExecutionGas, txStateGas, gasUsed); err != nil {
-			return 0, 0, err
+			return 0, 0, nil, err
+		}
+		usage = &tracing.TxGasUsage{
+			Block:  tracing.Gas{Execution: txExecutionGas, State: txStateGas},
+			Refund: refund,
 		}
 	} else {
 		if err = st.gp.ChargeGasLegacy(gasLeft, gasUsed); err != nil {
-			return 0, 0, err
+			return 0, 0, nil, err
 		}
 	}
 
@@ -1101,7 +1111,7 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Execution: gasLeft}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
 		}
 	}
-	return gasUsed, peakUsed, nil
+	return gasUsed, peakUsed, usage, nil
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.

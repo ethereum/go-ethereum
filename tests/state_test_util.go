@@ -353,9 +353,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	vmRet, err := core.ApplyMessage(evm, msg, core.NewGasPool(block.GasLimit()))
 	if err != nil {
 		st.StateDB.RevertToSnapshot(snapshot)
-		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
-			evm.Config.Tracer.OnTxEnd(nil, err)
-		}
+		evm.Config.Tracer.EmitTxEnd(nil, nil, err)
 		return st, common.Hash{}, 0, err
 	}
 	// Add 0-value mining reward. This only makes a difference in the cases
@@ -367,9 +365,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	// Commit state mutations into database.
 	root, _ = st.StateDB.Commit(rules, block.NumberU64())
-	if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
-		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
-		tracer.OnTxEnd(receipt, nil)
+	if tracer := evm.Config.Tracer; tracer.HasTxEndHook() {
+		tracer.EmitTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, vmRet.GasUsage, nil)
 	}
 	return st, root, vmRet.UsedGas, nil
 }
