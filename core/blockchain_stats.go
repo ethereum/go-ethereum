@@ -53,12 +53,15 @@ type ExecuteStats struct {
 	Validation      time.Duration // Time spent on the block validation
 	CrossValidation time.Duration // Optional, time spent on the block cross validation
 	DatabaseCommit  time.Duration // Time spent on database commit
+	CommitWait      time.Duration // Time spent waiting for the chain writer to commit the parent state
 	TotalTime       time.Duration // The total time spent on block execution
 	MgasPerSecond   float64       // The million gas processed per second
 
 	// Cache hit rates
 	StateReadCacheStats     state.ReaderStats
 	StatePrefetchCacheStats state.ReaderStats
+
+	writeDeferred bool // The chain writer commits the state and reports the commit times
 }
 
 // reportMetrics uploads execution statistics to the metrics system.
@@ -79,13 +82,17 @@ func (s *ExecuteStats) reportMetrics() {
 	accountUpdateTimer.Update(s.AccountUpdates) // Account updates are complete(in validation)
 	storageUpdateTimer.Update(s.StorageUpdates) // Storage updates are complete(in validation)
 	accountHashTimer.Update(s.AccountHashes)    // Account hashes are complete(in validation)
-	accountCommitTimer.Update(s.AccountCommits) // Account commits are complete, we can mark them
-	storageCommitTimer.Update(s.StorageCommits) // Storage commits are complete, we can mark them
+
+	// A deferred write reports its commit times from the chain writer
+	if !s.writeDeferred {
+		accountCommitTimer.Update(s.AccountCommits) // Account commits are complete, we can mark them
+		storageCommitTimer.Update(s.StorageCommits) // Storage commits are complete, we can mark them
+		triedbCommitTimer.Update(s.DatabaseCommit)  // Trie database commits are complete, we can mark them
+	}
 
 	blockExecutionTimer.Update(s.Execution)                 // The time spent on EVM processing
 	blockValidationTimer.Update(s.Validation)               // The time spent on block validation
 	blockCrossValidationTimer.Update(s.CrossValidation)     // The time spent on stateless cross validation
-	triedbCommitTimer.Update(s.DatabaseCommit)              // Trie database commits are complete, we can mark them
 	blockInsertTimer.Update(s.TotalTime)                    // The total time spent on block execution
 	chainMgaspsMeter.Update(time.Duration(s.MgasPerSecond)) // TODO(rjl493456442) generalize the ResettingTimer
 
@@ -208,7 +215,7 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			ExecutionMs: durationToMs(s.Execution),
 			StateReadMs: durationToMs(s.AccountReads + s.StorageReads + s.CodeReads),
 			StateHashMs: durationToMs(s.AccountHashes + s.AccountUpdates + s.StorageUpdates),
-			CommitMs:    durationToMs(max(s.AccountCommits, s.StorageCommits) + s.DatabaseCommit),
+			CommitMs:    durationToMs(max(s.AccountCommits, s.StorageCommits) + s.DatabaseCommit + s.CommitWait),
 			TotalMs:     durationToMs(s.TotalTime),
 		},
 		Throughput: slowBlockThru{

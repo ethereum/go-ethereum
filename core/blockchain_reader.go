@@ -110,6 +110,10 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 	if cached, ok := bc.bodyCache.Get(hash); ok {
 		return cached
 	}
+	// A block still being written is served from memory
+	if job := bc.writer.job(hash); job != nil {
+		return job.block.Body()
+	}
 	number, ok := bc.hc.GetBlockNumber(hash)
 	if !ok {
 		return nil
@@ -130,6 +134,10 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	if cached, ok := bc.bodyRLPCache.Get(hash); ok {
 		return cached
 	}
+	if job := bc.writer.job(hash); job != nil {
+		body, _ := rlp.EncodeToBytes(job.block.Body())
+		return body
+	}
 	number, ok := bc.hc.GetBlockNumber(hash)
 	if !ok {
 		return nil
@@ -145,7 +153,7 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 
 // HasBlock checks if a block is fully present in the database or not.
 func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
-	if bc.blockCache.Contains(hash) {
+	if bc.blockCache.Contains(hash) || bc.writer.job(hash) != nil {
 		return true
 	}
 	if !bc.HasHeader(hash, number) {
@@ -159,7 +167,7 @@ func (bc *BlockChain) HasFastBlock(hash common.Hash, number uint64) bool {
 	if !bc.HasBlock(hash, number) {
 		return false
 	}
-	if bc.receiptsCache.Contains(hash) {
+	if bc.receiptsCache.Contains(hash) || bc.writer.job(hash) != nil {
 		return true
 	}
 	return rawdb.HasReceipts(bc.db, hash, number)
@@ -171,6 +179,10 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
 		return block
+	}
+	// A block still being written is served from memory
+	if job := bc.writer.job(hash); job != nil {
+		return job.block
 	}
 	block := rawdb.ReadBlock(bc.db, hash, number)
 	if block == nil {
@@ -193,7 +205,7 @@ func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
-	hash := rawdb.ReadCanonicalHash(bc.db, number)
+	hash := bc.GetCanonicalHash(number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
@@ -234,6 +246,14 @@ func (bc *BlockChain) GetCanonicalReceipt(tx *types.Transaction, blockHash commo
 	if header == nil {
 		return nil, fmt.Errorf("block header is not found, %d, %x", blockNumber, blockHash)
 	}
+	// A block still being written has its receipts in memory
+	if job := bc.writer.job(blockHash); job != nil {
+		receipts := job.derivedReceipts(bc.chainConfig)
+		if int(txIndex) >= len(receipts) {
+			return nil, fmt.Errorf("receipt out of index, length: %d, index: %d", len(receipts), txIndex)
+		}
+		return receipts[txIndex], nil
+	}
 	var blobGasPrice *big.Int
 	if header.ExcessBlobGas != nil {
 		blobGasPrice = eip4844.CalcBlobFee(bc.chainConfig, header)
@@ -262,6 +282,10 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
 		return receipts
 	}
+	// The receipts of a block still being written get their fields derived from memory
+	if job := bc.writer.job(hash); job != nil {
+		return job.derivedReceipts(bc.chainConfig)
+	}
 	number, ok := rawdb.ReadHeaderNumber(bc.db, hash)
 	if !ok {
 		return nil
@@ -284,11 +308,35 @@ func (bc *BlockChain) GetRawReceipts(hash common.Hash, number uint64) types.Rece
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
 		return receipts
 	}
+	if job := bc.writer.job(hash); job != nil {
+		return job.rawReceipts()
+	}
 	return rawdb.ReadRawReceipts(bc.db, hash, number)
+}
+
+// GetLogs retrieves the logs of every transaction in a block, without derived fields like rawdb.ReadLogs.
+func (bc *BlockChain) GetLogs(hash common.Hash, number uint64) [][]*types.Log {
+	// Callers fill in the derived fields, so a block still being written hands
+	// out a fresh copy too
+	if job := bc.writer.job(hash); job != nil {
+		receipts := job.rawReceipts()
+		if receipts == nil {
+			return nil
+		}
+		logs := make([][]*types.Log, len(receipts))
+		for i, receipt := range receipts {
+			logs[i] = receipt.Logs
+		}
+		return logs
+	}
+	return rawdb.ReadLogs(bc.db, hash, number)
 }
 
 // GetReceiptsRLP retrieves the receipts of a block.
 func (bc *BlockChain) GetReceiptsRLP(hash common.Hash) rlp.RawValue {
+	if job := bc.writer.job(hash); job != nil {
+		return job.encodedReceipts()
+	}
 	number, ok := rawdb.ReadHeaderNumber(bc.db, hash)
 	if !ok {
 		return nil
@@ -298,6 +346,14 @@ func (bc *BlockChain) GetReceiptsRLP(hash common.Hash) rlp.RawValue {
 
 // GetAccessListRLP retrieves the block access list of a block in RLP encoding.
 func (bc *BlockChain) GetAccessListRLP(hash common.Hash) rlp.RawValue {
+	// A block still being written carries its access list itself
+	if job := bc.writer.job(hash); job != nil {
+		if accessList := job.block.AccessList(); accessList != nil {
+			enc, _ := rlp.EncodeToBytes(accessList)
+			return enc
+		}
+		return nil
+	}
 	number, ok := rawdb.ReadHeaderNumber(bc.db, hash)
 	if !ok {
 		return nil
@@ -346,6 +402,10 @@ func (bc *BlockChain) GetCanonicalTransaction(hash common.Hash) (*rawdb.LegacyTx
 	if item, exist := bc.txLookupCache.Get(hash); exist {
 		return item.lookup, item.transaction
 	}
+	// A transaction in a head queued in memory has no lookup on disk yet
+	if tx, block, index := bc.writer.headTransaction(hash); tx != nil {
+		return &rawdb.LegacyTxLookupEntry{BlockHash: block.Hash(), BlockIndex: block.NumberU64(), Index: index}, tx
+	}
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadCanonicalTransaction(bc.db, hash)
 	if tx == nil {
 		return nil, nil
@@ -380,6 +440,10 @@ func (bc *BlockChain) TxIndexDone() bool {
 
 // HasState checks if state trie is fully present in the database or not.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
+	// A state the chain writer is committing, or just wrote, counts as present
+	if bc.writer.hasState(hash) {
+		return true
+	}
 	_, err := bc.triedb.NodeReader(hash)
 	return err == nil
 }
@@ -424,6 +488,8 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 // StateAt returns a new mutable state with the given root, at the block with
 // the given number and time.
 func (bc *BlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
+	// The chain writer may still be committing this state
+	bc.writer.waitState(root)
 	if bc.chainConfig.IsUBT(number, time) {
 		return state.New(root, state.NewUBTDatabase(bc.triedb, bc.codedb))
 	}
@@ -433,6 +499,9 @@ func (bc *BlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*
 // StateAtForkBoundary returns a new mutable state based on the parent state
 // and the given header, handling the transition across the UBT fork.
 func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.Header) (*state.StateDB, error) {
+	// The chain writer may still be committing the parent state
+	bc.writer.waitState(parent.Root)
+
 	// The parent is already in the UBT fork.
 	if bc.chainConfig.IsUBT(parent.Number, parent.Time) {
 		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
