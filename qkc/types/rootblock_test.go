@@ -1,5 +1,5 @@
-// Copyright 2026-2027 The QuarkChain Authors
-// This file is part of the QuarkChain library.
+// Copyright 2026-2027 The quarkchain Authors
+// This file is part of the quarkchain library.
 //
 // The QuarkChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -109,7 +109,7 @@ func TestRootBlockDecodeInvalid(t *testing.T) {
 	}
 	// Corrupt the offset of the header's extra data.
 	bad := common.CopyBytes(enc)
-	bad[rootBlockFixedSize+204]++
+	bad[rootBlockFixedSize+196]++
 	if err := new(RootBlock).UnmarshalSSZ(bad); err == nil {
 		t.Error("expected error for bad extra data offset")
 	}
@@ -242,8 +242,8 @@ func TestRootBlockHashSSZ(t *testing.T) {
 		t.Fatalf("seal hash mismatch: have %x, want %x", have, want)
 	}
 	hashEnc := common.FromHex("0x" + unsealed +
-		"0700000000000000" + // nonce
 		"31010000" + // offset of extra
+		"0700000000000000" + // nonce
 		strings.Repeat("00", 31) + "03" + // mixDigest
 		strings.Repeat("00", 65) + // signature
 		"6578747261") // extra
@@ -333,7 +333,7 @@ func TestRootBlockDecodeKeepsStateOnError(t *testing.T) {
 	wantHeaders, wantTracking := len(dec.MinorBlockHeaders()), string(dec.TrackingData())
 
 	bad := common.CopyBytes(mustMarshalSSZ(t, block))
-	bad[rootBlockFixedSize+204]++ // corrupt the header's extra data offset
+	bad[rootBlockFixedSize+196]++ // corrupt the header's extra data offset
 	if err := dec.UnmarshalSSZ(bad); err == nil {
 		t.Fatal("expected error")
 	}
@@ -363,7 +363,7 @@ func TestRootBlockHeaderDecodeInvalid(t *testing.T) {
 		t.Error("expected error for truncated input")
 	}
 	bad := common.CopyBytes(enc)
-	bad[204]++ // extra data offset no longer equals the sealed fixed size
+	bad[196]++ // extra data offset no longer equals the sealed fixed size
 	if err := h.UnmarshalSSZ(bad); err == nil {
 		t.Error("expected error for bad extra data offset")
 	}
@@ -710,16 +710,14 @@ func TestRootBlockConcurrentHash(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 8 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 100 {
 				if have := block.Hash(); have != want {
 					t.Errorf("hash mismatch: have %x, want %x", have, want)
 					return
 				}
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

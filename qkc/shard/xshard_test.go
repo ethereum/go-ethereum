@@ -1,5 +1,5 @@
-// Copyright 2026-2027 The QuarkChain Authors
-// This file is part of the QuarkChain library.
+// Copyright 2026-2027 The quarkchain Authors
+// This file is part of the quarkchain library.
 //
 // The QuarkChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -123,12 +123,13 @@ func TestXShardDeposits(t *testing.T) {
 	// shard 2 and the second send to shard 1, the failed send having none.
 	hash := blocks[0].Hash()
 	deposit := func(send *xShardSend, logIndex uint64) *types.DepositTx {
+		to := send.to
 		return &types.DepositTx{
 			Version:         types.DepositTxVersion,
 			SourceBlockHash: hash,
 			SourceLogIndex:  logIndex,
 			From:            sender,
-			To:              send.to,
+			To:              &to,
 			Value:           uint256.NewInt(uint64(send.value)),
 			GasPrice:        uint256.MustFromBig(receipts[0][0].EffectiveGasPrice),
 			Gas:             params.XShardSendGas,
@@ -197,7 +198,7 @@ func TestXShardDepositsInvalid(t *testing.T) {
 		SourceBlockHash: blockHash,
 		SourceLogIndex:  5,
 		From:            common.Address{19: 0x0d},
-		To:              common.Address{19: 0x0e},
+		To:              &common.Address{19: 0x0e},
 		Value:           uint256.NewInt(0x0a),
 		GasPrice:        uint256.NewInt(0x0b),
 		Gas:             0x0c,

@@ -1,5 +1,5 @@
-// Copyright 2026-2027 The QuarkChain Authors
-// This file is part of the QuarkChain library.
+// Copyright 2026-2027 The quarkchain Authors
+// This file is part of the quarkchain library.
 //
 // The QuarkChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -39,7 +39,7 @@ func TestXShardDepositsStorage(t *testing.T) {
 			SourceBlockHash: full,
 			SourceLogIndex:  0,
 			From:            common.Address{0x0a},
-			To:              common.Address{0x0b},
+			To:              &common.Address{0x0b},
 			Value:           uint256.NewInt(1),
 			GasPrice:        uint256.NewInt(2),
 			Gas:             30000,
@@ -49,7 +49,7 @@ func TestXShardDepositsStorage(t *testing.T) {
 			SourceBlockHash: full,
 			SourceLogIndex:  3,
 			From:            common.Address{0x0c},
-			To:              common.Address{0x0d},
+			To:              &common.Address{0x0d},
 			Value:           uint256.NewInt(4),
 			GasPrice:        uint256.NewInt(5),
 			Gas:             40000,

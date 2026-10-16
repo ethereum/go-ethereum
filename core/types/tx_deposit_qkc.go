@@ -1,5 +1,5 @@
-// Copyright 2026-2027 The QuarkChain Authors
-// This file is part of the go-ethereum library.
+// Copyright 2026-2027 The quarkchain Authors
+// This file is part of the quarkchain library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -50,7 +50,7 @@ type DepositTx struct {
 	SourceBlockHash common.Hash
 	SourceLogIndex  uint64
 	From            common.Address
-	To              common.Address
+	To              *common.Address `rlp:"nil"` // nil means contract creation
 	Value           *uint256.Int
 	GasPrice        *uint256.Int // gas price of the sending transaction
 	Gas             uint64       // gas the deposit may use on the destination shard
