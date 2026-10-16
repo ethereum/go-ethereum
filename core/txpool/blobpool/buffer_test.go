@@ -3,6 +3,7 @@ package blobpool
 import (
 	"crypto/ecdsa"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -429,11 +430,15 @@ func TestBadCell(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	blobCount := 1
 
-	var dropped []string
+	var (
+		dropped   []string
+		refetched []string
+	)
 	buf := NewBlobBuffer(BlobBufferFunctions{
 		ValidateTx: func(tx *types.Transaction) error { return nil },
 		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
 		DropPeer:   func(peer string) { dropped = append(dropped, peer) },
+		Refetch:    func(peer string, hash common.Hash, size uint32) { refetched = append(refetched, peer) },
 	})
 
 	tx := makeV1Tx(t, 0, blobCount, 0, key)
@@ -456,11 +461,151 @@ func TestBadCell(t *testing.T) {
 		"peerC": badDelivery,
 	}, custody)
 
+	// The cells failed against proofs delivered by another peer, so the
+	// transaction is requested from the failing cell peer.
+	if len(dropped) != 0 {
+		t.Fatalf("no peer should be dropped before the refetch, got: %v", dropped)
+	}
+	if len(refetched) != 1 || refetched[0] != "peerC" {
+		t.Fatalf("transaction should be refetched from peerC, got: %v", refetched)
+	}
+	if buf.HasTx(hash) || !buf.HasCells(hash) {
+		t.Fatal("cells should be kept and the transaction dropped")
+	}
+	buf.AddTx([]*types.Transaction{tx}, "peerC")
+
 	if len(dropped) != 1 || dropped[0] != "peerC" {
 		t.Fatalf("only peerC should have been dropped, got: %v", dropped)
 	}
 	if buf.HasTx(hash) || buf.HasCells(hash) {
 		t.Fatal("buffer should be empty after bad cell drop")
+	}
+}
+
+func TestBadProofs(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	blobCount := 1
+
+	var (
+		dropped   []string
+		refetched []string
+		pooled    []*BlobTxForPool
+	)
+	buf := NewBlobBuffer(BlobBufferFunctions{
+		ValidateTx: func(tx *types.Transaction) error { return nil },
+		AddToPool:  func(ptx *BlobTxForPool) error { pooled = append(pooled, ptx); return nil },
+		DropPeer:   func(peer string) { dropped = append(dropped, peer) },
+		Refetch:    func(peer string, hash common.Hash, size uint32) { refetched = append(refetched, peer) },
+	})
+
+	tx := makeV1Tx(t, 0, blobCount, 1, key)
+	hash := tx.Hash()
+
+	// Same transaction with each cell proof moved to the next cell.
+	sidecar := tx.BlobTxSidecar().Copy()
+	sidecar.Proofs = append(sidecar.Proofs[1:], sidecar.Proofs[0])
+	badTx := tx.WithBlobTxSidecar(sidecar)
+
+	indices := []uint64{0, 1, 2, 3}
+	buf.AddTx([]*types.Transaction{badTx}, "peerA")
+	buf.AddCells(hash, map[string]*PeerDelivery{"peerB": makePeerDelivery(t, 1, blobCount, indices)}, types.NewCustodyBitmap(indices))
+
+	if len(dropped) != 0 {
+		t.Fatalf("no peer should be dropped before the refetch, got: %v", dropped)
+	}
+	if len(refetched) != 1 || refetched[0] != "peerB" {
+		t.Fatalf("transaction should be refetched from peerB, got: %v", refetched)
+	}
+	buf.AddTx([]*types.Transaction{tx}, "peerB")
+
+	if len(dropped) != 1 || dropped[0] != "peerA" {
+		t.Fatalf("only peerA should have been dropped, got: %v", dropped)
+	}
+	if buf.Flush(); len(pooled) != 1 || pooled[0].Tx.Hash() != hash {
+		t.Fatal("transaction should be pooled")
+	}
+	if !slices.Equal(pooled[0].CellSidecar.Proofs, tx.BlobTxSidecar().Proofs) {
+		t.Fatal("transaction should be pooled with the valid proofs")
+	}
+	if buf.HasTx(hash) || buf.HasCells(hash) {
+		t.Fatal("buffer should be empty after completion")
+	}
+}
+
+func TestBadProofsUndecided(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	blobCount := 1
+
+	var dropped []string
+	buf := NewBlobBuffer(BlobBufferFunctions{
+		ValidateTx: func(tx *types.Transaction) error { return nil },
+		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
+		DropPeer:   func(peer string) { dropped = append(dropped, peer) },
+	})
+
+	tx := makeV1Tx(t, 0, blobCount, 1, key)
+	hash := tx.Hash()
+
+	sidecar := tx.BlobTxSidecar().Copy()
+	sidecar.Proofs = append(sidecar.Proofs[1:], sidecar.Proofs[0])
+	badTx := tx.WithBlobTxSidecar(sidecar)
+
+	// Proofs failing on the verifier's cells from another peer while the
+	// refetch is pending leave the verifier's cells in place.
+	indices := []uint64{0, 1, 2, 3}
+	buf.AddTx([]*types.Transaction{badTx}, "peerA")
+	buf.AddCells(hash, map[string]*PeerDelivery{"peerB": makePeerDelivery(t, 1, blobCount, indices)}, types.NewCustodyBitmap(indices))
+	buf.AddTx([]*types.Transaction{badTx}, "peerC")
+
+	if len(dropped) != 0 {
+		t.Fatalf("no peer should be dropped while undecided, got: %v", dropped)
+	}
+	if buf.HasTx(hash) || !buf.HasCells(hash) {
+		t.Fatal("cells should be kept and the transaction dropped")
+	}
+	buf.AddTx([]*types.Transaction{tx}, "peerB")
+
+	if len(dropped) != 1 || dropped[0] != "peerA" {
+		t.Fatalf("only peerA should have been dropped, got: %v", dropped)
+	}
+	if buf.HasTx(hash) || buf.HasCells(hash) {
+		t.Fatal("buffer should be empty after completion")
+	}
+}
+
+func TestBadProofsFromCellPeer(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	blobCount := 1
+
+	var dropped []string
+	buf := NewBlobBuffer(BlobBufferFunctions{
+		ValidateTx: func(tx *types.Transaction) error { return nil },
+		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
+		DropPeer:   func(peer string) { dropped = append(dropped, peer) },
+	})
+
+	tx := makeV1Tx(t, 0, blobCount, 1, key)
+	hash := tx.Hash()
+
+	sidecar := tx.BlobTxSidecar().Copy()
+	sidecar.Proofs = append(sidecar.Proofs[1:], sidecar.Proofs[0])
+	badTx := tx.WithBlobTxSidecar(sidecar)
+
+	// A peer whose own cells fail against its own proofs is dropped at once,
+	// other cell peers are not.
+	indicesA := []uint64{0, 1, 2, 3}
+	indicesB := []uint64{4, 5, 6, 7}
+	buf.AddTx([]*types.Transaction{badTx}, "peerA")
+	buf.AddCells(hash, map[string]*PeerDelivery{
+		"peerA": makePeerDelivery(t, 1, blobCount, indicesA),
+		"peerB": makePeerDelivery(t, 1, blobCount, indicesB),
+	}, types.NewCustodyBitmap(append(indicesA, indicesB...)))
+
+	if len(dropped) != 1 || dropped[0] != "peerA" {
+		t.Fatalf("only peerA should have been dropped, got: %v", dropped)
+	}
+	if buf.HasTx(hash) || buf.HasCells(hash) {
+		t.Fatal("buffer should be empty after the drop")
 	}
 }
 
