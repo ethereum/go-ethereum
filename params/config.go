@@ -1023,9 +1023,6 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkTimestampIncompatible(c.BogotaTime, newcfg.BogotaTime, headTimestamp) {
 		return newTimestampCompatError("Bogota fork timestamp", c.BogotaTime, newcfg.BogotaTime)
 	}
-	if isForkTimestampIncompatible(c.BinaryTrieTime, newcfg.BinaryTrieTime, headTimestamp) {
-		return newTimestampCompatError("BinaryTrie fork timestamp", c.BinaryTrieTime, newcfg.BinaryTrieTime)
-	}
 	return nil
 }
 
