@@ -92,7 +92,7 @@ func (h *heldStream) advance() { h.key, h.value = nil, nil }
 // written after the last storage row, so no flushed table mixes the two key
 // families. Everything is written by return, batch included, and digested
 // into written.
-func rederiveMerkleRoot(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) (common.Hash, error) {
+func rederiveMerkleRoot(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64, y *blockYield) (common.Hash, error) {
 	workers = max(workers, 1)
 	var (
 		g, gctx   = errgroup.WithContext(ctx)
@@ -111,11 +111,11 @@ func rederiveMerkleRoot(ctx context.Context, accounts, slots *bintrie.RecordStre
 	}
 	for i := range workers {
 		jobs[i], roots[i] = make(chan *foldBatch, 2), make(chan []common.Hash, 2)
-		g.Go(func() error { return foldStorage(gctx, jobs[i], roots[i], free) })
+		g.Go(func() error { return foldStorage(gctx, jobs[i], roots[i], free, y) })
 	}
 	g.Go(func() error {
 		var err error
-		root, err = foldAccounts(gctx, accts, acctsFree, roots)
+		root, err = foldAccounts(gctx, accts, acctsFree, roots, y)
 		return err
 	})
 	g.Go(func() error {
@@ -125,7 +125,7 @@ func rederiveMerkleRoot(ctx context.Context, accounts, slots *bintrie.RecordStre
 			}
 			close(accts)
 		}()
-		return walkMerkleRecords(gctx, accounts, slots, batch, written, tmpDir, total, jobs, free, accts, acctsFree)
+		return walkMerkleRecords(gctx, accounts, slots, batch, written, tmpDir, total, jobs, free, accts, acctsFree, y)
 	})
 	if err := g.Wait(); err != nil {
 		return common.Hash{}, err
@@ -163,7 +163,7 @@ type foldAccount struct {
 // one worker, the next job to the next. total is the accounts and slots
 // expected, for progress reports.
 func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, total uint64,
-	jobs []chan *foldBatch, free chan *foldBatch, accts, acctsFree chan []foldAccount) error {
+	jobs []chan *foldBatch, free chan *foldBatch, accts, acctsFree chan []foldAccount, y *blockYield) error {
 	var (
 		slotHeld   = &heldStream{stream: slots}
 		walked     atomic.Uint64 // accounts and slots
@@ -196,6 +196,9 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 		return nil
 	}
 	take := func() error {
+		if err := y.pause(ctx); err != nil {
+			return err
+		}
 		select {
 		case cur = <-free:
 		case <-ctx.Done():
@@ -321,7 +324,7 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 		walked.Add(1)
 		walkedAccs++
 		if walkedAccs%uint64(foldBatchSize) == 0 {
-			if err := ctx.Err(); err != nil {
+			if err := y.pause(ctx); err != nil {
 				return err
 			}
 		}
@@ -364,7 +367,7 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 		accountSum.add(hash, row)
 		rawdb.WriteAccountSnapshot(batch, common.BytesToHash(hash), row)
 		if rows.Add(1)%uint64(foldBatchSize) == 0 {
-			if err := ctx.Err(); err != nil {
+			if err := y.pause(ctx); err != nil {
 				return err
 			}
 		}
@@ -386,12 +389,15 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 
 // foldStorage hashes the storage tries of the accounts it is sent and
 // reports the roots of each job's accounts, in their order.
-func foldStorage(ctx context.Context, in <-chan *foldBatch, out chan<- []common.Hash, free chan<- *foldBatch) error {
+func foldStorage(ctx context.Context, in <-chan *foldBatch, out chan<- []common.Hash, free chan<- *foldBatch, y *blockYield) error {
 	var (
 		st    = trie.NewStackTrie(nil)
 		found []common.Hash
 	)
 	for b := range in {
+		if err := y.pause(ctx); err != nil {
+			return err
+		}
 		var next, val int
 		update := func(to int) error {
 			for ; next < to; next++ {
@@ -429,13 +435,16 @@ func foldStorage(ctx context.Context, in <-chan *foldBatch, out chan<- []common.
 // foldAccounts builds the account trie from the accounts in order, taking
 // each one's storage root from the workers' jobs, in the order they were
 // handed out.
-func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []foldAccount, roots []chan []common.Hash) (common.Hash, error) {
+func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []foldAccount, roots []chan []common.Hash, y *blockYield) (common.Hash, error) {
 	var (
 		tr   = trie.NewStackTrie(nil)
 		have []common.Hash
 		job  int
 	)
 	for accounts := range in {
+		if err := y.pause(ctx); err != nil {
+			return common.Hash{}, err
+		}
 		for i := range accounts {
 			acct := &accounts[i]
 			root := types.EmptyRootHash
@@ -676,7 +685,7 @@ func (w *writtenState) families() []writtenFamily {
 
 // writeStagedNodes writes the staged tree nodes into the namespace in key
 // order, digesting each.
-func writeStagedNodes(ctx context.Context, pbtdb ethdb.Database, nodes *nodeStager, digest *writeDigest) error {
+func writeStagedNodes(ctx context.Context, pbtdb ethdb.Database, nodes *nodeStager, digest *writeDigest, y *blockYield) error {
 	var (
 		batch   = pbtdb.NewBatch()
 		ahead   = digest.ahead()
@@ -693,7 +702,7 @@ func writeStagedNodes(ctx context.Context, pbtdb ethdb.Database, nodes *nodeStag
 		if batch.ValueSize() < ethdb.IdealBatchSize {
 			return nil
 		}
-		if err := ctx.Err(); err != nil {
+		if err := y.pause(ctx); err != nil {
 			return err
 		}
 		if err := batch.Write(); err != nil {
@@ -719,7 +728,7 @@ func writeStagedNodes(ctx context.Context, pbtdb ethdb.Database, nodes *nodeStag
 // verifyWritten re-reads each family in key order, concurrently, and
 // requires it to match what was written. The namespace was empty when the
 // command began, so a family holding anything more is a mismatch as well.
-func verifyWritten(ctx context.Context, pbtdb ethdb.Database, families ...writtenFamily) error {
+func verifyWritten(ctx context.Context, pbtdb ethdb.Database, y *blockYield, families ...writtenFamily) error {
 	var g errgroup.Group
 	for _, f := range families {
 		g.Go(func() error {
@@ -735,7 +744,7 @@ func verifyWritten(ctx context.Context, pbtdb ethdb.Database, families ...writte
 				ahead.add(it.Key()[len(f.prefix):], it.Value())
 				if n%4096 == 0 {
 					read.Store(n)
-					if err := ctx.Err(); err != nil {
+					if err := y.pause(ctx); err != nil {
 						return err
 					}
 				}

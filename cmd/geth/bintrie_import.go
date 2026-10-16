@@ -372,10 +372,13 @@ func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error 
 	}
 	log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
 		"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
+	yield := newBlockYield()
+	defer followBlockProcessing(p.chain, yield)()
 	_, err := importState(ctx, p.db, importOptions{
 		snapshot:  p.cfg.Snapshot,
 		preimages: p.cfg.Preimages,
 		anchor:    anchor,
+		yield:     yield,
 		// Finalized blocks do not reorg, but an attested tree anchored off
 		// the canonical chain is refused by the follower anyway: say so now.
 		beforeAttest: func() error {
@@ -472,6 +475,8 @@ type importOptions struct {
 	// beforeAttest, when set, runs once everything is written and verified,
 	// right before the attestation: an error leaves the state unattested.
 	beforeAttest func() error
+	// yield, when set, pauses the import while the node processes a block.
+	yield *blockYield
 	conversionOptions
 }
 
@@ -576,6 +581,9 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 		g.Go(func() error {
 			var buf candidateBuf
 			for batch := range records {
+				if err := opts.yield.pause(gctx); err != nil {
+					return err
+				}
 				order := batch.order
 				for i := range batch.runs {
 					run := &batch.runs[i]
@@ -611,6 +619,9 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			order preimageOrder // the reader's own check, when it keeps the preimages
 		)
 		take := func() error {
+			if err := opts.yield.pause(gctx); err != nil {
+				return err
+			}
 			select {
 			case batch = <-free:
 				return nil
@@ -910,7 +921,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	// The pass is a pipeline: a decoder goroutine reads the snapshot into
 	// batches, which the tree builder's goroutine and this loop each consume
 	// in order, so decoding, hashing and joining overlap.
-	pipe := startLeafPipeline(snap, builder, &builderErr)
+	pipe := startLeafPipeline(snap, builder, &builderErr, opts.yield)
 	defer pipe.stop()
 	var (
 		batch *leafBatch
@@ -918,7 +929,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	)
 	for {
 		if batch == nil || next == len(batch.values) {
-			if err := ctx.Err(); err != nil {
+			if err := opts.yield.pause(ctx); err != nil {
 				return common.Hash{}, err
 			}
 			if batch != nil {
@@ -1088,15 +1099,15 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	)
 	defer readBack.Wait()
 	if nodes != nil {
-		if err := writeStagedNodes(ctx, pbtdb, nodes, written.nodes); err != nil {
+		if err := writeStagedNodes(ctx, pbtdb, nodes, written.nodes, opts.yield); err != nil {
 			return common.Hash{}, err
 		}
 		// The tree nodes are all written: read them back while the code
 		// limb and check 2 run. Reading puts nothing in the memtable.
-		readBack.Go(func() error { return verifyWritten(ctx, pbtdb, families[0]) })
+		readBack.Go(func() error { return verifyWritten(ctx, pbtdb, opts.yield, families[0]) })
 		// Likewise the flat storage, once check 2 has written its last row.
 		written.storageWritten = func() {
-			readBack.Go(func() error { return verifyWritten(ctx, pbtdb, families[2]) })
+			readBack.Go(func() error { return verifyWritten(ctx, pbtdb, opts.yield, families[2]) })
 		}
 	}
 
@@ -1115,7 +1126,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	prog = startProgress("Verifying code", "codes", uint64(len(hashes)), stats.codes.Load)
 	defer prog.stop()
 	for _, hash := range hashes {
-		if err := ctx.Err(); err != nil {
+		if err := opts.yield.pause(ctx); err != nil {
 			return common.Hash{}, err
 		}
 		var chunks []bintrie.IndexedChunk
@@ -1165,7 +1176,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	if err != nil {
 		return common.Hash{}, err
 	}
-	got, err := rederiveMerkleRoot(ctx, acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.accounts.Load()+stats.slots.Load())
+	got, err := rederiveMerkleRoot(ctx, acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.accounts.Load()+stats.slots.Load(), opts.yield)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1182,7 +1193,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
 	}
-	if err := verifyWritten(ctx, pbtdb, families[1]); err != nil {
+	if err := verifyWritten(ctx, pbtdb, opts.yield, families[1]); err != nil {
 		return common.Hash{}, err
 	}
 	if err := readBack.Wait(); err != nil {
@@ -1241,10 +1252,12 @@ type preimageBatch struct {
 }
 
 // preimageBatchSize and preimageBatchSlots bound a phase-1 batch: the records
-// it begins or continues, and their slot keys (2 MiB).
+// it begins or continues, and their slot keys (256 KiB). A batch is a few
+// milliseconds of a worker's time, so a block waits no longer for the import
+// to stand aside (blockYield).
 var (
 	preimageBatchSize  = 1024
-	preimageBatchSlots = 1 << 16
+	preimageBatchSlots = 1 << 13
 )
 
 // candidateBuf holds one candidate's key and value while it is built: the
@@ -1331,8 +1344,9 @@ type leafPipeline struct {
 }
 
 // startLeafPipeline starts decoding snap and feeding builder; *builderErr is
-// the error builder's node callback records.
-func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, builderErr *error) *leafPipeline {
+// the error builder's node callback records. Both pause between batches while
+// the node processes a block (y).
+func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, builderErr *error, y *blockYield) *leafPipeline {
 	ctx, cancel := context.WithCancel(context.Background())
 	g, ctx := errgroup.WithContext(ctx)
 	p := &leafPipeline{
@@ -1349,6 +1363,9 @@ func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, buil
 		defer close(p.leaves)
 		defer close(toBuilder)
 		for eof := false; !eof; {
+			if err := y.pause(ctx); err != nil {
+				return err
+			}
 			var b *leafBatch
 			select {
 			case b = <-p.free:
@@ -1383,6 +1400,9 @@ func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, buil
 	})
 	g.Go(func() error {
 		for b := range toBuilder {
+			if err := y.pause(ctx); err != nil {
+				return err
+			}
 			for i := range b.values {
 				if err := builder.Add(b.key(i), b.values[i][:]); err != nil {
 					return err

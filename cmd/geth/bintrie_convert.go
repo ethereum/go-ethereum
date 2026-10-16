@@ -534,7 +534,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, builderErr
 	}
 	sorter.Close()
-	if err := writeStagedNodes(context.Background(), pbtdb, nodes, written.nodes); err != nil {
+	if err := writeStagedNodes(context.Background(), pbtdb, nodes, written.nodes, nil); err != nil {
 		return common.Hash{}, err
 	}
 	nodes.close()
@@ -542,7 +542,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 
 	// Both stores must hold exactly what was written before anything becomes
 	// publishable or openable.
-	if err := verifyWritten(context.Background(), pbtdb, written.families()...); err != nil {
+	if err := verifyWritten(context.Background(), pbtdb, nil, written.families()...); err != nil {
 		return common.Hash{}, err
 	}
 	logWritten(written)
@@ -1128,7 +1128,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(context.Background(), acctStream, slotStream, batch, written, tmpDir, workers, total)
+	got, err := rederiveMerkleRoot(context.Background(), acctStream, slotStream, batch, written, tmpDir, workers, total, nil)
 	if err != nil {
 		return err
 	}

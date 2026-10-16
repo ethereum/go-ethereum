@@ -108,7 +108,7 @@ func BenchmarkImportBesideBlocks(b *testing.B) {
 			b.Fatal(err)
 		}
 		db := openBenchDB(b, dest)
-		node := &standIn{db: db, keys: keys}
+		node := &standIn{db: db, keys: keys, yield: newBlockYield()}
 
 		stages.reset()
 		baseline := node.run(interval, closeAfter(alone), stages)
@@ -127,6 +127,7 @@ func BenchmarkImportBesideBlocks(b *testing.B) {
 				snapshot:          filepath.Join(pairDir, "snapshot.bin"),
 				preimages:         filepath.Join(pairDir, "preimages.bin"),
 				anchor:            &types.Header{Number: new(big.Int), Root: root},
+				yield:             node.yield,
 				conversionOptions: conversionOptions{tmpDir: tmp, sortBudget: budget, workers: workers},
 			})
 			spent = time.Since(start)
@@ -189,11 +190,13 @@ func reportBlocks(b *testing.B, alone, beside []blockTime, spent time.Duration) 
 }
 
 // standIn stands in for the node's block processing over a database it shares
-// with the import.
+// with the import. It announces each block to yield, as the chain announces
+// its inserts.
 type standIn struct {
-	db   ethdb.Database
-	keys int // flat-state records, keyed by blocksStateKey
-	seq  uint64
+	db    ethdb.Database
+	keys  int // flat-state records, keyed by blocksStateKey
+	seq   uint64
+	yield *blockYield
 }
 
 // run processes a block every interval until stop fires, the next starting
@@ -212,7 +215,9 @@ func (s *standIn) run(interval time.Duration, stop <-chan struct{}, stages *impo
 		}
 		stage := stages.current()
 		start := time.Now()
+		s.yield.set(true)
 		s.block()
+		s.yield.set(false)
 		times = append(times, blockTime{time.Since(start), stage})
 	}
 }
