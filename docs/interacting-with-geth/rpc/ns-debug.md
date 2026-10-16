@@ -53,7 +53,7 @@ Flattens the entire key-value database into a single level, removing all unused 
 
 ### debug_chaindbProperty
 
-Returns leveldb properties of the key-value database.
+Returns the internal statistics of the key-value database as human-readable text. The output format depends on the backing database engine (Pebble or LevelDB).
 
 | Client  | Method invocation                                           |
 | :------ | ----------------------------------------------------------- |
