@@ -526,7 +526,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	}
 
 	switch s.trie.(type) {
-	case *bintrie.BinaryTrie, *pbt.Trie:
+	case *bintrie.BinaryTrie, *pbt.PartitionedTrie:
 		// UBT uses only one tree, and the copy has already been
 		// made in mustCopyTrie.
 		obj.trie = db.trie

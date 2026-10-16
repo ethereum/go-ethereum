@@ -40,9 +40,9 @@ var (
 	errUnsupported   = errors.New("pbt: not supported")
 )
 
-// Trie is a partitioned binary tree over the whole state. It is not safe for
-// concurrent use.
-type Trie struct {
+// PartitionedTrie is a partitioned binary tree over the whole state. It is not
+// safe for concurrent use.
+type PartitionedTrie struct {
 	root      node
 	reader    *trie.Reader
 	tracer    *trie.PrevalueTracer
@@ -52,7 +52,7 @@ type Trie struct {
 }
 
 // New opens the tree with the given root.
-func New(root common.Hash, db database.NodeDatabase) (*Trie, error) {
+func New(root common.Hash, db database.NodeDatabase) (*PartitionedTrie, error) {
 	if root == types.EmptyRootHash {
 		return nil, errors.New("pbt: the merkle-patricia empty root is not a tree root")
 	}
@@ -60,7 +60,7 @@ func New(root common.Hash, db database.NodeDatabase) (*Trie, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := &Trie{
+	t := &PartitionedTrie{
 		root:    emptyNode{},
 		reader:  reader,
 		tracer:  trie.NewPrevalueTracer(),
@@ -83,7 +83,7 @@ func pathOf(walk bitstr) []byte {
 	return appendBitPrefix(nil, walk)
 }
 
-func (t *Trie) resolve(h hashedNode, walk bitstr) (node, error) {
+func (t *PartitionedTrie) resolve(h hashedNode, walk bitstr) (node, error) {
 	path := pathOf(walk)
 	blob, err := t.reader.Node(path, common.Hash(h))
 	if err != nil {
@@ -93,7 +93,7 @@ func (t *Trie) resolve(h hashedNode, walk bitstr) (node, error) {
 	return decodeNode(blob, common.Hash(h))
 }
 
-func (t *Trie) onInsert(walk bitstr) {
+func (t *PartitionedTrie) onInsert(walk bitstr) {
 	p := string(pathOf(walk))
 	if _, ok := t.deletes[p]; ok {
 		delete(t.deletes, p)
@@ -102,7 +102,7 @@ func (t *Trie) onInsert(walk bitstr) {
 	}
 }
 
-func (t *Trie) onDelete(walk bitstr) {
+func (t *PartitionedTrie) onDelete(walk bitstr) {
 	p := string(pathOf(walk))
 	if _, ok := t.inserts[p]; ok {
 		delete(t.inserts, p)
@@ -112,7 +112,7 @@ func (t *Trie) onDelete(walk bitstr) {
 }
 
 // getStem returns the group of stem, or nil if absent.
-func (t *Trie) getStem(stem []byte) (*groupNode, error) {
+func (t *PartitionedTrie) getStem(stem []byte) (*groupNode, error) {
 	if t.committed {
 		return nil, trie.ErrCommitted
 	}
@@ -123,7 +123,7 @@ func (t *Trie) getStem(stem []byte) (*groupNode, error) {
 
 // findStem walks n, sitting at bit position pos, to the group of stem, or nil
 // if absent. It returns n with the nodes resolved on the way swapped in.
-func (t *Trie) findStem(n node, stem []byte, pos int) (node, *groupNode, error) {
+func (t *PartitionedTrie) findStem(n node, stem []byte, pos int) (node, *groupNode, error) {
 	switch n := n.(type) {
 	case hashedNode:
 		resolved, err := t.resolve(n, slice(stem, 0, pos))
@@ -152,7 +152,7 @@ func (t *Trie) findStem(n node, stem []byte, pos int) (node, *groupNode, error) 
 }
 
 // stateWrite writes values at subs of stem, a zero value deleting the key.
-func (t *Trie) stateWrite(stem []byte, subs []byte, vals [][]byte) error {
+func (t *PartitionedTrie) stateWrite(stem []byte, subs []byte, vals [][]byte) error {
 	for i, v := range vals {
 		if v != nil && bytes.Equal(v, zero[:]) {
 			vals[i] = nil
@@ -164,7 +164,7 @@ func (t *Trie) stateWrite(stem []byte, subs []byte, vals [][]byte) error {
 var zero [32]byte
 
 // updateStem writes values at subs of stem in one walk; nil deletes.
-func (t *Trie) updateStem(stem []byte, subs []byte, vals [][]byte) error {
+func (t *PartitionedTrie) updateStem(stem []byte, subs []byte, vals [][]byte) error {
 	if t.committed {
 		return trie.ErrCommitted
 	}
@@ -210,7 +210,7 @@ func emptiedBy(g *groupNode, subs []byte, vals [][]byte) bool {
 // insert applies the writes to stem below n, sitting at bit position pos, and
 // returns what replaces n. A new stem splits the group or branch it diverges
 // from; a group emptied by deletes collapses its parent branch.
-func (t *Trie) insert(n node, stem []byte, subs []byte, vals [][]byte, pos int) (node, error) {
+func (t *PartitionedTrie) insert(n node, stem []byte, subs []byte, vals [][]byte, pos int) (node, error) {
 	switch n := n.(type) {
 	case emptyNode:
 		g := newGroup(stem, subs, vals)
@@ -295,7 +295,7 @@ func (t *Trie) insert(n node, stem []byte, subs []byte, vals [][]byte, pos int) 
 
 // collapse replaces branch n at walk, whose child on side bit was emptied, by
 // its other child.
-func (t *Trie) collapse(n *branchNode, walk bitstr, bit byte) (node, error) {
+func (t *PartitionedTrie) collapse(n *branchNode, walk bitstr, bit byte) (node, error) {
 	sibling, sbit := n.right, byte(1)
 	if bit == 1 {
 		sibling, sbit = n.left, 0
@@ -323,7 +323,7 @@ func (t *Trie) collapse(n *branchNode, walk bitstr, bit byte) (node, error) {
 }
 
 // deletePrefix removes every key starting with the byte string prefix.
-func (t *Trie) deletePrefix(prefix []byte) error {
+func (t *PartitionedTrie) deletePrefix(prefix []byte) error {
 	if t.committed {
 		return trie.ErrCommitted
 	}
@@ -337,7 +337,7 @@ func (t *Trie) deletePrefix(prefix []byte) error {
 
 // delPrefix removes the keys below n, sitting at walk, that start with prefix,
 // and returns what replaces n and whether anything was removed.
-func (t *Trie) delPrefix(n node, prefix []byte, walk bitstr, pos int) (node, bool, error) {
+func (t *PartitionedTrie) delPrefix(n node, prefix []byte, walk bitstr, pos int) (node, bool, error) {
 	switch n := n.(type) {
 	case hashedNode:
 		resolved, err := t.resolve(n, walk)
@@ -383,7 +383,7 @@ func (t *Trie) delPrefix(n node, prefix []byte, walk bitstr, pos int) (node, boo
 }
 
 // deleteSubtree records the removal of every stored record below n.
-func (t *Trie) deleteSubtree(n node, walk bitstr, pos int) error {
+func (t *PartitionedTrie) deleteSubtree(n node, walk bitstr, pos int) error {
 	switch n := n.(type) {
 	case hashedNode:
 		resolved, err := t.resolve(n, walk)
@@ -405,11 +405,11 @@ func (t *Trie) deleteSubtree(n node, walk bitstr, pos int) error {
 }
 
 // GetKey returns the key itself: tree keys are not hashed preimages.
-func (t *Trie) GetKey(key []byte) []byte { return key }
+func (t *PartitionedTrie) GetKey(key []byte) []byte { return key }
 
 // GetAccount reads the account header. A delegated account's code hash is the
 // hash of its indicator.
-func (t *Trie) GetAccount(addr common.Address) (*types.StateAccount, error) {
+func (t *PartitionedTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
 	g, err := t.getStem(headerStem(addr))
 	if err != nil || g == nil {
 		return nil, err
@@ -438,7 +438,7 @@ func (t *Trie) GetAccount(addr common.Address) (*types.StateAccount, error) {
 // UpdateAccount writes the account's basic data. The code leaves are written
 // by UpdateContractCode when the code changes; a zero codeLen with code means
 // the code was not loaded, so the stored size is kept.
-func (t *Trie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int) error {
+func (t *PartitionedTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int) error {
 	var (
 		stem = headerStem(addr)
 		size = uint32(codeLen)
@@ -469,7 +469,7 @@ func (t *Trie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeL
 }
 
 // UpdateAccountBatch writes the accounts one by one.
-func (t *Trie) UpdateAccountBatch(addrs []common.Address, accounts []*types.StateAccount, codeLens []int) error {
+func (t *PartitionedTrie) UpdateAccountBatch(addrs []common.Address, accounts []*types.StateAccount, codeLens []int) error {
 	for i, addr := range addrs {
 		if err := t.UpdateAccount(addr, accounts[i], codeLens[i]); err != nil {
 			return err
@@ -480,7 +480,7 @@ func (t *Trie) UpdateAccountBatch(addrs []common.Address, accounts []*types.Stat
 
 // DeleteAccount removes the account header and storage. Code is shared by
 // hash and stays.
-func (t *Trie) DeleteAccount(addr common.Address) error {
+func (t *PartitionedTrie) DeleteAccount(addr common.Address) error {
 	if err := t.deletePrefix(headerStem(addr)); err != nil {
 		return err
 	}
@@ -488,7 +488,7 @@ func (t *Trie) DeleteAccount(addr common.Address) error {
 }
 
 // GetStorage returns the value of a raw storage slot, or nil if absent.
-func (t *Trie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
+func (t *PartitionedTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
 	k := storageKey(addr, key)
 	g, err := t.getStem(k[:len(k)-1])
 	if err != nil || g == nil {
@@ -498,7 +498,7 @@ func (t *Trie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
 }
 
 // UpdateStorage writes a storage slot; zero deletes it.
-func (t *Trie) UpdateStorage(addr common.Address, key, value []byte) error {
+func (t *PartitionedTrie) UpdateStorage(addr common.Address, key, value []byte) error {
 	k := storageKey(addr, key)
 	v := make([]byte, 32)
 	copy(v[32-min(len(value), 32):], value)
@@ -506,7 +506,7 @@ func (t *Trie) UpdateStorage(addr common.Address, key, value []byte) error {
 }
 
 // UpdateStorageBatch writes the slots one by one.
-func (t *Trie) UpdateStorageBatch(addr common.Address, keys [][]byte, values [][]byte) error {
+func (t *PartitionedTrie) UpdateStorageBatch(addr common.Address, keys [][]byte, values [][]byte) error {
 	for i, key := range keys {
 		if err := t.UpdateStorage(addr, key, values[i]); err != nil {
 			return err
@@ -516,14 +516,14 @@ func (t *Trie) UpdateStorageBatch(addr common.Address, keys [][]byte, values [][
 }
 
 // DeleteStorage removes a storage slot.
-func (t *Trie) DeleteStorage(addr common.Address, key []byte) error {
+func (t *PartitionedTrie) DeleteStorage(addr common.Address, key []byte) error {
 	k := storageKey(addr, key)
 	return t.updateStem(k[:len(k)-1], k[len(k)-1:], [][]byte{nil})
 }
 
 // UpdateContractCode writes the account's code leaf: the EIP-7702 indicator
 // in its header, or the code hash with the code chunks in the code zone.
-func (t *Trie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
+func (t *PartitionedTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
 	subs := []byte{codeHashLeafKey, delegationLeafKey}
 	if _, ok := types.ParseDelegation(code); ok {
 		v := make([]byte, 32)
@@ -557,12 +557,12 @@ func (t *Trie) UpdateContractCode(addr common.Address, codeHash common.Hash, cod
 }
 
 // Hash returns the root hash.
-func (t *Trie) Hash() common.Hash {
+func (t *PartitionedTrie) Hash() common.Hash {
 	return t.root.hashAt(0)
 }
 
 // Commit collects the modified records. The trie is unusable afterwards.
-func (t *Trie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
+func (t *PartitionedTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	defer func() { t.committed = true }()
 
 	var (
@@ -583,7 +583,7 @@ func (t *Trie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 }
 
 // collect adds the records modified below n, sitting at walk, to set.
-func (t *Trie) collect(n node, walk bitstr, pos int, set *trienode.NodeSet) {
+func (t *PartitionedTrie) collect(n node, walk bitstr, pos int, set *trienode.NodeSet) {
 	switch n := n.(type) {
 	case *groupNode:
 		if !n.modified {
@@ -606,28 +606,28 @@ func (t *Trie) collect(n node, walk bitstr, pos int, set *trienode.NodeSet) {
 }
 
 // Witness returns the records resolved from the database, keyed by path.
-func (t *Trie) Witness() map[string][]byte {
+func (t *PartitionedTrie) Witness() map[string][]byte {
 	return t.tracer.Values()
 }
 
 // NodeIterator is not supported.
-func (t *Trie) NodeIterator(startKey []byte) (trie.NodeIterator, error) {
+func (t *PartitionedTrie) NodeIterator(startKey []byte) (trie.NodeIterator, error) {
 	return nil, errUnsupported
 }
 
 // Prove is not supported.
-func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
+func (t *PartitionedTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	return errUnsupported
 }
 
 // IsUBT reports false: this is not the EIP-7864 tree.
-func (t *Trie) IsUBT() bool { return false }
+func (t *PartitionedTrie) IsUBT() bool { return false }
 
 // IsPBT reports true.
-func (t *Trie) IsPBT() bool { return true }
+func (t *PartitionedTrie) IsPBT() bool { return true }
 
 // PrefetchAccount resolves the accounts' header stems.
-func (t *Trie) PrefetchAccount(addrs []common.Address) error {
+func (t *PartitionedTrie) PrefetchAccount(addrs []common.Address) error {
 	for _, addr := range addrs {
 		if _, err := t.getStem(headerStem(addr)); err != nil {
 			return err
@@ -637,7 +637,7 @@ func (t *Trie) PrefetchAccount(addrs []common.Address) error {
 }
 
 // PrefetchStorage resolves the slots' stems.
-func (t *Trie) PrefetchStorage(addr common.Address, keys [][]byte) error {
+func (t *PartitionedTrie) PrefetchStorage(addr common.Address, keys [][]byte) error {
 	for _, key := range keys {
 		k := storageKey(addr, key)
 		if _, err := t.getStem(k[:len(k)-1]); err != nil {
@@ -648,8 +648,8 @@ func (t *Trie) PrefetchStorage(addr common.Address, keys [][]byte) error {
 }
 
 // Copy returns a deep copy of the trie.
-func (t *Trie) Copy() *Trie {
-	return &Trie{
+func (t *PartitionedTrie) Copy() *PartitionedTrie {
+	return &PartitionedTrie{
 		root:      t.root.copy(),
 		reader:    t.reader,
 		tracer:    t.tracer.Copy(),

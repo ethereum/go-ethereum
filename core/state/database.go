@@ -200,7 +200,7 @@ func mustCopyTrie(t Trie) Trie {
 		return t.Copy()
 	case *bintrie.BinaryTrie:
 		return t.Copy()
-	case *pbt.Trie:
+	case *pbt.PartitionedTrie:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
