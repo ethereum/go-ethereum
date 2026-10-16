@@ -586,7 +586,9 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
 	}
 	if obj.dirtyCode {
-		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+		if err := s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code); err != nil {
+			s.setError(fmt.Errorf("updateContractCode (%x) error: %v", obj.Address(), err))
+		}
 	}
 }
 
@@ -960,7 +962,7 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
-	if s.db.Type().Is(TypeUBT) {
+	if s.db.Type().Is(TypeUBT) || s.db.Type().Is(TypePBT) {
 		// Bypass per-account updateTrie() for binary trie. In binary trie mode
 		// there is only one unified trie (OpenStorageTrie returns self), so the
 		// per-account trie setup in updateTrie() (getPrefetchedTrie, getTrie,
@@ -1193,7 +1195,7 @@ func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[com
 	if err := it.Error(); err != nil {
 		return nil, nil, nil, err
 	}
-	if stack.Hash() != root {
+	if root != types.EmptyRootHash && stack.Hash() != root {
 		return nil, nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
 	}
 	return storages, storageOrigins, nodes, nil
@@ -1241,6 +1243,16 @@ func (s *StateDB) handleDestruction(rules params.Rules) (map[common.Hash]*Accoun
 		}
 		deletes[addrHash] = op
 
+		// The tree drops the storage along with the account, while the flat
+		// state keeps it per slot: enumerate the slots there to delete them.
+		if s.db.Type().Is(TypePBT) {
+			storages, storagesOrigin, _, err := s.deleteStorage(addrHash, types.EmptyRootHash)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
+			}
+			op.Storages, op.StoragesOrigin = storages, storagesOrigin
+			continue
+		}
 		// Short circuit if the origin storage was empty.
 		if prev.Root == types.EmptyRootHash || s.db.Type().Is(TypeUBT) {
 			continue
@@ -1419,7 +1431,7 @@ func (s *StateDB) commit(rules params.Rules, blockNumber uint64) (*StateUpdate, 
 	s.originalRoot = root
 
 	typ := StorageKeyHashed
-	if rules.IsCancun {
+	if rules.IsCancun && !s.db.Type().Is(TypePBT) {
 		typ = StorageKeyPlain
 	}
 	return NewStateUpdate(typ, origin, root, blockNumber, deletes, updates, nodes), nil
