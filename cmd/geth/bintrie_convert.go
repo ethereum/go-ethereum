@@ -534,7 +534,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, builderErr
 	}
 	sorter.Close()
-	if err := writeStagedNodes(pbtdb, nodes, written.nodes); err != nil {
+	if err := writeStagedNodes(context.Background(), pbtdb, nodes, written.nodes); err != nil {
 		return common.Hash{}, err
 	}
 	nodes.close()
@@ -542,7 +542,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 
 	// Both stores must hold exactly what was written before anything becomes
 	// publishable or openable.
-	if err := verifyWritten(pbtdb, written.families()...); err != nil {
+	if err := verifyWritten(context.Background(), pbtdb, written.families()...); err != nil {
 		return common.Hash{}, err
 	}
 	logWritten(written)
@@ -559,7 +559,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	}
 	// The check re-reads the artifacts and rebuilds the tree once more;
 	// streaming the leaves into it would save that pass.
-	if _, err := importState(chaindb, importOptions{snapshot: snapPath, preimages: prePath,
+	if _, err := importState(context.Background(), chaindb, importOptions{snapshot: snapPath, preimages: prePath,
 		anchor: &types.Header{Root: root}, verifyOnly: true, conversionOptions: opts}); err != nil {
 		return common.Hash{}, err
 	}
@@ -757,22 +757,34 @@ func (storeKeys) close() error              { return nil }
 // fileKeys merges one piece of an EIP-8347 preimage file against the
 // worker's scan range, as the EIP's converter step 2 does: both run in keccak
 // order, so each record must match the next account and each slot key the
-// next slot. The reader hashes every key, which proves the preimages.
+// next slot. The reader hashes every key, which proves the preimages. A
+// record's slot keys are read a window at a time, never whole.
 type fileKeys struct {
-	r     *preimageReader
-	slots []common.Hash
-	next  int
+	r      *preimageReader
+	order  preimageOrder
+	left   int           // slot keys of the current record not yet read
+	slots  []common.Hash // the window read last
+	hashes []common.Hash // their hashes
+	next   int           // the window's first slot key not yet matched
 }
 
+// fileKeysWindow is how many slot keys fileKeys reads at a time.
+var fileKeysWindow = 4096
+
 func (f *fileKeys) account(hash common.Hash) (common.Address, error) {
-	addr, addrHash, slots, err := f.r.next()
+	addr, count, err := f.r.nextRecord()
 	switch {
 	case err == io.EOF:
 		return common.Address{}, fmt.Errorf("missing preimage for account hash %x: the preimage file holds no record for it", hash)
 	case err != nil:
 		return common.Address{}, err
+	}
+	addrHash, err := f.order.record(f.r.records-1, addr)
+	switch {
+	case err != nil:
+		return common.Address{}, err
 	case addrHash == hash:
-		f.slots, f.next = slots, 0
+		f.left, f.slots, f.next = count, f.slots[:0], 0
 		return addr, nil
 	case bytes.Compare(addrHash[:], hash[:]) < 0:
 		return common.Address{}, fmt.Errorf("preimage file names address %x, which the state does not hold", addr)
@@ -781,26 +793,59 @@ func (f *fileKeys) account(hash common.Hash) (common.Address, error) {
 	}
 }
 
+// pending returns the current record's next slot key not yet matched and its
+// hash, reading the following window once the last is used up; ok is false
+// once the record has none left.
+func (f *fileKeys) pending() (slot, hash common.Hash, ok bool, err error) {
+	if f.next == len(f.slots) {
+		if f.left == 0 {
+			return common.Hash{}, common.Hash{}, false, nil
+		}
+		n := min(f.left, fileKeysWindow)
+		f.slots, f.hashes, f.next = slices.Grow(f.slots[:0], n)[:n], f.hashes[:0], 0
+		if err := f.r.readSlots(f.slots); err != nil {
+			return common.Hash{}, common.Hash{}, false, err
+		}
+		err := f.order.slots(f.slots, func(_, hash common.Hash) error {
+			f.hashes = append(f.hashes, hash)
+			return nil
+		})
+		if err != nil {
+			return common.Hash{}, common.Hash{}, false, err
+		}
+		f.left -= n
+	}
+	return f.slots[f.next], f.hashes[f.next], true, nil
+}
+
 func (f *fileKeys) slot(addr common.Address, hash common.Hash) (common.Hash, error) {
-	if f.next < len(f.slots) && f.r.slotHashes[f.next] == hash {
+	slot, have, ok, err := f.pending()
+	switch {
+	case err != nil:
+		return common.Hash{}, err
+	case ok && have == hash:
 		f.next++
-		return f.slots[f.next-1], nil
+		return slot, nil
+	case ok && bytes.Compare(have[:], hash[:]) < 0:
+		return common.Hash{}, fmt.Errorf("preimage file names slot %x of %x, which the state does not hold", slot, addr)
+	default:
+		return common.Hash{}, fmt.Errorf("missing preimage for storage key %x (account %x)", hash, addr)
 	}
-	if f.next < len(f.slots) && bytes.Compare(f.r.slotHashes[f.next][:], hash[:]) < 0 {
-		return common.Hash{}, fmt.Errorf("preimage file names slot %x of %x, which the state does not hold", f.slots[f.next], addr)
-	}
-	return common.Hash{}, fmt.Errorf("missing preimage for storage key %x (account %x)", hash, addr)
 }
 
 func (f *fileKeys) done(addr common.Address) error {
-	if f.next < len(f.slots) {
-		return fmt.Errorf("preimage file names slot %x of %x, which the state does not hold", f.slots[f.next], addr)
+	slot, _, ok, err := f.pending()
+	if err != nil {
+		return err
+	}
+	if ok {
+		return fmt.Errorf("preimage file names slot %x of %x, which the state does not hold", slot, addr)
 	}
 	return nil
 }
 
 func (f *fileKeys) close() error {
-	addr, _, _, err := f.r.next()
+	addr, _, err := f.r.nextRecord()
 	if err == io.EOF {
 		return nil
 	}
@@ -1035,40 +1080,15 @@ func hasMerkleSource(chaindb ethdb.Database, root common.Hash) bool {
 
 // wipeBinaryTrieState clears the binary tree state: the key families (the
 // bare prefix is shared with block bodies), the PBT history freezers, and
-// the journal file in triedbDir.
+// the journal file in triedbDir. Nothing may hold the namespace open.
 func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 	// Anchor, then bookkeeping, then state: any crash prefix leaves state the
 	// follower refuses, never an anchor or a position it would bind to it.
-	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
-	rawdb.DeletePBTAnchor(pbtdb)
+	rawdb.DeletePBTAnchor(rawdb.NewTable(chaindb, string(rawdb.PBTPrefix)))
 	if err := rawdb.WipeMigrationState(chaindb); err != nil {
 		return err
 	}
-	batch := pbtdb.NewBatch()
-	wiped := 0
-	for _, family := range rawdb.PBTKeyFamilies {
-		it := pbtdb.NewIterator(family, nil)
-		for it.Next() {
-			if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
-				it.Release()
-				return err
-			}
-			wiped++
-			if batch.ValueSize() >= ethdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					it.Release()
-					return err
-				}
-				batch.Reset()
-			}
-		}
-		err := it.Error()
-		it.Release()
-		if err != nil {
-			return err
-		}
-	}
-	if err := batch.Write(); err != nil {
+	if err := rawdb.DeletePBTState(chaindb, nil); err != nil {
 		return err
 	}
 	if ancient, err := chaindb.AncientDatadir(); err == nil {
@@ -1092,7 +1112,7 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 			return err
 		}
 	}
-	log.Info("Wiped binary tree state", "records", wiped)
+	log.Info("Wiped binary tree state")
 	return nil
 }
 
@@ -1108,7 +1128,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, batch, written, tmpDir, workers, total)
+	got, err := rederiveMerkleRoot(context.Background(), acctStream, slotStream, batch, written, tmpDir, workers, total)
 	if err != nil {
 		return err
 	}

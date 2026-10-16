@@ -30,9 +30,10 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		LogHistory              uint64 `toml:",omitempty"`
 		LogNoHistory            bool   `toml:",omitempty"`
 		LogExportCheckpoints    string
-		StateHistory            uint64                 `toml:",omitempty"`
-		MigrationWindowBlocks   uint64                 `toml:",omitempty"`
-		TrienodeHistory         int64                  `toml:",omitempty"`
+		StateHistory            uint64 `toml:",omitempty"`
+		MigrationWindowBlocks   uint64 `toml:",omitempty"`
+		TrienodeHistory         int64  `toml:",omitempty"`
+		PBTImport               PBTImportConfig
 		NodeFullValueCheckpoint uint32                 `toml:",omitempty"`
 		StateScheme             string                 `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
@@ -89,6 +90,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.StateHistory = c.StateHistory
 	enc.MigrationWindowBlocks = c.MigrationWindowBlocks
 	enc.TrienodeHistory = c.TrienodeHistory
+	enc.PBTImport = c.PBTImport
 	enc.NodeFullValueCheckpoint = c.NodeFullValueCheckpoint
 	enc.StateScheme = c.StateScheme
 	enc.RequiredBlocks = c.RequiredBlocks
@@ -146,9 +148,10 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		LogHistory              *uint64 `toml:",omitempty"`
 		LogNoHistory            *bool   `toml:",omitempty"`
 		LogExportCheckpoints    *string
-		StateHistory            *uint64                `toml:",omitempty"`
-		MigrationWindowBlocks   *uint64                `toml:",omitempty"`
-		TrienodeHistory         *int64                 `toml:",omitempty"`
+		StateHistory            *uint64 `toml:",omitempty"`
+		MigrationWindowBlocks   *uint64 `toml:",omitempty"`
+		TrienodeHistory         *int64  `toml:",omitempty"`
+		PBTImport               *PBTImportConfig
 		NodeFullValueCheckpoint *uint32                `toml:",omitempty"`
 		StateScheme             *string                `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
@@ -239,6 +242,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.TrienodeHistory != nil {
 		c.TrienodeHistory = *dec.TrienodeHistory
+	}
+	if dec.PBTImport != nil {
+		c.PBTImport = *dec.PBTImport
 	}
 	if dec.NodeFullValueCheckpoint != nil {
 		c.NodeFullValueCheckpoint = *dec.NodeFullValueCheckpoint

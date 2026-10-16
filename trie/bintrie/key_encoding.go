@@ -100,11 +100,16 @@ func KeyHash(data []byte) [32]byte {
 // HeaderStem returns the stem of addr's account header: AccountZone ‖
 // KeyHash(addr32), 33 bytes. Every account has exactly one header stem.
 func HeaderStem(addr common.Address) []byte {
+	return AppendHeaderStem(make([]byte, 0, AccountKeyLength-1), addr)
+}
+
+// AppendHeaderStem appends addr's header stem to dst, for a caller that
+// derives many stems into one buffer.
+func AppendHeaderStem(dst []byte, addr common.Address) []byte {
 	a32 := Address32(addr)
 	h := KeyHash(a32[:])
-	stem := make([]byte, 0, AccountKeyLength-1)
-	stem = append(stem, AccountZone)
-	return append(stem, h[:]...)
+	dst = append(dst, AccountZone)
+	return append(dst, h[:]...)
 }
 
 // HeaderKey returns the account header key at the given sub-index.
@@ -168,16 +173,20 @@ func StorageStem(addr common.Address, treeIndex *uint256.Int) []byte {
 // many stems for one account - one per overflow slot - hashes address32
 // once and reuses it here instead of paying KeyHash again per slot.
 func StorageStemWithPrefix(addr common.Address, prefix []byte, treeIndex *uint256.Int) []byte {
+	return AppendStorageStem(make([]byte, 0, StorageKeyLength), addr, prefix, treeIndex) // room for the caller's sub-index
+}
+
+// AppendStorageStem appends the stem StorageStemWithPrefix returns to dst.
+func AppendStorageStem(dst []byte, addr common.Address, prefix []byte, treeIndex *uint256.Int) []byte {
 	a32 := Address32(addr)
 	var buf [64]byte
 	copy(buf[:32], a32[:])
 	treeIndex.PutUint256(buf[32:])
 	suffix := KeyHash(buf[:])
 
-	stem := make([]byte, 0, StorageKeyLength) // room for the caller's sub-index
-	stem = append(stem, StorageZone)
-	stem = append(stem, prefix...)
-	return append(stem, suffix[:]...)
+	dst = append(dst, StorageZone)
+	dst = append(dst, prefix...)
+	return append(dst, suffix[:]...)
 }
 
 // StorageIndex resolves a raw storage slot key (at most 32 bytes, big
@@ -187,21 +196,21 @@ func StorageIndex(slot []byte) (inHeader bool, treeIndex uint256.Int, sub byte) 
 	var padded [32]byte
 	copy(padded[32-len(slot):], slot)
 
-	headerCandidate := padded[31] < HeaderStorageOffset
-	if headerCandidate {
-		for _, b := range padded[:31] {
-			if b != 0 {
-				headerCandidate = false
-				break
-			}
-		}
-	}
-	if headerCandidate {
-		return true, treeIndex, HeaderStorageOffset + padded[31]
+	if index, ok := HeaderSlot(&padded); ok {
+		return true, treeIndex, HeaderStorageOffset + index
 	}
 	treeIndex.SetBytes(padded[:])
 	treeIndex.Rsh(&treeIndex, 8) // slot / StemSubtreeWidth
 	return false, treeIndex, padded[31]
+}
+
+// HeaderSlot reports whether a storage slot key lives in its account's
+// header stem, a slot below 64, and its index among the header slots if so.
+func HeaderSlot(slot *[32]byte) (index byte, ok bool) {
+	if slot[31] >= HeaderStorageOffset || [31]byte(slot[:31]) != [31]byte{} {
+		return 0, false
+	}
+	return slot[31], true
 }
 
 // StorageSlotKey returns the tree key of a raw storage slot. Slots below 64

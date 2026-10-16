@@ -17,11 +17,13 @@
 package downloader
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -107,6 +109,12 @@ func (b *beaconBackfiller) resume() {
 		// If the downloader fails, report an error as in beacon chain mode there
 		// should be no errors as long as the chain we're syncing to is valid.
 		if err := b.downloader.synchronise(b.started); err != nil {
+			// A shadow tree behind the activation boundary is a wait: the next
+			// skeleton extension resumes the backfill.
+			if errors.Is(err, core.ErrActivationWait) {
+				log.Warn("Beacon backfilling waits on the shadow tree", "err", err)
+				return
+			}
 			log.Error("Beacon backfilling failed", "err", err)
 			return
 		}

@@ -188,6 +188,13 @@ type BlockChainConfig struct {
 	// Closing is irreversible: a deeper reorg afterwards means re-anchoring.
 	MigrationWindowBlocks uint64
 
+	// PBTImport hands the binary tree to an EIP-8347 snapshot import that runs
+	// inside the node: the follower is held off the namespace until
+	// FinishPBTImport. PBTImportForce lets that import replace a tree
+	// anchored elsewhere.
+	PBTImport      bool
+	PBTImportForce bool
+
 	// Number of blocks from the chain head for which trienode histories are retained.
 	// If set to 0, all trienode histories across the entire chain will be retained;
 	// If set to -1, no trienode history will be retained;
@@ -445,6 +452,16 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 			return nil, errors.New("merkle state disposed at a pre-fork head: re-anchor or resync")
 		}
 	}
+	// An import seeds the tree the follower carries to the fork: it needs a
+	// fork to carry it to, and a head that has not crossed it.
+	if cfg.PBTImport {
+		switch {
+		case mode != modeMigration:
+			return nil, errors.New(`binary tree import needs a chain config that schedules the tree (genesis key "binaryTrieTime"; see --override.genesis)`)
+		case isPBT:
+			return nil, errors.New("binary tree import refused: the head block already commits the binary tree")
+		}
+	}
 	tdbConfig, err := cfg.triedbConfig(isPBT)
 	if err != nil {
 		return nil, err
@@ -632,6 +649,21 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// Finish a disposal a previous run began.
 	if rawdb.ReadPBTMerkleDisposed(db) {
 		bc.startMerkleDisposal()
+	}
+
+	// An import running inside the node owns the binary tree until it
+	// attests: hold it before the follower exists, since the follower opens
+	// the namespace at once. An attested, anchored tree is finished; without
+	// force the import leaves it be, and a hold left over from a run that
+	// attested but died before releasing is cleared.
+	if mode == modeMigration {
+		_, _, anchored := rawdb.ReadPBTAnchor(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
+		switch finished := anchored && rawdb.HasPBTState(db); {
+		case cfg.PBTImport && (cfg.PBTImportForce || !finished):
+			rawdb.WritePBTImportPending(db)
+		case finished:
+			rawdb.DeletePBTImportPending(db)
+		}
 	}
 
 	// An archive node keeps the follower: its only route to a merkle handle.
@@ -2110,7 +2142,7 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		// At the activation boundary the pre-state lives in the shadow tree;
 		// give a lagging follower a bounded moment.
 		if err := bc.WaitActivation(block, activationWaitTimeout); err != nil {
-			return nil, it.index, fmt.Errorf("activation waits on the shadow tree: %w", err)
+			return nil, it.index, fmt.Errorf("%w: %w", ErrActivationWait, err)
 		}
 		// The traced section of block import.
 		start := time.Now()

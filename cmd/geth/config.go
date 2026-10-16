@@ -252,6 +252,12 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Add Ethereum service.
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
+	// An EIP-8347 import runs beside the chain. Registered after it, it is
+	// stopped first, before the chain closes the database under it.
+	if cfg.Eth.PBTImport.Snapshot != "" {
+		stack.RegisterLifecycle(newPBTImporter(stack, eth, cfg.Eth.PBTImport))
+	}
+
 	// Create gauge with geth system and build information
 	if eth != nil { // The 'eth' backend may be nil in light mode
 		var protos []string

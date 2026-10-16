@@ -115,6 +115,27 @@ func WritePBTMerkleDisposed(db ethdb.KeyValueWriter) {
 	}
 }
 
+// ReadPBTImportPending reports whether an import owns the binary tree.
+func ReadPBTImportPending(db ethdb.KeyValueReader) bool {
+	data, _ := db.Get(pbtImportPendingKey)
+	return len(data) == 1 && data[0] == 1
+}
+
+// WritePBTImportPending hands the binary tree to an import; write it before
+// anything can open the namespace.
+func WritePBTImportPending(db ethdb.KeyValueWriter) {
+	if err := db.Put(pbtImportPendingKey, []byte{1}); err != nil {
+		log.Crit("Failed to store binary tree import marker", "err", err)
+	}
+}
+
+// DeletePBTImportPending releases the binary tree once its import attested.
+func DeletePBTImportPending(db ethdb.KeyValueWriter) {
+	if err := db.Delete(pbtImportPendingKey); err != nil {
+		log.Crit("Failed to delete binary tree import marker", "err", err)
+	}
+}
+
 // DeleteMerkleState deletes the merkle state from the key-value store: the
 // snapshot and pathdb singletons, MerkleKeyFamilies, then the state ids. Path
 // scheme only: on the hash scheme the families also hold bare-hash code.
@@ -136,7 +157,34 @@ func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) error 
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	stop := func(bool) bool {
+	stop := stopOn(interrupt)
+	for _, prefix := range MerkleKeyFamilies {
+		if err := SafeDeleteRange(db, prefix, increaseKey(bytes.Clone(prefix)), false, stop); err != nil {
+			return err
+		}
+	}
+	return deleteStateIDs(db, stop)
+}
+
+// DeletePBTState deletes the binary tree state: every PBTKeyFamilies range
+// inside the PBTPrefix table, never the bare prefix, which block bodies
+// share. Interrupt stops it between ranges; a rerun finishes the job.
+func DeletePBTState(db ethdb.Database, interrupt <-chan struct{}) error {
+	var (
+		pbtdb = NewTable(db, string(PBTPrefix))
+		stop  = stopOn(interrupt)
+	)
+	for _, family := range PBTKeyFamilies {
+		if err := SafeDeleteRange(pbtdb, family, increaseKey(bytes.Clone(family)), false, stop); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// stopOn adapts an interrupt channel to SafeDeleteRange's stop callback.
+func stopOn(interrupt <-chan struct{}) func(bool) bool {
+	return func(bool) bool {
 		select {
 		case <-interrupt:
 			return true
@@ -144,12 +192,6 @@ func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) error 
 			return false
 		}
 	}
-	for _, prefix := range MerkleKeyFamilies {
-		if err := SafeDeleteRange(db, prefix, increaseKey(bytes.Clone(prefix)), false, stop); err != nil {
-			return err
-		}
-	}
-	return deleteStateIDs(db, stop)
 }
 
 // deleteStateIDs removes the root-to-id mappings and LastStateID by key

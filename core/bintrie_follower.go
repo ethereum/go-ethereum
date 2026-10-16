@@ -64,6 +64,16 @@ type BALRequest struct {
 	Hash   common.Hash
 }
 
+var (
+	// errPBTImportPending is what the binary direction answers while an
+	// import owns the tree: nothing may open the namespace under it.
+	errPBTImportPending = errors.New("binary tree held by an unfinished import")
+
+	// errPBTImportUnfinished reports a hold no import in this process will
+	// release: an earlier run stopped or failed, and its flags are gone.
+	errPBTImportUnfinished = errors.New("binary tree import unfinished: restart with --pbt.import.snapshot, --pbt.import.preimages and --pbt.import.anchor to finish it")
+)
+
 // bintrieFollower replays block access lists onto the binary shadow tree
 // ahead of the fork; the merkle trie stays frozen where the fork found it.
 // Each tree is the truth for where its replay stands; the persisted cursors
@@ -77,6 +87,9 @@ type bintrieFollower struct {
 	dirs      [2]*followerTree // binary then merkle; created on first use
 	kickHead  *types.Header    // a kick's target, when it named one
 	requester func([]BALRequest)
+
+	importErr    error     // why the import holding the tree failed, if it did
+	importLogged time.Time // the last report of a hold no runner will release
 
 	chain   *BlockChain // nil when driven synchronously in tests
 	headCh  chan ChainHeadEvent
@@ -289,12 +302,33 @@ func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
 		t.stall = err
 		f.mu.Unlock()
 		if err != nil {
+			if errors.Is(err, errPBTImportPending) {
+				f.reportImportHold()
+				continue
+			}
 			log.Warn("Migration direction stalled", "pbt", t.pbt, "head", head.Number, "err", err)
 			var missing *MissingAccessListError
 			if errors.As(err, &missing) {
 				f.requestLists(missing.Number, head.Number.Uint64())
 			}
 		}
+	}
+}
+
+// reportImportHold logs, at most hourly, a tree held by an import that no
+// runner in this process will release; a running import reports itself.
+func (f *bintrieFollower) reportImportHold() {
+	if f.cfg != nil && f.cfg.PBTImport {
+		return
+	}
+	f.mu.Lock()
+	due := time.Since(f.importLogged) >= time.Hour
+	if due {
+		f.importLogged = time.Now()
+	}
+	f.mu.Unlock()
+	if due {
+		log.Error("Binary tree held", "err", errPBTImportUnfinished)
 	}
 }
 
@@ -649,6 +683,11 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	if rawdb.ReadSnapSyncStatusFlag(f.db) == rawdb.StateSyncRunning {
 		return nil, errors.New("snap sync running: shadow trees wait")
 	}
+	// An import owns the binary tree until it attests: a handle opened under
+	// it would attest the half-written namespace or refuse it fatally.
+	if t.pbt && rawdb.ReadPBTImportPending(f.db) {
+		return nil, errPBTImportPending
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	// The marker is written before release takes this lock, so a handle
@@ -946,7 +985,7 @@ func interrupted(stop chan struct{}) bool {
 
 // MigrationProgress reports where a migrating chain stands.
 type MigrationProgress struct {
-	Phase  string             // inactive, running or done
+	Phase  string             // inactive, importing, importFailed, running or done
 	Binary *DirectionProgress // the binary shadow; nil before it runs
 	Merkle *DirectionProgress // the merkle window; nil before it runs
 }
@@ -974,6 +1013,32 @@ func (bc *BlockChain) KickMigration() {
 	}
 }
 
+// FinishPBTImport ends an import running inside the node. Success releases
+// the binary tree: the follower opens it and adopts the imported anchor. A
+// failure keeps the tree held, and MigrationProgress reports why.
+func (bc *BlockChain) FinishPBTImport(err error) {
+	f := bc.follower
+	if err != nil {
+		if f != nil {
+			f.mu.Lock()
+			f.importErr = err
+			f.mu.Unlock()
+		}
+		return
+	}
+	rawdb.DeletePBTImportPending(bc.db)
+	if f != nil {
+		// The stall the hold latched names a hold that is gone; drop it so
+		// progress does not report it until the next sync lands.
+		f.mu.Lock()
+		if t := f.dirs[dirIndex(true)]; t != nil && errors.Is(t.stall, errPBTImportPending) {
+			t.stall = nil
+		}
+		f.mu.Unlock()
+		f.kick(nil)
+	}
+}
+
 // Migrating reports whether the node is mid-migration between the two trees.
 func (bc *BlockChain) Migrating() bool {
 	return bc.follower != nil && !rawdb.ReadPBTMigrationDone(bc.db)
@@ -987,11 +1052,29 @@ func (bc *BlockChain) MigrationProgress() MigrationProgress {
 	if bc.follower == nil {
 		return MigrationProgress{Phase: "inactive"}
 	}
+	if rawdb.ReadPBTImportPending(bc.db) {
+		return bc.follower.importProgress()
+	}
 	head := bc.CurrentBlock()
 	if head == nil {
 		return MigrationProgress{Phase: "running"}
 	}
 	return bc.follower.progress(head)
+}
+
+// importProgress reports a tree held for an import: running, failed, or left
+// unfinished by an earlier run with no import configured in this one.
+func (f *bintrieFollower) importProgress() MigrationProgress {
+	f.mu.Lock()
+	err := f.importErr
+	f.mu.Unlock()
+	if err == nil && (f.cfg == nil || !f.cfg.PBTImport) {
+		err = errPBTImportUnfinished
+	}
+	if err == nil {
+		return MigrationProgress{Phase: "importing"}
+	}
+	return MigrationProgress{Phase: "importFailed", Binary: &DirectionProgress{Phase: "stalled", Error: err.Error()}}
 }
 
 func (f *bintrieFollower) progress(head *types.Header) MigrationProgress {

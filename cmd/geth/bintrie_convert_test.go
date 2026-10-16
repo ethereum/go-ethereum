@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"math/big"
@@ -361,10 +362,53 @@ func TestWrittenStateCatchesBadWrites(t *testing.T) {
 			})
 			t.Run("import/"+f.name+"/"+mode, func(t *testing.T) {
 				chaindb := rawdb.NewMemoryDatabase()
-				_, err := importState(newTamperDB(chaindb, f.prefix, mode), importOptions{snapshot: snapPath, preimages: prePath,
+				_, err := importState(context.Background(), newTamperDB(chaindb, f.prefix, mode), importOptions{snapshot: snapPath, preimages: prePath,
 					anchor: &types.Header{Number: big.NewInt(1), Root: root}, conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
 				caught(t, err, chaindb, f.name)
 			})
+		}
+	}
+}
+
+// TestWriteDigestSpansBatches pins the digest across its batch boundaries: a
+// changed record in any batch changes the sum, and keys that stop ascending
+// fail it, at a batch's first record as well as inside one.
+func TestWriteDigestSpansBatches(t *testing.T) {
+	n := 2*recordBatchSize + 5
+	digest := func(key func(i int) []byte, value func(i int) []byte) (*writeDigest, error) {
+		d := newWriteDigest()
+		a := d.ahead()
+		for i := range n {
+			a.add(key(i), value(i))
+		}
+		return d, a.finish()
+	}
+	key := func(i int) []byte { return binary.BigEndian.AppendUint32(nil, uint32(i)) }
+	value := func(i int) []byte { return []byte{byte(i)} }
+	base, err := digest(key, value)
+	if err != nil || base.count != uint64(n) {
+		t.Fatalf("ascending records: count %d, err %v", base.count, err)
+	}
+	for _, at := range []int{0, recordBatchSize, n - 1} {
+		changed, err := digest(key, func(i int) []byte {
+			if i == at {
+				return []byte{byte(i) + 1}
+			}
+			return value(i)
+		})
+		if err != nil || changed.sum() == base.sum() {
+			t.Fatalf("record %d changed: err %v, sum unchanged %v", at, err, changed.sum() == base.sum())
+		}
+	}
+	for _, at := range []int{1, recordBatchSize, recordBatchSize + 1} {
+		_, err := digest(func(i int) []byte {
+			if i == at {
+				return key(i - 1)
+			}
+			return key(i)
+		}, value)
+		if err == nil || !strings.Contains(err.Error(), "out of key order") {
+			t.Fatalf("record %d repeating its predecessor's key: err %v", at, err)
 		}
 	}
 }

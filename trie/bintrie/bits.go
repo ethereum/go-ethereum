@@ -205,16 +205,21 @@ func decodeBitPrefix(blob []byte) (bitstr, int, error) {
 	return p, 2 + nbytes, nil
 }
 
-// encodePath encodes a node position (the bits consumed above the node) as a
-// database path key: a two-byte big-endian bit count followed by the packed
-// bits. The root position encodes as the empty path, matching the database
-// convention of storing the root record at path nil.
-func encodePath(key []byte, n int) []byte {
+// appendPath appends a node position (the first n bits of key, consumed
+// above the node) to dst as a database path key: a two-byte big-endian bit
+// count followed by the packed bits. The root position encodes as the empty
+// path, matching the database convention of storing the root record at path
+// nil.
+func appendPath(dst, key []byte, n int) []byte {
 	if n == 0 {
-		return []byte{}
+		return dst
 	}
-	p := slice(key, 0, n)
-	return encodeBitPrefix(p)
+	dst = append(dst, byte(n>>8), byte(n))
+	dst = append(dst, key[:(n+7)/8]...)
+	if n&7 != 0 {
+		dst[len(dst)-1] &= 0xff << (8 - n&7)
+	}
+	return dst
 }
 
 // bitsToBitstr packs a one-bit-per-byte slice into a bitstr (test bridge).

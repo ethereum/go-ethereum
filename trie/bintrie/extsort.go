@@ -80,9 +80,10 @@ func (r arenaRecord) value(arena []byte) []byte {
 	return arena[r.off+r.klen : end : end]
 }
 
-// spillRecordOverhead approximates per-record bookkeeping bytes, so the
-// budget tracks real memory.
-const spillRecordOverhead = 64
+// arenaRecordBytes is what a buffered record costs beyond its key and value:
+// its arenaRecord in the index. The arena holds keys and values exactly, so
+// the budget is the memory the two runs hold.
+const arenaRecordBytes = 24
 
 // NewRecordSorter creates a sorter spilling to tmpDir past budget bytes
 // (non-positive: never spills). validate runs per Add; nil accepts all.
@@ -129,10 +130,15 @@ func (s *RecordSorter) Add(key, value []byte) error {
 			return err
 		}
 	}
+	if s.budget > 0 && s.arena == nil {
+		// One allocation per run buffer, the size the run spills at: a growing
+		// arena would copy itself several times over before reaching it.
+		s.arena = make([]byte, 0, max(s.budget/2, 1))
+	}
 	off := len(s.arena)
 	s.arena = append(append(s.arena, key...), value...)
 	s.index = append(s.index, arenaRecord{off: off, klen: len(key), vlen: len(value)})
-	s.buffered += len(key) + len(value) + spillRecordOverhead
+	s.buffered += len(key) + len(value) + arenaRecordBytes
 	if s.budget > 0 && s.buffered >= max(s.budget/2, 1) {
 		return s.spillAsync()
 	}
@@ -148,6 +154,10 @@ func (s *RecordSorter) spillAsync() error {
 	}
 	tmpDir, arena, index := s.tmpDir, s.arena, s.index
 	s.arena, s.index, s.buffered = s.spareArena[:0], s.spareIndex[:0], 0
+	if s.index == nil {
+		// The first spill has no spare: start the second run at the first's size.
+		s.index = make([]arenaRecord, 0, cap(index))
+	}
 	s.spilling = make(chan spilled, 1)
 	go func(done chan<- spilled) {
 		run, err := writeRun(tmpDir, arena, index)
@@ -274,9 +284,12 @@ func (s *RecordSorter) Sort() (*RecordStream, error) {
 		return nil, err
 	}
 	s.arena, s.index, s.spareArena, s.spareIndex = nil, nil, nil, nil
-	var h runHeap
+	var (
+		h    runHeap
+		size = mergeBufSize(s.budget, len(s.runs))
+	)
 	for _, f := range s.runs {
-		src := &runReader{r: bufio.NewReaderSize(f, 1<<19)}
+		src := &runReader{r: bufio.NewReaderSize(f, size)}
 		if err := src.advance(); err != nil {
 			if err == io.EOF {
 				continue
@@ -288,6 +301,16 @@ func (s *RecordSorter) Sort() (*RecordStream, error) {
 	heap.Init(&h)
 	s.merging = newMergeStream(h)
 	return s.merging, nil
+}
+
+// mergeBufSize sizes each run's read buffer for a merge of runs runs: 512 KiB,
+// less once the buffers together would pass a quarter of the budget, never
+// under 64 KiB. A mainnet sort merges thousands of runs.
+func mergeBufSize(budget, runs int) int {
+	if budget <= 0 || runs == 0 {
+		return 1 << 19
+	}
+	return min(1<<19, max(64<<10, budget/(4*runs)))
 }
 
 // Close removes the temporary files; call after any returned stream drains.

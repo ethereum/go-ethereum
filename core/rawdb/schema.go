@@ -86,6 +86,11 @@ var (
 	// before the first deletion, never cleared.
 	pbtMerkleDisposedKey = []byte("PBTMerkleDisposed")
 
+	// pbtImportPendingKey hands the binary tree to an import running inside
+	// the node: written before the follower exists, deleted once the import
+	// attests. Nothing may open the namespace while it is present.
+	pbtImportPendingKey = []byte("PBTImportPending")
+
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
 

@@ -18,23 +18,30 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"math/bits"
+	"os"
 	"slices"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/holiman/uint256"
@@ -78,14 +85,24 @@ leaves nothing openable. --verify-only runs both checks and writes nothing.
 Preimages are not persisted unless --keep-preimages is given: nothing on a
 binary-tree node reads them.
 
-Memory: the sorters hold at most 4 GB of records, and the database its cache
-plus memtables, about 1.5 x (--cache x --cache.database / 100). Go's collector
-can hold as much again before it runs, so budget about twice their sum, or cap
-it with GOMEMLIMIT. Merging the sorters' spilled runs takes 512 KiB per run on
-top.
+Memory: the sorters hold at most 4 GB of records, two run buffers each allocated
+once, and the database its cache plus memtables, about 1.5 x (--cache x
+--cache.database / 100). Go's collector can hold as much again before it runs,
+so budget about twice their sum, or cap it with GOMEMLIMIT. Merging the
+sorters' spilled runs takes up to 512 KiB per run on top, at most a quarter of
+the sorter's budget once runs are many.
 
 Disk: --tmpdir holds the sort spills and a copy of every tree node until the
 import ends, so it needs disk space, not a tmpfs.
+
+This command needs the node stopped. To import while the node keeps
+following the chain, start geth with --pbt.import.snapshot, --pbt.import.preimages
+and --pbt.import.anchor instead: the same checks run in the background once the
+anchor is canonical and finalized, scratch goes to <datadir>/geth/pbt-import,
+its sorters hold 1 GB rather than 4 beside the node's own memory, and the
+migration follower adopts the anchor when the import attests. That
+needs a chain config that schedules the binary tree (e.g. --override.genesis);
+debug_migrationProgress reports "importing" until then.
 `,
 	}
 )
@@ -162,7 +179,7 @@ func importBinaryTrie(ctx *cli.Context) error {
 	if workers < 1 {
 		return errors.New("--workers must be at least 1")
 	}
-	if _, err := importState(chaindb, importOptions{
+	if _, err := importState(context.Background(), chaindb, importOptions{
 		snapshot:      ctx.Args().Get(0),
 		preimages:     ctx.Args().Get(1),
 		anchor:        header,
@@ -184,6 +201,227 @@ func importBinaryTrie(ctx *cli.Context) error {
 		}
 	}
 	return nil
+}
+
+// onlineSortBudget is the sort budget of an import running inside the node:
+// a quarter of the offline command's, since the node keeps its caches and the
+// chain beside it. Nethermind holds 256 MiB per sort buffer in the same place.
+const onlineSortBudget = 1024 << 20
+
+// pbtImporter runs an EIP-8347 import inside the node, in the background,
+// while the chain keeps following its head (--pbt.import.*). The chain holds
+// the binary tree for it from construction (BlockChainConfig.PBTImport) until
+// FinishPBTImport releases it to the follower.
+type pbtImporter struct {
+	chain     *core.BlockChain
+	db        ethdb.Database
+	cfg       ethconfig.PBTImportConfig
+	triedbDir string        // the PBT journal's directory, for wipes
+	tmpDir    string        // scratch, owned by the import
+	poll      time.Duration // how often the anchor wait looks again
+
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+func newPBTImporter(stack *node.Node, backend *eth.Ethereum, cfg ethconfig.PBTImportConfig) *pbtImporter {
+	return &pbtImporter{
+		chain:     backend.BlockChain(),
+		db:        backend.ChainDb(),
+		cfg:       cfg,
+		triedbDir: stack.ResolvePath("triedb"),
+		tmpDir:    stack.ResolvePath("pbt-import"),
+		poll:      5 * time.Second,
+	}
+}
+
+// Start refuses what a restart cannot fix and leaves the import to run in
+// the background.
+func (p *pbtImporter) Start() error {
+	ref, err := parseAnchorRef(p.cfg.Anchor)
+	if err != nil {
+		return err
+	}
+	num, hash, anchored := rawdb.ReadPBTAnchor(rawdb.NewTable(p.db, string(rawdb.PBTPrefix)))
+	finished := anchored && rawdb.HasPBTState(p.db)
+	if finished && ref.matches(num, hash) {
+		log.Info("Binary tree already imported", "anchor", num, "hash", hash)
+		p.chain.FinishPBTImport(nil) // releases a --pbt.import.force hold
+		return nil
+	}
+	if !rawdb.ReadPBTImportPending(p.db) {
+		return fmt.Errorf("binary tree import refused: the database holds a tree anchored at block %d (%x); --%s replaces it", num, hash, utils.PBTImportForceFlag.Name)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel, p.done = cancel, make(chan struct{})
+	go func() {
+		defer close(p.done)
+		p.run(ctx, ref)
+	}()
+	return nil
+}
+
+// Stop cancels a running import and waits for it, before the chain closes
+// the database under it.
+func (p *pbtImporter) Stop() error {
+	if p.cancel != nil {
+		p.cancel()
+		<-p.done
+	}
+	return nil
+}
+
+// run waits for the anchor, imports at it and hands the outcome to the
+// chain. An interrupted run leaves the hold and its writes to the next start.
+func (p *pbtImporter) run(ctx context.Context, ref anchorRef) {
+	anchor, err := p.awaitAnchor(ctx, ref)
+	if err == nil {
+		err = p.importAt(ctx, anchor)
+	}
+	switch {
+	case err == nil:
+		p.chain.FinishPBTImport(nil)
+	case ctx.Err() != nil:
+		log.Info("Binary tree import interrupted; restart with the same flags to redo it")
+	default:
+		log.Error("Binary tree import failed", "err", err)
+		p.chain.FinishPBTImport(err)
+	}
+}
+
+// awaitAnchor waits until the anchor is canonical and finalized, the blocks
+// EIP-8347 anchors at, and fails once it never can be.
+func (p *pbtImporter) awaitAnchor(ctx context.Context, ref anchorRef) (*types.Header, error) {
+	var logged time.Time
+	for {
+		header, waiting, err := p.anchorState(ref)
+		if err != nil || header != nil {
+			return header, err
+		}
+		if time.Since(logged) >= time.Minute {
+			log.Info("Binary tree import waiting for its anchor", "anchor", p.cfg.Anchor, "state", waiting)
+			logged = time.Now()
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(p.poll):
+		}
+	}
+}
+
+// anchorState returns the anchor's header once it is canonical and
+// finalized, else what it still waits for, or why it never will qualify: a
+// finalized height holding another block, or a block past the fork.
+func (p *pbtImporter) anchorState(ref anchorRef) (*types.Header, string, error) {
+	number, hash := ref.number, ref.hash
+	if ref.byHash {
+		n, ok := rawdb.ReadHeaderNumber(p.db, hash)
+		if !ok {
+			return nil, "unknown block", nil
+		}
+		number = n
+	}
+	var (
+		canonical = rawdb.ReadCanonicalHash(p.db, number)
+		final     = p.chain.CurrentFinalBlock()
+		finalized = final != nil && final.Number.Uint64() >= number
+	)
+	if !ref.byHash {
+		hash = canonical
+	}
+	switch {
+	case canonical == (common.Hash{}):
+		return nil, "not in the canonical chain yet", nil
+	case canonical != hash && finalized:
+		return nil, "", fmt.Errorf("anchor block %x can never be canonical: height %d is finalized at %x", hash, number, canonical)
+	case canonical != hash:
+		return nil, "not canonical", nil
+	case !finalized:
+		return nil, "not finalized", nil
+	}
+	header := rawdb.ReadHeader(p.db, hash, number)
+	if header == nil {
+		return nil, "", fmt.Errorf("anchor header %d (%x) missing", number, hash)
+	}
+	if p.chain.Config().IsBinaryTrie(header.Number, header.Time) {
+		return nil, "", fmt.Errorf("anchor block %d is past the binary tree fork", number)
+	}
+	return header, "", nil
+}
+
+// importAt imports the pair at the anchor. The namespace is the import's
+// while the chain holds it: whatever a stopped or failed run, or the tree
+// --pbt.import.force replaces, left there is wiped first, and a failure
+// wipes its own writes.
+func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error {
+	if err := os.RemoveAll(p.tmpDir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(p.tmpDir, 0o700); err != nil {
+		return err
+	}
+	defer os.RemoveAll(p.tmpDir)
+
+	if dirty, err := hasBinaryTrieState(p.db); err != nil {
+		return err
+	} else if dirty {
+		if err := wipeBinaryTrieState(p.db, p.triedbDir); err != nil {
+			return err
+		}
+	}
+	log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
+		"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
+	_, err := importState(ctx, p.db, importOptions{
+		snapshot:  p.cfg.Snapshot,
+		preimages: p.cfg.Preimages,
+		anchor:    anchor,
+		// Finalized blocks do not reorg, but an attested tree anchored off
+		// the canonical chain is refused by the follower anyway: say so now.
+		beforeAttest: func() error {
+			if rawdb.ReadCanonicalHash(p.db, anchor.Number.Uint64()) != anchor.Hash() {
+				return fmt.Errorf("anchor block %d (%x) left the canonical chain during the import", anchor.Number, anchor.Hash())
+			}
+			return nil
+		},
+		conversionOptions: conversionOptions{
+			sortBudget: onlineSortBudget,
+			tmpDir:     p.tmpDir,
+			workers:    cmp.Or(p.cfg.Workers, utils.PBTImportWorkersFlag.Value),
+		},
+	})
+	if err != nil && ctx.Err() == nil {
+		if werr := wipeBinaryTrieState(p.db, p.triedbDir); werr != nil {
+			log.Error("Failed to wipe a failed binary tree import", "err", werr)
+		}
+	}
+	return err
+}
+
+// anchorRef is an anchor argument: a block hash, or else a block number.
+type anchorRef struct {
+	hash   common.Hash
+	number uint64
+	byHash bool
+}
+
+func parseAnchorRef(arg string) (anchorRef, error) {
+	if common.IsHexHash(arg) {
+		return anchorRef{hash: common.HexToHash(arg), byHash: true}, nil
+	}
+	number, err := strconv.ParseUint(arg, 10, 64)
+	if err != nil {
+		return anchorRef{}, fmt.Errorf("invalid binary tree import anchor %q: want a block number or hash", arg)
+	}
+	return anchorRef{number: number}, nil
+}
+
+// matches reports whether the ref names the given block.
+func (r anchorRef) matches(number uint64, hash common.Hash) bool {
+	if r.byHash {
+		return r.hash == hash
+	}
+	return r.number == number
 }
 
 // The EIP-8347 consumer: importState ingests a distributed PBT snapshot and
@@ -231,12 +469,16 @@ type importOptions struct {
 	anchor        *types.Header
 	verifyOnly    bool
 	keepPreimages bool
+	// beforeAttest, when set, runs once everything is written and verified,
+	// right before the attestation: an error leaves the state unattested.
+	beforeAttest func() error
 	conversionOptions
 }
 
 // importState verifies and ingests the artifacts, returning the imported
-// root. With verifyOnly the database is never touched.
-func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error) {
+// root. With verifyOnly the database is never touched. Cancelling ctx stops
+// it between batches, before anything is attested.
+func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions) (common.Hash, error) {
 	var (
 		anchorRoot   = opts.anchor.Root
 		snapshotPath = opts.snapshot
@@ -257,7 +499,8 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	// Phase 2 runs four sorters concurrently (accounts, slots, chunks and,
 	// briefly at the account/code-zone boundary, the code stems), so they
 	// split the same budget four ways: either phase's peak sorter RAM stays
-	// within opts.sortBudget.
+	// within opts.sortBudget, a sorter's budget being the bytes its two run
+	// buffers hold.
 	quarter := opts.sortBudget / 4
 
 	// Open both artifacts before the expensive phase: a mistyped path should
@@ -298,10 +541,13 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 
 	// Phase 1: derive every candidate tree key the preimages can stand for.
 	// The reader stays sequential, digesting the file; workers check its
-	// order, a batch of records against the one before it, and derive the
-	// candidates into sorters of their own, which the first then absorbs into
-	// one merge. Keeping the preimages needs their hashes in order, so then
-	// the reader checks the order itself.
+	// order, a batch against the one before it, and derive the candidates
+	// into sorters of their own, which the first then absorbs into one merge.
+	// Keeping the preimages needs their hashes in order, so then the reader
+	// checks the order itself. A record's slot keys go out in runs of at most
+	// a batch's worth, so a contract with many slots is spread over the
+	// workers rather than held whole; the reader counts its header-range
+	// slots, which only the record as a whole determines.
 	keep := rawBatch != nil && opts.keepPreimages
 	workers := max(opts.workers, 1)
 	cands := make([]*bintrie.RecordSorter, workers)
@@ -312,9 +558,14 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	var (
 		preAccounts  uint64
 		prePreimages uint64
-		records      = make(chan preimageBatch, 2*workers)
-		g, gctx      = errgroup.WithContext(context.Background())
+		batches      = 3*workers + 1 // queued, at the workers and at the reader
+		records      = make(chan *preimageBatch, batches)
+		free         = make(chan *preimageBatch, batches)
+		g, gctx      = errgroup.WithContext(ctx)
 	)
+	for range batches {
+		free <- &preimageBatch{runs: make([]preimageRun, 0, preimageBatchSize), keys: make([]common.Hash, 0, preimageBatchSlots)}
+	}
 	what, verified := "Verifying preimage file", "Verified preimage file"
 	if keep {
 		what, verified = "Verifying and storing preimages", "Verified and stored preimages"
@@ -323,86 +574,130 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	defer prog.stop()
 	for _, cand := range cands {
 		g.Go(func() error {
-			var hashes []common.Hash
+			var buf candidateBuf
 			for batch := range records {
-				prev := batch.prev
-				for i, rec := range batch.records {
+				order := batch.order
+				for i := range batch.runs {
+					run := &batch.runs[i]
 					if !keep {
-						addrHash, hs, err := checkPreimageRecord(batch.first+uint64(i), prev, rec.addr, rec.slots, hashes[:0])
-						if err != nil {
+						if run.first {
+							if _, err := order.record(run.index, run.addr); err != nil {
+								return err
+							}
+						}
+						if err := order.slots(run.slots, nil); err != nil {
 							return err
 						}
-						hashes, prev = hs, &addrHash
 					}
-					if err := addCandidates(cand, rec.addr, rec.slots); err != nil {
+					if err := addSlotCandidates(cand, &buf, run.addr, run.slots); err != nil {
 						return err
 					}
+					if run.last {
+						if err := addHeaderCandidate(cand, &buf, run.addr, run.headerSlots); err != nil {
+							return err
+						}
+					}
 				}
+				batch.runs, batch.keys = batch.runs[:0], batch.keys[:0]
+				free <- batch
 			}
 			return nil
 		})
 	}
 	readErr := func() error {
 		defer close(records)
-		batch := preimageBatch{records: make([]preimageRecord, 0, preimageBatchSize)}
-		send := func() error {
+		var (
+			batch *preimageBatch
+			order preimageOrder // the reader's own check, when it keeps the preimages
+		)
+		take := func() error {
 			select {
-			case records <- batch:
+			case batch = <-free:
+				return nil
 			case <-gctx.Done():
 				return gctx.Err() // a worker failed; its error is the one reported
 			}
-			last := crypto.Keccak256Hash(batch.records[len(batch.records)-1].addr[:])
-			batch = preimageBatch{
-				first:   batch.first + uint64(len(batch.records)),
-				prev:    &last,
-				records: make([]preimageRecord, 0, preimageBatchSize),
+		}
+		// send hands the batch over and takes the next, which continues the
+		// order check from this one's last run.
+		send := func() error {
+			last := &batch.runs[len(batch.runs)-1]
+			next := preimageOrder{index: last.index, addr: crypto.Keccak256Hash(last.addr[:]), started: true}
+			if !last.last {
+				next.slot, next.slotted = crypto.Keccak256Hash(last.slots[len(last.slots)-1][:]), true
 			}
+			records <- batch // never blocks: the channel holds every batch
+			if err := take(); err != nil {
+				return err
+			}
+			batch.order = next
 			return nil
 		}
+		if err := take(); err != nil {
+			return err
+		}
+		batch.order = preimageOrder{}
 		for {
-			var (
-				addr     common.Address
-				addrHash common.Hash
-				slots    []common.Hash
-				err      error
-			)
-			if keep {
-				addr, addrHash, slots, err = pre.next()
-			} else {
-				addr, slots, err = pre.nextRaw()
-			}
+			addr, count, err := pre.nextRecord()
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
 				return err
 			}
-			// The preimage file is keccak-ordered, which its reader enforces
-			// on this path, so the preimage store is written in that order.
+			index := pre.records - 1
+			// The preimage file is keccak-ordered, which the reader checks on
+			// this path, so the preimage store is written in that order.
 			if keep {
+				addrHash, err := order.record(index, addr)
+				if err != nil {
+					return err
+				}
 				if err := putPreimage(rawBatch, addrHash, addr.Bytes()); err != nil {
 					return err
 				}
-				for i, slot := range slots {
-					if err := putPreimage(rawBatch, pre.slotHashes[i], slot[:]); err != nil {
+			}
+			var headerSlots uint64
+			for left, first := count, true; first || left > 0; first = false {
+				if len(batch.runs) == cap(batch.runs) || (left > 0 && len(batch.keys) == cap(batch.keys)) {
+					if err := send(); err != nil {
 						return err
 					}
 				}
-				if err := flush(false); err != nil {
+				n := min(left, cap(batch.keys)-len(batch.keys))
+				slots := batch.keys[len(batch.keys) : len(batch.keys)+n]
+				batch.keys = batch.keys[:len(batch.keys)+n]
+				if err := pre.readSlots(slots); err != nil {
 					return err
 				}
-			}
-			batch.records = append(batch.records, preimageRecord{addr, slots})
-			if len(batch.records) == cap(batch.records) {
-				if err := send(); err != nil {
-					return err
+				for i := range slots {
+					if sub, ok := bintrie.HeaderSlot((*[32]byte)(&slots[i])); ok {
+						headerSlots |= 1 << sub
+					}
 				}
+				if keep {
+					err := order.slots(slots, func(slot, hash common.Hash) error {
+						return putPreimage(rawBatch, hash, slot[:])
+					})
+					if err != nil {
+						return err
+					}
+					if err := flush(false); err != nil {
+						return err
+					}
+				}
+				left -= n
+				run := preimageRun{index: index, addr: addr, slots: slots, first: first, last: left == 0}
+				if run.last {
+					run.headerSlots = headerSlots
+				}
+				batch.runs = append(batch.runs, run)
 			}
 			preAccounts++
-			prePreimages += 1 + uint64(len(slots))
+			prePreimages += 1 + uint64(count)
 		}
-		if len(batch.records) > 0 {
-			return send()
+		if len(batch.runs) > 0 {
+			records <- batch
 		}
 		return nil
 	}()
@@ -623,6 +918,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	)
 	for {
 		if batch == nil || next == len(batch.values) {
+			if err := ctx.Err(); err != nil {
+				return common.Hash{}, err
+			}
 			if batch != nil {
 				pipe.release(batch)
 			}
@@ -784,18 +1082,22 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	}
 	prog.finish("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves.Load(), "digest", snap.digest())
 	var (
-		written   = newWrittenState()
-		families  = written.families()
-		readNodes errgroup.Group
+		written  = newWrittenState()
+		families = written.families()
+		readBack errgroup.Group
 	)
-	defer readNodes.Wait()
+	defer readBack.Wait()
 	if nodes != nil {
-		if err := writeStagedNodes(pbtdb, nodes, written.nodes); err != nil {
+		if err := writeStagedNodes(ctx, pbtdb, nodes, written.nodes); err != nil {
 			return common.Hash{}, err
 		}
 		// The tree nodes are all written: read them back while the code
 		// limb and check 2 run. Reading puts nothing in the memtable.
-		readNodes.Go(func() error { return verifyWritten(pbtdb, families[0]) })
+		readBack.Go(func() error { return verifyWritten(ctx, pbtdb, families[0]) })
+		// Likewise the flat storage, once check 2 has written its last row.
+		written.storageWritten = func() {
+			readBack.Go(func() error { return verifyWritten(ctx, pbtdb, families[2]) })
+		}
 	}
 
 	// The code limb: every claimed code hash must reassemble from its
@@ -813,6 +1115,9 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	prog = startProgress("Verifying code", "codes", uint64(len(hashes)), stats.codes.Load)
 	defer prog.stop()
 	for _, hash := range hashes {
+		if err := ctx.Err(); err != nil {
+			return common.Hash{}, err
+		}
 		var chunks []bintrie.IndexedChunk
 		for {
 			ckey, cvalue, err := chunkHeld.current()
@@ -860,7 +1165,7 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err != nil {
 		return common.Hash{}, err
 	}
-	got, err := rederiveMerkleRoot(acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.accounts.Load()+stats.slots.Load())
+	got, err := rederiveMerkleRoot(ctx, acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.accounts.Load()+stats.slots.Load())
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -877,13 +1182,23 @@ func importState(chaindb ethdb.Database, opts importOptions) (common.Hash, error
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
 	}
-	if err := verifyWritten(pbtdb, families[1:]...); err != nil {
+	if err := verifyWritten(ctx, pbtdb, families[1]); err != nil {
 		return common.Hash{}, err
 	}
-	if err := readNodes.Wait(); err != nil {
+	if err := readBack.Wait(); err != nil {
 		return common.Hash{}, err
 	}
 	logWritten(written)
+	// A cancelled import never attests, however far it got: an interrupted
+	// run is redone from scratch, never half-trusted.
+	if err := ctx.Err(); err != nil {
+		return common.Hash{}, err
+	}
+	if opts.beforeAttest != nil {
+		if err := opts.beforeAttest(); err != nil {
+			return common.Hash{}, err
+		}
+	}
 	// The anchor rides with the root: the tree does not say which block it
 	// commits, and catching up from here has to start somewhere. The
 	// attestation is the completion marker and comes last; the imported tree
@@ -901,54 +1216,79 @@ func putPreimage(w ethdb.KeyValueWriter, hash common.Hash, preimage []byte) erro
 	return w.Put(append(append([]byte{}, rawdb.PreimagePrefix...), hash[:]...), preimage)
 }
 
-// preimageRecord is one account record of a preimage file.
-type preimageRecord struct {
-	addr  common.Address
-	slots []common.Hash
+// preimageRun is a record of the preimage file, or a run of its slot keys: a
+// batch holds at most preimageBatchSlots keys, so a record with more spans
+// batches, a run in each, and is never held whole. first marks the run a
+// record begins with, last the one it ends with.
+type preimageRun struct {
+	index       uint64 // the record's, in the file
+	addr        common.Address
+	slots       []common.Hash // a window of the batch's keys
+	first, last bool
+	headerSlots uint64 // the record's header-range slots, set on its last run
 }
 
-// preimageBatch is a run of records for a phase-1 worker, which checks their
-// order: first is the file index of records[0], and prev the address hash of
-// the record before it, if any.
+// preimageBatch is a stretch of the preimage file for a phase-1 worker. order
+// is the order check's state where the stretch starts, which the worker
+// checks the first run against: the record before or, if the run continues a
+// record, that record's last slot key before. Batches cycle between the
+// reader and the workers, so phase 1 holds a fixed number of slot keys,
+// however many one record has.
 type preimageBatch struct {
-	first   uint64
-	prev    *common.Hash
-	records []preimageRecord
+	order preimageOrder
+	runs  []preimageRun
+	keys  []common.Hash // the runs' slot keys, back to back
 }
 
-// preimageBatchSize is how many records the import's reader hands a
-// candidate worker at a time.
-var preimageBatchSize = 1024
+// preimageBatchSize and preimageBatchSlots bound a phase-1 batch: the records
+// it begins or continues, and their slot keys (2 MiB).
+var (
+	preimageBatchSize  = 1024
+	preimageBatchSlots = 1 << 16
+)
 
-// addCandidates derives the candidate tree keys one preimage record stands
-// for: one per header stem, carrying the address and a bitmap of the
-// header-range slots the record claims, and one per overflow slot. A
-// header-range slot's number is its sub-index minus the offset, so it needs
-// no candidate of its own - unlike an overflow slot, whose stem is a one-way
-// hash of the slot number and can only be matched by deriving it forward.
-func addCandidates(cand *bintrie.RecordSorter, addr common.Address, slots []common.Hash) error {
+// candidateBuf holds one candidate's key and value while it is built: the
+// sorter copies them, so a worker reuses one buffer for every candidate.
+type candidateBuf struct {
+	key   [bintrie.StorageKeyLength]byte
+	value [common.AddressLength + common.HashLength]byte
+}
+
+// addSlotCandidates derives the candidate tree keys a run of one record's
+// slot keys stands for: one per overflow slot. A header-range slot's number
+// is its sub-index minus the offset, so it needs no candidate of its own -
+// unlike an overflow slot, whose stem is a one-way hash of the slot number
+// and can only be matched by deriving it forward. The record's header
+// candidate carries the header-range slots (addHeaderCandidate).
+func addSlotCandidates(cand *bintrie.RecordSorter, buf *candidateBuf, addr common.Address, slots []common.Hash) error {
 	var (
-		headerSlots   uint64
 		storagePrefix [32]byte // blake3(address32), hashed once and reused for every overflow slot
 		havePrefix    bool
 	)
 	for _, slot := range slots {
 		inHeader, treeIndex, sub := bintrie.StorageIndex(slot[:])
 		if inHeader {
-			headerSlots |= 1 << (sub - bintrie.HeaderStorageOffset)
 			continue
 		}
 		if !havePrefix {
 			a32 := bintrie.Address32(addr)
 			storagePrefix, havePrefix = bintrie.KeyHash(a32[:]), true
 		}
-		key := append(bintrie.StorageStemWithPrefix(addr, storagePrefix[:], &treeIndex), sub)
-		if err := cand.Add(key, append(addr.Bytes(), slot[:]...)); err != nil {
+		key := append(bintrie.AppendStorageStem(buf.key[:0], addr, storagePrefix[:], &treeIndex), sub)
+		value := append(append(buf.value[:0], addr[:]...), slot[:]...)
+		if err := cand.Add(key, value); err != nil {
 			return err
 		}
 	}
-	value := binary.BigEndian.AppendUint64(addr.Bytes(), headerSlots)
-	return cand.Add(bintrie.HeaderStem(addr), value)
+	return nil
+}
+
+// addHeaderCandidate adds the candidate of addr's header stem: the address
+// and a bitmap of the header-range slots its record claims.
+func addHeaderCandidate(cand *bintrie.RecordSorter, buf *candidateBuf, addr common.Address, headerSlots uint64) error {
+	key := bintrie.AppendHeaderStem(buf.key[:0], addr)
+	value := binary.BigEndian.AppendUint64(append(buf.value[:0], addr[:]...), headerSlots)
+	return cand.Add(key, value)
 }
 
 // leafBatchSize and leafBatches size the snapshot pipeline: leaves per batch,

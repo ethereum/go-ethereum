@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/bits"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/blake3"
@@ -58,7 +59,12 @@ func emitRecord(n binaryNode, walk bitstr, pos int, onNode OnNode) error {
 // is a bug rather than bad input; serializeNodeErr is the variant for a tree
 // assembled from bytes somebody else supplied.
 func serializeNode(n binaryNode, pos int) []byte {
-	blob, err := serializeNodeErr(n, pos)
+	return appendNode(nil, n, pos)
+}
+
+// appendNode is serializeNode appending the record to dst.
+func appendNode(dst []byte, n binaryNode, pos int) []byte {
+	blob, err := appendNodeErr(dst, n, pos)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -66,10 +72,14 @@ func serializeNode(n binaryNode, pos int) []byte {
 }
 
 func serializeNodeErr(n binaryNode, pos int) ([]byte, error) {
+	return appendNodeErr(nil, n, pos)
+}
+
+func appendNodeErr(dst []byte, n binaryNode, pos int) ([]byte, error) {
 	switch n := n.(type) {
 	case *groupNode:
 		if len(n.subs) == 1 {
-			blob := make([]byte, 0, 1+len(n.stem)+1+32)
+			blob := slices.Grow(dst, 1+len(n.stem)+1+32)
 			blob = append(blob, tagLeaf)
 			blob = append(blob, n.stem...)
 			blob = append(blob, n.subs[0])
@@ -88,7 +98,7 @@ func serializeNodeErr(n binaryNode, pos int) ([]byte, error) {
 		if len(n.stem) > 0xff {
 			return nil, fmt.Errorf("bintrie: stem length %d does not fit the record", len(n.stem))
 		}
-		blob := make([]byte, 0, 1+2+1+len(n.stem)+bitmapSize+32*len(n.subs))
+		blob := slices.Grow(dst, 1+2+1+len(n.stem)+bitmapSize+32*len(n.subs))
 		blob = append(blob, tagGroup, byte(pos>>8), byte(pos))
 		blob = append(blob, byte(len(n.stem)))
 		blob = append(blob, n.stem...)
@@ -102,7 +112,7 @@ func serializeNodeErr(n binaryNode, pos int) ([]byte, error) {
 		}
 		return blob, nil
 	case *branchNode:
-		blob := make([]byte, 0, 1+2+len(n.prefix.b)+64)
+		blob := slices.Grow(dst, 1+2+len(n.prefix.b)+64)
 		blob = append(blob, tagBranch)
 		blob = appendBitPrefix(blob, n.prefix)
 		child := pos + n.prefix.n + 1

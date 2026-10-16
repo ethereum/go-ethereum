@@ -24,21 +24,28 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"sync/atomic"
 )
 
 // nodeStager holds the tree nodes StackBuilder emits until the tree is built,
 // then hands them back in database key order. A node's key sorts by depth
-// first (encodePath leads with the path's bit count) and the builder emits
+// first (appendPath leads with the path's bit count) and the builder emits
 // each depth in ascending order, but children before parents, so consecutive
 // nodes jump between depths. Written as they come, every flushed table spans
 // the node keys of every depth and overlaps the tables before it, so the
 // database rewrites the nodes at each level on the way down. One append-only
 // file per depth, replayed in depth order, writes them in ascending key order
-// instead.
+// instead. add only copies nodes into batches; a goroutine of the stager's
+// own appends them to their files, off the tree builder's critical path.
 type nodeStager struct {
 	dir    string
-	depths map[int]*spillFile
-	count  uint64 // nodes added
+	depths map[int]*spillFile // owned by stage until wait returns
+	count  uint64             // nodes added
+
+	cur        *recordBatch
+	work, free chan *recordBatch
+	done       chan struct{}
+	err        atomic.Pointer[error] // the first error stage met
 }
 
 // newNodeStager stages its files in a fresh directory under tmpDir.
@@ -47,10 +54,22 @@ func newNodeStager(tmpDir string) (*nodeStager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &nodeStager{dir: dir, depths: make(map[int]*spillFile)}, nil
+	s := &nodeStager{
+		dir:    dir,
+		depths: make(map[int]*spillFile),
+		work:   make(chan *recordBatch, 4),
+		free:   make(chan *recordBatch, 5),
+		done:   make(chan struct{}),
+	}
+	for range cap(s.free) {
+		s.free <- new(recordBatch)
+	}
+	s.cur = <-s.free
+	go s.stage(s.work)
+	return s, nil
 }
 
-// nodeDepth is the bit count encodePath leads a node's path with. The root's
+// nodeDepth is the bit count appendPath leads a node's path with. The root's
 // empty path sorts before every other one and gets depth -1.
 func nodeDepth(path []byte) int {
 	if len(path) < 2 {
@@ -59,9 +78,24 @@ func nodeDepth(path []byte) int {
 	return int(binary.BigEndian.Uint16(path))
 }
 
-// add appends one node to its depth's file. Neither path nor blob needs to
-// outlive the call.
-func (s *nodeStager) add(path, blob []byte) error {
+// stage appends each batch's nodes to their depth's files until work closes.
+// After an error it only recycles the batches.
+func (s *nodeStager) stage(work <-chan *recordBatch) {
+	defer close(s.done)
+	var err error
+	for b := range work {
+		for i := 0; err == nil && i < b.len(); i++ {
+			if err = s.write(b.key(i), b.value(i)); err != nil {
+				s.err.Store(&err)
+			}
+		}
+		b.reset()
+		s.free <- b
+	}
+}
+
+// write appends one node to its depth's file.
+func (s *nodeStager) write(path, blob []byte) error {
 	depth := nodeDepth(path)
 	d := s.depths[depth]
 	if d == nil {
@@ -71,14 +105,49 @@ func (s *nodeStager) add(path, blob []byte) error {
 		}
 		s.depths[depth] = d
 	}
-	s.count++
 	return d.add(path, blob)
+}
+
+// add copies one node for staging. Neither path nor blob needs to outlive the
+// call. It reports a failed staging write at a later call, or at replay.
+func (s *nodeStager) add(path, blob []byte) error {
+	s.cur.add(path, blob)
+	s.count++
+	if !s.cur.full() {
+		return nil
+	}
+	s.work <- s.cur
+	s.cur = <-s.free
+	if err := s.err.Load(); err != nil {
+		return *err
+	}
+	return nil
+}
+
+// wait hands over the last batch and waits until every node added is in its
+// file, returning the first error staging met.
+func (s *nodeStager) wait() error {
+	if s.work != nil {
+		if s.cur.len() > 0 {
+			s.work <- s.cur
+		}
+		close(s.work)
+		<-s.done
+		s.work, s.cur, s.free = nil, nil, nil // the batches are done with
+	}
+	if err := s.err.Load(); err != nil {
+		return *err
+	}
+	return nil
 }
 
 // replay feeds every staged node to write in database key order: depth by
 // depth, each depth in the order its nodes were added. path and blob are only
 // valid for the call.
 func (s *nodeStager) replay(write func(path, blob []byte) error) error {
+	if err := s.wait(); err != nil {
+		return err
+	}
 	r := bufio.NewReaderSize(nil, 1<<20)
 	for _, depth := range slices.Sorted(maps.Keys(s.depths)) {
 		if err := s.depths[depth].replay(r, write); err != nil {
@@ -90,6 +159,7 @@ func (s *nodeStager) replay(write func(path, blob []byte) error) error {
 
 // close removes the staging files.
 func (s *nodeStager) close() {
+	s.wait()
 	for _, d := range s.depths {
 		d.close()
 	}
