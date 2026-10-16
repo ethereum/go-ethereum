@@ -80,11 +80,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		blockHash   = block.Hash()
 		blockNumber = block.Number()
 		allLogs     []*types.Log
-
-		// TODO(qkc): check the cross-shard deposits of the block: their gas must
-		// fit the per-block cross-shard gas budget, and they must be the ones the
-		// cursor in the extra data points to, in order.
-		gp = NewGasPool(block.GasLimit())
+		gp          = NewGasPool(block.GasLimit())
 
 		// The receipts are digested on a pipeline of their own, fed as the
 		// transactions finish, so the block bloom and the receipt root are

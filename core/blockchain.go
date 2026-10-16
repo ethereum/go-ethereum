@@ -379,6 +379,8 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	logger     *tracing.Hooks
 
+	xshardInbox XShardInbox // Cross-shard deposits of a QuarkChain shard, see SetXShardInbox
+
 	lastForkReadyAlert time.Time     // Last time there was a fork readiness print out
 	slowBlockThreshold time.Duration // Block execution time threshold beyond which detailed statistics will be logged
 }

@@ -226,10 +226,6 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	var (
 		receipts = make(types.Receipts, 0, len(txs))
 		allLogs  []*types.Log
-
-		// TODO(qkc): check the cross-shard deposits of the block: their gas must
-		// fit the per-block cross-shard gas budget, and they must be the ones the
-		// cursor in the extra data points to, in order.
 		gp       = NewGasPool(block.GasLimit())
 		logIndex uint
 
