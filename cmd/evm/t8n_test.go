@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
 	"github.com/ethereum/go-ethereum/internal/reexec"
 )
@@ -685,6 +686,264 @@ func TestEvmRun(t *testing.T) {
 			}
 		}
 	}
+}
+
+// balBlockHash is the hash of the only block in testdata/blocktest_bal.json and
+// testdata/enginetest_bal.json.
+var balBlockHash = common.HexToHash("0xd56692af6b9fc93c12c1baa7dd03339397ca040c712bcba5c41e93dd12959d74")
+
+// TestBlockAccessListExecution checks that blocktest and enginetest run a block
+// carrying an EIP-7928 access list on the parallel processor, or on the
+// sequential one under --bal-sequential or when blocktest withholds the list,
+// and report the choice on stderr only under --bal-report.
+func TestBlockAccessListExecution(t *testing.T) {
+	t.Parallel()
+	for i, tc := range []struct {
+		input      []string
+		wantPath   string // empty when no event line is expected
+		wantReason string
+	}{
+		{[]string{"blocktest", "--bal-report", "./testdata/blocktest_bal.json"}, "parallel", ""},
+		{[]string{"blocktest", "--bal-report", "--bal-sequential", "./testdata/blocktest_bal.json"}, "sequential", "disabled"},
+		{[]string{"blocktest", "--bal-report", "--bal-withhold", "./testdata/blocktest_bal.json"}, "sequential", "withheld"},
+		{[]string{"blocktest", "--bal-report", "--bal-withhold", "--bal-sequential", "./testdata/blocktest_bal.json"}, "sequential", "withheld"},
+		{[]string{"blocktest", "./testdata/blocktest_bal.json"}, "", ""},
+		{[]string{"enginetest", "--bal-report", "./testdata/enginetest_bal.json"}, "parallel", ""},
+		{[]string{"enginetest", "--bal-report", "--bal-sequential", "./testdata/enginetest_bal.json"}, "sequential", "disabled"},
+		{[]string{"enginetest", "./testdata/enginetest_bal.json"}, "", ""},
+	} {
+		tt := cmdtest.NewTestCmd(t, nil)
+		tt.Run("evm-test", tc.input...)
+		stdout := tt.Output()
+		tt.WaitExit()
+		stderr := tt.StderrText()
+
+		var results []testResult
+		if err := json.Unmarshal(stdout, &results); err != nil {
+			t.Fatalf("test %d: stdout is not a JSON result list: %v\n%s", i, err, stdout)
+		}
+		if len(results) != 1 || !results[0].Pass {
+			t.Fatalf("test %d: unexpected results: %s", i, stdout)
+		}
+		events := balEvents(t, stderr)
+		if tc.wantPath == "" {
+			if len(events) != 0 {
+				t.Fatalf("test %d: events %+v without --bal-report, want none", i, events)
+			}
+			continue
+		}
+		want := executionEvent{Event: "balExecution", Block: 1, Hash: balBlockHash, Path: tc.wantPath, Reason: tc.wantReason}
+		if len(events) != 1 || events[0] != want {
+			t.Fatalf("test %d: events %+v, want [%+v]", i, events, want)
+		}
+	}
+}
+
+// TestBlockAccessListDropped checks that blocktest drops a delivered access
+// list that differs from the one the header commits to, in either fixture
+// field, and imports the block with the list computed in execution, as the
+// downloader does with a peer's list. The report names the dropped list in
+// both modes.
+func TestBlockAccessListDropped(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("./testdata/blocktest_bal.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"blockAccessList", "rlp_decoded"} {
+		var fixtures map[string]map[string]any
+		if err := json.Unmarshal(src, &fixtures); err != nil {
+			t.Fatal(err)
+		}
+		// Deliver the fixture's only block with one account missing from its
+		// access list, leaving the block and its expected post state alone.
+		for _, test := range fixtures {
+			block := test["blocks"].([]any)[0].(map[string]any)
+			list := block["blockAccessList"].([]any)
+			tampered := list[:len(list)-1]
+			if field == "rlp_decoded" {
+				delete(block, "blockAccessList")
+				block["rlp_decoded"] = map[string]any{"blockAccessList": tampered}
+			} else {
+				block["blockAccessList"] = tampered
+			}
+		}
+		out, err := json.Marshal(fixtures)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "blocktest_bal_dropped.json")
+		if err := os.WriteFile(path, out, 0644); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			args       []string
+			wantPath   string
+			wantReason string
+		}{
+			{[]string{"blocktest", "--bal-report", path}, "sequential", "bad-access-list"},
+			{[]string{"blocktest", "--bal-report", "--bal-sequential", path}, "sequential", "bad-access-list"},
+		} {
+			tt := cmdtest.NewTestCmd(t, nil)
+			tt.Run("evm-test", tc.args...)
+			stdout := tt.Output()
+			tt.WaitExit()
+			stderr := tt.StderrText()
+
+			var results []testResult
+			if err := json.Unmarshal(stdout, &results); err != nil {
+				t.Fatalf("%s %v: stdout is not a JSON result list: %v\n%s", field, tc.args, err, stdout)
+			}
+			if len(results) != 1 || !results[0].Pass {
+				t.Fatalf("%s %v: block with a dropped access list not imported: %s", field, tc.args, stdout)
+			}
+			events := balEvents(t, stderr)
+			want := executionEvent{Event: "balExecution", Block: 1, Hash: balBlockHash, Path: tc.wantPath, Reason: tc.wantReason}
+			if len(events) != 1 || events[0] != want {
+				t.Fatalf("%s %v: events %+v, want [%+v]", field, tc.args, events, want)
+			}
+		}
+	}
+}
+
+// TestBlockAccessListWithheldWithoutList checks that --bal-withhold reports
+// withheld only for a block delivered with a list: a block without one keeps
+// the reason core gives it, as it does without the flag.
+func TestBlockAccessListWithheldWithoutList(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("./testdata/blocktest_bal.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixtures map[string]map[string]any
+	if err := json.Unmarshal(src, &fixtures); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range fixtures {
+		delete(test["blocks"].([]any)[0].(map[string]any), "blockAccessList")
+	}
+	out, err := json.Marshal(fixtures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "blocktest_bal_without_list.json")
+	if err := os.WriteFile(path, out, 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"blocktest", "--bal-report", path},
+		{"blocktest", "--bal-report", "--bal-withhold", path},
+	} {
+		tt := cmdtest.NewTestCmd(t, nil)
+		tt.Run("evm-test", args...)
+		stdout := tt.Output()
+		tt.WaitExit()
+		stderr := tt.StderrText()
+
+		var results []testResult
+		if err := json.Unmarshal(stdout, &results); err != nil {
+			t.Fatalf("%v: stdout is not a JSON result list: %v\n%s", args, err, stdout)
+		}
+		if len(results) != 1 || !results[0].Pass {
+			t.Fatalf("%v: unexpected results: %s", args, stdout)
+		}
+		events := balEvents(t, stderr)
+		want := executionEvent{Event: "balExecution", Block: 1, Hash: balBlockHash, Path: "sequential", Reason: "no-access-list"}
+		if len(events) != 1 || events[0] != want {
+			t.Fatalf("%v: events %+v, want [%+v]", args, events, want)
+		}
+	}
+}
+
+// TestBlockAccessListDroppedTwins checks that the report ties a dropped list to
+// the import that dropped it. Fixtures run in parallel import the same block,
+// some delivering its own list and some a tampered one, so every clean import
+// must report the parallel path and every tampered one bad-access-list.
+func TestBlockAccessListDroppedTwins(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("./testdata/blocktest_bal.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const pairs = 4
+	dir := t.TempDir()
+	for i := 0; i < 2*pairs; i++ {
+		var fixtures map[string]map[string]any
+		if err := json.Unmarshal(src, &fixtures); err != nil {
+			t.Fatal(err)
+		}
+		renamed := make(map[string]map[string]any)
+		for name, test := range fixtures {
+			if i%2 == 1 {
+				block := test["blocks"].([]any)[0].(map[string]any)
+				list := block["blockAccessList"].([]any)
+				block["blockAccessList"] = list[:len(list)-1]
+			}
+			renamed[fmt.Sprintf("%s-%d", name, i)] = test
+		}
+		out, err := json.Marshal(renamed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("twin%d.json", i)), out, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		args      []string
+		wantClean executionEvent
+	}{
+		{[]string{"blocktest", "--bal-report", "--workers", "8", dir}, executionEvent{Path: "parallel"}},
+		{[]string{"blocktest", "--bal-report", "--bal-sequential", "--workers", "8", dir}, executionEvent{Path: "sequential", Reason: "disabled"}},
+	} {
+		tt := cmdtest.NewTestCmd(t, nil)
+		tt.Run("evm-test", tc.args...)
+		stdout := tt.Output()
+		tt.WaitExit()
+		stderr := tt.StderrText()
+
+		var results []testResult
+		if err := json.Unmarshal(stdout, &results); err != nil {
+			t.Fatalf("%v: stdout is not a JSON result list: %v\n%s", tc.args, err, stdout)
+		}
+		if len(results) != 2*pairs {
+			t.Fatalf("%v: %d results, want %d", tc.args, len(results), 2*pairs)
+		}
+		for _, r := range results {
+			if !r.Pass {
+				t.Fatalf("%v: %s failed: %s", tc.args, r.Name, r.Error)
+			}
+		}
+		counts := make(map[executionEvent]int)
+		for _, event := range balEvents(t, stderr) {
+			counts[executionEvent{Path: event.Path, Reason: event.Reason}]++
+		}
+		want := map[executionEvent]int{
+			tc.wantClean: pairs,
+			{Path: "sequential", Reason: "bad-access-list"}: pairs,
+		}
+		if !reflect.DeepEqual(counts, want) {
+			t.Fatalf("%v: decision lines %v, want %v", tc.args, counts, want)
+		}
+	}
+}
+
+// balEvents returns the execution events a runner printed on stderr under
+// --bal-report.
+func balEvents(t *testing.T, stderr string) []executionEvent {
+	t.Helper()
+	var events []executionEvent
+	for _, line := range strings.Split(stderr, "\n") {
+		if !strings.Contains(line, `"event"`) {
+			continue
+		}
+		var event executionEvent
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("bad event line %q: %v", line, err)
+		}
+		events = append(events, event)
+	}
+	return events
 }
 
 func TestEvmRunRegEx(t *testing.T) {
