@@ -52,7 +52,13 @@ func (p bitstr) equal(q bitstr) bool {
 
 // slice extracts n bits of key starting at bit position from, as a bitstr.
 func slice(key []byte, from, n int) bitstr {
-	out := bitstr{b: make([]byte, (n+7)/8), n: n}
+	return sliceInto(make([]byte, (n+7)/8), key, from, n)
+}
+
+// sliceInto is slice into the first (n+7)/8 bytes of buf, which it
+// overwrites.
+func sliceInto(buf, key []byte, from, n int) bitstr {
+	out := bitstr{b: buf[:(n+7)/8], n: n}
 	// Fast path: byte-aligned source range.
 	if from&7 == 0 {
 		copy(out.b, key[from>>3:])

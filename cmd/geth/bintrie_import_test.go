@@ -564,8 +564,9 @@ func readPreimageRecords(t *testing.T, path string) []preRecord {
 // key per read so the check crosses every read, and returns its records.
 func readPreimageFile(pr *preimageReader) ([]preRecord, error) {
 	var (
-		recs  []preRecord
-		order preimageOrder
+		recs   []preRecord
+		order  preimageOrder
+		hasher = newKeccakHasher()
 	)
 	for {
 		addr, count, err := pr.nextRecord()
@@ -575,7 +576,7 @@ func readPreimageFile(pr *preimageReader) ([]preRecord, error) {
 		if err != nil {
 			return recs, err
 		}
-		if _, err := order.record(pr.records-1, addr); err != nil {
+		if _, err := order.record(hasher, pr.records-1, addr); err != nil {
 			return recs, err
 		}
 		rec := preRecord{addr: addr, slots: make([]common.Hash, count)}
@@ -583,7 +584,7 @@ func readPreimageFile(pr *preimageReader) ([]preRecord, error) {
 			if err := pr.readSlots(rec.slots[i : i+1]); err != nil {
 				return recs, err
 			}
-			if err := order.slots(rec.slots[i:i+1], nil); err != nil {
+			if err := order.slots(hasher, rec.slots[i:i+1], nil); err != nil {
 				return recs, err
 			}
 		}

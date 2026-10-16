@@ -707,7 +707,7 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 				if account.Balance != nil {
 					balance = uint256.MustFromBig(account.Balance)
 				}
-				if err := accounts.Add(addrHash.Bytes(), merkleAccountRecord(account.Nonce, balance, codeHash)); err != nil {
+				if err := accounts.Add(addrHash.Bytes(), appendMerkleAccountRecord(nil, account.Nonce, balance, codeHash)); err != nil {
 					t.Fatal(err)
 				}
 			}

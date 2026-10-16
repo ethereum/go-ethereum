@@ -934,8 +934,8 @@ type preimageOrder struct {
 
 // record begins the index-th record, checking that its address hash ascends
 // past the one before. It returns the hash.
-func (o *preimageOrder) record(index uint64, addr common.Address) (common.Hash, error) {
-	hash := crypto.Keccak256Hash(addr[:])
+func (o *preimageOrder) record(h *keccakHasher, index uint64, addr common.Address) (common.Hash, error) {
+	hash := h.hash(addr[:])
 	if o.started && bytes.Compare(o.addr[:], hash[:]) >= 0 {
 		return common.Hash{}, fmt.Errorf("preimage record %d is out of hashed-key order", index)
 	}
@@ -945,9 +945,9 @@ func (o *preimageOrder) record(index uint64, addr common.Address) (common.Hash, 
 
 // slots checks the current record's next slot keys, handing each with its
 // hash to each if set.
-func (o *preimageOrder) slots(slots []common.Hash, each func(slot, hash common.Hash) error) error {
+func (o *preimageOrder) slots(h *keccakHasher, slots []common.Hash, each func(slot, hash common.Hash) error) error {
 	for _, slot := range slots {
-		hash := crypto.Keccak256Hash(slot[:])
+		hash := h.hash(slot[:])
 		if o.slotted && bytes.Compare(o.slot[:], hash[:]) >= 0 {
 			return fmt.Errorf("preimage record %d slot keys are out of hashed-key order", o.index)
 		}
@@ -959,6 +959,27 @@ func (o *preimageOrder) slots(slots []common.Hash, each func(slot, hash common.H
 		}
 	}
 	return nil
+}
+
+// keccakHasher hashes without allocating, for one goroutine:
+// crypto.Keccak256Hash hands both its input and its result to an interface,
+// so each call moves them to the heap.
+type keccakHasher struct {
+	state crypto.KeccakState
+	in    []byte
+	out   common.Hash
+}
+
+func newKeccakHasher() *keccakHasher {
+	return &keccakHasher{state: crypto.NewKeccakState()}
+}
+
+func (h *keccakHasher) hash(data []byte) common.Hash {
+	h.in = append(h.in[:0], data...)
+	h.state.Reset()
+	h.state.Write(h.in)
+	h.state.Read(h.out[:])
+	return h.out
 }
 
 // digest returns the keccak of everything read; the whole file once

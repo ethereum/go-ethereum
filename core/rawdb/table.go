@@ -203,12 +203,12 @@ func (t *table) SyncKeyValue() error {
 // until a final write is called, each operation prefixing all keys with the
 // pre-configured string.
 func (t *table) NewBatch() ethdb.Batch {
-	return &tableBatch{t.db.NewBatch(), t.prefix}
+	return &tableBatch{batch: t.db.NewBatch(), prefix: t.prefix}
 }
 
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
 func (t *table) NewBatchWithSize(size int) ethdb.Batch {
-	return &tableBatch{t.db.NewBatchWithSize(size), t.prefix}
+	return &tableBatch{batch: t.db.NewBatchWithSize(size), prefix: t.prefix}
 }
 
 // tableBatch is a wrapper around a database batch that prefixes each key access
@@ -216,16 +216,19 @@ func (t *table) NewBatchWithSize(size int) ethdb.Batch {
 type tableBatch struct {
 	batch  ethdb.Batch
 	prefix string
+	key    []byte // the last prefixed key: every batch copies the keys it is given
 }
 
 // Put inserts the given value into the batch for later committing.
 func (b *tableBatch) Put(key, value []byte) error {
-	return b.batch.Put(append([]byte(b.prefix), key...), value)
+	b.key = append(append(b.key[:0], b.prefix...), key...)
+	return b.batch.Put(b.key, value)
 }
 
 // Delete inserts a key removal into the batch for later committing.
 func (b *tableBatch) Delete(key []byte) error {
-	return b.batch.Delete(append([]byte(b.prefix), key...))
+	b.key = append(append(b.key[:0], b.prefix...), key...)
+	return b.batch.Delete(b.key)
 }
 
 // DeleteRange removes all keys in the range [start, end) from the batch for later committing.

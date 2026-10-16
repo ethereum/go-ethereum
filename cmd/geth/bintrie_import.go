@@ -450,9 +450,10 @@ const maxImportCodeSize = 1 << 20
 type importGroup struct {
 	stem        []byte
 	addr        common.Address
-	basic       *[32]byte
-	codeHash    *[32]byte
-	delegation  *[32]byte
+	basic       *[32]byte // nil, or leaves[0]
+	codeHash    *[32]byte // nil, or leaves[1]
+	delegation  *[32]byte // nil, or leaves[2]
+	leaves      [3][32]byte
 	slots       []importSlot // header-range storage, in sub-index order
 	headerClaim uint64       // header-range slots the preimage file lists
 	headerSeen  uint64       // header-range slots the leaves hold
@@ -579,7 +580,10 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	defer prog.stop()
 	for _, cand := range cands {
 		g.Go(func() error {
-			var buf candidateBuf
+			var (
+				buf    candidateBuf
+				hasher = newKeccakHasher()
+			)
 			for batch := range records {
 				if err := opts.yield.pause(gctx); err != nil {
 					return err
@@ -589,11 +593,11 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 					run := &batch.runs[i]
 					if !keep {
 						if run.first {
-							if _, err := order.record(run.index, run.addr); err != nil {
+							if _, err := order.record(hasher, run.index, run.addr); err != nil {
 								return err
 							}
 						}
-						if err := order.slots(run.slots, nil); err != nil {
+						if err := order.slots(hasher, run.slots, nil); err != nil {
 							return err
 						}
 					}
@@ -615,8 +619,9 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	readErr := func() error {
 		defer close(records)
 		var (
-			batch *preimageBatch
-			order preimageOrder // the reader's own check, when it keeps the preimages
+			batch  *preimageBatch
+			order  preimageOrder // the reader's own check, when it keeps the preimages
+			hasher = newKeccakHasher()
 		)
 		take := func() error {
 			if err := opts.yield.pause(gctx); err != nil {
@@ -660,7 +665,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			// The preimage file is keccak-ordered, which the reader checks on
 			// this path, so the preimage store is written in that order.
 			if keep {
-				addrHash, err := order.record(index, addr)
+				addrHash, err := order.record(hasher, index, addr)
 				if err != nil {
 					return err
 				}
@@ -687,7 +692,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 					}
 				}
 				if keep {
-					err := order.slots(slots, func(slot, hash common.Hash) error {
+					err := order.slots(hasher, slots, func(slot, hash common.Hash) error {
 						return putPreimage(rawBatch, hash, slot[:])
 					})
 					if err != nil {
@@ -771,19 +776,29 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 
 	// addSlot records one storage slot everywhere it goes but flat state,
 	// which the check-2 fold writes in keccak order: the preimage store,
-	// and the MPT re-derivation.
+	// and the MPT re-derivation. The sorter copies the key and value, so
+	// both are built in buffers reused for every slot.
+	var (
+		hasher  = newKeccakHasher()
+		enc     = rlp.NewEncoderBuffer(nil)
+		slotKey [2 * common.HashLength]byte
+		slotRLP []byte
+	)
 	addSlot := func(accountHash common.Hash, slot common.Hash, value [32]byte) error {
-		var (
-			slotHash = crypto.Keccak256Hash(slot[:])
-			enc, _   = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-		)
+		slotHash := hasher.hash(slot[:])
+		copy(slotKey[:], accountHash[:])
+		copy(slotKey[common.HashLength:], slotHash[:])
+		enc.Reset(nil)
+		enc.WriteBytes(common.TrimLeftZeroes(value[:]))
+		slotRLP = enc.AppendToBytes(slotRLP[:0])
 		stats.slots.Add(1)
-		return slotSorter.Add(append(accountHash.Bytes(), slotHash.Bytes()...), enc)
+		return slotSorter.Add(slotKey[:], slotRLP)
 	}
 
 	// sealGroup validates one account's header leaves and records it
 	// everywhere it goes but flat state, which the check-2 fold writes in
-	// keccak order.
+	// keccak order. The account record is built in a reused buffer too.
+	var acctRecord []byte
 	sealGroup := func(g *importGroup) error {
 		// Header-range slots are derived from sub-indices, so the preimage
 		// file's list of them is checked rather than believed - the exact
@@ -816,7 +831,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			// The delegation leaf derives from a 20-byte target, so its
 			// designator is always the 23-byte EIP-7702 indicator.
 			designator := g.delegation[:23]
-			codeHash = crypto.Keccak256Hash(designator)
+			codeHash = hasher.hash(designator)
 			if rawBatch != nil {
 				rawdb.WriteCode(rawBatch, codeHash, designator)
 			}
@@ -834,11 +849,11 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 				codeSizes[codeHash] = codeSize
 			}
 		}
-		accountHash := crypto.Keccak256Hash(g.addr.Bytes())
+		accountHash := hasher.hash(g.addr[:])
 		stats.accounts.Add(1)
 
-		value := merkleAccountRecord(nonce, balance, codeHash)
-		if err := acctSorter.Add(accountHash.Bytes(), value); err != nil {
+		acctRecord = appendMerkleAccountRecord(acctRecord[:0], nonce, balance, codeHash)
+		if err := acctSorter.Add(accountHash[:], acctRecord); err != nil {
 			return err
 		}
 		for _, s := range g.slots {
@@ -873,7 +888,9 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	var (
 		codeCand     *bintrie.RecordSorter
 		codeHeld     *heldStream
+		codeRecord   []byte
 		group        *importGroup
+		spare        importGroup // the one group, reused for every account
 		pastAccounts bool
 	)
 	defer func() {
@@ -942,7 +959,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			next = 0
 			stats.leaves.Add(uint64(len(batch.values)))
 		}
-		key, value := batch.key(next), batch.values[next]
+		key, value := batch.key(next), &batch.values[next]
 		next++
 		// Zone boundary: the account zone ends where anything else begins.
 		if key[0] != bintrie.AccountZone && !pastAccounts {
@@ -965,12 +982,12 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 				}
 				if bytes.Equal(ckey, stem) {
 					var (
-						codeHash = common.BytesToHash(cvalue[:32])
-						ti       = binary.BigEndian.Uint64(cvalue[32:])
-						index    = ti*256 + uint64(key[33])
+						ti    = binary.BigEndian.Uint64(cvalue[32:])
+						index = ti*256 + uint64(key[33])
 					)
-					record := append(codeHash.Bytes(), binary.BigEndian.AppendUint64(nil, index)...)
-					if err := chunkSorter.Add(record, value[:]); err != nil {
+					// The record is the code hash and the chunk index.
+					codeRecord = binary.BigEndian.AppendUint64(append(codeRecord[:0], cvalue[:32]...), index)
+					if err := chunkSorter.Add(codeRecord, value[:]); err != nil {
 						return common.Hash{}, err
 					}
 					break
@@ -1011,10 +1028,10 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 
 		if key[0] == bintrie.StorageZone {
 			if !haveStorageHash || addr != lastStorageAddr {
-				lastStorageAddr, lastStorageHash, haveStorageHash = addr, crypto.Keccak256Hash(addr.Bytes()), true
+				lastStorageAddr, lastStorageHash, haveStorageHash = addr, hasher.hash(addr[:]), true
 			}
 			slot := common.BytesToHash(matched[common.AddressLength:])
-			if err := addSlot(lastStorageHash, slot, value); err != nil {
+			if err := addSlot(lastStorageHash, slot, *value); err != nil {
 				return common.Hash{}, err
 			}
 			continue
@@ -1029,26 +1046,30 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			group = nil
 		}
 		if group == nil {
-			group = &importGroup{
-				stem:        bytes.Clone(stem),
+			spare = importGroup{
+				stem:        append(spare.stem[:0], stem...),
 				addr:        addr,
 				headerClaim: binary.BigEndian.Uint64(matched[common.AddressLength:]),
+				slots:       spare.slots[:0],
 			}
+			group = &spare
 		}
-		leaf := value
 		switch {
 		case sub == bintrie.BasicDataLeafKey:
-			group.basic = &leaf
+			group.leaves[0] = *value
+			group.basic = &group.leaves[0]
 		case sub == bintrie.CodeHashLeafKey:
-			group.codeHash = &leaf
+			group.leaves[1] = *value
+			group.codeHash = &group.leaves[1]
 		case sub == bintrie.DelegationLeafKey:
-			group.delegation = &leaf
+			group.leaves[2] = *value
+			group.delegation = &group.leaves[2]
 		case sub >= bintrie.HeaderStorageOffset && sub < bintrie.HeaderStorageOffset+bintrie.HeaderStorageSlots:
 			// The slot number is the sub-index, not something the preimage
 			// file has to be trusted for.
 			var slot common.Hash
 			slot[31] = sub - bintrie.HeaderStorageOffset
-			group.slots = append(group.slots, importSlot{slot: slot, value: leaf})
+			group.slots = append(group.slots, importSlot{slot: slot, value: *value})
 			group.headerSeen |= 1 << (sub - bintrie.HeaderStorageOffset)
 		}
 	}
@@ -1125,11 +1146,12 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	slices.SortFunc(hashes, func(a, b common.Hash) int { return bytes.Compare(a[:], b[:]) })
 	prog = startProgress("Verifying code", "codes", uint64(len(hashes)), stats.codes.Load)
 	defer prog.stop()
+	var chunks []bintrie.IndexedChunk // one code's, reused for the next
 	for _, hash := range hashes {
 		if err := opts.yield.pause(ctx); err != nil {
 			return common.Hash{}, err
 		}
-		var chunks []bintrie.IndexedChunk
+		chunks = chunks[:0]
 		for {
 			ckey, cvalue, err := chunkHeld.current()
 			if err != nil {

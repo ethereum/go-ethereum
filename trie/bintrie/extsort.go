@@ -27,6 +27,7 @@ import (
 	"math"
 	"os"
 	"slices"
+	"sync"
 )
 
 // RecordSorter is an external merge-sort: records accumulate in an in-memory
@@ -125,11 +126,6 @@ func (s *RecordSorter) Add(key, value []byte) error {
 	if uint64(len(value)) > math.MaxUint32 {
 		return fmt.Errorf("bintrie: sorter value of %d bytes exceeds the run encoding", len(value))
 	}
-	if s.validate != nil {
-		if err := s.validate(key, value); err != nil {
-			return err
-		}
-	}
 	if s.budget > 0 && s.arena == nil {
 		// One allocation per run buffer, the size the run spills at: a growing
 		// arena would copy itself several times over before reaching it.
@@ -137,6 +133,14 @@ func (s *RecordSorter) Add(key, value []byte) error {
 	}
 	off := len(s.arena)
 	s.arena = append(append(s.arena, key...), value...)
+	// The hook sees the arena's copy: handing it the caller's slices would
+	// move every caller's key and value to the heap.
+	if s.validate != nil {
+		if err := s.validate(s.arena[off:off+len(key)], s.arena[off+len(key):]); err != nil {
+			s.arena = s.arena[:off]
+			return err
+		}
+	}
 	s.index = append(s.index, arenaRecord{off: off, klen: len(key), vlen: len(value)})
 	s.buffered += len(key) + len(value) + arenaRecordBytes
 	if s.budget > 0 && s.buffered >= max(s.budget/2, 1) {
@@ -198,6 +202,10 @@ func (s *RecordSorter) spill() error {
 	return nil
 }
 
+// runWriters holds the spill writers: a run's 1 MiB buffer would otherwise be
+// garbage once per spill.
+var runWriters = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, 1<<20) }}
+
 // writeRun sorts a run and writes it to a temporary file, rewound for reading.
 func writeRun(tmpDir string, arena []byte, index []arenaRecord) (*os.File, error) {
 	if err := sortRun(arena, index); err != nil {
@@ -214,7 +222,12 @@ func writeRun(tmpDir string, arena []byte, index []arenaRecord) (*os.File, error
 		os.Remove(f.Name())
 		return nil, err
 	}
-	w := bufio.NewWriterSize(f, 1<<20)
+	w := runWriters.Get().(*bufio.Writer)
+	w.Reset(f)
+	defer func() {
+		w.Reset(nil)
+		runWriters.Put(w)
+	}()
 	for _, rec := range index {
 		if err := writeRunRecord(w, rec.key(arena), rec.value(arena)); err != nil {
 			return discard(err)

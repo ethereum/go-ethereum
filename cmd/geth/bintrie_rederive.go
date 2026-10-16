@@ -43,14 +43,36 @@ import (
 
 const merkleAccountRecordLen = 8 + 32 + common.HashLength
 
-// merkleAccountRecord encodes the account fields the fold needs. The storage
-// root is absent: it is recomputed from the storage records.
-func merkleAccountRecord(nonce uint64, balance *uint256.Int, codeHash common.Hash) []byte {
-	record := make([]byte, 0, merkleAccountRecordLen)
-	record = binary.BigEndian.AppendUint64(record, nonce)
+// appendMerkleAccountRecord appends the account fields the fold needs. The
+// storage root is absent: it is recomputed from the storage records.
+func appendMerkleAccountRecord(dst []byte, nonce uint64, balance *uint256.Int, codeHash common.Hash) []byte {
+	dst = binary.BigEndian.AppendUint64(dst, nonce)
 	balance32 := balance.Bytes32()
-	record = append(record, balance32[:]...)
-	return append(record, codeHash.Bytes()...)
+	dst = append(dst, balance32[:]...)
+	return append(dst, codeHash[:]...)
+}
+
+// appendAccountRLP appends a's encoding with storage root root: the consensus
+// one, or with slim the flat-state one, whose empty root and code hash are
+// empty strings (types.SlimAccountRLP). It encodes through enc's reused
+// buffer, where rlp.EncodeToBytes allocates the account and its encoding.
+func appendAccountRLP(dst []byte, enc *rlp.EncoderBuffer, a *foldAccount, root common.Hash, slim bool) []byte {
+	enc.Reset(nil)
+	list := enc.List()
+	enc.WriteUint64(a.nonce)
+	enc.WriteUint256(&a.balance)
+	if slim && root == types.EmptyRootHash {
+		enc.WriteBytes(nil)
+	} else {
+		enc.WriteBytes(root[:])
+	}
+	if slim && a.codeHash == types.EmptyCodeHash {
+		enc.WriteBytes(nil)
+	} else {
+		enc.WriteBytes(a.codeHash[:])
+	}
+	enc.ListEnd(list)
+	return enc.AppendToBytes(dst)
 }
 
 // heldStream wraps a sorted record stream with one record of lookahead.
@@ -173,6 +195,9 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 		worker     int
 		cur        *foldBatch
 		pending    []foldAccount
+		// Encodings and keys, reused: the batch and the spill copy them.
+		enc          = rlp.NewEncoderBuffer(nil)
+		slim, rowKey []byte
 	)
 	prog := startProgress("Re-deriving merkle state", "records", total, walked.Load)
 	defer prog.stop()
@@ -276,7 +301,10 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 				cur.ends = append(cur.ends, len(cur.vals))
 				if batch != nil {
 					storageSum.add(skey, svalue)
-					rawdb.WriteStorageSnapshot(batch, acct.hash, common.BytesToHash(skey[common.HashLength:]), svalue)
+					rowKey = append(append(rowKey[:0], rawdb.SnapshotStoragePrefix...), skey...)
+					if err := batch.Put(rowKey, svalue); err != nil {
+						return err
+					}
 					if err := flush(); err != nil {
 						return err
 					}
@@ -298,12 +326,7 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 			cur.accounts = append(cur.accounts, len(cur.keys))
 		}
 		if acctRows != nil {
-			slim := types.SlimAccountRLP(types.StateAccount{
-				Nonce:    acct.nonce,
-				Balance:  &acct.balance,
-				Root:     types.EmptyRootHash,
-				CodeHash: acct.codeHash[:],
-			})
+			slim = appendAccountRLP(slim[:0], &enc, &acct, types.EmptyRootHash, true)
 			if err := acctRows.add(akey, slim); err != nil {
 				return err
 			}
@@ -365,7 +388,10 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 	defer accountSum.finish()
 	err := acctRows.replay(bufio.NewReaderSize(nil, 256<<10), func(hash, row []byte) error {
 		accountSum.add(hash, row)
-		rawdb.WriteAccountSnapshot(batch, common.BytesToHash(hash), row)
+		rowKey = append(append(rowKey[:0], rawdb.SnapshotAccountPrefix...), hash...)
+		if err := batch.Put(rowKey, row); err != nil {
+			return err
+		}
 		if rows.Add(1)%uint64(foldBatchSize) == 0 {
 			if err := y.pause(ctx); err != nil {
 				return err
@@ -440,6 +466,8 @@ func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []fo
 		tr   = trie.NewStackTrie(nil)
 		have []common.Hash
 		job  int
+		enc  = rlp.NewEncoderBuffer(nil)
+		full []byte
 	)
 	for accounts := range in {
 		if err := y.pause(ctx); err != nil {
@@ -459,15 +487,7 @@ func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []fo
 				}
 				root, have = have[0], have[1:]
 			}
-			full, err := rlp.EncodeToBytes(&types.StateAccount{
-				Nonce:    acct.nonce,
-				Balance:  &acct.balance,
-				Root:     root,
-				CodeHash: acct.codeHash[:],
-			})
-			if err != nil {
-				return common.Hash{}, err
-			}
+			full = appendAccountRLP(full[:0], &enc, acct, root, false)
 			if err := tr.Update(acct.hash[:], full); err != nil {
 				return common.Hash{}, err
 			}
@@ -692,12 +712,16 @@ func writeStagedNodes(ctx context.Context, pbtdb ethdb.Database, nodes *nodeStag
 		staged  uint64
 		flushed atomic.Uint64
 		prog    = startProgress("Writing tree nodes", "nodes", nodes.count, flushed.Load)
+		key     []byte // the node's, reused: the batch copies it
 	)
 	defer ahead.finish()
 	defer prog.stop()
 	err := nodes.replay(func(path, blob []byte) error {
 		ahead.add(path, blob)
-		rawdb.WriteAccountTrieNode(batch, path, blob)
+		key = append(append(key[:0], rawdb.TrieNodeAccountPrefix...), path...)
+		if err := batch.Put(key, blob); err != nil {
+			return err
+		}
 		staged++
 		if batch.ValueSize() < ethdb.IdealBatchSize {
 			return nil
