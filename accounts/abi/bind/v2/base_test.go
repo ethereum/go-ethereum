@@ -394,6 +394,34 @@ func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]in
 	}
 }
 
+
+func TestUnpackLogEmptyPayloadErrors(t *testing.T) {
+	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"id","type":"uint256"},{"indexed":false,"name":"data","type":"uint256"}],"name":"basic1","type":"event"}]`
+	parsedAbi, err := abi.JSON(strings.NewReader(abiString))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
+	log := types.Log{
+		Topics: []common.Hash{
+			parsedAbi.Events["basic1"].ID,
+			common.BigToHash(big.NewInt(1)),
+		},
+		Data: nil,
+	}
+	out := new(struct {
+		Id   *big.Int
+		Data *big.Int
+	})
+	if err := bc.UnpackLog(out, "basic1", log); err == nil {
+		t.Fatal("expected error for empty non-indexed payload")
+	}
+	m := make(map[string]interface{})
+	if err := bc.UnpackLogIntoMap(m, "basic1", log); err == nil {
+		t.Fatal("expected error for empty non-indexed payload into map")
+	}
+}
+
 func newMockLog(topics []common.Hash, txHash common.Hash) types.Log {
 	return types.Log{
 		Address:     common.HexToAddress("0x0"),
