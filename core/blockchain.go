@@ -267,10 +267,11 @@ func (cfg BlockChainConfig) WithNoAsyncFlush(on bool) *BlockChainConfig {
 }
 
 // triedbConfig derives the configures for trie database.
-func (cfg *BlockChainConfig) triedbConfig(isUBT bool) *triedb.Config {
+func (cfg *BlockChainConfig) triedbConfig(isUBT, isPBT bool) *triedb.Config {
 	config := &triedb.Config{
 		Preimages:         cfg.Preimages,
 		IsUBT:             isUBT,
+		IsPBT:             isPBT,
 		BinTrieGroupDepth: cfg.BinTrieGroupDepth,
 	}
 	if cfg.StateScheme == rawdb.HashScheme {
@@ -396,9 +397,8 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if err != nil {
 		return nil, err
 	}
-	tconfig := cfg.triedbConfig(enableVerkle)
-	tconfig.IsPBT = pbtAtGenesis(db, genesis)
-	triedb := triedb.NewDatabase(db, tconfig)
+	enablePBT := pbtAtGenesis(db, genesis)
+	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle, enablePBT))
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the
@@ -408,7 +408,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if err != nil {
 		return nil, err
 	}
-	if chainConfig.PBTTime != nil && !triedb.IsPBT() {
+	if chainConfig.PBTTime != nil && !enablePBT {
 		return nil, errors.New("binary tree activation after genesis is not supported")
 	}
 	log.Info("")

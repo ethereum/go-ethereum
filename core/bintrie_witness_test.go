@@ -225,7 +225,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 		cacheConfig.BinTrieGroupDepth = triedb.DefaultBinTrieGroupDepth
 		cacheConfig.SnapshotLimit = 0
-		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
+		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true, false))
 		statedb, _ := state.New(types.EmptyBinaryHash, state.NewDatabase(triedb, nil))
 		checkBlockHashes(statedb, true)
 	})
