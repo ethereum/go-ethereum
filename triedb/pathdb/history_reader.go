@@ -43,6 +43,7 @@ type indexReaderWithLimitTag struct {
 	reader *indexReader
 	limit  uint64
 	db     ethdb.KeyValueReader
+	lock   sync.Mutex
 }
 
 // newIndexReaderWithLimitTag constructs a index reader with indexing position.
@@ -65,6 +66,9 @@ func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit
 // reader was created. The reader should be refreshed as needed to load the
 // latest indexed data from disk.
 func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uint64, error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	// Mark the index reader as stale if the tracked indexing position moves
 	// backward. This can occur if the pathdb is reverted and certain state
 	// histories are unindexed. For simplicity, the reader is marked as stale
@@ -110,6 +114,7 @@ type stateHistoryReader struct {
 	disk    ethdb.KeyValueReader
 	freezer ethdb.AncientReader
 	readers map[string]*indexReaderWithLimitTag
+	lock    sync.RWMutex
 }
 
 // newStateHistoryReader constructs the history reader with the supplied db
@@ -227,6 +232,31 @@ func (r *stateHistoryReader) readStorage(address common.Address, storageKey comm
 	return data, nil
 }
 
+// getReader locates or constructs the index reader for state retrieval,
+// ensuring thread-safe access to the readers cache.
+func (r *stateHistoryReader) getReader(state stateIdentQuery, lastIndexed uint64) (*indexReaderWithLimitTag, error) {
+	key := state.String()
+	r.lock.RLock()
+	ir, ok := r.readers[key]
+	r.lock.RUnlock()
+	if ok {
+		return ir, nil
+	}
+
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	if ir, ok := r.readers[key]; ok {
+		return ir, nil
+	}
+	ir, err := newIndexReaderWithLimitTag(r.disk, state.stateIdent, lastIndexed, 0)
+	if err != nil {
+		return nil, err
+	}
+	r.readers[key] = ir
+	return ir, nil
+}
+
 // read retrieves the state element data associated with the stateID.
 // stateID: represents the ID of the state of the specified version;
 // lastID: represents the ID of the latest/newest state history;
@@ -238,13 +268,9 @@ func (r *stateHistoryReader) read(state stateIdentQuery, stateID uint64, lastID 
 	}
 	// Construct the index reader to locate the corresponding history for
 	// state retrieval
-	ir, ok := r.readers[state.String()]
-	if !ok {
-		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, lastIndexed, 0)
-		if err != nil {
-			return nil, err
-		}
-		r.readers[state.String()] = ir
+	ir, err := r.getReader(state, lastIndexed)
+	if err != nil {
+		return nil, err
 	}
 	historyID, err := ir.readGreaterThan(stateID, lastID)
 	if err != nil {
