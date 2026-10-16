@@ -45,6 +45,7 @@ var blockTestCommand = &cli.Command{
 		WitnessCrossCheckFlag,
 		BALSequentialFlag,
 		BALWithholdFlag,
+		CacheNoPrecompileFlag,
 		BALReportFlag,
 		FuzzFlag,
 		WorkersFlag,

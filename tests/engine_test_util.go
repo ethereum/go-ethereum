@@ -158,6 +158,7 @@ func (t *EngineTest) Run(scheme string, tracer *tracing.Hooks, cfg RunConfig, at
 			Tracer:                   tracer,
 			DisableParallelExecution: cfg.Sequential,
 		},
+		NoPrecompileCache: cfg.NoPrecompileCache,
 	}
 	chain, err := core.NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), options)
 	if err != nil {

@@ -48,6 +48,7 @@ var engineTestCommand = &cli.Command{
 		FuzzFlag,
 		WorkersFlag,
 		BALSequentialFlag,
+		CacheNoPrecompileFlag,
 		BALReportFlag,
 	}, traceFlags),
 }

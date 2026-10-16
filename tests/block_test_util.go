@@ -60,6 +60,10 @@ type RunConfig struct {
 	// so every block executes without one. Engine tests carry the list in the
 	// payload and ignore it.
 	WithholdAccessList bool
+
+	// NoPrecompileCache turns off the precompile result cache the chain
+	// shares across a test's blocks.
+	NoPrecompileCache bool
 }
 
 // A BlockTest checks handling of entire blocks.
@@ -264,6 +268,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 			Tracer:                   tracer,
 			DisableParallelExecution: cfg.Sequential,
 		},
+		NoPrecompileCache:       cfg.NoPrecompileCache,
 		StatelessSelfValidation: witness,
 	}
 	if snapshotter {
