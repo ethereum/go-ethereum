@@ -147,6 +147,11 @@ func (b *testBackend) CurrentHeader() *types.Header {
 	return b.chain.CurrentHeader()
 }
 
+// Pending reports no pending block.
+func (b *testBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
+	return nil, nil, nil
+}
+
 // teardown releases the associated resources.
 func (b *testBackend) teardown() {
 	b.chain.Stop()
