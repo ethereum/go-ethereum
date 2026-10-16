@@ -40,6 +40,7 @@ var (
 	parallelSystemExecTimer = metrics.NewRegisteredResettingTimer("chain/execution/parallel/system", nil)
 	parallelTxExecTimer     = metrics.NewRegisteredResettingTimer("chain/execution/parallel/transactions", nil)
 	parallelStateHashTimer  = metrics.NewRegisteredResettingTimer("chain/execution/parallel/statehash", nil)
+	parallelHashWaitTimer   = metrics.NewRegisteredResettingTimer("chain/execution/parallel/waithash", nil)
 	parallelTotalTimer      = metrics.NewRegisteredResettingTimer("chain/execution/parallel/total", nil)
 )
 
@@ -304,9 +305,12 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	pipeline.feedBAL(blockAccessList)
 
 	// Join the concurrent root computation.
+	hashWaitStart := time.Now()
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
+	hashWait := time.Since(hashWaitStart)
+
 	// Join the receipts. The pipeline has had the whole of execution to work
 	// on them, so there should be nothing left to wait for.
 	pipeline.joinReceipts()
@@ -322,15 +326,16 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if stats != nil {
 		stats.addReads(preState)
 		stats.addReads(postState)
-		stats.Execution = systemExec + txExec
+		stats.Execution = systemExec + txExec + hashWait
 	}
 	parallelSystemExecTimer.Update(systemExec)
 	parallelTxExecTimer.Update(txExec)
 	parallelStateHashTimer.Update(stateHash)
+	parallelHashWaitTimer.Update(hashWait)
 	parallelTotalTimer.UpdateSince(start)
 
 	log.Debug("Parallel block execution", "number", header.Number, "txs", len(txs),
-		"system", common.PrettyDuration(systemExec), "txexec", common.PrettyDuration(txExec),
+		"system", common.PrettyDuration(systemExec), "txexec", common.PrettyDuration(txExec), "hashWait", common.PrettyDuration(hashWait),
 		"stateapply", common.PrettyDuration(stateApply), "statehash", common.PrettyDuration(stateHash),
 		"elapsed", common.PrettyDuration(time.Since(start)),
 	)
