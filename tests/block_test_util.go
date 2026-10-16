@@ -26,6 +26,8 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -37,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -45,6 +48,19 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
+
+// RunConfig holds the execution settings for BlockTest.Run and EngineTest.Run.
+// The zero value runs blocks as the chain does by default.
+type RunConfig struct {
+	// Sequential executes every block sequentially, even one the EIP-7928
+	// parallel processor could run.
+	Sequential bool
+
+	// WithholdAccessList never attaches a block test's delivered access list,
+	// so every block executes without one. Engine tests carry the list in the
+	// payload and ignore it.
+	WithholdAccessList bool
+}
 
 // A BlockTest checks handling of entire blocks.
 type BlockTest struct {
@@ -71,6 +87,77 @@ type btBlock struct {
 	ExpectException string
 	Rlp             string
 	UncleHeaders    []*btHeader
+
+	// The EIP-7928 block access list travels beside the block, not in its RLP.
+	// Fixtures carry it as blockAccessList, or, for a block expected to be
+	// rejected, only inside rlp_decoded.
+	BlockAccessList json.RawMessage `json:"blockAccessList"`
+	RlpDecoded      *struct {
+		BlockAccessList json.RawMessage `json:"blockAccessList"`
+	} `json:"rlp_decoded"`
+}
+
+// balQuantityKeys are the access list fields holding hex quantities, which the
+// fixtures zero-pad ("0x00") and geth's hexutil decoders reject.
+var balQuantityKeys = map[string]bool{
+	"blockAccessIndex": true, "postNonce": true, "postBalance": true,
+	"postValue": true, "slot": true, "storageReads": true,
+}
+
+// trimHexQuantity strips the leading zeros from a hex quantity.
+func trimHexQuantity(v string) string {
+	if !strings.HasPrefix(v, "0x") {
+		return v
+	}
+	digits := strings.TrimLeft(v[2:], "0")
+	if digits == "" {
+		digits = "0"
+	}
+	return "0x" + digits
+}
+
+// trimBALQuantities rewrites the hex quantities in a decoded access list JSON
+// tree into the form geth's decoders accept, leaving addresses and code alone.
+func trimBALQuantities(node any, quantity bool) any {
+	switch n := node.(type) {
+	case map[string]any:
+		for k, v := range n {
+			n[k] = trimBALQuantities(v, balQuantityKeys[k])
+		}
+	case []any:
+		for i, v := range n {
+			n[i] = trimBALQuantities(v, quantity)
+		}
+	case string:
+		if quantity {
+			return trimHexQuantity(n)
+		}
+	}
+	return node
+}
+
+// accessList decodes the fixture's block access list, if it carries one.
+func (bb *btBlock) accessList() (*bal.BlockAccessList, error) {
+	raw := bb.BlockAccessList
+	if len(raw) == 0 && bb.RlpDecoded != nil {
+		raw = bb.RlpDecoded.BlockAccessList
+	}
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var tree any
+	if err := json.Unmarshal(raw, &tree); err != nil {
+		return nil, err
+	}
+	trimmed, err := json.Marshal(trimBALQuantities(tree, false))
+	if err != nil {
+		return nil, err
+	}
+	var list bal.BlockAccessList
+	if err := json.Unmarshal(trimmed, &list); err != nil {
+		return nil, err
+	}
+	return &list, nil
 }
 
 //go:generate go run github.com/fjl/gencodec -type btHeader -field-override btHeaderMarshaling -out gen_btheader.go
@@ -113,7 +200,7 @@ type btHeaderMarshaling struct {
 	SlotNumber    *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, cfg RunConfig, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -161,7 +248,8 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 		Preimages:      true,
 		TxLookupLimit:  -1, // disable tx indexing
 		VmConfig: vm.Config{
-			Tracer: tracer,
+			Tracer:                   tracer,
+			DisableParallelExecution: cfg.Sequential,
 		},
 		StatelessSelfValidation: witness,
 	}
@@ -175,7 +263,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	}
 	defer chain.Stop()
 
-	validBlocks, err := t.insertBlocks(chain)
+	validBlocks, err := t.insertBlocks(chain, cfg.WithholdAccessList)
 	if err != nil {
 		return err
 	}
@@ -246,11 +334,11 @@ See https://ethereum-tests.readthedocs.io/en/latest/blockchain-ref.html
 	expected we are expected to ignore it and continue processing and then validate the
 	post state.
 */
-func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error) {
+func (t *BlockTest) insertBlocks(blockchain *core.BlockChain, withholdAccessList bool) ([]btBlock, error) {
 	validBlocks := make([]btBlock, 0)
 	// insert the test blocks, which will execute all transactions
 	for bi, b := range t.json.Blocks {
-		cb, err := b.decode()
+		cb, dropped, err := b.decode(withholdAccessList)
 		if err != nil {
 			if b.BlockHeader == nil {
 				log.Info("Block decoding failed", "index", bi, "err", err)
@@ -261,7 +349,9 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		}
 		// RLP decoding worked, try to insert into chain:
 		blocks := types.Blocks{cb}
+		beginImport(cb.Hash(), dropped)
 		i, err := blockchain.InsertChain(blocks)
+		endImport(cb.Hash())
 		if err != nil {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
@@ -406,12 +496,86 @@ func (t *BlockTest) validateImportedHeaders(cm *core.BlockChain, validBlocks []b
 	return nil
 }
 
-func (bb *btBlock) decode() (*types.Block, error) {
+// decode returns the fixture block, with its delivered access list attached
+// when that list is the one the header commits to, and whether a delivered
+// list was dropped. With withholdAccessList, no list is ever attached, and a
+// delivered one counts as dropped.
+func (bb *btBlock) decode(withholdAccessList bool) (*types.Block, bool, error) {
 	data, err := hexutil.Decode(bb.Rlp)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var b types.Block
-	err = rlp.DecodeBytes(data, &b)
-	return &b, err
+	if err = rlp.DecodeBytes(data, &b); err != nil {
+		return nil, false, err
+	}
+	list, err := bb.accessList()
+	if withholdAccessList {
+		return &b, list != nil || err != nil, nil
+	}
+	// The access list is delivered beside the block, as it is from a peer in
+	// sync, so it is used only if it is the one the header commits to.
+	// Otherwise it is dropped, like the downloader drops a peer's list, and
+	// the block is judged on its header with the list computed in execution.
+	h := b.BlockAccessListHash()
+	switch {
+	case err != nil:
+		log.Debug("Dropped block access list", "number", b.NumberU64(), "hash", b.Hash(), "err", err)
+	case list == nil:
+	case h == nil || list.Hash() != *h:
+		log.Debug("Dropped block access list", "number", b.NumberU64(), "hash", b.Hash(), "err", "hash mismatch")
+	default:
+		return b.WithAccessListUnsafe(list), false, nil
+	}
+	return &b, list != nil || err != nil, nil
+}
+
+// imports tracks the blocks being inserted by every running block test, so a
+// block's execution can be tied to the import that dropped its delivered access
+// list. Core logs a block's execution by hash alone, and fixtures run in
+// parallel can import the same block, with and without a valid list, so only
+// one import of a given hash runs at a time. Only evm --bal-report reads it,
+// and only evm --workers runs fixtures in parallel.
+var imports = struct {
+	lock     sync.Mutex
+	inFlight map[common.Hash]chan struct{}
+	dropped  map[common.Hash]bool
+}{
+	inFlight: make(map[common.Hash]chan struct{}),
+	dropped:  make(map[common.Hash]bool),
+}
+
+// beginImport waits until no other import of the block is in flight, then
+// records whether this one dropped the block's delivered access list.
+func beginImport(hash common.Hash, dropped bool) {
+	imports.lock.Lock()
+	defer imports.lock.Unlock()
+	for {
+		done, busy := imports.inFlight[hash]
+		if !busy {
+			break
+		}
+		imports.lock.Unlock()
+		<-done
+		imports.lock.Lock()
+	}
+	imports.inFlight[hash] = make(chan struct{})
+	imports.dropped[hash] = dropped
+}
+
+// endImport releases the block for the next import of it.
+func endImport(hash common.Hash) {
+	imports.lock.Lock()
+	defer imports.lock.Unlock()
+	close(imports.inFlight[hash])
+	delete(imports.inFlight, hash)
+	delete(imports.dropped, hash)
+}
+
+// AccessListDropped reports whether the block with the given hash is being
+// imported by a block test that dropped its delivered access list.
+func AccessListDropped(hash common.Hash) bool {
+	imports.lock.Lock()
+	defer imports.lock.Unlock()
+	return imports.dropped[hash]
 }

@@ -43,12 +43,19 @@ var blockTestCommand = &cli.Command{
 		HumanReadableFlag,
 		RunFlag,
 		WitnessCrossCheckFlag,
+		BALSequentialFlag,
+		BALWithholdFlag,
+		BALReportFlag,
 		FuzzFlag,
 		WorkersFlag,
 	}, traceFlags),
 }
 
 func blockTestCmd(ctx *cli.Context) error {
+	if ctx.Bool(BALReportFlag.Name) {
+		reportExecution(log.Root().Handler(), ctx.Bool(BALWithholdFlag.Name))
+	}
+
 	path := ctx.Args().First()
 
 	// If path is provided, run the tests at that path.
@@ -96,7 +103,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 
 	// Suppress INFO logs during fuzzing
 	if ctx.Bool(FuzzFlag.Name) {
-		log.SetDefault(log.NewLogger(log.DiscardHandler()))
+		discardLogs(ctx)
 	}
 
 	// Pull out keys to sort and ensure tests are run in order.
@@ -111,7 +118,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		test := tests[name]
 		result := &testResult{Name: name, Pass: true}
 		var finalRoot *common.Hash
-		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
+		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, runConfig(ctx), func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
 					result.State = dump(s)

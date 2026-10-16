@@ -132,7 +132,7 @@ type EngineAPIFunc func(chain *core.BlockChain, db ethdb.Database) (*rpc.Client,
 // Run executes the engine test on a fresh in-memory chain built from the
 // fixture's genesis. attach puts the engine API on that chain, and payloads and
 // forkchoice updates go through it at the method versions the fixture names.
-func (t *EngineTest) Run(scheme string, tracer *tracing.Hooks, attach EngineAPIFunc, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *EngineTest) Run(scheme string, tracer *tracing.Hooks, cfg RunConfig, attach EngineAPIFunc, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -150,7 +150,8 @@ func (t *EngineTest) Run(scheme string, tracer *tracing.Hooks, attach EngineAPIF
 		Preimages:      true,
 		TxLookupLimit:  -1, // disable tx indexing
 		VmConfig: vm.Config{
-			Tracer: tracer,
+			Tracer:                   tracer,
+			DisableParallelExecution: cfg.Sequential,
 		},
 	}
 	chain, err := core.NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), options)

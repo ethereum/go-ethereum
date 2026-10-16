@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/sync/errgroup"
 
@@ -73,6 +74,18 @@ var (
 		Name:  "workers",
 		Usage: "Number of test files to run in parallel (0 = one per CPU)",
 		Value: 1,
+	}
+	BALSequentialFlag = &cli.BoolFlag{
+		Name:  "bal-sequential",
+		Usage: "Execute every block sequentially, even one the EIP-7928 parallel processor could run. The delivered block access list is still validated.",
+	}
+	BALWithholdFlag = &cli.BoolFlag{
+		Name:  "bal-withhold",
+		Usage: "Never deliver the fixture's block access list, so every block executes without one, as a block received without its list does.",
+	}
+	BALReportFlag = &cli.BoolFlag{
+		Name:  "bal-report",
+		Usage: "Print one JSON line per executed block on stderr, naming the processor that ran it (EIP-7928 parallel or sequential) and why parallel was ruled out.",
 	}
 
 	// Debugging flags.
@@ -274,6 +287,14 @@ func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
 		return logger.NewStreamingStructLogger(config, os.Stderr).Hooks()
 	default:
 		return nil
+	}
+}
+
+// runConfig returns the block and engine test execution settings set by flags.
+func runConfig(ctx *cli.Context) tests.RunConfig {
+	return tests.RunConfig{
+		Sequential:         ctx.Bool(BALSequentialFlag.Name),
+		WithholdAccessList: ctx.Bool(BALWithholdFlag.Name),
 	}
 }
 

@@ -47,10 +47,16 @@ var engineTestCommand = &cli.Command{
 		RunFlag,
 		FuzzFlag,
 		WorkersFlag,
+		BALSequentialFlag,
+		BALReportFlag,
 	}, traceFlags),
 }
 
 func engineTestCmd(ctx *cli.Context) error {
+	if ctx.Bool(BALReportFlag.Name) {
+		reportExecution(log.Root().Handler(), false)
+	}
+
 	path := ctx.Args().First()
 
 	// If path is provided, run the tests at that path.
@@ -96,7 +102,7 @@ func runEngineTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	tracer := tracerFromFlags(ctx)
 
 	if ctx.Bool(FuzzFlag.Name) {
-		log.SetDefault(log.NewLogger(log.DiscardHandler()))
+		discardLogs(ctx)
 	}
 
 	keys := slices.Sorted(maps.Keys(testsByName))
@@ -108,7 +114,7 @@ func runEngineTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		}
 		test := testsByName[name]
 		result := &testResult{Name: name, Pass: true}
-		if err := test.Run(rawdb.PathScheme, tracer, attachEngineAPI, func(res error, chain *core.BlockChain) {
+		if err := test.Run(rawdb.PathScheme, tracer, runConfig(ctx), attachEngineAPI, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
 					result.State = dump(s)
