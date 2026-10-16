@@ -330,7 +330,7 @@ type ChainConfig struct {
 	BogotaTime    *uint64 `json:"bogotaTime,omitempty"`    // Bogota switch time (nil = no fork, 0 = already on bogota)
 	UBTTime       *uint64 `json:"ubtTime,omitempty"`       // UBT switch time (nil = no fork, 0 = already on UBT)
 
-	BinaryTrieTime *uint64 `json:"binaryTrieTime,omitempty"` // EIP-8297 binary tree switch time (nil = no fork, 0 = already on the binary tree)
+	PBTTime *uint64 `json:"binaryTrieTime,omitempty"` // EIP-8297 partitioned binary tree switch time (nil = no fork, 0 = already on the tree)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -473,8 +473,8 @@ func (c *ChainConfig) String() string {
 	if c.UBTTime != nil {
 		result += fmt.Sprintf(", UBTTime: %v", *c.UBTTime)
 	}
-	if c.BinaryTrieTime != nil {
-		result += fmt.Sprintf(", BinaryTrieTime: %v", *c.BinaryTrieTime)
+	if c.PBTTime != nil {
+		result += fmt.Sprintf(", PBTTime: %v", *c.PBTTime)
 	}
 	result += "}"
 	return result
@@ -574,8 +574,8 @@ func (c *ChainConfig) Description() string {
 	if c.UBTTime != nil {
 		banner += fmt.Sprintf(" - UBT:                         @%-10v\n", *c.UBTTime)
 	}
-	if c.BinaryTrieTime != nil {
-		banner += fmt.Sprintf(" - BinaryTrie:                  @%-10v\n", *c.BinaryTrieTime)
+	if c.PBTTime != nil {
+		banner += fmt.Sprintf(" - PBT:                         @%-10v\n", *c.PBTTime)
 	}
 	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
@@ -761,10 +761,10 @@ func (c *ChainConfig) IsUBT(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.UBTTime, time)
 }
 
-// IsBinaryTrie returns whether time is either equal to the EIP-8297 binary tree
-// fork time or greater.
-func (c *ChainConfig) IsBinaryTrie(num *big.Int, time uint64) bool {
-	return c.IsLondon(num) && isTimestampForked(c.BinaryTrieTime, time)
+// IsPBT returns whether time is either equal to the EIP-8297 partitioned binary
+// tree fork time or greater.
+func (c *ChainConfig) IsPBT(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.PBTTime, time)
 }
 
 // IsUBTGenesis checks whether the verkle fork is activated at the genesis block.

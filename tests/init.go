@@ -828,7 +828,7 @@ func init() {
 
 	// BinaryTree is Amsterdam committed with the EIP-8297 binary tree.
 	binaryTree := *Forks["Amsterdam"]
-	binaryTree.BinaryTrieTime = u64(0)
+	binaryTree.PBTTime = u64(0)
 	Forks["BinaryTree"] = &binaryTree
 }
 

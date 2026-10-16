@@ -408,7 +408,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if err != nil {
 		return nil, err
 	}
-	if chainConfig.BinaryTrieTime != nil && !triedb.IsPBT() {
+	if chainConfig.PBTTime != nil && !triedb.IsPBT() {
 		return nil, errors.New("binary tree activation after genesis is not supported")
 	}
 	log.Info("")

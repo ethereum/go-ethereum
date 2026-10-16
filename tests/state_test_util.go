@@ -281,7 +281,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// block context below.
 	isMerge := config.IsLondon(new(big.Int)) && t.json.Env.Random != nil
 	rules := config.Rules(block.Number(), isMerge, block.Time())
-	pbt := config.IsBinaryTrie(block.Number(), block.Time())
+	pbt := config.IsPBT(block.Number(), block.Time())
 	if pbt {
 		scheme = rawdb.PathScheme
 	}

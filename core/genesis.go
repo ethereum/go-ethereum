@@ -485,7 +485,7 @@ func (g *Genesis) IsUBT() bool {
 // IsPBT indicates whether the genesis state is committed with the partitioned
 // binary tree.
 func (g *Genesis) IsPBT() bool {
-	return g.Config != nil && g.Config.IsBinaryTrie(new(big.Int).SetUint64(g.Number), g.Timestamp)
+	return g.Config != nil && g.Config.IsPBT(new(big.Int).SetUint64(g.Number), g.Timestamp)
 }
 
 // ToBlock returns the genesis block according to genesis specification.
@@ -654,7 +654,7 @@ func pbtAtGenesis(db ethdb.Database, genesis *Genesis) bool {
 	}
 	hash := rawdb.ReadCanonicalHash(db, 0)
 	config, header := rawdb.ReadChainConfig(db, hash), rawdb.ReadHeader(db, hash, 0)
-	return config != nil && header != nil && config.IsBinaryTrie(header.Number, header.Time)
+	return config != nil && header != nil && config.IsPBT(header.Number, header.Time)
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.

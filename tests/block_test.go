@@ -116,7 +116,7 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
 	}
 	// The binary tree exists in the path scheme only, without stateless support.
 	witness := true
-	if config, ok := Forks[test.Network()]; ok && config.BinaryTrieTime != nil {
+	if config, ok := Forks[test.Network()]; ok && config.PBTTime != nil {
 		dbschemeConf, witness = []string{rawdb.PathScheme}, false
 	}
 	for _, snapshot := range snapshotConf {
