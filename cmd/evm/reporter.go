@@ -47,6 +47,11 @@ type testResult struct {
 	Error string       `json:"error,omitempty"`
 	State *state.Dump  `json:"state,omitempty"`
 	Stats *execStats   `json:"benchStats,omitempty"`
+
+	// Rejections is set by blocktest and enginetest, empty when nothing was
+	// rejected. The runner reports each error as is; checking it against
+	// the fixture's expected exception is left to the consumer.
+	Rejections []tests.Rejection `json:"rejections,omitzero"`
 }
 
 func (r testResult) String() string {
@@ -91,6 +96,27 @@ func report(ctx *cli.Context, results []testResult) {
 	}
 	out, _ := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))
+}
+
+// exitIncomplete is the exit status of a blocktest or enginetest run that could
+// not run all of its input: a path that does not exist or cannot be read, or a
+// fixture file that cannot be parsed. A run that ran everything exits 0 when
+// every test passed and 1 when any failed.
+const exitIncomplete = 2
+
+// failures returns an error counting the results that did not pass, if any,
+// so the run exits 1.
+func failures(results []testResult) error {
+	var failed int
+	for _, r := range results {
+		if !r.Pass {
+			failed++
+		}
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d tests failed", failed, len(results))
+	}
+	return nil
 }
 
 // executionEvent reports which processor executed a block: the EIP-7928

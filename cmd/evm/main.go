@@ -18,6 +18,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -322,8 +323,48 @@ func collectFiles(path string) []string {
 	return out
 }
 
+// collectFixtures walks the given paths for blocktest and enginetest. A
+// directory contributes all files with json extension below it, except in a
+// .meta directory, where EEST keeps files that are not fixtures; a path that
+// points to a file is used as is. A path that does not exist or cannot be read
+// is an error, returned before any test runs.
+func collectFixtures(paths ...string) ([]string, error) {
+	var out []string
+	for _, path := range paths {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			// User explicitly pointed out a file, ignore extension.
+			out = append(out, path)
+			continue
+		}
+		err := filepath.Walk(path, func(path string, info fs.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() && info.Name() == ".meta" {
+				return filepath.SkipDir
+			}
+			if !info.IsDir() && filepath.Ext(info.Name()) == ".json" {
+				out = append(out, path)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, path := range out {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		f.Close()
+	}
+	return out, nil
+}
+
 // runFiles runs the test files with run, on as many files at once as the workers
-// flag allows, and returns their results in file order.
+// flag allows, and returns their results in file order. A file that cannot be
+// run does not stop the others; the errors of all such files are returned.
 func runFiles(ctx *cli.Context, files []string, run func(*cli.Context, string) ([]testResult, error)) ([]testResult, error) {
 	workers := ctx.Int(WorkersFlag.Name)
 	if workers <= 0 {
@@ -331,20 +372,18 @@ func runFiles(ctx *cli.Context, files []string, run func(*cli.Context, string) (
 	}
 	var (
 		results = make([][]testResult, len(files))
+		errs    = make([]error, len(files))
 		group   errgroup.Group
 	)
 	group.SetLimit(workers)
 	for i, fname := range files {
 		group.Go(func() error {
-			r, err := run(ctx, fname)
-			results[i] = r
-			return err
+			results[i], errs[i] = run(ctx, fname)
+			return nil
 		})
 	}
-	if err := group.Wait(); err != nil {
-		return nil, err
-	}
-	return slices.Concat(results...), nil
+	group.Wait()
+	return slices.Concat(results...), errors.Join(errs...)
 }
 
 // dump returns a state dump for the most current trie.
