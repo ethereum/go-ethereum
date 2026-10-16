@@ -153,6 +153,10 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if block.GasUsed() != res.GasUsed {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), res.GasUsed)
 	}
+	// Validate the cross-shard deposits of a QuarkChain shard block.
+	if err := v.validateXShardDeposits(block, res.Receipts); err != nil {
+		return err
+	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
 	rbloom := res.blockBloom()
