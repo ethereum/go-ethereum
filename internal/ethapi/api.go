@@ -767,7 +767,7 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
-	if err := overrides.Apply(state, precompiles); err != nil {
+	if err := overrides.Apply(state, precompiles, rules.IsEIP158); err != nil {
 		return nil, err
 	}
 
@@ -938,7 +938,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
-	if err := overrides.Apply(state, precompiles); err != nil {
+	if err := overrides.Apply(state, precompiles, rules.IsEIP158); err != nil {
 		return 0, err
 	}
 	// Construct the gas estimator option from the user input
@@ -1363,7 +1363,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	// If not applied here, there could be cases where user-specified overrides (e.g., nonce)
 	// may conflict with default values from the database, leading to inconsistencies.
 	if stateOverrides != nil {
-		if err := stateOverrides.Apply(db, nil); err != nil {
+		if err := stateOverrides.Apply(db, nil, b.ChainConfig().IsEIP158(header.Number)); err != nil {
 			return nil, 0, nil, err
 		}
 	}
