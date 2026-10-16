@@ -22,6 +22,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -31,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sync/errgroup"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
@@ -65,6 +68,11 @@ var (
 		Name:    "cross-check",
 		Aliases: []string{"xc"},
 		Usage:   "Cross-check stateful execution against stateless, verifying the witness generation.",
+	}
+	WorkersFlag = &cli.IntFlag{
+		Name:  "workers",
+		Usage: "Number of test files to run in parallel (0 = one per CPU)",
+		Value: 1,
 	}
 
 	// Debugging flags.
@@ -214,6 +222,7 @@ func init() {
 	app.Commands = []*cli.Command{
 		runCommand,
 		blockTestCommand,
+		engineTestCommand,
 		stateTestCommand,
 		stateTransitionCommand,
 		transactionCommand,
@@ -290,6 +299,31 @@ func collectFiles(path string) []string {
 		fmt.Fprintln(os.Stderr, err)
 	}
 	return out
+}
+
+// runFiles runs the test files with run, on as many files at once as the workers
+// flag allows, and returns their results in file order.
+func runFiles(ctx *cli.Context, files []string, run func(*cli.Context, string) ([]testResult, error)) ([]testResult, error) {
+	workers := ctx.Int(WorkersFlag.Name)
+	if workers <= 0 {
+		workers = runtime.NumCPU()
+	}
+	var (
+		results = make([][]testResult, len(files))
+		group   errgroup.Group
+	)
+	group.SetLimit(workers)
+	for i, fname := range files {
+		group.Go(func() error {
+			r, err := run(ctx, fname)
+			results[i] = r
+			return err
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+	return slices.Concat(results...), nil
 }
 
 // dump returns a state dump for the most current trie.

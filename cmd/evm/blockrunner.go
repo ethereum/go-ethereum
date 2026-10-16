@@ -44,6 +44,7 @@ var blockTestCommand = &cli.Command{
 		RunFlag,
 		WitnessCrossCheckFlag,
 		FuzzFlag,
+		WorkersFlag,
 	}, traceFlags),
 }
 
@@ -52,16 +53,9 @@ func blockTestCmd(ctx *cli.Context) error {
 
 	// If path is provided, run the tests at that path.
 	if len(path) != 0 {
-		var (
-			collected = collectFiles(path)
-			results   []testResult
-		)
-		for _, fname := range collected {
-			r, err := runBlockTest(ctx, fname)
-			if err != nil {
-				return err
-			}
-			results = append(results, r...)
+		results, err := runFiles(ctx, collectFiles(path), runBlockTest)
+		if err != nil {
+			return err
 		}
 		report(ctx, results)
 		return nil

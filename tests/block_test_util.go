@@ -122,7 +122,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	// import pre accounts & construct test genesis block & state root
 	// Commit genesis state
 	var (
-		gspec = t.genesis(config)
+		gspec = genesisFromHeader(config, &t.json.Genesis, t.json.Pre)
 		db    = rawdb.NewMemoryDatabase()
 		tconf = &triedb.Config{
 			Preimages: true,
@@ -192,7 +192,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	if err != nil {
 		return err
 	}
-	if err = t.validatePostState(newDB); err != nil {
+	if err = validatePostState(t.json.Post, newDB); err != nil {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
 	// Cross-check the snapshot-to-hash against the trie hash
@@ -211,23 +211,25 @@ func (t *BlockTest) Network() string {
 	return t.json.Network
 }
 
-func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
+// genesisFromHeader returns the genesis of a block or engine test, built from
+// its genesis block header and pre-state.
+func genesisFromHeader(config *params.ChainConfig, header *btHeader, alloc types.GenesisAlloc) *core.Genesis {
 	return &core.Genesis{
 		Config:        config,
-		Nonce:         t.json.Genesis.Nonce.Uint64(),
-		Timestamp:     t.json.Genesis.Timestamp,
-		ParentHash:    t.json.Genesis.ParentHash,
-		ExtraData:     t.json.Genesis.ExtraData,
-		GasLimit:      t.json.Genesis.GasLimit,
-		GasUsed:       t.json.Genesis.GasUsed,
-		Difficulty:    t.json.Genesis.Difficulty,
-		Mixhash:       t.json.Genesis.MixHash,
-		Coinbase:      t.json.Genesis.Coinbase,
-		Alloc:         t.json.Pre,
-		BaseFee:       t.json.Genesis.BaseFeePerGas,
-		BlobGasUsed:   t.json.Genesis.BlobGasUsed,
-		ExcessBlobGas: t.json.Genesis.ExcessBlobGas,
-		SlotNumber:    t.json.Genesis.SlotNumber,
+		Nonce:         header.Nonce.Uint64(),
+		Timestamp:     header.Timestamp,
+		ParentHash:    header.ParentHash,
+		ExtraData:     header.ExtraData,
+		GasLimit:      header.GasLimit,
+		GasUsed:       header.GasUsed,
+		Difficulty:    header.Difficulty,
+		Mixhash:       header.MixHash,
+		Coinbase:      header.Coinbase,
+		Alloc:         alloc,
+		BaseFee:       header.BaseFeePerGas,
+		BlobGasUsed:   header.BlobGasUsed,
+		ExcessBlobGas: header.ExcessBlobGas,
+		SlotNumber:    header.SlotNumber,
 	}
 }
 
@@ -269,7 +271,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		}
 		if b.BlockHeader == nil {
 			if data, err := json.MarshalIndent(cb.Header(), "", "  "); err == nil {
-				fmt.Fprintf(os.Stdout, "block (index %d) insertion should have failed due to: %v:\n%v\n",
+				fmt.Fprintf(os.Stderr, "block (index %d) insertion should have failed due to: %v:\n%v\n",
 					bi, b.ExpectException, string(data))
 			}
 			return nil, fmt.Errorf("block (index %d) insertion should have failed due to: %v",
@@ -358,9 +360,10 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	return nil
 }
 
-func (t *BlockTest) validatePostState(statedb *state.StateDB) error {
-	// validate post state accounts in test file against what we have in state db
-	for addr, acct := range t.json.Post {
+// validatePostState checks the accounts of a test's expected post-state
+// against the state database.
+func validatePostState(post types.GenesisAlloc, statedb *state.StateDB) error {
+	for addr, acct := range post {
 		// address is indirectly verified by the other fields, as it's the db key
 		code2 := statedb.GetCode(addr)
 		balance2 := statedb.GetBalance(addr).ToBig()
