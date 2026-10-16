@@ -21,8 +21,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
+	"reflect"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -62,6 +66,82 @@ type simBlock struct {
 	BlockOverrides *override.BlockOverrides
 	StateOverrides *override.StateOverride
 	Calls          []TransactionArgs
+}
+
+// UnmarshalJSON rejects block and account override keys that are not defined.
+// encoding/json alone ignores unknown keys.
+func (b *simBlock) UnmarshalJSON(input []byte) error {
+	var dec struct {
+		BlockOverrides json.RawMessage
+		StateOverrides map[common.Address]json.RawMessage
+		Calls          []TransactionArgs
+	}
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	var res simBlock
+	if dec.BlockOverrides != nil {
+		if err := checkOverrideKeys(dec.BlockOverrides, reflect.TypeFor[override.BlockOverrides](), "block override"); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(dec.BlockOverrides, &res.BlockOverrides); err != nil {
+			return err
+		}
+	}
+	if dec.StateOverrides != nil {
+		overrides := make(override.StateOverride, len(dec.StateOverrides))
+		for addr, raw := range dec.StateOverrides {
+			if err := checkOverrideKeys(raw, reflect.TypeFor[override.OverrideAccount](), "state override for "+addr.Hex()); err != nil {
+				return err
+			}
+			var account override.OverrideAccount
+			if err := json.Unmarshal(raw, &account); err != nil {
+				return err
+			}
+			overrides[addr] = account
+		}
+		res.StateOverrides = &overrides
+	}
+	res.Calls = dec.Calls
+	*b = res
+	return nil
+}
+
+// checkOverrideKeys returns an error for a key of the JSON object that does not
+// name a field of t, or that names a field another key already names. Names
+// match case-insensitively, as in encoding/json. Repeated identical keys cannot
+// be seen here; encoding/json keeps the last one.
+func checkOverrideKeys(input json.RawMessage, t reflect.Type, what string) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(input, &keys); err != nil || keys == nil {
+		return nil
+	}
+	seen := make(map[int]string)
+	for _, key := range slices.Sorted(maps.Keys(keys)) {
+		field := -1
+		for i := 0; i < t.NumField(); i++ {
+			f := t.Field(i)
+			name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+			if !f.IsExported() || name == "-" {
+				continue
+			}
+			if name == "" {
+				name = f.Name
+			}
+			if strings.EqualFold(key, name) {
+				field = i
+				break
+			}
+		}
+		if field < 0 {
+			return fmt.Errorf("unknown field %q in %s", key, what)
+		}
+		if prev, ok := seen[field]; ok {
+			return fmt.Errorf("keys %q and %q in %s name the same field", prev, key, what)
+		}
+		seen[field] = key
+	}
+	return nil
 }
 
 // simCallResult is the result of a simulated call.
@@ -583,6 +663,9 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 		difficulty := header.Difficulty
 		if sim.chainConfig.IsPostMerge(number.Uint64(), timestamp) {
 			difficulty = big.NewInt(0)
+		}
+		if overrides.Difficulty != nil && difficulty.Sign() == 0 {
+			return nil, &invalidParamsError{fmt.Sprintf("block %d: difficulty override is not allowed after the merge", number)}
 		}
 		// The slot number is unknown when the parent has none, so it is omitted then.
 		var slotNumber *uint64
