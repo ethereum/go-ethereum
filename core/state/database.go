@@ -166,6 +166,9 @@ type Trie interface {
 
 	// IsUBT returns true if the trie is unified binary trie based.
 	IsUBT() bool
+
+	// IsPBT returns true if the trie is the EIP-8297 partitioned binary tree.
+	IsPBT() bool
 }
 
 // NewDatabase creates a state database with the provided data sources.

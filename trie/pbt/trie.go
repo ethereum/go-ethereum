@@ -620,6 +620,9 @@ func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 // IsUBT reports false: this is not the EIP-7864 tree.
 func (t *Trie) IsUBT() bool { return false }
 
+// IsPBT reports true.
+func (t *Trie) IsPBT() bool { return true }
+
 // PrefetchAccount resolves the accounts' header stems.
 func (t *Trie) PrefetchAccount(addrs []common.Address) error {
 	for _, addr := range addrs {
