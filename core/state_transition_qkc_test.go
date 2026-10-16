@@ -41,7 +41,7 @@ func xShardTestMove(logIndex uint64, from, to common.Address, value, gasPrice ui
 		SourceBlockHash: common.Hash{0x50},
 		SourceLogIndex:  logIndex,
 		From:            from,
-		To:              to,
+		To:              &to,
 		Value:           uint256.NewInt(value),
 		GasPrice:        uint256.NewInt(gasPrice),
 		Gas:             params.XShardSendGas,
@@ -137,10 +137,10 @@ func testDepositExecution(t *testing.T, amsterdam bool) {
 			t.Errorf("deposit %d: effective gas price %v, want %v", i, r.EffectiveGasPrice, gasPrice)
 		}
 		coinbaseFee.Add(coinbaseFee, new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(params.XShardSendGas)))
-		if received[d.To] == nil {
-			received[d.To] = new(big.Int)
+		if received[*d.To] == nil {
+			received[*d.To] = new(big.Int)
 		}
-		received[d.To].Add(received[d.To], d.Value.ToBig())
+		received[*d.To].Add(received[*d.To], d.Value.ToBig())
 
 		// The sender is not touched, the source shard paid for the deposit.
 		if d.From != sender && statedb.Exist(d.From) {
@@ -209,6 +209,7 @@ func TestDepositNotMove(t *testing.T) {
 		{"call", func(d *types.DepositTx) { d.IsMove, d.Gas, d.Data = false, 50000, []byte{1} }, ErrDepositNotMove},
 		{"move with data", func(d *types.DepositTx) { d.Data = []byte{1} }, ErrDepositNotMove},
 		{"move with more gas", func(d *types.DepositTx) { d.Gas++ }, ErrDepositNotMove},
+		{"move without a recipient", func(d *types.DepositTx) { d.To = nil }, ErrDepositNotMove},
 	} {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		evm := vm.NewEVM(NewEVMBlockContext(header, nil, &coinbase), statedb, &config, vm.Config{})

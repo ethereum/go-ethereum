@@ -37,7 +37,7 @@ func TestRPCDepositTransaction(t *testing.T) {
 		SourceBlockHash: common.Hash{0xaa},
 		SourceLogIndex:  3,
 		From:            common.Address{0x01},
-		To:              common.Address{0x02},
+		To:              &common.Address{0x02},
 		Value:           uint256.NewInt(1000),
 		GasPrice:        uint256.NewInt(10),
 		Gas:             50000,

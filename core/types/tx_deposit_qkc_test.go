@@ -96,7 +96,7 @@ func TestDepositTxTransaction(t *testing.T) {
 		SourceBlockHash: common.Hash{0xaa},
 		SourceLogIndex:  3,
 		From:            common.Address{0x01},
-		To:              common.Address{0x02},
+		To:              &common.Address{0x02},
 		Value:           uint256.NewInt(1000),
 		GasPrice:        uint256.NewInt(10),
 		Gas:             50000,
@@ -122,7 +122,7 @@ func TestDepositTxTransaction(t *testing.T) {
 		t.Fatalf("deposit copy %+v, want %+v", have, deposit)
 	}
 	// The deposit pays its gas price, whatever the base fee.
-	if dec.Type() != DepositTxType || dec.Gas() != 50000 || dec.Nonce() != 0 || *dec.To() != deposit.To ||
+	if dec.Type() != DepositTxType || dec.Gas() != 50000 || dec.Nonce() != 0 || *dec.To() != *deposit.To ||
 		dec.Value().Cmp(big.NewInt(1000)) != 0 || !bytes.Equal(dec.Data(), deposit.Data) {
 		t.Errorf("decoded transaction fields do not match the deposit")
 	}
@@ -184,7 +184,7 @@ func TestDepositTxJSON(t *testing.T) {
 		SourceBlockHash: common.Hash{0xaa},
 		SourceLogIndex:  3,
 		From:            common.Address{0x01},
-		To:              common.Address{0x02},
+		To:              &common.Address{0x02},
 		Value:           uint256.NewInt(1000),
 		GasPrice:        uint256.NewInt(10),
 		Gas:             50000,

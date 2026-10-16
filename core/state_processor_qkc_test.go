@@ -84,7 +84,7 @@ func TestDepositAfterTransaction(t *testing.T) {
 		}))
 		b.AddTx(types.NewTx(&types.DepositTx{
 			From:     common.HexToAddress("0xa1"),
-			To:       to,
+			To:       &to,
 			Value:    uint256.NewInt(1),
 			GasPrice: uint256.NewInt(params.GWei),
 			Gas:      params.XShardSendGas,

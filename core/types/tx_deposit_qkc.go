@@ -74,7 +74,7 @@ func (tx *DepositTx) copy() TxData {
 		SourceBlockHash: tx.SourceBlockHash,
 		SourceLogIndex:  tx.SourceLogIndex,
 		From:            tx.From,
-		To:              tx.To,
+		To:              copyAddressPtr(tx.To),
 		Gas:             tx.Gas,
 		IsMove:          tx.IsMove,
 		Data:            common.CopyBytes(tx.Data),
@@ -102,7 +102,7 @@ func (tx *DepositTx) gasTipCap() *big.Int    { return tx.GasPrice.ToBig() }
 func (tx *DepositTx) gasPrice() *big.Int     { return tx.GasPrice.ToBig() }
 func (tx *DepositTx) value() *big.Int        { return tx.Value.ToBig() }
 func (tx *DepositTx) nonce() uint64          { return 0 }
-func (tx *DepositTx) to() *common.Address    { tmp := tx.To; return &tmp }
+func (tx *DepositTx) to() *common.Address    { return copyAddressPtr(tx.To) }
 
 // effectiveGasPrice returns the gas price of the deposit, whatever the base fee:
 // the deposit pays the gas price of its sending transaction.

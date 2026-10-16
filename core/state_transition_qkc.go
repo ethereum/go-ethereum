@@ -45,8 +45,8 @@ func (st *stateTransition) executeDeposit(rules params.Rules) (*ExecutionResult,
 	if !rules.IsQuarkChain {
 		return nil, fmt.Errorf("%w: deposit tx (sender %v)", ErrTxTypeNotSupported, msg.From)
 	}
-	if !msg.isMove || len(msg.Data) != 0 || msg.GasLimit != params.XShardSendGas {
-		return nil, fmt.Errorf("%w: sender %v, gas %d, data length %d", ErrDepositNotMove, msg.From, msg.GasLimit, len(msg.Data))
+	if !msg.isMove || msg.To == nil || len(msg.Data) != 0 || msg.GasLimit != params.XShardSendGas {
+		return nil, fmt.Errorf("%w: sender %v, recipient %v, gas %d, data length %d", ErrDepositNotMove, msg.From, msg.To, msg.GasLimit, len(msg.Data))
 	}
 	fee, overflow := new(uint256.Int).MulOverflow(uint256.NewInt(msg.GasLimit), msg.GasPrice)
 	if overflow {
