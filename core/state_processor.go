@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/telemetry"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -66,9 +67,12 @@ func (p *StateProcessor) chainConfig() *params.ChainConfig {
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
 func (p *StateProcessor) Process(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config, execIndex *atomic.Int64, stats *ProcessStats) (*ProcessResult, error) {
-	if supportsParallelExecution(block, p.chainConfig(), statedb.Witness() != nil, cfg.Tracer != nil, cfg.DisableParallelExecution) {
+	reason := sequentialExecutionReason(block, p.chainConfig(), statedb.Witness() != nil, cfg.Tracer != nil, cfg.DisableParallelExecution)
+	if reason == "" {
+		log.Debug("Executing block", "number", block.NumberU64(), "hash", block.Hash(), "path", "parallel")
 		return p.processParallel(ctx, block, statedb, jumpDestCache, precompileCache, cfg, stats)
 	}
+	log.Debug("Executing block", "number", block.NumberU64(), "hash", block.Hash(), "path", "sequential", "reason", reason)
 	var (
 		start       = time.Now()
 		config      = p.chainConfig()
