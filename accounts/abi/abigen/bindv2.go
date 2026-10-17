@@ -215,6 +215,24 @@ func normalizeArgs(args abi.Arguments) abi.Arguments {
 	return args
 }
 
+func normalizeConstructorArgs(args abi.Arguments, receiver string) abi.Arguments {
+	args = slices.Clone(args)
+	used := make(map[string]bool)
+	used[receiver] = true
+	for _, arg := range args {
+		used[arg.Name] = true
+	}
+	for i, arg := range args {
+		if arg.Name == "" || arg.Name == "_" || isKeyWord(arg.Name) {
+			args[i].Name = abi.ResolveNameConflict(fmt.Sprintf("arg%d", i), func(name string) bool {
+				return used[name]
+			})
+			used[args[i].Name] = true
+		}
+	}
+	return args
+}
+
 // normalizeErrorOrEventFields normalizes errors/events for emitting through
 // bindings: Any anonymous fields are given generated names.
 func (cb *contractBinder) normalizeErrorOrEventFields(originalInputs abi.Arguments) abi.Arguments {
