@@ -644,10 +644,12 @@ func (ec *Client) BlobBaseFee(ctx context.Context) (*big.Int, error) {
 }
 
 type feeHistoryResultMarshaling struct {
-	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
-	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
-	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
-	GasUsedRatio []float64        `json:"gasUsedRatio"`
+	OldestBlock      *hexutil.Big     `json:"oldestBlock"`
+	Reward           [][]*hexutil.Big `json:"reward,omitempty"`
+	BaseFee          []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
+	GasUsedRatio     []float64        `json:"gasUsedRatio"`
+	BlobBaseFee      []*hexutil.Big   `json:"baseFeePerBlobGas,omitempty"`
+	BlobGasUsedRatio []float64        `json:"blobGasUsedRatio,omitempty"`
 }
 
 // FeeHistory retrieves the fee market history.
@@ -667,11 +669,20 @@ func (ec *Client) FeeHistory(ctx context.Context, blockCount uint64, lastBlock *
 	for i, b := range res.BaseFee {
 		baseFee[i] = (*big.Int)(b)
 	}
+	var blobBaseFee []*big.Int
+	if res.BlobBaseFee != nil {
+		blobBaseFee = make([]*big.Int, len(res.BlobBaseFee))
+		for i, b := range res.BlobBaseFee {
+			blobBaseFee[i] = (*big.Int)(b)
+		}
+	}
 	return &ethereum.FeeHistory{
-		OldestBlock:  (*big.Int)(res.OldestBlock),
-		Reward:       reward,
-		BaseFee:      baseFee,
-		GasUsedRatio: res.GasUsedRatio,
+		OldestBlock:      (*big.Int)(res.OldestBlock),
+		Reward:           reward,
+		BaseFee:          baseFee,
+		GasUsedRatio:     res.GasUsedRatio,
+		BlobBaseFee:      blobBaseFee,
+		BlobGasUsedRatio: res.BlobGasUsedRatio,
 	}, nil
 }
 
