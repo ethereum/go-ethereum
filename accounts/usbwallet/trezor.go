@@ -50,6 +50,8 @@ var ErrTrezorPassphraseNeeded = errors.New("trezor: passphrase needed")
 // is in browser mode.
 var errTrezorReplyInvalidHeader = errors.New("trezor: invalid reply header")
 
+const trezorMaxDataChunk = 1024
+
 // trezorDriver implements the communication with a Trezor hardware wallet.
 type trezorDriver struct {
 	device         io.ReadWriter // USB device connection to communicate through
@@ -197,10 +199,7 @@ func (w *trezorDriver) trezorDerive(derivationPath []uint32) (common.Address, er
 	if _, err := w.trezorExchange(&trezor.EthereumGetAddress{AddressN: derivationPath}, address); err != nil {
 		return common.Address{}, err
 	}
-	if addr := address.GetAddressBin(); len(addr) > 0 { // Older firmwares use binary formats
-		return common.BytesToAddress(addr), nil
-	}
-	if addr := address.GetAddressHex(); len(addr) > 0 { // Newer firmwares use hexadecimal formats
+	if addr := address.GetAddress(); addr != "" {
 		return common.HexToAddress(addr), nil
 	}
 	return common.Address{}, errors.New("missing derived address")
@@ -209,41 +208,24 @@ func (w *trezorDriver) trezorDerive(derivationPath []uint32) (common.Address, er
 // trezorSign sends the transaction to the Trezor wallet, and waits for the user
 // to confirm or deny the transaction.
 func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction, chainID *big.Int) (common.Address, *types.Transaction, error) {
-	// Create the transaction initiation message
-	data := tx.Data()
-	length := uint32(len(data))
-
-	request := &trezor.EthereumSignTx{
-		AddressN:   derivationPath,
-		Nonce:      new(big.Int).SetUint64(tx.Nonce()).Bytes(),
-		GasPrice:   tx.GasPrice().Bytes(),
-		GasLimit:   new(big.Int).SetUint64(tx.Gas()).Bytes(),
-		Value:      tx.Value().Bytes(),
-		DataLength: &length,
+	request, payload, err := w.buildSignRequest(derivationPath, tx, chainID)
+	if err != nil {
+		return common.Address{}, nil, err
 	}
-	if to := tx.To(); to != nil {
-		// Non contract deploy, set recipient explicitly
-		hex := to.Hex()
-		request.ToHex = &hex     // Newer firmwares (old will ignore)
-		request.ToBin = (*to)[:] // Older firmwares (new will ignore)
-	}
-	if length > 1024 { // Send the data chunked if that was requested
-		request.DataInitialChunk, data = data[:1024], data[1024:]
+	if len(payload) > trezorMaxDataChunk {
+		setInitialChunk(request, payload[:trezorMaxDataChunk])
+		payload = payload[trezorMaxDataChunk:]
 	} else {
-		request.DataInitialChunk, data = data, nil
+		setInitialChunk(request, payload)
+		payload = nil
 	}
-	if chainID != nil { // EIP-155 transaction, set chain ID explicitly (only 32 bit is supported!?)
-		id := uint32(chainID.Int64())
-		request.ChainId = &id
-	}
-	// Send the initiation message and stream content until a signature is returned
 	response := new(trezor.EthereumTxRequest)
 	if _, err := w.trezorExchange(request, response); err != nil {
 		return common.Address{}, nil, err
 	}
-	for response.DataLength != nil && int(*response.DataLength) <= len(data) {
-		chunk := data[:*response.DataLength]
-		data = data[*response.DataLength:]
+	for response.DataLength != nil && int(*response.DataLength) <= len(payload) {
+		chunk := payload[:*response.DataLength]
+		payload = payload[*response.DataLength:]
 
 		if _, err := w.trezorExchange(&trezor.EthereumTxAck{DataChunk: chunk}, response); err != nil {
 			return common.Address{}, nil, err
@@ -261,15 +243,21 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 
 	// Create the correct signer and signature transform based on the chain ID
 	var signer types.Signer
+	legacyTx := tx.Type() == types.LegacyTxType
 	if chainID == nil {
 		signer = new(types.HomesteadSigner)
 	} else {
-		// Trezor backend does not support typed transactions yet.
-		signer = types.NewEIP155Signer(chainID)
-		// if chainId is above (MaxUint32 - 36) / 2 then the final v values is returned
-		// directly. Otherwise, the returned value is 35 + chainid * 2.
-		if signature[64] > 1 && int(chainID.Int64()) <= (math.MaxUint32-36)/2 {
-			signature[64] -= byte(chainID.Uint64()*2 + 35)
+		signer = types.LatestSignerForChainID(chainID)
+		// Legacy (EIP-155) transactions still return the final ECDSA V value.
+		if legacyTx && signature[64] > 1 {
+			if !chainID.IsUint64() {
+				return common.Address{}, nil, errors.New("chain id overflows uint64")
+			}
+			sigAdj := chainID.Uint64()*2 + 35
+			if sigAdj > math.MaxUint8 {
+				return common.Address{}, nil, errors.New("chain id is too large for trezor response")
+			}
+			signature[64] -= byte(sigAdj)
 		}
 	}
 
@@ -283,6 +271,126 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 		return common.Address{}, nil, err
 	}
 	return sender, signed, nil
+}
+
+func (w *trezorDriver) buildSignRequest(derivationPath []uint32, tx *types.Transaction, chainID *big.Int) (proto.Message, []byte, error) {
+	payload := tx.Data()
+	length := uint32(len(payload))
+	switch tx.Type() {
+	case types.LegacyTxType:
+		req := &trezor.EthereumSignTx{
+			AddressN:   derivationPath,
+			Nonce:      encodeUint64(tx.Nonce()),
+			GasPrice:   bigIntBytes(tx.GasPrice()),
+			GasLimit:   encodeUint64(tx.Gas()),
+			Value:      bigIntBytes(tx.Value()),
+			DataLength: &length,
+		}
+		if chainID != nil {
+			if !chainID.IsUint64() {
+				return nil, nil, errors.New("chain id overflows trezor message")
+			}
+			id := chainID.Uint64()
+			req.ChainId = &id
+		}
+		if to := tx.To(); to != nil {
+			addr := to.Hex()
+			req.To = &addr
+		}
+		return req, payload, nil
+	case types.AccessListTxType, types.DynamicFeeTxType, types.BlobTxType:
+		if chainID == nil {
+			return nil, nil, errors.New("typed transactions require a chain id")
+		}
+		if !chainID.IsUint64() {
+			return nil, nil, errors.New("chain id overflows trezor message")
+		}
+		id := chainID.Uint64()
+		req := &trezor.EthereumSignTxEIP1559{
+			AddressN:   derivationPath,
+			Nonce:      encodeUint64(tx.Nonce()),
+			GasLimit:   encodeUint64(tx.Gas()),
+			Value:      bigIntBytes(tx.Value()),
+			DataLength: &length,
+			ChainId:    &id,
+			AccessList: convertAccessListEIP1559(tx.AccessList()),
+		}
+		if to := tx.To(); to != nil {
+			addr := to.Hex()
+			req.To = &addr
+		}
+		switch tx.Type() {
+		case types.AccessListTxType:
+			price := bigIntBytes(tx.GasPrice())
+			req.MaxGasFee = price
+			req.MaxPriorityFee = price
+		case types.DynamicFeeTxType:
+			req.MaxGasFee = bigIntBytes(tx.GasFeeCap())
+			req.MaxPriorityFee = bigIntBytes(tx.GasTipCap())
+		case types.BlobTxType:
+			req.MaxGasFee = bigIntBytes(tx.GasFeeCap())
+			req.MaxPriorityFee = bigIntBytes(tx.GasTipCap())
+			req.MaxFeePerBlobGas = bigIntBytes(tx.BlobGasFeeCap())
+			req.BlobVersionedHashes = convertBlobHashes(tx.BlobHashes())
+		}
+		return req, payload, nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported transaction type %d", tx.Type())
+	}
+}
+
+func encodeUint64(value uint64) []byte {
+	if value == 0 {
+		return nil
+	}
+	return new(big.Int).SetUint64(value).Bytes()
+}
+
+func bigIntBytes(v *big.Int) []byte {
+	if v == nil || v.Sign() == 0 {
+		return nil
+	}
+	return new(big.Int).Set(v).Bytes()
+}
+
+func convertAccessListEIP1559(list types.AccessList) []*trezor.EthereumSignTxEIP1559_EthereumAccessList {
+	if len(list) == 0 {
+		return nil
+	}
+	out := make([]*trezor.EthereumSignTxEIP1559_EthereumAccessList, len(list))
+	for i, entry := range list {
+		addr := entry.Address.Hex()
+		addrCopy := addr
+		keys := make([][]byte, len(entry.StorageKeys))
+		for j, key := range entry.StorageKeys {
+			keys[j] = append([]byte{}, key[:]...)
+		}
+		out[i] = &trezor.EthereumSignTxEIP1559_EthereumAccessList{
+			Address:     &addrCopy,
+			StorageKeys: keys,
+		}
+	}
+	return out
+}
+
+func convertBlobHashes(hashes []common.Hash) [][]byte {
+	if len(hashes) == 0 {
+		return nil
+	}
+	out := make([][]byte, len(hashes))
+	for i, h := range hashes {
+		out[i] = append([]byte{}, h[:]...)
+	}
+	return out
+}
+
+func setInitialChunk(msg proto.Message, chunk []byte) {
+	switch req := msg.(type) {
+	case *trezor.EthereumSignTx:
+		req.DataInitialChunk = chunk
+	case *trezor.EthereumSignTxEIP1559:
+		req.DataInitialChunk = chunk
+	}
 }
 
 // trezorExchange performs a data exchange with the Trezor wallet, sending it a
