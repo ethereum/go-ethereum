@@ -819,6 +819,71 @@ func testBALSync(t *testing.T, mode SyncMode, protocol uint) {
 	}
 }
 
+// silentBALPeer is a tester peer that never answers access list requests.
+type silentBALPeer struct {
+	*downloadTesterPeer
+	asked chan struct{}
+}
+
+func (p *silentBALPeer) RequestBALs(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
+	select {
+	case p.asked <- struct{}{}:
+	default:
+	}
+	return &eth.Request{Peer: p.id}, nil
+}
+
+// Tests that access list tasks requeued after their blocks were imported don't
+// keep the sync cycle from terminating when no eth/71 peer is left.
+func TestBALSynchronisationStaleTasks(t *testing.T) {
+	gspec, blocks := makeBALChain(96)
+
+	success := make(chan struct{})
+	tester := newTesterWithGenesis(t, FullSync, func() { close(success) }, false, gspec, beacon.New(ethash.NewFaker()))
+	defer tester.terminate()
+
+	peerChain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), gspec, beacon.New(ethash.NewFaker()), nil)
+	if err != nil {
+		t.Fatalf("failed to create peer chain: %v", err)
+	}
+	defer peerChain.Stop()
+
+	if _, err := peerChain.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to assemble peer chain: %v", err)
+	}
+	tester.newPeerWithChain("legacy", eth.ETH69, peerChain, nil)
+
+	modern := &silentBALPeer{
+		downloadTesterPeer: &downloadTesterPeer{dl: tester, id: "modern", chain: peerChain, withholdBodies: make(map[common.Hash]struct{}), dropped: make(chan error, 1)},
+		asked:              make(chan struct{}, 1),
+	}
+	if err := tester.downloader.RegisterPeer("modern", eth.ETH71, modern); err != nil {
+		t.Fatalf("failed to register modern peer: %v", err)
+	}
+	if err := tester.downloader.BeaconSync(blocks[len(blocks)-1].Header(), nil); err != nil {
+		t.Fatalf("failed to beacon-sync chain: %v", err)
+	}
+	// Drop the eth/71 peer once all blocks are imported without access lists
+	select {
+	case <-modern.asked:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("access lists never requested")
+	}
+	for start := time.Now(); tester.chain.CurrentBlock().Number.Uint64() != uint64(len(blocks)); time.Sleep(10 * time.Millisecond) {
+		if time.Since(start) > 10*time.Second {
+			t.Fatalf("chain not imported, head %d", tester.chain.CurrentBlock().Number.Uint64())
+		}
+	}
+	tester.downloader.UnregisterPeer("modern")
+
+	select {
+	case <-success:
+		assertOwnChain(t, tester, len(blocks)+1)
+	case <-time.After(10 * time.Second):
+		t.Fatalf("sync cycle did not terminate, pending access lists: %d", tester.downloader.queue.PendingBALs())
+	}
+}
+
 // Tests that if a large batch of blocks are being downloaded, it is throttled
 // until the cached blocks are retrieved.
 func TestThrottlingFull(t *testing.T) { testThrottling(t, eth.ETH69, FullSync) }
