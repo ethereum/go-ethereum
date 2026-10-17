@@ -17,6 +17,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -135,8 +136,10 @@ type fetcher interface {
 // BeaconLightApi requests light client information from a beacon node REST API.
 // Note: all required API endpoints are currently only implemented by Lodestar.
 type BeaconLightApi struct {
-	url           string
-	client        fetcher
+	url    string
+	client fetcher
+	// streamClient has no timeout: one would end the event stream.
+	streamClient  fetcher
 	customHeaders map[string]string
 	config        *params.ChainConfig // the forks, for validating the proofs served
 }
@@ -147,6 +150,7 @@ func NewBeaconLightApi(url string, customHeaders map[string]string, config *para
 		client: &http.Client{
 			Timeout: time.Second * 10,
 		},
+		streamClient:  &http.Client{},
 		customHeaders: customHeaders,
 		config:        config,
 	}
@@ -483,25 +487,18 @@ type HeadEventListener struct {
 func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() {
 	var (
 		ctx, closeCtx = context.WithCancel(context.Background())
-		streamCh      = make(chan *eventsource.Stream, 1)
+		eventCh       = make(chan eventsource.Event)
+		errCh         = make(chan error)
 		wg            sync.WaitGroup
 	)
 
 	// When connected to a Lodestar node the subscription blocks until the first actual
-	// event arrives; therefore we create the subscription in a separate goroutine while
+	// event arrives; therefore we run the subscription in a separate goroutine while
 	// letting the main goroutine sync up to the current head.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		stream := api.startEventStream(ctx, &listener)
-		if stream == nil {
-			// This case happens when the context was closed.
-			return
-		}
-		// Stream was opened, wait for close signal.
-		streamCh <- stream
-		<-ctx.Done()
-		stream.Close()
+		api.runEventStream(ctx, eventCh, errCh)
 	}()
 
 	wg.Add(1)
@@ -532,22 +529,9 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 		}
 
 		log.Trace("Starting event stream processing loop")
-		// Receive the stream.
-		var stream *eventsource.Stream
-		select {
-		case stream = <-streamCh:
-		case <-ctx.Done():
-			log.Trace("Stopping event stream processing loop")
-			return
-		}
-
 		for {
 			select {
-			case event, ok := <-stream.Events:
-				if !ok {
-					log.Trace("Event stream closed")
-					return
-				}
+			case event := <-eventCh:
 				log.Trace("New event received from event stream", "type", event.Event())
 				switch event.Event() {
 				case "head":
@@ -575,11 +559,12 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 					listener.OnError(fmt.Errorf("unexpected event: %s", event.Event()))
 				}
 
-			case err, ok := <-stream.Errors:
-				if !ok {
-					return
-				}
+			case err := <-errCh:
 				listener.OnError(err)
+
+			case <-ctx.Done():
+				log.Trace("Stopping event stream processing loop")
+				return
 			}
 		}
 	}()
@@ -590,33 +575,97 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 	}
 }
 
-// startEventStream establishes an event stream. This will keep retrying until the stream has been
-// established. It can only return nil when the context is canceled.
-func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadEventListener) *eventsource.Stream {
-	for retry := true; retry; retry = ctxSleep(ctx, 5*time.Second) {
-		log.Trace("Sending event subscription request")
-		uri, err := api.buildURL("/eth/v1/events", map[string][]string{"topics": {"head", "light_client_finality_update", "light_client_optimistic_update"}})
-		if err != nil {
-			listener.OnError(fmt.Errorf("error creating event subscription URL: %v", err))
-			continue
-		}
-		req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
-		if err != nil {
-			listener.OnError(fmt.Errorf("error creating event subscription request: %v", err))
-			continue
-		}
-		for k, v := range api.customHeaders {
-			req.Header.Set(k, v)
-		}
-		stream, err := eventsource.SubscribeWithRequest("", req)
-		if err != nil {
-			listener.OnError(fmt.Errorf("error creating event subscription: %v", err))
-			continue
-		}
-		log.Trace("Successfully created event stream")
-		return stream
+// The wait before subscribing to the event stream again starts at
+// minEventStreamWait and doubles after each attempt that brings no events, up to
+// maxEventStreamWait. Variables, so that tests can shorten them.
+var (
+	minEventStreamWait = time.Second
+	maxEventStreamWait = 30 * time.Second
+)
+
+// eventStreamWait returns the wait before subscribing to the event stream again,
+// given the previous wait (zero at first) and whether the last attempt brought
+// events.
+func eventStreamWait(last time.Duration, received bool) time.Duration {
+	if received || last == 0 {
+		return minEventStreamWait
 	}
-	return nil
+	return min(2*last, maxEventStreamWait)
+}
+
+// runEventStream subscribes to the event stream and passes on its events, and the
+// errors that end it, until the context is closed. Whenever the stream fails or ends,
+// it subscribes again.
+func (api *BeaconLightApi) runEventStream(ctx context.Context, eventCh chan<- eventsource.Event, errCh chan<- error) {
+	var wait time.Duration
+	for {
+		received, err := api.readEventStream(ctx, eventCh)
+		if ctx.Err() != nil {
+			return
+		}
+		select {
+		case errCh <- err:
+		case <-ctx.Done():
+			return
+		}
+		wait = eventStreamWait(wait, received)
+		if !ctxSleep(ctx, wait) {
+			return
+		}
+	}
+}
+
+// readEventStream subscribes to head and light client update events and passes them
+// on until the stream fails or ends, or the context is closed. It also reports whether
+// it passed on any named event.
+func (api *BeaconLightApi) readEventStream(ctx context.Context, eventCh chan<- eventsource.Event) (bool, error) {
+	log.Trace("Sending event subscription request")
+	uri, err := api.buildURL("/eth/v1/events", map[string][]string{"topics": {"head", "light_client_finality_update", "light_client_optimistic_update"}})
+	if err != nil {
+		return false, fmt.Errorf("error creating event subscription URL: %v", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
+	if err != nil {
+		return false, fmt.Errorf("error creating event subscription request: %v", err)
+	}
+	for k, v := range api.customHeaders {
+		req.Header.Set(k, v)
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Cache-Control", "no-cache")
+	resp, err := api.streamClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("error creating event subscription: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		// The start of the body says why, but don't wait long for a body that
+		// doesn't end.
+		timer := time.AfterFunc(time.Second, func() { resp.Body.Close() })
+		defer timer.Stop()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+		return false, fmt.Errorf("error creating event subscription: status code %d: %s", resp.StatusCode, bytes.TrimSpace(body))
+	}
+	log.Trace("Successfully created event stream")
+
+	var (
+		dec      = eventsource.NewDecoder(resp.Body)
+		received bool
+	)
+	for {
+		event, err := dec.Decode()
+		if err != nil {
+			return received, fmt.Errorf("error reading event stream: %v", err)
+		}
+		select {
+		case eventCh <- event:
+			// Only named events count: the decoder also turns other text, such as
+			// a web page, into events.
+			received = received || event.Event() != ""
+		case <-ctx.Done():
+			return received, ctx.Err()
+		}
+	}
 }
 
 func ctxSleep(ctx context.Context, timeout time.Duration) (ok bool) {
