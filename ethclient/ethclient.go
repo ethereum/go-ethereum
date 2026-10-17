@@ -652,6 +652,10 @@ type feeHistoryResultMarshaling struct {
 
 // FeeHistory retrieves the fee market history.
 func (ec *Client) FeeHistory(ctx context.Context, blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*ethereum.FeeHistory, error) {
+	// Avoid rewardPercentiles being 'null'.
+	if rewardPercentiles == nil {
+		rewardPercentiles = []float64{}
+	}
 	var res feeHistoryResultMarshaling
 	if err := ec.c.CallContext(ctx, &res, "eth_feeHistory", hexutil.Uint(blockCount), toBlockNumArg(lastBlock), rewardPercentiles); err != nil {
 		return nil, err
