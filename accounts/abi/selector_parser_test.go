@@ -78,3 +78,39 @@ func TestParseSelector(t *testing.T) {
 		}
 	}
 }
+
+func TestParseSelectorTupleArrays(t *testing.T) {
+	t.Parallel()
+	components := []ArgumentMarshaling{
+		{"name0", "uint256", "uint256", nil, false},
+		{"name1", "address", "address", nil, false},
+	}
+	tests := []struct {
+		input     string
+		tupleType string
+	}{
+		{"f((uint256,address)[])", "tuple[]"},
+		{"f((uint256,address)[2])", "tuple[2]"},
+		{"f((uint256,address)[][])", "tuple[][]"},
+		{"f((uint256,address)[2][])", "tuple[2][]"},
+	}
+	for _, tt := range tests {
+		selector, err := ParseSelector(tt.input)
+		if err != nil {
+			t.Fatalf("failed to parse selector %q: %v", tt.input, err)
+		}
+		want := []ArgumentMarshaling{{"name0", tt.tupleType, tt.tupleType, components, false}}
+		if !reflect.DeepEqual(selector.Inputs, want) {
+			t.Errorf("%q: unexpected args: %v != %v", tt.input, selector.Inputs, want)
+		}
+	}
+}
+
+func TestParseSelectorErrors(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{"transfer", "f(", "f(uint256", "f((uint256)[2)", "f(uint256)[]"} {
+		if _, err := ParseSelector(input); err == nil {
+			t.Errorf("expected error for %q", input)
+		}
+	}
+}
