@@ -5,6 +5,100 @@ import (
 	"time"
 )
 
+func TestResettingTimerCumulativeCountAndSum(t *testing.T) {
+	timer := NewResettingTimer()
+
+	// First batch of updates.
+	timer.Update(10 * time.Millisecond)
+	timer.Update(20 * time.Millisecond)
+	timer.Update(30 * time.Millisecond)
+
+	snap1 := timer.Snapshot()
+	if have, want := snap1.Count(), 3; have != want {
+		t.Fatalf("snap1 count: have %d, want %d", have, want)
+	}
+	if have, want := snap1.TotalCount(), int64(3); have != want {
+		t.Fatalf("snap1 total count: have %d, want %d", have, want)
+	}
+	wantSum1 := int64(10*time.Millisecond + 20*time.Millisecond + 30*time.Millisecond)
+	if have := snap1.TotalSum(); have != wantSum1 {
+		t.Fatalf("snap1 total sum: have %d, want %d", have, wantSum1)
+	}
+
+	// Second batch of updates (after snapshot reset the values).
+	timer.Update(40 * time.Millisecond)
+	timer.Update(50 * time.Millisecond)
+
+	snap2 := timer.Snapshot()
+	// Per-window count should be 2.
+	if have, want := snap2.Count(), 2; have != want {
+		t.Fatalf("snap2 count: have %d, want %d", have, want)
+	}
+	// Cumulative count should be 5 (3 + 2).
+	if have, want := snap2.TotalCount(), int64(5); have != want {
+		t.Fatalf("snap2 total count: have %d, want %d", have, want)
+	}
+	// Cumulative sum should include both batches.
+	wantSum2 := wantSum1 + int64(40*time.Millisecond+50*time.Millisecond)
+	if have := snap2.TotalSum(); have != wantSum2 {
+		t.Fatalf("snap2 total sum: have %d, want %d", have, wantSum2)
+	}
+
+	// Empty snapshot should still report the same cumulative totals.
+	snap3 := timer.Snapshot()
+	if have, want := snap3.Count(), 0; have != want {
+		t.Fatalf("snap3 count: have %d, want %d", have, want)
+	}
+	if have, want := snap3.TotalCount(), int64(5); have != want {
+		t.Fatalf("snap3 total count: have %d, want %d", have, want)
+	}
+	if have := snap3.TotalSum(); have != wantSum2 {
+		t.Fatalf("snap3 total sum: have %d, want %d", have, wantSum2)
+	}
+}
+
+func TestResettingSampleCumulativeCountAndSum(t *testing.T) {
+	Enable()
+
+	s := ResettingSample(NewUniformSample(100))
+
+	// First batch.
+	s.Update(10)
+	s.Update(20)
+	s.Update(30)
+
+	snap1 := s.Snapshot()
+	if have, want := snap1.Count(), int64(3); have != want {
+		t.Fatalf("snap1 count: have %d, want %d", have, want)
+	}
+	if have, want := snap1.Sum(), int64(60); have != want {
+		t.Fatalf("snap1 sum: have %d, want %d", have, want)
+	}
+
+	// Second batch.
+	s.Update(40)
+	s.Update(50)
+
+	snap2 := s.Snapshot()
+	// Count should be cumulative: 3 + 2 = 5.
+	if have, want := snap2.Count(), int64(5); have != want {
+		t.Fatalf("snap2 count: have %d, want %d", have, want)
+	}
+	// Sum should be cumulative: 60 + 90 = 150.
+	if have, want := snap2.Sum(), int64(150); have != want {
+		t.Fatalf("snap2 sum: have %d, want %d", have, want)
+	}
+
+	// Empty snapshot should still report cumulative totals.
+	snap3 := s.Snapshot()
+	if have, want := snap3.Count(), int64(5); have != want {
+		t.Fatalf("snap3 count: have %d, want %d", have, want)
+	}
+	if have, want := snap3.Sum(), int64(150); have != want {
+		t.Fatalf("snap3 sum: have %d, want %d", have, want)
+	}
+}
+
 func TestResettingTimer(t *testing.T) {
 	tests := []struct {
 		values   []int64
