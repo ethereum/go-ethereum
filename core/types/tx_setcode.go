@@ -136,9 +136,7 @@ func (a *SetCodeAuthorization) Authority() (common.Address, error) {
 	if len(pub) == 0 || pub[0] != 4 {
 		return common.Address{}, errors.New("invalid public key")
 	}
-	var addr common.Address
-	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
-	return addr, nil
+	return crypto.Keccak256Address(pub[1:]), nil
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
