@@ -313,7 +313,8 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 
 	// Copy a snapshot of the current storage to a new container
 	var storage Storage
-	if !l.cfg.DisableStorage && (op == vm.SLOAD || op == vm.SSTORE) {
+	// A step that halts with an error does not execute the opcode, so it records no storage.
+	if !l.cfg.DisableStorage && err == nil && (op == vm.SLOAD || op == vm.SSTORE) {
 		// initialise new changed values storage container for this contract
 		// if not present.
 		if l.storage[contractAddr] == nil {
