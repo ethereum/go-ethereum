@@ -336,7 +336,7 @@ func (s *ForwardUpdateSync) Process(requester request.Requester, events []reques
 	for s.processQueue != nil {
 		u := s.processQueue[0]
 		if !s.processResponse(requester, u) {
-			break
+			break // wait for the periods before it
 		}
 		s.unlockRange(u.sid, u.request)
 		s.processQueue = s.processQueue[1:]
@@ -379,23 +379,24 @@ func (s *ForwardUpdateSync) Process(requester request.Requester, events []reques
 }
 
 // processResponse adds the fetched updates and committees to the committee chain.
-// Returns true in case of full or partial success.
-func (s *ForwardUpdateSync) processResponse(requester request.Requester, u updateResponse) (success bool) {
+// Returns false if the response can't be processed yet because of a gap before its
+// first period; otherwise the response is done with (fully, partly or not at all
+// added: the periods not added are requested again).
+func (s *ForwardUpdateSync) processResponse(requester request.Requester, u updateResponse) (done bool) {
 	for i, update := range u.response.Updates {
 		if err := s.chain.InsertUpdate(update, u.response.Committees[i]); err != nil {
 			if err == light.ErrInvalidPeriod {
 				// there is a gap in the update periods; stop processing without
 				// failing and try again next time
-				return
+				return i > 0
 			}
 			if err == light.ErrInvalidUpdate || err == light.ErrWrongCommitteeRoot || err == light.ErrCannotReorg {
 				requester.Fail(u.sid.Server, "invalid update received")
 			} else {
 				log.Error("Unexpected InsertUpdate error", "error", err)
 			}
-			return
+			return true
 		}
-		success = true
 	}
-	return
+	return true
 }
