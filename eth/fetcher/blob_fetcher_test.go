@@ -102,6 +102,11 @@ type doBlobEnqueue struct {
 	custody types.CustodyBitmap
 }
 
+type doBlobRefund struct {
+	peer  string
+	cells int
+}
+
 type blobDoFunc func(*BlobFetcher)
 
 type isWaitingAvailability map[common.Hash]map[string]struct{}
@@ -779,6 +784,77 @@ func TestBlobFetcherFetchTimeout(t *testing.T) {
 	})
 }
 
+// TestBlobFetcherRefund tests that a peer which ran out of request tokens can
+// be asked for more cells as soon as its earlier deliveries are refunded,
+// without waiting for the tokens to refill over time.
+func TestBlobFetcherRefund(t *testing.T) {
+	cells := make([][]kzg4844.Cell, 4)
+	for i := range cells {
+		cells[i] = selectCells(testBlobSidecars[0].Cells, halfCustody)
+	}
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload: func(common.Hash) bool { return false },
+					AddCells:   func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
+						return nil
+					},
+					DropPeer: func(string) {},
+				},
+				fullCustody,
+				&mockRand{value: 5},
+				15,
+			)
+		},
+		steps: []interface{}{
+			// Full fetches cost 64 tokens each, only four fit into a fresh budget
+			doBlobNotify{peer: "A", hashes: testBlobTxHashes[:5], custody: fullCustody},
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"A": {
+						{hash: testBlobTxHashes[0], custody: halfCustody},
+						{hash: testBlobTxHashes[1], custody: halfCustody},
+						{hash: testBlobTxHashes[2], custody: halfCustody},
+						{hash: testBlobTxHashes[3], custody: halfCustody},
+						{hash: testBlobTxHashes[4], custody: halfCustody},
+					},
+				},
+				fetching: map[string][]blobAnnounce{
+					"A": {
+						{hash: testBlobTxHashes[0], custody: halfCustody},
+						{hash: testBlobTxHashes[1], custody: halfCustody},
+						{hash: testBlobTxHashes[2], custody: halfCustody},
+						{hash: testBlobTxHashes[3], custody: halfCustody},
+					},
+				},
+			},
+
+			// Deliveries alone don't give the tokens back
+			doBlobEnqueue{peer: "A", hashes: testBlobTxHashes[:4], cells: cells, custody: halfCustody},
+			isCompleted(testBlobTxHashes[:4]),
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[4], custody: halfCustody}},
+				},
+				fetching: nil,
+			},
+
+			// Once the delivered cells are verified, the last one goes out
+			doBlobRefund{peer: "A", cells: kzg4844.DataPerBlob},
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[4], custody: halfCustody}},
+				},
+				fetching: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[4], custody: halfCustody}},
+				},
+			},
+		},
+	})
+}
+
 // testBlobFetcher is the generic test runner for blob fetcher tests
 func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 	clock := new(mclock.Simulated)
@@ -822,6 +898,10 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 				t.Errorf("step %d: failed to enqueue blobs: %v", i, err)
 				return
 			}
+			<-wait
+
+		case doBlobRefund:
+			fetcher.Refund(step.peer, step.cells)
 			<-wait
 
 		case blobDoFunc:

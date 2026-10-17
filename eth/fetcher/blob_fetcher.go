@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -170,6 +171,7 @@ type BlobFetcher struct {
 	cleanup   chan *payloadDelivery
 	drop      chan *txDrop
 	custodyCh chan types.CustodyBitmap
+	refundCh  chan struct{}
 	quit      chan struct{}
 	custody   types.CustodyBitmap
 
@@ -199,6 +201,7 @@ type BlobFetcher struct {
 
 	// peerTokens tracks each peer's remaining cell request token.
 	peerTokens map[string]*token
+	tokenLock  sync.Mutex
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
@@ -221,6 +224,7 @@ func NewBlobFetcher(fn BlobFetcherFunctions, custody types.CustodyBitmap, rand r
 		cleanup:          make(chan *payloadDelivery),
 		drop:             make(chan *txDrop),
 		custodyCh:        make(chan types.CustodyBitmap),
+		refundCh:         make(chan struct{}, 1),
 		quit:             make(chan struct{}),
 		full:             make(map[common.Hash]struct{}),
 		partial:          make(map[common.Hash]struct{}),
@@ -307,6 +311,22 @@ func (f *BlobFetcher) UpdateCustody(cells types.CustodyBitmap) {
 	select {
 	case f.custodyCh <- cells:
 	case <-f.quit:
+	}
+}
+
+// Refund gives a peer back the tokens spent on n cells once they have been
+// verified against their transaction. It never blocks, so it is safe to call
+// with the blob buffer locked.
+func (f *BlobFetcher) Refund(peer string, n int) {
+	f.tokenLock.Lock()
+	if b, ok := f.peerTokens[peer]; ok {
+		b.amount = min(b.amount+int64(n), maxCellRequests)
+	}
+	f.tokenLock.Unlock()
+
+	select {
+	case f.refundCh <- struct{}{}:
+	default:
 	}
 }
 
@@ -673,7 +693,9 @@ func (f *BlobFetcher) loop() {
 
 		case drop := <-f.drop:
 			// A peer was dropped, remove all traces of it
+			f.tokenLock.Lock()
 			delete(f.peerTokens, drop.peer)
+			f.tokenLock.Unlock()
 			if _, ok := f.waitslots[drop.peer]; ok {
 				for hash := range f.waitslots[drop.peer] {
 					delete(f.waitlist[hash], drop.peer)
@@ -724,6 +746,9 @@ func (f *BlobFetcher) loop() {
 
 		case cells := <-f.custodyCh:
 			f.custody = cells
+
+		case <-f.refundCh:
+			f.scheduleFetches(timeoutTimer, timeoutTrigger, nil)
 
 		case <-f.quit:
 			return
@@ -793,6 +818,9 @@ func (f *BlobFetcher) rescheduleTimeout(timer *mclock.Timer, trigger chan struct
 // consumeToken consumes n tokens from peer's cell-request budget.
 // It returns false if the remaining tokens cannot cover n.
 func (f *BlobFetcher) consumeToken(peer string, n int) bool {
+	f.tokenLock.Lock()
+	defer f.tokenLock.Unlock()
+
 	now := f.clock.Now()
 	b, ok := f.peerTokens[peer]
 	if !ok {

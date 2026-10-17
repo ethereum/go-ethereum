@@ -425,6 +425,36 @@ func TestMultiPeerDelivery(t *testing.T) {
 	}
 }
 
+// TestRefundOnCompletion checks that peers get their cell request budget back
+// only once their cells are matched with the transaction.
+func TestRefundOnCompletion(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	refunds := make(map[string]int)
+	buf := NewBlobBuffer(BlobBufferFunctions{
+		ValidateTx: func(tx *types.Transaction) error { return nil },
+		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
+		DropPeer:   func(peer string) {},
+		Refund:     func(peer string, cells int) { refunds[peer] += cells },
+	})
+	tx := makeV1Tx(t, 0, 2, 0, key)
+
+	indicesB := []uint64{0, 2, 4, 6}
+	indicesC := []uint64{1, 3, 5}
+	buf.AddCells(tx.Hash(), map[string]*PeerDelivery{
+		"peerB": makePeerDelivery(t, 0, 2, indicesB),
+		"peerC": makePeerDelivery(t, 0, 2, indicesC),
+	}, types.NewCustodyBitmap(append(indicesB, indicesC...)))
+	if len(refunds) != 0 {
+		t.Fatalf("refunded before the transaction arrived: %v", refunds)
+	}
+	if err := buf.AddTx([]*types.Transaction{tx}, "peerA")[0]; err != nil {
+		t.Fatal(err)
+	}
+	if len(refunds) != 2 || refunds["peerB"] != len(indicesB) || refunds["peerC"] != len(indicesC) {
+		t.Fatalf("wrong refunds: %v", refunds)
+	}
+}
+
 func TestBadCell(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	blobCount := 1
@@ -434,6 +464,7 @@ func TestBadCell(t *testing.T) {
 		ValidateTx: func(tx *types.Transaction) error { return nil },
 		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
 		DropPeer:   func(peer string) { dropped = append(dropped, peer) },
+		Refund:     func(peer string, cells int) { t.Errorf("unexpected refund of %d cells to %s", cells, peer) },
 	})
 
 	tx := makeV1Tx(t, 0, blobCount, 0, key)
