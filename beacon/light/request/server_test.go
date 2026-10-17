@@ -1,6 +1,7 @@
 package request
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -234,6 +235,50 @@ func TestServerCanRequestAgain(t *testing.T) {
 	clock.WaitForTimers(1)
 	clock.Run(maxFailureDelay)
 	expEvents(3)
+	srv.unsubscribe()
+}
+
+// TestServerTimeoutResponseRace tests that a response arriving while the soft
+// timeout fires can't overtake EvTimeout. If it did, the server would count a
+// soft timeout that no final event clears, and refuse all further requests.
+func TestServerTimeoutResponseRace(t *testing.T) {
+	rs := &testRequestServer{}
+	clock := &mclock.Simulated{}
+	srv := NewServer(rs, clock).(*serverWithLimits)
+	var events []string
+	srv.subscribe(func(event Event) { events = append(events, event.Type.Name) })
+
+	// The response arrives while serverWithTimeout passes EvTimeout on: if it
+	// can take serverWithTimeout's lock then, it is passed on first, otherwise
+	// once EvTimeout has been. TryLock stands in for a response on another
+	// goroutine: it tells whether that response could take the lock at this
+	// point, without starting one.
+	response := Event{Type: EvResponse, Data: RequestResponse{ID: 1, Request: testRequest, Response: testResponse}}
+	var held bool
+	limitsCb := srv.serverWithTimeout.childEventCb
+	srv.serverWithTimeout.childEventCb = func(event Event) {
+		if event.Type == EvTimeout {
+			if srv.serverWithTimeout.lock.TryLock() {
+				srv.serverWithTimeout.lock.Unlock()
+				rs.eventCb(response)
+			} else {
+				held = true
+			}
+		}
+		limitsCb(event)
+	}
+	srv.sendRequest(testRequest)
+	clock.WaitForTimers(1)
+	clock.Run(softRequestTimeout)
+	if held {
+		rs.eventCb(response)
+	}
+	if exp := []string{EvTimeout.Name, EvResponse.Name}; !slices.Equal(events, exp) {
+		t.Errorf("Wrong events (expected %v, got %v)", exp, events)
+	}
+	if !srv.canRequestNow() {
+		t.Fatal("Can't request after the timed out request was answered")
+	}
 	srv.unsubscribe()
 }
 
