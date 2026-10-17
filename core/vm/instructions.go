@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/binary"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -24,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 func opAdd(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
@@ -406,32 +408,61 @@ func opGasprice(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 func opBlockhash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	num := scope.Stack.peek()
-	num64, overflow := num.Uint64WithOverflow()
-	if overflow {
+	num64, valid := blockHashNumber(evm, num)
+	if !valid {
 		num.Clear()
 		return nil, nil
 	}
+	res := evm.Context.GetHash(num64)
+	if witness := evm.StateDB.Witness(); witness != nil {
+		witness.AddBlockHash(num64)
+	}
+	traceBlockHashRead(evm, num64, res)
+	num.SetBytes(res[:])
+	return nil, nil
+}
 
-	var upper, lower uint64
-	upper = evm.Context.BlockNumber.Uint64()
-	if upper < 257 {
-		lower = 0
-	} else {
+// opBlockhashEIP7709 resolves BLOCKHASH from the EIP-2935 history storage.
+func opBlockhashEIP7709(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	num := scope.Stack.peek()
+	num64, valid := blockHashNumber(evm, num)
+	if !valid {
+		num.Clear()
+		return nil, nil
+	}
+	res := evm.StateDB.GetState(params.HistoryStorageAddress, historyStorageSlot(num64))
+	traceBlockHashRead(evm, num64, res)
+	num.SetBytes(res[:])
+	return nil, nil
+}
+
+// blockHashNumber checks whether `num` is in the range that the
+// BLOCKHASH opcode is allowed to query.
+// This is anywhere from the parent block to 256 blocks in the past.
+// Explicitly, this covers [currentBlock-256, currentBlock-1]
+func blockHashNumber(evm *EVM, num *uint256.Int) (uint64, bool) {
+	num64, overflow := num.Uint64WithOverflow()
+	if overflow {
+		return 0, false
+	}
+	upper := evm.Context.BlockNumber.Uint64()
+	var lower uint64
+	if upper >= 257 {
 		lower = upper - 256
 	}
-	if num64 >= lower && num64 < upper {
-		res := evm.Context.GetHash(num64)
-		if witness := evm.StateDB.Witness(); witness != nil {
-			witness.AddBlockHash(num64)
-		}
-		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnBlockHashRead != nil {
-			tracer.OnBlockHashRead(num64, res)
-		}
-		num.SetBytes(res[:])
-	} else {
-		num.Clear()
+	return num64, num64 >= lower && num64 < upper
+}
+
+func historyStorageSlot(number uint64) common.Hash {
+	var slot common.Hash
+	binary.BigEndian.PutUint64(slot[24:], number%params.HistoryServeWindow)
+	return slot
+}
+
+func traceBlockHashRead(evm *EVM, number uint64, hash common.Hash) {
+	if tracer := evm.Config.Tracer; tracer != nil && tracer.OnBlockHashRead != nil {
+		tracer.OnBlockHashRead(number, hash)
 	}
-	return nil, nil
 }
 
 func opCoinbase(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
