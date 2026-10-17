@@ -19,12 +19,14 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"encoding/json"
 	"math"
 	"reflect"
 	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -379,5 +381,112 @@ func TestBlockAccessListValidation(t *testing.T) {
 	listB := cBAL.ToEncodingObj()
 	if err := listB.Validate(math.MaxUint64, 10000); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
+	}
+}
+
+// TestBALAdoptedCodeHash checks that a code hash adopted through SETCODEFROM
+// (EIP-8298) is encoded as [index, "", hash] next to the two-element form,
+// round-trips, validates, and resolves through the lookup.
+func TestBALAdoptedCodeHash(t *testing.T) {
+	var (
+		creator = common.BytesToAddress([]byte{0xaa})
+		adopter = common.BytesToAddress([]byte{0xbb})
+		code    = []byte{0x60, 0x00, 0x00}
+		hash    = crypto.Keccak256Hash(code)
+		old     = common.HexToHash("0x01") // deposited before the block
+	)
+	b := NewConstructionBlockAccessList()
+	b.CodeChange(creator, 1, code)
+	b.CodeChange(adopter, 2, []byte{0x01})
+	b.CodeHashChange(adopter, 2, hash) // replaces the bytes at index 2
+	b.CodeHashChange(adopter, 3, old)
+	b.CodeChange(adopter, 4, nil)
+	list := b.ToEncodingObj()
+
+	want := []encodingCodeChange{
+		{BlockAccessIndex: 2, NewCodeHash: &hash},
+		{BlockAccessIndex: 3, NewCodeHash: &old},
+		{BlockAccessIndex: 4, NewCode: nil},
+	}
+	if got := (*list)[1].CodeChanges; !reflect.DeepEqual(got, want) {
+		t.Fatalf("adopter code changes mismatch: got %v, want %v", got, want)
+	}
+	// Both forms on the wire, through the generated encoder.
+	for i, want := range []any{
+		[]any{creator, []any{}, []any{}, []any{}, []any{}, []any{[]any{uint32(1), code}}},
+		[]any{adopter, []any{}, []any{}, []any{}, []any{}, []any{
+			[]any{uint32(2), []byte{}, hash}, []any{uint32(3), []byte{}, old}, []any{uint32(4), []byte{}},
+		}},
+	} {
+		have, _ := rlp.EncodeToBytes(&(*list)[i])
+		if want, _ := rlp.EncodeToBytes(want); !bytes.Equal(have, want) {
+			t.Fatalf("account %d encoding: %x, want %x", i, have, want)
+		}
+	}
+	// RLP and JSON round trips.
+	var buf bytes.Buffer
+	if err := list.EncodeRLP(&buf); err != nil {
+		t.Fatal(err)
+	}
+	var dec BlockAccessList
+	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
+		t.Fatal(err)
+	}
+	if dec.Hash() != list.Hash() || *dec[1].CodeChanges[0].NewCodeHash != hash || dec[0].CodeChanges[0].NewCodeHash != nil {
+		t.Fatal("RLP round trip mismatch")
+	}
+	blob, err := json.Marshal(list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decJSON BlockAccessList
+	if err := json.Unmarshal(blob, &decJSON); err != nil {
+		t.Fatal(err)
+	}
+	if decJSON.Hash() != list.Hash() {
+		t.Fatal("JSON round trip mismatch")
+	}
+	// Validation accepts the hash form and rejects a change carrying both.
+	if err := list.Validate(math.MaxUint64, 3); err != nil {
+		t.Fatalf("valid list rejected: %v", err)
+	}
+	bad := list.Copy()
+	*(*bad)[1].CodeChanges[0].NewCodeHash = old // the copy owns its hashes
+	(*bad)[1].CodeChanges[0].NewCode = code
+	if err := bad.Validate(math.MaxUint64, 3); err == nil {
+		t.Fatal("code change with both code and hash accepted")
+	}
+	if *(*list)[1].CodeChanges[0].NewCodeHash != hash {
+		t.Fatal("copy shares the adopted hash")
+	}
+	// The lookup reports the adopted hash and serves the code deposited by
+	// the creator; code from before the block is left to the caller.
+	l := list.Lookup()
+	if _, _, h, _, _, ok := l.AccountChanges(adopter, 3); !ok || h != hash {
+		t.Fatalf("adopted hash: got %x (%v), want %x", h, ok, hash)
+	}
+	if got, ok := l.Code(adopter, 3); !ok || !bytes.Equal(got, code) {
+		t.Fatalf("adopted code: got %x (%v), want %x", got, ok, code)
+	}
+	if _, ok := l.Code(adopter, 4); ok {
+		t.Fatal("code from before the block reported as carried")
+	}
+	if got, ok := l.Code(adopter, 5); !ok || len(got) != 0 {
+		t.Fatalf("cleared code: got %x (%v)", got, ok)
+	}
+	// At an index, the last change wins, across setters and Merge.
+	b = NewConstructionBlockAccessList()
+	b.CodeHashChange(adopter, 1, hash)
+	b.CodeChange(adopter, 1, code) // the bytes replace the hash
+	b.CodeChange(adopter, 2, code)
+	other := NewConstructionBlockAccessList()
+	other.CodeHashChange(adopter, 2, old)
+	b.Merge(other) // the merged hash replaces the bytes
+	want = []encodingCodeChange{
+		{BlockAccessIndex: 1, NewCode: code},
+		{BlockAccessIndex: 2, NewCodeHash: &old},
+	}
+	if got := (*b.ToEncodingObj())[0].CodeChanges; !reflect.DeepEqual(got, want) {
+		t.Fatalf("overridden code changes: got %v, want %v", got, want)
 	}
 }

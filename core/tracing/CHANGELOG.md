@@ -21,7 +21,7 @@ EIP-8037 splits gas into an execution and a state dimension, so every hook that 
 
 ### New types
 
-- `CodeChangeReason` is a new type used to provide a reason for code changes. It includes various reasons such as contract creation, genesis initialization, EIP-7702 authorization, self-destruct, and revert operations ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
+- `CodeChangeReason` is a new type used to provide a reason for code changes. It includes various reasons such as contract creation, genesis initialization, EIP-7702 authorization, self-destruct, and revert operations ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)), and the adoption of another account's code through the EIP-8298 `SETCODEFROM` instruction (`CodeChangeSetCodeFrom`).
 - `Gas` is the two-dimensional gas vector introduced by EIP-8037, pairing ordinary execution gas with the state-access dimension. The `State` field is always zero before the fork.
 - `GasChangeHookV2`, `EnterHookV2`, `ExitHookV2`, `OpcodeHookV2` and `FaultHookV2` are the hook signatures of the methods above.
 
@@ -31,6 +31,7 @@ EIP-8037 splits gas into an execution and a state dimension, so every hook that 
 - `GasChangeReason` has a new value `GasChangeStateGasRepaid`, reported after `GasChangeCallLeftOverRefunded` when the merge of a child moves state-gas from the reservoir back to `gas_left`, repaying execution gas the frame had lent to a state charge the child refilled (EIP-8037). Previously that movement was folded into the leftover-refunded event, which then rose by more than the child had actually returned.
 - `GasChangeReason` has a new value `GasChangeTxGasForwarded`, reported when the transaction hands its whole budget to the top-level frame. The receiving side was already reported as `GasChangeCallInitialBalance`, but the giving side was not, leaving a hole in the event stream at the transaction level.
 - `GasChangeReason` has a new value `GasChangeRefundRevertedState`, reported when a reverting frame is refilled the state-gas its rolled back state creations had paid for (EIP-8037). Previously a revert emitted no gas change at all, so the refill was invisible to tracers.
+- `StateUpdate.CodeChanges` lists the code written by the block. An account that adopts already stored code through the EIP-8298 `SETCODEFROM` instruction writes none, so it appears only in `AccountChanges`, with its new code hash.
 
 ## [v1.15.4](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.4)
 

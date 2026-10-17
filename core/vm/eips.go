@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -45,6 +46,7 @@ var activators = map[int]func(*JumpTable){
 	7843: enable7843,
 	8037: enable8037And8038,
 	8038: enable8037And8038,
+	8298: enable8298,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -611,4 +613,63 @@ func enable8037And8038(jt *JumpTable) {
 
 	// SELFDESTRUCT
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037And8038
+}
+
+// enable8298 enables the SETCODEFROM opcode as specified in EIP-8298.
+func enable8298(jt *JumpTable) {
+	jt[SETCODEFROM] = &operation{
+		execute:     opSetCodeFrom,
+		constantGas: params.WarmAccountAccessAmsterdam,
+		dynamicGas:  gasSetCodeFrom,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+}
+
+// opSetCodeFrom implements the SETCODEFROM opcode (EIP-8298): it sets the code
+// hash of the current account to the code hash of the source account.
+func opSetCodeFrom(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		x      = scope.Stack.peek()
+		source = common.Address(x.Bytes20())
+		addr   = scope.Contract.Address()
+	)
+	hash, ok := setCodeFromSource(evm, source)
+	if !ok {
+		x.Clear()
+		return nil, nil
+	}
+	if hash != evm.StateDB.GetCodeHash(addr) {
+		evm.StateDB.SetCodeFrom(addr, source)
+	}
+	x.SetOne()
+	return nil, nil
+}
+
+// setCodeFromSource returns the code hash SETCODEFROM adopts from source, and
+// whether source is valid: an existing account with code that does not start
+// with 0xEF and was not created in the current transaction. A delegation of
+// the source is never followed.
+func setCodeFromSource(evm *EVM, source common.Address) (common.Hash, bool) {
+	hash := evm.StateDB.GetCodeHash(source)
+	if hash == (common.Hash{}) || hash == types.EmptyCodeHash || evm.StateDB.IsNewContract(source) {
+		return common.Hash{}, false
+	}
+	if code := evm.StateDB.GetCode(source); len(code) == 0 || code[0] == 0xEF {
+		return common.Hash{}, false
+	}
+	return hash, true
+}
+
+// isSystemContract reports whether addr is called by the protocol from the
+// system address during block processing. The deposit contract is not: its
+// logs are read, but it is never called.
+func isSystemContract(addr common.Address) bool {
+	switch addr {
+	case params.BeaconRootsAddress, params.HistoryStorageAddress,
+		params.WithdrawalQueueAddress, params.ConsolidationQueueAddress,
+		params.BuilderDepositAddress, params.BuilderExitAddress:
+		return true
+	}
+	return false
 }

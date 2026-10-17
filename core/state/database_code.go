@@ -160,6 +160,7 @@ type CodeBatch struct {
 	db         *CodeDB
 	codes      [][]byte
 	codeHashes []common.Hash
+	queued     map[common.Hash]struct{} // hashes already in the batch
 }
 
 // newCodeBatch constructs the batch for writing contract code.
@@ -175,11 +176,20 @@ func newCodeBatchWithSize(db *CodeDB, size int) *CodeBatch {
 		db:         db,
 		codes:      make([][]byte, 0, size),
 		codeHashes: make([]common.Hash, 0, size),
+		queued:     make(map[common.Hash]struct{}, size),
 	}
 }
 
 // Put inserts the given contract code into the writer, waiting for commit.
+// A code already in the batch is written once, however many accounts hold it.
 func (b *CodeBatch) Put(codeHash common.Hash, code []byte) {
+	if _, ok := b.queued[codeHash]; ok {
+		return
+	}
+	if b.queued == nil {
+		b.queued = make(map[common.Hash]struct{})
+	}
+	b.queued[codeHash] = struct{}{}
 	b.codes = append(b.codes, code)
 	b.codeHashes = append(b.codeHashes, codeHash)
 }
@@ -197,6 +207,7 @@ func (b *CodeBatch) Commit() error {
 	}
 	b.codes = b.codes[:0]
 	b.codeHashes = b.codeHashes[:0]
+	clear(b.queued)
 	return nil
 }
 

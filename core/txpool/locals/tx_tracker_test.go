@@ -17,6 +17,7 @@
 package locals
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"maps"
 	"math/big"
@@ -204,5 +205,27 @@ func TestJournal(t *testing.T) {
 
 	if len(allCopy) != len(txs) {
 		t.Fatalf("Unexpected transactions being tracked, got: %d, want: %d", len(allCopy), len(txs))
+	}
+}
+
+// TestForgetSenderWithCode checks that the tracker stops resubmitting the
+// transactions of a sender that holds code by now (EIP-3607), but keeps those
+// rejected for a reason that may go away.
+func TestForgetSenderWithCode(t *testing.T) {
+	tracker := New("", time.Minute, gspec.Config, nil)
+	other, _ := crypto.GenerateKey()
+	var txs []*types.Transaction
+	for _, k := range []*ecdsa.PrivateKey{key, other} {
+		tx, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(1000), params.TxGas, big.NewInt(params.GWei), nil), signer, k)
+		txs = append(txs, tx)
+	}
+	tracker.TrackAll(txs)
+	tracker.forget(txs, []error{fmt.Errorf("%w: address %v", core.ErrSenderNoEOA, address), core.ErrInsufficientFunds})
+
+	if _, ok := tracker.all[txs[0].Hash()]; ok || tracker.byAddr[address] != nil {
+		t.Error("transaction of a sender with code still tracked")
+	}
+	if _, ok := tracker.all[txs[1].Hash()]; !ok {
+		t.Error("transaction of an underfunded sender forgotten")
 	}
 }

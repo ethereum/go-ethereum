@@ -198,19 +198,35 @@ func (s *hookedStateDB) SetCode(address common.Address, code []byte, reason trac
 	prev := s.inner.SetCode(address, code, reason)
 
 	if s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil {
-		prevHash := crypto.Keccak256Hash(prev)
-		codeHash := crypto.Keccak256Hash(code)
-
-		// Invoke the hooks only if the contract code is changed
-		if prevHash != codeHash {
-			if s.hooks.OnCodeChangeV2 != nil {
-				s.hooks.OnCodeChangeV2(address, prevHash, prev, codeHash, code, reason)
-			} else if s.hooks.OnCodeChange != nil {
-				s.hooks.OnCodeChange(address, prevHash, prev, codeHash, code)
-			}
-		}
+		s.onCodeChange(address, crypto.Keccak256Hash(prev), prev, crypto.Keccak256Hash(code), code, reason)
 	}
 	return prev
+}
+
+func (s *hookedStateDB) SetCodeFrom(address, source common.Address) []byte {
+	if s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
+		return s.inner.SetCodeFrom(address, source)
+	}
+	// Compare the stored hashes: a missing source changes nothing, and the
+	// previous code is hashed only for a real change.
+	before := s.inner.GetCodeHash(address)
+	prev := s.inner.SetCodeFrom(address, source)
+	if codeHash := s.inner.GetCodeHash(address); codeHash != before {
+		s.onCodeChange(address, crypto.Keccak256Hash(prev), prev, codeHash, s.inner.GetCode(address), tracing.CodeChangeSetCodeFrom)
+	}
+	return prev
+}
+
+// onCodeChange invokes the code change hooks if the contract code changed.
+func (s *hookedStateDB) onCodeChange(address common.Address, prevHash common.Hash, prev []byte, codeHash common.Hash, code []byte, reason tracing.CodeChangeReason) {
+	if prevHash == codeHash {
+		return
+	}
+	if s.hooks.OnCodeChangeV2 != nil {
+		s.hooks.OnCodeChangeV2(address, prevHash, prev, codeHash, code, reason)
+	} else if s.hooks.OnCodeChange != nil {
+		s.hooks.OnCodeChange(address, prevHash, prev, codeHash, code)
+	}
 }
 
 func (s *hookedStateDB) SetState(address common.Address, key common.Hash, value common.Hash) common.Hash {

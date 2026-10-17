@@ -19,11 +19,13 @@ package locals
 
 import (
 	"cmp"
+	"errors"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -169,6 +171,29 @@ func (tracker *TxTracker) recheck(journalCheck bool) []*types.Transaction {
 	return resubmits
 }
 
+// forget stops tracking the transactions the pool rejected because their sender
+// holds code by now (EIP-3607), e.g. adopted with SETCODEFROM (EIP-8298): they
+// can never be included again.
+func (tracker *TxTracker) forget(txs []*types.Transaction, errs []error) {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+
+	for i, tx := range txs {
+		if !errors.Is(errs[i], core.ErrSenderNoEOA) {
+			continue
+		}
+		addr, _ := types.Sender(tracker.signer, tx) // already validated
+		delete(tracker.all, tx.Hash())
+		if list := tracker.byAddr[addr]; list != nil {
+			list.Remove(tx.Nonce())
+			if list.Len() == 0 {
+				delete(tracker.byAddr, addr)
+			}
+		}
+	}
+	localGauge.Update(int64(len(tracker.all)))
+}
+
 // Start implements node.Lifecycle interface
 // Start is called after all services have been constructed and the networking
 // layer was also initialized to spawn any goroutines required by the service.
@@ -224,7 +249,7 @@ func (tracker *TxTracker) loop() {
 			}
 			resubmits := tracker.recheck(rejournal)
 			if len(resubmits) > 0 {
-				tracker.pool.Add(resubmits, false)
+				tracker.forget(resubmits, tracker.pool.Add(resubmits, false))
 			}
 			timer.Reset(recheckInterval)
 		}
