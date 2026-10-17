@@ -51,6 +51,9 @@ type Suite struct {
 	// requireAvailableBALs is enabled only by the in-process geth tests.
 	// External conformance runs must continue accepting unavailable BALs.
 	requireAvailableBALs bool
+
+	// blobSenders counts the accounts handed out by makeBlobTxs.
+	blobSenders int
 }
 
 // NewSuite creates and returns a new eth-test suite that can
@@ -1029,8 +1032,13 @@ func makeSidecar(data ...byte) *types.BlobTxSidecar {
 	return types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, proofs)
 }
 
+// makeBlobTxs signs each batch with an account no earlier call has used. The
+// tests never build a block, so blob txs from earlier tests may still sit in the
+// node's pool: reusing their nonces turns the new txs into underpriced
+// replacements, and skipping past them leaves a nonce gap the blob pool rejects.
 func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs types.Transactions, blobs [][]kzg4844.Blob) {
-	from, nonce := s.chain.GetSender(5)
+	from, nonce := s.chain.GetSender(5 + s.blobSenders)
+	s.blobSenders++
 	for i := 0; i < txCount; i++ {
 		blobdata := make([]byte, blobCount)
 		for i := range blobdata {
