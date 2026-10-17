@@ -19,6 +19,7 @@ package fetcher
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -505,8 +506,10 @@ func TestBlobFetcherPartialDelivery(t *testing.T) {
 					},
 				},
 			},
-			// Delivery from E -> complete
-			doWait{time: blobFetchTimeout / 2, step: true},
+			// Delivery from E -> complete. No timer is due within this window
+			// (the availability timer was disarmed when the waitlist drained),
+			// so only advance the clock without expecting a loop iteration.
+			doWait{time: blobFetchTimeout / 2, step: false},
 			doBlobEnqueue{
 				peer:    "E",
 				hashes:  []common.Hash{testBlobTxHashes[0]},
@@ -776,6 +779,106 @@ func TestBlobFetcherFetchTimeout(t *testing.T) {
 			isBlobScheduled{announces: nil, fetching: nil},
 			isFetching{hashes: nil},
 		},
+	})
+}
+
+// TestBlobFetcherAvailabilityTimerLifecycle tests that the availability timer
+// tracks the waitlist: it is disarmed when the waitlist drains, whether by
+// promotion to the fetching stage or by dropping the last waiting peer, and
+// re-armed on the next deadline when a transaction is promoted while others
+// keep waiting. A stale timer would fire on deadlines that no longer exist,
+// causing spurious loop iterations.
+func TestBlobFetcherAvailabilityTimerLifecycle(t *testing.T) {
+	newFetcher := func() (*BlobFetcher, *mclock.Simulated, chan struct{}) {
+		clock := new(mclock.Simulated)
+		wait := make(chan struct{})
+		fetcher := NewBlobFetcher(
+			BlobFetcherFunctions{
+				HasPayload: func(common.Hash) bool { return false },
+				AddCells:   func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+				FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
+					return nil
+				},
+				DropPeer: func(string) {},
+			},
+			custody,
+			&mockRand{value: 60}, // Force partial requests (60 >= fetchProbability)
+			15,
+		)
+		fetcher.clock = clock
+		fetcher.step = wait
+		fetcher.Start()
+		return fetcher, clock, wait
+	}
+	t.Run("promotion", func(t *testing.T) {
+		fetcher, clock, wait := newFetcher()
+		defer fetcher.Stop()
+
+		// The first full-custody announce puts the transaction on the
+		// waitlist and arms the availability timer.
+		fetcher.Notify("A", []common.Hash{testBlobTxHashes[0]}, fullCustody)
+		<-wait
+		if n := clock.ActiveTimers(); n != 1 {
+			t.Fatalf("waiting transaction: %d active timers, want 1 (availability)", n)
+		}
+		// The second announce reaches the availability threshold and promotes
+		// the transaction to the fetching stage. The availability timer must
+		// be disarmed, leaving only the fetch timeout timer.
+		fetcher.Notify("B", []common.Hash{testBlobTxHashes[0]}, fullCustody)
+		<-wait
+		if n := clock.ActiveTimers(); n != 1 {
+			t.Fatalf("drained waitlist: %d active timers, want 1 (fetch timeout)", n)
+		}
+	})
+	t.Run("drop", func(t *testing.T) {
+		fetcher, clock, wait := newFetcher()
+		defer fetcher.Stop()
+
+		fetcher.Notify("A", []common.Hash{testBlobTxHashes[0]}, fullCustody)
+		<-wait
+		if n := clock.ActiveTimers(); n != 1 {
+			t.Fatalf("waiting transaction: %d active timers, want 1 (availability)", n)
+		}
+		// Dropping the only waiting peer drains the waitlist. The availability
+		// timer must be disarmed with it.
+		fetcher.Drop("A")
+		<-wait
+		if n := clock.ActiveTimers(); n != 0 {
+			t.Fatalf("drained waitlist: %d active timers, want 0", n)
+		}
+	})
+	t.Run("partial promotion", func(t *testing.T) {
+		fetcher, clock, wait := newFetcher()
+		defer fetcher.Stop()
+
+		// Two transactions enter the waitlist one second apart, so the timer
+		// is armed on the first one's deadline.
+		fetcher.Notify("A", []common.Hash{testBlobTxHashes[0]}, fullCustody)
+		<-wait
+		clock.Run(time.Second)
+		fetcher.Notify("A", []common.Hash{testBlobTxHashes[1]}, fullCustody)
+		<-wait
+
+		// Promote the first transaction only. The second one is not due until
+		// a second later, so the timer must be re-armed on its deadline rather
+		// than left on the promoted transaction's.
+		fetcher.Notify("B", []common.Hash{testBlobTxHashes[0]}, fullCustody)
+		<-wait
+		clock.Run(blobAvailabilityTimeout - time.Second + txGatherSlack)
+		select {
+		case <-wait:
+			t.Fatal("loop woke up on the promoted transaction's stale deadline")
+		case <-time.After(100 * time.Millisecond):
+		}
+		// The timer must have been re-armed on the second transaction's
+		// deadline: advancing past it must wake the loop to convert the
+		// timed-out partial fetch to a full one.
+		clock.Run(time.Second)
+		select {
+		case <-wait:
+		case <-time.After(time.Second):
+			t.Fatal("availability timer was not re-armed on the waiting transaction")
+		}
 	})
 }
 
