@@ -591,14 +591,9 @@ type matchSequence struct {
 // newInstance creates a new instance of matchSequence.
 func (m *matchSequence) newInstance(mapIndices []uint32) matcherInstance {
 	// determine set of indices to request from next matcher
-	needMatched := make(map[uint32]struct{})
-	baseRequested := make(map[uint32]struct{})
-	nextRequested := make(map[uint32]struct{})
-	for _, mapIndex := range mapIndices {
-		needMatched[mapIndex] = struct{}{}
-		baseRequested[mapIndex] = struct{}{}
-		nextRequested[mapIndex] = struct{}{}
-	}
+	needMatched := newIndexBitset(mapIndices)
+	baseRequested := newIndexBitset(mapIndices)
+	nextRequested := newIndexBitset(mapIndices)
 	return &matchSequenceInstance{
 		matchSequence: m,
 		baseInstance:  m.base.newInstance(mapIndices),
@@ -693,7 +688,7 @@ func newMatchSequence(params *Params, matchers []matcher) matcher {
 type matchSequenceInstance struct {
 	*matchSequence
 	baseInstance, nextInstance                matcherInstance
-	baseRequested, nextRequested, needMatched map[uint32]struct{}
+	baseRequested, nextRequested, needMatched *indexBitset
 	baseResults, nextResults                  map[uint32]potentialMatches
 }
 
@@ -715,26 +710,26 @@ func (m *matchSequenceInstance) getMatchesForLayer(ctx context.Context, layerInd
 		}
 	}
 	// evaluate and return matched results where possible
-	for mapIndex := range m.needMatched {
-		if _, ok := m.baseRequested[mapIndex]; ok {
-			continue
+	m.needMatched.Iterate(func(mapIndex uint32) {
+		if m.baseRequested.Has(mapIndex) {
+			return
 		}
-		if _, ok := m.nextRequested[mapIndex]; ok {
-			continue
+		if m.nextRequested.Has(mapIndex) {
+			return
 		}
 		matchedResults = append(matchedResults, matcherResult{
 			mapIndex: mapIndex,
 			matches:  m.params.matchResults(mapIndex, m.offset, m.baseResults[mapIndex], m.nextResults[mapIndex]),
 		})
-		delete(m.needMatched, mapIndex)
-	}
+		m.needMatched.Clear(mapIndex)
+	})
 	return matchedResults, nil
 }
 
 // dropIndices implements matcherInstance.
 func (m *matchSequenceInstance) dropIndices(dropIndices []uint32) {
 	for _, mapIndex := range dropIndices {
-		delete(m.needMatched, mapIndex)
+		m.needMatched.Clear(mapIndex)
 	}
 	var dropBase, dropNext []uint32
 	for _, mapIndex := range dropIndices {
@@ -764,7 +759,7 @@ func (m *matchSequenceInstance) evalBase(ctx context.Context, layerIndex uint32)
 	)
 	for _, r := range results {
 		m.baseResults[r.mapIndex] = r.matches
-		delete(m.baseRequested, r.mapIndex)
+		m.baseRequested.Clear(r.mapIndex)
 		stats.add(r.matches != nil && len(r.matches) == 0, layerIndex)
 	}
 	m.mergeBaseStats(stats)
@@ -792,7 +787,7 @@ func (m *matchSequenceInstance) evalNext(ctx context.Context, layerIndex uint32)
 	)
 	for _, r := range results {
 		m.nextResults[r.mapIndex] = r.matches
-		delete(m.nextRequested, r.mapIndex)
+		m.nextRequested.Clear(r.mapIndex)
 		stats.add(r.matches != nil && len(r.matches) == 0, layerIndex)
 	}
 	m.mergeNextStats(stats)
@@ -811,15 +806,15 @@ func (m *matchSequenceInstance) evalNext(ctx context.Context, layerIndex uint32)
 // matcher based on the known results from the next matcher and removes it
 // from the internal requested set and returns true if possible.
 func (m *matchSequenceInstance) dropBase(mapIndex uint32) bool {
-	if _, ok := m.baseRequested[mapIndex]; !ok {
+	if !m.baseRequested.Has(mapIndex) {
 		return false
 	}
-	if _, ok := m.needMatched[mapIndex]; ok {
+	if m.needMatched.Has(mapIndex) {
 		if next := m.nextResults[mapIndex]; next == nil || len(next) > 0 {
 			return false
 		}
 	}
-	delete(m.baseRequested, mapIndex)
+	m.baseRequested.Clear(mapIndex)
 	return true
 }
 
@@ -827,15 +822,15 @@ func (m *matchSequenceInstance) dropBase(mapIndex uint32) bool {
 // matcher based on the known results from the base matcher and removes it
 // from the internal requested set and returns true if possible.
 func (m *matchSequenceInstance) dropNext(mapIndex uint32) bool {
-	if _, ok := m.nextRequested[mapIndex]; !ok {
+	if !m.nextRequested.Has(mapIndex) {
 		return false
 	}
-	if _, ok := m.needMatched[mapIndex]; ok {
+	if m.needMatched.Has(mapIndex) {
 		if base := m.baseResults[mapIndex]; base == nil || len(base) > 0 {
 			return false
 		}
 	}
-	delete(m.nextRequested, mapIndex)
+	m.nextRequested.Clear(mapIndex)
 	return true
 }
 
