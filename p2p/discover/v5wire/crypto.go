@@ -127,8 +127,12 @@ func deriveKeys(hash hashFn, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey, n1, n
 	}
 	kdf := hkdf.New(hash, eph, challenge, info)
 	sec := session{writeKey: make([]byte, aesKeySize), readKey: make([]byte, aesKeySize)}
-	kdf.Read(sec.writeKey)
-	kdf.Read(sec.readKey)
+	if _, err := kdf.Read(sec.writeKey); err != nil {
+		return nil
+	}
+	if _, err := kdf.Read(sec.readKey); err != nil {
+		return nil
+	}
 	clear(eph)
 	return &sec
 }
