@@ -103,7 +103,7 @@ func (a *TraceCallArgs) UnmarshalJSON(input []byte) error {
 		if err := json.Unmarshal(raw, &encoded); err != nil {
 			return err
 		}
-		// The profile uses a hex byte, allowing both 0x2 and 0x02.
+		// The type is a hex byte, allowing both 0x2 and 0x02.
 		if len(encoded) == 3 && encoded[:2] == "0x" {
 			encoded = "0x0" + encoded[2:]
 		}
@@ -117,7 +117,7 @@ func (a *TraceCallArgs) UnmarshalJSON(input []byte) error {
 		}
 		a.Type = &kind
 	}
-	// Filter before decoding so fields outside the profile cannot accidentally
+	// Filter before decoding so fields outside the call object cannot accidentally
 	// acquire meaning from TransactionArgs (for example, blob sidecars).
 	filtered, err := json.Marshal(fields)
 	if err != nil {

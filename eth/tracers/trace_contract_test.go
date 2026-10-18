@@ -239,7 +239,7 @@ func TestTraceNamespaceCallRejectionFallback(t *testing.T) {
 func TestTraceNamespaceInactiveCallTypes(t *testing.T) {
 	// An explicit type adds no requirement of its own, so a type alone runs before
 	// its fork, while a supplied feature does not: types 1 and 2 activate at blocks
-	// 1 and 2, and this chain never reaches Cancun or Prague (H14).
+	// 1 and 2, and this chain never reaches Cancun or Prague.
 	config := *params.AllEthashProtocolChanges
 	config.BerlinBlock, config.LondonBlock = big.NewInt(1), big.NewInt(2)
 	config.ArrowGlacierBlock, config.GrayGlacierBlock = nil, nil
@@ -628,7 +628,7 @@ func TestTraceNamespaceAuthorizationCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := traceContractClient(t, api)
-	// Untyped, typed, and priced with a legacy gasPrice, which serves as both fee caps (H14), in
+	// Untyped, typed, and priced with a legacy gasPrice, which serves as both fee caps, in
 	// trace_call and trace_callMany.
 	for _, extra := range []map[string]any{{}, {"type": "0x04"}, {"type": "0x02"}, {"gasPrice": "0x0"}, {"gasPrice": "0x77359400"}, {"type": "0x04", "gasPrice": "0x77359400"}} {
 		args := map[string]any{"from": traceTestSender, "to": authority, "authorizationList": []types.SetCodeAuthorization{auth}}
@@ -671,7 +671,7 @@ func TestTraceNamespaceConflictingCallFields(t *testing.T) {
 
 func TestTraceNamespaceTypeDoesNotChangeExecution(t *testing.T) {
 	// The target returns GASPRICE. An explicit type neither drops a supplied field nor rejects a combination
-	// of type and fields, and a legacy gasPrice also prices a blob call as both fee caps (H14).
+	// of type and fields, and a legacy gasPrice also prices a blob call as both fee caps.
 	api, _ := traceTestAPI(t, common.FromHex("3a60005260206000f3"), nil)
 	client := traceContractClient(t, api)
 	legacy, dynamic := big.NewInt(3_000_000_000), big.NewInt(2_000_000_000)

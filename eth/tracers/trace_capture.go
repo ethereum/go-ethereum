@@ -220,7 +220,7 @@ func (c *traceCapture) exit(depth int, output []byte, gasUsed uint64, err error,
 	c.reserve(len(output))
 }
 
-// traceErrorLabel maps an EVM failure to the profile's failure label. Unknown
+// traceErrorLabel maps an EVM failure to its Parity failure label. Unknown
 // errors keep their text, which consumers treat as a generic failure.
 func traceErrorLabel(err error, precompile bool) string {
 	var (

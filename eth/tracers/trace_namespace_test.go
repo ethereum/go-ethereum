@@ -563,7 +563,7 @@ func TestTraceNamespaceExplicitCallType(t *testing.T) {
 			t.Fatalf("accepted %s", input)
 		}
 	}
-	// A type that does not match the fields beside it never changes execution (H14).
+	// A type that does not match the fields beside it never changes execution.
 	for _, input := range []string{`{"type":"0x0","accessList":[]}`, `{"type":"0x1","maxFeePerGas":"0x0"}`, `{"type":"0x2","gasPrice":"0x0"}`} {
 		var args TraceCallArgs
 		if err := json.Unmarshal([]byte(input), &args); err != nil {

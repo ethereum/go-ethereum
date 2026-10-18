@@ -453,7 +453,7 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 		return nil, traceInvalid("authorizationList conflicts with blob fields")
 	}
 	// A legacy gasPrice serves as both fee caps, also for an authorization or blob call, but not beside
-	// dynamic fee fields. An explicit type never changes execution: the fields present decide (H14).
+	// dynamic fee fields. An explicit type never changes execution: the fields present decide.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return nil, traceInvalid("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
@@ -498,7 +498,7 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	// As in eth_call, CallDefaults runs omitted or over-cap gas at the RPC gas cap.
 	vmctx := env.vmctx
 	// Before London only gasPrice priced a transaction, so dynamic fee fields are rejected there, even
-	// with zero values, rather than dropped: CallDefaults prices such a call at gasPrice 0 (H14). The
+	// with zero values, rather than dropped: CallDefaults prices such a call at gasPrice 0. The
 	// fields are noted first, and the rejection follows CallDefaults, whose invalid-parameter checks
 	// take precedence over this block-dependent one.
 	dynamicFees := args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil
@@ -507,7 +507,7 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	gasCap, chainID := api.api.backend.RPCGasCap(), api.api.backend.ChainConfig().ChainID
 	if err := args.CallDefaults(gasCap, vmctx.BaseFee, chainID); err != nil {
 		// CallDefaults also rejects dynamic fee fields without a base fee. When nothing else is
-		// wrong with the call, that is this fork rule, reported as such.
+		// wrong with the call, that is the pre-London rule, reported as such.
 		if dynamicFees && beforeLondon {
 			rest := args
 			rest.MaxFeePerGas, rest.MaxPriorityFeePerGas = nil, nil
@@ -520,7 +520,7 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	if dynamicFees && beforeLondon {
 		return nil, dynamicFeesBeforeLondon
 	}
-	// An explicit type adds no requirement of its own (H14): a supplied feature
+	// An explicit type adds no requirement of its own: a supplied feature
 	// that is not active at the selected fork is rejected by message validation.
 	// As in eth_call, execution may spend more than params.MaxTxGas after Amsterdam.
 	msg := args.ToMessage(vmctx.BaseFee, true).SkipExecutionGasCapCheck()
