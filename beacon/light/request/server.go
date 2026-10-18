@@ -219,11 +219,12 @@ func (s *serverWithTimeout) startTimeout(reqData RequestResponse) {
 				childEventCb(Event{Type: EvFail, Data: reqData})
 			}
 		})
-		childEventCb := s.childEventCb
-		s.lock.Unlock()
-		if childEventCb != nil {
-			childEventCb(Event{Type: EvTimeout, Data: reqData})
+		// Emit EvTimeout under the lock so that it can't be overtaken by the
+		// final EvResponse/EvFail of the same request.
+		if s.childEventCb != nil {
+			s.childEventCb(Event{Type: EvTimeout, Data: reqData})
 		}
+		s.lock.Unlock()
 	})
 }
 
@@ -305,12 +306,12 @@ func (s *serverWithLimits) eventCallback(event Event) {
 			s.parallelLimit += parallelAdjustUp
 		}
 		s.pendingCount--
+		if event.Type == EvFail {
+			s.failLocked("failed request") // before checking: it delays new requests
+		}
 		if s.canRequest() {
 			sendCanRequestAgain = s.sendEvent
 			s.sendEvent = false
-		}
-		if event.Type == EvFail {
-			s.failLocked("failed request")
 		}
 	default:
 		// server event; check rate limit
@@ -385,6 +386,8 @@ func (s *serverWithLimits) canRequestNow() bool {
 	if canRequest {
 		sendCanRequestAgain = s.sendEvent
 		s.sendEvent = false
+	} else {
+		s.sendEvent = true // send EvCanRequestAgain once requests are possible again
 	}
 	childEventCb := s.childEventCb
 	s.lock.Unlock()

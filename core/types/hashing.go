@@ -138,3 +138,65 @@ func DeriveSha(list DerivableList, hasher ListHasher) common.Hash {
 	}
 	return hasher.Hash()
 }
+
+// ListHashStream computes the hash DeriveSha computes, for a list that is
+// filled in one element at a time. The block processor uses it to hash the
+// receipts of a block while the remaining transactions are still executing.
+type ListHashStream struct {
+	hasher   ListHasher
+	valueBuf *bytes.Buffer
+	indexBuf []byte
+	first    []byte // encoding of the element at index zero, inserted last
+	count    int
+}
+
+// NewListHashStream creates a stream feeding the given hasher.
+func NewListHashStream(hasher ListHasher) *ListHashStream {
+	hasher.Reset()
+	return &ListHashStream{
+		hasher:   hasher,
+		valueBuf: new(bytes.Buffer),
+	}
+}
+
+// Update inserts the next element of the list into the hasher. The list only
+// has to hold the element the stream is up to.
+func (s *ListHashStream) Update(list DerivableList) {
+	i := s.count
+	s.count++
+
+	// StackTrie wants the keys in increasing hash order, which puts the element
+	// at index zero after the one at index 0x7f. Keep its encoding aside until
+	// the list gets there, the same insertion sequence DeriveSha uses.
+	if i == 0 {
+		s.first = append(s.first[:0], encodeForDerive(list, 0, s.valueBuf)...)
+		return
+	}
+	s.insert(list, i)
+	if i == 0x7f {
+		s.insertFirst()
+	}
+}
+
+// Hash inserts whatever the stream kept aside and returns the hash of
+// everything it was given.
+func (s *ListHashStream) Hash() common.Hash {
+	if s.count > 0 && s.count <= 0x7f {
+		s.insertFirst()
+	}
+	return s.hasher.Hash()
+}
+
+// insert encodes the element at index i and updates the hasher with it. The
+// hasher error is dropped for the same reason DeriveSha drops it, a failing
+// hasher produces a wrong hash anyway.
+func (s *ListHashStream) insert(list DerivableList, i int) {
+	s.indexBuf = rlp.AppendUint64(s.indexBuf[:0], uint64(i))
+	s.hasher.Update(s.indexBuf, encodeForDerive(list, i, s.valueBuf))
+}
+
+// insertFirst inserts the element kept aside at index zero.
+func (s *ListHashStream) insertFirst() {
+	s.indexBuf = rlp.AppendUint64(s.indexBuf[:0], 0)
+	s.hasher.Update(s.indexBuf, s.first)
+}

@@ -208,7 +208,13 @@ func (j *journal) OnNonceChangeV2(addr common.Address, prev, new uint64, reason 
 		// To achieve this, advance the current frame's revision point past this
 		// entry. The CREATE frame's revert won't touch it (it's below the revision),
 		// but a parent frame's revert will (it's above the parent's revision).
-		j.revisions[len(j.revisions)-1] = len(j.entries)
+		//
+		// A contract creation transaction that cannot pay the account creation
+		// state gas (EIP-8037) increments the nonce before any frame is entered;
+		// there is no revision to advance and nothing above it can revert.
+		if len(j.revisions) > 0 {
+			j.revisions[len(j.revisions)-1] = len(j.entries)
+		}
 	}
 	if j.hooks.OnNonceChangeV2 != nil {
 		j.hooks.OnNonceChangeV2(addr, prev, new, reason)

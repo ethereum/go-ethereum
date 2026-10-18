@@ -273,10 +273,24 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			// Pebble doesn't use the Bloom filter at level6 for read efficiency.
 			{},
 		},
-		// Per-level target file sizes (replaces LevelOptions.TargetFileSize in v2).
+		// Per-level target file sizes, indexed relative to the base level:
+		// [0] is L0, [1] the base level, [2] the level below it, and so on.
+		//
+		// The L0 target is larger than the ladder below it on purpose. A flush
+		// is cut into files of this size, and every file costs an fsync of
+		// 20-30ms on NVMe regardless of its size, so a memtable flush of a few
+		// hundred MB into 2MB files was hundreds of fsyncs and took ~10s. A
+		// flush cannot run faster than file size / fsync latency, about 80MB/s
+		// at 2MB, and once a sustained write burst exceeds that the queue of
+		// memtables awaiting flush fills and pebble stops writes at the
+		// memtable limit while the disk sits half idle. At 16MB the same flush
+		// is a few dozen files and ~2.5s, and the stall moves to the L0 limit,
+		// which is the disk's compaction bandwidth itself.
+		//
+		// FlushSplitBytes is left at pebble's default of twice this value.
 		TargetFileSizes: [7]int64{
-			2 * 1024 * 1024,
-			4 * 1024 * 1024,
+			16 * 1024 * 1024, // L0
+			4 * 1024 * 1024,  // base level
 			8 * 1024 * 1024,
 			16 * 1024 * 1024,
 			32 * 1024 * 1024,

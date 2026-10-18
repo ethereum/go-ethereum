@@ -158,7 +158,8 @@ func TestAuthEndpoints(t *testing.T) {
 
 	notTooLong := time.Second * 57
 	tooLong := time.Second * 60
-	requestDelay := time.Second
+	// The iat claim is truncated to whole seconds, which can eat up to a second of this.
+	requestDelay := 2 * time.Second
 
 	testCases := []authTest{
 		// Auth works

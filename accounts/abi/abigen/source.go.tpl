@@ -80,12 +80,24 @@ var (
 		  if parsed == nil {
 			return common.Address{}, nil, nil, errors.New("GetABI returned nil")
 		  }
+		  {{if .Libraries}}
+			// Copy the opts so the nonce can be advanced without touching the caller's.
+			{
+			    opts := *auth
+			    auth = &opts
+			}
+		  {{end}}
 		  {{range $pattern, $name := .Libraries}}
-			{{decapitalise $name}}Addr, tx, _, _ := Deploy{{capitalise $name}}(auth, backend)
+			{{decapitalise $name}}Addr, tx, _, err := Deploy{{capitalise $name}}(auth, backend)
+			if err != nil {
+			    return common.Address{}, nil, nil, err
+			}
 			ctx, _ := context.WithTimeout(context.Background(), 5 * time.Second)
 			if err := bind.WaitAccepted(ctx, backend, tx); err != nil {
 			    return common.Address{}, nil, nil, err
 			}
+			// The pool's pending nonce may not include the library tx yet.
+			auth.Nonce = new(big.Int).SetUint64(tx.Nonce() + 1)
 			{{$contract.Type}}Bin = strings.ReplaceAll({{$contract.Type}}Bin, "__${{$pattern}}$__", {{decapitalise $name}}Addr.String()[2:])
 		  {{end}}
 		  address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex({{.Type}}Bin), backend {{range .Constructor.Inputs}}, {{.Name}}{{end}})

@@ -603,6 +603,51 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		}
 		checkKeys(50, 57, false)
 		checkKeys(58, 60, true)
+
+		// Test 8: deleting the empty key is a single-key delete, not a range
+		// delete of the whole keyspace.
+		if err := db.Put([]byte{}, []byte("empty")); err != nil {
+			t.Fatal(err)
+		}
+		batch = db.NewBatch()
+		if err := batch.Delete([]byte{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+		has, err = db.Has([]byte{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("empty key should be deleted")
+		}
+		checkKeys(58, 60, true)
+
+		// Same through Replay.
+		if err := db.Put([]byte{}, []byte("empty")); err != nil {
+			t.Fatal(err)
+		}
+		batch = db.NewBatch()
+		if err := batch.Delete([]byte{}); err != nil {
+			t.Fatal(err)
+		}
+		replayed := db.NewBatch()
+		if err := batch.Replay(replayed); err != nil {
+			t.Fatal(err)
+		}
+		if err := replayed.Write(); err != nil {
+			t.Fatal(err)
+		}
+		has, err = db.Has([]byte{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("empty key should be deleted via replay")
+		}
+		checkKeys(58, 60, true)
 	})
 
 	t.Run("BatchReplayWithDeleteRange", func(t *testing.T) {

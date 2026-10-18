@@ -39,6 +39,12 @@ func (q *bodyQueue) pending() int {
 	return q.queue.PendingBodies()
 }
 
+// next returns the number of the block at the head of the body retrieval
+// queue, false if none is pending.
+func (q *bodyQueue) next() (uint64, bool) {
+	return q.queue.NextBody()
+}
+
 // capacity is responsible for calculating how many bodies a particular peer is
 // estimated to be able to retrieve within the allotted round trip time.
 func (q *bodyQueue) capacity(peer *peerConnection, rtt time.Duration) int {

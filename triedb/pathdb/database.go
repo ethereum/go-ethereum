@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -135,6 +136,7 @@ type Database struct {
 
 	trienodeFreezer ethdb.ResettableAncientStore // Freezer for storing trienode histories, nil possible in tests
 	trienodeIndexer *historyIndexer              // History indexer for historical trienode data
+	writer          *asyncWriter                 // Background writer off the commit path
 
 	lock sync.RWMutex // Lock to prevent mutations from happening at the same time
 }
@@ -154,6 +156,7 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
+		writer:   newAsyncWriter(),
 	}
 	// Establish a dedicated database namespace tailored for verkle-specific
 	// data, ensuring the isolation of both verkle and merkle tree data. It's
@@ -199,9 +202,22 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 	return db
 }
 
+// waitWrites blocks until the writes scheduled so far are done.
+func (db *Database) waitWrites() error {
+	return db.writer.wait()
+}
+
+// persistHistory blocks until the writes scheduled so far are done and syncs
+// the history freezers, making the histories durable.
+func (db *Database) persistHistory() error {
+	if err := db.waitWrites(); err != nil {
+		return err
+	}
+	return syncHistory(db.stateFreezer, db.trienodeFreezer)
+}
+
 // setHistoryIndexer initializes the indexers for both state history and
-// trienode history if available. Note that this function may be called while
-// existing indexers are still running, so they must be closed beforehand.
+// trienode history if available.
 func (db *Database) setHistoryIndexer() {
 	// TODO (rjl493456442) disable the background indexing in read-only mode
 	if !db.config.EnableStateIndexing {
@@ -357,7 +373,12 @@ func (db *Database) Disable() error {
 	if err := disk.terminate(); err != nil {
 		return err
 	}
+	disk.resetCache() // a stale layer can no longer release its caches
 	disk.markStale()
+
+	if err := db.waitWrites(); err != nil {
+		return err
+	}
 
 	// Write the initial sync flag to persist it across restarts.
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
@@ -376,8 +397,30 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}
-	// Drop the stale state journal marker and reset the persistent state id
-	// back to zero.
+	// Stop the history indexers before the histories are purged: they work in
+	// the background, and one still indexing the old histories would write
+	// their index back after the purge.
+	if db.stateIndexer != nil {
+		db.stateIndexer.close()
+	}
+	if db.trienodeIndexer != nil {
+		db.trienodeIndexer.close()
+	}
+	// Drop the layer journal of the old state if exists.
+	if path := db.journalPath(); path != "" {
+		err := os.Remove(path)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove stale journal %s: %v", path, err)
+		}
+		if err := syncDir(db.config.JournalDirectory); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to sync the journal directory: %v", err)
+		}
+		if err == nil {
+			log.Debug("Removed stale journal", "path", path)
+		}
+	}
+	// Drop the stale state journal marker and the journal in the key-value
+	// store, and reset the persistent state id back to zero.
 	batch := db.diskdb.NewBatch()
 	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)
@@ -387,6 +430,9 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	// Clean up all state histories in the freezer. Theoretically all root->id
 	// mappings should be removed as well; since those can be huge, leave them
 	// on disk and let them be overwritten.
+	if err := db.waitWrites(); err != nil {
+		return err
+	}
 	purgeHistory(db.stateFreezer, db.diskdb, typeStateHistory)
 	purgeHistory(db.trienodeFreezer, db.diskdb, typeTrienodeHistory)
 
@@ -413,9 +459,8 @@ func (db *Database) Enable(root common.Hash) error {
 	db.tree.init(generateSnapshot(db, root, db.isUBT || db.config.SnapshotNoBuild))
 
 	// After snap sync, the state of the database may have changed completely.
-	// To ensure the history indexer always matches the current state, we must:
-	//   1. Close any existing indexer
-	//   2. Re-initialize the indexer so it starts indexing from the new state root.
+	// The indexers of the old state were stopped before the purge: start new
+	// ones, indexing from the new state root.
 	db.setHistoryIndexer()
 
 	log.Info("Rebuilt trie database", "root", root)
@@ -475,6 +520,9 @@ func (db *Database) Recover(root common.Hash) error {
 	if db.stateFreezer == nil {
 		return errors.New("state rollback is non-supported")
 	}
+	if err := db.waitWrites(); err != nil {
+		return err
+	}
 	// Short circuit if the target state is not recoverable
 	if !db.Recoverable(root) {
 		return errStateUnrecoverable
@@ -528,7 +576,11 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if db.waitSync {
 		return false
 	}
-	// Ensure the requested state is a known state.
+	// Ensure the requested state is a known state. The lookup and the history
+	// are written in background, wait for the scheduled writes first.
+	if err := db.waitWrites(); err != nil {
+		return false
+	}
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
 		return false
@@ -576,6 +628,10 @@ func (db *Database) Close() error {
 	}
 	dl.resetCache() // release the memory held by clean cache
 
+	// Terminate the background writer after the scheduled writes
+	if err := db.writer.close(); err != nil {
+		return err
+	}
 	// Terminate the background state history indexer
 	if db.stateIndexer != nil {
 		db.stateIndexer.close()

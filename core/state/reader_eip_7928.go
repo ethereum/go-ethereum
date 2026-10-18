@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // The EIP27928 reader utilizes a hierarchical architecture to optimize state
@@ -241,7 +240,7 @@ func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (*types.St
 	if err != nil {
 		return nil, err
 	}
-	balance, nonce, code, hasBalance, hasNonce, hasCode := r.lookup.AccountChanges(addr, r.txIndex)
+	balance, nonce, codeHash, hasBalance, hasNonce, hasCode := r.lookup.AccountChanges(addr, r.txIndex)
 
 	// No mutation precedes the current call frame, return the base account as is.
 	if !hasBalance && !hasNonce && !hasCode {
@@ -261,11 +260,7 @@ func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (*types.St
 		account.Nonce = nonce
 	}
 	if hasCode {
-		if len(code) == 0 {
-			account.CodeHash = types.EmptyCodeHash.Bytes()
-		} else {
-			account.CodeHash = crypto.Keccak256(code)
-		}
+		account.CodeHash = codeHash.Bytes()
 	}
 	return account, nil
 }

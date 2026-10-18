@@ -18,8 +18,10 @@ package bal
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 )
 
@@ -28,10 +30,19 @@ import (
 // ascending (and unique) by block-access index, so they can be binary-searched
 // directly without copying.
 type accountLookup struct {
-	balances []encodingBalanceChange
-	nonces   []encodingAccountNonce
-	codes    []encodingCodeChange
-	storage  map[common.Hash][]encodingStorageWrite
+	balances   []encodingBalanceChange
+	nonces     []encodingAccountNonce
+	codes      []encodingCodeChange
+	codeHashes []codeHash // lazily computed hashes, parallel to codes
+	storage    map[common.Hash][]encodingStorageWrite
+}
+
+// codeHash memoizes the hash of a code change. The lookup is shared by every
+// transaction of the block, so the hash is computed at most once per change
+// rather than once per transaction loading the account.
+type codeHash struct {
+	once sync.Once
+	hash common.Hash
 }
 
 // Lookup is a read-optimized, index-addressable view over a block access list.
@@ -48,10 +59,11 @@ func (e *BlockAccessList) Lookup() *Lookup {
 	for i := range *e {
 		acc := &(*e)[i]
 		al := &accountLookup{
-			balances: acc.BalanceChanges,
-			nonces:   acc.NonceChanges,
-			codes:    acc.CodeChanges,
-			storage:  make(map[common.Hash][]encodingStorageWrite, len(acc.StorageChanges)),
+			balances:   acc.BalanceChanges,
+			nonces:     acc.NonceChanges,
+			codes:      acc.CodeChanges,
+			codeHashes: make([]codeHash, len(acc.CodeChanges)),
+			storage:    make(map[common.Hash][]encodingStorageWrite, len(acc.StorageChanges)),
 		}
 		for j := range acc.StorageChanges {
 			sc := &acc.StorageChanges[j]
@@ -62,38 +74,36 @@ func (e *BlockAccessList) Lookup() *Lookup {
 	return l
 }
 
-// searchLatest returns the entry with the highest block-access index strictly
-// below limit, relying on entries being sorted ascending by that index.
-func searchLatest[E any](entries []E, limit uint32, index func(E) uint32) (E, bool) {
-	i := sort.Search(len(entries), func(i int) bool {
+// searchLatest returns the position of the entry with the highest block-access
+// index strictly below limit, relying on entries being sorted ascending by that
+// index. It returns -1 if there is no such entry.
+func searchLatest[E any](entries []E, limit uint32, index func(E) uint32) int {
+	// The entry before the first one satisfying (index >= limit)
+	return sort.Search(len(entries), func(i int) bool {
 		return index(entries[i]) >= limit
-	})
-	// All entries satisfy the condition (index >= limit)
-	if i == 0 {
-		var zero E
-		return zero, false
-	}
-	return entries[i-1], true
+	}) - 1
 }
 
 // AccountChanges returns the account field values observed at block-access index
 // limit (i.e. the latest mutation recorded strictly before limit). Each boolean
 // reports whether the corresponding field was mutated before limit.
-func (l *Lookup) AccountChanges(addr common.Address, limit uint32) (balance *uint256.Int, nonce uint64, code []byte, hasBalance, hasNonce, hasCode bool) {
+func (l *Lookup) AccountChanges(addr common.Address, limit uint32) (balance *uint256.Int, nonce uint64, codeHash common.Hash, hasBalance, hasNonce, hasCode bool) {
 	acc, ok := l.accounts[addr]
 	if !ok {
-		return nil, 0, nil, false, false, false
+		return nil, 0, common.Hash{}, false, false, false
 	}
-	if e, ok := searchLatest(acc.balances, limit, func(e encodingBalanceChange) uint32 { return e.BlockAccessIndex }); ok {
-		balance, hasBalance = e.PostBalance, true
+	if i := searchLatest(acc.balances, limit, func(e encodingBalanceChange) uint32 { return e.BlockAccessIndex }); i >= 0 {
+		balance, hasBalance = acc.balances[i].PostBalance, true
 	}
-	if e, ok := searchLatest(acc.nonces, limit, func(e encodingAccountNonce) uint32 { return e.BlockAccessIndex }); ok {
-		nonce, hasNonce = e.PostNonce, true
+	if i := searchLatest(acc.nonces, limit, func(e encodingAccountNonce) uint32 { return e.BlockAccessIndex }); i >= 0 {
+		nonce, hasNonce = acc.nonces[i].PostNonce, true
 	}
-	if e, ok := searchLatest(acc.codes, limit, func(e encodingCodeChange) uint32 { return e.BlockAccessIndex }); ok {
-		code, hasCode = e.NewCode, true
+	if i := searchLatest(acc.codes, limit, func(e encodingCodeChange) uint32 { return e.BlockAccessIndex }); i >= 0 {
+		h := &acc.codeHashes[i]
+		h.once.Do(func() { h.hash = crypto.Keccak256Hash(acc.codes[i].NewCode) })
+		codeHash, hasCode = h.hash, true
 	}
-	return balance, nonce, code, hasBalance, hasNonce, hasCode
+	return balance, nonce, codeHash, hasBalance, hasNonce, hasCode
 }
 
 // Code returns the contract code observed at block-access index limit, and
@@ -103,8 +113,8 @@ func (l *Lookup) Code(addr common.Address, limit uint32) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	if e, ok := searchLatest(acc.codes, limit, func(e encodingCodeChange) uint32 { return e.BlockAccessIndex }); ok {
-		return e.NewCode, true
+	if i := searchLatest(acc.codes, limit, func(e encodingCodeChange) uint32 { return e.BlockAccessIndex }); i >= 0 {
+		return acc.codes[i].NewCode, true
 	}
 	return nil, false
 }
@@ -120,8 +130,8 @@ func (l *Lookup) Storage(addr common.Address, slot common.Hash, limit uint32) (c
 	if !ok {
 		return common.Hash{}, false
 	}
-	if e, ok := searchLatest(writes, limit, func(e encodingStorageWrite) uint32 { return e.BlockAccessIndex }); ok {
-		return e.PostValue.Bytes32(), true
+	if i := searchLatest(writes, limit, func(e encodingStorageWrite) uint32 { return e.BlockAccessIndex }); i >= 0 {
+		return writes[i].PostValue.Bytes32(), true
 	}
 	return common.Hash{}, false
 }

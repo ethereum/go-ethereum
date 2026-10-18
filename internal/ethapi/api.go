@@ -792,10 +792,12 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 
 func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts) (*core.ExecutionResult, error) {
 	// Get a new instance of the EVM.
-	if err := args.CallDefaults(gp.Gas(), blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
+	available := gp.Available(b.ChainConfig().IsAmsterdam(header.Number, header.Time))
+	if err := args.CallDefaults(available, blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	msg := args.ToMessage(header.BaseFee, true)
+	msg := args.ToMessage(header.BaseFee, true).SkipExecutionGasCapCheck()
+
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
 	if msg.GasPrice.Sign() == 0 {
@@ -1357,9 +1359,11 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 	}
 
-	// Ensure any missing fields are filled, extract the recipient and input data
-	if err = args.setFeeDefaults(ctx, b, header); err != nil {
-		return nil, 0, nil, err
+	// Leave fees at zero when all fee fields are omitted so simulation does not require funds for gas.
+	if args.GasPrice != nil || args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.BlobFeeCap != nil {
+		if err = args.setFeeDefaults(ctx, b, header); err != nil {
+			return nil, 0, nil, err
+		}
 	}
 	if args.Nonce == nil {
 		nonce := hexutil.Uint64(db.GetNonce(args.from()))

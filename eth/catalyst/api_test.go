@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -312,7 +313,7 @@ func TestEth2NewBlock(t *testing.T) {
 	ethservice.BlockChain().SubscribeRemovedLogsEvent(rmLogsCh)
 
 	for i := 0; i < 10; i++ {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Header())
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root(), parent.Number(), parent.Time())
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().Add([]*types.Transaction{tx}, true)
@@ -531,6 +532,36 @@ func TestForkchoiceUpdatedReorgDepthLimit(t *testing.T) {
 	})
 }
 
+// TestForkchoiceUpdatedCanonicalAboveHead tests that forkchoiceUpdated moves the
+// head forward onto a block that the canonical index already holds above the
+// current head, the state an unclean shutdown leaves behind when the unpersisted
+// state is dropped. Such a move is not a reorg and must not trip the depth limit.
+func TestForkchoiceUpdatedCanonicalAboveHead(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthService(t, genesis, blocks, func(cfg *ethconfig.Config) {
+		cfg.EngineMaxReorgDepth = 5
+	})
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+	// Rewind the head, then restore the canonical index above it.
+	rewind := engine.ForkchoiceStateV1{HeadBlockHash: blocks[6].Hash()}
+	if _, err := api.ForkchoiceUpdatedV1(context.Background(), rewind, nil); err != nil {
+		t.Fatalf("rewind failed: %v", err)
+	}
+	for _, block := range blocks[7:] {
+		rawdb.WriteCanonicalHash(ethservice.ChainDb(), block.Hash(), block.NumberU64())
+	}
+	update := engine.ForkchoiceStateV1{HeadBlockHash: blocks[9].Hash()}
+	if _, err := api.ForkchoiceUpdatedV1(context.Background(), update, nil); err != nil {
+		t.Fatalf("forward update onto the canonical index failed: %v", err)
+	}
+	if head := ethservice.BlockChain().CurrentBlock().Number.Uint64(); head != blocks[9].NumberU64() {
+		t.Fatalf("chain head not advanced: have %d, want %d", head, blocks[9].NumberU64())
+	}
+}
+
 // TestForkchoiceUpdatedAtomicity checks that a forkchoiceUpdated call rejected
 // with -38002 leaves the forkchoice state untouched. The Engine API spec
 // requires all updates resulting from the call to be applied atomically, so a
@@ -636,7 +667,7 @@ func TestFullAPI(t *testing.T) {
 	)
 
 	callback := func(parent *types.Header) {
-		statedb, _ := ethservice.BlockChain().StateAt(parent)
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root, parent.Number, parent.Time)
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().Add([]*types.Transaction{tx}, false)
@@ -762,7 +793,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
 	for i := 0; i < 10; i++ {
-		statedb, _ := ethservice.BlockChain().StateAt(parent)
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root, parent.Number, parent.Time)
 		tx := types.MustSignNewTx(testKey, signer, &types.LegacyTx{
 			Nonce:    statedb.GetNonce(testAddr),
 			Value:    new(big.Int),
@@ -1421,7 +1452,7 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	// Each block, this callback will include two txs that generate body values like logs and requests.
 	callback := func(parent *types.Header) {
 		var (
-			statedb, _ = ethservice.BlockChain().StateAt(parent)
+			statedb, _ = ethservice.BlockChain().StateAt(parent.Root, parent.Number, parent.Time)
 			// Create tx to trigger log generator.
 			tx1, _ = types.SignTx(types.NewContractCreation(statedb.GetNonce(testAddr), new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 			// Create tx to trigger deposit generator.

@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -60,7 +59,8 @@ type ProcessResult struct {
 	Logs     []*types.Log
 	GasUsed  uint64
 
-	// BAL is only meaningful for post-Amsterdam blocks. Please ensure
-	// fork validation is performed before accessing it.
-	Bal *bal.ConstructionBlockAccessList
+	// pipeline digests the receipts and the access list alongside execution
+	// and validation. It is nil for a result assembled elsewhere, and the
+	// validator computes the receipt digests itself in that case.
+	pipeline *digestPipeline
 }

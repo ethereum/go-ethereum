@@ -350,6 +350,7 @@ type deliveryMetrics struct {
 	knownMeter       *metrics.Meter
 	underpricedMeter *metrics.Meter
 	otherRejectMeter *metrics.Meter
+	noCapacityMeter  *metrics.Meter
 }
 
 // Enqueue imports a batch of received transaction into the transaction pool
@@ -364,6 +365,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 		knownMeter:       txReplyKnownMeter,
 		underpricedMeter: txReplyUnderpricedMeter,
 		otherRejectMeter: txReplyOtherRejectMeter,
+		noCapacityMeter:  txReplyNoCapacityMeter,
 	}
 	if !direct {
 		metrics = deliveryMetrics{
@@ -371,6 +373,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 			knownMeter:       txBroadcastKnownMeter,
 			underpricedMeter: txBroadcastUnderpricedMeter,
 			otherRejectMeter: txBroadcastOtherRejectMeter,
+			noCapacityMeter:  txBroadcastNoCapacityMeter,
 		}
 	}
 	// Keep track of all the propagated transactions
@@ -446,16 +449,21 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 				break
 			}
 		}
-		otherreject := f.handleAddErrors(hashes, errs, metrics)
+		otherreject, nocapacity := f.handleAddErrors(hashes, errs, metrics)
 
 		// Notify the tracker which txs from this peer were accepted.
 		if f.onAccepted != nil && len(accepted) > 0 {
 			f.onAccepted(peer, accepted)
 		}
-		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit
-		// to throttle the misbehaving peer.
-		if otherreject > int64((len(hashes)+3)/4) {
-			log.Debug("Peer delivering stale or invalid transactions", "rejected", otherreject)
+		// If more than 25% of the batch was refused, sleep a bit to throttle
+		// the peer. Capacity refusals count towards this (the backpressure is
+		// intended) but are reported separately.
+		if refused := otherreject + nocapacity; refused > int64((len(hashes)+3)/4) {
+			if nocapacity > otherreject {
+				log.Debug("Peer delivering transactions faster than there is room for", "refused", nocapacity)
+			} else {
+				log.Debug("Peer delivering stale or invalid transactions", "rejected", otherreject)
+			}
 			time.Sleep(200 * time.Millisecond)
 		}
 		// If we encountered a protocol violation, disconnect this peer.
@@ -471,7 +479,7 @@ func (f *TxFetcher) Enqueue(peer string, version uint, txs []*types.Transaction,
 	}
 }
 
-func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics deliveryMetrics) (otherreject int64) {
+func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics deliveryMetrics) (otherreject, nocapacity int64) {
 	var (
 		duplicate   int64
 		underpriced int64
@@ -491,6 +499,12 @@ func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics del
 			f.underpriced.Add(txs[i], f.realTime())
 			underpriced++
 
+		// Refused for lack of room, not for anything wrong with the tx. It is
+		// not added to the underpriced set, so it can be fetched again when
+		// announced again.
+		case errors.Is(err, txpool.ErrOutOfCapacity):
+			nocapacity++
+
 		default:
 			otherreject++
 		}
@@ -498,7 +512,8 @@ func (f *TxFetcher) handleAddErrors(txs []common.Hash, errs []error, metrics del
 	metrics.knownMeter.Mark(duplicate)
 	metrics.underpricedMeter.Mark(underpriced)
 	metrics.otherRejectMeter.Mark(otherreject)
-	return otherreject
+	metrics.noCapacityMeter.Mark(nocapacity)
+	return otherreject, nocapacity
 }
 
 // Drop should be called when a peer disconnects. It cleans up all the internal
@@ -552,6 +567,7 @@ func (f *TxFetcher) loop() {
 			knownMeter:       txReplyKnownMeter,
 			underpricedMeter: txReplyUnderpricedMeter,
 			otherRejectMeter: txReplyOtherRejectMeter,
+			noCapacityMeter:  txReplyNoCapacityMeter,
 		})
 
 		select {

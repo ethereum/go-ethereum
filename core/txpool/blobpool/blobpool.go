@@ -691,10 +691,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
 	// fully synced).
-	state, err := p.chain.StateAt(head)
-	if err != nil {
-		state, err = p.chain.StateAt(p.chain.Genesis().Header())
-	}
+	state, err := txpool.HeadState(p.chain.Config(), p.chain.StateAt, head)
 	if err != nil {
 		return err
 	}
@@ -1262,7 +1259,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	// Handle reorg buffer timeouts evicting old gapped transactions
 	p.evictGapped()
 
-	statedb, err := p.chain.StateAt(newHead)
+	statedb, err := p.chain.StateAt(newHead.Root, newHead.Number, newHead.Time)
 	if err != nil {
 		log.Error("Failed to reset blobpool state", "err", err)
 		return
@@ -1302,6 +1299,10 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(p.chain.Config(), newHead))
 	}
 	p.evict.reinit(basefee, blobfee, false)
+	// The new head may have filled nonce gaps, promote what became executable
+	for from := range p.gapped {
+		p.promoteGapped(from)
+	}
 
 	// Announce transactions that became announcable due to fee changes
 	var announcable []*types.Transaction
@@ -2075,8 +2076,8 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	return errs
 }
 
-// add inserts a new blob transaction into the pool if it passes validation (both
-// consensus validity and pool restrictions).
+// AddPooledTx inserts a new blob transaction into the pool if it passes
+// validation (both consensus validity and pool restrictions).
 func (p *BlobPool) AddPooledTx(ptx *BlobTxForPool) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
 	// only even pulled from the network, so this method will act as the overload
@@ -2280,7 +2281,16 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 	}
 
 	//check the gapped queue for this account and try to promote
-	if gtxs, ok := p.gapped[from]; checkGapped && ok && len(gtxs) > 0 {
+	if checkGapped {
+		p.promoteGapped(from)
+	}
+	return nil
+}
+
+// promoteGapped moves gapped transactions of an account into the pool once their
+// nonce gap is filled. The caller must hold the pool lock.
+func (p *BlobPool) promoteGapped(from common.Address) {
+	if gtxs, ok := p.gapped[from]; ok && len(gtxs) > 0 {
 		// We have to add in nonce order, but we want to stable sort to cater for situations
 		// where transactions are replaced, keeping the original receive order for same nonce
 		sort.SliceStable(gtxs, func(i, j int) bool {
@@ -2328,7 +2338,6 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 		}
 		gappedGauge.Update(int64(len(p.gappedSource)))
 	}
-	return nil
 }
 
 // drop removes the worst transaction from the pool. It is primarily used when a

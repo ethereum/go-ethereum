@@ -137,3 +137,26 @@ func TestReceiptList(t *testing.T) {
 		}
 	}
 }
+
+// TestReceiptListInvalidTrailing checks that an undecodable receipt changes the
+// derived root, so it can't sneak into the database via EncodeForStorage.
+func TestReceiptListInvalidTrailing(t *testing.T) {
+	test := receiptsTests[len(receiptsTests)-1]
+	canonDB, _ := rlp.EncodeToBytes(test.input)
+	canonBody, _ := rlp.EncodeToBytes(types.Body{Transactions: test.txs})
+	network, _, err := blockReceiptsToNetwork(canonDB, canonBody, receiptQueryParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rl ReceiptList
+	if err := rlp.DecodeBytes(network, &rl); err != nil {
+		t.Fatal(err)
+	}
+	// Append a receipt with txType > 0x7f, which fails to decode.
+	bad, _ := rlp.EncodeToBytes([]any{uint64(128), uint64(1)})
+	rl.items.AppendRaw(bad)
+
+	if hash := types.DeriveSha(rl.Derivable(), trie.NewStackTrie(nil)); hash == test.root {
+		t.Fatal("invalid trailing receipt did not change the derived root")
+	}
+}

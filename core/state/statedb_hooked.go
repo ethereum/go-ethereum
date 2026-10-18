@@ -33,6 +33,9 @@ import (
 
 // hookedStateDB represents a statedb which emits calls to tracing-hooks
 // on state operations.
+//
+// Note, NewTracerView unwraps it to suspend access list recording for tracer
+// reads; any other wrapper of StateDB must be handled there as well.
 type hookedStateDB struct {
 	inner *StateDB
 	hooks *tracing.Hooks

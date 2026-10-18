@@ -394,12 +394,48 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 	if err != nil {
 		return fmt.Errorf("BlockBodies: %w", err)
 	}
+	for i := range items {
+		if err := checkBodyItemCounts(&items[i]); err != nil {
+			return fmt.Errorf("BlockBodies: body %d: %w", i, err)
+		}
+	}
 	metadata := func() any { return hashBodyParts(items) }
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
 		code: BlockBodiesMsg,
 		Res:  (*BlockBodiesResponse)(&items),
 	}, metadata)
+}
+
+const (
+	minTxEncodedSize         = 1 + 9      // Min size for RLP encoded transaction
+	minWithdrawalEncodedSize = 1 + 3 + 21 // Min size for RLP encoded withdrawal
+	minReceiptEncodedSize    = 1 + 4      // Min size for RLP encoded receipt
+)
+
+// checkBodyItemCounts rejects bodies containing more transactions or withdrawals
+// than can fit in their encoded size.
+func checkBodyItemCounts(body *BlockBody) error {
+	if n := body.Transactions.Len(); n*minTxEncodedSize > len(body.Transactions.Content()) {
+		return fmt.Errorf("%d transactions in %d bytes", n, len(body.Transactions.Content()))
+	}
+	if body.Withdrawals != nil {
+		if n := body.Withdrawals.Len(); n*minWithdrawalEncodedSize > len(body.Withdrawals.Content()) {
+			return fmt.Errorf("%d withdrawals in %d bytes", n, len(body.Withdrawals.Content()))
+		}
+	}
+	return nil
+}
+
+// checkReceiptItemCounts rejects receipt lists containing more receipts than
+// can fit in their encoded size.
+func checkReceiptItemCounts(lists []*ReceiptList) error {
+	for i, list := range lists {
+		if n := list.items.Len(); n*minReceiptEncodedSize > len(list.items.Content()) {
+			return fmt.Errorf("list %d: %d receipts in %d bytes", i, n, len(list.items.Content()))
+		}
+	}
+	return nil
 }
 
 // BlockBodyHashes contains the lists of block body part roots for a list of block bodies.
@@ -503,7 +539,9 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	if err != nil {
 		return fmt.Errorf("Receipts: %w", err)
 	}
-
+	if err := checkReceiptItemCounts(receiptLists); err != nil {
+		return fmt.Errorf("Receipts: %w", err)
+	}
 	return dispatchReceipts(res.RequestId, receiptLists, peer)
 }
 
@@ -519,6 +557,9 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	receiptLists, err := res.List.Items()
 	if err != nil {
+		return fmt.Errorf("Receipts: %w", err)
+	}
+	if err := checkReceiptItemCounts(receiptLists); err != nil {
 		return fmt.Errorf("Receipts: %w", err)
 	}
 
@@ -620,8 +661,8 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsReq
 		hashes []common.Hash
 		txs    []rlp.RawValue
 	)
-	for _, hash := range query {
-		if bytes >= softResponseLimit {
+	for i, hash := range query {
+		if bytes >= softResponseLimit || i >= maxPooledTxServe {
 			break
 		}
 		// Retrieve the requested transaction, skipping if unknown to us
@@ -705,8 +746,8 @@ func answerGetCells(backend Backend, query GetCellsRequest) ([]common.Hash, [][]
 		cells      [][]kzg4844.Cell
 	)
 	maxCells := softResponseLimit / 2048
-	for _, hash := range query.Hashes {
-		if cellCounts >= maxCells {
+	for i, hash := range query.Hashes {
+		if cellCounts >= maxCells || i >= maxCellsServe {
 			break
 		}
 		// Look up the blob versioned hashes for this transaction
@@ -730,13 +771,20 @@ func answerGetCells(backend Backend, query GetCellsRequest) ([]common.Hash, [][]
 					skip = true
 					break
 				}
-				flat = append(flat, *c)
 			}
 			if skip {
 				break
 			}
 		}
-		if skip || len(flat) == 0 {
+		if skip {
+			continue
+		}
+		for i := range blobCells[0] {
+			for _, bc := range blobCells {
+				flat = append(flat, *bc[i])
+			}
+		}
+		if len(flat) == 0 {
 			continue
 		}
 		hashes = append(hashes, hash)

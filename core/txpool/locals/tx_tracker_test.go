@@ -102,7 +102,7 @@ func (env *testEnv) setGasTip(gasTip uint64) {
 func (env *testEnv) makeTx(nonce uint64, gasPrice *big.Int) *types.Transaction {
 	if nonce == 0 {
 		head := env.chain.CurrentHeader()
-		state, _ := env.chain.StateAt(head)
+		state, _ := env.chain.StateAt(head.Root, head.Number, head.Time)
 		nonce = state.GetNonce(address)
 	}
 	if gasPrice == nil {
@@ -114,7 +114,7 @@ func (env *testEnv) makeTx(nonce uint64, gasPrice *big.Int) *types.Transaction {
 
 func (env *testEnv) makeTxs(n int) []*types.Transaction {
 	head := env.chain.CurrentHeader()
-	state, _ := env.chain.StateAt(head)
+	state, _ := env.chain.StateAt(head.Root, head.Number, head.Time)
 	nonce := state.GetNonce(address)
 
 	var txs []*types.Transaction

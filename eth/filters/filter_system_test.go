@@ -392,8 +392,12 @@ func TestLogFilterCreation(t *testing.T) {
 			{FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(2)}, true},
 			// "mined" block range to pending
 			{FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())}, true},
+			// earliest block range
+			{FilterCriteria{FromBlock: big.NewInt(rpc.EarliestBlockNumber.Int64()), ToBlock: big.NewInt(rpc.EarliestBlockNumber.Int64())}, true},
 			// from block "higher" than to block
 			{FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}, false},
+			// from block "higher" than earliest to block
+			{FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(rpc.EarliestBlockNumber.Int64())}, false},
 			// from block "higher" than to block
 			{FilterCriteria{FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(100)}, false},
 			// from block "higher" than to block
@@ -667,6 +671,8 @@ func TestLogFilter(t *testing.T) {
 			8: {FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(2), Topics: [][]common.Hash{{secondTopic}}}, allLogs[3:4], ""},
 			// match all logs due to wildcard topic
 			9: {FilterCriteria{Topics: [][]common.Hash{nil}}, allLogs[1:], ""},
+			// "mined" logs in the earliest..earliest range, same as 0x0..0x0
+			10: {FilterCriteria{FromBlock: big.NewInt(rpc.EarliestBlockNumber.Int64()), ToBlock: big.NewInt(rpc.EarliestBlockNumber.Int64())}, allLogs[:1], ""},
 		}
 	)
 

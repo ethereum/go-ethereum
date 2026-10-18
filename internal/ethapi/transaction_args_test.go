@@ -325,6 +325,33 @@ func TestCallDefaults(t *testing.T) {
 	}
 }
 
+// TestCallDefaultsPreLondon tests that CallDefaults rejects EIP-1559 fee
+// fields when the block has no base fee, instead of silently dropping them.
+func TestCallDefaultsPreLondon(t *testing.T) {
+	t.Parallel()
+
+	zero := new(hexutil.Big)
+	tests := []struct {
+		name string
+		args TransactionArgs
+		fail bool
+	}{
+		{name: "no fee fields"},
+		{name: "gasPrice", args: TransactionArgs{GasPrice: zero}},
+		{name: "maxFeePerGas", args: TransactionArgs{MaxFeePerGas: zero}, fail: true},
+		{name: "maxPriorityFeePerGas", args: TransactionArgs{MaxPriorityFeePerGas: zero}, fail: true},
+		{name: "both fee fields", args: TransactionArgs{MaxFeePerGas: zero, MaxPriorityFeePerGas: zero}, fail: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.args.CallDefaults(0, nil, big.NewInt(1))
+			if (err != nil) != tt.fail {
+				t.Fatalf("error mismatch, want fail=%v, have %v", tt.fail, err)
+			}
+		})
+	}
+}
+
 // TestSetDefaultsEmptyAuthList tests that setDefaults rejects an authorization
 // list on a contract creation even when the list is empty, as ToTransaction
 // cannot represent it.

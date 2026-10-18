@@ -872,7 +872,7 @@ func (s *StateDB) finaliseAmsterdam(rules params.Rules) *bal.ConstructionBlockAc
 		}
 		switch {
 		case obj.selfDestructed:
-			// EIP-8264: accounts marked for self-destruction, instead of
+			// EIP-8246: accounts marked for self-destruction, instead of
 			// being deleted, are modified as follows:
 			// - nonce is reset to 0,
 			// - balance is unchanged,

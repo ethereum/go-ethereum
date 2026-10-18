@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
@@ -298,51 +297,11 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 
 	for {
 		// Some beacon headers might have appeared since the last cycle, make
-		// sure we're always syncing to all available ones
+		// sure we're always syncing to all available ones.
 		head, _, _, err = d.skeleton.Bounds()
 		if err != nil {
 			return err
 		}
-		// If the pivot became stale (older than 2*64-8 (bit of wiggle room)),
-		// move it ahead to HEAD-64.
-		//
-		// Note the pivot is only moved before its commitment. Once the pivot
-		// is committed, the chain obtains a stateful head and pivot block should
-		// be on longer advanced.
-		//
-		// The state syncer is consulted first before the pivot movement.
-		d.pivotLock.Lock()
-		if d.pivotHeader != nil && !d.committed.Load() && d.snapSyncer.FrozenPivot() == nil {
-			if head.Number.Uint64() > d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
-				// Retrieve the next pivot header, either from skeleton chain
-				// or the filled chain
-				number := head.Number.Uint64() - uint64(fsMinFullBlocks)
-
-				log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
-				if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {
-					if number < tail.Number.Uint64() {
-						dist := tail.Number.Uint64() - number
-						if len(localHeaders) >= int(dist) {
-							d.pivotHeader = localHeaders[dist-1]
-							log.Warn("Retrieved pivot header from local", "number", d.pivotHeader.Number, "hash", d.pivotHeader.Hash(), "latest", head.Number, "oldest", tail.Number)
-						}
-					}
-				}
-				// Print an error log and return directly in case the pivot header
-				// is still not found. It means the skeleton chain is not linked
-				// correctly with local chain.
-				if d.pivotHeader == nil {
-					log.Error("Pivot header is not found", "number", number)
-					d.pivotLock.Unlock()
-					return errNoPivotHeader
-				}
-				// Write out the pivot into the database so a rollback beyond
-				// it can be detected, and update the state root that the
-				// state syncer will be downloading
-				rawdb.WriteLastPivotNumber(d.stateDB, d.pivotHeader.Number.Uint64())
-			}
-		}
-		d.pivotLock.Unlock()
 
 		// Retrieve a batch of headers and feed it to the header processor
 		var (

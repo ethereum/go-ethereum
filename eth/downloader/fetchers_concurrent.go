@@ -55,6 +55,10 @@ type typedQueue interface {
 	// fetching by the concurrent downloader.
 	pending() int
 
+	// next returns the number of the block at the head of the queue, which is
+	// the first one to be handed out, and false if the queue is empty.
+	next() (uint64, bool)
+
 	// capacity is responsible for calculating how many items of the abstracted
 	// type a particular peer is estimated to be able to retrieve within the
 	// allotted round trip time.
@@ -183,17 +187,28 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				idles    []*peerConnection
 				caps     []int
 				capacity int // Estimated aggregate items/s across all peers
+				ranged   int // Peers whose announced block range excludes the next block
 			)
+			next, queued := queue.next()
 			for _, peer := range d.peers.AllPeers() {
 				pending, stale := pending[peer.id], stales[peer.id]
-
 				items := queue.capacity(peer, time.Second)
-				capacity += items
 
 				if pending == nil && stale == nil {
+					// Peers announce the block range they serve bodies and
+					// receipts for. Requests are handed out from the queue
+					// head, so a peer whose range excludes it has nothing to
+					// contribute until the head catches up with its range.
+					if queued && !peer.serves(next) {
+						ranged++
+						continue
+					}
 					idles = append(idles, peer)
 					caps = append(caps, items)
-				} else if stale != nil {
+				}
+				capacity += items
+
+				if stale != nil {
 					if waited := time.Since(stale.Sent); waited > timeoutGracePeriod {
 						// Request has been in flight longer than the grace period
 						// permitted it, consider the peer malicious attempting to
@@ -263,6 +278,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			stats.idlePeers.Update(int64(len(idles) - assigned))
 			stats.busyPeers.Update(int64(len(pending)))
 			stats.stalePeers.Update(int64(len(stales)))
+			stats.rangedPeers.Update(int64(ranged))
 			stats.capacity.Update(int64(capacity))
 		}
 		// Wait for something to happen

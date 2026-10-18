@@ -39,6 +39,12 @@ func (q *receiptQueue) pending() int {
 	return q.queue.PendingReceipts()
 }
 
+// next returns the number of the block at the head of the receipt retrieval
+// queue, false if none is pending.
+func (q *receiptQueue) next() (uint64, bool) {
+	return q.queue.NextReceipt()
+}
+
 // capacity is responsible for calculating how many receipts a particular peer is
 // estimated to be able to retrieve within the allotted round trip time.
 func (q *receiptQueue) capacity(peer *peerConnection, rtt time.Duration) int {
