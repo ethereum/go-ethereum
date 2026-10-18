@@ -504,15 +504,28 @@ func (api *TraceAPI) call(ctx context.Context, input TraceCallArgs, kinds TraceT
 	// fields are noted first, and the rejection follows CallDefaults, whose invalid-parameter checks
 	// take precedence over this block-dependent one.
 	dynamicFees := args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil
-	if err := args.CallDefaults(api.api.backend.RPCGasCap(), vmctx.BaseFee, api.api.backend.ChainConfig().ChainID); err != nil {
+	beforeLondon := !api.api.backend.ChainConfig().IsLondon(vmctx.BlockNumber)
+	dynamicFeesBeforeLondon := traceCallRejection(fmt.Errorf("%w: maxFeePerGas or maxPriorityFeePerGas before London", core.ErrTxTypeNotSupported))
+	gasCap, chainID := api.api.backend.RPCGasCap(), api.api.backend.ChainConfig().ChainID
+	if err := args.CallDefaults(gasCap, vmctx.BaseFee, chainID); err != nil {
+		// CallDefaults also rejects dynamic fee fields without a base fee. When nothing else is
+		// wrong with the call, that is this fork rule, reported as such.
+		if dynamicFees && beforeLondon {
+			rest := args
+			rest.MaxFeePerGas, rest.MaxPriorityFeePerGas = nil, nil
+			if rest.CallDefaults(gasCap, vmctx.BaseFee, chainID) == nil {
+				return nil, dynamicFeesBeforeLondon
+			}
+		}
 		return nil, traceInvalid("invalid call: %v", err)
 	}
-	if dynamicFees && !api.api.backend.ChainConfig().IsLondon(vmctx.BlockNumber) {
-		return nil, traceCallRejection(fmt.Errorf("%w: maxFeePerGas or maxPriorityFeePerGas before London", core.ErrTxTypeNotSupported))
+	if dynamicFees && beforeLondon {
+		return nil, dynamicFeesBeforeLondon
 	}
 	// An explicit type adds no requirement of its own (H14): a supplied feature
 	// that is not active at the selected fork is rejected by message validation.
-	msg := args.ToMessage(vmctx.BaseFee, true)
+	// As in eth_call, execution may spend more than params.MaxTxGas after Amsterdam.
+	msg := args.ToMessage(vmctx.BaseFee, true).SkipExecutionGasCapCheck()
 	tx := args.ToTransaction(types.DynamicFeeTxType)
 	// As in eth_call, a zero effective gas price runs with BASEFEE 0, and a
 	// zero blob fee cap (supplied or defaulted) with BLOBBASEFEE 0. NoBaseFee

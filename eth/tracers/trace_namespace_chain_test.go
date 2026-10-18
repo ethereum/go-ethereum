@@ -217,26 +217,19 @@ func TestTraceNamespaceTouchedEmptyAccountDeletion(t *testing.T) {
 	t.Cleanup(backend.teardown)
 	api := NewTraceAPI(backend)
 	deleted := `{"balance":{"-":"0x0"},"nonce":{"-":"0x0"},"code":{"-":"0x"},"storage":{}}`
-	// A zero-fee call skips the fee payment and does not touch the coinbase.
-	result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"stateDiff"}, nil, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if have, _ := json.Marshal(result.StateDiff[empty]); string(have) != deleted {
-		t.Fatalf("touched empty account: have %s, want %s", have, deleted)
-	}
-	if diff := result.StateDiff[common.Address{}]; diff != nil {
-		t.Fatalf("untouched coinbase: %+v", diff)
-	}
-	// Paying a zero tip touches the empty coinbase, which is then deleted.
-	args := traceTestArgs(&traceTestTarget, nil)
-	args.GasPrice = (*hexutil.Big)(big.NewInt(params.InitialBaseFee))
-	if result, err = api.Call(context.Background(), args, TraceTypes{"stateDiff"}, nil, nil, nil); err != nil {
-		t.Fatal(err)
-	}
-	for _, address := range []common.Address{empty, {}} {
-		if have, _ := json.Marshal(result.StateDiff[address]); string(have) != deleted {
-			t.Fatalf("%x: have %s, want %s", address, have, deleted)
+	// A zero-fee call pays no fee but touches the coinbase as a block does, and so does paying a zero
+	// tip: either way the empty coinbase is deleted.
+	priced := traceTestArgs(&traceTestTarget, nil)
+	priced.GasPrice = (*hexutil.Big)(big.NewInt(params.InitialBaseFee))
+	for _, args := range []TraceCallArgs{traceTestArgs(&traceTestTarget, nil), priced} {
+		result, err := api.Call(context.Background(), args, TraceTypes{"stateDiff"}, nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, address := range []common.Address{empty, {}} {
+			if have, _ := json.Marshal(result.StateDiff[address]); string(have) != deleted {
+				t.Fatalf("%x: have %s, want %s", address, have, deleted)
+			}
 		}
 	}
 }
@@ -304,7 +297,7 @@ func TestTraceNamespacePending(t *testing.T) {
 	if block.ParentHash() != backend.chain.CurrentBlock().Hash() {
 		t.Fatal("pending block does not extend the head")
 	}
-	st, err := next.chain.StateAt(block.Header())
+	st, err := next.chain.StateAt(block.Root(), block.Number(), block.Time())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,5 +374,40 @@ func TestTraceNamespacePending(t *testing.T) {
 	var fresh TraceExecution
 	if err := client.Call(&fresh, "trace_call", increment[0], TraceTypes{}, "pending"); err != nil || !bytes.Equal(fresh.Output, word(1)) {
 		t.Fatalf("pending state leaked between requests: %x %v", fresh.Output, err)
+	}
+}
+
+// After Amsterdam (EIP-8037), trace_call and trace_callMany may spend more than
+// params.MaxTxGas on execution, as eth_call does.
+func TestTraceNamespaceExecutionGasCapAmsterdam(t *testing.T) {
+	contract := common.HexToAddress("0x000000000000000000000000000000000000c0de")
+	config := *params.MergedTestChainConfig
+	config.AmsterdamTime = new(uint64)
+	backend := newTestBackend(t, 0, &core.Genesis{Config: &config, Difficulty: common.Big0, GasLimit: 60_000_000, Alloc: types.GenesisAlloc{
+		traceTestSender: {Balance: big.NewInt(params.Ether)},
+		// Returns the gas left at entry if it is at least 20M, reverts otherwise:
+		//   GAS PUSH4 20000000 DUP2 LT PUSH1 0x11 JUMPI
+		//   PUSH0 MSTORE PUSH1 0x20 PUSH0 RETURN
+		//   JUMPDEST PUSH0 PUSH0 REVERT
+		contract: {Code: common.FromHex("0x5a6301312d0081106011575f5260205ff35b5f5ffd")},
+	}}, nil)
+	t.Cleanup(backend.teardown)
+	api := NewTraceAPI(backend)
+	args := traceTestArgs(&contract, nil)
+	gas := hexutil.Uint64(backend.RPCGasCap())
+	args.Gas = &gas
+
+	result, err := api.Call(context.Background(), args, TraceTypes{"trace"}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results, err := api.CallMany(context.Background(), TraceCalls{{args, TraceTypes{"trace"}}}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for method, result := range map[string]*TraceExecution{"trace_call": result, "trace_callMany": results[0]} {
+		if failure := result.Trace[0].Error; failure != "" {
+			t.Fatalf("%s: execution failed with %q, want execution gas above params.MaxTxGas", method, failure)
+		}
 	}
 }
