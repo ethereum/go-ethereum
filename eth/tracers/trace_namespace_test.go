@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"reflect"
@@ -834,6 +835,61 @@ func TestTraceRequestNullMembersAreOmitted(t *testing.T) {
 	for _, input := range []string{`{"mode":"garbage"}`, `{"count":-1}`, `{"extra":1}`, `{"extra":null}`} {
 		if err := json.Unmarshal([]byte(input), new(TraceFilter)); err == nil {
 			t.Errorf("%s: expected an error", input)
+		}
+	}
+}
+
+func TestTraceStateErrorUnavailableHistory(t *testing.T) {
+	for _, err := range []error{
+		errors.New("required historical state unavailable (reexec=128)"),
+		errors.New("missing trie node 1234"),
+		fmt.Errorf("missing block %v %d", common.Hash{1}, 7),
+		errors.New("genesis state is missing"),
+	} {
+		var rpcErr rpc.Error
+		if !errors.As(traceStateError(err), &rpcErr) || rpcErr.ErrorCode() != 4444 {
+			t.Errorf("%v: want 4444, got %v", err, traceStateError(err))
+		}
+	}
+	if err := errors.New("processing block 7 failed"); traceStateError(err) != err {
+		t.Errorf("unrelated error was mapped: %v", traceStateError(err))
+	}
+}
+
+// The transactions before a replayed one run without tracer hooks. Its replay
+// must still equal its envelope in the block replay, which traces them all.
+func TestTraceNamespaceReplayAfterPrecedingTransactions(t *testing.T) {
+	config := *params.AllEthashProtocolChanges
+	key, _ := crypto.HexToECDSA(strings.Repeat("0", 63) + "5")
+	sender := crypto.PubkeyToAddress(key.PublicKey)
+	counter, reverter, coinbase := common.HexToAddress("0xc0de0001"), common.HexToAddress("0xc0de0002"), common.HexToAddress("0xc0de0003")
+	genesis := &core.Genesis{Config: &config, GasLimit: 30_000_000, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
+		sender:   {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)},
+		counter:  {Code: common.FromHex("60005460010160005500")},         // slot 0 += 1
+		reverter: {Code: common.FromHex("60015450600160015560006000fd")}, // read and write slot 1, then revert
+	}}
+	var hashes []common.Hash
+	backend := newTestBackend(t, 1, genesis, func(_ int, block *core.BlockGen) {
+		block.SetCoinbase(coinbase)
+		for nonce, to := range []common.Address{counter, reverter, counter, reverter} {
+			tx := types.MustSignNewTx(key, types.LatestSigner(&config), &types.LegacyTx{
+				Nonce: uint64(nonce), Gas: 100000, GasPrice: big.NewInt(2 * params.InitialBaseFee), To: &to, Value: big.NewInt(1),
+			})
+			block.AddTx(tx)
+			hashes = append(hashes, tx.Hash())
+		}
+	})
+	defer backend.teardown()
+	client := traceContractClient(t, NewTraceAPI(backend))
+	modes := []string{"trace", "stateDiff", "vmTrace"}
+	var block []json.RawMessage
+	if err := client.Call(&block, "trace_replayBlockTransactions", "0x1", modes); err != nil || len(block) != len(hashes) {
+		t.Fatalf("block replay: %d envelopes, %v", len(block), err)
+	}
+	for i, hash := range hashes {
+		var got json.RawMessage
+		if err := client.Call(&got, "trace_replayTransaction", hash, modes); err != nil || !bytes.Equal(got, block[i]) {
+			t.Fatalf("transaction %d: got %s, want %s, err %v", i, got, block[i], err)
 		}
 	}
 }

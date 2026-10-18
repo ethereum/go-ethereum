@@ -308,10 +308,8 @@ func (api *TraceAPI) Filter(ctx context.Context, filter TraceFilter) ([]*TraceFr
 		}
 		// Replay reads ancestors and historical state by canonical number, so
 		// the traces of a block reorganized out while it ran may mix branches.
-		if selected != nil {
-			if _, err := api.blockByHash(ctx, selected.Hash(), true); err != nil {
-				return nil, err
-			}
+		if _, err := api.blockByHash(ctx, block.Hash(), true); err != nil {
+			return nil, err
 		}
 		for _, frame := range frames {
 			if !traceMatches(frame, filter) {
@@ -572,22 +570,44 @@ func (api *TraceAPI) transaction(ctx context.Context, hash common.Hash, kinds Tr
 		return nil, nil, 0, err
 	}
 	defer release()
+	// Preceding transactions only build the target's pre-state, so they run
+	// without tracer hooks.
+	evm := vm.NewEVM(vmctx, st, api.api.backend.ChainConfig(), vm.Config{})
+	defer evm.Release()
+	stopped := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { evm.Cancel(); close(stopped) })
+	defer func() {
+		if !stop() {
+			<-stopped
+		}
+	}()
+	signer := types.MakeSigner(api.api.backend.ChainConfig(), block.Number(), block.Time())
 	for i, tx := range block.Transactions() {
-		msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.api.backend.ChainConfig(), block.Number(), block.Time()), block.BaseFee())
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		modes := TraceTypes{}
-		if uint64(i) == index {
-			modes = kinds
-		}
-		result, err := api.execute(ctx, tx, msg, modes, vmctx, st, nil, blockHash, i, false, traceRejected)
+		msg, err := core.TransactionToMessage(tx, signer, block.BaseFee())
 		if err != nil {
 			return nil, nil, 0, err
 		}
 		if uint64(i) == index {
+			result, err := api.execute(ctx, tx, msg, kinds, vmctx, st, nil, blockHash, i, false, traceRejected)
+			if err != nil {
+				return nil, nil, 0, err
+			}
 			result.TransactionHash = &hash
 			return result, block, index, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, nil, 0, err
+		}
+		st.SetTxContext(tx.Hash(), i, uint32(i+1))
+		_, _, err = core.ApplyTransactionWithEVM(ctx, msg, core.NewGasPool(msg.GasLimit), st, block.Number(), blockHash, block.Time(), tx, evm)
+		if ctx.Err() != nil {
+			return nil, nil, 0, ctx.Err()
+		}
+		if err := st.Error(); err != nil {
+			return nil, nil, 0, traceStateError(err)
+		}
+		if err != nil {
+			return nil, nil, 0, traceRejected(err)
 		}
 	}
 	return nil, nil, 0, errors.New("transaction index points outside block")
@@ -788,7 +808,7 @@ func traceMatches(frame *TraceFrame, filter TraceFilter) bool {
 }
 
 func traceStateError(err error) error {
-	for _, text := range []string{"historical state", "missing trie node", "state not found", "pruned"} {
+	for _, text := range []string{"historical state", "missing trie node", "state not found", "pruned", "missing block", "genesis state is missing"} {
 		if strings.Contains(strings.ToLower(err.Error()), text) {
 			return &traceRPCError{4444, err.Error()}
 		}

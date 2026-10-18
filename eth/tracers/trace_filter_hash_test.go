@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -179,5 +180,56 @@ func TestTraceNamespaceFilterExecutedHead(t *testing.T) {
 	} {
 		var got json.RawMessage
 		requireTraceCode(t, client.Call(&got, "trace_filter", filter), -32602)
+	}
+}
+
+// Replace the chain as replay requests a block's parent state.
+type traceReplayReorgBackend struct {
+	*testBackend
+	reorg func()
+}
+
+func (b *traceReplayReorgBackend) StateAtBlock(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error) {
+	if b.reorg != nil {
+		reorg := b.reorg
+		b.reorg = nil
+		reorg()
+	}
+	return b.testBackend.StateAtBlock(ctx, block, base, readOnly, preferDisk)
+}
+
+// A range filter is resolved to one branch first. Replay reads ancestors by
+// canonical number, so a block reorganized out while it runs must fail rather
+// than return traces that may mix the two branches. Generated test chains cannot
+// serve a BLOCKHASH walk past the parent, so this checks the rejection only.
+func TestTraceNamespaceFilterRangeReorg(t *testing.T) {
+	config := *params.AllEthashProtocolChanges
+	key, _ := crypto.HexToECDSA(strings.Repeat("0", 63) + "4")
+	sender := crypto.PubkeyToAddress(key.PublicKey)
+	genesis := &core.Genesis{Config: &config, GasLimit: 30_000_000, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
+		sender:          {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)},
+		traceTestTarget: {Code: common.FromHex("436000524260205260406000f3")},
+	}}
+	backend := newTestBackend(t, 2, genesis, func(i int, block *core.BlockGen) {
+		block.AddTx(types.MustSignNewTx(key, types.LatestSigner(&config), &types.LegacyTx{
+			Nonce: uint64(i), Gas: 100000, GasPrice: big.NewInt(2 * params.InitialBaseFee), To: &traceTestTarget,
+		}))
+	})
+	defer backend.teardown()
+	wrapper := &traceReplayReorgBackend{testBackend: backend}
+	client := traceContractClient(t, NewTraceAPI(wrapper))
+	_, replacement, _ := core.GenerateChainWithGenesis(genesis, backend.engine, 3, func(_ int, block *core.BlockGen) {
+		block.SetCoinbase(traceTestTarget)
+	})
+	hash := backend.chain.GetBlockByNumber(2).Hash()
+	wrapper.reorg = func() {
+		if _, err := backend.chain.InsertChain(replacement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got json.RawMessage
+	requireTraceCode(t, client.Call(&got, "trace_filter", map[string]any{"fromBlock": "0x2", "toBlock": "0x2"}), -32001)
+	if wrapper.reorg != nil || backend.chain.GetBlockByNumber(2).Hash() == hash {
+		t.Fatal("replacement branch did not become canonical during replay")
 	}
 }
