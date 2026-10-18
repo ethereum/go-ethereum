@@ -20,8 +20,19 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+// The yield's counters: blocks the import stood aside for, pauses that waited
+// on one, and the nanoseconds they waited in all (several of the import's
+// goroutines can wait on the same block).
+var (
+	yieldBlocksCounter = metrics.NewRegisteredCounter("pbt/import/yield/blocks", nil)
+	yieldWaitsCounter  = metrics.NewRegisteredCounter("pbt/import/yield/waits", nil)
+	yieldWaitedCounter = metrics.NewRegisteredCounter("pbt/import/yield/waited", nil)
 )
 
 // blockYield lets an import running inside the node stand aside while the
@@ -50,6 +61,7 @@ func (y *blockYield) set(processing bool) {
 	}
 	if processing {
 		y.idle = make(chan struct{})
+		yieldBlocksCounter.Inc(1)
 	} else {
 		close(y.idle)
 	}
@@ -61,6 +73,7 @@ func (y *blockYield) set(processing bool) {
 // cancellation.
 func (y *blockYield) pause(ctx context.Context) error {
 	if y != nil && y.busy.Load() {
+		start := time.Now()
 		y.mu.Lock()
 		idle := y.idle
 		y.mu.Unlock()
@@ -68,6 +81,8 @@ func (y *blockYield) pause(ctx context.Context) error {
 		case <-idle:
 		case <-ctx.Done():
 		}
+		yieldWaitsCounter.Inc(1)
+		yieldWaitedCounter.Inc(int64(time.Since(start)))
 	}
 	return ctx.Err()
 }
