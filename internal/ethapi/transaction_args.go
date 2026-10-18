@@ -537,9 +537,13 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	case args.AccessList != nil || defaultType == types.AccessListTxType:
 		usedType = types.AccessListTxType
 	}
-	// Make it possible to default to newer tx, but use legacy if gasprice is provided
+	// Make it possible to default to newer tx, but use legacy if gasprice is provided.
+	// A gasprice together with an access list is an EIP-2930 transaction.
 	if args.GasPrice != nil {
 		usedType = types.LegacyTxType
+		if args.AccessList != nil {
+			usedType = types.AccessListTxType
+		}
 	}
 	var data types.TxData
 	switch usedType {
