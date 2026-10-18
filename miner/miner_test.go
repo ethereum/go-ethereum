@@ -21,9 +21,12 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -108,6 +111,75 @@ func TestBuildPendingBlocks(t *testing.T) {
 		}
 	}()
 	wg.Wait()
+}
+
+// TestBuildPendingBlockAheadOfClock checks the pending block when the chain
+// head is ahead of the local clock. The block is then built at parent.Time+1,
+// so its fork-specific fields must follow that timestamp, not the wall clock.
+func TestBuildPendingBlockAheadOfClock(t *testing.T) {
+	forkTime := uint64(time.Now().Add(time.Hour).Unix())
+
+	tests := []struct {
+		name       string
+		parentTime uint64
+		amsterdam  bool
+		slot       uint64
+	}{
+		// The chain head is already past the fork, the local clock is not.
+		// The Amsterdam genesis has slot 0, so the pending block has slot 1.
+		{"head-past-fork", forkTime + 12, true, 1},
+		// The pending block is the first block of the fork. The parent has
+		// no slot, so the pending block starts at slot 0.
+		{"head-at-fork-boundary", forkTime - 1, true, 0},
+		// The chain head and the pending block are both before the fork.
+		{"head-before-fork", forkTime - 12, false, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := *params.MergedTestChainConfig
+			config.AmsterdamTime = &forkTime
+
+			alloc := core.SystemContractAllocs()
+			alloc[testBankAddress] = types.Account{Balance: testBankFunds}
+			gspec := &core.Genesis{
+				Config:    &config,
+				Timestamp: tt.parentTime,
+				Alloc:     alloc,
+			}
+			engine := beacon.New(ethash.NewFaker())
+			chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)
+			if err != nil {
+				t.Fatalf("can't create new chain: %v", err)
+			}
+			defer chain.Stop()
+
+			pool := legacypool.New(testTxPoolConfig, chain)
+			txpool, _ := txpool.New(testTxPoolConfig.PriceLimit, chain, []txpool.SubPool{pool})
+			defer txpool.Close()
+
+			miner := New(&testWorkerBackend{chain: chain, txPool: txpool}, testConfig, engine)
+			block, _, _ := miner.Pending()
+			if block == nil {
+				t.Fatal("pending block is not available")
+			}
+			if block.Time() != tt.parentTime+1 {
+				t.Errorf("pending block time mismatch: have %d, want %d", block.Time(), tt.parentTime+1)
+			}
+			slot := block.Header().SlotNumber
+			if !tt.amsterdam {
+				if slot != nil {
+					t.Errorf("unexpected slot number %d pre-amsterdam", *slot)
+				}
+				return
+			}
+			if slot == nil {
+				t.Fatal("missing slot number post-amsterdam")
+			}
+			if *slot != tt.slot {
+				t.Errorf("slot number mismatch: have %d, want %d", *slot, tt.slot)
+			}
+		})
+	}
 }
 
 func minerTestGenesisBlock(period uint64, gasLimit uint64, faucet common.Address) *core.Genesis {

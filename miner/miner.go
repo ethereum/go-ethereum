@@ -156,6 +156,11 @@ func (miner *Miner) getPending() *newPayloadResult {
 		withdrawal  types.Withdrawals
 		slotNum     *uint64
 	)
+	// prepareWork raises the timestamp to parent+1 when the local clock is
+	// behind the head. Do it here too, so the fork rules match the block.
+	if header.Time >= timestamp {
+		timestamp = header.Time + 1
+	}
 	if miner.chainConfig.IsShanghai(childNumber, timestamp) {
 		withdrawal = []*types.Withdrawal{}
 	}
