@@ -437,7 +437,7 @@ func (bc *BlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*
 // and the given header, handling the transition across the UBT fork.
 func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.Header) (*state.StateDB, error) {
 	if bc.chainConfig.IsPBT(parent.Number, parent.Time) {
-		return bc.StateAt(parent.Root, parent.Number, parent.Time)
+		return state.New(parent.Root, state.NewPBTDatabase(bc.triedb, bc.codedb))
 	}
 	// The parent is already in the UBT fork.
 	if bc.chainConfig.IsUBT(parent.Number, parent.Time) {
