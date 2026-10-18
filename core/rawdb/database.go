@@ -86,9 +86,48 @@ func (frdb *freezerdb) Freeze() error {
 	return nil
 }
 
+// Level0Sublevels returns the key-value store's level-0 depth, zero if it
+// doesn't compact in the background.
+func (frdb *freezerdb) Level0Sublevels() int {
+	return level0Sublevels(frdb.KeyValueStore)
+}
+
+// LimitCompactions caps the key-value store's concurrent compactions, if it
+// compacts in the background.
+func (frdb *freezerdb) LimitCompactions(n int) {
+	limitCompactions(frdb.KeyValueStore, n)
+}
+
 // nofreezedb is a database wrapper that disables freezer data retrievals.
 type nofreezedb struct {
 	ethdb.KeyValueStore
+}
+
+// Level0Sublevels returns the key-value store's level-0 depth, zero if it
+// doesn't compact in the background.
+func (db *nofreezedb) Level0Sublevels() int {
+	return level0Sublevels(db.KeyValueStore)
+}
+
+// LimitCompactions caps the key-value store's concurrent compactions, if it
+// compacts in the background.
+func (db *nofreezedb) LimitCompactions(n int) {
+	limitCompactions(db.KeyValueStore, n)
+}
+
+// level0Sublevels returns db's level-0 depth, zero if it has no levels.
+func level0Sublevels(db any) int {
+	if c, ok := db.(ethdb.CompactionController); ok {
+		return c.Level0Sublevels()
+	}
+	return 0
+}
+
+// limitCompactions caps db's concurrent compactions, if it has any.
+func limitCompactions(db any, n int) {
+	if c, ok := db.(ethdb.CompactionController); ok {
+		c.LimitCompactions(n)
+	}
 }
 
 // Ancient returns an error as we don't have a backing chain freezer.

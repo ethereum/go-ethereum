@@ -29,6 +29,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -216,8 +217,9 @@ func TestBlockYield(t *testing.T) {
 }
 
 // TestImportYieldsToBlocks: an import standing aside for blocks processed
-// back to back, a fraction of a millisecond each, lands on the converter's
-// root and namespace like one that never pauses.
+// back to back, a fraction of a millisecond each, and for a level 0 that
+// keeps deepening, lands on the converter's root and namespace like one that
+// never pauses, and lifts the compaction cap it set once done.
 func TestImportYieldsToBlocks(t *testing.T) {
 	convDB, root, binRoot, snapPath, prePath := importFixture(t, mixedAlloc(8347))
 	defer func(p, s, l, f int) {
@@ -225,8 +227,11 @@ func TestImportYieldsToBlocks(t *testing.T) {
 	}(preimageBatchSize, preimageBatchSlots, leafBatchSize, foldBatchSize)
 	preimageBatchSize, preimageBatchSlots, leafBatchSize, foldBatchSize = 4, 1, 64, 2
 
-	y := newBlockYield()
-	stop := make(chan struct{})
+	var (
+		y    = newBlockYield()
+		db   fakeCompactions
+		stop = make(chan struct{})
+	)
 	defer close(stop)
 	go func() {
 		for {
@@ -236,14 +241,16 @@ func TestImportYieldsToBlocks(t *testing.T) {
 			default:
 			}
 			y.set(true)
+			db.sublevels.Store(paceMaxSublevels + 1)
 			time.Sleep(200 * time.Microsecond)
 			y.set(false)
+			db.sublevels.Store(0)
 			time.Sleep(200 * time.Microsecond)
 		}
 	}()
 	impDB := rawdb.NewMemoryDatabase()
 	imported, err := importState(context.Background(), impDB, importOptions{snapshot: snapPath, preimages: prePath,
-		anchor: &types.Header{Number: big.NewInt(7), Root: root}, yield: y,
+		anchor: &types.Header{Number: big.NewInt(7), Root: root}, yield: y, compactions: &db,
 		conversionOptions: conversionOptions{tmpDir: t.TempDir(), sortBudget: 512, workers: 4}})
 	if err != nil {
 		t.Fatalf("import failed: %v", err)
@@ -252,7 +259,51 @@ func TestImportYieldsToBlocks(t *testing.T) {
 		t.Fatalf("imported root %x, the converter built %x", imported, binRoot)
 	}
 	assertNamespaceEqual(t, convDB, impDB)
+	if !slices.Equal(db.limits, []int{importCompactions, 0}) {
+		t.Fatalf("compaction caps set %v, want %d then lifted", db.limits, importCompactions)
+	}
 }
+
+// TestCompactionPace: writes pass while level 0 is shallow, wait while it is
+// deep, and end with the context's error if cancelled meanwhile.
+func TestCompactionPace(t *testing.T) {
+	var db fakeCompactions
+	p := &compactionPace{db: &db}
+	if err := p.wait(context.Background()); err != nil {
+		t.Fatalf("a shallow level 0 held the write: %v", err)
+	}
+	db.sublevels.Store(paceMaxSublevels + 1)
+	p.next = time.Time{} // forget the last check
+	done := make(chan error, 1)
+	go func() { done <- p.wait(context.Background()) }()
+	select {
+	case err := <-done:
+		t.Fatalf("a deep level 0 let the write through: %v", err)
+	case <-time.After(3 * paceInterval):
+	}
+	db.sublevels.Store(paceMaxSublevels)
+	if err := <-done; err != nil {
+		t.Fatalf("write after level 0 drained: %v", err)
+	}
+	db.sublevels.Store(paceMaxSublevels + 1)
+	p.next = time.Time{}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { done <- p.wait(ctx) }()
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("a cancelled wait returned %v", err)
+	}
+}
+
+// fakeCompactions reports the level-0 depth a test sets and records the
+// compaction caps it is given.
+type fakeCompactions struct {
+	sublevels atomic.Int64
+	limits    []int
+}
+
+func (f *fakeCompactions) Level0Sublevels() int   { return int(f.sublevels.Load()) }
+func (f *fakeCompactions) LimitCompactions(n int) { f.limits = append(f.limits, n) }
 
 // TestImportChecksPreimageOrder: with phase 1's order check spread over its
 // workers, a record out of hashed-key order is refused wherever it sits,

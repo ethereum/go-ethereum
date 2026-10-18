@@ -157,6 +157,18 @@ func (t *table) Stat() (string, error) {
 	return t.db.Stat()
 }
 
+// Level0Sublevels returns the underlying database's level-0 depth, zero if it
+// doesn't compact in the background.
+func (t *table) Level0Sublevels() int {
+	return level0Sublevels(t.db)
+}
+
+// LimitCompactions caps the underlying database's concurrent compactions, if
+// it compacts in the background. The cap is the whole database's.
+func (t *table) LimitCompactions(n int) {
+	limitCompactions(t.db, n)
+}
+
 // Compact flattens the underlying data store for the given key range. In essence,
 // deleted and overwritten versions are discarded, and the data is rearranged to
 // reduce the cost of operations needed to access them.

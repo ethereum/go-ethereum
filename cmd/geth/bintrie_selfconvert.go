@@ -47,8 +47,9 @@ import (
 // a+1..P wrote. Replaying a+1..P over the tree anchored at a yields the tree
 // converted at P (EIP-8347), so the tree is attested at P, once P is
 // finalized, and the follower takes it from there. The conversion steps aside
-// for blocks through yield.
-func (p *pbtImporter) convertAt(ctx context.Context, a *types.Header, yield *blockYield) error {
+// for blocks through yield, and its writes are paced on compactions, as an
+// import's.
+func (p *pbtImporter) convertAt(ctx context.Context, a *types.Header, yield *blockYield, compactions ethdb.CompactionController) error {
 	workers := cmp.Or(p.cfg.Workers, utils.PBTImportWorkersFlag.Value)
 	f, ranges, pieces, err := splitPreimages(p.cfg.Preimages, workers)
 	if err != nil {
@@ -90,7 +91,7 @@ func (p *pbtImporter) convertAt(ctx context.Context, a *types.Header, yield *blo
 	log.Info("Starting binary tree conversion in the background", "anchor", at.Number, "hash", at.Hash(),
 		"stateRoot", at.Root, "preimages", p.cfg.Preimages, "preimageAnchor", a.Number)
 	ref := anchorRef{hash: at.Hash(), byHash: true}
-	root, err := convertPlan(ctx, p.db, plan, yield, conversionOptions{
+	root, err := convertPlan(ctx, p.db, plan, yield, compactions, conversionOptions{
 		sortBudget: onlineSortBudget,
 		tmpDir:     p.tmpDir,
 		workers:    workers,

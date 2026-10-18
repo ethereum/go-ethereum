@@ -94,6 +94,19 @@ type Compacter interface {
 	Compact(start []byte, limit []byte) error
 }
 
+// CompactionController is implemented by data stores that compact in the
+// background, for bulk writers that must not starve the store's other users.
+type CompactionController interface {
+	// Level0Sublevels returns how many sublevels the store's first level
+	// holds: each is one more table a read may consult, and too many stop
+	// every write.
+	Level0Sublevels() int
+
+	// LimitCompactions caps how many compactions run at once, until it is
+	// called again; n <= 0 lifts the cap.
+	LimitCompactions(n int)
+}
+
 // KeyValueStore contains all the methods required to allow handling different
 // key-value data stores backing the high level database.
 type KeyValueStore interface {

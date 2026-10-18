@@ -99,6 +99,7 @@ type Database struct {
 	compTime      atomic.Int64  // Total time spent in compaction in ns
 	level0Comp    atomic.Uint32 // Total number of level-zero compactions
 	nonLevel0Comp atomic.Uint32 // Total number of non level-zero compactions
+	compLimit     atomic.Int32  // Cap on concurrent compactions, 0 for none (LimitCompactions)
 
 	writeStalled        atomic.Bool  // Flag whether the write is stalled
 	writeDelayStartTime time.Time    // The start time of the latest write stall
@@ -257,8 +258,14 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		MemTableStopWritesThreshold: memTableNumber * 2,
 
 		// The default compaction concurrency(1 thread),
-		// Here use all available CPUs for faster compaction.
-		CompactionConcurrencyRange: func() (int, int) { return 1, numCPU },
+		// Here use all available CPUs for faster compaction, unless capped
+		// (LimitCompactions).
+		CompactionConcurrencyRange: func() (int, int) {
+			if n := int(db.compLimit.Load()); n > 0 {
+				return 1, min(n, numCPU)
+			}
+			return 1, numCPU
+		},
 
 		// Per-level options. Options for at least one level must be specified. The
 		// options for the last level are used for all subsequent levels.
@@ -505,6 +512,17 @@ func upperBound(prefix []byte) (limit []byte) {
 // method to read everything there is to read, independent of Pebble version.
 func (d *Database) Stat() (string, error) {
 	return d.db.Metrics().String(), nil
+}
+
+// Level0Sublevels returns the number of sublevels in pebble's level 0.
+func (d *Database) Level0Sublevels() int {
+	return int(d.db.Metrics().Levels[0].Sublevels)
+}
+
+// LimitCompactions caps how many compactions pebble runs at once, until it is
+// called again; n <= 0 lifts the cap. Compactions already running finish.
+func (d *Database) LimitCompactions(n int) {
+	d.compLimit.Store(int32(max(n, 0)))
 }
 
 // Compact flattens the underlying data store for the given key range. In essence,

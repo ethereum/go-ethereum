@@ -75,7 +75,7 @@ func convertState(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb
 	if opts.anchor == nil {
 		opts.anchor = &types.Header{Number: new(big.Int), Root: root}
 	}
-	converted, err := convertPlan(ctx, chaindb, plan, nil, opts)
+	converted, err := convertPlan(ctx, chaindb, plan, nil, nil, opts)
 	if err == nil && exported != (common.Hash{}) && converted != exported {
 		return common.Hash{}, fmt.Errorf("export built %x, the conversion %x", exported, converted)
 	}
@@ -879,7 +879,7 @@ func TestConvertYieldsToBlocks(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer file.Close()
-			got, err := convertPlan(context.Background(), chaindb, plan, y, opts)
+			got, err := convertPlan(context.Background(), chaindb, plan, y, nil, opts)
 			if err != nil {
 				t.Fatalf("conversion failed: %v", err)
 			}
