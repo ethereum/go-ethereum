@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -95,6 +96,10 @@ type ConsensusAPI struct {
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
 
+	// Inclusion lists of recent payloads (EIP-7805), kept so the verdict can
+	// be given once a payload accepted earlier gets validated.
+	inclusionLists *lru.Cache[common.Hash, *retainedInclusionList]
+
 	// The forkchoice update and new payload method require us to return the
 	// latest valid hash in an invalid chain. To support that return, we need
 	// to track historical bad blocks as well as bad tipsets in case a chain
@@ -150,6 +155,7 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 		maxReorgDepth:     eth.EngineMaxReorgDepth(),
 		remoteBlocks:      newHeaderQueue(),
 		localBlocks:       newPayloadQueue(),
+		inclusionLists:    lru.NewCache[common.Hash, *retainedInclusionList](inclusionListCacheLimit),
 		invalidBlocksHits: make(map[common.Hash]int),
 		invalidTipsets:    make(map[common.Hash]*types.Header),
 	}
@@ -241,6 +247,35 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.
 	// forkchoiceUpdate into a function that only updates the head and then a
 	// function that kicks off block construction.
 	return api.forkchoiceUpdated(ctx, update, params, engine.PayloadV4, false)
+}
+
+// ForkchoiceUpdatedV5 is equivalent to V4 with the addition of the inclusion
+// list in the payload attributes, and of the head's inclusion list verdict in
+// the payload status. It supports only PayloadAttributesV5.
+func (api *ConsensusAPI) ForkchoiceUpdatedV5(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes, custodyColumns *types.CustodyBitmap) (engine.ForkChoiceResponseV2, error) {
+	invalid := engine.ForkChoiceResponseV2{PayloadStatus: engine.PayloadStatusV2{PayloadStatusV1: engine.STATUS_INVALID.PayloadStatus}}
+	if params != nil {
+		switch {
+		case params.Withdrawals == nil:
+			return invalid, attributesErr("missing withdrawals")
+		case params.BeaconRoot == nil:
+			return invalid, attributesErr("missing beacon root")
+		case params.SlotNumber == nil:
+			return invalid, attributesErr("missing slot number")
+		case params.InclusionList == nil:
+			return invalid, attributesErr("missing inclusion list transactions")
+		case !api.checkFork(params.Timestamp, forks.Bogota):
+			return invalid, unsupportedForkErr("fcuV5 must only be called for bogota payloads")
+		}
+	}
+	if custodyColumns != nil {
+		api.eth.BlobFetcher().UpdateCustody(*custodyColumns)
+	}
+	res, err := api.forkchoiceUpdated(ctx, update, params, engine.PayloadV4, false)
+	return engine.ForkChoiceResponseV2{
+		PayloadStatus: api.inclusionListStatus(res.PayloadStatus, update.HeadBlockHash),
+		PayloadID:     res.PayloadID,
+	}, err
 }
 
 func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, payloadWitness bool) (result engine.ForkChoiceResponse, err error) {
@@ -893,6 +928,46 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
 	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
+}
+
+// NewPayloadV6 is equivalent to V5 with the addition of the inclusion list,
+// whose verdict is returned for valid payloads (EIP-7805).
+func (api *ConsensusAPI) NewPayloadV6(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes, inclusionList []hexutil.Bytes) (engine.PayloadStatusV2, error) {
+	invalid := engine.PayloadStatusV2{PayloadStatusV1: invalidStatus}
+	switch {
+	case params.Withdrawals == nil:
+		return invalid, paramsErr("nil withdrawals post-shanghai")
+	case params.ExcessBlobGas == nil:
+		return invalid, paramsErr("nil excessBlobGas post-cancun")
+	case params.BlobGasUsed == nil:
+		return invalid, paramsErr("nil blobGasUsed post-cancun")
+	case versionedHashes == nil:
+		return invalid, paramsErr("nil versionedHashes post-cancun")
+	case beaconRoot == nil:
+		return invalid, paramsErr("nil beaconRoot post-cancun")
+	case executionRequests == nil:
+		return invalid, paramsErr("nil executionRequests post-prague")
+	case params.SlotNumber == nil:
+		return invalid, paramsErr("nil slotnumber post-amsterdam")
+	case params.BlockAccessList == nil:
+		return invalid, paramsErr("missing block access list post-amsterdam")
+	case inclusionList == nil:
+		return invalid, paramsErr("nil inclusionListTransactions post-bogota")
+	case !api.checkFork(params.Timestamp, forks.Bogota):
+		return invalid, unsupportedForkErr("newPayloadV6 must only be called for bogota payloads")
+	}
+	requests := convertRequests(executionRequests)
+	if err := validateRequests(requests); err != nil {
+		return invalid, engine.InvalidParams.With(err)
+	}
+	res, err := api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
+
+	// Keep the list of any payload that isn't invalid. One that can't be
+	// validated yet gets its verdict once a forkchoice update finds it valid.
+	if res.Status != engine.INVALID {
+		api.retainInclusionList(params.BlockHash, inclusionList)
+	}
+	return api.inclusionListStatus(res, params.BlockHash), err
 }
 
 func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (result engine.PayloadStatusV1, err error) {

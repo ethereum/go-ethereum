@@ -135,6 +135,7 @@ const (
 	blockCacheLimit    = 256
 	receiptsCacheLimit = 32
 	txLookupCacheLimit = 1024
+	blockGasCacheLimit = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -366,6 +367,7 @@ type BlockChain struct {
 
 	txLookupLock  sync.RWMutex
 	txLookupCache *lru.Cache[common.Hash, txLookup]
+	blockGasCache *lru.Cache[common.Hash, blockGas] // Per-dimension gas of recent blocks, for inclusion lists
 
 	stopping      atomic.Bool // false if chain is running, true when stopped
 	procInterrupt atomic.Bool // interrupt signaler for block processing
@@ -434,6 +436,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		receiptsCache:      lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		blockCache:         lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		txLookupCache:      lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
+		blockGasCache:      lru.NewCache[common.Hash, blockGas](blockGasCacheLimit),
 		engine:             engine,
 		logger:             cfg.VmConfig.Tracer,
 		slowBlockThreshold: cfg.SlowBlockThreshold,
@@ -2403,6 +2406,11 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		return nil, err
 	}
 	vtime := time.Since(vstart)
+
+	// Keep the gas totals around, checking an inclusion list needs them.
+	if bc.chainConfig.IsBogota(block.Number(), block.Time()) {
+		bc.blockGasCache.Add(block.Hash(), blockGas{res.ExecutionGasUsed, res.StateGasUsed})
+	}
 
 	// If witnesses was generated and stateless self-validation requested, do
 	// that now. Self validation should *never* run in production, it's more of
