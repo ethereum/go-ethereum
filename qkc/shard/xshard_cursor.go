@@ -33,6 +33,10 @@ var (
 	// not known.
 	ErrUnknownCursorRoot = errors.New("unknown root block of the cross-shard cursor")
 
+	// ErrXShardRootMismatch is returned when a shard block's previous root block
+	// does not extend the root chain seen by its parent.
+	ErrXShardRootMismatch = errors.New("cross-shard root chain mismatch")
+
 	// ErrXShardDepositsMissing is returned when the deposits sent by a source
 	// block the root chain confirms are not received yet.
 	ErrXShardDepositsMissing = errors.New("cross-shard deposits not received")
@@ -78,7 +82,7 @@ type xShardCursor struct {
 
 // newXShardCursor returns a cursor at the given position, walking up to the
 // root block maxRoot.
-func newXShardCursor(config *params.QuarkChainConfig, chain XShardChain, pos types.XShardCursor, maxRoot common.Hash) (*xShardCursor, error) {
+func newXShardCursor(config *params.QuarkChainConfig, chain XShardChain, pos types.XShardCursor, parentRoot, maxRoot common.Hash) (*xShardCursor, error) {
 	c := &xShardCursor{
 		config:       config,
 		chain:        chain,
@@ -89,9 +93,28 @@ func newXShardCursor(config *params.QuarkChainConfig, chain XShardChain, pos typ
 	if c.maxRoot == nil {
 		return nil, fmt.Errorf("%w: %x", ErrUnknownCursorRoot, maxRoot)
 	}
+	if parentRoot != (common.Hash{}) {
+		parent := chain.RootBlock(parentRoot)
+		if parent == nil {
+			return nil, fmt.Errorf("%w: parent root block %x", ErrUnknownCursorRoot, parentRoot)
+		}
+		if parent.NumberU64() > c.maxRoot.NumberU64() {
+			return nil, fmt.Errorf("%w: parent root block %x is above %x", ErrXShardRootMismatch, parentRoot, maxRoot)
+		}
+		ancestor := chain.RootBlockByNumber(maxRoot, parent.NumberU64())
+		if ancestor == nil {
+			return nil, fmt.Errorf("%w: root block #%d below %x", ErrUnknownCursorRoot, parent.NumberU64(), maxRoot)
+		}
+		if ancestor.Hash() != parentRoot {
+			return nil, fmt.Errorf("%w: parent root block %x is not an ancestor of %x", ErrXShardRootMismatch, parentRoot, maxRoot)
+		}
+	}
 	// Past the last root block, the walk is over.
-	if c.root = chain.RootBlockByNumber(maxRoot, pos.RootBlockHeight); c.root == nil {
+	if pos.RootBlockHeight > c.maxRoot.NumberU64() {
 		return c, nil
+	}
+	if c.root = chain.RootBlockByNumber(maxRoot, pos.RootBlockHeight); c.root == nil {
+		return nil, fmt.Errorf("%w: root block #%d below %x", ErrUnknownCursorRoot, pos.RootBlockHeight, maxRoot)
 	}
 	if c.minorIndex > uint64(len(c.root.MinorBlockHeaders())) {
 		return nil, fmt.Errorf("invalid cross-shard cursor %+v: root block #%d has %d source blocks", pos, c.root.NumberU64(), len(c.root.MinorBlockHeaders()))
@@ -145,10 +168,14 @@ func (c *xShardCursor) Next() (*types.DepositTx, error) {
 			continue
 		}
 		// Move on to the next root block, starting with its coinbase.
-		root := c.chain.RootBlockByNumber(c.maxRoot.Hash(), c.root.NumberU64()+1)
-		if root == nil {
+		nextHeight := c.root.NumberU64() + 1
+		if nextHeight > c.maxRoot.NumberU64() {
 			c.root, c.minorIndex, c.depositIndex, c.deposits = nil, 0, 0, nil
 			return nil, nil
+		}
+		root := c.chain.RootBlockByNumber(c.maxRoot.Hash(), nextHeight)
+		if root == nil {
+			return nil, fmt.Errorf("%w: root block #%d below %x", ErrUnknownCursorRoot, nextHeight, c.maxRoot.Hash())
 		}
 		c.root, c.minorIndex, c.depositIndex, c.deposits = root, 0, 1, nil
 	}
@@ -208,7 +235,7 @@ func (in *XShardInbox) Deposits(parent *types.Header, prevRootBlock common.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("parent: %w", err)
 	}
-	cursor, err := newXShardCursor(in.config, in.chain, extra.Cursor, prevRootBlock)
+	cursor, err := newXShardCursor(in.config, in.chain, extra.Cursor, extra.PrevRootBlock, prevRootBlock)
 	if err != nil {
 		return nil, err
 	}
