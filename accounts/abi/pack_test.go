@@ -182,6 +182,12 @@ func TestMethodPack(t *testing.T) {
 	if _, err := abi.Pack("send", big.NewInt(-1)); err == nil {
 		t.Fatal("expected error when trying to pack negative big.Int into uint256 value")
 	}
+
+	// test that we can't pack a value that does not fit in 256 bits for a uint
+	// parameter, instead of silently truncating it
+	if _, err := abi.Pack("send", new(big.Int).Lsh(big.NewInt(1), 256)); err == nil {
+		t.Fatal("expected error when trying to pack big.Int larger than 256 bits into uint256 value")
+	}
 }
 
 func TestPackNumber(t *testing.T) {
