@@ -150,10 +150,10 @@ func runGeth(dir string, jwtPath string, ethVersion uint) (*node.Node, error) {
 		AuthAddr: "127.0.0.1",
 		AuthPort: 0,
 		P2P: p2p.Config{
-			ListenTCPAddr: "127.0.0.1:0",
-			NoDiscovery:   true,
-			MaxPeers:      10, // in case a test requires multiple connections, can be changed in the future
-			NoDial:        true,
+			ListenAddr:  "127.0.0.1:0",
+			NoDiscovery: true,
+			MaxPeers:    10, // in case a test requires multiple connections, can be changed in the future
+			NoDial:      true,
 		},
 		JWTSecret: jwtPath,
 	})

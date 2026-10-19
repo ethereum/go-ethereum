@@ -55,7 +55,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.NetRestrict = c.NetRestrict
 	enc.NodeDatabase = c.NodeDatabase
 	enc.Protocols = c.Protocols
-	enc.ListenAddr = c.ListenTCPAddr
+	enc.ListenAddr = c.ListenAddr
 	enc.DiscAddr = c.DiscAddr
 	enc.NAT = c.NAT
 	enc.Dialer = c.Dialer
@@ -141,7 +141,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.Protocols = dec.Protocols
 	}
 	if dec.ListenAddr != nil {
-		c.ListenTCPAddr = *dec.ListenAddr
+		c.ListenAddr = *dec.ListenAddr
 	}
 	if dec.DiscAddr != nil {
 		c.DiscAddr = *dec.DiscAddr

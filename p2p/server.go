@@ -357,7 +357,7 @@ func (srv *Server) Start() (err error) {
 	if srv.clock == nil {
 		srv.clock = mclock.System{}
 	}
-	if srv.NoDial && srv.ListenTCPAddr == "" && srv.ListenQUICAddr == "" {
+	if srv.NoDial && srv.ListenAddr == "" && srv.ListenQUICAddr == "" {
 		srv.log.Warn("P2P server will be useless, neither dialing nor listening")
 	}
 
@@ -548,7 +548,7 @@ func (srv *Server) MaxDialedConns() (limit int) {
 }
 
 func (srv *Server) setupListening() error {
-	if srv.ListenTCPAddr != "" {
+	if srv.ListenAddr != "" {
 		if err := srv.setupTCP(); err != nil {
 			return err
 		}
@@ -563,12 +563,12 @@ func (srv *Server) setupListening() error {
 
 func (srv *Server) setupTCP() error {
 	// Launch the listener.
-	listener, err := srv.listenFunc("tcp", srv.ListenTCPAddr)
+	listener, err := srv.listenFunc("tcp", srv.ListenAddr)
 	if err != nil {
 		return err
 	}
 	srv.listener = listener
-	srv.ListenTCPAddr = listener.Addr().String()
+	srv.ListenAddr = listener.Addr().String()
 
 	// Update the local node record and map the TCP listening port if NAT is configured.
 	tcp, isTCP := listener.Addr().(*net.TCPAddr)
@@ -649,7 +649,7 @@ func (srv *Server) quicCertLoop(rot *quicCertRotator) {
 }
 
 func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
-	listenAddr := srv.ListenTCPAddr
+	listenAddr := srv.ListenAddr
 
 	// Use an alternate listening address for UDP if
 	// a custom discovery address is configured.
@@ -1187,7 +1187,7 @@ func (srv *Server) NodeInfo() *NodeInfo {
 		Enode:      node.URLv4(),
 		ID:         node.ID().String(),
 		IP:         node.IPAddr().String(),
-		ListenAddr: srv.ListenTCPAddr,
+		ListenAddr: srv.ListenAddr,
 		Protocols:  make(map[string]interface{}),
 	}
 	info.Ports.Discovery = node.UDP()

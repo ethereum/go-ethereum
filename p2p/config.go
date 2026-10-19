@@ -93,13 +93,13 @@ type Config struct {
 	// each peer.
 	Protocols []Protocol `toml:"-" json:"-"`
 
-	// If ListenTCPAddr is set to a non-nil address, the server
+	// If ListenAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
 	//
 	// If the port is zero, the operating system will pick a port. The
-	// ListenTCPAddr field will be updated with the actual address when
+	// ListenAddr field will be updated with the actual address when
 	// the server is started.
-	ListenTCPAddr  string
+	ListenAddr     string
 	ListenQUICAddr string
 
 	// MaxBrowserPeers is the maximum number of browser peers, connected over
