@@ -264,8 +264,9 @@ func TestImportYieldsToBlocks(t *testing.T) {
 	}
 }
 
-// TestCompactionPace: writes pass while the write backlog is low, wait while
-// it is high, and end with the context's error if cancelled meanwhile.
+// TestCompactionPace: writes pass while the write backlog and compaction debt
+// are low, wait while either is high, and end with the context's error if
+// cancelled meanwhile.
 func TestCompactionPace(t *testing.T) {
 	var db fakeCompactions
 	p := &compactionPace{db: &db}
@@ -285,6 +286,18 @@ func TestCompactionPace(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("write after the backlog drained: %v", err)
 	}
+	db.debt.Store(paceMaxDebt + 1)
+	p.next = time.Time{}
+	go func() { done <- p.wait(context.Background()) }()
+	select {
+	case err := <-done:
+		t.Fatalf("a deep compaction debt let the write through: %v", err)
+	case <-time.After(3 * paceInterval):
+	}
+	db.debt.Store(paceMaxDebt)
+	if err := <-done; err != nil {
+		t.Fatalf("write after the debt shrank: %v", err)
+	}
 	db.backlog.Store(paceMaxBacklog*100 + 1)
 	p.next = time.Time{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -295,14 +308,16 @@ func TestCompactionPace(t *testing.T) {
 	}
 }
 
-// fakeCompactions reports the write backlog a test sets, in percent, and
-// records the compaction caps it is given.
+// fakeCompactions reports the write backlog, in percent, and compaction debt
+// a test sets, and records the compaction caps it is given.
 type fakeCompactions struct {
 	backlog atomic.Int64
+	debt    atomic.Uint64
 	limits  []int
 }
 
 func (f *fakeCompactions) WriteBacklog() float64  { return float64(f.backlog.Load()) / 100 }
+func (f *fakeCompactions) CompactionDebt() uint64 { return f.debt.Load() }
 func (f *fakeCompactions) LimitCompactions(n int) { f.limits = append(f.limits, n) }
 
 // TestImportChecksPreimageOrder: with phase 1's order check spread over its

@@ -102,6 +102,10 @@ type CompactionController interface {
 	// fraction leaves the rest of the headroom to the store's other users.
 	WriteBacklog() float64
 
+	// CompactionDebt returns how many bytes the store estimates its
+	// compactions have yet to rewrite.
+	CompactionDebt() uint64
+
 	// LimitCompactions caps how many compactions run at once, until it is
 	// called again; n <= 0 lifts the cap.
 	LimitCompactions(n int)

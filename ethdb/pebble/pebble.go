@@ -530,6 +530,12 @@ func (d *Database) WriteBacklog() float64 {
 	return max(float64(m.MemTable.Size)/float64(d.memTableStop), float64(m.Levels[0].Sublevels)/float64(d.l0Stop))
 }
 
+// CompactionDebt returns pebble's estimate of the bytes its compactions have
+// yet to rewrite.
+func (d *Database) CompactionDebt() uint64 {
+	return d.db.Metrics().Compact.EstimatedDebt
+}
+
 // LimitCompactions caps how many compactions pebble runs at once, until it is
 // called again; n <= 0 lifts the cap. Compactions already running finish.
 func (d *Database) LimitCompactions(n int) {

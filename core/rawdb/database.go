@@ -92,6 +92,12 @@ func (frdb *freezerdb) WriteBacklog() float64 {
 	return writeBacklog(frdb.KeyValueStore)
 }
 
+// CompactionDebt returns the key-value store's compaction debt, zero if it
+// doesn't compact in the background.
+func (frdb *freezerdb) CompactionDebt() uint64 {
+	return compactionDebt(frdb.KeyValueStore)
+}
+
 // LimitCompactions caps the key-value store's concurrent compactions, if it
 // compacts in the background.
 func (frdb *freezerdb) LimitCompactions(n int) {
@@ -109,6 +115,12 @@ func (db *nofreezedb) WriteBacklog() float64 {
 	return writeBacklog(db.KeyValueStore)
 }
 
+// CompactionDebt returns the key-value store's compaction debt, zero if it
+// doesn't compact in the background.
+func (db *nofreezedb) CompactionDebt() uint64 {
+	return compactionDebt(db.KeyValueStore)
+}
+
 // LimitCompactions caps the key-value store's concurrent compactions, if it
 // compacts in the background.
 func (db *nofreezedb) LimitCompactions(n int) {
@@ -120,6 +132,15 @@ func (db *nofreezedb) LimitCompactions(n int) {
 func writeBacklog(db any) float64 {
 	if c, ok := db.(ethdb.CompactionController); ok {
 		return c.WriteBacklog()
+	}
+	return 0
+}
+
+// compactionDebt returns db's compaction debt, zero if it has no background
+// compaction.
+func compactionDebt(db any) uint64 {
+	if c, ok := db.(ethdb.CompactionController); ok {
+		return c.CompactionDebt()
 	}
 	return 0
 }

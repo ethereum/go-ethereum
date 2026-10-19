@@ -32,12 +32,19 @@ import (
 // reads queue behind them. An online import therefore caps the database at
 // importCompactions.
 //
+// Two compactions cannot keep up with the tree-node write on mainnet, though:
+// left alone, the debt reached 1.8 TB and level 0 78k files by the import's
+// end, and the node then spent hours working the files down, its blocks
+// slower. The import's writes therefore also wait while the debt is above
+// paceMaxDebt, so it writes as fast as two compactions absorb.
+//
 // The import can also write faster than pebble flushes its memtables, or, with
 // fewer compactions, deepen level 0: either way pebble ends up stopping every
 // write, the node's block commits included. Past paceMaxBacklog of the way to
 // such a stop the import's own writes wait instead.
 const (
 	importCompactions = 2
+	paceMaxDebt       = 32 << 30
 	paceMaxBacklog    = 0.5
 	paceInterval      = 100 * time.Millisecond
 )
@@ -50,15 +57,15 @@ var (
 )
 
 // compactionPace holds writes back while a database is close to stopping
-// writes.
+// writes, or behind on its compactions.
 type compactionPace struct {
 	db   ethdb.CompactionController
 	mu   sync.Mutex
 	next time.Time // until then, the last check stands
 }
 
-// wait returns once the database's write backlog is low enough, or with ctx's
-// error once it is cancelled.
+// wait returns once the database's write backlog and compaction debt are low
+// enough, or with ctx's error once it is cancelled.
 func (p *compactionPace) wait(ctx context.Context) error {
 	start := time.Now()
 	defer func() {
@@ -70,7 +77,7 @@ func (p *compactionPace) wait(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for ctx.Err() == nil && time.Now().After(p.next) {
-		if p.db.WriteBacklog() <= paceMaxBacklog {
+		if p.db.WriteBacklog() <= paceMaxBacklog && p.db.CompactionDebt() <= paceMaxDebt {
 			p.next = time.Now().Add(paceInterval)
 			break
 		}

@@ -782,12 +782,19 @@ func (db *closeTrackingDB) Close() error {
 	return err
 }
 
-// WriteBacklog and LimitCompactions pass ethdb.CompactionController through,
-// which embedding the database interface would hide: an online import paces
-// itself and caps compactions through it.
+// WriteBacklog, CompactionDebt and LimitCompactions pass
+// ethdb.CompactionController through, which embedding the database interface
+// would hide: an online import paces itself and caps compactions through it.
 func (db *closeTrackingDB) WriteBacklog() float64 {
 	if c, ok := db.Database.(ethdb.CompactionController); ok {
 		return c.WriteBacklog()
+	}
+	return 0
+}
+
+func (db *closeTrackingDB) CompactionDebt() uint64 {
+	if c, ok := db.Database.(ethdb.CompactionController); ok {
+		return c.CompactionDebt()
 	}
 	return 0
 }

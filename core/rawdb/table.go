@@ -163,6 +163,12 @@ func (t *table) WriteBacklog() float64 {
 	return writeBacklog(t.db)
 }
 
+// CompactionDebt returns the underlying database's compaction debt, zero if
+// it doesn't compact in the background.
+func (t *table) CompactionDebt() uint64 {
+	return compactionDebt(t.db)
+}
+
 // LimitCompactions caps the underlying database's concurrent compactions, if
 // it compacts in the background. The cap is the whole database's.
 func (t *table) LimitCompactions(n int) {
