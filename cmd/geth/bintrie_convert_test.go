@@ -29,6 +29,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -811,5 +812,100 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 		if rawdb.HasPBTState(db) {
 			t.Fatal("a refused conversion attested its namespace")
 		}
+	})
+}
+
+// TestConvertYieldsToBlocks: the self-converter's scan makes no progress while
+// the node processes a block, even over accounts without storage, and a
+// conversion pausing between accounts and after every slot lands on the root
+// and namespace of one that never pauses.
+func TestConvertYieldsToBlocks(t *testing.T) {
+	defer func(n int) { scanPauseSlots = n }(scanPauseSlots)
+	scanPauseSlots = 1
+
+	source := func(alloc types.GenesisAlloc) (ethdb.Database, *triedb.Database, common.Hash) {
+		chaindb := rawdb.NewMemoryDatabase()
+		tdb := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.Defaults})
+		gspec := &core.Genesis{Config: params.TestChainConfig, BaseFee: big.NewInt(params.InitialBaseFee), Alloc: alloc}
+		root := gspec.MustCommit(chaindb, tdb).Root()
+		tdb.Close()
+		src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
+		t.Cleanup(func() { src.Close() })
+		return chaindb, src, root
+	}
+	options := func(root common.Hash) conversionOptions {
+		return conversionOptions{tmpDir: t.TempDir(), sortBudget: 512, workers: 4, anchor: &types.Header{Number: new(big.Int), Root: root}}
+	}
+
+	t.Run("scan waits through a block", func(t *testing.T) {
+		eoas := make(types.GenesisAlloc)
+		for i := range 16 {
+			eoas[common.Address{byte(i + 1)}] = types.Account{Balance: big.NewInt(int64(i + 1))}
+		}
+		chaindb, src, root := source(eoas)
+		opts := options(root)
+		plan, file, err := triedbPlan(src, root, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		y := newBlockYield()
+		y.set(true)
+		done := make(chan error, 1)
+		go func() {
+			_, _, closeScan, err := scanState(context.Background(), chaindb, plan, nil, true, opts, newStats("Converting state"), y)
+			if err == nil {
+				closeScan()
+			}
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			t.Fatalf("the scan ran through a block: %v", err)
+		case <-time.After(100 * time.Millisecond):
+		}
+		y.set(false)
+		if err := <-done; err != nil {
+			t.Fatalf("scan after the block: %v", err)
+		}
+	})
+
+	t.Run("pausing changes nothing", func(t *testing.T) {
+		convert := func(y *blockYield) (ethdb.Database, common.Hash) {
+			chaindb, src, root := source(mixedAlloc(8347))
+			opts := options(root)
+			plan, file, err := triedbPlan(src, root, opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			got, err := convertPlan(context.Background(), chaindb, plan, y, opts)
+			if err != nil {
+				t.Fatalf("conversion failed: %v", err)
+			}
+			return chaindb, got
+		}
+		y := newBlockYield()
+		stop := make(chan struct{})
+		defer close(stop)
+		go func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				y.set(true)
+				time.Sleep(200 * time.Microsecond)
+				y.set(false)
+				time.Sleep(200 * time.Microsecond)
+			}
+		}()
+		wantDB, want := convert(nil)
+		gotDB, got := convert(y)
+		if got != want {
+			t.Fatalf("pausing conversion built %x, the uninterrupted one %x", got, want)
+		}
+		assertNamespaceEqual(t, wantDB, gotDB)
 	})
 }

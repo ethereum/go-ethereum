@@ -401,7 +401,7 @@ func exportArtifacts(ctx context.Context, chaindb ethdb.Database, srcTriedb *tri
 		}
 	}()
 	stats := newStats("Exporting state")
-	stream, _, closeScan, err := scanState(ctx, chaindb, plan, preimages, false, opts, stats)
+	stream, _, closeScan, err := scanState(ctx, chaindb, plan, preimages, false, opts, stats, nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -457,8 +457,8 @@ func exportArtifacts(ctx context.Context, chaindb ethdb.Database, srcTriedb *tri
 // the dual-check a self-converter owes on those same leaves: check 2 and its
 // code limb, not check 1 (see ownLeaves). The attestation lands last, so an
 // interrupted run refuses to open. Cancelling ctx stops it between batches,
-// before anything is attested. The build, write and check 2 pause while the
-// node processes a block (yield, when set); the scan does not.
+// before anything is attested. The scan, build, write and check 2 pause while
+// the node processes a block (yield, when set).
 func convertPlan(ctx context.Context, chaindb ethdb.Database, plan scanPlan, yield *blockYield, opts conversionOptions) (common.Hash, error) {
 	if plan.release != nil {
 		defer plan.release()
@@ -470,7 +470,7 @@ func convertPlan(ctx context.Context, chaindb ethdb.Database, plan scanPlan, yie
 	} else if dirty {
 		return common.Hash{}, errors.New("binary tree namespace is not empty")
 	}
-	stream, cands, closeScan, err := scanState(ctx, chaindb, plan, nil, true, opts, newStats("Converting state"))
+	stream, cands, closeScan, err := scanState(ctx, chaindb, plan, nil, true, opts, newStats("Converting state"), yield)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -481,9 +481,10 @@ func convertPlan(ctx context.Context, chaindb ethdb.Database, plan scanPlan, yie
 // scanState runs plan's scan, each worker over its range into sorters of its
 // own, and merges what they derived: the leaves in tree-key order and, with
 // cands, the keys behind them that the dual-check joins against. preimages,
-// when set, receives the preimage file in scan order. closeAll releases the
-// sorters once the stream is drained.
-func scanState(ctx context.Context, chaindb ethdb.Database, plan scanPlan, preimages *preimageFile, cands bool, opts conversionOptions, stats *conversionStats) (stream *bintrie.RecordStream, candidates *bintrie.RecordSorter, closeAll func(), err error) {
+// when set, receives the preimage file in scan order. The workers pause while
+// the node processes a block (y, when set). closeAll releases the sorters once
+// the stream is drained.
+func scanState(ctx context.Context, chaindb ethdb.Database, plan scanPlan, preimages *preimageFile, cands bool, opts conversionOptions, stats *conversionStats, y *blockYield) (stream *bintrie.RecordStream, candidates *bintrie.RecordSorter, closeAll func(), err error) {
 	workers := len(plan.ranges)
 	// A worker's sorters are alive at once, and a sealed one keeps its
 	// buffer while its stream drains, so the budget is split rather than
@@ -533,7 +534,7 @@ func scanState(ctx context.Context, chaindb ethdb.Database, plan scanPlan, preim
 	g, gctx := errgroup.WithContext(ctx)
 	for i := range parts {
 		g.Go(func() error {
-			return deriveLeaves(gctx, chaindb, plan.sources[i], &parts[i], plan.keys[i], codes, writers[i], stats)
+			return deriveLeaves(gctx, chaindb, plan.sources[i], &parts[i], plan.keys[i], codes, writers[i], stats, y)
 		})
 	}
 	if err := g.Wait(); err != nil {
@@ -846,11 +847,17 @@ func (f *fileKeys) close() error {
 	return fmt.Errorf("preimage file names address %x, which the state does not hold", addr)
 }
 
+// scanPauseSlots is how many of one contract's slots the scan derives between
+// checks for a block in flight, so that a contract holding millions of them
+// does not keep a worker busy through a block.
+var scanPauseSlots = 1024
+
 // deriveLeaves scans part's range of the source state at root, deriving
 // every tree leaf into the part's sorter and, when the part has one, the keys
-// behind them into its candidates sorter. It gives up once ctx is cancelled,
-// by another worker failing.
-func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, part *scanPart, keys keySource, codes *codeSet, preimages *preimageFile, stats *conversionStats) error {
+// behind them into its candidates sorter. It pauses while the node processes
+// a block (y), between accounts and every scanPauseSlots slots of one, and
+// gives up once ctx is cancelled, by another worker failing.
+func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, part *scanPart, keys keySource, codes *codeSet, preimages *preimageFile, stats *conversionStats, y *blockYield) error {
 	// ponytail: an export's flat scan holds one pebble read snapshot per
 	// worker throughout, pinning a memtable and every table compacted
 	// meanwhile. Reopen from the last hash every 30s, as pathdb's index pruner
@@ -878,7 +885,12 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 			return fmt.Errorf("failed to open storage for %x: %w", addr, err)
 		}
 		defer storageIter.Release()
-		for storageIter.Next() {
+		for n := 1; storageIter.Next(); n++ {
+			if n%scanPauseSlots == 0 {
+				if err := y.pause(ctx); err != nil {
+					return err
+				}
+			}
 			slotHash := storageIter.Hash()
 			slotKey, err := keys.slot(addr, slotHash)
 			if err != nil {
@@ -921,7 +933,7 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 		if part.past(accountHash) {
 			break
 		}
-		if err := ctx.Err(); err != nil {
+		if err := y.pause(ctx); err != nil {
 			return err
 		}
 		// Full and slim account RLP both decode here.
