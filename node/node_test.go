@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -168,29 +169,41 @@ func TestNodeCloseClosesDB(t *testing.T) {
 }
 
 // TestNodeDatabaseCompactionControl: a pebble database opened through the
-// node still offers ethdb.CompactionController, which an online import caps
-// and paces itself through, and reports pebble's own write backlog.
+// node, in pebble's current format or the legacy one older geth wrote, still
+// offers ethdb.CompactionController, which an online import caps and paces
+// itself through, and reports pebble's own write backlog.
 func TestNodeDatabaseCompactionControl(t *testing.T) {
-	conf := testNodeConfig()
-	conf.DataDir = t.TempDir()
-	stack, err := New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer stack.Close()
-	db, err := stack.OpenDatabaseWithOptions("chaindata", DatabaseOptions{Cache: 16, Handles: 16})
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, ok := db.(ethdb.CompactionController)
-	if !ok {
-		t.Fatalf("%T hides ethdb.CompactionController", db)
-	}
-	if err := db.Put([]byte("key"), make([]byte, 4096)); err != nil {
-		t.Fatal(err)
-	}
-	if b := c.WriteBacklog(); b <= 0 || b >= 1 {
-		t.Fatalf("write backlog %v after a small write, want pebble's, in (0, 1)", b)
+	for _, legacy := range []bool{false, true} {
+		t.Run(fmt.Sprintf("legacy=%v", legacy), func(t *testing.T) {
+			conf := testNodeConfig()
+			conf.DataDir = t.TempDir()
+			stack, err := New(conf)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stack.Close()
+			if legacy {
+				v1, err := pebble.NewV1(stack.ResolvePath("chaindata"), 16, 16, "", false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				v1.Close()
+			}
+			db, err := stack.OpenDatabaseWithOptions("chaindata", DatabaseOptions{Cache: 16, Handles: 16})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c, ok := db.(ethdb.CompactionController)
+			if !ok {
+				t.Fatalf("%T hides ethdb.CompactionController", db)
+			}
+			if err := db.Put([]byte("key"), make([]byte, 4096)); err != nil {
+				t.Fatal(err)
+			}
+			if b := c.WriteBacklog(); b <= 0 || b >= 1 {
+				t.Fatalf("write backlog %v after a small write, want pebble's, in (0, 1)", b)
+			}
+		})
 	}
 }
 
