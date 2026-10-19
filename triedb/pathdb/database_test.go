@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -1281,6 +1282,48 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 		}
 		if err := checkHistoricalState(env, root, uint64(i+1), hr); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// TestFlushIngest checks that the buffer flushed into a pebble database, by
+// ingesting the content as a whole, is persisted along with the metadata.
+func TestFlushIngest(t *testing.T) {
+	// Redefine the diff layer depth allowance for faster testing.
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	kvdb, err := pebble.New(t.TempDir(), 16, 16, "", false)
+	if err != nil {
+		t.Fatalf("Failed to open pebble database: %v", err)
+	}
+	var (
+		buffer = 16 * 1024 // flush the buffer multiple times
+		tester = newTester(t, &testerConfig{layers: 32, writeBuffer: &buffer, kvdb: kvdb})
+	)
+	defer tester.release()
+
+	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
+		t.Fatalf("Failed to commit, err: %v", err)
+	}
+	if id := rawdb.ReadPersistentStateID(kvdb); id != uint64(len(tester.roots)) {
+		t.Fatalf("Unexpected persistent state id, want %d, got %d", len(tester.roots), id)
+	}
+	if root := rawdb.ReadSnapshotRoot(kvdb); root != tester.lastHash() {
+		t.Fatalf("Unexpected snapshot root, want %x, got %x", tester.lastHash(), root)
+	}
+	// Reopen the database without any cached data, verify the persisted states
+	tester.db.Close()
+	tester.db = New(tester.db.diskdb, &Config{NoAsyncFlush: true}, false)
+
+	if err := tester.verifyState(tester.lastHash()); err != nil {
+		t.Fatalf("Failed to verify state, err: %v", err)
+	}
+	for addrHash, account := range tester.snapAccounts[tester.lastHash()] {
+		if blob := rawdb.ReadAccountSnapshot(kvdb, addrHash); !bytes.Equal(blob, account) {
+			t.Fatalf("Unexpected flat account %x, want %x, got %x", addrHash, account, blob)
 		}
 	}
 }

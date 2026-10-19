@@ -51,6 +51,12 @@ type freezerdb struct {
 	ancientRoot string
 }
 
+// NewIngestBatch implements ethdb.Ingester, creating an ingest batch if the
+// key-value store supports it, otherwise a normal batch.
+func (frdb *freezerdb) NewIngestBatch(size int) ethdb.Batch {
+	return ethdb.NewIngestBatch(frdb.KeyValueStore, size)
+}
+
 // AncientDatadir returns the path of root ancient directory.
 func (frdb *freezerdb) AncientDatadir() (string, error) {
 	return frdb.ancientRoot, nil
@@ -89,6 +95,12 @@ func (frdb *freezerdb) Freeze() error {
 // nofreezedb is a database wrapper that disables freezer data retrievals.
 type nofreezedb struct {
 	ethdb.KeyValueStore
+}
+
+// NewIngestBatch implements ethdb.Ingester, creating an ingest batch if the
+// key-value store supports it, otherwise a normal batch.
+func (db *nofreezedb) NewIngestBatch(size int) ethdb.Batch {
+	return ethdb.NewIngestBatch(db.KeyValueStore, size)
 }
 
 // Ancient returns an error as we don't have a backing chain freezer.

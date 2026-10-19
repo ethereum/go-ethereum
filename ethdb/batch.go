@@ -52,6 +52,26 @@ type Batcher interface {
 	NewBatchWithSize(size int) Batch
 }
 
+// Ingester wraps the NewIngestBatch method of a backing data store.
+type Ingester interface {
+	// NewIngestBatch creates a write-only batch with pre-allocated buffer, whose
+	// accumulated data is committed by being ingested into the host database as
+	// a whole, bypassing the write-ahead log.
+	//
+	// It's meant for the large atomic writes, which would otherwise block the
+	// subsequent writes until done. Range deletion is not supported.
+	NewIngestBatch(size int) Batch
+}
+
+// NewIngestBatch creates an ingest batch if the given data store supports it,
+// otherwise a normal batch with pre-allocated buffer.
+func NewIngestBatch(db KeyValueStore, size int) Batch {
+	if ingester, ok := db.(Ingester); ok {
+		return ingester.NewIngestBatch(size)
+	}
+	return db.NewBatchWithSize(size)
+}
+
 // HookedBatch wraps an arbitrary batch where each operation may be hooked into
 // to monitor from black box code.
 type HookedBatch struct {
