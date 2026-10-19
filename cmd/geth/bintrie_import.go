@@ -67,7 +67,7 @@ var (
 		Flags: slices.Concat([]cli.Flag{
 			verifyOnlyFlag,
 			keepPreimagesFlag,
-			forceConvertFlag,
+			forceFlag,
 			tmpDirFlag,
 			workersFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
@@ -156,7 +156,7 @@ func importBinaryTrie(ctx *cli.Context) error {
 	}
 	log.Info("Importing binary tree state", "anchor", header.Number, "stateRoot", header.Root)
 
-	if ctx.Bool(forceConvertFlag.Name) {
+	if ctx.Bool(forceFlag.Name) {
 		if verifyOnly {
 			log.Warn("Ignoring --force: verification writes nothing")
 		} else {
@@ -244,7 +244,7 @@ func (p *pbtImporter) Start() error {
 	}
 	num, hash, anchored := rawdb.ReadPBTAnchor(rawdb.NewTable(p.db, string(rawdb.PBTPrefix)))
 	finished := anchored && rawdb.HasPBTState(p.db)
-	if finished && ref.matches(num, hash) {
+	if finished && (ref.matches(num, hash) || p.cfg.Snapshot == "" && p.convertedPast(ref, num)) {
 		log.Info("Binary tree already imported", "anchor", num, "hash", hash)
 		p.chain.FinishPBTImport(nil) // releases a --pbt.import.force hold
 		return nil
@@ -299,7 +299,7 @@ func (p *pbtImporter) awaitAnchor(ctx context.Context, ref anchorRef) (*types.He
 			return header, err
 		}
 		if time.Since(logged) >= time.Minute {
-			log.Info("Binary tree import waiting for its anchor", "anchor", p.cfg.Anchor, "state", waiting)
+			log.Info("Binary tree import waiting for its anchor", "anchor", ref, "state", waiting)
 			logged = time.Now()
 		}
 		select {
@@ -350,8 +350,9 @@ func (p *pbtImporter) anchorState(ref anchorRef) (*types.Header, string, error) 
 	return header, "", nil
 }
 
-// importAt imports the pair at the anchor. The namespace is the import's
-// while the chain holds it: whatever a stopped or failed run, or the tree
+// importAt imports the pair at the anchor, or self-converts with the
+// preimage file anchored there. The namespace is the import's while the
+// chain holds it: whatever a stopped or failed run, or the tree
 // --pbt.import.force replaces, left there is wiped first, and a failure
 // wipes its own writes.
 func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error {
@@ -370,29 +371,34 @@ func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error 
 			return err
 		}
 	}
-	log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
-		"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
 	yield := newBlockYield()
 	defer followBlockProcessing(p.chain, yield)()
-	_, err := importState(ctx, p.db, importOptions{
-		snapshot:  p.cfg.Snapshot,
-		preimages: p.cfg.Preimages,
-		anchor:    anchor,
-		yield:     yield,
-		// Finalized blocks do not reorg, but an attested tree anchored off
-		// the canonical chain is refused by the follower anyway: say so now.
-		beforeAttest: func() error {
-			if rawdb.ReadCanonicalHash(p.db, anchor.Number.Uint64()) != anchor.Hash() {
-				return fmt.Errorf("anchor block %d (%x) left the canonical chain during the import", anchor.Number, anchor.Hash())
-			}
-			return nil
-		},
-		conversionOptions: conversionOptions{
-			sortBudget: onlineSortBudget,
-			tmpDir:     p.tmpDir,
-			workers:    cmp.Or(p.cfg.Workers, utils.PBTImportWorkersFlag.Value),
-		},
-	})
+	var err error
+	if p.cfg.Snapshot == "" {
+		err = p.convertAt(ctx, anchor, yield)
+	} else {
+		log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
+			"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
+		_, err = importState(ctx, p.db, importOptions{
+			snapshot:  p.cfg.Snapshot,
+			preimages: p.cfg.Preimages,
+			anchor:    anchor,
+			yield:     yield,
+			conversionOptions: conversionOptions{
+				sortBudget: onlineSortBudget,
+				tmpDir:     p.tmpDir,
+				workers:    cmp.Or(p.cfg.Workers, utils.PBTImportWorkersFlag.Value),
+				// Finalized blocks do not reorg, but an attested tree anchored off
+				// the canonical chain is refused by the follower anyway: say so now.
+				beforeAttest: func() error {
+					if rawdb.ReadCanonicalHash(p.db, anchor.Number.Uint64()) != anchor.Hash() {
+						return fmt.Errorf("anchor block %d (%x) left the canonical chain during the import", anchor.Number, anchor.Hash())
+					}
+					return nil
+				},
+			},
+		})
+	}
 	if err != nil && ctx.Err() == nil {
 		if werr := wipeBinaryTrieState(p.db, p.triedbDir); werr != nil {
 			log.Error("Failed to wipe a failed binary tree import", "err", werr)
@@ -425,6 +431,24 @@ func (r anchorRef) matches(number uint64, hash common.Hash) bool {
 		return r.hash == hash
 	}
 	return r.number == number
+}
+
+func (r anchorRef) String() string {
+	if r.byHash {
+		return r.hash.Hex()
+	}
+	return strconv.FormatUint(r.number, 10)
+}
+
+// convertedPast reports whether a tree attested at the given block could be
+// a self-conversion's with the preimage file anchored at ref: those attest
+// the block the node had persisted, at or past ref.
+func (p *pbtImporter) convertedPast(ref anchorRef, number uint64) bool {
+	if ref.byHash {
+		n, ok := rawdb.ReadHeaderNumber(p.db, ref.hash)
+		return ok && number >= n
+	}
+	return number >= ref.number
 }
 
 // The EIP-8347 consumer: importState ingests a distributed PBT snapshot and
@@ -466,19 +490,38 @@ type importSlot struct {
 
 // importOptions carries an import's inputs: the two artifacts, the anchor
 // whose header the state is proven against, and the conversion tunables the
-// two commands share.
+// two commands share. A self-converter sets own instead of the artifacts.
 type importOptions struct {
 	snapshot      string
 	preimages     string
 	anchor        *types.Header
 	verifyOnly    bool
 	keepPreimages bool
-	// beforeAttest, when set, runs once everything is written and verified,
-	// right before the attestation: an error leaves the state unattested.
-	beforeAttest func() error
+	own           *ownLeaves
 	// yield, when set, pauses the import while the node processes a block.
 	yield *blockYield
 	conversionOptions
+}
+
+// ownLeaves carries a self-converter's leaves and join candidates into the
+// import in place of the artifacts. EIP-8347 has a self-converter run check 2
+// and its code limb over the leaves it derived, but not check 1: its build is
+// the tree, and the only claimed root is the one that build computes. Its
+// code store holds its code already, so none is written.
+type ownLeaves struct {
+	leaves     *bintrie.RecordStream // in tree-key order
+	candidates *bintrie.RecordSorter // derived by the scan, see accountCandidates
+	count      atomic.Uint64         // leaves handed out, for progress
+}
+
+// next hands the leaf pipeline the conversion's next leaf.
+func (o *ownLeaves) next() ([]byte, [32]byte, error) {
+	key, value, err := o.leaves.Next()
+	if err != nil {
+		return nil, [32]byte{}, err
+	}
+	o.count.Add(1)
+	return key, [32]byte(value), nil
 }
 
 // importState verifies and ingests the artifacts, returning the imported
@@ -486,10 +529,9 @@ type importOptions struct {
 // it between batches, before anything is attested.
 func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions) (common.Hash, error) {
 	var (
-		anchorRoot   = opts.anchor.Root
-		snapshotPath = opts.snapshot
-		preimagePath = opts.preimages
-		verifyOnly   = opts.verifyOnly
+		anchorRoot = opts.anchor.Root
+		verifyOnly = opts.verifyOnly
+		own        = opts.own
 	)
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
 	if !verifyOnly {
@@ -510,25 +552,33 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	quarter := opts.sortBudget / 4
 
 	// Open both artifacts before the expensive phase: a mistyped path should
-	// not cost a full pass over the other file.
-	pre, err := openPreimages(preimagePath)
-	if err != nil {
-		return common.Hash{}, err
+	// not cost a full pass over the other file. A self-converter has none.
+	var (
+		pre    *preimageReader
+		snap   *snapshotReader
+		leaves leafReader = own
+		err    error
+	)
+	if own == nil {
+		if pre, err = openPreimages(opts.preimages); err != nil {
+			return common.Hash{}, err
+		}
+		defer pre.close()
+		if snap, err = openSnapshot(opts.snapshot); err != nil {
+			return common.Hash{}, err
+		}
+		defer snap.close()
+		leaves = snap
 	}
-	defer pre.close()
-
-	snap, err := openSnapshot(snapshotPath)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	defer snap.close()
 	var (
 		pbtBatch ethdb.Batch // tree nodes and flat state, inside the namespace
 		rawBatch ethdb.Batch // code and preimages, outside it
 	)
 	if !verifyOnly {
 		pbtBatch = pbtdb.NewBatch()
-		rawBatch = chaindb.NewBatch()
+		if own == nil {
+			rawBatch = chaindb.NewBatch()
+		}
 	}
 	flush := func(force bool) error {
 		for _, batch := range []ethdb.Batch{pbtBatch, rawBatch} {
@@ -545,196 +595,25 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 		return nil
 	}
 
-	// Phase 1: derive every candidate tree key the preimages can stand for.
-	// The reader stays sequential, digesting the file; workers check its
-	// order, a batch against the one before it, and derive the candidates
-	// into sorters of their own, which the first then absorbs into one merge.
-	// Keeping the preimages needs their hashes in order, so then the reader
-	// checks the order itself. A record's slot keys go out in runs of at most
-	// a batch's worth, so a contract with many slots is spread over the
-	// workers rather than held whole; the reader counts its header-range
-	// slots, which only the record as a whole determines.
-	keep := rawBatch != nil && opts.keepPreimages
-	workers := max(opts.workers, 1)
-	cands := make([]*bintrie.RecordSorter, workers)
-	for i := range cands {
-		cands[i] = bintrie.NewRecordSorter(opts.tmpDir, splitBudget(opts.sortBudget, workers), nil)
-		defer cands[i].Close() // a second Close is a no-op; this one covers the error paths
-	}
-	var (
-		preAccounts  uint64
-		prePreimages uint64
-		batches      = 3*workers + 1 // queued, at the workers and at the reader
-		records      = make(chan *preimageBatch, batches)
-		free         = make(chan *preimageBatch, batches)
-		g, gctx      = errgroup.WithContext(ctx)
-	)
-	for range batches {
-		free <- &preimageBatch{runs: make([]preimageRun, 0, preimageBatchSize), keys: make([]common.Hash, 0, preimageBatchSlots)}
-	}
-	what, verified := "Verifying preimage file", "Verified preimage file"
-	if keep {
-		what, verified = "Verifying and storing preimages", "Verified and stored preimages"
-	}
-	prog := startProgress(what, "bytes", uint64(pre.size), pre.read.Load)
-	defer prog.stop()
-	for _, cand := range cands {
-		g.Go(func() error {
-			var (
-				buf    candidateBuf
-				hasher = newKeccakHasher()
-			)
-			for batch := range records {
-				if err := opts.yield.pause(gctx); err != nil {
-					return err
-				}
-				order := batch.order
-				for i := range batch.runs {
-					run := &batch.runs[i]
-					if !keep {
-						if run.first {
-							if _, err := order.record(hasher, run.index, run.addr); err != nil {
-								return err
-							}
-						}
-						if err := order.slots(hasher, run.slots, nil); err != nil {
-							return err
-						}
-					}
-					if err := addSlotCandidates(cand, &buf, run.addr, run.slots); err != nil {
-						return err
-					}
-					if run.last {
-						if err := addHeaderCandidate(cand, &buf, run.addr, run.headerSlots); err != nil {
-							return err
-						}
-					}
-				}
-				batch.runs, batch.keys = batch.runs[:0], batch.keys[:0]
-				free <- batch
-			}
-			return nil
-		})
-	}
-	readErr := func() error {
-		defer close(records)
-		var (
-			batch  *preimageBatch
-			order  preimageOrder // the reader's own check, when it keeps the preimages
-			hasher = newKeccakHasher()
-		)
-		take := func() error {
-			if err := opts.yield.pause(gctx); err != nil {
-				return err
-			}
-			select {
-			case batch = <-free:
-				return nil
-			case <-gctx.Done():
-				return gctx.Err() // a worker failed; its error is the one reported
-			}
-		}
-		// send hands the batch over and takes the next, which continues the
-		// order check from this one's last run.
-		send := func() error {
-			last := &batch.runs[len(batch.runs)-1]
-			next := preimageOrder{index: last.index, addr: crypto.Keccak256Hash(last.addr[:]), started: true}
-			if !last.last {
-				next.slot, next.slotted = crypto.Keccak256Hash(last.slots[len(last.slots)-1][:]), true
-			}
-			records <- batch // never blocks: the channel holds every batch
-			if err := take(); err != nil {
-				return err
-			}
-			batch.order = next
-			return nil
-		}
-		if err := take(); err != nil {
-			return err
-		}
-		batch.order = preimageOrder{}
-		for {
-			addr, count, err := pre.nextRecord()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return err
-			}
-			index := pre.records - 1
-			// The preimage file is keccak-ordered, which the reader checks on
-			// this path, so the preimage store is written in that order.
-			if keep {
-				addrHash, err := order.record(hasher, index, addr)
-				if err != nil {
-					return err
-				}
-				if err := putPreimage(rawBatch, addrHash, addr.Bytes()); err != nil {
-					return err
-				}
-			}
-			var headerSlots uint64
-			for left, first := count, true; first || left > 0; first = false {
-				if len(batch.runs) == cap(batch.runs) || (left > 0 && len(batch.keys) == cap(batch.keys)) {
-					if err := send(); err != nil {
-						return err
-					}
-				}
-				n := min(left, cap(batch.keys)-len(batch.keys))
-				slots := batch.keys[len(batch.keys) : len(batch.keys)+n]
-				batch.keys = batch.keys[:len(batch.keys)+n]
-				if err := pre.readSlots(slots); err != nil {
-					return err
-				}
-				for i := range slots {
-					if sub, ok := bintrie.HeaderSlot((*[32]byte)(&slots[i])); ok {
-						headerSlots |= 1 << sub
-					}
-				}
-				if keep {
-					err := order.slots(hasher, slots, func(slot, hash common.Hash) error {
-						return putPreimage(rawBatch, hash, slot[:])
-					})
-					if err != nil {
-						return err
-					}
-					if err := flush(false); err != nil {
-						return err
-					}
-				}
-				left -= n
-				run := preimageRun{index: index, addr: addr, slots: slots, first: first, last: left == 0}
-				if run.last {
-					run.headerSlots = headerSlots
-				}
-				batch.runs = append(batch.runs, run)
-			}
-			preAccounts++
-			prePreimages += 1 + uint64(count)
-		}
-		if len(batch.runs) > 0 {
-			records <- batch
-		}
-		return nil
-	}()
-	if err := g.Wait(); err != nil {
+	// Phase 1: every candidate tree key the preimages can stand for, from
+	// the preimage file, or from the keys a self-converter's scan resolved.
+	var cand *bintrie.RecordSorter
+	if own != nil {
+		cand = own.candidates
+	} else if cand, err = preimageCandidates(ctx, pre, rawBatch, flush, opts); err != nil {
 		return common.Hash{}, err
 	}
-	if readErr != nil {
-		return common.Hash{}, readErr
-	}
-	cand := cands[0]
-	for _, c := range cands[1:] {
-		if err := cand.Absorb(c); err != nil {
-			return common.Hash{}, err
-		}
-	}
-	prog.finish(verified, "accounts", preAccounts, "preimages", prePreimages, "digest", pre.digest())
+	defer cand.Close() // a second Close is a no-op; this one covers the error paths
 
-	// Phase 2: stream the snapshot; rebuild the tree; join every account and
+	// Phase 2: stream the leaves; rebuild the tree; join every account and
 	// storage leaf to its preimage candidate; collect the MPT re-derivation
 	// inputs.
-	prog = startProgress("Verifying snapshot", "bytes", uint64(snap.size), snap.read.Load)
+	var prog *progress
+	if own == nil {
+		prog = startProgress("Verifying snapshot", "bytes", uint64(snap.size), snap.read.Load)
+	} else {
+		prog = startProgress("Building the binary tree", "leaves", 0, own.count.Load)
+	}
 	defer prog.stop()
 	candStream, err := cand.Sort()
 	if err != nil {
@@ -938,7 +817,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	// The pass is a pipeline: a decoder goroutine reads the snapshot into
 	// batches, which the tree builder's goroutine and this loop each consume
 	// in order, so decoding, hashing and joining overlap.
-	pipe := startLeafPipeline(snap, builder, &builderErr, opts.yield)
+	pipe := startLeafPipeline(leaves, builder, &builderErr, opts.yield)
 	defer pipe.stop()
 	var (
 		batch *leafBatch
@@ -1104,15 +983,20 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	// snapshot that never left the account zone needs none built.
 	cand.Close()
 
-	// Check 1: the leaves must rebuild to the claimed root.
-	rebuilt := builder.Finish()
+	// Check 1: the leaves must rebuild to the claimed root. A self-converter
+	// claims none: its build is the tree.
+	root := builder.Finish()
 	if builderErr != nil {
 		return common.Hash{}, builderErr
 	}
-	if rebuilt != snap.root {
-		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
+	if own == nil {
+		if root != snap.root {
+			return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", root, snap.root)
+		}
+		prog.finish("Verified snapshot consistency", "root", root, "leaves", stats.leaves.Load(), "digest", snap.digest())
+	} else {
+		prog.finish("Built the binary tree", "root", root, "leaves", stats.leaves.Load())
 	}
-	prog.finish("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves.Load(), "digest", snap.digest())
 	// One knob for the parallelism: the digests share opts.workers hashing
 	// goroutines, and as many families are read back at once.
 	var (
@@ -1215,9 +1099,9 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	log.Info("Verified consensus anchoring", "stateRoot", anchorRoot, "accounts", stats.accounts.Load(), "slots", stats.slots.Load())
 
 	if verifyOnly {
-		log.Info("Verification complete, nothing written", "binaryRoot", snap.root,
+		log.Info("Verification complete, nothing written", "binaryRoot", root,
 			"snapshotDigest", snap.digest(), "preimageDigest", pre.digest())
-		return snap.root, nil
+		return root, nil
 	}
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
@@ -1241,12 +1125,210 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	// commits, and catching up from here has to start somewhere. The
 	// attestation is the completion marker and comes last; the imported tree
 	// bases an empty history, like a conversion.
-	rawdb.WriteSnapshotRoot(pbtdb, snap.root)
+	rawdb.WriteSnapshotRoot(pbtdb, root)
 	rawdb.WritePBTAnchor(pbtdb, opts.anchor.Number.Uint64(), opts.anchor.Hash())
 	rawdb.WritePBTFlatState(pbtdb)
-	log.Info("Import complete", "binaryRoot", snap.root, "anchor", opts.anchor.Number,
-		"snapshotDigest", snap.digest(), "preimageDigest", pre.digest())
-	return snap.root, nil
+	if own == nil {
+		log.Info("Import complete", "binaryRoot", root, "anchor", opts.anchor.Number,
+			"snapshotDigest", snap.digest(), "preimageDigest", pre.digest())
+	}
+	return root, nil
+}
+
+// preimageCandidates derives every candidate tree key the preimage file can
+// stand for: Phase 1 of an import. The reader stays sequential, digesting the
+// file; workers check its order, a batch against the one before it, and
+// derive the candidates into sorters of their own, which the first then
+// absorbs into one merge. Keeping the preimages needs their hashes in order,
+// so then the reader checks the order itself. A record's slot keys go out in
+// runs of at most a batch's worth, so a contract with many slots is spread
+// over the workers rather than held whole; the reader counts its
+// header-range slots, which only the record as a whole determines.
+func preimageCandidates(ctx context.Context, pre *preimageReader, rawBatch ethdb.Batch, flush func(bool) error, opts importOptions) (*bintrie.RecordSorter, error) {
+	keep := rawBatch != nil && opts.keepPreimages
+	workers := max(opts.workers, 1)
+	cands := make([]*bintrie.RecordSorter, workers)
+	for i := range cands {
+		cands[i] = bintrie.NewRecordSorter(opts.tmpDir, splitBudget(opts.sortBudget, workers), nil)
+	}
+	fail := func(err error) (*bintrie.RecordSorter, error) {
+		for _, c := range cands {
+			c.Close()
+		}
+		return nil, err
+	}
+	var (
+		preAccounts  uint64
+		prePreimages uint64
+		batches      = 3*workers + 1 // queued, at the workers and at the reader
+		records      = make(chan *preimageBatch, batches)
+		free         = make(chan *preimageBatch, batches)
+		g, gctx      = errgroup.WithContext(ctx)
+	)
+	for range batches {
+		free <- &preimageBatch{runs: make([]preimageRun, 0, preimageBatchSize), keys: make([]common.Hash, 0, preimageBatchSlots)}
+	}
+	what, verified := "Verifying preimage file", "Verified preimage file"
+	if keep {
+		what, verified = "Verifying and storing preimages", "Verified and stored preimages"
+	}
+	prog := startProgress(what, "bytes", uint64(pre.size), pre.read.Load)
+	defer prog.stop()
+	for _, cand := range cands {
+		g.Go(func() error {
+			var (
+				buf    candidateBuf
+				hasher = newKeccakHasher()
+			)
+			for batch := range records {
+				if err := opts.yield.pause(gctx); err != nil {
+					return err
+				}
+				order := batch.order
+				for i := range batch.runs {
+					run := &batch.runs[i]
+					if !keep {
+						if run.first {
+							if _, err := order.record(hasher, run.index, run.addr); err != nil {
+								return err
+							}
+						}
+						if err := order.slots(hasher, run.slots, nil); err != nil {
+							return err
+						}
+					}
+					if err := addSlotCandidates(cand, &buf, run.addr, run.slots); err != nil {
+						return err
+					}
+					if run.last {
+						if err := addHeaderCandidate(cand, &buf, run.addr, run.headerSlots); err != nil {
+							return err
+						}
+					}
+				}
+				batch.runs, batch.keys = batch.runs[:0], batch.keys[:0]
+				free <- batch
+			}
+			return nil
+		})
+	}
+	readErr := func() error {
+		defer close(records)
+		var (
+			batch  *preimageBatch
+			order  preimageOrder // the reader's own check, when it keeps the preimages
+			hasher = newKeccakHasher()
+		)
+		take := func() error {
+			if err := opts.yield.pause(gctx); err != nil {
+				return err
+			}
+			select {
+			case batch = <-free:
+				return nil
+			case <-gctx.Done():
+				return gctx.Err() // a worker failed; its error is the one reported
+			}
+		}
+		// send hands the batch over and takes the next, which continues the
+		// order check from this one's last run.
+		send := func() error {
+			last := &batch.runs[len(batch.runs)-1]
+			next := preimageOrder{index: last.index, addr: crypto.Keccak256Hash(last.addr[:]), started: true}
+			if !last.last {
+				next.slot, next.slotted = crypto.Keccak256Hash(last.slots[len(last.slots)-1][:]), true
+			}
+			records <- batch // never blocks: the channel holds every batch
+			if err := take(); err != nil {
+				return err
+			}
+			batch.order = next
+			return nil
+		}
+		if err := take(); err != nil {
+			return err
+		}
+		batch.order = preimageOrder{}
+		for {
+			addr, count, err := pre.nextRecord()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			index := pre.records - 1
+			// The preimage file is keccak-ordered, which the reader checks on
+			// this path, so the preimage store is written in that order.
+			if keep {
+				addrHash, err := order.record(hasher, index, addr)
+				if err != nil {
+					return err
+				}
+				if err := putPreimage(rawBatch, addrHash, addr.Bytes()); err != nil {
+					return err
+				}
+			}
+			var headerSlots uint64
+			for left, first := count, true; first || left > 0; first = false {
+				if len(batch.runs) == cap(batch.runs) || (left > 0 && len(batch.keys) == cap(batch.keys)) {
+					if err := send(); err != nil {
+						return err
+					}
+				}
+				n := min(left, cap(batch.keys)-len(batch.keys))
+				slots := batch.keys[len(batch.keys) : len(batch.keys)+n]
+				batch.keys = batch.keys[:len(batch.keys)+n]
+				if err := pre.readSlots(slots); err != nil {
+					return err
+				}
+				for i := range slots {
+					if sub, ok := bintrie.HeaderSlot((*[32]byte)(&slots[i])); ok {
+						headerSlots |= 1 << sub
+					}
+				}
+				if keep {
+					err := order.slots(hasher, slots, func(slot, hash common.Hash) error {
+						return putPreimage(rawBatch, hash, slot[:])
+					})
+					if err != nil {
+						return err
+					}
+					if err := flush(false); err != nil {
+						return err
+					}
+				}
+				left -= n
+				run := preimageRun{index: index, addr: addr, slots: slots, first: first, last: left == 0}
+				if run.last {
+					run.headerSlots = headerSlots
+				}
+				batch.runs = append(batch.runs, run)
+			}
+			preAccounts++
+			prePreimages += 1 + uint64(count)
+		}
+		if len(batch.runs) > 0 {
+			records <- batch
+		}
+		return nil
+	}()
+	if err := g.Wait(); err != nil {
+		return fail(err)
+	}
+	if readErr != nil {
+		return fail(readErr)
+	}
+	// An absorbed sorter holds nothing, so closing it releases no run.
+	cand := cands[0]
+	for _, c := range cands[1:] {
+		if err := cand.Absorb(c); err != nil {
+			return fail(err)
+		}
+		c.Close()
+	}
+	prog.finish(verified, "accounts", preAccounts, "preimages", prePreimages, "digest", pre.digest())
+	return cand, nil
 }
 
 // putPreimage writes one preimage store entry under its keccak hash.
@@ -1295,28 +1377,13 @@ type candidateBuf struct {
 }
 
 // addSlotCandidates derives the candidate tree keys a run of one record's
-// slot keys stands for: one per overflow slot. A header-range slot's number
-// is its sub-index minus the offset, so it needs no candidate of its own -
-// unlike an overflow slot, whose stem is a one-way hash of the slot number
-// and can only be matched by deriving it forward. The record's header
-// candidate carries the header-range slots (addHeaderCandidate).
+// slot keys stands for: one per overflow slot (see accountCandidates). The
+// record's header candidate carries the header-range slots
+// (addHeaderCandidate).
 func addSlotCandidates(cand *bintrie.RecordSorter, buf *candidateBuf, addr common.Address, slots []common.Hash) error {
-	var (
-		storagePrefix [32]byte // blake3(address32), hashed once and reused for every overflow slot
-		havePrefix    bool
-	)
+	c := accountCandidates{cand: cand, buf: buf, addr: addr}
 	for _, slot := range slots {
-		inHeader, treeIndex, sub := bintrie.StorageIndex(slot[:])
-		if inHeader {
-			continue
-		}
-		if !havePrefix {
-			a32 := bintrie.Address32(addr)
-			storagePrefix, havePrefix = bintrie.KeyHash(a32[:]), true
-		}
-		key := append(bintrie.AppendStorageStem(buf.key[:0], addr, storagePrefix[:], &treeIndex), sub)
-		value := append(append(buf.value[:0], addr[:]...), slot[:]...)
-		if err := cand.Add(key, value); err != nil {
+		if err := c.slot(slot); err != nil {
 			return err
 		}
 	}
@@ -1329,6 +1396,43 @@ func addHeaderCandidate(cand *bintrie.RecordSorter, buf *candidateBuf, addr comm
 	key := bintrie.AppendHeaderStem(buf.key[:0], addr)
 	value := binary.BigEndian.AppendUint64(append(buf.value[:0], addr[:]...), headerSlots)
 	return cand.Add(key, value)
+}
+
+// accountCandidates derives one account's candidates as its slots stream
+// past: one per overflow slot, carrying the address and the slot key. A
+// header-range slot's number is its sub-index minus the offset, so it needs
+// no candidate of its own - unlike an overflow slot, whose stem is a one-way
+// hash of the slot number and can only be matched by deriving it forward.
+// The self-converter's scan feeds it the keys it resolves; phase 1 the runs
+// of a preimage record.
+type accountCandidates struct {
+	cand          *bintrie.RecordSorter
+	buf           *candidateBuf
+	addr          common.Address
+	headerSlots   uint64
+	storagePrefix [32]byte // blake3(address32), hashed once and reused for every overflow slot
+	havePrefix    bool
+}
+
+// slot adds an overflow slot's candidate, or notes a header-range one.
+func (c *accountCandidates) slot(slot common.Hash) error {
+	inHeader, treeIndex, sub := bintrie.StorageIndex(slot[:])
+	if inHeader {
+		c.headerSlots |= 1 << (sub - bintrie.HeaderStorageOffset)
+		return nil
+	}
+	if !c.havePrefix {
+		a32 := bintrie.Address32(c.addr)
+		c.storagePrefix, c.havePrefix = bintrie.KeyHash(a32[:]), true
+	}
+	key := append(bintrie.AppendStorageStem(c.buf.key[:0], c.addr, c.storagePrefix[:], &treeIndex), sub)
+	value := append(append(c.buf.value[:0], c.addr[:]...), slot[:]...)
+	return c.cand.Add(key, value)
+}
+
+// finish adds the header stem's candidate, once every slot is in.
+func (c *accountCandidates) finish() error {
+	return addHeaderCandidate(c.cand, c.buf, c.addr, c.headerSlots)
 }
 
 // leafBatchSize and leafBatches size the snapshot pipeline: leaves per batch,
@@ -1361,8 +1465,14 @@ func (b *leafBatch) key(i int) []byte {
 	return b.keys[start:b.ends[i]:b.ends[i]]
 }
 
-// leafPipeline streams a snapshot's leaves from a decoder goroutine to a
-// tree-building goroutine and to the caller, both in snapshot order.
+// leafReader yields leaves in tree-key order: a snapshot's, or a
+// self-converter's own.
+type leafReader interface {
+	next() ([]byte, [32]byte, error)
+}
+
+// leafPipeline streams leaves from a decoder goroutine to a tree-building
+// goroutine and to the caller, both in tree-key order.
 type leafPipeline struct {
 	leaves chan *leafBatch // the caller's
 	free   chan *leafBatch
@@ -1370,10 +1480,10 @@ type leafPipeline struct {
 	g      *errgroup.Group
 }
 
-// startLeafPipeline starts decoding snap and feeding builder; *builderErr is
+// startLeafPipeline starts reading src and feeding builder; *builderErr is
 // the error builder's node callback records. Both pause between batches while
 // the node processes a block (y).
-func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, builderErr *error, y *blockYield) *leafPipeline {
+func startLeafPipeline(src leafReader, builder *bintrie.StackBuilder, builderErr *error, y *blockYield) *leafPipeline {
 	ctx, cancel := context.WithCancel(context.Background())
 	g, ctx := errgroup.WithContext(ctx)
 	p := &leafPipeline{
@@ -1401,7 +1511,7 @@ func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, buil
 			}
 			b.keys, b.ends, b.values = b.keys[:0], b.ends[:0], b.values[:0]
 			for len(b.values) < leafBatchSize {
-				key, value, err := snap.next()
+				key, value, err := src.next()
 				if err == io.EOF {
 					eof = true
 					break

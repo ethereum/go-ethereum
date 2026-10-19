@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -57,29 +56,25 @@ var (
 		Name:  "tmpdir",
 		Usage: "Directory for scratch files, the sort spills and a copy of every tree node; needs disk, not tmpfs (default: the OS temp dir)",
 	}
-	forceConvertFlag = &cli.BoolFlag{
+	forceFlag = &cli.BoolFlag{
 		Name:  "force",
-		Usage: "Wipe any existing binary tree state before converting",
+		Usage: "Wipe any existing binary tree state before importing",
 	}
 	snapshotOutFlag = &cli.StringFlag{
 		Name:  "snapshot-out",
-		Usage: "File to write the byte-canonical PBT snapshot artifact to",
+		Usage: "File to write the byte-canonical PBT snapshot artifact to (required)",
 	}
 	preimagesOutFlag = &cli.StringFlag{
 		Name:  "preimages-out",
-		Usage: "File to write the EIP-8347 preimage file to",
+		Usage: "File to write the EIP-8347 preimage file to (required)",
 	}
 	preimagesInFlag = &cli.StringFlag{
 		Name:  "preimages",
 		Usage: "EIP-8347 preimage file to take the state's keys from instead of the node's preimage store; it must hold exactly the state's keys",
 	}
-	dropPreimagesFlag = &cli.BoolFlag{
-		Name:  "drop-preimages",
-		Usage: "Delete the preimage store after the conversion verifies",
-	}
 	workersFlag = &cli.IntFlag{
 		Name:  "workers",
-		Usage: "Parallel workers: convert splits its scan among them by account hash, import its candidate key derivation; the 4 GB sort budget is split among them",
+		Usage: "Parallel workers: export splits its scan among them by account hash, import its candidate key derivation; the 4 GB sort budget is split among them",
 		Value: 4,
 	}
 
@@ -90,44 +85,55 @@ var (
 		Subcommands: []*cli.Command{
 			bintrieImportCommand,
 			{
-				Name:      "convert",
-				Usage:     "Convert MPT state to binary trie",
+				Name:      "export",
+				Usage:     "Write the EIP-8347 distribution artifacts of the MPT state (producers only)",
 				ArgsUsage: "[state-root]",
-				Action:    convertToBinaryTrie,
+				Action:    exportBinaryTrie,
 				Flags: slices.Concat([]cli.Flag{
 					tmpDirFlag,
-					forceConvertFlag,
 					snapshotOutFlag,
 					preimagesOutFlag,
 					preimagesInFlag,
-					dropPreimagesFlag,
 					workersFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
-geth bintrie convert [flags] [state-root]
+geth bintrie export --snapshot-out <file> --preimages-out <file> [flags] [state-root]
 
-Converts the MPT state into the EIP-8297 binary tree offline, following the
-EIP-8347 pipeline, and verifies the result before marking it complete.
+Writes the EIP-8347 distribution artifacts of the MPT state - the PBT snapshot
+and the preimage file - for a producer to publish, and checks them the way a
+downloading node will before keeping them. It does not migrate this node: it
+writes nothing to the database. A node migrates with "geth bintrie import" or
+online with --pbt.import.*.
+
 Defaults to the head root. The addresses and slot keys behind the state's
 hashes come from the node's preimage store (--cache.preimages) or from an
 EIP-8347 preimage file of the same state (--preimages). The scan runs on
---workers workers. --snapshot-out and --preimages-out emit the
-EIP-8347 distribution artifacts. --drop-preimages deletes the preimage store
-afterwards, which also rules out a re-conversion from it.
+--workers workers.
 `,
 			},
 		},
 	}
 )
 
-func convertToBinaryTrie(ctx *cli.Context) error {
+func exportBinaryTrie(ctx *cli.Context) error {
 	if ctx.NArg() > 1 {
 		return errors.New("too many arguments")
+	}
+	snapshotPath, preimagePath := ctx.String(snapshotOutFlag.Name), ctx.String(preimagesOutFlag.Name)
+	if snapshotPath == "" || preimagePath == "" {
+		return errors.New("--snapshot-out and --preimages-out are required")
+	}
+	if snapshotPath == preimagePath {
+		return errors.New("--snapshot-out and --preimages-out must name different files")
+	}
+	workers := ctx.Int(workersFlag.Name)
+	if workers < 1 {
+		return errors.New("--workers must be at least 1")
 	}
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chaindb := utils.MakeChainDatabase(ctx, stack, false)
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	defer chaindb.Close()
 
 	headBlock := rawdb.ReadHeadBlock(chaindb)
@@ -135,33 +141,20 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 		return errors.New("no head block found")
 	}
 	// Past the fork the head commits the binary tree: no merkle state exists
-	// at its root, and the namespace a conversion wipes is the live tree.
+	// at its root.
 	if past, err := headCommitsBinaryTree(chaindb, headBlock); err != nil {
 		return err
 	} else if past {
-		return errors.New("the head block commits the binary tree; nothing to convert")
+		return errors.New("the head block commits the binary tree; nothing to export")
 	}
-	var (
-		root   common.Hash
-		anchor *types.Header
-		err    error
-	)
+	root := headBlock.Root()
 	if ctx.NArg() == 1 {
-		root, err = parseRoot(ctx.Args().First())
-		if err != nil {
+		var err error
+		if root, err = parseRoot(ctx.Args().First()); err != nil {
 			return fmt.Errorf("invalid state root: %w", err)
 		}
-		// Only the head root is anchored; any other root converts into
-		// artifacts, not a bootable namespace.
-		if root == headBlock.Root() {
-			anchor = headBlock.Header()
-		}
-	} else {
-		root = headBlock.Root()
-		anchor = headBlock.Header()
 	}
-	// Without preimages the scan fails, and only after --force has wiped. An
-	// empty state has nothing to resolve.
+	// An empty state has nothing to resolve.
 	preimageIn := ctx.String(preimagesInFlag.Name)
 	if preimageIn != "" {
 		in, err := os.Stat(preimageIn)
@@ -169,72 +162,31 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 			return fmt.Errorf("--preimages: %w", err)
 		}
 		// The outputs are created, and truncated, before the input is read.
-		for _, out := range []string{ctx.String(snapshotOutFlag.Name), ctx.String(preimagesOutFlag.Name)} {
+		for _, out := range []string{snapshotPath, preimagePath} {
 			if fi, err := os.Stat(out); err == nil && os.SameFile(in, fi) {
 				return errors.New("--preimages must not name an output file")
 			}
 		}
 	} else if root != types.EmptyRootHash && !hasPreimages(chaindb) {
-		return errors.New("no preimages to convert from; the source must sync with --cache.preimages, or pass an EIP-8347 preimage file with --preimages")
+		return errors.New("no preimages to export from; the source must sync with --cache.preimages, or pass an EIP-8347 preimage file with --preimages")
 	}
-	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
+	log.Info("Exporting EIP-8347 artifacts", "root", root, "block", headBlock.NumberU64())
 
-	snapshotPath, preimagePath := ctx.String(snapshotOutFlag.Name), ctx.String(preimagesOutFlag.Name)
-	if snapshotPath != "" && snapshotPath == preimagePath {
-		return errors.New("--snapshot-out and --preimages-out must name different files")
-	}
-	if (snapshotPath == "") != (preimagePath == "") {
-		log.Warn("Emitting one distribution artifact without the other; EIP-8347 distributes the snapshot and the preimage file together")
-	}
-	workers := ctx.Int(workersFlag.Name)
-	if workers < 1 {
-		return errors.New("--workers must be at least 1")
-	}
-	// Probe before MakeTrieDatabase: its guard fatals on a completed
-	// conversion and cannot see interrupted debris.
-	if ctx.Bool(forceConvertFlag.Name) {
-		if !hasMerkleSource(chaindb, root) {
-			return errors.New("refusing --force: no merkle state to reconvert from")
-		}
-		if err := wipeBinaryTrieState(chaindb, stack.ResolvePath("triedb")); err != nil {
-			return fmt.Errorf("failed to wipe binary tree state: %w", err)
-		}
-	} else if dirty, err := hasBinaryTrieState(chaindb); err != nil {
-		return fmt.Errorf("failed to probe the binary tree namespace: %w", err)
-	} else if dirty {
-		if !hasMerkleSource(chaindb, root) {
-			return errors.New("binary tree state present, merkle state gone; re-import rather than reconvert")
-		}
-		return errors.New("database already holds binary tree state, complete or from an interrupted conversion; re-run with --force to wipe and reconvert")
-	}
 	srcTriedb := utils.MakeTrieDatabase(ctx, stack, chaindb, true, true, false)
-	// Closed once: --drop-preimages closes it early, before its wipe.
-	closeSource := sync.OnceValue(srcTriedb.Close)
-	defer closeSource()
+	defer srcTriedb.Close()
 
-	binRoot, err := convertState(chaindb, srcTriedb, root, conversionOptions{
+	binRoot, err := exportArtifacts(context.Background(), chaindb, srcTriedb, root, conversionOptions{
 		sortBudget:   sortBudget,
 		tmpDir:       ctx.String(tmpDirFlag.Name),
 		snapshotPath: snapshotPath,
 		preimagePath: preimagePath,
-		anchor:       anchor,
 		workers:      workers,
 		preimageIn:   preimageIn,
 	})
 	if err != nil {
 		return err
 	}
-	log.Info("Conversion complete", "binaryRoot", binRoot)
-
-	if ctx.Bool(dropPreimagesFlag.Name) {
-		// The trie database flushes on close; wipe once it has let go.
-		if err := closeSource(); err != nil {
-			return fmt.Errorf("failed to close the source trie database: %w", err)
-		}
-		if err := wipePreimages(chaindb); err != nil {
-			return fmt.Errorf("preimage deletion failed: %w", err)
-		}
-	}
+	log.Info("Export complete", "block", headBlock.NumberU64(), "root", root, "binaryRoot", binRoot)
 	return nil
 }
 
@@ -242,11 +194,14 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 type conversionOptions struct {
 	sortBudget   int           // total bytes of buffered records before the sorts spill
 	tmpDir       string        // spill directory; empty means the OS temp dir
-	snapshotPath string        // PBT snapshot artifact destination; empty writes none
-	preimagePath string        // preimage file destination; empty writes none
-	anchor       *types.Header // block committing root; nil leaves the namespace unbootable
+	snapshotPath string        // export: PBT snapshot artifact destination
+	preimagePath string        // export: preimage file destination
+	anchor       *types.Header // conversion: block committing the converted root, attested with it
 	workers      int           // parallel workers; below 1 means one
 	preimageIn   string        // EIP-8347 preimage file to resolve keys from; empty reads the node's store
+	// beforeAttest, when set, runs once everything is written and verified,
+	// right before the attestation: an error leaves the state unattested.
+	beforeAttest func() error
 }
 
 // conversionStats tracks progress for the periodic report. The message names
@@ -346,33 +301,88 @@ func (p *progress) finish(msg string, ctx ...any) {
 	log.Info(msg, append(ctx, "elapsed", common.PrettyDuration(time.Since(p.start)))...)
 }
 
-// convertState converts the MPT state at root into the binary tree namespace
-// per EIP-8347: one scan, split by account hash across workers, derives
-// every leaf, an external sort orders the leaves in tree-key order, and the
-// tree builds bottom-up in one pass. The scan must re-derive the source
-// state root, both stores must read back exactly what was written, and the
-// leaves must pass EIP-8347's dual-check as an import's would. The
-// attestation lands last, so an interrupted run refuses to open.
-func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
-	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
-
-	// A non-virgin namespace, completed or debris, needs --force.
-	if dirty, err := hasBinaryTrieState(chaindb); err != nil {
-		return common.Hash{}, err
-	} else if dirty {
-		return common.Hash{}, errors.New("binary tree namespace is not empty; re-run with --force to wipe it")
+// triedbPlan plans a scan of the MPT state at root through a trie database:
+// each worker scans its own range of account hashes, resolving keys from the
+// node's preimage store or from its own piece of a preimage file. Close the
+// returned file, if any, once the scan is done.
+func triedbPlan(srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (scanPlan, io.Closer, error) {
+	workers := max(opts.workers, 1)
+	plan := scanPlan{ranges: splitHashSpace(workers)}
+	var file io.Closer = io.NopCloser(nil)
+	if opts.preimageIn != "" {
+		f, ranges, pieces, err := splitPreimages(opts.preimageIn, workers)
+		if err != nil {
+			return scanPlan{}, nil, err
+		}
+		file, plan.ranges = f, ranges
+		for _, piece := range pieces {
+			plan.keys = append(plan.keys, &fileKeys{r: piece, hasher: newKeccakHasher()})
+		}
+	} else {
+		for range plan.ranges {
+			plan.keys = append(plan.keys, storeKeys{srcTriedb})
+		}
 	}
-	stats := newStats("Converting state")
-	// EIP-8347 has every node, self-converters too, run the dual-check on the
-	// leaves it adopts. The check reads the artifacts, so those not asked for
-	// go to scratch files; a preimage file given as input is read as is.
-	scratch, err := os.MkdirTemp(opts.tmpDir, "bintrie-convert-")
+	src := triedbSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
+	for range plan.ranges {
+		plan.sources = append(plan.sources, src)
+	}
+	return plan, file, nil
+}
+
+// scanPlan is what a conversion scans: per worker, a range of account
+// hashes, the source to read it from and the keys behind its hashes.
+type scanPlan struct {
+	ranges  []hashRange
+	sources []leafSource
+	keys    []keySource
+	release func() // frees the sources once the scan is done, if they hold anything
+}
+
+// splitPreimages opens a preimage file and cuts it into at most n pieces of
+// about equal bytes on record boundaries, returning each piece's reader and
+// the range of account hashes it covers: the work splits by data volume, and
+// a small file may make fewer pieces than workers.
+func splitPreimages(path string, n int) (*os.File, []hashRange, []*preimageReader, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, nil, nil, err
+	}
+	offsets, starts, err := splitPreimageFile(f, info.Size(), n)
+	if err != nil {
+		f.Close()
+		return nil, nil, nil, err
+	}
+	ranges, pieces := make([]hashRange, len(offsets)), make([]*preimageReader, len(offsets))
+	for i := range offsets {
+		end := info.Size()
+		if i+1 < len(offsets) {
+			end = offsets[i+1]
+			ranges[i].end = starts[i+1]
+		}
+		ranges[i].start = starts[i]
+		pieces[i] = preimagePiece(f, offsets[i], end-offsets[i])
+	}
+	return f, ranges, pieces, nil
+}
+
+// exportArtifacts writes the EIP-8347 distribution artifacts of the MPT state
+// at root, the PBT snapshot and the preimage file, for a producer to publish,
+// and checks them as a downloading node does: a verify-only import, check 1
+// and check 2 over the bytes written. It writes nothing to the database; the
+// node it runs on is not migrated.
+func exportArtifacts(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
+	plan, file, err := triedbPlan(srcTriedb, root, opts)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	defer os.RemoveAll(scratch)
-	snapPath := cmp.Or(opts.snapshotPath, filepath.Join(scratch, "snapshot"))
-	snapshot, err := newSnapshotWriter(snapPath)
+	defer file.Close()
+	snapshot, err := newSnapshotWriter(opts.snapshotPath)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -381,140 +391,28 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 			snapshot.abort()
 		}
 	}()
-	prePath := cmp.Or(opts.preimagePath, opts.preimageIn, filepath.Join(scratch, "preimages"))
-	var preimages *preimageFile
-	if prePath != opts.preimageIn {
-		if preimages, err = newPreimageFile(prePath); err != nil {
-			return common.Hash{}, err
-		}
-		defer func() {
-			if preimages != nil {
-				preimages.abort()
-			}
-		}()
-	}
-	// Phase 1: scan, deriving leaves. Each worker scans its own range of
-	// account hashes into sorters of its own, resolving keys from the node's
-	// preimage store or from its own piece of a preimage file.
-	workers := max(opts.workers, 1)
-	ranges := splitHashSpace(workers)
-	keys := make([]keySource, workers)
-	for i := range keys {
-		keys[i] = storeKeys{srcTriedb}
-	}
-	if opts.preimageIn != "" {
-		f, err := os.Open(opts.preimageIn)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		defer f.Close()
-		info, err := f.Stat()
-		if err != nil {
-			return common.Hash{}, err
-		}
-		// The file's pieces set the ranges, so the work splits by data volume;
-		// a small file may make fewer pieces than workers.
-		offsets, starts, err := splitPreimageFile(f, info.Size(), workers)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		workers = len(offsets)
-		ranges, keys = make([]hashRange, workers), make([]keySource, workers)
-		for i := range offsets {
-			end := info.Size()
-			if i+1 < workers {
-				end = offsets[i+1]
-				ranges[i].end = starts[i+1]
-			}
-			ranges[i].start = starts[i]
-			keys[i] = &fileKeys{r: preimagePiece(f, offsets[i], end-offsets[i]), hasher: newKeccakHasher()}
-		}
-	}
-	// Every worker's three sorters are alive at once, and a sealed one keeps
-	// its buffer while its stream drains, so the budget is split rather than
-	// reused.
-	share := splitBudget(opts.sortBudget, 3*workers)
-	parts := make([]scanPart, workers)
-	for i, r := range ranges {
-		parts[i] = scanPart{
-			hashRange: r,
-			leaves:    bintrie.NewLeafSorter(opts.tmpDir, share),
-			// The re-derivation limbs, keyed by account hash and by account‖slot.
-			accounts: bintrie.NewRecordSorter(opts.tmpDir, share, nil),
-			slots:    bintrie.NewRecordSorter(opts.tmpDir, share, nil),
-		}
-		defer parts[i].leaves.Close()
-		defer parts[i].accounts.Close()
-		defer parts[i].slots.Close()
-	}
-	// Every worker writes its range of the preimage file: the first straight
-	// into the artifact, the others into fragments joined after it.
-	writers := make([]*preimageFile, workers)
-	writers[0] = preimages
-	if preimages != nil {
-		for i := 1; i < workers; i++ {
-			frag, err := newPreimageFragment(opts.tmpDir)
-			if err != nil {
-				return common.Hash{}, err
-			}
-			defer frag.abort()
-			writers[i] = frag
-		}
-	}
-	src := leafSource{srcTriedb, root, srcTriedb.Scheme() == rawdb.PathScheme && srcTriedb.SnapshotCompleted()}
-	codes := newCodeSet()
-	g, gctx := errgroup.WithContext(context.Background())
-	for i := range parts {
-		g.Go(func() error {
-			return deriveLeaves(gctx, chaindb, src, &parts[i], keys[i], codes, writers[i], stats)
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return common.Hash{}, err
-	}
-	if preimages != nil {
-		if err := preimages.join(writers[1:]); err != nil {
-			return common.Hash{}, err
-		}
-	}
-	stats.report(true)
-
-	// One merge serves every worker's records.
-	sorter, accounts, slots := parts[0].leaves, parts[0].accounts, parts[0].slots
-	for _, p := range parts[1:] {
-		if err := errors.Join(sorter.Absorb(p.leaves), accounts.Absorb(p.accounts), slots.Absorb(p.slots)); err != nil {
-			return common.Hash{}, err
-		}
-	}
-
-	// Check 1, before the build: everything written is fed by this same
-	// record set, so only this check ties the output to the source state.
-	// The fold writes the flat state as it goes, digesting what it writes.
-	written := newWrittenState(workers)
-	defer written.close()
-	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, workers, stats.accounts.Load()+stats.slots.Load()); err != nil {
-		return common.Hash{}, err
-	}
-	accounts.Close()
-	slots.Close()
-
-	// Phase 2+3: sort and build. Tree nodes are staged per depth and written
-	// once the tree is built, in key order (see nodeStager).
-	stream, err := sorter.Sort()
+	preimages, err := newPreimageFile(opts.preimagePath)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	nodes, err := newNodeStager(opts.tmpDir)
+	defer func() {
+		if preimages != nil {
+			preimages.abort()
+		}
+	}()
+	stats := newStats("Exporting state")
+	stream, _, closeScan, err := scanState(ctx, chaindb, plan, preimages, false, opts, stats)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	defer nodes.close()
-	var builderErr error
-	builder := bintrie.NewStackBuilder(func(path []byte, hash common.Hash, blob []byte) {
-		if builderErr == nil {
-			builderErr = nodes.add(path, blob)
-		}
-	})
+	defer closeScan()
+
+	// The snapshot is the sorted leaves, and its trailer commits the root
+	// they build to; no tree node is kept.
+	var written atomic.Uint64
+	prog := startProgress("Writing PBT snapshot", "leaves", stats.leaves.Load(), written.Load)
+	defer prog.stop()
+	builder := bintrie.NewStackBuilder(nil)
 	for {
 		key, value, err := stream.Next()
 		if err == io.EOF {
@@ -529,90 +427,181 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		if err := builder.Add(key, value); err != nil {
 			return common.Hash{}, err
 		}
+		written.Add(1)
 	}
 	binRoot := builder.Finish()
-	if builderErr != nil {
-		return common.Hash{}, builderErr
-	}
-	sorter.Close()
-	if err := writeStagedNodes(context.Background(), pbtdb, nodes, written.nodes, nil); err != nil {
-		return common.Hash{}, err
-	}
-	nodes.close()
-	log.Info("Built binary tree", "nodes", written.nodes.count, "leaves", stats.leaves.Load())
-
-	// Both stores must hold exactly what was written before anything becomes
-	// publishable or openable.
-	if err := verifyWritten(context.Background(), pbtdb, nil, written.families()...); err != nil {
-		return common.Hash{}, err
-	}
-	logWritten(written)
-
+	prog.finish("Wrote PBT snapshot leaves", "leaves", written.Load(), "binaryRoot", binRoot)
 	snapDigest, err := snapshot.finalize(binRoot)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	var preDigest common.Hash
-	if preimages != nil {
-		if preDigest, err = preimages.finalize(); err != nil {
-			return common.Hash{}, err
-		}
+	preDigest, err := preimages.finalize()
+	if err != nil {
+		return common.Hash{}, err
 	}
-	// The check re-reads the artifacts and rebuilds the tree once more;
-	// streaming the leaves into it would save that pass.
-	if _, err := importState(context.Background(), chaindb, importOptions{snapshot: snapPath, preimages: prePath,
+	if _, err := importState(ctx, chaindb, importOptions{snapshot: opts.snapshotPath, preimages: opts.preimagePath,
 		anchor: &types.Header{Root: root}, verifyOnly: true, conversionOptions: opts}); err != nil {
 		return common.Hash{}, err
 	}
-	// Keep the artifacts asked for; the aborts remove the scratch ones.
-	if opts.snapshotPath != "" {
-		log.Info("Wrote PBT snapshot artifact", "path", opts.snapshotPath, "leaves", snapshot.count, "digest", snapDigest)
-		snapshot = nil
-	}
-	if opts.preimagePath != "" {
-		log.Info("Wrote preimage file", "path", opts.preimagePath, "accounts", preimages.accounts, "digest", preDigest)
-		preimages = nil
-	}
-
-	// No state id: the tree bases an empty history and live commits number
-	// from 1. The attestation comes last.
-	rawdb.WriteSnapshotRoot(pbtdb, binRoot)
-	if opts.anchor != nil {
-		rawdb.WritePBTAnchor(pbtdb, opts.anchor.Number.Uint64(), opts.anchor.Hash())
-	} else {
-		log.Warn("Converted without an anchor: the namespace is not bootable; reconvert at the head root with --force before starting the node")
-	}
-	rawdb.WritePBTFlatState(pbtdb)
+	log.Info("Wrote PBT snapshot artifact", "path", opts.snapshotPath, "leaves", snapshot.count, "digest", snapDigest)
+	log.Info("Wrote preimage file", "path", opts.preimagePath, "accounts", preimages.accounts, "digest", preDigest)
+	snapshot, preimages = nil, nil // verified: keep them
 	return binRoot, nil
+}
+
+// convertPlan converts the state at opts.anchor's root over plan into the
+// binary tree namespace per EIP-8347, the self-converter's way: one scan,
+// split by account hash across workers, derives every leaf and the keys
+// behind it, an external sort orders the leaves in tree-key order, and the
+// import's pipeline builds the tree bottom-up from them in one pass and runs
+// the dual-check a self-converter owes on those same leaves: check 2 and its
+// code limb, not check 1 (see ownLeaves). The attestation lands last, so an
+// interrupted run refuses to open. Cancelling ctx stops it between batches,
+// before anything is attested. The build, write and check 2 pause while the
+// node processes a block (yield, when set); the scan does not.
+func convertPlan(ctx context.Context, chaindb ethdb.Database, plan scanPlan, yield *blockYield, opts conversionOptions) (common.Hash, error) {
+	if plan.release != nil {
+		defer plan.release()
+	}
+	// A non-virgin namespace, completed or debris, is wiped first by whoever
+	// owns it.
+	if dirty, err := hasBinaryTrieState(chaindb); err != nil {
+		return common.Hash{}, err
+	} else if dirty {
+		return common.Hash{}, errors.New("binary tree namespace is not empty")
+	}
+	stream, cands, closeScan, err := scanState(ctx, chaindb, plan, nil, true, opts, newStats("Converting state"))
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer closeScan()
+	return importState(ctx, chaindb, importOptions{anchor: opts.anchor, own: &ownLeaves{leaves: stream, candidates: cands}, yield: yield, conversionOptions: opts})
+}
+
+// scanState runs plan's scan, each worker over its range into sorters of its
+// own, and merges what they derived: the leaves in tree-key order and, with
+// cands, the keys behind them that the dual-check joins against. preimages,
+// when set, receives the preimage file in scan order. closeAll releases the
+// sorters once the stream is drained.
+func scanState(ctx context.Context, chaindb ethdb.Database, plan scanPlan, preimages *preimageFile, cands bool, opts conversionOptions, stats *conversionStats) (stream *bintrie.RecordStream, candidates *bintrie.RecordSorter, closeAll func(), err error) {
+	workers := len(plan.ranges)
+	// A worker's sorters are alive at once, and a sealed one keeps its
+	// buffer while its stream drains, so the budget is split rather than
+	// reused.
+	sorters := workers
+	if cands {
+		sorters *= 2
+	}
+	share := splitBudget(opts.sortBudget, sorters)
+	parts := make([]scanPart, workers)
+	closeParts := func() {
+		for _, p := range parts {
+			if p.leaves != nil {
+				p.leaves.Close()
+			}
+			if p.cands != nil {
+				p.cands.Close()
+			}
+		}
+	}
+	defer func() {
+		if err != nil {
+			closeParts()
+		}
+	}()
+	for i, r := range plan.ranges {
+		parts[i] = scanPart{hashRange: r, leaves: bintrie.NewLeafSorter(opts.tmpDir, share)}
+		if cands {
+			parts[i].cands = bintrie.NewRecordSorter(opts.tmpDir, share, nil)
+		}
+	}
+	// Every worker writes its range of the preimage file: the first straight
+	// into it, the others into fragments joined after it.
+	writers := make([]*preimageFile, workers)
+	writers[0] = preimages
+	if preimages != nil {
+		for i := 1; i < workers; i++ {
+			frag, err := newPreimageFragment(opts.tmpDir)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			defer frag.abort()
+			writers[i] = frag
+		}
+	}
+	codes := newCodeSet()
+	g, gctx := errgroup.WithContext(ctx)
+	for i := range parts {
+		g.Go(func() error {
+			return deriveLeaves(gctx, chaindb, plan.sources[i], &parts[i], plan.keys[i], codes, writers[i], stats)
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, nil, nil, err
+	}
+	// Nothing reads the source past the scan.
+	if plan.release != nil {
+		plan.release()
+	}
+	if preimages != nil {
+		if err := preimages.join(writers[1:]); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	stats.report(true)
+
+	// One merge serves every worker's records.
+	sorter, candidates := parts[0].leaves, parts[0].cands
+	for _, p := range parts[1:] {
+		if err := sorter.Absorb(p.leaves); err != nil {
+			return nil, nil, nil, err
+		}
+		if cands {
+			if err := candidates.Absorb(p.cands); err != nil {
+				return nil, nil, nil, err
+			}
+		}
+	}
+	if stream, err = sorter.Sort(); err != nil {
+		return nil, nil, nil, err
+	}
+	return stream, candidates, closeParts, nil
 }
 
 // leafSource yields the source state's accounts from a seek hash on, then
 // each account's storage, in keccak order, as RLP the way the state stores
-// it. flat reads pathdb's flat state, which its iterators allow only once
-// complete; otherwise the trie nodes are walked: a hash-scheme source, or a
-// pathdb still syncing or generating. Either way verifySourceRoot
-// authenticates the scanned leaves against root.
-type leafSource struct {
+// it. Whatever the source, check 2 authenticates the leaves derived from the
+// scan against the root.
+type leafSource interface {
+	accounts(seek common.Hash) (pathdb.AccountIterator, error)
+	storage(accountHash, storageRoot common.Hash) (pathdb.StorageIterator, error)
+}
+
+// triedbSource reads the state at root through a trie database. flat reads
+// pathdb's flat state, which its iterators allow only once complete;
+// otherwise the trie nodes are walked: a hash-scheme source, or a pathdb
+// still syncing or generating.
+type triedbSource struct {
 	db   *triedb.Database
 	root common.Hash
 	flat bool // flat accounts are slim RLP, trie leaves full RLP
 }
 
-func (s leafSource) accounts(seek common.Hash) (pathdb.AccountIterator, error) {
+func (s triedbSource) accounts(seek common.Hash) (pathdb.AccountIterator, error) {
 	if s.flat {
 		return s.db.AccountIterator(s.root, seek)
 	}
 	return s.walk(trie.StateTrieID(s.root), seek[:])
 }
 
-func (s leafSource) storage(accountHash, storageRoot common.Hash) (pathdb.StorageIterator, error) {
+func (s triedbSource) storage(accountHash, storageRoot common.Hash) (pathdb.StorageIterator, error) {
 	if s.flat {
 		return s.db.StorageIterator(s.root, accountHash, common.Hash{})
 	}
 	return s.walk(trie.StorageTrieID(s.root, accountHash, storageRoot), nil)
 }
 
-func (s leafSource) walk(id *trie.ID, start []byte) (*trieLeafIterator, error) {
+func (s triedbSource) walk(id *trie.ID, start []byte) (*trieLeafIterator, error) {
 	tr, err := trie.New(id, s.db)
 	if err != nil {
 		return nil, err
@@ -673,7 +662,7 @@ func splitBudget(budget, n int) int {
 // sorters it derives into.
 type scanPart struct {
 	hashRange
-	leaves, accounts, slots *bintrie.RecordSorter
+	leaves, cands *bintrie.RecordSorter
 }
 
 // codeInfo is what an account header needs of its code: the size, and the
@@ -858,26 +847,21 @@ func (f *fileKeys) close() error {
 }
 
 // deriveLeaves scans part's range of the source state at root, deriving
-// every tree leaf into the part's sorter and recording the merkle
-// re-derivation limbs the source-root check folds back up. It gives up once
-// ctx is cancelled, by another worker failing.
+// every tree leaf into the part's sorter and, when the part has one, the keys
+// behind them into its candidates sorter. It gives up once ctx is cancelled,
+// by another worker failing.
 func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, part *scanPart, keys keySource, codes *codeSet, preimages *preimageFile, stats *conversionStats) error {
-	// ponytail: a flat scan holds one pebble read snapshot per worker
-	// throughout, pinning a memtable and every table compacted meanwhile
-	// (the old flat state on a --force reconvert). Reopen from the last hash
-	// every 30s, as pathdb's index pruner does, if producer RAM or disk gets
-	// tight.
+	// ponytail: an export's flat scan holds one pebble read snapshot per
+	// worker throughout, pinning a memtable and every table compacted
+	// meanwhile. Reopen from the last hash every 30s, as pathdb's index pruner
+	// does, if producer RAM or disk gets tight.
 	accIter, err := src.accounts(part.start)
 	if err != nil {
 		return fmt.Errorf("failed to open source accounts: %w", err)
 	}
 	defer accIter.Release()
-	var (
-		// RecordSorter.Add copies its inputs, so one key buffer serves every slot.
-		slotKeyBuf [2 * common.HashLength]byte
-		// The current account's counts, published to stats with it.
-		leaves, slots uint64
-	)
+	// The current account's counts, published to stats with it.
+	var leaves, slots uint64
 	emit := func(key []byte, value [32]byte) error {
 		// Zero values resolve to absence and are never written.
 		if value == ([32]byte{}) {
@@ -886,9 +870,9 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 		leaves++
 		return part.leaves.Add(key, value[:])
 	}
-	// scanStorage derives one account's slots; the deferred release keeps
-	// the iterator from leaking on any error path.
-	scanStorage := func(accountHash common.Hash, addr common.Address, storageRoot common.Hash) error {
+	// scanStorage derives one account's slots and their join candidates; the
+	// deferred release keeps the iterator from leaking on any error path.
+	scanStorage := func(accountHash common.Hash, addr common.Address, storageRoot common.Hash, cands *accountCandidates) error {
 		storageIter, err := src.storage(accountHash, storageRoot)
 		if err != nil {
 			return fmt.Errorf("failed to open storage for %x: %w", addr, err)
@@ -918,10 +902,11 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 			if err := emit(bintrie.StorageSlotKey(addr, slotKey[:]), padded); err != nil {
 				return err
 			}
-			copy(slotKeyBuf[:common.HashLength], accountHash[:])
-			copy(slotKeyBuf[common.HashLength:], slotHash[:])
-			if err := part.slots.Add(slotKeyBuf[:], slotVal); err != nil {
-				return err
+			// A zero slot emits no leaf, so it may claim no key either.
+			if cands != nil && padded != ([32]byte{}) {
+				if err := cands.slot(slotKey); err != nil {
+					return err
+				}
 			}
 			slots++
 		}
@@ -930,6 +915,7 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 		}
 		return nil
 	}
+	var candBuf candidateBuf // the sorter copies each candidate, so one buffer serves the scan
 	for accIter.Next() {
 		accountHash := accIter.Hash()
 		if part.past(accountHash) {
@@ -956,12 +942,17 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 		if err := emitAccountHeader(chaindb, addr, acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash), codes, stats, emit); err != nil {
 			return err
 		}
-		if err := part.accounts.Add(accountHash.Bytes(), appendMerkleAccountRecord(nil, acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash))); err != nil {
-			return err
+		var cands *accountCandidates
+		if part.cands != nil {
+			cands = &accountCandidates{cand: part.cands, buf: &candBuf, addr: addr}
 		}
-
 		if acc.Root != types.EmptyRootHash {
-			if err := scanStorage(accountHash, addr, acc.Root); err != nil {
+			if err := scanStorage(accountHash, addr, acc.Root, cands); err != nil {
+				return err
+			}
+		}
+		if cands != nil {
+			if err := cands.finish(); err != nil {
 				return err
 			}
 		}
@@ -1072,14 +1063,6 @@ func hasBinaryTrieState(chaindb ethdb.Database) (bool, error) {
 	return false, nil
 }
 
-// hasMerkleSource reports merkle state to convert from: no disposal marker (a
-// begun disposal leaves nodes behind) and a root node on disk (an imported
-// datadir never had one).
-func hasMerkleSource(chaindb ethdb.Database, root common.Hash) bool {
-	return !rawdb.ReadPBTMerkleDisposed(chaindb) &&
-		(rawdb.HasAccountTrieNode(chaindb, nil) || rawdb.HasLegacyTrieNode(chaindb, root))
-}
-
 // wipeBinaryTrieState clears the binary tree state: the key families (the
 // bare prefix is shared with block bodies), the PBT history freezers, and
 // the journal file in triedbDir. Nothing may hold the namespace open.
@@ -1115,60 +1098,6 @@ func wipeBinaryTrieState(chaindb ethdb.Database, triedbDir string) error {
 		}
 	}
 	log.Info("Wiped binary tree state")
-	return nil
-}
-
-// verifySourceRoot demands that the scanned records re-derive the state root
-// they were read from, the converter's counterpart to the importer's anchor
-// check. With a batch it also writes the flat state, see rederiveMerkleRoot.
-func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) error {
-	acctStream, err := accounts.Sort()
-	if err != nil {
-		return err
-	}
-	slotStream, err := slots.Sort()
-	if err != nil {
-		return err
-	}
-	got, err := rederiveMerkleRoot(context.Background(), acctStream, slotStream, batch, written, tmpDir, workers, total, nil)
-	if err != nil {
-		return err
-	}
-	if got != want {
-		return fmt.Errorf("the scanned state re-derives merkle root %x, the source commits %x", got, want)
-	}
-	log.Info("Verified the scan against the source state root", "stateRoot", want)
-	return nil
-}
-
-// wipePreimages deletes the preimage store, which a binary tree never
-// consults. The whole key family goes, --vmdebug's SHA3 preimages included:
-// they share the key space, and a 32-byte one looks like a slot key.
-func wipePreimages(chaindb ethdb.Database) error {
-	it := preimageKeys(chaindb)
-	defer it.Release()
-
-	batch := chaindb.NewBatch()
-	wiped := 0
-	for it.Next() {
-		if err := batch.Delete(common.CopyBytes(it.Key())); err != nil {
-			return err
-		}
-		wiped++
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return err
-			}
-			batch.Reset()
-		}
-	}
-	if err := it.Error(); err != nil {
-		return err
-	}
-	if err := batch.Write(); err != nil {
-		return err
-	}
-	log.Warn("Deleted the preimage store", "records", wiped)
 	return nil
 }
 

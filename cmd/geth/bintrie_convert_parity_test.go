@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -150,7 +151,7 @@ func convertGenesis(t *testing.T, alloc types.GenesisAlloc, pathScheme bool, opt
 	if pathScheme && !src.SnapshotCompleted() {
 		t.Fatal("path-scheme source has no completed snapshot")
 	}
-	binRoot, err = convertState(chaindb, src, root, opts)
+	binRoot, err = convertState(context.Background(), chaindb, src, root, opts)
 	return chaindb, root, binRoot, err
 }
 
@@ -369,7 +370,7 @@ func TestConvertParallelMatchesSerial(t *testing.T) {
 
 		src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
 		defer src.Close()
-		_, err := convertState(chaindb, src, root, conversionOptions{tmpDir: t.TempDir(), workers: 4})
+		_, err := convertState(context.Background(), chaindb, src, root, conversionOptions{tmpDir: t.TempDir(), workers: 4})
 		if err == nil || !strings.Contains(err.Error(), "corrupt preimage") {
 			t.Fatalf("a corrupt slot preimage converted on four workers; err = %v", err)
 		}

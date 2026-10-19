@@ -18,9 +18,11 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -36,12 +38,48 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
+
+// convertState converts the MPT state at root in place, the self-converter's
+// way, over a trie database, attested at opts.anchor or else at a header
+// holding only root. With output paths in opts it first exports the
+// artifacts, as a producer would, and holds both runs to one root.
+func convertState(ctx context.Context, chaindb ethdb.Database, srcTriedb *triedb.Database, root common.Hash, opts conversionOptions) (common.Hash, error) {
+	var exported common.Hash
+	if opts.snapshotPath != "" || opts.preimagePath != "" {
+		out := opts
+		if out.snapshotPath == "" || out.preimagePath == "" {
+			dir, err := os.MkdirTemp(opts.tmpDir, "convert-artifacts-")
+			if err != nil {
+				return common.Hash{}, err
+			}
+			defer os.RemoveAll(dir)
+			out.snapshotPath = cmp.Or(out.snapshotPath, filepath.Join(dir, "snapshot"))
+			out.preimagePath = cmp.Or(out.preimagePath, filepath.Join(dir, "preimages"))
+		}
+		var err error
+		if exported, err = exportArtifacts(ctx, chaindb, srcTriedb, root, out); err != nil {
+			return common.Hash{}, err
+		}
+	}
+	plan, file, err := triedbPlan(srcTriedb, root, opts)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer file.Close()
+	if opts.anchor == nil {
+		opts.anchor = &types.Header{Number: new(big.Int), Root: root}
+	}
+	converted, err := convertPlan(ctx, chaindb, plan, nil, opts)
+	if err == nil && exported != (common.Hash{}) && converted != exported {
+		return common.Hash{}, fmt.Errorf("export built %x, the conversion %x", exported, converted)
+	}
+	return converted, err
+}
 
 func TestBintrieConvert(t *testing.T) {
 	var (
@@ -92,7 +130,7 @@ func TestBintrieConvert(t *testing.T) {
 	})
 	defer srcTriedb2.Close()
 
-	currentRoot, err := convertState(chaindb, srcTriedb2, root, conversionOptions{})
+	currentRoot, err := convertState(context.Background(), chaindb, srcTriedb2, root, conversionOptions{})
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}
@@ -263,7 +301,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	} else if !dirty {
 		t.Fatal("conversion debris is invisible to the namespace probe")
 	}
-	if _, err := convertState(chaindb, src, root, conversionOptions{}); err == nil {
+	if _, err := convertState(context.Background(), chaindb, src, root, conversionOptions{}); err == nil {
 		t.Fatal("conversion ran over the debris of a previous run")
 	}
 
@@ -271,7 +309,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	if err := wipeBinaryTrieState(chaindb, ""); err != nil {
 		t.Fatalf("wipe failed: %v", err)
 	}
-	if _, err := convertState(chaindb, src, root, conversionOptions{}); err != nil {
+	if _, err := convertState(context.Background(), chaindb, src, root, conversionOptions{}); err != nil {
 		t.Fatalf("conversion failed after wipe: %v", err)
 	}
 	if got := rawdb.ReadAccountSnapshot(pbtdb, common.Hash{0x01}); len(got) != 0 {
@@ -283,7 +321,7 @@ func TestConvertRefusesDirtyNamespace(t *testing.T) {
 	}
 
 	// A completed conversion also refuses without --force.
-	if _, err := convertState(chaindb, src, root, conversionOptions{}); err == nil {
+	if _, err := convertState(context.Background(), chaindb, src, root, conversionOptions{}); err == nil {
 		t.Fatal("conversion ran over a completed conversion")
 	}
 }
@@ -357,7 +395,7 @@ func TestWrittenStateCatchesBadWrites(t *testing.T) {
 				srcTriedb.Close()
 				src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
 				defer src.Close()
-				_, err := convertState(newTamperDB(chaindb, f.prefix, mode), src, root, conversionOptions{tmpDir: t.TempDir()})
+				_, err := convertState(context.Background(), newTamperDB(chaindb, f.prefix, mode), src, root, conversionOptions{tmpDir: t.TempDir()})
 				caught(t, err, chaindb, f.name)
 			})
 			t.Run("import/"+f.name+"/"+mode, func(t *testing.T) {
@@ -456,7 +494,7 @@ func TestConvertRejectsCorruptCode(t *testing.T) {
 	}
 	src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
 	defer src.Close()
-	if _, err := convertState(chaindb, src, root, conversionOptions{tmpDir: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "assembled code hashes to") {
+	if _, err := convertState(context.Background(), chaindb, src, root, conversionOptions{tmpDir: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "assembled code hashes to") {
 		t.Fatalf("converted corrupt code; err = %v", err)
 	}
 	if rawdb.HasPBTState(chaindb) {
@@ -501,7 +539,7 @@ func TestWipeRestoresVirginNamespace(t *testing.T) {
 
 	convert := func(dir string) (common.Hash, []byte, []byte) {
 		t.Helper()
-		binRoot, err := convertState(chaindb, src, root, conversionOptions{
+		binRoot, err := convertState(context.Background(), chaindb, src, root, conversionOptions{
 			tmpDir:       dir,
 			snapshotPath: filepath.Join(dir, "snapshot.bin"),
 			preimagePath: filepath.Join(dir, "preimages.bin"),
@@ -569,27 +607,6 @@ type refusedBatch struct{ ethdb.Batch }
 
 func (refusedBatch) Write() error { return errors.New("batch refused") }
 
-// TestWipePreimages: --drop-preimages deletes the preimage store and no other
-// key under its prefix.
-func TestWipePreimages(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	hash := crypto.Keccak256Hash([]byte{1})
-	rawdb.WritePreimages(db, map[common.Hash][]byte{hash: {1}})
-	other := append(bytes.Clone(rawdb.PreimagePrefix), 0x01)
-	if err := db.Put(other, []byte{1}); err != nil {
-		t.Fatal(err)
-	}
-	if err := wipePreimages(db); err != nil {
-		t.Fatal(err)
-	}
-	if rawdb.ReadPreimage(db, hash) != nil {
-		t.Fatal("preimage survived")
-	}
-	if ok, _ := db.Has(other); !ok {
-		t.Fatal("wiped a key that is not a preimage")
-	}
-}
-
 // TestConvertCorruptPreimageRefused: a corrupt preimage store entry must
 // abort the conversion with nothing surviving - no artifacts, no
 // attestation.
@@ -619,7 +636,7 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 		t.Helper()
 		dir := t.TempDir()
 		snapPath, prePath := filepath.Join(dir, "snapshot.bin"), filepath.Join(dir, "preimages.bin")
-		_, err := convertState(chaindb, src, root, conversionOptions{
+		_, err := convertState(context.Background(), chaindb, src, root, conversionOptions{
 			tmpDir:       dir,
 			snapshotPath: snapPath,
 			preimagePath: prePath,
@@ -669,9 +686,11 @@ func TestConvertCorruptPreimageRefused(t *testing.T) {
 
 // raw-namespace cursors and records must not outlive the state they name.
 
-// TestConvertDetectsLostRecords pins the only check that ties a conversion's
-// output to its input: the other two are fed by the same scan, so a lossy
-// one verifies green against its own loss.
+// TestConvertDetectsLostRecords pins the check that ties a conversion's
+// output to its input. The converter's dual-check joins its own leaves to
+// candidates from the same scan, so a record the scan loses goes missing from
+// both and the join stays consistent: only check 2, re-deriving the source
+// root from the leaves, can catch it.
 func TestConvertDetectsLostRecords(t *testing.T) {
 	alloc := artifactAlloc()
 
@@ -688,91 +707,109 @@ func TestConvertDetectsLostRecords(t *testing.T) {
 	root := gspec.MustCommit(chaindb, srcTriedb).Root()
 	srcTriedb.Close()
 
-	// scan rebuilds the records deriveLeaves emits, minus what drop rejects:
-	// the account row for (addr, nil), a storage row for (addr, &key).
-	scan := func(t *testing.T, drop func(addr common.Address, slot *common.Hash) bool) (*bintrie.RecordSorter, *bintrie.RecordSorter) {
+	// scan derives the leaves and candidates deriveLeaves would, minus what
+	// drop rejects: the account for (addr, nil), a slot for (addr, &key).
+	scan := func(t *testing.T, drop func(addr common.Address, slot *common.Hash) bool) *ownLeaves {
 		t.Helper()
-		accounts := bintrie.NewRecordSorter(t.TempDir(), 0, nil)
-		slots := bintrie.NewRecordSorter(t.TempDir(), 0, nil)
+		leaves := bintrie.NewLeafSorter(t.TempDir(), 0)
+		cands := bintrie.NewRecordSorter(t.TempDir(), 0, nil)
 		t.Cleanup(func() {
-			accounts.Close()
-			slots.Close()
+			leaves.Close()
+			cands.Close()
 		})
-		for addr, account := range alloc {
-			addrHash := crypto.Keccak256Hash(addr.Bytes())
-			if drop == nil || !drop(addr, nil) {
-				codeHash := types.EmptyCodeHash
-				if len(account.Code) != 0 {
-					codeHash = crypto.Keccak256Hash(account.Code)
-				}
-				balance := new(uint256.Int)
-				if account.Balance != nil {
-					balance = uint256.MustFromBig(account.Balance)
-				}
-				if err := accounts.Add(addrHash.Bytes(), appendMerkleAccountRecord(nil, account.Nonce, balance, codeHash)); err != nil {
-					t.Fatal(err)
-				}
+		emit := func(key []byte, value [32]byte) error {
+			if value == ([32]byte{}) {
+				return nil
 			}
+			return leaves.Add(key, value[:])
+		}
+		codes, stats := newCodeSet(), newStats("Scanning")
+		for addr, account := range alloc {
+			if drop != nil && drop(addr, nil) {
+				continue
+			}
+			codeHash := types.EmptyCodeHash
+			if len(account.Code) != 0 {
+				codeHash = crypto.Keccak256Hash(account.Code)
+			}
+			balance := new(uint256.Int)
+			if account.Balance != nil {
+				balance = uint256.MustFromBig(account.Balance)
+			}
+			if err := emitAccountHeader(chaindb, addr, account.Nonce, balance, codeHash, codes, stats, emit); err != nil {
+				t.Fatal(err)
+			}
+			c := accountCandidates{cand: cands, buf: new(candidateBuf), addr: addr}
 			for key, value := range account.Storage {
-				if drop != nil && drop(addr, &key) {
+				if (drop != nil && drop(addr, &key)) || value == (common.Hash{}) {
 					continue
 				}
-				enc, err := rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-				if err != nil {
+				if err := emit(bintrie.StorageSlotKey(addr, key[:]), value); err != nil {
 					t.Fatal(err)
 				}
-				if err := slots.Add(append(addrHash.Bytes(), crypto.Keccak256(key[:])...), enc); err != nil {
+				if err := c.slot(key); err != nil {
 					t.Fatal(err)
 				}
 			}
+			if err := c.finish(); err != nil {
+				t.Fatal(err)
+			}
 		}
-		return accounts, slots
+		stream, err := leaves.Sort()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &ownLeaves{leaves: stream, candidates: cands}
+	}
+	convert := func(t *testing.T, own *ownLeaves) (ethdb.Database, error) {
+		db := rawdb.NewMemoryDatabase()
+		_, err := importState(context.Background(), db, importOptions{own: own,
+			anchor:            &types.Header{Number: big.NewInt(1), Root: root},
+			conversionOptions: conversionOptions{tmpDir: t.TempDir()}})
+		return db, err
 	}
 
 	// The account holding storage, so both loss cases land on it.
 	var (
 		victim   = common.HexToAddress("0x2000000000000000000000000000000000000002")
 		slotOne  = common.BigToHash(big.NewInt(1))
-		mismatch = "re-derives merkle root"
+		mismatch = "re-derive merkle root"
 	)
 	if _, ok := alloc[victim]; !ok {
 		t.Fatalf("fixture no longer holds %x", victim)
 	}
 
 	t.Run("complete set", func(t *testing.T) {
-		accounts, slots := scan(t, nil)
-		if err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0); err != nil {
-			t.Fatalf("the complete record set failed the source-root check: %v", err)
+		db, err := convert(t, scan(t, nil))
+		if err != nil {
+			t.Fatalf("the complete leaf set failed the dual-check: %v", err)
+		}
+		if !rawdb.HasPBTState(db) {
+			t.Fatal("a passing conversion attested nothing")
 		}
 	})
 
 	t.Run("lost account", func(t *testing.T) {
-		accounts, slots := scan(t, func(addr common.Address, _ *common.Hash) bool {
+		db, err := convert(t, scan(t, func(addr common.Address, _ *common.Hash) bool {
 			return addr == victim
-		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
+		}))
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
-			t.Fatalf("a dropped account survived the source-root check; err = %v", err)
+			t.Fatalf("a dropped account survived check 2; err = %v", err)
+		}
+		if rawdb.HasPBTState(db) {
+			t.Fatal("a refused conversion attested its namespace")
 		}
 	})
 
 	t.Run("lost slot", func(t *testing.T) {
-		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
+		db, err := convert(t, scan(t, func(addr common.Address, slot *common.Hash) bool {
 			return addr == victim && slot != nil && *slot == slotOne
-		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
+		}))
 		if err == nil || !strings.Contains(err.Error(), mismatch) {
-			t.Fatalf("a dropped storage slot survived the source-root check; err = %v", err)
+			t.Fatalf("a dropped storage slot survived check 2; err = %v", err)
 		}
-	})
-
-	t.Run("orphaned storage", func(t *testing.T) {
-		accounts, slots := scan(t, func(addr common.Address, slot *common.Hash) bool {
-			return addr == victim && slot == nil
-		})
-		err := verifySourceRoot(accounts, slots, root, nil, nil, "", 4, 0)
-		if err == nil || !strings.Contains(err.Error(), "which holds no account") {
-			t.Fatalf("orphaned storage survived the source-root check; err = %v", err)
+		if rawdb.HasPBTState(db) {
+			t.Fatal("a refused conversion attested its namespace")
 		}
 	})
 }

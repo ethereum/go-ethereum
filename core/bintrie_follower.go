@@ -1006,6 +1006,15 @@ func (bc *BlockChain) SetBALRequester(req func([]BALRequest)) {
 	}
 }
 
+// RequestAccessLists asks the fetcher for the missing access lists of the
+// canonical blocks from the given one up to to, at most one batch. A
+// self-converter reads them while the follower, which otherwise asks, is held.
+func (bc *BlockChain) RequestAccessLists(from, to uint64) {
+	if bc.follower != nil {
+		bc.follower.requestLists(from, to)
+	}
+}
+
 // KickMigration re-arms a stalled migration sync.
 func (bc *BlockChain) KickMigration() {
 	if bc.follower != nil {

@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"math/big"
 	"path/filepath"
 	"testing"
@@ -167,7 +168,7 @@ func TestConvertMatchesChain(t *testing.T) {
 	})
 	defer src.Close()
 
-	binRoot, err := convertState(chaindb, src, headRoot, conversionOptions{})
+	binRoot, err := convertState(context.Background(), chaindb, src, headRoot, conversionOptions{})
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}
@@ -238,7 +239,7 @@ func TestBintrieConvertDiskBacked(t *testing.T) {
 		Preimages: true,
 		PathDB:    pathdb.ReadOnly,
 	})
-	binRoot, err := convertState(chaindb, src, root, conversionOptions{tmpDir: datadir})
+	binRoot, err := convertState(context.Background(), chaindb, src, root, conversionOptions{tmpDir: datadir})
 	if err != nil {
 		t.Fatalf("conversion failed on a freezer-backed database: %v", err)
 	}
@@ -270,7 +271,7 @@ func TestBintrieConvertDiskBacked(t *testing.T) {
 		Preimages: true,
 		PathDB:    pathdb.ReadOnly,
 	})
-	root2, err := convertState(chaindb, src, root, conversionOptions{tmpDir: datadir})
+	root2, err := convertState(context.Background(), chaindb, src, root, conversionOptions{tmpDir: datadir})
 	if err != nil {
 		t.Fatalf("re-conversion after wipe failed: %v", err)
 	}
@@ -301,7 +302,7 @@ func TestConvertedBaseAcceptsCommits(t *testing.T) {
 		Preimages: true,
 		PathDB:    pathdb.ReadOnly,
 	})
-	binRoot, err := convertState(chaindb, src, root, conversionOptions{})
+	binRoot, err := convertState(context.Background(), chaindb, src, root, conversionOptions{})
 	if err != nil {
 		t.Fatalf("conversion failed: %v", err)
 	}
@@ -376,7 +377,7 @@ func TestConvertedStateOutlivesMerkleDisposal(t *testing.T) {
 		})
 		defer src.Close()
 
-		binRoot, err := convertState(chaindb, src, root, conversionOptions{})
+		binRoot, err := convertState(context.Background(), chaindb, src, root, conversionOptions{})
 		if err != nil {
 			t.Fatalf("conversion failed: %v", err)
 		}

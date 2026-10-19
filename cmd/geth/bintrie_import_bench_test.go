@@ -62,18 +62,7 @@ var importMarks = []struct{ msg, name string }{
 // by default, and the sort budget scales with it like mainnet's 4096 MB to its
 // 424 M accounts, so the sorters spill to as many runs as on mainnet.
 func BenchmarkImport(b *testing.B) {
-	dir := os.Getenv("BINTRIE_BENCH_DIR")
-	if dir == "" {
-		b.Skip("BINTRIE_BENCH_DIR not set")
-	}
-	accounts := 21_208_000
-	if s := os.Getenv("BINTRIE_BENCH_ACCOUNTS"); s != "" {
-		var err error
-		if accounts, err = strconv.Atoi(s); err != nil {
-			b.Fatal(err)
-		}
-	}
-	dir = filepath.Join(dir, fmt.Sprintf("accounts-%d", accounts))
+	dir, accounts := benchSize(b, "accounts")
 	root := benchArtifacts(b, dir, accounts)
 	budget := int(sortBudget * int64(accounts) / 424_160_000)
 
@@ -115,6 +104,133 @@ func BenchmarkImport(b *testing.B) {
 			}
 		})
 	}
+}
+
+// benchSize returns the benchmark's state size, from $BINTRIE_BENCH_ACCOUNTS
+// or 5% of mainnet's accounts, and its fixture directory under
+// $BINTRIE_BENCH_DIR, skipping the benchmark without one.
+func benchSize(b *testing.B, kind string) (string, int) {
+	dir := os.Getenv("BINTRIE_BENCH_DIR")
+	if dir == "" {
+		b.Skip("BINTRIE_BENCH_DIR not set")
+	}
+	accounts := 21_208_000
+	if s := os.Getenv("BINTRIE_BENCH_ACCOUNTS"); s != "" {
+		var err error
+		if accounts, err = strconv.Atoi(s); err != nil {
+			b.Fatal(err)
+		}
+	}
+	return filepath.Join(dir, fmt.Sprintf("%s-%d", kind, accounts)), accounts
+}
+
+// selfConvertMarks are the log lines closing each self-conversion phase but
+// the last, the read-back, which ends with the conversion.
+var selfConvertMarks = []struct{ msg, name string }{
+	{"Converting state", "scan"},
+	{"Built the binary tree", "build"},
+	{"Verified code against its hashes", "code"},
+	{"Verified consensus anchoring", "check2"},
+}
+
+// BenchmarkSelfConvert times an online self-conversion of a mainnet-shaped
+// state the way convertAt runs it when no block follows the preimage file's
+// anchor: the merkle database and its preimage file are generated once, and
+// every run converts a copy of the database. The sort budget scales like
+// BenchmarkImport's, from the node's, but the collector paces itself against
+// the live heap: a ballast holds the rest of the node's budget, so it collects
+// as often as on mainnet. The ballast is never written, so it costs no RSS.
+func BenchmarkSelfConvert(b *testing.B) {
+	dir, accounts := benchSize(b, "selfconvert")
+	root := benchSource(b, dir, accounts)
+	budget := int(onlineSortBudget * int64(accounts) / 424_160_000)
+	ballast := make([]byte, onlineSortBudget-budget)
+	defer runtime.KeepAlive(ballast)
+
+	defer debug.SetGCPercent(debug.SetGCPercent(50)) // the node's --gogc
+	defer log.SetDefault(log.Root())
+	clock := &phaseClock{marks: make(map[string]time.Time)}
+	log.SetDefault(log.NewLogger(clock))
+	dest, tmp := filepath.Join(dir, "dest"), filepath.Join(dir, "tmp")
+	defer os.RemoveAll(dest)
+	spent := make([]time.Duration, len(selfConvertMarks)+1)
+	for range b.N {
+		b.StopTimer()
+		os.RemoveAll(dest)
+		os.RemoveAll(tmp)
+		os.MkdirAll(tmp, 0o755)
+		if err := os.CopyFS(dest, os.DirFS(filepath.Join(dir, "source"))); err != nil {
+			b.Fatal(err)
+		}
+		db := openBenchDB(b, dest)
+		start := time.Now()
+		b.StartTimer()
+		err := benchSelfConvert(db, filepath.Join(dir, "preimages.bin"), root, tmp, budget, utils.PBTImportWorkersFlag.Value)
+		b.StopTimer()
+		end := time.Now()
+		db.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
+		for i, m := range selfConvertMarks {
+			at := clock.at(m.msg)
+			spent[i] += at.Sub(start)
+			start = at
+		}
+		spent[len(selfConvertMarks)] += end.Sub(start)
+	}
+	for i, m := range selfConvertMarks {
+		b.ReportMetric(spent[i].Seconds()/float64(b.N), m.name+"-s")
+	}
+	b.ReportMetric(spent[len(selfConvertMarks)].Seconds()/float64(b.N), "readback-s")
+}
+
+// benchSelfConvert converts db's persisted state with the keys of the
+// preimage file at path, as convertAt does with no access list to read.
+func benchSelfConvert(db ethdb.Database, path string, root common.Hash, tmp string, budget, workers int) error {
+	f, ranges, pieces, err := splitPreimages(path, workers)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	persisted, sources, err := capturePersisted(db, ranges)
+	if err != nil {
+		return err
+	}
+	if persisted != root {
+		return fmt.Errorf("persisted state %x, want %x", persisted, root)
+	}
+	release := func() {
+		for _, s := range sources {
+			s.release()
+		}
+	}
+	defer release()
+	lists, err := accessListKeys(context.Background(), nil, 0, 0, ranges, tmp)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		for _, k := range lists {
+			k.close()
+		}
+	}()
+	plan := scanPlan{ranges: ranges, release: release}
+	for i := range ranges {
+		keys, err := newDriftKeys(pieces[i], lists[i])
+		if err != nil {
+			return err
+		}
+		plan.sources = append(plan.sources, sources[i])
+		plan.keys = append(plan.keys, keys)
+	}
+	_, err = convertPlan(context.Background(), db, plan, nil, conversionOptions{
+		sortBudget: budget,
+		tmpDir:     tmp,
+		workers:    workers,
+		anchor:     &types.Header{Number: new(big.Int), Root: root},
+	})
+	return err
 }
 
 // phaseClock is a log handler noting when each message was last logged.
@@ -170,7 +286,7 @@ func benchArtifacts(b *testing.B, dir string, n int) common.Hash {
 	db := openBenchDB(b, src)
 	root := commitMainnetShape(b, db, n)
 	ro := triedb.NewDatabase(db, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
-	_, err := convertState(db, ro, root, conversionOptions{
+	_, err := convertState(context.Background(), db, ro, root, conversionOptions{
 		tmpDir:       tmp,
 		sortBudget:   sortBudget,
 		workers:      runtime.NumCPU(),
@@ -183,6 +299,40 @@ func benchArtifacts(b *testing.B, dir string, n int) common.Hash {
 		b.Fatal(err)
 	}
 	os.RemoveAll(src)
+	if err := os.WriteFile(rootFile, root[:], 0o644); err != nil {
+		b.Fatal(err)
+	}
+	return root
+}
+
+// benchSource returns the state root of the merkle database in dir/source,
+// generating it first if absent, with the preimage file at that root beside
+// it as dir/preimages.bin.
+func benchSource(b *testing.B, dir string, n int) common.Hash {
+	rootFile := filepath.Join(dir, "root")
+	if blob, err := os.ReadFile(rootFile); err == nil {
+		return common.BytesToHash(blob)
+	}
+	b.Logf("generating %d accounts into %s", n, dir)
+	src, tmp := filepath.Join(dir, "source"), filepath.Join(dir, "tmp")
+	os.RemoveAll(src)
+	os.MkdirAll(tmp, 0o755)
+	db := openBenchDB(b, src)
+	root := commitMainnetShape(b, db, n)
+	ro := triedb.NewDatabase(db, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
+	_, err := exportArtifacts(context.Background(), db, ro, root, conversionOptions{
+		tmpDir:       tmp,
+		sortBudget:   sortBudget,
+		workers:      runtime.NumCPU(),
+		snapshotPath: filepath.Join(tmp, "snapshot.bin"),
+		preimagePath: filepath.Join(dir, "preimages.bin"),
+	})
+	ro.Close()
+	db.Close()
+	os.RemoveAll(tmp)
+	if err != nil {
+		b.Fatal(err)
+	}
 	if err := os.WriteFile(rootFile, root[:], 0o644); err != nil {
 		b.Fatal(err)
 	}

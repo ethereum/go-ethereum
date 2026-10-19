@@ -131,7 +131,7 @@ func TestAnchorSeededCatchup(t *testing.T) {
 		prePath  = filepath.Join(t.TempDir(), "preimages")
 	)
 	src := triedb.NewDatabase(chaindb, &triedb.Config{Preimages: true, PathDB: pathdb.ReadOnly})
-	if _, err := convertState(chaindb, src, anchor.Root(), conversionOptions{
+	if _, err := convertState(context.Background(), chaindb, src, anchor.Root(), conversionOptions{
 		snapshotPath: snapPath,
 		preimagePath: prePath,
 	}); err != nil {
@@ -199,7 +199,7 @@ func newOnlineFixture(t *testing.T, anchors ...int) *onlineFixture {
 		}
 		dir := t.TempDir()
 		pair := [2]string{filepath.Join(dir, "snapshot"), filepath.Join(dir, "preimages")}
-		if _, err := convertState(db, src, blocks[i].Root(), conversionOptions{snapshotPath: pair[0], preimagePath: pair[1]}); err != nil {
+		if _, err := convertState(context.Background(), db, src, blocks[i].Root(), conversionOptions{snapshotPath: pair[0], preimagePath: pair[1]}); err != nil {
 			t.Fatalf("conversion at block %d failed: %v", blocks[i].NumberU64(), err)
 		}
 		f.pairs[i] = pair

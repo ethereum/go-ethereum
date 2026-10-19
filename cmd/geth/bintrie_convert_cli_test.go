@@ -17,12 +17,12 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
@@ -62,37 +62,25 @@ const bintrieCLIGenesis = `{
 // bintrieCLIEmptyGenesis is bintrieCLIGenesis with nothing allocated.
 var bintrieCLIEmptyGenesis = bintrieCLIGenesis[:strings.Index(bintrieCLIGenesis, `"alloc"`)] + `"alloc": {}}`
 
-// TestBintrieConvertCLI drives the real command against a real datadir: the
-// only test that runs the CLI action, and the only configuration in which
-// the wipe meets an ancient directory and a node-layout triedb path.
-func TestBintrieConvertCLI(t *testing.T) {
+// TestBintrieExportCLI drives the producer's command against a real datadir:
+// it writes both artifacts and leaves the node's database without binary
+// tree state, needs both outputs, and refuses a head past the fork.
+func TestBintrieExportCLI(t *testing.T) {
 	t.Parallel()
 	datadir := t.TempDir()
 	json := filepath.Join(datadir, "genesis.json")
 	if err := os.WriteFile(json, []byte(bintrieCLIGenesis), 0600); err != nil {
 		t.Fatal(err)
 	}
-	runCmd := func(expectFail bool, args ...string) string {
-		t.Helper()
-		geth := runGeth(t, append([]string{"--datadir", datadir}, args...)...)
-		geth.WaitExit()
-		if failed := geth.ExitStatus() != 0; failed != expectFail {
-			t.Fatalf("geth %v: exit status %d, expected failure %v\nstderr:\n%s",
-				args, geth.ExitStatus(), expectFail, geth.StderrText())
-		}
-		return geth.StderrText()
-	}
+	run := gethRunner(t)
+	run(datadir, false, "--cache.preimages", "init", json)
 
-	// Init with preimages: the converter cannot run without them.
-	runCmd(false, "--cache.preimages", "init", json)
-
-	// A full conversion with both artifacts.
 	outdir := t.TempDir()
 	snapPath := filepath.Join(outdir, "snapshot.bin")
 	prePath := filepath.Join(outdir, "preimages.bin")
-	out := runCmd(false, "bintrie", "convert", "--snapshot-out", snapPath, "--preimages-out", prePath)
-	if !strings.Contains(out, "Conversion complete") {
-		t.Fatalf("conversion output lacks completion:\n%s", out)
+	out := run(datadir, false, "bintrie", "export", "--snapshot-out", snapPath, "--preimages-out", prePath)
+	if !strings.Contains(out, "Export complete") {
+		t.Fatalf("export output lacks completion:\n%s", out)
 	}
 	if fi, err := os.Stat(snapPath); err != nil || fi.Size() <= snapshotOverhead {
 		t.Fatalf("snapshot artifact missing or empty: %v", err)
@@ -100,33 +88,18 @@ func TestBintrieConvertCLI(t *testing.T) {
 	if fi, err := os.Stat(prePath); err != nil || fi.Size() == 0 {
 		t.Fatalf("preimage file missing or empty: %v", err)
 	}
-
-	// A second run must refuse the converted namespace.
-	out = runCmd(true, "bintrie", "convert")
-	if !strings.Contains(out, "--force") {
-		t.Fatalf("refusal does not mention --force:\n%s", out)
-	}
-
-	// --force wipes and reconverts; on a real datadir this is the one path
-	// where the wipe resets the PBT freezers and removes the journal file.
-	runCmd(false, "bintrie", "convert", "--force")
-
-	// With the merkle state gone, --force would leave neither tree.
 	chaindb := mustOpenChainDB(t, datadir)
-	rawdb.WritePBTMerkleDisposed(chaindb)
+	if dirty, err := hasBinaryTrieState(rawdb.NewDatabase(chaindb)); err != nil || dirty {
+		t.Fatalf("the export wrote binary tree state into the node (err %v)", err)
+	}
 	if err := chaindb.Close(); err != nil {
 		t.Fatal(err)
 	}
-	out = runCmd(true, "bintrie", "convert", "--force")
-	if !strings.Contains(out, "refusing --force") {
-		t.Fatalf("no --force refusal without merkle state:\n%s", out)
-	}
-	out = runCmd(true, "bintrie", "convert")
-	if !strings.Contains(out, "re-import rather than reconvert") {
-		t.Fatalf("refusal lacks the re-import hint:\n%s", out)
+	if out := run(datadir, true, "bintrie", "export", "--snapshot-out", snapPath); !strings.Contains(out, "are required") {
+		t.Fatalf("an export without a preimage file output was not refused:\n%s", out)
 	}
 
-	// A head past the fork commits the binary tree: refused before any wipe.
+	// A head past the fork commits the binary tree: no merkle state to export.
 	chaindb = mustOpenChainDB(t, datadir)
 	db := rawdb.NewDatabase(chaindb)
 	ghash := rawdb.ReadCanonicalHash(db, 0)
@@ -136,15 +109,8 @@ func TestBintrieConvertCLI(t *testing.T) {
 	if err := chaindb.Close(); err != nil {
 		t.Fatal(err)
 	}
-	for _, args := range [][]string{{"bintrie", "convert"}, {"bintrie", "convert", "--force"}} {
-		if out := runCmd(true, args...); !strings.Contains(out, "commits the binary tree") {
-			t.Fatalf("%v not refused past the fork:\n%s", args, out)
-		}
-	}
-	after := mustOpenChainDB(t, datadir)
-	defer after.Close()
-	if !rawdb.ReadPBTFlatState(rawdb.NewTable(rawdb.NewDatabase(after), string(rawdb.PBTPrefix))) {
-		t.Fatal("refused --force wiped the namespace")
+	if out := run(datadir, true, "bintrie", "export", "--snapshot-out", snapPath, "--preimages-out", prePath); !strings.Contains(out, "commits the binary tree") {
+		t.Fatalf("export not refused past the fork:\n%s", out)
 	}
 }
 
@@ -171,12 +137,12 @@ func TestBintrieImportCLI(t *testing.T) {
 	}
 	run := gethRunner(t)
 
-	// The producer converts and exports.
+	// The producer exports.
 	outdir := t.TempDir()
 	snapPath := filepath.Join(outdir, "snapshot.bin")
 	prePath := filepath.Join(outdir, "preimages.bin")
 	run(producer, false, "--cache.preimages", "init", json)
-	run(producer, false, "bintrie", "convert", "--snapshot-out", snapPath, "--preimages-out", prePath)
+	run(producer, false, "bintrie", "export", "--snapshot-out", snapPath, "--preimages-out", prePath)
 
 	// The consumer holds only headers: same genesis, no preimages.
 	consumer := t.TempDir()
@@ -199,11 +165,6 @@ func TestBintrieImportCLI(t *testing.T) {
 	// where the wipe meets an ancient directory and a node-layout journal.
 	run(consumer, false, "bintrie", "import", "--force", snapPath, prePath, "0")
 
-	// No preimages here: convert --force is refused before it wipes the import.
-	out = run(consumer, true, "bintrie", "convert", "--force")
-	if !strings.Contains(out, "no preimages") {
-		t.Fatalf("convert --force not refused without preimages:\n%s", out)
-	}
 	// Past the fork the namespace is the live state: import --force is refused.
 	chaindb := mustOpenChainDB(t, consumer)
 	db := rawdb.NewDatabase(chaindb)
@@ -225,7 +186,7 @@ func TestBintrieImportCLI(t *testing.T) {
 	}
 }
 
-// TestBintrieEmptyStateCLI: an anchor with no accounts converts to the empty
+// TestBintrieEmptyStateCLI: an anchor with no accounts exports to the empty
 // snapshot, a zero root and three zero counts, beside an empty preimage file,
 // and the pair verifies against the same empty anchor.
 func TestBintrieEmptyStateCLI(t *testing.T) {
@@ -246,7 +207,7 @@ func TestBintrieEmptyStateCLI(t *testing.T) {
 	}
 	snapPath, prePath := filepath.Join(outdir, "snapshot.bin"), filepath.Join(outdir, "preimages.bin")
 	run(producer, "--cache.preimages", "init", json)
-	run(producer, "bintrie", "convert", "--snapshot-out", snapPath, "--preimages-out", prePath)
+	run(producer, "bintrie", "export", "--snapshot-out", snapPath, "--preimages-out", prePath)
 	if fi, err := os.Stat(snapPath); err != nil || fi.Size() != snapshotOverhead {
 		t.Fatalf("empty snapshot: %v, want %d bytes", fi, snapshotOverhead)
 	}
@@ -259,10 +220,10 @@ func TestBintrieEmptyStateCLI(t *testing.T) {
 	}
 }
 
-// TestBintrieConvertFromPreimageFileCLI: a node that never kept preimages
-// self-converts by taking its keys from a preimage file of the same state,
-// and lands on the producer's root.
-func TestBintrieConvertFromPreimageFileCLI(t *testing.T) {
+// TestBintrieExportFromPreimageFileCLI: a node that never kept preimages
+// exports by taking its keys from a preimage file of the same state, and
+// writes the producer's artifacts byte for byte.
+func TestBintrieExportFromPreimageFileCLI(t *testing.T) {
 	t.Parallel()
 	producer, node, outdir := t.TempDir(), t.TempDir(), t.TempDir()
 	json := filepath.Join(outdir, "genesis.json")
@@ -270,28 +231,32 @@ func TestBintrieConvertFromPreimageFileCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	run := gethRunner(t)
-	prePath := filepath.Join(outdir, "preimages.bin")
+	snapPath, prePath := filepath.Join(outdir, "snapshot.bin"), filepath.Join(outdir, "preimages.bin")
 	run(producer, false, "--cache.preimages", "init", json)
-	run(producer, false, "bintrie", "convert", "--preimages-out", prePath)
+	run(producer, false, "bintrie", "export", "--snapshot-out", snapPath, "--preimages-out", prePath)
 
 	run(node, false, "init", json)
-	if out := run(node, true, "bintrie", "convert"); !strings.Contains(out, "no preimages") {
-		t.Fatalf("a conversion with no preimages was not refused:\n%s", out)
+	nodeSnap, nodePre := filepath.Join(outdir, "node-snapshot.bin"), filepath.Join(outdir, "node-preimages.bin")
+	if out := run(node, true, "bintrie", "export", "--snapshot-out", nodeSnap, "--preimages-out", nodePre); !strings.Contains(out, "no preimages") {
+		t.Fatalf("an export with no preimages was not refused:\n%s", out)
 	}
 	// Another spelling of the input as an output would truncate it unread.
-	if out := run(node, true, "bintrie", "convert", "--preimages", prePath, "--preimages-out", outdir+"/./preimages.bin"); !strings.Contains(out, "must not name an output file") {
+	if out := run(node, true, "bintrie", "export", "--preimages", prePath, "--snapshot-out", nodeSnap, "--preimages-out", outdir+"/./preimages.bin"); !strings.Contains(out, "must not name an output file") {
 		t.Fatalf("an output aliasing the input was not refused:\n%s", out)
 	}
-	run(node, false, "bintrie", "convert", "--preimages", prePath)
-
-	root := func(datadir string) common.Hash {
-		t.Helper()
-		db := mustOpenChainDB(t, datadir)
-		defer db.Close()
-		return rawdb.ReadSnapshotRoot(rawdb.NewTable(rawdb.NewDatabase(db), string(rawdb.PBTPrefix)))
-	}
-	if got, want := root(node), root(producer); got != want || got == (common.Hash{}) {
-		t.Fatalf("converted from the file to %x, the producer to %x", got, want)
+	run(node, false, "bintrie", "export", "--preimages", prePath, "--snapshot-out", nodeSnap, "--preimages-out", nodePre)
+	for _, pair := range [][2]string{{snapPath, nodeSnap}, {prePath, nodePre}} {
+		want, err := os.ReadFile(pair[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(pair[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("%s from the preimage file differs from the producer's %s", pair[1], pair[0])
+		}
 	}
 }
 
