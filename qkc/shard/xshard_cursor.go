@@ -93,6 +93,10 @@ func newXShardCursor(config *params.QuarkChainConfig, chain XShardChain, pos typ
 	if c.maxRoot == nil {
 		return nil, fmt.Errorf("%w: %x", ErrUnknownCursorRoot, maxRoot)
 	}
+	// ShardChain.validateRootReference checks this during InsertShardBlock.
+	// Check it again for core.BlockChain imports with an inbox, since a root
+	// rewind or fork could replay deposits. A zero parentRoot means the parent
+	// has not seen a root block yet.
 	if parentRoot != (common.Hash{}) {
 		parent := chain.RootBlock(parentRoot)
 		if parent == nil {
@@ -109,7 +113,8 @@ func newXShardCursor(config *params.QuarkChainConfig, chain XShardChain, pos typ
 			return nil, fmt.Errorf("%w: parent root block %x is not an ancestor of %x", ErrXShardRootMismatch, parentRoot, maxRoot)
 		}
 	}
-	// Past the last root block, the walk is over.
+	// Only heights past the tip are EOF. A missing root below it must not let
+	// the cursor skip deposits and advance as if the walk were complete.
 	if pos.RootBlockHeight > c.maxRoot.NumberU64() {
 		return c, nil
 	}
@@ -175,6 +180,7 @@ func (c *xShardCursor) Next() (*types.DepositTx, error) {
 		}
 		root := c.chain.RootBlockByNumber(c.maxRoot.Hash(), nextHeight)
 		if root == nil {
+			// A gap before maxRoot is missing data, not the end of the walk.
 			return nil, fmt.Errorf("%w: root block #%d below %x", ErrUnknownCursorRoot, nextHeight, c.maxRoot.Hash())
 		}
 		c.root, c.minorIndex, c.depositIndex, c.deposits = root, 0, 1, nil
