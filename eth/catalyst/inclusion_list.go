@@ -18,18 +18,24 @@ package catalyst
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 // inclusionListCacheLimit is the number of payloads whose inclusion list is
 // kept, so a later engine call can still give the verdict on them.
 const inclusionListCacheLimit = 128
+
+// maxInclusionListBytes is MAX_TRANSACTIONS_BYTES_PER_INCLUSION_LIST, the size
+// limit of the transactions on an inclusion list.
+const maxInclusionListBytes = 8192
 
 // retainedInclusionList is the inclusion list a payload was handed with, and
 // the verdict on it once the payload was found valid.
@@ -89,4 +95,45 @@ func (api *ConsensusAPI) checkInclusionList(hash common.Hash, txs [][]byte) (boo
 		return false, err
 	}
 	return chain.CheckInclusionList(block, execution, state, txs)
+}
+
+// GetInclusionListV1 returns transactions from the local pool for an inclusion
+// list (EIP-7805). It takes the next transaction of each account that can pay
+// the next block's base fee, longest waiting first, up to the size limit. A later
+// transaction of the same account can only be included after the next one, so
+// it would take up room without adding anything.
+func (api *ConsensusAPI) GetInclusionListV1() ([]hexutil.Bytes, error) {
+	// Blob transactions can't go on an inclusion list, the pool leaves them out
+	// by default.
+	var (
+		baseFee    = api.eth.APIBackend.BaseFee(context.Background())
+		pending, _ = api.eth.TxPool().Pending(txpool.PendingFilter{})
+		next       = make([]*txpool.LazyTransaction, 0, len(pending))
+	)
+	for _, txs := range pending {
+		if baseFee != nil && txs[0].GasFeeCap.CmpBig(baseFee) < 0 {
+			continue
+		}
+		next = append(next, txs[0])
+	}
+	slices.SortFunc(next, func(a, b *txpool.LazyTransaction) int {
+		return a.Time.Compare(b.Time)
+	})
+	var (
+		list = make([]hexutil.Bytes, 0)
+		size int
+	)
+	for _, lazy := range next {
+		tx := lazy.Resolve()
+		if tx == nil {
+			continue
+		}
+		enc, err := tx.MarshalBinary()
+		if err != nil || size+len(enc) > maxInclusionListBytes {
+			continue
+		}
+		list = append(list, enc)
+		size += len(enc)
+	}
+	return list, nil
 }
