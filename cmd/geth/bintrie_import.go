@@ -92,8 +92,8 @@ so budget about twice their sum, or cap it with GOMEMLIMIT. Merging the
 sorters' spilled runs takes up to 512 KiB per run on top, at most a quarter of
 the sorter's budget once runs are many.
 
-Disk: --tmpdir holds the sort spills and a copy of every tree node until the
-import ends, so it needs disk space, not a tmpfs.
+Disk: --tmpdir holds the sort spills and a copy of every tree node, each
+until it is used up, so it needs disk space, not a tmpfs.
 
 This command needs the node stopped. To import while the node keeps
 following the chain, start geth with --pbt.import.snapshot, --pbt.import.preimages
@@ -372,10 +372,13 @@ func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error 
 	}
 	log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
 		"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
+	yield := newBlockYield()
+	defer followBlockProcessing(p.chain, yield)()
 	_, err := importState(ctx, p.db, importOptions{
 		snapshot:  p.cfg.Snapshot,
 		preimages: p.cfg.Preimages,
 		anchor:    anchor,
+		yield:     yield,
 		// Finalized blocks do not reorg, but an attested tree anchored off
 		// the canonical chain is refused by the follower anyway: say so now.
 		beforeAttest: func() error {
@@ -447,9 +450,10 @@ const maxImportCodeSize = 1 << 20
 type importGroup struct {
 	stem        []byte
 	addr        common.Address
-	basic       *[32]byte
-	codeHash    *[32]byte
-	delegation  *[32]byte
+	basic       *[32]byte // nil, or leaves[0]
+	codeHash    *[32]byte // nil, or leaves[1]
+	delegation  *[32]byte // nil, or leaves[2]
+	leaves      [3][32]byte
 	slots       []importSlot // header-range storage, in sub-index order
 	headerClaim uint64       // header-range slots the preimage file lists
 	headerSeen  uint64       // header-range slots the leaves hold
@@ -472,6 +476,8 @@ type importOptions struct {
 	// beforeAttest, when set, runs once everything is written and verified,
 	// right before the attestation: an error leaves the state unattested.
 	beforeAttest func() error
+	// yield, when set, pauses the import while the node processes a block.
+	yield *blockYield
 	conversionOptions
 }
 
@@ -574,18 +580,24 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	defer prog.stop()
 	for _, cand := range cands {
 		g.Go(func() error {
-			var buf candidateBuf
+			var (
+				buf    candidateBuf
+				hasher = newKeccakHasher()
+			)
 			for batch := range records {
+				if err := opts.yield.pause(gctx); err != nil {
+					return err
+				}
 				order := batch.order
 				for i := range batch.runs {
 					run := &batch.runs[i]
 					if !keep {
 						if run.first {
-							if _, err := order.record(run.index, run.addr); err != nil {
+							if _, err := order.record(hasher, run.index, run.addr); err != nil {
 								return err
 							}
 						}
-						if err := order.slots(run.slots, nil); err != nil {
+						if err := order.slots(hasher, run.slots, nil); err != nil {
 							return err
 						}
 					}
@@ -607,10 +619,14 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	readErr := func() error {
 		defer close(records)
 		var (
-			batch *preimageBatch
-			order preimageOrder // the reader's own check, when it keeps the preimages
+			batch  *preimageBatch
+			order  preimageOrder // the reader's own check, when it keeps the preimages
+			hasher = newKeccakHasher()
 		)
 		take := func() error {
+			if err := opts.yield.pause(gctx); err != nil {
+				return err
+			}
 			select {
 			case batch = <-free:
 				return nil
@@ -649,7 +665,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			// The preimage file is keccak-ordered, which the reader checks on
 			// this path, so the preimage store is written in that order.
 			if keep {
-				addrHash, err := order.record(index, addr)
+				addrHash, err := order.record(hasher, index, addr)
 				if err != nil {
 					return err
 				}
@@ -676,7 +692,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 					}
 				}
 				if keep {
-					err := order.slots(slots, func(slot, hash common.Hash) error {
+					err := order.slots(hasher, slots, func(slot, hash common.Hash) error {
 						return putPreimage(rawBatch, hash, slot[:])
 					})
 					if err != nil {
@@ -760,19 +776,29 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 
 	// addSlot records one storage slot everywhere it goes but flat state,
 	// which the check-2 fold writes in keccak order: the preimage store,
-	// and the MPT re-derivation.
+	// and the MPT re-derivation. The sorter copies the key and value, so
+	// both are built in buffers reused for every slot.
+	var (
+		hasher  = newKeccakHasher()
+		enc     = rlp.NewEncoderBuffer(nil)
+		slotKey [2 * common.HashLength]byte
+		slotRLP []byte
+	)
 	addSlot := func(accountHash common.Hash, slot common.Hash, value [32]byte) error {
-		var (
-			slotHash = crypto.Keccak256Hash(slot[:])
-			enc, _   = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-		)
+		slotHash := hasher.hash(slot[:])
+		copy(slotKey[:], accountHash[:])
+		copy(slotKey[common.HashLength:], slotHash[:])
+		enc.Reset(nil)
+		enc.WriteBytes(common.TrimLeftZeroes(value[:]))
+		slotRLP = enc.AppendToBytes(slotRLP[:0])
 		stats.slots.Add(1)
-		return slotSorter.Add(append(accountHash.Bytes(), slotHash.Bytes()...), enc)
+		return slotSorter.Add(slotKey[:], slotRLP)
 	}
 
 	// sealGroup validates one account's header leaves and records it
 	// everywhere it goes but flat state, which the check-2 fold writes in
-	// keccak order.
+	// keccak order. The account record is built in a reused buffer too.
+	var acctRecord []byte
 	sealGroup := func(g *importGroup) error {
 		// Header-range slots are derived from sub-indices, so the preimage
 		// file's list of them is checked rather than believed - the exact
@@ -805,7 +831,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			// The delegation leaf derives from a 20-byte target, so its
 			// designator is always the 23-byte EIP-7702 indicator.
 			designator := g.delegation[:23]
-			codeHash = crypto.Keccak256Hash(designator)
+			codeHash = hasher.hash(designator)
 			if rawBatch != nil {
 				rawdb.WriteCode(rawBatch, codeHash, designator)
 			}
@@ -823,11 +849,11 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 				codeSizes[codeHash] = codeSize
 			}
 		}
-		accountHash := crypto.Keccak256Hash(g.addr.Bytes())
+		accountHash := hasher.hash(g.addr[:])
 		stats.accounts.Add(1)
 
-		value := merkleAccountRecord(nonce, balance, codeHash)
-		if err := acctSorter.Add(accountHash.Bytes(), value); err != nil {
+		acctRecord = appendMerkleAccountRecord(acctRecord[:0], nonce, balance, codeHash)
+		if err := acctSorter.Add(accountHash[:], acctRecord); err != nil {
 			return err
 		}
 		for _, s := range g.slots {
@@ -862,7 +888,9 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	var (
 		codeCand     *bintrie.RecordSorter
 		codeHeld     *heldStream
+		codeRecord   []byte
 		group        *importGroup
+		spare        importGroup // the one group, reused for every account
 		pastAccounts bool
 	)
 	defer func() {
@@ -910,7 +938,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	// The pass is a pipeline: a decoder goroutine reads the snapshot into
 	// batches, which the tree builder's goroutine and this loop each consume
 	// in order, so decoding, hashing and joining overlap.
-	pipe := startLeafPipeline(snap, builder, &builderErr)
+	pipe := startLeafPipeline(snap, builder, &builderErr, opts.yield)
 	defer pipe.stop()
 	var (
 		batch *leafBatch
@@ -918,7 +946,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	)
 	for {
 		if batch == nil || next == len(batch.values) {
-			if err := ctx.Err(); err != nil {
+			if err := opts.yield.pause(ctx); err != nil {
 				return common.Hash{}, err
 			}
 			if batch != nil {
@@ -931,7 +959,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			next = 0
 			stats.leaves.Add(uint64(len(batch.values)))
 		}
-		key, value := batch.key(next), batch.values[next]
+		key, value := batch.key(next), &batch.values[next]
 		next++
 		// Zone boundary: the account zone ends where anything else begins.
 		if key[0] != bintrie.AccountZone && !pastAccounts {
@@ -954,12 +982,12 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 				}
 				if bytes.Equal(ckey, stem) {
 					var (
-						codeHash = common.BytesToHash(cvalue[:32])
-						ti       = binary.BigEndian.Uint64(cvalue[32:])
-						index    = ti*256 + uint64(key[33])
+						ti    = binary.BigEndian.Uint64(cvalue[32:])
+						index = ti*256 + uint64(key[33])
 					)
-					record := append(codeHash.Bytes(), binary.BigEndian.AppendUint64(nil, index)...)
-					if err := chunkSorter.Add(record, value[:]); err != nil {
+					// The record is the code hash and the chunk index.
+					codeRecord = binary.BigEndian.AppendUint64(append(codeRecord[:0], cvalue[:32]...), index)
+					if err := chunkSorter.Add(codeRecord, value[:]); err != nil {
 						return common.Hash{}, err
 					}
 					break
@@ -1000,10 +1028,10 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 
 		if key[0] == bintrie.StorageZone {
 			if !haveStorageHash || addr != lastStorageAddr {
-				lastStorageAddr, lastStorageHash, haveStorageHash = addr, crypto.Keccak256Hash(addr.Bytes()), true
+				lastStorageAddr, lastStorageHash, haveStorageHash = addr, hasher.hash(addr[:]), true
 			}
 			slot := common.BytesToHash(matched[common.AddressLength:])
-			if err := addSlot(lastStorageHash, slot, value); err != nil {
+			if err := addSlot(lastStorageHash, slot, *value); err != nil {
 				return common.Hash{}, err
 			}
 			continue
@@ -1018,26 +1046,30 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			group = nil
 		}
 		if group == nil {
-			group = &importGroup{
-				stem:        bytes.Clone(stem),
+			spare = importGroup{
+				stem:        append(spare.stem[:0], stem...),
 				addr:        addr,
 				headerClaim: binary.BigEndian.Uint64(matched[common.AddressLength:]),
+				slots:       spare.slots[:0],
 			}
+			group = &spare
 		}
-		leaf := value
 		switch {
 		case sub == bintrie.BasicDataLeafKey:
-			group.basic = &leaf
+			group.leaves[0] = *value
+			group.basic = &group.leaves[0]
 		case sub == bintrie.CodeHashLeafKey:
-			group.codeHash = &leaf
+			group.leaves[1] = *value
+			group.codeHash = &group.leaves[1]
 		case sub == bintrie.DelegationLeafKey:
-			group.delegation = &leaf
+			group.leaves[2] = *value
+			group.delegation = &group.leaves[2]
 		case sub >= bintrie.HeaderStorageOffset && sub < bintrie.HeaderStorageOffset+bintrie.HeaderStorageSlots:
 			// The slot number is the sub-index, not something the preimage
 			// file has to be trusted for.
 			var slot common.Hash
 			slot[31] = sub - bintrie.HeaderStorageOffset
-			group.slots = append(group.slots, importSlot{slot: slot, value: leaf})
+			group.slots = append(group.slots, importSlot{slot: slot, value: *value})
 			group.headerSeen |= 1 << (sub - bintrie.HeaderStorageOffset)
 		}
 	}
@@ -1081,22 +1113,26 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 		return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", rebuilt, snap.root)
 	}
 	prog.finish("Verified snapshot consistency", "root", rebuilt, "leaves", stats.leaves.Load(), "digest", snap.digest())
+	// One knob for the parallelism: the digests share opts.workers hashing
+	// goroutines, and as many families are read back at once.
 	var (
-		written  = newWrittenState()
+		written  = newWrittenState(opts.workers)
 		families = written.families()
 		readBack errgroup.Group
 	)
+	defer written.close() // after the read-back below
+	readBack.SetLimit(max(opts.workers, 1))
 	defer readBack.Wait()
 	if nodes != nil {
-		if err := writeStagedNodes(ctx, pbtdb, nodes, written.nodes); err != nil {
+		if err := writeStagedNodes(ctx, pbtdb, nodes, written.nodes, opts.yield); err != nil {
 			return common.Hash{}, err
 		}
 		// The tree nodes are all written: read them back while the code
 		// limb and check 2 run. Reading puts nothing in the memtable.
-		readBack.Go(func() error { return verifyWritten(ctx, pbtdb, families[0]) })
+		readBack.Go(func() error { return verifyWritten(ctx, pbtdb, opts.yield, families[0]) })
 		// Likewise the flat storage, once check 2 has written its last row.
 		written.storageWritten = func() {
-			readBack.Go(func() error { return verifyWritten(ctx, pbtdb, families[2]) })
+			readBack.Go(func() error { return verifyWritten(ctx, pbtdb, opts.yield, families[2]) })
 		}
 	}
 
@@ -1114,11 +1150,12 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	slices.SortFunc(hashes, func(a, b common.Hash) int { return bytes.Compare(a[:], b[:]) })
 	prog = startProgress("Verifying code", "codes", uint64(len(hashes)), stats.codes.Load)
 	defer prog.stop()
+	var chunks []bintrie.IndexedChunk // one code's, reused for the next
 	for _, hash := range hashes {
-		if err := ctx.Err(); err != nil {
+		if err := opts.yield.pause(ctx); err != nil {
 			return common.Hash{}, err
 		}
-		var chunks []bintrie.IndexedChunk
+		chunks = chunks[:0]
 		for {
 			ckey, cvalue, err := chunkHeld.current()
 			if err != nil {
@@ -1155,6 +1192,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 		return common.Hash{}, fmt.Errorf("code chunks left over for unclaimed hash %x", ckey[:32])
 	}
 	prog.finish("Verified code against its hashes", "codes", stats.codes.Load())
+	chunkSorter.Close() // its spill is done with: free the disk now, not at return
 
 	// Check 2: re-derive the MPT and demand the anchor root.
 	acctStream, err := acctSorter.Sort()
@@ -1165,10 +1203,12 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	if err != nil {
 		return common.Hash{}, err
 	}
-	got, err := rederiveMerkleRoot(ctx, acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.accounts.Load()+stats.slots.Load())
+	got, err := rederiveMerkleRoot(ctx, acctStream, slotStream, pbtBatch, written, opts.tmpDir, opts.workers, stats.accounts.Load()+stats.slots.Load(), opts.yield)
 	if err != nil {
 		return common.Hash{}, err
 	}
+	acctSorter.Close() // likewise, drained by check 2
+	slotSorter.Close()
 	if got != anchorRoot {
 		return common.Hash{}, fmt.Errorf("the leaves re-derive merkle root %x, the anchor commits %x", got, anchorRoot)
 	}
@@ -1182,9 +1222,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	if err := flush(true); err != nil {
 		return common.Hash{}, err
 	}
-	if err := verifyWritten(ctx, pbtdb, families[1]); err != nil {
-		return common.Hash{}, err
-	}
+	readBack.Go(func() error { return verifyWritten(ctx, pbtdb, opts.yield, families[1]) })
 	if err := readBack.Wait(); err != nil {
 		return common.Hash{}, err
 	}
@@ -1241,10 +1279,12 @@ type preimageBatch struct {
 }
 
 // preimageBatchSize and preimageBatchSlots bound a phase-1 batch: the records
-// it begins or continues, and their slot keys (2 MiB).
+// it begins or continues, and their slot keys (256 KiB). A batch is a few
+// milliseconds of a worker's time, so a block waits no longer for the import
+// to stand aside (blockYield).
 var (
 	preimageBatchSize  = 1024
-	preimageBatchSlots = 1 << 16
+	preimageBatchSlots = 1 << 13
 )
 
 // candidateBuf holds one candidate's key and value while it is built: the
@@ -1331,8 +1371,9 @@ type leafPipeline struct {
 }
 
 // startLeafPipeline starts decoding snap and feeding builder; *builderErr is
-// the error builder's node callback records.
-func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, builderErr *error) *leafPipeline {
+// the error builder's node callback records. Both pause between batches while
+// the node processes a block (y).
+func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, builderErr *error, y *blockYield) *leafPipeline {
 	ctx, cancel := context.WithCancel(context.Background())
 	g, ctx := errgroup.WithContext(ctx)
 	p := &leafPipeline{
@@ -1349,6 +1390,9 @@ func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, buil
 		defer close(p.leaves)
 		defer close(toBuilder)
 		for eof := false; !eof; {
+			if err := y.pause(ctx); err != nil {
+				return err
+			}
 			var b *leafBatch
 			select {
 			case b = <-p.free:
@@ -1383,6 +1427,9 @@ func startLeafPipeline(snap *snapshotReader, builder *bintrie.StackBuilder, buil
 	})
 	g.Go(func() error {
 		for b := range toBuilder {
+			if err := y.pause(ctx); err != nil {
+				return err
+			}
 			for i := range b.values {
 				if err := builder.Add(b.key(i), b.values[i][:]); err != nil {
 					return err

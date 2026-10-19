@@ -427,7 +427,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 				ranges[i].end = starts[i+1]
 			}
 			ranges[i].start = starts[i]
-			keys[i] = &fileKeys{r: preimagePiece(f, offsets[i], end-offsets[i])}
+			keys[i] = &fileKeys{r: preimagePiece(f, offsets[i], end-offsets[i]), hasher: newKeccakHasher()}
 		}
 	}
 	// Every worker's three sorters are alive at once, and a sealed one keeps
@@ -490,7 +490,8 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 	// Check 1, before the build: everything written is fed by this same
 	// record set, so only this check ties the output to the source state.
 	// The fold writes the flat state as it goes, digesting what it writes.
-	written := newWrittenState()
+	written := newWrittenState(workers)
+	defer written.close()
 	if err := verifySourceRoot(accounts, slots, root, pbtdb.NewBatch(), written, opts.tmpDir, workers, stats.accounts.Load()+stats.slots.Load()); err != nil {
 		return common.Hash{}, err
 	}
@@ -534,7 +535,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 		return common.Hash{}, builderErr
 	}
 	sorter.Close()
-	if err := writeStagedNodes(context.Background(), pbtdb, nodes, written.nodes); err != nil {
+	if err := writeStagedNodes(context.Background(), pbtdb, nodes, written.nodes, nil); err != nil {
 		return common.Hash{}, err
 	}
 	nodes.close()
@@ -542,7 +543,7 @@ func convertState(chaindb ethdb.Database, srcTriedb *triedb.Database, root commo
 
 	// Both stores must hold exactly what was written before anything becomes
 	// publishable or openable.
-	if err := verifyWritten(context.Background(), pbtdb, written.families()...); err != nil {
+	if err := verifyWritten(context.Background(), pbtdb, nil, written.families()...); err != nil {
 		return common.Hash{}, err
 	}
 	logWritten(written)
@@ -761,6 +762,7 @@ func (storeKeys) close() error              { return nil }
 // record's slot keys are read a window at a time, never whole.
 type fileKeys struct {
 	r      *preimageReader
+	hasher *keccakHasher
 	order  preimageOrder
 	left   int           // slot keys of the current record not yet read
 	slots  []common.Hash // the window read last
@@ -779,7 +781,7 @@ func (f *fileKeys) account(hash common.Hash) (common.Address, error) {
 	case err != nil:
 		return common.Address{}, err
 	}
-	addrHash, err := f.order.record(f.r.records-1, addr)
+	addrHash, err := f.order.record(f.hasher, f.r.records-1, addr)
 	switch {
 	case err != nil:
 		return common.Address{}, err
@@ -806,7 +808,7 @@ func (f *fileKeys) pending() (slot, hash common.Hash, ok bool, err error) {
 		if err := f.r.readSlots(f.slots); err != nil {
 			return common.Hash{}, common.Hash{}, false, err
 		}
-		err := f.order.slots(f.slots, func(_, hash common.Hash) error {
+		err := f.order.slots(f.hasher, f.slots, func(_, hash common.Hash) error {
 			f.hashes = append(f.hashes, hash)
 			return nil
 		})
@@ -954,7 +956,7 @@ func deriveLeaves(ctx context.Context, chaindb ethdb.Database, src leafSource, p
 		if err := emitAccountHeader(chaindb, addr, acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash), codes, stats, emit); err != nil {
 			return err
 		}
-		if err := part.accounts.Add(accountHash.Bytes(), merkleAccountRecord(acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash))); err != nil {
+		if err := part.accounts.Add(accountHash.Bytes(), appendMerkleAccountRecord(nil, acc.Nonce, acc.Balance, common.BytesToHash(acc.CodeHash))); err != nil {
 			return err
 		}
 
@@ -1128,7 +1130,7 @@ func verifySourceRoot(accounts, slots *bintrie.RecordSorter, want common.Hash, b
 	if err != nil {
 		return err
 	}
-	got, err := rederiveMerkleRoot(context.Background(), acctStream, slotStream, batch, written, tmpDir, workers, total)
+	got, err := rederiveMerkleRoot(context.Background(), acctStream, slotStream, batch, written, tmpDir, workers, total, nil)
 	if err != nil {
 		return err
 	}

@@ -236,15 +236,22 @@ func (g *groupNode) foldRange(i, j, from, extraLo, extraHi int) common.Hash {
 	for m < j && g.subs[m]>>(7-b)&1 == 0 {
 		m++
 	}
-	// Assemble the prefix: stem bits [extraLo, extraHi) then sub bits [from, b).
-	var prefix bitstr
+	// Assemble the prefix: stem bits [extraLo, extraHi) then sub bits [from, b),
+	// in buf: branchHash copies it.
+	var (
+		buf    [maxPathBits / 8]byte
+		prefix bitstr
+	)
 	if extraHi > extraLo {
-		prefix = slice(g.stem, extraLo, extraHi-extraLo)
+		prefix = sliceInto(buf[:], g.stem, extraLo, extraHi-extraLo)
 		for k := from; k < b; k++ {
-			prefix = prefix.concat(g.subs[i]>>(7-k)&1, bitstr{})
+			prefix.n++
+			prefix.b = buf[:(prefix.n+7)/8]
+			prefix.setBit(prefix.n-1, g.subs[i]>>(7-k)&1)
 		}
 	} else {
-		prefix = slice([]byte{g.subs[i]}, from, b-from)
+		sub := [1]byte{g.subs[i]}
+		prefix = sliceInto(buf[:], sub[:], from, b-from)
 	}
 	left := g.foldRange(i, m, b+1, 0, 0)
 	right := g.foldRange(m, j, b+1, 0, 0)

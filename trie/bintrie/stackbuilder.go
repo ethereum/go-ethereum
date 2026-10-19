@@ -57,12 +57,12 @@ type StackBuilder struct {
 	// Scratch reused across every emitted record: each node is built,
 	// hashed and handed to onNode once, so one instance of each serves the
 	// whole build, marked dirty before every use. valViews slices valArena
-	// into the [][]byte groupNode.vals wants; path and blob back the record
-	// handed to onNode.
-	groupScratch  groupNode
-	branchScratch branchNode
-	valViews      [][]byte
-	path, blob    []byte
+	// into the [][]byte groupNode.vals wants; prefix backs a branch's bit
+	// prefix, and path and blob the record handed to onNode.
+	groupScratch groupNode
+	valViews     [][]byte
+	prefix       [maxPathBits / 8]byte
+	path, blob   []byte
 }
 
 type builderFrame struct {
@@ -167,16 +167,16 @@ func (b *StackBuilder) closeBelow(div int) common.Hash {
 		frame := b.frames[len(b.frames)-1]
 		b.frames = b.frames[:len(b.frames)-1]
 		parentPos := b.posBelow(div)
-		b.branchScratch.prefix = slice(b.lastKey, parentPos, frame.split-parentPos)
-		b.branchScratch.left = hashedNode(frame.left)
-		b.branchScratch.right = hashedNode(right)
-		b.branchScratch.dirty = true
-		right = b.branchScratch.hashAt(parentPos)
+		// Both children are hashes already: the branch is hashed and
+		// encoded from them directly, not boxed into a branchNode.
+		prefix := sliceInto(b.prefix[:], b.lastKey, parentPos, frame.split-parentPos)
+		hash := branchHash(prefix, frame.left, right)
 		if b.onNode != nil {
 			b.path = appendPath(b.path[:0], b.lastKey, parentPos)
-			b.blob = appendNode(b.blob[:0], &b.branchScratch, parentPos)
-			b.onNode(b.path, right, b.blob)
+			b.blob = appendBranch(b.blob[:0], prefix, frame.left, right)
+			b.onNode(b.path, hash, b.blob)
 		}
+		right = hash
 	}
 	return right
 }

@@ -43,14 +43,36 @@ import (
 
 const merkleAccountRecordLen = 8 + 32 + common.HashLength
 
-// merkleAccountRecord encodes the account fields the fold needs. The storage
-// root is absent: it is recomputed from the storage records.
-func merkleAccountRecord(nonce uint64, balance *uint256.Int, codeHash common.Hash) []byte {
-	record := make([]byte, 0, merkleAccountRecordLen)
-	record = binary.BigEndian.AppendUint64(record, nonce)
+// appendMerkleAccountRecord appends the account fields the fold needs. The
+// storage root is absent: it is recomputed from the storage records.
+func appendMerkleAccountRecord(dst []byte, nonce uint64, balance *uint256.Int, codeHash common.Hash) []byte {
+	dst = binary.BigEndian.AppendUint64(dst, nonce)
 	balance32 := balance.Bytes32()
-	record = append(record, balance32[:]...)
-	return append(record, codeHash.Bytes()...)
+	dst = append(dst, balance32[:]...)
+	return append(dst, codeHash[:]...)
+}
+
+// appendAccountRLP appends a's encoding with storage root root: the consensus
+// one, or with slim the flat-state one, whose empty root and code hash are
+// empty strings (types.SlimAccountRLP). It encodes through enc's reused
+// buffer, where rlp.EncodeToBytes allocates the account and its encoding.
+func appendAccountRLP(dst []byte, enc *rlp.EncoderBuffer, a *foldAccount, root common.Hash, slim bool) []byte {
+	enc.Reset(nil)
+	list := enc.List()
+	enc.WriteUint64(a.nonce)
+	enc.WriteUint256(&a.balance)
+	if slim && root == types.EmptyRootHash {
+		enc.WriteBytes(nil)
+	} else {
+		enc.WriteBytes(root[:])
+	}
+	if slim && a.codeHash == types.EmptyCodeHash {
+		enc.WriteBytes(nil)
+	} else {
+		enc.WriteBytes(a.codeHash[:])
+	}
+	enc.ListEnd(list)
+	return enc.AppendToBytes(dst)
 }
 
 // heldStream wraps a sorted record stream with one record of lookahead.
@@ -92,7 +114,7 @@ func (h *heldStream) advance() { h.key, h.value = nil, nil }
 // written after the last storage row, so no flushed table mixes the two key
 // families. Everything is written by return, batch included, and digested
 // into written.
-func rederiveMerkleRoot(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64) (common.Hash, error) {
+func rederiveMerkleRoot(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, workers int, total uint64, y *blockYield) (common.Hash, error) {
 	workers = max(workers, 1)
 	var (
 		g, gctx   = errgroup.WithContext(ctx)
@@ -111,11 +133,11 @@ func rederiveMerkleRoot(ctx context.Context, accounts, slots *bintrie.RecordStre
 	}
 	for i := range workers {
 		jobs[i], roots[i] = make(chan *foldBatch, 2), make(chan []common.Hash, 2)
-		g.Go(func() error { return foldStorage(gctx, jobs[i], roots[i], free) })
+		g.Go(func() error { return foldStorage(gctx, jobs[i], roots[i], free, y) })
 	}
 	g.Go(func() error {
 		var err error
-		root, err = foldAccounts(gctx, accts, acctsFree, roots)
+		root, err = foldAccounts(gctx, accts, acctsFree, roots, y)
 		return err
 	})
 	g.Go(func() error {
@@ -125,7 +147,7 @@ func rederiveMerkleRoot(ctx context.Context, accounts, slots *bintrie.RecordStre
 			}
 			close(accts)
 		}()
-		return walkMerkleRecords(gctx, accounts, slots, batch, written, tmpDir, total, jobs, free, accts, acctsFree)
+		return walkMerkleRecords(gctx, accounts, slots, batch, written, tmpDir, total, jobs, free, accts, acctsFree, y)
 	})
 	if err := g.Wait(); err != nil {
 		return common.Hash{}, err
@@ -163,7 +185,7 @@ type foldAccount struct {
 // one worker, the next job to the next. total is the accounts and slots
 // expected, for progress reports.
 func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStream, batch ethdb.Batch, written *writtenState, tmpDir string, total uint64,
-	jobs []chan *foldBatch, free chan *foldBatch, accts, acctsFree chan []foldAccount) error {
+	jobs []chan *foldBatch, free chan *foldBatch, accts, acctsFree chan []foldAccount, y *blockYield) error {
 	var (
 		slotHeld   = &heldStream{stream: slots}
 		walked     atomic.Uint64 // accounts and slots
@@ -173,6 +195,9 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 		worker     int
 		cur        *foldBatch
 		pending    []foldAccount
+		// Encodings and keys, reused: the batch and the spill copy them.
+		enc          = rlp.NewEncoderBuffer(nil)
+		slim, rowKey []byte
 	)
 	prog := startProgress("Re-deriving merkle state", "records", total, walked.Load)
 	defer prog.stop()
@@ -196,6 +221,9 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 		return nil
 	}
 	take := func() error {
+		if err := y.pause(ctx); err != nil {
+			return err
+		}
 		select {
 		case cur = <-free:
 		case <-ctx.Done():
@@ -273,7 +301,10 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 				cur.ends = append(cur.ends, len(cur.vals))
 				if batch != nil {
 					storageSum.add(skey, svalue)
-					rawdb.WriteStorageSnapshot(batch, acct.hash, common.BytesToHash(skey[common.HashLength:]), svalue)
+					rowKey = append(append(rowKey[:0], rawdb.SnapshotStoragePrefix...), skey...)
+					if err := batch.Put(rowKey, svalue); err != nil {
+						return err
+					}
 					if err := flush(); err != nil {
 						return err
 					}
@@ -295,12 +326,7 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 			cur.accounts = append(cur.accounts, len(cur.keys))
 		}
 		if acctRows != nil {
-			slim := types.SlimAccountRLP(types.StateAccount{
-				Nonce:    acct.nonce,
-				Balance:  &acct.balance,
-				Root:     types.EmptyRootHash,
-				CodeHash: acct.codeHash[:],
-			})
+			slim = appendAccountRLP(slim[:0], &enc, &acct, types.EmptyRootHash, true)
 			if err := acctRows.add(akey, slim); err != nil {
 				return err
 			}
@@ -321,7 +347,7 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 		walked.Add(1)
 		walkedAccs++
 		if walkedAccs%uint64(foldBatchSize) == 0 {
-			if err := ctx.Err(); err != nil {
+			if err := y.pause(ctx); err != nil {
 				return err
 			}
 		}
@@ -362,9 +388,12 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 	defer accountSum.finish()
 	err := acctRows.replay(bufio.NewReaderSize(nil, 256<<10), func(hash, row []byte) error {
 		accountSum.add(hash, row)
-		rawdb.WriteAccountSnapshot(batch, common.BytesToHash(hash), row)
+		rowKey = append(append(rowKey[:0], rawdb.SnapshotAccountPrefix...), hash...)
+		if err := batch.Put(rowKey, row); err != nil {
+			return err
+		}
 		if rows.Add(1)%uint64(foldBatchSize) == 0 {
-			if err := ctx.Err(); err != nil {
+			if err := y.pause(ctx); err != nil {
 				return err
 			}
 		}
@@ -386,12 +415,15 @@ func walkMerkleRecords(ctx context.Context, accounts, slots *bintrie.RecordStrea
 
 // foldStorage hashes the storage tries of the accounts it is sent and
 // reports the roots of each job's accounts, in their order.
-func foldStorage(ctx context.Context, in <-chan *foldBatch, out chan<- []common.Hash, free chan<- *foldBatch) error {
+func foldStorage(ctx context.Context, in <-chan *foldBatch, out chan<- []common.Hash, free chan<- *foldBatch, y *blockYield) error {
 	var (
 		st    = trie.NewStackTrie(nil)
 		found []common.Hash
 	)
 	for b := range in {
+		if err := y.pause(ctx); err != nil {
+			return err
+		}
 		var next, val int
 		update := func(to int) error {
 			for ; next < to; next++ {
@@ -429,13 +461,18 @@ func foldStorage(ctx context.Context, in <-chan *foldBatch, out chan<- []common.
 // foldAccounts builds the account trie from the accounts in order, taking
 // each one's storage root from the workers' jobs, in the order they were
 // handed out.
-func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []foldAccount, roots []chan []common.Hash) (common.Hash, error) {
+func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []foldAccount, roots []chan []common.Hash, y *blockYield) (common.Hash, error) {
 	var (
 		tr   = trie.NewStackTrie(nil)
 		have []common.Hash
 		job  int
+		enc  = rlp.NewEncoderBuffer(nil)
+		full []byte
 	)
 	for accounts := range in {
+		if err := y.pause(ctx); err != nil {
+			return common.Hash{}, err
+		}
 		for i := range accounts {
 			acct := &accounts[i]
 			root := types.EmptyRootHash
@@ -450,15 +487,7 @@ func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []fo
 				}
 				root, have = have[0], have[1:]
 			}
-			full, err := rlp.EncodeToBytes(&types.StateAccount{
-				Nonce:    acct.nonce,
-				Balance:  &acct.balance,
-				Root:     root,
-				CodeHash: acct.codeHash[:],
-			})
-			if err != nil {
-				return common.Hash{}, err
-			}
+			full = appendAccountRLP(full[:0], &enc, acct, root, false)
 			if err := tr.Update(acct.hash[:], full); err != nil {
 				return common.Hash{}, err
 			}
@@ -474,22 +503,48 @@ func foldAccounts(ctx context.Context, in <-chan []foldAccount, free chan<- []fo
 
 // writeDigest hashes one key family's records in the order written. Keys are
 // the family-relative suffixes the namespace stores them under. Records are
-// hashed in batches of recordBatchSize, on several goroutines (see ahead),
+// hashed in batches of recordBatchSize, on pool's goroutines (see ahead),
 // and the family's digest hashes the batch digests in order.
 type writeDigest struct {
 	top   crypto.KeccakState
 	count uint64
+	pool  *digestPool
 }
 
-func newWriteDigest() *writeDigest {
-	return &writeDigest{top: crypto.NewKeccakState()}
+func newWriteDigest(pool *digestPool) *writeDigest {
+	return &writeDigest{top: crypto.NewKeccakState(), pool: pool}
 }
 
 func (d *writeDigest) sum() common.Hash {
 	return common.BytesToHash(d.top.Sum(nil))
 }
 
-// digestAhead digests records on goroutines of its own, so that a writer on
+// digestPool hashes the batches of every digestAhead of a command, on as
+// many goroutines as the command has workers: the families written and read
+// back at once share them.
+type digestPool struct {
+	work chan *digestBatch
+}
+
+func newDigestPool(workers int) *digestPool {
+	workers = max(workers, 1)
+	p := &digestPool{work: make(chan *digestBatch, 2*workers)}
+	for range workers {
+		go func() {
+			hasher := crypto.NewKeccakState()
+			for b := range p.work {
+				b.sum, b.err = b.digest(hasher)
+				b.hashed <- struct{}{}
+			}
+		}()
+	}
+	return p
+}
+
+// close stops the pool, once every digestAhead on it has finished.
+func (p *digestPool) close() { close(p.work) }
+
+// digestAhead digests records on its pool's goroutines, so that a writer on
 // the critical path only copies them.
 type digestAhead struct {
 	work, order, free chan *digestBatch
@@ -546,8 +601,8 @@ type digestBatch struct {
 	hashed chan struct{}
 }
 
-// digestWorkers is how many goroutines hash one family's batches.
-const digestWorkers = 4
+// digestDepth is how many batches one family has hashing or queued at once.
+const digestDepth = 8
 
 // digest hashes the batch's records, whose keys must ascend.
 func (b *digestBatch) digest(hasher crypto.KeccakState) (common.Hash, error) {
@@ -570,28 +625,19 @@ func (b *digestBatch) digest(hasher crypto.KeccakState) (common.Hash, error) {
 }
 
 // ahead starts digesting the records handed to the returned digestAhead, in
-// order. Its finish reports keys that do not ascend.
+// order, on d's pool. Its finish reports keys that do not ascend.
 func (d *writeDigest) ahead() *digestAhead {
 	a := &digestAhead{
-		work:  make(chan *digestBatch, 2*digestWorkers),
-		order: make(chan *digestBatch, 2*digestWorkers),
-		free:  make(chan *digestBatch, 2*digestWorkers+1),
+		work:  d.pool.work,
+		order: make(chan *digestBatch, digestDepth),
+		free:  make(chan *digestBatch, digestDepth+1),
 		done:  make(chan error, 1),
 	}
 	for range cap(a.free) {
 		a.free <- &digestBatch{hashed: make(chan struct{}, 1)}
 	}
 	a.cur = <-a.free
-	work, order := a.work, a.order // finish clears a.work
-	for range digestWorkers {
-		go func() {
-			hasher := crypto.NewKeccakState()
-			for b := range work {
-				b.sum, b.err = b.digest(hasher)
-				b.hashed <- struct{}{}
-			}
-		}()
-	}
+	order := a.order // finish clears a.order
 	go func() {
 		var (
 			err  error
@@ -631,30 +677,33 @@ func (a *digestAhead) add(key, value []byte) {
 // finish waits for every record to be digested and returns the first error
 // the digest met. Later calls return the same.
 func (a *digestAhead) finish() error {
-	if a.work == nil {
+	if a.order == nil {
 		return a.err
 	}
 	if a.cur.len() > 0 {
 		a.order <- a.cur
 		a.work <- a.cur
 	}
-	close(a.work)
 	close(a.order)
-	a.err, a.work = <-a.done, nil
+	a.err, a.order = <-a.done, nil
 	return a.err
 }
 
-// writtenState digests the three key families a command writes.
-// storageWritten, if set, runs once every flat storage row is in the
-// database and digested, before the flat accounts are written.
+// writtenState digests the three key families a command writes, on a pool it
+// stops on close. storageWritten, if set, runs once every flat storage row
+// is in the database and digested, before the flat accounts are written.
 type writtenState struct {
 	nodes, accounts, storage *writeDigest
 	storageWritten           func()
+	pool                     *digestPool
 }
 
-func newWrittenState() *writtenState {
-	return &writtenState{nodes: newWriteDigest(), accounts: newWriteDigest(), storage: newWriteDigest()}
+func newWrittenState(workers int) *writtenState {
+	pool := newDigestPool(workers)
+	return &writtenState{nodes: newWriteDigest(pool), accounts: newWriteDigest(pool), storage: newWriteDigest(pool), pool: pool}
 }
+
+func (w *writtenState) close() { w.pool.close() }
 
 // writtenFamily is one key family a command writes, with the digest of what
 // it wrote.
@@ -676,24 +725,28 @@ func (w *writtenState) families() []writtenFamily {
 
 // writeStagedNodes writes the staged tree nodes into the namespace in key
 // order, digesting each.
-func writeStagedNodes(ctx context.Context, pbtdb ethdb.Database, nodes *nodeStager, digest *writeDigest) error {
+func writeStagedNodes(ctx context.Context, pbtdb ethdb.Database, nodes *nodeStager, digest *writeDigest, y *blockYield) error {
 	var (
 		batch   = pbtdb.NewBatch()
 		ahead   = digest.ahead()
 		staged  uint64
 		flushed atomic.Uint64
 		prog    = startProgress("Writing tree nodes", "nodes", nodes.count, flushed.Load)
+		key     []byte // the node's, reused: the batch copies it
 	)
 	defer ahead.finish()
 	defer prog.stop()
 	err := nodes.replay(func(path, blob []byte) error {
 		ahead.add(path, blob)
-		rawdb.WriteAccountTrieNode(batch, path, blob)
+		key = append(append(key[:0], rawdb.TrieNodeAccountPrefix...), path...)
+		if err := batch.Put(key, blob); err != nil {
+			return err
+		}
 		staged++
 		if batch.ValueSize() < ethdb.IdealBatchSize {
 			return nil
 		}
-		if err := ctx.Err(); err != nil {
+		if err := y.pause(ctx); err != nil {
 			return err
 		}
 		if err := batch.Write(); err != nil {
@@ -719,14 +772,14 @@ func writeStagedNodes(ctx context.Context, pbtdb ethdb.Database, nodes *nodeStag
 // verifyWritten re-reads each family in key order, concurrently, and
 // requires it to match what was written. The namespace was empty when the
 // command began, so a family holding anything more is a mismatch as well.
-func verifyWritten(ctx context.Context, pbtdb ethdb.Database, families ...writtenFamily) error {
+func verifyWritten(ctx context.Context, pbtdb ethdb.Database, y *blockYield, families ...writtenFamily) error {
 	var g errgroup.Group
 	for _, f := range families {
 		g.Go(func() error {
 			var read atomic.Uint64
 			prog := startProgress("Reading back "+f.name+" records", "records", f.want.count, read.Load)
 			defer prog.stop()
-			got := newWriteDigest()
+			got := newWriteDigest(f.want.pool)
 			ahead := got.ahead()
 			defer ahead.finish()
 			it := pbtdb.NewIterator(f.prefix, nil)
@@ -735,7 +788,7 @@ func verifyWritten(ctx context.Context, pbtdb ethdb.Database, families ...writte
 				ahead.add(it.Key()[len(f.prefix):], it.Value())
 				if n%4096 == 0 {
 					read.Store(n)
-					if err := ctx.Err(); err != nil {
+					if err := y.pause(ctx); err != nil {
 						return err
 					}
 				}

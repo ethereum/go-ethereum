@@ -30,6 +30,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -172,6 +173,77 @@ func TestImportWorkersAgree(t *testing.T) {
 		anchor: &types.Header{Number: big.NewInt(7), Root: root},
 		// A tiny budget makes every worker's candidates spill, so the
 		// merge runs over absorbed runs.
+		conversionOptions: conversionOptions{tmpDir: t.TempDir(), sortBudget: 512, workers: 4}})
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	if imported != binRoot {
+		t.Fatalf("imported root %x, the converter built %x", imported, binRoot)
+	}
+	assertNamespaceEqual(t, convDB, impDB)
+}
+
+// TestBlockYield: a pause passes while no block is processed, waits through
+// one, and ends with the context's error if cancelled meanwhile.
+func TestBlockYield(t *testing.T) {
+	var none *blockYield
+	if err := none.pause(context.Background()); err != nil {
+		t.Fatalf("a nil yield paused: %v", err)
+	}
+	y := newBlockYield()
+	if err := y.pause(context.Background()); err != nil {
+		t.Fatalf("an idle yield paused: %v", err)
+	}
+	y.set(true)
+	done := make(chan error, 1)
+	go func() { done <- y.pause(context.Background()) }()
+	select {
+	case err := <-done:
+		t.Fatalf("paused through a block: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	y.set(false)
+	if err := <-done; err != nil {
+		t.Fatalf("pause after the block: %v", err)
+	}
+	y.set(true)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { done <- y.pause(ctx) }()
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("a cancelled pause returned %v", err)
+	}
+}
+
+// TestImportYieldsToBlocks: an import standing aside for blocks processed
+// back to back, a fraction of a millisecond each, lands on the converter's
+// root and namespace like one that never pauses.
+func TestImportYieldsToBlocks(t *testing.T) {
+	convDB, root, binRoot, snapPath, prePath := importFixture(t, mixedAlloc(8347))
+	defer func(p, s, l, f int) {
+		preimageBatchSize, preimageBatchSlots, leafBatchSize, foldBatchSize = p, s, l, f
+	}(preimageBatchSize, preimageBatchSlots, leafBatchSize, foldBatchSize)
+	preimageBatchSize, preimageBatchSlots, leafBatchSize, foldBatchSize = 4, 1, 64, 2
+
+	y := newBlockYield()
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			y.set(true)
+			time.Sleep(200 * time.Microsecond)
+			y.set(false)
+			time.Sleep(200 * time.Microsecond)
+		}
+	}()
+	impDB := rawdb.NewMemoryDatabase()
+	imported, err := importState(context.Background(), impDB, importOptions{snapshot: snapPath, preimages: prePath,
+		anchor: &types.Header{Number: big.NewInt(7), Root: root}, yield: y,
 		conversionOptions: conversionOptions{tmpDir: t.TempDir(), sortBudget: 512, workers: 4}})
 	if err != nil {
 		t.Fatalf("import failed: %v", err)
@@ -492,8 +564,9 @@ func readPreimageRecords(t *testing.T, path string) []preRecord {
 // key per read so the check crosses every read, and returns its records.
 func readPreimageFile(pr *preimageReader) ([]preRecord, error) {
 	var (
-		recs  []preRecord
-		order preimageOrder
+		recs   []preRecord
+		order  preimageOrder
+		hasher = newKeccakHasher()
 	)
 	for {
 		addr, count, err := pr.nextRecord()
@@ -503,7 +576,7 @@ func readPreimageFile(pr *preimageReader) ([]preRecord, error) {
 		if err != nil {
 			return recs, err
 		}
-		if _, err := order.record(pr.records-1, addr); err != nil {
+		if _, err := order.record(hasher, pr.records-1, addr); err != nil {
 			return recs, err
 		}
 		rec := preRecord{addr: addr, slots: make([]common.Hash, count)}
@@ -511,7 +584,7 @@ func readPreimageFile(pr *preimageReader) ([]preRecord, error) {
 			if err := pr.readSlots(rec.slots[i : i+1]); err != nil {
 				return recs, err
 			}
-			if err := order.slots(rec.slots[i:i+1], nil); err != nil {
+			if err := order.slots(hasher, rec.slots[i:i+1], nil); err != nil {
 				return recs, err
 			}
 		}
