@@ -70,7 +70,7 @@ var DefaultConfig = Config{
 	HTTPBodyLimit:        5 * 1024 * 1024,
 	GraphQLVirtualHosts:  []string{"localhost"},
 	P2P: p2p.Config{
-		ListenTCPAddr:        ":30303",
+		ListenAddr:           ":30303",
 		MaxPeers:             50,
 		MaxBrowserPeers:      100,
 		MaxBrowserPeersPerIP: 8,
