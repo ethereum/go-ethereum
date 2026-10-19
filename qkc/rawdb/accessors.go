@@ -18,9 +18,11 @@ package rawdb
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	coretypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/qkc/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ReadRootHeadHash retrieves the hash of the root tip.
@@ -107,5 +109,40 @@ func ReadLastConfirmedBlockHash(db ethdb.KeyValueReader, rootHash common.Hash) c
 func WriteLastConfirmedBlockHash(db ethdb.KeyValueWriter, rootHash common.Hash, hash common.Hash) {
 	if err := db.Put(lastConfirmedKey(rootHash), hash.Bytes()); err != nil {
 		log.Crit("Failed to store last confirmed shard block hash", "err", err)
+	}
+}
+
+// HasXShardDeposits reports whether the deposits sent to this shard by the block
+// of another shard with the given hash are stored.
+func HasXShardDeposits(db ethdb.KeyValueReader, hash common.Hash) bool {
+	has, _ := db.Has(xShardDepositsKey(hash))
+	return has
+}
+
+// ReadXShardDeposits retrieves the deposits sent to this shard by the block of
+// another shard with the given hash. It returns nil if they are not stored, and
+// an empty list if the block sent this shard nothing.
+func ReadXShardDeposits(db ethdb.KeyValueReader, hash common.Hash) []*coretypes.DepositTx {
+	data, _ := db.Get(xShardDepositsKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	var deposits []*coretypes.DepositTx
+	if err := rlp.DecodeBytes(data, &deposits); err != nil {
+		log.Error("Invalid cross-shard deposits RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return deposits
+}
+
+// WriteXShardDeposits stores the deposits sent to this shard by the block of
+// another shard with the given hash, as the RLP encoding of the list.
+func WriteXShardDeposits(db ethdb.KeyValueWriter, hash common.Hash, deposits []*coretypes.DepositTx) {
+	data, err := rlp.EncodeToBytes(deposits)
+	if err != nil {
+		log.Crit("Failed to RLP encode cross-shard deposits", "err", err)
+	}
+	if err := db.Put(xShardDepositsKey(hash), data); err != nil {
+		log.Crit("Failed to store cross-shard deposits", "err", err)
 	}
 }

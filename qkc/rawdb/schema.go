@@ -26,8 +26,9 @@ var (
 	// rootHeadKey tracks the latest known root block, the root tip.
 	rootHeadKey = []byte("qkc_LastRoot")
 
-	rootBlockPrefix     = []byte("qkc_rb")  // rootBlockPrefix + hash -> root block
-	lastConfirmedPrefix = []byte("qkc_rLM") // lastConfirmedPrefix + root hash -> last confirmed shard block hash
+	rootBlockPrefix      = []byte("qkc_rb")     // rootBlockPrefix + hash -> root block
+	lastConfirmedPrefix  = []byte("qkc_rLM")    // lastConfirmedPrefix + root hash -> last confirmed shard block hash
+	xShardDepositsPrefix = []byte("qkc_xShard") // xShardDepositsPrefix + source block hash -> deposits sent to this shard by the block
 )
 
 // rootBlockKey = rootBlockPrefix + hash
@@ -38,4 +39,9 @@ func rootBlockKey(hash common.Hash) []byte {
 // lastConfirmedKey = lastConfirmedPrefix + root hash
 func lastConfirmedKey(rootHash common.Hash) []byte {
 	return append(common.CopyBytes(lastConfirmedPrefix), rootHash.Bytes()...)
+}
+
+// xShardDepositsKey = xShardDepositsPrefix + source block hash
+func xShardDepositsKey(hash common.Hash) []byte {
+	return append(common.CopyBytes(xShardDepositsPrefix), hash.Bytes()...)
 }
