@@ -330,6 +330,10 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		Requests: requests,
 		Logs:     allLogs,
 		GasUsed:  gp.Used(),
+
+		ExecutionGasUsed: gp.CumulativeExecution(),
+		StateGasUsed:     gp.CumulativeState(),
+
 		pipeline: pipeline,
 	}, nil
 }

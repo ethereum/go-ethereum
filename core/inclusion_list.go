@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,6 +27,34 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+// blockGas is the gas used by a block's transactions in each EIP-8037 dimension.
+type blockGas struct {
+	execution uint64
+	state     uint64
+}
+
+// BlockGasUsed returns the execution and state gas used by the block's
+// transactions. A block processed before the node started is re-executed.
+func (bc *BlockChain) BlockGasUsed(block *types.Block) (uint64, uint64, error) {
+	if gas, ok := bc.blockGasCache.Get(block.Hash()); ok {
+		return gas.execution, gas.state, nil
+	}
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return 0, 0, consensus.ErrUnknownAncestor
+	}
+	statedb, err := bc.StateAt(parent.Root, parent.Number, parent.Time)
+	if err != nil {
+		return 0, 0, err
+	}
+	res, err := bc.processor.Process(context.Background(), block, statedb, nil, nil, bc.overrideTracerActivation(false), nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	bc.blockGasCache.Add(block.Hash(), blockGas{res.ExecutionGasUsed, res.StateGasUsed})
+	return res.ExecutionGasUsed, res.StateGasUsed, nil
+}
 
 // CheckInclusionList reports whether the block satisfies the inclusion list
 // (EIP-7805), given the execution and state gas used by its transactions.
