@@ -648,13 +648,16 @@ func EnableUBTAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
 
 // pbtAtGenesis reports whether the given genesis, or the stored one, commits
 // the state with the partitioned binary tree.
-func pbtAtGenesis(db ethdb.Database, genesis *Genesis) bool {
+func pbtAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
 	if genesis != nil {
-		return genesis.IsPBT()
+		if genesis.Config == nil {
+			return false, errGenesisNoConfig
+		}
+		return genesis.IsPBT(), nil
 	}
 	hash := rawdb.ReadCanonicalHash(db, 0)
 	config, header := rawdb.ReadChainConfig(db, hash), rawdb.ReadHeader(db, hash, 0)
-	return config != nil && header != nil && config.IsPBT(header.Number, header.Time)
+	return config != nil && header != nil && config.IsPBT(header.Number, header.Time), nil
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.

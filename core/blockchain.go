@@ -397,7 +397,10 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if err != nil {
 		return nil, err
 	}
-	enablePBT := pbtAtGenesis(db, genesis)
+	enablePBT, err := pbtAtGenesis(db, genesis)
+	if err != nil {
+		return nil, err
+	}
 	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle, enablePBT))
 
 	// Write the supplied genesis to the database if it has not been initialized
