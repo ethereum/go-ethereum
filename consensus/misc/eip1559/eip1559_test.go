@@ -124,8 +124,75 @@ func TestCalcBaseFee(t *testing.T) {
 			GasUsed:  test.parentGasUsed,
 			BaseFee:  big.NewInt(test.parentBaseFee),
 		}
-		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcBaseFee(config(), parent, 0), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
+		}
+	}
+}
+
+// TestCalcBaseFeeBogota checks the EIP-8198 max change of 5/48, applied after
+// dividing by the gas target like the spec does.
+func TestCalcBaseFeeBogota(t *testing.T) {
+	cfg := config()
+	cfg.BogotaTime = new(uint64)
+
+	tests := []struct {
+		parentBaseFee   int64
+		parentGasLimit  uint64
+		parentGasUsed   uint64
+		expectedBaseFee int64
+	}{
+		{params.InitialBaseFee, 20000000, 9000000, 989583334},   // usage below target
+		{params.InitialBaseFee, 20000000, 11000000, 1010416666}, // usage above target
+		{97000000, 20000000, 9999999, 97000000},                 // multiplying by 5 first would decrease by 1
+		{195000000, 20000000, 10000001, 195000001},              // multiplying by 5 first would increase by 2
+	}
+	for i, test := range tests {
+		parent := &types.Header{
+			Number:   common.Big32,
+			GasLimit: test.parentGasLimit,
+			GasUsed:  test.parentGasUsed,
+			BaseFee:  big.NewInt(test.parentBaseFee),
+		}
+		if have, want := CalcBaseFee(cfg, parent, 0), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+			t.Errorf("test %d: have %d  want %d, ", i, have, want)
+		}
+	}
+}
+
+// TestBaseFeeBogotaTransition checks that the first Bogota block applies the
+// new max change to its pre-Bogota parent.
+func TestBaseFeeBogotaTransition(t *testing.T) {
+	cfg := config()
+	bogotaTime := uint64(1000)
+	cfg.BogotaTime = &bogotaTime
+
+	parent := &types.Header{
+		Number:   common.Big32,
+		Time:     990,
+		GasLimit: 20000000,
+		GasUsed:  20000000,
+		BaseFee:  big.NewInt(params.InitialBaseFee),
+	}
+	for _, tc := range []struct {
+		time      uint64
+		want, not int64
+	}{
+		{999, 1125000000, 1104166666},  // 1/8 before the fork
+		{1000, 1104166666, 1125000000}, // 5/48 from the fork on
+	} {
+		header := &types.Header{
+			Number:   big.NewInt(33),
+			Time:     tc.time,
+			GasLimit: parent.GasLimit,
+			BaseFee:  big.NewInt(tc.want),
+		}
+		if err := VerifyEIP1559Header(cfg, parent, header); err != nil {
+			t.Errorf("time %d: expected valid header: %v", tc.time, err)
+		}
+		header.BaseFee = big.NewInt(tc.not)
+		if err := VerifyEIP1559Header(cfg, parent, header); err == nil {
+			t.Errorf("time %d: expected invalid base fee %d", tc.time, tc.not)
 		}
 	}
 }

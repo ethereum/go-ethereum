@@ -318,7 +318,7 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if miner.chainConfig.IsLondon(header.Number) {
-		header.BaseFee = eip1559.CalcBaseFee(miner.chainConfig, parent)
+		header.BaseFee = eip1559.CalcBaseFee(miner.chainConfig, parent, timestamp)
 		if !miner.chainConfig.IsLondon(parent.Number) {
 			parentGasLimit := parent.GasLimit * miner.chainConfig.ElasticityMultiplier()
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, miner.config.GasCeil)
