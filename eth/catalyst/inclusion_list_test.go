@@ -17,7 +17,9 @@
 package catalyst
 
 import (
+	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"math/big"
 	"testing"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -206,5 +209,61 @@ func TestForkchoiceUpdatedV5BuildsInclusionList(t *testing.T) {
 	}
 	if got := status.InclusionListSatisfied; status.Status != engine.VALID || got == nil || !*got {
 		t.Fatalf("status %s, inclusionListSatisfied %v, want VALID and true", status.Status, got)
+	}
+}
+
+// TestGetInclusionListV1 checks that the inclusion list stays within the size
+// limit and leaves out transactions that can't pay the next block's base fee.
+func TestGetInclusionListV1(t *testing.T) {
+	genesis, _ := generateMergeChain(0, true)
+	keys := make([]*ecdsa.PrivateKey, 13)
+	for i := range keys {
+		keys[i], _ = crypto.GenerateKey()
+		genesis.Alloc[crypto.PubkeyToAddress(keys[i].PublicKey)] = types.Account{Balance: big.NewInt(params.Ether)}
+	}
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+	signer := types.LatestSigner(genesis.Config)
+	sign := func(key *ecdsa.PrivateKey, feeCap int64) *types.Transaction {
+		return types.MustSignNewTx(key, signer, &types.DynamicFeeTx{
+			ChainID:   genesis.Config.ChainID,
+			GasTipCap: big.NewInt(params.GWei / 1000),
+			GasFeeCap: big.NewInt(feeCap),
+			Gas:       200_000,
+			To:        &common.Address{0xaa},
+			Data:      bytes.Repeat([]byte{0xff}, 1000),
+		})
+	}
+	// The oldest transaction can't pay the base fee, the others take up more
+	// room together than the list has.
+	underpriced := sign(keys[0], params.GWei/100)
+	txs := []*types.Transaction{underpriced}
+	for _, key := range keys[1:] {
+		txs = append(txs, sign(key, 2*params.GWei))
+	}
+	for i, err := range ethservice.TxPool().Add(txs, true) {
+		if err != nil {
+			t.Fatalf("tx %d: %v", i, err)
+		}
+	}
+	list, err := api.GetInclusionListV1()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var size int
+	for _, enc := range list {
+		var tx types.Transaction
+		if err := tx.UnmarshalBinary(enc); err != nil {
+			t.Fatal(err)
+		}
+		if tx.Hash() == underpriced.Hash() {
+			t.Error("underpriced transaction on the list")
+		}
+		size += len(enc)
+	}
+	if len(list) == 0 || size > maxInclusionListBytes {
+		t.Fatalf("list of %d transactions, %d bytes", len(list), size)
 	}
 }
