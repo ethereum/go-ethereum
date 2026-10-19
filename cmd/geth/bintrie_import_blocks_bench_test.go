@@ -108,7 +108,7 @@ func BenchmarkImportBesideBlocks(b *testing.B) {
 			b.Fatal(err)
 		}
 		db := openBenchDB(b, dest)
-		node := &standIn{db: db, keys: keys, yield: newBlockYield()}
+		node := &standIn{db: db, keys: keys, prefix: rawdb.SnapshotAccountPrefix, yield: newBlockYield()}
 
 		stages.reset()
 		baseline := node.run(interval, closeAfter(alone), stages)
@@ -138,19 +138,259 @@ func BenchmarkImportBesideBlocks(b *testing.B) {
 		if importErr != nil {
 			b.Fatal(importErr)
 		}
-		reportBlocks(b, baseline, beside, spent)
+		reportBlocks(b, baseline, beside, spent, importMarks)
 	}
 }
 
-// blockTime is one block's processing time and the import stage it ran in.
+// BenchmarkMigrateBesideBlocks compares what the node's two ways of migrating
+// while it follows the chain cost its block processing: mode=import imports
+// BenchmarkImport's pair, and mode=convert converts the same state in place,
+// the self-converter's way, from BenchmarkSelfConvert's merkle database and
+// preimage file. Both run on one database holding that merkle state and the
+// stand-in's flat state, as a node's holds both, beside the stand-in of
+// BenchmarkImportBesideBlocks and with its knobs. Besides block latency,
+// overall and per stage, each reports its peak RSS and the most the database
+// and the scratch grew, and checks the root it built against the pair's.
+// $IMPORT_BUDGET_MB sets the sort budget, scaled to the state by default: give
+// it the node's 1024 to see the memory a mainnet migration holds.
+func BenchmarkMigrateBesideBlocks(b *testing.B) {
+	dir := os.Getenv("BINTRIE_BENCH_DIR")
+	if dir == "" {
+		b.Skip("BINTRIE_BENCH_DIR not set")
+	}
+	var (
+		accounts = envInt(b, "BINTRIE_BENCH_ACCOUNTS", 21_208_000)
+		stateGB  = envInt(b, "BLOCKS_STATE_GB", 4)
+		heapGB   = envInt(b, "BLOCKS_HEAP_GB", 2)
+		workers  = envInt(b, "IMPORT_WORKERS", 4)
+		budgetMB = envInt(b, "IMPORT_BUDGET_MB", 0)
+		interval = envDuration(b, "BLOCKS_INTERVAL", time.Second)
+		alone    = envDuration(b, "BLOCKS_ALONE", 2*time.Minute)
+	)
+	pairDir := filepath.Join(dir, fmt.Sprintf("accounts-%d", accounts))
+	root := benchArtifacts(b, pairDir, accounts)
+	srcDir := filepath.Join(dir, fmt.Sprintf("selfconvert-%d", accounts))
+	if src := benchSource(b, srcDir, accounts); src != root {
+		b.Fatalf("the merkle fixture commits %x, the pair %x", src, root)
+	}
+	binRoot := pairBinaryRoot(b, pairDir)
+	stateDir, keys := migrateState(b, dir, srcDir, accounts, stateGB)
+	budget := int(onlineSortBudget * int64(accounts) / 424_160_000)
+	if budgetMB > 0 {
+		budget = budgetMB << 20
+	}
+
+	defer debug.SetGCPercent(debug.SetGCPercent(50)) // the node's --gogc
+	heap := liveHeap(heapGB)
+	defer heap.release()
+	defer log.SetDefault(log.Root())
+	clock := &phaseClock{marks: make(map[string]time.Time)}
+	log.SetDefault(log.NewLogger(clock))
+
+	dest, tmp := filepath.Join(dir, "beside"), filepath.Join(dir, "beside-tmp")
+	defer os.RemoveAll(dest)
+	migrations := []struct {
+		mode  string
+		marks []struct{ msg, name string }
+		run   func(db ethdb.Database, y *blockYield) (common.Hash, error)
+	}{
+		{"import", importMarks, func(db ethdb.Database, y *blockYield) (common.Hash, error) {
+			return importState(context.Background(), db, importOptions{
+				snapshot:          filepath.Join(pairDir, "snapshot.bin"),
+				preimages:         filepath.Join(pairDir, "preimages.bin"),
+				anchor:            &types.Header{Number: new(big.Int), Root: root},
+				yield:             y,
+				conversionOptions: conversionOptions{tmpDir: tmp, sortBudget: budget, workers: workers},
+			})
+		}},
+		{"convert", convertMarks, func(db ethdb.Database, y *blockYield) (common.Hash, error) {
+			return benchSelfConvert(db, filepath.Join(srcDir, "preimages.bin"), root, tmp, budget, workers, y)
+		}},
+	}
+	for _, m := range migrations {
+		b.Run("mode="+m.mode, func(b *testing.B) {
+			for range b.N {
+				b.StopTimer()
+				os.RemoveAll(dest)
+				os.RemoveAll(tmp)
+				os.MkdirAll(tmp, 0o755)
+				if err := cloneDir(stateDir, dest); err != nil {
+					b.Fatal(err)
+				}
+				db := openBenchDB(b, dest)
+				node := &standIn{db: db, keys: keys, prefix: standInPrefix, yield: newBlockYield()}
+				baseline := node.run(interval, closeAfter(alone), nil)
+
+				clock.reset()
+				resetPeakRSS()
+				grown := sampleGrowth(dest, tmp)
+				done := make(chan struct{})
+				var (
+					built common.Hash
+					err   error
+					spent time.Duration
+				)
+				b.StartTimer()
+				go func() {
+					defer close(done)
+					start := time.Now()
+					built, err = m.run(db, node.yield)
+					spent = time.Since(start)
+				}()
+				beside := node.run(interval, done, nil)
+				b.StopTimer()
+				grew, rss := grown(), peakRSS()
+				db.Close()
+				if err != nil {
+					b.Fatal(err)
+				}
+				if built != binRoot {
+					b.Fatalf("the %s built %x, the pair commits %x", m.mode, built, binRoot)
+				}
+				clock.stage(beside, m.marks)
+				reportBlocks(b, baseline, beside, spent, m.marks)
+				b.ReportMetric(float64(grew)/1e9, "peak-disk-GB")
+				if rss > 0 {
+					b.ReportMetric(float64(rss)/1e9, "peak-rss-GB")
+				}
+			}
+		})
+	}
+}
+
+// standInPrefix keys the stand-in's records beside a merkle state, outside
+// every key family a migration reads or writes.
+var standInPrefix = []byte("~")
+
+// convertMarks are selfConvertMarks closed by the read-back, which no line
+// closes.
+var convertMarks = append(slices.Clone(selfConvertMarks), struct{ msg, name string }{"", "readback"})
+
+// migrateState returns a compacted database holding the self-conversion
+// fixture's merkle state from srcDir and, under standInPrefix beside it, gb GB
+// of stand-in flat state, built once under dir, and the stand-in's record
+// count.
+func migrateState(b *testing.B, dir, srcDir string, accounts, gb int) (string, int) {
+	path := filepath.Join(dir, fmt.Sprintf("migrate-%d-%dgb", accounts, gb))
+	keys := gb * 1e9 / 140
+	if _, err := os.Stat(filepath.Join(path, "done")); err == nil {
+		return path, keys
+	}
+	b.Logf("generating %d GB of flat state beside %s into %s", gb, srcDir, path)
+	os.RemoveAll(path)
+	if err := cloneDir(filepath.Join(srcDir, "source"), path); err != nil {
+		b.Fatal(err)
+	}
+	db := openBenchDB(b, path)
+	writeStandInState(b, db, keys, standInPrefix)
+	if err := db.Compact(nil, nil); err != nil {
+		b.Fatal(err)
+	}
+	db.Close()
+	if err := os.WriteFile(filepath.Join(path, "done"), nil, 0o644); err != nil {
+		b.Fatal(err)
+	}
+	return path, keys
+}
+
+// pairBinaryRoot returns the binary tree root the pair in dir commits, read
+// from its snapshot's trailer once and kept beside it.
+func pairBinaryRoot(b *testing.B, dir string) common.Hash {
+	cached := filepath.Join(dir, "binroot")
+	if blob, err := os.ReadFile(cached); err == nil {
+		return common.BytesToHash(blob)
+	}
+	sr, err := openSnapshot(filepath.Join(dir, "snapshot.bin"))
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer sr.close()
+	for {
+		if _, _, err := sr.next(); err == io.EOF {
+			break
+		} else if err != nil {
+			b.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(cached, sr.root[:], 0o644); err != nil {
+		b.Fatal(err)
+	}
+	return sr.root
+}
+
+// sampleGrowth samples the bytes under dirs every 500 ms until the returned
+// function is called, which returns the most they grew over the first sample.
+func sampleGrowth(dirs ...string) func() int64 {
+	size := func() (n int64) {
+		for _, dir := range dirs {
+			filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+				if err == nil && !d.IsDir() {
+					if info, err := d.Info(); err == nil {
+						n += info.Size()
+					}
+				}
+				return nil
+			})
+		}
+		return n
+	}
+	var (
+		base = size()
+		peak int64
+		stop = make(chan struct{})
+		done = make(chan struct{})
+	)
+	go func() {
+		defer close(done)
+		tick := time.NewTicker(500 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			peak = max(peak, size()-base)
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+			}
+		}
+	}()
+	return func() int64 {
+		close(stop)
+		<-done
+		return peak
+	}
+}
+
+// resetPeakRSS restarts the kernel's count of the process's peak RSS, where
+// it keeps one (Linux), so that peakRSS reports the peak from here on.
+func resetPeakRSS() { os.WriteFile("/proc/self/clear_refs", []byte("5"), 0) }
+
+// peakRSS returns the process's peak RSS in bytes since resetPeakRSS, or 0
+// where the kernel does not report it.
+func peakRSS() int64 {
+	status, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		return 0
+	}
+	for line := range strings.Lines(string(status)) {
+		if kb, ok := strings.CutPrefix(line, "VmHWM:"); ok {
+			n, _ := strconv.ParseInt(strings.TrimSuffix(strings.TrimSpace(kb), " kB"), 10, 64)
+			return n << 10
+		}
+	}
+	return 0
+}
+
+// blockTime is one block's processing time, the import stage it ran in and
+// when it began.
 type blockTime struct {
 	took  time.Duration
 	stage int
+	at    time.Time
 }
 
 // reportBlocks reports the block latencies alone and beside the import,
-// overall and per stage, as milliseconds.
-func reportBlocks(b *testing.B, alone, beside []blockTime, spent time.Duration) {
+// overall and per stage of marks, as milliseconds.
+func reportBlocks(b *testing.B, alone, beside []blockTime, spent time.Duration, marks []struct{ msg, name string }) {
 	ms := func(d time.Duration) float64 { return float64(d) / float64(time.Millisecond) }
 	sorted := func(ts []blockTime, stage int) []time.Duration {
 		var out []time.Duration
@@ -181,10 +421,10 @@ func reportBlocks(b *testing.B, alone, beside []blockTime, spent time.Duration) 
 	b.ReportMetric(spent.Seconds(), "import-s")
 
 	var lines []string
-	for i := range len(importMarks) {
+	for i := range len(marks) {
 		st := sorted(beside, i)
 		lines = append(lines, fmt.Sprintf("%-9s n=%-4d p50=%6.1f p95=%6.1f p99=%6.1f max=%6.1f ms",
-			importMarks[i].name, len(st), ms(pct(st, 0.5)), ms(pct(st, 0.95)), ms(pct(st, 0.99)), ms(pct(st, 1))))
+			marks[i].name, len(st), ms(pct(st, 0.5)), ms(pct(st, 0.95)), ms(pct(st, 0.99)), ms(pct(st, 1))))
 	}
 	b.Logf("blocks beside the import, by stage:\n%s", strings.Join(lines, "\n"))
 }
@@ -193,10 +433,11 @@ func reportBlocks(b *testing.B, alone, beside []blockTime, spent time.Duration) 
 // with the import. It announces each block to yield, as the chain announces
 // its inserts.
 type standIn struct {
-	db    ethdb.Database
-	keys  int // flat-state records, keyed by blocksStateKey
-	seq   uint64
-	yield *blockYield
+	db     ethdb.Database
+	keys   int    // flat-state records, keyed by blocksStateKey
+	prefix []byte // the records' key prefix
+	seq    uint64
+	yield  *blockYield
 }
 
 // run processes a block every interval until stop fires, the next starting
@@ -218,7 +459,7 @@ func (s *standIn) run(interval time.Duration, stop <-chan struct{}, stages *impo
 		s.yield.set(true)
 		s.block()
 		s.yield.set(false)
-		times = append(times, blockTime{time.Since(start), stage})
+		times = append(times, blockTime{time.Since(start), stage, start})
 	}
 }
 
@@ -243,7 +484,7 @@ func (s *standIn) block() {
 			defer wg.Done()
 			rng := rand.New(rand.NewPCG(s.seq, uint64(r)+1))
 			for range blockReads / blockReaders {
-				s.db.Get(blocksStateKey(rng.IntN(s.keys)))
+				s.db.Get(blocksStateKey(s.prefix, rng.IntN(s.keys)))
 			}
 		}()
 	}
@@ -266,7 +507,7 @@ func (s *standIn) block() {
 	value := make([]byte, 100)
 	for range blockWrites {
 		binary.BigEndian.PutUint64(value, rng.Uint64())
-		batch.Put(blocksStateKey(rng.IntN(s.keys)), value)
+		batch.Put(blocksStateKey(s.prefix, rng.IntN(s.keys)), value)
 	}
 	if err := batch.Write(); err != nil {
 		panic(err)
@@ -280,12 +521,13 @@ func closeAfter(d time.Duration) <-chan struct{} {
 	return ch
 }
 
-// blocksStateKey returns the flat-state key of the i-th stand-in record, in
-// the merkle namespace beside which the import writes the binary tree's.
-func blocksStateKey(i int) []byte {
+// blocksStateKey returns the flat-state key of the i-th stand-in record under
+// prefix: the merkle namespace's, beside which the import writes the binary
+// tree's, or standInPrefix beside a merkle state.
+func blocksStateKey(prefix []byte, i int) []byte {
 	var n [8]byte
 	binary.BigEndian.PutUint64(n[:], uint64(i))
-	return append(slices.Clone(rawdb.SnapshotAccountPrefix), crypto.Keccak256(n[:])...)
+	return append(slices.Clone(prefix), crypto.Keccak256(n[:])...)
 }
 
 // blocksState returns a compacted database holding gb GB of stand-in flat
@@ -299,12 +541,25 @@ func blocksState(b *testing.B, dir string, gb int) (string, int) {
 	b.Logf("generating %d GB of flat state into %s", gb, path)
 	os.RemoveAll(path)
 	db := openBenchDB(b, path)
+	writeStandInState(b, db, keys, rawdb.SnapshotAccountPrefix)
+	if err := db.Compact(nil, nil); err != nil {
+		b.Fatal(err)
+	}
+	db.Close()
+	if err := os.WriteFile(filepath.Join(path, "done"), nil, 0o644); err != nil {
+		b.Fatal(err)
+	}
+	return path, keys
+}
+
+// writeStandInState writes keys stand-in records under prefix into db.
+func writeStandInState(b *testing.B, db ethdb.Database, keys int, prefix []byte) {
 	batch := db.NewBatch()
 	value := make([]byte, 100)
 	rng := rand.NewChaCha8([32]byte{1})
 	for i := range keys {
 		rng.Read(value)
-		batch.Put(blocksStateKey(i), value)
+		batch.Put(blocksStateKey(prefix, i), value)
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				b.Fatal(err)
@@ -315,14 +570,6 @@ func blocksState(b *testing.B, dir string, gb int) (string, int) {
 	if err := batch.Write(); err != nil {
 		b.Fatal(err)
 	}
-	if err := db.Compact(nil, nil); err != nil {
-		b.Fatal(err)
-	}
-	db.Close()
-	if err := os.WriteFile(filepath.Join(path, "done"), nil, 0o644); err != nil {
-		b.Fatal(err)
-	}
-	return path, keys
 }
 
 // cloneDir copies the database at src to dst, linking the immutable tables
@@ -384,8 +631,13 @@ func (h *ballast) release() { h.nodes = nil }
 // closing each (importMarks).
 type importStage struct{ stage atomic.Int32 }
 
-func (s *importStage) reset()       { s.stage.Store(0) }
-func (s *importStage) current() int { return int(s.stage.Load()) }
+func (s *importStage) reset() { s.stage.Store(0) }
+func (s *importStage) current() int {
+	if s == nil {
+		return 0
+	}
+	return int(s.stage.Load())
+}
 
 func (s *importStage) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= slog.LevelInfo

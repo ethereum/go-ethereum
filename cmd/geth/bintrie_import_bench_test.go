@@ -165,7 +165,7 @@ func BenchmarkSelfConvert(b *testing.B) {
 		db := openBenchDB(b, dest)
 		start := time.Now()
 		b.StartTimer()
-		err := benchSelfConvert(db, filepath.Join(dir, "preimages.bin"), root, tmp, budget, utils.PBTImportWorkersFlag.Value)
+		_, err := benchSelfConvert(db, filepath.Join(dir, "preimages.bin"), root, tmp, budget, utils.PBTImportWorkersFlag.Value, nil)
 		b.StopTimer()
 		end := time.Now()
 		db.Close()
@@ -186,19 +186,20 @@ func BenchmarkSelfConvert(b *testing.B) {
 }
 
 // benchSelfConvert converts db's persisted state with the keys of the
-// preimage file at path, as convertAt does with no access list to read.
-func benchSelfConvert(db ethdb.Database, path string, root common.Hash, tmp string, budget, workers int) error {
+// preimage file at path, as convertAt does with no access list to read,
+// pausing while a block is processed (y), and returns the root it built.
+func benchSelfConvert(db ethdb.Database, path string, root common.Hash, tmp string, budget, workers int, y *blockYield) (common.Hash, error) {
 	f, ranges, pieces, err := splitPreimages(path, workers)
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	defer f.Close()
 	persisted, sources, err := capturePersisted(db, ranges)
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	if persisted != root {
-		return fmt.Errorf("persisted state %x, want %x", persisted, root)
+		return common.Hash{}, fmt.Errorf("persisted state %x, want %x", persisted, root)
 	}
 	release := func() {
 		for _, s := range sources {
@@ -208,7 +209,7 @@ func benchSelfConvert(db ethdb.Database, path string, root common.Hash, tmp stri
 	defer release()
 	lists, err := accessListKeys(context.Background(), nil, 0, 0, ranges, tmp)
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	defer func() {
 		for _, k := range lists {
@@ -219,18 +220,17 @@ func benchSelfConvert(db ethdb.Database, path string, root common.Hash, tmp stri
 	for i := range ranges {
 		keys, err := newDriftKeys(pieces[i], lists[i])
 		if err != nil {
-			return err
+			return common.Hash{}, err
 		}
 		plan.sources = append(plan.sources, sources[i])
 		plan.keys = append(plan.keys, keys)
 	}
-	_, err = convertPlan(context.Background(), db, plan, nil, conversionOptions{
+	return convertPlan(context.Background(), db, plan, y, conversionOptions{
 		sortBudget: budget,
 		tmpDir:     tmp,
 		workers:    workers,
 		anchor:     &types.Header{Number: new(big.Int), Root: root},
 	})
-	return err
 }
 
 // phaseClock is a log handler noting when each message was last logged.
@@ -256,6 +256,26 @@ func (c *phaseClock) at(msg string) time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.marks[msg]
+}
+
+func (c *phaseClock) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	clear(c.marks)
+}
+
+// stage sets each block's stage of marks, the first not closed by the time
+// the block began, by when the lines closing them were last logged.
+func (c *phaseClock) stage(times []blockTime, marks []struct{ msg, name string }) {
+	for i := range times {
+		times[i].stage = len(marks) - 1
+		for j, m := range marks {
+			if at := c.at(m.msg); !at.IsZero() && times[i].at.Before(at) {
+				times[i].stage = j
+				break
+			}
+		}
+	}
 }
 
 // openBenchDB opens a database as `geth bintrie import` does with default flags.
