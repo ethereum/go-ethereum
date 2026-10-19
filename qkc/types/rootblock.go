@@ -316,6 +316,19 @@ type RootBlock struct {
 // root block, i.e. the offsets of its three fields.
 const rootBlockFixedSize = 3 * 4
 
+func rootBlockSSZOffsets(buf []byte) (headerOffset, headersOffset, trackingOffset uint64, err error) {
+	if len(buf) < rootBlockFixedSize {
+		return 0, 0, 0, ssz.ErrSize
+	}
+	headerOffset = ssz.ReadOffset(buf[0:4])
+	headersOffset = ssz.ReadOffset(buf[4:8])
+	trackingOffset = ssz.ReadOffset(buf[8:12])
+	if headerOffset != rootBlockFixedSize || headerOffset > headersOffset || headersOffset > trackingOffset || trackingOffset > uint64(len(buf)) {
+		return 0, 0, 0, ssz.ErrOffset
+	}
+	return headerOffset, headersOffset, trackingOffset, nil
+}
+
 // NewRootBlock creates a new root block. The given header, shard block headers
 // and tracking data are copied, so later changes to them do not affect the
 // block.
@@ -385,16 +398,9 @@ func (b *RootBlock) MarshalSSZ() ([]byte, error) {
 
 // UnmarshalSSZ decodes the block from its SSZ encoding.
 func (b *RootBlock) UnmarshalSSZ(buf []byte) error {
-	if len(buf) < rootBlockFixedSize {
-		return ssz.ErrSize
-	}
-	var (
-		headerOffset   = ssz.ReadOffset(buf[0:4])
-		headersOffset  = ssz.ReadOffset(buf[4:8])
-		trackingOffset = ssz.ReadOffset(buf[8:12])
-	)
-	if headerOffset != rootBlockFixedSize || headerOffset > headersOffset || headersOffset > trackingOffset || trackingOffset > uint64(len(buf)) {
-		return ssz.ErrOffset
+	headerOffset, headersOffset, trackingOffset, err := rootBlockSSZOffsets(buf)
+	if err != nil {
+		return err
 	}
 	header := new(RootBlockHeader)
 	if err := header.UnmarshalSSZ(buf[headerOffset:headersOffset]); err != nil {
@@ -429,6 +435,20 @@ func (b *RootBlock) UnmarshalSSZ(buf []byte) error {
 	// Accepted input is canonical, so its length is the canonical SSZ size.
 	b.size.Store(uint64(len(buf)))
 	return nil
+}
+
+// DecodeRootBlockHeaderFromBlockSSZ decodes the header from a root block SSZ
+// encoding without decoding its shard block headers or tracking data.
+func DecodeRootBlockHeaderFromBlockSSZ(buf []byte) (*RootBlockHeader, error) {
+	headerOffset, headersOffset, _, err := rootBlockSSZOffsets(buf)
+	if err != nil {
+		return nil, err
+	}
+	header := new(RootBlockHeader)
+	if err := header.UnmarshalSSZ(buf[headerOffset:headersOffset]); err != nil {
+		return nil, err
+	}
+	return header, nil
 }
 
 // MinorBlockHeaders returns the shard block headers confirmed by the block.
