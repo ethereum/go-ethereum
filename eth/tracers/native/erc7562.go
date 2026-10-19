@@ -154,12 +154,12 @@ func newErc7562Tracer(ctx *tracers.Context, cfg json.RawMessage, _ *params.Chain
 	}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.OnTxStart,
-			OnOpcode:  t.OnOpcode,
-			OnTxEnd:   t.OnTxEnd,
-			OnEnter:   t.OnEnter,
-			OnExit:    t.OnExit,
-			OnLog:     t.OnLog,
+			OnTxStart:  t.OnTxStart,
+			OnOpcodeV2: t.OnOpcode,
+			OnTxEnd:    t.OnTxEnd,
+			OnEnter:    t.OnEnter,
+			OnExit:     t.OnExit,
+			OnLog:      t.OnLog,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -366,7 +366,7 @@ func (t *erc7562Tracer) clearFailedLogs(cf *callFrameWithOpcodes, parentFailed b
 	}
 }
 
-func (t *erc7562Tracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *erc7562Tracer) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if t.interrupt.Load() {
 		return
 	}

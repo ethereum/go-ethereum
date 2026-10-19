@@ -69,10 +69,19 @@ func (c *countingWriter) Write(p []byte) (int, error) {
 // StructLog is emitted to the EVM each cycle and lists information about the
 // current internal state prior to the execution of the statement.
 type StructLog struct {
-	Pc            uint64                      `json:"pc"`
-	Op            vm.OpCode                   `json:"op"`
-	Gas           uint64                      `json:"gas"`
-	GasCost       uint64                      `json:"gasCost"`
+	Pc uint64    `json:"pc"`
+	Op vm.OpCode `json:"op"`
+
+	// Execution gas, the opcode's execution charge and the budget before
+	// it executes
+	Gas     uint64 `json:"gas"`
+	GasCost uint64 `json:"gasCost"`
+
+	// EIP-8037 state gas, omitted when zero: the opcode's state charge and the
+	// reservoir before it executes
+	StateGasCost      int64  `json:"stateGasCost,omitempty"`
+	StateGasReservoir uint64 `json:"stateGasReservoir,omitempty"`
+
 	Memory        []byte                      `json:"memory,omitempty"`
 	MemorySize    int                         `json:"memSize"`
 	Stack         []uint256.Int               `json:"stack"`
@@ -85,8 +94,10 @@ type StructLog struct {
 
 // overrides for gencodec
 type structLogMarshaling struct {
-	Gas         math.HexOrDecimal64
-	GasCost     math.HexOrDecimal64
+	Gas               math.HexOrDecimal64
+	GasCost           math.HexOrDecimal64
+	StateGasReservoir math.HexOrDecimal64
+
 	Memory      hexutil.Bytes
 	ReturnData  hexutil.Bytes
 	Stack       []hexutil.U256
@@ -110,6 +121,9 @@ func (s *StructLog) ErrorString() string {
 // Write writes the human-readable log data into the supplied writer.
 func (s *StructLog) Write(writer io.Writer) {
 	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", s.Op, s.Pc, s.Gas, s.GasCost)
+	if s.StateGasCost != 0 || s.StateGasReservoir != 0 {
+		fmt.Fprintf(writer, " stateCost=%v reservoir=%v", s.StateGasCost, s.StateGasReservoir)
+	}
 	if s.Err != nil {
 		fmt.Fprintf(writer, " ERROR: %v", s.Err)
 	}
@@ -156,17 +170,19 @@ func (s *StructLog) Write(writer io.Writer) {
 // storage:
 // Legacy has a storage field while non-legacy doesn't.
 type structLogLegacy struct {
-	Pc            uint64             `json:"pc"`
-	Op            string             `json:"op"`
-	Gas           uint64             `json:"gas"`
-	GasCost       uint64             `json:"gasCost"`
-	Depth         int                `json:"depth"`
-	Error         string             `json:"error,omitempty,omitzero"`
-	Stack         *[]string          `json:"stack,omitempty"`
-	ReturnData    string             `json:"returnData,omitempty"`
-	Memory        *[]string          `json:"memory,omitempty"`
-	Storage       *map[string]string `json:"storage,omitempty"`
-	RefundCounter uint64             `json:"refund,omitempty"`
+	Pc                uint64             `json:"pc"`
+	Op                string             `json:"op"`
+	Gas               uint64             `json:"gas"`
+	GasCost           uint64             `json:"gasCost"`
+	StateGasCost      int64              `json:"stateGasCost,omitempty"`
+	StateGasReservoir uint64             `json:"stateGasReservoir,omitempty"`
+	Depth             int                `json:"depth"`
+	Error             string             `json:"error,omitempty,omitzero"`
+	Stack             *[]string          `json:"stack,omitempty"`
+	ReturnData        string             `json:"returnData,omitempty"`
+	Memory            *[]string          `json:"memory,omitempty"`
+	Storage           *map[string]string `json:"storage,omitempty"`
+	RefundCounter     uint64             `json:"refund,omitempty"`
 }
 
 func formatMemoryWord(chunk []byte) string {
@@ -181,13 +197,15 @@ func formatMemoryWord(chunk []byte) string {
 // toLegacyJSON converts the structLog to legacy json-encoded legacy form.
 func (s *StructLog) toLegacyJSON() json.RawMessage {
 	msg := structLogLegacy{
-		Pc:            s.Pc,
-		Op:            s.Op.String(),
-		Gas:           s.Gas,
-		GasCost:       s.GasCost,
-		Depth:         s.Depth,
-		Error:         s.ErrorString(),
-		RefundCounter: s.RefundCounter,
+		Pc:                s.Pc,
+		Op:                s.Op.String(),
+		Gas:               s.Gas,
+		GasCost:           s.GasCost,
+		StateGasCost:      s.StateGasCost,
+		StateGasReservoir: s.StateGasReservoir,
+		Depth:             s.Depth,
+		Error:             s.ErrorString(),
+		RefundCounter:     s.RefundCounter,
 	}
 	if s.Stack != nil {
 		stack := make([]string, len(s.Stack))
@@ -273,14 +291,14 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 		OnSystemCallStartV2: l.OnSystemCallStart,
 		OnSystemCallEnd:     l.OnSystemCallEnd,
 		OnExit:              l.OnExit,
-		OnOpcode:            l.OnOpcode,
+		OnOpcodeV2:          l.OnOpcode,
 	}
 }
 
 // OnOpcode logs a new structured log message and pushes it out to the environment
 //
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// If tracing was interrupted, exit
 	if l.interrupt.Load() {
 		return
@@ -300,7 +318,18 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		stack        = scope.StackData()
 		stackLen     = len(stack)
 	)
-	log := StructLog{pc, op, gas, cost, nil, len(memory), nil, nil, nil, depth, l.env.StateDB.GetRefund(), err}
+	log := StructLog{
+		Pc:                pc,
+		Op:                op,
+		Gas:               gas.Execution,
+		StateGasReservoir: gas.State,
+		GasCost:           cost.Execution,
+		StateGasCost:      cost.State,
+		MemorySize:        len(memory),
+		Depth:             depth,
+		RefundCounter:     l.env.StateDB.GetRefund(),
+		Err:               err,
+	}
 	if l.cfg.EnableMemory {
 		log.Memory = memory
 	}
@@ -455,10 +484,10 @@ func (t *mdLogger) Hooks() *tracing.Hooks {
 		OnTxStart:           t.OnTxStart,
 		OnSystemCallStartV2: t.OnSystemCallStart,
 		OnSystemCallEnd:     t.OnSystemCallEnd,
-		OnEnter:             t.OnEnter,
+		OnEnterV2:           t.OnEnter,
 		OnExit:              t.OnExit,
-		OnOpcode:            t.OnOpcode,
-		OnFault:             t.OnFault,
+		OnOpcodeV2:          t.OnOpcode,
+		OnFaultV2:           t.OnFault,
 	}
 }
 
@@ -474,7 +503,7 @@ func (t *mdLogger) OnSystemCallEnd() {
 	t.skip = false
 }
 
-func (t *mdLogger) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *mdLogger) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
 	if t.skip {
 		return
 	}
@@ -487,20 +516,22 @@ func (t *mdLogger) OnEnter(depth int, typ byte, from common.Address, to common.A
 			"  - to: `%v`\n"+
 			"  - data: `%#x`\n"+
 			"  - gas: `%d`\n"+
+			"  - state gas reservoir: `%d`\n"+
 			"  - value: `%v` wei\n",
-			from.String(), to.String(), input, gas, value)
+			from.String(), to.String(), input, gas.Execution, gas.State, value)
 	} else {
 		fmt.Fprintf(t.out, "Pre-execution info:\n"+
 			"  - from: `%v`\n"+
 			"  - create: `%v`\n"+
 			"  - data: `%#x`\n"+
 			"  - gas: `%d`\n"+
+			"  - state gas reservoir: `%d`\n"+
 			"  - value: `%v` wei\n",
-			from.String(), to.String(), input, gas, value)
+			from.String(), to.String(), input, gas.Execution, gas.State, value)
 	}
 	fmt.Fprintf(t.out, `
-|  Pc   |      Op     | Cost |   Refund  |   Stack   |
-|-------|-------------|------|-----------|-----------|
+|  Pc   |      Op     | Cost | StateCost | Reservoir |   Refund  |   Stack   |
+|-------|-------------|------|-----------|-----------|-----------|-----------|
 `)
 }
 
@@ -518,13 +549,13 @@ func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 }
 
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *mdLogger) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if t.skip {
 		return
 	}
 	stack := scope.StackData()
-	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10v |", pc, vm.OpCode(op).String(),
-		cost, t.env.StateDB.GetRefund())
+	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10d |%10d |%10v |", pc, vm.OpCode(op).String(),
+		cost.Execution, cost.State, gas.State, t.env.StateDB.GetRefund())
 
 	if !t.cfg.DisableStack {
 		// format stack
@@ -541,7 +572,7 @@ func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 	}
 }
 
-func (t *mdLogger) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *mdLogger) OnFault(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
 	if t.skip {
 		return
 	}

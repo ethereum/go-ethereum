@@ -50,14 +50,14 @@ func newKeccak256PreimageTracer(ctx *tracers.Context, cfg json.RawMessage, chain
 	}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnOpcode: t.OnOpcode,
+			OnOpcodeV2: t.OnOpcode,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
 	}, nil
 }
 
-func (t *keccak256PreimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *keccak256PreimageTracer) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Skip if tracing was interrupted
 	if t.stopErr.Load() != nil {
 		return

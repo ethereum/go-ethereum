@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -189,10 +190,10 @@ func TestHaltBetweenSteps(t *testing.T) {
 	evm.SetTxContext(vm.TxContext{GasPrice: uint256.NewInt(1)})
 	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
 	tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, 0, big.NewInt(0))
-	tracer.OnOpcode(0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.OnOpcodeV2(0, 0, tracing.Gas{}, tracing.OpCost{}, scope, nil, 0, nil)
 	timeout := errors.New("stahp")
 	tracer.Stop(timeout)
-	tracer.OnOpcode(0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.OnOpcodeV2(0, 0, tracing.Gas{}, tracing.OpCost{}, scope, nil, 0, nil)
 
 	if _, err := tracer.GetResult(); !strings.Contains(err.Error(), timeout.Error()) {
 		t.Errorf("Expected timeout error, got %v", err)

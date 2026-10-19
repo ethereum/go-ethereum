@@ -96,13 +96,13 @@ func NewMuxTracer(names []string, objects []*tracers.Tracer) (*tracers.Tracer, e
 	}, nil
 }
 
-func (t *muxTracer) OnOpcodeV2(pc uint64, op byte, gas, cost tracing.Gas, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *muxTracer) OnOpcodeV2(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 	for _, t := range t.tracers {
 		t.EmitOpcode(pc, op, gas, cost, scope, rData, depth, err)
 	}
 }
 
-func (t *muxTracer) OnFaultV2(pc uint64, op byte, gas, cost tracing.Gas, scope tracing.OpContext, depth int, err error) {
+func (t *muxTracer) OnFaultV2(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
 	for _, t := range t.tracers {
 		t.EmitFault(pc, op, gas, cost, scope, depth, err)
 	}
