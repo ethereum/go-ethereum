@@ -48,6 +48,7 @@ type BuildPayloadArgs struct {
 	BeaconRoot     *common.Hash          // The provided beaconRoot (Cancun)
 	SlotNum        *uint64               // The provided slotNumber (Amsterdam)
 	TargetGasLimit *uint64               // The provided target gas limit (Amsterdam)
+	InclusionList  [][]byte              // The inclusion list the payload must satisfy (Bogota)
 	Version        engine.PayloadVersion // Versioning byte for payload id calculation.
 }
 
@@ -67,6 +68,9 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	}
 	if args.TargetGasLimit != nil {
 		binary.Write(hasher, binary.BigEndian, *args.TargetGasLimit)
+	}
+	if args.InclusionList != nil {
+		rlp.Encode(hasher, args.InclusionList)
 	}
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
@@ -284,6 +288,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 		beaconRoot:     args.BeaconRoot,
 		slotNum:        args.SlotNum,
 		targetGasLimit: args.TargetGasLimit,
+		inclusionList:  args.InclusionList,
 		noTxs:          true,
 	}
 	empty := miner.generateWork(ctx, emptyParams, witness)
@@ -325,6 +330,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 			beaconRoot:     args.BeaconRoot,
 			slotNum:        args.SlotNum,
 			targetGasLimit: args.TargetGasLimit,
+			inclusionList:  args.InclusionList,
 			noTxs:          false,
 		}
 		for {
