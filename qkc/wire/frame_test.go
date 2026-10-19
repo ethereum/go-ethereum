@@ -33,7 +33,7 @@ var (
 	//   - id = "id" (ASCII, 2 bytes)
 	//   - full_shard_id_list = [1, 2]
 	//   - root_tip = None (Ping only)
-	//   - opcode = 0x81 (PING), 0x82 (PONG) from ClusterOp (CLUSTER_OP_BASE=128)
+	//   - opcode = 0x81 (PING), 0x82 (PONG), cluster-op range (base = 128)
 	pythonClusterPing = "0000001300000001000000000000303981000000000000000100000002696400000002000000010000000200"
 	pythonNoMetaPing  = "0000001381000000000000000100000002696400000002000000010000000200"
 )

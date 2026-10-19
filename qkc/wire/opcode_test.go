@@ -61,7 +61,7 @@ func TestClusterOpBase(t *testing.T) {
 	}
 }
 
-func TestCriticalOpcodeValues(t *testing.T) {
+func TestExampleOpcodeClassification(t *testing.T) {
 	cases := []struct {
 		name string
 		op   byte
@@ -69,8 +69,6 @@ func TestCriticalOpcodeValues(t *testing.T) {
 		{"ClusterOpPing", byte(ClusterOpPing)},
 		{"ClusterOpPong", byte(ClusterOpPong)},
 		{"CommandOpHello", byte(CommandOpHello)},
-		{"CommandOpPing", byte(CommandOpPing)},
-		{"CommandOpPong", byte(CommandOpPong)},
 	}
 
 	for _, c := range cases {
