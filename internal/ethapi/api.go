@@ -2129,7 +2129,9 @@ func (api *DebugAPI) PrintBlock(ctx context.Context, number uint64) (string, err
 	return spew.Sdump(block), nil
 }
 
-// ChaindbProperty returns leveldb properties of the key-value database.
+// ChaindbProperty returns the internal statistics of the chain's key-value
+// database as human-readable text. The output format depends on the backing
+// engine (Pebble or LevelDB).
 func (api *DebugAPI) ChaindbProperty() (string, error) {
 	return api.b.ChainDb().Stat()
 }
