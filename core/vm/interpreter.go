@@ -157,8 +157,7 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 		// to be uint256. Practically much less so feasible.
 		pc = uint64(0) // program counter
 
-		execCost  uint64 // execution dimension of the current opcode's cost
-		stateCost uint64 // state dimension of the current opcode's cost
+		execCost uint64 // execution dimension of the current opcode's cost
 
 		// copies used by tracer
 		pcCopy    uint64    // needed for the deferred EVMLogger
@@ -173,11 +172,15 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 			if err == nil {
 				return
 			}
+			cost := tracing.OpCost{
+				Execution: execCost,
+				State:     contract.Gas.UsedStateGas - gasCopy.UsedStateGas,
+			}
 			if !logged && evm.Config.Tracer.HasOpcodeHook() {
-				evm.Config.Tracer.EmitOpcode(pcCopy, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: execCost, State: stateCost}, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
+				evm.Config.Tracer.EmitOpcode(pcCopy, byte(op), gasCopy.AsTracing(), cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
 			}
 			if logged && evm.Config.Tracer.HasFaultHook() {
-				evm.Config.Tracer.EmitFault(pcCopy, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: execCost, State: stateCost}, callContext, evm.depth, VMErrorFromErr(err))
+				evm.Config.Tracer.EmitFault(pcCopy, byte(op), gasCopy.AsTracing(), cost, callContext, evm.depth, VMErrorFromErr(err))
 			}
 		}()
 	}
@@ -199,7 +202,7 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
 		operation := jumpTable[op]
-		execCost, stateCost = operation.constantGas, 0 // For tracing
+		execCost = operation.constantGas // For tracing
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
 			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
@@ -217,7 +220,7 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 		var dynamicCost GasCosts
 		memorySize, dynamicCost, err = contract.meterDynamicGas(operation, evm, stack, mem)
 		// cost is explicitly set so that the capture state defer method can get the proper cost
-		execCost, stateCost = execCost+dynamicCost.ExecutionGas, dynamicCost.StateGas
+		execCost += dynamicCost.ExecutionGas
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +237,14 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 				)
 			}
 			if evm.Config.Tracer.HasOpcodeHook() {
-				evm.Config.Tracer.EmitOpcode(pc, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: execCost, State: stateCost}, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
+				// TODO: CREATE and CREATE2 charge the account creation while they
+				// execute, after this hook has fired, so it is missing from the
+				// cost reported for their step.
+				cost := tracing.OpCost{
+					Execution: execCost,
+					State:     contract.Gas.UsedStateGas - gasCopy.UsedStateGas,
+				}
+				evm.Config.Tracer.EmitOpcode(pc, byte(op), gasCopy.AsTracing(), cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
 				logged = true
 			}
 		}

@@ -196,3 +196,68 @@ func TestHaltedStoreCapture(t *testing.T) {
 		t.Errorf("SLOAD storage mismatch\n\thave: %v\n\twant: %v", have, want)
 	}
 }
+
+// Tests that after Amsterdam the struct logger reports the EIP-8037 state gas
+// charged or refilled by an opcode and the reservoir it draws from, and omits
+// both fields when they are zero.
+func TestStateGasCapture(t *testing.T) {
+	var (
+		logger = NewStructLogger(nil)
+		addr   = common.HexToAddress("0xc0de")
+		config = *params.MergedTestChainConfig
+		// Create slot 0, then clear it again: the second SSTORE refills the
+		// creation charge of the first.
+		code = []byte{
+			byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE),
+			byte(vm.PUSH1), 0x0, byte(vm.PUSH1), 0x0, byte(vm.SSTORE),
+			byte(vm.STOP),
+		}
+		gas     = params.MaxTxGas + 200_000 // reservoir covering the SSTORE state cost
+		statedb = state.NewDatabaseForTesting()
+	)
+	config.AmsterdamTime = new(uint64)
+	st, _ := state.New(types.EmptyRootHash, statedb)
+	st.SetCode(addr, code, tracing.CodeChangeUnspecified)
+	if _, _, err := runtime.Call(addr, nil, &runtime.Config{
+		ChainConfig: &config,
+		State:       st,
+		GasLimit:    gas,
+		EVMConfig:   vm.Config{Tracer: logger.Hooks()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var (
+		reservoir = gas - params.MaxTxGas
+		stateCost = int64(params.StorageCreationSize * params.CostPerStateByte)
+		want      = []struct {
+			cost      int64
+			reservoir uint64
+		}{
+			{0, reservoir},                              // PUSH1
+			{0, reservoir},                              // PUSH1
+			{stateCost, reservoir},                      // SSTORE, creates the slot
+			{0, reservoir - uint64(stateCost)},          // PUSH1
+			{0, reservoir - uint64(stateCost)},          // PUSH1
+			{-stateCost, reservoir - uint64(stateCost)}, // SSTORE, clears it again
+			{0, reservoir},                              // STOP
+		}
+	)
+	if len(logger.logs) != len(want) {
+		t.Fatalf("wrong number of steps: have %d, want %d", len(logger.logs), len(want))
+	}
+	for i, entry := range logger.logs {
+		var step struct {
+			StateGasCost      *int64  `json:"stateGasCost"`
+			StateGasReservoir *uint64 `json:"stateGasReservoir"`
+		}
+		if err := json.Unmarshal(entry, &step); err != nil {
+			t.Fatal(err)
+		}
+		if have := step.StateGasCost; (have == nil) != (want[i].cost == 0) || (have != nil && *have != want[i].cost) {
+			t.Errorf("step %d: stateGasCost mismatch, want %d: %s", i, want[i].cost, entry)
+		}
+		if have := step.StateGasReservoir; have == nil || *have != want[i].reservoir {
+			t.Errorf("step %d: stateGasReservoir mismatch, want %d: %s", i, want[i].reservoir, entry)
+		}
+	}
+}

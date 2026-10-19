@@ -126,25 +126,19 @@ func (l *fileWritingTracer) hooks() *tracing.Hooks {
 	return &tracing.Hooks{
 		OnTxStart: l.OnTxStart,
 		OnTxEnd:   l.OnTxEnd,
-		OnEnter: func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-			if l.inner != nil && l.inner.OnEnter != nil {
-				l.inner.OnEnter(depth, typ, from, to, input, gas, value)
-			}
+		OnEnterV2: func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
+			l.inner.EmitEnter(depth, typ, from, to, input, gas, value)
 		},
 		OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 			if l.inner != nil && l.inner.OnExit != nil {
 				l.inner.OnExit(depth, output, gasUsed, err, reverted)
 			}
 		},
-		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-			if l.inner != nil && l.inner.OnOpcode != nil {
-				l.inner.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
-			}
+		OnOpcodeV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+			l.inner.EmitOpcode(pc, op, gas, cost, scope, rData, depth, err)
 		},
-		OnFault: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
-			if l.inner != nil && l.inner.OnFault != nil {
-				l.inner.OnFault(pc, op, gas, cost, scope, depth, err)
-			}
+		OnFaultV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
+			l.inner.EmitFault(pc, op, gas, cost, scope, depth, err)
 		},
 		OnSystemCallStart: func() {
 			if l.inner != nil && l.inner.OnSystemCallStart != nil {

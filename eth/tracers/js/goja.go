@@ -236,12 +236,12 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage, chainCo
 
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.OnTxStart,
-			OnTxEnd:   t.OnTxEnd,
-			OnEnter:   t.OnEnter,
-			OnExit:    t.OnExit,
-			OnOpcode:  t.OnOpcode,
-			OnFault:   t.OnFault,
+			OnTxStart:  t.OnTxStart,
+			OnTxEnd:    t.OnTxEnd,
+			OnEnter:    t.OnEnter,
+			OnExit:     t.OnExit,
+			OnOpcodeV2: t.OnOpcode,
+			OnFaultV2:  t.OnFault,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -330,7 +330,7 @@ func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, 
 }
 
 // OnOpcode implements the Tracer interface to trace a single step of VM execution.
-func (t *jsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *jsTracer) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if !t.traceStep {
 		return
 	}
@@ -344,8 +344,10 @@ func (t *jsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 	log.stack.stack = scope.StackData()
 	log.contract.scope = scope
 	log.pc = pc
-	log.gas = gas
-	log.cost = cost
+	log.gas = gas.Execution
+	log.cost = cost.Execution
+	log.stateCost = cost.State
+	log.stateReservoir = gas.State
 	log.refund = t.env.StateDB.GetRefund()
 	log.depth = depth
 	log.err = err
@@ -355,7 +357,7 @@ func (t *jsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 }
 
 // OnFault implements the Tracer interface to trace an execution fault
-func (t *jsTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *jsTracer) OnFault(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
 	if t.err != nil {
 		return
 	}
@@ -1006,19 +1008,23 @@ type steplog struct {
 	stack    *stackObj
 	contract *contractObj
 
-	pc     uint64
-	gas    uint64
-	cost   uint64
-	depth  int
-	refund uint64
-	err    error
+	pc             uint64
+	gas            uint64
+	cost           uint64
+	stateCost      int64  // EIP-8037 net state gas charged (or refilled, negative) by the opcode
+	stateReservoir uint64 // EIP-8037 state gas reservoir before the opcode
+	depth          int
+	refund         uint64
+	err            error
 }
 
-func (l *steplog) GetPC() uint64     { return l.pc }
-func (l *steplog) GetGas() uint64    { return l.gas }
-func (l *steplog) GetCost() uint64   { return l.cost }
-func (l *steplog) GetDepth() int     { return l.depth }
-func (l *steplog) GetRefund() uint64 { return l.refund }
+func (l *steplog) GetPC() uint64                { return l.pc }
+func (l *steplog) GetGas() uint64               { return l.gas }
+func (l *steplog) GetCost() uint64              { return l.cost }
+func (l *steplog) GetStateGasCost() int64       { return l.stateCost }
+func (l *steplog) GetStateGasReservoir() uint64 { return l.stateReservoir }
+func (l *steplog) GetDepth() int                { return l.depth }
+func (l *steplog) GetRefund() uint64            { return l.refund }
 
 func (l *steplog) GetError() goja.Value {
 	if l.err != nil {
@@ -1033,6 +1039,8 @@ func (l *steplog) setupObject() *goja.Object {
 	o.Set("getPC", l.vm.ToValue(l.GetPC))
 	o.Set("getGas", l.vm.ToValue(l.GetGas))
 	o.Set("getCost", l.vm.ToValue(l.GetCost))
+	o.Set("getStateGasCost", l.vm.ToValue(l.GetStateGasCost))
+	o.Set("getStateGasReservoir", l.vm.ToValue(l.GetStateGasReservoir))
 	o.Set("getDepth", l.vm.ToValue(l.GetDepth))
 	o.Set("getRefund", l.vm.ToValue(l.GetRefund))
 	o.Set("getError", l.vm.ToValue(l.GetError))
