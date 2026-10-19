@@ -92,8 +92,8 @@ so budget about twice their sum, or cap it with GOMEMLIMIT. Merging the
 sorters' spilled runs takes up to 512 KiB per run on top, at most a quarter of
 the sorter's budget once runs are many.
 
-Disk: --tmpdir holds the sort spills and a copy of every tree node until the
-import ends, so it needs disk space, not a tmpfs.
+Disk: --tmpdir holds the sort spills and a copy of every tree node, each
+until it is used up, so it needs disk space, not a tmpfs.
 
 This command needs the node stopped. To import while the node keeps
 following the chain, start geth with --pbt.import.snapshot, --pbt.import.preimages
@@ -1192,6 +1192,7 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 		return common.Hash{}, fmt.Errorf("code chunks left over for unclaimed hash %x", ckey[:32])
 	}
 	prog.finish("Verified code against its hashes", "codes", stats.codes.Load())
+	chunkSorter.Close() // its spill is done with: free the disk now, not at return
 
 	// Check 2: re-derive the MPT and demand the anchor root.
 	acctStream, err := acctSorter.Sort()
@@ -1206,6 +1207,8 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 	if err != nil {
 		return common.Hash{}, err
 	}
+	acctSorter.Close() // likewise, drained by check 2
+	slotSorter.Close()
 	if got != anchorRoot {
 		return common.Hash{}, fmt.Errorf("the leaves re-derive merkle root %x, the anchor commits %x", got, anchorRoot)
 	}

@@ -145,7 +145,8 @@ func (s *nodeStager) wait() error {
 
 // replay feeds every staged node to write in database key order: depth by
 // depth, each depth in the order its nodes were added. path and blob are only
-// valid for the call.
+// valid for the call. Each depth's file is removed once replayed, so replay
+// runs once.
 func (s *nodeStager) replay(write func(path, blob []byte) error) error {
 	if err := s.wait(); err != nil {
 		return err
@@ -155,6 +156,8 @@ func (s *nodeStager) replay(write func(path, blob []byte) error) error {
 		if err := s.depths[depth].replay(r, write); err != nil {
 			return err
 		}
+		s.depths[depth].close()
+		delete(s.depths, depth)
 	}
 	return nil
 }
