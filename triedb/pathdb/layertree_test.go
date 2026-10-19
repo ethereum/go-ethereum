@@ -17,11 +17,15 @@
 package pathdb
 
 import (
+	"bytes"
 	"errors"
+	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 func newTestLayerTree() *layerTree {
@@ -241,336 +245,6 @@ func TestBaseLayer(t *testing.T) {
 		c.op()
 		if tr.base.rootHash() != c.base {
 			t.Fatalf("Unexpected base root, want %v, got: %v", c.base, tr.base.rootHash())
-		}
-	}
-}
-
-func TestDescendant(t *testing.T) {
-	var cases = []struct {
-		init      func() *layerTree
-		snapshotA map[common.Hash]map[common.Hash]struct{}
-		op        func(tr *layerTree)
-		snapshotB map[common.Hash]map[common.Hash]struct{}
-	}{
-		{
-			// Chain:
-			//   C1->C2 (HEAD)
-			init: func() *layerTree {
-				tr := newTestLayerTree()
-				tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				return tr
-			},
-			snapshotA: map[common.Hash]map[common.Hash]struct{}{
-				{0x1}: {
-					common.Hash{0x2}: {},
-				},
-			},
-			// Chain:
-			//   C1->C2->C3 (HEAD)
-			op: func(tr *layerTree) {
-				tr.add(common.Hash{0x3}, common.Hash{0x2}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-			},
-			snapshotB: map[common.Hash]map[common.Hash]struct{}{
-				{0x1}: {
-					common.Hash{0x2}: {},
-					common.Hash{0x3}: {},
-				},
-				{0x2}: {
-					common.Hash{0x3}: {},
-				},
-			},
-		},
-		{
-			// Chain:
-			//   C1->C2->C3->C4 (HEAD)
-			init: func() *layerTree {
-				tr := newTestLayerTree()
-				tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x3}, common.Hash{0x2}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x4}, common.Hash{0x3}, 3, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				return tr
-			},
-			snapshotA: map[common.Hash]map[common.Hash]struct{}{
-				{0x1}: {
-					common.Hash{0x2}: {},
-					common.Hash{0x3}: {},
-					common.Hash{0x4}: {},
-				},
-				{0x2}: {
-					common.Hash{0x3}: {},
-					common.Hash{0x4}: {},
-				},
-				{0x3}: {
-					common.Hash{0x4}: {},
-				},
-			},
-			// Chain:
-			//   C2->C3->C4 (HEAD)
-			op: func(tr *layerTree) {
-				tr.cap(common.Hash{0x4}, 2)
-			},
-			snapshotB: map[common.Hash]map[common.Hash]struct{}{
-				{0x2}: {
-					common.Hash{0x3}: {},
-					common.Hash{0x4}: {},
-				},
-				{0x3}: {
-					common.Hash{0x4}: {},
-				},
-			},
-		},
-		{
-			// Chain:
-			//   C1->C2->C3->C4 (HEAD)
-			init: func() *layerTree {
-				tr := newTestLayerTree()
-				tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x3}, common.Hash{0x2}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x4}, common.Hash{0x3}, 3, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				return tr
-			},
-			snapshotA: map[common.Hash]map[common.Hash]struct{}{
-				{0x1}: {
-					common.Hash{0x2}: {},
-					common.Hash{0x3}: {},
-					common.Hash{0x4}: {},
-				},
-				{0x2}: {
-					common.Hash{0x3}: {},
-					common.Hash{0x4}: {},
-				},
-				{0x3}: {
-					common.Hash{0x4}: {},
-				},
-			},
-			// Chain:
-			//   C3->C4 (HEAD)
-			op: func(tr *layerTree) {
-				tr.cap(common.Hash{0x4}, 1)
-			},
-			snapshotB: map[common.Hash]map[common.Hash]struct{}{
-				{0x3}: {
-					common.Hash{0x4}: {},
-				},
-			},
-		},
-		{
-			// Chain:
-			//   C1->C2->C3->C4 (HEAD)
-			init: func() *layerTree {
-				tr := newTestLayerTree()
-				tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x3}, common.Hash{0x2}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x4}, common.Hash{0x3}, 3, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				return tr
-			},
-			snapshotA: map[common.Hash]map[common.Hash]struct{}{
-				{0x1}: {
-					common.Hash{0x2}: {},
-					common.Hash{0x3}: {},
-					common.Hash{0x4}: {},
-				},
-				{0x2}: {
-					common.Hash{0x3}: {},
-					common.Hash{0x4}: {},
-				},
-				{0x3}: {
-					common.Hash{0x4}: {},
-				},
-			},
-			// Chain:
-			//   C4 (HEAD)
-			op: func(tr *layerTree) {
-				tr.cap(common.Hash{0x4}, 0)
-			},
-			snapshotB: map[common.Hash]map[common.Hash]struct{}{},
-		},
-		{
-			// Chain:
-			//   C1->C2->C3->C4 (HEAD)
-			//     ->C2'->C3'->C4'
-			init: func() *layerTree {
-				tr := newTestLayerTree()
-				tr.add(common.Hash{0x2a}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x3a}, common.Hash{0x2a}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x4a}, common.Hash{0x3a}, 3, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x2b}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x3b}, common.Hash{0x2b}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x4b}, common.Hash{0x3b}, 3, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				return tr
-			},
-			snapshotA: map[common.Hash]map[common.Hash]struct{}{
-				{0x1}: {
-					common.Hash{0x2a}: {},
-					common.Hash{0x3a}: {},
-					common.Hash{0x4a}: {},
-					common.Hash{0x2b}: {},
-					common.Hash{0x3b}: {},
-					common.Hash{0x4b}: {},
-				},
-				{0x2a}: {
-					common.Hash{0x3a}: {},
-					common.Hash{0x4a}: {},
-				},
-				{0x3a}: {
-					common.Hash{0x4a}: {},
-				},
-				{0x2b}: {
-					common.Hash{0x3b}: {},
-					common.Hash{0x4b}: {},
-				},
-				{0x3b}: {
-					common.Hash{0x4b}: {},
-				},
-			},
-			// Chain:
-			//   C2->C3->C4 (HEAD)
-			op: func(tr *layerTree) {
-				tr.cap(common.Hash{0x4a}, 2)
-			},
-			snapshotB: map[common.Hash]map[common.Hash]struct{}{
-				{0x2a}: {
-					common.Hash{0x3a}: {},
-					common.Hash{0x4a}: {},
-				},
-				{0x3a}: {
-					common.Hash{0x4a}: {},
-				},
-			},
-		},
-		{
-			// Chain:
-			//   C1->C2->C3->C4 (HEAD)
-			//     ->C2'->C3'->C4'
-			init: func() *layerTree {
-				tr := newTestLayerTree()
-				tr.add(common.Hash{0x2a}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x3a}, common.Hash{0x2a}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x4a}, common.Hash{0x3a}, 3, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x2b}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x3b}, common.Hash{0x2b}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x4b}, common.Hash{0x3b}, 3, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				return tr
-			},
-			snapshotA: map[common.Hash]map[common.Hash]struct{}{
-				{0x1}: {
-					common.Hash{0x2a}: {},
-					common.Hash{0x3a}: {},
-					common.Hash{0x4a}: {},
-					common.Hash{0x2b}: {},
-					common.Hash{0x3b}: {},
-					common.Hash{0x4b}: {},
-				},
-				{0x2a}: {
-					common.Hash{0x3a}: {},
-					common.Hash{0x4a}: {},
-				},
-				{0x3a}: {
-					common.Hash{0x4a}: {},
-				},
-				{0x2b}: {
-					common.Hash{0x3b}: {},
-					common.Hash{0x4b}: {},
-				},
-				{0x3b}: {
-					common.Hash{0x4b}: {},
-				},
-			},
-			// Chain:
-			//   C3->C4 (HEAD)
-			op: func(tr *layerTree) {
-				tr.cap(common.Hash{0x4a}, 1)
-			},
-			snapshotB: map[common.Hash]map[common.Hash]struct{}{
-				{0x3a}: {
-					common.Hash{0x4a}: {},
-				},
-			},
-		},
-		{
-			// Chain:
-			//   C1->C2->C3->C4 (HEAD)
-			//         ->C3'->C4'
-			init: func() *layerTree {
-				tr := newTestLayerTree()
-				tr.add(common.Hash{0x2}, common.Hash{0x1}, 1, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x3a}, common.Hash{0x2}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x4a}, common.Hash{0x3a}, 3, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x3b}, common.Hash{0x2}, 2, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				tr.add(common.Hash{0x4b}, common.Hash{0x3b}, 3, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(nil, nil, nil, nil, false))
-				return tr
-			},
-			snapshotA: map[common.Hash]map[common.Hash]struct{}{
-				{0x1}: {
-					common.Hash{0x2}:  {},
-					common.Hash{0x3a}: {},
-					common.Hash{0x4a}: {},
-					common.Hash{0x3b}: {},
-					common.Hash{0x4b}: {},
-				},
-				{0x2}: {
-					common.Hash{0x3a}: {},
-					common.Hash{0x4a}: {},
-					common.Hash{0x3b}: {},
-					common.Hash{0x4b}: {},
-				},
-				{0x3a}: {
-					common.Hash{0x4a}: {},
-				},
-				{0x3b}: {
-					common.Hash{0x4b}: {},
-				},
-			},
-			// Chain:
-			//   C2->C3->C4 (HEAD)
-			//     ->C3'->C4'
-			op: func(tr *layerTree) {
-				tr.cap(common.Hash{0x4a}, 2)
-			},
-			snapshotB: map[common.Hash]map[common.Hash]struct{}{
-				{0x2}: {
-					common.Hash{0x3a}: {},
-					common.Hash{0x4a}: {},
-					common.Hash{0x3b}: {},
-					common.Hash{0x4b}: {},
-				},
-				{0x3a}: {
-					common.Hash{0x4a}: {},
-				},
-				{0x3b}: {
-					common.Hash{0x4b}: {},
-				},
-			},
-		},
-	}
-	check := func(setA, setB map[common.Hash]map[common.Hash]struct{}) bool {
-		if len(setA) != len(setB) {
-			return false
-		}
-		for h, subA := range setA {
-			subB, ok := setB[h]
-			if !ok {
-				return false
-			}
-			if len(subA) != len(subB) {
-				return false
-			}
-			for hh := range subA {
-				if _, ok := subB[hh]; !ok {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	for _, c := range cases {
-		tr := c.init()
-		if !check(c.snapshotA, tr.descendants) {
-			t.Fatalf("Unexpected descendants")
-		}
-		c.op(tr)
-		if !check(c.snapshotB, tr.descendants) {
-			t.Fatalf("Unexpected descendants")
 		}
 	}
 }
@@ -1029,5 +703,246 @@ func TestLookupZeroBaseRootFallback(t *testing.T) {
 		common.HexToHash("0xdeadbeef"))
 	if !errors.Is(err, errSnapshotStale) {
 		t.Errorf("lookupStorage(stale state): want errSnapshotStale, got %v", err)
+	}
+}
+
+// walkLookup resolves the layer holding an entry in the specified state by
+// checking the live layers one by one, as the reference of the indexed lookups.
+// The persisted layers (still linked by the forks off the disk layer) are
+// regarded as the disk layer, which holds their data.
+func walkLookup(tr *layerTree, state common.Hash, has func(*diffLayer) bool) layer {
+	l := tr.get(state)
+	for {
+		if tr.get(l.rootHash()) != l {
+			return tr.bottom()
+		}
+		dl, ok := l.(*diffLayer)
+		if !ok || has(dl) {
+			return l
+		}
+		l = dl.parentLayer()
+	}
+}
+
+// checkLookups checks the indexed lookups of the given entries in the specified
+// state against walking down the layers one by one.
+func checkLookups(t *testing.T, tr *layerTree, state common.Hash, acct common.Hash, slot common.Hash, owner common.Hash, path []byte) {
+	t.Helper()
+
+	got, err := tr.lookupAccount(acct, state)
+	if err != nil {
+		t.Fatalf("Failed to resolve account: %v", err)
+	}
+	want := walkLookup(tr, state, func(dl *diffLayer) bool {
+		_, ok := dl.states.account(acct)
+		return ok
+	})
+	gotBlob, err1 := got.account(acct, 0)
+	wantBlob, err2 := want.account(acct, 0)
+	if err1 != nil || err2 != nil || !bytes.Equal(gotBlob, wantBlob) {
+		t.Fatalf("Unexpected account, want %x, got %x (%v, %v)", wantBlob, gotBlob, err1, err2)
+	}
+	got, err = tr.lookupStorage(acct, slot, state)
+	if err != nil {
+		t.Fatalf("Failed to resolve storage: %v", err)
+	}
+	want = walkLookup(tr, state, func(dl *diffLayer) bool {
+		_, ok := dl.states.storage(acct, slot)
+		return ok
+	})
+	gotBlob, err1 = got.storage(acct, slot, 0)
+	wantBlob, err2 = want.storage(acct, slot, 0)
+	if err1 != nil || err2 != nil || !bytes.Equal(gotBlob, wantBlob) {
+		t.Fatalf("Unexpected storage, want %x, got %x (%v, %v)", wantBlob, gotBlob, err1, err2)
+	}
+	got, _, err = tr.lookupNode(owner, path, state)
+	if err != nil {
+		t.Fatalf("Failed to resolve node: %v", err)
+	}
+	want = walkLookup(tr, state, func(dl *diffLayer) bool {
+		_, ok := dl.nodes.node(owner, path)
+		return ok
+	})
+	gotBlob, _, _, err1 = got.node(owner, path, 0)
+	wantBlob, _, _, err2 = want.node(owner, path, 0)
+	if err1 != nil || err2 != nil || !bytes.Equal(gotBlob, wantBlob) {
+		t.Fatalf("Unexpected node, want %x, got %x (%v, %v)", wantBlob, gotBlob, err1, err2)
+	}
+}
+
+// TestLayerTreeLookupRandom checks the indexed lookups against walking down the
+// layers one by one, over a random tree being extended with forks and capped.
+func TestLayerTreeLookupRandom(t *testing.T) {
+	for seed := int64(1); seed <= 8; seed++ {
+		testLayerTreeLookupRandom(t, seed)
+	}
+}
+
+func testLayerTreeLookupRandom(t *testing.T, seed int64) {
+	var (
+		r        = rand.New(rand.NewSource(seed))
+		tr       = newTestLayerTree()
+		accounts = make([]common.Hash, 32)
+		slots    = make([]common.Hash, 16)
+		paths    = [][]byte{nil, {0x1}, {0x2}, {0x1, 0x3}, {0x2, 0x4}, {0x5, 0x6, 0x7}}
+		block    uint64
+	)
+	for i := range accounts {
+		r.Read(accounts[i][:])
+	}
+	for i := range slots {
+		r.Read(slots[i][:])
+	}
+	owners := append([]common.Hash{{}}, accounts[:3]...)
+
+	newSets := func() (*nodeSetWithOrigin, *StateSetWithOrigin) {
+		var (
+			accts  = make(map[common.Hash][]byte)
+			stores = make(map[common.Hash]map[common.Hash][]byte)
+			nodes  = make(map[common.Hash]map[string]*trienode.Node)
+		)
+		for i := 0; i < 1+r.Intn(4); i++ {
+			accts[accounts[r.Intn(len(accounts))]] = []byte{byte(r.Intn(256))}
+		}
+		for i := 0; i < r.Intn(4); i++ {
+			acct := accounts[r.Intn(4)]
+			if stores[acct] == nil {
+				stores[acct] = make(map[common.Hash][]byte)
+			}
+			stores[acct][slots[r.Intn(len(slots))]] = []byte{byte(r.Intn(256))}
+		}
+		for i := 0; i < r.Intn(4); i++ {
+			owner := owners[r.Intn(len(owners))]
+			if nodes[owner] == nil {
+				nodes[owner] = make(map[string]*trienode.Node)
+			}
+			blob := []byte{byte(r.Intn(256))}
+			nodes[owner][string(paths[r.Intn(len(paths))])] = trienode.New(crypto.Keccak256Hash(blob), blob)
+		}
+		return NewNodeSetWithOrigin(nodes, nil), NewStateSetWithOrigin(accts, stores, nil, nil, false)
+	}
+	// live returns the live layers, along with the diff layers linked to the
+	// disk layer through the live layers. The forks off a persisted layer still
+	// link to it, capping them is not supported.
+	live := func() (roots []common.Hash, diffs []common.Hash) {
+		tr.forEach(func(l layer) {
+			roots = append(roots, l.rootHash())
+			if _, ok := l.(*diffLayer); !ok {
+				return
+			}
+			for cur := l; cur != tr.base; cur = cur.parentLayer() {
+				if tr.layers[cur.rootHash()] != cur {
+					return
+				}
+			}
+			diffs = append(diffs, l.rootHash())
+		})
+		return roots, diffs
+	}
+	for step := 0; step < 3000; step++ {
+		// Extend a random layer, forking the tree, or cap a random diff layer
+		roots, diffs := live()
+		if len(diffs) == 0 || r.Intn(5) != 0 {
+			var root common.Hash
+			r.Read(root[:])
+			block++
+			nodes, states := newSets()
+			if err := tr.add(root, roots[r.Intn(len(roots))], block, nodes, states); err != nil {
+				t.Fatalf("Failed to add layer: %v", err)
+			}
+		} else if err := tr.cap(diffs[r.Intn(len(diffs))], 1+r.Intn(8)); err != nil {
+			t.Fatalf("Failed to cap layers: %v", err)
+		}
+		// Resolve through the index only, or along with the unindexed layers
+		if r.Intn(2) == 0 {
+			tr.index.wait()
+		}
+		roots, _ = live()
+		for i := 0; i < 16; i++ {
+			checkLookups(t, tr, roots[r.Intn(len(roots))], accounts[r.Intn(len(accounts))], slots[r.Intn(len(slots))], owners[r.Intn(len(owners))], paths[r.Intn(len(paths))])
+		}
+	}
+}
+
+// TestLayerIndexGrow checks the index rows are regrown for a layer with many
+// keys, with the entries of the layers indexed before still resolved.
+func TestLayerIndexGrow(t *testing.T) {
+	var (
+		r      = rand.New(rand.NewSource(1))
+		tr     = newTestLayerTree()
+		accts  []common.Hash
+		parent = tr.base.rootHash()
+	)
+	add := func(n int) {
+		accounts := make(map[common.Hash][]byte)
+		for i := 0; i < n; i++ {
+			var acct common.Hash
+			r.Read(acct[:])
+			accounts[acct] = []byte{byte(i)}
+			accts = append(accts, acct)
+		}
+		var root common.Hash
+		r.Read(root[:])
+		if err := tr.add(root, parent, 0, NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(accounts, nil, nil, nil, false)); err != nil {
+			t.Fatalf("Failed to add layer: %v", err)
+		}
+		parent = root
+	}
+	for i := 0; i < 16; i++ {
+		add(16)
+	}
+	tr.index.wait()
+	rows := len(tr.index.rows.Load().rows)
+
+	add(4 * indexMinRows / indexRowsPerKey)
+	tr.index.wait()
+	if grown := len(tr.index.rows.Load().rows); grown <= rows {
+		t.Fatalf("Index rows not grown, before: %d, after: %d", rows, grown)
+	}
+	for _, acct := range accts {
+		checkLookups(t, tr, parent, acct, common.Hash{}, common.Hash{}, nil)
+	}
+}
+
+// TestLayerIndexWrap checks the lookups while the slots are reused by the new
+// layers, along with the rejection of the layers beyond the span of the index.
+func TestLayerIndexWrap(t *testing.T) {
+	var (
+		tr     = newTestLayerTree()
+		parent = tr.base.rootHash()
+		accts  []common.Hash
+	)
+	add := func(i int) error {
+		acct := common.Hash{0xaa, byte(i >> 8), byte(i)}
+		root := common.Hash{0xbb, byte(i >> 8), byte(i)}
+		accounts := map[common.Hash][]byte{acct: {byte(i)}, {0xcc}: {byte(i)}}
+		if err := tr.add(root, parent, uint64(i), NewNodeSetWithOrigin(nil, nil), NewStateSetWithOrigin(accounts, nil, nil, nil, false)); err != nil {
+			return err
+		}
+		accts = append(accts, acct)
+		parent = root
+		return nil
+	}
+	// Fill up the span of the index, the layer beyond it is rejected
+	for i := 0; i < indexSlots; i++ {
+		if err := add(i); err != nil {
+			t.Fatalf("Failed to add layer: %v", err)
+		}
+	}
+	if err := add(indexSlots); err == nil {
+		t.Fatal("Layer beyond the span of the index is accepted")
+	}
+	// Wrap around the slots with the bottom layers persisted
+	for i := indexSlots; i < 3*indexSlots; i++ {
+		if err := tr.cap(parent, maxDiffLayers); err != nil {
+			t.Fatalf("Failed to cap layers: %v", err)
+		}
+		if err := add(i); err != nil {
+			t.Fatalf("Failed to add layer: %v", err)
+		}
+	}
+	tr.index.wait()
+	for _, acct := range append(accts, common.Hash{0xcc}) {
+		checkLookups(t, tr, parent, acct, common.Hash{}, common.Hash{}, nil)
 	}
 }
