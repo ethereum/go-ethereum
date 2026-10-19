@@ -206,3 +206,62 @@ func TestCheckInclusionListBlockState(t *testing.T) {
 		}
 	}
 }
+
+// TestBlockGasUsed checks that a block's gas totals are kept from its import,
+// and that re-executing it, as for a block imported before the node started,
+// gives the same totals.
+func TestBlockGasUsed(t *testing.T) {
+	for _, sequential := range []bool{false, true} {
+		var (
+			carolKey, carol = inclusionListTestKey(t, "carol")
+			env             = newInclusionListTestEnv(types.GenesisAlloc{carol: {Balance: big.NewInt(params.Ether)}})
+			engine          = beacon.New(ethash.NewFaker())
+			signer          = types.LatestSigner(env.cfg)
+		)
+		_, blocks, _ := GenerateChainWithGenesis(env.gspec, engine, 1, func(_ int, b *BlockGen) {
+			// Deploy a contract that stores a slot, using gas in both dimensions.
+			tx, err := types.SignNewTx(carolKey, signer, &types.DynamicFeeTx{
+				ChainID:   signer.ChainID(),
+				GasTipCap: common.Big0,
+				GasFeeCap: big.NewInt(2 * params.InitialBaseFee),
+				Gas:       1_000_000,
+				Data:      common.FromHex("0x600160005500"),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			b.AddTx(tx)
+		})
+		cfg := DefaultConfig()
+		cfg.VmConfig.DisableParallelExecution = sequential
+		bc, err := NewBlockChain(rawdb.NewMemoryDatabase(), env.gspec, engine, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer bc.Stop()
+		if _, err := bc.InsertChain(blocks); err != nil {
+			t.Fatal(err)
+		}
+		block := blocks[0]
+		if !bc.blockGasCache.Contains(block.Hash()) {
+			t.Fatalf("sequential=%v: gas totals not kept from the import", sequential)
+		}
+		execution, state, err := bc.BlockGasUsed(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Creating the account and the slot costs more state gas than running
+		// the code costs execution gas.
+		if execution == 0 || state <= execution || state != block.GasUsed() {
+			t.Fatalf("sequential=%v: gas totals %d/%d, block gas used %d", sequential, execution, state, block.GasUsed())
+		}
+		bc.blockGasCache.Purge()
+		reExecution, reState, err := bc.BlockGasUsed(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reExecution != execution || reState != state {
+			t.Fatalf("sequential=%v: re-executed gas totals %d/%d, imported %d/%d", sequential, reExecution, reState, execution, state)
+		}
+	}
+}
