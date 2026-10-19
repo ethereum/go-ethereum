@@ -167,6 +167,33 @@ func TestNodeCloseClosesDB(t *testing.T) {
 	}
 }
 
+// TestNodeDatabaseCompactionControl: a pebble database opened through the
+// node still offers ethdb.CompactionController, which an online import caps
+// and paces itself through, and reports pebble's own write backlog.
+func TestNodeDatabaseCompactionControl(t *testing.T) {
+	conf := testNodeConfig()
+	conf.DataDir = t.TempDir()
+	stack, err := New(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stack.Close()
+	db, err := stack.OpenDatabaseWithOptions("chaindata", DatabaseOptions{Cache: 16, Handles: 16})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, ok := db.(ethdb.CompactionController)
+	if !ok {
+		t.Fatalf("%T hides ethdb.CompactionController", db)
+	}
+	if err := db.Put([]byte("key"), make([]byte, 4096)); err != nil {
+		t.Fatal(err)
+	}
+	if b := c.WriteBacklog(); b <= 0 || b >= 1 {
+		t.Fatalf("write backlog %v after a small write, want pebble's, in (0, 1)", b)
+	}
+}
+
 // This test checks that OpenDatabase can be used from within a Lifecycle Start method.
 func TestNodeOpenDatabaseFromLifecycleStart(t *testing.T) {
 	stack, _ := New(testNodeConfig())
