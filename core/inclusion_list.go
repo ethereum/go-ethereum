@@ -99,6 +99,7 @@ func checkInclusionList(config *params.ChainConfig, chain ChainContext, header *
 		rules    = config.Rules(header.Number, true, header.Time)
 		evm      = vm.NewEVM(NewEVMBlockContext(header, chain, nil), statedb, config, vm.Config{})
 		included = make(map[common.Hash]struct{}, len(txs))
+		pending  = make([]*types.Transaction, 0, len(inclusionList))
 	)
 	defer evm.Release()
 
@@ -114,6 +115,12 @@ func checkInclusionList(config *params.ChainConfig, chain ChainContext, header *
 		if _, ok := included[tx.Hash()]; ok || tx.Type() == types.BlobTxType {
 			continue
 		}
+		pending = append(pending, tx)
+	}
+	// Recovering the senders is most of the work, start it on all cores.
+	SenderCacher().Recover(signer, pending)
+
+	for _, tx := range pending {
 		// A bad signature or a foreign chain ID fails here.
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
