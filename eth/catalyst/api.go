@@ -432,6 +432,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 			BeaconRoot:     payloadAttributes.BeaconRoot,
 			SlotNum:        payloadAttributes.SlotNumber,
 			TargetGasLimit: payloadAttributes.TargetGasLimit,
+			InclusionList:  payloadAttributes.InclusionList,
 			Version:        payloadVersion,
 		}
 		id := args.Id()

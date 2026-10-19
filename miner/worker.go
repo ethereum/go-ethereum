@@ -138,6 +138,7 @@ type generateParams struct {
 	beaconRoot     *common.Hash      // The beacon root (cancun field).
 	slotNum        *uint64           // The slot number (amsterdam field).
 	targetGasLimit *uint64           // The target gas limit requested by the CL (amsterdam field).
+	inclusionList  [][]byte          // The inclusion list the block must satisfy (bogota field).
 	noTxs          bool              // Flag whether an empty block without any transaction is expected
 
 	forceOverrides    bool // Flag whether we should overwrite extraData and transactions
@@ -202,6 +203,9 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 			}
 		}
 	}
+	// Even the empty block has to satisfy the inclusion list.
+	miner.commitInclusionList(ctx, work, genParam.inclusionList)
+
 	// Construct the block body, the withdrawal list should never be null
 	// if Shanghai has been activated.
 	body := types.Body{
@@ -405,6 +409,34 @@ func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx 
 	env.tcount++
 	env.bal.Merge(bal)
 	return nil
+}
+
+// commitInclusionList appends the inclusion list transactions that can still be
+// included, so the block satisfies the list (EIP-7805). Including one of them
+// can make another one valid, so the list is gone over until nothing more fits.
+func (miner *Miner) commitInclusionList(ctx context.Context, env *environment, list [][]byte) {
+	pending := make([]*types.Transaction, 0, len(list))
+	for _, enc := range list {
+		// Blob transactions are exempt, and come without their blobs anyway.
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(enc); err != nil || tx.Type() == types.BlobTxType {
+			continue
+		}
+		pending = append(pending, tx)
+	}
+	for included := true; included && len(pending) > 0; {
+		included = false
+		remaining := pending[:0]
+		for _, tx := range pending {
+			env.state.SetTxContext(tx.Hash(), env.tcount, uint32(env.tcount+1))
+			if err := miner.commitTransaction(ctx, env, tx); err != nil {
+				remaining = append(remaining, tx)
+				continue
+			}
+			included = true
+		}
+		pending = remaining
+	}
 }
 
 func (miner *Miner) commitBlobTransaction(ctx context.Context, env *environment, tx *types.Transaction) error {

@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -196,6 +197,73 @@ func TestBuildPayload(t *testing.T) {
 	}
 }
 
+// TestBuildPayloadInclusionList checks that even the empty payload carries the
+// inclusion list transactions that fit, including one that only becomes valid
+// once another one is in, and leaves blob transactions out.
+func TestBuildPayloadInclusionList(t *testing.T) {
+	w, b := newTestWorker(t, params.TestChainConfig, ethash.NewFaker(), rawdb.NewMemoryDatabase(), 0)
+
+	var (
+		signer   = types.LatestSigner(params.TestChainConfig)
+		transfer = func(nonce uint64) *types.Transaction {
+			return types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
+				Nonce:    nonce,
+				To:       &testUserAddress,
+				Value:    big.NewInt(1),
+				Gas:      params.TxGas,
+				GasPrice: big.NewInt(params.InitialBaseFee),
+			})
+		}
+		first, second = transfer(0), transfer(1)
+		blob          = types.MustSignNewTx(testBankKey, types.LatestSignerForChainID(params.TestChainConfig.ChainID), &types.BlobTx{
+			ChainID:    uint256.MustFromBig(params.TestChainConfig.ChainID),
+			GasFeeCap:  uint256.NewInt(params.InitialBaseFee),
+			Gas:        params.TxGas,
+			BlobFeeCap: uint256.NewInt(params.InitialBaseFee),
+			BlobHashes: []common.Hash{{0x01}},
+		})
+		list [][]byte
+	)
+	for _, tx := range []*types.Transaction{second, blob, first} {
+		enc, err := tx.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		list = append(list, enc)
+	}
+	payload, err := w.buildPayload(context.Background(), &BuildPayloadArgs{
+		Parent:        b.chain.CurrentBlock().Hash(),
+		Timestamp:     uint64(time.Now().Unix()),
+		InclusionList: list,
+	}, false)
+	if err != nil {
+		t.Fatalf("Failed to build payload %v", err)
+	}
+	txs := payload.ResolveEmpty().ExecutionPayload.Transactions
+	if len(txs) != 2 {
+		t.Fatalf("empty payload has %d transactions, want 2", len(txs))
+	}
+	for i, want := range []*types.Transaction{first, second} {
+		var tx types.Transaction
+		if err := tx.UnmarshalBinary(txs[i]); err != nil {
+			t.Fatal(err)
+		}
+		if tx.Hash() != want.Hash() {
+			t.Errorf("transaction %d is %x, want %x", i, tx.Hash(), want.Hash())
+		}
+	}
+	// The full payload starts with the pool's transaction from the same
+	// account, and still appends the second one.
+	txs = payload.ResolveFull().ExecutionPayload.Transactions
+	var last types.Transaction
+	if err := last.UnmarshalBinary(txs[len(txs)-1]); err != nil {
+		t.Fatal(err)
+	}
+	if len(txs) != 2 || last.Hash() != second.Hash() {
+		t.Errorf("full payload has %d transactions ending in %x, want 2 ending in %x", len(txs), last.Hash(), second.Hash())
+	}
+}
+
 func TestPayloadId(t *testing.T) {
 	t.Parallel()
 	ids := make(map[string]int)
@@ -263,6 +331,22 @@ func TestPayloadId(t *testing.T) {
 					Amount:    0,
 				},
 			},
+		},
+		// Different inclusion list (non-empty)
+		{
+			Parent:        common.Hash{2},
+			Timestamp:     2,
+			Random:        common.Hash{0x2},
+			FeeRecipient:  common.Address{0x2},
+			InclusionList: [][]byte{{0x1}},
+		},
+		// Different inclusion list (non-empty)
+		{
+			Parent:        common.Hash{2},
+			Timestamp:     2,
+			Random:        common.Hash{0x2},
+			FeeRecipient:  common.Address{0x2},
+			InclusionList: [][]byte{{0x2}},
 		},
 	} {
 		id := tt.Id().String()
