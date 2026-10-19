@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -39,6 +40,7 @@ const xShardOutboxABIJSON = `[
 		{"name": "to", "type": "address"},
 		{"name": "value", "type": "uint256"},
 		{"name": "gasLimit", "type": "uint64"},
+		{"name": "isMove", "type": "bool"},
 		{"name": "data", "type": "bytes"}
 	]},
 	{"type": "event", "name": "SentMessage", "inputs": [
@@ -48,6 +50,7 @@ const xShardOutboxABIJSON = `[
 		{"name": "value", "type": "uint256"},
 		{"name": "gasPrice", "type": "uint256"},
 		{"name": "gasLimit", "type": "uint64"},
+		{"name": "isMove", "type": "bool"},
 		{"name": "data", "type": "bytes"}
 	]}
 ]`
@@ -63,7 +66,7 @@ var (
 const (
 	xShardGasPrice = 10
 	xShardValue    = 1000
-	xShardGasLimit = 50000
+	xShardGasLimit = params.XShardSendGas // the gas limit of a move
 	xShardDst      = 2
 )
 
@@ -94,9 +97,9 @@ func newXShardEVM() (*EVM, *state.StateDB) {
 	return evm, statedb
 }
 
-func packXShardSend(t *testing.T, dstShard uint32, to common.Address, value *big.Int, gasLimit uint64, data []byte) []byte {
+func packXShardSend(t *testing.T, dstShard uint32, to common.Address, value *big.Int, gasLimit uint64, isMove bool, data []byte) []byte {
 	t.Helper()
-	input, err := xShardOutboxABI.Pack("send", dstShard, to, value, gasLimit, data)
+	input, err := xShardOutboxABI.Pack("send", dstShard, to, value, gasLimit, isMove, data)
 	if err != nil {
 		t.Fatalf("failed to pack input: %v", err)
 	}
@@ -105,27 +108,17 @@ func packXShardSend(t *testing.T, dstShard uint32, to common.Address, value *big
 
 func TestXShardOutboxSend(t *testing.T) {
 	for _, tt := range []struct {
-		name     string
-		data     []byte
-		excess   uint64
-		gasLimit uint64 // defaults to xShardGasLimit
+		name   string
+		excess uint64
 	}{
-		{name: "no data"},
-		{name: "data", data: []byte{0xde, 0xad, 0xbe, 0xef}},
-		{name: "word sized data", data: bytes.Repeat([]byte{0xaa}, 64)},
-		{name: "excess value", data: []byte{1, 2, 3}, excess: 12345},
-		{name: "minimum gas limit", gasLimit: params.XShardSendGas},
-		{name: "maximum gas limit", gasLimit: params.MaxCrossShardTxGas},
+		{name: "move"},
+		{name: "excess value", excess: 12345},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			evm, statedb := newXShardEVM()
-			gasLimit := tt.gasLimit
-			if gasLimit == 0 {
-				gasLimit = xShardGasLimit
-			}
 			var (
-				input    = packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), gasLimit, tt.data)
-				cost     = uint256.NewInt(xShardValue + gasLimit*xShardGasPrice)
+				input    = packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, true, nil)
+				cost     = uint256.NewInt(xShardValue + xShardGasLimit*xShardGasPrice)
 				callVal  = new(uint256.Int).AddUint64(cost, tt.excess)
 				gas      = NewGasBudget(1_000_000, 0)
 				wantUsed = (&xShardOutbox{}).RequiredGas(input)
@@ -151,14 +144,54 @@ func TestXShardOutboxSend(t *testing.T) {
 			if len(logs) != 1 {
 				t.Fatalf("got %d logs, want 1", len(logs))
 			}
-			checkSentMessageLog(t, logs[0], gasLimit, tt.data)
+			checkSentMessageLog(t, logs[0], xShardGasLimit, true, nil)
+		})
+	}
+}
+
+// TestXShardMessageEncoding checks that the outbox decodes the input of send
+// and encodes the SentMessage event as the standard ABI encoder and decoder,
+// including messages it does not accept yet.
+func TestXShardMessageEncoding(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		gasLimit uint64
+		isMove   bool
+		data     []byte
+	}{
+		{name: "move", gasLimit: params.XShardSendGas, isMove: true},
+		{name: "data", gasLimit: 50000, data: []byte{0xde, 0xad, 0xbe, 0xef}},
+		{name: "word sized data", gasLimit: params.MaxCrossShardTxGas, data: bytes.Repeat([]byte{0xaa}, 64)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			msg, err := decodeXShardSend(packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), tt.gasLimit, tt.isMove, tt.data))
+			if err != nil {
+				t.Fatalf("failed to decode input: %v", err)
+			}
+			want := &xShardMessage{
+				dstShard: xShardDst,
+				to:       xShardRecipient,
+				value:    uint256.NewInt(xShardValue),
+				gasLimit: tt.gasLimit,
+				isMove:   tt.isMove,
+				data:     tt.data,
+			}
+			if want.data == nil {
+				want.data = []byte{}
+			}
+			if !reflect.DeepEqual(msg, want) {
+				t.Fatalf("decoded %+v, want %+v", msg, want)
+			}
+			log := xShardSentMessageLog(params.XShardOutboxAddress, xShardSender, msg, uint256.NewInt(xShardGasPrice))
+			checkSentMessageLog(t, log, tt.gasLimit, tt.isMove, tt.data)
 		})
 	}
 }
 
 // checkSentMessageLog checks a SentMessage log of the default test message
-// with the given gas limit and data, decoding it with the standard ABI decoder.
-func checkSentMessageLog(t *testing.T, log *types.Log, gasLimit uint64, data []byte) {
+// with the given gas limit, move flag and data, decoding it with the standard
+// ABI decoder.
+func checkSentMessageLog(t *testing.T, log *types.Log, gasLimit uint64, isMove bool, data []byte) {
 	t.Helper()
 	if log.Address != params.XShardOutboxAddress {
 		t.Errorf("log address %v, want %v", log.Address, params.XShardOutboxAddress)
@@ -187,6 +220,7 @@ func checkSentMessageLog(t *testing.T, log *types.Log, gasLimit uint64, data []b
 		"value":    big.NewInt(xShardValue),
 		"gasPrice": big.NewInt(xShardGasPrice),
 		"gasLimit": gasLimit,
+		"isMove":   isMove,
 		"data":     data,
 	}
 	for name, w := range want {
@@ -209,14 +243,19 @@ func checkSentMessageLog(t *testing.T, log *types.Log, gasLimit uint64, data []b
 
 func TestXShardOutboxInvalid(t *testing.T) {
 	var (
-		cost  = uint64(xShardValue + xShardGasLimit*xShardGasPrice)
-		input = func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, []byte{1, 2, 3})
+		cost = xShardValue + xShardGasLimit*xShardGasPrice
+		// pack returns the input of a message of the default test values.
+		pack = func(gasLimit uint64, isMove bool, data []byte) func(t *testing.T) []byte {
+			return func(t *testing.T) []byte {
+				return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), gasLimit, isMove, data)
+			}
 		}
-		// edit returns the default input with args[off] set to b.
+		input    = pack(xShardGasLimit, true, nil)             // a valid move
+		withData = pack(xShardGasLimit, true, []byte{1, 2, 3}) // a well-formed input with data
+		// edit returns withData with args[off] set to b.
 		edit = func(off int, b byte) func(t *testing.T) []byte {
 			return func(t *testing.T) []byte {
-				in := input(t)
+				in := withData(t)
 				in[4+off] = b
 				return in
 			}
@@ -233,38 +272,41 @@ func TestXShardOutboxInvalid(t *testing.T) {
 		want   error
 	}{
 		{name: "empty input", input: func(*testing.T) []byte { return nil }, want: errXShardInvalidInput},
-		{name: "unknown selector", input: func(t *testing.T) []byte { in := input(t); in[0] ^= 1; return in }, want: errXShardInvalidInput},
-		{name: "short input", input: func(t *testing.T) []byte { return input(t)[:4+5*32] }, want: errXShardInvalidInput},
+		{name: "unknown selector", input: func(t *testing.T) []byte { in := withData(t); in[0] ^= 1; return in }, want: errXShardInvalidInput},
+		{name: "short input", input: func(t *testing.T) []byte { return withData(t)[:4+6*32] }, want: errXShardInvalidInput},
 		{name: "dirty dstShard", input: edit(27, 1), want: errXShardInvalidInput},
 		{name: "dirty to", input: edit(32+11, 1), want: errXShardInvalidInput},
 		{name: "dirty gasLimit", input: edit(3*32+23, 1), want: errXShardInvalidInput},
-		{name: "non-canonical offset", input: edit(4*32+31, 0xc0), want: errXShardInvalidInput},
-		{name: "length past input", input: edit(5*32+31, 33), want: errXShardInvalidInput},
+		{name: "dirty isMove", input: edit(4*32, 1), want: errXShardInvalidInput},
+		{name: "non-bool isMove", input: edit(4*32+31, 2), want: errXShardInvalidInput},
+		{name: "non-canonical offset", input: edit(5*32+31, 0xe0), want: errXShardInvalidInput},
+		{name: "length past input", input: edit(6*32+31, 33), want: errXShardInvalidInput},
 		{name: "huge length", input: func(t *testing.T) []byte {
-			in := packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, nil)
-			copy(in[4+5*32+24:], bytes.Repeat([]byte{0xff}, 8))
+			in := input(t)
+			copy(in[4+6*32+24:], bytes.Repeat([]byte{0xff}, 8))
 			return in
 		}, want: errXShardInvalidInput},
-		{name: "trailing bytes", input: func(t *testing.T) []byte { return append(input(t), make([]byte, 32)...) }, want: errXShardInvalidInput},
-		{name: "missing padding", input: func(t *testing.T) []byte { in := input(t); return in[:len(in)-1] }, want: errXShardInvalidInput},
+		{name: "trailing bytes", input: func(t *testing.T) []byte { return append(withData(t), make([]byte, 32)...) }, want: errXShardInvalidInput},
+		{name: "missing padding", input: func(t *testing.T) []byte { in := withData(t); return in[:len(in)-1] }, want: errXShardInvalidInput},
 		{name: "own shard", input: func(t *testing.T) []byte {
-			return packXShardSend(t, 1, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, nil)
+			return packXShardSend(t, 1, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, true, nil)
 		}, want: errXShardInvalidShard},
 		{name: "unknown shard", input: func(t *testing.T) []byte {
-			return packXShardSend(t, 3, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, nil)
+			return packXShardSend(t, 3, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, true, nil)
 		}, want: errXShardInvalidShard},
-		{name: "gas limit below minimum", input: func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.XShardSendGas-1, nil)
-		}, want: errXShardInvalidGasLimit},
-		{name: "gas limit above max", input: func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.MaxCrossShardTxGas+1, nil)
-		}, value: xShardValue + (params.MaxCrossShardTxGas+1)*xShardGasPrice, want: errXShardInvalidGasLimit},
-		{name: "ethereum maximum gas limit", input: func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, big.NewInt(xShardValue), params.MaxTxGas, nil)
-		}, value: xShardValue + params.MaxTxGas*xShardGasPrice, want: errXShardInvalidGasLimit},
+		{name: "gas limit below minimum", input: pack(params.XShardSendGas-1, true, nil), want: errXShardInvalidGasLimit},
+		{name: "gas limit above max", input: pack(params.MaxCrossShardTxGas+1, true, nil),
+			value: xShardValue + (params.MaxCrossShardTxGas+1)*xShardGasPrice, want: errXShardInvalidGasLimit},
+		{name: "ethereum maximum gas limit", input: pack(params.MaxTxGas, true, nil),
+			value: xShardValue + params.MaxTxGas*xShardGasPrice, want: errXShardInvalidGasLimit},
+		{name: "not a move", input: pack(xShardGasLimit, false, nil), want: errXShardNotMove},
+		{name: "call", input: pack(50000, false, []byte{1, 2, 3}), value: xShardValue + 50000*xShardGasPrice, want: errXShardNotMove},
+		{name: "move with data", input: withData, want: errXShardInvalidMove},
+		{name: "move with more gas", input: pack(xShardGasLimit+1, true, nil),
+			value: xShardValue + (xShardGasLimit+1)*xShardGasPrice, want: errXShardInvalidMove},
 		{name: "insufficient value", input: input, value: cost - 1, want: errXShardInsufficientValue},
 		{name: "cost overflow", input: func(t *testing.T) []byte {
-			return packXShardSend(t, xShardDst, xShardRecipient, maxUint256, xShardGasLimit, nil)
+			return packXShardSend(t, xShardDst, xShardRecipient, maxUint256, xShardGasLimit, true, nil)
 		}, want: errXShardInsufficientValue},
 		{name: "contract sender", input: input, caller: common.HexToAddress("0xc0de"), want: errXShardSenderNotOrigin},
 		{name: "system call", input: input, caller: params.SystemAddress, want: errXShardCallOnly},
