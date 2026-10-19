@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -64,7 +65,14 @@ func (st *stateTransition) executeDeposit(rules params.Rules) (*ExecutionResult,
 	}
 	// Start the transaction in the state, e.g. its block access list entry (EIP-7928).
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, nil, nil)
+	// Trace the move as a top-level call without executing the recipient's code.
+	tracer := st.evm.Config.Tracer
+	gas := tracing.Gas{Execution: msg.GasLimit}
+	if tracer != nil {
+		tracer.EmitEnter(0, byte(vm.CALL), msg.From, *msg.To, msg.Data, gas, msg.Value.ToBig())
+	}
 	st.state.AddBalance(*msg.To, msg.Value, tracing.BalanceIncreaseXShardDeposit)
+	tracer.EmitExit(0, nil, gas, tracing.Gas{}, nil, false)
 	st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 
 	return &ExecutionResult{
