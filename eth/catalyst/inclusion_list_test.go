@@ -41,8 +41,9 @@ func bogotaTestChain(t *testing.T) (*core.Genesis, []*types.Block) {
 	return genesis, blocks
 }
 
-// buildBogotaPayload builds an empty Bogota payload on parent.
-func buildBogotaPayload(t *testing.T, api *ConsensusAPI, parent *types.Block) *engine.ExecutionPayloadEnvelope {
+// buildBogotaPayload builds a Bogota payload on parent, which only holds the
+// inclusion list transactions as the pool is empty.
+func buildBogotaPayload(t *testing.T, api *ConsensusAPI, parent *types.Block, list ...[]byte) *engine.ExecutionPayloadEnvelope {
 	t.Helper()
 	attrs := &engine.PayloadAttributes{
 		Timestamp:      parent.Time() + 5,
@@ -50,7 +51,7 @@ func buildBogotaPayload(t *testing.T, api *ConsensusAPI, parent *types.Block) *e
 		BeaconRoot:     &witnessBeaconRoot,
 		SlotNumber:     &witnessSlotNumber,
 		TargetGasLimit: &witnessGasTarget,
-		InclusionList:  [][]byte{},
+		InclusionList:  append([][]byte{}, list...),
 	}
 	resp, err := api.ForkchoiceUpdatedV5(context.Background(), engine.ForkchoiceStateV1{HeadBlockHash: parent.Hash()}, attrs, nil)
 	if err != nil {
@@ -186,5 +187,24 @@ func TestForkchoiceUpdatedV5InclusionList(t *testing.T) {
 	}
 	if got := resp.PayloadStatus.InclusionListSatisfied; got == nil || *got {
 		t.Errorf("inclusionListSatisfied %v, want false", got)
+	}
+}
+
+// TestForkchoiceUpdatedV5BuildsInclusionList checks that a payload built from
+// forkchoiceUpdatedV5 attributes satisfies their inclusion list.
+func TestForkchoiceUpdatedV5BuildsInclusionList(t *testing.T) {
+	genesis, blocks := bogotaTestChain(t)
+	n, ethservice := startEthService(t, genesis, blocks[:9])
+	defer n.Close()
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+	list := testInclusionList(t, genesis.Config, 9)
+	envelope := buildBogotaPayload(t, api, blocks[8], list[0])
+	status, err := newPayloadV6(api, *envelope.ExecutionPayload, requestsOf(envelope), list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := status.InclusionListSatisfied; status.Status != engine.VALID || got == nil || !*got {
+		t.Fatalf("status %s, inclusionListSatisfied %v, want VALID and true", status.Status, got)
 	}
 }
