@@ -63,7 +63,7 @@ func (st *stateTransition) executeDeposit(rules params.Rules) (*ExecutionResult,
 	if err != nil {
 		return nil, err
 	}
-	// Start the transaction in the state, e.g. its block access list entry (EIP-7928).
+	// Start the transaction in the state, e.g. adding sender to access list.
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, nil, nil)
 	// Trace the move as a top-level call without executing the recipient's code.
 	tracer := st.evm.Config.Tracer
