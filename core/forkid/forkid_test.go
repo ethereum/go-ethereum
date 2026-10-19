@@ -126,8 +126,10 @@ func TestCreation(t *testing.T) {
 				{123, 1762365719, ID{Hash: checksumToBytes(0xe7e0e7ff), Next: 1762365720}}, // Last Osaka block
 				{123, 1762365720, ID{Hash: checksumToBytes(0x3893353e), Next: 1762955544}}, // First BPO1 block
 				{123, 1762955543, ID{Hash: checksumToBytes(0x3893353e), Next: 1762955544}}, // Last BPO1 block
-				{123, 1762955544, ID{Hash: checksumToBytes(0x23aa1351), Next: 0}},          // First BPO2 block
-				{123, 2000000000, ID{Hash: checksumToBytes(0x23aa1351), Next: 0}},          // Future BPO2 block
+				{123, 1762955544, ID{Hash: checksumToBytes(0x23aa1351), Next: 1793036568}}, // First BPO2 block
+				{123, 1793036567, ID{Hash: checksumToBytes(0x23aa1351), Next: 1793036568}}, // Last BPO2 block
+				{123, 1793036568, ID{Hash: checksumToBytes(0x3d068b59), Next: 0}},          // First Amsterdam block
+				{123, 2000000000, ID{Hash: checksumToBytes(0x3d068b59), Next: 0}},          // Future Amsterdam block
 			},
 		},
 	}
