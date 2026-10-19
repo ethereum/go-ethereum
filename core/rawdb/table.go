@@ -157,10 +157,10 @@ func (t *table) Stat() (string, error) {
 	return t.db.Stat()
 }
 
-// Level0Sublevels returns the underlying database's level-0 depth, zero if it
-// doesn't compact in the background.
-func (t *table) Level0Sublevels() int {
-	return level0Sublevels(t.db)
+// WriteBacklog returns how close the underlying database is to stopping
+// writes, zero if it doesn't compact in the background.
+func (t *table) WriteBacklog() float64 {
+	return writeBacklog(t.db)
 }
 
 // LimitCompactions caps the underlying database's concurrent compactions, if

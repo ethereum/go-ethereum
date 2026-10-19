@@ -97,10 +97,10 @@ type Compacter interface {
 // CompactionController is implemented by data stores that compact in the
 // background, for bulk writers that must not starve the store's other users.
 type CompactionController interface {
-	// Level0Sublevels returns how many sublevels the store's first level
-	// holds: each is one more table a read may consult, and too many stop
-	// every write.
-	Level0Sublevels() int
+	// WriteBacklog returns how close the store is to stopping every write,
+	// as a fraction: 1 stops them. A bulk writer that waits above some
+	// fraction leaves the rest of the headroom to the store's other users.
+	WriteBacklog() float64
 
 	// LimitCompactions caps how many compactions run at once, until it is
 	// called again; n <= 0 lifts the cap.

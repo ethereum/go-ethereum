@@ -86,10 +86,10 @@ func (frdb *freezerdb) Freeze() error {
 	return nil
 }
 
-// Level0Sublevels returns the key-value store's level-0 depth, zero if it
-// doesn't compact in the background.
-func (frdb *freezerdb) Level0Sublevels() int {
-	return level0Sublevels(frdb.KeyValueStore)
+// WriteBacklog returns how close the key-value store is to stopping writes,
+// zero if it doesn't compact in the background.
+func (frdb *freezerdb) WriteBacklog() float64 {
+	return writeBacklog(frdb.KeyValueStore)
 }
 
 // LimitCompactions caps the key-value store's concurrent compactions, if it
@@ -103,10 +103,10 @@ type nofreezedb struct {
 	ethdb.KeyValueStore
 }
 
-// Level0Sublevels returns the key-value store's level-0 depth, zero if it
-// doesn't compact in the background.
-func (db *nofreezedb) Level0Sublevels() int {
-	return level0Sublevels(db.KeyValueStore)
+// WriteBacklog returns how close the key-value store is to stopping writes,
+// zero if it doesn't compact in the background.
+func (db *nofreezedb) WriteBacklog() float64 {
+	return writeBacklog(db.KeyValueStore)
 }
 
 // LimitCompactions caps the key-value store's concurrent compactions, if it
@@ -115,10 +115,11 @@ func (db *nofreezedb) LimitCompactions(n int) {
 	limitCompactions(db.KeyValueStore, n)
 }
 
-// level0Sublevels returns db's level-0 depth, zero if it has no levels.
-func level0Sublevels(db any) int {
+// writeBacklog returns how close db is to stopping writes, zero if it has no
+// background compaction.
+func writeBacklog(db any) float64 {
 	if c, ok := db.(ethdb.CompactionController); ok {
-		return c.Level0Sublevels()
+		return c.WriteBacklog()
 	}
 	return 0
 }

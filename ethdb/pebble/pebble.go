@@ -100,6 +100,8 @@ type Database struct {
 	level0Comp    atomic.Uint32 // Total number of level-zero compactions
 	nonLevel0Comp atomic.Uint32 // Total number of non level-zero compactions
 	compLimit     atomic.Int32  // Cap on concurrent compactions, 0 for none (LimitCompactions)
+	memTableStop  uint64        // Memtable bytes at which pebble stops writes (WriteBacklog)
+	l0Stop        int           // Level-0 sublevels at which pebble stops writes (WriteBacklog)
 
 	writeStalled        atomic.Bool  // Flag whether the write is stalled
 	writeDelayStartTime time.Time    // The start time of the latest write stall
@@ -348,6 +350,12 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	}
 	db.db = innerDB
 
+	// The write stops, with pebble's defaults filled in as Open does.
+	stops := opt.Clone()
+	stops.EnsureDefaults()
+	db.memTableStop = uint64(stops.MemTableStopWritesThreshold) * stops.MemTableSize
+	db.l0Stop = stops.L0StopWritesThreshold
+
 	db.compTimeMeter = metrics.GetOrRegisterMeter(namespace+"compact/time", nil)
 	db.compReadMeter = metrics.GetOrRegisterMeter(namespace+"compact/input", nil)
 	db.compWriteMeter = metrics.GetOrRegisterMeter(namespace+"compact/output", nil)
@@ -514,9 +522,12 @@ func (d *Database) Stat() (string, error) {
 	return d.db.Metrics().String(), nil
 }
 
-// Level0Sublevels returns the number of sublevels in pebble's level 0.
-func (d *Database) Level0Sublevels() int {
-	return int(d.db.Metrics().Levels[0].Sublevels)
+// WriteBacklog returns how close pebble is to stopping writes: the larger of
+// its memtables' bytes and its level-0 sublevels, each over the amount at
+// which pebble stops every write.
+func (d *Database) WriteBacklog() float64 {
+	m := d.db.Metrics()
+	return max(float64(m.MemTable.Size)/float64(d.memTableStop), float64(m.Levels[0].Sublevels)/float64(d.l0Stop))
 }
 
 // LimitCompactions caps how many compactions pebble runs at once, until it is

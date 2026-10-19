@@ -30,30 +30,34 @@ import (
 // it does, the import's stretch of compactions rewrites 2-3× the bytes two
 // compactions would, mostly in the bottom level, and block processing's disk
 // reads queue behind them. An online import therefore caps the database at
-// importCompactions. With fewer compactions level 0 could outgrow pebble's
-// stop-writes threshold (12 sublevels), which would stall the node's writes
-// too: past paceMaxSublevels the import's own writes wait instead.
+// importCompactions.
+//
+// The import can also write faster than pebble flushes its memtables, or, with
+// fewer compactions, deepen level 0: either way pebble ends up stopping every
+// write, the node's block commits included. Past paceMaxBacklog of the way to
+// such a stop the import's own writes wait instead.
 const (
 	importCompactions = 2
-	paceMaxSublevels  = 6
+	paceMaxBacklog    = 0.5
 	paceInterval      = 100 * time.Millisecond
 )
 
-// The pace's counters: writes held back by a deep level 0, and the
-// nanoseconds they waited in all.
+// The pace's counters: writes held back by the database's write backlog, and
+// the nanoseconds they waited in all.
 var (
 	paceWaitsCounter  = metrics.NewRegisteredCounter("pbt/import/pace/waits", nil)
 	paceWaitedCounter = metrics.NewRegisteredCounter("pbt/import/pace/waited", nil)
 )
 
-// compactionPace holds writes back while a database's level 0 is deep.
+// compactionPace holds writes back while a database is close to stopping
+// writes.
 type compactionPace struct {
 	db   ethdb.CompactionController
 	mu   sync.Mutex
 	next time.Time // until then, the last check stands
 }
 
-// wait returns once the database's level 0 is shallow enough, or with ctx's
+// wait returns once the database's write backlog is low enough, or with ctx's
 // error once it is cancelled.
 func (p *compactionPace) wait(ctx context.Context) error {
 	start := time.Now()
@@ -66,7 +70,7 @@ func (p *compactionPace) wait(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for ctx.Err() == nil && time.Now().After(p.next) {
-		if p.db.Level0Sublevels() <= paceMaxSublevels {
+		if p.db.WriteBacklog() <= paceMaxBacklog {
 			p.next = time.Now().Add(paceInterval)
 			break
 		}
