@@ -38,11 +38,15 @@ func packBytesSlice(bytes []byte, l int) []byte {
 func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 	switch t.T {
 	case UintTy:
-		// make sure to not pack a negative value into a uint type.
+		// make sure to not pack a negative value into a uint type, nor a value
+		// that would be truncated to fit in a 256 bit word.
 		if reflectValue.Kind() == reflect.Pointer {
 			val := new(big.Int).Set(reflectValue.Interface().(*big.Int))
 			if val.Sign() == -1 {
 				return nil, errInvalidSign
+			}
+			if val.BitLen() > 256 {
+				return nil, errOutOfRange
 			}
 		}
 		return packNum(reflectValue), nil
