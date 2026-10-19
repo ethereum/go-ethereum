@@ -749,7 +749,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		p.recheck(addr, nil)
 	}
 	var (
-		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), head))
+		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), head, head.Time))
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
 	if head.ExcessBlobGas != nil {
@@ -1292,7 +1292,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	}
 	// Reset the price heap for the new set of basefee/blobfee pairs
 	var (
-		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), newHead))
+		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), newHead, newHead.Time))
 		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinBlobGasprice))
 	)
 	if newHead.ExcessBlobGas != nil {
@@ -2733,7 +2733,8 @@ func (p *BlobPool) Clear() {
 	p.gappedSource = make(map[common.Hash]common.Address)
 
 	var (
-		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head.Load()))
+		head    = p.head.Load()
+		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), head, head.Time))
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
 	p.evict = newPriceHeap(basefee, blobfee, p.index, p.blockedAccount)

@@ -525,7 +525,7 @@ func (c *Cache) selectTopTxs() []common.Hash {
 		return nil
 	}
 	config := p.chain.Config()
-	baseFee := eip1559.CalcBaseFee(config, head)
+	baseFee := eip1559.CalcBaseFee(config, head, head.Time)
 
 	filter := txpool.PendingFilter{
 		BlobTxs:      true,

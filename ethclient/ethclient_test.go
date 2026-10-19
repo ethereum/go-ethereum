@@ -411,7 +411,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gasTipCap.Cmp(big.NewInt(234375000)) != 0 {
+	if gasTipCap.Cmp(big.NewInt(197482638)) != 0 {
 		t.Fatalf("unexpected gas tip cap: %v", gasTipCap)
 	}
 
@@ -433,13 +433,13 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 		OldestBlock: big.NewInt(2),
 		Reward: [][]*big.Int{
 			{
-				big.NewInt(234375000),
-				big.NewInt(234375000),
+				big.NewInt(197482638),
+				big.NewInt(197482638),
 			},
 		},
 		BaseFee: []*big.Int{
-			big.NewInt(765625000),
-			big.NewInt(671627818),
+			big.NewInt(802517362),
+			big.NewInt(720411925),
 		},
 		GasUsedRatio: []float64{0.008912678667376286},
 	}

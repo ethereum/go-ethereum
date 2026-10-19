@@ -1012,9 +1012,13 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	return nil
 }
 
-// BaseFeeChangeDenominator bounds the amount the base fee can change between blocks.
-func (c *ChainConfig) BaseFeeChangeDenominator() uint64 {
-	return DefaultBaseFeeChangeDenominator
+// BaseFeeChangeFraction bounds the amount the base fee can change between blocks,
+// returned as a numerator and denominator.
+func (c *ChainConfig) BaseFeeChangeFraction(num *big.Int, time uint64) (uint64, uint64) {
+	if c.IsBogota(num, time) {
+		return BaseFeeChangeNumeratorEIP8198, BaseFeeChangeDenominatorEIP8198
+	}
+	return 1, DefaultBaseFeeChangeDenominator
 }
 
 // ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.
