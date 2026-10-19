@@ -21,9 +21,21 @@
 //	[4B payload_len] [metaSize B metadata] [1B opcode] [8B rpc_id] [payload bytes]
 //
 // payload_len is the length of payload bytes only.
-// metadata size depends on metaSize parameter:
-//   - 12 bytes: ClusterMetadata (chain_id uint32 + cluster_peer_id uint64) for master↔slave
-//   - 0 bytes:  no metadata for slave↔slave traffic
+//
+// The frame body layout ([opcode][rpc_id][payload]) is identical for every
+// connection type; only the metadata section varies, selected by the
+// connection layer (pyquarkchain parameterizes this via metadata_class; here
+// callers pick ReadFrame vs ReadFrameNoMeta):
+//
+//   - 12 bytes: ClusterMetadata (chain_id uint32 + cluster_peer_id uint64)
+//     for master↔slave connections
+//   - 0 bytes:  no metadata for slave↔slave connections
+//
+// pyquarkchain additionally defines a 4-byte P2PMetadata for master↔master
+// (cluster-to-cluster) connections. This frame can carry it without
+// structural changes; whether future master↔master P2P reuses this TCP frame
+// or follows goquarkchain's devp2p-based QKCMsg route is a pending protocol
+// decision.
 package wire
 
 import (
@@ -36,6 +48,9 @@ import (
 
 // Frame is a complete protocol frame.
 // Wire layout after metadata: [1B opcode][8B rpc_id][N bytes payload]
+//
+// Meta is only populated on the wire for frames read/written via ReadFrame /
+// WriteFrame; NoMeta variants leave it at the zero value.
 type Frame struct {
 	Meta    ClusterMetadata
 	Opcode  byte
