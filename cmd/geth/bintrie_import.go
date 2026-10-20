@@ -100,9 +100,11 @@ following the chain, start geth with --pbt.import.snapshot, --pbt.import.preimag
 and --pbt.import.anchor instead: the same checks run in the background once the
 anchor is canonical and finalized, scratch goes to <datadir>/geth/pbt-import,
 its sorters hold 1 GB rather than 4 beside the node's own memory, and the
-migration follower adopts the anchor when the import attests. That
-needs a chain config that schedules the binary tree (e.g. --override.genesis);
-debug_migrationProgress reports "importing" until then.
+migration follower adopts the anchor when the import attests. The online
+import consumes its artifacts, emptying each once it is read, unless given
+--pbt.import.keep-artifacts. It needs a chain config that schedules the
+binary tree (e.g. --override.genesis); debug_migrationProgress reports
+"importing" until then.
 `,
 	}
 )
@@ -356,6 +358,18 @@ func (p *pbtImporter) anchorState(ref anchorRef) (*types.Header, string, error) 
 // --pbt.import.force replaces, left there is wiped first, and a failure
 // wipes its own writes.
 func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error {
+	// An artifact an earlier attempt consumed is no use: say so now rather
+	// than fail partway through reading it.
+	for _, path := range []string{p.cfg.Snapshot, p.cfg.Preimages} {
+		if path == "" {
+			continue
+		}
+		if consumed, err := consumedArtifact(path); err != nil {
+			return err
+		} else if consumed {
+			return fmt.Errorf("%s was consumed by an earlier attempt: restart with a fresh copy (--%s keeps the artifacts)", path, utils.PBTImportKeepArtifactsFlag.Name)
+		}
+	}
 	if err := os.RemoveAll(p.tmpDir); err != nil {
 		return err
 	}
@@ -381,11 +395,12 @@ func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error 
 		log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
 			"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
 		_, err = importState(ctx, p.db, importOptions{
-			snapshot:    p.cfg.Snapshot,
-			preimages:   p.cfg.Preimages,
-			anchor:      anchor,
-			yield:       yield,
-			compactions: compactions,
+			snapshot:         p.cfg.Snapshot,
+			preimages:        p.cfg.Preimages,
+			anchor:           anchor,
+			yield:            yield,
+			compactions:      compactions,
+			consumeArtifacts: !p.cfg.KeepArtifacts,
 			conversionOptions: conversionOptions{
 				sortBudget: onlineSortBudget,
 				tmpDir:     p.tmpDir,
@@ -505,6 +520,10 @@ type importOptions struct {
 	// compactions, when set, is capped at importCompactions for the import,
 	// and the namespace's writes wait while its level 0 is deep (bintrie_pace.go).
 	compactions ethdb.CompactionController
+	// consumeArtifacts frees the artifacts' disk space as the import reads
+	// them, each emptied once its pass is over: the online import's default,
+	// never with verifyOnly.
+	consumeArtifacts bool
 	conversionOptions
 }
 
@@ -569,12 +588,13 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 		leaves leafReader = own
 		err    error
 	)
+	consume := opts.consumeArtifacts && !verifyOnly
 	if own == nil {
-		if pre, err = openPreimages(opts.preimages); err != nil {
+		if pre, err = openPreimages(opts.preimages, consume); err != nil {
 			return common.Hash{}, err
 		}
 		defer pre.close()
-		if snap, err = openSnapshot(opts.snapshot); err != nil {
+		if snap, err = openSnapshot(opts.snapshot, consume); err != nil {
 			return common.Hash{}, err
 		}
 		defer snap.close()
@@ -614,6 +634,10 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 		return common.Hash{}, err
 	}
 	defer cand.Close() // a second Close is a no-op; this one covers the error paths
+	if pre != nil && pre.consuming {
+		pre.close()
+		consumeArtifact(opts.preimages)
+	}
 
 	// Phase 2: stream the leaves; rebuild the tree; join every account and
 	// storage leaf to its preimage candidate; collect the MPT re-derivation
@@ -1004,6 +1028,10 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 			return common.Hash{}, fmt.Errorf("snapshot leaves rebuild to %x, its pbtRoot claims %x", root, snap.root)
 		}
 		prog.finish("Verified snapshot consistency", "root", root, "leaves", stats.leaves.Load(), "digest", snap.digest())
+		if snap.consuming {
+			snap.close()
+			consumeArtifact(opts.snapshot)
+		}
 	} else {
 		prog.finish("Built the binary tree", "root", root, "leaves", stats.leaves.Load())
 	}

@@ -512,7 +512,7 @@ type snapRecord struct {
 
 func readSnapshotRecords(t *testing.T, path string) (common.Hash, []snapRecord) {
 	t.Helper()
-	sr, err := openSnapshot(path)
+	sr, err := openSnapshot(path, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,7 +614,7 @@ type preRecord struct {
 
 func readPreimageRecords(t *testing.T, path string) []preRecord {
 	t.Helper()
-	pr, err := openPreimages(path)
+	pr, err := openPreimages(path, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -242,6 +242,9 @@ type PBTImportConfig struct {
 	Anchor    string `toml:",omitempty"`
 	Workers   int    `toml:",omitempty"` // 0 picks the importer's default
 	Force     bool   `toml:",omitempty"` // replace a tree anchored elsewhere
+	// KeepArtifacts keeps the snapshot and preimage file; by default the
+	// node empties each once it has read it, freeing its disk space.
+	KeepArtifacts bool `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

@@ -337,6 +337,7 @@ type scanPlan struct {
 	sources []leafSource
 	keys    []keySource
 	release func() // frees the sources once the scan is done, if they hold anything
+	scanned func() // runs once the scan has read every key, before the build: consumes the keys' file, if set
 }
 
 // splitPreimages opens a preimage file and cuts it into at most n pieces of
@@ -541,9 +542,12 @@ func scanState(ctx context.Context, chaindb ethdb.Database, plan scanPlan, preim
 	if err := g.Wait(); err != nil {
 		return nil, nil, nil, err
 	}
-	// Nothing reads the source past the scan.
+	// Nothing reads the source, nor the keys, past the scan.
 	if plan.release != nil {
 		plan.release()
+	}
+	if plan.scanned != nil {
+		plan.scanned()
 	}
 	if preimages != nil {
 		if err := preimages.join(writers[1:]); err != nil {

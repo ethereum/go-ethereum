@@ -305,7 +305,7 @@ func pairBinaryRoot(b *testing.B, dir string) common.Hash {
 	if blob, err := os.ReadFile(cached); err == nil {
 		return common.BytesToHash(blob)
 	}
-	sr, err := openSnapshot(filepath.Join(dir, "snapshot.bin"))
+	sr, err := openSnapshot(filepath.Join(dir, "snapshot.bin"), false)
 	if err != nil {
 		b.Fatal(err)
 	}

@@ -372,7 +372,7 @@ func TestArtifactGoldenDigests(t *testing.T) {
 func TestArtifactReaders(t *testing.T) {
 	_, snapPath, prePath := convertWithArtifacts(t, artifactAlloc(), 0)
 
-	sr, err := openSnapshot(snapPath)
+	sr, err := openSnapshot(snapPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +400,7 @@ func TestArtifactReaders(t *testing.T) {
 		}
 	}
 
-	pr, err := openPreimages(prePath)
+	pr, err := openPreimages(prePath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func TestArtifactReaders(t *testing.T) {
 		if err := os.WriteFile(bad, tamper.mod(append([]byte{}, blob...)), 0600); err != nil {
 			t.Fatal(err)
 		}
-		pr2, err := openPreimages(bad)
+		pr2, err := openPreimages(bad, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -682,7 +682,7 @@ func TestArtifactReadersReject(t *testing.T) {
 			{"byte after the pbtRoot trailer", rawSnapshot{trailer: make([]byte, common.HashLength+1)}, "trailing byte"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				sr, err := openSnapshot(tc.snap.write(t))
+				sr, err := openSnapshot(tc.snap.write(t), false)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -732,7 +732,7 @@ func TestArtifactReadersReject(t *testing.T) {
 			{"trailing partial header", []rawPreRecord{{addr: addr, count: -1}, {addr: highAddr[:1], count: -1}}, "truncated"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				pr, err := openPreimages(rawPreimages(t, tc.recs))
+				pr, err := openPreimages(rawPreimages(t, tc.recs), false)
 				if err != nil {
 					t.Fatal(err)
 				}

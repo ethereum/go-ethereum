@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"slices"
 	"sync/atomic"
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/pagecache"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
@@ -634,14 +636,15 @@ func (pf *preimageFile) abort() {
 // ascending storage accounts and group stems, and the six ordering MUSTs,
 // which one strictly-ascending check over the derived keys covers.
 type snapshotReader struct {
-	f      *os.File
-	size   int64
-	read   atomic.Uint64 // bytes read from f, for progress reports
-	hasher crypto.KeccakState
-	br     *bufio.Reader
-	root   common.Hash // the claimed pbtRoot, known once next has returned io.EOF
-	zone   int         // the last record's zone, -1 before the first
-	ended  bool        // the end tag and the root have been read
+	f         *os.File
+	size      int64
+	consuming bool          // f is punched out as it is read: empty it once read (consumeArtifact)
+	read      atomic.Uint64 // bytes read from f, for progress reports
+	hasher    crypto.KeccakState
+	br        *bufio.Reader
+	root      common.Hash // the claimed pbtRoot, known once next has returned io.EOF
+	zone      int         // the last record's zone, -1 before the first
+	ended     bool        // the end tag and the root have been read
 
 	pending    []snapshotLeaf
 	pendIdx    int
@@ -659,9 +662,10 @@ type snapshotReader struct {
 	prevKey []byte
 }
 
-// openSnapshot opens the artifact for next to read record by record.
-func openSnapshot(path string) (*snapshotReader, error) {
-	f, err := os.Open(path)
+// openSnapshot opens the artifact for next to read record by record; with
+// consume, its disk space is freed behind the reader (openArtifact).
+func openSnapshot(path string, consume bool) (*snapshotReader, error) {
+	f, r, consuming, err := openArtifact(path, consume)
 	if err != nil {
 		return nil, err
 	}
@@ -670,9 +674,64 @@ func openSnapshot(path string) (*snapshotReader, error) {
 		f.Close()
 		return nil, err
 	}
-	sr := &snapshotReader{f: f, size: info.Size(), hasher: crypto.NewKeccakState(), zone: -1}
-	sr.br = bufio.NewReaderSize(io.TeeReader(countingReader{pagecache.NewReader(f), &sr.read}, sr.hasher), 1<<20)
+	sr := &snapshotReader{f: f, size: info.Size(), consuming: consuming, hasher: crypto.NewKeccakState(), zone: -1}
+	sr.br = bufio.NewReaderSize(io.TeeReader(countingReader{r, &sr.read}, sr.hasher), 1<<20)
 	return sr, nil
+}
+
+// openArtifact opens an artifact read once from start to end. To consume it,
+// it is opened for writing, so the reader can punch out what it has read
+// (pagecache.NewConsumingReader); a file that can't be written (permissions,
+// a read-only mount) is read as is, and kept.
+func openArtifact(path string, consume bool) (f *os.File, r io.Reader, consuming bool, err error) {
+	if consume {
+		if f, err = os.OpenFile(path, os.O_RDWR, 0); err == nil {
+			return f, pagecache.NewConsumingReader(f), true, nil
+		}
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil, false, err
+		}
+		log.Warn("Artifact can't be written, keeping it", "path", path, "err", err)
+	}
+	if f, err = os.Open(path); err != nil {
+		return nil, nil, false, err
+	}
+	return f, pagecache.NewReader(f), false, nil
+}
+
+// consumeArtifact empties an artifact the import has read in full, so its
+// disk space comes back; the name stays, so that a restart with the same
+// flags finds the file and recognises it as consumed (consumedArtifact).
+func consumeArtifact(path string) {
+	if err := os.Truncate(path, 0); err != nil {
+		log.Warn("Failed to empty a consumed artifact", "path", path, "err", err)
+		return
+	}
+	log.Info("Emptied a consumed artifact", "path", path)
+}
+
+// consumedArtifact reports whether an earlier attempt consumed the artifact
+// at path: emptied, or punched from the start by a reader that was stopped
+// midway, which reads back as zeros. Neither artifact starts with 32 zero
+// bytes: both open on the lowest account hash, after a kind byte in the
+// snapshot.
+func consumedArtifact(path string) (bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	var head [common.HashLength]byte
+	switch _, err := io.ReadFull(f, head[:]); err {
+	case io.EOF:
+		return true, nil
+	case nil:
+		return head == [common.HashLength]byte{}, nil
+	case io.ErrUnexpectedEOF:
+		return false, nil
+	default:
+		return false, err
+	}
 }
 
 // countingReader counts the bytes read through it.
@@ -813,20 +872,22 @@ func (sr *snapshotReader) close() { sr.f.Close() }
 // no record is ever read whole. The order is preimageOrder's to check. A
 // piece (see preimagePiece) reads one span of records and hashes nothing.
 type preimageReader struct {
-	f       *os.File
-	size    int64
-	read    atomic.Uint64 // bytes read from f, for progress reports
-	hasher  crypto.KeccakState
-	r       *bufio.Reader
-	left    int64                          // bytes after the current record
-	records uint64                         // records begun
-	pending int64                          // slot keys of the current record not yet read
-	header  [preimageRecordHeaderSize]byte // nextRecord's buffer: a local would be allocated per record
+	f         *os.File
+	size      int64
+	consuming bool          // f is punched out as it is read: empty it once read (consumeArtifact)
+	read      atomic.Uint64 // bytes read from f, for progress reports
+	hasher    crypto.KeccakState
+	r         *bufio.Reader
+	left      int64                          // bytes after the current record
+	records   uint64                         // records begun
+	pending   int64                          // slot keys of the current record not yet read
+	header    [preimageRecordHeaderSize]byte // nextRecord's buffer: a local would be allocated per record
 }
 
-// openPreimages opens the preimage file.
-func openPreimages(path string) (*preimageReader, error) {
-	f, err := os.Open(path)
+// openPreimages opens the preimage file; with consume, its disk space is
+// freed behind the reader (openArtifact).
+func openPreimages(path string, consume bool) (*preimageReader, error) {
+	f, r, consuming, err := openArtifact(path, consume)
 	if err != nil {
 		return nil, err
 	}
@@ -835,8 +896,8 @@ func openPreimages(path string) (*preimageReader, error) {
 		f.Close()
 		return nil, err
 	}
-	pr := &preimageReader{f: f, size: size.Size(), hasher: crypto.NewKeccakState(), left: size.Size()}
-	pr.r = bufio.NewReaderSize(io.TeeReader(countingReader{pagecache.NewReader(f), &pr.read}, pr.hasher), 1<<20)
+	pr := &preimageReader{f: f, size: size.Size(), consuming: consuming, hasher: crypto.NewKeccakState(), left: size.Size()}
+	pr.r = bufio.NewReaderSize(io.TeeReader(countingReader{r, &pr.read}, pr.hasher), 1<<20)
 	return pr, nil
 }
 
