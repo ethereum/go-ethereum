@@ -126,6 +126,8 @@ func (v *BlockValidator) validateXShardDeposits(block *types.Block, receipts typ
 	}
 	if next == nil {
 		cursor = deposits.Cursor()
+		// Require inclusion while the next deposit fits so block producers cannot
+		// arbitrarily defer pending cross-shard deposits.
 	} else if next.Gas <= extra.XShardGasLimit-gasUsed {
 		return fmt.Errorf("%w: the deposit of block %x log %d fits in the %d gas left", ErrXShardGas, next.SourceBlockHash, next.SourceLogIndex, extra.XShardGasLimit-gasUsed)
 	}
