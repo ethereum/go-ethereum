@@ -330,12 +330,21 @@ func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	if env.ParentBaseFee == nil || env.Number == 0 {
 		return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'parentBaseFee' in env section"))
 	}
+	// The Bogota base fee is derived from the slot spacing of the parent and block.
+	if chainConfig.IsBogota(big.NewInt(int64(env.Number)), env.Timestamp) && (env.SlotNumber == nil || env.ParentSlotNumber == nil) {
+		return NewError(ErrorConfig, errors.New("EIP-8198 config but missing 'slotNumber' or 'parentSlotNumber' in env section"))
+	}
 	env.BaseFee = eip1559.CalcBaseFee(chainConfig, &types.Header{
-		Number:   new(big.Int).SetUint64(env.Number - 1),
-		BaseFee:  env.ParentBaseFee,
-		GasUsed:  env.ParentGasUsed,
-		GasLimit: env.ParentGasLimit,
-	}, env.Timestamp)
+		Number:     new(big.Int).SetUint64(env.Number - 1),
+		Time:       env.ParentTimestamp,
+		BaseFee:    env.ParentBaseFee,
+		GasUsed:    env.ParentGasUsed,
+		GasLimit:   env.ParentGasLimit,
+		SlotNumber: env.ParentSlotNumber,
+	}, &types.Header{
+		Time:       env.Timestamp,
+		SlotNumber: env.SlotNumber,
+	})
 	return nil
 }
 

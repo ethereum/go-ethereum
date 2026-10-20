@@ -346,7 +346,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// Base fee could have been overridden.
 		if header.BaseFee == nil {
 			if sim.validate {
-				header.BaseFee = eip1559.CalcBaseFee(sim.chainConfig, parent, header.Time)
+				header.BaseFee = eip1559.CalcBaseFee(sim.chainConfig, parent, header)
 			} else {
 				header.BaseFee = big.NewInt(0)
 			}
