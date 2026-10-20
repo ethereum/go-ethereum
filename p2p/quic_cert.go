@@ -70,10 +70,6 @@ func (qh quicCertHash) matches(h [sha256.Size]byte) bool {
 // quicCertRotator maintains the node's current and next TLS certificate.
 // Both hashes are announced in "qh", so a node record fetched up to one
 // rotation ago still verifies the certificate presented after a rotation.
-//
-// TODO: peers whose node record is more than one rotation stale (e.g. from a
-// DNS discovery list) will not match the current certificate. Widen the
-// tolerance if that becomes a problem, for example by announcing more hashes.
 type quicCertRotator struct {
 	mu            sync.Mutex
 	current, next *tls.Certificate
