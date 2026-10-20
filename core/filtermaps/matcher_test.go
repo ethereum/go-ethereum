@@ -127,9 +127,9 @@ func (b *hookBackend) GetLogByLvIndex(ctx context.Context, lvIndex uint64) (*typ
 	return log, err
 }
 
-// newCancelTestSetup creates an indexed test chain and returns a matcher backend
+// newMatcherTestSetup creates an indexed test chain and returns a matcher backend
 // along with an address filter matching at least one of its logs.
-func newCancelTestSetup(t *testing.T) (*testSetup, *FilterMapsMatcherBackend, []common.Address) {
+func newMatcherTestSetup(t *testing.T) (*testSetup, *FilterMapsMatcherBackend, []common.Address) {
 	ts := newTestSetup(t)
 	ts.chain.addBlocks(100, 10, 10, 4, true)
 	ts.setHistory(0, false)
@@ -147,13 +147,13 @@ func newCancelTestSetup(t *testing.T) (*testSetup, *FilterMapsMatcherBackend, []
 	return nil, nil, nil
 }
 
-// waitSearch waits for a cancelled search to return its error.
+// waitSearch waits for a log search to return its error.
 func waitSearch(t *testing.T, errCh chan error) error {
 	select {
 	case err := <-errCh:
 		return err
 	case <-time.After(10 * time.Second):
-		t.Fatal("Cancelled log search did not return")
+		t.Fatal("Log search did not return")
 		return nil
 	}
 }
@@ -161,7 +161,7 @@ func waitSearch(t *testing.T, errCh chan error) error {
 // TestMatcherCancel checks that a cancelled search returns with the context
 // error and does not process any further requests.
 func TestMatcherCancel(t *testing.T) {
-	ts, mb, addresses := newCancelTestSetup(t)
+	ts, mb, addresses := newMatcherTestSetup(t)
 	defer ts.close()
 	defer mb.Close()
 
@@ -203,7 +203,7 @@ func TestMatcherCancel(t *testing.T) {
 // the indexer to release the index lock do not proceed once the lock is
 // released if the search has been cancelled in the meantime.
 func TestMatcherCancelWhileWaitingForIndexLock(t *testing.T) {
-	ts, mb, addresses := newCancelTestSetup(t)
+	ts, mb, addresses := newMatcherTestSetup(t)
 	defer ts.close()
 	defer mb.Close()
 

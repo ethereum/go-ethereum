@@ -524,20 +524,34 @@ func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, ne
 // Note that this function assumes that the indexer read lock is being held when
 // called from outside the indexerLoop goroutine.
 func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
+	blockNumber, lvPointer, ok, err := f.getLogBlock(lvIndex)
+	if !ok || err != nil {
+		return nil, err
+	}
+	return f.getLogInBlock(f.indexedView, blockNumber, lvPointer, lvIndex)
+}
+
+// getLogBlock returns the number of the block containing the given log value
+// index, along with the log value pointer of the block. If the index is outside
+// the indexed range then false is returned.
+//
+// Note that this function assumes that the indexer read lock is being held when
+// called from outside the indexerLoop goroutine.
+func (f *FilterMaps) getLogBlock(lvIndex uint64) (uint64, uint64, bool, error) {
 	mapIndex := uint32(lvIndex >> f.logValuesPerMap)
 	if !f.indexedRange.maps.Includes(mapIndex) {
-		return nil, nil
+		return 0, 0, false, nil
 	}
 	// find possible block range based on map to block pointers
 	lastBlockNumber, _, err := f.getLastBlockOfMap(mapIndex)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve last block of map %d containing searched log value index %d: %v", mapIndex, lvIndex, err)
+		return 0, 0, false, fmt.Errorf("failed to retrieve last block of map %d containing searched log value index %d: %v", mapIndex, lvIndex, err)
 	}
 	var firstBlockNumber uint64
 	if mapIndex > 0 {
 		firstBlockNumber, _, err = f.getLastBlockOfMap(mapIndex - 1)
 		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve last block of map %d before searched log value index %d: %v", mapIndex, lvIndex, err)
+			return 0, 0, false, fmt.Errorf("failed to retrieve last block of map %d before searched log value index %d: %v", mapIndex, lvIndex, err)
 		}
 	}
 	if firstBlockNumber < f.indexedRange.blocks.First() {
@@ -548,7 +562,7 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 		midBlockNumber := (firstBlockNumber + lastBlockNumber + 1) / 2
 		midLvPointer, err := f.getBlockLvPointer(midBlockNumber)
 		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve log value pointer of block %d while binary searching log value index %d: %v", midBlockNumber, lvIndex, err)
+			return 0, 0, false, fmt.Errorf("failed to retrieve log value pointer of block %d while binary searching log value index %d: %v", midBlockNumber, lvIndex, err)
 		}
 		if lvIndex < midLvPointer {
 			lastBlockNumber = midBlockNumber - 1
@@ -556,14 +570,25 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 			firstBlockNumber = midBlockNumber
 		}
 	}
-	// get block receipts
-	receipts := f.indexedView.Receipts(firstBlockNumber)
-	if receipts == nil {
-		return nil, fmt.Errorf("failed to retrieve receipts for block %d containing searched log value index %d: %v", firstBlockNumber, lvIndex, err)
-	}
 	lvPointer, err := f.getBlockLvPointer(firstBlockNumber)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve log value pointer of block %d containing searched log value index %d: %v", firstBlockNumber, lvIndex, err)
+		return 0, 0, false, fmt.Errorf("failed to retrieve log value pointer of block %d containing searched log value index %d: %v", firstBlockNumber, lvIndex, err)
+	}
+	return firstBlockNumber, lvPointer, true, nil
+}
+
+// getLogInBlock returns the log at the given log value index, located in the
+// given block of the chain view. The log value pointer of the block should be
+// retrieved from the log index consistent with the chain view. If the index
+// does not point to the first log value entry of a log then no log and no error
+// are returned as this can happen when the log value index was a false positive.
+//
+// Note that this function does not access the log index, therefore it does not
+// require the indexer read lock.
+func (f *FilterMaps) getLogInBlock(view *ChainView, blockNumber, lvPointer, lvIndex uint64) (*types.Log, error) {
+	receipts := view.Receipts(blockNumber)
+	if receipts == nil {
+		return nil, fmt.Errorf("failed to retrieve receipts for block %d containing searched log value index %d", blockNumber, lvIndex)
 	}
 	// iterate through receipts to find the exact log starting at lvIndex
 	for _, receipt := range receipts {

@@ -447,6 +447,9 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 				rows = append(rows, nil)
 			}
 		}
+		if len(mapIndices) == 0 {
+			continue
+		}
 		if err := r.f.storeFilterMapRows(batch, mapIndices, rowIndex, rows); err != nil {
 			return fmt.Errorf("failed to store filter maps %v row %d: %v", mapIndices, rowIndex, err)
 		}

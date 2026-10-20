@@ -121,14 +121,23 @@ func (fm *FilterMapsMatcherBackend) GetBlockLvPointer(ctx context.Context, block
 // GetLogByLvIndex implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) GetLogByLvIndex(ctx context.Context, lvIndex uint64) (*types.Log, error) {
 	fm.f.indexLock.RLock()
-	defer fm.f.indexLock.RUnlock()
 
 	// The search might have been cancelled while waiting for the indexer to
 	// release the lock.
 	if err := ctx.Err(); err != nil {
+		fm.f.indexLock.RUnlock()
 		return nil, err
 	}
-	return fm.f.getLogByLvIndex(lvIndex)
+	view := fm.f.indexedView
+	blockNumber, lvPointer, ok, err := fm.f.getLogBlock(lvIndex)
+	fm.f.indexLock.RUnlock()
+
+	if !ok || err != nil {
+		return nil, err
+	}
+	// Retrieving the receipts is expensive and does not access the log index.
+	// Do it without holding the lock so that it does not delay the indexer.
+	return fm.f.getLogInBlock(view, blockNumber, lvPointer, lvIndex)
 }
 
 // synced signals to the matcher that has triggered a synchronisation that it
