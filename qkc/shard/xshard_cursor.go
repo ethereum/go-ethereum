@@ -93,11 +93,14 @@ func newXShardCursor(config *params.QuarkChainConfig, chain XShardChain, pos typ
 	if c.maxRoot == nil {
 		return nil, fmt.Errorf("%w: %x", ErrUnknownCursorRoot, maxRoot)
 	}
-	// Only heights past the tip are EOF. A missing root below it must not let
-	// the cursor skip deposits and advance as if the walk were complete.
+	// Only heights past the tip are EOF.
 	if pos.RootBlockHeight > c.maxRoot.NumberU64() {
 		return c, nil
 	}
+	// ShardChain.validateRootReference checks root headers from maxRoot back
+	// to the parent's root reference before execution. The cursor may lag
+	// behind that reference, outside the checked range. This additional
+	// consistency check rejects missing local root data instead of reporting EOF.
 	if c.root = chain.RootBlockByNumber(maxRoot, pos.RootBlockHeight); c.root == nil {
 		return nil, fmt.Errorf("%w: missing root block #%d below %x", ErrInconsistentClusterState, pos.RootBlockHeight, maxRoot)
 	}
