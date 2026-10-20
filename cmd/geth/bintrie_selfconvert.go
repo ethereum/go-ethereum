@@ -46,8 +46,8 @@ import (
 // it last persisted, P >= a, with the keys of the file plus those blocks
 // a+1..P wrote. Replaying a+1..P over the tree anchored at a yields the tree
 // converted at P (EIP-8347), so the tree is attested at P, once P is
-// finalized, and the follower takes it from there. The build steps aside for
-// blocks through yield.
+// finalized, and the follower takes it from there. The conversion steps aside
+// for blocks through yield.
 func (p *pbtImporter) convertAt(ctx context.Context, a *types.Header, yield *blockYield) error {
 	workers := cmp.Or(p.cfg.Workers, utils.PBTImportWorkersFlag.Value)
 	f, ranges, pieces, err := splitPreimages(p.cfg.Preimages, workers)
