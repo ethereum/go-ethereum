@@ -5017,6 +5017,152 @@ func TestStateMethodsDefaultToLatest(t *testing.T) {
 		[]any{map[common.Address][]common.Hash{acc: {slot}}})
 }
 
+// stateErrBackend fails every state lookup with err, while headers resolve.
+type stateErrBackend struct {
+	*testBackend
+	err      error
+	progress ethereum.SyncProgress
+}
+
+func (b stateErrBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
+	return b.progress
+}
+
+func (b stateErrBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
+	return nil, nil, b.err
+}
+
+// historicStateBackend falls back to historic state, like the eth backend.
+type historicStateBackend struct {
+	*testBackend
+}
+
+func (b historicStateBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
+	header, err := b.HeaderByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, nil, err
+	}
+	if header == nil {
+		return nil, nil, errors.New("header not found")
+	}
+	statedb, err := b.chain.StateAt(header.Root, header.Number, header.Time)
+	if err != nil {
+		statedb, err = b.chain.HistoricState(header.Root, header.Number, header.Time)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return statedb, header, nil
+}
+
+func proofErrorCode(err error) int {
+	var de interface{ ErrorCode() int }
+	if !errors.As(err, &de) {
+		return 0
+	}
+	return de.ErrorCode()
+}
+
+func TestGetProofStateUnavailable(t *testing.T) {
+	t.Parallel()
+
+	genesis := &core.Genesis{Config: params.MergedTestChainConfig, Difficulty: common.Big0}
+	backend := newTestBackend(t, 2, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	var (
+		addr     = common.Address{0x11}
+		missing  = errors.New("missing trie node")
+		syncing  = ethereum.SyncProgress{CurrentBlock: 1, HighestBlock: 2}
+		indexing = ethereum.SyncProgress{StateIndexRemaining: 1}
+	)
+	for _, tc := range []struct {
+		name     string
+		progress ethereum.SyncProgress
+		block    rpc.BlockNumber
+		wantCode int
+		wantErr  error
+	}{
+		{"pruned state", ethereum.SyncProgress{}, 1, 4444, nil},
+		{"syncing", syncing, 1, 0, missing},
+		{"indexing history", indexing, 1, 0, missing},
+		{"header not found", ethereum.SyncProgress{}, 100, 0, missing},
+		{"pending", ethereum.SyncProgress{}, rpc.PendingBlockNumber, 0, missing},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := NewBlockChainAPI(stateErrBackend{backend, missing, tc.progress})
+			bn := rpc.BlockNumberOrHashWithNumber(tc.block)
+			_, err := api.GetProof(context.Background(), addr, nil, &bn)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if code := proofErrorCode(err); code != tc.wantCode {
+				t.Fatalf("error code mismatch: have %d, want %d (err: %v)", code, tc.wantCode, err)
+			}
+			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error mismatch: have %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestGetProofStateErrorPending(t *testing.T) {
+	t.Parallel()
+
+	api := NewBlockChainAPI(stateErrBackend{})
+	missing := errors.New("missing trie node")
+	pending := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	if err := api.proofStateError(context.Background(), pending, missing); err != missing {
+		t.Fatalf("pending error mismatch: have %v, want %v", err, missing)
+	}
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	if code := proofErrorCode(api.proofStateError(context.Background(), latest, missing)); code != 4444 {
+		t.Fatalf("latest error code mismatch: have %d, want 4444", code)
+	}
+}
+
+// TestGetProofHistoricStateUnavailable checks that a block whose state the node
+// does not keep, here outside the in-memory layers with no history index, is
+// reported as pruned, while the head still serves proofs.
+func TestGetProofHistoricStateUnavailable(t *testing.T) {
+	t.Parallel()
+
+	var (
+		engine  = beacon.New(ethash.NewFaker())
+		genesis = &core.Genesis{
+			Config:     params.MergedTestChainConfig,
+			Difficulty: common.Big0,
+			Alloc:      core.SystemContractAllocs(),
+		}
+		// The default config is not archive mode, so no history index exists
+		// and block 1 is outside the in-memory layers.
+		cfg = core.DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	)
+	db := rawdb.NewMemoryDatabase()
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, 2*state.TriesInMemory, func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	chain, err := core.NewBlockChain(db, genesis, engine, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert: %v", n, err)
+	}
+
+	api := NewBlockChainAPI(historicStateBackend{&testBackend{db: db, chain: chain}})
+	old := rpc.BlockNumberOrHashWithNumber(1)
+	_, err = api.GetProof(context.Background(), common.Address{0x11}, nil, &old)
+	if code := proofErrorCode(err); code != 4444 {
+		t.Fatalf("error code mismatch: have %d, want 4444 (err: %v)", code, err)
+	}
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	if _, err := api.GetProof(context.Background(), common.Address{0x11}, nil, &latest); err != nil {
+		t.Fatalf("latest proof failed: %v", err)
+	}
+}
+
 // TestCreateAccessListAuthorizationGas checks that eth_createAccessList accepts
 // the gas limit returned by eth_estimateGas for a set-code transaction with
 // several authorizations, both before and after Amsterdam.
