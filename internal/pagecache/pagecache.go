@@ -19,6 +19,7 @@
 // written data piles up as gigabytes of dirty pages flushed in bursts, which
 // stall every read meanwhile, and both written and read data crowd the node's
 // own pages out of the page cache. On Linux a Writer sends each window to
-// disk as soon as it is written and a Reader drops each window behind it;
-// elsewhere both are the file itself.
+// disk as soon as it is written and a Reader drops each window behind it, a
+// consuming Reader freeing it on disk as well; elsewhere both are the file
+// itself.
 package pagecache

@@ -63,10 +63,11 @@ func (w *Writer) Write(p []byte) (int, error) {
 }
 
 // Reader reads a file, dropping what it has read from the page cache a
-// window at a time.
+// window at a time, and with consume, freeing it on disk too.
 type Reader struct {
 	f            *os.File
 	off, dropped int64
+	consume      bool
 }
 
 // NewReader returns a Reader of f from its current offset.
@@ -75,12 +76,26 @@ func NewReader(f *os.File) *Reader {
 	return &Reader{f: f, off: off, dropped: off}
 }
 
+// NewConsumingReader returns a Reader of f from its current offset that also
+// punches what it has read out of the file, a window at a time, so a file
+// read once gives its disk space back as it goes. f must be open for writing;
+// where the file system can't punch holes, or f is read-only, the space
+// comes back only once the file is removed or truncated.
+func NewConsumingReader(f *os.File) *Reader {
+	r := NewReader(f)
+	r.consume = true
+	return r
+}
+
 func (r *Reader) Read(p []byte) (int, error) {
 	n, err := r.f.Read(p)
 	r.off += int64(n)
 	if r.off-r.dropped >= window || (err != nil && r.off > r.dropped) {
 		control(r.f, func(fd int) {
 			unix.Fadvise(fd, r.dropped, r.off-r.dropped, unix.FADV_DONTNEED)
+			if r.consume {
+				unix.Fallocate(fd, unix.FALLOC_FL_PUNCH_HOLE|unix.FALLOC_FL_KEEP_SIZE, r.dropped, r.off-r.dropped)
+			}
 		})
 		r.dropped = r.off
 	}

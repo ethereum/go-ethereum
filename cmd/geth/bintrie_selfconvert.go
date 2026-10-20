@@ -80,6 +80,9 @@ func (p *pbtImporter) convertAt(ctx context.Context, a *types.Header, yield *blo
 		}
 	}()
 	plan := scanPlan{ranges: ranges, release: release}
+	if !p.cfg.KeepArtifacts {
+		plan.scanned = func() { consumeArtifact(p.cfg.Preimages) }
+	}
 	for i := range ranges {
 		keys, err := newDriftKeys(pieces[i], lists[i])
 		if err != nil {

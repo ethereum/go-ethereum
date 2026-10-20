@@ -301,6 +301,11 @@ var (
 		Usage:    "Let the snapshot import replace a binary tree the database holds at another anchor",
 		Category: flags.EthCategory,
 	}
+	PBTImportKeepArtifactsFlag = &cli.BoolFlag{
+		Name:     "pbt.import.keep-artifacts",
+		Usage:    "Keep the snapshot and preimage file once the background import or self-conversion has read them; by default each is emptied as it is consumed, so its disk space comes back during the import",
+		Category: flags.EthCategory,
+	}
 	SyncModeFlag = &cli.StringFlag{
 		Name:     "syncmode",
 		Usage:    `Blockchain sync mode ("snap" or "full")`,
@@ -1894,6 +1899,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(PBTImportForceFlag.Name) {
 		cfg.PBTImport.Force = ctx.Bool(PBTImportForceFlag.Name)
+	}
+	if ctx.IsSet(PBTImportKeepArtifactsFlag.Name) {
+		cfg.PBTImport.KeepArtifacts = ctx.Bool(PBTImportKeepArtifactsFlag.Name)
 	}
 	if imp := cfg.PBTImport; imp.Snapshot != "" || imp.Preimages != "" || imp.Anchor != "" {
 		if imp.Preimages == "" || imp.Anchor == "" {

@@ -31,3 +31,7 @@ type Reader = os.File
 
 // NewReader returns f.
 func NewReader(f *os.File) *Reader { return f }
+
+// NewConsumingReader returns f: only Linux has the call to punch the file
+// out behind the reader.
+func NewConsumingReader(f *os.File) *Reader { return f }

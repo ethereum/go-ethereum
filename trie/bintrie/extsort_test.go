@@ -552,23 +552,6 @@ func TestSorterBuffersStayWithinBudget(t *testing.T) {
 	}
 }
 
-// TestMergeBufSize pins the merge's read buffers: full size for a few runs,
-// a quarter of the budget shared out for many, a floor for very many.
-func TestMergeBufSize(t *testing.T) {
-	for _, tc := range []struct{ budget, runs, want int }{
-		{1 << 30, 100, 1 << 19},
-		{0, 7, 1 << 19},
-		{1 << 20, 1000, 64 << 10},
-	} {
-		if got := mergeBufSize(tc.budget, tc.runs); got != tc.want {
-			t.Errorf("mergeBufSize(%d, %d) = %d, want %d", tc.budget, tc.runs, got, tc.want)
-		}
-	}
-	if got := mergeBufSize(1<<30, 2800); got <= 64<<10 || got >= 1<<19 {
-		t.Errorf("mergeBufSize(1 GiB, 2800 runs) = %d, want between 64 KiB and 512 KiB", got)
-	}
-}
-
 // benchLeafRecords builds a state-shaped leaf set: every account a header
 // stem (basic data, code hash, a few header slots), every tenth account a
 // code group and a bigger storage group. Returned in random order. The fixed

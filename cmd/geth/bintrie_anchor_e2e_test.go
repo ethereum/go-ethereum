@@ -236,9 +236,9 @@ func (f *onlineFixture) importer(t *testing.T, chain *core.BlockChain, db ethdb.
 // TestOnlineImportFollowsTheChain: the import waits for its anchor to be
 // finalized, clears an interrupted run's leftovers, and runs while blocks
 // keep landing; once it attests, the follower adopts the anchor and reaches
-// the head with the root a genesis-seeded follower produced. Restarting with
-// the same flags imports nothing; another anchor needs force, which replaces
-// the tree.
+// the head with the root a genesis-seeded follower produced, and the pair it
+// consumed is left empty. Restarting with the same flags imports nothing;
+// another anchor needs force, which replaces the tree.
 func TestOnlineImportFollowsTheChain(t *testing.T) {
 	f := newOnlineFixture(t, 3, 4)
 	db := rawdb.NewMemoryDatabase()
@@ -272,6 +272,11 @@ func TestOnlineImportFollowsTheChain(t *testing.T) {
 	}
 	if len(rawdb.ReadAccountTrieNode(pbtdb, leftover)) != 0 {
 		t.Fatal("the interrupted run's leftovers survived")
+	}
+	for _, path := range f.pairs[3] {
+		if info, err := os.Stat(path); err != nil || info.Size() != 0 {
+			t.Fatalf("the import did not consume %s (err %v)", path, err)
+		}
 	}
 	p.Stop()
 	chain.Stop()
@@ -356,9 +361,10 @@ func TestOnlineImportNeverCanonicalAnchor(t *testing.T) {
 
 // TestOnlineImportStopAndFailure: stopping a waiting import keeps the hold for
 // the next start; an anchor that leaves the canonical chain before the
-// attestation is refused; and a pair that fails verification after writing
+// attestation is refused; a pair that fails verification after writing
 // leaves the tree held and its namespace clean, scratch included, while the
-// chain keeps inserting blocks.
+// chain keeps inserting blocks; and a restart over the pair that failed run
+// consumed says so instead of reading it.
 func TestOnlineImportStopAndFailure(t *testing.T) {
 	f := newOnlineFixture(t, 3)
 	db := rawdb.NewMemoryDatabase()
@@ -379,6 +385,7 @@ func TestOnlineImportStopAndFailure(t *testing.T) {
 
 	anchor := f.blocks[3]
 	rawdb.WriteCanonicalHash(db, common.Hash{0x0b, 0xad}, anchor.NumberU64())
+	p.cfg.KeepArtifacts = true // the pair serves the next run too
 	err := p.importAt(context.Background(), anchor.Header())
 	rawdb.WriteCanonicalHash(db, anchor.Hash(), anchor.NumberU64())
 	if err == nil || !strings.Contains(err.Error(), "left the canonical chain") {
@@ -417,4 +424,14 @@ func TestOnlineImportStopAndFailure(t *testing.T) {
 		t.Fatal("a failed import released the tree")
 	}
 	insertBlocks(t, chain, f.blocks[5:])
+
+	p = f.importer(t, chain, db, 3, false)
+	p.cfg.Anchor = f.blocks[4].Hash().Hex()
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+	<-p.done
+	if prog := chain.MigrationProgress(); prog.Phase != "importFailed" || prog.Binary == nil || !strings.Contains(prog.Binary.Error, "consumed") {
+		t.Fatalf("progress %+v, want importFailed naming the consumed pair", prog)
+	}
 }

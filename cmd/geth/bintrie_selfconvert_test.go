@@ -263,6 +263,7 @@ func driftChain(t *testing.T, n int) (*core.Genesis, consensus.Engine, []*types.
 // it has persisted, resolving the keys that came and went since A through
 // the access lists, attests P once finalized, and the follower takes the
 // tree from P to the head, to the root a genesis-seeded follower produced.
+// The scan consumes the preimage file, which a failed scan leaves whole.
 // Restarting with the same flags converts nothing.
 func TestOnlineSelfConvert(t *testing.T) {
 	gspec, engine, blocks, cfg, store := driftChain(t, 8)
@@ -362,6 +363,9 @@ func TestOnlineSelfConvert(t *testing.T) {
 	if got := chain.CurrentBlock().Number.Uint64(); got != head.NumberU64() {
 		t.Fatalf("head %d after the failed conversion, want %d", got, head.NumberU64())
 	}
+	if info, err := os.Stat(half); err != nil || info.Size() != int64(len(whole)/2) {
+		t.Fatalf("a failed conversion consumed its preimage file (err %v)", err)
+	}
 	imp.Stop()
 	chain.Stop()
 
@@ -374,6 +378,9 @@ func TestOnlineSelfConvert(t *testing.T) {
 	}
 	if _, ok := rawdb.ReadShadowStateRoot(db, blocks[3].Hash(), blocks[3].NumberU64()); ok {
 		t.Fatal("follower replayed below the conversion's block")
+	}
+	if info, err := os.Stat(prePath); err != nil || info.Size() != 0 {
+		t.Fatalf("the conversion did not consume its preimage file (err %v)", err)
 	}
 	imp.Stop()
 	chain.Stop()
