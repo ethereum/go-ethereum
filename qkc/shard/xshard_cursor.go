@@ -33,12 +33,12 @@ var (
 	// is not known.
 	ErrUnknownCursorRoot = errors.New("unknown root block of the cross-shard cursor")
 
-	// ErrInconsistentClusterState is returned when an ancestor of a known root
-	// block is missing from the local view.
+	// ErrInconsistentClusterState is returned when local data is missing or
+	// inconsistent with a known root chain or an imported shard block's cursor.
 	ErrInconsistentClusterState = errors.New("inconsistent cluster state")
 
-	// ErrXShardDepositsMissing is returned when the deposits sent by a source
-	// block the root chain confirms are not received yet.
+	// ErrXShardDepositsMissing is returned when advancing to a source block
+	// whose deposits have not been received yet.
 	ErrXShardDepositsMissing = errors.New("cross-shard deposits not received")
 )
 
@@ -104,13 +104,15 @@ func newXShardCursor(config *params.QuarkChainConfig, chain XShardChain, pos typ
 	if c.root = chain.RootBlockByNumber(maxRoot, pos.RootBlockHeight); c.root == nil {
 		return nil, fmt.Errorf("%w: missing root block #%d below %x", ErrInconsistentClusterState, pos.RootBlockHeight, maxRoot)
 	}
+	// The imported parent's cursor must fit the root block it points to.
 	if c.minorIndex > uint64(len(c.root.MinorBlockHeaders())) {
-		return nil, fmt.Errorf("invalid cross-shard cursor %+v: root block #%d has %d source blocks", pos, c.root.NumberU64(), len(c.root.MinorBlockHeaders()))
+		return nil, fmt.Errorf("%w: invalid cross-shard cursor %+v: root block #%d has %d source blocks", ErrInconsistentClusterState, pos, c.root.NumberU64(), len(c.root.MinorBlockHeaders()))
 	}
 	if c.minorIndex > 0 {
 		header := c.root.MinorBlockHeaders()[c.minorIndex-1]
+		// The parent already consumed deposits from this source block.
 		if c.deposits = chain.XShardDeposits(header.Hash()); c.deposits == nil {
-			return nil, fmt.Errorf("%w: block %x", ErrXShardDepositsMissing, header.Hash())
+			return nil, fmt.Errorf("%w: missing deposits of block %x", ErrInconsistentClusterState, header.Hash())
 		}
 	}
 	return c, nil

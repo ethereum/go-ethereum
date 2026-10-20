@@ -229,6 +229,10 @@ func TestXShardInboxErrors(t *testing.T) {
 	if _, err := shard1.Deposits(&types.Header{Number: new(big.Int), Difficulty: new(big.Int)}, roots[3].Hash()); err == nil {
 		t.Error("walked from a parent without a cursor")
 	}
+	invalidMinorIndex := uint64(len(roots[1].MinorBlockHeaders())) + 1
+	if _, err := shard1.Deposits(cursorAt(1, invalidMinorIndex, 0), roots[3].Hash()); !errors.Is(err, ErrInconsistentClusterState) {
+		t.Errorf("cursor source index out of range: error %v, want %v", err, ErrInconsistentClusterState)
+	}
 	delete(toShard1.deposits, a.Hash())
 	deposits, err := shard1.Deposits(cursorAt(1, 0, 0), roots[3].Hash())
 	if err != nil {
@@ -237,8 +241,8 @@ func TestXShardInboxErrors(t *testing.T) {
 	if _, err := deposits.Next(); !errors.Is(err, ErrXShardDepositsMissing) {
 		t.Errorf("deposits not received: error %v, want %v", err, ErrXShardDepositsMissing)
 	}
-	if _, err := shard1.Deposits(cursorAt(1, 1, 0), roots[3].Hash()); !errors.Is(err, ErrXShardDepositsMissing) {
-		t.Errorf("deposits not received at the cursor: error %v, want %v", err, ErrXShardDepositsMissing)
+	if _, err := shard1.Deposits(cursorAt(1, 1, 0), roots[3].Hash()); !errors.Is(err, ErrInconsistentClusterState) {
+		t.Errorf("deposits missing at the parent cursor: error %v, want %v", err, ErrInconsistentClusterState)
 	}
 }
 
