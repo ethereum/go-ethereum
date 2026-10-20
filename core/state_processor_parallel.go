@@ -50,6 +50,10 @@ var (
 // supportsParallelExecution reports whether the block can be executed using the
 // BAL-driven parallel processor.
 func supportsParallelExecution(block *types.Block, config *params.ChainConfig, wantWitness bool, wantTrace bool, disableParallel bool) bool {
+	// QKC parallel execution is not supported yet.
+	if config.QuarkChain != nil {
+		return false
+	}
 	// Parallel execution explicitly disabled via config (e.g. by tests that
 	// want to force the sequential path).
 	if disableParallel {
