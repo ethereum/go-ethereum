@@ -123,11 +123,13 @@ func BenchmarkImportBesideBlocks(b *testing.B) {
 		go func() {
 			defer close(done)
 			start := time.Now()
+			compactions, _ := db.(ethdb.CompactionController)
 			_, importErr = importState(context.Background(), db, importOptions{
 				snapshot:          filepath.Join(pairDir, "snapshot.bin"),
 				preimages:         filepath.Join(pairDir, "preimages.bin"),
 				anchor:            &types.Header{Number: new(big.Int), Root: root},
 				yield:             node.yield,
+				compactions:       compactions,
 				conversionOptions: conversionOptions{tmpDir: tmp, sortBudget: budget, workers: workers},
 			})
 			spent = time.Since(start)
@@ -195,11 +197,13 @@ func BenchmarkMigrateBesideBlocks(b *testing.B) {
 		run   func(db ethdb.Database, y *blockYield) (common.Hash, error)
 	}{
 		{"import", importMarks, func(db ethdb.Database, y *blockYield) (common.Hash, error) {
+			compactions, _ := db.(ethdb.CompactionController) // as importAt passes the node's
 			return importState(context.Background(), db, importOptions{
 				snapshot:          filepath.Join(pairDir, "snapshot.bin"),
 				preimages:         filepath.Join(pairDir, "preimages.bin"),
 				anchor:            &types.Header{Number: new(big.Int), Root: root},
 				yield:             y,
+				compactions:       compactions,
 				conversionOptions: conversionOptions{tmpDir: tmp, sortBudget: budget, workers: workers},
 			})
 		}},

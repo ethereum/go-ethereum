@@ -225,7 +225,8 @@ func benchSelfConvert(db ethdb.Database, path string, root common.Hash, tmp stri
 		plan.sources = append(plan.sources, sources[i])
 		plan.keys = append(plan.keys, keys)
 	}
-	return convertPlan(context.Background(), db, plan, y, conversionOptions{
+	compactions, _ := db.(ethdb.CompactionController) // as convertAt passes the node's
+	return convertPlan(context.Background(), db, plan, y, compactions, conversionOptions{
 		sortBudget: budget,
 		tmpDir:     tmp,
 		workers:    workers,

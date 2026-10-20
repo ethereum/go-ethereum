@@ -157,6 +157,24 @@ func (t *table) Stat() (string, error) {
 	return t.db.Stat()
 }
 
+// WriteBacklog returns how close the underlying database is to stopping
+// writes, zero if it doesn't compact in the background.
+func (t *table) WriteBacklog() float64 {
+	return writeBacklog(t.db)
+}
+
+// CompactionDebt returns the underlying database's compaction debt, zero if
+// it doesn't compact in the background.
+func (t *table) CompactionDebt() uint64 {
+	return compactionDebt(t.db)
+}
+
+// LimitCompactions caps the underlying database's concurrent compactions, if
+// it compacts in the background. The cap is the whole database's.
+func (t *table) LimitCompactions(n int) {
+	limitCompactions(t.db, n)
+}
+
 // Compact flattens the underlying data store for the given key range. In essence,
 // deleted and overwritten versions are discarded, and the data is rearranged to
 // reduce the cost of operations needed to access them.

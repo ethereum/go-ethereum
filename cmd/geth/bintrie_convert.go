@@ -458,8 +458,9 @@ func exportArtifacts(ctx context.Context, chaindb ethdb.Database, srcTriedb *tri
 // code limb, not check 1 (see ownLeaves). The attestation lands last, so an
 // interrupted run refuses to open. Cancelling ctx stops it between batches,
 // before anything is attested. The scan, build, write and check 2 pause while
-// the node processes a block (yield, when set).
-func convertPlan(ctx context.Context, chaindb ethdb.Database, plan scanPlan, yield *blockYield, opts conversionOptions) (common.Hash, error) {
+// the node processes a block (yield, when set). compactions, when set, is
+// capped and paced as for an import (importOptions).
+func convertPlan(ctx context.Context, chaindb ethdb.Database, plan scanPlan, yield *blockYield, compactions ethdb.CompactionController, opts conversionOptions) (common.Hash, error) {
 	if plan.release != nil {
 		defer plan.release()
 	}
@@ -475,7 +476,7 @@ func convertPlan(ctx context.Context, chaindb ethdb.Database, plan scanPlan, yie
 		return common.Hash{}, err
 	}
 	defer closeScan()
-	return importState(ctx, chaindb, importOptions{anchor: opts.anchor, own: &ownLeaves{leaves: stream, candidates: cands}, yield: yield, conversionOptions: opts})
+	return importState(ctx, chaindb, importOptions{anchor: opts.anchor, own: &ownLeaves{leaves: stream, candidates: cands}, yield: yield, compactions: compactions, conversionOptions: opts})
 }
 
 // scanState runs plan's scan, each worker over its range into sorters of its

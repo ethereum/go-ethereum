@@ -86,9 +86,70 @@ func (frdb *freezerdb) Freeze() error {
 	return nil
 }
 
+// WriteBacklog returns how close the key-value store is to stopping writes,
+// zero if it doesn't compact in the background.
+func (frdb *freezerdb) WriteBacklog() float64 {
+	return writeBacklog(frdb.KeyValueStore)
+}
+
+// CompactionDebt returns the key-value store's compaction debt, zero if it
+// doesn't compact in the background.
+func (frdb *freezerdb) CompactionDebt() uint64 {
+	return compactionDebt(frdb.KeyValueStore)
+}
+
+// LimitCompactions caps the key-value store's concurrent compactions, if it
+// compacts in the background.
+func (frdb *freezerdb) LimitCompactions(n int) {
+	limitCompactions(frdb.KeyValueStore, n)
+}
+
 // nofreezedb is a database wrapper that disables freezer data retrievals.
 type nofreezedb struct {
 	ethdb.KeyValueStore
+}
+
+// WriteBacklog returns how close the key-value store is to stopping writes,
+// zero if it doesn't compact in the background.
+func (db *nofreezedb) WriteBacklog() float64 {
+	return writeBacklog(db.KeyValueStore)
+}
+
+// CompactionDebt returns the key-value store's compaction debt, zero if it
+// doesn't compact in the background.
+func (db *nofreezedb) CompactionDebt() uint64 {
+	return compactionDebt(db.KeyValueStore)
+}
+
+// LimitCompactions caps the key-value store's concurrent compactions, if it
+// compacts in the background.
+func (db *nofreezedb) LimitCompactions(n int) {
+	limitCompactions(db.KeyValueStore, n)
+}
+
+// writeBacklog returns how close db is to stopping writes, zero if it has no
+// background compaction.
+func writeBacklog(db any) float64 {
+	if c, ok := db.(ethdb.CompactionController); ok {
+		return c.WriteBacklog()
+	}
+	return 0
+}
+
+// compactionDebt returns db's compaction debt, zero if it has no background
+// compaction.
+func compactionDebt(db any) uint64 {
+	if c, ok := db.(ethdb.CompactionController); ok {
+		return c.CompactionDebt()
+	}
+	return 0
+}
+
+// limitCompactions caps db's concurrent compactions, if it has any.
+func limitCompactions(db any, n int) {
+	if c, ok := db.(ethdb.CompactionController); ok {
+		c.LimitCompactions(n)
+	}
 }
 
 // Ancient returns an error as we don't have a backing chain freezer.

@@ -373,17 +373,19 @@ func (p *pbtImporter) importAt(ctx context.Context, anchor *types.Header) error 
 	}
 	yield := newBlockYield()
 	defer followBlockProcessing(p.chain, yield)()
+	compactions, _ := p.db.(ethdb.CompactionController) // nil if the store doesn't compact
 	var err error
 	if p.cfg.Snapshot == "" {
-		err = p.convertAt(ctx, anchor, yield)
+		err = p.convertAt(ctx, anchor, yield, compactions)
 	} else {
 		log.Info("Starting binary tree import in the background", "anchor", anchor.Number, "hash", anchor.Hash(),
 			"stateRoot", anchor.Root, "snapshot", p.cfg.Snapshot, "preimages", p.cfg.Preimages)
 		_, err = importState(ctx, p.db, importOptions{
-			snapshot:  p.cfg.Snapshot,
-			preimages: p.cfg.Preimages,
-			anchor:    anchor,
-			yield:     yield,
+			snapshot:    p.cfg.Snapshot,
+			preimages:   p.cfg.Preimages,
+			anchor:      anchor,
+			yield:       yield,
+			compactions: compactions,
 			conversionOptions: conversionOptions{
 				sortBudget: onlineSortBudget,
 				tmpDir:     p.tmpDir,
@@ -500,6 +502,9 @@ type importOptions struct {
 	own           *ownLeaves
 	// yield, when set, pauses the import while the node processes a block.
 	yield *blockYield
+	// compactions, when set, is capped at importCompactions for the import,
+	// and the namespace's writes wait while its level 0 is deep (bintrie_pace.go).
+	compactions ethdb.CompactionController
 	conversionOptions
 }
 
@@ -534,6 +539,11 @@ func importState(ctx context.Context, chaindb ethdb.Database, opts importOptions
 		own        = opts.own
 	)
 	pbtdb := rawdb.NewTable(chaindb, string(rawdb.PBTPrefix))
+	if opts.compactions != nil {
+		opts.compactions.LimitCompactions(importCompactions)
+		defer opts.compactions.LimitCompactions(0)
+		pbtdb = &pacedDB{Database: pbtdb, ctx: ctx, pace: &compactionPace{db: opts.compactions}}
+	}
 	if !verifyOnly {
 		if dirty, err := hasBinaryTrieState(chaindb); err != nil {
 			return common.Hash{}, err
