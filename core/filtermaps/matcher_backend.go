@@ -75,6 +75,9 @@ func (fm *FilterMapsMatcherBackend) Close() {
 // on write.
 // GetFilterMapRows implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) GetFilterMapRows(ctx context.Context, mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) ([]FilterRow, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return fm.f.getFilterMapRows(mapIndices, rowIndex, baseLayerOnly)
 }
 
@@ -88,6 +91,11 @@ func (fm *FilterMapsMatcherBackend) GetBlockLvPointer(ctx context.Context, block
 	fm.f.indexLock.RLock()
 	defer fm.f.indexLock.RUnlock()
 
+	// The search might have been cancelled while waiting for the indexer to
+	// release the lock.
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	if blockNumber >= fm.f.indexedRange.blocks.AfterLast() {
 		if fm.f.indexedRange.headIndexed {
 			// return index after head block
@@ -115,6 +123,11 @@ func (fm *FilterMapsMatcherBackend) GetLogByLvIndex(ctx context.Context, lvIndex
 	fm.f.indexLock.RLock()
 	defer fm.f.indexLock.RUnlock()
 
+	// The search might have been cancelled while waiting for the indexer to
+	// release the lock.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return fm.f.getLogByLvIndex(lvIndex)
 }
 
