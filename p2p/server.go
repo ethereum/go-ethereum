@@ -143,12 +143,11 @@ const (
 type conn struct {
 	fd net.Conn
 	transport
-	node    *enode.Node
-	flags   connFlag
-	browser bool       // true for unverified inbound peers (currently all inbound QUIC)
-	cont    chan error // The run loop uses cont to signal errors to SetupConn.
-	caps    []Cap      // valid after the protocol handshake
-	name    string     // valid after the protocol handshake
+	node  *enode.Node
+	flags connFlag
+	cont  chan error // The run loop uses cont to signal errors to SetupConn.
+	caps  []Cap      // valid after the protocol handshake
+	name  string     // valid after the protocol handshake
 }
 
 type transport interface {
@@ -762,7 +761,7 @@ running:
 				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(), "conn", c.flags, "addr", p.RemoteAddr(), "name", p.Name())
 				srv.dialsched.peerAdded(c)
 				if p.Inbound() {
-					if c.browser {
+					if c.isBrowser() {
 						browserCount++
 						if ip := connIP(c); !netutil.AddrIsLAN(ip) {
 							browserIPs[ip]++
@@ -787,7 +786,7 @@ running:
 			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
 			if pd.Inbound() {
-				if pd.rw.browser {
+				if pd.rw.isBrowser() {
 					browserCount--
 					if ip := connIP(pd.rw); !netutil.AddrIsLAN(ip) {
 						if browserIPs[ip]--; browserIPs[ip] <= 0 {
@@ -837,13 +836,13 @@ func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount, b
 	// Browsers are limited by a separate MaxBrowserPeers budget and do not count
 	// against MaxPeers or MaxInboundConns.
 	switch {
-	case c.browser && browserCount >= srv.MaxBrowserPeers:
+	case c.isBrowser() && browserCount >= srv.MaxBrowserPeers:
 		return DiscTooManyPeers
-	case c.browser && srv.MaxBrowserPeersPerIP > 0 && perIPBrowserExceeded(c, browserIPs, srv.MaxBrowserPeersPerIP):
+	case c.isBrowser() && srv.MaxBrowserPeersPerIP > 0 && perIPBrowserExceeded(c, browserIPs, srv.MaxBrowserPeersPerIP):
 		return DiscTooManyPeers
-	case !c.browser && !c.is(trustedConn) && len(peers)-browserCount >= srv.MaxPeers:
+	case !c.isBrowser() && !c.is(trustedConn) && len(peers)-browserCount >= srv.MaxPeers:
 		return DiscTooManyPeers
-	case !c.browser && !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.MaxInboundConns():
+	case !c.isBrowser() && !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.MaxInboundConns():
 		return DiscTooManyPeers
 	case peers[c.node.ID()] != nil:
 		return DiscAlreadyConnected
@@ -873,16 +872,10 @@ func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount, browser
 
 // protocolsFor returns the subprotocols a connection may run.
 func (srv *Server) protocolsFor(c *conn) []Protocol {
-	if !c.browser {
+	if !c.isBrowser() {
 		return srv.Protocols
 	}
-	var protos []Protocol
-	for _, p := range srv.Protocols {
-		if p.AllowBrowser {
-			protos = append(protos, p)
-		}
-	}
-	return protos
+	return browserProtocols(srv.Protocols)
 }
 
 // listenLoop runs in its own goroutine and accepts
@@ -1015,8 +1008,12 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		dialPub = dialDest.Pubkey()
 	}
 	if qc, ok := fd.(*quic.Conn); ok {
-		c.browser = qc.Nonce() != nil
-		c.transport = newQUICTransport(qc, srv.protocolsFor(c))
+		protos := srv.Protocols
+		if qc.Nonce() != nil {
+			// quic connection with nonce is regarded as browser connection
+			protos = browserProtocols(srv.Protocols)
+		}
+		c.transport = newQUICTransport(qc, protos)
 	} else {
 		c.transport = srv.newTransport(fd, dialPub)
 	}
@@ -1058,7 +1055,12 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
 		return fmt.Errorf("%w: %v", errEncHandshakeError, err)
 	}
-	if dialDest != nil {
+	if qc, ok := c.fd.(*quic.Conn); ok && qc.Nonce() != nil {
+		// browser connection
+		if c.node, err = browserNodeFromConn(qc); err != nil {
+			return fmt.Errorf("%w: %v", errEncHandshakeError, err)
+		}
+	} else if dialDest != nil {
 		c.node = dialDest
 	} else {
 		c.node = nodeFromConn(remotePubkey, c.fd)
@@ -1076,7 +1078,8 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 		clog.Trace("Failed p2p handshake", "err", err)
 		return &protoHandshakeError{err: err}
 	}
-	if id := c.node.ID(); !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
+	// Browser peers have no public key to check the identity against.
+	if id := c.node.ID(); !c.isBrowser() && !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
 		clog.Trace("Wrong devp2p handshake identity", "phsid", hex.EncodeToString(phs.ID))
 		return DiscUnexpectedIdentity
 	}
@@ -1141,7 +1144,7 @@ func (srv *Server) runPeer(p *Peer) {
 
 	// A browser that disconnects due to an invalid message gets a longer
 	// reconnection cooldown on its source IP.
-	if p.rw.browser && penalizeBrowser(err) {
+	if p.rw.isBrowser() && penalizeBrowser(err) {
 		srv.penalizeInbound(p.rw)
 	}
 
