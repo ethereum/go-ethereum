@@ -89,11 +89,11 @@ Memory: the sorters hold at most 4 GB of records, two run buffers each allocated
 once, and the database its cache plus memtables, about 1.5 x (--cache x
 --cache.database / 100). Go's collector can hold as much again before it runs,
 so budget about twice their sum, or cap it with GOMEMLIMIT. Merging the
-sorters' spilled runs takes up to 512 KiB per run on top, at most a quarter of
-the sorter's budget once runs are many.
+sorters' spilled runs takes about 140 KiB per run on top, snappy's buffers.
 
-Disk: --tmpdir holds the sort spills and a copy of every tree node, each
-until it is used up, so it needs disk space, not a tmpfs.
+Disk: --tmpdir holds the sort spills and a copy of every tree node, both
+snappy-compressed, each until it is used up and on Linux freed as it is read,
+so it needs disk space, not a tmpfs.
 
 This command needs the node stopped. To import while the node keeps
 following the chain, start geth with --pbt.import.snapshot, --pbt.import.preimages

@@ -30,6 +30,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/internal/pagecache"
+	"github.com/golang/snappy"
 )
 
 // RecordSorter is an external merge-sort: records accumulate in an in-memory
@@ -204,9 +205,20 @@ func (s *RecordSorter) spill() error {
 	return nil
 }
 
-// runWriters holds the spill writers: a run's 1 MiB buffer would otherwise be
-// garbage once per spill.
-var runWriters = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, 1<<20) }}
+// runWriter writes a run through snappy: hashes don't compress, but the
+// values, the lengths and the prefixes neighbouring keys share do, which
+// about halves a run on disk.
+type runWriter struct {
+	bw *bufio.Writer
+	sw *snappy.Writer
+}
+
+// runWriters holds the spill writers: a run's 1 MiB buffer and its snappy
+// buffers would otherwise be garbage once per spill.
+var runWriters = sync.Pool{New: func() any {
+	sw := snappy.NewBufferedWriter(nil)
+	return &runWriter{bw: bufio.NewWriterSize(sw, 1<<20), sw: sw}
+}}
 
 // writeRun sorts a run and writes it to a temporary file, rewound for reading.
 func writeRun(tmpDir string, arena []byte, index []arenaRecord) (*os.File, error) {
@@ -224,18 +236,22 @@ func writeRun(tmpDir string, arena []byte, index []arenaRecord) (*os.File, error
 		os.Remove(f.Name())
 		return nil, err
 	}
-	w := runWriters.Get().(*bufio.Writer)
-	w.Reset(pagecache.NewWriter(f))
+	w := runWriters.Get().(*runWriter)
+	w.sw.Reset(pagecache.NewWriter(f))
+	w.bw.Reset(w.sw)
 	defer func() {
-		w.Reset(nil)
+		w.sw.Reset(nil)
 		runWriters.Put(w)
 	}()
 	for _, rec := range index {
-		if err := writeRunRecord(w, rec.key(arena), rec.value(arena)); err != nil {
+		if err := writeRunRecord(w.bw, rec.key(arena), rec.value(arena)); err != nil {
 			return discard(err)
 		}
 	}
-	if err := w.Flush(); err != nil {
+	if err := w.bw.Flush(); err != nil {
+		return discard(err)
+	}
+	if err := w.sw.Flush(); err != nil {
 		return discard(err)
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -299,12 +315,13 @@ func (s *RecordSorter) Sort() (*RecordStream, error) {
 		return nil, err
 	}
 	s.arena, s.index, s.spareArena, s.spareIndex = nil, nil, nil, nil
-	var (
-		h    runHeap
-		size = mergeBufSize(s.budget, len(s.runs))
-	)
+	// A merge reads every run at once and finishes them all together, so a
+	// run would hold its disk space to the merge's end: each is read through
+	// a consuming reader instead, which frees what it has read. A run's
+	// reader holds snappy's buffers, about 140 KiB.
+	var h runHeap
 	for _, f := range s.runs {
-		src := &runReader{r: bufio.NewReaderSize(pagecache.NewReader(f), size)}
+		src := &runReader{r: snappy.NewReader(pagecache.NewConsumingReader(f))}
 		if err := src.advance(); err != nil {
 			if err == io.EOF {
 				continue
@@ -316,16 +333,6 @@ func (s *RecordSorter) Sort() (*RecordStream, error) {
 	heap.Init(&h)
 	s.merging = newMergeStream(h)
 	return s.merging, nil
-}
-
-// mergeBufSize sizes each run's read buffer for a merge of runs runs: 512 KiB,
-// less once the buffers together would pass a quarter of the budget, never
-// under 64 KiB. A mainnet sort merges thousands of runs.
-func mergeBufSize(budget, runs int) int {
-	if budget <= 0 || runs == 0 {
-		return 1 << 19
-	}
-	return min(1<<19, max(64<<10, budget/(4*runs)))
 }
 
 // Close removes the temporary files; call after any returned stream drains.
@@ -474,7 +481,7 @@ func (ls *RecordStream) Next() (key, value []byte, err error) {
 
 // runReader streams one spilled run.
 type runReader struct {
-	r          *bufio.Reader
+	r          *snappy.Reader
 	buf        []byte
 	key, value []byte
 }

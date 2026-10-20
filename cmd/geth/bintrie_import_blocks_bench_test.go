@@ -27,6 +27,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -322,15 +323,16 @@ func pairBinaryRoot(b *testing.B, dir string) common.Hash {
 	return sr.root
 }
 
-// sampleGrowth samples the bytes under dirs every 500 ms until the returned
-// function is called, which returns the most they grew over the first sample.
+// sampleGrowth samples the disk space under dirs every 500 ms until the
+// returned function is called, which returns the most it grew over the first
+// sample.
 func sampleGrowth(dirs ...string) func() int64 {
 	size := func() (n int64) {
 		for _, dir := range dirs {
 			filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
 				if err == nil && !d.IsDir() {
 					if info, err := d.Info(); err == nil {
-						n += info.Size()
+						n += allocated(info)
 					}
 				}
 				return nil
@@ -362,6 +364,18 @@ func sampleGrowth(dirs ...string) func() int64 {
 		<-done
 		return peak
 	}
+}
+
+// allocated returns the disk space a file takes, which punching holes into it
+// frees while its size stays: its 512-byte blocks where the system's stat
+// counts them (unix), its size elsewhere.
+func allocated(info fs.FileInfo) int64 {
+	if st := reflect.ValueOf(info.Sys()); st.Kind() == reflect.Pointer {
+		if blocks := st.Elem().FieldByName("Blocks"); blocks.CanInt() {
+			return blocks.Int() * 512
+		}
+	}
+	return info.Size()
 }
 
 // resetPeakRSS restarts the kernel's count of the process's peak RSS, where

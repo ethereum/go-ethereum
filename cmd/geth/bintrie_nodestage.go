@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/internal/pagecache"
+	"github.com/golang/snappy"
 )
 
 // nodeStager holds the tree nodes StackBuilder emits until the tree is built,
@@ -172,10 +173,13 @@ func (s *nodeStager) close() {
 }
 
 // spillFile is an append-only temp file of two-field records, read back in
-// the order they were added.
+// the order they were added. Records go through snappy: the hashes inside a
+// node don't compress, but its values and the paths neighbouring nodes share
+// do, which takes nearly half off.
 type spillFile struct {
 	f    *os.File
 	w    *bufio.Writer
+	sw   *snappy.Writer
 	head [2 * binary.MaxVarintLen64]byte // a record's length prefix
 }
 
@@ -187,7 +191,8 @@ func newSpillFile(dir, pattern string) (*spillFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &spillFile{f: f, w: bufio.NewWriterSize(pagecache.NewWriter(f), 256<<10)}, nil
+	sw := snappy.NewBufferedWriter(pagecache.NewWriter(f))
+	return &spillFile{f: f, w: bufio.NewWriterSize(sw, 256<<10), sw: sw}, nil
 }
 
 // add appends one record, both fields length-prefixed. Neither needs to
@@ -206,15 +211,19 @@ func (s *spillFile) add(a, b []byte) error {
 }
 
 // replay feeds every record to fn in the order added, reading through r. a
-// and b are only valid for the call.
+// and b are only valid for the call. The file is read once, so it is
+// consumed as it is read: its disk space comes back during the replay.
 func (s *spillFile) replay(r *bufio.Reader, fn func(a, b []byte) error) error {
 	if err := s.w.Flush(); err != nil {
+		return err
+	}
+	if err := s.sw.Flush(); err != nil {
 		return err
 	}
 	if _, err := s.f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	r.Reset(pagecache.NewReader(s.f))
+	r.Reset(snappy.NewReader(pagecache.NewConsumingReader(s.f)))
 	var buf []byte
 	for {
 		alen, err := binary.ReadUvarint(r)
