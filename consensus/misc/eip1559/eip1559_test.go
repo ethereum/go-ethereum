@@ -18,6 +18,7 @@ package eip1559
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -124,75 +125,115 @@ func TestCalcBaseFee(t *testing.T) {
 			GasUsed:  test.parentGasUsed,
 			BaseFee:  big.NewInt(test.parentBaseFee),
 		}
-		if have, want := CalcBaseFee(config(), parent, 0), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcBaseFee(config(), parent, &types.Header{}), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}
 }
 
-// TestCalcBaseFeeBogota checks the EIP-8198 max change of 5/48, applied after
-// dividing by the gas target like the spec does.
+// TestCalcBaseFeeBogota checks the EIP-8198 max change of seconds per slot over
+// 96, applied after dividing by the gas target like the spec does.
 func TestCalcBaseFeeBogota(t *testing.T) {
 	cfg := config()
 	cfg.BogotaTime = new(uint64)
 
 	tests := []struct {
 		parentBaseFee   int64
-		parentGasLimit  uint64
 		parentGasUsed   uint64
+		seconds, slots  uint64
 		expectedBaseFee int64
 	}{
-		{params.InitialBaseFee, 20000000, 9000000, 989583334},   // usage below target
-		{params.InitialBaseFee, 20000000, 11000000, 1010416666}, // usage above target
-		{97000000, 20000000, 9999999, 97000000},                 // multiplying by 5 first would decrease by 1
-		{195000000, 20000000, 10000001, 195000001},              // multiplying by 5 first would increase by 2
+		{params.InitialBaseFee, 9000000, 10, 1, 989583334},     // 10s slots, usage below target
+		{params.InitialBaseFee, 11000000, 10, 1, 1010416666},   // 10s slots, usage above target
+		{params.InitialBaseFee, 11000000, 12, 1, 1012500000},   // 12s slots keep the 1/8 rule
+		{params.InitialBaseFee, 11000000, 20, 2, 1010416666},   // a missed 10s slot keeps 10s per slot
+		{params.InitialBaseFee, 20000000, 1000, 1, 2000000000}, // capped at the whole base fee
+		{97000000, 9999999, 10, 1, 97000000},                   // multiplying by the seconds first would decrease by 1
+		{195000000, 10000001, 10, 1, 195000001},                // multiplying by the seconds first would increase by 2
 	}
 	for i, test := range tests {
-		parent := &types.Header{
-			Number:   common.Big32,
-			GasLimit: test.parentGasLimit,
-			GasUsed:  test.parentGasUsed,
-			BaseFee:  big.NewInt(test.parentBaseFee),
-		}
-		if have, want := CalcBaseFee(cfg, parent, 0), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		var (
+			parentSlot = uint64(100)
+			slot       = parentSlot + test.slots
+			parent     = &types.Header{
+				Number:     common.Big32,
+				Time:       1000,
+				SlotNumber: &parentSlot,
+				GasLimit:   20000000,
+				GasUsed:    test.parentGasUsed,
+				BaseFee:    big.NewInt(test.parentBaseFee),
+			}
+			header = &types.Header{Time: parent.Time + test.seconds, SlotNumber: &slot}
+		)
+		if have, want := CalcBaseFee(cfg, parent, header), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}
 }
 
-// TestBaseFeeBogotaTransition checks that the first Bogota block applies the
-// new max change to its pre-Bogota parent.
+// TestBaseFeeBogotaTransition checks the base fee and slot number rules on both
+// sides of the fork, through header verification.
 func TestBaseFeeBogotaTransition(t *testing.T) {
 	cfg := config()
 	bogotaTime := uint64(1000)
 	cfg.BogotaTime = &bogotaTime
 
-	parent := &types.Header{
-		Number:   common.Big32,
-		Time:     990,
-		GasLimit: 20000000,
-		GasUsed:  20000000,
-		BaseFee:  big.NewInt(params.InitialBaseFee),
-	}
-	for _, tc := range []struct {
-		time      uint64
-		want, not int64
+	for i, tc := range []struct {
+		parentTime, time uint64
+		slot             uint64
+		baseFee          int64
+		wantErr          string
 	}{
-		{999, 1125000000, 1104166666},  // 1/8 before the fork
-		{1000, 1104166666, 1125000000}, // 5/48 from the fork on
+		{988, 999, 101, 1125000000, ""},                    // 1/8 before the fork, whatever the spacing
+		{988, 1000, 101, 1125000000, ""},                   // first Bogota block, 12s after its parent
+		{990, 1000, 101, 1104166666, ""},                   // 10s after its parent gives 5/48
+		{990, 1000, 100, 1104166666, "invalid slotNumber"}, // the slot number must advance
 	} {
-		header := &types.Header{
-			Number:   big.NewInt(33),
-			Time:     tc.time,
-			GasLimit: parent.GasLimit,
-			BaseFee:  big.NewInt(tc.want),
+		var (
+			parentSlot = uint64(100)
+			slot       = tc.slot
+			parent     = &types.Header{
+				Number:     common.Big32,
+				Time:       tc.parentTime,
+				SlotNumber: &parentSlot,
+				GasLimit:   20000000,
+				GasUsed:    20000000,
+				BaseFee:    big.NewInt(params.InitialBaseFee),
+			}
+			header = &types.Header{
+				Number:     big.NewInt(33),
+				Time:       tc.time,
+				SlotNumber: &slot,
+				GasLimit:   parent.GasLimit,
+				BaseFee:    big.NewInt(tc.baseFee),
+			}
+		)
+		err := VerifyEIP1559Header(cfg, parent, header)
+		switch {
+		case tc.wantErr == "" && err != nil:
+			t.Errorf("test %d: expected valid header: %v", i, err)
+		case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+			t.Errorf("test %d: expected %q error, got %v", i, tc.wantErr, err)
 		}
-		if err := VerifyEIP1559Header(cfg, parent, header); err != nil {
-			t.Errorf("time %d: expected valid header: %v", tc.time, err)
-		}
-		header.BaseFee = big.NewInt(tc.not)
-		if err := VerifyEIP1559Header(cfg, parent, header); err == nil {
-			t.Errorf("time %d: expected invalid base fee %d", tc.time, tc.not)
-		}
+	}
+}
+
+// TestCalcNextBaseFee checks that the next-block estimate assumes one slot at the
+// reference duration, since the real spacing isn't known yet.
+func TestCalcNextBaseFee(t *testing.T) {
+	cfg := config()
+	cfg.BogotaTime = new(uint64)
+
+	slot := uint64(100)
+	head := &types.Header{
+		Number:     common.Big32,
+		Time:       1000,
+		SlotNumber: &slot,
+		GasLimit:   20000000,
+		GasUsed:    20000000,
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+	}
+	if have, want := CalcNextBaseFee(cfg, head), big.NewInt(1125000000); have.Cmp(want) != 0 {
+		t.Errorf("have %d  want %d", have, want)
 	}
 }

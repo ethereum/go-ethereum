@@ -155,8 +155,7 @@ const (
 	CreateBySelfdestructGas uint64 = 25000
 
 	DefaultBaseFeeChangeDenominator = 8          // Bounds the amount the base fee can change between blocks.
-	BaseFeeChangeNumeratorEIP8198   = 5          // Numerator of the max base fee change between blocks after EIP-8198.
-	BaseFeeChangeDenominatorEIP8198 = 48         // Denominator of the max base fee change between blocks after EIP-8198.
+	BaseFeeReferenceSlotSeconds     = 12         // Slot duration the base fee change denominator is calibrated for (EIP-8198).
 	DefaultElasticityMultiplier     = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
 	InitialBaseFee                  = 1000000000 // Initial base fee for EIP-1559 blocks.
 

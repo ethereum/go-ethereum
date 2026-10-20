@@ -312,9 +312,16 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 	if genParams.random != (common.Hash{}) {
 		header.MixDigest = genParams.random
 	}
+	// Apply EIP-7843.
+	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
+		if genParams.slotNum == nil {
+			return nil, errors.New("no slot number set post-amsterdam")
+		}
+		header.SlotNumber = genParams.slotNum
+	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if miner.chainConfig.IsLondon(header.Number) {
-		header.BaseFee = eip1559.CalcBaseFee(miner.chainConfig, parent, timestamp)
+		header.BaseFee = eip1559.CalcBaseFee(miner.chainConfig, parent, header)
 		if !miner.chainConfig.IsLondon(parent.Number) {
 			parentGasLimit := parent.GasLimit * miner.chainConfig.ElasticityMultiplier()
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, miner.config.GasCeil)
@@ -335,13 +342,6 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 		header.BlobGasUsed = new(uint64)
 		header.ExcessBlobGas = &excessBlobGas
 		header.ParentBeaconRoot = genParams.beaconRoot
-	}
-	// Apply EIP-7843.
-	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
-		if genParams.slotNum == nil {
-			return nil, errors.New("no slot number set post-amsterdam")
-		}
-		header.SlotNumber = genParams.slotNum
 	}
 	// Could potentially happen if starting to mine in an odd state.
 	// Note genParams.coinbase can be different with header.Coinbase
