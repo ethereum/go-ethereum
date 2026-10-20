@@ -515,7 +515,7 @@ func (d *Downloader) syncToHead(beaconPing chan struct{}) (err error) {
 	// the frozen header instead of a fresh one.
 	if mode == ethconfig.SnapSync && pivot != nil {
 		if frozen := d.snapSyncer.FrozenPivot(); frozen != nil {
-			if rawdb.ReadCanonicalHash(d.stateDB, frozen.Number.Uint64()) == frozen.Hash() {
+			if d.isFrozenPivotCanonical(frozen) {
 				log.Info("Resuming snap sync against frozen pivot", "number", frozen.Number, "hash", frozen.Hash())
 				pivot = frozen
 			} else {
@@ -1119,6 +1119,28 @@ func (d *Downloader) movePivotIfStale() error {
 	rawdb.WriteLastPivotNumber(d.stateDB, number)
 	d.pivotHeader = header
 	return nil
+}
+
+// isFrozenPivotCanonical reports whether the pivot frozen by the snap syncer is
+// still part of the chain being synced.
+//
+// The pivot block is only committed into the local chain once its state is
+// complete, so while frozen it is normally tracked by the skeleton chain alone,
+// with the local canonical chain covering only the blocks below it.
+func (d *Downloader) isFrozenPivotCanonical(frozen *types.Header) bool {
+	head, tail, _, err := d.skeleton.Bounds()
+	if err != nil {
+		return false
+	}
+	number := frozen.Number.Uint64()
+	if number > head.Number.Uint64() {
+		return false
+	}
+	if number >= tail.Number.Uint64() {
+		header := d.skeleton.Header(number)
+		return header != nil && header.Hash() == frozen.Hash()
+	}
+	return rawdb.ReadCanonicalHash(d.stateDB, number) == frozen.Hash()
 }
 
 func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, before, after []*fetchResult) {
