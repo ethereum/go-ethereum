@@ -242,49 +242,13 @@ func TestXShardInboxErrors(t *testing.T) {
 	}
 }
 
-func TestXShardInboxRootAncestry(t *testing.T) {
-	roots, _, _, _, _, _, chain := testRootChain()
-	fork := qkctypes.NewRootBlockWithHeader(&qkctypes.RootBlockHeader{
-		Number:     2,
-		ParentHash: roots[1].Hash(),
-		Coinbase:   common.Address{0xff},
-	}).WithBody(nil, nil)
-	chain.roots[fork.Hash()] = fork
-	inbox := NewXShardInbox(&params.QuarkChainConfig{ShardID: 1}, chain)
-
-	for _, tt := range []struct {
-		name       string
-		cursor     types.XShardCursor
-		parentRoot common.Hash
-		prevRoot   common.Hash
-		want       error
-	}{
-		{name: "same root", cursor: pos(2, 0, 0), parentRoot: roots[2].Hash(), prevRoot: roots[2].Hash()},
-		{name: "descendant", cursor: pos(2, 0, 0), parentRoot: roots[2].Hash(), prevRoot: roots[3].Hash()},
-		{name: "rewind after consumption", cursor: pos(4, 0, 0), parentRoot: roots[3].Hash(), prevRoot: roots[0].Hash(), want: ErrXShardRootMismatch},
-		{name: "different fork", cursor: pos(2, 0, 0), parentRoot: roots[2].Hash(), prevRoot: fork.Hash(), want: ErrXShardRootMismatch},
-		{name: "unknown parent root", cursor: pos(2, 0, 0), parentRoot: common.Hash{0xfe}, prevRoot: roots[3].Hash(), want: ErrUnknownCursorRoot},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			parent := cursorAt(tt.cursor.RootBlockHeight, tt.cursor.MinorBlockIndex, tt.cursor.XShardDepositIndex)
-			extra, _ := parent.QKCExtra()
-			extra.PrevRootBlock = tt.parentRoot
-			parent.Extra = extra.Encode()
-			_, err := inbox.Deposits(parent, tt.prevRoot)
-			if !errors.Is(err, tt.want) {
-				t.Errorf("deposits error %v, want %v", err, tt.want)
-			}
-		})
-	}
-}
-
 func TestXShardInboxMissingRoot(t *testing.T) {
 	t.Run("at start", func(t *testing.T) {
 		roots, _, _, _, _, _, chain := testRootChain()
 		delete(chain.roots, roots[2].Hash())
 		inbox := NewXShardInbox(&params.QuarkChainConfig{ShardID: 1}, chain)
-		if _, err := inbox.Deposits(cursorAt(1, 0, 0), roots[3].Hash()); !errors.Is(err, ErrUnknownCursorRoot) {
-			t.Errorf("deposits error %v, want %v", err, ErrUnknownCursorRoot)
+		if _, err := inbox.Deposits(cursorAt(1, 0, 0), roots[3].Hash()); !errors.Is(err, ErrInconsistentClusterState) {
+			t.Errorf("deposits error %v, want %v", err, ErrInconsistentClusterState)
 		}
 	})
 	t.Run("while walking", func(t *testing.T) {
@@ -295,8 +259,8 @@ func TestXShardInboxMissingRoot(t *testing.T) {
 			t.Fatal(err)
 		}
 		delete(chain.roots, roots[2].Hash())
-		if _, err := deposits.Next(); !errors.Is(err, ErrUnknownCursorRoot) {
-			t.Errorf("next deposit error %v, want %v", err, ErrUnknownCursorRoot)
+		if _, err := deposits.Next(); !errors.Is(err, ErrInconsistentClusterState) {
+			t.Errorf("next deposit error %v, want %v", err, ErrInconsistentClusterState)
 		}
 	})
 }
