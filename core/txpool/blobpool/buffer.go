@@ -73,9 +73,7 @@ type PeerDelivery struct {
 type txEntry struct {
 	tx *types.Transaction
 
-	// Technically it is not required to store peer information to drop properly.
-	// This is mainly for per peer size limit check.
-	peer  string    // Peer Identifier
+	peer  string    // Peer that supplied the transaction and proofs
 	added time.Time // Timestamp when the tx is added
 	size  uint64    // Encoded size, as accounted against the buffer limits
 }
@@ -175,7 +173,7 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 			continue
 		}
 		if entry, ok := b.cells[hash]; ok {
-			b.storeCompleted(hash, tx, entry)
+			b.storeCompleted(hash, tx, peer, entry)
 			continue
 		}
 		// Refuse the transaction if the peer has exhausted its allowance.
@@ -214,7 +212,7 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 
 	// Check if this delivery completes the entry
 	if txe, ok := b.txs[hash]; ok {
-		b.storeCompleted(hash, txe.tx, entry)
+		b.storeCompleted(hash, txe.tx, txe.peer, entry)
 		return
 	}
 
@@ -230,12 +228,16 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 
 // storeCompleted verifies cells per-peer, sorts them, and schedules them for
 // addition into the pool. The actual addition happens in Flush().
-func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cells *cellEntry) {
+func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, peer string, cells *cellEntry) {
 	sidecar := tx.BlobTxSidecar()
 
 	// Per-peer cell verification
 	if badPeers := b.verifyCells(cells, sidecar); len(badPeers) > 0 {
-		b.dropPeers(badPeers)
+		// Proofs are not committed to by the transaction hash. A failed tuple
+		// can only be attributed when one peer supplied both proofs and cells.
+		if slices.Contains(badPeers, peer) && b.cb.DropPeer != nil {
+			b.cb.DropPeer(peer)
+		}
 		b.removeCells(hash)
 		b.removeTx(hash)
 		return
@@ -392,15 +394,6 @@ func (b *BlobBuffer) evictOne() bool {
 	blobBufferOverflowCounter.Inc(1)
 	b.removeCells(oldest)
 	return true
-}
-
-func (b *BlobBuffer) dropPeers(peers []string) {
-	if b.cb.DropPeer == nil {
-		return
-	}
-	for _, p := range peers {
-		b.cb.DropPeer(p)
-	}
 }
 
 func (b *BlobBuffer) evict() {
