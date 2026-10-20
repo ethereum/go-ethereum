@@ -227,7 +227,7 @@ func (p *Peer) Inbound() bool {
 // IsBrowser returns true if the peer is an unverified inbound peer connected
 // over QUIC, budgeted separately from other peers.
 func (p *Peer) IsBrowser() bool {
-	return p.rw.browser
+	return p.rw.isBrowser()
 }
 
 // Trusted returns true if the peer is configured as trusted.
@@ -283,7 +283,7 @@ func (p *Peer) run() (remoteRequested bool, err error) {
 	p.wg.Add(1)
 	go p.readLoop(readErr)
 	// Browser peers do not support ping/pong.
-	if !p.rw.browser {
+	if !p.rw.isBrowser() {
 		p.wg.Add(1)
 		go p.pingLoop()
 	}
@@ -378,7 +378,7 @@ func (p *Peer) readLoop(errc chan<- error) {
 func (p *Peer) handle(msg Msg) error {
 	switch {
 	case msg.Code == pingMsg:
-		if p.rw.browser {
+		if p.rw.isBrowser() {
 			// browser connections ignore base protocol messages,
 			// including pingMsg.
 			return msg.Discard()

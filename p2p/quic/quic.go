@@ -18,6 +18,7 @@ package quic
 
 import (
 	"crypto/ecdsa"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -96,13 +97,10 @@ func (c *Conn) browserHandshake(prv *ecdsa.PrivateKey, caps []string) (*ecdsa.Pu
 	if err := c.writeProof(prv, c.nonce, caps); err != nil {
 		return nil, err
 	}
-	// assign random node id and node key
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		return nil, err
-	}
-	c.nodeID = crypto.FromECDSAPub(&key.PublicKey)[1:]
-	return &key.PublicKey, nil
+	// assign random node id
+	c.nodeID = make([]byte, 32)
+	rand.Read(c.nodeID)
+	return nil, nil
 }
 
 func (c *Conn) nodeHandshake(prv *ecdsa.PrivateKey, caps []string) (*ecdsa.PublicKey, error) {

@@ -25,6 +25,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/p2p/quic"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -133,4 +136,61 @@ func (q *quicTransport) doProtoHandshake(_ *protoHandshake) (*protoHandshake, er
 		}
 	}
 	return &protoHandshake{Version: baseProtocolVersion, Caps: caps, ID: q.conn.PeerID()}, nil
+}
+
+var browserScheme = enr.SchemeMap{
+	"browser": browserID{},
+}
+
+type browserID struct{}
+
+func (b browserID) NodeAddr(r *enr.Record) []byte {
+	var id enode.ID
+	r.Load(enr.WithEntry("browserid", &id))
+	return id[:]
+}
+
+func (b browserID) Verify(r *enr.Record, sig []byte) error {
+	return nil
+}
+
+// browserNodeFromConn creates the node of a browser peer from its random ID
+// and remote IP.
+func browserNodeFromConn(conn *quic.Conn) (*enode.Node, error) {
+	var r enr.Record
+	if ip := netutil.AddrAddr(conn.RemoteAddr()); ip.Is4() {
+		r.Set(enr.IPv4Addr(ip))
+	} else if ip.IsValid() {
+		r.Set(enr.IPv6Addr(ip))
+	}
+	return signBrowser(&r, enode.ID(conn.PeerID()))
+}
+
+func signBrowser(r *enr.Record, id enode.ID) (*enode.Node, error) {
+	r.Set(enr.ID("browser"))
+	r.Set(enr.WithEntry("browserid", id))
+	if err := r.SetSig(browserID{}, []byte{}); err != nil {
+		return nil, err
+	}
+	return enode.New(browserScheme, r)
+}
+
+// isBrowser returns whether the remote node uses the browser identity scheme
+func (c *conn) isBrowser() bool {
+	var scheme enr.ID
+	if c.node != nil {
+		c.node.Load(&scheme)
+	}
+	return scheme == "browser"
+}
+
+// browserProtocols returns the subprotocols that browser peers can run
+func browserProtocols(protos []Protocol) []Protocol {
+	var allowed []Protocol
+	for _, p := range protos {
+		if p.AllowBrowser {
+			allowed = append(allowed, p)
+		}
+	}
+	return allowed
 }
