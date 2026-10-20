@@ -256,22 +256,22 @@ func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, erro
 		historicalAccountReadTimer.UpdateSince(start)
 	}(time.Now())
 
-	// TODO(rjl493456442): Theoretically, the obtained disk layer could become stale
-	// within a very short time window.
-	//
-	// While reading the account data while holding `db.tree.lock` can resolve
-	// this issue, but it will introduce a heavy contention over the lock.
-	//
-	// Let's optimistically assume the situation is very unlikely to happen,
-	// and try to define a low granularity lock if the current approach doesn't
-	// work later.
-	dl := r.db.tree.bottom()
 	hash := crypto.Keccak256Hash(address.Bytes())
-	latest, err := dl.account(hash, 0)
-	if err != nil {
-		return nil, err
+	for {
+		dl := r.db.tree.bottom()
+		latest, err := dl.account(hash, 0)
+		if err == nil {
+			return r.reader.read(newAccountIdentQuery(address, hash), r.id, dl.stateID(), latest)
+		}
+		if !errors.Is(err, errSnapshotStale) {
+			return nil, err
+		}
+		// Layer was replaced by a commit -> retry. Same bottom layer still
+		// stale (e.g. database disabled) -> give up.
+		if r.db.tree.bottom() == dl {
+			return nil, err
+		}
 	}
-	return r.reader.read(newAccountIdentQuery(address, hash), r.id, dl.stateID(), latest)
 }
 
 // Account directly retrieves the account associated with a particular address in
@@ -306,23 +306,23 @@ func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash)
 		historicalStorageReadTimer.UpdateSince(start)
 	}(time.Now())
 
-	// TODO(rjl493456442): Theoretically, the obtained disk layer could become stale
-	// within a very short time window.
-	//
-	// While reading the account data while holding `db.tree.lock` can resolve
-	// this issue, but it will introduce a heavy contention over the lock.
-	//
-	// Let's optimistically assume the situation is very unlikely to happen,
-	// and try to define a low granularity lock if the current approach doesn't
-	// work later.
-	dl := r.db.tree.bottom()
 	addrHash := crypto.Keccak256Hash(address.Bytes())
 	keyHash := crypto.Keccak256Hash(key.Bytes())
-	latest, err := dl.storage(addrHash, keyHash, 0)
-	if err != nil {
-		return nil, err
+	for {
+		dl := r.db.tree.bottom()
+		latest, err := dl.storage(addrHash, keyHash, 0)
+		if err == nil {
+			return r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
+		}
+		if !errors.Is(err, errSnapshotStale) {
+			return nil, err
+		}
+		// Layer was replaced by a commit -> retry. Same bottom layer still
+		// stale (e.g. database disabled) -> give up.
+		if r.db.tree.bottom() == dl {
+			return nil, err
+		}
 	}
-	return r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
 }
 
 // HistoricalNodeReader is a wrapper over history reader, providing access to
@@ -385,35 +385,35 @@ func (r *HistoricalNodeReader) Node(owner common.Hash, path []byte, hash common.
 		historicalTrienodeReadTimer.UpdateSince(start)
 	}(time.Now())
 
-	// TODO(rjl493456442): Theoretically, the obtained disk layer could become stale
-	// within a very short time window.
-	//
-	// While reading the account data while holding `db.tree.lock` can resolve
-	// this issue, but it will introduce a heavy contention over the lock.
-	//
-	// Let's optimistically assume the situation is very unlikely to happen,
-	// and try to define a low granularity lock if the current approach doesn't
-	// work later.
-	dl := r.db.tree.bottom()
-	latest, h, _, err := dl.node(owner, path, 0)
-	if err != nil {
-		return nil, err
-	}
-	if h == hash {
-		return latest, nil
-	}
-	blob, err := r.reader.read(newTrienodeIdent(owner, string(path)), r.id, dl.stateID(), latest)
-	if err != nil {
-		return nil, err
-	}
-	// Error out if the local one is inconsistent with the target.
-	if crypto.Keccak256Hash(blob) != hash {
-		blobHex := "nil"
-		if len(blob) > 0 {
-			blobHex = hexutil.Encode(blob)
+	for {
+		dl := r.db.tree.bottom()
+		latest, h, _, err := dl.node(owner, path, 0)
+		if err == nil {
+			if h == hash {
+				return latest, nil
+			}
+			blob, err := r.reader.read(newTrienodeIdent(owner, string(path)), r.id, dl.stateID(), latest)
+			if err != nil {
+				return nil, err
+			}
+			// Error out if the local one is inconsistent with the target.
+			if crypto.Keccak256Hash(blob) != hash {
+				blobHex := "nil"
+				if len(blob) > 0 {
+					blobHex = hexutil.Encode(blob)
+				}
+				log.Error("Unexpected historical trie node", "owner", owner.Hex(), "path", path, "blob", blobHex)
+				return nil, fmt.Errorf("unexpected historical trie node: (%x %v), blob: %s", owner, path, blobHex)
+			}
+			return blob, nil
 		}
-		log.Error("Unexpected historical trie node", "owner", owner.Hex(), "path", path, "blob", blobHex)
-		return nil, fmt.Errorf("unexpected historical trie node: (%x %v), blob: %s", owner, path, blobHex)
+		if !errors.Is(err, errSnapshotStale) {
+			return nil, err
+		}
+		// Layer was replaced by a commit -> retry. Same bottom layer still
+		// stale (e.g. database disabled) -> give up.
+		if r.db.tree.bottom() == dl {
+			return nil, err
+		}
 	}
-	return blob, nil
 }
