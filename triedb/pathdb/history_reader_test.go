@@ -289,3 +289,80 @@ func TestHistoricalStateReaderPendingWrites(t *testing.T) {
 		}
 	}
 }
+
+// TestHistoricalStateReaderConcurrentCommit ensures the historical reads are not
+// affected by the disk layer replaced by concurrent commits.
+func TestHistoricalStateReaderConcurrentCommit(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	env := newTester(t, &testerConfig{layers: 16, enableIndex: true})
+	defer env.release()
+	waitIndexing(env.db)
+
+	type slot struct {
+		addr common.Address
+		key  common.Hash
+	}
+	var (
+		root     = env.roots[9]
+		accounts = make(map[common.Address][]byte)
+		storages = make(map[slot][]byte)
+	)
+	for addrHash, blob := range env.snapAccounts[root] {
+		accounts[env.accountPreimage(addrHash)] = blob
+	}
+	for addrHash, slots := range env.snapStorages[root] {
+		for slotHash, blob := range slots {
+			storages[slot{env.accountPreimage(addrHash), env.hashPreimage(slotHash)}] = blob
+		}
+	}
+	var (
+		done = make(chan struct{})
+		wg   sync.WaitGroup
+	)
+	for i := 0; i < 8; i++ {
+		wg.Go(func() {
+			reader, err := env.db.HistoricReader(root)
+			if err != nil {
+				t.Errorf("Failed to construct the reader: %v", err)
+				return
+			}
+			for {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				for addr, want := range accounts {
+					blob, err := reader.AccountRLP(addr)
+					if err != nil {
+						t.Errorf("Failed to read the historical account: %v", err)
+						return
+					}
+					if !bytes.Equal(blob, want) {
+						t.Errorf("Unexpected account data, want: %x, got: %x", want, blob)
+						return
+					}
+				}
+				for s, want := range storages {
+					blob, err := reader.Storage(s.addr, s.key)
+					if err != nil {
+						t.Errorf("Failed to read the historical storage: %v", err)
+						return
+					}
+					if !bytes.Equal(blob, want) {
+						t.Errorf("Unexpected storage data, want: %x, got: %x", want, blob)
+						return
+					}
+				}
+			}
+		})
+	}
+	// Commit layers on top, each of which replaces the bottom disk layer
+	env.extend(64)
+	close(done)
+	wg.Wait()
+}
