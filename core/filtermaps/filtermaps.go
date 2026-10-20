@@ -197,6 +197,13 @@ type filterMapsRange struct {
 	// rendered
 	// blockLvPointers are available in the blocks range
 	blocks common.Range[uint64]
+
+	// if localBase is set then the index was started at the history cutoff
+	// with no checkpoint available there. Log value indices are then counted
+	// from a locally chosen base instead of genesis: searches work the same
+	// but epochs before the base cannot be rendered and the index cannot be
+	// exported as checkpoints.
+	localBase bool
 }
 
 // hasIndexedBlocks returns true if the range has at least one fully indexed block.
@@ -256,6 +263,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 			blocks:           common.NewRange(rs.BlocksFirst, rs.BlocksAfterLast-rs.BlocksFirst),
 			maps:             common.NewRange(rs.MapsFirst, rs.MapsAfterLast-rs.MapsFirst),
 			tailPartialEpoch: rs.TailPartialEpoch,
+			localBase:        rs.LocalBase,
 		},
 		// deleting last unindexed epoch might have been interrupted by shutdown
 		cleanedEpochsBefore: max(rs.MapsFirst>>params.logMapsPerEpoch, 1) - 1,
@@ -274,7 +282,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 		log.Info("Initialized log indexer",
 			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
 			"firstmap", f.indexedRange.maps.First(), "lastmap", f.indexedRange.maps.Last(),
-			"headindexed", f.indexedRange.headIndexed)
+			"headindexed", f.indexedRange.headIndexed, "localbase", f.indexedRange.localBase)
 	}
 	return f, nil
 }
@@ -393,26 +401,47 @@ func (f *FilterMaps) init() error {
 			bestIdx, bestLen = idx, max
 		}
 	}
-	var initBlockNumber uint64
+	var (
+		cpList          checkpointList
+		initBlockNumber uint64
+		localBase       bool
+	)
 	if bestLen > 0 {
-		initBlockNumber = checkpoints[bestIdx][bestLen-1].BlockNumber
+		cpList = checkpoints[bestIdx][:bestLen]
+		initBlockNumber = cpList[bestLen-1].BlockNumber
 	}
 	if initBlockNumber < f.historyCutoff {
-		return errors.New("cannot start indexing before history cutoff point")
+		// The receipts needed to start from the best checkpoint have been pruned,
+		// so the global log value index of the blocks after the cutoff cannot be
+		// known. Start at the cutoff block instead, as if it was the last block
+		// of epoch 0 with its first log value at the start of epoch 1.
+		if f.historyCutoff >= f.targetView.HeadNumber() {
+			return errors.New("cannot start indexing at history cutoff point after chain head")
+		}
+		cpList = checkpointList{{
+			BlockNumber: f.historyCutoff,
+			BlockId:     f.targetView.BlockId(f.historyCutoff),
+			FirstIndex:  uint64(f.firstEpochMap(1)) << f.logValuesPerMap,
+		}}
+		localBase = true
+		log.Info("Starting log index at history cutoff with a local log value index base", "block", f.historyCutoff)
+		if f.exportFileName != "" {
+			log.Warn("Log index checkpoints cannot be exported from a local log value index base")
+		}
 	}
 	batch := f.db.NewBatch()
-	for epoch := range bestLen {
-		cp := checkpoints[bestIdx][epoch]
+	for epoch, cp := range cpList {
 		f.storeLastBlockOfMap(batch, f.lastEpochMap(uint32(epoch)), cp.BlockNumber, cp.BlockId)
 		f.storeBlockLvPointer(batch, cp.BlockNumber, cp.FirstIndex)
 	}
 	fmr := filterMapsRange{
 		initialized: true,
+		localBase:   localBase,
 	}
-	if bestLen > 0 {
-		cp := checkpoints[bestIdx][bestLen-1]
+	if len(cpList) > 0 {
+		cp := cpList[len(cpList)-1]
 		fmr.blocks = common.NewRange(cp.BlockNumber+1, 0)
-		fmr.maps = common.NewRange(f.firstEpochMap(uint32(bestLen)), 0)
+		fmr.maps = common.NewRange(f.firstEpochMap(uint32(len(cpList))), 0)
 	}
 	f.setRange(batch, f.targetView, fmr, false)
 	return batch.Write()
@@ -473,6 +502,7 @@ func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, ne
 			MapsFirst:        newRange.maps.First(),
 			MapsAfterLast:    newRange.maps.AfterLast(),
 			TailPartialEpoch: newRange.tailPartialEpoch,
+			LocalBase:        newRange.localBase,
 		}
 		rawdb.WriteFilterMapsRange(batch, rs)
 		if !isTempRange {
@@ -849,6 +879,9 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 // Note: acquiring the indexLock read lock is unnecessary here, as this function
 // is always called within the indexLoop.
 func (f *FilterMaps) exportCheckpoints() {
+	if f.indexedRange.localBase {
+		return // log value indices are not the global ones
+	}
 	finalLvPtr, err := f.getBlockLvPointer(f.finalBlock + 1)
 	if err != nil {
 		log.Error("Error fetching log value pointer of finalized block", "block", f.finalBlock, "error", err)
