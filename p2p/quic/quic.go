@@ -98,7 +98,7 @@ func (c *Conn) browserHandshake(prv *ecdsa.PrivateKey, caps []string) (*ecdsa.Pu
 		return nil, err
 	}
 	// assign random node id
-	c.nodeID = make([]byte, 32)
+	c.nodeID = make([]byte, 64)
 	rand.Read(c.nodeID)
 	return nil, nil
 }
