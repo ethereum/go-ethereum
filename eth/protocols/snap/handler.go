@@ -79,14 +79,12 @@ type Backend interface {
 	Handle(peer *Peer, packet Packet) error
 }
 
-// MakeProtocols constructs the P2P protocol definitions for `snap`. When snapV2
-// is set, the snap/2 version is advertised in addition to the default versions;
-// otherwise only the default (snap/1) versions are offered on the wire.
-func MakeProtocols(backend Backend, snapV2 bool) []p2p.Protocol {
+// MakeProtocols constructs the P2P protocol definitions for `snap`. snap/2 is
+// advertised alongside snap/1 only when advertiseV2 is set; otherwise snap/1
+// alone is offered on the wire.
+func MakeProtocols(backend Backend, advertiseV2 bool) []p2p.Protocol {
 	versions := ProtocolVersions
-	if !snapV2 {
-		// snap/2 is not safe to advertise unconditionally yet, so it is gated
-		// behind a feature flag.
+	if !advertiseV2 {
 		versions = []uint{SNAP1}
 	}
 	protocols := make([]p2p.Protocol, len(versions))
