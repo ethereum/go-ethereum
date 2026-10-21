@@ -104,14 +104,10 @@ func (q *quicTransport) close(err error) {
 
 func (q *quicTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*enode.Node, error) {
 	q.conn.SetDeadline(time.Now().Add(handshakeTimeout))
-	pubkey, err := q.conn.Handshake(prv, q.chosenCaps())
-	if err != nil {
+	if err := q.conn.Handshake(prv, q.chosenCaps()); err != nil {
 		return nil, err
 	}
-	if q.conn.Nonce() != nil {
-		return browserNodeFromConn(q.conn)
-	}
-	return nodeFromConn(pubkey, q.conn), nil
+	return browserNodeFromConn(q.conn)
 }
 
 // chosenCaps matches the capabilities announced in the CONNECT request against

@@ -142,7 +142,7 @@ func (l *quicListener) handleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	select {
-	case l.conns <- p2pquic.NewConn(sess, str, nil, nonce, caps):
+	case l.conns <- p2pquic.NewConn(sess, str, nonce, caps):
 	case <-ctx.Done():
 		sess.CloseWithError(0, "")
 	}
@@ -150,11 +150,11 @@ func (l *quicListener) handleSession(w http.ResponseWriter, r *http.Request) {
 
 // readConnect parses the WT-Available-Protocols header of the CONNECT request.
 // A browser lists the id-proof nonce ("ENR-key-proof-v1=<hex>") and its advertised
-// capabilities. If there is no nonce entry, it will be marked as a node peer.
+// capabilities. Requests without a nonce are rejected.
 func readConnect(r *http.Request) (nonce []byte, caps []string, err error) {
 	hdr := r.Header.Values("WT-Available-Protocols")
 	if len(hdr) == 0 {
-		return nil, nil, nil
+		return nil, nil, errors.New("quic: missing WT-Available-Protocols")
 	}
 	list, err := httpsfv.UnmarshalList(hdr)
 	if err != nil {
@@ -177,6 +177,9 @@ func readConnect(r *http.Request) (nonce []byte, caps []string, err error) {
 			continue
 		}
 		caps = append(caps, s)
+	}
+	if nonce == nil {
+		return nil, nil, errors.New("quic: missing nonce")
 	}
 	return nonce, caps, nil
 }
