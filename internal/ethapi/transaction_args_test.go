@@ -376,6 +376,23 @@ func TestSetDefaultsEmptyAuthList(t *testing.T) {
 	}
 }
 
+func TestToTransactionGasPriceAccessList(t *testing.T) {
+	gas, nonce := hexutil.Uint64(50000), hexutil.Uint64(0)
+	al := types.AccessList{{Address: common.Address{0xaa}}}
+	args := &TransactionArgs{
+		Gas:        &gas,
+		Nonce:      &nonce,
+		Value:      new(hexutil.Big),
+		GasPrice:   (*hexutil.Big)(big.NewInt(1)),
+		ChainID:    (*hexutil.Big)(big.NewInt(1)),
+		AccessList: &al,
+	}
+	tx := args.ToTransaction(types.DynamicFeeTxType)
+	if tx.Type() != types.AccessListTxType || len(tx.AccessList()) != 1 {
+		t.Fatalf("want access list tx, have type %d with access list %v", tx.Type(), tx.AccessList())
+	}
+}
+
 type backendMock struct {
 	current *types.Header
 	config  *params.ChainConfig
