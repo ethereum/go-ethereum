@@ -93,9 +93,6 @@ func (ctx *ScopeContext) ContractCode() []byte {
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
-//
-// Run sets up the per-call scope and picks the interpreter loop. Without a
-// tracer it runs the generated execUntraced, otherwise execTraced.
 func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	evm.depth++
@@ -125,10 +122,6 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		Stack:    stack,
 		Contract: contract,
 	}
-
-	// The exit hooks in execTraced still need the stack and memory, so this
-	// teardown must run after them. Defers in execTraced fire before this one,
-	// so the ordering holds.
 	defer func() {
 		stack.release()
 		mem.Free()
