@@ -57,7 +57,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EnablePreimageRecording bool
 		EnableWitnessStats      bool
 		StatelessSelfValidation bool
-		SnapV2                  bool
+		SnapV2                  *bool `toml:",omitempty"`
 		VMTrace                 string
 		VMTraceJsonConfig       string
 		RPCGasCap               uint64
@@ -175,7 +175,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EnablePreimageRecording *bool
 		EnableWitnessStats      *bool
 		StatelessSelfValidation *bool
-		SnapV2                  *bool
+		SnapV2                  *bool `toml:",omitempty"`
 		VMTrace                 *string
 		VMTraceJsonConfig       *string
 		RPCGasCap               *uint64
@@ -316,7 +316,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.StatelessSelfValidation = *dec.StatelessSelfValidation
 	}
 	if dec.SnapV2 != nil {
-		c.SnapV2 = *dec.SnapV2
+		c.SnapV2 = dec.SnapV2
 	}
 	if dec.VMTrace != nil {
 		c.VMTrace = *dec.VMTrace

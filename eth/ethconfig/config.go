@@ -183,10 +183,11 @@ type Config struct {
 	// Generate execution witnesses and self-check against them (testing purpose)
 	StatelessSelfValidation bool
 
-	// SnapV2 enables the experimental snap/2 (EIP-8189, BAL-based) sync protocol:
-	// the node advertises snap/2 on the wire and uses the snap/2 state syncer.
-	// It is not safe to enable on public networks yet.
-	SnapV2 bool
+	// SnapV2 selects the snap/2 (EIP-8189, BAL-based) state syncer. Unset means
+	// automatic: snap/2 once Amsterdam has been active long enough for the sync
+	// pivot to carry block access lists. Enabling it before then falls back to
+	// snap/1. snap/2 is served either way, except while syncing via snap/1.
+	SnapV2 *bool `toml:",omitempty"`
 
 	// Enables VM tracing
 	VMTrace           string

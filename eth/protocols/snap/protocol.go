@@ -37,7 +37,7 @@ const ProtocolName = "snap"
 
 // ProtocolVersions are all the `snap` protocol versions this node implements
 // (first is primary). What's actually advertised on the wire is decided by
-// MakeProtocols, which gates snap/2 behind a feature flag.
+// MakeProtocols.
 var ProtocolVersions = []uint{SNAP2, SNAP1}
 
 // protocolLengths are the number of implemented messages corresponding to

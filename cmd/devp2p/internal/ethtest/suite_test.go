@@ -181,6 +181,7 @@ func setupGeth(stack *node.Node, dir string) error {
 	if err != nil {
 		return err
 	}
+	snapV2 := true
 	backend, err := eth.New(stack, &ethconfig.Config{
 		Genesis:        &chain.genesis,
 		NetworkId:      chain.genesis.Config.ChainID.Uint64(), // 19763
@@ -189,7 +190,7 @@ func setupGeth(stack *node.Node, dir string) error {
 		TrieDirtyCache: 16,
 		TrieTimeout:    60 * time.Minute,
 		SnapshotCache:  10,
-		SnapV2:         true, // advertise snap/2 (alongside snap/1) so the snap/2 suite can negotiate it
+		SnapV2:         &snapV2, // use snap/2 so the snap/2 suite can negotiate it
 	})
 	if err != nil {
 		return err
