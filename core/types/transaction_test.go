@@ -710,6 +710,39 @@ func intPtr(i int64) *int64 {
 	return &i
 }
 
+func BenchmarkEffectiveGasTipIntCmp(b *testing.B) {
+	signer := LatestSigner(params.TestChainConfig)
+	key, _ := crypto.GenerateKey()
+	newTx := func(feeCap int64) *Transaction {
+		tx, _ := SignNewTx(key, signer, &DynamicFeeTx{
+			ChainID:   big.NewInt(1),
+			GasTipCap: big.NewInt(2000000000),
+			GasFeeCap: big.NewInt(feeCap),
+			Gas:       21000,
+			To:        &common.Address{},
+			Value:     big.NewInt(0),
+		})
+		return tx
+	}
+	minTip := uint256.NewInt(1)
+	baseFee := uint256.NewInt(1000000000) // 1 gwei
+
+	for _, tc := range []struct {
+		name string
+		tx   *Transaction
+	}{
+		{"FeeCapAboveBaseFee", newTx(3000000000)},
+		{"FeeCapBelowBaseFee", newTx(500000000)},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				tc.tx.EffectiveGasTipIntCmp(minTip, baseFee)
+			}
+		})
+	}
+}
+
 func BenchmarkEffectiveGasTipCmp(b *testing.B) {
 	signer := LatestSigner(params.TestChainConfig)
 	key, _ := crypto.GenerateKey()
@@ -733,4 +766,43 @@ func BenchmarkEffectiveGasTipCmp(b *testing.B) {
 			tx.EffectiveGasTipCmp(other, baseFee)
 		}
 	})
+}
+
+// TestEffectiveGasTipIntCmp checks the comparison of a transaction's effective
+// tip with a given tip, including a fee cap below the base fee: the effective
+// tip is then negative, below any tip, and must not wrap around.
+func TestEffectiveGasTipIntCmp(t *testing.T) {
+	testCases := []struct {
+		tipCap  int64
+		feeCap  int64
+		baseFee *int64
+		other   uint64
+		want    int
+	}{
+		{tipCap: 10, feeCap: 100, baseFee: intPtr(50), other: 5, want: 1},
+		{tipCap: 10, feeCap: 100, baseFee: intPtr(50), other: 10, want: 0},
+		{tipCap: 10, feeCap: 100, baseFee: intPtr(95), other: 5, want: 0},  // fee cap minus base fee binds
+		{tipCap: 10, feeCap: 100, baseFee: intPtr(100), other: 0, want: 0}, // effective tip zero
+		{tipCap: 10, feeCap: 100, baseFee: intPtr(101), other: 0, want: -1},
+		{tipCap: 10, feeCap: 100, baseFee: intPtr(101), other: 1, want: -1},
+		{tipCap: 10, feeCap: 20, baseFee: intPtr(50), other: 5, want: -1}, // fee cap far below the base fee
+		{tipCap: 10, feeCap: 100, baseFee: nil, other: 5, want: 1},
+	}
+	for i, tc := range testCases {
+		tx := NewTx(&DynamicFeeTx{
+			ChainID:   big.NewInt(1),
+			GasTipCap: big.NewInt(tc.tipCap),
+			GasFeeCap: big.NewInt(tc.feeCap),
+			Gas:       21000,
+			To:        &common.Address{},
+			Value:     big.NewInt(0),
+		})
+		var baseFee *uint256.Int
+		if tc.baseFee != nil {
+			baseFee = uint256.NewInt(uint64(*tc.baseFee))
+		}
+		if have := tx.EffectiveGasTipIntCmp(uint256.NewInt(tc.other), baseFee); have != tc.want {
+			t.Errorf("case %d: have %d, want %d", i, have, tc.want)
+		}
+	}
 }

@@ -372,7 +372,7 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 }
 
 // calcEffectiveGasTip calculates the effective gas tip of the transaction and
-// saves the result to dst.
+// saves the result to dst. On error, dst is undefined.
 func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.Int) error {
 	if baseFee == nil {
 		if dst.SetFromBig(tx.inner.gasTipCap()) {
@@ -380,15 +380,12 @@ func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.In
 		}
 		return nil
 	}
-
-	var err error
 	if dst.SetFromBig(tx.inner.gasFeeCap()) {
 		return ErrUint256Overflow
 	}
 	if dst.Cmp(baseFee) < 0 {
-		err = ErrGasFeeCapTooLow
+		return ErrGasFeeCapTooLow
 	}
-
 	dst.Sub(dst, baseFee)
 	gasTipCap := new(uint256.Int)
 	if gasTipCap.SetFromBig(tx.inner.gasTipCap()) {
@@ -397,7 +394,7 @@ func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.In
 	if gasTipCap.Cmp(dst) < 0 {
 		dst.Set(gasTipCap)
 	}
-	return err
+	return nil
 }
 
 // EffectiveGasTipValue returns the effective gasTip value for the given base fee,
@@ -440,7 +437,15 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *uint256.Int, baseFee *uint25
 		return tx.GasTipCapIntCmp(other.ToBig())
 	}
 	txTip := new(uint256.Int)
-	tx.calcEffectiveGasTip(txTip, baseFee)
+	if err := tx.calcEffectiveGasTip(txTip, baseFee); err != nil {
+		if err == ErrGasFeeCapTooLow {
+			// The fee cap is below the base fee: the effective tip is
+			// negative, below any uint256.
+			return -1
+		}
+		// fall back to big int comparison in case of error
+		return tx.EffectiveGasTipValue(baseFee.ToBig()).Cmp(other.ToBig())
+	}
 	return txTip.Cmp(other)
 }
 
