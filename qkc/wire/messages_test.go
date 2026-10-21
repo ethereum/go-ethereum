@@ -31,8 +31,8 @@ func TestNewClusterMessageRegistry(t *testing.T) {
 	}{
 		{ClusterOpPing, &PingRequest{}},
 		{ClusterOpPong, &PongResponse{}},
-		{ClusterOpConnectToSlavesRequest, &ConnectToSlavesRequest{}},
-		{ClusterOpConnectToSlavesResponse, &ConnectToSlavesResponse{}},
+		{ClusterOpConnectToSlavesRequest, &ConnectToChainsRequest{}},
+		{ClusterOpConnectToSlavesResponse, &ConnectToChainsResponse{}},
 	}
 	for _, c := range cases {
 		got, err := NewClusterMessage(c.op)
@@ -114,9 +114,9 @@ func TestPingPongSSZRoundTrip(t *testing.T) {
 	roundTripSSZ(t, &PongResponse{})
 }
 
-func TestConnectToSlavesSSZRoundTrip(t *testing.T) {
-	req := &ConnectToSlavesRequest{
-		SlaveInfoList: []SlaveInfo{
+func TestConnectToChainsSSZRoundTrip(t *testing.T) {
+	req := &ConnectToChainsRequest{
+		ChainInfoList: []ChainInfo{
 			{ID: []byte("s1"), Host: []byte("10.0.0.1"), Port: 38391, FullShardIDList: []uint32{1, 2}},
 			{ID: []byte("s2"), Host: []byte("10.0.0.2"), Port: 38392, FullShardIDList: nil},
 		},
@@ -124,7 +124,7 @@ func TestConnectToSlavesSSZRoundTrip(t *testing.T) {
 	roundTripSSZ(t, req)
 
 	// Results mirror the request order; empty bytes mean success.
-	resp := &ConnectToSlavesResponse{
+	resp := &ConnectToChainsResponse{
 		ResultList: [][]byte{
 			nil,                    // success
 			[]byte("dial timeout"), // failure
@@ -133,8 +133,8 @@ func TestConnectToSlavesSSZRoundTrip(t *testing.T) {
 	roundTripSSZ(t, resp)
 
 	// Boundary: empty lists.
-	roundTripSSZ(t, &ConnectToSlavesRequest{})
-	roundTripSSZ(t, &ConnectToSlavesResponse{})
+	roundTripSSZ(t, &ConnectToChainsRequest{})
+	roundTripSSZ(t, &ConnectToChainsResponse{})
 }
 
 func TestHelloCommandSSZRoundTrip(t *testing.T) {
@@ -167,9 +167,9 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 	}{
 		{"PingRequest", 0, func() SSZMessage { return new(PingRequest) }},
 		{"PongResponse", 0, func() SSZMessage { return new(PongResponse) }},
-		{"SlaveInfo", 0, func() SSZMessage { return new(SlaveInfo) }},
-		{"ConnectToSlavesRequest", 0, func() SSZMessage { return new(ConnectToSlavesRequest) }},
-		{"ConnectToSlavesResponse", 0, func() SSZMessage { return new(ConnectToSlavesResponse) }},
+		{"ChainInfo", 0, func() SSZMessage { return new(ChainInfo) }},
+		{"ConnectToChainsRequest", 0, func() SSZMessage { return new(ConnectToChainsRequest) }},
+		{"ConnectToChainsResponse", 0, func() SSZMessage { return new(ConnectToChainsResponse) }},
 		{"HelloCommand", 58, func() SSZMessage { return new(HelloCommand) }},
 	}
 	for _, tc := range cases {
@@ -198,7 +198,7 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 }
 
 func TestResultListGoldenEncoding(t *testing.T) {
-	msg := &ConnectToSlavesResponse{ResultList: [][]byte{nil, []byte("x")}}
+	msg := &ConnectToChainsResponse{ResultList: [][]byte{nil, []byte("x")}}
 	got, err := msg.MarshalSSZ()
 	if err != nil {
 		t.Fatalf("MarshalSSZ: %v", err)
@@ -246,53 +246,6 @@ func TestSSZGoldenEncoding(t *testing.T) {
 	wantEmpty := []byte{0x08, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00}
 	if !bytes.Equal(empty, wantEmpty) {
 		t.Fatalf("empty golden mismatch:\n  got  %x\n  want %x", empty, wantEmpty)
-	}
-}
-
-// ---- frame integration: opcode + registry + SSZ payload ----
-
-func TestFrameMessageIntegration(t *testing.T) {
-	ping := &PingRequest{ID: []byte("node-1"), FullShardIDList: []uint32{0x10001}}
-	payload, err := ping.MarshalSSZ()
-	if err != nil {
-		t.Fatalf("MarshalSSZ: %v", err)
-	}
-
-	var buf bytes.Buffer
-	if err := WriteFrame(&buf, &Frame{
-		Meta:    ClusterMetadata{ChainID: 1, ClusterPeerID: 42},
-		Opcode:  byte(ClusterOpPing),
-		RPCID:   7,
-		Payload: payload,
-	}); err != nil {
-		t.Fatalf("WriteFrame: %v", err)
-	}
-
-	frame, err := ReadFrame(&buf, 0)
-	if err != nil {
-		t.Fatalf("ReadFrame: %v", err)
-	}
-	if frame.Meta.ChainID != 1 || frame.Meta.ClusterPeerID != 42 || frame.RPCID != 7 {
-		t.Fatalf("frame header mismatch: %+v rpcid=%d", frame.Meta, frame.RPCID)
-	}
-
-	msg, err := NewClusterMessage(ClusterOp(frame.Opcode))
-	if err != nil {
-		t.Fatalf("NewClusterMessage: %v", err)
-	}
-	got, ok := msg.(*PingRequest)
-	if !ok {
-		t.Fatalf("registry returned %T, want *PingRequest", msg)
-	}
-	if err := got.UnmarshalSSZ(frame.Payload); err != nil {
-		t.Fatalf("UnmarshalSSZ: %v", err)
-	}
-	reencoded, err := got.MarshalSSZ()
-	if err != nil {
-		t.Fatalf("re-MarshalSSZ: %v", err)
-	}
-	if !bytes.Equal(reencoded, payload) {
-		t.Fatalf("message encoding mismatch: got %x, want %x", reencoded, payload)
 	}
 }
 

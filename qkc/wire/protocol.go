@@ -14,19 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package wire maps the implemented opcodes to their SSZ message types.
 package wire
 
 import (
 	"fmt"
 )
-
-// SSZMessage is implemented by every wire message after sszgen runs.
-type SSZMessage interface {
-	MarshalSSZ() ([]byte, error)
-	UnmarshalSSZ([]byte) error
-	SizeSSZ() int
-}
 
 // Direction matches the P2P sync Direction enum in
 // quarkchain/cluster/p2p_commands.py.
@@ -53,9 +45,16 @@ func (d Direction) String() string {
 	}
 }
 
+// SSZMessage is implemented by every wire message after sszgen runs.
+type SSZMessage interface {
+	MarshalSSZ() ([]byte, error)
+	UnmarshalSSZ([]byte) error
+	SizeSSZ() int
+}
+
 // NewClusterMessage returns a new empty message struct pointer corresponding
-// to the given ClusterOp.  Used by slave/master_conn.go to allocate the
-// concrete type before deserialising a frame payload.
+// to the given ClusterOp. Used by the connection layer on both Master and chain
+// sides to allocate the concrete type before decoding a frame payload.
 func NewClusterMessage(op ClusterOp) (SSZMessage, error) {
 	switch op {
 	case ClusterOpPing:
@@ -63,9 +62,9 @@ func NewClusterMessage(op ClusterOp) (SSZMessage, error) {
 	case ClusterOpPong:
 		return &PongResponse{}, nil
 	case ClusterOpConnectToSlavesRequest:
-		return &ConnectToSlavesRequest{}, nil
+		return &ConnectToChainsRequest{}, nil
 	case ClusterOpConnectToSlavesResponse:
-		return &ConnectToSlavesResponse{}, nil
+		return &ConnectToChainsResponse{}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown ClusterOp: 0x%x", op)

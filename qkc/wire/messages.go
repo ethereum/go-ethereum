@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package wire defines the SSZ container types for wire messages. See README.md
-// for the schema rules and the repo-root command for regenerating their codecs.
 package wire
 
 // The go:generate directive below runs from this package directory; it cds to
@@ -42,49 +40,50 @@ const UInt128Length = 16
 // §1  Cluster initialisation
 // =============================================================================
 
-// PingRequest (ClusterOp.PING, 0x81) — sent by master to initialise a slave.
+// PingRequest (ClusterOp.PING, 0x81) initializes a chain connection.
 type PingRequest struct {
-	// For []byte, ssz-max is the maximum byte length; for []T, it is the
-	// maximum element count. These broad schema limits do not set frame caps.
 	ID              []byte   `ssz-max:"4294967295"`
 	FullShardIDList []uint32 `ssz-max:"4294967295"`
 	HasRootTip      bool
 	RootTip         []byte `ssz-max:"4294967295"` // SSZ encoding of RootBlock when HasRootTip is true.
 }
 
-// PongResponse (ClusterOp.PONG, 0x82) — slave's reply to PING.
+// PongResponse (ClusterOp.PONG, 0x82) is the chain's response to PING and
+// echoes the request RPCID in the frame header.
 type PongResponse struct {
 	ID              []byte   `ssz-max:"4294967295"`
 	FullShardIDList []uint32 `ssz-max:"4294967295"`
 }
 
-// SlaveInfo (used by ConnectToSlavesRequest) — describes a remote slave.
-type SlaveInfo struct {
+// ChainInfo describes a remote chain for ConnectToChainsRequest.
+type ChainInfo struct {
 	ID              []byte `ssz-max:"4294967295"`
 	Host            []byte `ssz-max:"4294967295"`
 	Port            uint16
 	FullShardIDList []uint32 `ssz-max:"4294967295"`
 }
 
-// ConnectToSlavesRequest (ClusterOp.CONNECT_TO_SLAVES_REQUEST, 0x83).
-type ConnectToSlavesRequest struct {
-	SlaveInfoList []SlaveInfo `ssz-max:"4294967295"`
+// ConnectToChainsRequest (opcode 0x83) asks a chain to connect to the listed
+// chains and report each result.
+type ConnectToChainsRequest struct {
+	ChainInfoList []ChainInfo `ssz-max:"4294967295"`
 }
 
-// ConnectToSlavesResponse (ClusterOp.CONNECT_TO_SLAVES_RESPONSE, 0x84).
-// Each ResultList entry is empty on success or contains the error payload.
-type ConnectToSlavesResponse struct {
+// ConnectToChainsResponse (opcode 0x84) reports one result per requested
+// chain, in request order. Empty means success; non-empty contains the error
+// payload.
+type ConnectToChainsResponse struct {
 	ResultList [][]byte `ssz-max:"4294967295,4294967295" ssz-size:"?,?"`
 }
 
-// HelloCommand (CommandOp.HELLO, 0x00) — initial inter-cluster handshake.
+// HelloCommand (CommandOp.HELLO, 0x00) is the non-RPC Master↔Master handshake.
 type HelloCommand struct {
 	Version              uint32
 	NetworkID            uint32
 	PeerID               [HashLength]byte
 	PeerIP               [UInt128Length]byte
 	PeerPort             uint16
-	ChainMaskList        []uint32 `ssz-max:"4294967295"`
+	ChainMaskList        []uint32 `ssz-max:"4294967295"` // Chain masks hosted by this Master.
 	RootBlockHeader      []byte   `ssz-max:"4294967295"` // SSZ encoding of RootBlockHeader.
 	GenesisRootBlockHash [HashLength]byte
 }

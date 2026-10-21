@@ -36,16 +36,16 @@ the message source file and generates codecs for its structs.
   the enclosing message boundary, not by a legacy length prefix.
 - `[]T` is a `List[T]`; `[][]byte` is a list of byte lists. Each dynamic list
   uses offsets to locate its elements.
-- SSZ integers and offsets are little-endian. The outer frame's existing
-  length and metadata encoding are unchanged by message payload SSZ.
+- SSZ integers and offsets are little-endian. The transport layer carries the
+  encoded SSZ bytes as the message payload.
 - SSZ has no implicit nullable Go pointer. Represent presence explicitly in
   the schema and test both present and absent cases.
 
 The current `ssz-max` tags use the broad schema limit `4294967295` (`2^32-1`).
 For `[]byte`, this is a byte count; for `[]T`, it is an element count. It does
 not preallocate that amount of memory and does not guarantee that a value of
-that size fits in a frame. The frame's uint32 payload length and
-`ReadFrame`'s `maxPayloadLen` impose separate wire and runtime limits.
+that size fits in a transport payload. The transport layer may apply separate
+message-size limits.
 `sszgen` requires numeric literals in tags, so Go constants cannot be
 referenced there. If the protocol defines a tighter bound for a new field, use
 that bound in its tag.
