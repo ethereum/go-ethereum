@@ -285,6 +285,12 @@ func (m *SortedMap) lazies(pool txpool.LazyResolver) *lazyList {
 	return m.lazy
 }
 
+// first returns the transaction with the lowest nonce; the map must not be
+// empty.
+func (m *SortedMap) first() *types.Transaction {
+	return m.items[(*m.index)[0]]
+}
+
 // LastElement returns the last element of a flattened list, thus, the
 // transaction with the highest nonce
 func (m *SortedMap) LastElement() *types.Transaction {
@@ -303,6 +309,9 @@ type list struct {
 	costcap   *uint256.Int // Price of the highest costing transaction (reset only if exceeds balance)
 	gascap    uint64       // Gas limit of the highest spending transaction (reset only if exceeds block limit)
 	totalcost *uint256.Int // Total cost of all transactions in the list
+
+	heads *headIndex     // Index of the pending accounts' first transactions (pending lists only)
+	addr  common.Address // Account of the list, in heads
 }
 
 // newList creates a new transaction list for maintaining nonce-indexable fast,
@@ -313,6 +322,21 @@ func newList(strict bool) *list {
 		txs:       NewSortedMap(),
 		costcap:   new(uint256.Int),
 		totalcost: new(uint256.Int),
+	}
+}
+
+// newPendingList creates the pending list of addr, which keeps addr's entry in
+// heads up to date.
+func newPendingList(addr common.Address, heads *headIndex) *list {
+	l := newList(true)
+	l.heads, l.addr = heads, addr
+	return l
+}
+
+// changed updates the list's account in the index of first transactions.
+func (l *list) changed() {
+	if l.heads != nil {
+		l.heads.update(l.addr, l)
 	}
 }
 
@@ -367,13 +391,18 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		l.subTotalCost([]*types.Transaction{old})
 	}
 
-	// Otherwise overwrite the old transaction with the current one
+	// Otherwise overwrite the old transaction with the current one. Only one at
+	// or below the first nonce can change the list's first transaction.
+	head := l.txs.index.Len() == 0 || tx.Nonce() <= (*l.txs.index)[0]
 	l.txs.Put(tx)
 	if l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
 	if gas := tx.Gas(); l.gascap < gas {
 		l.gascap = gas
+	}
+	if head {
+		l.changed()
 	}
 	return true, old
 }
@@ -384,6 +413,9 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 func (l *list) Forward(threshold uint64) types.Transactions {
 	txs := l.txs.Forward(threshold)
 	l.subTotalCost(txs)
+	if len(txs) > 0 {
+		l.changed()
+	}
 	return txs
 }
 
@@ -427,6 +459,7 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 	l.subTotalCost(removed)
 	l.subTotalCost(invalids)
 	l.txs.reheap()
+	l.changed()
 	return removed, invalids
 }
 
@@ -435,6 +468,9 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 func (l *list) Cap(threshold int) types.Transactions {
 	txs := l.txs.Cap(threshold)
 	l.subTotalCost(txs)
+	if len(txs) > 0 {
+		l.changed()
+	}
 	return txs
 }
 
@@ -448,6 +484,7 @@ func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
 		return false, nil
 	}
 	l.subTotalCost([]*types.Transaction{tx})
+	defer l.changed()
 	// In strict mode, filter out non-executable transactions
 	if l.strict {
 		txs := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > nonce })
@@ -467,6 +504,9 @@ func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
 func (l *list) Ready(start uint64) types.Transactions {
 	txs := l.txs.Ready(start)
 	l.subTotalCost(txs)
+	if len(txs) > 0 {
+		l.changed()
+	}
 	return txs
 }
 

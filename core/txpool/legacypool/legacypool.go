@@ -241,6 +241,7 @@ type LegacyPool struct {
 	reserver      txpool.Reserver              // Address reserver to ensure exclusivity across subpools
 
 	pending map[common.Address]*list // All currently processable transactions
+	heads   *headIndex               // Accounts of pending by their first transaction's fee cap
 	queue   *queue
 	all     *lookup     // All transactions to allow lookups
 	priced  *pricedList // All transactions sorted by price
@@ -274,6 +275,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		chainconfig:     chain.Config(),
 		signer:          signer,
 		pending:         make(map[common.Address]*list),
+		heads:           newHeadIndex(),
 		queue:           newQueue(config, signer),
 		all:             newLookup(),
 		reqResetCh:      make(chan *txpoolResetRequest),
@@ -504,6 +506,9 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
+	if filter.MinTip != nil && filter.BaseFee != nil {
+		return pool.pendingPayable(filter)
+	}
 	var count int
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
 	for addr, list := range pool.pending {
@@ -513,6 +518,27 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address
 			count += n
 		}
 	}
+	return pending, count
+}
+
+// pendingPayable is Pending for a filter with a minimum tip and a base fee,
+// which ends each list before its first transaction whose fee cap is below the
+// base fee: that transaction pays a negative tip. Only the accounts whose first
+// transaction's fee cap covers the base fee can contribute, and the index of
+// first transactions by fee cap finds them without visiting the others. The
+// caller holds pool.mu.
+func (pool *LegacyPool) pendingPayable(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
+	var (
+		count   int
+		pending = make(map[common.Address][]*txpool.LazyTransaction)
+	)
+	pool.heads.atLeast(filter.BaseFee, func(addr common.Address, list *list) {
+		lazies := list.txs.lazies(pool)
+		if n := lazies.pending(filter); n > 0 {
+			pending[addr] = lazies.txs[:n:n]
+			count += n
+		}
+	})
 	return pending, count
 }
 
@@ -818,7 +844,7 @@ func (pool *LegacyPool) enqueueTx(hash common.Hash, tx *types.Transaction, addAl
 func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) bool {
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
-		pool.pending[addr] = newList(true)
+		pool.pending[addr] = newPendingList(addr, pool.heads)
 		pendingAddrsGauge.Inc(1)
 	}
 	list := pool.pending[addr]
@@ -1810,6 +1836,7 @@ func (pool *LegacyPool) Clear() {
 	pool.all.Clear()
 	pool.priced.Reheap()
 	pool.pending = make(map[common.Address]*list)
+	pool.heads = newHeadIndex()
 	pool.queue = newQueue(pool.config, pool.signer)
 	pool.pendingNonces = newNoncer(pool.currentState)
 

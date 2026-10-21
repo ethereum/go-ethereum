@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/txorder"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
@@ -99,10 +100,28 @@ func comparePending(got map[common.Address][]*txpool.LazyTransaction, count int,
 // TestPendingCached checks that Pending, served from the per-account cache,
 // returns what filtering and converting every transaction on each call
 // returns, through random additions, replacements, removals, new heads, balance
-// drops and evictions over the pool's limits.
+// drops and evictions over the pool's limits. For a filter with a minimum tip
+// and a base fee, Pending visits only the accounts the fee cap index finds.
+// Fees are small integers, each in a fee cap bucket of its own, or wide: scaled
+// to gwei-like values with noise, many sharing a bucket with the base fee.
 func TestPendingCached(t *testing.T) {
 	t.Parallel()
 
+	t.Run("small", func(t *testing.T) { t.Parallel(); testPendingCached(t, 1, false) })
+	t.Run("wide", func(t *testing.T) { t.Parallel(); testPendingCached(t, 1e7, false) })
+}
+
+// TestPendingPayable is TestPendingCached with lower fee caps and base fees, so
+// that most accounts' first transaction pays the base fee and the index finds
+// most of them.
+func TestPendingPayable(t *testing.T) {
+	t.Parallel()
+
+	t.Run("small", func(t *testing.T) { t.Parallel(); testPendingCached(t, 1, true) })
+	t.Run("wide", func(t *testing.T) { t.Parallel(); testPendingCached(t, 1e7, true) })
+}
+
+func testPendingCached(t *testing.T, scale int64, payable bool) {
 	config := testTxPoolConfig
 	config.AccountSlots = 2
 	config.GlobalSlots = 16
@@ -125,14 +144,27 @@ func TestPendingCached(t *testing.T) {
 		addrs[i] = crypto.PubkeyToAddress(keys[i].PublicKey)
 		testAddBalance(pool, addrs[i], big.NewInt(1e18))
 	}
+	// fee scales v, adding noise below the scale
+	fee := func(v int64) int64 {
+		if scale == 1 {
+			return v
+		}
+		return v*scale + rng.Int63n(scale)
+	}
+	// the fee caps start at 30 and the filters' base fees go up to 69, on both
+	// sides of them; for the payable test the fee caps start at 1 and the base
+	// fees stay below 30, so that most accounts can pay
+	lowestFeeCap, baseFeeEnd := int64(30), 70
+	if payable {
+		lowestFeeCap, baseFeeEnd = 1, 30
+	}
 	randomFilter := func() txpool.PendingFilter {
 		var f txpool.PendingFilter
 		if rng.Intn(4) > 0 {
-			f.MinTip = uint256.NewInt(uint64(rng.Intn(12)))
+			f.MinTip = uint256.NewInt(uint64(fee(int64(rng.Intn(12)))))
 		}
 		if rng.Intn(4) > 0 {
-			// on both sides of the fee caps (30 to 59)
-			f.BaseFee = uint256.NewInt(uint64(rng.Intn(70)))
+			f.BaseFee = uint256.NewInt(uint64(fee(int64(rng.Intn(baseFeeEnd)))))
 		}
 		if rng.Intn(3) == 0 {
 			f.GasLimitCap = uint64(21000 + rng.Intn(30000))
@@ -143,7 +175,7 @@ func TestPendingCached(t *testing.T) {
 		t.Helper()
 		filters := []txpool.PendingFilter{
 			{}, {MinTip: uint256.NewInt(1)},
-			{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(45)}, // some fee caps below the base fee
+			{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(uint64(fee(45)))}, // above some fee caps
 			randomFilter(), randomFilter(), randomFilter(),
 		}
 		for _, f := range filters {
@@ -185,10 +217,11 @@ func TestPendingCached(t *testing.T) {
 			gas := uint64(21000 + rng.Intn(3)*10000)
 			var tx *types.Transaction
 			if rng.Intn(4) == 0 {
-				tx = pricedTransaction(nonce, gas, big.NewInt(int64(30+rng.Intn(30))), keys[k])
+				tx = pricedTransaction(nonce, gas, big.NewInt(fee(lowestFeeCap+int64(rng.Intn(30)))), keys[k])
 			} else {
-				tip := int64(1 + rng.Intn(15))
-				tx = dynamicFeeTx(nonce, gas, big.NewInt(int64(30+rng.Intn(20))), big.NewInt(tip), keys[k])
+				tip := fee(int64(1 + rng.Intn(15)))
+				feeCap := max(fee(lowestFeeCap+int64(rng.Intn(20))), tip)
+				tx = dynamicFeeTx(nonce, gas, big.NewInt(feeCap), big.NewInt(tip), keys[k])
 			}
 			pool.addRemotesSync([]*types.Transaction{tx})
 		case op < 13: // removal of a pending or queued transaction
@@ -204,7 +237,7 @@ func TestPendingCached(t *testing.T) {
 			<-pool.requestReset(nil, nil)
 		case op < 19: // a balance drop that makes some transactions unaffordable
 			pool.mu.Lock()
-			pool.currentState.SetBalance(addr, uint256.NewInt(uint64(rng.Intn(4))*600000), tracing.BalanceChangeUnspecified)
+			pool.currentState.SetBalance(addr, uint256.NewInt(uint64(rng.Intn(4))*600000*uint64(scale)), tracing.BalanceChangeUnspecified)
 			pool.mu.Unlock()
 			<-pool.requestReset(nil, nil)
 		default: // the balance back
@@ -216,7 +249,8 @@ func TestPendingCached(t *testing.T) {
 }
 
 // TestPendingCachedConcurrent reads the pool from several goroutines while it
-// changes, for the race detector.
+// changes, through the fee cap index and visiting every account, for the race
+// detector.
 func TestPendingCachedConcurrent(t *testing.T) {
 	t.Parallel()
 
@@ -232,11 +266,14 @@ func TestPendingCachedConcurrent(t *testing.T) {
 		wg   sync.WaitGroup
 		stop = make(chan struct{})
 	)
-	for range 4 {
+	for i := range 4 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			filter := txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(2)}
+			if i%2 == 1 {
+				filter.BaseFee = nil // visits every account
+			}
 			for {
 				select {
 				case <-stop:
@@ -398,5 +435,100 @@ func TestSortedMapCaches(t *testing.T) {
 				t.Fatalf("after %s: lazy cache's transaction %d differs from a list built afresh", mutation.name, i)
 			}
 		}
+	}
+}
+
+// TestPendingPayableOrdering checks that the miner's price-and-nonce ordering
+// takes the same transactions, in the same order, from Pending served through
+// the fee cap index as from every account's transactions filtered one by one,
+// on a pool where some accounts' first transaction can't be included, its fee
+// cap below the base fee, its tip below the miner's minimum or its gas above
+// the cap, and others stop paying at a later transaction. Fee caps are on both
+// sides of the base fee, and at it, so that the index's lowest bucket is
+// compared exactly.
+func TestPendingPayableOrdering(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupPool()
+	defer pool.Close()
+
+	const baseFee, minTip, gasCap = 1000, 10, 50000
+	rng := rand.New(rand.NewSource(1))
+	for i := 0; i < 60; i++ {
+		key, _ := crypto.GenerateKey()
+		testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1e18))
+		var txs []*types.Transaction
+		for n := uint64(0); n < 3; n++ {
+			feeCap := int64(baseFee + rng.Intn(3)*rng.Intn(500)) // a third of them exactly the base fee
+			tip := int64(minTip + rng.Intn(20))
+			gas := uint64(21000)
+			switch rng.Intn(6) {
+			case 0:
+				tip = int64(1 + rng.Intn(minTip-1)) // below the miner's minimum, at the pool's
+			case 1:
+				gas = gasCap + 1
+			case 2:
+				feeCap = int64(baseFee - 1 - rng.Intn(500)) // below the base fee
+			}
+			txs = append(txs, dynamicFeeTx(n, gas, big.NewInt(max(feeCap, tip)), big.NewInt(tip), key))
+		}
+		if errs := pool.addRemotesSync(txs); errs[0] != nil {
+			t.Fatal(errs[0])
+		}
+	}
+	filter := txpool.PendingFilter{MinTip: uint256.NewInt(minTip), BaseFee: uint256.NewInt(baseFee), GasLimitCap: gasCap}
+	drain := func(txs map[common.Address][]*txpool.LazyTransaction) []common.Hash {
+		var hashes []common.Hash
+		order := txorder.NewTransactionsByPriceAndNonce(types.LatestSigner(pool.chainconfig), txs, big.NewInt(baseFee))
+		for ltx, _ := order.Peek(); ltx != nil; ltx, _ = order.Peek() {
+			hashes = append(hashes, ltx.Hash)
+			order.Shift()
+		}
+		return hashes
+	}
+	pending, _ := pool.Pending(filter)
+	want, got := drain(uncachedPending(pool, filter)), drain(pending)
+	if len(want) == 0 || len(want) == pool.all.Count() {
+		t.Fatalf("%d of %d transactions ordered: the test needs some", len(want), pool.all.Count())
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("ordering from Pending takes %d transactions, from every account %d, or another order", len(got), len(want))
+	}
+}
+
+// TestPendingWithoutMinTip checks that Pending with a base fee but no minimum
+// tip, which doesn't filter by the fees, visits every account rather than only
+// those the fee cap index finds: an account's list is whole even when its first
+// transaction's fee cap is below the base fee. With a minimum tip, even 0, each
+// list ends before its first transaction below the base fee.
+func TestPendingWithoutMinTip(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupPool()
+	defer pool.Close()
+
+	payer, _ := crypto.GenerateKey()
+	waiter, _ := crypto.GenerateKey()
+	testAddBalance(pool, crypto.PubkeyToAddress(payer.PublicKey), big.NewInt(1e18))
+	testAddBalance(pool, crypto.PubkeyToAddress(waiter.PublicKey), big.NewInt(1e18))
+	txs := []*types.Transaction{
+		dynamicFeeTx(0, 21000, big.NewInt(200), big.NewInt(10), payer),  // pays the base fee
+		dynamicFeeTx(1, 21000, big.NewInt(50), big.NewInt(10), payer),   // doesn't
+		dynamicFeeTx(2, 21000, big.NewInt(200), big.NewInt(10), payer),  // behind it
+		dynamicFeeTx(0, 21000, big.NewInt(50), big.NewInt(10), waiter),  // doesn't pay the base fee
+		dynamicFeeTx(1, 21000, big.NewInt(200), big.NewInt(10), waiter), // behind it
+	}
+	for _, err := range pool.addRemotesSync(txs) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	filter := txpool.PendingFilter{BaseFee: uint256.NewInt(100)}
+	if _, n := pool.Pending(filter); n != 5 {
+		t.Errorf("Pending without MinTip: %d transactions, want 5", n)
+	}
+	filter.MinTip = uint256.NewInt(0)
+	if _, n := pool.Pending(filter); n != 1 {
+		t.Errorf("Pending with MinTip 0: %d transactions, want 1", n)
 	}
 }

@@ -275,6 +275,38 @@ func validatePoolInternals(pool *LegacyPool) error {
 			return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
 		}
 	}
+	// Ensure the index of first transactions holds exactly the pending accounts
+	heads := pool.heads
+	var indexed int
+	for k, bucket := range heads.buckets {
+		if len(bucket) == 0 {
+			return fmt.Errorf("empty fee cap bucket %d kept", k)
+		}
+		if heads.used[k/64]&(1<<(k%64)) == 0 {
+			return fmt.Errorf("fee cap bucket %d not marked used", k)
+		}
+		for addr, entry := range bucket {
+			list := pool.pending[addr]
+			if list == nil || entry.list != list {
+				return fmt.Errorf("account %x indexed with another list than its pending one", addr)
+			}
+			first := list.Flatten()[0]
+			if entry.feeCap.ToBig().Cmp(first.GasFeeCap()) != 0 || feeBucket(&entry.feeCap) != k || heads.bucket[addr] != k {
+				return fmt.Errorf("account %x indexed in bucket %d with fee cap %v, first transaction's is %v", addr, k, &entry.feeCap, first.GasFeeCap())
+			}
+			indexed++
+		}
+	}
+	if indexed != len(pool.pending) || len(heads.bucket) != len(pool.pending) {
+		return fmt.Errorf("%d accounts indexed (%d with a bucket), %d pending", indexed, len(heads.bucket), len(pool.pending))
+	}
+	for w, used := range heads.used {
+		for b := 0; b < 64; b++ {
+			if used&(1<<b) != 0 && heads.buckets[uint16(w*64+b)] == nil {
+				return fmt.Errorf("fee cap bucket %d marked used, but empty", w*64+b)
+			}
+		}
+	}
 	// Ensure all auths in pool are tracked
 	for _, tx := range pool.all.txs {
 		for _, addr := range tx.SetCodeAuthorities() {

@@ -1,0 +1,230 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package legacypool
+
+import (
+	"crypto/ecdsa"
+	"math/big"
+	"math/rand"
+	"slices"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
+)
+
+// TestFeeBucket checks that buckets are ordered as the fee caps in them, are
+// at most 1/32 wide above 64 and cover every uint256.
+func TestFeeBucket(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	values := []*uint256.Int{
+		uint256.NewInt(0), uint256.NewInt(1), uint256.NewInt(63), uint256.NewInt(64), uint256.NewInt(65),
+		uint256.NewInt(127), uint256.NewInt(128), uint256.NewInt(1e9), uint256.NewInt(1e9 + 1),
+		new(uint256.Int).Lsh(uint256.NewInt(1), 64), new(uint256.Int).Lsh(uint256.NewInt(1), 255),
+		new(uint256.Int).SetAllOne(),
+	}
+	for i := 0; i < 2000; i++ {
+		var v uint256.Int
+		v.SetUint64(rng.Uint64())
+		v.Rsh(&v, uint(rng.Intn(64)))
+		v.Lsh(&v, uint(rng.Intn(200)))
+		values = append(values, &v)
+	}
+	slices.SortFunc(values, func(a, b *uint256.Int) int { return a.Cmp(b) })
+
+	for i, v := range values {
+		k := feeBucket(v)
+		if int(k) >= feeBucketCount {
+			t.Fatalf("fee cap %v: bucket %d, beyond %d", v, k, feeBucketCount)
+		}
+		if i > 0 && k < feeBucket(values[i-1]) {
+			t.Fatalf("fee cap %v: bucket %d below %d of the smaller %v", v, k, feeBucket(values[i-1]), values[i-1])
+		}
+		if v.LtUint64(64) && uint64(k) != v.Uint64() {
+			t.Fatalf("fee cap %v: bucket %d, want its own", v, k)
+		}
+	}
+	// Every bucket from 64 on spans [lo, lo + lo/32]: the next value after
+	// a bucket's lowest that lands in the next bucket is within that.
+	for _, v := range values {
+		if v.LtUint64(64) || v.BitLen() == 256 {
+			continue
+		}
+		var lo, width, next uint256.Int
+		lo.Rsh(v, uint(v.BitLen()-6))
+		lo.Lsh(&lo, uint(v.BitLen()-6)) // the bucket's lowest fee cap
+		width.Lsh(uint256.NewInt(1), uint(v.BitLen()-6))
+		next.Add(&lo, &width)
+		if feeBucket(&lo) != feeBucket(v) || feeBucket(&next) != feeBucket(v)+1 {
+			t.Fatalf("fee cap %v: bucket %d, lowest %v in %d, next %v in %d", v, feeBucket(v), &lo, feeBucket(&lo), &next, feeBucket(&next))
+		}
+	}
+}
+
+// TestHeadIndexAtLeast changes pending lists at random, through every list
+// operation, and checks that atLeast returns exactly the accounts whose first
+// transaction has a fee cap at least the one asked for.
+func TestHeadIndexAtLeast(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	idx := newHeadIndex()
+	key, _ := crypto.GenerateKey()
+	lists := make(map[common.Address]*list)
+	for i := 0; i < 200; i++ {
+		addr := common.Address{byte(i), byte(i >> 8)}
+		lists[addr] = newPendingList(addr, idx)
+	}
+	randomFee := func() *big.Int { return big.NewInt(rng.Int63n(1 << uint(1+rng.Intn(40)))) }
+	for step := 0; step < 20000; step++ {
+		var (
+			addr = common.Address{byte(rng.Intn(200)), 0}
+			l    = lists[addr]
+			n    = uint64(l.Len())
+		)
+		if first := l.Flatten(); len(first) > 0 {
+			n += first[0].Nonce()
+		}
+		switch rng.Intn(8) {
+		case 0, 1, 2: // the next nonce, or a replacement
+			nonce := n
+			if n > 0 && rng.Intn(3) == 0 {
+				nonce = n - 1 - uint64(rng.Intn(min(int(n), 3)))
+			}
+			tip := randomFee()
+			l.Add(dynamicFeeTx(nonce, 21000, new(big.Int).Add(tip, randomFee()), tip, key), 0)
+		case 3:
+			l.Forward(n - uint64(rng.Intn(3)))
+		case 4:
+			if txs := l.Flatten(); len(txs) > 0 {
+				l.Remove(txs[rng.Intn(len(txs))])
+			}
+		case 5:
+			l.Cap(rng.Intn(3))
+		case 6:
+			l.Filter(uint256.NewInt(uint64(rng.Int63n(1<<45))), 30000)
+		case 7: // the pool readies queued lists only, but a list is a list
+			l.Ready(n)
+		}
+		if step%100 != 0 {
+			continue
+		}
+		feeCap := uint256.NewInt(uint64(rng.Int63n(1 << uint(1+rng.Intn(40)))))
+		got := make(map[common.Address]bool)
+		idx.atLeast(feeCap, func(addr common.Address, l *list) {
+			if got[addr] || lists[addr] != l {
+				t.Fatalf("step %d: account %x returned twice or with another list", step, addr)
+			}
+			got[addr] = true
+		})
+		for addr, l := range lists {
+			txs := l.Flatten()
+			want := len(txs) > 0 && txs[0].GasFeeCapIntCmp(feeCap.ToBig()) >= 0
+			if got[addr] != want {
+				t.Fatalf("step %d, fee cap %v: account %x returned %v, want %v", step, feeCap, addr, got[addr], want)
+			}
+		}
+	}
+}
+
+// TestPendingPayableVisitsPayers checks that Pending, with a minimum tip and a
+// base fee, leaves the accounts whose first transaction can't pay the base fee
+// unvisited, even if later ones pay more: their cached lists are not even built.
+func TestPendingPayableVisitsPayers(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupPool()
+	defer pool.Close()
+
+	var (
+		keys   []*ecdsa.PrivateKey
+		payers = make(map[int]bool)
+	)
+	for i := 0; i < 100; i++ {
+		key, _ := crypto.GenerateKey()
+		keys = append(keys, key)
+		testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1e18))
+		feeCap := int64(3e8) // under a third of the base fee
+		if i%10 == 0 {
+			feeCap, payers[i] = 2e9, true
+		}
+		var txs []*types.Transaction
+		for n := uint64(0); n < 3; n++ {
+			txs = append(txs, dynamicFeeTx(n, 21000, big.NewInt(feeCap), big.NewInt(1e8), key))
+			feeCap *= 10 // the later ones pay, but only after the first
+		}
+		if errs := pool.addRemotesSync(txs); errs[0] != nil {
+			t.Fatal(errs[0])
+		}
+	}
+	filter := txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(1e9)}
+	got, count := pool.Pending(filter)
+	if len(got) != len(payers) || count != 3*len(payers) {
+		t.Fatalf("%d accounts and %d transactions, want %d and %d", len(got), count, len(payers), 3*len(payers))
+	}
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	for i, key := range keys {
+		list := pool.pending[crypto.PubkeyToAddress(key.PublicKey)]
+		if cached := list.txs.lazy != nil; cached != payers[i] {
+			t.Errorf("account %d (payer %v): list cached %v", i, payers[i], cached)
+		}
+	}
+}
+
+// TestHeadIndexAtLeastExtremes checks atLeast at the ends of the fee cap
+// range, 0, 2^255 and the largest uint256, with accounts indexed at and
+// around each.
+func TestHeadIndexAtLeastExtremes(t *testing.T) {
+	var (
+		idx  = newHeadIndex()
+		key  = func() *ecdsa.PrivateKey { k, _ := crypto.GenerateKey(); return k }()
+		half = new(uint256.Int).Lsh(uint256.NewInt(1), 255)
+		most = new(uint256.Int).SetAllOne()
+		caps = []*uint256.Int{
+			uint256.NewInt(0), uint256.NewInt(1), new(uint256.Int).SubUint64(half, 1), half,
+			new(uint256.Int).AddUint64(half, 1), new(uint256.Int).SubUint64(most, 1), most,
+		}
+		feeCaps = make(map[common.Address]*uint256.Int)
+	)
+	for i, feeCap := range caps {
+		addr := common.Address{byte(i)}
+		l := newPendingList(addr, idx)
+		l.txs.Put(dynamicFeeTx(0, 21000, feeCap.ToBig(), big.NewInt(0), key)) // past Add's cost check
+		idx.update(addr, l)
+		feeCaps[addr] = feeCap
+	}
+	for _, threshold := range append(caps, uint256.NewInt(2), new(uint256.Int).Rsh(most, 1)) {
+		var got int
+		idx.atLeast(threshold, func(addr common.Address, l *list) {
+			if feeCaps[addr].Lt(threshold) {
+				t.Errorf("at least %v: account with fee cap %v returned", threshold, feeCaps[addr])
+			}
+			got++
+		})
+		var want int
+		for _, feeCap := range feeCaps {
+			if !feeCap.Lt(threshold) {
+				want++
+			}
+		}
+		if got != want {
+			t.Errorf("at least %v: %d accounts returned, want %d", threshold, got, want)
+		}
+	}
+}
