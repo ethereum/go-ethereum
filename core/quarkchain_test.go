@@ -17,7 +17,6 @@
 package core
 
 import (
-	"maps"
 	"math/big"
 	"strings"
 	"testing"
@@ -60,7 +59,6 @@ func TestXShardOutbox(t *testing.T) {
 		Config: &config,
 		Alloc:  withSystemContracts(types.GenesisAlloc{sender: {Balance: funds}}),
 	}
-	maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(config.QuarkChain.ShardID))
 	signer := types.LatestSigner(gspec.Config)
 
 	// The first message is valid and overpays, the second one goes to an

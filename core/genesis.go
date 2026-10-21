@@ -564,51 +564,6 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))
 }
 
-// PoSWStakingContractAllocs returns staking accounts for use when generating a shard's
-// genesis configuration. The returned allocation must be written to genesis.json;
-// neither chain startup nor core.Genesis injects these accounts.
-func PoSWStakingContractAllocs(shardID uint32) types.GenesisAlloc {
-	alloc := make(types.GenesisAlloc)
-	for _, address := range poswStakingContractAddresses(shardID) {
-		alloc[address] = types.Account{
-			Nonce:   1,
-			Code:    bytes.Clone(params.PoSWStakingRuntimeCode),
-			Balance: new(big.Int),
-		}
-	}
-	return alloc
-}
-
-// ValidatePoSWStakingContracts checks staking deployment in a QuarkChain genesis allocation.
-// It never modifies or supplements the allocation. Account balances, nonces and
-// initial storage remain exactly as specified in the genesis configuration.
-func (g *Genesis) ValidatePoSWStakingContracts() error {
-	if g.Config == nil || g.Config.QuarkChain == nil {
-		return nil
-	}
-	if !g.Config.IsConstantinople(common.Big0) {
-		return fmt.Errorf("staking contracts require Constantinople at genesis")
-	}
-	shardID := g.Config.QuarkChain.ShardID
-	for _, address := range poswStakingContractAddresses(shardID) {
-		if crypto.Keccak256Hash(g.Alloc[address].Code) != params.PoSWStakingRuntimeCodeHash {
-			return fmt.Errorf("staking contract %s has unexpected genesis code hash", address)
-		}
-	}
-	if shardID != 0 && len(g.Alloc[params.RootStakingContractAddress].Code) != 0 {
-		return fmt.Errorf("root staking contract must only be deployed on shard 0")
-	}
-	return nil
-}
-
-func poswStakingContractAddresses(shardID uint32) []common.Address {
-	addresses := []common.Address{params.ShardStakingContractAddress}
-	if shardID == 0 {
-		addresses = append(addresses, params.RootStakingContractAddress)
-	}
-	return addresses
-}
-
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database, tracer *tracing.Hooks) (*types.Block, error) {
@@ -624,9 +579,6 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database, tracer *tra
 	}
 	if config.Clique != nil && len(g.ExtraData) < 32+crypto.SignatureLength {
 		return nil, errors.New("can't start clique chain without signers")
-	}
-	if err := g.ValidatePoSWStakingContracts(); err != nil {
-		return nil, err
 	}
 	// flush the data to disk and compute the state root
 	root, err := flushAlloc(&g.Alloc, triedb, tracer)
@@ -724,8 +676,6 @@ func DefaultHoodiGenesisBlock() *Genesis {
 
 // SystemContractAllocs returns the genesis allocation of the system contracts
 // that the post-shanghai forks issue system calls into.
-// Used by developer genesis, simulated backends, and tests.
-// Changing these allocations changes state roots and block hashes in unit tests.
 func SystemContractAllocs() types.GenesisAlloc {
 	return types.GenesisAlloc{
 		// EIP-4788 - Beacon block root in the EVM

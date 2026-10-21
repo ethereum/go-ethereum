@@ -18,7 +18,6 @@ package shard
 
 import (
 	"bytes"
-	"maps"
 	"math/big"
 	"reflect"
 	"strings"
@@ -66,7 +65,6 @@ func TestXShardDeposits(t *testing.T) {
 		t.Fatal(err)
 	}
 	alloc := core.SystemContractAllocs()
-	maps.Copy(alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ShardID))
 	alloc[sender] = types.Account{Balance: big.NewInt(params.Ether)}
 	alloc[impostor] = types.Account{Code: program.New().Push(vm.XShardSentMessageTopic).Push(0).Push(0).Op(vm.LOG1).Bytes()}
 	gspec := &core.Genesis{Config: &config, Alloc: alloc}
