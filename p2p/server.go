@@ -1008,12 +1008,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		dialPub = dialDest.Pubkey()
 	}
 	if qc, ok := fd.(*quic.Conn); ok {
-		protos := srv.Protocols
-		if qc.Nonce() != nil {
-			// quic connection with nonce is regarded as browser connection
-			protos = browserProtocols(srv.Protocols)
-		}
-		c.transport = newQUICTransport(qc, protos)
+		c.transport = newQUICTransport(qc, browserProtocols(srv.Protocols))
 	} else {
 		c.transport = srv.newTransport(fd, dialPub)
 	}

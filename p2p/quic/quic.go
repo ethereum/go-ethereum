@@ -34,15 +34,6 @@ import (
 const (
 	quicMaxMsgSize = (1 << 24) - 1
 	quicProofLabel = "ENR-key-proof-v1"
-
-	// quicMaxHandshakeSize bounds the server's handshake message.
-	quicMaxHandshakeSize = 2 * 1024
-
-	// quicExporterLabel and quicExporterLen parameterize the TLS exporter
-	// (RFC 5705) used as the channel binding for node-to-node mutual
-	// authentication.
-	quicExporterLabel = "ENR key binding v1"
-	quicExporterLen   = 32
 )
 
 var errQUICMsgTooLarge = errors.New("quic: message too large")
@@ -51,12 +42,11 @@ var errQUICMsgTooLarge = errors.New("quic: message too large")
 // stream.
 type Conn struct {
 	*webtransport.Stream
-	session  *webtransport.Session
-	dialDest *ecdsa.PublicKey
+	session *webtransport.Session
 
-	nonce  []byte   // id-proof challenge from CONNECT, nil for node peers
+	nonce  []byte   // id-proof challenge from CONNECT
 	caps   []string // capabilities announced in CONNECT, replaced by the chosen ones in the handshake
-	nodeID []byte   // peer identity established by the handshake
+	nodeID []byte   // random peer identity assigned by the handshake
 
 	// These are the buffers for snappy compression.
 	// Compression is enabled if they are non-nil.
@@ -71,76 +61,29 @@ func (c *Conn) LocalAddr() net.Addr  { return c.session.LocalAddr() }
 func (c *Conn) RemoteAddr() net.Addr { return c.session.RemoteAddr() }
 
 // NewConn wraps a WebTransport session and its first bidirectional stream.
-func NewConn(session *webtransport.Session, str *webtransport.Stream, dialDest *ecdsa.PublicKey, nonce []byte, caps []string) *Conn {
-	return &Conn{Stream: str, session: session, dialDest: dialDest, nonce: nonce, caps: caps}
+func NewConn(session *webtransport.Session, str *webtransport.Stream, nonce []byte, caps []string) *Conn {
+	return &Conn{Stream: str, session: session, nonce: nonce, caps: caps}
 }
 
-func (c *Conn) Nonce() []byte  { return c.nonce }
 func (c *Conn) Caps() []string { return c.caps }
 
-// PeerID returns the peer identity established by the handshake (dialed connection) or
-// randomly assigned (browser, inbound connection).
+// PeerID returns the random peer identity assigned by the handshake.
 func (c *Conn) PeerID() []byte { return c.nodeID }
 
 // Handshake establishes connection over the QUIC stream. This must be called
 // before any data is written or read from the connection. caps are the
-// capabilities chosen by the server; they are ignored when dialing.
-func (c *Conn) Handshake(prv *ecdsa.PrivateKey, caps []string) (*ecdsa.PublicKey, error) {
-	if c.nonce != nil {
-		return c.browserHandshake(prv, caps)
+// capabilities chosen by the server.
+func (c *Conn) Handshake(prv *ecdsa.PrivateKey, caps []string) error {
+	if c.nonce == nil {
+		return errors.New("not supported")
 	}
-	return c.nodeHandshake(prv, caps)
-}
-
-// browserHandshake runs the server side of a browser connection.
-func (c *Conn) browserHandshake(prv *ecdsa.PrivateKey, caps []string) (*ecdsa.PublicKey, error) {
 	if err := c.writeProof(prv, c.nonce, caps); err != nil {
-		return nil, err
+		return err
 	}
 	// assign random node id
 	c.nodeID = make([]byte, 64)
 	rand.Read(c.nodeID)
-	return nil, nil
-}
-
-func (c *Conn) nodeHandshake(prv *ecdsa.PrivateKey, caps []string) (*ecdsa.PublicKey, error) {
-	ekm, err := c.exporter()
-	if err != nil {
-		return nil, err
-	}
-	if c.dialDest == nil {
-		// inbound: prove our identity over the exporter
-		if err := c.writeProof(prv, ekm, caps); err != nil {
-			return nil, err
-		}
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			return nil, err
-		}
-		c.nodeID = crypto.FromECDSAPub(&key.PublicKey)[1:]
-		return &key.PublicKey, nil
-	}
-	// dialed: verify the server's proof
-	remote, err := c.readProof(ekm)
-	if err != nil {
-		return nil, err
-	}
-	if !remote.Equal(c.dialDest) {
-		return nil, errors.New("quic: node identity mismatch")
-	}
-	c.nodeID = crypto.FromECDSAPub(remote)[1:]
-	return remote, nil
-}
-
-// ExportKeyingMaterial returns TLS exported keying material.
-func (c *Conn) ExportKeyingMaterial(label string, length int) ([]byte, error) {
-	cs := c.session.SessionState().ConnectionState.TLS
-	return cs.ExportKeyingMaterial(label, nil, length)
-}
-
-// exporter returns the keying material used as the node-to-node channel binding.
-func (c *Conn) exporter() ([]byte, error) {
-	return c.ExportKeyingMaterial(quicExporterLabel, quicExporterLen)
+	return nil
 }
 
 func proofDigest(challenge []byte) []byte {
@@ -169,33 +112,6 @@ func (c *Conn) writeProof(prv *ecdsa.PrivateKey, challenge []byte, caps []string
 	}
 	c.caps = caps
 	return nil
-}
-
-func (c *Conn) readProof(challenge []byte) (*ecdsa.PublicKey, error) {
-	var hs handshake
-	s := rlp.NewStream(byteReader{c.Stream}, quicMaxHandshakeSize)
-	if err := s.Decode(&hs); err != nil {
-		return nil, err
-	}
-	if len(hs.Proof) != crypto.SignatureLength {
-		return nil, errors.New("quic: invalid id-proof")
-	}
-	pub, err := crypto.SigToPub(proofDigest(challenge), hs.Proof)
-	if err != nil {
-		return nil, err
-	}
-	c.caps = hs.Caps
-	return pub, nil
-}
-
-// byteReader reads one byte at a time so that rlp.Stream does not buffer
-// past the handshake into the frames that follow it.
-type byteReader struct{ io.Reader }
-
-func (r byteReader) ReadByte() (byte, error) {
-	var b [1]byte
-	_, err := io.ReadFull(r.Reader, b[:])
-	return b[0], err
 }
 
 // ReadFrame reads one framed devp2p message from the stream.

@@ -17,12 +17,17 @@
 package p2p
 
 import (
-	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
+	"math/rand"
 	"net"
+	"net/http"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/quic"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/quic-go/webtransport-go"
 )
 
 func newTestQUICListener(t *testing.T) *quicListener {
@@ -46,6 +53,35 @@ func newTestQUICListener(t *testing.T) *quicListener {
 	return ln
 }
 
+// dialQUICBrowser opens a WebTransport session like a browser, announcing the
+// id-proof nonce and capabilities in the CONNECT request.
+func dialQUICBrowser(ctx context.Context, ln *quicListener, nonce []byte, caps ...string) (*quic.Conn, error) {
+	rot, err := newQUICCertRotator()
+	if err != nil {
+		return nil, err
+	}
+	wd := &webtransport.Dialer{
+		TLSClientConfig: newQUICTLSConfig(rot),
+		QUICConfig:      quicConfig,
+	}
+	protos := []string{strconv.Quote(quicNonceProto + hex.EncodeToString(nonce))}
+	for _, c := range caps {
+		protos = append(protos, strconv.Quote(c))
+	}
+	hdr := http.Header{}
+	hdr.Set("WT-Available-Protocols", strings.Join(protos, ", "))
+	_, sess, err := wd.Dial(ctx, "https://"+ln.Addr().String()+quicWTPath, hdr)
+	if err != nil {
+		return nil, err
+	}
+	str, err := sess.AcceptStream(ctx)
+	if err != nil {
+		sess.CloseWithError(0, "")
+		return nil, err
+	}
+	return quic.NewConn(sess, str, nil, nil), nil
+}
+
 func TestQUICListenerAccept(t *testing.T) {
 	ln := newTestQUICListener(t)
 	defer ln.Close()
@@ -56,7 +92,7 @@ func TestQUICListenerAccept(t *testing.T) {
 	// The server opens the stream and writes first; the dialer reads.
 	readCh := make(chan string, 1)
 	go func() {
-		conn, err := dialQUICNode(ctx, ln, nil)
+		conn, err := dialQUICBrowser(ctx, ln, make([]byte, quicNonceLen))
 		if err != nil {
 			t.Error(err)
 			ln.Close()
@@ -138,32 +174,34 @@ func TestQUICTransport(t *testing.T) {
 	defer cancel()
 
 	serverKey := newkey()
-	dialerKey := newkey()
+	nonce := make([]byte, quicNonceLen)
+	rand.Read(nonce)
 
-	testHandshake := func(name string) *protoHandshake {
-		pub := crypto.FromECDSAPub(&newkey().PublicKey)
-		return &protoHandshake{Version: baseProtocolVersion, Name: name, ID: pub[1:]}
-	}
-
+	// The dialer acts as a browser: it reads the server's id-proof and recovers
+	// the server key from the signature over its nonce.
 	type dialResult struct {
-		tr    transport
-		their *protoHandshake
-		err   error
+		tr     transport
+		remote *ecdsa.PublicKey
+		err    error
 	}
 	dialCh := make(chan dialResult, 1)
 	go func() {
-		conn, err := dialQUICNode(ctx, ln, &serverKey.PublicKey)
+		conn, err := dialQUICBrowser(ctx, ln, nonce)
 		if err != nil {
 			dialCh <- dialResult{err: err}
 			return
 		}
-		tr := newQUICTransport(conn, nil)
-		if _, err := tr.doEncHandshake(dialerKey); err != nil {
+		var hs struct {
+			Proof []byte
+			Caps  []string
+		}
+		if err := rlp.NewStream(conn, 0).Decode(&hs); err != nil {
 			dialCh <- dialResult{err: err}
 			return
 		}
-		their, err := tr.doProtoHandshake(testHandshake("dialer"))
-		dialCh <- dialResult{tr: tr, their: their, err: err}
+		remote, err := crypto.SigToPub(crypto.Keccak256([]byte("ENR-key-proof-v1"), nonce), hs.Proof)
+		conn.SetSnappy(true)
+		dialCh <- dialResult{tr: newQUICTransport(conn, nil), remote: remote, err: err}
 	}()
 
 	conn, err := ln.Accept()
@@ -171,12 +209,10 @@ func TestQUICTransport(t *testing.T) {
 		t.Fatal(err)
 	}
 	lt := newQUICTransport(conn.(*quic.Conn), nil)
-	_, err = lt.doEncHandshake(serverKey)
-	if err != nil {
+	if _, err := lt.doEncHandshake(serverKey); err != nil {
 		t.Fatal(err)
 	}
-	_, err = lt.doProtoHandshake(testHandshake("listener"))
-	if err != nil {
+	if _, err := lt.doProtoHandshake(nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -184,13 +220,10 @@ func TestQUICTransport(t *testing.T) {
 	if res.err != nil {
 		t.Fatal(res.err)
 	}
-	if want := crypto.FromECDSAPub(&serverKey.PublicKey)[1:]; !bytes.Equal(res.their.ID, want) {
-		t.Fatalf("got handshake ID %x, want %x", res.their.ID, want)
+	if !res.remote.Equal(&serverKey.PublicKey) {
+		t.Fatal("id-proof does not recover the server key")
 	}
-	wireSnappy := func(tr transport) bool {
-		return tr.(*quicTransport).conn.SnappyEnabled()
-	}
-	if !wireSnappy(lt) || !wireSnappy(res.tr) {
+	if !lt.(*quicTransport).conn.SnappyEnabled() {
 		t.Fatal("snappy not enabled after handshake")
 	}
 
@@ -210,64 +243,6 @@ func TestQUICTransport(t *testing.T) {
 	}
 	if len(payload) != 2 || payload[0] != "hello" || payload[1] != "quic" {
 		t.Fatalf("payload mismatch: %v", payload)
-	}
-}
-
-// TestQUICExporter verifies that the TLS exporter (RFC 5705 keying material) is
-// available on a WebTransport connection and yields the same value on both ends.
-// Node-to-node mutual authentication relies on this channel binding.
-func TestQUICExporter(t *testing.T) {
-	ln := newTestQUICListener(t)
-	defer ln.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	const label = "devp2p-quic-test"
-	clientCh := make(chan []byte, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		qc, err := dialQUICNode(ctx, ln, nil)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		ekm, err := qc.ExportKeyingMaterial(label, 32)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		clientCh <- ekm
-	}()
-
-	conn, err := ln.Accept()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-
-	// WebTransport streams become visible to the peer on first write; write so
-	// the dialer's AcceptStream returns.
-	if _, err := conn.Write([]byte{0}); err != nil {
-		t.Fatal(err)
-	}
-
-	serverEKM, err := conn.(*quic.Conn).ExportKeyingMaterial(label, 32)
-	if err != nil {
-		t.Fatalf("server ExportKeyingMaterial failed: %v", err)
-	}
-	select {
-	case err := <-errCh:
-		t.Fatalf("client: %v", err)
-	case clientEKM := <-clientCh:
-		if len(serverEKM) != 32 || len(clientEKM) != 32 {
-			t.Fatalf("unexpected lengths: server=%d client=%d", len(serverEKM), len(clientEKM))
-		}
-		if !bytes.Equal(serverEKM, clientEKM) {
-			t.Fatalf("exporter mismatch:\n server=%x\n client=%x", serverEKM, clientEKM)
-		}
-	case <-ctx.Done():
-		t.Fatal("timeout waiting for client exporter")
 	}
 }
 
