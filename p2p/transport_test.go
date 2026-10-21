@@ -50,13 +50,13 @@ func TestProtocolHandshake(t *testing.T) {
 		defer wg.Done()
 		defer fd0.Close()
 		frame := newRLPX(fd0, &prv1.PublicKey)
-		rpubkey, err := frame.doEncHandshake(prv0)
+		rnode, err := frame.doEncHandshake(prv0)
 		if err != nil {
 			t.Errorf("dial side enc handshake failed: %v", err)
 			return
 		}
-		if !reflect.DeepEqual(rpubkey, &prv1.PublicKey) {
-			t.Errorf("dial side remote pubkey mismatch: got %v, want %v", rpubkey, &prv1.PublicKey)
+		if !reflect.DeepEqual(rnode.Pubkey(), &prv1.PublicKey) {
+			t.Errorf("dial side remote pubkey mismatch: got %v, want %v", rnode.Pubkey(), &prv1.PublicKey)
 			return
 		}
 
@@ -76,13 +76,13 @@ func TestProtocolHandshake(t *testing.T) {
 		defer wg.Done()
 		defer fd1.Close()
 		rlpx := newRLPX(fd1, nil)
-		rpubkey, err := rlpx.doEncHandshake(prv1)
+		rnode, err := rlpx.doEncHandshake(prv1)
 		if err != nil {
 			t.Errorf("listen side enc handshake failed: %v", err)
 			return
 		}
-		if !reflect.DeepEqual(rpubkey, &prv0.PublicKey) {
-			t.Errorf("listen side remote pubkey mismatch: got %v, want %v", rpubkey, &prv0.PublicKey)
+		if !reflect.DeepEqual(rnode.Pubkey(), &prv0.PublicKey) {
+			t.Errorf("listen side remote pubkey mismatch: got %v, want %v", rnode.Pubkey(), &prv0.PublicKey)
 			return
 		}
 

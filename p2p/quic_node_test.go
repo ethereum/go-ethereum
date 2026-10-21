@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/quic"
 	"github.com/quic-go/webtransport-go"
 )
@@ -63,7 +64,7 @@ func TestQUICNodeHandshake(t *testing.T) {
 	dialerKey := newkey()
 
 	type dialResult struct {
-		remote *ecdsa.PublicKey
+		remote *enode.Node
 		err    error
 	}
 	dialCh := make(chan dialResult, 1)
@@ -91,7 +92,7 @@ func TestQUICNodeHandshake(t *testing.T) {
 		t.Fatal(res.err)
 	}
 	// The dialer verified the server against the key it dialed.
-	if !res.remote.Equal(&serverKey.PublicKey) {
+	if !res.remote.Pubkey().Equal(&serverKey.PublicKey) {
 		t.Fatal("dialer did not verify the server identity")
 	}
 }

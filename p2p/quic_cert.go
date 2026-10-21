@@ -17,14 +17,12 @@
 package p2p
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"math/big"
 	"sync"
 	"time"
@@ -51,21 +49,6 @@ const (
 type quicCertHash []byte
 
 func (quicCertHash) ENRKey() string { return "qh" }
-
-func (qh quicCertHash) valid() bool {
-	return len(qh) == sha256.Size || len(qh) == 2*sha256.Size
-}
-
-// matches reports whether h is one of the announced certificate hashes.
-func (qh quicCertHash) matches(h [sha256.Size]byte) bool {
-	for len(qh) >= sha256.Size {
-		if bytes.Equal(qh[:sha256.Size], h[:]) {
-			return true
-		}
-		qh = qh[sha256.Size:]
-	}
-	return false
-}
 
 // quicCertRotator maintains the node's current and next TLS certificate.
 // Both hashes are announced in "qh", so a node record fetched up to one
@@ -160,26 +143,4 @@ func newQUICTLSConfig(rot *quicCertRotator) *tls.Config {
 		ClientAuth:         tls.NoClientCert,
 		NextProtos:         []string{ALPN},
 	}
-}
-
-// quicClientTLSConfig sets the tls.Config to dial a node whose ENR advertises
-// the hashes of its certificates. Certificate validity is enforced here because
-// the base config disables the standard chain verification.
-func quicClientTLSConfig(base *tls.Config, qh quicCertHash) *tls.Config {
-	conf := base.Clone()
-	conf.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-		if !qh.matches(sha256.Sum256(rawCerts[0])) {
-			return errors.New("quic: certificate does not match qh in node record")
-		}
-		cert, err := x509.ParseCertificate(rawCerts[0])
-		if err != nil {
-			return err
-		}
-		now := time.Now()
-		if now.Before(cert.NotBefore) || now.After(cert.NotAfter) {
-			return errors.New("quic: certificate expired or not yet valid")
-		}
-		return nil
-	}
-	return conf
 }

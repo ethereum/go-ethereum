@@ -54,8 +54,8 @@ func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn, dialDest *ecdsa.Public
 	return &testTransport{rpub: rpub, rlpxTransport: wrapped}
 }
 
-func (c *testTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
-	return c.rpub, nil
+func (c *testTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*enode.Node, error) {
+	return enode.NewV4(c.rpub, nil, 0, 0), nil
 }
 
 func (c *testTransport) doProtoHandshake(our *protoHandshake) (*protoHandshake, error) {
@@ -473,9 +473,12 @@ type setupTransport struct {
 	closeErr error
 }
 
-func (c *setupTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
+func (c *setupTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*enode.Node, error) {
 	c.calls += "doEncHandshake,"
-	return c.pubkey, c.encHandshakeErr
+	if c.encHandshakeErr != nil {
+		return nil, c.encHandshakeErr
+	}
+	return enode.NewV4(c.pubkey, nil, 0, 0), nil
 }
 
 func (c *setupTransport) doProtoHandshake(our *protoHandshake) (*protoHandshake, error) {

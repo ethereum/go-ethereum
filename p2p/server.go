@@ -152,7 +152,7 @@ type conn struct {
 
 type transport interface {
 	// The two handshakes.
-	doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error)
+	doEncHandshake(prv *ecdsa.PrivateKey) (*enode.Node, error)
 	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
 	// The MsgReadWriter can only be used after the encryption
 	// handshake has completed. The code uses conn.id to track this
@@ -1050,20 +1050,15 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 	}
 
 	// Run the RLPx handshake.
-	remotePubkey, err := c.doEncHandshake(srv.PrivateKey)
+	remoteNode, err := c.doEncHandshake(srv.PrivateKey)
 	if err != nil {
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
 		return fmt.Errorf("%w: %v", errEncHandshakeError, err)
 	}
-	if qc, ok := c.fd.(*quic.Conn); ok && qc.Nonce() != nil {
-		// browser connection
-		if c.node, err = browserNodeFromConn(qc); err != nil {
-			return fmt.Errorf("%w: %v", errEncHandshakeError, err)
-		}
-	} else if dialDest != nil {
+	if dialDest != nil {
 		c.node = dialDest
 	} else {
-		c.node = nodeFromConn(remotePubkey, c.fd)
+		c.node = remoteNode
 	}
 	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	err = srv.checkpoint(c, srv.checkpointPostHandshake)
@@ -1078,8 +1073,7 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 		clog.Trace("Failed p2p handshake", "err", err)
 		return &protoHandshakeError{err: err}
 	}
-	// Browser peers have no public key to check the identity against.
-	if id := c.node.ID(); !c.isBrowser() && !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
+	if id := c.node.ID(); !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
 		clog.Trace("Wrong devp2p handshake identity", "phsid", hex.EncodeToString(phs.ID))
 		return DiscUnexpectedIdentity
 	}
