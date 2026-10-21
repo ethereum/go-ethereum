@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -101,9 +102,16 @@ func (q *quicTransport) close(err error) {
 	q.conn.Close()
 }
 
-func (q *quicTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
+func (q *quicTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*enode.Node, error) {
 	q.conn.SetDeadline(time.Now().Add(handshakeTimeout))
-	return q.conn.Handshake(prv, q.chosenCaps())
+	pubkey, err := q.conn.Handshake(prv, q.chosenCaps())
+	if err != nil {
+		return nil, err
+	}
+	if q.conn.Nonce() != nil {
+		return browserNodeFromConn(q.conn)
+	}
+	return nodeFromConn(pubkey, q.conn), nil
 }
 
 // chosenCaps matches the capabilities announced in the CONNECT request against
@@ -163,7 +171,7 @@ func browserNodeFromConn(conn *quic.Conn) (*enode.Node, error) {
 	} else if ip.IsValid() {
 		r.Set(enr.IPv6Addr(ip))
 	}
-	return signBrowser(&r, enode.ID(conn.PeerID()))
+	return signBrowser(&r, enode.ID(crypto.Keccak256Hash(conn.PeerID())))
 }
 
 func signBrowser(r *enr.Record, id enode.ID) (*enode.Node, error) {

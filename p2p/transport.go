@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -49,11 +50,12 @@ const (
 type rlpxTransport struct {
 	rmu, wmu sync.Mutex
 	wbuf     bytes.Buffer
+	fd       net.Conn
 	conn     *rlpx.Conn
 }
 
 func newRLPX(conn net.Conn, dialDest *ecdsa.PublicKey) transport {
-	return &rlpxTransport{conn: rlpx.NewConn(conn, dialDest)}
+	return &rlpxTransport{fd: conn, conn: rlpx.NewConn(conn, dialDest)}
 }
 
 func (t *rlpxTransport) ReadMsg() (Msg, error) {
@@ -126,9 +128,13 @@ func (t *rlpxTransport) close(err error) {
 	t.conn.Close()
 }
 
-func (t *rlpxTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
+func (t *rlpxTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*enode.Node, error) {
 	t.conn.SetDeadline(time.Now().Add(handshakeTimeout))
-	return t.conn.Handshake(prv)
+	pubkey, err := t.conn.Handshake(prv)
+	if err != nil {
+		return nil, err
+	}
+	return nodeFromConn(pubkey, t.fd), nil
 }
 
 func (t *rlpxTransport) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
