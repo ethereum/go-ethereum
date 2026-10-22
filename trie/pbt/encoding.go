@@ -30,7 +30,8 @@ func serializeNode(n node, pos int) []byte {
 	switch n := n.(type) {
 	case *groupNode:
 		if len(n.subs) == 1 {
-			return append(append(append([]byte{tagLeaf}, n.stem...), n.subs[0]), n.vals[0]...)
+			blob := append(make([]byte, 0, 2+len(n.stem)+len(n.vals[0])), tagLeaf)
+			return append(append(append(blob, n.stem...), n.subs[0]), n.vals[0]...)
 		}
 		blob := make([]byte, 4, 4+len(n.stem)+32+32*len(n.vals))
 		blob[0] = tagGroup
@@ -49,7 +50,7 @@ func serializeNode(n node, pos int) []byte {
 	case *branchNode:
 		child := pos + n.prefix.n + 1
 		left, right := n.left.hashAt(child), n.right.hashAt(child)
-		blob := appendBitPrefix([]byte{tagBranch}, n.prefix)
+		blob := appendBitPrefix(append(make([]byte, 0, 3+len(n.prefix.b)+64), tagBranch), n.prefix)
 		return append(append(blob, left[:]...), right[:]...)
 	}
 	panic("pbt: unexpected node type")
