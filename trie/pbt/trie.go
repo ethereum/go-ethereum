@@ -425,7 +425,7 @@ func (t *PartitionedTrie) GetAccount(addr common.Address) (*types.StateAccount, 
 	}
 	switch {
 	case delegation != nil:
-		if size == 0 || size > 32 {
+		if size != uint32(len(types.DelegationPrefix)+common.AddressLength) {
 			return nil, fmt.Errorf("pbt: account %x delegation with code size %d", addr, size)
 		}
 		acc.CodeHash = crypto.Keccak256(delegation[:size])
