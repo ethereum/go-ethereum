@@ -327,14 +327,20 @@ func (t *PartitionedTrie) delPrefix(n node, prefix []byte, walk bitstr, pos int)
 		}
 	case *branchNode:
 		m := n.prefix.matchKey(prefix, pos)
+		split := pos + n.prefix.n
 		if pos+m >= 8*len(prefix) {
-			// Every key below starts with prefix.
-			return emptyNode{}, true, t.deleteSubtree(n, walk, pos)
+			// Every key below starts with prefix, so both children go too.
+			t.onDelete(walk)
+			for bit, child := range [2]node{n.left, n.right} {
+				if _, _, err := t.delPrefix(child, prefix, walk.append(n.prefix).concat(byte(bit), bitstr{}), split+1); err != nil {
+					return n, false, err
+				}
+			}
+			return emptyNode{}, true, nil
 		}
 		if m < n.prefix.n {
 			return n, false, nil
 		}
-		split := pos + n.prefix.n
 		bit := bitAt(prefix, split)
 		child := &n.left
 		if bit == 1 {
@@ -355,28 +361,6 @@ func (t *PartitionedTrie) delPrefix(n node, prefix []byte, walk bitstr, pos int)
 		return n, removed, nil
 	}
 	return n, false, nil
-}
-
-// deleteSubtree records the removal of every stored record below n.
-func (t *PartitionedTrie) deleteSubtree(n node, walk bitstr, pos int) error {
-	switch n := n.(type) {
-	case hashedNode:
-		resolved, err := t.resolve(n, walk)
-		if err != nil {
-			return err
-		}
-		return t.deleteSubtree(resolved, walk, pos)
-	case *groupNode:
-		t.onDelete(walk)
-	case *branchNode:
-		t.onDelete(walk)
-		split := pos + n.prefix.n
-		if err := t.deleteSubtree(n.left, walk.append(n.prefix).concat(0, bitstr{}), split+1); err != nil {
-			return err
-		}
-		return t.deleteSubtree(n.right, walk.append(n.prefix).concat(1, bitstr{}), split+1)
-	}
-	return nil
 }
 
 // GetKey returns the key itself: tree keys are not hashed preimages.
