@@ -21,17 +21,21 @@ import (
 	"encoding/json"
 	"math/big"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/holiman/uint256"
 )
 
 func TestSetupGenesis(t *testing.T) {
@@ -333,5 +337,175 @@ func TestBinaryGenesisCommit(t *testing.T) {
 	vdb := rawdb.NewTable(db, string(rawdb.VerklePrefix))
 	if !rawdb.HasAccountTrieNode(vdb, nil) {
 		t.Fatal("could not find node")
+	}
+}
+
+func genesisConfig(shardID uint32) *params.ChainConfig {
+	config := *params.AllEthashProtocolChanges
+	config.QuarkChain = &params.QuarkChainConfig{ShardID: shardID}
+	return &config
+}
+
+func TestStakingGenesisAlloc(t *testing.T) {
+	root := common.HexToAddress("0x514b430000000000000000000000000000000001")
+	shard := common.HexToAddress("0x514b430000000000000000000000000000000002")
+	for _, shardID := range []uint32{0, 1, 9} {
+		alloc := PoSWStakingContractAllocs(shardID)
+		want := []common.Address{shard}
+		if shardID == 0 {
+			want = append(want, root)
+		}
+		if len(alloc) != len(want) {
+			t.Fatalf("shard %d: %d contracts, want %d", shardID, len(alloc), len(want))
+		}
+		for _, address := range want {
+			account := alloc[address]
+			if account.Nonce != 1 || account.Balance == nil || account.Balance.Sign() != 0 || len(account.Storage) != 0 || !bytes.Equal(account.Code, params.PoSWStakingRuntimeCode) {
+				t.Fatalf("shard %d: invalid staking account at %s", shardID, address)
+			}
+		}
+	}
+	alloc := PoSWStakingContractAllocs(0)
+	alloc[shard].Code[0] ^= 1
+	if !bytes.Equal(alloc[root].Code, params.PoSWStakingRuntimeCode) || !bytes.Equal(PoSWStakingContractAllocs(0)[shard].Code, params.PoSWStakingRuntimeCode) {
+		t.Fatal("generated allocations share mutable runtime code")
+	}
+}
+
+func TestStakingGenesisFromConfig(t *testing.T) {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		for _, shardID := range []uint32{0, 1} {
+			t.Run(scheme+"/"+strconv.FormatUint(uint64(shardID), 10), func(t *testing.T) {
+				for _, posw := range []*params.PoSWConfig{nil, {}, {Enabled: true, WindowSize: 256, StakePerBlock: uint256.NewInt(100), DiffDivider: 20}} {
+					config := genesisConfig(shardID)
+					config.QuarkChain.PoSW = posw
+					alloc := PoSWStakingContractAllocs(shardID)
+					funded := common.HexToAddress("0xabcd")
+					alloc[funded] = types.Account{Balance: big.NewInt(42)}
+					// These fields belong to genesis.json. Startup must preserve
+					// them rather than merge a generated account over the config.
+					address := params.ShardStakingContractAddress
+					account := alloc[address]
+					account.Nonce = 7
+					account.Balance = big.NewInt(123)
+					account.Storage = map[common.Hash]common.Hash{{1}: {2}}
+					alloc[address] = account
+					genesis := &Genesis{Config: config, GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: alloc}
+					encoded, err := json.Marshal(genesis)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var configured Genesis
+					if err := json.Unmarshal(encoded, &configured); err != nil {
+						t.Fatal(err)
+					}
+					if err := configured.ValidatePoSWStakingContracts(); err != nil {
+						t.Fatal(err)
+					}
+
+					db := rawdb.NewMemoryDatabase()
+					t.Cleanup(func() { db.Close() })
+					dbConfig := triedb.HashDefaults
+					if scheme == rawdb.PathScheme {
+						dbConfig = &triedb.Config{PathDB: pathdb.Defaults}
+					}
+					tdb := triedb.NewDatabase(db, dbConfig)
+					t.Cleanup(func() { tdb.Close() })
+					wantHash := configured.ToBlock().Hash()
+					block, err := configured.Commit(db, tdb, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if block.Hash() != wantHash {
+						t.Fatal("configured genesis hash changed during commit")
+					}
+					statedb, err := state.New(block.Root(), state.NewDatabase(tdb, nil))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if statedb.GetNonce(address) != 7 || statedb.GetBalance(address).Uint64() != 123 || statedb.GetState(address, common.Hash{1}) != (common.Hash{2}) || statedb.GetBalance(funded).Uint64() != 42 {
+						t.Fatal("configured account state was overwritten")
+					}
+					for expectedAddress, expected := range PoSWStakingContractAllocs(shardID) {
+						if !bytes.Equal(statedb.GetCode(expectedAddress), expected.Code) {
+							t.Fatalf("configured runtime missing at %s", expectedAddress)
+						}
+					}
+					if shardID != 0 && len(statedb.GetCode(params.RootStakingContractAddress)) != 0 {
+						t.Fatal("root staking deployed outside shard zero")
+					}
+					stored, err := ReadGenesis(db)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(stored.Alloc, configured.Alloc) || stored.ToBlock().Hash() != block.Hash() {
+						t.Fatal("saved allocation differs from configuration")
+					}
+					if _, hash, _, err := SetupGenesisBlock(db, tdb, &configured); err != nil || hash != block.Hash() {
+						t.Fatalf("restart: %s, %v", hash, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestStakingGenesisValidation(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		change func(*params.ChainConfig, types.GenesisAlloc)
+		want   string
+	}{
+		{"missing shard", func(_ *params.ChainConfig, a types.GenesisAlloc) { delete(a, params.ShardStakingContractAddress) }, "unexpected genesis code hash"},
+		{"missing root", func(_ *params.ChainConfig, a types.GenesisAlloc) { delete(a, params.RootStakingContractAddress) }, "unexpected genesis code hash"},
+		{"unexpected code", func(_ *params.ChainConfig, a types.GenesisAlloc) {
+			a[params.ShardStakingContractAddress] = types.Account{Code: []byte{0}, Balance: new(big.Int)}
+		}, "unexpected genesis code hash"},
+		{"wrong shard", func(c *params.ChainConfig, _ types.GenesisAlloc) { c.QuarkChain.ShardID = 1 }, "only be deployed on shard 0"},
+		{"unsupported EVM", func(c *params.ChainConfig, _ types.GenesisAlloc) { c.ConstantinopleBlock = nil }, "Constantinople at genesis"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config, alloc := genesisConfig(0), PoSWStakingContractAllocs(0)
+			test.change(config, alloc)
+			before, err := json.Marshal(alloc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := (&Genesis{Config: config, Alloc: alloc}).ValidatePoSWStakingContracts(); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("have %v, want %q", err, test.want)
+			}
+			after, err := json.Marshal(alloc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Fatal("validation changed genesis alloc")
+			}
+		})
+	}
+	if err := (&Genesis{Config: params.AllEthashProtocolChanges}).ValidatePoSWStakingContracts(); err != nil {
+		t.Fatal(err)
+	}
+	if err := new(Genesis).ValidatePoSWStakingContracts(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGenesisDoesNotInjectStaking(t *testing.T) {
+	config := genesisConfig(0)
+	funded := common.HexToAddress("0xabcd")
+	genesis := &Genesis{Config: config, GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: types.GenesisAlloc{funded: {Balance: big.NewInt(42)}}}
+	db := rawdb.NewMemoryDatabase()
+	defer db.Close()
+	tdb := triedb.NewDatabase(db, triedb.HashDefaults)
+	defer tdb.Close()
+	if _, err := genesis.Commit(db, tdb, nil); err == nil {
+		t.Fatal("committed genesis without staking contracts")
+	}
+	if rawdb.ReadCanonicalHash(db, 0) != (common.Hash{}) {
+		t.Fatal("invalid genesis was persisted")
+	}
+	if len(genesis.Alloc) != 1 {
+		t.Fatal("caller allocation changed")
 	}
 }
