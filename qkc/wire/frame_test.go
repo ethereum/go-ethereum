@@ -24,17 +24,17 @@ import (
 	"testing"
 )
 
-func TestFrameRoundTrip(t *testing.T) {
-	frame := &ChainFrame{Frame: Frame{Opcode: 0x42, RPCID: 0x0102030405060708, Payload: []byte("chain")}}
+func TestClusterFrameRoundTrip(t *testing.T) {
+	frame := &ClusterFrame{Opcode: 0x42, RPCID: 0x0102030405060708, Payload: []byte("chain")}
 	var buf bytes.Buffer
-	if err := WriteChainFrame(&buf, frame); err != nil {
+	if err := WriteClusterFrame(&buf, frame); err != nil {
 		t.Fatal(err)
 	}
 	encoded := buf.Bytes()
 	if got := binary.BigEndian.Uint32(encoded[:4]); got != uint32(len(frame.Payload)) {
 		t.Fatalf("payload length = %d, want %d", got, len(frame.Payload))
 	}
-	got, err := ReadChainFrame(&buf, 0)
+	got, err := ReadClusterFrame(&buf, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,17 +43,22 @@ func TestFrameRoundTrip(t *testing.T) {
 	}
 }
 
-func TestMasterFrameRoundTrip(t *testing.T) {
-	frame := &MasterFrame{ClusterPeerID: 0x1122334455667788, Frame: Frame{Opcode: 0x81, RPCID: 9, Payload: []byte("master-chain")}}
+func TestClusterFrameWithPeerIDRoundTrip(t *testing.T) {
+	frame := &ClusterFrame{
+		ClusterPeerID: 0x1122334455667788,
+		Opcode:        0x81,
+		RPCID:         9,
+		Payload:       []byte("master-chain"),
+	}
 	var buf bytes.Buffer
-	if err := WriteMasterFrame(&buf, frame); err != nil {
+	if err := WriteClusterFrameWithPeerID(&buf, frame); err != nil {
 		t.Fatal(err)
 	}
 	encoded := buf.Bytes()
 	if got := binary.BigEndian.Uint64(encoded[4:12]); got != frame.ClusterPeerID {
 		t.Fatalf("cluster peer ID = 0x%x, want 0x%x", got, frame.ClusterPeerID)
 	}
-	got, err := ReadMasterFrame(&buf, 0)
+	got, err := ReadClusterFrameWithPeerID(&buf, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,16 +67,16 @@ func TestMasterFrameRoundTrip(t *testing.T) {
 	}
 }
 
-func TestPeerFrameRoundTrip(t *testing.T) {
-	frame := &PeerFrame{ChainID: 0x01020304, Frame: Frame{Opcode: 0x02, RPCID: 7, Payload: []byte("p2p")}}
+func TestP2PFrameRoundTrip(t *testing.T) {
+	frame := &P2PFrame{ChainID: 0x01020304, Opcode: 0x02, RPCID: 7, Payload: []byte("p2p")}
 	var encoded bytes.Buffer
-	if err := WritePeerFrame(&encoded, frame); err != nil {
+	if err := WriteP2PFrame(&encoded, frame); err != nil {
 		t.Fatal(err)
 	}
 	if encoded.Len() != 4+frameBodyHeader+len(frame.Payload) {
 		t.Fatalf("encoded length = %d", encoded.Len())
 	}
-	got, err := ReadPeerFrame(&encoded, 0)
+	got, err := ReadP2PFrame(&encoded, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,49 +86,51 @@ func TestPeerFrameRoundTrip(t *testing.T) {
 }
 
 func TestFrameWireLayouts(t *testing.T) {
-	body := Frame{Opcode: 0x10, RPCID: 0x0102030405060708, Payload: []byte{0xaa}}
+	const peerID = 0x1122334455667788
+	frame := &ClusterFrame{Opcode: 0x10, RPCID: 0x0102030405060708, Payload: []byte{0xaa}}
 
 	var chain bytes.Buffer
-	if err := WriteChainFrame(&chain, &ChainFrame{Frame: body}); err != nil {
+	if err := WriteClusterFrame(&chain, frame); err != nil {
 		t.Fatal(err)
 	}
 	wantChain := []byte{0, 0, 0, 1, 0x10, 1, 2, 3, 4, 5, 6, 7, 8, 0xaa}
 	if !bytes.Equal(chain.Bytes(), wantChain) {
-		t.Fatalf("ChainFrame bytes = %x, want %x", chain.Bytes(), wantChain)
+		t.Fatalf("ClusterFrame bytes = %x, want %x", chain.Bytes(), wantChain)
 	}
 
+	frame.ClusterPeerID = peerID
 	var master bytes.Buffer
-	if err := WriteMasterFrame(&master, &MasterFrame{ClusterPeerID: 0x1122334455667788, Frame: body}); err != nil {
+	if err := WriteClusterFrameWithPeerID(&master, frame); err != nil {
 		t.Fatal(err)
 	}
 	wantMaster := []byte{0, 0, 0, 1, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x10, 1, 2, 3, 4, 5, 6, 7, 8, 0xaa}
 	if !bytes.Equal(master.Bytes(), wantMaster) {
-		t.Fatalf("MasterFrame bytes = %x, want %x", master.Bytes(), wantMaster)
+		t.Fatalf("ClusterFrame with peer ID bytes = %x, want %x", master.Bytes(), wantMaster)
 	}
 
-	var peer bytes.Buffer
-	if err := WritePeerFrame(&peer, &PeerFrame{ChainID: 0xaabbccdd, Frame: body}); err != nil {
+	var p2p bytes.Buffer
+	if err := WriteP2PFrame(&p2p, &P2PFrame{ChainID: 0xaabbccdd, Opcode: frame.Opcode, RPCID: frame.RPCID, Payload: frame.Payload}); err != nil {
 		t.Fatal(err)
 	}
-	wantPeer := []byte{0xaa, 0xbb, 0xcc, 0xdd, 0x10, 1, 2, 3, 4, 5, 6, 7, 8, 0xaa}
-	if !bytes.Equal(peer.Bytes(), wantPeer) {
-		t.Fatalf("PeerFrame bytes = %x, want %x", peer.Bytes(), wantPeer)
+	wantP2P := []byte{0xaa, 0xbb, 0xcc, 0xdd, 0x10, 1, 2, 3, 4, 5, 6, 7, 8, 0xaa}
+	if !bytes.Equal(p2p.Bytes(), wantP2P) {
+		t.Fatalf("P2PFrame bytes = %x, want %x", p2p.Bytes(), wantP2P)
 	}
 }
 
-func TestMultiFrameChainStream(t *testing.T) {
-	frames := []*ChainFrame{
-		{Frame: Frame{Opcode: 1, RPCID: 1, Payload: []byte("one")}},
-		{Frame: Frame{Opcode: 2, RPCID: 2, Payload: []byte("two")}},
+func TestMultiFrameClusterStream(t *testing.T) {
+	frames := []*ClusterFrame{
+		{Opcode: 1, RPCID: 1, Payload: []byte("one")},
+		{Opcode: 2, RPCID: 2, Payload: []byte("two")},
 	}
 	var stream bytes.Buffer
 	for _, frame := range frames {
-		if err := WriteChainFrame(&stream, frame); err != nil {
+		if err := WriteClusterFrame(&stream, frame); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for i, want := range frames {
-		got, err := ReadChainFrame(&stream, 0)
+		got, err := ReadClusterFrame(&stream, 0)
 		if err != nil {
 			t.Fatalf("frame %d: %v", i, err)
 		}
@@ -134,53 +141,58 @@ func TestMultiFrameChainStream(t *testing.T) {
 }
 
 func TestFrameReadErrors(t *testing.T) {
-	if _, err := ReadChainFrame(bytes.NewReader(nil), 0); !errors.Is(err, io.EOF) {
+	if _, err := ReadClusterFrame(bytes.NewReader(nil), 0); !errors.Is(err, io.EOF) {
 		t.Fatalf("empty stream error = %v, want EOF", err)
 	}
-	if _, err := ReadMasterFrame(bytes.NewReader([]byte{0, 0}), 0); !errors.Is(err, io.ErrUnexpectedEOF) {
+	if _, err := ReadClusterFrameWithPeerID(bytes.NewReader([]byte{0, 0}), 0); !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("truncated length error = %v, want unexpected EOF", err)
 	}
 	var buf bytes.Buffer
-	_ = WriteChainFrame(&buf, &ChainFrame{Frame: Frame{Payload: []byte("payload")}})
-	if _, err := ReadChainFrame(bytes.NewReader(buf.Bytes()), 3); err == nil {
+	if err := WriteClusterFrame(&buf, &ClusterFrame{Payload: []byte("payload")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadClusterFrame(bytes.NewReader(buf.Bytes()), 3); err == nil {
 		t.Fatal("oversized payload accepted")
 	}
-	if _, err := ReadPeerFrame(bytes.NewReader([]byte{1, 2, 3}), 0); err == nil {
+	if _, err := ReadP2PFrame(bytes.NewReader([]byte{1, 2, 3}), 0); err == nil {
 		t.Fatal("short P2P frame accepted")
+	}
+	if err := WriteClusterFrame(&buf, &ClusterFrame{ClusterPeerID: 1}); err == nil {
+		t.Fatal("direct chain codec accepted a cluster peer ID")
 	}
 }
 
 func TestFrameEOFContract(t *testing.T) {
-	if _, err := ReadChainFrame(bytes.NewReader(nil), 0); !errors.Is(err, io.EOF) {
+	if _, err := ReadClusterFrame(bytes.NewReader(nil), 0); !errors.Is(err, io.EOF) {
 		t.Fatalf("clean EOF = %v, want EOF", err)
 	}
-	if _, err := ReadChainFrame(bytes.NewReader([]byte{0, 0}), 0); !errors.Is(err, io.ErrUnexpectedEOF) {
+	if _, err := ReadClusterFrame(bytes.NewReader([]byte{0, 0}), 0); !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("partial length = %v, want unexpected EOF", err)
 	}
-	if _, err := ReadMasterFrame(bytes.NewReader([]byte{0, 0, 0, 0}), 0); !errors.Is(err, io.ErrUnexpectedEOF) {
+	if _, err := ReadClusterFrameWithPeerID(bytes.NewReader([]byte{0, 0, 0, 0}), 0); !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("missing cluster peer ID = %v, want unexpected EOF", err)
 	}
-	if _, err := ReadChainFrame(bytes.NewReader([]byte{0, 0, 0, 0}), 0); !errors.Is(err, io.ErrUnexpectedEOF) {
+	if _, err := ReadClusterFrame(bytes.NewReader([]byte{0, 0, 0, 0}), 0); !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("missing frame body = %v, want unexpected EOF", err)
 	}
 }
 
-func TestMasterAndPeerFramePayloadLimits(t *testing.T) {
-	master := &MasterFrame{Frame: Frame{Payload: []byte("payload")}}
-	var masterBytes bytes.Buffer
-	if err := WriteMasterFrame(&masterBytes, master); err != nil {
+func TestFramePayloadLimits(t *testing.T) {
+	cluster := &ClusterFrame{Payload: []byte("payload")}
+	var clusterBytes bytes.Buffer
+	if err := WriteClusterFrameWithPeerID(&clusterBytes, cluster); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReadMasterFrame(bytes.NewReader(masterBytes.Bytes()), 3); err == nil {
-		t.Fatal("MasterFrame accepted payload above limit")
+	if _, err := ReadClusterFrameWithPeerID(bytes.NewReader(clusterBytes.Bytes()), 3); err == nil {
+		t.Fatal("ClusterFrame accepted payload above limit")
 	}
 
-	peer := &PeerFrame{Frame: Frame{Payload: []byte("payload")}}
-	var peerBytes bytes.Buffer
-	if err := WritePeerFrame(&peerBytes, peer); err != nil {
+	p2p := &P2PFrame{Payload: []byte("payload")}
+	var p2pBytes bytes.Buffer
+	if err := WriteP2PFrame(&p2pBytes, p2p); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReadPeerFrame(bytes.NewReader(peerBytes.Bytes()), 3); err == nil {
-		t.Fatal("PeerFrame accepted payload above limit")
+	if _, err := ReadP2PFrame(bytes.NewReader(p2pBytes.Bytes()), 3); err == nil {
+		t.Fatal("P2PFrame accepted payload above limit")
 	}
 }
