@@ -43,7 +43,9 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 		OnTxStart:        t.OnTxStart,
 		OnTxEnd:          t.OnTxEnd,
 		OnEnter:          t.OnEnter,
+		OnEnterV2:        t.OnEnterV2,
 		OnExit:           t.OnExit,
+		OnExitV2:         t.OnExitV2,
 		OnOpcode:         t.OnOpcode,
 		OnOpcodeV2:       t.OnOpcodeV2,
 		OnFault:          t.OnFault,
@@ -80,6 +82,12 @@ func (t *noop) OnEnter(depth int, typ byte, from common.Address, to common.Addre
 }
 
 func (t *noop) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+}
+
+func (t *noop) OnEnterV2(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
+}
+
+func (t *noop) OnExitV2(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 }
 
 func (t *noop) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {

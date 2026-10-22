@@ -66,6 +66,9 @@ type VMContext struct {
 	Random      *common.Hash
 	BaseFee     *big.Int
 
+	// Rules are the chain rules in effect for the execution.
+	Rules params.Rules
+
 	// StateDB provides read access to the state being executed on.
 	StateDB StateDB
 }
@@ -322,6 +325,28 @@ type Hooks struct {
 
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+}
+
+// EmitSystemCallStart dispatches a system call start, preferring the hook that
+// receives the VM context.
+func (h *Hooks) EmitSystemCallStart(vm *VMContext) {
+	if h == nil {
+		return
+	}
+	if h.OnSystemCallStartV2 != nil {
+		h.OnSystemCallStartV2(vm)
+		return
+	}
+	if h.OnSystemCallStart != nil {
+		h.OnSystemCallStart()
+	}
+}
+
+// EmitSystemCallEnd dispatches a system call end.
+func (h *Hooks) EmitSystemCallEnd() {
+	if h != nil && h.OnSystemCallEnd != nil {
+		h.OnSystemCallEnd()
+	}
 }
 
 // HasGasHook reports whether any gas-change hook is registered. Call sites

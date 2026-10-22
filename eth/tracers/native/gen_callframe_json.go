@@ -16,19 +16,20 @@ var _ = (*callFrameMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (c callFrame) MarshalJSON() ([]byte, error) {
 	type callFrame0 struct {
-		Type         vm.OpCode       `json:"-"`
-		From         common.Address  `json:"from"`
-		Gas          hexutil.Uint64  `json:"gas"`
-		GasUsed      hexutil.Uint64  `json:"gasUsed"`
-		To           *common.Address `json:"to,omitempty" rlp:"optional"`
-		Input        hexutil.Bytes   `json:"input" rlp:"optional"`
-		Output       hexutil.Bytes   `json:"output,omitempty" rlp:"optional"`
-		Error        string          `json:"error,omitempty" rlp:"optional"`
-		RevertReason string          `json:"revertReason,omitempty"`
-		Calls        []callFrame     `json:"calls,omitempty" rlp:"optional"`
-		Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
-		Value        *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
-		TypeString   string          `json:"type"`
+		Type              vm.OpCode       `json:"-"`
+		From              common.Address  `json:"from"`
+		Gas               hexutil.Uint64  `json:"gas"`
+		GasUsed           hexutil.Uint64  `json:"gasUsed"`
+		To                *common.Address `json:"to,omitempty" rlp:"optional"`
+		Input             hexutil.Bytes   `json:"input" rlp:"optional"`
+		Output            hexutil.Bytes   `json:"output,omitempty" rlp:"optional"`
+		Error             string          `json:"error,omitempty" rlp:"optional"`
+		RevertReason      string          `json:"revertReason,omitempty"`
+		Calls             []callFrame     `json:"calls,omitempty" rlp:"optional"`
+		Logs              []callLog       `json:"logs,omitempty" rlp:"optional"`
+		Value             *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
+		StateGasReservoir *hexutil.Uint64 `json:"stateGasReservoir,omitempty" rlp:"-"`
+		TypeString        string          `json:"type"`
 	}
 	var enc callFrame0
 	enc.Type = c.Type
@@ -43,6 +44,7 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	enc.Calls = c.Calls
 	enc.Logs = c.Logs
 	enc.Value = (*hexutil.Big)(c.Value)
+	enc.StateGasReservoir = (*hexutil.Uint64)(c.StateGasReservoir)
 	enc.TypeString = c.TypeString()
 	return json.Marshal(&enc)
 }
@@ -50,18 +52,19 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (c *callFrame) UnmarshalJSON(input []byte) error {
 	type callFrame0 struct {
-		Type         *vm.OpCode      `json:"-"`
-		From         *common.Address `json:"from"`
-		Gas          *hexutil.Uint64 `json:"gas"`
-		GasUsed      *hexutil.Uint64 `json:"gasUsed"`
-		To           *common.Address `json:"to,omitempty" rlp:"optional"`
-		Input        *hexutil.Bytes  `json:"input" rlp:"optional"`
-		Output       *hexutil.Bytes  `json:"output,omitempty" rlp:"optional"`
-		Error        *string         `json:"error,omitempty" rlp:"optional"`
-		RevertReason *string         `json:"revertReason,omitempty"`
-		Calls        []callFrame     `json:"calls,omitempty" rlp:"optional"`
-		Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
-		Value        *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
+		Type              *vm.OpCode      `json:"-"`
+		From              *common.Address `json:"from"`
+		Gas               *hexutil.Uint64 `json:"gas"`
+		GasUsed           *hexutil.Uint64 `json:"gasUsed"`
+		To                *common.Address `json:"to,omitempty" rlp:"optional"`
+		Input             *hexutil.Bytes  `json:"input" rlp:"optional"`
+		Output            *hexutil.Bytes  `json:"output,omitempty" rlp:"optional"`
+		Error             *string         `json:"error,omitempty" rlp:"optional"`
+		RevertReason      *string         `json:"revertReason,omitempty"`
+		Calls             []callFrame     `json:"calls,omitempty" rlp:"optional"`
+		Logs              []callLog       `json:"logs,omitempty" rlp:"optional"`
+		Value             *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
+		StateGasReservoir *hexutil.Uint64 `json:"stateGasReservoir,omitempty" rlp:"-"`
 	}
 	var dec callFrame0
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -102,6 +105,9 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Value != nil {
 		c.Value = (*big.Int)(dec.Value)
+	}
+	if dec.StateGasReservoir != nil {
+		c.StateGasReservoir = (*uint64)(dec.StateGasReservoir)
 	}
 	return nil
 }

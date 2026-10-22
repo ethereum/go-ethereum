@@ -290,7 +290,7 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 		OnTxEnd:             l.OnTxEnd,
 		OnSystemCallStartV2: l.OnSystemCallStart,
 		OnSystemCallEnd:     l.OnSystemCallEnd,
-		OnExit:              l.OnExit,
+		OnExitV2:            l.OnExit,
 		OnOpcodeV2:          l.OnOpcode,
 	}
 }
@@ -381,7 +381,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tr
 }
 
 // OnExit is called a call frame finishes processing.
-func (l *StructLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (l *StructLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 	if depth != 0 {
 		return
 	}
@@ -463,10 +463,12 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 }
 
 type mdLogger struct {
-	out  io.Writer
-	cfg  *Config
-	env  *tracing.VMContext
-	skip bool
+	out         io.Writer
+	cfg         *Config
+	env         *tracing.VMContext
+	gas         tracing.Gas // budget the top-level frame was entered with
+	isAmsterdam bool        // whether gas has a state dimension (EIP-8037)
+	skip        bool
 }
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
@@ -485,7 +487,7 @@ func (t *mdLogger) Hooks() *tracing.Hooks {
 		OnSystemCallStartV2: t.OnSystemCallStart,
 		OnSystemCallEnd:     t.OnSystemCallEnd,
 		OnEnterV2:           t.OnEnter,
-		OnExit:              t.OnExit,
+		OnExitV2:            t.OnExit,
 		OnOpcodeV2:          t.OnOpcode,
 		OnFaultV2:           t.OnFault,
 	}
@@ -493,6 +495,7 @@ func (t *mdLogger) Hooks() *tracing.Hooks {
 
 func (t *mdLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
+	t.isAmsterdam = env.Rules.IsAmsterdam
 }
 
 func (t *mdLogger) OnSystemCallStart(env *tracing.VMContext) {
@@ -510,41 +513,55 @@ func (t *mdLogger) OnEnter(depth int, typ byte, from common.Address, to common.A
 	if depth != 0 {
 		return
 	}
-	if create := vm.OpCode(typ) == vm.CREATE; !create {
-		fmt.Fprintf(t.out, "Pre-execution info:\n"+
-			"  - from: `%v`\n"+
-			"  - to: `%v`\n"+
-			"  - data: `%#x`\n"+
-			"  - gas: `%d`\n"+
-			"  - state gas reservoir: `%d`\n"+
-			"  - value: `%v` wei\n",
-			from.String(), to.String(), input, gas.Execution, gas.State, value)
-	} else {
-		fmt.Fprintf(t.out, "Pre-execution info:\n"+
-			"  - from: `%v`\n"+
-			"  - create: `%v`\n"+
-			"  - data: `%#x`\n"+
-			"  - gas: `%d`\n"+
-			"  - state gas reservoir: `%d`\n"+
-			"  - value: `%v` wei\n",
-			from.String(), to.String(), input, gas.Execution, gas.State, value)
+	t.gas = gas
+
+	target := "to"
+	if vm.OpCode(typ) == vm.CREATE {
+		target = "create"
 	}
-	fmt.Fprintf(t.out, `
+	fmt.Fprintf(t.out, "Pre-execution info:\n"+
+		"  - from: `%v`\n"+
+		"  - %s: `%v`\n"+
+		"  - data: `%#x`\n"+
+		"  - gas: `%d`\n",
+		from.String(), target, to.String(), input, gas.Execution)
+	if t.isAmsterdam {
+		fmt.Fprintf(t.out, "  - state gas reservoir: `%d`\n", gas.State)
+	}
+	fmt.Fprintf(t.out, "  - value: `%v` wei\n", value)
+
+	if t.isAmsterdam {
+		fmt.Fprintf(t.out, `
 |  Pc   |      Op     | Cost | StateCost | Reservoir |   Refund  |   Stack   |
 |-------|-------------|------|-----------|-----------|-----------|-----------|
 `)
+	} else {
+		fmt.Fprintf(t.out, `
+|  Pc   |      Op     | Cost |   Refund  |   Stack   |
+|-------|-------------|------|-----------|-----------|
+`)
+	}
 }
 
-func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *mdLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 	if t.skip {
 		return
 	}
 	if depth == 0 {
-		fmt.Fprintf(t.out, "\nPost-execution info:\n"+
-			"  - output: `%#x`\n"+
-			"  - consumed gas: `%d`\n"+
-			"  - error: `%v`\n",
-			output, gasUsed, err)
+		var used uint64
+		if t.gas.Execution > gasLeft.Execution {
+			used = t.gas.Execution - gasLeft.Execution
+		}
+		fmt.Fprintf(t.out, "\nPost-execution info:\n  - output: `%#x`\n", output)
+		if t.isAmsterdam {
+			// Each dimension is the budget it started with less what is left:
+			// the state one can go up when refills outweigh the charges.
+			fmt.Fprintf(t.out, "  - consumed execution gas: `%d`\n", used)
+			fmt.Fprintf(t.out, "  - consumed state gas: `%d`\n", int64(t.gas.State)-int64(gasLeft.State))
+		} else {
+			fmt.Fprintf(t.out, "  - consumed gas: `%d`\n", used)
+		}
+		fmt.Fprintf(t.out, "  - error: `%v`\n", err)
 	}
 }
 
@@ -554,8 +571,13 @@ func (t *mdLogger) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.Op
 		return
 	}
 	stack := scope.StackData()
-	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10d |%10d |%10v |", pc, vm.OpCode(op).String(),
-		cost.Execution, cost.State, gas.State, t.env.StateDB.GetRefund())
+	if t.isAmsterdam {
+		fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10d |%10d |%10v |", pc, vm.OpCode(op).String(),
+			cost.Execution, cost.State, gas.State, t.env.StateDB.GetRefund())
+	} else {
+		fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10v |", pc, vm.OpCode(op).String(),
+			cost.Execution, t.env.StateDB.GetRefund())
+	}
 
 	if !t.cfg.DisableStack {
 		// format stack

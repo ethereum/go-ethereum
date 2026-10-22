@@ -517,6 +517,48 @@ func (evm *EVM) createFramePreCheck(caller common.Address, value *uint256.Int) e
 	return nil
 }
 
+// pendingAccountCreation returns the account-creation state gas the CREATE or
+// CREATE2 about to run will charge, for the opcode hook, which fires before the
+// opcode executes. The destination is read under the same conditions as in
+// opCreate*, after the opcode's gas is charged and the precheck passed, so the
+// block access list records the same access whether tracing or not.
+func (evm *EVM) pendingAccountCreation(op OpCode, scope *ScopeContext) uint64 {
+	if !evm.chainRules.IsAmsterdam {
+		return 0
+	}
+	var (
+		stack  = scope.Stack
+		caller = scope.Contract.Address()
+	)
+	if evm.createFramePreCheck(caller, stack.peek()) != nil {
+		return 0
+	}
+	var address common.Address
+	if op == CREATE {
+		address = crypto.CreateAddress(caller, evm.StateDB.GetNonce(caller))
+	} else {
+		// Memory is expanded after the hook, so the initcode may extend past
+		// it; the missing tail reads as zeros.
+		var (
+			offset, size = stack.back(1).Uint64(), stack.back(2).Uint64()
+			initcode     []byte
+		)
+		if end := offset + size; end <= uint64(scope.Memory.Len()) {
+			initcode = scope.Memory.GetPtr(offset, size)
+		} else {
+			initcode = make([]byte, size)
+			if offset < uint64(scope.Memory.Len()) {
+				copy(initcode, scope.Memory.GetPtr(offset, uint64(scope.Memory.Len())-offset))
+			}
+		}
+		address = crypto.CreateAddress2(caller, stack.back(3).Bytes32(), crypto.Keccak256(initcode))
+	}
+	if !evm.StateDB.Empty(address) {
+		return 0
+	}
+	return params.AccountCreationSize * evm.Context.CostPerStateByte
+}
+
 // chargeAccountCreation runs the create-frame precheck and charges the
 // account-creation state gas since Amsterdam, before the 63/64ths split.
 //
@@ -789,6 +831,7 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		Time:        evm.Context.Time,
 		Random:      evm.Context.Random,
 		BaseFee:     evm.Context.BaseFee,
+		Rules:       evm.chainRules,
 		StateDB:     statedb,
 	}
 }

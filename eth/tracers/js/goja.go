@@ -134,6 +134,7 @@ type jsTracer struct {
 	log         *steplog
 	frame       *callframe
 	frameResult *callframeResult
+	frameGas    []uint64 // entry gas of the open frames, for the gas used on exit
 
 	// Goja-wrapping of types prepared for JS consumption
 	logValue         goja.Value
@@ -238,8 +239,8 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage, chainCo
 		Hooks: &tracing.Hooks{
 			OnTxStart:  t.OnTxStart,
 			OnTxEnd:    t.OnTxEnd,
-			OnEnter:    t.OnEnter,
-			OnExit:     t.OnExit,
+			OnEnterV2:  t.OnEnter,
+			OnExitV2:   t.OnExit,
 			OnOpcodeV2: t.OnOpcode,
 			OnFaultV2:  t.OnFault,
 		},
@@ -385,12 +386,13 @@ func (t *jsTracer) onEnd(output []byte, gasUsed uint64, err error, reverted bool
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
+	t.frameGas = append(t.frameGas, gas.Execution)
 	if t.err != nil {
 		return
 	}
 	if depth == 0 {
-		t.onStart(from, to, vm.OpCode(typ) == vm.CREATE, input, gas, value)
+		t.onStart(from, to, vm.OpCode(typ) == vm.CREATE, input, gas.Execution, value)
 		return
 	}
 	if !t.traceFrame {
@@ -401,7 +403,8 @@ func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.A
 	t.frame.from = from
 	t.frame.to = to
 	t.frame.input = common.CopyBytes(input)
-	t.frame.gas = uint(gas)
+	t.frame.gas = uint(gas.Execution)
+	t.frame.stateGasReservoir = gas.State
 	t.frame.value = nil
 	if value != nil {
 		t.frame.value = new(big.Int).SetBytes(value.Bytes())
@@ -414,7 +417,14 @@ func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.A
 
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *jsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *jsTracer) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+	var gasUsed uint64
+	if n := len(t.frameGas); n > 0 {
+		if gas := t.frameGas[n-1]; gas > gasLeft.Execution {
+			gasUsed = gas - gasLeft.Execution
+		}
+		t.frameGas = t.frameGas[:n-1]
+	}
 	if t.err != nil {
 		return
 	}
@@ -894,12 +904,13 @@ type callframe struct {
 	toBig toBigFn
 	toBuf toBufFn
 
-	typ   string
-	from  common.Address
-	to    common.Address
-	input []byte
-	gas   uint
-	value *big.Int
+	typ               string
+	from              common.Address
+	to                common.Address
+	input             []byte
+	gas               uint
+	stateGasReservoir uint64 // EIP-8037 state gas reservoir the frame is entered with
+	value             *big.Int
 }
 
 func (f *callframe) GetType() string {
@@ -940,6 +951,10 @@ func (f *callframe) GetGas() uint {
 	return f.gas
 }
 
+func (f *callframe) GetStateGasReservoir() uint64 {
+	return f.stateGasReservoir
+}
+
 func (f *callframe) GetValue() goja.Value {
 	if f.value == nil {
 		return goja.Undefined()
@@ -959,6 +974,7 @@ func (f *callframe) setupObject() *goja.Object {
 	o.Set("getTo", f.vm.ToValue(f.GetTo))
 	o.Set("getInput", f.vm.ToValue(f.GetInput))
 	o.Set("getGas", f.vm.ToValue(f.GetGas))
+	o.Set("getStateGasReservoir", f.vm.ToValue(f.GetStateGasReservoir))
 	o.Set("getValue", f.vm.ToValue(f.GetValue))
 	return o
 }
@@ -967,7 +983,7 @@ type callframeResult struct {
 	vm    *goja.Runtime
 	toBuf toBufFn
 
-	gasUsed uint
+	gasUsed uint // gas entered with minus the gas left returned to the caller
 	output  []byte
 	err     error
 }

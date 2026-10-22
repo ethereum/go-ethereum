@@ -43,6 +43,8 @@ type fileWritingTracer struct {
 
 	// for custom tracing
 	getResult func() (json.RawMessage, error)
+
+	frames []tracing.Gas // entry budgets of the open frames, for the inner exit hook
 }
 
 func (l *fileWritingTracer) Write(p []byte) (n int, err error) {
@@ -127,12 +129,15 @@ func (l *fileWritingTracer) hooks() *tracing.Hooks {
 		OnTxStart: l.OnTxStart,
 		OnTxEnd:   l.OnTxEnd,
 		OnEnterV2: func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
+			l.frames = append(l.frames, gas)
 			l.inner.EmitEnter(depth, typ, from, to, input, gas, value)
 		},
-		OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-			if l.inner != nil && l.inner.OnExit != nil {
-				l.inner.OnExit(depth, output, gasUsed, err, reverted)
+		OnExitV2: func(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+			var gas tracing.Gas
+			if n := len(l.frames); n > 0 {
+				gas, l.frames = l.frames[n-1], l.frames[:n-1]
 			}
+			l.inner.EmitExit(depth, output, gas, gasLeft, err, reverted)
 		},
 		OnOpcodeV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 			l.inner.EmitOpcode(pc, op, gas, cost, scope, rData, depth, err)
@@ -140,15 +145,11 @@ func (l *fileWritingTracer) hooks() *tracing.Hooks {
 		OnFaultV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
 			l.inner.EmitFault(pc, op, gas, cost, scope, depth, err)
 		},
-		OnSystemCallStart: func() {
-			if l.inner != nil && l.inner.OnSystemCallStart != nil {
-				l.inner.OnSystemCallStart()
-			}
+		OnSystemCallStartV2: func(vm *tracing.VMContext) {
+			l.inner.EmitSystemCallStart(vm)
 		},
 		OnSystemCallEnd: func() {
-			if l.inner != nil && l.inner.OnSystemCallEnd != nil {
-				l.inner.OnSystemCallEnd()
-			}
+			l.inner.EmitSystemCallEnd()
 		},
 	}
 }
