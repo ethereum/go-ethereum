@@ -65,6 +65,9 @@ type jsonLogger struct {
 	env     *tracing.VMContext
 	hooks   *tracing.Hooks
 	written *countingWriter
+
+	callFrames bool          // whether entered frames are written out
+	frames     []tracing.Gas // entry budgets of the open frames
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
@@ -76,11 +79,12 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 		l.cfg = &Config{}
 	}
 	l.hooks = &tracing.Hooks{
-		OnTxStart:         l.OnTxStart,
-		OnSystemCallStart: l.onSystemCallStart,
-		OnExit:            l.OnExit,
-		OnOpcodeV2:        l.OnOpcode,
-		OnFaultV2:         l.OnFault,
+		OnTxStart:           l.OnTxStart,
+		OnSystemCallStartV2: l.onSystemCallStart,
+		OnEnterV2:           l.OnEnter,
+		OnExitV2:            l.OnExit,
+		OnOpcodeV2:          l.OnOpcode,
+		OnFaultV2:           l.OnFault,
 	}
 	return l.hooks
 }
@@ -90,17 +94,22 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 // in the output.
 func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 	cw := &countingWriter{w: writer}
-	l := &jsonLogger{encoder: json.NewEncoder(cw), cfg: cfg, written: cw}
+	l := &jsonLogger{
+		encoder:    json.NewEncoder(cw),
+		cfg:        cfg,
+		written:    cw,
+		callFrames: true,
+	}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
 	l.hooks = &tracing.Hooks{
-		OnTxStart:         l.OnTxStart,
-		OnSystemCallStart: l.onSystemCallStart,
-		OnEnterV2:         l.OnEnter,
-		OnExit:            l.OnExit,
-		OnOpcodeV2:        l.OnOpcode,
-		OnFaultV2:         l.OnFault,
+		OnTxStart:           l.OnTxStart,
+		OnSystemCallStartV2: l.onSystemCallStart,
+		OnEnterV2:           l.OnEnter,
+		OnExitV2:            l.OnExit,
+		OnOpcodeV2:          l.OnOpcode,
+		OnFaultV2:           l.OnFault,
 	}
 	return l.hooks
 }
@@ -141,7 +150,7 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.
 	l.encoder.Encode(log)
 }
 
-func (l *jsonLogger) onSystemCallStart() {
+func (l *jsonLogger) onSystemCallStart(*tracing.VMContext) {
 	// Process no events while in system call.
 	hooks := *l.hooks
 	*l.hooks = tracing.Hooks{
@@ -153,7 +162,9 @@ func (l *jsonLogger) onSystemCallStart() {
 
 // OnEnter is not enabled by default.
 func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
-	if l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
+	l.frames = append(l.frames, gas)
+
+	if !l.callFrames || l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
 		return
 	}
 	frame := callFrame{
@@ -170,7 +181,14 @@ func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common
 	l.encoder.Encode(frame)
 }
 
-func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (l *jsonLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+	var gasUsed uint64
+	if n := len(l.frames); n > 0 {
+		if entry := l.frames[n-1]; entry.Execution > gasLeft.Execution {
+			gasUsed = entry.Execution - gasLeft.Execution
+		}
+		l.frames = l.frames[:n-1]
+	}
 	if l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
 		return
 	}

@@ -261,3 +261,61 @@ func TestStateGasCapture(t *testing.T) {
 		}
 	}
 }
+
+// Tests that after Amsterdam the struct logger reports the account creation a
+// CREATE charges on the CREATE step itself, although the charge is only made
+// once the opcode executes.
+func TestCreateStateGasCapture(t *testing.T) {
+	var (
+		logger  = NewStructLogger(nil)
+		addr    = common.HexToAddress("0xc0de")
+		config  = *params.MergedTestChainConfig
+		code    = []byte{byte(vm.PUSH1), 0x0, byte(vm.PUSH1), 0x0, byte(vm.PUSH1), 0x0, byte(vm.CREATE), byte(vm.STOP)}
+		gas     = params.MaxTxGas + 400_000 // reservoir covering the account creation
+		statedb = state.NewDatabaseForTesting()
+	)
+	config.AmsterdamTime = new(uint64)
+	st, _ := state.New(types.EmptyRootHash, statedb)
+	st.SetCode(addr, code, tracing.CodeChangeUnspecified)
+	st.SetBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+	if _, _, err := runtime.Call(addr, nil, &runtime.Config{
+		ChainConfig: &config,
+		State:       st,
+		GasLimit:    gas,
+		EVMConfig:   vm.Config{Tracer: logger.Hooks()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var (
+		reservoir = gas - params.MaxTxGas
+		stateCost = int64(params.AccountCreationSize * params.CostPerStateByte)
+		want      = []struct {
+			cost      int64
+			reservoir uint64
+		}{
+			{0, reservoir},                     // PUSH1
+			{0, reservoir},                     // PUSH1
+			{0, reservoir},                     // PUSH1
+			{stateCost, reservoir},             // CREATE, charges the account creation
+			{0, reservoir - uint64(stateCost)}, // STOP
+		}
+	)
+	if len(logger.logs) != len(want) {
+		t.Fatalf("wrong number of steps: have %d, want %d: %s", len(logger.logs), len(want), logger.logs)
+	}
+	for i, entry := range logger.logs {
+		var step struct {
+			StateGasCost      *int64  `json:"stateGasCost"`
+			StateGasReservoir *uint64 `json:"stateGasReservoir"`
+		}
+		if err := json.Unmarshal(entry, &step); err != nil {
+			t.Fatal(err)
+		}
+		if have := step.StateGasCost; (have == nil) != (want[i].cost == 0) || (have != nil && *have != want[i].cost) {
+			t.Errorf("step %d: stateGasCost mismatch, want %d: %s", i, want[i].cost, entry)
+		}
+		if have := step.StateGasReservoir; have == nil || *have != want[i].reservoir {
+			t.Errorf("step %d: stateGasReservoir mismatch, want %d: %s", i, want[i].reservoir, entry)
+		}
+	}
+}
