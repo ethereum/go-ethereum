@@ -125,5 +125,5 @@ func DeserializeAndHash(blob []byte) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 	g := n.(*groupNode)
-	return g.fold(g.hashPos), nil
+	return g.rootHash(g.hashPos), nil
 }

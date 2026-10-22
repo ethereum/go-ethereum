@@ -54,7 +54,8 @@ type (
 		subs     []byte
 		vals     [][]byte
 		hash     common.Hash
-		hashPos  int // groups hash relative to their position
+		hashPos  int            // the position hash was computed at
+		children [2]common.Hash // of the top branch, if known
 		dirty    bool
 		modified bool
 	}
@@ -90,43 +91,54 @@ func (n *branchNode) copy() node {
 	return &cp
 }
 
+// hashAt returns the group's hash at bit position pos.
 func (g *groupNode) hashAt(pos int) common.Hash {
-	if g.dirty || g.hash == (common.Hash{}) || g.hashPos != pos {
-		g.hash, g.hashPos, g.dirty = g.fold(pos), pos, false
+	if g.dirty {
+		g.hash, g.children = common.Hash{}, [2]common.Hash{}
 	}
+	if g.hash == (common.Hash{}) || (g.hashPos != pos && len(g.subs) > 1) {
+		g.hash = g.rootHash(pos)
+	}
+	g.hashPos, g.dirty = pos, false
 	return g.hash
 }
 
-// fold hashes the canonical subtree over the group's values at pos: the top
-// branch prefix carries the stem bits below pos.
-func (g *groupNode) fold(pos int) common.Hash {
+// rootHash hashes the canonical subtree over the group's values at bit
+// position pos. Only its top branch depends on pos, through the stem bits
+// below it that its prefix carries, so the branch's children are kept for when
+// the group moves.
+func (g *groupNode) rootHash(pos int) common.Hash {
 	if len(g.subs) == 1 {
 		return leafHash(g.stem, g.subs[0], g.vals[0])
 	}
-	return g.foldRange(0, len(g.subs), 0, pos, 8*len(g.stem))
+	b, m := splitSubs(g.subs, 0, len(g.subs))
+	if g.children == ([2]common.Hash{}) {
+		g.children = [2]common.Hash{g.foldRange(0, m, b+1), g.foldRange(m, len(g.subs), b+1)}
+	}
+	prefix := slice(g.stem, pos, 8*len(g.stem)-pos).append(slice(g.subs, 0, b))
+	return branchHash(prefix, g.children[0], g.children[1])
 }
 
-// foldRange hashes the subtree over subs[i:j], whose sub-index bits agree on
-// [0, from). Its prefix is stem bits [lo, hi) followed by the shared sub bits.
-func (g *groupNode) foldRange(i, j, from, lo, hi int) common.Hash {
+// foldRange hashes the canonical subtree over subs[i:j], whose sub-indices
+// agree on their first from bits. A branch's prefix is the bits they go on
+// sharing from there.
+func (g *groupNode) foldRange(i, j, from int) common.Hash {
 	if j-i == 1 {
 		return leafHash(g.stem, g.subs[i], g.vals[i])
 	}
-	b := 8 - bits.Len8(g.subs[i]^g.subs[j-1])
-	m := i + 1
-	for g.subs[m]>>(7-b)&1 == 0 {
+	b, m := splitSubs(g.subs, i, j)
+	return branchHash(slice(g.subs[i:], from, b-from), g.foldRange(i, m, b+1), g.foldRange(m, j, b+1))
+}
+
+// splitSubs returns the first bit b on which subs[i:j] differ, and the index
+// m that divides them on it.
+func splitSubs(subs []byte, i, j int) (b, m int) {
+	b = 8 - bits.Len8(subs[i]^subs[j-1])
+	m = i + 1
+	for subs[m]>>(7-b)&1 == 0 {
 		m++
 	}
-	var prefix bitstr
-	if hi > lo {
-		prefix = slice(g.stem, lo, hi-lo)
-		for k := from; k < b; k++ {
-			prefix = prefix.concat(g.subs[i]>>(7-k)&1, bitstr{})
-		}
-	} else {
-		prefix = slice([]byte{g.subs[i]}, from, b-from)
-	}
-	return branchHash(prefix, g.foldRange(i, m, b+1, 0, 0), g.foldRange(m, j, b+1, 0, 0))
+	return b, m
 }
 
 func (g *groupNode) lookup(sub byte) []byte {

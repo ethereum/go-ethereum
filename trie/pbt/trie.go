@@ -248,7 +248,7 @@ func (t *PartitionedTrie) insert(n node, stem []byte, subs []byte, vals [][]byte
 		t.onInsert(slice(n.stem, 0, split+1))
 		t.onInsert(slice(stem, 0, split+1))
 		t.onInsert(slice(stem, 0, pos))
-		n.dirty, n.modified = true, true
+		n.modified = true
 		branch := &branchNode{prefix: slice(stem, pos, run), left: g, right: n, dirty: true, modified: true}
 		if bitAt(stem, split) == 1 {
 			branch.left, branch.right = n, g
@@ -316,7 +316,7 @@ func (t *PartitionedTrie) collapse(n *branchNode, walk bitstr, bit byte) (node, 
 		s.dirty, s.modified = true, true
 		return s, nil
 	case *groupNode:
-		s.dirty, s.modified = true, true
+		s.modified = true
 		return s, nil
 	}
 	return n, fmt.Errorf("pbt: unexpected collapse survivor %T", sibling)
