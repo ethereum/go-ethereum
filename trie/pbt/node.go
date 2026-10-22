@@ -106,9 +106,8 @@ func (g *groupNode) hashAt(pos int) common.Hash {
 }
 
 // rootHash hashes the canonical subtree over the group's values at bit
-// position pos. Only its top branch depends on pos, through the stem bits
-// below it that its prefix carries, so the branch's children are kept for when
-// the group moves.
+// position pos. Only its top branch depends on pos, so the branch's children
+// are kept for when the group moves.
 func (g *groupNode) rootHash(pos int) common.Hash {
 	if len(g.subs) == 1 {
 		return leafHash(g.stem, g.subs[0], g.vals[0])
@@ -117,6 +116,8 @@ func (g *groupNode) rootHash(pos int) common.Hash {
 	if g.children == ([2]common.Hash{}) {
 		g.children = [2]common.Hash{g.foldRange(0, m, b+1), g.foldRange(m, len(g.subs), b+1)}
 	}
+	// The top branch's prefix runs from pos to the end of the stem, then over
+	// the sub-index bits that every value shares.
 	prefix := slice(g.stem, pos, 8*len(g.stem)-pos).append(slice(g.subs, 0, b))
 	return branchHash(prefix, g.children[0], g.children[1])
 }
