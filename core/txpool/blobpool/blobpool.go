@@ -749,7 +749,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		p.recheck(addr, nil)
 	}
 	var (
-		basefee = uint256.MustFromBig(eip1559.CalcNextBaseFee(p.chain.Config(), head))
+		basefee = p.nextBaseFee(head)
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
 	if head.ExcessBlobGas != nil {
@@ -1292,7 +1292,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	}
 	// Reset the price heap for the new set of basefee/blobfee pairs
 	var (
-		basefee = uint256.MustFromBig(eip1559.CalcNextBaseFee(p.chain.Config(), newHead))
+		basefee = p.nextBaseFee(newHead)
 		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinBlobGasprice))
 	)
 	if newHead.ExcessBlobGas != nil {
@@ -2734,7 +2734,7 @@ func (p *BlobPool) Clear() {
 
 	var (
 		head    = p.head.Load()
-		basefee = uint256.MustFromBig(eip1559.CalcNextBaseFee(p.chain.Config(), head))
+		basefee = p.nextBaseFee(head)
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
 	p.evict = newPriceHeap(basefee, blobfee, p.index, p.blockedAccount)
@@ -2748,4 +2748,15 @@ func (p *BlobPool) GetCustody(hash common.Hash) *types.CustodyBitmap {
 		return &meta.custody
 	}
 	return nil
+}
+
+// nextBaseFee estimates the base fee of the block after head.
+func (p *BlobPool) nextBaseFee(head *types.Header) *uint256.Int {
+	var parent *types.Header
+	if head.Number.Sign() > 0 {
+		if block := p.chain.GetBlock(head.ParentHash, head.Number.Uint64()-1); block != nil {
+			parent = block.Header()
+		}
+	}
+	return uint256.MustFromBig(eip1559.CalcNextBaseFee(p.chain.Config(), head, parent))
 }

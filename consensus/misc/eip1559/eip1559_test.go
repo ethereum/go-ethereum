@@ -132,7 +132,7 @@ func TestCalcBaseFee(t *testing.T) {
 }
 
 // TestCalcBaseFeeBogota checks the EIP-8198 max change of seconds per slot over
-// 96, applied after dividing by the gas target like the spec does.
+// 96, at most 1/8, applied after dividing by the gas target like the spec does.
 func TestCalcBaseFeeBogota(t *testing.T) {
 	cfg := config()
 	cfg.BogotaTime = new(uint64)
@@ -147,7 +147,9 @@ func TestCalcBaseFeeBogota(t *testing.T) {
 		{params.InitialBaseFee, 11000000, 10, 1, 1010416666},   // 10s slots, usage above target
 		{params.InitialBaseFee, 11000000, 12, 1, 1012500000},   // 12s slots keep the 1/8 rule
 		{params.InitialBaseFee, 11000000, 20, 2, 1010416666},   // a missed 10s slot keeps 10s per slot
-		{params.InitialBaseFee, 20000000, 1000, 1, 2000000000}, // capped at the whole base fee
+		{params.InitialBaseFee, 20000000, 1000, 1, 1125000000}, // a long gap still moves at most 1/8
+		{params.InitialBaseFee, 0, 1000, 1, 875000000},         // nor drops below 7/8
+		{params.InitialBaseFee, 11000000, 13, 1, 1012500000},   // 13s slots count as 12s
 		{97000000, 9999999, 10, 1, 97000000},                   // multiplying by the seconds first would decrease by 1
 		{195000000, 10000001, 10, 1, 195000001},                // multiplying by the seconds first would increase by 2
 	}
@@ -218,22 +220,35 @@ func TestBaseFeeBogotaTransition(t *testing.T) {
 	}
 }
 
-// TestCalcNextBaseFee checks that the next-block estimate assumes one slot at the
-// reference duration, since the real spacing isn't known yet.
+// TestCalcNextBaseFee checks that the next-block estimate keeps the spacing per slot
+// between head and its parent, and falls back to the reference slot without one.
 func TestCalcNextBaseFee(t *testing.T) {
 	cfg := config()
 	cfg.BogotaTime = new(uint64)
 
-	slot := uint64(100)
+	headSlot := uint64(100)
 	head := &types.Header{
 		Number:     common.Big32,
 		Time:       1000,
-		SlotNumber: &slot,
+		SlotNumber: &headSlot,
 		GasLimit:   20000000,
 		GasUsed:    20000000,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 	}
-	if have, want := CalcNextBaseFee(cfg, head), big.NewInt(1125000000); have.Cmp(want) != 0 {
-		t.Errorf("have %d  want %d", have, want)
+	parentAt := func(time, slot uint64) *types.Header {
+		return &types.Header{Number: big.NewInt(31), Time: time, SlotNumber: &slot}
+	}
+	for i, tc := range []struct {
+		parent *types.Header
+		want   int64
+	}{
+		{nil, 1125000000},               // no parent: one 12s slot
+		{parentAt(990, 99), 1104166666}, // 10s slots
+		{parentAt(980, 98), 1104166666}, // a missed 10s slot keeps 10s per slot
+		{parentAt(985, 99), 1125000000}, // 15s slots count as 12s
+	} {
+		if have, want := CalcNextBaseFee(cfg, head, tc.parent), big.NewInt(tc.want); have.Cmp(want) != 0 {
+			t.Errorf("test %d: have %d  want %d", i, have, want)
+		}
 	}
 }

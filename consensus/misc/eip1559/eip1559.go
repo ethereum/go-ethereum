@@ -110,12 +110,19 @@ func CalcBaseFee(config *params.ChainConfig, parent, header *types.Header) *big.
 	}
 }
 
-// CalcNextBaseFee estimates the basefee of the block after head, assuming it lands
-// in the next slot at the reference slot duration.
-func CalcNextBaseFee(config *params.ChainConfig, head *types.Header) *big.Int {
-	next := &types.Header{Time: head.Time + params.BaseFeeReferenceSlotSeconds}
+// CalcNextBaseFee estimates the basefee of the block after head, assuming it keeps
+// the spacing per slot between head and parent, or one reference slot without parent.
+func CalcNextBaseFee(config *params.ChainConfig, head, parent *types.Header) *big.Int {
+	seconds, slots := uint64(params.BaseFeeReferenceSlotSeconds), uint64(1)
+	if parent != nil && head.Time > parent.Time {
+		seconds = head.Time - parent.Time
+		if parent.SlotNumber != nil && head.SlotNumber != nil && *head.SlotNumber > *parent.SlotNumber {
+			slots = *head.SlotNumber - *parent.SlotNumber
+		}
+	}
+	next := &types.Header{Time: head.Time + seconds}
 	if head.SlotNumber != nil {
-		slot := *head.SlotNumber + 1
+		slot := *head.SlotNumber + slots
 		next.SlotNumber = &slot
 	}
 	return CalcBaseFee(config, head, next)
@@ -137,13 +144,13 @@ func baseFeeChangeFraction(config *params.ChainConfig, parent, header *types.Hea
 	if header.Time > parent.Time {
 		seconds = header.Time - parent.Time
 	}
-	denom.Mul(denom, new(big.Int).SetUint64(params.BaseFeeReferenceSlotSeconds))
-	denom.Mul(denom, new(big.Int).SetUint64(slots))
-
-	// The change is capped at the whole base fee.
+	// Spacing beyond the reference slot duration is ignored, so no block moves
+	// the base fee by more than 1/8.
+	limit := new(big.Int).SetUint64(params.BaseFeeReferenceSlotSeconds)
+	limit.Mul(limit, new(big.Int).SetUint64(slots))
 	num := new(big.Int).SetUint64(seconds)
-	if num.Cmp(denom) > 0 {
-		num.Set(denom)
+	if num.Cmp(limit) > 0 {
+		num.Set(limit)
 	}
-	return num, denom
+	return num, denom.Mul(denom, limit)
 }

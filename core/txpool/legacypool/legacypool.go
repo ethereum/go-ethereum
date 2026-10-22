@@ -1255,7 +1255,11 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 		pool.demoteUnexecutables()
 		if reset.newHead != nil {
 			if pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
-				pendingBaseFee := eip1559.CalcNextBaseFee(pool.chainconfig, reset.newHead)
+				var parent *types.Header
+				if block := pool.chain.GetBlock(reset.newHead.ParentHash, reset.newHead.Number.Uint64()-1); block != nil {
+					parent = block.Header()
+				}
+				pendingBaseFee := eip1559.CalcNextBaseFee(pool.chainconfig, reset.newHead, parent)
 				pool.priced.SetBaseFee(pendingBaseFee)
 			} else {
 				pool.priced.Reheap()
