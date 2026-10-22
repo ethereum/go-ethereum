@@ -42,7 +42,8 @@ const UInt128Length = 16
 
 // TODO(ssz-limits): The 4294967295 values below are broad numeric bounds
 // supplied to fastssz for variable-length fields, not intended 4 GB message
-// sizes. Revisit them with protocol-specific limits if QKC defines them later.
+// sizes. Actual message size is primarily constrained by the per-frame size
+// limit. Revisit these bounds if QKC defines protocol-specific field limits.
 
 // PingRequest (ClusterOp.PING, 0x81) initializes a chain connection.
 type PingRequest struct {
