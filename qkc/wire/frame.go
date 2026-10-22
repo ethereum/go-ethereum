@@ -103,13 +103,9 @@ func readClusterFrame(r io.Reader, maxPayloadLen uint32, hasPeerID bool) (*Clust
 	if _, err := io.ReadFull(r, body); err != nil {
 		return nil, fmt.Errorf("reading cluster frame body (payload_len=%d): %w", payloadLen, normalizeTruncatedEOF(err))
 	}
-	message, err := unmarshalFrameBody(body)
-	if err != nil {
-		return nil, err
-	}
-	frame.Opcode = message.Opcode
-	frame.RPCID = message.RPCID
-	frame.Payload = message.Payload
+	frame.Opcode = body[0]
+	frame.RPCID = binary.BigEndian.Uint64(body[1:frameBodyHeader])
+	frame.Payload = body[frameBodyHeader:]
 	return frame, nil
 }
 
@@ -124,7 +120,10 @@ func writeClusterFrame(w io.Writer, frame *ClusterFrame, withPeerID bool) error 
 		return errors.New("payload too large")
 	}
 
-	body := marshalFrameBody(frame.Opcode, frame.RPCID, frame.Payload)
+	body := make([]byte, frameBodyHeader+len(frame.Payload))
+	body[0] = frame.Opcode
+	binary.BigEndian.PutUint64(body[1:frameBodyHeader], frame.RPCID)
+	copy(body[frameBodyHeader:], frame.Payload)
 	extra := 0
 	if withPeerID {
 		extra = 8
@@ -160,15 +159,12 @@ func ReadP2PFrame(r io.Reader, maxPayloadLen uint32) (*P2PFrame, error) {
 		return nil, fmt.Errorf("P2P frame too short: %d < %d", len(data), 4+frameBodyHeader)
 	}
 
-	message, err := unmarshalFrameBody(data[4:])
-	if err != nil {
-		return nil, err
-	}
+	body := data[4:]
 	return &P2PFrame{
 		ChainID: binary.BigEndian.Uint32(data[:4]),
-		Opcode:  message.Opcode,
-		RPCID:   message.RPCID,
-		Payload: message.Payload,
+		Opcode:  body[0],
+		RPCID:   binary.BigEndian.Uint64(body[1:frameBodyHeader]),
+		Payload: body[frameBodyHeader:],
 	}, nil
 }
 
@@ -182,37 +178,15 @@ func WriteP2PFrame(w io.Writer, frame *P2PFrame) error {
 		return errors.New("payload too large")
 	}
 
-	body := marshalFrameBody(frame.Opcode, frame.RPCID, frame.Payload)
+	body := make([]byte, frameBodyHeader+len(frame.Payload))
+	body[0] = frame.Opcode
+	binary.BigEndian.PutUint64(body[1:frameBodyHeader], frame.RPCID)
+	copy(body[frameBodyHeader:], frame.Payload)
 	buf := make([]byte, 4+len(body))
 	binary.BigEndian.PutUint32(buf[:4], frame.ChainID)
 	copy(buf[4:], body)
 	_, err := w.Write(buf)
 	return err
-}
-
-type frameMessage struct {
-	Opcode  byte
-	RPCID   uint64
-	Payload []byte
-}
-
-func marshalFrameBody(opcode byte, rpcID uint64, payload []byte) []byte {
-	body := make([]byte, frameBodyHeader+len(payload))
-	body[0] = opcode
-	binary.BigEndian.PutUint64(body[1:frameBodyHeader], rpcID)
-	copy(body[frameBodyHeader:], payload)
-	return body
-}
-
-func unmarshalFrameBody(body []byte) (frameMessage, error) {
-	if len(body) < frameBodyHeader {
-		return frameMessage{}, fmt.Errorf("frame body too short: %d < %d", len(body), frameBodyHeader)
-	}
-	return frameMessage{
-		Opcode:  body[0],
-		RPCID:   binary.BigEndian.Uint64(body[1:frameBodyHeader]),
-		Payload: body[frameBodyHeader:],
-	}, nil
 }
 
 // normalizeTruncatedEOF preserves EOF before a frame starts as a graceful
