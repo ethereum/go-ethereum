@@ -10,9 +10,10 @@ hand.
    width integers and arrays for fixed-size values, `[]byte` for variable byte
    strings, and `[]T` for variable lists. For nested variable lists, use one
    limit per dimension and `ssz-size:"?,?"`.
-2. Put an `ssz-max` tag on every variable-length dimension. Use a narrower
-   limit only when the protocol defines one; otherwise use the format limit
-   already used by the other wire messages.
+2. For variable-length fields, add `ssz-max` with a numeric limit. Use a
+   protocol-defined limit when one is known, or the current broad limit
+   `4294967295` otherwise. Use fixed Go types or `ssz-size:"N"` for
+   fixed-size fields.
 3. Add the opcode-to-type case to `NewClusterMessage` or
    `NewCommandMessage` in `protocol.go`.
 4. From the repository root, run:
@@ -40,12 +41,6 @@ the message source file and generates codecs for its structs.
   encoded SSZ bytes as the message payload.
 - SSZ has no implicit nullable Go pointer. Represent presence explicitly in
   the schema and test both present and absent cases.
-
-The current `ssz-max` tags use the broad schema limit `4294967295` (`2^32-1`).
-For `[]byte`, this is a byte count; for `[]T`, it is an element count. It does
-not preallocate that amount of memory and does not guarantee that a value of
-that size fits in a transport payload. The transport layer may apply separate
-message-size limits.
-`sszgen` requires numeric literals in tags, so Go constants cannot be
-referenced there. If the protocol defines a tighter bound for a new field, use
-that bound in its tag.
+For nested variable lists, provide one `ssz-max` value per dimension and use
+`ssz-size:"?,?"`. The current `4294967295` tags are broad placeholders and can
+be revisited later; see the TODO in `messages.go`.
