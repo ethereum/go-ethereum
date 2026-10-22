@@ -31,8 +31,8 @@ func TestNewClusterMessageRegistry(t *testing.T) {
 	}{
 		{ClusterOpPing, &PingRequest{}},
 		{ClusterOpPong, &PongResponse{}},
-		{ClusterOpConnectToSlavesRequest, &ConnectToChainsRequest{}},
-		{ClusterOpConnectToSlavesResponse, &ConnectToChainsResponse{}},
+		{ClusterOpConnectToChainsRequest, &ConnectToChainsRequest{}},
+		{ClusterOpConnectToChainsResponse, &ConnectToChainsResponse{}},
 	}
 	for _, c := range cases {
 		got, err := NewClusterMessage(c.op)
@@ -90,10 +90,10 @@ func roundTripSSZ(t *testing.T, msg SSZMessage) {
 
 func TestPingPongSSZRoundTrip(t *testing.T) {
 	ping := &PingRequest{
-		ID:              []byte{0xde, 0xad, 0xbe, 0xef},
-		FullShardIDList: []uint32{1, 0x10002, 0xffffffff},
-		HasRootTip:      true,
-		RootTip:         []byte{0xaa, 0xbb},
+		ID:         []byte{0xde, 0xad, 0xbe, 0xef},
+		ChainID:    0x10002,
+		HasRootTip: true,
+		RootTip:    []byte{0xaa, 0xbb},
 	}
 	roundTripSSZ(t, ping)
 
@@ -106,7 +106,7 @@ func TestPingPongSSZRoundTrip(t *testing.T) {
 		t.Fatalf("deep mismatch: got %+v, want %+v", &got, ping)
 	}
 
-	pong := &PongResponse{ID: []byte("id"), FullShardIDList: []uint32{2, 3}}
+	pong := &PongResponse{ID: []byte("id"), ChainID: 2}
 	roundTripSSZ(t, pong)
 
 	// Boundary: all dynamic fields empty.
@@ -117,8 +117,8 @@ func TestPingPongSSZRoundTrip(t *testing.T) {
 func TestConnectToChainsSSZRoundTrip(t *testing.T) {
 	req := &ConnectToChainsRequest{
 		ChainInfoList: []ChainInfo{
-			{ID: []byte("s1"), Host: []byte("10.0.0.1"), Port: 38391, FullShardIDList: []uint32{1, 2}},
-			{ID: []byte("s2"), Host: []byte("10.0.0.2"), Port: 38392, FullShardIDList: nil},
+			{ID: []byte("s1"), Host: []byte("10.0.0.1"), Port: 38391, ChainID: 1},
+			{ID: []byte("s2"), Host: []byte("10.0.0.2"), Port: 38392, ChainID: 2},
 		},
 	}
 	roundTripSSZ(t, req)
@@ -219,31 +219,30 @@ func TestResultListGoldenEncoding(t *testing.T) {
 
 // ---- golden encoding ----
 
-// TestSSZGoldenEncoding pins the encoding of a PongResponse with two dynamic
-// fields: two little-endian offsets followed by ID bytes and uint32 values.
+// TestSSZGoldenEncoding pins the encoding of a PongResponse with a dynamic ID
+// and a fixed-width ChainID.
 //
-//	PongResponse{ID: {0x01,0x02}, FullShardIDList: {1}}
-//	  offset(ID)   = 8  -> 08 00 00 00
-//	  offset(list) = 10 -> 0a 00 00 00
-//	  ID              -> 01 02
-//	  list elem 1     -> 01 00 00 00
+//	PongResponse{ID: {0x01,0x02}, ChainID: 1}
+//	  offset(ID) = 8 -> 08 00 00 00
+//	  ChainID    = 1 -> 01 00 00 00
+//	  ID            -> 01 02
 func TestSSZGoldenEncoding(t *testing.T) {
-	pong := &PongResponse{ID: []byte{0x01, 0x02}, FullShardIDList: []uint32{1}}
+	pong := &PongResponse{ID: []byte{0x01, 0x02}, ChainID: 1}
 	got, err := pong.MarshalSSZ()
 	if err != nil {
 		t.Fatalf("MarshalSSZ: %v", err)
 	}
-	want := []byte{0x08, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x01, 0x02, 0x01, 0x00, 0x00, 0x00}
+	want := []byte{0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x02}
 	if !bytes.Equal(got, want) {
 		t.Fatalf("golden mismatch:\n  got  %x\n  want %x", got, want)
 	}
 
-	// Empty message: both offsets point to the end of the fixed section.
+	// Empty ID: its offset points to the end of the fixed section.
 	empty, err := (&PongResponse{}).MarshalSSZ()
 	if err != nil {
 		t.Fatalf("MarshalSSZ: %v", err)
 	}
-	wantEmpty := []byte{0x08, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00}
+	wantEmpty := []byte{0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	if !bytes.Equal(empty, wantEmpty) {
 		t.Fatalf("empty golden mismatch:\n  got  %x\n  want %x", empty, wantEmpty)
 	}

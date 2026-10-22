@@ -47,25 +47,25 @@ const UInt128Length = 16
 
 // PingRequest (ClusterOp.PING, 0x81) initializes a chain connection.
 type PingRequest struct {
-	ID              []byte   `ssz-max:"4294967295"`
-	FullShardIDList []uint32 `ssz-max:"4294967295"`
-	HasRootTip      bool
-	RootTip         []byte `ssz-max:"4294967295"` // SSZ encoding of RootBlock when HasRootTip is true.
+	ID         []byte `ssz-max:"4294967295"`
+	ChainID    uint32
+	HasRootTip bool
+	RootTip    []byte `ssz-max:"4294967295"` // SSZ encoding of RootBlock when HasRootTip is true.
 }
 
 // PongResponse (ClusterOp.PONG, 0x82) is the chain's response to PING and
 // echoes the request RPCID in the frame header.
 type PongResponse struct {
-	ID              []byte   `ssz-max:"4294967295"`
-	FullShardIDList []uint32 `ssz-max:"4294967295"`
+	ID      []byte `ssz-max:"4294967295"`
+	ChainID uint32
 }
 
 // ChainInfo describes a remote chain for ConnectToChainsRequest.
 type ChainInfo struct {
-	ID              []byte `ssz-max:"4294967295"`
-	Host            []byte `ssz-max:"4294967295"`
-	Port            uint16
-	FullShardIDList []uint32 `ssz-max:"4294967295"`
+	ID      []byte `ssz-max:"4294967295"`
+	Host    []byte `ssz-max:"4294967295"`
+	Port    uint16
+	ChainID uint32
 }
 
 // ConnectToChainsRequest (opcode 0x83) asks a chain to connect to the listed
