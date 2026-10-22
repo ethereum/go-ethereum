@@ -192,21 +192,6 @@ func newGroup(stem []byte, subs []byte, vals [][]byte) *groupNode {
 	return g
 }
 
-// emptiedBy reports whether the writes delete every value of g.
-func emptiedBy(g *groupNode, subs []byte, vals [][]byte) bool {
-	for _, v := range vals {
-		if v != nil {
-			return false
-		}
-	}
-	for _, sub := range g.subs {
-		if bytes.IndexByte(subs, sub) < 0 {
-			return false
-		}
-	}
-	return true
-}
-
 // update applies the writes to stem below n, sitting at bit position pos, and
 // returns what replaces n. A new stem splits the group or branch it diverges
 // from; a group emptied by deletes collapses its parent branch.
@@ -229,12 +214,12 @@ func (t *PartitionedTrie) update(n node, stem []byte, subs []byte, vals [][]byte
 
 	case *groupNode:
 		if bytes.Equal(n.stem, stem) {
-			if emptiedBy(n, subs, vals) {
-				t.onDelete(slice(stem, 0, pos))
-				return emptyNode{}, nil
-			}
 			for i, v := range vals {
 				n.set(subs[i], v)
+			}
+			if len(n.subs) == 0 {
+				t.onDelete(slice(stem, 0, pos))
+				return emptyNode{}, nil
 			}
 			return n, nil
 		}
