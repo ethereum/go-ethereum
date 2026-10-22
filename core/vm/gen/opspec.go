@@ -135,8 +135,8 @@ func (g *generator) lastHotFamilyMember(f opFamily) (last byte, ok bool) {
 // checking every member up to last agrees on them. The underflow bound is the one
 // thing that varies, so it returns minOffset, how far the bound sits above n. That's
 // 0 for DUP, since DUPn needs n items, and 1 for SWAP, since SWAPn needs n+1. If any
-// other value differs between members, the shared case would be wrong for some of
-// them, so the generator stops instead.
+// other value differs between members, or one needs a fork gate, the shared case
+// would be wrong for some of them, so the generator stops instead.
 func (g *generator) familyConstants(f opFamily, last byte) (minOffset, maxStack int, gas uint64, delta int) {
 	base := g.specs[byte(f.base)]
 	minOffset, maxStack, gas, delta = base.MinStack-1, base.MaxStack, base.ConstantGas, base.stackDelta()
@@ -146,6 +146,9 @@ func (g *generator) familyConstants(f opFamily, last byte) (minOffset, maxStack 
 		case g.tierOf(code) != tierStatic:
 			abortf("opcode %#x (%s) is in the %s family but is not on the static tier, so the family case cannot emit its gas",
 				code, spec.Name, base.Name)
+		case spec.fork != "":
+			abortf("opcode %#x (%s) is in the %s family but is gated on %s, and the family case has no fork gate",
+				code, spec.Name, base.Name, spec.fork)
 		case spec.MinStack != n+minOffset:
 			abortf("opcode %#x (%s) needs %d stack items, but the %s family case would check for %d",
 				code, spec.Name, spec.MinStack, base.Name, n+minOffset)
