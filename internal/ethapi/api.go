@@ -203,10 +203,10 @@ func NewTxPoolAPI(b Backend) *TxPoolAPI {
 }
 
 // flattenTxs builds the RPC transaction map keyed by nonce for a set of pool txs.
-func flattenTxs(txs types.Transactions, header *types.Header, cfg *params.ChainConfig) map[string]*RPCTransaction {
+func flattenTxs(txs types.Transactions, header, parent *types.Header, cfg *params.ChainConfig) map[string]*RPCTransaction {
 	dump := make(map[string]*RPCTransaction, len(txs))
 	for _, tx := range txs {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCPendingTransaction(tx, header, cfg)
+		dump[fmt.Sprintf("%d", tx.Nonce())] = NewRPCPendingTransaction(tx, header, parent, cfg)
 	}
 	return dump
 }
@@ -219,13 +219,14 @@ func (api *TxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction
 		"queued":  make(map[string]map[string]*RPCTransaction, len(queue)),
 	}
 	curHeader := api.b.CurrentHeader()
+	parent := parentHeader(context.Background(), api.b, curHeader)
 	// Flatten the pending transactions
 	for account, txs := range pending {
-		content["pending"][account.Hex()] = flattenTxs(txs, curHeader, api.b.ChainConfig())
+		content["pending"][account.Hex()] = flattenTxs(txs, curHeader, parent, api.b.ChainConfig())
 	}
 	// Flatten the queued transactions
 	for account, txs := range queue {
-		content["queued"][account.Hex()] = flattenTxs(txs, curHeader, api.b.ChainConfig())
+		content["queued"][account.Hex()] = flattenTxs(txs, curHeader, parent, api.b.ChainConfig())
 	}
 	return content
 }
@@ -235,12 +236,13 @@ func (api *TxPoolAPI) ContentFrom(addr common.Address) map[string]map[string]*RP
 	content := make(map[string]map[string]*RPCTransaction, 2)
 	pending, queue := api.b.TxPoolContentFrom(addr)
 	curHeader := api.b.CurrentHeader()
+	parent := parentHeader(context.Background(), api.b, curHeader)
 
 	// Build the pending transactions
-	content["pending"] = flattenTxs(pending, curHeader, api.b.ChainConfig())
+	content["pending"] = flattenTxs(pending, curHeader, parent, api.b.ChainConfig())
 
 	// Build the queued transactions
-	content["queued"] = flattenTxs(queue, curHeader, api.b.ChainConfig())
+	content["queued"] = flattenTxs(queue, curHeader, parent, api.b.ChainConfig())
 
 	return content
 }
@@ -1201,15 +1203,24 @@ func effectiveGasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
 	return fee
 }
 
+// parentHeader returns the parent of head, or nil if it isn't available.
+func parentHeader(ctx context.Context, b Backend, head *types.Header) *types.Header {
+	if head == nil || head.Number.Sign() == 0 {
+		return nil
+	}
+	parent, _ := b.HeaderByHash(ctx, head.ParentHash)
+	return parent
+}
+
 // NewRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
-func NewRPCPendingTransaction(tx *types.Transaction, current *types.Header, config *params.ChainConfig) *RPCTransaction {
+func NewRPCPendingTransaction(tx *types.Transaction, current, parent *types.Header, config *params.ChainConfig) *RPCTransaction {
 	var (
 		baseFee     *big.Int
 		blockNumber = uint64(0)
 		blockTime   = uint64(0)
 	)
 	if current != nil {
-		baseFee = eip1559.CalcNextBaseFee(config, current)
+		baseFee = eip1559.CalcNextBaseFee(config, current, parent)
 		blockNumber = current.Number.Uint64()
 		blockTime = current.Time
 	}
@@ -1542,7 +1553,8 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 	if !found {
 		// No finalized transaction, try to retrieve it from the pool
 		if tx := api.b.GetPoolTransaction(hash); tx != nil {
-			return NewRPCPendingTransaction(tx, api.b.CurrentHeader(), api.b.ChainConfig()), nil
+			head := api.b.CurrentHeader()
+			return NewRPCPendingTransaction(tx, head, parentHeader(ctx, api.b, head), api.b.ChainConfig()), nil
 		}
 		// If also not in the pool there is a chance the tx indexer is still in progress.
 		if !api.b.TxIndexDone() {
@@ -1962,11 +1974,12 @@ func (api *TransactionAPI) PendingTransactions() ([]*RPCTransaction, error) {
 		}
 	}
 	curHeader := api.b.CurrentHeader()
+	parent := parentHeader(context.Background(), api.b, curHeader)
 	transactions := make([]*RPCTransaction, 0, len(pending))
 	for _, tx := range pending {
 		from, _ := types.Sender(api.signer, tx)
 		if _, exists := accounts[from]; exists {
-			transactions = append(transactions, NewRPCPendingTransaction(tx, curHeader, api.b.ChainConfig()))
+			transactions = append(transactions, NewRPCPendingTransaction(tx, curHeader, parent, api.b.ChainConfig()))
 		}
 	}
 	return transactions, nil

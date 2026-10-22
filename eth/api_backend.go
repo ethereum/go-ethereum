@@ -468,7 +468,8 @@ func (b *EthAPIBackend) BaseFee(ctx context.Context) *big.Int {
 	header := b.CurrentHeader()
 	next := new(big.Int).Add(header.Number, common.Big1)
 	if b.ChainConfig().IsLondon(next) {
-		return eip1559.CalcNextBaseFee(b.ChainConfig(), header)
+		parent := b.eth.blockchain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+		return eip1559.CalcNextBaseFee(b.ChainConfig(), header, parent)
 	}
 	return nil
 }
