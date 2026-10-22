@@ -19,33 +19,30 @@ package wire
 // Opcode values are one byte on the wire and split into two ranges:
 //
 //   - CommandOp: P2P command opcodes, 0x00–0x7F.
-//   - ClusterOp: cluster RPC opcodes (Master ↔ chain, chain ↔ chain),
+//   - ClusterOp: cluster RPC opcodes (master ↔ slave, slave ↔ slave),
 //     0x80–0xFF, defined relative to ClusterOpBase.
 //
-// The currently defined set includes cluster connection opcodes and the
-// initial peer handshake. Add opcodes as protocol operations are introduced,
-// assigning unique values within the appropriate range. Opcode ranges identify
-// operation families, not frame types: a peer command keeps its CommandOp when
-// relayed through a MasterFrame to a chain or virtual peer for dispatch.
+// The opcode set is not finalised yet. This file defines only the
+// framework and one example opcode per range. Add opcodes as the
+// corresponding protocol messages are implemented, assigning unique
+// values within the appropriate range.
 
 // ClusterOpBase is the offset added to all cluster op values on wire.
 // Values below ClusterOpBase belong to CommandOp (P2P).
 const ClusterOpBase ClusterOp = 128
 
-// ClusterOp  —  cluster RPC opcodes (Master ↔ chain, chain ↔ chain)
+// ClusterOp  —  cluster RPC opcodes (master ↔ slave, slave ↔ slave)
 type ClusterOp byte
 
 const (
 	// Cluster connection opcodes.
 	ClusterOpPing                    ClusterOp = 1 + ClusterOpBase // 0x81
 	ClusterOpPong                    ClusterOp = 2 + ClusterOpBase // 0x82
-	ClusterOpConnectToChainsRequest  ClusterOp = 3 + ClusterOpBase // 0x83
-	ClusterOpConnectToChainsResponse ClusterOp = 4 + ClusterOpBase // 0x84
+	ClusterOpConnectToSlavesRequest  ClusterOp = 3 + ClusterOpBase // 0x83
+	ClusterOpConnectToSlavesResponse ClusterOp = 4 + ClusterOpBase // 0x84
 )
 
-// CommandOp identifies peer command operations. They are carried in PeerFrame
-// between clusters and may be relayed inside a cluster in MasterFrame without
-// changing the opcode; the receiving Master or chain dispatches the operation.
+// CommandOp  —  P2P command opcodes (peer ↔ peer, cluster_peer_id != 0)
 type CommandOp byte
 
 const (
