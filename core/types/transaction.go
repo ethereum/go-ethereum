@@ -38,6 +38,7 @@ var (
 	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
 	ErrUint256Overflow      = errors.New("bigint overflow, too large for uint256")
 	errShortTypedTx         = errors.New("typed transaction too short")
+	errOversizedSigValue    = errors.New("transaction chain id or signature value exceeds 256 bits")
 	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
 	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
 	errVYParityMissing      = errors.New("missing 'yParity' or 'v' field in transaction")
@@ -148,11 +149,14 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	case kind == rlp.List:
 		// It's a legacy transaction.
 		var inner LegacyTx
-		err := s.Decode(&inner)
-		if err == nil {
-			tx.setDecoded(&inner, rlp.ListSize(size))
+		if err := s.Decode(&inner); err != nil {
+			return err
 		}
-		return err
+		if err := validateDecoded(&inner); err != nil {
+			return err
+		}
+		tx.setDecoded(&inner, rlp.ListSize(size))
+		return nil
 	case kind == rlp.Byte:
 		return errShortTypedTx
 	default:
@@ -181,8 +185,10 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] > 0x7f {
 		// It's a legacy transaction.
 		var data LegacyTx
-		err := rlp.DecodeBytes(b, &data)
-		if err != nil {
+		if err := rlp.DecodeBytes(b, &data); err != nil {
+			return err
+		}
+		if err := validateDecoded(&data); err != nil {
 			return err
 		}
 		tx.setDecoded(&data, uint64(len(b)))
@@ -215,8 +221,24 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
-	err := inner.decode(b[1:])
-	return inner, err
+	if err := inner.decode(b[1:]); err != nil {
+		return nil, err
+	}
+	if err := validateDecoded(inner); err != nil {
+		return nil, err
+	}
+	return inner, nil
+}
+
+func validateDecoded(inner TxData) error {
+	v, r, s := inner.rawSignatureValues()
+	if v.BitLen() > 256 || r.BitLen() > 256 || s.BitLen() > 256 {
+		return errOversizedSigValue
+	}
+	if inner.txType() != LegacyTxType && inner.chainID().BitLen() > 256 {
+		return errOversizedSigValue
+	}
+	return nil
 }
 
 // setDecoded sets the inner transaction and size after decoding.
