@@ -1430,6 +1430,10 @@ func (s *StateDB) commit(rules params.Rules, blockNumber uint64) (*StateUpdate, 
 	origin := s.originalRoot
 	s.originalRoot = root
 
+	// Unlike the merkle-patricia trie, the binary tree still wipes stored
+	// slots after Cancun, when EIP-161 clears an empty account holding storage
+	// (a genesis allocation can create one). Those slots are read from the
+	// flat state, which keys them by hash.
 	typ := StorageKeyHashed
 	if rules.IsCancun && !s.db.Type().Is(TypePBT) {
 		typ = StorageKeyPlain
