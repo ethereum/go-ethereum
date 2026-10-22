@@ -407,6 +407,73 @@ func FuzzInterpreterDiff(f *testing.F) {
 	})
 }
 
+// TestInterpreterDiffBounds runs every opcode with its own case in the generated
+// dispatch at the edges of its stack bounds and static gas, on every diff fork, and
+// checks it against the table loop. The case constants are emitted at generate time,
+// so a wrong bound or charge only shows up when execution lands exactly on it. A
+// trailing run of POPs drains the stack to underflow, which catches a case that
+// steps sp by the wrong delta.
+func TestInterpreterDiffBounds(t *testing.T) {
+	ops := generatedCaseOps(t)
+	for _, fk := range diffForks {
+		table := NewEVM(diffBlockCtx(fk.merged), newDiffState(t), fk.cfg, Config{}).table
+		for _, op := range ops {
+			t.Run(fk.name+"/"+op.String(), func(t *testing.T) {
+				operation := table[op]
+				withDepth := func(d int) []byte {
+					return append(bytes.Repeat([]byte{byte(PUSH1), 0x00}, d), byte(op))
+				}
+				for _, d := range []int{operation.minStack - 1, operation.minStack, operation.maxStack, operation.maxStack + 1} {
+					if d < 0 || d > int(params.StackLimit) {
+						continue
+					}
+					code := withDepth(d)
+					checkDiff(t, fk.cfg, fk.merged, code, 1_000_000)
+					checkDiff(t, fk.cfg, fk.merged, append(code, bytes.Repeat([]byte{byte(POP)}, int(params.StackLimit)+1)...), 1_000_000)
+				}
+				// Each PUSH1 costs GasFastestStep, so this straddles the static charge.
+				base := GasFastestStep * uint64(operation.minStack)
+				for gas := base; gas <= base+operation.constantGas+2; gas++ {
+					checkDiff(t, fk.cfg, fk.merged, withDepth(operation.minStack), gas)
+				}
+			})
+		}
+	}
+}
+
+// checkDiff runs code through both interpreters and fails on any divergence.
+func checkDiff(t *testing.T, cfg *params.ChainConfig, merged bool, code []byte, gas uint64) {
+	t.Helper()
+	table := runOne(t, cfg, merged, true, code, nil, gas)
+	gen := runOne(t, cfg, merged, false, code, nil, gas)
+	if where, ok := gen.equal(table); !ok {
+		t.Fatalf("divergence in %s: code=%x gas=%d\n  table: ret=%x %s err=%q\n  gen:   ret=%x %s err=%q",
+			where, code, gas, table.ret, gasSummary(table.gas), table.errStr, gen.ret, gasSummary(gen.gas), gen.errStr)
+	}
+}
+
+// generatedCaseOps returns every opcode named in a case of the generated dispatch.
+func generatedCaseOps(t *testing.T) []OpCode {
+	t.Helper()
+	f, err := parser.ParseFile(token.NewFileSet(), "interpreter_gen.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing interpreter_gen.go: %v", err)
+	}
+	var ops []OpCode
+	ast.Inspect(f, func(n ast.Node) bool {
+		if clause, ok := n.(*ast.CaseClause); ok {
+			for _, expr := range clause.List {
+				ops = append(ops, StringToOp(expr.(*ast.Ident).Name))
+			}
+		}
+		return true
+	})
+	if len(ops) == 0 {
+		t.Fatal("no cases found in interpreter_gen.go")
+	}
+	return ops
+}
+
 // TestGeneratedDispatchKeepsOffStackInternals asserts the generated dispatch reaches
 // the stack only through its methods. The dispatch keeps its own depth counter in sp,
 // and the tempting way to reconcile that with the real stack is to assign size or

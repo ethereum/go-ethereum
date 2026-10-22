@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // This file holds the shape of the generated dispatch: the emitters for one
@@ -41,6 +43,8 @@ const (
 	dispatchName  = "(*EVM)." + dispatchFunc
 	vmPkgPath     = "github.com/ethereum/go-ethereum/core/vm"
 	pgoFile       = "cmd/geth/default.pgo"
+	stackFile     = "stack.go"
+	stackLocal    = "stack" // the dispatch's stack, which a family's body calls into
 )
 
 type generator struct {
@@ -157,10 +161,11 @@ func (g *generator) emitStackReload() {
 	g.p("sp = stack.len()\n")
 }
 
-// emitAdvance moves to the next opcode.
+// emitAdvance moves to the next opcode and fetches it, then goes round the loop.
 func (g *generator) emitAdvance() {
 	g.p(`
 		pc++
+		op = contract.GetOp(pc)
 		continue mainLoop
 	`)
 }
@@ -218,6 +223,39 @@ func (g *generator) emitDynamicOp(code byte) {
 	}
 }
 
+// emitFamily emits one shared case for the hot members of a family like DUP or
+// SWAP, and nothing if none of them are hot. It works like emitStaticOp, except it
+// gets n from the opcode, checks the stack against n, and writes the body inline
+// since a family has no single handler to call. A handler call overwrites res but
+// the inline body doesn't, so res can still hold an earlier CALL's output. That's
+// harmless because every exit from the loop sets res and err together.
+func (g *generator) emitFamily(f opFamily) {
+	last, ok := g.lastHotFamilyMember(f)
+	if !ok {
+		return
+	}
+	minOffset, maxStack, gas, delta := g.familyConstants(f, last)
+
+	names := make([]string, 0, int(last-byte(f.base))+1)
+	for code := byte(f.base); code <= last; code++ {
+		names = append(names, g.specs[code].Name)
+	}
+	g.p("case %s:\n", strings.Join(names, ", "))
+	g.p("n := int(op-%s) + 1\n", g.specs[byte(f.base)].Name)
+
+	minExpr := "n"
+	if minOffset != 0 {
+		minExpr = fmt.Sprintf("n+%d", minOffset)
+	}
+	g.emitStackChecks(minExpr, maxStack, true, maxStack < int(params.StackLimit))
+	if gas != 0 {
+		g.emitStaticGas(gas)
+	}
+	g.p("%s\n", f.body)
+	g.emitStackStep(delta)
+	g.emitAdvance()
+}
+
 // emitTableOp emits the switch's default case, which walks the table exactly as the
 // legacy loop did. Every fork-varying op lands here, along with the undefined ones,
 // so their volatile logic stays shared rather than restated.
@@ -269,9 +307,7 @@ func (g *generator) createFile() {
 
 	// execUntraced: doc comment, loop-local declarations, and the dispatch loop
 	g.p(`
-		// execUntraced is the generated, tracing-free interpreter fast path. It is a
-		// switch over the opcode byte, which Go lowers to a jump table, replacing the
-		// legacy loop's indirect call through the per-fork JumpTable.
+		// execUntraced is the generated, tracing-free interpreter fast path.
 		//
 		// Hot, fork-stable opcodes get their own case, with static gas and stack bounds
 		// emitted as constants and the handler called by name. Everything fork-varying
@@ -293,6 +329,7 @@ func (g *generator) createFile() {
 				rules    = evm.chainRules
 				pc       = uint64(0)
 				res      []byte
+				op       OpCode
 			)
 			// Which of these the switch uses depends on the tier assignments, so
 			// keep them all live rather than tracking usage while emitting.
@@ -301,19 +338,25 @@ func (g *generator) createFile() {
 			// by its opcode's known delta, and the table case re-reads it because
 			// its delta is not known until run time.
 			sp := stack.len()
+			// Each case fetches the opcode that follows it, see emitAdvance, so
+			// the loop only ever dispatches on one already in hand.
+			op = contract.GetOp(pc)
 		mainLoop:
 			for {
-	`)
-
-	// fetch the opcode and open the dispatch switch
-	g.p(`
-				op := contract.GetOp(pc)
 				switch op {
 	`)
 
-	// one case per opcode with its own tier, in opcode order
+	// one case per opcode with its own tier, in opcode order, except that a
+	// family writes one case at its base and its other members write nothing
 	for code := range 256 {
-		switch b := byte(code); g.tierOf(b) {
+		b := byte(code)
+		if f, ok := familyOf(b); ok {
+			if b == byte(f.base) {
+				g.emitFamily(f)
+			}
+			continue
+		}
+		switch g.tierOf(b) {
 		case tierStatic:
 			g.emitStaticOp(b)
 		case tierDynamic:
