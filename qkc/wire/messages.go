@@ -46,8 +46,12 @@ const UInt128Length = 16
 // limit. Revisit these bounds if QKC defines protocol-specific field limits.
 
 // PingRequest (ClusterOp.PING, 0x81) initializes a chain connection.
+// Chain↔chain PINGs use HasRootTip=false. pyquarkchain sent a dummy root block
+// on these links, but the receiver ignored it.
 type PingRequest struct {
-	ID         []byte `ssz-max:"4294967295"`
+	// ChainID identifies the dialing chain on chain↔chain links, whose frames
+	// have no metadata. Master→chain handlers ignore it; zero is a valid chain
+	// ID and does not mean root.
 	ChainID    uint32
 	HasRootTip bool
 	RootTip    []byte `ssz-max:"4294967295"` // SSZ encoding of RootBlock when HasRootTip is true.
@@ -56,13 +60,11 @@ type PingRequest struct {
 // PongResponse (ClusterOp.PONG, 0x82) is the chain's response to PING and
 // echoes the request RPCID in the frame header.
 type PongResponse struct {
-	ID      []byte `ssz-max:"4294967295"`
 	ChainID uint32
 }
 
 // ChainInfo describes a remote chain for ConnectToChainsRequest.
 type ChainInfo struct {
-	ID      []byte `ssz-max:"4294967295"`
 	Host    []byte `ssz-max:"4294967295"`
 	Port    uint16
 	ChainID uint32
@@ -88,7 +90,6 @@ type HelloCommand struct {
 	PeerID               [HashLength]byte
 	PeerIP               [UInt128Length]byte
 	PeerPort             uint16
-	ChainMaskList        []uint32 `ssz-max:"4294967295"` // Chain masks hosted by this Master.
-	RootBlockHeader      []byte   `ssz-max:"4294967295"` // SSZ encoding of RootBlockHeader.
+	RootBlockHeader      []byte `ssz-max:"4294967295"` // SSZ encoding of RootBlockHeader.
 	GenesisRootBlockHash [HashLength]byte
 }
