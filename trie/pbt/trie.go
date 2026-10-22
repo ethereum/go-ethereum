@@ -171,7 +171,7 @@ func (t *PartitionedTrie) updateStem(stem []byte, subs []byte, vals [][]byte) er
 	if err := validateStem(stem); err != nil {
 		return err
 	}
-	root, err := t.insert(t.root, stem, subs, vals, 0)
+	root, err := t.update(t.root, stem, subs, vals, 0)
 	if err != nil {
 		return err
 	}
@@ -207,10 +207,10 @@ func emptiedBy(g *groupNode, subs []byte, vals [][]byte) bool {
 	return true
 }
 
-// insert applies the writes to stem below n, sitting at bit position pos, and
+// update applies the writes to stem below n, sitting at bit position pos, and
 // returns what replaces n. A new stem splits the group or branch it diverges
 // from; a group emptied by deletes collapses its parent branch.
-func (t *PartitionedTrie) insert(n node, stem []byte, subs []byte, vals [][]byte, pos int) (node, error) {
+func (t *PartitionedTrie) update(n node, stem []byte, subs []byte, vals [][]byte, pos int) (node, error) {
 	switch n := n.(type) {
 	case emptyNode:
 		g := newGroup(stem, subs, vals)
@@ -225,7 +225,7 @@ func (t *PartitionedTrie) insert(n node, stem []byte, subs []byte, vals [][]byte
 		if err != nil {
 			return n, err
 		}
-		return t.insert(resolved, stem, subs, vals, pos)
+		return t.update(resolved, stem, subs, vals, pos)
 
 	case *groupNode:
 		if bytes.Equal(n.stem, stem) {
@@ -264,7 +264,7 @@ func (t *PartitionedTrie) insert(n node, stem []byte, subs []byte, vals [][]byte
 			if bit == 1 {
 				child = &n.right
 			}
-			updated, err := t.insert(*child, stem, subs, vals, split+1)
+			updated, err := t.update(*child, stem, subs, vals, split+1)
 			if err != nil {
 				return n, err
 			}
