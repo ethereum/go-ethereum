@@ -43,12 +43,11 @@ var (
 // PartitionedTrie is a partitioned binary tree over the whole state. It is not
 // safe for concurrent use.
 type PartitionedTrie struct {
-	root      node
-	reader    *trie.Reader
-	tracer    *trie.PrevalueTracer
-	inserts   map[string]struct{} // record paths created since load
-	deletes   map[string]struct{} // record paths removed since load
-	committed bool
+	root    node
+	reader  *trie.Reader
+	tracer  *trie.PrevalueTracer
+	inserts map[string]struct{} // record paths created since load
+	deletes map[string]struct{} // record paths removed since load
 }
 
 // New opens the tree with the given root.
@@ -113,9 +112,6 @@ func (t *PartitionedTrie) onDelete(walk bitstr) {
 
 // getStem returns the group of stem, or nil if absent.
 func (t *PartitionedTrie) getStem(stem []byte) (*groupNode, error) {
-	if t.committed {
-		return nil, trie.ErrCommitted
-	}
 	root, g, err := t.findStem(t.root, stem, 0)
 	t.root = root
 	return g, err
@@ -165,9 +161,6 @@ var zero [32]byte
 
 // updateStem writes values at subs of stem in one walk; nil deletes.
 func (t *PartitionedTrie) updateStem(stem []byte, subs []byte, vals [][]byte) error {
-	if t.committed {
-		return trie.ErrCommitted
-	}
 	if err := validateStem(stem); err != nil {
 		return err
 	}
@@ -309,9 +302,6 @@ func (t *PartitionedTrie) collapse(n *branchNode, walk bitstr, bit byte) (node, 
 
 // deletePrefix removes every key starting with the byte string prefix.
 func (t *PartitionedTrie) deletePrefix(prefix []byte) error {
-	if t.committed {
-		return trie.ErrCommitted
-	}
 	root, _, err := t.delPrefix(t.root, prefix, bitstr{}, 0)
 	if err != nil {
 		return err
@@ -548,8 +538,6 @@ func (t *PartitionedTrie) Hash() common.Hash {
 
 // Commit collects the modified records. The trie is unusable afterwards.
 func (t *PartitionedTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
-	defer func() { t.committed = true }()
-
 	var (
 		root = t.Hash()
 		set  = trienode.NewNodeSet(common.Hash{})
@@ -635,11 +623,10 @@ func (t *PartitionedTrie) PrefetchStorage(addr common.Address, keys [][]byte) er
 // Copy returns a deep copy of the trie.
 func (t *PartitionedTrie) Copy() *PartitionedTrie {
 	return &PartitionedTrie{
-		root:      t.root.copy(),
-		reader:    t.reader,
-		tracer:    t.tracer.Copy(),
-		inserts:   maps.Clone(t.inserts),
-		deletes:   maps.Clone(t.deletes),
-		committed: t.committed,
+		root:    t.root.copy(),
+		reader:  t.reader,
+		tracer:  t.tracer.Copy(),
+		inserts: maps.Clone(t.inserts),
+		deletes: maps.Clone(t.deletes),
 	}
 }
