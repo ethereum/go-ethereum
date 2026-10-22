@@ -237,12 +237,16 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 				)
 			}
 			if evm.Config.Tracer.HasOpcodeHook() {
-				// TODO: CREATE and CREATE2 charge the account creation while they
-				// execute, after this hook has fired, so it is missing from the
-				// cost reported for their step.
+				// The state dimension is the net state gas the opcode charged or
+				// refilled so far, read off the frame's usage counter. CREATE and
+				// CREATE2 charge the account creation only while they execute, so
+				// it is looked ahead here.
 				cost := tracing.OpCost{
 					Execution: execCost,
 					State:     contract.Gas.UsedStateGas - gasCopy.UsedStateGas,
+				}
+				if op == CREATE || op == CREATE2 {
+					cost.State += int64(evm.pendingAccountCreation(op, callContext))
 				}
 				evm.Config.Tracer.EmitOpcode(pc, byte(op), gasCopy.AsTracing(), cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
 				logged = true

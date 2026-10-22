@@ -157,8 +157,8 @@ func newErc7562Tracer(ctx *tracers.Context, cfg json.RawMessage, _ *params.Chain
 			OnTxStart:  t.OnTxStart,
 			OnOpcodeV2: t.OnOpcode,
 			OnTxEnd:    t.OnTxEnd,
-			OnEnter:    t.OnEnter,
-			OnExit:     t.OnExit,
+			OnEnterV2:  t.OnEnter,
+			OnExitV2:   t.OnExit,
 			OnLog:      t.OnLog,
 		},
 		GetResult: t.GetResult,
@@ -214,7 +214,7 @@ func (t *erc7562Tracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction,
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *erc7562Tracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *erc7562Tracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
 	// Skip if tracing was interrupted
 	if t.interrupt.Load() {
 		return
@@ -226,7 +226,7 @@ func (t *erc7562Tracer) OnEnter(depth int, typ byte, from common.Address, to com
 		From:  from,
 		To:    &toCopy,
 		Input: common.CopyBytes(input),
-		Gas:   gas,
+		Gas:   gas.Execution,
 		Value: value,
 		AccessedSlots: accessedSlots{
 			Reads:           map[common.Hash][]common.Hash{},
@@ -253,7 +253,7 @@ func (t *erc7562Tracer) captureEnd(output []byte, err error, reverted bool) {
 
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *erc7562Tracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *erc7562Tracer) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 	if t.interrupt.Load() {
 		return
 	}
@@ -274,7 +274,7 @@ func (t *erc7562Tracer) OnExit(depth int, output []byte, gasUsed uint64, err err
 	if errors.Is(err, vm.ErrCodeStoreOutOfGas) || errors.Is(err, vm.ErrOutOfGas) {
 		call.OutOfGas = true
 	}
-	call.GasUsed = gasUsed
+	call.GasUsed = gasUsed(call.Gas, gasLeft)
 	call.processOutput(output, err, reverted)
 	// Nest call into parent.
 	t.callstackWithOpcodes[size-1].Calls = append(t.callstackWithOpcodes[size-1].Calls, call)

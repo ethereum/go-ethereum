@@ -533,11 +533,7 @@ func ParseDepositLogs(requests *[][]byte, logs []*types.Log, config *params.Chai
 }
 
 func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
-	if tracer.OnSystemCallStartV2 != nil {
-		tracer.OnSystemCallStartV2(ctx)
-	} else if tracer.OnSystemCallStart != nil {
-		tracer.OnSystemCallStart()
-	}
+	tracer.EmitSystemCallStart(ctx)
 }
 
 // AssembleBlock finalizes the state and assembles the block with provided
