@@ -110,7 +110,7 @@ func (t *PartitionedTrie) onDelete(walk bitstr) {
 	}
 }
 
-// getStem returns the group of stem, or nil if absent.
+// getStem returns the group at `stem`, or nil if absent.
 func (t *PartitionedTrie) getStem(stem []byte) (*groupNode, error) {
 	root, g, err := t.findStem(t.root, stem, 0)
 	t.root = root
