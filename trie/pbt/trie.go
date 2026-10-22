@@ -131,6 +131,7 @@ func (t *PartitionedTrie) findStem(n node, stem []byte, pos int) (node, *groupNo
 		if bytes.Equal(n.stem, stem) {
 			return n, n, nil
 		}
+		return n, nil, nil
 	case *branchNode:
 		if n.prefix.matchKey(stem, pos) < n.prefix.n {
 			return n, nil, nil
@@ -143,8 +144,10 @@ func (t *PartitionedTrie) findStem(n node, stem []byte, pos int) (node, *groupNo
 		resolved, g, err := t.findStem(*child, stem, split+1)
 		*child = resolved
 		return n, g, err
+	case emptyNode:
+		return n, nil, nil
 	}
-	return n, nil, nil
+	return n, nil, fmt.Errorf("pbt: unexpected node type %T", n)
 }
 
 // stateWrite writes values at subs of stem, a zero value deleting the key.
