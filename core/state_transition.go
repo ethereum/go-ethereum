@@ -296,6 +296,11 @@ type Message struct {
 	// execution after Amsterdam, instead of capping it at params.MaxTxGas and
 	// moving the remainder into the EIP-8037 state gas reservoir.
 	skipExecutionGasCap bool
+
+	// isDeposit marks a QuarkChain cross-shard deposit, and isMove one only
+	// transferring its value, see executeDeposit.
+	isDeposit bool
+	isMove    bool
 }
 
 // SkipNonceCheck disables the check of the message nonce against the account
@@ -372,6 +377,9 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         blobGasFeeCap,
+	}
+	if deposit := tx.Deposit(); deposit != nil {
+		msg.isDeposit, msg.isMove = true, deposit.IsMove
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -716,6 +724,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
 	)
+	if msg.isDeposit {
+		return st.executeDeposit(rules)
+	}
 	// Validate the message and pre-pay gas.
 	if err := st.preCheck(rules); err != nil {
 		return nil, err

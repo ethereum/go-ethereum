@@ -493,6 +493,10 @@ const (
 	// BalanceDecreaseXShardSend is ether burnt by the cross-shard outbox of a
 	// QuarkChain shard, to be minted on the destination shard.
 	BalanceDecreaseXShardSend BalanceChangeReason = 200
+
+	// BalanceIncreaseXShardDeposit is ether minted to the recipient of a
+	// cross-shard deposit on a QuarkChain shard, as burnt on the source shard.
+	BalanceIncreaseXShardDeposit BalanceChangeReason = 201
 )
 
 // Gas represents a multi-dimensional gas budget introduced by EIP-8037.
