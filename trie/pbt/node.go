@@ -39,7 +39,9 @@ type node interface {
 
 type (
 	// branchNode splits on the bit after its prefix. Both children are
-	// non-empty.
+	// non-empty. The prefix is the run of bits that every key under the branch
+	// shares past those its ancestors consumed, what the MPT keeps in an
+	// extension node; EIP-8297 folds it into the branch and its hash.
 	branchNode struct {
 		prefix      bitstr
 		left, right node
