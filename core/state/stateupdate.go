@@ -19,6 +19,7 @@ package state
 import (
 	"fmt"
 	"maps"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -249,7 +250,7 @@ func encodeStorages[K comparable](src map[K]map[common.Hash]common.Hash) map[K]m
 // It transforms account and storage updates into their corresponding MPT-encoded
 // key-value mappings, using the same encoding rules as the Ethereum state trie.
 func (sc *StateUpdate) EncodeMPTState() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte) {
-	return encodeAccounts(sc.Accounts), encodeAccounts(sc.AccountsOrigin), encodeStorages(sc.Storages), encodeStorages(sc.StoragesOrigin)
+	return sc.encodeState()
 }
 
 // EncodeUBTState encodes all state mutations alongside their original value
@@ -258,7 +259,34 @@ func (sc *StateUpdate) EncodeMPTState() (map[common.Hash][]byte, map[common.Addr
 // It transforms account and storage updates into their corresponding UBT-encoded
 // key-value mappings, using the same encoding rules as the Ethereum state trie.
 func (sc *StateUpdate) EncodeUBTState() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte) {
-	return encodeAccounts(sc.Accounts), encodeAccounts(sc.AccountsOrigin), encodeStorages(sc.Storages), encodeStorages(sc.StoragesOrigin)
+	return sc.encodeState()
+}
+
+// encodeState encodes the state mutations alongside their original values, with
+// the four sets encoded concurrently.
+func (sc *StateUpdate) encodeState() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte) {
+	var (
+		wg             sync.WaitGroup
+		accounts       map[common.Hash][]byte
+		accountsOrigin map[common.Address][]byte
+		storages       map[common.Hash]map[common.Hash][]byte
+	)
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		accounts = encodeAccounts(sc.Accounts)
+	}()
+	go func() {
+		defer wg.Done()
+		accountsOrigin = encodeAccounts(sc.AccountsOrigin)
+	}()
+	go func() {
+		defer wg.Done()
+		storages = encodeStorages(sc.Storages)
+	}()
+	storagesOrigin := encodeStorages(sc.StoragesOrigin)
+	wg.Wait()
+	return accounts, accountsOrigin, storages, storagesOrigin
 }
 
 // deriveCodeFields derives the missing fields of contract code changes

@@ -67,8 +67,6 @@ type stateSet struct {
 	accountListSorted []common.Hash                 // List of account for iteration. If it exists, it's sorted, otherwise it's nil
 	storageListSorted map[common.Hash][]common.Hash // List of storage slots for iterated retrievals, one per account. Any existing lists are sorted if non-nil
 
-	rawStorageKey bool // indicates whether the storage set uses the raw slot key or the hash
-
 	// Lock for guarding the two lists above. These lists might be accessed
 	// concurrently and lock protection is essential to avoid concurrent
 	// slice or map read/write.
@@ -76,7 +74,7 @@ type stateSet struct {
 }
 
 // newStates constructs the state set with the provided account and storage data.
-func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte, rawStorageKey bool) *stateSet {
+func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte) *stateSet {
 	// Don't panic for the lazy callers, initialize the nil maps instead.
 	if accounts == nil {
 		accounts = make(map[common.Hash][]byte)
@@ -87,7 +85,6 @@ func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[com
 	s := &stateSet{
 		accountData:       accounts,
 		storageData:       storages,
-		rawStorageKey:     rawStorageKey,
 		storageListSorted: make(map[common.Hash][]common.Hash),
 	}
 	s.size = s.check()
@@ -278,6 +275,54 @@ func (s *stateSet) merge(other *stateSet) {
 	s.updateSize(delta)
 }
 
+// mergeStateSets aggregates the provided state sets (ordered from oldest to
+// newest) into a single set, with entries from the newer sets overwriting
+// the ones from the older sets. The returned set assumes the ownership of
+// the freshly allocated internal maps, leaving the source sets unmodified.
+func mergeStateSets(sets []*stateSet) *stateSet {
+	var (
+		accountOverwrites counter
+		storageOverwrites counter
+		accounts          int // the upper bound of the account entries
+		owners            int // the upper bound of the storage sets
+	)
+	for _, set := range sets {
+		accounts += len(set.accountData)
+		owners += len(set.storageData)
+	}
+	out := &stateSet{
+		accountData: make(map[common.Hash][]byte, accounts),
+		storageData: make(map[common.Hash]map[common.Hash][]byte, owners),
+
+		storageListSorted: make(map[common.Hash][]common.Hash),
+	}
+	for _, set := range sets {
+		for accountHash, data := range set.accountData {
+			if origin, ok := out.accountData[accountHash]; ok {
+				accountOverwrites.add(common.HashLength + len(origin))
+			}
+			out.accountData[accountHash] = data
+		}
+		for accountHash, storage := range set.storageData {
+			slots, ok := out.storageData[accountHash]
+			if !ok {
+				slots = make(map[common.Hash][]byte, len(storage))
+				out.storageData[accountHash] = slots
+			}
+			for storageHash, data := range storage {
+				if origin, ok := slots[storageHash]; ok {
+					storageOverwrites.add(2*common.HashLength + len(origin))
+				}
+				slots[storageHash] = data
+			}
+		}
+	}
+	out.size = out.check()
+	accountOverwrites.report(gcAccountMeter, gcAccountBytesMeter)
+	storageOverwrites.report(gcStorageMeter, gcStorageBytesMeter)
+	return out
+}
+
 // revertTo takes the original value of accounts and storages as input and reverts
 // the latest state transition applied on the state set.
 //
@@ -335,9 +380,6 @@ func (s *stateSet) updateSize(delta int) {
 // encode serializes the content of state set into the provided writer.
 func (s *stateSet) encode(w io.Writer) error {
 	// Encode accounts
-	if err := rlp.Encode(w, s.rawStorageKey); err != nil {
-		return err
-	}
 	type accounts struct {
 		AddrHashes []common.Hash
 		Accounts   [][]byte
@@ -378,9 +420,6 @@ func (s *stateSet) encode(w io.Writer) error {
 
 // decode deserializes the content from the rlp stream into the state set.
 func (s *stateSet) decode(r *rlp.Stream) error {
-	if err := r.Decode(&s.rawStorageKey); err != nil {
-		return fmt.Errorf("load diff raw storage key flag: %v", err)
-	}
 	type accounts struct {
 		AddrHashes []common.Hash
 		Accounts   [][]byte
@@ -428,16 +467,6 @@ func (s *stateSet) write(batch ethdb.Batch, genMarker []byte, clean *fastcache.C
 	return writeStates(batch, genMarker, s.accountData, s.storageData, clean)
 }
 
-// reset clears all cached state data, including any optional sorted lists that
-// may have been generated.
-func (s *stateSet) reset() {
-	s.accountData = make(map[common.Hash][]byte)
-	s.storageData = make(map[common.Hash]map[common.Hash][]byte)
-	s.size = 0
-	s.accountListSorted = nil
-	s.storageListSorted = make(map[common.Hash][]common.Hash)
-}
-
 // dbsize returns the approximate size for db write.
 func (s *stateSet) dbsize() int {
 	m := len(s.accountData) * len(rawdb.SnapshotAccountPrefix)
@@ -462,6 +491,8 @@ type StateSetWithOrigin struct {
 	// by the account address and slot key hash. The nil value means the slot was
 	// not present.
 	storageOrigin map[common.Address]map[common.Hash][]byte
+
+	rawStorageKey bool // indicates whether the storage origin uses the raw slot key or the hash
 
 	// memory size of the state data (accountOrigin and storageOrigin)
 	size uint64
@@ -488,17 +519,21 @@ func NewStateSetWithOrigin(accounts map[common.Hash][]byte, storages map[common.
 			size += 2*common.HashLength + len(data)
 		}
 	}
-	set := newStates(accounts, storages, rawStorageKey)
+	set := newStates(accounts, storages)
 	return &StateSetWithOrigin{
 		stateSet:      set,
 		accountOrigin: accountOrigin,
 		storageOrigin: storageOrigin,
+		rawStorageKey: rawStorageKey,
 		size:          set.size + uint64(size),
 	}
 }
 
 // encode serializes the content of state set into the provided writer.
 func (s *StateSetWithOrigin) encode(w io.Writer) error {
+	if err := rlp.Encode(w, s.rawStorageKey); err != nil {
+		return err
+	}
 	// Encode state set
 	if err := s.stateSet.encode(w); err != nil {
 		return err
@@ -540,6 +575,9 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 
 // decode deserializes the content from the rlp stream into the state set.
 func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
+	if err := r.Decode(&s.rawStorageKey); err != nil {
+		return fmt.Errorf("load diff raw storage key flag: %v", err)
+	}
 	if s.stateSet == nil {
 		s.stateSet = &stateSet{}
 	}
