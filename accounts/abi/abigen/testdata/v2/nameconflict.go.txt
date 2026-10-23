@@ -146,10 +146,8 @@ func (nameConflict *NameConflict) UnpackLogEvent(log *types.Log) (*NameConflictL
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(NameConflictLog)
-	if len(log.Data) > 0 {
-		if err := nameConflict.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := nameConflict.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range nameConflict.abi.Events[event].Inputs {
