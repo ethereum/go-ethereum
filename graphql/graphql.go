@@ -786,7 +786,8 @@ func (b *Block) NextBaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 			return nil, nil
 		}
 	}
-	nextBaseFee := eip1559.CalcBaseFee(chaincfg, header)
+	parent, _ := b.r.backend.HeaderByHash(ctx, header.ParentHash)
+	nextBaseFee := eip1559.CalcNextBaseFee(chaincfg, header, parent)
 	return (*hexutil.Big)(nextBaseFee), nil
 }
 

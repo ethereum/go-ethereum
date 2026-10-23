@@ -47,8 +47,12 @@ func VerifyEIP1559Header(config *params.ChainConfig, parent, header *types.Heade
 	if config.IsLondon(parent.Number) && parent.BaseFee == nil {
 		return errors.New("parent header is missing baseFee")
 	}
+	// The Bogota base fee is derived from the slot spacing, so slots must advance.
+	if config.IsBogota(header.Number, header.Time) && parent.SlotNumber != nil && header.SlotNumber != nil && *header.SlotNumber <= *parent.SlotNumber {
+		return fmt.Errorf("invalid slotNumber: have %d, parent %d", *header.SlotNumber, *parent.SlotNumber)
+	}
 	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcBaseFee(config, parent)
+	expectedBaseFee := CalcBaseFee(config, parent, header)
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 			header.BaseFee, expectedBaseFee, parent.BaseFee, parent.GasUsed)
@@ -56,8 +60,9 @@ func VerifyEIP1559Header(config *params.ChainConfig, parent, header *types.Heade
 	return nil
 }
 
-// CalcBaseFee calculates the basefee of the header.
-func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
+// CalcBaseFee calculates the basefee of the header on top of parent. Only the
+// header's time and slot number are used.
+func CalcBaseFee(config *params.ChainConfig, parent, header *types.Header) *big.Int {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
 	if !config.IsLondon(parent.Number) {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
@@ -72,26 +77,30 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	var (
 		num   = new(big.Int)
 		denom = new(big.Int)
+
+		changeNum, changeDenom = baseFeeChangeFraction(config, parent, header)
 	)
 
 	if parent.GasUsed > parentGasTarget {
 		// If the parent block used more gas than its target, the baseFee should increase.
-		// max(1, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+		// max(1, parentBaseFee * gasUsedDelta / parentGasTarget * changeNum / changeDenom)
 		num.SetUint64(parent.GasUsed - parentGasTarget)
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
+		num.Mul(num, changeNum)
+		num.Div(num, changeDenom)
 		if num.Cmp(common.Big1) < 0 {
 			return num.Add(parent.BaseFee, common.Big1)
 		}
 		return num.Add(parent.BaseFee, num)
 	} else {
 		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
-		// max(0, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+		// max(0, parentBaseFee * gasUsedDelta / parentGasTarget * changeNum / changeDenom)
 		num.SetUint64(parentGasTarget - parent.GasUsed)
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
+		num.Mul(num, changeNum)
+		num.Div(num, changeDenom)
 
 		baseFee := num.Sub(parent.BaseFee, num)
 		if baseFee.Cmp(common.Big0) < 0 {
@@ -99,4 +108,49 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		}
 		return baseFee
 	}
+}
+
+// CalcNextBaseFee estimates the basefee of the block after head, assuming it keeps
+// the spacing per slot between head and parent, or one reference slot without parent.
+func CalcNextBaseFee(config *params.ChainConfig, head, parent *types.Header) *big.Int {
+	seconds, slots := uint64(params.BaseFeeReferenceSlotSeconds), uint64(1)
+	if parent != nil && head.Time > parent.Time {
+		seconds = head.Time - parent.Time
+		if parent.SlotNumber != nil && head.SlotNumber != nil && *head.SlotNumber > *parent.SlotNumber {
+			slots = *head.SlotNumber - *parent.SlotNumber
+		}
+	}
+	next := &types.Header{Time: head.Time + seconds}
+	if head.SlotNumber != nil {
+		slot := *head.SlotNumber + slots
+		next.SlotNumber = &slot
+	}
+	return CalcBaseFee(config, head, next)
+}
+
+// baseFeeChangeFraction returns the max fraction the base fee can move from parent
+// to header. From Bogota it scales with the seconds per slot between them (EIP-8198).
+func baseFeeChangeFraction(config *params.ChainConfig, parent, header *types.Header) (*big.Int, *big.Int) {
+	denom := new(big.Int).SetUint64(config.BaseFeeChangeDenominator())
+	if !config.IsBogota(parent.Number, header.Time) {
+		return big.NewInt(1), denom
+	}
+	// Chains without slot numbers count every block as one slot.
+	slots := uint64(1)
+	if parent.SlotNumber != nil && header.SlotNumber != nil && *header.SlotNumber > *parent.SlotNumber {
+		slots = *header.SlotNumber - *parent.SlotNumber
+	}
+	var seconds uint64
+	if header.Time > parent.Time {
+		seconds = header.Time - parent.Time
+	}
+	// Spacing beyond the reference slot duration is ignored, so no block moves
+	// the base fee by more than 1/8.
+	limit := new(big.Int).SetUint64(params.BaseFeeReferenceSlotSeconds)
+	limit.Mul(limit, new(big.Int).SetUint64(slots))
+	num := new(big.Int).SetUint64(seconds)
+	if num.Cmp(limit) > 0 {
+		num.Set(limit)
+	}
+	return num, denom.Mul(denom, limit)
 }

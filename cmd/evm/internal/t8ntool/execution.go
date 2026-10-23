@@ -110,6 +110,7 @@ type stEnv struct {
 	ExcessBlobGas         *uint64                             `json:"currentExcessBlobGas,omitempty"`
 	ParentExcessBlobGas   *uint64                             `json:"parentExcessBlobGas,omitempty"`
 	ParentBlobGasUsed     *uint64                             `json:"parentBlobGasUsed,omitempty"`
+	ParentSlotNumber      *uint64                             `json:"parentSlotNumber,omitempty"`
 	ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
 	SlotNumber            *uint64                             `json:"slotNumber"`
 }
@@ -130,6 +131,7 @@ type stEnvMarshaling struct {
 	ExcessBlobGas       *math.HexOrDecimal64
 	ParentExcessBlobGas *math.HexOrDecimal64
 	ParentBlobGasUsed   *math.HexOrDecimal64
+	ParentSlotNumber    *math.HexOrDecimal64
 	SlotNumber          *math.HexOrDecimal64
 }
 
