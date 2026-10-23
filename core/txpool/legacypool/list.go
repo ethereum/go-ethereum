@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 )
@@ -58,7 +59,8 @@ type SortedMap struct {
 	items   map[uint64]*types.Transaction // Hash map storing the transaction data
 	index   *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
 	cache   types.Transactions            // Cache of the transactions already sorted
-	cacheMu sync.Mutex                    // Mutex covering the cache
+	lazy    *lazyList                     // Cache of the sorted transactions as Pending serves them
+	cacheMu sync.Mutex                    // Mutex covering the caches
 }
 
 // NewSortedMap creates a new nonce-sorted transaction map.
@@ -82,7 +84,7 @@ func (m *SortedMap) Put(tx *types.Transaction) {
 		heap.Push(m.index, nonce)
 	}
 	m.cacheMu.Lock()
-	m.items[nonce], m.cache = tx, nil
+	m.items[nonce], m.cache, m.lazy = tx, nil, nil
 	m.cacheMu.Unlock()
 }
 
@@ -99,11 +101,16 @@ func (m *SortedMap) Forward(threshold uint64) types.Transactions {
 		delete(m.items, nonce)
 	}
 	// If we had a cached order, shift the front
-	m.cacheMu.Lock()
-	if m.cache != nil {
-		m.cache = m.cache[len(removed):]
+	if len(removed) > 0 {
+		m.cacheMu.Lock()
+		if m.cache != nil {
+			m.cache = m.cache[len(removed):]
+		}
+		if m.lazy != nil {
+			m.lazy = m.lazy.slice(len(removed), len(m.lazy.txs))
+		}
+		m.cacheMu.Unlock()
 	}
-	m.cacheMu.Unlock()
 	return removed
 }
 
@@ -128,7 +135,7 @@ func (m *SortedMap) reheap() {
 	}
 	heap.Init(m.index)
 	m.cacheMu.Lock()
-	m.cache = nil
+	m.cache, m.lazy = nil, nil
 	m.cacheMu.Unlock()
 }
 
@@ -146,7 +153,7 @@ func (m *SortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 	}
 	if len(removed) > 0 {
 		m.cacheMu.Lock()
-		m.cache = nil
+		m.cache, m.lazy = nil, nil
 		m.cacheMu.Unlock()
 	}
 	return removed
@@ -175,6 +182,9 @@ func (m *SortedMap) Cap(threshold int) types.Transactions {
 	if m.cache != nil {
 		m.cache = m.cache[:len(m.cache)-len(drops)]
 	}
+	if m.lazy != nil {
+		m.lazy = m.lazy.slice(0, len(m.lazy.txs)-len(drops))
+	}
 	m.cacheMu.Unlock()
 	return drops
 }
@@ -196,7 +206,7 @@ func (m *SortedMap) Remove(nonce uint64) bool {
 	}
 	delete(m.items, nonce)
 	m.cacheMu.Lock()
-	m.cache = nil
+	m.cache, m.lazy = nil, nil
 	m.cacheMu.Unlock()
 
 	return true
@@ -222,7 +232,7 @@ func (m *SortedMap) Ready(start uint64) types.Transactions {
 		heap.Pop(m.index)
 	}
 	m.cacheMu.Lock()
-	m.cache = nil
+	m.cache, m.lazy = nil, nil
 	m.cacheMu.Unlock()
 
 	return ready
@@ -236,6 +246,11 @@ func (m *SortedMap) Len() int {
 func (m *SortedMap) flatten() types.Transactions {
 	m.cacheMu.Lock()
 	defer m.cacheMu.Unlock()
+	return m.flattenLocked()
+}
+
+// flattenLocked is flatten with cacheMu held.
+func (m *SortedMap) flattenLocked() types.Transactions {
 	// If the sorting was not cached yet, create and cache it
 	if m.cache == nil {
 		m.cache = make(types.Transactions, 0, len(m.items))
@@ -256,6 +271,18 @@ func (m *SortedMap) Flatten() types.Transactions {
 	txs := make(types.Transactions, len(cache))
 	copy(txs, cache)
 	return txs
+}
+
+// lazies returns the nonce-sorted transactions as Pending serves them,
+// resolvable through pool. The result is cached until the contents change, and
+// shared: callers must not modify it.
+func (m *SortedMap) lazies(pool txpool.LazyResolver) *lazyList {
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	if m.lazy == nil {
+		m.lazy = newLazyList(pool, m.flattenLocked())
+	}
+	return m.lazy
 }
 
 // LastElement returns the last element of a flattened list, thus, the
