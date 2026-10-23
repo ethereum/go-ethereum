@@ -61,6 +61,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/memlimit"
+	"github.com/ethereum/go-ethereum/internal/traceapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
@@ -2258,6 +2259,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (*eth.EthAPIBac
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
+	stack.RegisterAPIs(traceapi.GetAPIs(backend.APIBackend))
 	return backend.APIBackend, backend
 }
 

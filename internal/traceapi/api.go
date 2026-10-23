@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package tracers
+package traceapi
 
 import (
 	"bytes"
@@ -34,6 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -44,13 +46,82 @@ const (
 	traceFilterResultLimit = 10000
 	traceCallManyLimit     = 10000
 	traceBatchTimeout      = 30 * time.Second
+	defaultTraceTimeout    = 5 * time.Second
 )
 
+// Backend provides the chain access of the trace namespace.
+type Backend interface {
+	ethapi.ChainContextBackend
+	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
+	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	Pending() (*types.Block, types.Receipts, *state.StateDB)
+	GetCanonicalTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64)
+	TxIndexDone() bool
+	RPCGasCap() uint64
+	ChainDb() ethdb.Database
+	StateAtBlock(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, tracers.StateReleaseFunc, error)
+}
+
+// GetAPIs returns the trace namespace service.
+func GetAPIs(backend Backend) []rpc.API {
+	return []rpc.API{{Namespace: "trace", Service: NewTraceAPI(backend)}}
+}
+
 // TraceAPI implements the Parity trace namespace independently of debug APIs.
-type TraceAPI struct{ api *API }
+type TraceAPI struct{ api *chainAPI }
 
 // NewTraceAPI constructs the trace namespace service.
-func NewTraceAPI(backend Backend) *TraceAPI { return &TraceAPI{api: NewAPI(backend)} }
+func NewTraceAPI(backend Backend) *TraceAPI { return &TraceAPI{api: &chainAPI{backend: backend}} }
+
+// chainAPI wraps the chain access functions offered by the backend.
+type chainAPI struct {
+	backend Backend
+}
+
+// chainContext constructs the context reader which is used by the evm for reading
+// the necessary chain context.
+func (api *chainAPI) chainContext(ctx context.Context) core.ChainContext {
+	return ethapi.NewChainContext(ctx, api.backend)
+}
+
+// blockByNumber is the wrapper of the chain access function offered by the backend.
+// It will return an error if the block is not found.
+func (api *chainAPI) blockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
+	block, err := api.backend.BlockByNumber(ctx, number)
+	if err != nil {
+		return nil, err
+	}
+	if block == nil {
+		return nil, fmt.Errorf("block #%d not found", number)
+	}
+	return block, nil
+}
+
+// blockByHash is the wrapper of the chain access function offered by the backend.
+// It will return an error if the block is not found.
+func (api *chainAPI) blockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	block, err := api.backend.BlockByHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	if block == nil {
+		return nil, fmt.Errorf("block %s not found", hash.Hex())
+	}
+	return block, nil
+}
+
+// blockByNumberAndHash is the wrapper of the chain access function offered by
+// the backend. It will return an error if the block is not found.
+func (api *chainAPI) blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber, hash common.Hash) (*types.Block, error) {
+	block, err := api.blockByNumber(ctx, number)
+	if err != nil {
+		return nil, err
+	}
+	if block.Hash() == hash {
+		return block, nil
+	}
+	return api.blockByHash(ctx, hash)
+}
 
 // Call executes an unsigned call on the selected block's post-state.
 func (api *TraceAPI) Call(ctx context.Context, args TraceCallArgs, kinds TraceTypes, block *rpc.BlockNumberOrHash, stateOverrides *override.StateOverride, blockOverrides *override.BlockOverrides) (*TraceExecution, error) {
@@ -377,7 +448,7 @@ type traceCallEnv struct {
 	state       *state.StateDB
 	vmctx       vm.BlockContext
 	precompiles vm.PrecompiledContracts // nil unless state overrides replaced them
-	release     StateReleaseFunc
+	release     tracers.StateReleaseFunc
 }
 
 // callEnv selects a block by number, tag or EIP-1898 hash and applies the
@@ -387,7 +458,7 @@ func (api *TraceAPI) callEnv(ctx context.Context, selector *rpc.BlockNumberOrHas
 	var (
 		block   *types.Block
 		st      *state.StateDB
-		release StateReleaseFunc = func() {}
+		release tracers.StateReleaseFunc = func() {}
 		err     error
 	)
 	number, byNumber := rpc.LatestBlockNumber, true
@@ -613,7 +684,7 @@ func (api *TraceAPI) transaction(ctx context.Context, hash common.Hash, kinds Tr
 	return nil, nil, 0, errors.New("transaction index points outside block")
 }
 
-func (api *TraceAPI) blockState(ctx context.Context, block *types.Block) (*state.StateDB, vm.BlockContext, StateReleaseFunc, error) {
+func (api *TraceAPI) blockState(ctx context.Context, block *types.Block) (*state.StateDB, vm.BlockContext, tracers.StateReleaseFunc, error) {
 	parent, err := api.api.blockByHash(ctx, block.ParentHash())
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, err
