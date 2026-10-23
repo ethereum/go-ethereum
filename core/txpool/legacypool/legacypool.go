@@ -241,6 +241,7 @@ type LegacyPool struct {
 	reserver      txpool.Reserver              // Address reserver to ensure exclusivity across subpools
 
 	pending map[common.Address]*list // All currently processable transactions
+	heads   *headIndex               // Accounts of pending by their first transaction's fee cap
 	queue   *queue
 	all     *lookup     // All transactions to allow lookups
 	priced  *pricedList // All transactions sorted by price
@@ -274,6 +275,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		chainconfig:     chain.Config(),
 		signer:          signer,
 		pending:         make(map[common.Address]*list),
+		heads:           newHeadIndex(),
 		queue:           newQueue(config, signer),
 		all:             newLookup(),
 		reqResetCh:      make(chan *txpoolResetRequest),
@@ -491,6 +493,10 @@ func (pool *LegacyPool) ContentFrom(addr common.Address) ([]*types.Transaction, 
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
+//
+// The lists and transactions returned are shared with the pool's cache of
+// each account's pending transactions, which is kept until the account's
+// transactions change: callers must not modify them.
 func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
 	// If only blob transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.
@@ -500,46 +506,39 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
+	if filter.MinTip != nil && filter.BaseFee != nil {
+		return pool.pendingPayable(filter)
+	}
 	var count int
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
 	for addr, list := range pool.pending {
-		txs := list.Flatten()
-
-		// If the miner requests tip enforcement, cap the lists now
-		if filter.MinTip != nil || filter.GasLimitCap != 0 {
-			for i, tx := range txs {
-				if filter.MinTip != nil {
-					if tx.EffectiveGasTipIntCmp(filter.MinTip, filter.BaseFee) < 0 {
-						txs = txs[:i]
-						break
-					}
-				}
-				if filter.GasLimitCap != 0 {
-					if tx.Gas() > filter.GasLimitCap {
-						txs = txs[:i]
-						break
-					}
-				}
-			}
-		}
-		if len(txs) > 0 {
-			lazies := make([]*txpool.LazyTransaction, len(txs))
-			for i := 0; i < len(txs); i++ {
-				lazies[i] = &txpool.LazyTransaction{
-					Pool:      pool,
-					Hash:      txs[i].Hash(),
-					Tx:        txs[i],
-					Time:      txs[i].Time(),
-					GasFeeCap: uint256.MustFromBig(txs[i].GasFeeCap()),
-					GasTipCap: uint256.MustFromBig(txs[i].GasTipCap()),
-					Gas:       txs[i].Gas(),
-					BlobGas:   txs[i].BlobGas(),
-				}
-			}
-			pending[addr] = lazies
-			count += len(lazies)
+		lazies := list.txs.lazies(pool)
+		if n := lazies.pending(filter); n > 0 {
+			pending[addr] = lazies.txs[:n:n]
+			count += n
 		}
 	}
+	return pending, count
+}
+
+// pendingPayable is Pending for a filter with a minimum tip and a base fee,
+// which ends each list before its first transaction whose fee cap is below the
+// base fee: that transaction pays a negative tip. Only the accounts whose first
+// transaction's fee cap covers the base fee can contribute, and the index of
+// first transactions by fee cap finds them without visiting the others. The
+// caller holds pool.mu.
+func (pool *LegacyPool) pendingPayable(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
+	var (
+		count   int
+		pending = make(map[common.Address][]*txpool.LazyTransaction)
+	)
+	pool.heads.atLeast(filter.BaseFee, func(addr common.Address, list *list) {
+		lazies := list.txs.lazies(pool)
+		if n := lazies.pending(filter); n > 0 {
+			pending[addr] = lazies.txs[:n:n]
+			count += n
+		}
+	})
 	return pending, count
 }
 
@@ -845,7 +844,7 @@ func (pool *LegacyPool) enqueueTx(hash common.Hash, tx *types.Transaction, addAl
 func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) bool {
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
-		pool.pending[addr] = newList(true)
+		pool.pending[addr] = newPendingList(addr, pool.heads)
 		pendingAddrsGauge.Inc(1)
 	}
 	list := pool.pending[addr]
@@ -1837,6 +1836,7 @@ func (pool *LegacyPool) Clear() {
 	pool.all.Clear()
 	pool.priced.Reheap()
 	pool.pending = make(map[common.Address]*list)
+	pool.heads = newHeadIndex()
 	pool.queue = newQueue(pool.config, pool.signer)
 	pool.pendingNonces = newNoncer(pool.currentState)
 
