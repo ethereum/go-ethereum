@@ -39,7 +39,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-func traceContractClient(t *testing.T, api *TraceAPI) *rpc.Client {
+func traceContractClient(t *testing.T, api *API) *rpc.Client {
 	t.Helper()
 	server := rpc.NewServer()
 	t.Cleanup(server.Stop)
@@ -66,7 +66,7 @@ func TestTraceFrontierCreateCodeDeposit(t *testing.T) {
 		Alloc: types.GenesisAlloc{traceTestSender: {Balance: big.NewInt(1e18)}},
 	}, nil)
 	t.Cleanup(backend.teardown)
-	client := traceContractClient(t, NewTraceAPI(backend))
+	client := traceContractClient(t, NewAPI(backend))
 	var result struct {
 		Output hexutil.Bytes `json:"output"`
 		Trace  []struct {
@@ -216,7 +216,7 @@ func TestTraceNamespaceCallRejectionFallback(t *testing.T) {
 		traceTestSender: {Balance: big.NewInt(1e18)},
 	}}, nil)
 	t.Cleanup(backend.teardown)
-	client = traceContractClient(t, NewTraceAPI(backend))
+	client = traceContractClient(t, NewAPI(backend))
 	auth := []types.SetCodeAuthorization{{Address: traceTestTarget}}
 	requireTraceCode(t, client.Call(&result, "trace_call", map[string]any{"from": traceTestSender, "to": traceTestTarget, "authorizationList": auth}, TraceTypes{}), -32003)
 	// Before Osaka, the per-transaction blob limit does not apply.
@@ -248,7 +248,7 @@ func TestTraceNamespaceInactiveCallTypes(t *testing.T) {
 		Alloc: types.GenesisAlloc{traceTestSender: {Balance: big.NewInt(1e18)}},
 	}, nil)
 	t.Cleanup(backend.teardown)
-	client := traceContractClient(t, NewTraceAPI(backend))
+	client := traceContractClient(t, NewAPI(backend))
 	for block := uint64(0); block <= 2; block++ {
 		for kind := uint64(1); kind <= 4; kind++ {
 			t.Run(hexutil.EncodeUint64(block)+"/"+hexutil.EncodeUint64(kind), func(t *testing.T) {
@@ -706,7 +706,7 @@ func TestTraceNamespaceFilterBounds(t *testing.T) {
 	config := *params.AllEthashProtocolChanges
 	backend := newTestBackend(t, 3, &core.Genesis{Config: &config, GasLimit: 30_000_000, BaseFee: big.NewInt(params.InitialBaseFee)}, nil)
 	t.Cleanup(backend.teardown)
-	client := traceContractClient(t, NewTraceAPI(backend))
+	client := traceContractClient(t, NewAPI(backend))
 	// Bounds beyond the head, reversed ranges (including an explicit toBlock
 	// before the omitted latest start), pending and block hashes (plain or as
 	// EIP-1898 objects) are invalid parameters.
@@ -770,7 +770,7 @@ func TestTraceNamespaceBackendErrors(t *testing.T) {
 	_, backend := traceTestAPI(t, nil, nil)
 	for _, number := range []rpc.BlockNumber{rpc.SafeBlockNumber, rpc.FinalizedBlockNumber} {
 		for _, original := range []error{errors.New(number.String() + " block not found"), errors.New("database unavailable"), &traceRPCError{4444, "pruned history"}} {
-			api := NewTraceAPI(traceBlockErrorBackend{backend, original})
+			api := NewAPI(traceBlockErrorBackend{backend, original})
 			_, blockErr := api.Block(context.Background(), number)
 			_, filterErr := api.Filter(context.Background(), TraceFilter{FromBlock: &number})
 			for i, err := range []error{blockErr, filterErr} {
@@ -840,7 +840,7 @@ func TestTraceNamespaceEarliestMeansCutoff(t *testing.T) {
 	config := *params.AllEthashProtocolChanges
 	backend := newTestBackend(t, 2, &core.Genesis{Config: &config, GasLimit: 30_000_000, BaseFee: big.NewInt(params.InitialBaseFee)}, nil)
 	t.Cleanup(backend.teardown)
-	api := NewTraceAPI(traceRetentionBackend{backend})
+	api := NewAPI(traceRetentionBackend{backend})
 	ctx := context.Background()
 	earliest, genesisNumber := rpc.EarliestBlockNumber, rpc.BlockNumber(0)
 	onlyCutoff := func(frames []*TraceFrame) bool {

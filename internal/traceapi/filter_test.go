@@ -69,7 +69,7 @@ func TestTraceNamespaceFilterBlockHash(t *testing.T) {
 	})
 	defer backend.teardown()
 	wrapper := &traceHashReorgBackend{testBackend: backend}
-	client := traceContractClient(t, NewTraceAPI(wrapper))
+	client := traceContractClient(t, NewAPI(wrapper))
 	hash := backend.chain.GetBlockByNumber(1).Hash()
 	var want json.RawMessage
 	if err := client.Call(&want, "trace_filter", map[string]any{"fromBlock": "0x1", "toBlock": "0x1"}); err != nil {
@@ -153,7 +153,7 @@ func (b traceHashUnexecutedBackend) HeaderByNumber(ctx context.Context, number r
 func TestTraceNamespaceFilterUnexecutedBlockHash(t *testing.T) {
 	backend := newTestBackend(t, 1, &core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: 30_000_000}, nil)
 	defer backend.teardown()
-	client := traceContractClient(t, NewTraceAPI(traceHashUnexecutedBackend{backend}))
+	client := traceContractClient(t, NewAPI(traceHashUnexecutedBackend{backend}))
 	hash := backend.chain.GetBlockByNumber(1).Hash()
 	for _, filter := range []map[string]any{{"blockHash": hash}, {"blockHash": hash, "count": 0}} {
 		var got json.RawMessage
@@ -164,7 +164,7 @@ func TestTraceNamespaceFilterUnexecutedBlockHash(t *testing.T) {
 func TestTraceNamespaceFilterExecutedHead(t *testing.T) {
 	backend := newTestBackend(t, 1, &core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: 30_000_000}, nil)
 	t.Cleanup(backend.teardown)
-	client := traceContractClient(t, NewTraceAPI(traceHashUnexecutedBackend{backend}))
+	client := traceContractClient(t, NewAPI(traceHashUnexecutedBackend{backend}))
 	// The header chain is at block 1, but execution is still at genesis.
 	// Latest bounds must select the executed head, which has no traces.
 	for _, filter := range []map[string]any{{}, {"fromBlock": "latest"}, {"toBlock": "latest"}, {"fromBlock": "0x0"}} {
@@ -218,7 +218,7 @@ func TestTraceNamespaceFilterRangeReorg(t *testing.T) {
 	})
 	defer backend.teardown()
 	wrapper := &traceReplayReorgBackend{testBackend: backend}
-	client := traceContractClient(t, NewTraceAPI(wrapper))
+	client := traceContractClient(t, NewAPI(wrapper))
 	_, replacement, _ := core.GenerateChainWithGenesis(genesis, backend.engine, 3, func(_ int, block *core.BlockGen) {
 		block.SetCoinbase(traceTestTarget)
 	})

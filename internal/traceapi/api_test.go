@@ -46,7 +46,7 @@ import (
 var traceTestSender = common.HexToAddress("0xcafe0001")
 var traceTestTarget = common.HexToAddress("0xcafe0002")
 
-func traceTestAPI(t *testing.T, code []byte, extra types.GenesisAlloc) (*TraceAPI, *testBackend) {
+func traceTestAPI(t *testing.T, code []byte, extra types.GenesisAlloc) (*API, *testBackend) {
 	t.Helper()
 	alloc := types.GenesisAlloc{
 		traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)},
@@ -58,7 +58,7 @@ func traceTestAPI(t *testing.T, code []byte, extra types.GenesisAlloc) (*TraceAP
 	config := *params.AllDevChainProtocolChanges
 	backend := newTestBackend(t, 0, &core.Genesis{Config: &config, Alloc: alloc, GasLimit: 30_000_000, Difficulty: big.NewInt(0), BaseFee: big.NewInt(params.InitialBaseFee)}, nil)
 	t.Cleanup(backend.teardown)
-	return NewTraceAPI(backend), backend
+	return NewAPI(backend), backend
 }
 
 func traceTestArgs(to *common.Address, data []byte) TraceCallArgs {
@@ -694,7 +694,7 @@ func TestTraceNamespacePrecheckFailureCost(t *testing.T) {
 	}}, nil)
 	t.Cleanup(backend.teardown)
 	for _, kinds := range []TraceTypes{{"trace", "vmTrace"}, {"vmTrace"}} {
-		result, err := NewTraceAPI(backend).Call(context.Background(), traceTestArgs(&traceTestTarget, nil), kinds, nil, nil, nil)
+		result, err := NewAPI(backend).Call(context.Background(), traceTestArgs(&traceTestTarget, nil), kinds, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -760,7 +760,7 @@ func TestTraceNamespaceCreateCost(t *testing.T) {
 		traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)}, traceTestTarget: {Code: code},
 	}}, nil)
 	t.Cleanup(backend.teardown)
-	result, err := NewTraceAPI(backend).Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace"}, nil, nil, nil)
+	result, err := NewAPI(backend).Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "vmTrace"}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -880,7 +880,7 @@ func TestTraceNamespaceReplayAfterPrecedingTransactions(t *testing.T) {
 		}
 	})
 	defer backend.teardown()
-	client := traceContractClient(t, NewTraceAPI(backend))
+	client := traceContractClient(t, NewAPI(backend))
 	modes := []string{"trace", "stateDiff", "vmTrace"}
 	var block []json.RawMessage
 	if err := client.Call(&block, "trace_replayBlockTransactions", "0x1", modes); err != nil || len(block) != len(hashes) {

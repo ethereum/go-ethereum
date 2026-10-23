@@ -55,7 +55,7 @@ func TestTraceNamespaceMinedPathsReplayAndFilter(t *testing.T) {
 		hashes = append(hashes, tx.Hash())
 	})
 	defer backend.teardown()
-	api := NewTraceAPI(backend)
+	api := NewAPI(backend)
 	ctx := context.Background()
 	root, err := api.Get(ctx, hashes[0], TracePosition{})
 	if err != nil {
@@ -173,7 +173,7 @@ func TestTraceNamespaceSelfDestructForkRules(t *testing.T) {
 		backend := newTestBackend(t, 0, &core.Genesis{Config: &config, GasLimit: 30_000_000, Difficulty: big.NewInt(0), BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
 			traceTestSender: {Balance: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)}, traceTestTarget: {Balance: big.NewInt(7), Code: code, Storage: map[common.Hash]common.Hash{{}: {31: 7}}},
 		}}, nil)
-		api := NewTraceAPI(backend)
+		api := NewAPI(backend)
 		result, err := api.Call(context.Background(), traceTestArgs(&traceTestTarget, nil), TraceTypes{"trace", "stateDiff", "vmTrace"}, nil, nil, nil)
 		backend.teardown()
 		if err != nil {
@@ -215,7 +215,7 @@ func TestTraceNamespaceTouchedEmptyAccountDeletion(t *testing.T) {
 		empty: {Balance: common.Big0}, common.Address{}: {Balance: common.Big0},
 	}}, nil)
 	t.Cleanup(backend.teardown)
-	api := NewTraceAPI(backend)
+	api := NewAPI(backend)
 	deleted := `{"balance":{"-":"0x0"},"nonce":{"-":"0x0"},"code":{"-":"0x"},"storage":{}}`
 	// A zero-fee call pays no fee but touches the coinbase as a block does, and so does paying a zero
 	// tip: either way the empty coinbase is deleted.
@@ -309,21 +309,21 @@ func TestTraceNamespacePending(t *testing.T) {
 
 	// Without a pending block, pending is an invalid parameter for every
 	// method rather than an alias of latest.
-	client := traceContractClient(t, NewTraceAPI(backend))
+	client := traceContractClient(t, NewAPI(backend))
 	var result json.RawMessage
 	requireTraceCode(t, client.Call(&result, "trace_block", "pending"), -32602)
 	requireTraceCode(t, client.Call(&result, "trace_replayBlockTransactions", "pending", TraceTypes{"trace"}), -32602)
 	requireTraceCode(t, client.Call(&result, "trace_call", calls[0].([]any)[0], TraceTypes{}, "pending"), -32602)
 	requireTraceCode(t, client.Call(&result, "trace_callMany", calls, map[string]any{"blockNumber": "pending"}), -32602)
 	// A pending block without its post-state is not a pending environment.
-	client = traceContractClient(t, NewTraceAPI(tracePendingBackend{backend, block, nil}))
+	client = traceContractClient(t, NewAPI(tracePendingBackend{backend, block, nil}))
 	requireTraceCode(t, client.Call(&result, "trace_block", "pending"), -32602)
 	requireTraceCode(t, client.Call(&result, "trace_call", calls[0].([]any)[0], TraceTypes{}, "pending"), -32602)
 
 	// With one, block methods trace the pending block and simulations run on
 	// its post-state and header: NUMBER is the next block, and the pending
 	// transfer is visible.
-	client = traceContractClient(t, NewTraceAPI(tracePendingBackend{backend, block, st}))
+	client = traceContractClient(t, NewAPI(tracePendingBackend{backend, block, st}))
 	var frames []map[string]any
 	if err := client.Call(&frames, "trace_block", "pending"); err != nil {
 		t.Fatal(err)
@@ -392,7 +392,7 @@ func TestTraceNamespaceExecutionGasCapAmsterdam(t *testing.T) {
 		contract: {Code: common.FromHex("0x5a6301312d0081106011575f5260205ff35b5f5ffd")},
 	}}, nil)
 	t.Cleanup(backend.teardown)
-	api := NewTraceAPI(backend)
+	api := NewAPI(backend)
 	args := traceTestArgs(&contract, nil)
 	gas := hexutil.Uint64(backend.RPCGasCap())
 	args.Gas = &gas

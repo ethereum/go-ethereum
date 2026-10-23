@@ -19,16 +19,13 @@ package traceapi
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -334,71 +331,3 @@ type traceStorageWrite struct {
 	Key *hexutil.Big `json:"key"`
 	Val *hexutil.Big `json:"val"`
 }
-
-type traceRPCError struct {
-	code    int
-	message string
-}
-
-func (e *traceRPCError) Error() string  { return e.message }
-func (e *traceRPCError) ErrorCode() int { return e.code }
-func traceInvalid(format string, args ...any) error {
-	return &traceRPCError{-32602, fmt.Sprintf(format, args...)}
-}
-
-// traceItemError reports the zero-based index of the failing trace_callMany
-// item in error.data.
-type traceItemError struct {
-	err   rpc.Error
-	index int
-}
-
-func (e *traceItemError) Error() string  { return fmt.Sprintf("call %d: %v", e.index, e.err) }
-func (e *traceItemError) ErrorCode() int { return e.err.ErrorCode() }
-func (e *traceItemError) ErrorData() any { return map[string]int{"index": e.index} }
-
-// traceCallRejection maps a rejected unsigned call to the eth_simulateV1
-// validation codes. Nonce and sender-code checks are skipped for unsigned
-// calls, as in eth_call. Call objects invalid regardless of state are rejected
-// with -32602 before execution; any other rejection of a well-formed call at
-// the selected block, such as a blob fee cap below the blob base fee or a
-// feature not active at that fork, is -32003 (Transaction rejected), as for
-// trace_rawTransaction.
-func traceCallRejection(err error) error {
-	code := -32003
-	switch {
-	case errors.Is(err, core.ErrFeeCapTooLow):
-		code = -38012
-	case errors.Is(err, core.ErrIntrinsicGas), errors.Is(err, core.ErrFloorDataGas):
-		code = -38013
-	case errors.Is(err, core.ErrInsufficientFunds), errors.Is(err, core.ErrInsufficientFundsForTransfer):
-		code = -38014
-	case errors.Is(err, vm.ErrMaxInitCodeSizeExceeded):
-		code = -38025
-	}
-	return &traceRPCError{code, err.Error()}
-}
-
-// traceRawRejection maps a rejected signed transaction to the
-// eth_sendRawTransaction error groups, with -32003 for other rejections.
-func traceRawRejection(err error) error {
-	code := -32003
-	switch {
-	case errors.Is(err, core.ErrNonceTooLow):
-		code = 1
-	case errors.Is(err, core.ErrNonceTooHigh):
-		code = 2
-	case errors.Is(err, core.ErrIntrinsicGas), errors.Is(err, core.ErrFloorDataGas):
-		code = 800
-	case errors.Is(err, core.ErrTipAboveFeeCap):
-		code = 804
-	case errors.Is(err, core.ErrFeeCapTooLow):
-		code = 806
-	case errors.Is(err, core.ErrInsufficientFunds), errors.Is(err, core.ErrInsufficientFundsForTransfer):
-		code = 809
-	}
-	return &traceRPCError{code, err.Error()}
-}
-
-// traceRejected reports a mined transaction that failed validation on replay.
-func traceRejected(err error) error { return &traceRPCError{-32003, err.Error()} }
