@@ -173,6 +173,10 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 	if config.IsAmsterdam(number, time) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	}
+	// EIP-8253
+	if config.IsBogota(number, time) && !config.IsBogota(parent.Number, parent.Time) {
+		ProcessZeroNonceStorageAccounts(evm, blockAccessList)
+	}
 	// EIP-4788
 	if beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
