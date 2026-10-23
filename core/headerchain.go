@@ -65,6 +65,9 @@ type HeaderChain struct {
 	headerCache *lru.Cache[common.Hash, *types.Header]
 	numberCache *lru.Cache[common.Hash, uint64] // most recent block numbers
 
+	pending    func(hash common.Hash) *types.Header // headers of blocks still being written, optional
+	queuedHead func(number uint64) common.Hash      // hashes of heads whose markers aren't on disk yet, optional
+
 	procInterrupt func() bool
 	engine        consensus.Engine
 }
@@ -100,6 +103,10 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 func (hc *HeaderChain) GetBlockNumber(hash common.Hash) (uint64, bool) {
 	if cached, ok := hc.numberCache.Get(hash); ok {
 		return cached, true
+	}
+	// A block the chain writer is still writing isn't in the database yet
+	if header := hc.pendingHeader(hash); header != nil {
+		return header.Number.Uint64(), true
 	}
 	number, ok := rawdb.ReadHeaderNumber(hc.chainDb, hash)
 	if ok {
@@ -390,6 +397,10 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return header
 	}
+	// A block the chain writer is still writing isn't in the database yet
+	if header := hc.pendingHeader(hash); header != nil && header.Number.Uint64() == number {
+		return header
+	}
 	header := rawdb.ReadHeader(hc.chainDb, hash, number)
 	if header == nil {
 		return nil
@@ -397,6 +408,22 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	// Cache the found header for next time and return
 	hc.headerCache.Add(hash, header)
 	return header
+}
+
+// pendingHeader returns the header of a block whose write hasn't landed yet, or nil.
+func (hc *HeaderChain) pendingHeader(hash common.Hash) *types.Header {
+	if hc.pending == nil {
+		return nil
+	}
+	return hc.pending(hash)
+}
+
+// queuedHeadHash returns the hash of the head with the given number whose markers aren't on disk yet, or zero.
+func (hc *HeaderChain) queuedHeadHash(number uint64) common.Hash {
+	if hc.queuedHead == nil {
+		return common.Hash{}
+	}
+	return hc.queuedHead(number)
 }
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
@@ -416,13 +443,16 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
 		return true
 	}
+	if header := hc.pendingHeader(hash); header != nil && header.Number.Uint64() == number {
+		return true
+	}
 	return rawdb.HasHeader(hc.chainDb, hash, number)
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
-	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
+	hash := hc.GetCanonicalHash(number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
@@ -446,14 +476,20 @@ func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 	}
 	var headers []rlp.RawValue
 	// If we have some of the headers in cache already, use that before going to db.
-	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
+	hash := hc.GetCanonicalHash(number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
 	for count > 0 {
 		header, ok := hc.headerCache.Get(hash)
 		if !ok {
-			break
+			// A head queued in memory is neither cached nor canonical on disk yet
+			if hc.queuedHeadHash(number) != hash {
+				break
+			}
+			if header = hc.GetHeader(hash, number); header == nil {
+				break
+			}
 		}
 		rlpData, _ := rlp.EncodeToBytes(header)
 		headers = append(headers, rlpData)
@@ -469,6 +505,10 @@ func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 }
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
+	// A head queued in memory has no marker on disk yet
+	if hash := hc.queuedHeadHash(number); hash != (common.Hash{}) {
+		return hash
+	}
 	return rawdb.ReadCanonicalHash(hc.chainDb, number)
 }
 
