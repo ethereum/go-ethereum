@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"math/big"
 	"slices"
 	"strings"
@@ -370,6 +371,32 @@ func TestTraceNamespaceCallGasAboveCapRunsAtCap(t *testing.T) {
 	}
 	if len(single.Trace) == 0 || single.Trace[0].Action.Gas != want || len(many) != 1 || len(many[0].Trace) == 0 || many[0].Trace[0].Action.Gas != want {
 		t.Fatalf("root action gas: have %+v and %+v, want %d", single.Trace, many, want)
+	}
+}
+
+// traceUncappedBackend serves calls without an RPC gas cap.
+type traceUncappedBackend struct{ *testBackend }
+
+func (traceUncappedBackend) RPCGasCap() uint64 { return 0 }
+
+func TestTraceNamespaceCallOmittedGasWithoutCap(t *testing.T) {
+	_, backend := traceTestAPI(t, common.FromHex("00"), nil)
+	client := traceContractClient(t, NewAPI(traceUncappedBackend{backend}))
+	args := map[string]any{"from": traceTestSender, "to": traceTestTarget}
+	// As in eth_call, omitted gas runs at the maximum when there is no cap.
+	want := hexutil.Uint64(math.MaxUint64 - params.TxGas)
+	var result struct {
+		Trace []struct {
+			Action struct {
+				Gas hexutil.Uint64 `json:"gas"`
+			} `json:"action"`
+		} `json:"trace"`
+	}
+	if err := client.Call(&result, "trace_call", args, TraceTypes{"trace"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Trace) == 0 || result.Trace[0].Action.Gas != want {
+		t.Fatalf("root action gas: have %+v, want %d", result.Trace, want)
 	}
 }
 

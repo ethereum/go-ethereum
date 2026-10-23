@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -576,9 +577,13 @@ func (api *API) call(ctx context.Context, input TraceCallArgs, kinds TraceTypes,
 	if err := checkCallArgs(&args); err != nil {
 		return nil, err
 	}
-	// As in eth_call, CallDefaults runs omitted or over-cap gas at the RPC gas cap.
+	// As in eth_call, CallDefaults runs omitted or over-cap gas at the RPC gas cap,
+	// and omitted gas at the maximum without a cap.
 	vmctx := env.vmctx
 	gasCap, chainID := api.backend.RPCGasCap(), api.backend.ChainConfig().ChainID
+	if gasCap == 0 {
+		gasCap = math.MaxUint64
+	}
 	// Before London only gasPrice priced a transaction, so dynamic fee fields are rejected there, even
 	// with zero values, rather than dropped: CallDefaults prices such a call at gasPrice 0. The other
 	// invalid-parameter checks of CallDefaults take precedence over this block-dependent one.
