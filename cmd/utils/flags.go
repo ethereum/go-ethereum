@@ -294,9 +294,10 @@ var (
 		Category: flags.StateCategory,
 	}
 	SnapV2Flag = &cli.BoolFlag{
-		Name:     "snap.v2",
-		Usage:    "Enable or disable the snap/2 (EIP-8189, BAL-based) state syncer, which needs Amsterdam active (default: automatic)",
-		Category: flags.StateCategory,
+		Name:        "snap.v2",
+		Usage:       "Enable or disable the snap/2 (EIP-8189, BAL-based) state syncer, which needs Amsterdam active",
+		DefaultText: "automatic",
+		Category:    flags.StateCategory,
 	}
 	BinTrieGroupDepthFlag = &cli.IntFlag{
 		Name:     "bintrie.groupdepth",
