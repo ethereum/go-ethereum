@@ -33,6 +33,7 @@ var (
 	errBadInt32    = errors.New("abi: improperly encoded int32 value")
 	errBadInt64    = errors.New("abi: improperly encoded int64 value")
 	errInvalidSign = errors.New("abi: negatively-signed value cannot be packed into uint parameter")
+	errOutOfRange  = errors.New("abi: value larger than 256 bits cannot be packed into uint parameter")
 )
 
 // formatSliceString formats the reflection kind with the given slice size
