@@ -117,9 +117,10 @@ var (
 		Category: flags.EthCategory,
 	}
 	MinFreeDiskSpaceFlag = &cli.IntFlag{
-		Name:     "datadir.minfreedisk",
-		Usage:    "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
-		Category: flags.EthCategory,
+		Name:        "datadir.minfreedisk",
+		Usage:       "Minimum free disk space in MB, once reached triggers auto shut down (0 = disabled)",
+		DefaultText: "--cache.gc converted to MB",
+		Category:    flags.EthCategory,
 	}
 	KeyStoreDirFlag = &flags.DirectoryFlag{
 		Name:     "keystore",
@@ -552,14 +553,16 @@ var (
 		Value:    ethconfig.Defaults.FilterLogCacheSize,
 	}
 	FDLimitFlag = &cli.IntFlag{
-		Name:     "fdlimit",
-		Usage:    "Raise the open file descriptor resource limit (default = system fd limit)",
-		Category: flags.PerfCategory,
+		Name:        "fdlimit",
+		Usage:       "Raise the open file descriptor resource limit",
+		DefaultText: "system fd limit",
+		Category:    flags.PerfCategory,
 	}
 	MemoryLimitFlag = &cli.IntFlag{
-		Name:     "memorylimit",
-		Usage:    "Soft memory limit for the Go runtime in megabytes (default = no limit)",
-		Category: flags.PerfCategory,
+		Name:        "memorylimit",
+		Usage:       "Soft memory limit for the Go runtime in megabytes",
+		DefaultText: "no limit",
+		Category:    flags.PerfCategory,
 	}
 	GOGCFlag = &cli.IntFlag{
 		Name:     "gogc",
