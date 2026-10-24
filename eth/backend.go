@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -132,6 +133,19 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
+
+	clContacted atomic.Bool // Set on first Engine API call (newPayload / FCU)
+}
+
+// MarkCLContacted records that the consensus client has driven this node at
+// least once; catalyst calls it from its package and so cannot reach the field
+// directly.
+func (s *Ethereum) MarkCLContacted() { s.clContacted.Store(true) }
+
+// ConsensusReady reports whether eth_syncing should be allowed to return false.
+// True once the consensus client has driven the node at least once.
+func (s *Ethereum) ConsensusReady() bool {
+	return s.clContacted.Load()
 }
 
 // New creates a new Ethereum object (including the initialisation of the common Ethereum object),
