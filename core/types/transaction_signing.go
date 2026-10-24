@@ -498,8 +498,9 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 	if len(pub) == 0 || pub[0] != 4 {
 		return common.Address{}, errors.New("invalid public key")
 	}
+	hash := crypto.Keccak256Hash(pub[1:])
 	var addr common.Address
-	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
+	copy(addr[:], hash[12:])
 	return addr, nil
 }
 
