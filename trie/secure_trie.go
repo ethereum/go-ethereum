@@ -373,3 +373,7 @@ func (t *StateTrie) MustNodeIterator(start []byte) NodeIterator {
 func (t *StateTrie) IsUBT() bool {
 	return false
 }
+
+func (t *StateTrie) IsPBT() bool {
+	return false
+}
