@@ -166,6 +166,7 @@ func (n *Notifier) activate() error {
 			return err
 		}
 	}
+	n.buffer = nil
 	n.activated = true
 	return nil
 }
