@@ -126,6 +126,16 @@ func RunGit(args ...string) string {
 	return strings.TrimSpace(stdout.String())
 }
 
+// gitOutput runs a git subcommand and returns its output, or "" if git can't be
+// run or the command fails.
+func gitOutput(args ...string) string {
+	out, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // readGitFile returns content of file in .git directory.
 func readGitFile(file string) string {
 	content, err := os.ReadFile(filepath.Join(".git", file))
