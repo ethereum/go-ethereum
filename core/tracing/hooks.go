@@ -92,7 +92,9 @@ type StateUpdate struct {
 	// StorageChanges contains all storage slot changes keyed by address and storage slot key.
 	StorageChanges map[common.Address]map[common.Hash]*StorageChange
 
-	// CodeChanges contains all contract code changes keyed by address.
+	// CodeChanges contains all contract code changes keyed by address. Code
+	// adopted through SETCODEFROM (EIP-8298) is listed only if the block writes
+	// it; otherwise the new code hash is in AccountChanges alone.
 	CodeChanges map[common.Address]*CodeChange
 
 	// TrieChanges contains trie node mutations keyed by address hash and trie node path.
@@ -697,4 +699,8 @@ const (
 	// CodeChangeRevert reverts the code to a previous value on call failure.
 	// Emitted only when the tracer opts into WrapWithJournal.
 	CodeChangeRevert CodeChangeReason = 6
+
+	// CodeChangeSetCodeFrom is when an account adopts the code of another
+	// account through the SETCODEFROM instruction (EIP-8298).
+	CodeChangeSetCodeFrom CodeChangeReason = 7
 )

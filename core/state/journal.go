@@ -22,7 +22,6 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 )
 
@@ -354,11 +353,14 @@ func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
 	})
 }
 
-func (j *journal) setCode(address common.Address, prevCode []byte) {
+func (j *journal) setCode(address common.Address, prevCode []byte, prevHash common.Hash, prevDirty, prevAdopted bool) {
 	j.stashCode(address, prevCode)
 	j.append(codeChange{
-		account:  address,
-		prevCode: prevCode,
+		account:     address,
+		prevCode:    prevCode,
+		prevHash:    prevHash,
+		prevDirty:   prevDirty,
+		prevAdopted: prevAdopted,
 	})
 }
 
@@ -432,8 +434,11 @@ type (
 		origvalue common.Hash
 	}
 	codeChange struct {
-		account  common.Address
-		prevCode []byte
+		account     common.Address
+		prevCode    []byte
+		prevHash    common.Hash
+		prevDirty   bool // the previous code still had to be written
+		prevAdopted bool // the previous code was adopted through SETCODEFROM
 	}
 
 	// Changes to other state values.
@@ -554,7 +559,11 @@ func (ch nonceChange) copy() journalEntry {
 }
 
 func (ch codeChange) revert(s *StateDB) {
-	s.getStateObject(ch.account).setCode(crypto.Keccak256Hash(ch.prevCode), ch.prevCode)
+	obj := s.getStateObject(ch.account)
+	obj.code = ch.prevCode
+	obj.data.CodeHash = ch.prevHash.Bytes()
+	obj.dirtyCode = ch.prevDirty
+	obj.codeAdopted = ch.prevAdopted
 }
 
 func (ch codeChange) mutation() (common.Address, journalMutationKind, bool) {
@@ -563,8 +572,11 @@ func (ch codeChange) mutation() (common.Address, journalMutationKind, bool) {
 
 func (ch codeChange) copy() journalEntry {
 	return codeChange{
-		account:  ch.account,
-		prevCode: ch.prevCode,
+		account:     ch.account,
+		prevCode:    ch.prevCode,
+		prevHash:    ch.prevHash,
+		prevDirty:   ch.prevDirty,
+		prevAdopted: ch.prevAdopted,
 	}
 }
 

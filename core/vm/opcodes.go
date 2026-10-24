@@ -213,6 +213,9 @@ const (
 	LOG4
 )
 
+// 0xa7 - account code op (EIP-8298).
+const SETCODEFROM OpCode = 0xa7
+
 // 0xd0 range - eof operations.
 const (
 	DATALOAD  OpCode = 0xd0
@@ -418,6 +421,9 @@ var opCodeToString = [256]string{
 	LOG3: "LOG3",
 	LOG4: "LOG4",
 
+	// 0xa7 - account code op.
+	SETCODEFROM: "SETCODEFROM",
+
 	// 0xd range - eof ops.
 	DATALOAD:  "DATALOAD",
 	DATALOADN: "DATALOADN",
@@ -607,6 +613,7 @@ var stringToOp = map[string]OpCode{
 	"LOG2":            LOG2,
 	"LOG3":            LOG3,
 	"LOG4":            LOG4,
+	"SETCODEFROM":     SETCODEFROM,
 	"DATALOAD":        DATALOAD,
 	"DATALOADN":       DATALOADN,
 	"DATASIZE":        DATASIZE,

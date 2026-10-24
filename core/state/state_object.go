@@ -73,7 +73,8 @@ type stateObject struct {
 	uncommittedStorage Storage
 
 	// Cache flags.
-	dirtyCode bool // true if the code was updated
+	dirtyCode   bool // true if the code was updated
+	codeAdopted bool // true if the code was adopted through SETCODEFROM (EIP-8298)
 
 	// Flag whether the account was marked as self-destructed. The self-destructed
 	// account is still accessible in the scope of same transaction.
@@ -520,6 +521,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		dirtyStorage:       s.dirtyStorage.Copy(),
 		uncommittedStorage: s.uncommittedStorage.Copy(),
 		dirtyCode:          s.dirtyCode,
+		codeAdopted:        s.codeAdopted,
 		selfDestructed:     s.selfDestructed,
 		newContract:        s.newContract,
 	}
@@ -596,7 +598,7 @@ func (s *stateObject) CodeSize() int {
 
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
 	prev = slices.Clone(s.code)
-	s.db.journal.setCode(s.address, prev)
+	s.db.journal.setCode(s.address, prev, common.BytesToHash(s.CodeHash()), s.dirtyCode, s.codeAdopted)
 	s.setCode(codeHash, code)
 	return prev
 }
@@ -605,6 +607,18 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
 	s.data.CodeHash = codeHash[:]
 	s.dirtyCode = true
+	s.codeAdopted = false
+}
+
+// SetCodeFrom adopts the code of src, as the SETCODEFROM instruction does
+// (EIP-8298). The code is written only while src still has to write it: src
+// may replace its code before the block is committed.
+func (s *stateObject) SetCodeFrom(src *stateObject) (prev []byte) {
+	s.Code() // load the replaced code, the journal keeps it
+	prev = s.SetCode(common.BytesToHash(src.CodeHash()), src.Code())
+	s.dirtyCode = src.dirtyCode
+	s.codeAdopted = true
+	return prev
 }
 
 func (s *stateObject) SetNonce(nonce uint64) {

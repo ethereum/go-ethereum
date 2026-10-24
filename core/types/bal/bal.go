@@ -51,6 +51,11 @@ type ConstructionAccountAccess struct {
 	// CodeChange contains the post-state contract code of an account keyed
 	// by tx index.
 	CodeChange map[uint32][]byte `json:"codeChange,omitempty"`
+
+	// CodeHashChange contains the post-state code hash of an account keyed by
+	// tx index, for code adopted through SETCODEFROM (EIP-8298). An index is
+	// in at most one of CodeChange and CodeHashChange.
+	CodeHashChange map[uint32]common.Hash `json:"codeHashChange,omitempty"`
 }
 
 // NewConstructionAccountAccess initializes the account access object.
@@ -61,6 +66,7 @@ func NewConstructionAccountAccess() *ConstructionAccountAccess {
 		BalanceChanges: make(map[uint32]*uint256.Int),
 		NonceChanges:   make(map[uint32]uint64),
 		CodeChange:     make(map[uint32][]byte),
+		CodeHashChange: make(map[uint32]common.Hash),
 	}
 }
 
@@ -116,6 +122,17 @@ func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex
 	}
 	// TODO(rjl493456442) is it essential to deep-copy the code?
 	b.Accounts[address].CodeChange[txIndex] = bytes.Clone(code)
+	delete(b.Accounts[address].CodeHashChange, txIndex)
+}
+
+// CodeHashChange records the code hash an account adopted through SETCODEFROM
+// (EIP-8298).
+func (b *ConstructionBlockAccessList) CodeHashChange(address common.Address, txIndex uint32, hash common.Hash) {
+	if _, ok := b.Accounts[address]; !ok {
+		b.Accounts[address] = NewConstructionAccountAccess()
+	}
+	b.Accounts[address].CodeHashChange[txIndex] = hash
+	delete(b.Accounts[address].CodeChange, txIndex)
 }
 
 // NonceChange records tx post-state nonce of any contract-like accounts whose
@@ -190,6 +207,11 @@ func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) 
 		}
 		for txIdx, code := range otherAcc.CodeChange {
 			acc.CodeChange[txIdx] = code
+			delete(acc.CodeHashChange, txIdx)
+		}
+		for txIdx, hash := range otherAcc.CodeHashChange {
+			acc.CodeHashChange[txIdx] = hash
+			delete(acc.CodeChange, txIdx)
 		}
 	}
 }
@@ -219,6 +241,7 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 			codes[index] = bytes.Clone(code)
 		}
 		aaCopy.CodeChange = codes
+		aaCopy.CodeHashChange = maps.Clone(aa.CodeHashChange)
 		res.Accounts[addr] = &aaCopy
 	}
 	return res

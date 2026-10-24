@@ -444,6 +444,47 @@ func TestInvalidTransactions(t *testing.T) {
 	}
 }
 
+// TestSenderWithCode checks that the transactions of a sender holding code,
+// e.g. adopted with SETCODEFROM (EIP-8298), are dropped on reset and rejected.
+// A sender delegating its code (EIP-7702) is unaffected.
+func TestSenderWithCode(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupPool()
+	defer pool.Close()
+
+	var (
+		keyD, _   = crypto.GenerateKey()
+		sender    = crypto.PubkeyToAddress(key.PublicKey)
+		delegated = crypto.PubkeyToAddress(keyD.PublicKey)
+	)
+	testAddBalance(pool, sender, big.NewInt(params.Ether))
+	testAddBalance(pool, delegated, big.NewInt(params.Ether))
+	for _, tx := range []*types.Transaction{
+		transaction(0, 100000, key), transaction(1, 100000, key), transaction(3, 100000, key), // pending and queued
+		transaction(0, 100000, keyD),
+	} {
+		if err := pool.addRemoteSync(tx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pool.mu.Lock()
+	pool.currentState.SetCode(sender, []byte{byte(vm.STOP)}, tracing.CodeChangeUnspecified)
+	pool.currentState.SetCode(delegated, types.AddressToDelegation(common.Address{0xaa}), tracing.CodeChangeUnspecified)
+	pool.mu.Unlock()
+	<-pool.requestReset(nil, nil)
+
+	if pending, queued := pool.Stats(); pending != 1 || queued != 0 {
+		t.Fatalf("pool has %d pending and %d queued transactions, want only the delegated one", pending, queued)
+	}
+	if err := pool.addRemoteSync(transaction(2, 100000, key)); !errors.Is(err, core.ErrSenderNoEOA) {
+		t.Fatalf("want %v, have %v", core.ErrSenderNoEOA, err)
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestQueue(t *testing.T) {
 	t.Parallel()
 
