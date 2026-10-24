@@ -98,7 +98,11 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 						if dl.stale {
 							return nil, errSnapshotStale
 						}
-						return dl.buffer.states.mustAccount(hash)
+						account, err := dl.buffer.states.mustAccount(hash)
+						if err != nil {
+							return nil, err
+						}
+						return encodeSlimAccount(account), nil
 					}),
 					priority: depth,
 				})
@@ -110,8 +114,15 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 				// The state set in diff layer is immutable and will never be stale,
 				// so the read lock protection is unnecessary.
 				accountList := dl.states.accountList()
+				states := dl.states
 				fi.iterators = append(fi.iterators, &weightedIterator{
-					it:       newDiffAccountIterator(seek, accountList, dl.states.mustAccount),
+					it: newDiffAccountIterator(seek, accountList, func(hash common.Hash) ([]byte, error) {
+						account, err := states.mustAccount(hash)
+						if err != nil {
+							return nil, err
+						}
+						return encodeSlimAccount(account), nil
+					}),
 					priority: depth,
 				})
 			}

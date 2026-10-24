@@ -44,13 +44,13 @@ type NodeDatabase interface {
 // StateReader wraps the Account and Storage method of a backing state reader.
 type StateReader interface {
 	// Account directly retrieves the account associated with a particular hash in
-	// the slim data format. An error will be returned if the read operation exits
-	// abnormally. Specifically, if the layer is already stale.
+	// the consensus (full) data format. An error will be returned if the read
+	// operation exits abnormally. Specifically, if the layer is already stale.
 	//
 	// Note:
 	// - the returned account object is safe to modify
 	// - no error will be returned if the requested account is not found in database
-	Account(hash common.Hash) (*types.SlimAccount, error)
+	Account(hash common.Hash) (*types.StateAccount, error)
 
 	// Storage directly retrieves the storage data associated with a particular hash,
 	// within a particular account. An error will be returned if the read operation
