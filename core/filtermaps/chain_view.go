@@ -70,9 +70,6 @@ func (cv *ChainView) HeadNumber() uint64 {
 // Note that the hash of the head block is not returned because ChainView might
 // represent a view where the head block is currently being created.
 func (cv *ChainView) BlockHash(number uint64) common.Hash {
-	cv.lock.Lock()
-	defer cv.lock.Unlock()
-
 	if number > cv.headNumber {
 		panic("invalid block number")
 	}
@@ -85,9 +82,6 @@ func (cv *ChainView) BlockHash(number uint64) common.Hash {
 // consensus and therefore rendering the index with the new head will happen
 // before the hash of that new head is available.
 func (cv *ChainView) BlockId(number uint64) common.Hash {
-	cv.lock.Lock()
-	defer cv.lock.Unlock()
-
 	if number > cv.headNumber {
 		panic("invalid block number")
 	}
@@ -189,14 +183,30 @@ func (cv *ChainView) extendNonCanonical() bool {
 
 // blockHash returns the given block hash without doing the head number check.
 func (cv *ChainView) blockHash(number uint64) common.Hash {
+	cv.lock.Lock()
+	if number+uint64(len(cv.hashes)) > cv.headNumber {
+		hash := cv.hashes[cv.headNumber-number]
+		cv.lock.Unlock()
+		return hash
+	}
+	lastNumber, lastHash := cv.headNumber-uint64(len(cv.hashes)-1), cv.hashes[len(cv.hashes)-1]
+	cv.lock.Unlock()
+
+	// The block is before the known non-canonical section, so the canonical hash
+	// is valid if the last hash of the section is still canonical.
+	hash := cv.chain.GetCanonicalHash(number)
+	if cv.chain.GetCanonicalHash(lastNumber) == lastHash {
+		return hash
+	}
+	// The chain has been reorged; extend the non-canonical section.
+	cv.lock.Lock()
+	defer cv.lock.Unlock()
+
+	if !cv.extendNonCanonical() {
+		return common.Hash{}
+	}
 	if number+uint64(len(cv.hashes)) <= cv.headNumber {
-		hash := cv.chain.GetCanonicalHash(number)
-		if !cv.extendNonCanonical() {
-			return common.Hash{}
-		}
-		if number+uint64(len(cv.hashes)) <= cv.headNumber {
-			return hash
-		}
+		return hash
 	}
 	return cv.hashes[cv.headNumber-number]
 }

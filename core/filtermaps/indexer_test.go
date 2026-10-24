@@ -474,6 +474,8 @@ type testChain struct {
 	canonical []common.Hash
 	blocks    map[common.Hash]*types.Block
 	receipts  map[common.Hash]types.Receipts
+
+	receiptsHook func() // called by GetReceiptsByHash if set
 }
 
 func (ts *testSetup) newTestChain() *testChain {
@@ -516,12 +518,16 @@ func (tc *testChain) GetCanonicalHash(number uint64) common.Hash {
 
 func (tc *testChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	tc.lock.RLock()
-	defer tc.lock.RUnlock()
+	hook, block, receipts := tc.receiptsHook, tc.blocks[hash], tc.receipts[hash]
+	tc.lock.RUnlock()
 
-	if block := tc.blocks[hash]; block == nil || block.NumberU64() < tc.ts.historyCutoff.Load() {
+	if hook != nil {
+		hook()
+	}
+	if block == nil || block.NumberU64() < tc.ts.historyCutoff.Load() {
 		return nil
 	}
-	return tc.receipts[hash]
+	return receipts
 }
 
 func (tc *testChain) GetRawReceipts(hash common.Hash, number uint64) types.Receipts {
