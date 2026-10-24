@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -96,8 +97,44 @@ func (e *balTestEnv) run(t *testing.T, gen func(*BlockGen)) (*bal.BlockAccessLis
 		t.Fatal("expected non-nil block access list")
 	}
 	assertParallelEquiv(t, e.gspec, engine, blocks[0])
+	assertTracedEquiv(t, e.gspec, engine, blocks[0])
 
 	return blocks[0].AccessList(), receipts[0]
+}
+
+// assertTracedEquiv re-executes the block with a tracing wrapper around the
+// state. The wrapper must not change the access list: post-execution netting
+// reads pre-values from the concrete state either way.
+func assertTracedEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, block *types.Block) {
+	t.Helper()
+	if block.AccessList() == nil || block.BlockAccessListHash() == nil {
+		return
+	}
+	bc, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("new blockchain: %v", err)
+	}
+	defer bc.Stop()
+
+	statedb, err := bc.State()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	res, err := NewStateProcessor(bc).Process(context.Background(), block, statedb, nil, nil, vm.Config{
+		DisableParallelExecution: true,
+		Tracer:                   &tracing.Hooks{},
+	}, nil)
+	if err != nil {
+		t.Fatalf("traced process: %v", err)
+	}
+	traced, tracedHash := res.encodedAccessList()
+	if tracedHash != *block.BlockAccessListHash() {
+		printed := ""
+		if traced != nil {
+			printed = traced.PrettyPrint()
+		}
+		t.Fatalf("traced access list hash %x != committed %x\n%s", tracedHash, *block.BlockAccessListHash(), printed)
+	}
 }
 
 // assertParallelEquiv re-executes a sequentially-generated block through both
@@ -1528,6 +1565,167 @@ func TestBALPostExecutionQueueReads(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestBALPostExecutionSameIndexNetting tests that same-index netting properly demotes
+// storage writes to reads and drops balance changes when a post-execution scope
+// nets changes back to the pre-index baseline.
+func TestBALPostExecutionSameIndexNetting(t *testing.T) {
+	beneficiary := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	prior := uint256.NewInt(7)
+
+	// The forwarder contract forwards any received balance to beneficiary.
+	// bytecode: 4 zeros (retOffset, retSize, inOffset, inSize), SELFBALANCE (0x47), PUSH20 beneficiary, GAS (0x5a), CALL (0xf1)
+	var forwarderCode []byte
+	forwarderCode = append(forwarderCode, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00) // 4 zeros
+	forwarderCode = append(forwarderCode, 0x47)                                           // SELFBALANCE
+	forwarderCode = append(forwarderCode, 0x73)                                           // PUSH20
+	forwarderCode = append(forwarderCode, beneficiary.Bytes()...)
+	forwarderCode = append(forwarderCode, 0x5a) // GAS
+	forwarderCode = append(forwarderCode, 0xf1) // CALL
+	forwarderCode = append(forwarderCode, 0x50) // POP
+
+	// Override params.WithdrawalQueueAddress with our forwarder contract in the genesis alloc
+	extra := types.GenesisAlloc{
+		params.WithdrawalQueueAddress: {
+			Nonce:   1,
+			Code:    forwarderCode,
+			Balance: common.Big0,
+		},
+		beneficiary: {Balance: prior.ToBig()},
+	}
+	env := newBALTestEnv(extra)
+
+	// In the block:
+	// A withdrawal credits params.WithdrawalQueueAddress with 1 Gwei.
+	// Then during PostExecution, ProcessWithdrawalQueue calls the contract,
+	// which forwards all its balance to beneficiary.
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+		g.AddWithdrawal(&types.Withdrawal{
+			Validator: 1,
+			Address:   params.WithdrawalQueueAddress,
+			Amount:    1, // 1 Gwei
+		})
+	})
+
+	// The WithdrawalQueueAddress should have NET 0 balance change, so its balanceChanges must be empty!
+	aa := assertPresent(t, b, params.WithdrawalQueueAddress)
+	if len(aa.BalanceChanges) != 0 {
+		t.Fatalf("expected WithdrawalQueueAddress balanceChanges to be empty after netting, got: %+v", aa.BalanceChanges)
+	}
+
+	// Beneficiary should have the balance increase recorded at index 1 (post-execution index).
+	// The recorded value is the prior balance plus the forwarded 1 gwei.
+	benAA := assertPresent(t, b, beneficiary)
+	wantBal := new(uint256.Int).Add(prior, uint256.NewInt(params.GWei))
+	if len(benAA.BalanceChanges) != 1 || benAA.BalanceChanges[0].BlockAccessIndex != 1 ||
+		benAA.BalanceChanges[0].PostBalance.Cmp(wantBal) != 0 {
+		t.Fatalf("expected beneficiary balance %s at index 1, got: %+v", wantBal, benAA.BalanceChanges)
+	}
+}
+
+// TestBALPostExecutionStorageNetting verifies that across multiple post-execution system
+// calls sharing the last index, a storage write that is restored to its pre-index baseline
+// value is demoted to a storage read.
+func TestBALPostExecutionStorageNetting(t *testing.T) {
+	slot := common.HexToHash("0x01")
+	// WithdrawalQueue contract:
+	// If calldata size == 0: writes 0x42 to slot 1 (called by ProcessWithdrawalQueue).
+	// If calldata size > 0: writes 0x00 to slot 1 (called by ProcessConsolidationQueue).
+	var wqCode []byte
+	wqCode = append(wqCode, 0x36, 0x60, 0x0a, 0x57)                   // if calldatasize > 0 jump to byte 10 (0x0a)
+	wqCode = append(wqCode, 0x60, 0x42, 0x60, 0x01, 0x55, 0x00)       // slot 1 = 0x42; stop
+	wqCode = append(wqCode, 0x5b, 0x60, 0x00, 0x60, 0x01, 0x55, 0x00) // jumpdest; slot 1 = 0x00; stop
+
+	// ConsolidationQueue contract:
+	// Calls WithdrawalQueue with calldata size 1 to restore slot 1 back to 0.
+	// Stack: gas, addr, value, argsOffset, argsLength, retOffset, retLength
+	var cqCode []byte
+	cqCode = append(cqCode, 0x60, 0x00) // retLength = 0
+	cqCode = append(cqCode, 0x60, 0x00) // retOffset = 0
+	cqCode = append(cqCode, 0x60, 0x01) // argsLength = 1
+	cqCode = append(cqCode, 0x60, 0x00) // argsOffset = 0
+	cqCode = append(cqCode, 0x60, 0x00) // value = 0
+	cqCode = append(cqCode, 0x73)
+	cqCode = append(cqCode, params.WithdrawalQueueAddress.Bytes()...) // addr
+	cqCode = append(cqCode, 0x5a)                                     // gas
+	cqCode = append(cqCode, 0xf1, 0x50, 0x00)                         // call, pop, stop
+
+	extra := types.GenesisAlloc{
+		params.WithdrawalQueueAddress: {
+			Nonce:   1,
+			Code:    wqCode,
+			Balance: common.Big0,
+		},
+		params.ConsolidationQueueAddress: {
+			Nonce:   1,
+			Code:    cqCode,
+			Balance: common.Big0,
+		},
+	}
+	env := newBALTestEnv(extra)
+
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+	})
+
+	aa := assertPresent(t, b, params.WithdrawalQueueAddress)
+	// slot 1 must NOT be in StorageChanges
+	for _, sc := range aa.StorageChanges {
+		if sc.Slot.Uint64() == 1 {
+			t.Fatalf("slot 1 should be netted and not appear in storage_changes: %+v", sc)
+		}
+	}
+	// slot 1 MUST be in StorageReads
+	if !hasSlotIn(aa.StorageReads, slot) {
+		t.Fatalf("slot 1 must appear in storage_reads after demotion\n%s", b.PrettyPrint())
+	}
+}
+
+// TestBALPostExecutionKeepsPriorIndexWrite checks that netting stops at the
+// index boundary. A transaction write restored by the post-execution system
+// call stays in the access list at both indices.
+func TestBALPostExecutionKeepsPriorIndexWrite(t *testing.T) {
+	callerSlot := common.HexToHash("0x01")
+	counterSlot := common.HexToHash("0x02")
+	// SSTORE(1, CALLER); SSTORE(2, SLOAD(2) + 1); STOP
+	// SSTORE pops the key first, then the value.
+	code := []byte{
+		0x33, 0x60, 0x01, 0x55,
+		0x60, 0x02, 0x54, 0x60, 0x01, 0x01, 0x60, 0x02, 0x55,
+		0x00,
+	}
+	env := newBALTestEnv(types.GenesisAlloc{
+		params.ConsolidationQueueAddress: {
+			Nonce: 1,
+			Code:  code,
+			Storage: map[common.Hash]common.Hash{
+				callerSlot: common.BytesToHash(params.SystemAddress.Bytes()),
+			},
+			Balance: common.Big0,
+		},
+	})
+
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+		g.AddTx(env.tx(0, &params.ConsolidationQueueAddress, big.NewInt(0), 1_000_000, 0, nil))
+	})
+
+	aa := assertPresent(t, b, params.ConsolidationQueueAddress)
+	alice := common.BytesToHash(env.from.Bytes())
+	system := common.BytesToHash(params.SystemAddress.Bytes())
+	assertStorageChanges(t, aa, callerSlot, []balStorageChangeExpectation{
+		{index: 1, value: alice},
+		{index: 2, value: system},
+	})
+	assertStorageChanges(t, aa, counterSlot, []balStorageChangeExpectation{
+		{index: 1, value: common.HexToHash("0x01")},
+		{index: 2, value: common.HexToHash("0x02")},
+	})
+	if hasSlotIn(aa.StorageReads, callerSlot) || hasSlotIn(aa.StorageReads, counterSlot) {
+		t.Fatalf("restored slots must stay writes, not reads\n%s", b.PrettyPrint())
 	}
 }
 
