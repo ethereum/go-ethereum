@@ -158,7 +158,14 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, syncHistory fun
 		// Terminate the state snapshot generation if it's active
 		var (
 			start = time.Now()
-			batch = db.NewBatchWithSize((b.nodes.dbsize() + b.states.dbsize()) * 11 / 10) // extra 10% for potential pebble internal stuff
+
+			// Flush the buffer by ingesting the content as a whole if possible,
+			// bypassing the write-ahead log of the key-value store. Otherwise
+			// the large write blocks the subsequent writes until it's done.
+			//
+			// Pre-calculate the size of batch with extra 10% for potential pebble
+			// internal stuff.
+			batch = ethdb.NewIngestBatch(db, (b.nodes.dbsize()+b.states.dbsize())*11/10)
 		)
 		// Wait for the scheduled history writes and explicitly sync the history
 		// freezers to ensure all written data is persisted to disk before

@@ -21,6 +21,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -91,6 +93,10 @@ type Database struct {
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 	closed   bool            // keep track of whether we're Closed
+
+	ingestDir  string          // Directory holding the sstables to be ingested
+	ingestOpts *pebble.Options // Options for writing the sstables to be ingested
+	ingestSeq  atomic.Uint64   // Sequence number for naming the sstables to be ingested
 
 	log log.Logger // Contextual logger tracking the database path
 
@@ -354,6 +360,20 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		return nil, err
 	}
 	db.db = innerDB
+
+	// Set up the sstable ingestion. The options are copied with the defaults
+	// filled in as pebble does internally,
+	db.ingestDir = filepath.Join(file, ingestDirName)
+	db.ingestOpts = opt.Clone()
+	db.ingestOpts.EnsureDefaults()
+
+	// The leftover sstables of any interrupted ingestion are removed
+	if !readonly {
+		if err := os.RemoveAll(db.ingestDir); err != nil {
+			innerDB.Close()
+			return nil, err
+		}
+	}
 
 	db.compTimeMeter = metrics.GetOrRegisterMeter(namespace+"compact/time", nil)
 	db.compReadMeter = metrics.GetOrRegisterMeter(namespace+"compact/input", nil)
