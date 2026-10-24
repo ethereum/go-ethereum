@@ -87,6 +87,7 @@ func MakeProtocols(backend Backend, advertiseV2 bool) []p2p.Protocol {
 	if !advertiseV2 {
 		versions = []uint{SNAP1}
 	}
+	entry := newENREntry(versions)
 	protocols := make([]p2p.Protocol, len(versions))
 	for i, version := range versions {
 		protocols[i] = p2p.Protocol{
@@ -105,7 +106,7 @@ func MakeProtocols(backend Backend, advertiseV2 bool) []p2p.Protocol {
 			PeerInfo: func(id enode.ID) interface{} {
 				return backend.PeerInfo(id)
 			},
-			Attributes: []enr.Entry{&enrEntry{}},
+			Attributes: []enr.Entry{entry},
 		}
 	}
 	return protocols
