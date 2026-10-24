@@ -141,6 +141,7 @@ var (
 	// (c) Persistent state ID
 	// (d) State ID lookups, etc.
 	VerklePrefix = []byte("v")
+	PBTPrefix    = []byte("p") // PBTPrefix is VerklePrefix for the EIP-8297 partitioned binary tree
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db

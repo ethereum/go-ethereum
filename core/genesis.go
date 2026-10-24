@@ -130,7 +130,7 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 }
 
 // hashAlloc computes the state root according to the genesis specification.
-func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
+func hashAlloc(ga *types.GenesisAlloc, isUBT, isPBT bool) (common.Hash, error) {
 	// If a genesis-time verkle trie is requested, create a trie config
 	// with the verkle trie enabled so that the tree can be initialized
 	// as such.
@@ -142,10 +142,13 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 			BinTrieGroupDepth: triedb.UBTDefaults.BinTrieGroupDepth,
 		}
 	}
+	if isPBT {
+		config = &triedb.Config{PathDB: pathdb.Defaults, IsPBT: true}
+	}
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	emptyRoot := types.EmptyRootHash
-	if isUBT {
+	if isUBT || isPBT {
 		emptyRoot = types.EmptyBinaryHash
 	}
 	db := rawdb.NewMemoryDatabase()
@@ -171,7 +174,7 @@ func hashAlloc(ga *types.GenesisAlloc, isUBT bool) (common.Hash, error) {
 // generated states will be persisted into the given database.
 func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database, tracer *tracing.Hooks) (common.Hash, error) {
 	emptyRoot := types.EmptyRootHash
-	if triedb.IsUBT() {
+	if triedb.IsUBT() || triedb.IsPBT() {
 		emptyRoot = types.EmptyBinaryHash
 	}
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil))
@@ -479,9 +482,15 @@ func (g *Genesis) IsUBT() bool {
 	return g.Config.IsUBTGenesis()
 }
 
+// IsPBT indicates whether the genesis state is committed with the partitioned
+// binary tree.
+func (g *Genesis) IsPBT() bool {
+	return g.Config != nil && g.Config.IsPBT(new(big.Int).SetUint64(g.Number), g.Timestamp)
+}
+
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := hashAlloc(&g.Alloc, g.IsUBT())
+	root, err := hashAlloc(&g.Alloc, g.IsUBT(), g.IsPBT())
 	if err != nil {
 		panic(err)
 	}
@@ -635,6 +644,20 @@ func EnableUBTAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// pbtAtGenesis reports whether the given genesis, or the stored one, commits
+// the state with the partitioned binary tree.
+func pbtAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
+	if genesis != nil {
+		if genesis.Config == nil {
+			return false, errGenesisNoConfig
+		}
+		return genesis.IsPBT(), nil
+	}
+	hash := rawdb.ReadCanonicalHash(db, 0)
+	config, header := rawdb.ReadChainConfig(db, hash), rawdb.ReadHeader(db, hash, 0)
+	return config != nil && header != nil && config.IsPBT(header.Number, header.Time), nil
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.

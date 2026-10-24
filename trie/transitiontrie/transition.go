@@ -237,6 +237,9 @@ func (t *TransitionTrie) IsUBT() bool {
 	return true
 }
 
+// IsPBT returns false: the transition is towards the unified binary trie.
+func (t *TransitionTrie) IsPBT() bool { return false }
+
 // UpdateStem updates a group of values, given the stem they are using. If
 // a value already exists, it is overwritten.
 // TODO: This is Verkle-specific and requires access to private fields.
