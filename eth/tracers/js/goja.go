@@ -134,6 +134,7 @@ type jsTracer struct {
 	log         *steplog
 	frame       *callframe
 	frameResult *callframeResult
+	frameGas    []uint64 // entry gas of the open frames, for the gas used on exit
 
 	// Goja-wrapping of types prepared for JS consumption
 	logValue         goja.Value
@@ -236,12 +237,12 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage, chainCo
 
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.OnTxStart,
-			OnTxEnd:   t.OnTxEnd,
-			OnEnter:   t.OnEnter,
-			OnExit:    t.OnExit,
-			OnOpcode:  t.OnOpcode,
-			OnFault:   t.OnFault,
+			OnTxStart:  t.OnTxStart,
+			OnTxEnd:    t.OnTxEnd,
+			OnEnterV2:  t.OnEnter,
+			OnExitV2:   t.OnExit,
+			OnOpcodeV2: t.OnOpcode,
+			OnFaultV2:  t.OnFault,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -330,7 +331,7 @@ func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, 
 }
 
 // OnOpcode implements the Tracer interface to trace a single step of VM execution.
-func (t *jsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *jsTracer) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if !t.traceStep {
 		return
 	}
@@ -344,8 +345,10 @@ func (t *jsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 	log.stack.stack = scope.StackData()
 	log.contract.scope = scope
 	log.pc = pc
-	log.gas = gas
-	log.cost = cost
+	log.gas = gas.Execution
+	log.cost = cost.Execution
+	log.stateCost = cost.State
+	log.stateReservoir = gas.State
 	log.refund = t.env.StateDB.GetRefund()
 	log.depth = depth
 	log.err = err
@@ -355,7 +358,7 @@ func (t *jsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 }
 
 // OnFault implements the Tracer interface to trace an execution fault
-func (t *jsTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *jsTracer) OnFault(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
 	if t.err != nil {
 		return
 	}
@@ -383,12 +386,13 @@ func (t *jsTracer) onEnd(output []byte, gasUsed uint64, err error, reverted bool
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
+	t.frameGas = append(t.frameGas, gas.Execution)
 	if t.err != nil {
 		return
 	}
 	if depth == 0 {
-		t.onStart(from, to, vm.OpCode(typ) == vm.CREATE, input, gas, value)
+		t.onStart(from, to, vm.OpCode(typ) == vm.CREATE, input, gas.Execution, value)
 		return
 	}
 	if !t.traceFrame {
@@ -399,7 +403,8 @@ func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.A
 	t.frame.from = from
 	t.frame.to = to
 	t.frame.input = common.CopyBytes(input)
-	t.frame.gas = uint(gas)
+	t.frame.gas = uint(gas.Execution)
+	t.frame.stateGasReservoir = gas.State
 	t.frame.value = nil
 	if value != nil {
 		t.frame.value = new(big.Int).SetBytes(value.Bytes())
@@ -412,7 +417,14 @@ func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.A
 
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *jsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *jsTracer) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+	var gasUsed uint64
+	if n := len(t.frameGas); n > 0 {
+		if gas := t.frameGas[n-1]; gas > gasLeft.Execution {
+			gasUsed = gas - gasLeft.Execution
+		}
+		t.frameGas = t.frameGas[:n-1]
+	}
 	if t.err != nil {
 		return
 	}
@@ -892,12 +904,13 @@ type callframe struct {
 	toBig toBigFn
 	toBuf toBufFn
 
-	typ   string
-	from  common.Address
-	to    common.Address
-	input []byte
-	gas   uint
-	value *big.Int
+	typ               string
+	from              common.Address
+	to                common.Address
+	input             []byte
+	gas               uint
+	stateGasReservoir uint64 // EIP-8037 state gas reservoir the frame is entered with
+	value             *big.Int
 }
 
 func (f *callframe) GetType() string {
@@ -938,6 +951,10 @@ func (f *callframe) GetGas() uint {
 	return f.gas
 }
 
+func (f *callframe) GetStateGasReservoir() uint64 {
+	return f.stateGasReservoir
+}
+
 func (f *callframe) GetValue() goja.Value {
 	if f.value == nil {
 		return goja.Undefined()
@@ -957,6 +974,7 @@ func (f *callframe) setupObject() *goja.Object {
 	o.Set("getTo", f.vm.ToValue(f.GetTo))
 	o.Set("getInput", f.vm.ToValue(f.GetInput))
 	o.Set("getGas", f.vm.ToValue(f.GetGas))
+	o.Set("getStateGasReservoir", f.vm.ToValue(f.GetStateGasReservoir))
 	o.Set("getValue", f.vm.ToValue(f.GetValue))
 	return o
 }
@@ -965,7 +983,7 @@ type callframeResult struct {
 	vm    *goja.Runtime
 	toBuf toBufFn
 
-	gasUsed uint
+	gasUsed uint // gas entered with minus the gas left returned to the caller
 	output  []byte
 	err     error
 }
@@ -1006,19 +1024,23 @@ type steplog struct {
 	stack    *stackObj
 	contract *contractObj
 
-	pc     uint64
-	gas    uint64
-	cost   uint64
-	depth  int
-	refund uint64
-	err    error
+	pc             uint64
+	gas            uint64
+	cost           uint64
+	stateCost      int64  // EIP-8037 net state gas charged (or refilled, negative) by the opcode
+	stateReservoir uint64 // EIP-8037 state gas reservoir before the opcode
+	depth          int
+	refund         uint64
+	err            error
 }
 
-func (l *steplog) GetPC() uint64     { return l.pc }
-func (l *steplog) GetGas() uint64    { return l.gas }
-func (l *steplog) GetCost() uint64   { return l.cost }
-func (l *steplog) GetDepth() int     { return l.depth }
-func (l *steplog) GetRefund() uint64 { return l.refund }
+func (l *steplog) GetPC() uint64                { return l.pc }
+func (l *steplog) GetGas() uint64               { return l.gas }
+func (l *steplog) GetCost() uint64              { return l.cost }
+func (l *steplog) GetStateGasCost() int64       { return l.stateCost }
+func (l *steplog) GetStateGasReservoir() uint64 { return l.stateReservoir }
+func (l *steplog) GetDepth() int                { return l.depth }
+func (l *steplog) GetRefund() uint64            { return l.refund }
 
 func (l *steplog) GetError() goja.Value {
 	if l.err != nil {
@@ -1033,6 +1055,8 @@ func (l *steplog) setupObject() *goja.Object {
 	o.Set("getPC", l.vm.ToValue(l.GetPC))
 	o.Set("getGas", l.vm.ToValue(l.GetGas))
 	o.Set("getCost", l.vm.ToValue(l.GetCost))
+	o.Set("getStateGasCost", l.vm.ToValue(l.GetStateGasCost))
+	o.Set("getStateGasReservoir", l.vm.ToValue(l.GetStateGasReservoir))
 	o.Set("getDepth", l.vm.ToValue(l.GetDepth))
 	o.Set("getRefund", l.vm.ToValue(l.GetRefund))
 	o.Set("getError", l.vm.ToValue(l.GetError))

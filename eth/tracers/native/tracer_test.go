@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
@@ -57,10 +58,10 @@ func TestTracerStopRace(t *testing.T) {
 			tr, err := tracers.DefaultDirectory.New(s.name, &tracers.Context{}, nil, params.MainnetChainConfig)
 			require.NoError(t, err)
 
-			if s.needsFrame && tr.OnEnter != nil {
+			if s.needsFrame {
 				// Push a single top-level call frame so GetResult doesn't
 				// short-circuit before reading the interruption reason.
-				tr.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, nil, 0, big.NewInt(0))
+				tr.EmitEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, nil, tracing.Gas{}, big.NewInt(0))
 			}
 
 			stopErr := errors.New("execution timeout")
