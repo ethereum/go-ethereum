@@ -334,3 +334,38 @@ func TestServerWebsocketReadLimit(t *testing.T) {
 		})
 	}
 }
+
+type waitService struct {
+	started chan struct{}
+	done    chan struct{}
+}
+
+func (s *waitService) Wait(ctx context.Context) error {
+	close(s.started)
+	<-ctx.Done()
+	close(s.done)
+	return ctx.Err()
+}
+
+// This test checks that calls in progress on a persistent connection are
+// canceled when the connection is closed.
+func TestServerCancelCallsOnDisconnect(t *testing.T) {
+	t.Parallel()
+
+	svc := &waitService{started: make(chan struct{}), done: make(chan struct{})}
+	server := NewServer()
+	defer server.Stop()
+	if err := server.RegisterName("test", svc); err != nil {
+		t.Fatal(err)
+	}
+	client := DialInProc(server)
+	go client.Call(nil, "test_wait")
+	<-svc.started
+	client.Close()
+
+	select {
+	case <-svc.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("call context not canceled after the client disconnected")
+	}
+}
