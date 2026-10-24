@@ -75,6 +75,7 @@ type PayloadAttributes struct {
 	BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
 	SlotNumber            *uint64             `json:"slotNumber"`
 	TargetGasLimit        *uint64             `json:"targetGasLimit"`
+	InclusionList         [][]byte            `json:"inclusionListTransactions"`
 }
 
 // JSON type overrides for PayloadAttributes.
@@ -82,6 +83,7 @@ type payloadAttributesMarshaling struct {
 	Timestamp      hexutil.Uint64
 	SlotNumber     *hexutil.Uint64
 	TargetGasLimit *hexutil.Uint64
+	InclusionList  []hexutil.Bytes
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out ed_codec.go
@@ -191,6 +193,13 @@ type PayloadStatusV1 struct {
 	ValidationError *string        `json:"validationError"`
 }
 
+// PayloadStatusV2 is PayloadStatusV1 with the inclusion list verdict of EIP-7805,
+// which is only set for valid payloads.
+type PayloadStatusV2 struct {
+	PayloadStatusV1
+	InclusionListSatisfied *bool `json:"inclusionListSatisfied"`
+}
+
 type TransitionConfigurationV1 struct {
 	TerminalTotalDifficulty *hexutil.Big   `json:"terminalTotalDifficulty"`
 	TerminalBlockHash       common.Hash    `json:"terminalBlockHash"`
@@ -228,6 +237,12 @@ func (b *PayloadID) UnmarshalText(input []byte) error {
 
 type ForkChoiceResponse struct {
 	PayloadStatus PayloadStatusV1 `json:"payloadStatus"`
+	PayloadID     *PayloadID      `json:"payloadId"`
+}
+
+// ForkChoiceResponseV2 is ForkChoiceResponse with a PayloadStatusV2.
+type ForkChoiceResponseV2 struct {
+	PayloadStatus PayloadStatusV2 `json:"payloadStatus"`
 	PayloadID     *PayloadID      `json:"payloadId"`
 }
 
