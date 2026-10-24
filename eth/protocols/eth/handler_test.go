@@ -180,6 +180,46 @@ func (b *testBackend) Handle(*Peer, Packet) error {
 // Tests that block headers can be retrieved from a remote chain based on user queries.
 func TestGetBlockHeaders69(t *testing.T) { testGetBlockHeaders(t, ETH69) }
 
+func TestDecodeBlockHeadersKeepsDistinctHeaders(t *testing.T) {
+	headers := []*types.Header{
+		{
+			UncleHash:   types.EmptyUncleHash,
+			TxHash:      types.EmptyTxsHash,
+			ReceiptHash: types.EmptyReceiptsHash,
+			Difficulty:  big.NewInt(1),
+			Number:      big.NewInt(1),
+			Extra:       []byte{0x01},
+		},
+		{
+			UncleHash:   types.EmptyUncleHash,
+			TxHash:      types.EmptyTxsHash,
+			ReceiptHash: types.EmptyReceiptsHash,
+			Difficulty:  big.NewInt(2),
+			Number:      big.NewInt(2),
+			Extra:       []byte{0x02},
+		},
+	}
+	list := encodeRL(headers)
+	decoded, err := decodeBlockHeaders(&list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded) != len(headers) {
+		t.Fatalf("decoded header count mismatch: got %d want %d", len(decoded), len(headers))
+	}
+	if decoded[0] == decoded[1] {
+		t.Fatal("decoded headers alias the same object")
+	}
+	for i := range headers {
+		if decoded[i].Hash() != headers[i].Hash() {
+			t.Fatalf("header %d hash mismatch: got %x want %x", i, decoded[i].Hash(), headers[i].Hash())
+		}
+		if !bytes.Equal(decoded[i].Extra, headers[i].Extra) {
+			t.Fatalf("header %d extra mismatch: got %x want %x", i, decoded[i].Extra, headers[i].Extra)
+		}
+	}
+}
+
 func testGetBlockHeaders(t *testing.T, protocol uint) {
 	t.Parallel()
 
