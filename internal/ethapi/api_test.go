@@ -4437,6 +4437,54 @@ func TestEstimateGasAmsterdam(t *testing.T) {
 	}
 }
 
+// TestEstimateGasPrevRandaoOverride checks that a prevRandao block override is
+// honored by gas estimation even when the target header has non-zero difficulty.
+// The estimator rebuilds the block context from the header, and
+// NewEVMBlockContext only maps the header's mix digest to the context random
+// for zero-difficulty (post-merge) headers, so the override must be carried
+// into the estimator explicitly.
+func TestEstimateGasPrevRandaoOverride(t *testing.T) {
+	t.Parallel()
+
+	// Contract that succeeds only if PREVRANDAO equals 0x1234, reverting with
+	// the observed value otherwise.
+	contractCode := common.FromHex("4480600052611234146100125760206000fd5b60206000f3")
+	contractAddr := common.HexToAddress("0x00000000000000000000000000000000c0de")
+
+	var (
+		account = newTestAccount()
+		genesis = &core.Genesis{
+			Config:     params.MergedTestChainConfig,
+			Difficulty: big.NewInt(1), // non-zero difficulty despite post-merge rules
+			Alloc: types.GenesisAlloc{
+				account.addr: {Balance: big.NewInt(params.Ether)},
+				contractAddr: {Code: contractCode},
+			},
+		}
+	)
+	api := NewBlockChainAPI(newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil))
+	blockNumber := rpc.LatestBlockNumber
+	latest := &rpc.BlockNumberOrHash{BlockNumber: &blockNumber}
+	call := TransactionArgs{
+		From: &account.addr,
+		To:   &contractAddr,
+	}
+
+	// Without the override the PREVRANDAO opcode yields the block difficulty
+	// (the random is not set for a non-zero difficulty header), so the
+	// estimation must fail.
+	if _, err := api.EstimateGas(context.Background(), call, latest, nil, nil); err == nil {
+		t.Fatal("expected estimation to fail without prevRandao override")
+	}
+
+	// With the override the contract observes 0x1234 and the estimation must
+	// succeed.
+	prevRandao := common.HexToHash("0x1234")
+	if _, err := api.EstimateGas(context.Background(), call, latest, nil, &override.BlockOverrides{PrevRandao: &prevRandao}); err != nil {
+		t.Fatalf("expected estimation to succeed with prevRandao override, have %v", err)
+	}
+}
+
 // TestExecutionGasCapAmsterdam checks that after Amsterdam (EIP-8037), eth_call
 // and non-strict eth_simulateV1 may spend more than params.MaxTxGas on execution,
 // while eth_estimateGas and strict eth_simulateV1 are still bound by it.

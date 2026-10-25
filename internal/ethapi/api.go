@@ -946,12 +946,17 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if blockOverrides != nil && blockOverrides.BlobBaseFee != nil {
 		blobBaseFee = blockOverrides.BlobBaseFee.ToInt()
 	}
+	var prevRandao *common.Hash
+	if blockOverrides != nil {
+		prevRandao = blockOverrides.PrevRandao
+	}
 	opts := &gasestimator.Options{
 		Config:      b.ChainConfig(),
 		Chain:       NewChainContext(ctx, b),
 		Header:      header,
 		State:       state,
 		BlobBaseFee: blobBaseFee,
+		Random:      prevRandao,
 		ErrorRatio:  estimateGasErrorRatio,
 	}
 	// Set any required transaction default, but make sure the gas cap itself is not messed with
