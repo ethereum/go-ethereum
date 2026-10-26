@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -345,7 +346,7 @@ func TestExecutionPayloadErigonFixture(t *testing.T) {
 		Miner:                 common.HexToAddress("0x2222222222222222222222222222222222222222"),
 		StateRoot:             common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333"),
 		Transactions:          txBytes,
-		ReceiptsRoot:          byteListsRoot(receiptBytes),
+		ReceiptsRoot:          ByteListsRoot(receiptBytes),
 		Number:                99,
 		GasLimits:             GasAmounts{Regular: 30_000_000, Blob: 262144},
 		GasUsed:               GasAmounts{Regular: 42_000, Blob: 131072},
@@ -465,6 +466,28 @@ func TestInnerContainerRoots(t *testing.T) {
 	}
 	if got, want := fees.Root(), common.HexToHash("0xe1e98c0ea24eb951bece89b1deb89c40bf1d574cb58f23c80293731c35decb16"); got != want {
 		t.Errorf("BlobFeesPerGas{max, 1<<255} root %x, want %x", got, want)
+	}
+}
+
+// TestExecutionPayloadFieldCount guards the hand-written Root methods against
+// a field added to a struct but not to its active_fields configuration. The
+// container helper already panics when a Root lists more or fewer roots than
+// the configuration has fields, so with this the struct, the configuration
+// and the roots list stay in step.
+func TestExecutionPayloadFieldCount(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		value  any
+		fields int
+	}{
+		{"ExecutionPayload", ExecutionPayload{}, payloadFields.NumFields()},
+		{"ExecutionPayloadSummary", ExecutionPayloadSummary{}, payloadFields.NumFields()},
+		{"GasAmounts", GasAmounts{}, pairFields.NumFields()},
+		{"BlobFeesPerGas", BlobFeesPerGas{}, pairFields.NumFields()},
+	} {
+		if n := reflect.TypeOf(c.value).NumField(); n != c.fields {
+			t.Errorf("%s has %d fields, its configuration %d", c.name, n, c.fields)
+		}
 	}
 }
 
