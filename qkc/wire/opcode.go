@@ -26,7 +26,7 @@ package wire
 // initial peer handshake. Add opcodes as protocol operations are introduced,
 // assigning unique values within the appropriate range. Opcode ranges identify
 // operation families, not frame types: a peer command keeps its CommandOp when
-// relayed through a MasterFrame to a chain or virtual peer for dispatch.
+// relayed through a ClusterFrame to a chain or virtual peer for dispatch.
 
 // ClusterOpBase is the offset added to all cluster op values on wire.
 // Values below ClusterOpBase belong to CommandOp (P2P).
@@ -43,8 +43,8 @@ const (
 	ClusterOpConnectToChainsResponse ClusterOp = 4 + ClusterOpBase // 0x84
 )
 
-// CommandOp identifies peer command operations. They are carried in PeerFrame
-// between clusters and may be relayed inside a cluster in MasterFrame without
+// CommandOp identifies peer command operations. They are carried in P2PFrame
+// between clusters and may be relayed inside a cluster in ClusterFrame without
 // changing the opcode; the receiving Master or chain dispatches the operation.
 type CommandOp byte
 

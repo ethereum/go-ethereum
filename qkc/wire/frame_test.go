@@ -22,7 +22,6 @@ import (
 	"errors"
 	"io"
 	"math"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -74,14 +73,14 @@ func TestClusterFrameWithPeerIDRoundTrip(t *testing.T) {
 
 func TestP2PFrameRoundTrip(t *testing.T) {
 	frame := &P2PFrame{ChainID: 0x01020304, Opcode: 0x02, RPCID: 7, Payload: []byte("p2p")}
-	var encoded bytes.Buffer
-	if err := WriteP2PFrame(&encoded, frame); err != nil {
+	encoded, err := EncodeP2PFrame(frame)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if encoded.Len() != 4+frameBodyHeader+len(frame.Payload) {
-		t.Fatalf("encoded length = %d", encoded.Len())
+	if len(encoded) != chainIDSize+frameBodyHeader+len(frame.Payload) {
+		t.Fatalf("encoded length = %d", len(encoded))
 	}
-	got, err := DecodeP2PFrame(encoded.Bytes())
+	got, err := DecodeP2PFrame(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,6 +197,9 @@ func TestFrameReadErrors(t *testing.T) {
 	if err := WriteClusterFrame(&buf, &ClusterFrame{ClusterPeerID: 1}); err == nil {
 		t.Fatal("direct chain codec accepted a cluster peer ID")
 	}
+	if _, err := EncodeP2PFrame(nil); err == nil {
+		t.Fatal("EncodeP2PFrame accepted a nil frame")
+	}
 }
 
 func TestFrameEOFContract(t *testing.T) {
@@ -313,18 +315,69 @@ func TestFramePayloadLimits(t *testing.T) {
 	}
 }
 
-func TestClusterFrameHeaderDoesNotAllocateBody(t *testing.T) {
-	const claimedPayloadLen = 8 << 20
-	var header [frameHeader]byte
-	binary.BigEndian.PutUint32(header[:], claimedPayloadLen)
-	var before, after runtime.MemStats
-	runtime.ReadMemStats(&before)
-	_, err := ReadClusterFrame(bytes.NewReader(header[:]), claimedPayloadLen)
-	runtime.ReadMemStats(&after)
-	if !errors.Is(err, io.ErrUnexpectedEOF) {
-		t.Fatalf("missing body error = %v, want unexpected EOF", err)
+func TestClusterFrameMaxPayload(t *testing.T) {
+	const payloadLimit = 16 << 20
+	if MaxFramePayloadLen != payloadLimit {
+		t.Fatalf("maximum payload = %d, want %d", MaxFramePayloadLen, payloadLimit)
 	}
-	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 1<<20 {
-		t.Fatalf("allocated %d bytes for a header without body", allocated)
+	payload := bytes.Repeat([]byte{0xa5}, payloadLimit+1)
+	for _, codec := range []struct {
+		name   string
+		peerID uint64
+		read   func(io.Reader, uint32) (*ClusterFrame, error)
+		write  func(io.Writer, *ClusterFrame) error
+	}{
+		{"direct", 0, ReadClusterFrame, WriteClusterFrame},
+		{"peer", 0x1122334455667788, ReadClusterFrameWithPeerID, WriteClusterFrameWithPeerID},
+	} {
+		t.Run(codec.name, func(t *testing.T) {
+			frame := &ClusterFrame{ClusterPeerID: codec.peerID, Opcode: 0x42, RPCID: 7, Payload: payload[:payloadLimit]}
+			var encoded bytes.Buffer
+			if err := codec.write(&encoded, frame); err != nil {
+				t.Fatal(err)
+			}
+			got, err := codec.read(&encoded, payloadLimit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.ClusterPeerID != frame.ClusterPeerID || got.Opcode != frame.Opcode || got.RPCID != frame.RPCID || !bytes.Equal(got.Payload, frame.Payload) {
+				t.Fatal("maximum-size frame round trip mismatch")
+			}
+			if encoded.Len() != 0 {
+				t.Fatalf("unread frame bytes = %d", encoded.Len())
+			}
+			frame.Payload = payload
+			if err := codec.write(&encoded, frame); err == nil {
+				t.Fatal("writer accepted payload above 16 MiB")
+			}
+			if encoded.Len() != 0 {
+				t.Fatal("writer emitted frame data before rejecting oversized payload")
+			}
+		})
+	}
+}
+
+func TestClusterFrameForgedLength(t *testing.T) {
+	for _, codec := range []struct {
+		name string
+		read func(io.Reader, uint32) (*ClusterFrame, error)
+	}{
+		{"direct", ReadClusterFrame},
+		{"peer", ReadClusterFrameWithPeerID},
+	} {
+		t.Run(codec.name, func(t *testing.T) {
+			for _, length := range []uint32{(16 << 20) + 1, math.MaxUint32} {
+				// Leave bytes after the header to detect reads of peer ID or body.
+				var data [frameHeader + clusterPeerIDSize + frameBodyHeader]byte
+				binary.BigEndian.PutUint32(data[:frameHeader], length)
+				r := bytes.NewReader(data[:])
+				if _, err := codec.read(r, MaxFramePayloadLen); err == nil || !strings.Contains(err.Error(), "payload too large") {
+					t.Fatalf("forged length %d error = %v, want payload too large", length, err)
+				}
+				if r.Len() != len(data)-frameHeader {
+					t.Fatalf("read beyond length header for forged length %d", length)
+				}
+			}
+		})
 	}
 }

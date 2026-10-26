@@ -31,20 +31,30 @@ import (
 const RootChainID uint32 = math.MaxUint32
 
 const (
-	opcodeSize      = 1
-	rpcIDSize       = 8
-	frameHeader     = 4 // internal TCP payload length prefix
-	frameBodyHeader = opcodeSize + rpcIDSize
+	chainIDSize       = 4
+	clusterPeerIDSize = 8
+	opcodeSize        = 1
+	rpcIDSize         = 8
+	frameHeader       = 4 // internal TCP payload length prefix
+	frameBodyHeader   = opcodeSize + rpcIDSize
 )
 
-// MaxFramePayloadLen caps internal payloads at 2 GB on every architecture.
-// The frame headers still fit in a 32-bit int at this limit.
-const MaxFramePayloadLen = 2_000_000_000
+// MaxFramePayloadLen caps internal frame payloads at 16 MiB to bound upfront
+// allocations while accommodating payloads relayed from devp2p messages.
+// External messages must separately obey the devp2p limit, including P2P frame
+// headers. Larger internal data, such as block lists for sync, must be split
+// by size at the protocol level.
+const MaxFramePayloadLen = 16 << 20
 
-// ClusterFrame is the common frame used by BaseConn for internal cluster
-// communication. ClusterPeerID routes traffic through a virtual peer connection
-// on Master↔chain links; it is zero for ordinary cluster traffic and is omitted
-// entirely on direct chain↔chain links.
+// ClusterFrame carries one internal TCP message between cluster processes.
+//
+// Wire layout:
+//
+//	[4B payload_len][8B cluster_peer_id, Master↔chain only][1B opcode][8B rpc_id][payload]
+//
+// payload_len counts only payload. ClusterPeerID routes traffic through a
+// virtual peer connection on Master↔chain links; it is zero for ordinary
+// cluster traffic and is omitted entirely on direct chain↔chain links.
 //
 // The codec selected for the connection determines whether ClusterPeerID is
 // present on the wire.
@@ -111,12 +121,8 @@ func readClusterFrame(r io.Reader, maxPayloadLen uint32, hasPeerID bool) (*Clust
 		}
 	}
 
-	bodyLen := frameBodyHeader + int(payloadLen)
-	body, err := io.ReadAll(io.LimitReader(r, int64(bodyLen)))
-	if len(body) != bodyLen {
-		if err == nil {
-			err = io.ErrUnexpectedEOF
-		}
+	body := make([]byte, frameBodyHeader+int(payloadLen))
+	if _, err := io.ReadFull(r, body); err != nil {
 		return nil, fmt.Errorf("reading cluster frame body (payload_len=%d): %w", payloadLen, normalizeTruncatedEOF(err))
 	}
 	frame.Opcode = body[0]
@@ -136,20 +142,20 @@ func writeClusterFrame(w io.Writer, frame *ClusterFrame, withPeerID bool) error 
 		return errors.New("payload too large")
 	}
 
-	body := make([]byte, frameBodyHeader+len(frame.Payload))
-	body[0] = frame.Opcode
-	binary.BigEndian.PutUint64(body[1:frameBodyHeader], frame.RPCID)
-	copy(body[frameBodyHeader:], frame.Payload)
 	extra := 0
 	if withPeerID {
-		extra = 8
+		extra = clusterPeerIDSize
 	}
-	buf := make([]byte, frameHeader+extra+len(body))
+	buf := make([]byte, frameHeader+extra+frameBodyHeader+len(frame.Payload))
 	binary.BigEndian.PutUint32(buf[:frameHeader], uint32(len(frame.Payload)))
+	offset := frameHeader
 	if withPeerID {
-		binary.BigEndian.PutUint64(buf[frameHeader:frameHeader+8], frame.ClusterPeerID)
+		binary.BigEndian.PutUint64(buf[offset:offset+clusterPeerIDSize], frame.ClusterPeerID)
+		offset += clusterPeerIDSize
 	}
-	copy(buf[frameHeader+extra:], body)
+	buf[offset] = frame.Opcode
+	binary.BigEndian.PutUint64(buf[offset+opcodeSize:offset+frameBodyHeader], frame.RPCID)
+	copy(buf[offset+frameBodyHeader:], frame.Payload)
 	_, err := w.Write(buf)
 	return err
 }
@@ -159,38 +165,41 @@ func writeClusterFrame(w io.Writer, frame *ClusterFrame, withPeerID bool) error 
 // The returned Payload aliases data. Copy the payload if it must survive
 // changes to or reuse of the input buffer.
 func DecodeP2PFrame(data []byte) (*P2PFrame, error) {
-	if len(data) < 4+frameBodyHeader {
-		return nil, fmt.Errorf("P2P frame too short: %d < %d", len(data), 4+frameBodyHeader)
+	if len(data) < chainIDSize+frameBodyHeader {
+		return nil, fmt.Errorf("P2P frame too short: %d < %d", len(data), chainIDSize+frameBodyHeader)
 	}
 
-	body := data[4:]
+	body := data[chainIDSize:]
 	return &P2PFrame{
-		ChainID: binary.BigEndian.Uint32(data[:4]),
+		ChainID: binary.BigEndian.Uint32(data[:chainIDSize]),
 		Opcode:  body[0],
 		RPCID:   binary.BigEndian.Uint64(body[1:frameBodyHeader]),
 		Payload: body[frameBodyHeader:],
 	}, nil
 }
 
-// WriteP2PFrame writes one external cluster↔cluster message payload. The caller
-// enforces the devp2p message size limit and sends these bytes as one message;
-// this codec adds no length prefix.
-func WriteP2PFrame(w io.Writer, frame *P2PFrame) error {
+// EncodeP2PFrame encodes one external cluster↔cluster message payload. The
+// caller enforces the devp2p message size limit; this codec adds no length
+// prefix.
+func EncodeP2PFrame(frame *P2PFrame) ([]byte, error) {
 	if frame == nil {
-		return errors.New("nil P2P frame")
+		return nil, errors.New("nil P2P frame")
 	}
-	if uint64(len(frame.Payload)) > math.MaxUint32 {
-		return errors.New("payload too large")
-	}
+	buf := make([]byte, chainIDSize+frameBodyHeader+len(frame.Payload))
+	binary.BigEndian.PutUint32(buf[:chainIDSize], frame.ChainID)
+	buf[chainIDSize] = frame.Opcode
+	binary.BigEndian.PutUint64(buf[chainIDSize+opcodeSize:chainIDSize+frameBodyHeader], frame.RPCID)
+	copy(buf[chainIDSize+frameBodyHeader:], frame.Payload)
+	return buf, nil
+}
 
-	body := make([]byte, frameBodyHeader+len(frame.Payload))
-	body[0] = frame.Opcode
-	binary.BigEndian.PutUint64(body[1:frameBodyHeader], frame.RPCID)
-	copy(body[frameBodyHeader:], frame.Payload)
-	buf := make([]byte, 4+len(body))
-	binary.BigEndian.PutUint32(buf[:4], frame.ChainID)
-	copy(buf[4:], body)
-	_, err := w.Write(buf)
+// WriteP2PFrame writes one P2P frame to w.
+func WriteP2PFrame(w io.Writer, frame *P2PFrame) error {
+	buf, err := EncodeP2PFrame(frame)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(buf)
 	return err
 }
 
