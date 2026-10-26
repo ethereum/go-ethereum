@@ -107,6 +107,7 @@ var (
 		utils.MemoryLimitFlag,
 		utils.GOGCFlag,
 		utils.CryptoKZGFlag,
+		utils.CryptoKZGLazyFlag,
 		utils.ListenPortFlag,
 		utils.DiscoveryPortFlag,
 		utils.MaxPeersFlag,

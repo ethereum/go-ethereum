@@ -230,10 +230,12 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// The initialization of the KZG library can take up to 2 seconds
 	// We start this here in parallel, so it should be available
 	// once we start executing blocks. It's threadsafe.
-	go func() {
-		log.Info("Initializing the KZG library", "backend", ctx.String(utils.CryptoKZGFlag.Name))
-		kzg4844.Warmup()
-	}()
+	if !ctx.Bool(utils.CryptoKZGLazyFlag.Name) {
+		go func() {
+			log.Info("Initializing the KZG library", "backend", ctx.String(utils.CryptoKZGFlag.Name))
+			kzg4844.Warmup()
+		}()
+	}
 	if ctx.IsSet(utils.OverrideOsaka.Name) {
 		v := ctx.Uint64(utils.OverrideOsaka.Name)
 		cfg.Eth.OverrideOsaka = &v

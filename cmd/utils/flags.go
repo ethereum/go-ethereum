@@ -573,6 +573,11 @@ var (
 		Value:    "gokzg",
 		Category: flags.PerfCategory,
 	}
+	CryptoKZGLazyFlag = &cli.BoolFlag{
+		Name:     "crypto.kzg.lazy",
+		Usage:    "Initialize the KZG library on first use instead of at startup (speeds up test nodes without blobs)",
+		Category: flags.PerfCategory,
+	}
 
 	// Miner settings
 	MinerGasLimitFlag = &cli.Uint64Flag{
