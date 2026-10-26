@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"runtime"
 	"slices"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -246,15 +248,50 @@ func encodeTransactions(txs []*types.Transaction) [][]byte {
 }
 
 func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
-	var txs = make([]*types.Transaction, len(enc))
-	for i, encTx := range enc {
+	var (
+		txs     = make([]*types.Transaction, len(enc))
+		workers = min(runtime.GOMAXPROCS(0), len(enc)/decodeBatchSize)
+	)
+	if workers < 2 {
+		if err := decodeRange(enc, txs, 0, len(enc)); err != nil {
+			return nil, err
+		}
+		return txs, nil
+	}
+	// Each worker decodes a contiguous run and stops at its first error, so the
+	// first failed run holds the lowest failing index.
+	var (
+		errs  = make([]error, workers)
+		chunk = (len(enc) + workers - 1) / workers
+		wg    sync.WaitGroup
+	)
+	for w := range workers {
+		wg.Go(func() {
+			errs[w] = decodeRange(enc, txs, w*chunk, min((w+1)*chunk, len(enc)))
+		})
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	return txs, nil
+}
+
+// decodeBatchSize is the fewest transactions worth handing to a decode worker.
+const decodeBatchSize = 32
+
+// decodeRange decodes enc[from:to] into txs.
+func decodeRange(enc [][]byte, txs []*types.Transaction, from, to int) error {
+	for i := from; i < to; i++ {
 		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encTx); err != nil {
-			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
+		if err := tx.UnmarshalBinary(enc[i]); err != nil {
+			return fmt.Errorf("invalid transaction %d: %v", i, err)
 		}
 		txs[i] = &tx
 	}
-	return txs, nil
+	return nil
 }
 
 // ExecutableDataToBlock constructs a block from executable data.
