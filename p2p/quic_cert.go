@@ -115,6 +115,7 @@ func generateQUICCert(notBefore time.Time) (*tls.Certificate, error) {
 		SerialNumber: serial,
 		NotBefore:    notBefore,
 		NotAfter:     notBefore.Add(quicCertValidity),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
 	if err != nil {
