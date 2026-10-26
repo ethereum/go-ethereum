@@ -26,10 +26,27 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
+
+func TestQKCDisablesParallelExecution(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	config.AmsterdamTime = new(uint64)
+	block := types.NewBlockWithHeader(&types.Header{
+		Number: big.NewInt(1),
+		Time:   1,
+	}).WithAccessList(new(bal.BlockAccessList))
+	if !supportsParallelExecution(block, &config, false, false, false) {
+		t.Fatal("Amsterdam block with a BAL should support parallel execution")
+	}
+	config.QuarkChain = &params.QuarkChainConfig{}
+	if supportsParallelExecution(block, &config, false, false, false) {
+		t.Fatal("QKC block must use sequential execution even with Amsterdam and a BAL")
+	}
+}
 
 func TestCheckDepositOrder(t *testing.T) {
 	var (

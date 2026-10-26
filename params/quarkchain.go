@@ -36,6 +36,13 @@ const (
 	// MaxCrossShardTxGas caps a message's destination gas budget, including
 	// XShardSendGas. It matches half of QuarkChain's default 12,000,000 block gas limit.
 	MaxCrossShardTxGas uint64 = 6_000_000
+
+	// XShardGasLimitDivisor sets the cross-shard gas limit of a shard block, the
+	// gas reserved for its deposits, to its gas limit over this divisor.
+	XShardGasLimitDivisor uint64 = 2
+
+	// RootCoinbaseShardID is the shard the root chain pays its coinbase to.
+	RootCoinbaseShardID uint32 = 0
 )
 
 // QuarkChainConfig is the configuration of a QuarkChain shard chain. Its
