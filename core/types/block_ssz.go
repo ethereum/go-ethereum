@@ -122,7 +122,7 @@ func (p *ExecutionPayload) Summary() *ExecutionPayloadSummary {
 		ParentHash:            p.ParentHash,
 		Miner:                 p.Miner,
 		StateRoot:             p.StateRoot,
-		TransactionsRoot:      byteListsRoot(p.Transactions),
+		TransactionsRoot:      ByteListsRoot(p.Transactions),
 		ReceiptsRoot:          p.ReceiptsRoot,
 		Number:                p.Number,
 		GasLimits:             p.GasLimits,
@@ -131,7 +131,7 @@ func (p *ExecutionPayload) Summary() *ExecutionPayloadSummary {
 		ExtraData:             p.ExtraData,
 		MixHash:               p.MixHash,
 		BaseFeesPerGas:        p.BaseFeesPerGas,
-		WithdrawalsRoot:       byteListsRoot(p.Withdrawals),
+		WithdrawalsRoot:       ByteListsRoot(p.Withdrawals),
 		ExcessGas:             p.ExcessGas,
 		ParentBeaconBlockRoot: p.ParentBeaconBlockRoot,
 		RequestsHash:          p.RequestsHash,
@@ -207,10 +207,12 @@ func extraDataRoot(data []byte) [32]byte {
 	return ssz.MixInLength(ssz.Merkleize(ssz.Pack(data), 1), uint64(len(data)))
 }
 
-// byteListsRoot computes the root of a ProgressiveList[ProgressiveByteList]
-// field from its elements' bytes, the type of the transactions, withdrawals
-// and receipts lists.
-func byteListsRoot(elems [][]byte) common.Hash {
+// ByteListsRoot computes the root of a ProgressiveList[ProgressiveByteList]
+// from its elements' bytes, the type of the transactions, withdrawals and
+// receipts lists of ExecutionPayload. The receipts are not part of the
+// payload, so the code that fills ReceiptsRoot from a block's receipts uses
+// it from outside.
+func ByteListsRoot(elems [][]byte) common.Hash {
 	roots := make([][32]byte, len(elems))
 	for i, elem := range elems {
 		roots[i] = ssz.HashTreeRootProgressiveBytes(elem)
