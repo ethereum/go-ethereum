@@ -97,6 +97,18 @@ func (h *hasher) hash(n node, force bool) []byte {
 		// hash nodes don't have children, so they're left as were
 		return n
 
+	case *expiredNode:
+		// Return the original subtree hash that was cached when the
+		// expired node was decoded. The parent node references this
+		// hash, so we must return the same value to keep the Merkle
+		// root consistent.
+		if n.cachedHash != nil {
+			return n.cachedHash
+		}
+		// Fallback: hash the marker blob (should not happen in practice
+		// because decodeNodeUnsafe always provides the hash).
+		return h.hashData(encodeExpiredNodeBlob(n.offset, n.size, n.subpath))
+
 	default:
 		panic(fmt.Errorf("unexpected node type, %T", n))
 	}
@@ -214,6 +226,8 @@ func (h *hasher) proofHash(original node) []byte {
 		return bytes.Clone(h.encodeShortNode(n))
 	case *fullNode:
 		return bytes.Clone(h.encodeFullNode(n))
+	case *expiredNode:
+		return encodeExpiredNodeBlob(n.offset, n.size, n.subpath)
 	default:
 		panic(fmt.Errorf("unexpected node type, %T", original))
 	}
