@@ -303,11 +303,18 @@ func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, readL
 		return conn.WriteMessage(websocket.TextMessage, buf)
 	}
 	// Every frame is one message, so it can be read in one go and checked once.
+	var wc *websocketCodec
 	readFrame := func() ([]byte, error) {
 		_, frame, err := conn.ReadMessage()
+		if err != nil {
+			// Read errors are permanent: the peer closed the connection or it broke,
+			// so nothing can be delivered anymore. Closing the codec right away lets
+			// clientConn.close cancel calls still running on this connection.
+			wc.close()
+		}
 		return frame, err
 	}
-	wc := &websocketCodec{
+	wc = &websocketCodec{
 		jsonCodec:    newFuncCodec(conn, encodeMsg, encodeBatch, nil, readFrame),
 		conn:         conn,
 		pingReset:    make(chan struct{}, 1),

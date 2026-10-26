@@ -282,6 +282,47 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 	}
 }
 
+// This test checks that a call still running on a websocket connection is canceled
+// when the client disconnects.
+func TestWebsocketDisconnectCancelsCall(t *testing.T) {
+	t.Parallel()
+
+	var (
+		srv     = NewServer()
+		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+		service = &blockingTestService{
+			started:  make(chan struct{}),
+			canceled: make(chan struct{}),
+			release:  make(chan struct{}),
+		}
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+	defer close(service.release) // ends the call on failure so that httpsrv.Close returns
+
+	if err := srv.RegisterName("test", service); err != nil {
+		t.Fatal(err)
+	}
+	client, err := DialWebsocket(context.Background(), wsURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go client.Call(nil, "test_wait")
+	select {
+	case <-service.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("call did not start")
+	}
+	client.Close()
+
+	select {
+	case <-service.canceled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("call was not canceled after the client disconnected")
+	}
+}
+
 // wsPingTestServer runs a WebSocket server which accepts a single subscription request.
 // When a value arrives on sendPing, the server sends a ping frame, waits for a matching
 // pong and finally delivers a single subscription result.

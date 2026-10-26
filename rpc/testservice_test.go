@@ -227,3 +227,19 @@ type largeRespService struct {
 func (x largeRespService) LargeResp() string {
 	return strings.Repeat("x", x.length)
 }
+
+// blockingTestService has a method that blocks until its call context is canceled.
+type blockingTestService struct {
+	started  chan struct{} // closed when the call starts running
+	canceled chan struct{} // closed when the call sees its context canceled
+	release  chan struct{} // closed by the test to end the call without cancellation
+}
+
+func (s *blockingTestService) Wait(ctx context.Context) {
+	close(s.started)
+	select {
+	case <-ctx.Done():
+		close(s.canceled)
+	case <-s.release:
+	}
+}
