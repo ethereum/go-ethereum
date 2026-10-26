@@ -454,10 +454,28 @@ func (b *Block) Size() uint64 {
 	if size := b.size.Load(); size > 0 {
 		return size
 	}
-	c := writeCounter(0)
-	rlp.Encode(&c, b)
-	b.size.Store(uint64(c))
-	return uint64(c)
+	size := b.encodedSize()
+	b.size.Store(size)
+	return size
+}
+
+// encodedSize counts the block's encoding using the sizes the transactions
+// already know, instead of encoding them again.
+func (b *Block) encodedSize() uint64 {
+	var txs uint64
+	for _, tx := range b.transactions {
+		if tx.Type() == LegacyTxType {
+			txs += tx.Size()
+		} else {
+			// typed transactions are wrapped in a byte string, whose header
+			// has the same length as a list header
+			txs += rlp.ListSize(tx.Size())
+		}
+	}
+	// Encode the rest with an empty transaction list, then swap in the real one
+	enc, _ := rlp.EncodeToBytes(&extblock{Header: b.header, Uncles: b.uncles, Withdrawals: b.withdrawals})
+	_, content, _, _ := rlp.Split(enc)
+	return rlp.ListSize(uint64(len(content)) - 1 + rlp.ListSize(txs))
 }
 
 // SanityCheck can be used to prevent that unbounded fields are
