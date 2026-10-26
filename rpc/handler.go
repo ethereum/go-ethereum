@@ -329,6 +329,9 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 			cancel()
 			responded.Do(func() {
 				responseError = errors.New(errMsgTimeout)
+				if msg.isNotification() {
+					return
+				}
 				writeCtx, _, writeSpanEnd := telemetry.StartSpanWithTracer(outerCtx, h.tracer(), "rpc.writeJSON")
 				resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
 				err := h.conn.writeJSON(writeCtx, resp, true)
