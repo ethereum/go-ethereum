@@ -253,6 +253,9 @@ func (s *modernSigner) supportsType(txtype byte) bool {
 
 func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
 	tt := tx.Type()
+	if tt == DepositTxType {
+		return tx.inner.(*DepositTx).From, nil
+	}
 	if !s.supportsType(tt) {
 		return common.Address{}, ErrTxTypeNotSupported
 	}

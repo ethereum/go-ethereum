@@ -61,6 +61,12 @@ type ValidationFunction func(tx *types.Transaction, head *types.Header, signer t
 // This check is public to allow different transaction pools to check the basic
 // rules without duplicating code and running the risk of missed updates.
 func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types.Signer, opts *ValidationOptions) error {
+	// Reject cross-shard deposits, which are not signed: only the consensus
+	// layer may include them in a block, as it checks them against the source
+	// shards. This guards the pool, deposits being no consensus concern here.
+	if tx.Type() == types.DepositTxType {
+		return fmt.Errorf("%w: deposit tx", core.ErrTxTypeNotSupported)
+	}
 	// Ensure transactions not implemented by the calling pool are rejected
 	if opts.Accept&(1<<tx.Type()) == 0 {
 		return fmt.Errorf("%w: tx type %v not supported by this pool", core.ErrTxTypeNotSupported, tx.Type())

@@ -66,6 +66,10 @@ func (p *StateProcessor) chainConfig() *params.ChainConfig {
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
 func (p *StateProcessor) Process(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config, execIndex *atomic.Int64) (*ProcessResult, error) {
+	// Cross-shard deposits run before the other transactions, on either path.
+	if err := checkDepositOrder(block.Transactions()); err != nil {
+		return nil, err
+	}
 	if supportsParallelExecution(block, p.chainConfig(), statedb.Witness() != nil, cfg.Tracer != nil, cfg.DisableParallelExecution) {
 		return p.processParallel(ctx, block, statedb, jumpDestCache, precompileCache, cfg)
 	}
@@ -76,7 +80,11 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		blockHash   = block.Hash()
 		blockNumber = block.Number()
 		allLogs     []*types.Log
-		gp          = NewGasPool(block.GasLimit())
+
+		// TODO(qkc): check the cross-shard deposits of the block: their gas must
+		// fit the per-block cross-shard gas budget, and they must be the ones the
+		// cursor in the extra data points to, in order.
+		gp = NewGasPool(block.GasLimit())
 
 		// The receipts are digested on a pipeline of their own, fed as the
 		// transactions finish, so the block bloom and the receipt root are
