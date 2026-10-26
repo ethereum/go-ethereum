@@ -338,15 +338,6 @@ func executableDataToBlock(data ExecutableData, txs []*types.Transaction, versio
 			return nil, fmt.Errorf("invalid versionedHash at %v: %v blobHash: %v", i, versionedHashes[i], blobHashes[i])
 		}
 	}
-	// Only set withdrawalsRoot if it is non-nil. This allows CLs to use
-	// ExecutableData before withdrawals are enabled by marshaling
-	// Withdrawals as the json null value.
-	var withdrawalsRoot *common.Hash
-	if data.Withdrawals != nil {
-		h := types.DeriveSha(types.Withdrawals(data.Withdrawals), trie.NewStackTrie(nil))
-		withdrawalsRoot = &h
-	}
-
 	var requestsHash *common.Hash
 	if requests != nil {
 		h := types.CalcRequestsHash(requests)
@@ -369,7 +360,6 @@ func executableDataToBlock(data ExecutableData, txs []*types.Transaction, versio
 		UncleHash:           types.EmptyUncleHash,
 		Coinbase:            data.FeeRecipient,
 		Root:                data.StateRoot,
-		TxHash:              types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
 		ReceiptHash:         data.ReceiptsRoot,
 		Bloom:               types.BytesToBloom(data.LogsBloom),
 		Difficulty:          common.Big0,
@@ -380,7 +370,6 @@ func executableDataToBlock(data ExecutableData, txs []*types.Transaction, versio
 		BaseFee:             data.BaseFeePerGas,
 		Extra:               data.ExtraData,
 		MixDigest:           data.Random,
-		WithdrawalsHash:     withdrawalsRoot,
 		ExcessBlobGas:       data.ExcessBlobGas,
 		BlobGasUsed:         data.BlobGasUsed,
 		ParentBeaconRoot:    beaconRoot,
@@ -388,8 +377,12 @@ func executableDataToBlock(data ExecutableData, txs []*types.Transaction, versio
 		SlotNumber:          data.SlotNumber,
 		BlockAccessListHash: blockAccessListHash,
 	}
+	// The transaction and withdrawal roots are derived from the body. Only
+	// withdrawals that are non-nil get a root, which allows CLs to use
+	// ExecutableData before withdrawals are enabled by marshaling Withdrawals
+	// as the json null value.
 	body := types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}
-	return types.NewBlockWithHeader(header).WithBody(body), nil
+	return types.NewBlockFromBody(header, body, trie.NewStackTrie(nil)), nil
 }
 
 // attachAccessList decodes the block access list carried by the executable data
