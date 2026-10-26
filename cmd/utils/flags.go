@@ -2124,15 +2124,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.String(CryptoKZGFlag.Name) != "gokzg" && ctx.String(CryptoKZGFlag.Name) != "ckzg" {
 		Fatalf("--%s flag must be 'gokzg' or 'ckzg'", CryptoKZGFlag.Name)
 	}
-	// The initialization of the KZG library can take up to 2 seconds
-	// We start this here in parallel, so it should be available
-	// once we start executing blocks. It's threadsafe.
-	go func() {
-		log.Info("Initializing the KZG library", "backend", ctx.String(CryptoKZGFlag.Name))
-		if err := kzg4844.UseCKZG(ctx.String(CryptoKZGFlag.Name) == "ckzg"); err != nil {
-			Fatalf("Failed to set KZG library implementation to %s: %v", ctx.String(CryptoKZGFlag.Name), err)
-		}
-	}()
+	if err := kzg4844.SelectCKZG(ctx.String(CryptoKZGFlag.Name) == "ckzg"); err != nil {
+		Fatalf("Failed to set KZG library implementation to %s: %v", ctx.String(CryptoKZGFlag.Name), err)
+	}
 
 	// VM tracing config.
 	if ctx.IsSet(VMTraceFlag.Name) {
