@@ -28,13 +28,13 @@ import (
 
 const (
 	keccakCacheBits     = 17 // 128K entries, about 16 MB
-	keccakCacheMaxInput = 87 // longest input the cache holds
+	keccakCacheMaxInput = 85 // longest input the cache holds, sized for CREATE2 preimages
 )
 
 // keccakCacheEntry holds one input and its hash, guarded by the busy flag.
 type keccakCacheEntry struct {
 	busy atomic.Uint32
-	size uint8 // input length plus one, zero for an empty entry
+	size uint8 // input length plus one, zero marks an unused entry so it never matches the empty input
 	data [keccakCacheMaxInput]byte
 	hash common.Hash
 }
