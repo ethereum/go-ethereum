@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // ChainHeaderReader defines a small collection of methods needed to access the local
@@ -52,6 +53,12 @@ type ChainReader interface {
 
 	// GetBlock retrieves a block from the database by hash and number.
 	GetBlock(hash common.Hash, number uint64) *types.Block
+}
+
+// StakingReader provides read-only staking data at a specific parent state.
+// It is separate from ChainHeaderReader because a header-only chain has no state.
+type StakingReader interface {
+	GetLockedStakes(parent *types.Header, staker common.Address) (*uint256.Int, error)
 }
 
 // Engine is an algorithm agnostic consensus engine.
