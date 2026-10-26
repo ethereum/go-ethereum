@@ -247,6 +247,14 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	if dbErr := work.state.Error(); dbErr != nil {
 		return &newPayloadResult{err: fmt.Errorf("%w: %v", errStateReadFailure, dbErr)}
 	}
+	// The receipts were made before the block hash was known (see applyTransaction).
+	hash := block.Hash()
+	for _, receipt := range work.receipts {
+		receipt.BlockHash = hash
+		for _, l := range receipt.Logs {
+			l.BlockHash = hash
+		}
+	}
 	return &newPayloadResult{
 		block:       block,
 		fees:        totalFees(block, work.receipts),
@@ -437,12 +445,20 @@ func (miner *Miner) commitBlobTransaction(ctx context.Context, env *environment,
 }
 
 // applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
+// The receipt and its logs get an empty block hash: generateWork sets it once the block is
+// assembled.
 func (miner *Miner) applyTransaction(ctx context.Context, env *environment, tx *types.Transaction) (*types.Receipt, *bal.ConstructionBlockAccessList, error) {
 	var (
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Snapshot()
+
+		receipt    *types.Receipt
+		accessList *bal.ConstructionBlockAccessList
+		msg, err   = core.TransactionToMessage(tx, env.signer, env.header.BaseFee)
 	)
-	receipt, bal, err := core.ApplyTransaction(ctx, env.evm, env.gasPool, env.state, env.header, tx)
+	if err == nil {
+		receipt, accessList, err = core.ApplyTransactionWithEVM(ctx, msg, env.gasPool, env.state, env.header.Number, common.Hash{}, env.header.Time, tx, env.evm)
+	}
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
@@ -452,7 +468,7 @@ func (miner *Miner) applyTransaction(ctx context.Context, env *environment, tx *
 		return nil, nil, err
 	}
 	env.header.GasUsed = env.gasPool.Used()
-	return receipt, bal, nil
+	return receipt, accessList, nil
 }
 
 func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *txorder.TransactionsByPriceAndNonce, interrupt *atomic.Int32) error {
