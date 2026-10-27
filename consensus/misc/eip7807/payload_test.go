@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -157,15 +159,35 @@ func TestPayloadFromBlock(t *testing.T) {
 	}
 }
 
-// TestReferenceDump writes the fixture as JSON-RPC shaped block data, with
-// the requests, the block access list and the blob schedule the RPC does not
-// carry, for the fellowship's Python reference. That script re-encodes every
-// element from the data and recomputes the root with the SSZ executable
-// reference, so agreement checks the mapping's choices, not only the
-// hashing. It runs only when EIP7807_REFERENCE_DUMP names the file to write.
+// referenceDump renders a block as JSON-RPC shaped data, with the requests,
+// the block access list and the blob schedule the RPC does not carry, for the
+// fellowship's Python reference. That script re-encodes every element from
+// the data and recomputes the root with the SSZ executable reference, so
+// agreement checks the mapping's choices, not only the hashing.
+func referenceDump(config *params.ChainConfig, block *types.Block, receipts types.Receipts, requests [][]byte, root common.Hash) ([]byte, error) {
+	flat := make([]hexutil.Bytes, len(requests))
+	for i, r := range requests {
+		flat[i] = r
+	}
+	accessList, err := rlp.EncodeToBytes(block.AccessList())
+	if err != nil {
+		return nil, err
+	}
+	return json.MarshalIndent(map[string]any{
+		"block":             ethapi.RPCMarshalBlock(block, true, true, config),
+		"receipts":          receipts,
+		"executionRequests": flat,
+		"blockAccessList":   hexutil.Bytes(accessList),
+		"blobSchedule":      config.BlobConfig(config.LatestFork(block.Time())),
+		"root":              root,
+	}, "", " ")
+}
+
+// TestReferenceDump writes the fixture for the Python reference. It runs only
+// when EIP7807_REFERENCE_DUMP names the directory to write into.
 func TestReferenceDump(t *testing.T) {
-	path := os.Getenv("EIP7807_REFERENCE_DUMP")
-	if path == "" {
+	dir := os.Getenv("EIP7807_REFERENCE_DUMP")
+	if dir == "" {
 		t.Skip("EIP7807_REFERENCE_DUMP not set")
 	}
 	config, block, receipts, requests := fixture(nil)
@@ -177,22 +199,11 @@ func TestReferenceDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	flat := make([]hexutil.Bytes, len(requests))
-	for i, r := range requests {
-		flat[i] = r
-	}
-	dump, err := json.MarshalIndent(map[string]any{
-		"block":             ethapi.RPCMarshalBlock(block, true, true, config),
-		"receipts":          receipts,
-		"executionRequests": flat,
-		"blockAccessList":   hexutil.Bytes(p.BlockAccessList),
-		"blobSchedule":      config.BlobScheduleConfig.Cancun,
-		"root":              root,
-	}, "", " ")
+	dump, err := referenceDump(config, block, receipts, requests, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, dump, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "fixture.json"), dump, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
