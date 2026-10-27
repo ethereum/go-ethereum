@@ -1547,6 +1547,58 @@ func TestBALWithdrawalNonZeroAmountRecordsBalance(t *testing.T) {
 	}
 }
 
+// TestBALPostExecutionBalanceNetted: withdrawals and the post-execution system
+// calls share the last block access index, so a withdrawal to a predeploy whose
+// dequeue call forwards the whole balance on records no balance change.
+func TestBALPostExecutionBalanceNetted(t *testing.T) {
+	sink := common.HexToAddress("0x5157")
+	// CALL(GAS, sink, SELFBALANCE, 0, 0, 0, 0)
+	forward := append(common.FromHex("60006000600060004773"), sink.Bytes()...)
+	forward = append(forward, common.FromHex("5af15000")...)
+	env := newBALTestEnv(types.GenesisAlloc{
+		params.WithdrawalQueueAddress: {Nonce: 1, Code: forward, Balance: common.Big0},
+	})
+
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+		g.AddWithdrawal(&types.Withdrawal{Validator: 1, Address: params.WithdrawalQueueAddress, Amount: 7})
+	})
+
+	if q := assertPresent(t, b, params.WithdrawalQueueAddress); len(q.BalanceChanges) != 0 {
+		t.Fatalf("netted predeploy balance must not be recorded: %+v", q.BalanceChanges)
+	}
+	s := assertPresent(t, b, sink)
+	if len(s.BalanceChanges) != 1 || s.BalanceChanges[0].PostBalance.Cmp(uint256.NewInt(7*params.GWei)) != 0 {
+		t.Fatalf("sink balance change: %+v", s.BalanceChanges)
+	}
+}
+
+// TestBALPostExecutionStorageNetted: a slot written by one post-execution system
+// call and restored by the next one records no change, only a read.
+func TestBALPostExecutionStorageNetted(t *testing.T) {
+	// SSTORE(1, ISZERO(SLOAD(1)))
+	toggle := common.FromHex("6001541560015500")
+	// CALL(GAS, consolidation queue, 0, 0, 0, 0, 0)
+	call := append(common.FromHex("6000600060006000600073"), params.ConsolidationQueueAddress.Bytes()...)
+	call = append(call, common.FromHex("5af15000")...)
+	env := newBALTestEnv(types.GenesisAlloc{
+		params.WithdrawalQueueAddress:    {Nonce: 1, Code: call, Balance: common.Big0},
+		params.ConsolidationQueueAddress: {Nonce: 1, Code: toggle, Balance: common.Big0},
+	})
+
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+	})
+
+	q := assertPresent(t, b, params.ConsolidationQueueAddress)
+	if len(q.StorageChanges) != 0 {
+		t.Fatalf("netted slot must not be recorded as a change: %+v", q.StorageChanges)
+	}
+	if !hasSlotIn(q.StorageReads, common.BigToHash(big.NewInt(1))) {
+		t.Fatalf("netted slot must be recorded as a read: %+v", q.StorageReads)
+	}
+}
+
 // ============================== EIP-7702 authority ==============================
 
 // TestBALAuthorityIncludedOnSetCodeTx: the authority of an EIP-7702 set-code

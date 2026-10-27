@@ -65,6 +65,24 @@ func (m *mutation) isDelete() bool {
 	return m.typ == deletion
 }
 
+// indexStartAccount holds the account fields as they were when the current
+// block access index began. Only the fields flagged as set are captured.
+type indexStartAccount struct {
+	balance    *uint256.Int
+	balanceSet bool
+	nonce      uint64
+	nonceSet   bool
+	code       []byte
+	codeSet    bool
+}
+
+// indexStartSlot identifies a storage slot whose value at the beginning of
+// the current block access index is captured.
+type indexStartSlot struct {
+	address common.Address
+	key     common.Hash
+}
+
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -133,6 +151,13 @@ type StateDB struct {
 
 	// Block access index (0 for pre-execution, 1..n for transactions, n+1 for post-execution)
 	blockAccessIndex uint32
+
+	// Account fields and storage slots as they were when the current block
+	// access index began, captured by the first scope at the index mutating
+	// them. Several system calls share an index, so their changes are netted
+	// against these values rather than against each other (EIP-7928).
+	indexStartAccounts map[common.Address]indexStartAccount
+	indexStartStorage  map[indexStartSlot]common.Hash
 
 	// Transient storage
 	transientStorage transientStorage
@@ -719,6 +744,8 @@ func (s *StateDB) Copy() *StateDB {
 		refund:               s.refund,
 		thash:                s.thash,
 		txIndex:              s.txIndex,
+		indexStartAccounts:   maps.Clone(s.indexStartAccounts),
+		indexStartStorage:    maps.Clone(s.indexStartStorage),
 		blockAccessIndex:     s.blockAccessIndex,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
@@ -848,11 +875,30 @@ func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMut
 	if obj != nil {
 		balance, nonce = obj.Balance(), obj.Nonce()
 	}
+	// Changes are netted against the account as it was when the block access
+	// index began. A scope restoring a field changed by an earlier scope at
+	// the same index drops the change recorded for it.
+	start := s.indexStartAccounts[addr]
+	captured := false // whether a field is captured by this scope
 	if state.balanceSet && balance.Cmp(state.balance) != 0 {
-		s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+		if !start.balanceSet {
+			start.balance, start.balanceSet, captured = state.balance, true, true
+		}
+		if balance.Cmp(start.balance) != 0 {
+			s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+		} else {
+			s.stateAccessList.RemoveBalanceChange(s.blockAccessIndex, addr)
+		}
 	}
 	if state.nonceSet && nonce != state.nonce {
-		s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
+		if !start.nonceSet {
+			start.nonce, start.nonceSet, captured = state.nonce, true, true
+		}
+		if nonce != start.nonce {
+			s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
+		} else {
+			s.stateAccessList.RemoveNonceChange(addr, s.blockAccessIndex)
+		}
 	}
 	if state.codeSet {
 		var code []byte
@@ -860,8 +906,41 @@ func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMut
 			code = obj.Code()
 		}
 		if !bytes.Equal(code, state.code) {
-			s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
+			if !start.codeSet {
+				start.code, start.codeSet, captured = state.code, true, true
+			}
+			if !bytes.Equal(code, start.code) {
+				s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
+			} else {
+				s.stateAccessList.RemoveCodeChange(addr, s.blockAccessIndex)
+			}
 		}
+	}
+	if captured {
+		if s.indexStartAccounts == nil {
+			s.indexStartAccounts = make(map[common.Address]indexStartAccount)
+		}
+		s.indexStartAccounts[addr] = start
+	}
+}
+
+// recordStorageChange records the change of a storage slot from prev, its
+// value at the beginning of the scope, to value. Like account changes, it is
+// netted against the value the slot held when the block access index began.
+func (s *StateDB) recordStorageChange(addr common.Address, key, prev, value common.Hash) {
+	slot := indexStartSlot{address: addr, key: key}
+	start, ok := s.indexStartStorage[slot]
+	if !ok {
+		if s.indexStartStorage == nil {
+			s.indexStartStorage = make(map[indexStartSlot]common.Hash)
+		}
+		start = prev
+		s.indexStartStorage[slot] = start
+	}
+	if value != start {
+		s.stateAccessList.StorageWrite(s.blockAccessIndex, addr, key, value)
+	} else {
+		s.stateAccessList.RemoveStorageWrite(s.blockAccessIndex, addr, key)
 	}
 }
 
@@ -1148,6 +1227,10 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 func (s *StateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint32) {
 	s.thash = thash
 	s.txIndex = ti
+	if blockAccessIndex != s.blockAccessIndex {
+		clear(s.indexStartAccounts)
+		clear(s.indexStartStorage)
+	}
 	s.blockAccessIndex = blockAccessIndex
 }
 

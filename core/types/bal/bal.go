@@ -19,6 +19,7 @@ package bal
 import (
 	"bytes"
 	"maps"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -51,6 +52,49 @@ type ConstructionAccountAccess struct {
 	// CodeChange contains the post-state contract code of an account keyed
 	// by tx index.
 	CodeChange map[uint32][]byte `json:"codeChange,omitempty"`
+
+	// removed lists the changes dropped by the Remove* methods, so that Merge
+	// drops them from the destination list as well.
+	removed []removedChange
+}
+
+// changeKind identifies the kind of a change recorded in the access list.
+type changeKind uint8
+
+const (
+	storageChange changeKind = iota
+	balanceChange
+	nonceChange
+	codeChange
+)
+
+// removedChange identifies a change dropped by one of the Remove* methods.
+type removedChange struct {
+	kind  changeKind
+	index uint32
+	slot  common.Hash // only set for storage changes
+}
+
+// drop deletes the identified change from the account. A slot left without
+// any write is kept as a read, as it was accessed.
+func (a *ConstructionAccountAccess) drop(r removedChange) {
+	switch r.kind {
+	case storageChange:
+		if writes, ok := a.StorageWrites[r.slot]; ok {
+			delete(writes, r.index)
+			if len(writes) > 0 {
+				return
+			}
+			delete(a.StorageWrites, r.slot)
+		}
+		a.StorageReads[r.slot] = struct{}{}
+	case balanceChange:
+		delete(a.BalanceChanges, r.index)
+	case nonceChange:
+		delete(a.NonceChanges, r.index)
+	case codeChange:
+		delete(a.CodeChange, r.index)
+	}
 }
 
 // NewConstructionAccountAccess initializes the account access object.
@@ -136,6 +180,42 @@ func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint32, address common
 	b.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
 }
 
+// remove drops the identified change of an account and remembers it, so that
+// merging the list drops the change from the destination as well.
+func (b *ConstructionBlockAccessList) remove(address common.Address, r removedChange) {
+	if _, ok := b.Accounts[address]; !ok {
+		b.Accounts[address] = NewConstructionAccountAccess()
+	}
+	b.Accounts[address].drop(r)
+	b.Accounts[address].removed = append(b.Accounts[address].removed, r)
+}
+
+// RemoveStorageWrite drops the write of a storage slot at the given index,
+// keeping the slot as a read. It is used when a scope sharing a block access
+// index with earlier ones (e.g. a later system call) restores the value the
+// slot held when the index began, so nothing changed over the whole index.
+func (b *ConstructionBlockAccessList) RemoveStorageWrite(txIdx uint32, address common.Address, key common.Hash) {
+	b.remove(address, removedChange{kind: storageChange, index: txIdx, slot: key})
+}
+
+// RemoveBalanceChange drops the balance change of an account at the given
+// index, see RemoveStorageWrite.
+func (b *ConstructionBlockAccessList) RemoveBalanceChange(txIdx uint32, address common.Address) {
+	b.remove(address, removedChange{kind: balanceChange, index: txIdx})
+}
+
+// RemoveNonceChange drops the nonce change of an account at the given index,
+// see RemoveStorageWrite.
+func (b *ConstructionBlockAccessList) RemoveNonceChange(address common.Address, txIdx uint32) {
+	b.remove(address, removedChange{kind: nonceChange, index: txIdx})
+}
+
+// RemoveCodeChange drops the code change of an account at the given index,
+// see RemoveStorageWrite.
+func (b *ConstructionBlockAccessList) RemoveCodeChange(address common.Address, txIdx uint32) {
+	b.remove(address, removedChange{kind: codeChange, index: txIdx})
+}
+
 // PrettyPrint returns a human-readable representation of the access list
 func (b *ConstructionBlockAccessList) PrettyPrint() string {
 	enc := b.ToEncodingObj()
@@ -151,7 +231,8 @@ func (b *ConstructionBlockAccessList) PrettyPrint() string {
 // Typically each list covers its own tx index, so txIdx-level collisions are
 // not expected; the exception is pre/post-transition system calls, which
 // share a single tx index. In that case callers must pass block-accessList
-// in order strictly.
+// in order strictly, and the changes other removed (see RemoveStorageWrite)
+// are dropped from the local list.
 //
 // other is referenced (not deep copied), after the call both lists share
 // inner maps and other must not be mutated.
@@ -162,8 +243,13 @@ func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) 
 	for addr, otherAcc := range other.Accounts {
 		acc, ok := b.Accounts[addr]
 		if !ok {
+			// A new account has no earlier changes for the removals to drop.
+			otherAcc.removed = nil
 			b.Accounts[addr] = otherAcc
 			continue
+		}
+		for _, r := range otherAcc.removed {
+			acc.drop(r)
 		}
 		for key, writes := range otherAcc.StorageWrites {
 			existing, ok := acc.StorageWrites[key]
@@ -219,6 +305,7 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 			codes[index] = bytes.Clone(code)
 		}
 		aaCopy.CodeChange = codes
+		aaCopy.removed = slices.Clone(aa.removed)
 		res.Accounts[addr] = &aaCopy
 	}
 	return res
