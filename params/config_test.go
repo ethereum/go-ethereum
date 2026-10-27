@@ -120,6 +120,30 @@ func TestCheckCompatible(t *testing.T) {
 	}
 }
 
+// TestBPOAfterNamedFork checks that a BPO fork may be scheduled after a later
+// named fork, that BPOs stay ordered among themselves, and that the blob
+// config of the named fork does not pick up the not yet active BPO.
+func TestBPOAfterNamedFork(t *testing.T) {
+	zero, later := uint64(0), uint64(15_000)
+	bpo3 := &BlobConfig{Target: 21, Max: 32, UpdateFraction: 0x010b70de}
+
+	config := *MergedTestChainConfig
+	config.BPO1Time, config.BPO2Time, config.AmsterdamTime, config.BPO3Time = &zero, &zero, &zero, &later
+	config.BlobScheduleConfig = &BlobScheduleConfig{
+		Cancun: DefaultCancunBlobConfig,
+		Prague: DefaultPragueBlobConfig,
+		BPO1:   DefaultBPO1BlobConfig,
+		BPO2:   DefaultBPO2BlobConfig,
+		BPO3:   bpo3,
+	}
+	require.NoError(t, config.CheckConfigForkOrder())
+	require.Equal(t, DefaultBPO2BlobConfig, config.BlobConfig(config.LatestFork(0)))
+
+	config.BPO2Time = &later
+	config.BPO3Time = &zero
+	require.ErrorContains(t, config.CheckConfigForkOrder(), "bpo2 enabled at timestamp 15000, but bpo3 enabled at timestamp 0")
+}
+
 func TestConfigRules(t *testing.T) {
 	c := &ChainConfig{
 		LondonBlock:  new(big.Int),

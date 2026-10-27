@@ -909,8 +909,12 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		block     *big.Int // forks up to - and including the merge - were defined with block numbers
 		timestamp *uint64  // forks after the merge are scheduled using timestamps
 		optional  bool     // if true, the fork may be nil and next fork is still allowed
+		bpo       bool     // blob-parameter-only fork, ordered only against preceding forks
 	}
-	var lastFork fork
+	// BPO forks follow Osaka and each other, but may also be scheduled after
+	// later named forks (Amsterdam, Bogota, ...). Named forks are therefore
+	// only ordered against the previous named fork, skipping the BPOs.
+	var lastAnyFork, lastNamedFork fork
 	for _, cur := range []fork{
 		{name: "homesteadBlock", block: c.HomesteadBlock},
 		{name: "daoForkBlock", block: c.DAOForkBlock, optional: true},
@@ -932,14 +936,18 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
 		{name: "osakaTime", timestamp: c.OsakaTime, optional: true},
 		{name: "ubtTime", timestamp: c.UBTTime, optional: true},
-		{name: "bpo1", timestamp: c.BPO1Time, optional: true},
-		{name: "bpo2", timestamp: c.BPO2Time, optional: true},
-		{name: "bpo3", timestamp: c.BPO3Time, optional: true},
-		{name: "bpo4", timestamp: c.BPO4Time, optional: true},
-		{name: "bpo5", timestamp: c.BPO5Time, optional: true},
+		{name: "bpo1", timestamp: c.BPO1Time, optional: true, bpo: true},
+		{name: "bpo2", timestamp: c.BPO2Time, optional: true, bpo: true},
+		{name: "bpo3", timestamp: c.BPO3Time, optional: true, bpo: true},
+		{name: "bpo4", timestamp: c.BPO4Time, optional: true, bpo: true},
+		{name: "bpo5", timestamp: c.BPO5Time, optional: true, bpo: true},
 		{name: "amsterdam", timestamp: c.AmsterdamTime, optional: true},
 		{name: "bogota", timestamp: c.BogotaTime, optional: true},
 	} {
+		lastFork := lastNamedFork
+		if cur.bpo {
+			lastFork = lastAnyFork
+		}
 		if lastFork.name != "" {
 			switch {
 			// Non-optional forks must all be present in the chain config up to the last defined fork
@@ -971,7 +979,10 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		}
 		// If it was optional and not set, then ignore it
 		if !cur.optional || (cur.block != nil || cur.timestamp != nil) {
-			lastFork = cur
+			lastAnyFork = cur
+			if !cur.bpo {
+				lastNamedFork = cur
+			}
 		}
 	}
 
@@ -1162,7 +1173,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 // BlobConfig returns the blob config active at the provided fork. Since named
 // forks (Osaka, Amsterdam, ...) no longer carry their own blob schedule, the
 // lookup walks down from fork through the BPO chain to Prague/Cancun and returns
-// the first non-nil entry.
+// the first non-nil entry. A BPO scheduled after the activation of fork (e.g.
+// a BPO following Amsterdam) is not yet active at fork and is skipped.
 func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
 	if c.BlobScheduleConfig == nil {
 		return nil
@@ -1180,10 +1192,15 @@ func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
 		{forks.Prague, bsc.Prague},
 		{forks.Cancun, bsc.Cancun},
 	}
+	forkTime := c.Timestamp(fork)
 	for _, e := range chain {
-		if e.at <= fork && e.cfg != nil {
-			return e.cfg
+		if e.at > fork || e.cfg == nil {
+			continue
 		}
+		if t := c.Timestamp(e.at); t != nil && forkTime != nil && *t > *forkTime {
+			continue
+		}
+		return e.cfg
 	}
 	return nil
 }
