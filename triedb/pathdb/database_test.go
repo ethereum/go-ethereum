@@ -1095,6 +1095,10 @@ func TestAddCap(t *testing.T) {
 	if err := tester.verifyState(head); err != nil {
 		t.Fatalf("State is invalid, err: %v", err)
 	}
+	// The histories are written in background
+	if err := tester.db.waitWrites(); err != nil {
+		t.Fatalf("Failed to write histories, err: %v", err)
+	}
 	if err := tester.verifyHistory(); err != nil {
 		t.Fatalf("State history is invalid, err: %v", err)
 	}
