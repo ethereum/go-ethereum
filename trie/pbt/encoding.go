@@ -29,6 +29,7 @@ import (
 func serializeNode(n node, pos int) []byte {
 	switch n := n.(type) {
 	case *groupNode:
+		// A single value, the common case, is stored as its leaf record.
 		if len(n.subs) == 1 {
 			blob := append(make([]byte, 0, 2+len(n.stem)+len(n.vals[0])), tagLeaf)
 			return append(append(append(blob, n.stem...), n.subs[0]), n.vals[0]...)
