@@ -17,6 +17,14 @@
 // Package syncx contains exotic synchronization primitives.
 package syncx
 
+import (
+	"context"
+	"errors"
+)
+
+// ErrClosed is returned by LockContext if the mutex is closed.
+var ErrClosed = errors.New("mutex closed")
+
 // ClosableMutex is a mutex that can also be closed.
 // Once closed, it can never be taken again.
 type ClosableMutex struct {
@@ -34,6 +42,26 @@ func NewClosableMutex() *ClosableMutex {
 func (cm *ClosableMutex) TryLock() bool {
 	_, ok := <-cm.ch
 	return ok
+}
+
+// LockContext locks cm, waiting until it is free or ctx is done. A free mutex is
+// taken even if ctx is done. It returns ctx.Err() if ctx ends the wait, and
+// ErrClosed if the mutex is closed.
+func (cm *ClosableMutex) LockContext(ctx context.Context) error {
+	var ok bool
+	select {
+	case _, ok = <-cm.ch:
+	default:
+		select {
+		case _, ok = <-cm.ch:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if !ok {
+		return ErrClosed
+	}
+	return nil
 }
 
 // MustLock locks cm.
