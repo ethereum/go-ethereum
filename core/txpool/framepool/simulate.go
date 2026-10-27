@@ -220,7 +220,7 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 			frame := evm.TxContext.FrameContext.CurrentFrame
 			op := vm.OpCode(raw)
 			switch op {
-			case vm.GASPRICE, vm.BLOCKHASH, vm.COINBASE, vm.NUMBER, vm.PREVRANDAO, vm.GASLIMIT, vm.BASEFEE, vm.BLOBBASEFEE, vm.INVALID, vm.SELFDESTRUCT, vm.BALANCE, vm.SELFBALANCE:
+			case vm.GASPRICE, vm.BLOCKHASH, vm.COINBASE, vm.NUMBER, vm.PREVRANDAO, vm.GASLIMIT, vm.BASEFEE, vm.BLOBBASEFEE, vm.INVALID, vm.SELFDESTRUCT, vm.SETCODEFROM, vm.BALANCE, vm.SELFBALANCE:
 				reject("banned opcode " + op.String())
 			case vm.SLOTNUM:
 				if frame != prefix.RecentRootFrame || depth != 1 || scope.Address() != params.RecentRootAddress || !bytes.Equal(scope.ContractCode(), params.RecentRootCode) {

@@ -91,7 +91,7 @@ func runSimulationAlter(t *testing.T, sender common.Address, frames []types.Fram
 }
 
 func TestSimulationBannedOpcodes(t *testing.T) {
-	for _, op := range []vm.OpCode{vm.GASPRICE, vm.BLOCKHASH, vm.COINBASE, vm.TIMESTAMP, vm.NUMBER, vm.PREVRANDAO, vm.GASLIMIT, vm.BASEFEE, vm.BLOBBASEFEE, vm.SLOTNUM, vm.INVALID, vm.SELFDESTRUCT, vm.BALANCE, vm.SELFBALANCE, vm.CREATE, vm.CREATE2, vm.SSTORE, vm.GAS} {
+	for _, op := range []vm.OpCode{vm.GASPRICE, vm.BLOCKHASH, vm.COINBASE, vm.TIMESTAMP, vm.NUMBER, vm.PREVRANDAO, vm.GASLIMIT, vm.BASEFEE, vm.BLOBBASEFEE, vm.SLOTNUM, vm.INVALID, vm.SELFDESTRUCT, vm.SETCODEFROM, vm.BALANCE, vm.SELFBALANCE, vm.CREATE, vm.CREATE2, vm.SSTORE, vm.GAS} {
 		t.Run(op.String(), func(t *testing.T) {
 			p := program.New()
 			for range 7 {

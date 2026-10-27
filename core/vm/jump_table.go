@@ -103,6 +103,7 @@ func newBogotaInstructionSet() JumpTable {
 	enable8141(&instructionSet) // EIP-8141 frame transaction opcodes
 	enable7906(&instructionSet) // EIP-7906 transaction assertions
 	enable4758(&instructionSet) // EIP-4758 SENDALL replaces SELFDESTRUCT
+	enable8298(&instructionSet) // EIP-8298 SETCODEFROM
 	return validate(instructionSet)
 }
 

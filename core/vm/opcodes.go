@@ -213,6 +213,9 @@ const (
 	LOG4
 )
 
+// SETCODEFROM adopts the code of another account (EIP-8298).
+const SETCODEFROM OpCode = 0xa7
+
 // 0xaa and 0xb0 range - frame transaction operations (EIP-8141).
 const (
 	APPROVE       OpCode = 0xaa
@@ -431,6 +434,8 @@ var opCodeToString = [256]string{
 	LOG3: "LOG3",
 	LOG4: "LOG4",
 
+	SETCODEFROM: "SETCODEFROM",
+
 	// 0xaa and 0xb0 range - frame transaction operations.
 	APPROVE:       "APPROVE",
 	TXPARAM:       "TXPARAM",
@@ -631,6 +636,7 @@ var stringToOp = map[string]OpCode{
 	"LOG2":            LOG2,
 	"LOG3":            LOG3,
 	"LOG4":            LOG4,
+	"SETCODEFROM":     SETCODEFROM,
 	"APPROVE":         APPROVE,
 	"TXPARAM":         TXPARAM,
 	"FRAMEDATALOAD":   FRAMEDATALOAD,
