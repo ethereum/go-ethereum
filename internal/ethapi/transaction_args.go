@@ -144,7 +144,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 	}
 	for i, auth := range args.AuthorizationList {
 		if auth.V > 1 {
-			return fmt.Errorf("authorization %d: 'yParity' field must be 0 or 1", i)
+			return fmt.Errorf("authorization %d: %w", i, types.ErrInvalidYParity)
 		}
 	}
 

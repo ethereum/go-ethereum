@@ -410,9 +410,8 @@ func TestSetDefaultsInvalidAuthYParity(t *testing.T) {
 		Gas:                  &gas,
 		AuthorizationList:    []types.SetCodeAuthorization{{Address: addr, V: 2}},
 	}
-	want := "authorization 0: 'yParity' field must be 0 or 1"
-	if err := args.setDefaults(context.Background(), b, sidecarConfig{}); err == nil || err.Error() != want {
-		t.Fatalf("error mismatch, want %q, have %v", want, err)
+	if err := args.setDefaults(context.Background(), b, sidecarConfig{}); !errors.Is(err, types.ErrInvalidYParity) {
+		t.Fatalf("error mismatch, want %v, have %v", types.ErrInvalidYParity, err)
 	}
 }
 
