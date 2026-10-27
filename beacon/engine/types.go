@@ -269,7 +269,17 @@ func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in data.
 func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
-	block, err := executableDataToBlock(data, versionedHashes, beaconRoot, requests)
+	txs, err := DecodeTransactions(data.Transactions)
+	if err != nil {
+		return nil, err
+	}
+	return ExecutableDataToBlockWithTxs(data, txs, versionedHashes, beaconRoot, requests)
+}
+
+// ExecutableDataToBlockWithTxs is ExecutableDataToBlock for callers that already
+// decoded data.Transactions with DecodeTransactions.
+func ExecutableDataToBlockWithTxs(data ExecutableData, txs []*types.Transaction, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
+	block, err := executableDataToBlock(data, txs, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +302,11 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // for stateless execution, so it skips checking if the executable data hashes to
 // the requested hash (stateless has to *compute* the root hash, it's not given).
 func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
-	block, err := executableDataToBlock(data, versionedHashes, beaconRoot, requests)
+	txs, err := DecodeTransactions(data.Transactions)
+	if err != nil {
+		return nil, err
+	}
+	block, err := executableDataToBlock(data, txs, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		return nil, err
 	}
@@ -301,11 +315,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 
 // executableDataToBlock assembles the block without its access list body and
 // without checking the block hash.
-func executableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
-	txs, err := DecodeTransactions(data.Transactions)
-	if err != nil {
-		return nil, err
-	}
+func executableDataToBlock(data ExecutableData, txs []*types.Transaction, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
 	if len(data.ExtraData) > int(params.MaximumExtraDataSize) {
 		return nil, fmt.Errorf("invalid extradata length: %v", len(data.ExtraData))
 	}
