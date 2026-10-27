@@ -94,9 +94,6 @@ func (p *FramePool) add(tx *types.Transaction, reorg bool) error {
 	if err := p.precheck(entry); err != nil {
 		return err
 	}
-	if _, overflow := entry.maxCost.MulOverflow(uint256.NewInt(tx.Gas()), &entry.feeCap); overflow {
-		return core.ErrInsufficientFunds
-	}
 	if err := p.verifySignatures(tx); err != nil {
 		return err
 	}
@@ -244,6 +241,10 @@ func (p *FramePool) precheck(entry *frameTx) error {
 	if p.all[entry.tx.Hash()] != nil {
 		return txpool.ErrAlreadyKnown
 	}
+	// The payer's reservation is the transaction's max_fee, the upper bound
+	// of its escrow at any base fees (EIP-8141). feeCap is that budget's
+	// per-gas view, which the miner prices against the base fee.
+	entry.maxCost.Set(entry.tx.FrameMaxFee())
 	entry.feeCap.Set(uint256.MustFromBig(entry.tx.GasFeeCap()))
 	entry.tipCap.Set(uint256.MustFromBig(entry.tx.GasTipCap()))
 	old, err := p.checkReplacement(entry)
@@ -263,7 +264,7 @@ func (p *FramePool) checkReplacement(entry *frameTx) (*frameTx, error) {
 		if old.tx.Nonce() != entry.tx.Nonce() || !slices.Equal(old.tx.FrameNonceKeys(), entry.tx.FrameNonceKeys()) {
 			return nil, ErrSenderPending
 		}
-		if !p.bumped(&old.feeCap, &entry.feeCap) || !p.bumped(&old.tipCap, &entry.tipCap) {
+		if !p.bumped(&old.maxCost, &entry.maxCost) || !p.bumped(&old.tipCap, &entry.tipCap) {
 			return nil, txpool.ErrReplaceUnderpriced
 		}
 	}

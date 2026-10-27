@@ -4220,9 +4220,8 @@ func TestEIP8141(t *testing.T) {
 	signer := types.LatestSigner(&config)
 
 	frametx := &types.FrameTx{
-		ChainID:   uint256.MustFromBig(config.ChainID),
-		NonceKeys: []uint256.Int{{}},
-		Sender:    addr1,
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  addr1,
 		Frames: []types.Frame{
 			{
 				Mode:      types.ModeVerify,
@@ -4243,14 +4242,16 @@ func TestEIP8141(t *testing.T) {
 				Value:     uint256.NewInt(0),
 			},
 		},
+		// The signature hash commits to the signature's length: sign over
+		// a placeholder of the final length.
 		Signatures: types.SignatureList{{
-			Scheme: types.FrameTxSchemeSecp256k1,
-			Signer: addr1.Bytes(),
+			Scheme:    types.FrameTxSchemeSecp256k1,
+			Signer:    addr1.Bytes(),
+			Signature: make([]byte, 65),
 		}},
 		Fees: types.Fees{
+			MaxFee:               uint256.NewInt(1e16),
 			MaxPriorityFeePerGas: uint256.NewInt(2),
-			MaxFeePerGas:         uint256.MustFromBig(newGwei(5)),
-			MaxFeePerBlobGas:     uint256.NewInt(0),
 		},
 	}
 	// Sign the canonical signature hash with the sender key and fill in the
@@ -4344,18 +4345,16 @@ func TestEIP8141FrameLogsWithTracer(t *testing.T) {
 	signer := types.LatestSigner(&config)
 
 	frametx := &types.FrameTx{
-		ChainID:   uint256.MustFromBig(config.ChainID),
-		NonceKeys: []uint256.Int{{}},
-		Sender:    addr1,
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  addr1,
 		Frames: []types.Frame{
 			{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 100_000}, Value: uint256.NewInt(0)},
 			{Mode: types.ModeSender, Target: &aa, GasLimits: types.Limits{Execution: 100_000}, Value: uint256.NewInt(0)},
 		},
-		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: addr1.Bytes()}},
+		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: addr1.Bytes(), Signature: make([]byte, 65)}},
 		Fees: types.Fees{
+			MaxFee:               uint256.NewInt(1e16),
 			MaxPriorityFeePerGas: uint256.NewInt(2),
-			MaxFeePerGas:         uint256.MustFromBig(newGwei(5)),
-			MaxFeePerBlobGas:     uint256.NewInt(0),
 		},
 	}
 	sigHash := signer.Hash(types.NewTx(frametx))
@@ -4411,17 +4410,15 @@ func TestEIP8141ParallelStateReservation(t *testing.T) {
 	signer := types.LatestSigner(&config)
 
 	frametx := &types.FrameTx{
-		ChainID:   uint256.MustFromBig(config.ChainID),
-		NonceKeys: []uint256.Int{{}},
-		Sender:    addr1,
+		ChainID: uint256.MustFromBig(config.ChainID),
+		Sender:  addr1,
 		Frames: []types.Frame{
 			{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 50_000, State: gspec.GasLimit}, Value: uint256.NewInt(0)},
 		},
-		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: addr1.Bytes()}},
+		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: addr1.Bytes(), Signature: make([]byte, 65)}},
 		Fees: types.Fees{
+			MaxFee:               uint256.NewInt(1e16),
 			MaxPriorityFeePerGas: uint256.NewInt(2),
-			MaxFeePerGas:         uint256.MustFromBig(newGwei(5)),
-			MaxFeePerBlobGas:     uint256.NewInt(0),
 		},
 	}
 	sigHash := signer.Hash(types.NewTx(frametx))

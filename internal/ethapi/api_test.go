@@ -4450,19 +4450,17 @@ func TestFrameTransactionRPC(t *testing.T) {
 	)
 	config.BogotaTime = new(uint64)
 	tx := types.NewTx(&types.FrameTx{
-		ChainID:   uint256.MustFromBig(config.ChainID),
-		NonceKeys: []uint256.Int{{}},
-		NonceSeq:  3,
-		Sender:    sender,
+		ChainID:  uint256.MustFromBig(config.ChainID),
+		NonceSeq: 3,
+		Sender:   sender,
 		Frames: []types.Frame{
 			{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 5000}, Value: uint256.NewInt(0)},
 			{Mode: types.ModeSender, Target: &target, GasLimits: types.Limits{Execution: 30000, State: 100}, Value: uint256.NewInt(0), Data: []byte{0x1}},
 		},
 		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: sender.Bytes(), Signature: make([]byte, 65)}},
 		Fees: types.Fees{
+			MaxFee:               uint256.NewInt(1e12),
 			MaxPriorityFeePerGas: uint256.NewInt(2),
-			MaxFeePerGas:         uint256.NewInt(100),
-			MaxFeePerBlobGas:     uint256.NewInt(0),
 		},
 	})
 
@@ -4484,6 +4482,7 @@ func TestFrameTransactionRPC(t *testing.T) {
 	wantFields := map[string]string{
 		"from":     `"0xaa00000000000000000000000000000000000000"`,
 		"gasPrice": `"0x9"`,
+		"maxFee":   `"0xe8d4a51000"`,
 		"frames": `[{"mode":"0x1","flags":"0x3","executionGas":"0x1388","stateGas":"0x0","value":"0x0","data":"0x"},` +
 			`{"mode":"0x2","flags":"0x0","target":"0xbb00000000000000000000000000000000000000","executionGas":"0x7530","stateGas":"0x64","value":"0x0","data":"0x01"}]`,
 	}

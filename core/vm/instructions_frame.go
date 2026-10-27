@@ -47,9 +47,8 @@ type FrameContext struct {
 	NonceKeys            []uint256.Int
 	LegacyNonce          uint64
 	MaxPriorityFeePerGas *uint256.Int
-	MaxFeePerGas         *uint256.Int
-	MaxFeePerBlobGas     *uint256.Int
-	MaxCost              *uint256.Int
+	MaxFee               *uint256.Int // fee budget covering execution, state and blob gas
+	MaxCost              *uint256.Int // escrow collected from the payer on payment approval
 	SigHash              common.Hash
 	Frames               []types.Frame
 	Signatures           types.SignatureList
@@ -200,7 +199,13 @@ func FrameApprove(statedb StateDB, fc *FrameContext, budget *GasBudget, scope ui
 			if _, ok := budget.Charge(GasCosts{StateGas: stateGas}); !ok {
 				return ErrOutOfGas
 			}
-			seq := common.Hash(new(uint256.Int).SetUint64(fc.NonceSeq + 1).Bytes32())
+			// A sequential use advances each key past the transaction's
+			// sequence; a single-use one exhausts each key at MAX_NONCE_SEQ.
+			next := fc.NonceSeq
+			if next != stdmath.MaxUint64 {
+				next++
+			}
+			seq := common.Hash(new(uint256.Int).SetUint64(next).Bytes32())
 			for i := range fc.NonceKeys {
 				statedb.SetState(params.NonceManagerAddress, slots[i], seq)
 			}
@@ -283,11 +288,7 @@ func opTxParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	case 0x03:
 		scope.Stack.push(new(uint256.Int).Set(fc.MaxPriorityFeePerGas))
 	case 0x04:
-		scope.Stack.push(new(uint256.Int).Set(fc.MaxFeePerGas))
-	case 0x05:
-		scope.Stack.push(new(uint256.Int).Set(fc.MaxFeePerBlobGas))
-	case 0x06:
-		scope.Stack.push(new(uint256.Int).Set(fc.MaxCost))
+		scope.Stack.push(new(uint256.Int).Set(fc.MaxFee))
 	case 0x07:
 		pushUint(scope, uint64(len(evm.TxContext.BlobHashes)))
 	case 0x08:
@@ -309,7 +310,12 @@ func opTxParam(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		hash := types.FrameTxNonceKeysHash(fc.NonceKeys)
 		pushWord(scope, hash[:])
 	case 0x10:
-		scope.Stack.push(&fc.NonceKeys[0])
+		// The first nonce key, zero for the empty key set.
+		var key uint256.Int
+		if len(fc.NonceKeys) > 0 {
+			key.Set(&fc.NonceKeys[0])
+		}
+		scope.Stack.push(&key)
 	default:
 		return nil, errInvalidTxParam
 	}

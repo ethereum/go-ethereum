@@ -1073,6 +1073,7 @@ type RPCTransaction struct {
 	GasFeeCap           *hexutil.Big                 `json:"maxFeePerGas,omitempty"`
 	GasTipCap           *hexutil.Big                 `json:"maxPriorityFeePerGas,omitempty"`
 	MaxFeePerBlobGas    *hexutil.Big                 `json:"maxFeePerBlobGas,omitempty"`
+	MaxFee              *hexutil.Big                 `json:"maxFee,omitempty"`
 	Hash                common.Hash                  `json:"hash"`
 	Input               hexutil.Bytes                `json:"input"`
 	Nonce               hexutil.Uint64               `json:"nonce"`
@@ -1221,14 +1222,15 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			})
 		}
 		result.Signatures = tx.FrameSignatures()
-		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.MaxFee = (*hexutil.Big)(tx.FrameMaxFee().ToBig())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// The gas price of a frame transaction is its max_fee budget spread
+		// over its gas, see types.Transaction.GasFeeCap.
 		if baseFee != nil && blockHash != (common.Hash{}) {
 			result.GasPrice = (*hexutil.Big)(effectiveGasPrice(tx, baseFee))
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
-		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
 		result.BlobVersionedHashes = tx.BlobHashes()
 	}
 	return result

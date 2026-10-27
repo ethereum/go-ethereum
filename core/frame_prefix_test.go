@@ -42,14 +42,22 @@ func prefixTestEVM(sdb *state.StateDB, baseFee int64, timestamp uint64) *vm.EVM 
 	return vm.NewEVM(ctx, sdb, &config, vm.Config{})
 }
 
+// prefixTestTx builds a signed frame transaction whose max_fee budget is
+// feeCap per unit of its max_gas.
 func prefixTestTx(t *testing.T, frames []types.Frame, feeCap, tip uint64) *types.Transaction {
 	t.Helper()
 	ftx := &types.FrameTx{
-		ChainID: uint256.MustFromBig(cfg8037.ChainID), NonceKeys: []uint256.Int{{}}, Sender: senderAddr,
-		Frames:     frames,
-		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1}},
-		Fees:       types.Fees{MaxFeePerGas: uint256.NewInt(feeCap), MaxPriorityFeePerGas: uint256.NewInt(tip), MaxFeePerBlobGas: new(uint256.Int)},
+		ChainID: uint256.MustFromBig(cfg8037.ChainID), Sender: senderAddr,
+		Frames: frames,
+		// The signature hash commits to the signature's length: sign over
+		// a placeholder of the final length.
+		Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signature: make([]byte, 65)}},
 	}
+	maxGas, err := types.FrameTxMaxGas(ftx.Frames, ftx.Signatures, ftx.Sender, ftx.NonceKeys, ftx.NonceSeq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ftx.Fees = types.Fees{MaxFee: new(uint256.Int).Mul(uint256.NewInt(feeCap), uint256.NewInt(maxGas)), MaxPriorityFeePerGas: uint256.NewInt(tip)}
 	signer := types.NewBogotaSigner(cfg8037.ChainID)
 	hash := signer.Hash(types.NewTx(ftx))
 	sig, err := crypto.Sign(hash[:], senderKey)
@@ -95,10 +103,11 @@ func TestFramePrefixExecution(t *testing.T) {
 			if !sdb.GetBalance(evm.Context.Coinbase).IsZero() {
 				t.Fatal("prefix paid coinbase")
 			}
-			// No settlement: the full transaction's maximum cost remains debited.
-			want := new(uint256.Int).Sub(uint256.NewInt(1e18), new(uint256.Int).Mul(uint256.NewInt(msg.GasLimit), msg.GasFeeCap))
+			// No settlement: the whole fee budget, which prefix simulation
+			// escrows, remains debited.
+			want := new(uint256.Int).Sub(uint256.NewInt(1e18), msg.FrameMaxFee)
 			if sdb.GetBalance(senderAddr).Cmp(want) != 0 {
-				t.Fatalf("payer balance %v, want full max-cost debit %v", sdb.GetBalance(senderAddr), want)
+				t.Fatalf("payer balance %v, want full budget debit %v", sdb.GetBalance(senderAddr), want)
 			}
 		} else {
 			result, err := ApplyMessage(evm, msg, nil)
@@ -122,7 +131,7 @@ func TestFramePrefixFeeChecks(t *testing.T) {
 		prefixErr, fullErr error
 	}{
 		{"below base fee", 4, 2, nil, ErrFeeCapTooLow},
-		{"tip above cap", 4, 5, ErrTipAboveFeeCap, ErrTipAboveFeeCap},
+		{"tip above budget per gas", 10, 20, nil, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tx := prefixTestTx(t, []types.Frame{prefixVerifyFrame()}, tc.cap, tc.tip)
@@ -271,8 +280,7 @@ func TestFramePrefixIntrospection(t *testing.T) {
 		selector uint64
 		want     *uint256.Int
 	}{
-		{3, msg.GasTipCap}, {4, msg.GasFeeCap},
-		{6, new(uint256.Int).Mul(uint256.NewInt(msg.GasLimit), msg.GasFeeCap)},
+		{3, msg.GasTipCap}, {4, msg.FrameMaxFee}, {0x10, new(uint256.Int)},
 		{8, new(uint256.Int).SetBytes(msg.FrameSigHash[:])},
 		{9, uint256.NewInt(2)}, {11, uint256.NewInt(1)},
 	}

@@ -44,6 +44,7 @@ type txJSON struct {
 	MaxPriorityFeePerGas *hexutil.Big           `json:"maxPriorityFeePerGas"`
 	MaxFeePerGas         *hexutil.Big           `json:"maxFeePerGas"`
 	MaxFeePerBlobGas     *hexutil.Big           `json:"maxFeePerBlobGas,omitempty"`
+	MaxFee               *hexutil.Big           `json:"maxFee,omitempty"` // EIP-8141 fee budget of a frame transaction
 	Value                *hexutil.Big           `json:"value"`
 	Input                *hexutil.Bytes         `json:"input"`
 	AccessList           *AccessList            `json:"accessList,omitempty"`
@@ -186,9 +187,8 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Sender = &sender
 		enc.Frames = itx.Frames
 		enc.Signatures = itx.Signatures
-		enc.MaxFeePerGas = (*hexutil.Big)(itx.Fees.MaxFeePerGas.ToBig())
+		enc.MaxFee = (*hexutil.Big)(itx.Fees.MaxFee.ToBig())
 		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.Fees.MaxPriorityFeePerGas.ToBig())
-		enc.MaxFeePerBlobGas = (*hexutil.Big)(itx.Fees.MaxFeePerBlobGas.ToBig())
 		enc.BlobVersionedHashes = itx.BlobVersionedHashes
 	}
 	return json.Marshal(&enc)
@@ -545,9 +545,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
 		itx.NonceSeq = uint64(*dec.Nonce)
-		if dec.NonceKeys == nil {
-			return errors.New("missing required field 'nonceKeys' in transaction")
-		}
+		// The empty key set selects the sender's account nonce.
 		itx.NonceKeys = make([]uint256.Int, len(dec.NonceKeys))
 		for i, key := range dec.NonceKeys {
 			itx.NonceKeys[i] = uint256.Int(key)
@@ -568,17 +566,17 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if itx.Signatures == nil {
 			itx.Signatures = SignatureList{}
 		}
+		if dec.MaxFee == nil {
+			return errors.New("missing required field 'maxFee' for txdata")
+		}
+		if itx.Fees.MaxFee, overflow = uint256.FromBig((*big.Int)(dec.MaxFee)); overflow {
+			return errors.New("'maxFee' value overflows uint256")
+		}
 		if dec.MaxPriorityFeePerGas == nil {
 			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
 		}
-		itx.Fees.MaxPriorityFeePerGas = uint256.MustFromBig((*big.Int)(dec.MaxPriorityFeePerGas))
-		if dec.MaxFeePerGas == nil {
-			return errors.New("missing required field 'maxFeePerGas' for txdata")
-		}
-		itx.Fees.MaxFeePerGas = uint256.MustFromBig((*big.Int)(dec.MaxFeePerGas))
-		itx.Fees.MaxFeePerBlobGas = new(uint256.Int)
-		if dec.MaxFeePerBlobGas != nil {
-			itx.Fees.MaxFeePerBlobGas = uint256.MustFromBig((*big.Int)(dec.MaxFeePerBlobGas))
+		if itx.Fees.MaxPriorityFeePerGas, overflow = uint256.FromBig((*big.Int)(dec.MaxPriorityFeePerGas)); overflow {
+			return errors.New("'maxPriorityFeePerGas' value overflows uint256")
 		}
 		itx.BlobVersionedHashes = dec.BlobVersionedHashes
 		if itx.BlobVersionedHashes == nil {

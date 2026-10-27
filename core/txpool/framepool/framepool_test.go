@@ -173,14 +173,24 @@ func signedPoolTx(t *testing.T, senderID, payerID int, nonce, fee, tip uint64, d
 		frames = append([]types.Frame{{Mode: types.ModeVerify, Target: &target, Data: data, GasLimits: types.Limits{Execution: 10_000}, Value: new(uint256.Int)}}, frames...)
 	}
 	inner := &types.FrameTx{
-		ChainID: uint256.MustFromBig(params.AllDevChainProtocolChanges.ChainID), Sender: sender, NonceKeys: []uint256.Int{{}}, NonceSeq: nonce, Frames: frames,
-		Fees: types.Fees{MaxFeePerGas: uint256.NewInt(fee), MaxPriorityFeePerGas: uint256.NewInt(tip), MaxFeePerBlobGas: new(uint256.Int)},
+		ChainID: uint256.MustFromBig(params.AllDevChainProtocolChanges.ChainID), Sender: sender, NonceSeq: nonce, Frames: frames,
+		Fees: types.Fees{MaxPriorityFeePerGas: uint256.NewInt(tip)},
 	}
 	for _, key := range keys {
-		inner.Signatures = append(inner.Signatures, types.SignatureEntry{Scheme: types.FrameTxSchemeSecp256k1, Signer: crypto.PubkeyToAddress(key.PublicKey).Bytes()})
+		// The signature hash commits to each signature's length: sign over
+		// placeholders of the final length.
+		inner.Signatures = append(inner.Signatures, types.SignatureEntry{Scheme: types.FrameTxSchemeSecp256k1, Signer: crypto.PubkeyToAddress(key.PublicKey).Bytes(), Signature: make([]byte, 65)})
 	}
 	if alter != nil {
 		alter(inner)
+	}
+	// Unless altered, the max_fee budget is fee per unit of max_gas.
+	if inner.Fees.MaxFee == nil {
+		maxGas, err := types.FrameTxMaxGas(inner.Frames, inner.Signatures, inner.Sender, inner.NonceKeys, inner.NonceSeq)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inner.Fees.MaxFee = new(uint256.Int).Mul(uint256.NewInt(fee), uint256.NewInt(maxGas))
 	}
 	hash := types.LatestSigner(params.AllDevChainProtocolChanges).Hash(types.NewTx(inner))
 	for i, key := range keys {
@@ -197,12 +207,13 @@ func poolTxData(tx *types.Transaction) *types.FrameTx {
 	return &types.FrameTx{
 		ChainID: uint256.MustFromBig(tx.ChainId()), NonceKeys: tx.FrameNonceKeys(), NonceSeq: tx.Nonce(), Sender: *tx.FrameSender(),
 		Frames: tx.Frames(), Signatures: append(types.SignatureList(nil), tx.FrameSignatures()...),
-		Fees: types.Fees{MaxFeePerGas: uint256.MustFromBig(tx.GasFeeCap()), MaxPriorityFeePerGas: uint256.MustFromBig(tx.GasTipCap()), MaxFeePerBlobGas: new(uint256.Int)},
+		Fees: types.Fees{MaxFee: tx.FrameMaxFee(), MaxPriorityFeePerGas: uint256.MustFromBig(tx.GasTipCap())},
 	}
 }
 
+// txCost returns the payer reservation of a pool transaction: its max_fee.
 func txCost(tx *types.Transaction) *uint256.Int {
-	return new(uint256.Int).Mul(uint256.NewInt(tx.Gas()), uint256.MustFromBig(tx.GasFeeCap()))
+	return tx.FrameMaxFee()
 }
 func addPoolTx(t *testing.T, pool *FramePool, tx *types.Transaction, want error) {
 	t.Helper()
@@ -984,25 +995,24 @@ func TestDependenciesReleasedOnReplacementAndClear(t *testing.T) {
 }
 
 func TestCheckedPayerCostAndExposure(t *testing.T) {
-	sample := signedPoolTx(t, 1, 20, 0, 20, 2, nil, nil)
 	max := new(uint256.Int).SetAllOne()
-	// Leave headroom for signature-byte calldata gas while making each cost
-	// roughly two thirds of the maximum balance.
-	fee := new(uint256.Int).Div(max, uint256.NewInt(sample.Gas()*3/2))
+	// Each budget is roughly two thirds of the maximum balance.
+	budget := new(uint256.Int).Div(max, uint256.NewInt(3))
+	budget.Lsh(budget, 1)
 	pool, _, other := setupFramePool(t, 10, func(s *state.StateDB) {
 		s.SetBalance(poolAddress(t, 20), max, tracing.BalanceChangeUnspecified)
 	})
 	first := signedPoolTx(t, 1, 20, 0, 20, 2, nil, func(tx *types.FrameTx) {
-		tx.Fees.MaxFeePerGas = fee
+		tx.Fees.MaxFee = budget
 	})
 	addPoolTx(t, pool, first, nil)
 	// Each tx is individually solvent, but summing them overflows uint256.
 	second := signedPoolTx(t, 2, 20, 0, 20, 2, nil, func(tx *types.FrameTx) {
-		tx.Fees.MaxFeePerGas = fee
+		tx.Fees.MaxFee = budget
 	})
 	addPoolTx(t, pool, second, core.ErrInsufficientFunds)
 	overflow := signedPoolTx(t, 3, 20, 0, 20, 2, nil, func(tx *types.FrameTx) {
-		tx.Fees.MaxFeePerGas = max
+		tx.Fees.MaxFee = max
 	})
 	addPoolTx(t, pool, overflow, core.ErrInsufficientFunds)
 	assertLive(t, pool, first, true)

@@ -105,13 +105,14 @@ func simulate(config *params.ChainConfig, head *types.Header, statedb *state.Sta
 	result.payerBalance = new(uint256.Int).Set(statedb.GetBalance(expectedPayer))
 	deps := &result.dependencies
 	deps.add(sender, dependencyBalance|dependencyCode)
+	// The empty key set selects the sender's account nonce; every key
+	// selects a nonce manager slot (EIP-8250).
 	keys := tx.FrameNonceKeys()
+	if types.HasLegacyNonceKeys(keys) {
+		deps.add(sender, dependencyNonce)
+	}
 	for i := range keys {
-		if keys[i].IsZero() {
-			deps.add(sender, dependencyNonce)
-		} else {
-			deps.slots[storageLocation{params.NonceManagerAddress, types.FrameTxNonceSlot(sender, &keys[i])}] = common.Hash{}
-		}
+		deps.slots[storageLocation{params.NonceManagerAddress, types.FrameTxNonceSlot(sender, &keys[i])}] = common.Hash{}
 	}
 	senderHadCode := len(statedb.GetCode(sender)) != 0
 	if prefix.DeployFrame >= 0 {

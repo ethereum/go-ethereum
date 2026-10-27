@@ -127,8 +127,10 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if tx.GasTipCap().BitLen() > 256 {
 		return core.ErrTipVeryHigh
 	}
-	// Ensure gasFeeCap is greater than or equal to gasTipCap
-	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
+	// Ensure gasFeeCap is greater than or equal to gasTipCap. A frame
+	// transaction caps its total fee instead: its tip may exceed the
+	// per-gas view of that budget.
+	if tx.Type() != types.FrameTxType && tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
 		return core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly

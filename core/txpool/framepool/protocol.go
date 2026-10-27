@@ -59,18 +59,28 @@ func (p Prefix) validRootAge(head *types.Header) bool {
 
 // checkNonces compares full storage words so malformed or exhausted sequences
 // cannot pass through uint64 truncation. Protocol reads do not warm the slots.
+// The empty key set selects the sender's account nonce; a keyed set at
+// MAX_NONCE_SEQ requires every selected key to be unused (EIP-8250).
 func checkNonces(statedb *state.StateDB, tx *types.Transaction) error {
 	sender := *tx.FrameSender()
 	keys := tx.FrameNonceKeys()
+	if types.HasLegacyNonceKeys(keys) {
+		switch current := statedb.GetNonce(sender); {
+		case current > tx.Nonce():
+			return fmt.Errorf("%w: address %v, tx: %d state: %d", core.ErrNonceTooLow, sender, tx.Nonce(), current)
+		case current < tx.Nonce():
+			return fmt.Errorf("%w: address %v, tx: %d state: %d", core.ErrNonceTooHigh, sender, tx.Nonce(), current)
+		}
+		return nil
+	}
 	want := uint256.NewInt(tx.Nonce())
+	if tx.Nonce() == math.MaxUint64 {
+		want.Clear()
+	}
 	for i := range keys {
 		var current uint256.Int
-		if keys[i].IsZero() {
-			current.SetUint64(statedb.GetNonce(sender))
-		} else {
-			word := statedb.GetState(params.NonceManagerAddress, types.FrameTxNonceSlot(sender, &keys[i]))
-			current.SetBytes(word[:])
-		}
+		word := statedb.GetState(params.NonceManagerAddress, types.FrameTxNonceSlot(sender, &keys[i]))
+		current.SetBytes(word[:])
 		switch current.Cmp(want) {
 		case 1:
 			return fmt.Errorf("%w: address %v key %s, tx: %d state: %s", core.ErrNonceTooLow, sender, keys[i].Hex(), tx.Nonce(), current.Dec())

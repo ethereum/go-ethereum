@@ -65,15 +65,15 @@ type FrameTx struct {
 	BlobVersionedHashes []common.Hash
 }
 
-// HasLegacyNonceKeys reports whether the nonce key set is the legacy set
-// [0], which selects the sender's account nonce instead of a keyed nonce
-// sequence held by the nonce manager (EIP-8250).
+// HasLegacyNonceKeys reports whether the nonce key set is the empty set,
+// which selects the sender's account nonce instead of keyed nonce sequences
+// held by the nonce manager (EIP-8250).
 func HasLegacyNonceKeys(keys []uint256.Int) bool {
-	return len(keys) == 1 && keys[0].IsZero()
+	return len(keys) == 0
 }
 
 // FrameTxNonceSlot returns the nonce manager storage slot holding sender's
-// sequence for a non-zero nonce key: keccak256(left_pad_32(sender) || key)
+// sequence for a nonce key: keccak256(left_pad_32(sender) || key)
 // (EIP-8250).
 func FrameTxNonceSlot(sender common.Address, key *uint256.Int) common.Hash {
 	var buf [64]byte
@@ -108,7 +108,7 @@ func (tx *Transaction) FrameTxValidateStatic() error {
 // at decode time, so a structurally well-formed but statically invalid
 // frame transaction decodes successfully and is rejected when applied.
 func (tx *FrameTx) ValidateStatic() error {
-	if tx.ChainID == nil || tx.Fees.MaxPriorityFeePerGas == nil || tx.Fees.MaxFeePerGas == nil || tx.Fees.MaxFeePerBlobGas == nil {
+	if tx.ChainID == nil || tx.Fees.MaxFee == nil || tx.Fees.MaxPriorityFeePerGas == nil {
 		return ErrFrameTxInvalidFormat
 	}
 	if len(tx.Frames) == 0 || len(tx.Frames) > params.FrameTxMaxFrames {
@@ -215,13 +215,11 @@ func (tx *FrameTx) ValidateStatic() error {
 	if expiryVerifierFrames > 1 {
 		return fmt.Errorf("%w: multiple expiry verifier frames", ErrFrameTxInvalidFormat)
 	}
-	if len(tx.BlobVersionedHashes) == 0 && !tx.Fees.MaxFeePerBlobGas.IsZero() {
-		return fmt.Errorf("%w: max fee per blob gas must be zero without blobs", ErrFrameTxInvalidFormat)
-	}
-	// EIP-8250: the nonce key set holds one to MAX_NONCE_KEYS keys in
-	// strictly increasing order, the zero key only alone, and the sequence
-	// stays below MAX_NONCE_SEQ = 2^64-1.
-	if len(tx.NonceKeys) == 0 || len(tx.NonceKeys) > params.FrameTxMaxNonceKeys {
+	// EIP-8250: the nonce key set holds at most MAX_NONCE_KEYS keys in
+	// strictly increasing order. The empty set selects the account nonce,
+	// whose sequence must stay below MAX_NONCE_SEQ = 2^64-1; a keyed set at
+	// MAX_NONCE_SEQ selects single-use keys.
+	if len(tx.NonceKeys) > params.FrameTxMaxNonceKeys {
 		return fmt.Errorf("%w: invalid nonce key count", ErrFrameTxInvalidFormat)
 	}
 	for i := 1; i < len(tx.NonceKeys); i++ {
@@ -229,12 +227,9 @@ func (tx *FrameTx) ValidateStatic() error {
 			return fmt.Errorf("%w: nonce keys not strictly increasing", ErrFrameTxInvalidFormat)
 		}
 	}
-	if tx.NonceKeys[0].IsZero() && len(tx.NonceKeys) > 1 {
-		return fmt.Errorf("%w: zero nonce key alongside other keys", ErrFrameTxInvalidFormat)
-	}
 	// The texts below match core.ErrNonceMax and core.ErrGasLimitTooHigh,
 	// the failures EIP-8141 classifies these as.
-	if tx.NonceSeq == gomath.MaxUint64 {
+	if HasLegacyNonceKeys(tx.NonceKeys) && tx.NonceSeq == gomath.MaxUint64 {
 		return fmt.Errorf("%w: nonce has max value", ErrFrameTxInvalidFormat)
 	}
 	// The per-transaction gas cap of EIP-7825 bounds the execution
@@ -261,7 +256,8 @@ func (tx *FrameTx) ValidateStatic() error {
 }
 
 // sigHash returns the canonical signature hash of the frame transaction.
-// The raw signature bytes of every entry with an empty msg are elided.
+// The raw signature bytes of every entry with an empty msg are replaced by
+// their length, encoded as an unsigned integer.
 func (tx *FrameTx) sigHash(chainID *big.Int) common.Hash {
 	if chainID == nil {
 		chainID = tx.chainID()
@@ -270,7 +266,9 @@ func (tx *FrameTx) sigHash(chainID *big.Int) common.Hash {
 	for i, sig := range tx.Signatures {
 		sigs[i] = sig
 		if len(sig.Msg) == 0 {
-			sigs[i].Signature = nil
+			// The big-endian bytes of the length RLP-encode exactly
+			// as the integer does.
+			sigs[i].Signature = new(big.Int).SetUint64(uint64(len(sig.Signature))).Bytes()
 		}
 	}
 	return prefixedRlpHash(
@@ -299,9 +297,8 @@ func (tx *FrameTx) copy() TxData {
 
 		ChainID: new(uint256.Int),
 		Fees: Fees{
+			MaxFee:               new(uint256.Int),
 			MaxPriorityFeePerGas: new(uint256.Int),
-			MaxFeePerGas:         new(uint256.Int),
-			MaxFeePerBlobGas:     new(uint256.Int),
 		},
 	}
 	for i, frame := range tx.Frames {
@@ -336,14 +333,11 @@ func (tx *FrameTx) copy() TxData {
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
 	}
+	if tx.Fees.MaxFee != nil {
+		cpy.Fees.MaxFee.Set(tx.Fees.MaxFee)
+	}
 	if tx.Fees.MaxPriorityFeePerGas != nil {
 		cpy.Fees.MaxPriorityFeePerGas.Set(tx.Fees.MaxPriorityFeePerGas)
-	}
-	if tx.Fees.MaxFeePerGas != nil {
-		cpy.Fees.MaxFeePerGas.Set(tx.Fees.MaxFeePerGas)
-	}
-	if tx.Fees.MaxFeePerBlobGas != nil {
-		cpy.Fees.MaxFeePerBlobGas.Set(tx.Fees.MaxFeePerBlobGas)
 	}
 	return cpy
 }
@@ -360,11 +354,20 @@ func (tx *FrameTx) to() *common.Address    { return nil }
 func (tx *FrameTx) value() *big.Int        { return common.Big0 }
 func (tx *FrameTx) data() []byte           { return nil }
 func (tx *FrameTx) accessList() AccessList { return nil }
+
+// gasFeeCap returns the frame transaction's max_fee budget spread over its
+// max_gas anchor: the highest per-gas price the transaction can pay if it
+// uses all of its gas and carries no blobs. The budget itself caps the
+// fee; this per-gas view only serves pricing that is expressed per gas.
 func (tx *FrameTx) gasFeeCap() *big.Int {
-	if tx.Fees.MaxFeePerGas == nil {
+	if tx.Fees.MaxFee == nil {
 		return new(big.Int)
 	}
-	return tx.Fees.MaxFeePerGas.ToBig()
+	feeCap := tx.Fees.MaxFee.ToBig()
+	if gas := tx.gas(); gas > 0 {
+		feeCap.Div(feeCap, new(big.Int).SetUint64(gas))
+	}
+	return feeCap
 }
 func (tx *FrameTx) gasTipCap() *big.Int {
 	if tx.Fees.MaxPriorityFeePerGas == nil {
@@ -372,12 +375,7 @@ func (tx *FrameTx) gasTipCap() *big.Int {
 	}
 	return tx.Fees.MaxPriorityFeePerGas.ToBig()
 }
-func (tx *FrameTx) gasPrice() *big.Int {
-	if tx.Fees.MaxFeePerGas == nil {
-		return new(big.Int)
-	}
-	return tx.Fees.MaxFeePerGas.ToBig()
-}
+func (tx *FrameTx) gasPrice() *big.Int { return tx.gasFeeCap() }
 
 // gas returns the inclusion-facing derived gas limit of the frame
 // transaction: its max_gas anchor.
@@ -414,7 +412,7 @@ func (tx *FrameTx) decode(input []byte) error {
 	if err := rlp.DecodeBytes(input, tx); err != nil {
 		return fmt.Errorf("%w: %v", ErrFrameTxInvalidFormat, err)
 	}
-	if tx.ChainID == nil || tx.Fees.MaxPriorityFeePerGas == nil || tx.Fees.MaxFeePerGas == nil || tx.Fees.MaxFeePerBlobGas == nil {
+	if tx.ChainID == nil || tx.Fees.MaxFee == nil || tx.Fees.MaxPriorityFeePerGas == nil {
 		return ErrFrameTxInvalidFormat
 	}
 	return nil
@@ -587,9 +585,8 @@ func (s *SignatureEntry) ResolvedSigner(sender common.Address) common.Address {
 // Fees groups the fee parameters of a frame transaction, encoded as
 // the nested `fees` list of the transaction payload.
 type Fees struct {
+	MaxFee               *uint256.Int // total wei budget for execution, state and blob gas
 	MaxPriorityFeePerGas *uint256.Int
-	MaxFeePerGas         *uint256.Int
-	MaxFeePerBlobGas     *uint256.Int
 }
 
 // FrameTxSignatureGas returns the gas charged for the protocol validation of
@@ -605,20 +602,38 @@ func FrameTxSignatureGas(sig *SignatureEntry) uint64 {
 	}
 }
 
-// FrameTxChargedData returns the nonce RLP, frame data and signature fields
-// priced as calldata. Other fields are covered by the fixed intrinsic costs.
-func FrameTxChargedData(frames []Frame, sigs SignatureList, nonceKeys []uint256.Int, nonceSeq uint64) [][]byte {
-	charged := make([][]byte, 0, len(frames)+3*len(sigs)+2)
+// frameTxChargedData measures the byte fields priced as calldata: the
+// encoding of the nonce fields (EIP-8250), the data of every frame and the
+// signer, msg and signature of every signature entry. It returns their total
+// length and the number of zero bytes among them. The signature bytes of an
+// entry with an empty msg count as non-zero whatever their value: the
+// canonical signature hash commits only to their length.
+func frameTxChargedData(frames []Frame, sigs SignatureList, nonceKeys []uint256.Int, nonceSeq uint64) (length, zeros uint64) {
+	count := func(data []byte) {
+		length += uint64(len(data))
+		zeros += uint64(bytes.Count(data, []byte{0}))
+	}
 	keys, _ := rlp.EncodeToBytes(nonceKeys)
-	seq, _ := rlp.EncodeToBytes(nonceSeq)
-	charged = append(charged, keys, seq)
+	count(keys)
+	// A keyed single-use sequence is encoded and signed, but exempt from
+	// data pricing.
+	if HasLegacyNonceKeys(nonceKeys) || nonceSeq != gomath.MaxUint64 {
+		seq, _ := rlp.EncodeToBytes(nonceSeq)
+		count(seq)
+	}
 	for i := range frames {
-		charged = append(charged, frames[i].Data)
+		count(frames[i].Data)
 	}
 	for i := range sigs {
-		charged = append(charged, sigs[i].Signer, sigs[i].Msg, sigs[i].Signature)
+		count(sigs[i].Signer)
+		count(sigs[i].Msg)
+		if len(sigs[i].Msg) == 0 {
+			length += uint64(len(sigs[i].Signature))
+		} else {
+			count(sigs[i].Signature)
+		}
 	}
-	return charged
+	return length, zeros
 }
 
 // FrameTxBudgetTotals returns the frames' total declared gas budget in each
@@ -636,7 +651,7 @@ func FrameTxBudgetTotals(frames []Frame) (execution, state uint64) {
 // regardless of execution: the base cost, the per-frame cost, the signature
 // verification cost, the value transfer cost of each value-bearing frame
 // with an explicit target other than the sender, and the access cost of each
-// non-zero nonce key (EIP-8250).
+// nonce key (EIP-8250).
 func frameTxMandatoryGas(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int) uint64 {
 	gas := params.FrameTxIntrinsicGas + uint64(len(frames))*params.FrameTxPerFrameGas
 	for i := range sigs {
@@ -648,11 +663,7 @@ func frameTxMandatoryGas(frames []Frame, sigs SignatureList, sender common.Addre
 			gas += params.TxValueCost2780
 		}
 	}
-	// The legacy key set uses the account nonce instead of a nonce manager slot.
-	if !HasLegacyNonceKeys(nonceKeys) {
-		gas += uint64(len(nonceKeys)) * params.FrameTxKeyedNonceAccessGas
-	}
-	return gas
+	return gas + uint64(len(nonceKeys))*params.FrameTxKeyedNonceAccessGas
 }
 
 // FrameTxIntrinsicGas computes the intrinsic execution gas of an EIP-8141
@@ -662,11 +673,7 @@ func frameTxMandatoryGas(frames []Frame, sigs SignatureList, sender common.Addre
 // from each frame's own execution gas budget.
 func FrameTxIntrinsicGas(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (uint64, error) {
 	gas := frameTxMandatoryGas(frames, sigs, sender, nonceKeys)
-	var dataLen, z uint64
-	for _, d := range FrameTxChargedData(frames, sigs, nonceKeys, nonceSeq) {
-		dataLen += uint64(len(d))
-		z += uint64(bytes.Count(d, []byte{0}))
-	}
+	dataLen, z := frameTxChargedData(frames, sigs, nonceKeys, nonceSeq)
 	if dataLen > 0 {
 		nz := dataLen - z
 		// Frame transactions exist only post-Istanbul.
@@ -689,10 +696,7 @@ func FrameTxIntrinsicGas(frames []Frame, sigs SignatureList, sender common.Addre
 // The floor is anchored on the mandatory costs, so it never undercuts the
 // transaction's own intrinsic base.
 func FrameTxFloorGas(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (uint64, error) {
-	var dataLen uint64
-	for _, data := range FrameTxChargedData(frames, sigs, nonceKeys, nonceSeq) {
-		dataLen += uint64(len(data))
-	}
+	dataLen, _ := frameTxChargedData(frames, sigs, nonceKeys, nonceSeq)
 	if gomath.MaxUint64/(params.TxTokenPerNonZeroByte*params.TxCostFloorPerToken7976) < dataLen {
 		return 0, errors.New("gas uint64 overflow")
 	}
@@ -725,8 +729,8 @@ func FrameTxStandardGasLimit(frames []Frame, sigs SignatureList, sender common.A
 
 // FrameTxMaxGas computes the inclusion anchor of a frame transaction: the
 // larger of its standard gas limit and its calldata floor plus the frames'
-// total state gas budget. The maximum transaction cost escrowed from the
-// payer prices this anchor at the fee cap.
+// total state gas budget. The fee budget must cover this anchor at the base
+// fee.
 func FrameTxMaxGas(frames []Frame, sigs SignatureList, sender common.Address, nonceKeys []uint256.Int, nonceSeq uint64) (uint64, error) {
 	standard, err := FrameTxStandardGasLimit(frames, sigs, sender, nonceKeys, nonceSeq)
 	if err != nil {
@@ -761,6 +765,44 @@ func FrameTxGasReservation(frames []Frame, sigs SignatureList, sender common.Add
 		return 0, 0, errors.New("gas uint64 overflow")
 	}
 	return max(intrinsicGas+executionGas, floorGas), stateGas, nil
+}
+
+// FrameTxFeeBudget checks a frame transaction's max_fee budget against the
+// base fees of the including block (EIP-8141). The budget covers execution,
+// state and blob gas together and must cover their worst case at these base
+// fees, required_max_fee = maxGas * baseFee + blobGas * blobBaseFee; ok
+// reports whether it does. maxCost, escrowed from the payer on payment
+// approval, is that worst case plus the largest tip the rest of the budget
+// allows, the priority fee per gas on every unit of maxGas at most. gasPrice
+// is the price GASPRICE reports: the base fee plus that tip spread over
+// maxGas. blobBaseFee may be nil if blobGas is zero.
+func FrameTxFeeBudget(maxFee, tip *uint256.Int, maxGas, blobGas uint64, baseFee, blobBaseFee *uint256.Int) (maxCost, gasPrice *uint256.Int, ok bool) {
+	required := new(uint256.Int).SetUint64(maxGas)
+	if _, overflow := required.MulOverflow(required, baseFee); overflow {
+		return nil, nil, false
+	}
+	if blobGas > 0 {
+		blobFee := new(uint256.Int).SetUint64(blobGas)
+		if _, overflow := blobFee.MulOverflow(blobFee, blobBaseFee); overflow {
+			return nil, nil, false
+		}
+		if _, overflow := required.AddOverflow(required, blobFee); overflow {
+			return nil, nil, false
+		}
+	}
+	if maxFee.Lt(required) {
+		return nil, nil, false
+	}
+	budgetLeft := new(uint256.Int).Sub(maxFee, required)
+	priority := new(uint256.Int).SetUint64(maxGas)
+	if _, overflow := priority.MulOverflow(priority, tip); overflow || priority.Gt(budgetLeft) {
+		priority = budgetLeft
+	}
+	gasPrice = new(uint256.Int).Set(baseFee)
+	if maxGas > 0 {
+		gasPrice.Add(gasPrice, new(uint256.Int).Div(priority, uint256.NewInt(maxGas)))
+	}
+	return required.Add(required, priority), gasPrice, true
 }
 
 // ErrFrameTxSignerMismatch reports a well-formed signature entry that

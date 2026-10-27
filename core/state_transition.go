@@ -297,11 +297,15 @@ type Message struct {
 	BlobGasFeeCap *uint256.Int
 	TxHash        common.Hash
 
-	// Frame transaction fields (EIP-8141).
-	Frames                []types.Frame
-	FrameNonceKeys        []uint256.Int
-	FrameSignatures       types.SignatureList
-	FrameSigHash          common.Hash
+	// Frame transaction fields (EIP-8141). FrameMaxFee is the fee budget
+	// covering all of the transaction's gas; GasFeeCap only carries its
+	// per-gas view.
+	Frames          []types.Frame
+	FrameNonceKeys  []uint256.Int
+	FrameSignatures types.SignatureList
+	FrameSigHash    common.Hash
+	FrameMaxFee     *uint256.Int
+
 	BlobHashes            []common.Hash
 	SetCodeAuthorizations []types.SetCodeAuthorization
 
@@ -380,6 +384,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		msg.FrameNonceKeys = tx.FrameNonceKeys()
 		msg.FrameSignatures = tx.FrameSignatures()
 		msg.FrameSigHash = s.Hash(tx)
+		msg.FrameMaxFee = tx.FrameMaxFee()
 		msg.To = nil
 		msg.Value = new(uint256.Int)
 		msg.Data = nil
@@ -480,6 +485,10 @@ type stateTransition struct {
 	prefixOnly   bool
 	prefixEnd    int
 	prefixResult FramePrefixResult
+
+	// frameMaxCost is the escrow a frame transaction's payer pays on
+	// payment approval, derived from its fee budget in preCheck.
+	frameMaxCost *uint256.Int
 }
 
 // newStateTransition initialises and returns a new state transition object.
@@ -633,10 +642,18 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 	// Only check transactions that are not fake
 	msg := st.msg
 	if !msg.SkipNonceChecks && msg.Frames != nil && !types.HasLegacyNonceKeys(msg.FrameNonceKeys) {
+		// EIP-8250: every selected key must hold the transaction's sequence,
+		// or be unused for the single-use sequence MAX_NONCE_SEQ.
 		for i := range msg.FrameNonceKeys {
 			slot := types.FrameTxNonceSlot(msg.From, &msg.FrameNonceKeys[i])
 			current := st.state.GetState(params.NonceManagerAddress, slot)
 			seq := new(uint256.Int).SetBytes(current[:])
+			if msg.Nonce == math.MaxUint64 {
+				if !seq.IsZero() {
+					return fmt.Errorf("%w: address %v, single-use key %s already used", ErrNonceTooLow, msg.From, msg.FrameNonceKeys[i].Hex())
+				}
+				continue
+			}
 			if seq.CmpUint64(msg.Nonce) > 0 {
 				return fmt.Errorf("%w: address %v, key %s", ErrNonceTooLow, msg.From, msg.FrameNonceKeys[i].Hex())
 			}
@@ -682,7 +699,13 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 	if rules.IsLondon {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
 		skipCheck := st.evm.Config.NoBaseFee && msg.GasFeeCap.BitLen() == 0 && msg.GasTipCap.BitLen() == 0
-		if !skipCheck {
+		if msg.Frames != nil {
+			// Frame transactions cap their total fee, not their price per
+			// gas.
+			if err := st.checkFrameFeeBudget(); err != nil {
+				return err
+			}
+		} else if !skipCheck {
 			if msg.GasFeeCap.Cmp(msg.GasTipCap) < 0 {
 				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
 					msg.From.Hex(), msg.GasTipCap, msg.GasFeeCap)
@@ -724,8 +747,9 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 			}
 		}
 	}
-	// Check that the user is paying at least the current blob fee
-	if rules.IsCancun {
+	// Check that the user is paying at least the current blob fee. Frame
+	// transactions pay their blob fee from their fee budget instead.
+	if rules.IsCancun && msg.Frames == nil {
 		if st.blobGasUsed() > 0 {
 			// Skip the checks if gas fields are zero and blobBaseFee was explicitly disabled (eth_call)
 			skipCheck := st.evm.Config.NoBaseFee && msg.BlobGasFeeCap.BitLen() == 0
@@ -910,9 +934,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	// Settle down the gas usage and refund the ETH back if any remaining
-	var gasUsed, peakUsed uint64
+	var (
+		gasUsed, peakUsed uint64
+		framePriorityFee  *uint256.Int
+	)
 	if isFrameTx {
-		gasUsed, peakUsed, err = st.settleFrameGas(frameReceipts, floorDataGas)
+		gasUsed, peakUsed, framePriorityFee, err = st.settleFrameGas(frameReceipts, floorDataGas)
 	} else {
 		gasUsed, peakUsed, err = st.settleGas(rules, floorDataGas)
 	}
@@ -921,19 +948,23 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	// Pay the effective transaction fee to the specific coinbase
-	effectiveTip := msg.GasPrice
-	if rules.IsLondon {
-		baseFee, overflow := uint256.FromBig(st.evm.Context.BaseFee)
-		if overflow {
-			return nil, fmt.Errorf("invalid baseFee: %v", st.evm.Context.BaseFee)
-		}
-		effectiveTip = new(uint256.Int).Sub(msg.GasPrice, baseFee)
-	}
-	if st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0 {
+	switch {
+	case isFrameTx:
+		// The frame settlement capped the priority fee by the escrow.
+		st.state.AddBalance(st.evm.Context.Coinbase, framePriorityFee, tracing.BalanceIncreaseRewardTransactionFee)
+	case st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0:
 		// Skip fee payment when NoBaseFee is set and the fee fields
 		// are 0. This avoids a negative effectiveTip being applied to
 		// the coinbase when simulating calls.
-	} else {
+	default:
+		effectiveTip := msg.GasPrice
+		if rules.IsLondon {
+			baseFee, overflow := uint256.FromBig(st.evm.Context.BaseFee)
+			if overflow {
+				return nil, fmt.Errorf("invalid baseFee: %v", st.evm.Context.BaseFee)
+			}
+			effectiveTip = new(uint256.Int).Sub(msg.GasPrice, baseFee)
+		}
 		fee := new(uint256.Int).SetUint64(gasUsed)
 		fee.Mul(fee, effectiveTip)
 		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
@@ -1203,18 +1234,19 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64) (g
 // receipt's usage, so gas a rollback or a later frame's refill removed from
 // a receipt counts as unused without further accounting. The payer, who
 // escrowed the transaction's maximum cost at APPROVE, receives back
-// everything beyond the actual fee.
-func (st *stateTransition) settleFrameGas(receipts []types.FrameReceipt, floorDataGas uint64) (gasUsed, peakUsed uint64, err error) {
+// everything beyond the burned base fee and the returned priority fee,
+// which the caller credits to the coinbase.
+func (st *stateTransition) settleFrameGas(receipts []types.FrameReceipt, floorDataGas uint64) (gasUsed, peakUsed uint64, priorityFee *uint256.Int, err error) {
 	msg := st.msg
 	standardGasLimit, err := types.FrameTxStandardGasLimit(msg.Frames, msg.FrameSignatures, msg.From, msg.FrameNonceKeys, msg.Nonce)
 	if err != nil {
-		return 0, 0, ErrGasUintOverflow
+		return 0, 0, nil, ErrGasUintOverflow
 	}
 	var unusedGas, txStateGas uint64
 	for i := range receipts {
 		limits := &msg.Frames[i].GasLimits
 		if receipts[i].GasUsed > limits.Execution || receipts[i].StateGasUsed > limits.State {
-			return 0, 0, fmt.Errorf("frame %d gas usage exceeds its budget", i)
+			return 0, 0, nil, fmt.Errorf("frame %d gas usage exceeds its budget", i)
 		}
 		unusedGas += limits.Execution - receipts[i].GasUsed
 		unusedGas += limits.State - receipts[i].StateGasUsed
@@ -1245,35 +1277,51 @@ func (st *stateTransition) settleFrameGas(receipts []types.FrameReceipt, floorDa
 
 	// Settle the final consumption in the block-level pool, per dimension.
 	if err = st.gp.ChargeGasAmsterdam(blockExecutionGas, txStateGas, gasUsed); err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
 
-	// Refund the payer's unspent escrow: the maximum cost collected at
-	// APPROVE less the charged fee — the gas used priced at the effective
-	// gas price, plus the blob fee.
+	// Disburse the escrow collected at APPROVE: the gas used at the base
+	// fee, plus the blob gas at the blob base fee, is burned. The coinbase
+	// receives the priority fee per gas on the gas used, capped by what the
+	// escrow holds after the burn, and the payer gets back the rest.
 	fc := st.evm.TxContext.FrameContext
 	if fc.Payer == nil {
-		return 0, 0, fmt.Errorf("%w: no frame approved gas payment", ErrFrameTxInvalidExecution)
+		return 0, 0, nil, fmt.Errorf("%w: no frame approved gas payment", ErrFrameTxInvalidExecution)
 	}
-	actualFee := new(uint256.Int).SetUint64(gasUsed)
-	actualFee.Mul(actualFee, msg.GasPrice)
+	baseFee, overflow := uint256.FromBig(st.evm.Context.BaseFee)
+	if overflow {
+		return 0, 0, nil, fmt.Errorf("invalid baseFee: %v", st.evm.Context.BaseFee)
+	}
+	burned := new(uint256.Int).SetUint64(gasUsed)
+	if baseFee != nil {
+		burned.Mul(burned, baseFee)
+	} else {
+		burned.Clear()
+	}
 	if blobGas := st.blobGasUsed(); blobGas > 0 {
 		blobBaseFee, overflow := uint256.FromBig(st.evm.Context.BlobBaseFee)
 		if overflow {
-			return 0, 0, fmt.Errorf("invalid blobBaseFee: %v", st.evm.Context.BlobBaseFee)
+			return 0, 0, nil, fmt.Errorf("invalid blobBaseFee: %v", st.evm.Context.BlobBaseFee)
 		}
 		blobFee := new(uint256.Int).SetUint64(blobGas)
 		blobFee.Mul(blobFee, blobBaseFee)
-		actualFee.Add(actualFee, blobFee)
+		burned.Add(burned, blobFee)
 	}
-	if actualFee.Cmp(fc.MaxCost) > 0 {
-		return 0, 0, fmt.Errorf("frame transaction fee exceeds collected maximum: %v > %v", actualFee, fc.MaxCost)
+	// The fee budget check bounds the burn by the escrow, gas used being
+	// at most max_gas.
+	if burned.Gt(fc.MaxCost) {
+		return 0, 0, nil, fmt.Errorf("frame transaction fee exceeds collected maximum: %v > %v", burned, fc.MaxCost)
 	}
-	st.state.AddBalance(*fc.Payer, new(uint256.Int).Sub(fc.MaxCost, actualFee), tracing.BalanceIncreaseGasReturn)
+	left := new(uint256.Int).Sub(fc.MaxCost, burned)
+	priorityFee = new(uint256.Int).SetUint64(gasUsed)
+	if _, overflow := priorityFee.MulOverflow(priorityFee, msg.GasTipCap); overflow || priorityFee.Gt(left) {
+		priorityFee.Set(left)
+	}
+	st.state.AddBalance(*fc.Payer, left.Sub(left, priorityFee), tracing.BalanceIncreaseGasReturn)
 	if st.evm.Config.Tracer.HasGasHook() {
 		st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Execution: unusedGas + refund}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
 	}
-	return gasUsed, peakUsed, nil
+	return gasUsed, peakUsed, priorityFee, nil
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
@@ -1420,6 +1468,48 @@ func (st *stateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }
 
+// checkFrameFeeBudget checks a frame transaction's max_fee budget against the
+// block's base fees (EIP-8141): it must cover the worst-case charge, max_gas
+// at the base fee plus the blob gas at the blob base fee. It derives the
+// escrow the payer pays on payment approval and installs the price GASPRICE
+// reports. Prefix simulation, which is not tied to the base fees of the
+// including block, escrows the whole budget, the upper bound of the escrow
+// at any base fees.
+func (st *stateTransition) checkFrameFeeBudget() error {
+	msg := st.msg
+	maxFee := msg.FrameMaxFee
+	if maxFee == nil {
+		maxFee = new(uint256.Int)
+	}
+	baseFee, overflow := uint256.FromBig(st.evm.Context.BaseFee)
+	if overflow {
+		return fmt.Errorf("invalid baseFee: %v", st.evm.Context.BaseFee)
+	}
+	blobBaseFee, overflow := uint256.FromBig(st.evm.Context.BlobBaseFee)
+	if overflow {
+		return fmt.Errorf("invalid blobBaseFee: %v", st.evm.Context.BlobBaseFee)
+	}
+	if baseFee == nil {
+		baseFee = new(uint256.Int)
+	}
+	maxCost, gasPrice, ok := types.FrameTxFeeBudget(maxFee, msg.GasTipCap, msg.GasLimit, st.blobGasUsed(), baseFee, blobBaseFee)
+	switch {
+	case st.prefixOnly:
+		maxCost = maxFee
+		if !ok {
+			gasPrice = baseFee
+		}
+	case !ok:
+		// The error text matches ErrFeeCapTooLow, the failure EIP-8141
+		// fixtures classify an insufficient budget as.
+		return fmt.Errorf("%w: address %v, maxFee: %s, baseFee: %s, blobBaseFee: %v", ErrFeeCapTooLow,
+			msg.From.Hex(), maxFee, baseFee, st.evm.Context.BlobBaseFee)
+	}
+	st.frameMaxCost = maxCost
+	st.evm.TxContext.GasPrice = gasPrice
+	return nil
+}
+
 // Frame receipt status codes (EIP-8141).
 const (
 	frameStatusFailed  uint64 = 0
@@ -1451,26 +1541,9 @@ type frameLogRange struct {
 func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []types.FrameReceipt, error) {
 	msg := st.msg
 
-	// The maximum cost collected from the payer upon payment approval: the
-	// max_gas anchor priced at the fee cap, plus the blob fee at the blob
-	// base fee. A cost that does not fit 256 bits invalidates the
-	// transaction at admission.
-	maxCost := new(uint256.Int).SetUint64(msg.GasLimit)
-	if _, overflow := maxCost.MulOverflow(maxCost, msg.GasFeeCap); overflow {
-		return nil, nil, fmt.Errorf("%w: maximum transaction cost exceeds 256 bits", ErrFrameTxInvalidExecution)
-	}
-	if blobGas := st.blobGasUsed(); blobGas > 0 {
-		blobBaseFee, overflow := uint256.FromBig(st.evm.Context.BlobBaseFee)
-		if overflow {
-			return nil, nil, fmt.Errorf("invalid blobBaseFee: %v", st.evm.Context.BlobBaseFee)
-		}
-		blobFee := new(uint256.Int).SetUint64(blobGas)
-		if _, overflow := blobFee.MulOverflow(blobFee, blobBaseFee); overflow {
-			return nil, nil, fmt.Errorf("%w: maximum transaction cost exceeds 256 bits", ErrFrameTxInvalidExecution)
-		}
-		if _, overflow := maxCost.AddOverflow(maxCost, blobFee); overflow {
-			return nil, nil, fmt.Errorf("%w: maximum transaction cost exceeds 256 bits", ErrFrameTxInvalidExecution)
-		}
+	maxFee := msg.FrameMaxFee
+	if maxFee == nil {
+		maxFee = new(uint256.Int)
 	}
 	frameCtx := &vm.FrameContext{
 		Sender:               msg.From,
@@ -1478,9 +1551,8 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		NonceKeys:            msg.FrameNonceKeys,
 		LegacyNonce:          st.state.GetNonce(msg.From),
 		MaxPriorityFeePerGas: msg.GasTipCap,
-		MaxFeePerGas:         msg.GasFeeCap,
-		MaxFeePerBlobGas:     msg.BlobGasFeeCap,
-		MaxCost:              maxCost,
+		MaxFee:               maxFee,
+		MaxCost:              st.frameMaxCost,
 		SigHash:              msg.FrameSigHash,
 		Frames:               msg.Frames,
 		Signatures:           msg.FrameSignatures,

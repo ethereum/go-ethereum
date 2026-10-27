@@ -78,7 +78,7 @@ func TestFrameKeyedNoncePrefix(t *testing.T) {
 	tx := types.NewTx(&types.FrameTx{
 		ChainID: uint256.MustFromBig(cfg8037.ChainID), NonceKeys: keys, Sender: senderAddr,
 		Frames: []types.Frame{frame},
-		Fees:   types.Fees{MaxFeePerGas: uint256.NewInt(10), MaxPriorityFeePerGas: uint256.NewInt(2), MaxFeePerBlobGas: new(uint256.Int)},
+		Fees:   types.Fees{MaxFee: uint256.NewInt(10_000_000), MaxPriorityFeePerGas: uint256.NewInt(2)},
 	})
 	if _, err := ApplyFramePrefix(evm, prefixTestMessage(t, evm, tx), nil, 0); err != nil {
 		t.Fatal(err)

@@ -712,7 +712,8 @@ func (env *fuzzEnv) generate(data []byte) *fuzzCase {
 		signatures[i] = types.SignatureEntry{Scheme: types.FrameTxSchemeArbitrary, Signature: in.bytes(in.intn(66))}
 	}
 	secp := func(i, key int, explicit bool) {
-		signatures[i] = types.SignatureEntry{Scheme: types.FrameTxSchemeSecp256k1}
+		// The signature hash commits to the signature's length.
+		signatures[i] = types.SignatureEntry{Scheme: types.FrameTxSchemeSecp256k1, Signature: make([]byte, 65)}
 		if explicit {
 			signatures[i].Signer = env.eoas[key].Bytes()
 		}
@@ -739,14 +740,20 @@ func (env *fuzzEnv) generate(data []byte) *fuzzCase {
 		arbitrary(sigCount - 1)
 	}
 
-	maxFee := fuzzPick(in, uint64(10), 1, 1000, 1_000_000_000)
+	feeCap := fuzzPick(in, uint64(10), 1, 1000, 1_000_000_000)
 	inner := &types.FrameTx{
-		ChainID: uint256.MustFromBig(env.config.ChainID), NonceKeys: []uint256.Int{{}}, NonceSeq: txNonce, Sender: sender, Frames: frames, Signatures: signatures,
-		Fees: types.Fees{MaxFeePerGas: uint256.NewInt(maxFee), MaxPriorityFeePerGas: uint256.NewInt(min(maxFee, fuzzPick(in, uint64(1), 0, maxFee))), MaxFeePerBlobGas: new(uint256.Int)},
+		ChainID: uint256.MustFromBig(env.config.ChainID), NonceSeq: txNonce, Sender: sender, Frames: frames, Signatures: signatures,
+		Fees: types.Fees{MaxPriorityFeePerGas: uint256.NewInt(min(feeCap, fuzzPick(in, uint64(1), 0, feeCap)))},
 	}
+	// The max_fee budget is feeCap per unit of max_gas.
+	maxGas, err := types.FrameTxMaxGas(frames, signatures, sender, nil, txNonce)
+	if err != nil {
+		return nil
+	}
+	inner.Fees.MaxFee = new(uint256.Int).Mul(uint256.NewInt(feeCap), uint256.NewInt(maxGas))
 	head := &types.Header{
 		Number: big.NewInt(1), Time: 1000, Difficulty: new(big.Int), GasLimit: 30_000_000,
-		BaseFee: new(big.Int).SetUint64(fuzzPick(in, maxFee, 1, maxFee/2)), ExcessBlobGas: new(uint64), BlobGasUsed: new(uint64),
+		BaseFee: new(big.Int).SetUint64(fuzzPick(in, feeCap, 1, feeCap/2)), ExcessBlobGas: new(uint64), BlobGasUsed: new(uint64),
 	}
 	signer := types.MakeSigner(env.config, head.Number, head.Time)
 	sign := func(i int, hash []byte) {
@@ -776,7 +783,7 @@ func (env *fuzzEnv) generate(data []byte) *fuzzCase {
 	if err != nil {
 		return nil
 	}
-	maxCost := new(uint256.Int).Mul(uint256.NewInt(tx.Gas()), uint256.NewInt(maxFee))
+	maxCost := tx.FrameMaxFee()
 	switch in.intn(5) {
 	case 0:
 		world.account(payer).balance = *fuzzEther

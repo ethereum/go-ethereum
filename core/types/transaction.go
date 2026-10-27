@@ -321,6 +321,12 @@ func (tx *Transaction) To() *common.Address {
 
 // Cost returns (gas * gasPrice) + (blobGas * blobGasPrice) + value.
 func (tx *Transaction) Cost() *big.Int {
+	// A frame transaction's fee is capped by its max_fee budget, which
+	// covers all of its gas, blob gas included. It transfers no top-level
+	// value.
+	if frametx, ok := tx.inner.(*FrameTx); ok {
+		return frametx.Fees.MaxFee.ToBig()
+	}
 	// Avoid allocating copies via tx.GasPrice()/tx.Value(); use inner values directly.
 	total := new(big.Int).SetUint64(tx.inner.gas())
 	total.Mul(total, tx.inner.gasPrice())
@@ -464,9 +470,6 @@ func (tx *Transaction) BlobGasFeeCap() *big.Int {
 	if blobtx, ok := tx.inner.(*BlobTx); ok {
 		return blobtx.BlobFeeCap.ToBig()
 	}
-	if frametx, ok := tx.inner.(*FrameTx); ok {
-		return frametx.Fees.MaxFeePerBlobGas.ToBig()
-	}
 	return nil
 }
 
@@ -590,6 +593,16 @@ func (tx *Transaction) FrameNonceKeys() []uint256.Int {
 		return nil
 	}
 	return frametx.NonceKeys
+}
+
+// FrameMaxFee returns the max_fee budget of a frame transaction, nil
+// otherwise.
+func (tx *Transaction) FrameMaxFee() *uint256.Int {
+	frametx, ok := tx.inner.(*FrameTx)
+	if !ok {
+		return nil
+	}
+	return new(uint256.Int).Set(frametx.Fees.MaxFee)
 }
 
 // SetCodeAuthorities returns a list of unique authorities from the

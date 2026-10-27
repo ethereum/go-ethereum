@@ -130,6 +130,7 @@ type stTransaction struct {
 
 	// Frame transaction fields (EIP-8141, EIP-8250).
 	ChainID    *big.Int           `json:"chainId,omitempty"`
+	MaxFee     *big.Int           `json:"maxFee,omitempty"`
 	NonceKeys  []*big.Int         `json:"nonceKeys,omitempty"`
 	Frames     []stFrame          `json:"frames,omitempty"`
 	Signatures []stFrameSignature `json:"signatures,omitempty"`
@@ -144,6 +145,7 @@ type stTransactionMarshaling struct {
 	PrivateKey           hexutil.Bytes
 	BlobGasFeeCap        *stBig
 	ChainID              *math.HexOrDecimal256
+	MaxFee               *stBig
 	NonceKeys            []*stBig
 }
 
@@ -523,11 +525,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, signer type
 		if err != nil {
 			return nil, err
 		}
-		feeCap, err := toU256(tx.MaxFeePerGas)
-		if err != nil {
-			return nil, err
-		}
-		blobFeeCap, err := toU256(tx.BlobGasFeeCap)
+		maxFee, err := toU256(tx.MaxFee)
 		if err != nil {
 			return nil, err
 		}
@@ -566,9 +564,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, signer type
 		if blobHashes == nil {
 			blobHashes = []common.Hash{}
 		}
-		if tx.NonceKeys == nil {
-			return nil, errors.New("frame transaction without nonce keys")
-		}
+		// An absent key set is the empty set, selecting the account nonce.
 		nonceKeys := make([]uint256.Int, len(tx.NonceKeys))
 		for i, key := range tx.NonceKeys {
 			if key == nil || key.Sign() < 0 || nonceKeys[i].SetFromBig(key) {
@@ -583,9 +579,8 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, signer type
 			Frames:     frames,
 			Signatures: signatures,
 			Fees: types.Fees{
+				MaxFee:               maxFee,
 				MaxPriorityFeePerGas: tip,
-				MaxFeePerGas:         feeCap,
-				MaxFeePerBlobGas:     blobFeeCap,
 			},
 			BlobVersionedHashes: blobHashes,
 		}

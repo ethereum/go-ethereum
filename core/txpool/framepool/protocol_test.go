@@ -306,7 +306,7 @@ func TestKeyedIdentityReplacement(t *testing.T) {
 	original := keyedTx(t, keys, 0, 20, 2, nil)
 	addPoolTx(t, pool, original, nil)
 	addPoolTx(t, pool, keyedTx(t, keys, 0, 21, 2, nil), txpool.ErrReplaceUnderpriced)
-	for _, other := range [][]uint256.Int{{{}}, {*uint256.NewInt(1)}, {*uint256.NewInt(1), *uint256.NewInt(3)}} {
+	for _, other := range [][]uint256.Int{{}, {{}}, {*uint256.NewInt(1)}, {*uint256.NewInt(1), *uint256.NewInt(3)}} {
 		addPoolTx(t, pool, keyedTx(t, other, 0, 40, 4, nil), ErrSenderPending)
 	}
 	addPoolTx(t, pool, keyedTx(t, keys, 1, 40, 4, nil), ErrSenderPending)

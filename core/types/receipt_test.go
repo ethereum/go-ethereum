@@ -767,9 +767,8 @@ func TestFrameTxUnmarshalRPCNames(t *testing.T) {
 		}},
 		Signatures: SignatureList{},
 		Fees: Fees{
+			MaxFee:               uint256.NewInt(100),
 			MaxPriorityFeePerGas: uint256.NewInt(2),
-			MaxFeePerGas:         uint256.NewInt(100),
-			MaxFeePerBlobGas:     uint256.NewInt(0),
 		},
 	})
 	own, err := json.Marshal(tx)
@@ -778,7 +777,7 @@ func TestFrameTxUnmarshalRPCNames(t *testing.T) {
 	}
 	rpc := `{"type":"0x6","chainId":"0x1","nonce":"0x0","nonceKeys":["0x0"],"from":"0xaa00000000000000000000000000000000000000",` +
 		`"frames":[{"mode":"0x2","flags":"0x0","target":"0xbb00000000000000000000000000000000000000","executionGas":"0x7530","stateGas":"0x64","value":"0x0","data":"0x01"}],` +
-		`"signatures":[],"maxPriorityFeePerGas":"0x2","maxFeePerGas":"0x64","maxFeePerBlobGas":"0x0","blobVersionedHashes":[]}`
+		`"signatures":[],"maxPriorityFeePerGas":"0x2","maxFee":"0x64","blobVersionedHashes":[]}`
 	for _, input := range []string{string(own), rpc} {
 		var have Transaction
 		if err := json.Unmarshal([]byte(input), &have); err != nil {

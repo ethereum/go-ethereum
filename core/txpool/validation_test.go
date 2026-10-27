@@ -121,23 +121,17 @@ func TestValidateFrameTransactionBlobs(t *testing.T) {
 	frameTx := func(blobHashes []common.Hash) *types.Transaction {
 		sender := common.Address{0xaa}
 		target := common.Address{0xbb}
-		blobFeeCap := uint256.NewInt(0)
-		if len(blobHashes) > 0 {
-			blobFeeCap.SetUint64(100)
-		}
 		return types.NewTx(&types.FrameTx{
-			ChainID:   uint256.MustFromBig(config.ChainID),
-			NonceKeys: []uint256.Int{{}},
-			Sender:    sender,
+			ChainID: uint256.MustFromBig(config.ChainID),
+			Sender:  sender,
 			Frames: []types.Frame{
 				{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 5000}, Value: uint256.NewInt(0)},
 				{Mode: types.ModeSender, Target: &target, GasLimits: types.Limits{Execution: 30000}, Value: uint256.NewInt(0)},
 			},
 			Signatures: types.SignatureList{{Scheme: types.FrameTxSchemeSecp256k1, Signer: sender.Bytes(), Signature: make([]byte, 65)}},
 			Fees: types.Fees{
+				MaxFee:               uint256.NewInt(100_000_000),
 				MaxPriorityFeePerGas: uint256.NewInt(1),
-				MaxFeePerGas:         uint256.NewInt(100),
-				MaxFeePerBlobGas:     blobFeeCap,
 			},
 			BlobVersionedHashes: blobHashes,
 		})
@@ -206,17 +200,15 @@ func TestValidateFrameTransactionStatic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tx := &types.FrameTx{
-				ChainID:   uint256.MustFromBig(config.ChainID),
-				NonceKeys: []uint256.Int{{}},
-				Sender:    common.Address{0xaa},
+				ChainID: uint256.MustFromBig(config.ChainID),
+				Sender:  common.Address{0xaa},
 				Frames: []types.Frame{
 					{Mode: types.ModeVerify, Flags: types.ApproveExecutionAndPayment, GasLimits: types.Limits{Execution: 5000}, Value: uint256.NewInt(0)},
 					{Mode: types.ModeSender, GasLimits: types.Limits{Execution: 30000}, Value: uint256.NewInt(0)},
 				},
 				Fees: types.Fees{
+					MaxFee:               uint256.NewInt(100_000_000),
 					MaxPriorityFeePerGas: uint256.NewInt(1),
-					MaxFeePerGas:         uint256.NewInt(100),
-					MaxFeePerBlobGas:     uint256.NewInt(0),
 				},
 			}
 			if tt.mutate != nil {
