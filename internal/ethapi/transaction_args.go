@@ -142,6 +142,11 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 			return errors.New(`authorizationList provided for contract creation, but "to" field is missing`)
 		}
 	}
+	for i, auth := range args.AuthorizationList {
+		if auth.V > 1 {
+			return fmt.Errorf("authorization %d: 'yParity' field must be 0 or 1", i)
+		}
+	}
 
 	if args.Gas == nil {
 		// These fields are immutable during the estimation, safe to
