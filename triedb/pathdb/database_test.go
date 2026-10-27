@@ -24,7 +24,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -151,6 +154,8 @@ type testerConfig struct {
 
 	kvdb    ethdb.KeyValueStore // Optional, the key-value store (default: a fresh in-memory one)
 	ancient string              // Optional, the directory of the ancient store (default: a temporary one)
+
+	asyncFlush bool // Flush the write buffer in background, as outside of tests
 }
 
 func (c *testerConfig) trieCacheSize() int {
@@ -190,7 +195,7 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			TrieCleanSize:       config.trieCacheSize(),
 			StateCleanSize:      config.stateCacheSize(),
 			WriteBufferSize:     config.writeBufferSize(),
-			NoAsyncFlush:        true,
+			NoAsyncFlush:        !config.asyncFlush,
 			JournalDirectory:    config.journalDir,
 			NoHistoryIndexDelay: true,
 		})
@@ -1351,6 +1356,443 @@ func TestJournalWithoutHistory(t *testing.T) {
 	tester.db = New(tester.db.diskdb, &config)
 	if bottom := tester.db.tree.bottom(); bottom.stateID() != journaled.stateID() || bottom.rootHash() != journaled.rootHash() {
 		t.Fatalf("Lost the journal's write buffer over an empty trienode history, disk layer #%d", bottom.stateID())
+	}
+}
+
+// TestJournalLive checks that a copy of the database taken after a live journal,
+// before the next mutation, opens with every layer up to the journaled head,
+// while the database itself stays writable.
+func TestJournalLive(t *testing.T) {
+	for _, async := range []bool{false, true} {
+		testJournalLive(t, "", async)
+		testJournalLive(t, filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000))), async)
+	}
+}
+
+func testJournalLive(t *testing.T, journalDir string, asyncFlush bool) {
+	// Redefine the diff layer depth allowance for faster testing.
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	var (
+		kvdb    = newSyncTracker()
+		ancient = t.TempDir()
+		tester  = newTester(t, &testerConfig{layers: 12, journalDir: journalDir, kvdb: kvdb, ancient: ancient, asyncFlush: asyncFlush})
+	)
+	defer tester.release()
+
+	// Have persisted state, and a write buffer that isn't empty, below the
+	// diff layers. With the flush in background, journal while one runs.
+	extendToBuffer(t, tester)
+	if asyncFlush {
+		startFlush(t, tester)
+	}
+	head, bottom := len(tester.roots)-1, tester.bottomIndex()
+	if _, err := tester.db.JournalLive(tester.lastHash()); err != nil {
+		t.Fatalf("Failed to journal, err: %v", err)
+	}
+	// Copy the database as a snapshot taken now would: the key-value store as
+	// of its last sync, and the files.
+	if err := kvdb.SyncKeyValue(); err != nil {
+		t.Fatalf("Failed to sync, err: %v", err)
+	}
+	var (
+		copyKV      = kvdb.crash()
+		copyAncient = t.TempDir()
+		copyJournal string
+	)
+	if err := os.CopyFS(copyAncient, os.DirFS(ancient)); err != nil {
+		t.Fatalf("Failed to copy the ancient store, err: %v", err)
+	}
+	if journalDir != "" {
+		copyJournal = t.TempDir()
+		if err := os.CopyFS(copyJournal, os.DirFS(journalDir)); err != nil {
+			t.Fatalf("Failed to copy the journal, err: %v", err)
+		}
+	}
+	// The database stays writable, and moves its disk layer past the journal.
+	tester.extend(8)
+	if tester.bottomIndex() <= head {
+		t.Fatal("The disk layer didn't move past the journaled head")
+	}
+	// Open the copy in place of the database.
+	disk, err := rawdb.Open(copyKV, rawdb.OpenOptions{Ancient: copyAncient})
+	if err != nil {
+		t.Fatalf("Failed to open the copy, err: %v", err)
+	}
+	config := *tester.db.config
+	config.JournalDirectory = copyJournal
+
+	source := tester.db
+	tester.db = New(disk, &config)
+	defer func() {
+		tester.db.Close()
+		disk.Close()
+		tester.db = source
+	}()
+	if tester.bottomIndex() != bottom {
+		t.Fatalf("Unexpected disk layer of the copy, want: %d, got: %d", bottom, tester.bottomIndex())
+	}
+	for i := range tester.roots {
+		err := tester.verifyState(tester.roots[i])
+		if i >= bottom && i <= head {
+			if err != nil {
+				t.Fatalf("Invalid state %d in the copy, err: %v", i, err)
+			}
+		} else if err == nil {
+			t.Fatalf("Unexpected state %d in the copy", i)
+		}
+	}
+	if err := tester.verifyHistory(); err != nil {
+		t.Fatalf("Invalid state history in the copy, err: %v", err)
+	}
+}
+
+// extendToBuffer extends the tester until a write buffer that isn't empty
+// sits on persisted state.
+func extendToBuffer(t *testing.T, tester *tester) {
+	for i := 0; rawdb.ReadPersistentStateID(tester.db.diskdb) == 0 || tester.db.tree.bottom().buffer.empty(); i++ {
+		if i == 256 {
+			t.Fatal("No persisted state under a write buffer that isn't empty")
+		}
+		tester.extend(1)
+	}
+}
+
+// startFlush extends the tester until a commit starts a flush of the write
+// buffer, and once more for the new write buffer not to be empty. It returns
+// with the flush likely still running.
+func startFlush(t *testing.T, tester *tester) {
+	for i := 0; ; i++ {
+		if i == 256 {
+			t.Fatal("No flush started")
+		}
+		frozen := tester.db.tree.bottom().frozen
+		tester.extend(1)
+		if f := tester.db.tree.bottom().frozen; f != nil && f != frozen {
+			break
+		}
+	}
+	tester.extend(1)
+}
+
+// gatedStore is a key-value store that tracks its syncs and, once armed, holds
+// the batches that write a given key, after letting some of them through, until
+// released. held is closed when it first holds one.
+type gatedStore struct {
+	*syncTracker
+	key     []byte
+	pass    atomic.Int64 // Batches writing the key still let through once armed
+	armed   atomic.Bool
+	once    sync.Once
+	held    chan struct{}
+	opened  sync.Once
+	release chan struct{}
+}
+
+func newGatedStore(key []byte) *gatedStore {
+	return &gatedStore{syncTracker: newSyncTracker(), key: key, held: make(chan struct{}), release: make(chan struct{})}
+}
+
+// hold arms the store, letting n batches that write its key through.
+func (s *gatedStore) hold(n int) {
+	s.pass.Store(int64(n))
+	s.armed.Store(true)
+}
+
+// open releases the held batches, and lets the next ones through.
+func (s *gatedStore) open() {
+	s.opened.Do(func() { close(s.release) })
+}
+
+// waitHeld waits until the store holds a batch.
+func (s *gatedStore) waitHeld(t *testing.T) {
+	t.Helper()
+
+	select {
+	case <-s.held:
+	case <-time.After(time.Minute):
+		t.Fatal("No batch was held")
+	}
+}
+
+func (s *gatedStore) NewBatch() ethdb.Batch {
+	return &gatedBatch{Batch: s.syncTracker.NewBatch(), store: s}
+}
+
+func (s *gatedStore) NewBatchWithSize(size int) ethdb.Batch {
+	return &gatedBatch{Batch: s.syncTracker.NewBatchWithSize(size), store: s}
+}
+
+// gatedBatch is a batch of a gatedStore.
+type gatedBatch struct {
+	ethdb.Batch
+	store *gatedStore
+	match bool // Whether the batch writes the key of the store
+}
+
+func (b *gatedBatch) Put(key []byte, value []byte) error {
+	if bytes.Equal(key, b.store.key) {
+		b.match = true
+	}
+	return b.Batch.Put(key, value)
+}
+
+func (b *gatedBatch) Write() error {
+	if b.match && b.store.armed.Load() && b.store.pass.Add(-1) < 0 {
+		b.store.once.Do(func() { close(b.store.held) })
+		<-b.store.release
+	}
+	return b.Batch.Write()
+}
+
+func (b *gatedBatch) Reset() {
+	b.match = false
+	b.Batch.Reset()
+}
+
+// keyOf returns the key that the given write puts.
+func keyOf(write func(ethdb.KeyValueWriter)) []byte {
+	db := memorydb.New()
+	write(db)
+	it := db.NewIterator(nil, nil)
+	defer it.Release()
+	it.Next()
+	return common.CopyBytes(it.Key())
+}
+
+// openCrashCopy opens a copy of a database as a snapshot taken now holds it:
+// the key-value store as of its last sync, with the journal, and the ancient
+// store.
+func openCrashCopy(t *testing.T, kvdb *syncTracker, ancient string, config *Config) *Database {
+	t.Helper()
+
+	copyAncient := t.TempDir()
+	if err := os.CopyFS(copyAncient, os.DirFS(ancient)); err != nil {
+		t.Fatalf("Failed to copy the ancient store, err: %v", err)
+	}
+	disk, err := rawdb.Open(kvdb.crash(), rawdb.OpenOptions{Ancient: copyAncient})
+	if err != nil {
+		t.Fatalf("Failed to open the copy, err: %v", err)
+	}
+	db := New(disk, config)
+	t.Cleanup(func() {
+		db.Close()
+		disk.Close()
+	})
+	return db
+}
+
+// checkCopyLayers checks that the copy of the tester's database has the layers
+// from the given disk layer up to the given head.
+func checkCopyLayers(t *testing.T, tester *tester, copied *Database, bottom, head int) {
+	t.Helper()
+
+	if root := copied.tree.bottom().rootHash(); root != tester.roots[bottom] {
+		t.Fatalf("Unexpected disk layer of the copy, want: %x, got: %x", tester.roots[bottom], root)
+	}
+	for i := bottom; i <= head; i++ {
+		if copied.tree.get(tester.roots[i]) == nil {
+			t.Fatalf("Layer %d is missing from the copy", i)
+		}
+	}
+}
+
+// journalLiveHeld clears the journal the database loaded at its start from the
+// key-value store, for a copy to need the live journal, then writes the live
+// journal, which mustn't wait for the background work the store holds.
+func journalLiveHeld(t *testing.T, tester *tester) {
+	t.Helper()
+
+	rawdb.WriteTrieJournal(tester.db.diskdb, nil)
+	done := make(chan error, 1)
+	go func() {
+		_, err := tester.db.JournalLive(tester.lastHash())
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Failed to journal, err: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("The live journal waits for the held background work")
+	}
+}
+
+// TestJournalLiveGenerating checks that a live journal leaves the generation of
+// the state snapshot running, and that a copy taken during the generation opens
+// with every layer and completes it from its progress marker.
+func TestJournalLiveGenerating(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	var (
+		kvdb    = newGatedStore(keyOf(func(w ethdb.KeyValueWriter) { rawdb.WriteSnapshotGenerator(w, []byte{0}) }))
+		ancient = t.TempDir()
+		tester  = newTester(t, &testerConfig{layers: 64, kvdb: kvdb, ancient: ancient})
+	)
+	defer tester.release()
+	defer kvdb.open()
+	extendToBuffer(t, tester)
+
+	// Reopen the database without its state snapshot, which it generates again,
+	// as after a snap sync. Hold the generator's third batch: the first sets its
+	// initial marker, the second holds generated states.
+	var (
+		config = *tester.db.config
+		disk   = tester.db.diskdb
+	)
+	if err := tester.db.Journal(tester.lastHash()); err != nil {
+		t.Fatalf("Failed to journal, err: %v", err)
+	}
+	tester.db.Close()
+	for _, prefix := range [][]byte{rawdb.SnapshotAccountPrefix, rawdb.SnapshotStoragePrefix} {
+		it := kvdb.NewIterator(prefix, nil)
+		for it.Next() {
+			if n := len(it.Key()); n == len(prefix)+common.HashLength || n == len(prefix)+2*common.HashLength {
+				kvdb.Delete(it.Key())
+			}
+		}
+		it.Release()
+	}
+	rawdb.DeleteSnapshotGenerator(kvdb)
+	kvdb.hold(2)
+	tester.db = New(disk, &config)
+	kvdb.waitHeld(t)
+
+	head, bottom := len(tester.roots)-1, tester.bottomIndex()
+	journalLiveHeld(t, tester)
+	if err := kvdb.SyncKeyValue(); err != nil {
+		t.Fatalf("Failed to sync, err: %v", err)
+	}
+	var progress journalGenerator
+	if err := rlp.DecodeBytes(rawdb.ReadSnapshotGenerator(kvdb.crash()), &progress); err != nil || progress.Done || len(progress.Marker) == 0 {
+		t.Fatalf("The copy holds no partial generation: %+v, err: %v", progress, err)
+	}
+	copied := openCrashCopy(t, kvdb.syncTracker, ancient, &config)
+	kvdb.open()
+
+	checkCopyLayers(t, tester, copied, bottom, head)
+	select {
+	case <-copied.tree.bottom().generator.done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("The copy didn't generate the state snapshot")
+	}
+	for i := bottom; i < head; i++ {
+		root := tester.roots[i]
+		r, err := copied.StateReader(root)
+		if err != nil {
+			t.Fatalf("Failed to read state %d of the copy, err: %v", i, err)
+		}
+		for addrHash, want := range tester.snapAccounts[root] {
+			if blob, err := r.(*reader).AccountRLP(addrHash); err != nil || !bytes.Equal(blob, want) {
+				t.Fatalf("Unexpected account in state %d of the copy, want: %x, got: %x, err: %v", i, want, blob, err)
+			}
+		}
+		for addrHash, slots := range tester.snapStorages[root] {
+			for slotHash, want := range slots {
+				if blob, err := r.Storage(addrHash, slotHash); err != nil || !bytes.Equal(blob, want) {
+					t.Fatalf("Unexpected slot in state %d of the copy, want: %x, got: %x, err: %v", i, want, blob, err)
+				}
+			}
+		}
+	}
+}
+
+// TestJournalLiveIndexing checks that a live journal leaves the indexing of the
+// state histories running, and that a copy taken during the initial indexing,
+// with part of the index written, or after it, opens with every layer and
+// serves the historical states.
+func TestJournalLiveIndexing(t *testing.T) {
+	t.Run("initial", func(t *testing.T) { testJournalLiveIndexing(t, true) })
+	t.Run("indexed", func(t *testing.T) { testJournalLiveIndexing(t, false) })
+}
+
+func testJournalLiveIndexing(t *testing.T, initial bool) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	var (
+		kvdb    = newGatedStore(keyOf(func(w ethdb.KeyValueWriter) { rawdb.WriteStateHistoryIndexMetadata(w, []byte{0}) }))
+		ancient = t.TempDir()
+		tester  = newTester(t, &testerConfig{layers: 64, kvdb: kvdb, ancient: ancient})
+	)
+	defer tester.release()
+	defer kvdb.open()
+	extendToBuffer(t, tester)
+
+	// Reopen the database indexing its state histories, as an archive node does.
+	// The initial indexing writes its progress last: hold that write.
+	var (
+		config = *tester.db.config
+		disk   = tester.db.diskdb
+	)
+	config.EnableStateIndexing = true
+	if err := tester.db.Journal(tester.lastHash()); err != nil {
+		t.Fatalf("Failed to journal, err: %v", err)
+	}
+	tester.db.Close()
+	if initial {
+		kvdb.hold(0)
+	}
+	tester.db = New(disk, &config)
+	if initial {
+		kvdb.waitHeld(t)
+	} else {
+		waitIndexed(t, tester.db)
+	}
+	head, bottom := len(tester.roots)-1, tester.bottomIndex()
+	journalLiveHeld(t, tester)
+	if err := kvdb.SyncKeyValue(); err != nil {
+		t.Fatalf("Failed to sync, err: %v", err)
+	}
+	if initial {
+		crash := kvdb.crash()
+		if loadIndexMetadata(crash, typeStateHistory) != nil {
+			t.Fatal("The copy holds the progress of the initial indexing")
+		}
+		it := crash.NewIterator(rawdb.StateHistoryAccountMetadataPrefix, nil)
+		if !it.Next() {
+			t.Fatal("The copy holds none of the index")
+		}
+		it.Release()
+	}
+	copied := openCrashCopy(t, kvdb.syncTracker, ancient, &config)
+	kvdb.open()
+	checkCopyLayers(t, tester, copied, bottom, head)
+	waitIndexed(t, copied)
+
+	for i := 0; i < bottom; i++ {
+		root := tester.roots[i]
+		r, err := copied.HistoricReader(root)
+		if err != nil {
+			t.Fatalf("Failed to read historical state %d of the copy, err: %v", i, err)
+		}
+		for addrHash, want := range tester.snapAccounts[root] {
+			if blob, err := r.AccountRLP(tester.accountPreimage(addrHash)); err != nil || !bytes.Equal(blob, want) {
+				t.Fatalf("Unexpected account in historical state %d of the copy, want: %x, got: %x, err: %v", i, want, blob, err)
+			}
+		}
+	}
+}
+
+// waitIndexed waits until the database indexed its state histories. The
+// indexer can wait for its next round, 15 s later, if its first one comes before
+// it marks itself synced.
+func waitIndexed(t *testing.T, db *Database) {
+	t.Helper()
+
+	select {
+	case <-db.stateIndexer.initer.done:
+	case <-time.After(time.Minute):
+		t.Fatal("The state histories weren't indexed")
 	}
 }
 

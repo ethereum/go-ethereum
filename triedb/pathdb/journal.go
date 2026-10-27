@@ -388,7 +388,19 @@ func (db *Database) Journal(root common.Hash) error {
 	if err := db.persistHistory(); err != nil {
 		return err
 	}
-	// Store the journal into the database and return
+	if _, err := db.writeJournal(l, start); err != nil {
+		return err
+	}
+	// Set the db in read only mode to reject all following mutations
+	db.readOnly = true
+	return nil
+}
+
+// writeJournal writes the journal of the given layer and all the layers below
+// it, into the journal file if a journal directory is set and into the key-value
+// store otherwise, and returns its size. The frozen buffer must be flushed and
+// the state histories persisted beforehand.
+func (db *Database) writeJournal(l layer, start time.Time) (uint64, error) {
 	var (
 		file        *os.File
 		buffered    *bufio.Writer
@@ -399,12 +411,12 @@ func (db *Database) Journal(root common.Hash) error {
 		// Write into a temp file first
 		err := os.MkdirAll(db.config.JournalDirectory, 0755)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		tmp := journalPath + tempJournalSuffix
 		file, err = os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
-			return fmt.Errorf("failed to open journal file %s: %w", tmp, err)
+			return 0, fmt.Errorf("failed to open journal file %s: %w", tmp, err)
 		}
 		defer func() {
 			if file != nil {
@@ -421,20 +433,20 @@ func (db *Database) Journal(root common.Hash) error {
 
 	// Firstly write out the metadata of journal
 	if err := rlp.Encode(journal, journalVersion); err != nil {
-		return err
+		return 0, err
 	}
 	// Secondly write out the state root in disk, ensure all layers
 	// on top are continuous with disk.
 	diskRoot, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if err := rlp.Encode(journal, diskRoot); err != nil {
-		return err
+		return 0, err
 	}
 	// Finally write out the journal of each layer in reverse order.
 	if err := l.journal(journal); err != nil {
-		return err
+		return 0, err
 	}
 
 	// Store the journal into the database and return
@@ -443,34 +455,71 @@ func (db *Database) Journal(root common.Hash) error {
 		size := data.Len()
 		rawdb.WriteTrieJournal(db.diskdb, data.Bytes())
 		log.Info("Persisted dirty state to disk", "size", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
-	} else {
-		if err := buffered.Flush(); err != nil {
-			return fmt.Errorf("failed to flush the journal: %w", err)
-		}
-		stat, err := file.Stat()
-		if err != nil {
-			return err
-		}
-		size := int(stat.Size())
-
-		// Close the temporary file and atomically rename it
-		if err := file.Sync(); err != nil {
-			return fmt.Errorf("failed to fsync the journal, %v", err)
-		}
-		if err := file.Close(); err != nil {
-			return fmt.Errorf("failed to close the journal: %v", err)
-		}
-		// Replace the live journal with the newly generated one
-		if err := os.Rename(journalPath+tempJournalSuffix, journalPath); err != nil {
-			return fmt.Errorf("failed to rename the journal: %v", err)
-		}
-		if err := syncDir(db.config.JournalDirectory); err != nil {
-			return fmt.Errorf("failed to fsync the dir: %v", err)
-		}
-		file = nil
-		log.Info("Persisted dirty state to file", "path", journalPath, "size", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
+		return uint64(size), nil
 	}
-	// Set the db in read only mode to reject all following mutations
-	db.readOnly = true
-	return nil
+	if err := buffered.Flush(); err != nil {
+		return 0, fmt.Errorf("failed to flush the journal: %w", err)
+	}
+	stat, err := file.Stat()
+	if err != nil {
+		return 0, err
+	}
+	size := int(stat.Size())
+
+	// Close the temporary file and atomically rename it
+	if err := file.Sync(); err != nil {
+		return 0, fmt.Errorf("failed to fsync the journal, %v", err)
+	}
+	if err := file.Close(); err != nil {
+		return 0, fmt.Errorf("failed to close the journal: %v", err)
+	}
+	// Replace the live journal with the newly generated one
+	if err := os.Rename(journalPath+tempJournalSuffix, journalPath); err != nil {
+		return 0, fmt.Errorf("failed to rename the journal: %v", err)
+	}
+	if err := syncDir(db.config.JournalDirectory); err != nil {
+		return 0, fmt.Errorf("failed to fsync the dir: %v", err)
+	}
+	file = nil
+	log.Info("Persisted dirty state to file", "path", journalPath, "size", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
+	return uint64(size), nil
+}
+
+// JournalLive writes the journal of the layers up to the given root as Journal
+// does, but leaves the database running: the background state generator isn't
+// stopped and the database stays writable. It returns the size of the journal.
+//
+// The state histories are synced and the frozen buffer flushed first, so that a
+// copy of the database taken before the next mutation (a filesystem snapshot,
+// say) opens with every layer up to root, once its key-value store is synced
+// too. The caller must hold off the mutations until the copy is taken. The
+// journal stays behind like the one a clean shutdown leaves: after a crash, it's
+// loaded only if it still matches the persistent state and the state histories.
+//
+// The supplied root must be a valid trie hash value.
+func (db *Database) JournalLive(root common.Hash) (uint64, error) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	// Short circuit if the mutation is not allowed.
+	if err := db.modifyAllowed(); err != nil {
+		return 0, err
+	}
+	l := db.tree.get(root)
+	if l == nil {
+		return 0, fmt.Errorf("triedb layer [%#x] missing", root)
+	}
+	// The journal holds the live buffer of the disk layer, not the frozen one.
+	// Wait until the frozen buffer is flushed into the persistent state, which
+	// the journal is checked against. No new flush can start with the lock held.
+	if err := db.tree.bottom().waitFlush(); err != nil {
+		return 0, err
+	}
+	start := time.Now()
+
+	// The histories up to the disk layer must be on disk with the journal.
+	if err := db.persistHistory(); err != nil {
+		return 0, err
+	}
+	return db.writeJournal(l, start)
 }
