@@ -125,12 +125,12 @@ func ClassifyPrefix(frames []types.Frame, sender common.Address, signatures type
 		return invalid("invalid sender verification flags")
 	}
 	prefix.Payer = frames[prefix.End].ResolvedTarget(sender)
-	postTx := false
+	assertSuffix := false
 	for i := range frames {
-		if frames[i].Mode == types.ModePostTx {
-			postTx = true
-		} else if postTx {
-			return invalid("execution frame after POST_TX")
+		if frames[i].Mode == types.ModeAssert {
+			assertSuffix = true
+		} else if assertSuffix {
+			return invalid("execution frame after ASSERT")
 		}
 		if i <= prefix.End {
 			if frames[i].Flags&types.AtomicBatchFlag != 0 {

@@ -142,11 +142,11 @@ func (tx *FrameTx) ValidateStatic() error {
 		expiryVerifierFrames int
 	)
 	for i, frame := range tx.Frames {
-		if frame.Mode > ModePostTx {
+		if frame.Mode > ModeAssert {
 			return fmt.Errorf("%w: unknown frame mode", ErrFrameTxInvalidFormat)
 		}
-		if i > 0 && tx.Frames[i-1].Mode == ModePostTx && frame.Mode != ModePostTx {
-			return fmt.Errorf("%w: POST_TX frames must form a suffix", ErrFrameTxInvalidFormat)
+		if i > 0 && tx.Frames[i-1].Mode == ModeAssert && frame.Mode != ModeAssert {
+			return fmt.Errorf("%w: ASSERT frames must form a suffix", ErrFrameTxInvalidFormat)
 		}
 		if frame.Flags >= FlagsLimit {
 			return fmt.Errorf("%w: reserved frame flags set", ErrFrameTxInvalidFormat)
@@ -174,16 +174,16 @@ func (tx *FrameTx) ValidateStatic() error {
 			return fmt.Errorf("%w: execution approval flag outside sender target", ErrFrameTxInvalidFormat)
 		}
 
-		// Atomic batches cannot contain VERIFY or POST_TX frames.
+		// Atomic batches cannot contain VERIFY or ASSERT frames.
 		if frame.Flags&AtomicBatchFlag != 0 {
-			if frame.Mode == ModeVerify || frame.Mode == ModePostTx {
-				return fmt.Errorf("%w: atomic batches cannot contain verify or post-tx frames", ErrFrameTxInvalidFormat)
+			if frame.Mode == ModeVerify || frame.Mode == ModeAssert {
+				return fmt.Errorf("%w: atomic batches cannot contain verify or assert frames", ErrFrameTxInvalidFormat)
 			}
 			if i+1 >= len(tx.Frames) {
 				return fmt.Errorf("%w: atomic batch flag set on last frame", ErrFrameTxInvalidFormat)
 			}
-			if tx.Frames[i+1].Mode == ModeVerify || tx.Frames[i+1].Mode == ModePostTx {
-				return fmt.Errorf("%w: atomic batches cannot contain verify or post-tx frames", ErrFrameTxInvalidFormat)
+			if tx.Frames[i+1].Mode == ModeVerify || tx.Frames[i+1].Mode == ModeAssert {
+				return fmt.Errorf("%w: atomic batches cannot contain verify or assert frames", ErrFrameTxInvalidFormat)
 			}
 		}
 
@@ -420,12 +420,12 @@ func (tx *FrameTx) decode(input []byte) error {
 	return nil
 }
 
-// Frame execution modes (EIP-8141, POST_TX from EIP-7906).
+// Frame execution modes (EIP-8141, ASSERT from EIP-7906).
 const (
 	ModeDefault uint64 = 0
 	ModeVerify  uint64 = 1
 	ModeSender  uint64 = 2
-	ModePostTx  uint64 = 3
+	ModeAssert  uint64 = 3
 )
 
 // Frame flags (EIP-8141). Bits 0-1 hold the allowed approval scope, bit 2

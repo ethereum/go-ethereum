@@ -108,7 +108,7 @@ func TestRecentRootPrefixShapes(t *testing.T) {
 					}
 					frames = append(frames, shape...)
 					end := len(frames) - 1
-					frames = append(frames, types.Frame{Mode: types.ModeSender}, types.Frame{Mode: types.ModePostTx, GasLimits: types.Limits{Execution: math.MaxUint64}})
+					frames = append(frames, types.Frame{Mode: types.ModeSender}, types.Frame{Mode: types.ModeAssert, GasLimits: types.Limits{Execution: math.MaxUint64}})
 					got, err := ClassifyPrefix(frames, sender, nil)
 					if err != nil || got.End != end || got.RecentRootFrame != rootIndex {
 						t.Fatalf("prefix %+v: %v", got, err)
@@ -126,8 +126,8 @@ func TestRecentRootPrefixShapes(t *testing.T) {
 		{"duplicate expiry", []types.Frame{expiry, expiry, root, self}},
 		{"after deploy", []types.Frame{deploy, root, self}},
 		{"after validation", []types.Frame{self, root}},
-		{"post tx inside prefix", []types.Frame{{Mode: types.ModePostTx}, self}},
-		{"body after post tx", []types.Frame{self, {Mode: types.ModePostTx}, {Mode: types.ModeSender}}},
+		{"assert inside prefix", []types.Frame{{Mode: types.ModeAssert}, self}},
+		{"body after assert", []types.Frame{self, {Mode: types.ModeAssert}, {Mode: types.ModeSender}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := ClassifyPrefix(tc.frames, sender, nil); !errors.Is(err, ErrInvalidPrefix) {
@@ -437,7 +437,7 @@ func TestPostTxAdmission(t *testing.T) {
 	target := simulationHelper
 	pool, _, _ := setupFramePool(t, 10, func(s *state.StateDB) { s.SetCode(target, []byte{byte(vm.INVALID)}, tracing.CodeChangeUnspecified) })
 	tx := signedPoolTx(t, 1, 0, 0, 20, 2, nil, func(tx *types.FrameTx) {
-		tx.Frames = append(tx.Frames, types.Frame{Mode: types.ModeSender, GasLimits: types.Limits{Execution: 200_000}, Value: new(uint256.Int)}, types.Frame{Mode: types.ModePostTx, Target: &target, GasLimits: types.Limits{Execution: 200_000}, Value: new(uint256.Int)})
+		tx.Frames = append(tx.Frames, types.Frame{Mode: types.ModeSender, GasLimits: types.Limits{Execution: 200_000}, Value: new(uint256.Int)}, types.Frame{Mode: types.ModeAssert, Target: &target, GasLimits: types.Limits{Execution: 200_000}, Value: new(uint256.Int)})
 	})
 	addPoolTx(t, pool, tx, nil)
 	assertLive(t, pool, tx, true)

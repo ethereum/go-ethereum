@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -38,7 +39,7 @@ func assertionTestEVM(t *testing.T) (*EVM, *state.StateDB) {
 	cfg := amsterdam8037Config()
 	cfg.BogotaTime = new(uint64)
 	evm := NewEVM(amsterdam8037EVM(db).Context, db, cfg, Config{})
-	evm.TxContext.FrameContext = &FrameContext{Frames: []types.Frame{{Mode: types.ModePostTx}, {Mode: types.ModePostTx}}, MaxCost: uint256.NewInt(12345)}
+	evm.TxContext.FrameContext = &FrameContext{Frames: []types.Frame{{Mode: types.ModeAssert}, {Mode: types.ModeAssert}}, MaxCost: uint256.NewInt(12345)}
 	db.SetTxContext(common.HexToHash("0x123"), 0, 1)
 	return evm, db
 }
@@ -70,56 +71,54 @@ func TestAssertionTables(t *testing.T) {
 	db.SetState(a, k2, k1)
 	db.SetState(a, k1, k2)
 	db.SetBalance(a, uint256.NewInt(8), tracing.BalanceChangeUnspecified)
+	db.SetNonce(a, 5, tracing.NonceChangeUnspecified)
 	db.SetCode(b, []byte{0}, tracing.CodeChangeUnspecified)
 	db.AddLog(&types.Log{Address: b, Topics: []common.Hash{k1, k2, k2}, Data: []byte{10, 11, 12}})
 	db.AddLog(&types.Log{Address: a, Topics: []common.Hash{k2, k1}})
 	evm.TxContext.FrameContext.Payer = &a
 	cases := []struct {
-		op   OpCode
-		args []uint64
-		want uint64
+		param, index uint64
+		want         uint64
 	}{
-		{TXTRACE, []uint64{0, 0}, 1}, {TXTRACE, []uint64{1, 0}, 3}, {TXTRACE, []uint64{2, 0}, 1},
-		{TXTRACE, []uint64{3, 0}, 1}, {TXTRACE, []uint64{4, 0}, 10}, {TXTRACE, []uint64{5, 0}, 8},
-		{TXTRACE, []uint64{6, 0}, 1}, {TXTRACE, []uint64{7, 0}, 3}, {TXTRACE, []uint64{8, 0}, 3}, {TXTRACE, []uint64{9, 0}, 4},
-		{TXTRACE, []uint64{6, 1}, 1}, {TXTRACE, []uint64{7, 1}, 4}, {TXTRACE, []uint64{6, 2}, 2},
-		{TXTRACE, []uint64{0x0a, 0}, 2}, {TXTRACE, []uint64{0x0c, 0}, 2},
-		{TXTRACE, []uint64{0x0d, 0}, 2}, {TXTRACE, []uint64{0x0e, 0}, 3},
-		{TXTRACE, []uint64{0x0f, 0}, 3}, {TXTRACE, []uint64{0x10, 0}, 4}, {TXTRACE, []uint64{0x11, 0}, 4},
-		{TXTRACE, []uint64{0x13, 0}, 3}, {TXTRACE, []uint64{0x14, 0}, 12345}, {TXTRACE, []uint64{0x15, 0}, 1},
-		{TXDIFF, []uint64{0, 1, 3}, 3}, {TXDIFF, []uint64{1, 1, 3}, 4},
-		{TXDIFF, []uint64{2, 1, 0}, 10}, {TXDIFF, []uint64{3, 1, 0}, 8},
-		{TXDIFF, []uint64{6, 1, 0}, 2}, {TXDIFF, []uint64{7, 1, 1}, 1}, {TXDIFF, []uint64{7, 2, 0}, 2},
-		{TXDIFF, []uint64{8, 1, 0}, 1}, {TXDIFF, []uint64{9, 1, 0}, 1}, {TXDIFF, []uint64{9, 2, 0}, 0},
-		{TXDIFF, []uint64{0x0a, 1, 0}, 6}, {TXDIFF, []uint64{0x0a, 2, 0}, 12},
-		{TXDIFF, []uint64{0x0b, 4, 0}, 1}, {TXDIFF, []uint64{0x0c, 4, 0}, 0}, {TXDIFF, []uint64{0x0c, 3, 0}, 1},
+		// Table counts: a's balance, a's two slots and b's slot, b's code,
+		// a's nonce, and the two events.
+		{0x00, 0, 1}, {0x01, 0, 3}, {0x02, 0, 1}, {0x03, 0, 1}, {0x11, 0, 2},
+		// Balances: address, before, after.
+		{0x04, 0, 1}, {0x05, 0, 10}, {0x06, 0, 8},
+		// Slots, sorted by address then key: address, before, after, key.
+		{0x07, 0, 1}, {0x08, 0, 3}, {0x09, 0, 4}, {0x0a, 0, 3},
+		{0x07, 1, 1}, {0x08, 1, 0}, {0x09, 1, 3}, {0x0a, 1, 4},
+		{0x07, 2, 2}, {0x0a, 2, 4},
+		// Codes and nonces: address first.
+		{0x0b, 0, 2}, {0x0e, 0, 1}, {0x0f, 0, 0}, {0x10, 0, 5},
+		// Events in emission order.
+		{0x12, 0, 2}, {0x13, 0, 3}, {0x14, 0, 3}, {0x15, 0, 4}, {0x16, 0, 4}, {0x18, 0, 3},
+		{0x12, 1, 1}, {0x13, 1, 2}, {0x14, 1, 4}, {0x15, 1, 3}, {0x18, 1, 0},
+		// Gas payment.
+		{0x19, 0, 12345}, {0x1a, 0, 1},
 	}
 	for _, tc := range cases {
-		args := make([]*uint256.Int, len(tc.args))
-		for i, v := range tc.args {
-			args[i] = uint256.NewInt(v)
-		}
-		got, _, err := assertionOp(evm, tc.op, args...)
+		got, _, err := assertionOp(evm, TXTRACE, uint256.NewInt(tc.param), uint256.NewInt(tc.index))
 		if err != nil || got != *uint256.NewInt(tc.want) {
-			t.Errorf("%s %v: %v, %v; want %d", tc.op, tc.args, got, err, tc.want)
+			t.Errorf("TXTRACE %#x %d: %v, %v; want %d", tc.param, tc.index, got, err, tc.want)
 		}
 	}
-	for _, p := range []uint64{4, 5} {
-		got, _, err := assertionOp(evm, TXDIFF, uint256.NewInt(p), uint256.NewInt(99), new(uint256.Int))
-		if err != nil || common.Hash(got.Bytes32()) != types.EmptyCodeHash {
-			t.Fatalf("absent code hash: %x, %v", got, err)
+	for param, want := range map[uint64]common.Hash{0x0c: types.EmptyCodeHash, 0x0d: crypto.Keccak256Hash([]byte{0})} {
+		got, _, err := assertionOp(evm, TXTRACE, uint256.NewInt(param), new(uint256.Int))
+		if err != nil || common.Hash(got.Bytes32()) != want {
+			t.Errorf("TXTRACE %#x: %x, %v; want %x", param, got.Bytes32(), err, want)
 		}
 	}
 	// A different frame must see fresh tables, even if the old frame read them.
 	db.AddLog(&types.Log{Address: a})
 	evm.TxContext.FrameContext.CurrentFrame++
 	evm.depth = 2
-	got, _, err := assertionOp(evm, TXTRACE, uint256.NewInt(0x0c), new(uint256.Int))
+	got, _, err := assertionOp(evm, TXTRACE, uint256.NewInt(0x11), new(uint256.Int))
 	if err != nil || got.Uint64() != 3 {
 		t.Fatalf("next frame/nested call: %v, %v", got, err)
 	}
 	evm.TxContext.FrameContext.Payer = nil
-	got, _, err = assertionOp(evm, TXTRACE, uint256.NewInt(0x15), new(uint256.Int))
+	got, _, err = assertionOp(evm, TXTRACE, uint256.NewInt(0x1a), new(uint256.Int))
 	if err != nil || !got.IsZero() {
 		t.Fatal("nil payer is not zero")
 	}
@@ -135,18 +134,14 @@ func TestAssertionHaltsAndCopy(t *testing.T) {
 		op   OpCode
 		args []*uint256.Int
 	}{
-		{TXTRACE, []*uint256.Int{uint256.NewInt(0x16), zero}},
+		{TXTRACE, []*uint256.Int{uint256.NewInt(0x1b), zero}},
 		{TXTRACE, []*uint256.Int{huge, zero}},
 		{TXTRACE, []*uint256.Int{zero, one}},
-		{TXTRACE, []*uint256.Int{uint256.NewInt(0x0d), huge}},
-		{TXTRACE, []*uint256.Int{uint256.NewInt(0x0d), one}},
-		{TXTRACE, []*uint256.Int{uint256.NewInt(0x0f), zero}},
-		{TXDIFF, []*uint256.Int{uint256.NewInt(13), zero, zero}},
-		{TXDIFF, []*uint256.Int{huge, zero, zero}},
-		{TXDIFF, []*uint256.Int{uint256.NewInt(2), zero, one}},
-		{TXDIFF, []*uint256.Int{uint256.NewInt(7), zero, huge}},
-		{TXDIFF, []*uint256.Int{uint256.NewInt(9), zero, one}},
-		{TXDIFF, []*uint256.Int{uint256.NewInt(0x0c), zero, zero}},
+		{TXTRACE, []*uint256.Int{uint256.NewInt(0x19), one}},
+		{TXTRACE, []*uint256.Int{uint256.NewInt(0x04), zero}},
+		{TXTRACE, []*uint256.Int{uint256.NewInt(0x12), huge}},
+		{TXTRACE, []*uint256.Int{uint256.NewInt(0x12), one}},
+		{TXTRACE, []*uint256.Int{uint256.NewInt(0x14), zero}},
 		{EVENTDATACOPY, []*uint256.Int{huge, zero, zero, zero}},
 		{EVENTDATACOPY, []*uint256.Int{zero, zero, uint256.NewInt(4), zero}},
 		{EVENTDATACOPY, []*uint256.Int{zero, zero, huge, zero}},
@@ -166,9 +161,9 @@ func TestAssertionHaltsAndCopy(t *testing.T) {
 	if _, _, err := assertionOp(evm, EVENTDATACOPY, zero, max, uint256.NewInt(3), zero); err != nil {
 		t.Fatalf("zero length at end: %v", err)
 	}
-	for _, mode := range []uint64{types.ModeDefault, types.ModeVerify, types.ModeSender, types.ModePostTx + 1} {
+	for _, mode := range []uint64{types.ModeDefault, types.ModeVerify, types.ModeSender, types.ModeAssert + 1} {
 		evm.TxContext.FrameContext.Frames[0].Mode = mode
-		for _, op := range []OpCode{TXTRACE, TXDIFF, EVENTDATACOPY} {
+		for _, op := range []OpCode{TXTRACE, EVENTDATACOPY} {
 			if _, _, err := assertionOp(evm, op, zero, zero, zero, zero); !errors.Is(err, errInvalidAssertion) {
 				t.Fatalf("mode %d %s: %v", mode, op, err)
 			}
@@ -180,7 +175,8 @@ func TestAssertionHaltsAndCopy(t *testing.T) {
 	}
 }
 
-// assertionReads checks the live-getter boundary separately from table reads.
+// assertionReads counts live state reads, which the assertion instructions
+// must never perform: they read only the transaction's own diff and logs.
 type assertionReads struct {
 	StateDB
 	reads int
@@ -199,78 +195,24 @@ func (s *assertionReads) GetState(a common.Address, k common.Hash) common.Hash {
 	return s.StateDB.GetState(a, k)
 }
 
-func TestAssertionGasAndAccess(t *testing.T) {
-	for _, p := range []uint64{0, 1, 2, 3, 4, 5, 6, 8, 10, 11, 13} {
-		t.Run(uint256.NewInt(p).String(), func(t *testing.T) {
-			evm, db := assertionTestEVM(t)
-			reads := &assertionReads{StateDB: db}
-			evm.StateDB = reads
-			address := common.HexToAddress("0x22")
-			scope := &ScopeContext{Stack: newStackForTesting(), Memory: NewMemory(), Contract: NewContract(common.Address{}, common.Address{}, new(uint256.Int), NewGasBudget(100000, 0), nil)}
-			defer scope.Memory.Free()
-			scope.Stack.push(new(uint256.Int))
-			scope.Stack.push(uint256.NewInt(0x22))
-			scope.Stack.push(uint256.NewInt(p))
-			snapshot := db.Snapshot()
-			gas, err := gasTxDiff(evm, scope.Contract, scope.Stack, scope.Memory, 0)
-			want := params.WarmAccountAccessAmsterdam
-			if p < 2 {
-				want = params.ColdStorageAccessAmsterdam
-			} else if p < 6 {
-				want = params.ColdAccountAccessAmsterdam
-			}
-			if err != nil || gas.ExecutionGas != want || reads.reads != 0 {
-				t.Fatalf("cold cost %v, %v; reads %d", gas, err, reads.reads)
-			}
-			account, slot := db.SlotInAccessList(address, common.Hash{})
-			if account != (p >= 2 && p < 6) || slot != (p < 2) {
-				t.Fatalf("warmth: %v %v", account, slot)
-			}
-			gas, _ = gasTxDiff(evm, scope.Contract, scope.Stack, scope.Memory, 0)
-			if gas.ExecutionGas != params.WarmAccountAccessAmsterdam {
-				t.Fatalf("warm cost: %v", gas)
-			}
-			pc := uint64(0)
-			_, err = opTxDiff(&pc, evm, scope)
-			if p <= 12 && err != nil {
-				t.Fatal(err)
-			}
-			wantReads := 0
-			if p < 6 {
-				wantReads = 1
-			}
-			if reads.reads != wantReads {
-				t.Fatalf("live reads: %d", reads.reads)
-			}
-			db.RevertToSnapshot(snapshot)
-			if a, s := db.SlotInAccessList(address, common.Hash{}); a || s {
-				t.Fatal("warmth survived revert")
-			}
-		})
-	}
-	// Interpreter-level checks ensure gas precedes invalid context/operands.
-	for _, op := range []OpCode{TXTRACE, TXDIFF, EVENTDATACOPY} {
+// TestAssertionGasPrecedesContext checks that the instructions charge their
+// gas before validating their context and operands.
+func TestAssertionGasPrecedesContext(t *testing.T) {
+	for _, op := range []OpCode{TXTRACE, EVENTDATACOPY} {
 		for _, gas := range []uint64{0, 10000} {
 			evm, db := assertionTestEVM(t)
 			reads := &assertionReads{StateDB: db}
 			evm.StateDB = reads
 			evm.TxContext.FrameContext = nil
 			code := []byte{byte(PUSH0), byte(PUSH0)}
-			if op != TXTRACE {
-				code = append(code, byte(PUSH0))
-			}
+			opCost := params.WarmAccountAccessAmsterdam
 			if op == EVENTDATACOPY {
-				code = append(code, byte(PUSH0))
+				code = append(code, byte(PUSH0), byte(PUSH0))
+				opCost = GasFastestStep
 			}
 			code = append(code, byte(op))
 			budget := gas
 			if gas == 0 {
-				opCost := params.WarmAccountAccessAmsterdam
-				if op == TXDIFF {
-					opCost = params.ColdStorageAccessAmsterdam
-				} else if op == EVENTDATACOPY {
-					opCost = GasFastestStep
-				}
 				budget = uint64(len(code)-1)*GasQuickStep + opCost - 1
 			}
 			contract := NewContract(common.Address{}, common.Address{}, new(uint256.Int), NewGasBudget(budget, 0), nil)
@@ -288,7 +230,7 @@ func TestAssertionGasAndAccess(t *testing.T) {
 }
 
 func TestAssertionForkActivation(t *testing.T) {
-	for _, op := range []OpCode{TXTRACE, TXDIFF, EVENTDATACOPY} {
+	for _, op := range []OpCode{TXTRACE, EVENTDATACOPY} {
 		evm, _ := assertionTestEVM(t)
 		cfg := amsterdam8037Config()
 		old := NewEVM(evm.Context, evm.StateDB, cfg, Config{})
@@ -313,19 +255,5 @@ func TestAssertionCopyGas(t *testing.T) {
 	// PUSH operands (10), copy base (3), two copied words (6), two memory words (6).
 	if contract.Gas.UsedExecutionGas != 25 {
 		t.Fatalf("EVENTDATACOPY gas = %d, want 25", contract.Gas.UsedExecutionGas)
-	}
-}
-
-func TestAssertionReservedInputsDoNotReadState(t *testing.T) {
-	evm, db := assertionTestEVM(t)
-	reads := &assertionReads{StateDB: db}
-	evm.StateDB = reads
-	for p := uint64(2); p <= 5; p++ {
-		if _, _, err := assertionOp(evm, TXDIFF, uint256.NewInt(p), uint256.NewInt(42), uint256.NewInt(1)); !errors.Is(err, errInvalidAssertion) {
-			t.Fatalf("reserved input, param %d: %v", p, err)
-		}
-	}
-	if reads.reads != 0 {
-		t.Fatalf("reserved inputs recorded %d state reads", reads.reads)
 	}
 }

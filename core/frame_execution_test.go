@@ -28,7 +28,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-func TestFramePostTxBodyRollback(t *testing.T) {
+func TestFrameAssertBodyRollback(t *testing.T) {
 	target := common.HexToAddress("0xcafe")
 	assertion := common.HexToAddress("0xdead")
 	for _, code := range [][]byte{
@@ -43,8 +43,8 @@ func TestFramePostTxBodyRollback(t *testing.T) {
 		tx := prefixTestTx(t, []types.Frame{
 			prefixVerifyFrame(),
 			{Mode: types.ModeSender, Target: &target, GasLimits: types.Limits{Execution: 100_000, State: 200_000}, Value: new(uint256.Int)},
-			{Mode: types.ModePostTx, Target: &assertion, Flags: types.ApprovePayment, GasLimits: types.Limits{Execution: 10_000}, Value: new(uint256.Int)},
-			{Mode: types.ModePostTx, GasLimits: types.Limits{Execution: 10_000}, Value: new(uint256.Int)},
+			{Mode: types.ModeAssert, Target: &assertion, Flags: types.ApprovePayment, GasLimits: types.Limits{Execution: 10_000}, Value: new(uint256.Int)},
+			{Mode: types.ModeAssert, GasLimits: types.Limits{Execution: 10_000}, Value: new(uint256.Int)},
 		}, 10, 2)
 		result, err := ApplyMessage(evm, prefixTestMessage(t, evm, tx), nil)
 		if err != nil {

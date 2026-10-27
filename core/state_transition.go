@@ -1591,7 +1591,7 @@ func (st *stateTransition) applyFrames(rules params.Rules) (*common.Address, []t
 		frameCtx.Receipts = append(frameCtx.Receipts, receipt)
 		logRanges = append(logRanges, frameLogRange{logStart, countLogs()})
 
-		if frame.Mode == types.ModePostTx && receipt.Status == frameStatusFailed {
+		if frame.Mode == types.ModeAssert && receipt.Status == frameStatusFailed {
 			if prefixCaptured {
 				// Keep the validation prefix and execution gas, but discard
 				// all body state, logs and state-gas charges.
@@ -1775,7 +1775,7 @@ func (st *stateTransition) executeFrame(frameCtx *vm.FrameContext, frame *types.
 		leftover vm.GasBudget
 		vmerr    error
 	)
-	if frame.Mode == types.ModeVerify || frame.Mode == types.ModePostTx {
+	if frame.Mode == types.ModeVerify || frame.Mode == types.ModeAssert {
 		// Only VERIFY's APPROVE may bypass write protection.
 		_, leftover, vmerr = st.evm.StaticCall(caller, target, frame.Data, budget)
 	} else {

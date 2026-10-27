@@ -66,53 +66,25 @@ func TestTransactionDiff(t *testing.T) {
 	if !reflect.DeepEqual(diff.Slots, wantSlots) {
 		t.Fatalf("slots: %#v", diff.Slots)
 	}
-	if len(diff.Deployed) != 1 || diff.Deployed[0] != (TransactionDeployment{b, crypto.Keccak256Hash([]byte{0})}) {
-		t.Fatalf("deployed: %#v", diff.Deployed)
+	wantCodes := []TransactionCodeChange{
+		{b, types.EmptyCodeHash, crypto.Keccak256Hash([]byte{0})},
+		{c, types.EmptyCodeHash, crypto.Keccak256Hash(types.AddressToDelegation(a))},
 	}
-	if diff.AccountFlags[a] != 7 || diff.AccountFlags[b] != 10 || diff.AccountFlags[c] != 8 {
-		t.Fatalf("flags: %v", diff.AccountFlags)
+	if !reflect.DeepEqual(diff.Codes, wantCodes) {
+		t.Fatalf("codes: %#v", diff.Codes)
+	}
+	if want := []TransactionNonceChange{{a, 1, 2}}; !reflect.DeepEqual(diff.Nonces, want) {
+		t.Fatalf("nonces: %#v", diff.Nonces)
 	}
 	if len(diff.Events) != 2 || diff.Events[0].Address != b || diff.Events[1].Address != a {
 		t.Fatalf("events: %v", diff.Events)
-	}
-	if !reflect.DeepEqual(diff.TopicIndices[k2], []uint64{0}) || !reflect.DeepEqual(diff.TopicIndices[k1], []uint64{1}) {
-		t.Fatalf("topic indices: %v", diff.TopicIndices)
 	}
 	s.SetBalance(a, uint256.NewInt(10), tracing.BalanceChangeUnspecified)
 	s.SetState(a, k2, k2)
 	s.SetNonce(a, 1, tracing.NonceChangeUnspecified)
 	diff = s.GetTransactionDiff()
-	if len(diff.Balances) != 1 || len(diff.Slots) != 0 || diff.AccountFlags[a] != 0 {
+	if len(diff.Balances) != 1 || len(diff.Slots) != 0 || len(diff.Nonces) != 0 || len(diff.Codes) != 2 {
 		t.Fatalf("restored values remain: %#v", diff)
-	}
-}
-
-func TestAssertionSlotAccessList(t *testing.T) {
-	s, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
-	addr, key := common.HexToAddress("0x123"), common.HexToHash("0x45")
-	snapshot := s.Snapshot()
-	s.AddSlotToAccessListOnly(addr, key)
-	for _, db := range []*StateDB{s, s.Copy()} {
-		if account, slot := db.SlotInAccessList(addr, key); account || !slot {
-			t.Fatalf("independent slot warmth = %v, %v", account, slot)
-		}
-	}
-	nested := s.Snapshot()
-	s.AddAddressToAccessList(addr)
-	if account, slot := s.SlotInAccessList(addr, key); !account || !slot {
-		t.Fatal("warming account lost slot")
-	}
-	s.RevertToSnapshot(nested)
-	if account, slot := s.SlotInAccessList(addr, key); account || !slot {
-		t.Fatal("account revert lost slot")
-	}
-	s.AddSlotToAccessList(addr, key)
-	if account, slot := s.SlotInAccessList(addr, key); !account || !slot {
-		t.Fatal("ordinary slot warming failed")
-	}
-	s.RevertToSnapshot(snapshot)
-	if account, slot := s.SlotInAccessList(addr, key); account || slot {
-		t.Fatal("slot warmth survived revert")
 	}
 }
 
@@ -128,27 +100,20 @@ func TestTransactionDiffUnloadedCode(t *testing.T) {
 	}
 	s, _ = New(root, database)
 	s.SetCode(addr, []byte{0x00}, tracing.CodeChangeUnspecified)
-	before := s.GetTransactionAccount(addr)
-	if before.CodeHash != crypto.Keccak256Hash(code) {
-		t.Fatalf("unloaded original code hash = %x", before.CodeHash)
-	}
-	if diff := s.GetTransactionDiff(); len(diff.Deployed) != 0 || diff.AccountFlags[addr] != 8 {
-		t.Fatalf("replaced code: %#v", diff)
+	if diff := s.GetTransactionDiff(); !reflect.DeepEqual(diff.Codes, []TransactionCodeChange{{addr, crypto.Keccak256Hash(code), crypto.Keccak256Hash([]byte{0x00})}}) {
+		t.Fatalf("replaced code: %#v", diff.Codes)
 	}
 	s.SetCode(addr, code, tracing.CodeChangeUnspecified)
-	if diff := s.GetTransactionDiff(); len(diff.Deployed) != 0 || diff.AccountFlags[addr] != 0 {
-		t.Fatalf("restored code: %#v", diff)
+	if diff := s.GetTransactionDiff(); len(diff.Codes) != 0 {
+		t.Fatalf("restored code: %#v", diff.Codes)
 	}
 }
 
-func TestAssertionMissingSlotBAL(t *testing.T) {
+func TestMissingSlotReadBAL(t *testing.T) {
 	s, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 	s.Prepare(params.Rules{IsAmsterdam: true}, common.Address{}, common.Address{}, nil, nil, nil)
 	addr, key := common.HexToAddress("0x123"), common.HexToHash("0x45")
 	s.GetState(addr, key)
-	if s.GetTransactionState(addr, key) != (common.Hash{}) {
-		t.Fatal("absent slot prestate is not zero")
-	}
 	entries := *s.stateAccessList.ToEncodingObj()
 	if len(entries) != 1 || entries[0].Address != addr || len(entries[0].StorageReads) != 1 || common.Hash(entries[0].StorageReads[0].Bytes32()) != key {
 		t.Fatalf("missing slot BAL: %#v", entries)

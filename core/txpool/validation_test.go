@@ -181,7 +181,7 @@ func TestValidateFrameTransactionStatic(t *testing.T) {
 		},
 		{
 			name:    "unknown mode",
-			mutate:  func(tx *types.FrameTx) { tx.Frames[0].Mode = 3 },
+			mutate:  func(tx *types.FrameTx) { tx.Frames[0].Mode = types.ModeAssert + 1 },
 			wantErr: true,
 		},
 		{

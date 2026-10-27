@@ -19,7 +19,6 @@ package vm
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
@@ -27,14 +26,38 @@ import (
 
 var errInvalidAssertion = errors.New("invalid transaction assertion parameter or context")
 
+// TXTRACE parameters (EIP-7906). Every state-change table lists its address,
+// before and after params consecutively.
+const (
+	txTraceBalancesChanged = 0x00
+	txTraceSlotsChanged    = 0x01
+	txTraceCodesChanged    = 0x02
+	txTraceNoncesChanged   = 0x03
+	txTraceBalanceAddress  = 0x04 // then BALANCE_BEFORE, BALANCE_AFTER
+	txTraceSlotAddress     = 0x07 // then SLOT_BEFORE, SLOT_AFTER, SLOT_KEY
+	txTraceCodeAddress     = 0x0b // then CODE_BEFORE, CODE_AFTER
+	txTraceNonceAddress    = 0x0e // then NONCE_BEFORE, NONCE_AFTER
+	txTraceEventsCount     = 0x11
+	txTraceEventAddress    = 0x12
+	txTraceEventTopicCount = 0x13
+	txTraceEventTopic0     = 0x14 // through EVENT_TOPIC3
+	txTraceEventDataLen    = 0x18
+	txTraceGasPreCharge    = 0x19
+	txTraceGasPayer        = 0x1a
+)
+
 type assertionDiffCache struct {
 	frame int
 	diff  *state.TransactionDiff
 }
 
-func postTxContext(evm *EVM) (*FrameContext, error) {
+// assertContext returns the executing frame transaction's context, or an
+// error unless the executing frame is an ASSERT frame. The check keys on the
+// frame, not the call depth, so the assertion instructions are valid anywhere
+// in an ASSERT frame's call subtree and nowhere else.
+func assertContext(evm *EVM) (*FrameContext, error) {
 	fc := evm.TxContext.FrameContext
-	if fc == nil || fc.CurrentFrame < 0 || fc.CurrentFrame >= len(fc.Frames) || fc.Frames[fc.CurrentFrame].Mode != types.ModePostTx {
+	if fc == nil || fc.CurrentFrame < 0 || fc.CurrentFrame >= len(fc.Frames) || fc.Frames[fc.CurrentFrame].Mode != types.ModeAssert {
 		return nil, errInvalidAssertion
 	}
 	return fc, nil
@@ -51,78 +74,99 @@ func assertionIndex(index *uint256.Int, length int) bool {
 	return index.IsUint64() && index.Uint64() < uint64(length)
 }
 
+// opTxTrace implements the TXTRACE instruction (EIP-7906), pushing one value
+// of the executing transaction's state diff selected by a parameter and, for
+// the per-entry parameters, an index into the table the parameter enumerates.
 func opTxTrace(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	fc, err := postTxContext(evm)
+	fc, err := assertContext(evm)
 	if err != nil {
 		return nil, err
 	}
 	param, index := scope.Stack.pop(), scope.Stack.pop()
-	if !param.IsUint64() || param.Uint64() > 0x15 {
+	if !param.IsUint64() || param.Uint64() > txTraceGasPayer {
 		return nil, errInvalidAssertion
 	}
 	diff := assertionDiff(evm, fc)
 	var value uint256.Int
 	p, i := param.Uint64(), index.Uint64()
-	switch p {
-	case 0, 1, 2, 0x0c, 0x14, 0x15:
+	switch {
+	case p <= txTraceNoncesChanged || p == txTraceEventsCount || p >= txTraceGasPreCharge:
 		if !index.IsZero() {
 			return nil, errInvalidAssertion
 		}
 		switch p {
-		case 0:
+		case txTraceBalancesChanged:
 			value.SetUint64(uint64(len(diff.Balances)))
-		case 1:
+		case txTraceSlotsChanged:
 			value.SetUint64(uint64(len(diff.Slots)))
-		case 2:
-			value.SetUint64(uint64(len(diff.Deployed)))
-		case 0x0c:
+		case txTraceCodesChanged:
+			value.SetUint64(uint64(len(diff.Codes)))
+		case txTraceNoncesChanged:
+			value.SetUint64(uint64(len(diff.Nonces)))
+		case txTraceEventsCount:
 			value.SetUint64(uint64(len(diff.Events)))
-		case 0x14:
+		case txTraceGasPreCharge:
 			if fc.MaxCost != nil {
 				value.Set(fc.MaxCost)
 			}
-		case 0x15:
+		case txTraceGasPayer:
 			if fc.Payer != nil {
 				value.SetBytes(fc.Payer[:])
 			}
 		}
-	case 3, 4, 5:
+	case p < txTraceSlotAddress:
 		if !assertionIndex(&index, len(diff.Balances)) {
 			return nil, errInvalidAssertion
 		}
 		entry := &diff.Balances[i]
-		switch p {
-		case 3:
+		switch p - txTraceBalanceAddress {
+		case 0:
 			value.SetBytes(entry.Address[:])
-		case 4:
+		case 1:
 			value.Set(&entry.Before)
-		case 5:
+		case 2:
 			value.Set(&entry.After)
 		}
-	case 6, 7, 8, 9:
+	case p < txTraceCodeAddress:
 		if !assertionIndex(&index, len(diff.Slots)) {
 			return nil, errInvalidAssertion
 		}
 		entry := &diff.Slots[i]
-		switch p {
-		case 6:
+		switch p - txTraceSlotAddress {
+		case 0:
 			value.SetBytes(entry.Address[:])
-		case 7:
-			value.SetBytes(entry.Key[:])
-		case 8:
+		case 1:
 			value.SetBytes(entry.Before[:])
-		case 9:
+		case 2:
 			value.SetBytes(entry.After[:])
+		case 3:
+			value.SetBytes(entry.Key[:])
 		}
-	case 0x0a, 0x0b:
-		if !assertionIndex(&index, len(diff.Deployed)) {
+	case p < txTraceNonceAddress:
+		if !assertionIndex(&index, len(diff.Codes)) {
 			return nil, errInvalidAssertion
 		}
-		entry := &diff.Deployed[i]
-		if p == 0x0a {
+		entry := &diff.Codes[i]
+		switch p - txTraceCodeAddress {
+		case 0:
 			value.SetBytes(entry.Address[:])
-		} else {
-			value.SetBytes(entry.CodeHash[:])
+		case 1:
+			value.SetBytes(entry.Before[:])
+		case 2:
+			value.SetBytes(entry.After[:])
+		}
+	case p < txTraceEventsCount:
+		if !assertionIndex(&index, len(diff.Nonces)) {
+			return nil, errInvalidAssertion
+		}
+		entry := &diff.Nonces[i]
+		switch p - txTraceNonceAddress {
+		case 0:
+			value.SetBytes(entry.Address[:])
+		case 1:
+			value.SetUint64(entry.Before)
+		case 2:
+			value.SetUint64(entry.After)
 		}
 	default:
 		if !assertionIndex(&index, len(diff.Events)) {
@@ -130,14 +174,14 @@ func opTxTrace(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		}
 		event := diff.Events[i]
 		switch p {
-		case 0x0d:
+		case txTraceEventAddress:
 			value.SetBytes(event.Address[:])
-		case 0x0e:
+		case txTraceEventTopicCount:
 			value.SetUint64(uint64(len(event.Topics)))
-		case 0x13:
+		case txTraceEventDataLen:
 			value.SetUint64(uint64(len(event.Data)))
 		default:
-			position := p - 0x0f
+			position := p - txTraceEventTopic0
 			if position >= uint64(len(event.Topics)) {
 				return nil, errInvalidAssertion
 			}
@@ -148,73 +192,10 @@ func opTxTrace(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
 }
 
-func opTxDiff(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	fc, err := postTxContext(evm)
-	if err != nil {
-		return nil, err
-	}
-	param, key, index := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.pop()
-	if !param.IsUint64() || param.Uint64() > 0x0c {
-		return nil, errInvalidAssertion
-	}
-	p := param.Uint64()
-	if p >= 2 && p != 7 && p != 9 && p != 0x0c && !index.IsZero() {
-		return nil, errInvalidAssertion
-	}
-	address := common.Address(key.Bytes20())
-	var value uint256.Int
-	switch p {
-	case 0, 1:
-		slot := common.Hash(index.Bytes32())
-		live := evm.StateDB.GetState(address, slot)
-		if p == 0 {
-			live = evm.StateDB.GetTransactionState(address, slot)
-		}
-		value.SetBytes(live[:])
-	case 2, 3:
-		value.Set(evm.StateDB.GetBalance(address))
-		if p == 2 {
-			before := evm.StateDB.GetTransactionAccount(address)
-			value.Set(&before.Balance)
-		}
-	case 4, 5:
-		hash := evm.StateDB.GetCodeHash(address)
-		if hash == (common.Hash{}) {
-			hash = types.EmptyCodeHash
-		}
-		if p == 4 {
-			hash = evm.StateDB.GetTransactionAccount(address).CodeHash
-		}
-		value.SetBytes(hash[:])
-	default:
-		diff := assertionDiff(evm, fc)
-		var indices []uint64
-		switch p {
-		case 6, 7:
-			indices = diff.SlotIndices[address]
-		case 8, 9:
-			indices = diff.EventIndices[address]
-		case 0x0a:
-			value.SetUint64(diff.AccountFlags[address])
-		case 0x0b, 0x0c:
-			indices = diff.TopicIndices[common.Hash(key.Bytes32())]
-		}
-		switch p {
-		case 6, 8, 0x0b:
-			value.SetUint64(uint64(len(indices)))
-		case 7, 9, 0x0c:
-			if !assertionIndex(&index, len(indices)) {
-				return nil, errInvalidAssertion
-			}
-			value.SetUint64(indices[index.Uint64()])
-		}
-	}
-	scope.Stack.push(&value)
-	return nil, nil
-}
-
+// opEventDataCopy implements the EVENTDATACOPY instruction (EIP-7906),
+// copying a portion of one event's non-indexed data into memory.
 func opEventDataCopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	fc, err := postTxContext(evm)
+	fc, err := assertContext(evm)
 	if err != nil {
 		return nil, err
 	}

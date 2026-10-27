@@ -666,19 +666,13 @@ func enable8141(jt *JumpTable) {
 	}
 }
 
-// enable7906 enables transaction assertions within POST_TX frames.
+// enable7906 enables transaction assertions within ASSERT frames.
 func enable7906(jt *JumpTable) {
 	jt[TXTRACE] = &operation{
 		execute:     opTxTrace,
 		constantGas: params.WarmAccountAccessAmsterdam,
 		minStack:    minStack(2, 1),
 		maxStack:    maxStack(2, 1),
-	}
-	jt[TXDIFF] = &operation{
-		execute:    opTxDiff,
-		dynamicGas: gasTxDiff,
-		minStack:   minStack(3, 1),
-		maxStack:   maxStack(3, 1),
 	}
 	jt[EVENTDATACOPY] = &operation{
 		execute:     opEventDataCopy,

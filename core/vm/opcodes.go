@@ -223,8 +223,7 @@ const (
 	SIGPARAM      OpCode = 0xb4
 	SIGDATACOPY   OpCode = 0xb5
 	TXTRACE       OpCode = 0xb6
-	TXDIFF        OpCode = 0xb7
-	EVENTDATACOPY OpCode = 0xb8
+	EVENTDATACOPY OpCode = 0xb7
 )
 
 // 0xd0 range - eof operations.
@@ -441,7 +440,6 @@ var opCodeToString = [256]string{
 	SIGPARAM:      "SIGPARAM",
 	SIGDATACOPY:   "SIGDATACOPY",
 	TXTRACE:       "TXTRACE",
-	TXDIFF:        "TXDIFF",
 	EVENTDATACOPY: "EVENTDATACOPY",
 
 	// 0xd range - eof ops.
@@ -641,7 +639,6 @@ var stringToOp = map[string]OpCode{
 	"SIGPARAM":        SIGPARAM,
 	"SIGDATACOPY":     SIGDATACOPY,
 	"TXTRACE":         TXTRACE,
-	"TXDIFF":          TXDIFF,
 	"EVENTDATACOPY":   EVENTDATACOPY,
 	"DATALOAD":        DATALOAD,
 	"DATALOADN":       DATALOADN,

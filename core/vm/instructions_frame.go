@@ -223,7 +223,7 @@ func opApprove(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	offset := scope.Stack.pop()
 	length := scope.Stack.pop()
 	scopeArg := scope.Stack.pop()
-	if fc.Frames[fc.CurrentFrame].Mode == types.ModePostTx {
+	if fc.Frames[fc.CurrentFrame].Mode == types.ModeAssert {
 		return nil, ErrWriteProtection
 	}
 

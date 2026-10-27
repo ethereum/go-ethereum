@@ -25,12 +25,12 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// TransactionAccount is the account metadata visible to transaction assertions.
-// Absent accounts have zero balance/nonce and the empty code hash.
-type TransactionAccount struct {
-	Balance  uint256.Int
-	Nonce    uint64
-	CodeHash common.Hash
+// transactionAccount is the account metadata visible to transaction
+// assertions. Absent accounts have zero balance/nonce and the empty code hash.
+type transactionAccount struct {
+	balance  uint256.Int
+	nonce    uint64
+	codeHash common.Hash
 }
 
 // TransactionBalanceChange is a net balance change since transaction start.
@@ -45,73 +45,64 @@ type TransactionSlotChange struct {
 	Key, Before, After common.Hash
 }
 
-// TransactionDeployment is newly installed, non-delegation contract code.
-type TransactionDeployment struct {
-	Address  common.Address
-	CodeHash common.Hash
+// TransactionCodeChange is a net change to an account's code hash, computed
+// over the code as stored: a delegation indicator is hashed itself.
+type TransactionCodeChange struct {
+	Address       common.Address
+	Before, After common.Hash
 }
 
-// TransactionDiff is the EIP-7906 view before gas settlement and deferred
-// deletion. Tables are address/key sorted; events retain emission order.
-// The caller must not mutate the returned view or the logs it references.
+// TransactionNonceChange is a net change to an account's nonce.
+type TransactionNonceChange struct {
+	Address       common.Address
+	Before, After uint64
+}
+
+// TransactionDiff is the EIP-7906 view of the executing transaction before
+// gas settlement. Tables are address/key sorted; events retain emission
+// order. The caller must not mutate the returned view or the logs it
+// references.
 type TransactionDiff struct {
-	Balances     []TransactionBalanceChange
-	Slots        []TransactionSlotChange
-	Deployed     []TransactionDeployment
-	Events       []*types.Log
-	AccountFlags map[common.Address]uint64
-	SlotIndices  map[common.Address][]uint64
-	EventIndices map[common.Address][]uint64
-	TopicIndices map[common.Hash][]uint64
+	Balances []TransactionBalanceChange
+	Slots    []TransactionSlotChange
+	Codes    []TransactionCodeChange
+	Nonces   []TransactionNonceChange
+	Events   []*types.Log
 }
 
-func transactionAccount(obj *stateObject) TransactionAccount {
-	account := TransactionAccount{CodeHash: types.EmptyCodeHash}
+func newTransactionAccount(obj *stateObject) transactionAccount {
+	account := transactionAccount{codeHash: types.EmptyCodeHash}
 	if obj != nil {
-		account.Balance.Set(obj.data.Balance)
-		account.Nonce = obj.data.Nonce
-		account.CodeHash = common.BytesToHash(obj.data.CodeHash)
+		account.balance.Set(obj.data.Balance)
+		account.nonce = obj.data.Nonce
+		account.codeHash = common.BytesToHash(obj.data.CodeHash)
 	}
 	return account
 }
 
-// GetTransactionAccount returns the account's balance, nonce and code hash at
-// transaction start without recording an access. The caller must perform the
-// corresponding live read first.
-func (s *StateDB) GetTransactionAccount(addr common.Address) TransactionAccount {
-	account := transactionAccount(s.stateObjects[addr])
+// transactionStartAccount returns the account's balance, nonce and code hash
+// at transaction start without recording an access.
+func (s *StateDB) transactionStartAccount(addr common.Address) transactionAccount {
+	account := newTransactionAccount(s.stateObjects[addr])
 	if original := s.journal.mutations[addr]; original != nil {
 		if original.balanceSet {
-			account.Balance.Set(original.balance)
+			account.balance.Set(original.balance)
 		}
 		if original.nonceSet {
-			account.Nonce = original.nonce
+			account.nonce = original.nonce
 		}
 		if original.codeSet {
-			account.CodeHash = crypto.Keccak256Hash(original.code)
+			account.codeHash = crypto.Keccak256Hash(original.code)
 		}
 	}
 	return account
-}
-
-// GetTransactionState returns a slot's value at transaction start without
-// recording an access. The caller must perform the live storage read first.
-func (s *StateDB) GetTransactionState(addr common.Address, key common.Hash) common.Hash {
-	if obj := s.stateObjects[addr]; obj != nil {
-		return obj.getCommittedState(key)
-	}
-	return common.Hash{}
 }
 
 // GetTransactionDiff builds a transaction-local diff without recording BAL or
 // EIP-2929 accesses. Storage wiped without an explicit slot write is not listed.
 func (s *StateDB) GetTransactionDiff() *TransactionDiff {
 	diff := &TransactionDiff{
-		Events:       s.GetLogs(s.thash, 0, common.Hash{}, 0),
-		AccountFlags: make(map[common.Address]uint64),
-		SlotIndices:  make(map[common.Address][]uint64),
-		EventIndices: make(map[common.Address][]uint64),
-		TopicIndices: make(map[common.Hash][]uint64),
+		Events: s.GetLogs(s.thash, 0, common.Hash{}, 0),
 	}
 	// Enumerate the slots written by surviving journal entries; reverted
 	// writes left the journal together with their call frames.
@@ -125,25 +116,16 @@ func (s *StateDB) GetTransactionDiff() *TransactionDiff {
 		}
 	}
 	for addr := range s.journal.mutations {
-		obj := s.stateObjects[addr]
-		before := s.GetTransactionAccount(addr)
-		after := transactionAccount(obj)
-		var flags uint64
-		if before.Nonce != after.Nonce {
-			flags |= 1
+		before := s.transactionStartAccount(addr)
+		after := newTransactionAccount(s.stateObjects[addr])
+		if before.balance != after.balance {
+			diff.Balances = append(diff.Balances, TransactionBalanceChange{addr, before.balance, after.balance})
 		}
-		if before.Balance != after.Balance {
-			flags |= 2
-			diff.Balances = append(diff.Balances, TransactionBalanceChange{addr, before.Balance, after.Balance})
+		if before.codeHash != after.codeHash {
+			diff.Codes = append(diff.Codes, TransactionCodeChange{addr, before.codeHash, after.codeHash})
 		}
-		if before.CodeHash != after.CodeHash {
-			flags |= 8
-		}
-		diff.AccountFlags[addr] = flags
-		if before.CodeHash == types.EmptyCodeHash && after.CodeHash != types.EmptyCodeHash {
-			if _, delegation := types.ParseDelegation(obj.Code()); !delegation {
-				diff.Deployed = append(diff.Deployed, TransactionDeployment{addr, after.CodeHash})
-			}
+		if before.nonce != after.nonce {
+			diff.Nonces = append(diff.Nonces, TransactionNonceChange{addr, before.nonce, after.nonce})
 		}
 	}
 	for addr, slots := range written {
@@ -159,57 +141,17 @@ func (s *StateDB) GetTransactionDiff() *TransactionDiff {
 			}
 			if before != after {
 				diff.Slots = append(diff.Slots, TransactionSlotChange{addr, key, before, after})
-				diff.AccountFlags[addr] |= 4
 			}
 		}
 	}
 	slices.SortFunc(diff.Balances, func(a, b TransactionBalanceChange) int { return a.Address.Cmp(b.Address) })
-	slices.SortFunc(diff.Deployed, func(a, b TransactionDeployment) int { return a.Address.Cmp(b.Address) })
+	slices.SortFunc(diff.Codes, func(a, b TransactionCodeChange) int { return a.Address.Cmp(b.Address) })
+	slices.SortFunc(diff.Nonces, func(a, b TransactionNonceChange) int { return a.Address.Cmp(b.Address) })
 	slices.SortFunc(diff.Slots, func(a, b TransactionSlotChange) int {
 		if cmp := a.Address.Cmp(b.Address); cmp != 0 {
 			return cmp
 		}
 		return a.Key.Cmp(b.Key)
 	})
-	for i, slot := range diff.Slots {
-		diff.SlotIndices[slot.Address] = append(diff.SlotIndices[slot.Address], uint64(i))
-	}
-	for i, event := range diff.Events {
-		diff.EventIndices[event.Address] = append(diff.EventIndices[event.Address], uint64(i))
-		for j := 1; j < len(event.Topics); j++ {
-			topic := event.Topics[j]
-			// An event matching multiple indexed positions appears only once.
-			if !slices.Contains(event.Topics[1:j], topic) {
-				diff.TopicIndices[topic] = append(diff.TopicIndices[topic], uint64(i))
-			}
-		}
-	}
 	return diff
 }
-
-// accessListSlot also identifies independently warmed assertion storage keys.
-type accessListSlot struct {
-	address common.Address
-	slot    common.Hash
-}
-
-// AddSlotToAccessListOnly warms a storage key without warming its account.
-func (s *StateDB) AddSlotToAccessListOnly(addr common.Address, slot common.Hash) {
-	if _, present := s.accessList.Contains(addr, slot); present {
-		return
-	}
-	if s.accessList.slotOnly == nil {
-		s.accessList.slotOnly = make(map[accessListSlot]struct{})
-	}
-	key := accessListSlot{addr, slot}
-	s.accessList.slotOnly[key] = struct{}{}
-	s.journal.append(accessListAddSlotOnlyChange{key})
-}
-
-type accessListAddSlotOnlyChange struct{ key accessListSlot }
-
-func (ch accessListAddSlotOnlyChange) revert(s *StateDB) { delete(s.accessList.slotOnly, ch.key) }
-func (ch accessListAddSlotOnlyChange) mutation() (common.Address, journalMutationKind, bool) {
-	return common.Address{}, journalMutationKindNone, false
-}
-func (ch accessListAddSlotOnlyChange) copy() journalEntry { return ch }
