@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
@@ -51,6 +52,13 @@ type PrecompiledContract interface {
 	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 	Name() string
+}
+
+// statefulPrecompile is implemented by precompiles whose result also depends
+// on the state. RunState post-processes the stateless output of Run and may
+// charge further gas and access the state.
+type statefulPrecompile interface {
+	RunState(stateDB StateDB, output []byte, gas *GasBudget, logger *tracing.Hooks) ([]byte, error)
 }
 
 // PrecompiledContracts contains the precompiled contracts supported at the given fork.
@@ -171,6 +179,30 @@ var PrecompiledContractsOsaka = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x1, 0x00}): &p256Verify{},
 }
 
+// PrecompiledContractsBogota contains the set of pre-compiled Ethereum
+// contracts used in the Bogota release.
+var PrecompiledContractsBogota = PrecompiledContracts{
+	common.BytesToAddress([]byte{0x01}): &ecrecoverAccountCode{},
+	common.BytesToAddress([]byte{0x02}): &sha256hash{},
+	common.BytesToAddress([]byte{0x03}): &ripemd160hash{},
+	common.BytesToAddress([]byte{0x04}): &dataCopy{},
+	common.BytesToAddress([]byte{0x05}): &bigModExp{eip2565: true, eip7823: true, eip7883: true},
+	common.BytesToAddress([]byte{0x06}): &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{0x07}): &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{0x08}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{0x09}): &blake2F{},
+	common.BytesToAddress([]byte{0x0a}): &kzgPointEvaluation{},
+	common.BytesToAddress([]byte{0x0b}): &bls12381G1Add{},
+	common.BytesToAddress([]byte{0x0c}): &bls12381G1MultiExp{},
+	common.BytesToAddress([]byte{0x0d}): &bls12381G2Add{},
+	common.BytesToAddress([]byte{0x0e}): &bls12381G2MultiExp{},
+	common.BytesToAddress([]byte{0x0f}): &bls12381Pairing{},
+	common.BytesToAddress([]byte{0x10}): &bls12381MapG1{},
+	common.BytesToAddress([]byte{0x11}): &bls12381MapG2{},
+
+	common.BytesToAddress([]byte{0x1, 0x00}): &p256Verify{},
+}
+
 // PrecompiledContractsP256Verify contains the precompiled Ethereum
 // contract specified in EIP-7212. This is exported for testing purposes.
 var PrecompiledContractsP256Verify = PrecompiledContracts{
@@ -219,7 +251,7 @@ func activePrecompiledContracts(rules params.Rules) *PrecompiledContracts {
 	case rules.IsUBT:
 		return &PrecompiledContractsVerkle
 	case rules.IsBogota:
-		return &PrecompiledContractsOsaka
+		return &PrecompiledContractsBogota
 	case rules.IsOsaka:
 		return &PrecompiledContractsOsaka
 	case rules.IsPrague:
@@ -283,24 +315,34 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 	if rules.IsAmsterdam {
 		stateDB.Touch(address)
 	}
-	// Serve pure precompiles from the shared result cache if one is attached.
-	// Gas accounting and state touching above are identical on hit and miss,
-	// only the recomputation is skipped.
+	output, err := runPrecompile(p, address, input, rules, cache)
+	if err != nil {
+		return output, gas, err
+	}
+	if sp, ok := p.(statefulPrecompile); ok {
+		output, err = sp.RunState(stateDB, output, &gas, logger)
+	}
+	return output, gas, err
+}
+
+// runPrecompile runs the stateless part of a precompile, serving pure
+// precompiles from the shared result cache if one is attached. Only the
+// recomputation is skipped on a hit.
+func runPrecompile(p PrecompiledContract, address common.Address, input []byte, rules params.Rules, cache *PrecompileCache) ([]byte, error) {
 	if cache != nil {
 		if key, ok := precompileCacheKey(p, input); ok {
 			scope := precompileCacheScope{activePrecompiledContracts(rules), address}
 			if output, ok := cache.load(scope, key); ok {
-				return output, gas, nil
+				return output, nil
 			}
 			output, err := p.Run(input)
 			if err == nil && len(output) <= maxCacheablePrecompileOutput {
 				cache.store(scope, key, output)
 			}
-			return output, gas, err
+			return output, err
 		}
 	}
-	output, err := p.Run(input)
-	return output, gas, err
+	return p.Run(input)
 }
 
 // ecrecover implemented as a native contract.
@@ -352,6 +394,46 @@ func (c *ecrecover) Cacheable() bool { return true }
 // NormalizeInput drops everything past the bytes Run reads.
 func (c *ecrecover) NormalizeInput(input []byte) ([]byte, bool) {
 	return normalizeZeroPadded(input, ecRecoverInputLength), true
+}
+
+// ecrecoverAccountCode is the ecrecover precompile restricted by EIP-8151 to
+// recovered accounts whose raw code is empty or an EIP-7702 delegation.
+type ecrecoverAccountCode struct {
+	ecrecover
+}
+
+// RunState charges for and performs the EIP-8151 account code check of the
+// address recovered by Run. A failed recovery accesses no state.
+func (c *ecrecoverAccountCode) RunState(stateDB StateDB, output []byte, gas *GasBudget, logger *tracing.Hooks) ([]byte, error) {
+	if len(output) == 0 {
+		return nil, nil
+	}
+	var (
+		addr = common.BytesToAddress(output)
+		warm = stateDB.AddressInAccessList(addr)
+		cost = params.WarmAccountAccessAmsterdam // code read
+	)
+	if warm {
+		cost += params.WarmAccountAccessAmsterdam
+	} else {
+		cost += params.ColdAccountAccessAmsterdam
+	}
+	prior, ok := gas.ChargeExecution(cost)
+	if !ok {
+		return nil, ErrOutOfGas
+	}
+	if logger.HasGasHook() {
+		logger.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeCallPrecompiledContract)
+	}
+	if !warm {
+		stateDB.AddAddressToAccessList(addr)
+	}
+	if code := stateDB.GetCode(addr); len(code) != 0 {
+		if _, ok := types.ParseDelegation(code); !ok {
+			return nil, nil
+		}
+	}
+	return output, nil
 }
 
 // SHA256 implemented as a native contract.
