@@ -151,8 +151,12 @@ func (n *branchNode) hashAtDepth(pos, depth int) common.Hash {
 		right = hashChild(n.right, childPos, depth+1)
 		wg.Wait()
 	} else {
-		left = hashChild(n.left, childPos, depth+1)
-		right = hashChild(n.right, childPos, depth+1)
+		sides := [2]binaryNode{n.left, n.right}
+		var hashes [2]common.Hash
+		for i, c := range sides {
+			hashes[i] = hashChild(c, childPos, depth+1)
+		}
+		left, right = hashes[0], hashes[1]
 	}
 	n.cachedHash = branchHash(n.prefix, left, right)
 	n.dirty = false
@@ -181,10 +185,15 @@ func isDirty(n binaryNode) bool {
 }
 
 func (n *branchNode) copy() binaryNode {
+	sides := [2]binaryNode{n.left, n.right}
+	var copies [2]binaryNode
+	for i, c := range sides {
+		copies[i] = c.copy()
+	}
 	cp := &branchNode{
 		prefix:     bitstr{b: append([]byte{}, n.prefix.b...), n: n.prefix.n},
-		left:       n.left.copy(),
-		right:      n.right.copy(),
+		left:       copies[0],
+		right:      copies[1],
 		cachedHash: n.cachedHash,
 		dirty:      n.dirty,
 		modified:   n.modified,
@@ -253,9 +262,12 @@ func (g *groupNode) foldRange(i, j, from, extraLo, extraHi int) common.Hash {
 		sub := [1]byte{g.subs[i]}
 		prefix = sliceInto(buf[:], sub[:], from, b-from)
 	}
-	left := g.foldRange(i, m, b+1, 0, 0)
-	right := g.foldRange(m, j, b+1, 0, 0)
-	return branchHash(prefix, left, right)
+	bounds := [2][2]int{{i, m}, {m, j}}
+	var hashes [2]common.Hash
+	for s, bd := range bounds {
+		hashes[s] = g.foldRange(bd[0], bd[1], b+1, 0, 0)
+	}
+	return branchHash(prefix, hashes[0], hashes[1])
 }
 
 // lookup returns the value at sub, or nil if absent.

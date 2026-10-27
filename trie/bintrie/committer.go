@@ -150,8 +150,10 @@ func (t *BinaryTrie) collect(n binaryNode, walk bitstr, pos int, set *trienode.N
 		}
 		nn.modified = false
 		child := pos + nn.prefix.n + 1
-		t.collect(nn.left, walk.append(nn.prefix).concat(0, bitstr{}), child, set)
-		t.collect(nn.right, walk.append(nn.prefix).concat(1, bitstr{}), child, set)
+		children := [2]binaryNode{nn.left, nn.right}
+		for bit, c := range children {
+			t.collect(c, walk.append(nn.prefix).concat(byte(bit), bitstr{}), child, set)
+		}
 		path := pathOf(walk)
 		set.AddNode(path, trienode.NewNodeWithPrev(nn.hashAt(pos), serializeNode(nn, pos), t.tracer.Get(path)))
 	}
