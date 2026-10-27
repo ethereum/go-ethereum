@@ -33,7 +33,7 @@ func serializeNode(n node, pos int) []byte {
 			blob := append(make([]byte, 0, 2+len(n.stem)+len(n.vals[0])), tagLeaf)
 			return append(append(append(blob, n.stem...), n.subs[0]), n.vals[0]...)
 		}
-		blob := make([]byte, 4, 4+len(n.stem)+32+32*len(n.vals))
+		blob := make([]byte, 4, 4+len(n.stem)+32+32*len(n.vals)+64)
 		blob[0] = tagGroup
 		binary.BigEndian.PutUint16(blob[1:], uint16(pos))
 		blob[3] = byte(len(n.stem))
@@ -45,6 +45,13 @@ func serializeNode(n node, pos int) []byte {
 		blob = append(blob, bitmap[:]...)
 		for _, v := range n.vals {
 			blob = append(blob, v...)
+		}
+		// A group of 16 values or more keeps its top branch's children, so that
+		// read back it rehashes only that branch when it moves. Smaller groups
+		// refold in a few microseconds.
+		if len(n.vals) >= 16 {
+			n.hashAt(pos) // fills n.children
+			blob = append(append(blob, n.children[0][:]...), n.children[1][:]...)
 		}
 		return blob
 	case *branchNode:
@@ -97,7 +104,7 @@ func decodeNode(blob []byte, hash common.Hash) (node, error) {
 		for _, b := range bitmap {
 			count += bits.OnesCount8(b)
 		}
-		if count < 2 || len(values) != 32*count {
+		if count < 2 || len(values) != 32*count && len(values) != 32*count+64 {
 			return nil, errInvalidRecord
 		}
 		g := &groupNode{stem: common.CopyBytes(blob[4 : 4+size]), hash: hash, hashPos: pos}
@@ -107,6 +114,9 @@ func decodeNode(blob []byte, hash common.Hash) (node, error) {
 				g.vals = append(g.vals, common.CopyBytes(values[:32]))
 				values = values[32:]
 			}
+		}
+		if len(values) == 64 {
+			g.children = [2]common.Hash{common.BytesToHash(values[:32]), common.BytesToHash(values[32:])}
 		}
 		return g, nil
 	}
