@@ -636,7 +636,19 @@ func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 	if b == nil {
 		return nil, fmt.Errorf("invalid integer value %v/%v for type %v", encValue, reflect.TypeOf(encValue), encType)
 	}
-	if b.BitLen() > length {
+	// Check that the value fits into the type. A signed N-bit integer covers
+	// the range [-2^(N-1), 2^(N-1)-1], i.e. one bit less than an unsigned one.
+	// For negative values the bit length of ^b (= -b-1) is checked instead, so
+	// that -2^(N-1) is accepted while -2^(N-1)-1 is rejected.
+	bits := length
+	magnitude := b
+	if signed {
+		bits--
+		if b.Sign() == -1 {
+			magnitude = new(big.Int).Not(b)
+		}
+	}
+	if magnitude.BitLen() > bits {
 		return nil, fmt.Errorf("integer larger than '%v'", encType)
 	}
 	if !signed && b.Sign() == -1 {
