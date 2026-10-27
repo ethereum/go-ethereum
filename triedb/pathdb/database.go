@@ -526,6 +526,13 @@ func (db *Database) Recover(root common.Hash) error {
 	if !db.Recoverable(root) {
 		return errStateUnrecoverable
 	}
+	// A rollback within the write buffer leaves the persistent state as it was,
+	// so after a crash a journal left behind would be loaded again, with the
+	// state histories it needs truncated. Delete it first; the key-value store
+	// is synced below, before the truncation.
+	if err := db.deleteJournal(); err != nil {
+		return err
+	}
 	// Apply the state histories upon the disk layer in order
 	var (
 		start = time.Now()

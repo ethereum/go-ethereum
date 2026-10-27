@@ -447,3 +447,20 @@ func (db *Database) Journal(root common.Hash) error {
 	db.readOnly = true
 	return nil
 }
+
+// deleteJournal removes the journal file and the key-value journal. The caller
+// must hold db.lock.
+func (db *Database) deleteJournal() error {
+	rawdb.DeleteTrieJournal(db.diskdb)
+	if path := db.journalPath(); path != "" {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove the journal %s: %v", path, err)
+		}
+		// Sync the directory even if the journal is gone already: an earlier
+		// removal may not be durable yet.
+		if err := syncDir(db.config.JournalDirectory); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to fsync the dir: %v", err)
+		}
+	}
+	return nil
+}
