@@ -73,6 +73,6 @@ little-endian. Do not apply this numeric byte order rule to hashes.
 After generation, business code passes the wire message and opcode to
 `cluster.Sender`. The backend resolves the destination chain ID and uses the
 selected connection to send it. `wire.RootChainID` selects the Master from a
-chain backend. See [`cluster.Sender`](../cluster/api.go) for the outbound
-interface and routing rules. Sending encodes the outer message; `Data` fields
-must already contain their correctly encoded inner objects.
+chain backend. See [sending cluster messages](../cluster/README.md) for the
+outbound interface and routing rules. Sending encodes the outer message;
+`Data` fields must already contain their correctly encoded inner objects.

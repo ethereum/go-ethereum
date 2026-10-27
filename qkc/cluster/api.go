@@ -31,12 +31,14 @@ import (
 // wire.RootChainID is invalid and an ordinary chain ID selects a connection
 // from its chain pool. Each call selects one TCP connection; the backend then
 // uses that connection's generic non-RPC or RPC send path. Sender does not
-// broadcast or gain a method when a new wire message is added.
+// broadcast or gain a method when a new wire message is added. The caller
+// supplies the opcode registered for msg or req; Call takes the request opcode.
 type Sender interface {
 	// Send writes a command to chainID without waiting for a response. An
 	// invalid or unresolved destination is an error.
 	Send(ctx context.Context, chainID uint32, op byte, msg wire.SSZMessage) error
-	// Call sends an RPC to chainID and returns the decoded response type
-	// registered for op. The caller checks application-level response status.
+	// Call sends req using request opcode op and returns the response decoded
+	// from the response frame's opcode. The caller checks the concrete response
+	// type and application-level status.
 	Call(ctx context.Context, chainID uint32, op byte, req wire.SSZMessage) (wire.SSZMessage, error)
 }
