@@ -178,6 +178,17 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 			return fmt.Errorf("invalid block access list: %v", err)
 		}
 	}
+	// Validate the parsed requests match the expected header value. This must run
+	// in stateless mode too: the requests are not reflected in the state or receipt
+	// root that stateless execution returns, so they can only be checked here.
+	if header.RequestsHash != nil {
+		reqhash := types.CalcRequestsHash(res.Requests)
+		if reqhash != *header.RequestsHash {
+			return fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
+		}
+	} else if res.Requests != nil {
+		return errors.New("block has requests before prague fork")
+	}
 	// In stateless mode, return early because the receipt and state root are not
 	// provided through the witness, rather the cross validator needs to return it.
 	if stateless {
@@ -187,15 +198,6 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	receiptSha := res.receiptRoot()
 	if receiptSha != header.ReceiptHash {
 		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
-	}
-	// Validate the parsed requests match the expected header value.
-	if header.RequestsHash != nil {
-		reqhash := types.CalcRequestsHash(res.Requests)
-		if reqhash != *header.RequestsHash {
-			return fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
-		}
-	} else if res.Requests != nil {
-		return errors.New("block has requests before prague fork")
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.

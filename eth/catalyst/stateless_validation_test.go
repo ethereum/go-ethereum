@@ -102,3 +102,62 @@ func clearRoots(p engine.ExecutableData) engine.ExecutableData {
 	p.ReceiptsRoot = common.Hash{}
 	return p
 }
+
+// TestStatelessRejectsForgedRequests checks that stateless execution validates the
+// execution requests against re-execution. The requests are not reflected in the
+// state or receipt root that stateless execution returns, so a payload whose
+// requests disagree with execution must be rejected, as engine_newPayload does.
+func TestStatelessRejectsForgedRequests(t *testing.T) {
+	for _, fork := range witnessForks {
+		if fork.name != "prague" && fork.name != "amsterdam" {
+			continue
+		}
+		t.Run(fork.name, func(t *testing.T) {
+			genesis, blocks := forkTestChain(t, 10)
+			fork.activate(genesis.Config, blocks[len(blocks)-2].Time()+5)
+			genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
+
+			n, ethservice := startEthService(t, genesis, blocks[:9])
+			defer n.Close()
+			api := newConsensusAPIWithoutHeartbeat(ethservice)
+			ethservice.TxPool().Add(blocks[9].Transactions(), true)
+
+			attrs := &engine.PayloadAttributes{
+				Timestamp:   blocks[8].Time() + 5,
+				Withdrawals: make([]*types.Withdrawal, 0),
+				BeaconRoot:  &witnessBeaconRoot,
+			}
+			if fork.slotAndGas {
+				attrs.SlotNumber = &witnessSlotNumber
+				attrs.TargetGasLimit = &witnessGasTarget
+			}
+			resp, err := fork.fcu(api, engine.ForkchoiceStateV1{HeadBlockHash: blocks[8].Hash()}, attrs)
+			if err != nil || resp.PayloadID == nil {
+				t.Fatalf("fcu: %v", err)
+			}
+			envelope, err := api.getPayload(*resp.PayloadID, true, nil, nil)
+			if err != nil || envelope.Witness == nil {
+				t.Fatalf("getPayload: %v", err)
+			}
+			// The unmodified payload must validate statelessly and return the honest roots.
+			assertStatelessRoots(t, api, fork, envelope, *envelope.Witness, "honest")
+
+			// Add a withdrawal request (EIP-7002) that execution did not produce: type
+			// 0x01 followed by a source address, a validator pubkey and an amount.
+			fake := append([]byte{0x01}, make([]byte, 20+48+8)...)
+			fake[1] = 0xaa
+			forged := *envelope
+			forged.Requests = append(append([][]byte{}, envelope.Requests...), fake)
+			payload := clearRoots(*envelope.ExecutionPayload)
+			forged.ExecutionPayload = &payload
+
+			res, err := fork.stateless(api, &forged, *envelope.Witness)
+			if err != nil {
+				t.Fatalf("stateless (forged): %v", err)
+			}
+			if res.Status != engine.INVALID {
+				t.Errorf("forged requests: got %s (roots %x %x), want INVALID", res.Status, res.StateRoot, res.ReceiptsRoot)
+			}
+		})
+	}
+}
