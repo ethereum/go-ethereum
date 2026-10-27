@@ -252,16 +252,15 @@ func (t *BinaryTrie) proveMultiWalk(n binaryNode, tgts []proofTarget, pos int, m
 				right = append(right, tg)
 			}
 		}
-		l, err := t.proveMultiWalk(nn.left, left, split+1, mp)
-		if err != nil {
-			return n, err
+		sides := [2]*binaryNode{&nn.left, &nn.right}
+		tgtSides := [2][]proofTarget{left, right}
+		for i, side := range sides {
+			child, err := t.proveMultiWalk(*side, tgtSides[i], split+1, mp)
+			if err != nil {
+				return n, err
+			}
+			*side = child
 		}
-		nn.left = l
-		r, err := t.proveMultiWalk(nn.right, right, split+1, mp)
-		if err != nil {
-			return n, err
-		}
-		nn.right = r
 		return n, nil
 
 	default:

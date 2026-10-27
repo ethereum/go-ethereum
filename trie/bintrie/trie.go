@@ -172,16 +172,13 @@ func (t *BinaryTrie) getStem(n binaryNode, stem []byte, pos int) (binaryNode, *g
 			// the two leaves diverging on the first sub-index bit.
 			return n, nil, ErrPartialStem
 		}
-		if bitAt(stem, split) == 0 {
-			child, g, err := t.getStem(nn.left, stem, split+1)
-			if child != nn.left {
-				nn.left = child // only on resolution: a write barrier per level otherwise
-			}
-			return n, g, err
+		side := &nn.left
+		if bitAt(stem, split) == 1 {
+			side = &nn.right
 		}
-		child, g, err := t.getStem(nn.right, stem, split+1)
-		if child != nn.right {
-			nn.right = child
+		child, g, err := t.getStem(*side, stem, split+1)
+		if child != *side {
+			*side = child // only on resolution: a write barrier per level otherwise
 		}
 		return n, g, err
 	default:
@@ -241,16 +238,13 @@ func (t *BinaryTrie) getKey(n binaryNode, key []byte, pos int) (binaryNode, []by
 		if split >= 8*len(key) {
 			return n, nil, nil // no bit left to branch on
 		}
-		if bitAt(key, split) == 0 {
-			child, v, err := t.getKey(nn.left, key, split+1)
-			if child != nn.left {
-				nn.left = child // only on resolution: a write barrier per level otherwise
-			}
-			return n, v, err
+		side := &nn.left
+		if bitAt(key, split) == 1 {
+			side = &nn.right
 		}
-		child, v, err := t.getKey(nn.right, key, split+1)
-		if child != nn.right {
-			nn.right = child
+		child, v, err := t.getKey(*side, key, split+1)
+		if child != *side {
+			*side = child // only on resolution: a write barrier per level otherwise
 		}
 		return n, v, err
 	default:
@@ -422,26 +416,18 @@ func (t *BinaryTrie) insStem(n binaryNode, stem []byte, subs []byte, vals [][]by
 				return n, ErrPartialStem
 			}
 			bit := bitAt(stem, split)
-			var (
-				child binaryNode
-				err   error
-			)
-			if bit == 0 {
-				child, err = t.insStem(nn.left, stem, subs, vals, split+1)
-			} else {
-				child, err = t.insStem(nn.right, stem, subs, vals, split+1)
+			side := &nn.left
+			if bit == 1 {
+				side = &nn.right
 			}
+			child, err := t.insStem(*side, stem, subs, vals, split+1)
 			if err != nil {
 				return n, err
 			}
 			if _, gone := child.(empty); gone {
 				return t.collapse(nn, keyWalk(stem, pos), bit)
 			}
-			if bit == 0 {
-				nn.left = child
-			} else {
-				nn.right = child
-			}
+			*side = child
 			nn.dirty, nn.modified = true, true
 			return nn, nil
 		}
@@ -577,16 +563,11 @@ func (t *BinaryTrie) delStem(n binaryNode, stem []byte, pos int) (binaryNode, bo
 			return n, false, ErrPartialStem
 		}
 		bit := bitAt(stem, split)
-		var (
-			child   binaryNode
-			removed bool
-			err     error
-		)
-		if bit == 0 {
-			child, removed, err = t.delStem(nn.left, stem, split+1)
-		} else {
-			child, removed, err = t.delStem(nn.right, stem, split+1)
+		side := &nn.left
+		if bit == 1 {
+			side = &nn.right
 		}
+		child, removed, err := t.delStem(*side, stem, split+1)
 		if err != nil {
 			return n, false, err
 		}
@@ -594,11 +575,7 @@ func (t *BinaryTrie) delStem(n binaryNode, stem []byte, pos int) (binaryNode, bo
 			merged, err := t.collapse(nn, keyWalk(stem, pos), bit)
 			return merged, removed, err
 		}
-		if bit == 0 {
-			nn.left = child
-		} else {
-			nn.right = child
-		}
+		*side = child
 		if removed {
 			nn.dirty, nn.modified = true, true
 		}
@@ -693,16 +670,11 @@ func (t *BinaryTrie) delPrefix(n binaryNode, P []byte, walk bitstr, pos int) (bi
 		split := pos + nn.prefix.n
 		bit := bitAt(P, split)
 		childWalk := walk.append(nn.prefix).concat(bit, bitstr{})
-		var (
-			child   binaryNode
-			removed bool
-			err     error
-		)
-		if bit == 0 {
-			child, removed, err = t.delPrefix(nn.left, P, childWalk, split+1)
-		} else {
-			child, removed, err = t.delPrefix(nn.right, P, childWalk, split+1)
+		side := &nn.left
+		if bit == 1 {
+			side = &nn.right
 		}
+		child, removed, err := t.delPrefix(*side, P, childWalk, split+1)
 		if err != nil {
 			return n, false, err
 		}
@@ -710,11 +682,7 @@ func (t *BinaryTrie) delPrefix(n binaryNode, P []byte, walk bitstr, pos int) (bi
 			merged, err := t.collapse(nn, walk, bit)
 			return merged, removed, err
 		}
-		if bit == 0 {
-			nn.left = child
-		} else {
-			nn.right = child
-		}
+		*side = child
 		if removed {
 			nn.dirty, nn.modified = true, true
 		}
@@ -754,13 +722,12 @@ func (t *BinaryTrie) findPrefix(n binaryNode, P []byte, pos int) (binaryNode, bo
 		}
 		split := pos + nn.prefix.n
 		bit := bitAt(P, split)
-		if bit == 0 {
-			child, found, err := t.findPrefix(nn.left, P, split+1)
-			nn.left = child
-			return n, found, err
+		side := &nn.left
+		if bit == 1 {
+			side = &nn.right
 		}
-		child, found, err := t.findPrefix(nn.right, P, split+1)
-		nn.right = child
+		child, found, err := t.findPrefix(*side, P, split+1)
+		*side = child
 		return n, found, err
 	default:
 		return n, false, fmt.Errorf("bintrie: unknown node type %T", n)
@@ -793,10 +760,13 @@ func (t *BinaryTrie) deleteSubtree(n binaryNode, walk bitstr, pos int) error {
 	case *branchNode:
 		t.ops.onDelete(pathOf(walk))
 		split := pos + nn.prefix.n
-		if err := t.deleteSubtree(nn.left, walk.append(nn.prefix).concat(0, bitstr{}), split+1); err != nil {
-			return err
+		children := [2]binaryNode{nn.left, nn.right}
+		for bit, c := range children {
+			if err := t.deleteSubtree(c, walk.append(nn.prefix).concat(byte(bit), bitstr{}), split+1); err != nil {
+				return err
+			}
 		}
-		return t.deleteSubtree(nn.right, walk.append(nn.prefix).concat(1, bitstr{}), split+1)
+		return nil
 	default:
 		return fmt.Errorf("bintrie: unknown node type %T", n)
 	}
@@ -1190,11 +1160,11 @@ func (t *BinaryTrie) writeRecords(n binaryNode, walk bitstr, pos int, onNode OnN
 		return emitRecord(nn, walk, pos, onNode)
 	case *branchNode:
 		child := pos + nn.prefix.n + 1
-		if err := t.writeRecords(nn.left, walk.append(nn.prefix).concat(0, bitstr{}), child, onNode); err != nil {
-			return err
-		}
-		if err := t.writeRecords(nn.right, walk.append(nn.prefix).concat(1, bitstr{}), child, onNode); err != nil {
-			return err
+		children := [2]binaryNode{nn.left, nn.right}
+		for bit, c := range children {
+			if err := t.writeRecords(c, walk.append(nn.prefix).concat(byte(bit), bitstr{}), child, onNode); err != nil {
+				return err
+			}
 		}
 		return emitRecord(nn, walk, pos, onNode)
 	default:

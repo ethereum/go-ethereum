@@ -82,13 +82,12 @@ func (t *BinaryTrie) proveWalk(n binaryNode, key []byte, walk bitstr, pos int, p
 		split := pos + nn.prefix.n
 		bit := bitAt(key, split)
 		childWalk := walk.append(nn.prefix).concat(bit, bitstr{})
-		if bit == 0 {
-			c, err := t.proveWalk(nn.left, key, childWalk, split+1, proofDb)
-			nn.left = c
-			return n, err
+		side := &nn.left
+		if bit == 1 {
+			side = &nn.right
 		}
-		c, err := t.proveWalk(nn.right, key, childWalk, split+1, proofDb)
-		nn.right = c
+		c, err := t.proveWalk(*side, key, childWalk, split+1, proofDb)
+		*side = c
 		return n, err
 	default:
 		return n, fmt.Errorf("bintrie: unknown node type %T", n)
@@ -124,8 +123,12 @@ func proveGroup(g *groupNode, key []byte, pos int, proofDb ethdb.KeyValueWriter)
 		} else {
 			prefix = slice([]byte{g.subs[i]}, from, b-from)
 		}
-		left := g.foldRange(i, m, b+1, 0, 0)
-		right := g.foldRange(m, j, b+1, 0, 0)
+		bounds := [2][2]int{{i, m}, {m, j}}
+		var hashes [2]common.Hash
+		for s, bd := range bounds {
+			hashes[s] = g.foldRange(bd[0], bd[1], b+1, 0, 0)
+		}
+		left, right := hashes[0], hashes[1]
 		preimage := make([]byte, 0, 3+len(prefix.b)+64)
 		preimage = append(preimage, tagBranch)
 		preimage = appendBitPrefix(preimage, prefix)
