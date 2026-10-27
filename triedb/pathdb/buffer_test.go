@@ -79,6 +79,9 @@ func bufTestBlob(r *rand.Rand, n int) []byte {
 // no more compactable runs left.
 func waitCompaction(t *testing.T, b *buffer) {
 	t.Helper()
+
+	// The sets are only compactable once covered by the buffer-wide filter
+	b.global.wait()
 	for i := 0; i < 1000; i++ {
 		b.compactMu.Lock()
 		idle := !b.compacting
@@ -149,18 +152,24 @@ func verifyBuffer(t *testing.T, b *buffer, nodes map[common.Hash]map[string]*tri
 // run consists of the contiguous sets with the same level.
 func TestCompactRun(t *testing.T) {
 	newSet := func(level int) *bufferSet {
-		return &bufferSet{
+		set := &bufferSet{
 			level:  level,
 			layers: 1,
 			nodes:  newNodeSet(nil),
 			states: newStates(nil, nil),
 		}
+		set.global.Store(true)
+		return set
 	}
 	newSets := func(levels ...int) []*bufferSet {
 		var sets []*bufferSet
 		for _, level := range levels {
 			sets = append(sets, newSet(level))
 		}
+		return sets
+	}
+	uncovered := func(sets []*bufferSet) []*bufferSet {
+		sets[len(sets)-1].global.Store(false)
 		return sets
 	}
 	var cases = []struct {
@@ -179,6 +188,9 @@ func TestCompactRun(t *testing.T) {
 
 		// Level boundary splits the run
 		{newSets(1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0), 4, 12},
+
+		// The set not covered by the buffer-wide filter is excluded
+		{uncovered(newSets(0, 0, 0, 0, 0, 0, 0, 0, 0)), 0, 8},
 	}
 	for i, c := range cases {
 		start, end := compactRun(c.sets, compactCap(math.MaxUint64))
@@ -196,7 +208,9 @@ func TestCompactRunCap(t *testing.T) {
 	newSet := func(size uint64) *bufferSet {
 		nodes := newNodeSet(nil)
 		nodes.size = size
-		return &bufferSet{layers: 1, nodes: nodes, states: newStates(nil, nil)}
+		set := &bufferSet{layers: 1, nodes: nodes, states: newStates(nil, nil)}
+		set.global.Store(true)
+		return set
 	}
 	sets := func(sizes ...uint64) []*bufferSet {
 		var list []*bufferSet

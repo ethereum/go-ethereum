@@ -112,8 +112,9 @@ func bloomNodeKey[P string | []byte](owner common.Hash, path P) uint64 {
 //   - The buffer-wide filter, short-circuiting the lookups that miss the buffer
 //     entirely (the vast majority of the reads landing on the disk layer). It's
 //     shared by the consecutive views and keeps growing while being probed: keys
-//     are inserted with insertAtomic, before the content holding them is
-//     published, so no false negative can be observed.
+//     are inserted with insertAtomic in background after the set holding them is
+//     published, and the set is only ruled out by this filter once it's marked as
+//     global, so no false negative can be observed.
 //
 //   - The per-set filters, locating the set holding an entry without probing the
 //     maps of the newer sets, which span megabytes and fall out of the CPU caches.
@@ -204,8 +205,8 @@ func (b *bloomFilter) contains(key uint64) bool {
 	return true
 }
 
-// bloomParts is the number of the partitions the bloom keys of a committed set
-// are derived and inserted in, concurrently.
+// bloomParts is the number of the partitions the bloom keys of a diff layer are
+// derived and inserted in, concurrently.
 const bloomParts = 4
 
 // appendBloomKeys appends the bloom keys of all the entries aggregated in the
@@ -213,6 +214,24 @@ const bloomParts = 4
 func appendBloomKeys(dst []uint64, nodes *nodeSet, states *stateSet) []uint64 {
 	dst = slices.Grow(dst, bloomKeyCount(nodes, states))
 	return appendBloomKeysPart(dst, nodes, states, 0, 1)
+}
+
+// deriveBloomKeys derives the bloom keys of all the entries aggregated in the
+// provided node set and state set, in partitions concurrently.
+func deriveBloomKeys(nodes *nodeSet, states *stateSet) [][]uint64 {
+	var (
+		wg   sync.WaitGroup
+		keys = make([][]uint64, bloomParts)
+	)
+	for i := range keys {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			keys[i] = appendBloomKeysPart(nil, nodes, states, i, bloomParts)
+		}()
+	}
+	wg.Wait()
+	return keys
 }
 
 // appendBloomKeysPart appends the bloom keys of the given partition (out of
@@ -280,7 +299,3 @@ func bloomKeyCount(nodes *nodeSet, states *stateSet) int {
 	}
 	return n
 }
-
-// bloomKeyPool recycles the key slices staged between the key derivation and
-// the construction of the filter of a committed set, one per partition.
-var bloomKeyPool = sync.Pool{New: func() any { return new([bloomParts][]uint64) }}

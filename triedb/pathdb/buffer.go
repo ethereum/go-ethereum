@@ -34,25 +34,22 @@ import (
 
 // bufferSet groups the modified trie nodes and flat states aggregated from
 // one or more contiguous state transitions.
-//
-// A set is built from the bottom-most diff layer at commit (sharing its maps),
-// by merging sets (compaction and flattening), or from the journal at startup.
-// Once linked into the buffer it is regarded as immutable, with two exceptions:
-// the revert of the newest set aggregating more than one transition, done in
-// place with exclusive access guaranteed by the associated disk layer (a
-// single-transition set, possibly sharing its maps with a diff layer, is dropped
-// instead), and the sorted key lists cached lazily under the state set's own lock.
 type bufferSet struct {
 	level  int          // compaction level: 0 for a single transition, a merge yields the max level plus one
 	layers uint64       // the number of state transitions aggregated inside
 	nodes  *nodeSet     // aggregated trie node set
 	states *stateSet    // aggregated state set
 	bloom  *bloomFilter // filter over the keys of the set, nil to probe the set always
+
+	// global reports whether the keys of the set are inserted into the buffer-wide
+	// filter, which happens in background in the order of commit, thus the sets
+	// covered by the buffer-wide filter are always the oldest ones.
+	global atomic.Bool
 }
 
 // newBufferSet constructs the set with the provided nodes and states, along
-// with the filter over the given bloom keys of them.
-func newBufferSet(nodes *nodeSet, states *stateSet, layers uint64, keys ...[]uint64) *bufferSet {
+// with the filter over their bloom keys.
+func newBufferSet(nodes *nodeSet, states *stateSet, layers uint64, bloom *bloomFilter) *bufferSet {
 	// Don't panic for the lazy callers, initialize the nil set instead
 	if nodes == nil {
 		nodes = newNodeSet(nil)
@@ -69,7 +66,7 @@ func newBufferSet(nodes *nodeSet, states *stateSet, layers uint64, keys ...[]uin
 		layers: layers,
 		nodes:  nodes,
 		states: states,
-		bloom:  newSetBloom(keys...),
+		bloom:  bloom,
 	}
 }
 
@@ -81,6 +78,9 @@ func (s *bufferSet) size() uint64 {
 // mergeBufferSets aggregates the provided sets (ordered from oldest to newest)
 // into a single set. The resulting set assumes ownership of freshly allocated
 // internal maps, leaving the source sets unmodified.
+//
+// The provided sets must be all covered by the buffer-wide filter, ensured by
+// the callers (see compactRun and flatten).
 func mergeBufferSets(sets []*bufferSet) *bufferSet {
 	var (
 		level  int
@@ -101,6 +101,7 @@ func mergeBufferSets(sets []*bufferSet) *bufferSet {
 		states: mergeStateSets(states),
 	}
 	merged.bloom = newSetBloom(appendBloomKeys(nil, merged.nodes, merged.states))
+	merged.global.Store(true)
 	return merged
 }
 
@@ -114,9 +115,10 @@ type bufferView struct {
 
 	// bloom is the filter guarding the aggregated sets, short-circuiting the
 	// linear scan over them for the lookups of the non-contained state entries
-	// (the vast majority). The filter is shared between the consecutive views:
-	// it's strictly additive and the keys of a view are guaranteed to be fully
-	// inserted before the view publication, thus no false negative is possible.
+	// (the vast majority). The filter is shared between the consecutive views
+	// and strictly additive. The keys of a set are inserted in background after
+	// its publication, thus the filter only guards the sets marked as global,
+	// while the others are probed by their own filters.
 	bloom *bloomFilter
 
 	// lists caches the sorted state key lists across the aggregated sets, shared
@@ -140,67 +142,59 @@ func markBufferHit(depth int) {
 	bufferHitDepthMeter.Mark(int64(depth))
 }
 
-// node retrieves the trie node with node path and its trie identifier.
-func (v *bufferView) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
-	key := bloomNodeKey(owner, path)
-	if !v.bloom.contains(key) {
+// find resolves the entry with the given bloom key by probing the sets from the
+// newest one, with get retrieving the entry from a set. The oldest sets covered
+// by the buffer-wide filter are ruled out by it as a whole, while the newest ones
+// not covered yet are probed one by one.
+func find[T any](v *bufferView, key uint64, get func(*bufferSet) (T, bool)) (T, bool) {
+	var (
+		zero    T
+		covered = len(v.sets)
+	)
+	for covered > 0 && !v.sets[covered-1].global.Load() {
+		covered--
+	}
+	if covered == len(v.sets) && !v.bloom.contains(key) {
 		bloomShortcircuitMeter.Mark(1)
-		return nil, false
+		return zero, false
 	}
 	for i := len(v.sets) - 1; i >= 0; i-- {
+		if i == covered-1 && covered < len(v.sets) && !v.bloom.contains(key) {
+			bloomShortcircuitMeter.Mark(1)
+			return zero, false
+		}
 		if !v.sets[i].bloom.contains(key) {
 			continue
 		}
-		if n, ok := v.sets[i].nodes.node(owner, path); ok {
+		if val, ok := get(v.sets[i]); ok {
 			markBufferHit(len(v.sets) - 1 - i)
-			return n, true
+			return val, true
 		}
 		setBloomFalsePositiveMeter.Mark(1)
 	}
 	bloomFalsePositiveMeter.Mark(1)
-	return nil, false
+	return zero, false
+}
+
+// node retrieves the trie node with node path and its trie identifier.
+func (v *bufferView) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
+	return find(v, bloomNodeKey(owner, path), func(set *bufferSet) (*trienode.Node, bool) {
+		return set.nodes.node(owner, path)
+	})
 }
 
 // account retrieves the account blob with account address hash.
 func (v *bufferView) account(hash common.Hash) ([]byte, bool) {
-	key := bloomAccountKey(hash)
-	if !v.bloom.contains(key) {
-		bloomShortcircuitMeter.Mark(1)
-		return nil, false
-	}
-	for i := len(v.sets) - 1; i >= 0; i-- {
-		if !v.sets[i].bloom.contains(key) {
-			continue
-		}
-		if blob, ok := v.sets[i].states.account(hash); ok {
-			markBufferHit(len(v.sets) - 1 - i)
-			return blob, true
-		}
-		setBloomFalsePositiveMeter.Mark(1)
-	}
-	bloomFalsePositiveMeter.Mark(1)
-	return nil, false
+	return find(v, bloomAccountKey(hash), func(set *bufferSet) ([]byte, bool) {
+		return set.states.account(hash)
+	})
 }
 
 // storage retrieves the storage slot with account address hash and slot key hash.
 func (v *bufferView) storage(addrHash common.Hash, storageHash common.Hash) ([]byte, bool) {
-	key := bloomStorageKey(addrHash, storageHash)
-	if !v.bloom.contains(key) {
-		bloomShortcircuitMeter.Mark(1)
-		return nil, false
-	}
-	for i := len(v.sets) - 1; i >= 0; i-- {
-		if !v.sets[i].bloom.contains(key) {
-			continue
-		}
-		if blob, ok := v.sets[i].states.storage(addrHash, storageHash); ok {
-			markBufferHit(len(v.sets) - 1 - i)
-			return blob, true
-		}
-		setBloomFalsePositiveMeter.Mark(1)
-	}
-	bloomFalsePositiveMeter.Mark(1)
-	return nil, false
+	return find(v, bloomStorageKey(addrHash, storageHash), func(set *bufferSet) ([]byte, bool) {
+		return set.states.storage(addrHash, storageHash)
+	})
 }
 
 // compactThreshold returns the number of contiguous sets with the same level
@@ -243,18 +237,18 @@ func (s *bufferSet) sealed(maxSize uint64) bool {
 	return s.size() >= maxSize/2
 }
 
-// compactRun locates the first contiguous run of unsealed sets with the same
-// level whose length reaches the compaction threshold, returning the boundaries
-// of the longest prefix of it that merges within the cap. (-1, -1) is returned
-// if no such run exists.
+// compactRun locates the first contiguous run of unsealed sets covered by the
+// buffer-wide filter with the same level whose length reaches the compaction
+// threshold, returning the boundaries of the longest prefix of it that merges
+// within the cap. (-1, -1) is returned if no such run exists.
 func compactRun(sets []*bufferSet, maxSize uint64) (int, int) {
 	for i := 0; i < len(sets); {
-		if sets[i].sealed(maxSize) {
+		if sets[i].sealed(maxSize) || !sets[i].global.Load() {
 			i++
 			continue
 		}
 		j := i
-		for j < len(sets) && sets[j].level == sets[i].level && !sets[j].sealed(maxSize) {
+		for j < len(sets) && sets[j].level == sets[i].level && !sets[j].sealed(maxSize) && sets[j].global.Load() {
 			j++
 		}
 		if j-i >= compactThreshold(sets[i].level) {
@@ -295,6 +289,7 @@ type buffer struct {
 	compactCond *sync.Cond // signaled when the compaction thread terminates
 	compacting  bool       // whether the background compaction thread is active
 	paused      int        // the number of pending compaction pause requests
+	global      *taskQueue // inserting the keys of the committed sets into the buffer-wide filter
 
 	// done is the notifier whether the content in buffer has been flushed or not.
 	// This channel is nil if the buffer is not frozen.
@@ -307,7 +302,8 @@ type buffer struct {
 // newBuffer initializes the buffer with the provided states and trie nodes.
 func newBuffer(limit int, nodes *nodeSet, states *stateSet, layers uint64) *buffer {
 	b := &buffer{
-		limit: uint64(limit),
+		limit:  uint64(limit),
+		global: newTaskQueue(),
 	}
 	b.compactCond = sync.NewCond(&b.compactMu)
 
@@ -318,10 +314,11 @@ func newBuffer(limit int, nodes *nodeSet, states *stateSet, layers uint64) *buff
 	)
 	if nodes != nil || states != nil || layers != 0 {
 		keys := appendBloomKeys(nil, nodes, states)
-		set := newBufferSet(nodes, states, layers, keys)
+		set := newBufferSet(nodes, states, layers, newSetBloom(keys))
 		for _, key := range keys {
 			bloom.insert(key)
 		}
+		set.global.Store(true)
 		if set.size() > 0 || layers > 0 {
 			sets = []*bufferSet{set}
 			size = set.size()
@@ -447,34 +444,18 @@ func (b *buffer) storageList(accountHash common.Hash) []common.Hash {
 // the bottom-most diff layer), thus they are regarded as immutable and shall
 // never be mutated by the buffer.
 func (b *buffer) commit(nodes *nodeSet, states *stateSet) *buffer {
+	keys := deriveBloomKeys(nodes, states)
+	return b.commitWithBloom(nodes, states, newSetBloom(keys...), keys)
+}
+
+// commitWithBloom is the variant of commit taking the bloom keys of the sets
+// along with the filter over them, e.g. the ones of a diff layer.
+func (b *buffer) commitWithBloom(nodes *nodeSet, states *stateSet, bloom *bloomFilter, keys [][]uint64) *buffer {
 	start := time.Now()
 
 	b.viewMu.Lock()
 	view := b.view.Load()
-
-	// Derive the bloom keys of the new set in partitions concurrently, inserting
-	// them into the shared bloom filter before the view publication, ensuring
-	// the readers of the new view can never observe a false negative.
-	var (
-		wg   sync.WaitGroup
-		keys = bloomKeyPool.Get().(*[bloomParts][]uint64)
-	)
-	defer bloomKeyPool.Put(keys)
-
-	for i := range keys {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			keys[i] = appendBloomKeysPart(keys[i][:0], nodes, states, i, bloomParts)
-
-			// Write the entries into the global bloom
-			for _, key := range keys[i] {
-				view.bloom.insertAtomic(key)
-			}
-		}()
-	}
-	wg.Wait()
-	set := newBufferSet(nodes, states, 1, keys[:]...)
+	set := newBufferSet(nodes, states, 1, bloom)
 
 	// Construct the set list for the new view. Note the list held by the
 	// current view must not be modified in place (append could mutate the
@@ -494,6 +475,19 @@ func (b *buffer) commit(nodes *nodeSet, states *stateSet) *buffer {
 	b.view.Store(next)
 	b.viewMu.Unlock()
 
+	// Insert the keys of the new set into the buffer-wide filter in background,
+	// the set is probed by its own filter until then.
+	b.global.schedule(func() {
+		for _, part := range keys {
+			for _, key := range part {
+				view.bloom.insertAtomic(key)
+			}
+		}
+		set.global.Store(true)
+
+		// The set becomes compactable once covered by the buffer-wide filter
+		b.tryCompact()
+	})
 	bufferAppendTimer.UpdateSince(start)
 	bufferAppendBytesMeter.Mark(int64(set.size()))
 	bufferSetsGauge.Update(int64(len(next.sets)))
@@ -666,10 +660,7 @@ func (b *buffer) compact() {
 		)
 		// Publish the folded set by replacing the constituents in the current
 		// view. Note the view might have been extended with new sets in the
-		// meantime, while the position of the constituents remains unchanged,
-		// as the sets before them can only be modified by the compaction
-		// itself (mutations like revert and reset are guaranteed to be
-		// mutual-exclusive with the compaction).
+		// meantime, while the position of the merged sets remains unchanged.
 		b.viewMu.Lock()
 		cur := b.view.Load()
 		sets := make([]*bufferSet, 0, len(cur.sets)-(j-i)+1)
@@ -681,10 +672,7 @@ func (b *buffer) compact() {
 		for _, set := range sets {
 			size += set.size()
 		}
-		// The bloom filter and the key lists are untouched by the compaction:
-		// the folded set holds the same key set as its constituents (the keys
-		// overwritten inside remain as stale bloom entries, harmless for
-		// correctness).
+		// The bloom filter and the key lists are untouched by the compaction.
 		b.view.Store(&bufferView{
 			layers: cur.layers,
 			size:   size,
@@ -710,9 +698,11 @@ func (b *buffer) compact() {
 // the current view, reducing the lookup cost for the subsequent state access.
 func (b *buffer) flatten() (*nodeSet, *stateSet) {
 	// Block until the background compaction is terminated, ensuring the
-	// stability of the set list.
+	// stability of the set list, and the sets are covered by the buffer-wide
+	// filter, which then covers the flattened set.
 	b.pauseCompaction()
 	defer b.resumeCompaction()
+	b.global.wait()
 
 	b.viewMu.Lock()
 	defer b.viewMu.Unlock()
@@ -807,9 +797,16 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, syncHistory fun
 		commitStoragesMeter.Mark(int64(slots))
 		commitTimeTimer.UpdateSince(start)
 
-		// The content in the frozen buffer is kept for consequent state access,
-		// TODO (rjl493456442) measure the gc overhead for holding this struct.
-		// TODO (rjl493456442) can we somehow get rid of it after flushing??
+		// Release the persisted content, served by the clean caches and the disk
+		// from now on. The items written above are held by the buffer until the
+		// batch is committed, so no stale value can be cached by the readers.
+		b.viewMu.Lock()
+		b.view.Store(&bufferView{
+			bloom: newBloomFilter(0), // empty filter, short-circuiting all the reads
+			lists: new(bufferLists),
+		})
+		b.viewMu.Unlock()
+
 		log.Debug("Persisted buffer content", "nodes", nodeCount, "accounts", accounts, "slots", slots, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
 	}()
 }
