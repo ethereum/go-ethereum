@@ -101,6 +101,9 @@ func (s *syncerV2) isStorageFetched(accountHash, storageHash common.Hash) bool {
 // Networks with the legacy SELFDESTRUCT break this premise: wholesale storage
 // wipes carry no per-slot writes, leaving already-downloaded slots stale.
 func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) error {
+	// Bytecode deployed in the block, for resolving EIP-8298 adopted code.
+	deployed := b.DeployedCodes()
+
 	// Iterate over all accounts in the access list
 	for _, access := range *b {
 		addr := access.Address
@@ -161,8 +164,15 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) er
 
 		// Apply code change (last entry = post-block state)
 		if n := len(access.CodeChanges); n > 0 {
-			code := access.CodeChanges[n-1].NewCode
-			if len(code) > 0 {
+			change := access.CodeChanges[n-1]
+			if change.NewCodeHash != nil {
+				// Code adopted through SETCODEFROM. Bytecode deployed before
+				// the block is already known by hash.
+				if code, ok := deployed[*change.NewCodeHash]; ok {
+					rawdb.WriteCode(batch, *change.NewCodeHash, code)
+				}
+				account.CodeHash = change.NewCodeHash.Bytes()
+			} else if code := change.NewCode; len(code) > 0 {
 				codeHash := crypto.Keccak256(code)
 				rawdb.WriteCode(batch, common.BytesToHash(codeHash), code)
 				account.CodeHash = codeHash

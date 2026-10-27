@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // The EIP27928 reader utilizes a hierarchical architecture to optimize state
@@ -241,7 +240,7 @@ func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (*types.St
 	if err != nil {
 		return nil, err
 	}
-	balance, nonce, code, hasBalance, hasNonce, hasCode := r.lookup.AccountChanges(addr, r.txIndex)
+	balance, nonce, codeHash, hasBalance, hasNonce, hasCode := r.lookup.AccountChanges(addr, r.txIndex)
 
 	// No mutation precedes the current call frame, return the base account as is.
 	if !hasBalance && !hasNonce && !hasCode {
@@ -261,11 +260,7 @@ func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (*types.St
 		account.Nonce = nonce
 	}
 	if hasCode {
-		if len(code) == 0 {
-			account.CodeHash = types.EmptyCodeHash.Bytes()
-		} else {
-			account.CodeHash = crypto.Keccak256(code)
-		}
+		account.CodeHash = codeHash.Bytes()
 	}
 	return account, nil
 }
@@ -282,8 +277,12 @@ func (r *ReaderWithBlockLevelAccessList) Storage(addr common.Address, slot commo
 // Has implements Reader, returning the flag indicating whether the contract
 // code with specified address and hash exists or not.
 func (r *ReaderWithBlockLevelAccessList) Has(addr common.Address, codeHash common.Hash) bool {
-	if _, ok := r.lookup.Code(addr, r.txIndex); ok {
-		return true
+	if hash, code, ok := r.lookup.Code(addr, r.txIndex); ok {
+		if code != nil || hash == types.EmptyCodeHash {
+			return true
+		}
+		// Code adopted from an account deployed before the block.
+		return r.Reader.Has(addr, hash)
 	}
 	return r.Reader.Has(addr, codeHash)
 }
@@ -292,8 +291,12 @@ func (r *ReaderWithBlockLevelAccessList) Has(addr common.Address, codeHash commo
 // and hash. Code created earlier in the block (and therefore absent from the
 // pre-transition state) is served directly from the access list.
 func (r *ReaderWithBlockLevelAccessList) Code(addr common.Address, codeHash common.Hash) []byte {
-	if code, ok := r.lookup.Code(addr, r.txIndex); ok {
-		return code
+	if hash, code, ok := r.lookup.Code(addr, r.txIndex); ok {
+		if code != nil || hash == types.EmptyCodeHash {
+			return code
+		}
+		// Code adopted from an account deployed before the block.
+		return r.Reader.Code(addr, hash)
 	}
 	return r.Reader.Code(addr, codeHash)
 }
@@ -301,8 +304,12 @@ func (r *ReaderWithBlockLevelAccessList) Code(addr common.Address, codeHash comm
 // CodeSize implements Reader, returning the contract code size with specified
 // address and hash.
 func (r *ReaderWithBlockLevelAccessList) CodeSize(addr common.Address, codeHash common.Hash) int {
-	if code, ok := r.lookup.Code(addr, r.txIndex); ok {
-		return len(code)
+	if hash, code, ok := r.lookup.Code(addr, r.txIndex); ok {
+		if code != nil || hash == types.EmptyCodeHash {
+			return len(code)
+		}
+		// Code adopted from an account deployed before the block.
+		return r.Reader.CodeSize(addr, hash)
 	}
 	return r.Reader.CodeSize(addr, codeHash)
 }

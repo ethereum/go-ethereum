@@ -530,6 +530,19 @@ func (s *StateDB) SetCode(addr common.Address, code []byte, reason tracing.CodeC
 	return nil
 }
 
+// AdoptCode sets the code of addr to code already deployed under codeHash, as
+// EIP-8298 SETCODEFROM does. The change is recorded in the block access list
+// by code hash rather than by bytecode. It returns the previous code.
+func (s *StateDB) AdoptCode(addr common.Address, codeHash common.Hash, code []byte) (prev []byte) {
+	stateObject := s.getOrNewStateObject(addr)
+	if stateObject == nil {
+		return nil
+	}
+	prev = stateObject.SetCode(codeHash, code)
+	s.journal.adoptCode(addr)
+	return prev
+}
+
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) common.Hash {
 	if stateObject := s.getOrNewStateObject(addr); stateObject != nil {
 		return stateObject.SetState(key, value)
@@ -909,10 +922,13 @@ func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMut
 			if !start.codeSet {
 				start.code, start.codeSet, captured = state.code, true, true
 			}
-			if !bytes.Equal(code, start.code) {
-				s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
-			} else {
+			switch {
+			case bytes.Equal(code, start.code):
 				s.stateAccessList.RemoveCodeChange(addr, s.blockAccessIndex)
+			case obj != nil && state.codeAdopted():
+				s.stateAccessList.AdoptedCodeChange(addr, s.blockAccessIndex, common.BytesToHash(obj.CodeHash()))
+			default:
+				s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
 			}
 		}
 	}

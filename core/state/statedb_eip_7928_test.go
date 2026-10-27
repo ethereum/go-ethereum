@@ -17,13 +17,16 @@
 package state
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -158,5 +161,108 @@ func TestApplyBlockAccessListMatchesSequential(t *testing.T) {
 
 	if gotRoot != wantRoot {
 		t.Fatalf("BAL apply root = %x, want %x", gotRoot, wantRoot)
+	}
+}
+
+// TestAccessListRecordsAdoptedCode checks that code set through AdoptCode is
+// recorded in the block access list by hash, that a reverted adoption leaves a
+// plain code change, and that ApplyBlockAccessList resolves adopted code from
+// the pre-block state and from code deployed earlier in the block.
+func TestAccessListRecordsAdoptedCode(t *testing.T) {
+	var (
+		source   = common.HexToAddress("0x1111")
+		adopter  = common.HexToAddress("0x2222")
+		deployer = common.HexToAddress("0x3333")
+		late     = common.HexToAddress("0x4444")
+		reverted = common.HexToAddress("0x5555")
+
+		preCode  = []byte{0x60, 0x01, 0x00}
+		newCode  = []byte{0x60, 0x02, 0x00}
+		preHash  = crypto.Keccak256Hash(preCode)
+		newHash  = crypto.Keccak256Hash(newCode)
+		rules    = params.Rules{IsAmsterdam: true, IsEIP158: true}
+		recorded = bal.NewConstructionBlockAccessList()
+	)
+	db := NewDatabaseForTesting()
+	base, _ := New(types.EmptyRootHash, db)
+	base.SetCode(source, preCode, tracing.CodeChangeUnspecified)
+	base.SetNonce(source, 1, tracing.NonceChangeUnspecified)
+	base.SetNonce(adopter, 1, tracing.NonceChangeUnspecified)
+	base.SetNonce(late, 1, tracing.NonceChangeUnspecified)
+	base.SetNonce(reverted, 1, tracing.NonceChangeUnspecified)
+	root0, err := base.Commit(params.Rules{}, 0)
+	if err != nil {
+		t.Fatalf("commit base: %v", err)
+	}
+	seq, _ := New(root0, db)
+
+	// Transaction 1: adopt pre-block code, deploy new code, and adopt code
+	// whose adoption is reverted before a plain code write.
+	seq.SetTxContext(common.Hash{}, 0, 1)
+	seq.Prepare(rules, common.Address{}, common.Address{}, nil, nil, nil)
+	seq.AdoptCode(adopter, preHash, preCode)
+	seq.SetCode(deployer, newCode, tracing.CodeChangeContractCreation)
+	snap := seq.Snapshot()
+	seq.AdoptCode(reverted, preHash, preCode)
+	seq.RevertToSnapshot(snap)
+	seq.SetCode(reverted, newCode, tracing.CodeChangeUnspecified)
+	recorded.Merge(seq.Finalise(rules))
+
+	// Transaction 2: adopt the code deployed by transaction 1.
+	seq.SetTxContext(common.Hash{}, 1, 2)
+	seq.Prepare(rules, common.Address{}, common.Address{}, nil, nil, nil)
+	seq.AdoptCode(late, newHash, newCode)
+	recorded.Merge(seq.Finalise(rules))
+	wantRoot := seq.IntermediateRoot(rules)
+
+	list := recorded.ToEncodingObj()
+	want := map[common.Address]struct {
+		index uint32
+		code  []byte
+		hash  *common.Hash
+	}{
+		adopter:  {1, nil, &preHash},
+		deployer: {1, newCode, nil},
+		reverted: {1, newCode, nil},
+		late:     {2, nil, &newHash},
+	}
+	for _, access := range *list {
+		w, ok := want[access.Address]
+		if !ok {
+			continue
+		}
+		if len(access.CodeChanges) != 1 {
+			t.Fatalf("%x: want 1 code change, got %d", access.Address, len(access.CodeChanges))
+		}
+		c := access.CodeChanges[0]
+		if c.BlockAccessIndex != w.index || !bytes.Equal(c.NewCode, w.code) || (c.NewCodeHash == nil) != (w.hash == nil) || (w.hash != nil && *c.NewCodeHash != *w.hash) {
+			t.Fatalf("%x: code change mismatch: have %+v", access.Address, c)
+		}
+		delete(want, access.Address)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing code changes: %v", want)
+	}
+	// The access list must survive an RLP round trip and rebuild the state.
+	enc, err := rlp.EncodeToBytes(list)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	var dec bal.BlockAccessList
+	if err := rlp.DecodeBytes(enc, &dec); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	balState, _ := New(root0, db)
+	if err := balState.ApplyBlockAccessList(&dec); err != nil {
+		t.Fatalf("apply block access list: %v", err)
+	}
+	if gotRoot := balState.IntermediateRoot(rules); gotRoot != wantRoot {
+		t.Fatalf("BAL apply root = %x, want %x", gotRoot, wantRoot)
+	}
+	if code := balState.GetCode(adopter); !bytes.Equal(code, preCode) {
+		t.Fatalf("adopter code = %x, want %x", code, preCode)
+	}
+	if code := balState.GetCode(late); !bytes.Equal(code, newCode) {
+		t.Fatalf("late adopter code = %x, want %x", code, newCode)
 	}
 }

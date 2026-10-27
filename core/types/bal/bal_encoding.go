@@ -216,10 +216,13 @@ type encodingAccountNonceMarshaling struct {
 	PostNonce        hexutil.Uint64
 }
 
-// encodingCodeChange is one transaction's deployed runtime bytecode for an account.
+// encodingCodeChange is one transaction's deployed runtime bytecode for an
+// account. Code adopted through EIP-8298 SETCODEFROM is recorded with empty
+// NewCode and the adopted code hash in the optional trailing NewCodeHash.
 type encodingCodeChange struct {
-	BlockAccessIndex uint32 `json:"blockAccessIndex"`
-	NewCode          []byte `json:"newCode"`
+	BlockAccessIndex uint32       `json:"blockAccessIndex"`
+	NewCode          []byte       `json:"newCode"`
+	NewCodeHash      *common.Hash `json:"newCodeHash,omitempty" rlp:"optional"`
 }
 
 type encodingCodeChangeMarshaling struct {
@@ -320,10 +323,14 @@ func (e *AccountAccess) validate(maxBALIndex int) error {
 		return fmt.Errorf("code change index exceeds limit, index: %d, limit: %d", e.CodeChanges[len(e.CodeChanges)-1].BlockAccessIndex, maxBALIndex)
 	}
 	// Check that none of the code changes report a new code which is larger
-	// than the max allowed by the protocol
+	// than the max allowed by the protocol, and that adopted code changes
+	// carry no bytecode.
 	for _, change := range e.CodeChanges {
 		if len(change.NewCode) > params.MaxCodeSizeAmsterdam {
 			return errors.New("code change contained oversized code")
+		}
+		if change.NewCodeHash != nil && len(change.NewCode) != 0 {
+			return errors.New("adopted code change contained code")
 		}
 	}
 	return nil
@@ -365,6 +372,7 @@ func (e *AccountAccess) Copy() AccountAccess {
 		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
 			BlockAccessIndex: codeChange.BlockAccessIndex,
 			NewCode:          bytes.Clone(codeChange.NewCode),
+			NewCodeHash:      codeChange.NewCodeHash,
 		})
 	}
 	return res
@@ -442,6 +450,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	codeIndices := slices.Collect(maps.Keys(a.CodeChange))
 	slices.SortFunc(codeIndices, cmp.Compare)
 	for _, idx := range codeIndices {
+		change := a.CodeChange[idx]
 		res.CodeChanges = append(res.CodeChanges, encodingCodeChange{
 			BlockAccessIndex: idx,
 
@@ -449,7 +458,8 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 			// In theory the deep-copy is unnecessary, the semantics of
 			// the function should be probably changed that the returned
 			// AccessList is unsafe for modification.
-			NewCode: a.CodeChange[idx],
+			NewCode:     change.Code,
+			NewCodeHash: change.AdoptedHash,
 		})
 	}
 	return res
@@ -499,7 +509,11 @@ func (e *BlockAccessList) PrettyPrint() string {
 		}
 		printWithIndent(1, "code changes:")
 		for _, change := range accountDiff.CodeChanges {
-			printWithIndent(2, fmt.Sprintf("%d: %x", change.BlockAccessIndex, change.NewCode))
+			if change.NewCodeHash != nil {
+				printWithIndent(2, fmt.Sprintf("%d: adopted %x", change.BlockAccessIndex, *change.NewCodeHash))
+			} else {
+				printWithIndent(2, fmt.Sprintf("%d: %x", change.BlockAccessIndex, change.NewCode))
+			}
 		}
 	}
 	return res.String()

@@ -570,4 +570,8 @@ const (
 	// CodeChangeRevert reverts the code to a previous value on call failure.
 	// Emitted only when the tracer opts into WrapWithJournal.
 	CodeChangeRevert CodeChangeReason = 6
+
+	// CodeChangeSetCodeFrom is when an account adopts the code of another
+	// account through the EIP-8298 SETCODEFROM instruction.
+	CodeChangeSetCodeFrom CodeChangeReason = 7
 )

@@ -32,6 +32,7 @@ import (
 )
 
 func makeTestConstructionBAL() *ConstructionBlockAccessList {
+	adoptedHash := common.HexToHash("0x831c0acb827695f54824e6e0b3334bca5d0b988609981927399fdf744bf73a5d")
 	return &ConstructionBlockAccessList{
 		map[common.Address]*ConstructionAccountAccess{
 			common.BytesToAddress([]byte{0xff, 0xff}): {
@@ -55,8 +56,8 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 					1: 2,
 					2: 6,
 				},
-				CodeChange: map[uint32][]byte{
-					0: common.Hex2Bytes("deadbeef"),
+				CodeChange: map[uint32]CodeChange{
+					0: {Code: common.Hex2Bytes("deadbeef")},
 				},
 			},
 			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
@@ -79,8 +80,9 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 				NonceChanges: map[uint32]uint64{
 					1: 2,
 				},
-				CodeChange: map[uint32][]byte{
-					0: common.Hex2Bytes("deadbeef"),
+				CodeChange: map[uint32]CodeChange{
+					0: {Code: common.Hex2Bytes("deadbeef")},
+					2: {Code: []byte{}, AdoptedHash: &adoptedHash},
 				},
 			},
 		},
@@ -153,8 +155,8 @@ func TestConstructionBALMerge(t *testing.T) {
 	if !ok {
 		t.Fatal("account only present in other was not adopted")
 	}
-	if !bytes.Equal(accB.CodeChange[2], []byte{0xde, 0xad}) {
-		t.Fatalf("code change for adopted account missing: %x", accB.CodeChange[2])
+	if !bytes.Equal(accB.CodeChange[2].Code, []byte{0xde, 0xad}) {
+		t.Fatalf("code change for adopted account missing: %x", accB.CodeChange[2].Code)
 	}
 }
 

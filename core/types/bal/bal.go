@@ -51,11 +51,18 @@ type ConstructionAccountAccess struct {
 
 	// CodeChange contains the post-state contract code of an account keyed
 	// by tx index.
-	CodeChange map[uint32][]byte `json:"codeChange,omitempty"`
+	CodeChange map[uint32]CodeChange `json:"codeChange,omitempty"`
 
 	// removed lists the changes dropped by the Remove* methods, so that Merge
 	// drops them from the destination list as well.
 	removed []removedChange
+}
+
+// CodeChange is the post-transaction code of an account. Code adopted through
+// EIP-8298 SETCODEFROM is recorded by its code hash instead of its bytecode.
+type CodeChange struct {
+	Code        []byte       `json:"code,omitempty"`
+	AdoptedHash *common.Hash `json:"adoptedHash,omitempty"`
 }
 
 // changeKind identifies the kind of a change recorded in the access list.
@@ -104,7 +111,7 @@ func NewConstructionAccountAccess() *ConstructionAccountAccess {
 		StorageReads:   make(map[common.Hash]struct{}),
 		BalanceChanges: make(map[uint32]*uint256.Int),
 		NonceChanges:   make(map[uint32]uint64),
-		CodeChange:     make(map[uint32][]byte),
+		CodeChange:     make(map[uint32]CodeChange),
 	}
 }
 
@@ -159,7 +166,16 @@ func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex
 		b.Accounts[address] = NewConstructionAccountAccess()
 	}
 	// TODO(rjl493456442) is it essential to deep-copy the code?
-	b.Accounts[address].CodeChange[txIndex] = bytes.Clone(code)
+	b.Accounts[address].CodeChange[txIndex] = CodeChange{Code: bytes.Clone(code)}
+}
+
+// AdoptedCodeChange records the code hash an account adopted through EIP-8298
+// SETCODEFROM.
+func (b *ConstructionBlockAccessList) AdoptedCodeChange(address common.Address, txIndex uint32, codeHash common.Hash) {
+	if _, ok := b.Accounts[address]; !ok {
+		b.Accounts[address] = NewConstructionAccountAccess()
+	}
+	b.Accounts[address].CodeChange[txIndex] = CodeChange{AdoptedHash: &codeHash}
 }
 
 // NonceChange records tx post-state nonce of any contract-like accounts whose
@@ -274,8 +290,8 @@ func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) 
 		for txIdx, nonce := range otherAcc.NonceChanges {
 			acc.NonceChanges[txIdx] = nonce
 		}
-		for txIdx, code := range otherAcc.CodeChange {
-			acc.CodeChange[txIdx] = code
+		for txIdx, change := range otherAcc.CodeChange {
+			acc.CodeChange[txIdx] = change
 		}
 	}
 }
@@ -300,9 +316,12 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 		aaCopy.BalanceChanges = balances
 		aaCopy.NonceChanges = maps.Clone(aa.NonceChanges)
 
-		codes := make(map[uint32][]byte, len(aa.CodeChange))
-		for index, code := range aa.CodeChange {
-			codes[index] = bytes.Clone(code)
+		codes := make(map[uint32]CodeChange, len(aa.CodeChange))
+		for index, change := range aa.CodeChange {
+			codes[index] = CodeChange{
+				Code:        bytes.Clone(change.Code),
+				AdoptedHash: change.AdoptedHash,
+			}
 		}
 		aaCopy.CodeChange = codes
 		aaCopy.removed = slices.Clone(aa.removed)

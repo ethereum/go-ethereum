@@ -67,6 +67,10 @@ type balApplyContext struct {
 	accountReads atomic.Int64
 	storageReads atomic.Int64
 	prefetchMu   sync.Mutex
+
+	// codes holds the bytecode deployed in the block, keyed by hash, for
+	// resolving EIP-8298 adopted code changes.
+	codes map[common.Hash][]byte
 }
 
 func (s *StateDB) applyBlockAccessList(list bal.BlockAccessList, threads int) error {
@@ -103,7 +107,7 @@ func (s *StateDB) applyBlockAccessList(list bal.BlockAccessList, threads int) er
 		}
 	}
 	// Process the accounts by applying the final value of mutated fields.
-	var ba balApplyContext
+	ba := balApplyContext{codes: list.DeployedCodes()}
 	if err := parallelBALApply(len(accounts), threads, func(i int) error {
 		return s.prepareBALAccount(accounts[i], &ba)
 	}); err != nil {
@@ -156,8 +160,22 @@ func (s *StateDB) prepareBALAccount(entry *balAccount, ba *balApplyContext) erro
 		obj.setNonce(entry.access.NonceChanges[n-1].PostNonce)
 	}
 	if n := len(entry.access.CodeChanges); n > 0 {
-		code := entry.access.CodeChanges[n-1].NewCode
-		obj.setCode(crypto.Keccak256Hash(code), slices.Clone(code))
+		change := &entry.access.CodeChanges[n-1]
+		if change.NewCodeHash != nil {
+			// Code adopted through SETCODEFROM was deployed either earlier
+			// in the block or before it.
+			hash := *change.NewCodeHash
+			code, ok := ba.codes[hash]
+			if !ok {
+				code = s.reader.Code(addr, hash)
+				if len(code) == 0 {
+					return fmt.Errorf("adopted code %x of %x not found", hash, addr)
+				}
+			}
+			obj.setCode(hash, slices.Clone(code))
+		} else {
+			obj.setCode(crypto.Keccak256Hash(change.NewCode), slices.Clone(change.NewCode))
+		}
 	}
 	if err := s.applyBALStorage(obj, entry.slots, ba); err != nil {
 		return err

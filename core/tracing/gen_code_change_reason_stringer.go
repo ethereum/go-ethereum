@@ -15,11 +15,12 @@ func _() {
 	_ = x[CodeChangeAuthorizationClear-4]
 	_ = x[CodeChangeSelfDestruct-5]
 	_ = x[CodeChangeRevert-6]
+	_ = x[CodeChangeSetCodeFrom-7]
 }
 
-const _CodeChangeReason_name = "UnspecifiedContractCreationGenesisAuthorizationAuthorizationClearSelfDestructRevert"
+const _CodeChangeReason_name = "UnspecifiedContractCreationGenesisAuthorizationAuthorizationClearSelfDestructRevertSetCodeFrom"
 
-var _CodeChangeReason_index = [...]uint8{0, 11, 27, 34, 47, 65, 77, 83}
+var _CodeChangeReason_index = [...]uint8{0, 11, 27, 34, 47, 65, 77, 83, 94}
 
 func (i CodeChangeReason) String() string {
 	idx := int(i) - 0

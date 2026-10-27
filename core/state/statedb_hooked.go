@@ -218,6 +218,24 @@ func (s *hookedStateDB) SetCode(address common.Address, code []byte, reason trac
 	return prev
 }
 
+func (s *hookedStateDB) AdoptCode(address common.Address, codeHash common.Hash, code []byte) []byte {
+	prev := s.inner.AdoptCode(address, codeHash, code)
+
+	if s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil {
+		prevHash := crypto.Keccak256Hash(prev)
+
+		// Invoke the hooks only if the contract code is changed
+		if prevHash != codeHash {
+			if s.hooks.OnCodeChangeV2 != nil {
+				s.hooks.OnCodeChangeV2(address, prevHash, prev, codeHash, code, tracing.CodeChangeSetCodeFrom)
+			} else if s.hooks.OnCodeChange != nil {
+				s.hooks.OnCodeChange(address, prevHash, prev, codeHash, code)
+			}
+		}
+	}
+	return prev
+}
+
 func (s *hookedStateDB) SetState(address common.Address, key common.Hash, value common.Hash) common.Hash {
 	prev := s.inner.SetState(address, key, value)
 	if s.hooks.OnStorageChange != nil && prev != value {

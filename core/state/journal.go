@@ -47,7 +47,8 @@ const (
 	journalMutationKindNonce
 	journalMutationKindCode
 	journalMutationKindStorage
-	journalMutationKindCount // sentinel, must stay last
+	journalMutationKindCodeAdoption // code set by EIP-8298 SETCODEFROM
+	journalMutationKindCount        // sentinel, must stay last
 )
 
 type journalMutationCounts [journalMutationKindCount]int
@@ -100,6 +101,13 @@ func (s *journalMutationState) clearKind(kind journalMutationKind) {
 		s.code = nil
 		s.codeSet = false
 	}
+}
+
+// codeAdopted reports whether the account adopted code through EIP-8298
+// SETCODEFROM in the current transaction (and the adoption was not reverted),
+// in which case the block access list records its code change by hash.
+func (s *journalMutationState) codeAdopted() bool {
+	return s.counts[journalMutationKindCodeAdoption] != 0
 }
 
 func (s *journalMutationState) copy() *journalMutationState {
@@ -362,6 +370,12 @@ func (j *journal) setCode(address common.Address, prevCode []byte) {
 	})
 }
 
+// adoptCode marks the account as having adopted code through EIP-8298
+// SETCODEFROM. The code itself is journaled by the accompanying setCode.
+func (j *journal) adoptCode(address common.Address) {
+	j.append(codeAdoptionChange{account: address})
+}
+
 func (j *journal) nonceChange(address common.Address, prev uint64) {
 	j.stashNonce(address, prev)
 	j.append(nonceChange{
@@ -434,6 +448,9 @@ type (
 	codeChange struct {
 		account  common.Address
 		prevCode []byte
+	}
+	codeAdoptionChange struct {
+		account common.Address
 	}
 
 	// Changes to other state values.
@@ -566,6 +583,16 @@ func (ch codeChange) copy() journalEntry {
 		account:  ch.account,
 		prevCode: ch.prevCode,
 	}
+}
+
+func (ch codeAdoptionChange) revert(s *StateDB) {}
+
+func (ch codeAdoptionChange) mutation() (common.Address, journalMutationKind, bool) {
+	return ch.account, journalMutationKindCodeAdoption, true
+}
+
+func (ch codeAdoptionChange) copy() journalEntry {
+	return codeAdoptionChange{account: ch.account}
 }
 
 func (ch storageChange) revert(s *StateDB) {
