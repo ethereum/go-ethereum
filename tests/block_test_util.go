@@ -64,6 +64,13 @@ type btJSON struct {
 	BestBlock  common.UnprefixedHash `json:"lastblockhash"`
 	Network    string                `json:"network"`
 	SealEngine string                `json:"sealEngine"`
+	Config     btConfig              `json:"config"`
+}
+
+// btConfig holds the chain configuration fields of a blockchain fixture that
+// are not implied by the network name.
+type btConfig struct {
+	ZeroNonceStorageAccounts []common.Address `json:"zeroNonceStorageAccounts"`
 }
 
 type btBlock struct {
@@ -114,15 +121,18 @@ type btHeaderMarshaling struct {
 }
 
 func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
-	config, ok := Forks[t.json.Network]
+	forkConfig, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
 	}
+	// Copy the shared fork config before applying the fixture's settings.
+	config := *forkConfig
+	config.ZeroNonceStorageAccounts = t.json.Config.ZeroNonceStorageAccounts
 
 	// import pre accounts & construct test genesis block & state root
 	// Commit genesis state
 	var (
-		gspec = t.genesis(config)
+		gspec = t.genesis(&config)
 		db    = rawdb.NewMemoryDatabase()
 		tconf = &triedb.Config{
 			Preimages: true,

@@ -160,6 +160,11 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 	if config.IsAmsterdam(number, time) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	}
+	// EIP-8253: bump the nonce of the zero-nonce storage accounts at the
+	// Bogota fork block, before any pre-execution system call.
+	if config.IsBogota(number, time) && !config.IsBogota(parent.Number, parent.Time) {
+		ProcessZeroNonceStorageAccounts(config.ZeroNonceStorageAccounts, evm, blockAccessList)
+	}
 	// EIP-4788
 	if beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
@@ -169,6 +174,26 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 		ProcessParentBlockHash(parent.Hash(), evm, blockAccessList)
 	}
 	return blockAccessList
+}
+
+// ProcessZeroNonceStorageAccounts applies the EIP-8253 irregular state
+// transition: the nonce of every listed account is set to one, creating the
+// account if absent. Balance, code and storage are left untouched. The change
+// is recorded at block access index 0, ahead of the pre-execution system calls.
+func ProcessZeroNonceStorageAccounts(accounts []common.Address, evm *vm.EVM, blockAccessList *bal.ConstructionBlockAccessList) {
+	if len(accounts) == 0 {
+		return
+	}
+	rules := evm.GetRules()
+	evm.StateDB.Prepare(rules, common.Address{}, common.Address{}, nil, nil, nil)
+	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
+	for _, addr := range accounts {
+		evm.StateDB.SetNonce(addr, 1, tracing.NonceChangeUnspecified)
+	}
+	accessList := evm.StateDB.Finalise(rules)
+	if rules.IsAmsterdam {
+		blockAccessList.Merge(accessList)
+	}
 }
 
 // PostExecution processes the withdrawals and then the post-execution system

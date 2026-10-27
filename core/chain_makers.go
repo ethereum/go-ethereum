@@ -384,6 +384,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
+		if config.IsBogota(b.header.Number, b.header.Time) && !config.IsBogota(parent.Number(), parent.Time()) {
+			// EIP-8253: bump the zero-nonce storage accounts at the Bogota fork block.
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			blockContext.Random = &common.Hash{} // enable post-merge instruction set
+			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+			ProcessZeroNonceStorageAccounts(config.ZeroNonceStorageAccounts, evm, b.bal)
+		}
 		if config.IsPrague(b.header.Number, b.header.Time) || config.IsUBT(b.header.Number, b.header.Time) {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)

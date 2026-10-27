@@ -434,6 +434,12 @@ type ChainConfig struct {
 
 	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
 
+	// ZeroNonceStorageAccounts lists the accounts with empty code, zero nonce
+	// and non-empty storage whose nonce is set to one at the Bogota fork block
+	// (EIP-8253). It is empty for chains on which EIP-161 has been active
+	// since genesis.
+	ZeroNonceStorageAccounts []common.Address `json:"zeroNonceStorageAccounts,omitempty"`
+
 	// EnableUBTAtGenesis is a flag that specifies whether the network uses
 	// the Verkle tree starting from the genesis block. If set to true, the
 	// genesis state will be committed using the Binary tree, eliminating the

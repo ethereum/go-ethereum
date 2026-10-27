@@ -4190,6 +4190,87 @@ func TestEIP7702(t *testing.T) {
 	}
 }
 
+// TestEIP8253ForkBlockNonceBump checks that the Bogota fork block sets the
+// nonce of the configured zero-nonce storage accounts to one, leaving balance
+// and storage untouched and creating absent accounts, that the change is
+// recorded as a single nonce change at block access index 0, and that blocks
+// built by the chain maker import through both the sequential and the
+// BAL-driven parallel processor.
+func TestEIP8253ForkBlockNonceBump(t *testing.T) {
+	var (
+		config   = *params.MergedTestChainConfig
+		engine   = beacon.New(ethash.NewFaker())
+		zero     = uint64(0)
+		bogota   = uint64(20) // the chain maker spaces blocks 10s apart: block 2
+		withData = common.HexToAddress("0x8253")
+		absent   = common.HexToAddress("0x8254")
+		slot     = common.HexToHash("0x01")
+		balance  = big.NewInt(1000)
+	)
+	config.AmsterdamTime = &zero
+	config.BogotaTime = &bogota
+	config.ZeroNonceStorageAccounts = []common.Address{withData, absent}
+	alloc := SystemContractAllocs()
+	alloc[withData] = types.Account{
+		Balance: balance,
+		Storage: map[common.Hash]common.Hash{slot: common.HexToHash("0x2a")},
+	}
+	gspec := &Genesis{Config: &config, Alloc: alloc}
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 3, func(i int, b *BlockGen) {
+		b.SetParentBeaconRoot(common.Hash{})
+	})
+	for i, want := range []int{0, 2, 0} {
+		bumps := 0
+		for _, access := range *blocks[i].AccessList() {
+			if access.Address != withData && access.Address != absent {
+				continue
+			}
+			if len(access.NonceChanges) != 1 || access.NonceChanges[0].BlockAccessIndex != 0 || access.NonceChanges[0].PostNonce != 1 {
+				t.Fatalf("block %d: unexpected nonce changes for %x: %+v", i+1, access.Address, access.NonceChanges)
+			}
+			if len(access.BalanceChanges) != 0 || len(access.CodeChanges) != 0 || len(access.StorageChanges) != 0 || len(access.StorageReads) != 0 {
+				t.Fatalf("block %d: bump of %x recorded more than a nonce change", i+1, access.Address)
+			}
+			bumps++
+		}
+		if bumps != want {
+			t.Fatalf("block %d: %d bumped accounts in the access list, want %d", i+1, bumps, want)
+		}
+	}
+	for _, sequential := range []bool{false, true} {
+		options := DefaultConfig()
+		options.VmConfig.DisableParallelExecution = sequential
+		chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, options)
+		if err != nil {
+			t.Fatalf("failed to create tester chain: %v", err)
+		}
+		if n, err := chain.InsertChain(blocks); err != nil {
+			t.Fatalf("sequential=%v: block %d: failed to insert into chain: %v", sequential, n, err)
+		}
+		pre, err := chain.StateAt(blocks[0].Header())
+		if err != nil {
+			t.Fatalf("failed to open pre-fork state: %v", err)
+		}
+		if pre.GetNonce(withData) != 0 || pre.Exist(absent) {
+			t.Fatalf("sequential=%v: accounts bumped before the fork block", sequential)
+		}
+		post, _ := chain.State()
+		for _, addr := range []common.Address{withData, absent} {
+			if nonce := post.GetNonce(addr); nonce != 1 {
+				t.Fatalf("sequential=%v: nonce of %x: have %d, want 1", sequential, addr, nonce)
+			}
+		}
+		if have := post.GetBalance(withData); have.ToBig().Cmp(balance) != 0 {
+			t.Fatalf("sequential=%v: balance changed: have %v, want %v", sequential, have, balance)
+		}
+		if have := post.GetState(withData, slot); have != common.HexToHash("0x2a") {
+			t.Fatalf("sequential=%v: storage changed: have %x", sequential, have)
+		}
+		chain.Stop()
+	}
+}
+
 // TestEIP8141 inserts a block with an EIP-8141 frame transaction: a VERIFY
 // frame authorizes execution and payment through the default code using the
 // sender's signature entry, and a SENDER frame calls a storage-writing
