@@ -18,15 +18,18 @@ package eth
 
 import (
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // AdminAPI is the collection of Ethereum full node related APIs for node
@@ -140,4 +143,70 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 		blocks = blocks[:0]
 	}
 	return true, nil
+}
+
+// PauseForCloneArgs are the arguments of admin_pauseForClone.
+type PauseForCloneArgs struct {
+	Timeout   *string `json:"timeout"`   // How long the pause may last, as a duration such as "30s"
+	AfterHead bool    `json:"afterHead"` // Whether to wait for a new head before pausing
+}
+
+// PauseForClone holds the chain writes and makes the database consistent on
+// disk at the current head, for a copy of the data directory to be taken in the
+// meantime. Other writers keep running, so the copy must capture every store
+// reported at one instant, as a filesystem snapshot of the data directory does.
+// It then opens at the head reported, without the rewind that follows an
+// unclean shutdown.
+//
+// The timeout (20s by default, 2m at most) applies to getting the pause ready:
+// the wait for a new head if asked, for the chain writes to stop, and making the
+// database consistent. A pause ready only after the timeout is given up. Once
+// ready, the pause ends with ResumeAfterClone, or by itself when the timeout
+// passes again. Writing the journal and the syncs aren't interrupted, so they
+// can overrun the timeout.
+// One pause is held at a time. A copy is good only if ResumeAfterClone reports
+// the pause intact, which says that the pause lasted, not that the copy holds
+// every store.
+//
+// It's only served over IPC.
+func (api *AdminAPI) PauseForClone(ctx context.Context, args *PauseForCloneArgs) (*ClonePauseResult, error) {
+	if err := ipcOnly(ctx); err != nil {
+		return nil, err
+	}
+	var (
+		timeout   = defaultCloneTimeout
+		afterHead bool
+	)
+	if args != nil {
+		if args.Timeout != nil {
+			var err error
+			if timeout, err = time.ParseDuration(*args.Timeout); err != nil {
+				return nil, err
+			}
+			if timeout <= 0 || timeout > maxCloneTimeout {
+				return nil, fmt.Errorf("timeout %v out of range, at most %v", timeout, maxCloneTimeout)
+			}
+		}
+		afterHead = args.AfterHead
+	}
+	return api.eth.clonePauser.pause(ctx, timeout, timeout, afterHead)
+}
+
+// ResumeAfterClone ends the pause for a clone with the given id, and tells
+// whether it lasted until then: a copy taken during it is good only if so. It's
+// only served over IPC.
+func (api *AdminAPI) ResumeAfterClone(ctx context.Context, id string) (*CloneResumeResult, error) {
+	if err := ipcOnly(ctx); err != nil {
+		return nil, err
+	}
+	return api.eth.clonePauser.resume(id)
+}
+
+// ipcOnly refuses the calls that didn't come over IPC. In-process calls, the
+// console's say, are served by the codec IPC uses, and report IPC too.
+func ipcOnly(ctx context.Context) error {
+	if transport := rpc.PeerInfoFromContext(ctx).Transport; transport != "ipc" {
+		return fmt.Errorf("only served over IPC, not %s", transport)
+	}
+	return nil
 }

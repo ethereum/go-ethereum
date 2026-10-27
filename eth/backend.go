@@ -133,6 +133,8 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
+
+	clonePauser *clonePauser // Hands out the pauses of the chain writes for a clone
 }
 
 // New creates a new Ethereum object (including the initialisation of the common Ethereum object),
@@ -295,6 +297,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+	eth.clonePauser = newClonePauser(eth.blockchain, clonePaths(stack.ResolvePath("chaindata"), chainDb, options.TrieJournalDirectory, config.DatabaseEra))
 
 	// Initialize filtermaps log index.
 	fmConfig := filtermaps.Config{
@@ -605,6 +608,10 @@ func (s *Ethereum) setupDiscovery() error {
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
+	// End the pause for a clone, if any, before anything else: it holds the
+	// chain writes, which the downloader may be waiting for.
+	s.clonePauser.close()
+
 	// Stop all the peer-related stuff first.
 	s.discmix.Close()
 	s.dropper.Stop()
