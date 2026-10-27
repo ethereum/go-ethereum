@@ -16,10 +16,12 @@
 
 package wire
 
+import "github.com/ethereum/go-ethereum/common"
+
 // The go:generate directive below runs from this package directory; it cds to
 // the repository root so the generator paths are stable and can be copied
 // into documentation.
-//go:generate sh -c "cd ../.. && go run github.com/ferranbt/fastssz/sszgen --path qkc/wire/messages.go --output qkc/wire/messages_ssz.go"
+//go:generate sh -c "cd ../.. && go run github.com/ferranbt/fastssz/sszgen --path qkc/wire/messages.go --output qkc/wire/messages_ssz.go --include common/types.go"
 
 // =============================================================================
 // Wire-level constants
@@ -27,14 +29,18 @@ package wire
 //
 // These match the fixed-width fields in the message schemas.
 
-// HashLength is the byte length of a hash256.
-const HashLength = 32
-
 // SignatureLength is the byte length of a signature65.
 const SignatureLength = 65
 
 // UInt128Length is the byte length of a uint128.
 const UInt128Length = 16
+
+// UInt256Length is the byte length of a uint256; numeric fields use little-endian.
+const UInt256Length = 32
+
+// Data carries an already encoded object unchanged through SSZ: RLP for geth
+// objects, SSZ for QKC root objects.
+type Data []byte
 
 // =============================================================================
 // §1  Cluster initialisation
@@ -54,7 +60,7 @@ type PingRequest struct {
 	// ID and does not mean root.
 	ChainID    uint32
 	HasRootTip bool
-	RootTip    []byte `ssz-max:"4294967295"` // SSZ encoding of RootBlock when HasRootTip is true.
+	RootTip    Data `ssz-max:"4294967295"` // SSZ-encoded RootBlock when HasRootTip is true.
 }
 
 // PongResponse (ClusterOp.PONG, 0x82) is the chain's response to PING and
@@ -87,9 +93,9 @@ type ConnectToChainsResponse struct {
 type HelloCommand struct {
 	Version              uint32
 	NetworkID            uint32
-	PeerID               [HashLength]byte
+	PeerID               common.Hash
 	PeerIP               [UInt128Length]byte
 	PeerPort             uint16
-	RootBlockHeader      []byte `ssz-max:"4294967295"` // SSZ encoding of RootBlockHeader.
-	GenesisRootBlockHash [HashLength]byte
+	RootBlockHeader      Data `ssz-max:"4294967295"` // SSZ-encoded RootBlockHeader.
+	GenesisRootBlockHash common.Hash
 }

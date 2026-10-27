@@ -20,6 +20,9 @@ import (
 	"bytes"
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
 )
 
 // ---- opcode → message registry ----
@@ -85,6 +88,44 @@ func roundTripSSZ(t *testing.T, msg SSZMessage) {
 	}
 	if !bytes.Equal(enc, dec) {
 		t.Fatalf("round trip mismatch:\n  got  %x\n  want %x", dec, enc)
+	}
+}
+
+func TestRootBlockPayloadsSSZ(t *testing.T) {
+	header := &qkctypes.RootBlockHeader{Version: 1, Number: 2, Extra: []byte("root")}
+	headerData, err := header.MarshalSSZ()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hello := &HelloCommand{RootBlockHeader: Data(headerData)}
+	var decodedHello HelloCommand
+	if err := decodedHello.UnmarshalSSZ(mustMarshalSSZ(t, hello)); err != nil {
+		t.Fatal(err)
+	}
+	var decodedHeader qkctypes.RootBlockHeader
+	if err := decodedHeader.UnmarshalSSZ(decodedHello.RootBlockHeader); err != nil {
+		t.Fatal(err)
+	}
+	if decodedHeader.Hash() != header.Hash() {
+		t.Fatal("root block header changed in SSZ message")
+	}
+
+	block := qkctypes.NewRootBlock(header, nil, nil)
+	blockData, err := block.MarshalSSZ()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ping := &PingRequest{HasRootTip: true, RootTip: Data(blockData)}
+	var decodedPing PingRequest
+	if err := decodedPing.UnmarshalSSZ(mustMarshalSSZ(t, ping)); err != nil {
+		t.Fatal(err)
+	}
+	var decodedBlock qkctypes.RootBlock
+	if err := decodedBlock.UnmarshalSSZ(decodedPing.RootTip); err != nil {
+		t.Fatal(err)
+	}
+	if decodedBlock.Hash() != block.Hash() {
+		t.Fatal("root block changed in SSZ message")
 	}
 }
 
@@ -155,11 +196,11 @@ func TestHelloCommandSSZRoundTrip(t *testing.T) {
 	msg := &HelloCommand{
 		Version:              1,
 		NetworkID:            2,
-		PeerID:               [HashLength]byte{1, 2, 3},
+		PeerID:               common.Hash{1, 2, 3},
 		PeerIP:               [UInt128Length]byte{127, 0, 0, 1},
 		PeerPort:             38291,
 		RootBlockHeader:      []byte{0xaa, 0xbb},
-		GenesisRootBlockHash: [HashLength]byte{4, 5, 6},
+		GenesisRootBlockHash: common.Hash{4, 5, 6},
 	}
 	roundTripSSZ(t, msg)
 }
