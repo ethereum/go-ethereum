@@ -543,16 +543,40 @@ func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
 // AssembleBlock finalizes the state and assembles the block with provided
 // body and receipts.
 func AssembleBlock(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, blockAccessList *bal.ConstructionBlockAccessList) *types.Block {
-	// Assign the post-transition state root
 	rules := chain.Config().Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
-	header.Root = state.IntermediateRoot(rules)
 
-	if !rules.IsAmsterdam {
-		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+	// The block's other digests don't depend on the state root: assemble the
+	// block on a goroutine while the root is computed. The goroutine sets the
+	// access list's hash on the header, so the header is written here only
+	// once it is done. It is joined on every exit, and its panic re-raised.
+	var (
+		block    *types.Block
+		panicked any
+		done     = make(chan struct{})
+	)
+	go func() {
+		defer close(done)
+		defer func() { panicked = recover() }()
+		if !rules.IsAmsterdam {
+			block = types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+			return
+		}
+		// Assign the BlockAccessListHash if Amsterdam has been enabled
+		bal := blockAccessList.ToEncodingObj()
+		balHash := bal.Hash()
+		header.BlockAccessListHash = &balHash
+		block = types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessListUnsafe(bal)
+	}()
+	defer func() { <-done }()
+
+	// Assign the post-transition state root
+	root := state.IntermediateRoot(rules)
+	<-done
+	if panicked != nil {
+		panic(panicked)
 	}
-	// Assign the BlockAccessListHash if Amsterdam has been enabled
-	bal := blockAccessList.ToEncodingObj()
-	balHash := bal.Hash()
-	header.BlockAccessListHash = &balHash
-	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessListUnsafe(bal)
+	header.Root = root
+	blockHeader := block.Header()
+	blockHeader.Root = root
+	return block.WithSeal(blockHeader)
 }
