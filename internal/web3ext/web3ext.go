@@ -158,6 +158,17 @@ web3._extend({
 			name: 'stopWS',
 			call: 'admin_stopWS'
 		}),
+		new web3._extend.Method({
+			name: 'pauseForClone',
+			call: 'admin_pauseForClone',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'resumeAfterClone',
+			call: 'admin_resumeAfterClone',
+			params: 1
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

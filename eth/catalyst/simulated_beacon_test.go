@@ -37,8 +37,16 @@ import (
 
 func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis, period uint64) (*node.Node, *eth.Ethereum, *SimulatedBeacon) {
 	t.Helper()
+	return startSimulatedBeaconEthServiceAt(t, "", genesis, period)
+}
+
+// startSimulatedBeaconEthServiceAt starts the Ethereum service with the node's
+// data in the given directory, or in memory if it's empty.
+func startSimulatedBeaconEthServiceAt(t *testing.T, datadir string, genesis *core.Genesis, period uint64) (*node.Node, *eth.Ethereum, *SimulatedBeacon) {
+	t.Helper()
 
 	n, err := node.New(&node.Config{
+		DataDir: datadir,
 		P2P: p2p.Config{
 			ListenAddr:  "127.0.0.1:0",
 			NoDiscovery: true,
@@ -206,5 +214,37 @@ func TestOnDemandSpam(t *testing.T) {
 			t.Fatalf("timed out without including all withdrawals/txs: have txs %d, want %d, have wxs %d, want %d",
 				includedTxs, txCount, includedWxs, wxCount)
 		}
+	}
+}
+
+// TestSimulatedBeaconPauseForClone checks the pause for a clone over the RPC of a
+// running node: it pauses at the head, and the chain goes on after the resume.
+func TestSimulatedBeaconPauseForClone(t *testing.T) {
+	var (
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		testAddr   = crypto.PubkeyToAddress(testKey.PublicKey)
+		genesis    = core.DeveloperGenesisBlock(10_000_000, &testAddr)
+	)
+	node, ethService, mock := startSimulatedBeaconEthServiceAt(t, t.TempDir(), genesis, 0)
+	defer node.Close()
+
+	client := node.Attach() // in process, served as over IPC
+	defer client.Close()
+
+	head := mock.Commit()
+	var pause eth.ClonePauseResult
+	if err := client.Call(&pause, "admin_pauseForClone", nil); err != nil {
+		t.Fatalf("Failed to pause: %v", err)
+	}
+	if pause.Hash != head {
+		t.Fatalf("Unexpected head of the pause: %x, want %x", pause.Hash, head)
+	}
+	var resumed eth.CloneResumeResult
+	if err := client.Call(&resumed, "admin_resumeAfterClone", pause.ID); err != nil || !resumed.Intact {
+		t.Fatalf("Failed to resume: %v %v", resumed, err)
+	}
+	block := ethService.BlockChain().GetBlockByHash(mock.Commit())
+	if block == nil || block.NumberU64() != uint64(pause.Number)+1 || block.ParentHash() != pause.Hash {
+		t.Fatalf("The block after the pause isn't on top of its head: %v", block)
 	}
 }

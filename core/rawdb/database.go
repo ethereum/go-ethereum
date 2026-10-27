@@ -192,6 +192,12 @@ func resolveChainFreezerDir(ancient string) string {
 	return freezer
 }
 
+// EraDir returns the directory of the era database, given the root ancient
+// directory and the configured era directory, as the chain freezer opens it.
+func EraDir(ancient string, era string) string {
+	return resolveChainEraDir(resolveChainFreezerDir(ancient), era)
+}
+
 // resolveChainEraDir is a helper function which resolves the absolute path of era database.
 func resolveChainEraDir(chainFreezerDir string, era string) string {
 	switch {
