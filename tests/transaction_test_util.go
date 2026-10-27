@@ -88,6 +88,14 @@ func (tt *TransactionTest) Run() error {
 		}
 		var cost uint64
 		if tx.Type() == types.FrameTxType {
+			// The EIP-8141 static constraints and signature entries are
+			// part of a frame transaction's validity.
+			if err = tx.FrameTxValidateStatic(); err != nil {
+				return
+			}
+			if err = types.ValidateFrameTxSignatures(tx.FrameSignatures(), sender, signer.Hash(tx)); err != nil {
+				return
+			}
 			cost, err = core.FrameTxIntrinsicGas(tx.Frames(), tx.FrameSignatures(), sender, tx.FrameNonceKeys(), tx.Nonce())
 		} else {
 			cost, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), sender, tx.To(), value, rules)
@@ -100,7 +108,8 @@ func (tt *TransactionTest) Run() error {
 			return sender, hash, 0, fmt.Errorf("insufficient gas ( %d < %d )", tx.Gas(), requiredGas)
 		}
 
-		if rules.IsPrague {
+		// A frame transaction derives its gas limit from the calldata floor.
+		if rules.IsPrague && tx.Type() != types.FrameTxType {
 			var floorDataGas uint64
 			floorDataGas, err = core.FloorDataGas(rules, sender, tx.To(), value, tx.Data(), tx.AccessList())
 			if err != nil {
@@ -132,6 +141,7 @@ func (tt *TransactionTest) Run() error {
 		{"Prague", true},
 		{"Osaka", true},
 		{"Amsterdam", true},
+		{"Bogota", true},
 	} {
 		expected := tt.Result[testcase.name]
 		if expected == nil {

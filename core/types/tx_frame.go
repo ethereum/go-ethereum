@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/crypto/secp256r1"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -110,6 +111,16 @@ func (tx *Transaction) FrameTxValidateStatic() error {
 func (tx *FrameTx) ValidateStatic() error {
 	if tx.ChainID == nil || tx.Fees.MaxFee == nil || tx.Fees.MaxPriorityFeePerGas == nil {
 		return ErrFrameTxInvalidFormat
+	}
+	// Blob versioned hashes follow EIP-4844, under the per-transaction blob
+	// limit of EIP-7594.
+	if len(tx.BlobVersionedHashes) > params.BlobTxMaxBlobs {
+		return fmt.Errorf("%w: blob transaction has too many blobs (%d > %d)", ErrFrameTxInvalidFormat, len(tx.BlobVersionedHashes), params.BlobTxMaxBlobs)
+	}
+	for i, hash := range tx.BlobVersionedHashes {
+		if !kzg4844.IsValidVersionedHash(hash[:]) {
+			return fmt.Errorf("%w: blob %d has invalid hash version", ErrFrameTxInvalidFormat, i)
+		}
 	}
 	if len(tx.Frames) == 0 || len(tx.Frames) > params.FrameTxMaxFrames {
 		return fmt.Errorf("%w: frame count must be greater than 0 and at most %d", ErrFrameTxInvalidFormat, params.FrameTxMaxFrames)

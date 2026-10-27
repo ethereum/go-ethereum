@@ -71,6 +71,10 @@ func TestExecutionSpecTransaction(t *testing.T) {
 
 	// Emptiness of authorization list is only validated during the tx precheck
 	st.skipLoad(`eip7702_set_code_tx/invalid_tx/empty_authorization_list\.json`)
+	// The fixture prices these frame transactions without their EIP-8250
+	// nonce keys, while the gas cap they are filled at counts the keys'
+	// access cost.
+	st.fails(`gas_limit_cap_counts_keyed_nonce_access_transaction\.json/.*transaction_test-at_cap-`, "fixture intrinsic gas omits the nonce keys")
 
 	st.walk(t, executionSpecTransactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
 		if err := st.checkFailure(t, test.Run()); err != nil {
