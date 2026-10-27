@@ -206,7 +206,8 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
 	if stats != nil {
-		stats.Validation = time.Since(start) - time.Since(hashStart)
+		stats.Total = time.Since(start)
+		stats.Validation = stats.Total - time.Since(hashStart)
 		stats.AccountHashes = statedb.AccountHashes
 		stats.AccountUpdates = statedb.AccountUpdates
 		stats.StorageUpdates = statedb.StorageUpdates

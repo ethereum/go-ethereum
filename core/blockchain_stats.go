@@ -45,6 +45,7 @@ type ExecuteStats struct {
 // spent on the critical path, while the state reads are summed over all the states
 // used for execution, which run concurrently in the parallel execution.
 type ProcessStats struct {
+	Total         time.Duration // Wall-clock time of the processing phase
 	Execution     time.Duration // Time spent on the system calls and transactions
 	AccountReads  time.Duration // Time spent on the account reads
 	StorageReads  time.Duration // Time spent on the storage reads
@@ -84,6 +85,7 @@ func (s *ProcessStats) mergeReads(o *ProcessStats) {
 
 // ValidateStats contains the statistics recorded by the Validator.
 type ValidateStats struct {
+	Total      time.Duration // Wall-clock time of the validation phase
 	Validation time.Duration // Time spent on the block validation, excluding the state hashing
 
 	// Trie hashing of the state, including the part done ahead of the validation
@@ -107,6 +109,7 @@ func (s *ValidateStats) stateHashes() time.Duration {
 // CommitStats contains the statistics of the state commit, gathered from the
 // canonical state.
 type CommitStats struct {
+	Total          time.Duration // Wall-clock time of the write phase, including the block data write
 	AccountCommits time.Duration // Time spent on the account trie commit
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	DatabaseCommit time.Duration // Time spent on database commit
@@ -133,12 +136,16 @@ func (s *ExecuteStats) reportMetrics() {
 	accountHashTimer.Update(v.AccountHashes)    // Account hashes are complete(in validation)
 	accountCommitTimer.Update(c.AccountCommits) // Account commits are complete, we can mark them
 	storageCommitTimer.Update(c.StorageCommits) // Storage commits are complete, we can mark them
+	triedbCommitTimer.Update(c.DatabaseCommit)  // Trie database commits are complete, we can mark them
 
-	blockExecutionTimer.Update(p.Execution)                 // The time spent on EVM processing
-	blockValidationTimer.Update(v.Validation)               // The time spent on block validation
-	blockCrossValidationTimer.Update(s.CrossValidation)     // The time spent on stateless cross validation
-	triedbCommitTimer.Update(c.DatabaseCommit)              // Trie database commits are complete, we can mark them
+	blockExecutionTimer.Update(p.Execution)             // The critical-path time of the processing
+	blockValidationTimer.Update(v.Validation)           // The critical-path time of the validation
+	blockCrossValidationTimer.Update(s.CrossValidation) // The time spent on stateless cross validation
+
 	blockInsertTimer.Update(s.TotalTime)                    // The total time spent on block execution
+	blockProcessTimer.Update(p.Total)                       // The wall-clock time of the processing phase
+	blockValidateTimer.Update(v.Total)                      // The wall-clock time of the validation phase
+	blockCommitTimer.Update(c.Total)                        // The wall-clock time of the write phase
 	chainMgaspsMeter.Update(time.Duration(s.MgasPerSecond)) // TODO(rjl493456442) generalize the ResettingTimer
 
 	// Cache hit rates
@@ -165,6 +172,7 @@ type slowBlockLog struct {
 	Msg         string          `json:"msg"`
 	Block       slowBlockInfo   `json:"block"`
 	Timing      slowBlockTime   `json:"timing"`
+	Phases      slowBlockPhases `json:"phases"`
 	Throughput  slowBlockThru   `json:"throughput"`
 	StateReads  slowBlockReads  `json:"state_reads"`
 	StateWrites slowBlockWrites `json:"state_writes"`
@@ -184,6 +192,13 @@ type slowBlockTime struct {
 	StateHashMs float64 `json:"state_hash_ms"`
 	CommitMs    float64 `json:"commit_ms"`
 	TotalMs     float64 `json:"total_ms"`
+}
+
+// slowBlockPhases represents the wall-clock time of the execution phases.
+type slowBlockPhases struct {
+	ProcessMs  float64 `json:"process_ms"`
+	ValidateMs float64 `json:"validate_ms"`
+	CommitMs   float64 `json:"commit_ms"`
 }
 
 type slowBlockThru struct {
@@ -262,6 +277,11 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			StateHashMs: durationToMs(s.Validate.stateHashes()),
 			CommitMs:    durationToMs(max(s.Commit.AccountCommits, s.Commit.StorageCommits) + s.Commit.DatabaseCommit),
 			TotalMs:     durationToMs(s.TotalTime),
+		},
+		Phases: slowBlockPhases{
+			ProcessMs:  durationToMs(s.Process.Total),
+			ValidateMs: durationToMs(s.Validate.Total),
+			CommitMs:   durationToMs(s.Commit.Total),
 		},
 		Throughput: slowBlockThru{
 			MgasPerSec: s.MgasPerSecond,

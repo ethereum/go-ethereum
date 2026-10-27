@@ -159,7 +159,8 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 
 	if stats != nil {
 		stats.addReads(statedb)
-		stats.Execution = time.Since(start) - stats.stateReads()
+		stats.Total = time.Since(start)
+		stats.Execution = stats.Total - stats.stateReads()
 	}
 	return &ProcessResult{
 		Receipts: receipts,

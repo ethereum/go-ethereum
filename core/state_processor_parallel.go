@@ -326,6 +326,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 	if stats != nil {
 		stats.addReads(preState)
 		stats.addReads(postState)
+		stats.Total = time.Since(start)
 		stats.Execution = systemExec + txExec + hashWait
 	}
 	parallelSystemExecTimer.Update(systemExec)

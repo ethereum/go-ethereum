@@ -74,6 +74,20 @@ var (
 	chainInfoGauge   = metrics.NewRegisteredGaugeInfo("chain/info", nil)
 	chainMgaspsMeter = metrics.NewRegisteredResettingTimer("chain/mgasps", nil)
 
+	// Wall-clock time of the block insertion and its phases
+	blockInsertTimer   = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
+	blockProcessTimer  = metrics.NewRegisteredResettingTimer("chain/phase/process", nil)
+	blockValidateTimer = metrics.NewRegisteredResettingTimer("chain/phase/validate", nil)
+	blockCommitTimer   = metrics.NewRegisteredResettingTimer("chain/phase/commit", nil)
+
+	// Critical-path time of the processing and validation phases, excluding the
+	// state reads and the state hashing respectively
+	blockExecutionTimer       = metrics.NewRegisteredResettingTimer("chain/execution", nil)
+	blockValidationTimer      = metrics.NewRegisteredResettingTimer("chain/validation", nil)
+	blockCrossValidationTimer = metrics.NewRegisteredResettingTimer("chain/crossvalidation", nil)
+
+	// State access time, the reads are summed over the concurrent readers in the
+	// parallel execution
 	accountReadTimer   = metrics.NewRegisteredResettingTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredResettingTimer("chain/account/hashes", nil)
 	accountUpdateTimer = metrics.NewRegisteredResettingTimer("chain/account/updates", nil)
@@ -84,6 +98,12 @@ var (
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 	codeReadTimer      = metrics.NewRegisteredResettingTimer("chain/code/reads", nil)
 	codeReadBytesTimer = metrics.NewRegisteredResettingTimer("chain/code/readbytes", nil)
+
+	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
+	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
+	codeReadSingleTimer    = metrics.NewRegisteredResettingTimer("chain/code/single/reads", nil)
+	triedbCommitTimer      = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
+	blockWriteTimer        = metrics.NewRegisteredResettingTimer("chain/write", nil) // Block data write, concurrent with the state commit
 
 	accountCacheHitMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/process/hit", nil)
 	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/process/miss", nil)
@@ -98,17 +118,6 @@ var (
 	storageCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/miss", nil)
 	codeCacheHitPrefetchMeter     = metrics.NewRegisteredMeter("chain/code/reads/cache/prefetch/hit", nil)
 	codeCacheMissPrefetchMeter    = metrics.NewRegisteredMeter("chain/code/reads/cache/prefetch/miss", nil)
-
-	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
-	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
-	codeReadSingleTimer    = metrics.NewRegisteredResettingTimer("chain/code/single/reads", nil)
-	triedbCommitTimer      = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
-
-	blockInsertTimer          = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
-	blockValidationTimer      = metrics.NewRegisteredResettingTimer("chain/validation", nil)
-	blockCrossValidationTimer = metrics.NewRegisteredResettingTimer("chain/crossvalidation", nil)
-	blockExecutionTimer       = metrics.NewRegisteredResettingTimer("chain/execution", nil)
-	blockWriteTimer           = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
@@ -1720,9 +1729,19 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB, stats *CommitStats) error {
 	if !bc.HasHeader(block.ParentHash(), block.NumberU64()-1) {
 		return consensus.ErrUnknownAncestor
+	}
+	// Registered first so it runs after the block data write is joined.
+	if stats != nil {
+		start := time.Now()
+		defer func() {
+			stats.Total = time.Since(start)
+			stats.AccountCommits = statedb.AccountCommits
+			stats.StorageCommits = statedb.StorageCommits
+			stats.DatabaseCommit = statedb.DatabaseCommits
+		}()
 	}
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
@@ -1835,8 +1854,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 // writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
 // This function expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	if err := bc.writeBlockWithState(block, receipts, state); err != nil {
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool, stats *CommitStats) (status WriteStatus, err error) {
+	start := time.Now()
+	if err := bc.writeBlockWithState(block, receipts, state, stats); err != nil {
 		return NonStatTy, err
 	}
 	currentBlock := bc.CurrentBlock()
@@ -1868,6 +1888,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	if emitHeadEvent {
 		bc.chainHeadFeed.Send(ChainHeadEvent{Header: block.Header()})
 	}
+	stats.Total = time.Since(start)
 	return CanonStatTy, nil
 }
 
@@ -2404,6 +2425,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		bc.reportBadBlock(block, res, err)
 		return nil, err
 	}
+
 	// If witnesses was generated and stateless self-validation requested, do
 	// that now. Self validation should *never* run in production, it's more of
 	// a tight integration to enable running *all* consensus tests through the
@@ -2446,19 +2468,17 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// Write the block to the chain and get the status.
 	var status WriteStatus
 	if config.WriteState {
+		_, _, spanEnd = telemetry.StartSpan(ctx, "bc.writeState")
 		if !config.WriteHead {
 			// Don't set the head, only insert the block
-			err = bc.writeBlockWithState(block, res.Receipts, statedb)
+			err = bc.writeBlockWithState(block, res.Receipts, statedb, &stats.Commit)
 		} else {
-			status, err = bc.writeBlockAndSetHead(block, res.Receipts, res.Logs, statedb, false)
+			status, err = bc.writeBlockAndSetHead(block, res.Receipts, res.Logs, statedb, false, &stats.Commit)
 		}
+		spanEnd(&err)
 		if err != nil {
 			return nil, err
 		}
-		// Update the metrics touched during block commit
-		stats.Commit.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
-		stats.Commit.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
-		stats.Commit.DatabaseCommit = statedb.DatabaseCommits // Database commits are complete, we can mark them
 	}
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed
