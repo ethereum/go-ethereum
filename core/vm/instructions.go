@@ -980,6 +980,36 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	return nil, errStopToken
 }
 
+// opSendall implements EIP-4758 SENDALL, which replaces SELFDESTRUCT: it moves
+// the whole balance to the beneficiary and halts, but never deletes the account.
+func opSendall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	if evm.readOnly {
+		return nil, ErrWriteProtection
+	}
+	var (
+		this        = scope.Contract.Address()
+		balance     = evm.StateDB.GetBalance(this)
+		top         = scope.Stack.pop1()
+		beneficiary = common.Address(top.Bytes20())
+	)
+	if this != beneficiary {
+		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
+		if !balance.IsZero() {
+			evm.StateDB.AddLog(types.EthTransferLog(this, beneficiary, balance))
+		}
+	}
+	if tracer := evm.Config.Tracer; tracer != nil {
+		if tracer.OnEnter != nil {
+			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
+		}
+		if tracer.OnExit != nil {
+			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
+		}
+	}
+	return nil, errStopToken
+}
+
 // decodeSingle decodes the immediate operand of a backward-compatible DUPN or SWAPN instruction (EIP-8024)
 // https://eips.ethereum.org/EIPS/eip-8024
 func decodeSingle(x byte) int {

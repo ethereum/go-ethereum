@@ -269,6 +269,10 @@ func TestSelfdestructStateTracer(t *testing.T) {
 		factorySelfDestructBalanceCheckCode = common.Hex2Bytes("6e6002600d60003960026000f3fe30ff600052600f60116064f0600080808080855af150803160005560008080806032855af1503160015500")
 		createdContractAddrSelfBalanceCheck = crypto.CreateAddress(factorySelfDestructBalanceCheck, 0)
 	)
+	// EIP-4758 replaces SELFDESTRUCT with SENDALL in Bogota: the post-6780
+	// cases run on the forks before it.
+	post6780Config := *params.AllDevChainProtocolChanges
+	post6780Config.BogotaTime = nil
 
 	tests := []struct {
 		name            string
@@ -314,7 +318,7 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			description:    "Post-EIP-6780: Existing contract selfdestructs to recipient. Balance transferred but contract NOT destroyed (code/storage remain).",
 			targetContract: contract,
 			genesis: &core.Genesis{
-				Config: params.AllDevChainProtocolChanges,
+				Config: &post6780Config,
 				Alloc: types.GenesisAlloc{
 					caller: {Balance: big.NewInt(params.Ether)},
 					contract: {
@@ -374,7 +378,7 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			description:    "Post-EIP-6780: Factory creates contract with 100 wei, contract selfdestructs back to factory. Contract destroyed (EIP-6780 exception for same-tx creation).",
 			targetContract: factory,
 			genesis: &core.Genesis{
-				Config: params.AllDevChainProtocolChanges,
+				Config: &post6780Config,
 				Alloc: types.GenesisAlloc{
 					caller: {Balance: big.NewInt(params.Ether)},
 					factory: {
@@ -442,7 +446,7 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			description:    "Post-EIP-6780: Existing contract A selfdestructs to B, then B sends funds back to A. Funds are NOT burnt (A still exists post-6780).",
 			targetContract: coordinator,
 			genesis: &core.Genesis{
-				Config: params.AllDevChainProtocolChanges,
+				Config: &post6780Config,
 				Alloc: types.GenesisAlloc{
 					caller: {Balance: big.NewInt(params.Ether)},
 					contractA: {
@@ -479,7 +483,7 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			description:    "Post-EIP-6780: Factory creates A, A selfdestructs to B, B sends funds back to A. Funds are burnt (A was destroyed via EIP-6780 exception).",
 			targetContract: factoryRefund,
 			genesis: &core.Genesis{
-				Config: params.AllDevChainProtocolChanges,
+				Config: &post6780Config,
 				Alloc: types.GenesisAlloc{
 					caller: {Balance: big.NewInt(params.Ether)},
 					contractB: {
@@ -514,7 +518,7 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			description:    "Post-EIP-6780: Pre-existing contract selfdestructs to itself. Balance NOT burnt (selfdestruct-to-self is no-op for existing contracts).",
 			targetContract: coordinatorSendAfter,
 			genesis: &core.Genesis{
-				Config: params.AllDevChainProtocolChanges,
+				Config: &post6780Config,
 				Alloc: types.GenesisAlloc{
 					caller: {Balance: big.NewInt(params.Ether)},
 					contractSelfDestruct: {
@@ -554,7 +558,7 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			description:    "Post-EIP-6780: Factory creates contract, contract selfdestructs to itself. Balance IS burnt and contract destroyed (EIP-6780 exception for same-tx creation).",
 			targetContract: factorySelfDestructBalanceCheck,
 			genesis: &core.Genesis{
-				Config: params.AllDevChainProtocolChanges,
+				Config: &post6780Config,
 				Alloc: types.GenesisAlloc{
 					caller: {Balance: big.NewInt(params.Ether)},
 					factorySelfDestructBalanceCheck: {

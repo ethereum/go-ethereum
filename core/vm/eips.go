@@ -614,6 +614,18 @@ func enable8037And8038(jt *JumpTable) {
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037And8038
 }
 
+// enable4758 applies EIP-4758: SENDALL replaces SELFDESTRUCT, keeping its
+// EIP-8037/8038 pricing.
+func enable4758(jt *JumpTable) {
+	jt[SELFDESTRUCT] = &operation{
+		execute:     opSendall,
+		constantGas: params.SelfdestructGasEIP150,
+		dynamicGas:  gasSelfdestruct8037And8038,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+	}
+}
+
 // enable8141 enables the EIP-8141 frame transaction instructions.
 func enable8141(jt *JumpTable) {
 	jt[APPROVE] = &operation{
