@@ -377,6 +377,8 @@ type BlockChain struct {
 	stopping      atomic.Bool // false if chain is running, true when stopped
 	procInterrupt atomic.Bool // interrupt signaler for block processing
 
+	clonePause atomic.Pointer[ClonePause] // The pause for a clone held, if any
+
 	prefetchLock sync.Mutex     // Orders prefetcher launches against shutdown
 	prefetchWg   sync.WaitGroup // Tracks running block prefetchers
 
@@ -1420,6 +1422,10 @@ func (bc *BlockChain) stopWithoutSaving() {
 	// Signal shutdown to all goroutines.
 	bc.InterruptInsert(true)
 
+	// End the pause for a clone if one is held: it holds the chain mutex.
+	if p := bc.clonePause.Load(); p != nil {
+		p.Resume()
+	}
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
 	//
 	// Note: Close waits for the mutex to become available, i.e. any running chain
