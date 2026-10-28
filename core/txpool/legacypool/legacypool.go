@@ -1543,7 +1543,11 @@ func (pool *LegacyPool) demoteUnexecutables() {
 	gasLimit := pool.currentHead.Load().GasLimit
 	for addr, list := range pool.pending {
 		nonce := pool.currentState.GetNonce(addr)
-
+		if txpool.HasRegularCode(pool.currentState, addr) {
+			// The account adopted regular code (EIP-8298), so none of its
+			// transactions can execute anymore: drop them all as too old.
+			nonce = math.MaxUint64
+		}
 		// Drop all transactions that are deemed too old (low nonce)
 		olds := list.Forward(nonce)
 		for _, tx := range olds {

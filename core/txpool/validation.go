@@ -307,6 +307,11 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 			return fmt.Errorf("%w: tx nonce %v, gapped nonce %v", core.ErrNonceTooHigh, tx.Nonce(), gap)
 		}
 	}
+	// Ensure the sender can still originate transactions (EIP-3607): an EOA
+	// that adopted regular code through EIP-8298 has retired its key.
+	if HasRegularCode(opts.State, from) {
+		return fmt.Errorf("%w: address %v", core.ErrSenderNoEOA, from.Hex())
+	}
 	// Ensure the transactor has enough funds to cover the transaction costs
 	var (
 		balance = opts.State.GetBalance(from).ToBig()
@@ -339,4 +344,17 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		}
 	}
 	return nil
+}
+
+// HasRegularCode reports whether addr holds code other than an EIP-7702
+// delegation indicator, which bars it from sending ECDSA-signed transactions
+// (EIP-3607). Under EIP-8298 an EOA can adopt such code, invalidating its
+// pending transactions.
+func HasRegularCode(statedb *state.StateDB, addr common.Address) bool {
+	code := statedb.GetCode(addr)
+	if len(code) == 0 {
+		return false
+	}
+	_, delegated := types.ParseDelegation(code)
+	return !delegated
 }

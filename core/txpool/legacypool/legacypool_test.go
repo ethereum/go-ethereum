@@ -2621,6 +2621,46 @@ func TestSetCodeTransactionsReorg(t *testing.T) {
 	}
 }
 
+// Tests that an account holding regular code, as an EOA does once it adopts
+// code through EIP-8298, gets no new transactions into the pool and loses its
+// pooled ones, executable and gapped, on the next reset.
+func TestRegularCodeSenderTransactions(t *testing.T) {
+	t.Parallel()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	blockchain := newTestBlockChain(params.MergedTestChainConfig, 1000000, statedb, new(event.Feed))
+
+	pool := New(testTxPoolConfig, blockchain)
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
+	defer pool.Close()
+
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, addr, big.NewInt(params.Ether))
+
+	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), key)); err != nil {
+		t.Fatalf("failed to add executable transaction: %v", err)
+	}
+	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), key)); err != nil {
+		t.Fatalf("failed to add gapped transaction: %v", err)
+	}
+	if pending, queued := pool.Stats(); pending != 1 || queued != 1 {
+		t.Fatalf("pool mismatch: pending %d, queued %d, want 1 and 1", pending, queued)
+	}
+	// The account adopts regular code in the next block.
+	blockchain.statedb.SetCode(addr, []byte{byte(vm.PUSH0), byte(vm.STOP)}, tracing.CodeChangeUnspecified)
+	<-pool.requestReset(nil, nil)
+	if pending, queued := pool.Stats(); pending != 0 || queued != 0 {
+		t.Fatalf("pool mismatch: pending %d, queued %d, want none", pending, queued)
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), key)); !errors.Is(err, core.ErrSenderNoEOA) {
+		t.Fatalf("unexpected error %v, expecting %v", err, core.ErrSenderNoEOA)
+	}
+}
+
 // Benchmarks the speed of validating the contents of the pending queue of the
 // transaction pool.
 func BenchmarkPendingDemotion100(b *testing.B)   { benchmarkPendingDemotion(b, 100) }

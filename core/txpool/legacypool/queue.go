@@ -17,6 +17,7 @@
 package legacypool
 
 import (
+	"math"
 	"sort"
 	"time"
 
@@ -172,8 +173,13 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 		if list == nil {
 			continue // Just in case someone calls with a non existing account
 		}
-		// Drop all transactions that are deemed too old (low nonce)
-		forwards := list.Forward(currentState.GetNonce(addr))
+		// Drop all transactions that are deemed too old (low nonce), or all of
+		// them once the account adopted regular code (EIP-8298)
+		nonce := currentState.GetNonce(addr)
+		if txpool.HasRegularCode(currentState, addr) {
+			nonce = math.MaxUint64
+		}
+		forwards := list.Forward(nonce)
 		for _, tx := range forwards {
 			dropped = append(dropped, tx.Hash())
 		}
