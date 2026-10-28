@@ -5074,3 +5074,38 @@ func TestCreateAccessListAuthorizationGas(t *testing.T) {
 		})
 	}
 }
+
+// headerErrorBackend fails header lookups of the safe and finalized tags.
+type headerErrorBackend struct {
+	*testBackend
+	err error
+}
+
+func (b headerErrorBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	if number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber {
+		return nil, b.err
+	}
+	return b.testBackend.HeaderByNumber(ctx, number)
+}
+
+// A safe or finalized tag that cannot be resolved to a block yet is null, while
+// any other backend failure is still reported.
+func TestGetHeaderByNumberUnresolvedTag(t *testing.T) {
+	t.Parallel()
+
+	backend := newTestBackend(t, 0, &core.Genesis{Config: params.MergedTestChainConfig, Difficulty: common.Big0}, beacon.New(ethash.NewFaker()), nil)
+	failure := errors.New("database failure")
+	for number, notFound := range map[rpc.BlockNumber]error{
+		rpc.SafeBlockNumber:      ErrSafeBlockNotFound,
+		rpc.FinalizedBlockNumber: ErrFinalizedBlockNotFound,
+	} {
+		api := NewBlockChainAPI(headerErrorBackend{backend, notFound})
+		if header, err := api.GetHeaderByNumber(context.Background(), number); header != nil || err != nil {
+			t.Errorf("%v not found: have %v %v, want null", number, header, err)
+		}
+		api = NewBlockChainAPI(headerErrorBackend{backend, failure})
+		if _, err := api.GetHeaderByNumber(context.Background(), number); !errors.Is(err, failure) {
+			t.Errorf("%v failure: have %v, want %v", number, err, failure)
+		}
+	}
+}

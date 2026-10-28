@@ -19,6 +19,7 @@ package state
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -42,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
@@ -1486,5 +1488,31 @@ func TestStateDBCopyUBT(t *testing.T) {
 	}
 	if got, want := cpy.GetBalance(addr), uint256.NewInt(2_000); got.Cmp(want) != 0 {
 		t.Fatalf("copy balance did not update: got %s, want %s", got, want)
+	}
+}
+
+// Opening a state whose root is unknown reports ErrStateUnavailable, for live
+// state under both schemes and for historic state.
+func TestStateUnavailable(t *testing.T) {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		t.Run(scheme, func(t *testing.T) {
+			disk := rawdb.NewMemoryDatabase()
+			config := triedb.HashDefaults
+			if scheme == rawdb.PathScheme {
+				config = &triedb.Config{PathDB: pathdb.Defaults}
+			}
+			tdb := triedb.NewDatabase(disk, config)
+			defer tdb.Close()
+
+			root := common.Hash{1}
+			if _, err := New(root, NewDatabase(tdb, NewCodeDB(disk))); !errors.Is(err, database.ErrStateUnavailable) {
+				t.Errorf("live: have %v, want %v", err, database.ErrStateUnavailable)
+			}
+			if scheme == rawdb.PathScheme {
+				if _, err := New(root, NewHistoricDatabase(tdb, NewCodeDB(disk))); !errors.Is(err, database.ErrStateUnavailable) {
+					t.Errorf("historic: have %v, want %v", err, database.ErrStateUnavailable)
+				}
+			}
+		})
 	}
 }
