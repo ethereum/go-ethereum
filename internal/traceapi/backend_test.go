@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
@@ -41,6 +42,7 @@ type testBackend struct {
 	engine      consensus.Engine
 	chaindb     ethdb.Database
 	chain       *core.BlockChain
+	evmTimeout  time.Duration
 }
 
 // newTestBackend creates a new test backend. OBS: After test is done, teardown must be
@@ -50,6 +52,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		chainConfig: gspec.Config,
 		engine:      ethash.NewFaker(),
 		chaindb:     rawdb.NewMemoryDatabase(),
+		evmTimeout:  5 * time.Second,
 	}
 	// Generate blocks for testing
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, backend.engine, n, generator)
@@ -135,6 +138,44 @@ func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, base
 		return nil, nil, fmt.Errorf("%w: %v", database.ErrStateUnavailable, err)
 	}
 	return statedb, func() {}, nil
+}
+
+func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
+	parent := b.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("%w: parent %#x not found", database.ErrStateUnavailable, block.ParentHash())
+	}
+	statedb, release, err := b.StateAtBlock(ctx, parent, nil, true, false)
+	if err != nil {
+		return nil, vm.BlockContext{}, nil, nil, err
+	}
+	vmctx := core.NewEVMBlockContext(block.Header(), b.chain, nil)
+	evm := vm.NewEVM(vmctx, statedb, b.chainConfig, vm.Config{})
+	defer evm.Release()
+	core.PreExecution(ctx, block.BeaconRoot(), parent.Header(), b.chainConfig, evm, block.Number(), block.Time())
+	signer := types.MakeSigner(b.chainConfig, block.Number(), block.Time())
+	for idx, tx := range block.Transactions() {
+		if idx == txIndex {
+			return tx, vmctx, statedb, release, nil
+		}
+		msg, err := core.TransactionToMessage(tx, signer, block.BaseFee())
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, nil, err
+		}
+		statedb.SetTxContext(tx.Hash(), idx, uint32(idx+1))
+		if _, err := core.ApplyMessage(evm, msg, nil); err != nil {
+			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %w", tx.Hash(), err)
+		}
+		statedb.Finalise(evm.GetRules())
+	}
+	if txIndex == 0 {
+		return nil, vmctx, statedb, release, nil
+	}
+	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
+}
+
+func (b *testBackend) RPCEVMTimeout() time.Duration {
+	return b.evmTimeout
 }
 
 // teardown releases the associated resources.

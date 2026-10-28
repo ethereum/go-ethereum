@@ -28,7 +28,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -36,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
@@ -48,20 +46,14 @@ const (
 	filterResultLimit = 10000
 	callManyLimit     = 10000
 	batchTimeout      = 30 * time.Second
-	executionTimeout  = 5 * time.Second
+	replayTimeout     = 5 * time.Second
 )
 
 // Backend provides the chain access of the trace namespace.
 type Backend interface {
-	ethapi.ChainContextBackend
-	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
-	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	tracers.Backend
 	Pending() (*types.Block, types.Receipts, *state.StateDB)
-	GetCanonicalTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64)
-	TxIndexDone() bool
-	RPCGasCap() uint64
-	ChainDb() ethdb.Database
-	StateAtBlock(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, tracers.StateReleaseFunc, error)
+	RPCEVMTimeout() time.Duration
 }
 
 // APIs returns the trace namespace service.
@@ -201,7 +193,7 @@ func (api *API) RawTransaction(ctx context.Context, input hexutil.Bytes, kinds O
 		return nil, rawRejection(fmt.Errorf("invalid signed transaction: %w", err))
 	}
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-	return api.execute(ctx, tx, msg, kinds, vmctx, st, nil, common.Hash{}, 0, false, rawRejection)
+	return api.execute(ctx, api.backend.RPCEVMTimeout(), tx, msg, kinds, vmctx, st, nil, common.Hash{}, 0, false, rawRejection)
 }
 
 // ReplayTransaction returns one replay envelope or null for an unknown transaction.
@@ -610,7 +602,7 @@ func (api *API) call(ctx context.Context, input CallArgs, kinds Outputs, env *ca
 	if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
 		vmctx.BlobBaseFee = new(big.Int)
 	}
-	return api.execute(ctx, tx, msg, kinds, vmctx, env.state, env.precompiles, common.Hash{}, index, true, callRejection)
+	return api.execute(ctx, api.backend.RPCEVMTimeout(), tx, msg, kinds, vmctx, env.state, env.precompiles, common.Hash{}, index, true, callRejection)
 }
 
 // checkGasCap rejects a signed gas limit above the RPC gas cap, since capping it
@@ -641,76 +633,23 @@ func (api *API) transaction(ctx context.Context, hash common.Hash, kinds Outputs
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	st, vmctx, release, err := api.blockState(ctx, block)
+	// Preceding transactions only build the target's pre-state, so they run
+	// without tracer hooks.
+	tx, vmctx, st, release, err := api.backend.StateAtTransaction(ctx, block, int(index))
+	if err != nil {
+		return nil, nil, 0, stateError(err)
+	}
+	defer release()
+	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time()), block.BaseFee())
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	defer release()
-	// Preceding transactions only build the target's pre-state, so they run
-	// without tracer hooks.
-	evm := vm.NewEVM(vmctx, st, api.backend.ChainConfig(), vm.Config{})
-	defer evm.Release()
-	stopped := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { evm.Cancel(); close(stopped) })
-	defer func() {
-		if !stop() {
-			<-stopped
-		}
-	}()
-	signer := types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-	for i, tx := range block.Transactions() {
-		msg, err := core.TransactionToMessage(tx, signer, block.BaseFee())
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		if uint64(i) == index {
-			result, err := api.execute(ctx, tx, msg, kinds, vmctx, st, nil, blockHash, i, false, replayRejection)
-			if err != nil {
-				return nil, nil, 0, err
-			}
-			result.TransactionHash = &hash
-			return result, block, index, nil
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, nil, 0, err
-		}
-		st.SetTxContext(tx.Hash(), i, uint32(i+1))
-		_, _, err = core.ApplyTransactionWithEVM(ctx, msg, core.NewGasPool(msg.GasLimit), st, block.Number(), blockHash, block.Time(), tx, evm)
-		if ctx.Err() != nil {
-			return nil, nil, 0, ctx.Err()
-		}
-		if err := st.Error(); err != nil {
-			return nil, nil, 0, stateError(err)
-		}
-		if err != nil {
-			return nil, nil, 0, replayRejection(err)
-		}
-	}
-	return nil, nil, 0, errors.New("transaction index points outside block")
-}
-
-func (api *API) blockState(ctx context.Context, block *types.Block) (*state.StateDB, vm.BlockContext, tracers.StateReleaseFunc, error) {
-	parent, err := api.blockByHash(ctx, block.ParentHash())
+	result, err := api.execute(ctx, replayTimeout, tx, msg, kinds, vmctx, st, nil, blockHash, int(index), false, replayRejection)
 	if err != nil {
-		return nil, vm.BlockContext{}, nil, err
+		return nil, nil, 0, err
 	}
-	st, release, err := api.backend.StateAtBlock(ctx, parent, nil, true, false)
-	if err != nil {
-		return nil, vm.BlockContext{}, nil, stateError(err)
-	}
-	config := api.backend.ChainConfig()
-	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-	if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(st)
-	}
-	evm := vm.NewEVM(vmctx, st, config, vm.Config{})
-	core.PreExecution(ctx, block.BeaconRoot(), parent.Header(), config, evm, block.Number(), block.Time())
-	evm.Release()
-	if err := st.Error(); err != nil {
-		release()
-		return nil, vm.BlockContext{}, nil, stateError(err)
-	}
-	return st, vmctx, release, nil
+	result.TransactionHash = &hash
+	return result, block, index, nil
 }
 
 func (api *API) replayBlock(ctx context.Context, block *types.Block, kinds Outputs) ([]*Execution, error) {
@@ -720,9 +659,9 @@ func (api *API) replayBlock(ctx context.Context, block *types.Block, kinds Outpu
 	if len(block.Transactions()) == 0 {
 		return results, nil
 	}
-	st, vmctx, release, err := api.blockState(ctx, block)
+	_, vmctx, st, release, err := api.backend.StateAtTransaction(ctx, block, 0)
 	if err != nil {
-		return nil, err
+		return nil, stateError(err)
 	}
 	defer release()
 	for i, tx := range block.Transactions() {
@@ -730,7 +669,7 @@ func (api *API) replayBlock(ctx context.Context, block *types.Block, kinds Outpu
 		if err != nil {
 			return nil, err
 		}
-		result, err := api.execute(ctx, tx, msg, kinds, vmctx, st, nil, block.Hash(), i, false, replayRejection)
+		result, err := api.execute(ctx, replayTimeout, tx, msg, kinds, vmctx, st, nil, block.Hash(), i, false, replayRejection)
 		if err != nil {
 			return nil, err
 		}
@@ -741,12 +680,15 @@ func (api *API) replayBlock(ctx context.Context, block *types.Block, kinds Outpu
 	return results, nil
 }
 
-// execute applies one message. Precompiles replace the active set when not
-// nil; reject maps a validation failure, which leaves the message unexecuted,
-// to its RPC error.
-func (api *API) execute(ctx context.Context, tx *types.Transaction, msg *core.Message, kinds Outputs, vmctx vm.BlockContext, st *state.StateDB, precompiles vm.PrecompiledContracts, blockHash common.Hash, index int, unsigned bool, reject func(error) error) (*Execution, error) {
-	ctx, cancel := context.WithTimeout(ctx, executionTimeout)
-	defer cancel()
+// execute applies one message, within the timeout when it is positive.
+// Precompiles replace the active set when not nil; reject maps a validation
+// failure, which leaves the message unexecuted, to its RPC error.
+func (api *API) execute(ctx context.Context, timeout time.Duration, tx *types.Transaction, msg *core.Message, kinds Outputs, vmctx vm.BlockContext, st *state.StateDB, precompiles vm.PrecompiledContracts, blockHash common.Hash, index int, unsigned bool, reject func(error) error) (*Execution, error) {
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
