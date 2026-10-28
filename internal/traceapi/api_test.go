@@ -34,8 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/parity"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
@@ -250,7 +250,7 @@ func TestIgnoresSuppliedNonce(t *testing.T) {
 		// The sender's state nonce is 0; the supplied nonce is neither
 		// validated nor used for the created address.
 		want := crypto.CreateAddress(testSender, 0)
-		if have := result.Trace[0].Result.(createResult).Address; have != want {
+		if have := result.Trace[0].Result.(parity.CreateResult).Address; have != want {
 			t.Fatalf("nonce %d: created %x, want %x", nonce, have, want)
 		}
 		if change, ok := result.StateDiff[testSender].Nonce.(map[string]any)["*"].(map[string]any); !ok || change["to"] != hexutil.Uint64(1) {
@@ -301,7 +301,7 @@ func TestNestedPrecompile(t *testing.T) {
 		}
 		if value != 0 {
 			child := result.Trace[1]
-			if len(child.TraceAddress) != 1 || child.TraceAddress[0] != 0 || !bytes.Equal(child.Result.(callResult).Output, []byte{42}) {
+			if len(child.TraceAddress) != 1 || child.TraceAddress[0] != 0 || !bytes.Equal(child.Result.(parity.CallResult).Output, []byte{42}) {
 				t.Fatalf("child: %+v", child)
 			}
 		}
@@ -342,7 +342,7 @@ func TestConstructorAndDelegation(t *testing.T) {
 	if created.VMTrace == nil || !bytes.Equal(created.VMTrace.Code, init) {
 		t.Fatal("missing initcode")
 	}
-	frame := created.Trace[0].Result.(createResult)
+	frame := created.Trace[0].Result.(parity.CreateResult)
 	if !bytes.Equal(frame.Code, []byte{1}) {
 		t.Fatalf("code: %x", frame.Code)
 	}
@@ -515,7 +515,7 @@ func TestErrorLabels(t *testing.T) {
 		}
 		frame := result.Trace[tc.frame]
 		// REVERT keeps {gasUsed, output}; exceptional halts have no result.
-		if _, ok := frame.Result.(callResult); ok != (tc.want == "Reverted") {
+		if _, ok := frame.Result.(parity.CallResult); ok != (tc.want == "Reverted") {
 			t.Fatalf("%s: result %+v", tc.name, frame.Result)
 		}
 	}
@@ -599,7 +599,7 @@ func TestStorageMarkers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	address := created.Trace[0].Result.(createResult).Address
+	address := created.Trace[0].Result.(parity.CreateResult).Address
 	have, _ = json.Marshal(created.StateDiff[address].Storage)
 	want, _ = json.Marshal(map[common.Hash]any{slot0: map[string]any{"+": common.Hash{31: 42}}})
 	if !bytes.Equal(have, want) {
@@ -669,7 +669,7 @@ func TestPrecheckFailuresKeepFailedFrames(t *testing.T) {
 		}
 	}
 	child := result.Trace[3]
-	if !slices.Equal(child.TraceAddress, []uint64{2}) || child.Error != "" || child.Action.(callAction).To != empty {
+	if !slices.Equal(child.TraceAddress, []uint64{2}) || child.Error != "" || child.Action.(parity.CallAction).To != empty {
 		t.Fatalf("child path: %+v", child)
 	}
 	var subs []bool
@@ -735,9 +735,9 @@ func TestPrecheckFailureCost(t *testing.T) {
 				frame := result.Trace[failed]
 				gas := uint64(0)
 				switch action := frame.Action.(type) {
-				case callAction:
+				case parity.CallAction:
 					gas = uint64(action.Gas)
-				case createAction:
+				case parity.CreateAction:
 					gas = uint64(action.Gas)
 				}
 				if frame.Error != "Insufficient balance for transfer" || gas != forwarded+stipend {
@@ -775,7 +775,7 @@ func TestCreateCost(t *testing.T) {
 			continue
 		}
 		creates++
-		forwarded := uint64(result.Trace[creates].Action.(createAction).Gas)
+		forwarded := uint64(result.Trace[creates].Action.(parity.CreateAction).Gas)
 		if op.Cost != base[op.Op]+forwarded {
 			t.Fatalf("%s cost %d, want %d + %d forwarded", op.Op, op.Cost, base[op.Op], forwarded)
 		}
@@ -789,18 +789,6 @@ func TestCreateCost(t *testing.T) {
 	}
 	if creates != 2 {
 		t.Fatalf("traced %d creations", creates)
-	}
-}
-
-func TestErrorLabelPrecheckFailures(t *testing.T) {
-	for err, want := range map[error]string{
-		vm.ErrInsufficientBalance: "Insufficient balance for transfer",
-		vm.ErrDepth:               "Max call depth exceeded",
-		vm.ErrNonceUintOverflow:   "Nonce overflow",
-	} {
-		if have := errorLabel(err, false); have != want {
-			t.Errorf("%v: have %q, want %q", err, have, want)
-		}
 	}
 }
 

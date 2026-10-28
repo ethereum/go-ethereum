@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/parity"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
@@ -559,7 +560,7 @@ func TestCallManyTransactionBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if have := results[0].Trace[0].Result.(createResult).Address; have != created {
+	if have := results[0].Trace[0].Result.(parity.CreateResult).Address; have != created {
 		t.Fatalf("created %x, want %x", have, created)
 	}
 	// Transient storage starts empty for every item.
@@ -575,7 +576,7 @@ func TestCallManyTransactionBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if have, want := results[4].Trace[0].Result.(callResult).GasUsed, single.Trace[0].Result.(callResult).GasUsed; have != want {
+	if have, want := results[4].Trace[0].Result.(parity.CallResult).GasUsed, single.Trace[0].Result.(parity.CallResult).GasUsed; have != want {
 		t.Fatalf("second increment used %d gas, want %d", have, want)
 	}
 	// Items share one block environment.
@@ -875,7 +876,7 @@ func TestEarliestMeansCutoff(t *testing.T) {
 	api := NewAPI(retentionBackend{backend})
 	ctx := context.Background()
 	earliest, genesisNumber := rpc.EarliestBlockNumber, rpc.BlockNumber(0)
-	onlyCutoff := func(frames []*TraceFrame) bool {
+	onlyCutoff := func(frames []*parity.Frame) bool {
 		for _, frame := range frames {
 			if frame.BlockNumber != 1 {
 				return false
