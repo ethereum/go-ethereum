@@ -25,6 +25,7 @@ var Modules = map[string]string{
 	"miner":  MinerJs,
 	"net":    NetJs,
 	"rpc":    RpcJs,
+	"trace":  TraceJs,
 	"txpool": TxpoolJs,
 	"dev":    DevJs,
 }
@@ -696,6 +697,64 @@ web3._extend({
 			getter: 'rpc_modules'
 		}),
 	]
+});
+`
+
+const TraceJs = `
+web3._extend({
+	property: 'trace',
+	methods: [
+		new web3._extend.Method({
+			name: 'call',
+			call: 'trace_call',
+			params: 5,
+			inputFormatter: [null, null, null, null, null]
+		}),
+		new web3._extend.Method({
+			name: 'callMany',
+			call: 'trace_callMany',
+			params: 4,
+			inputFormatter: [null, null, null, null]
+		}),
+		new web3._extend.Method({
+			name: 'rawTransaction',
+			call: 'trace_rawTransaction',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'replayTransaction',
+			call: 'trace_replayTransaction',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'replayBlockTransactions',
+			call: 'trace_replayBlockTransactions',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, null]
+		}),
+		new web3._extend.Method({
+			name: 'transaction',
+			call: 'trace_transaction',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'get',
+			call: 'trace_get',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'block',
+			call: 'trace_block',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'filter',
+			call: 'trace_filter',
+			params: 1
+		}),
+	],
+	properties: []
 });
 `
 
