@@ -18,6 +18,7 @@ package pathdb
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -287,5 +288,151 @@ func TestHistoricalStateReaderPendingWrites(t *testing.T) {
 		if !bytes.Equal(blob, want) {
 			t.Fatalf("Unexpected account data, want: %x, got: %x", want, blob)
 		}
+	}
+}
+
+// TestHistoricalStateReaderStaleDiskLayerRetry ensures that when the bottom disk
+// layer is replaced (and marked stale) by concurrent block commits,
+// HistoricalStateReader transparently re-reads from the updated bottom layer
+// instead of failing with errSnapshotStale.
+func TestHistoricalStateReaderStaleDiskLayerRetry(t *testing.T) {
+	maxDiffLayers = 2
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	env := newTester(t, &testerConfig{layers: 16, enableIndex: true})
+	defer env.release()
+	waitIndexing(env.db)
+
+	root := env.roots[5]
+
+	// Capture test accounts and storage slots in local slices so readers don't touch
+	// tester maps concurrently while the writer extends the chain.
+	type acctEntry struct {
+		addr common.Address
+		want []byte
+	}
+	type storageEntry struct {
+		addr common.Address
+		key  common.Hash
+		want []byte
+	}
+	var (
+		accounts []acctEntry
+		storages []storageEntry
+	)
+	for addrHash, want := range env.snapAccounts[root] {
+		addr := env.accountPreimage(addrHash)
+		accounts = append(accounts, acctEntry{addr: addr, want: want})
+	}
+	for addrHash, storageMap := range env.snapStorages[root] {
+		addr := env.accountPreimage(addrHash)
+		for storageHash, want := range storageMap {
+			slotKey := env.hashPreimage(storageHash)
+			storages = append(storages, storageEntry{addr: addr, key: slotKey, want: want})
+		}
+	}
+
+	var (
+		stop    = make(chan struct{})
+		errc    = make(chan error, 8)
+		wg      sync.WaitGroup
+		commits = 50
+	)
+
+	// Writer goroutine: repeatedly extends the chain past maxDiffLayers, forcing
+	// disk layer merges and marking the replaced bottom disk layer stale.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < commits; i++ {
+			env.extend(1)
+		}
+		close(stop)
+	}()
+
+	// Reader goroutines: continuously query historical accounts and storage slots
+	// while the writer is committing and invalidating disk layers.
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			reader, err := env.db.HistoricReader(root)
+			if err != nil {
+				select {
+				case errc <- fmt.Errorf("HistoricReader: %w", err):
+				default:
+				}
+				return
+			}
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				for _, entry := range accounts {
+					blob, err := reader.AccountRLP(entry.addr)
+					if err != nil {
+						select {
+						case errc <- fmt.Errorf("AccountRLP(%x): %w", entry.addr, err):
+						default:
+						}
+						return
+					}
+					if !bytes.Equal(blob, entry.want) {
+						select {
+						case errc <- fmt.Errorf("unexpected account data for %x", entry.addr):
+						default:
+						}
+						return
+					}
+				}
+				for _, entry := range storages {
+					blob, err := reader.Storage(entry.addr, entry.key)
+					if err != nil {
+						select {
+						case errc <- fmt.Errorf("Storage(%x, %x): %w", entry.addr, entry.key, err):
+						default:
+						}
+						return
+					}
+					if !bytes.Equal(blob, entry.want) {
+						select {
+						case errc <- fmt.Errorf("unexpected storage data for %x, %x", entry.addr, entry.key):
+						default:
+						}
+						return
+					}
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errc)
+	for err := range errc {
+		t.Fatal(err)
+	}
+
+	// Ensure that if the database is disabled (bottom layer marked stale without
+	// replacement), the reader returns errSnapshotStale rather than spinning indefinitely.
+	if err := env.db.Disable(); err != nil {
+		t.Fatalf("Failed to disable database: %v", err)
+	}
+	disabledReader, err := env.db.HistoricReader(root)
+	if err != nil {
+		t.Fatalf("Failed to construct reader: %v", err)
+	}
+	if _, err := disabledReader.AccountRLP(accounts[0].addr); !errors.Is(err, errSnapshotStale) {
+		t.Fatalf("Expected errSnapshotStale on disabled database, got: %v", err)
+	}
+	if _, err := disabledReader.Storage(storages[0].addr, storages[0].key); !errors.Is(err, errSnapshotStale) {
+		t.Fatalf("Expected errSnapshotStale on disabled database, got: %v", err)
+	}
+	disabledNodeReader := &HistoricalNodeReader{db: env.db, id: 1}
+	if _, err := disabledNodeReader.Node(common.Hash{}, nil, common.Hash{}); !errors.Is(err, errSnapshotStale) {
+		t.Fatalf("Expected errSnapshotStale on disabled database for Node, got: %v", err)
 	}
 }

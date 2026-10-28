@@ -48,7 +48,7 @@ func (bc *BlockChain) BlockGasUsed(block *types.Block) (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	res, err := bc.processor.Process(context.Background(), block, statedb, nil, nil, bc.overrideTracerActivation(false), nil)
+	res, err := bc.processor.Process(context.Background(), block, statedb, nil, nil, bc.overrideTracerActivation(false), nil, nil)
 	if err != nil {
 		return 0, 0, err
 	}

@@ -131,7 +131,7 @@ func TestAccountIteratorBasics(t *testing.T) {
 			storage[hash] = accStorage
 		}
 	}
-	states := newStates(accounts, storage, false)
+	states := newStates(accounts, storage)
 	it := newDiffAccountIterator(common.Hash{}, states.accountList(), nil)
 	verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 
@@ -168,7 +168,7 @@ func TestStorageIteratorBasics(t *testing.T) {
 		storage[hash] = accStorage
 		nilStorage[hash] = nilstorage
 	}
-	states := newStates(accounts, storage, false)
+	states := newStates(accounts, storage)
 	for account := range accounts {
 		it := newDiffStorageIterator(account, common.Hash{}, states.storageList(account), nil)
 		verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator

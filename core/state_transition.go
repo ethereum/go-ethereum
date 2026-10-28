@@ -625,6 +625,10 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 	if msg.AccessList != nil && !rules.IsBerlin {
 		return fmt.Errorf("%w: access list tx (sender %v)", ErrTxTypeNotSupported, msg.From)
 	}
+	// Check that the blob fee cap is only present once EIP-4844 is active
+	if msg.BlobGasFeeCap != nil && !rules.IsCancun {
+		return fmt.Errorf("%w: blob tx (sender %v)", ErrTxTypeNotSupported, msg.From)
+	}
 	// Check the blob version validity
 	if msg.BlobHashes != nil {
 		if !rules.IsCancun {

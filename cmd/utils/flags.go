@@ -117,9 +117,10 @@ var (
 		Category: flags.EthCategory,
 	}
 	MinFreeDiskSpaceFlag = &cli.IntFlag{
-		Name:     "datadir.minfreedisk",
-		Usage:    "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
-		Category: flags.EthCategory,
+		Name:        "datadir.minfreedisk",
+		Usage:       "Minimum free disk space in MB, once reached triggers auto shut down (0 = disabled)",
+		DefaultText: "--cache.gc converted to MB",
+		Category:    flags.EthCategory,
 	}
 	KeyStoreDirFlag = &flags.DirectoryFlag{
 		Name:     "keystore",
@@ -294,10 +295,10 @@ var (
 		Category: flags.StateCategory,
 	}
 	SnapV2Flag = &cli.BoolFlag{
-		Name:     "snap.v2",
-		Usage:    "Enable the experimental snap/2 (EIP-8189, BAL-based) sync protocol (advertises and syncs via snap/2; not safe on public networks)",
-		Value:    ethconfig.Defaults.SnapV2,
-		Category: flags.StateCategory,
+		Name:        "snap.v2",
+		Usage:       "Enable or disable the snap/2 (EIP-8189, BAL-based) state syncer, which needs Amsterdam active",
+		DefaultText: "automatic",
+		Category:    flags.StateCategory,
 	}
 	BinTrieGroupDepthFlag = &cli.IntFlag{
 		Name:     "bintrie.groupdepth",
@@ -552,14 +553,16 @@ var (
 		Value:    ethconfig.Defaults.FilterLogCacheSize,
 	}
 	FDLimitFlag = &cli.IntFlag{
-		Name:     "fdlimit",
-		Usage:    "Raise the open file descriptor resource limit (default = system fd limit)",
-		Category: flags.PerfCategory,
+		Name:        "fdlimit",
+		Usage:       "Raise the open file descriptor resource limit",
+		DefaultText: "system fd limit",
+		Category:    flags.PerfCategory,
 	}
 	MemoryLimitFlag = &cli.IntFlag{
-		Name:     "memorylimit",
-		Usage:    "Soft memory limit for the Go runtime in megabytes (default = no limit)",
-		Category: flags.PerfCategory,
+		Name:        "memorylimit",
+		Usage:       "Soft memory limit for the Go runtime in megabytes",
+		DefaultText: "no limit",
+		Category:    flags.PerfCategory,
 	}
 	GOGCFlag = &cli.IntFlag{
 		Name:     "gogc",
@@ -1996,7 +1999,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	}
 	if ctx.IsSet(SnapV2Flag.Name) {
-		cfg.SnapV2 = ctx.Bool(SnapV2Flag.Name)
+		snapV2 := ctx.Bool(SnapV2Flag.Name)
+		cfg.SnapV2 = &snapV2
 	}
 	// Override any default configs for hard coded networks.
 	switch {

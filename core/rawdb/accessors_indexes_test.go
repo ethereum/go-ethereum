@@ -297,3 +297,31 @@ func TestExtractReceiptFields(t *testing.T) {
 		}
 	}
 }
+
+// TestFilterMapsRangeLocalBase checks that the optional LocalBase field keeps the
+// encoding of existing log index ranges unchanged and is stored when set.
+func TestFilterMapsRangeLocalBase(t *testing.T) {
+	type oldRange struct {
+		Version                      uint32
+		HeadIndexed                  bool
+		HeadDelimiter                uint64
+		BlocksFirst, BlocksAfterLast uint64
+		MapsFirst, MapsAfterLast     uint32
+		TailPartialEpoch             uint32
+	}
+	old := oldRange{2, true, 1000, 10, 20, 16, 32, 3}
+	oldEnc, _ := rlp.EncodeToBytes(&old)
+	newEnc, _ := rlp.EncodeToBytes(&FilterMapsRange{2, true, 1000, 10, 20, 16, 32, 3, false})
+	if string(oldEnc) != string(newEnc) {
+		t.Fatalf("Encoding changed without a local base: %x != %x", newEnc, oldEnc)
+	}
+	db := NewMemoryDatabase()
+	for _, localBase := range []bool{false, true} {
+		want := FilterMapsRange{2, true, 1000, 10, 20, 16, 32, 3, localBase}
+		WriteFilterMapsRange(db, want)
+		got, initialized, err := ReadFilterMapsRange(db)
+		if err != nil || !initialized || got != want {
+			t.Fatalf("Range mismatch: got %+v (initialized %v, error %v), want %+v", got, initialized, err, want)
+		}
+	}
+}

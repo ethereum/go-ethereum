@@ -64,7 +64,7 @@ func (tx *txJSON) yParityValue() (*big.Int, error) {
 	if tx.YParity != nil {
 		val := uint64(*tx.YParity)
 		if val != 0 && val != 1 {
-			return nil, errInvalidYParity
+			return nil, ErrInvalidYParity
 		}
 		bigval := new(big.Int).SetUint64(val)
 		if tx.V != nil && tx.V.ToInt().Cmp(bigval) != 0 {

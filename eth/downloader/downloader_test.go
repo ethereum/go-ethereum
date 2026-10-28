@@ -18,6 +18,7 @@ package downloader
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sync"
@@ -1187,5 +1188,59 @@ func TestInvalidBodyPeerDrop(t *testing.T) {
 	case <-peer.dropped:
 	case <-time.After(1 * time.Minute):
 		t.Fatal("peer was not dropped")
+	}
+}
+
+// Tests that a pivot frozen by the snap syncer is recognized as part of the
+// chain being synced, even though the pivot block itself is not committed into
+// the local chain until its state is complete.
+func TestFrozenPivotCanonical(t *testing.T) {
+	tester := newTester(t, SnapSync)
+	defer tester.terminate()
+
+	// Assemble a header chain with [1, 4] committed locally and [5, 10] only
+	// tracked by the skeleton, leaving [11, 12] as stale leftovers above the
+	// skeleton head.
+	headers := []*types.Header{tester.chain.Genesis().Header()}
+	for i := 1; i <= 12; i++ {
+		headers = append(headers, &types.Header{
+			ParentHash: headers[i-1].Hash(),
+			Number:     big.NewInt(int64(i)),
+			Difficulty: common.Big0,
+		})
+	}
+	for i := 1; i <= 4; i++ {
+		rawdb.WriteHeader(tester.db, headers[i])
+		rawdb.WriteCanonicalHash(tester.db, headers[i].Hash(), uint64(i))
+	}
+	for i := 5; i <= 12; i++ {
+		rawdb.WriteSkeletonHeader(tester.db, headers[i])
+	}
+	blob, _ := json.Marshal(&skeletonProgress{
+		Subchains: []*subchain{{Head: 10, Tail: 5, Next: headers[4].Hash()}},
+	})
+	rawdb.WriteSkeletonSyncStatus(tester.db, blob)
+
+	sidechain := func(number int) *types.Header {
+		header := types.CopyHeader(headers[number])
+		header.Extra = []byte("side")
+		return header
+	}
+	tests := []struct {
+		header *types.Header
+		want   bool
+	}{
+		{headers[7], true},    // tracked by the skeleton only
+		{headers[5], true},    // skeleton tail
+		{headers[10], true},   // skeleton head
+		{sidechain(7), false}, // reorged out of the skeleton
+		{headers[3], true},    // committed locally
+		{sidechain(3), false}, // reorged out of the local chain
+		{headers[11], false},  // above the skeleton head
+	}
+	for i, tt := range tests {
+		if have := tester.downloader.isFrozenPivotCanonical(tt.header); have != tt.want {
+			t.Errorf("test %d: frozen pivot %d canonical mismatch: have %v, want %v", i, tt.header.Number, have, tt.want)
+		}
 	}
 }
