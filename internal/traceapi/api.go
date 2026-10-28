@@ -592,6 +592,12 @@ func (api *API) call(ctx context.Context, input CallArgs, kinds Outputs, env *ca
 	// logs collected under it.
 	nonce := hexutil.Uint64(index)
 	args.Nonce = &nonce
+	// A legacy gasPrice prices an authorization call as both fee caps, but as a
+	// legacy transaction it would drop the authorizations the tracer discovers
+	// from it.
+	if args.GasPrice != nil && args.AuthorizationList != nil {
+		args.MaxFeePerGas, args.MaxPriorityFeePerGas, args.GasPrice = args.GasPrice, args.GasPrice, nil
+	}
 	tx := args.ToTransaction(types.DynamicFeeTxType)
 	// As in eth_call, a zero effective gas price runs with BASEFEE 0, and a
 	// zero blob fee cap (supplied or defaulted) with BLOBBASEFEE 0. NoBaseFee
@@ -697,10 +703,7 @@ func (api *API) execute(ctx context.Context, timeout time.Duration, tx *types.Tr
 	if active == nil {
 		active = vm.ActivePrecompiledContracts(rules)
 	}
-	c := newCapture(st, kinds, rules, active)
-	// Paying a zero fee touches the fee recipient without a balance change
-	// event; touch-clearing may still delete it.
-	c.touch(vmctx.Coinbase)
+	c := newCapture(kinds, rules, active)
 	hooks := c.hooks()
 	evm := vm.NewEVM(vmctx, state.NewHookedState(st, hooks), api.backend.ChainConfig(), vm.Config{Tracer: hooks, NoBaseFee: unsigned})
 	defer evm.Release()
@@ -737,9 +740,6 @@ func (api *API) execute(ctx context.Context, timeout time.Duration, tx *types.Tr
 	result := c.result()
 	if err := st.Error(); err != nil {
 		return nil, stateError(err)
-	}
-	if c.before != nil && c.before.Error() != nil {
-		return nil, stateError(c.before.Error())
 	}
 	return result, nil
 }
