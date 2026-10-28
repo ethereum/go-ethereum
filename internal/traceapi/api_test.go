@@ -893,3 +893,21 @@ func TestReplayAfterPrecedingTransactions(t *testing.T) {
 		}
 	}
 }
+
+// Unsigned calls run within the RPC EVM timeout, as eth_call does.
+func TestCallEVMTimeout(t *testing.T) {
+	config := *params.AllEthashProtocolChanges
+	loop := common.HexToAddress("0x1000")
+	backend := newTestBackend(t, 0, &core.Genesis{Config: &config, GasLimit: 30_000_000, Difficulty: big.NewInt(0), BaseFee: big.NewInt(params.InitialBaseFee), Alloc: types.GenesisAlloc{
+		loop: {Code: common.FromHex("5b600056")}, // JUMPDEST PUSH1 0 JUMP
+	}}, nil)
+	defer backend.teardown()
+	backend.evmTimeout = time.Millisecond
+	client := newTestClient(t, NewAPI(backend))
+
+	var got json.RawMessage
+	err := client.Call(&got, "trace_call", map[string]any{"to": loop, "gas": "0x1c9c380"}, []string{"trace"}, "latest")
+	if err == nil || !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+		t.Fatalf("have %v, want %v", err, context.DeadlineExceeded)
+	}
+}

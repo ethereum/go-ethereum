@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
@@ -184,19 +185,19 @@ func TestFilterExecutedHead(t *testing.T) {
 	}
 }
 
-// Replace the chain as replay requests a block's parent state.
+// Replace the chain as replay requests a block's pre-state.
 type replayReorgBackend struct {
 	*testBackend
 	reorg func()
 }
 
-func (b *replayReorgBackend) StateAtBlock(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, tracers.StateReleaseFunc, error) {
+func (b *replayReorgBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	if b.reorg != nil {
 		reorg := b.reorg
 		b.reorg = nil
 		reorg()
 	}
-	return b.testBackend.StateAtBlock(ctx, block, base, readOnly, preferDisk)
+	return b.testBackend.StateAtTransaction(ctx, block, txIndex)
 }
 
 // A range filter is resolved to one branch first. Replay reads ancestors by
