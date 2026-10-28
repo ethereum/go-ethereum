@@ -68,6 +68,15 @@ const (
 var (
 	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
 	maxDiffLayers = 128
+
+	// maxRevertBatch is the maximum number of persisted state histories merged
+	// and reverted together in a rollback.
+	maxRevertBatch = uint64(256)
+
+	// maxRevertBatchSize is the maximum encoded size of the state histories
+	// merged and reverted together, to limit the memory a rollback uses. A
+	// larger history is reverted on its own.
+	maxRevertBatchSize = 32 * 1024 * 1024
 )
 
 // Defaults contains default settings for Ethereum mainnet.

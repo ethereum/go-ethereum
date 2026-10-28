@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -551,6 +552,51 @@ func (t *tester) verifyState(root common.Hash) error {
 	return nil
 }
 
+// verifyFlatState checks the flat state of the given root against the recorded
+// state, including the absence of the accounts and slots recorded at other
+// roots only.
+func (t *tester) verifyFlatState(root common.Hash) error {
+	reader, err := t.db.StateReader(root)
+	if err != nil {
+		return err
+	}
+	for _, accounts := range t.snapAccounts {
+		for addrHash := range accounts {
+			account, err := reader.Account(addrHash)
+			if err != nil {
+				return err
+			}
+			var blob []byte
+			if account != nil {
+				slim, err := rlp.EncodeToBytes(account)
+				if err != nil {
+					return err
+				}
+				if blob, err = types.FullAccountRLP(slim); err != nil {
+					return err
+				}
+			}
+			if want := t.snapAccounts[root][addrHash]; !bytes.Equal(blob, want) {
+				return fmt.Errorf("flat account %x is %x, want %x", addrHash, blob, want)
+			}
+		}
+	}
+	for _, storages := range t.snapStorages {
+		for addrHash, slots := range storages {
+			for slotHash := range slots {
+				blob, err := reader.Storage(addrHash, slotHash)
+				if err != nil {
+					return err
+				}
+				if want := t.snapStorages[root][addrHash][slotHash]; !bytes.Equal(blob, want) {
+					return fmt.Errorf("flat slot %x of %x is %x, want %x", slotHash, addrHash, blob, want)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (t *tester) verifyHistory() error {
 	bottom := t.bottomIndex()
 	for i, root := range t.roots {
@@ -624,6 +670,261 @@ func TestDatabaseRollback(t *testing.T) {
 	if tester.db.tree.len() != 1 {
 		t.Fatal("Only disk layer is expected")
 	}
+	// Revert in growing jumps, which merges the persisted state histories.
+	for _, index := range []bool{false, true} {
+		t.Run(fmt.Sprintf("jumps-index-%v", index), func(t *testing.T) {
+			testDatabaseRollbackJumps(t, index)
+		})
+	}
+}
+
+func testDatabaseRollbackJumps(t *testing.T, index bool) {
+	tester := newTester(t, &testerConfig{layers: 32, enableIndex: index})
+	defer tester.release()
+	if index {
+		waitIndexInit(t, tester.db)
+	}
+	for i, jump := tester.bottomIndex(), 1; i >= 0; jump *= 3 {
+		j := max(i-jump, -1)
+		root := types.EmptyRootHash
+		if j >= 0 {
+			root = tester.roots[j]
+		}
+		if err := tester.db.Recover(root); err != nil {
+			t.Fatalf("Failed to revert from %d to %d: %v", i, j, err)
+		}
+		id := tester.db.tree.bottom().stateID()
+		if id != uint64(j+1) {
+			t.Fatalf("State id %d after reverting to %d", id, j)
+		}
+		// Transitions still in the write buffer are reverted there, and the
+		// persistent state stays at the last flush.
+		stored := rawdb.ReadPersistentStateID(tester.db.diskdb)
+		if stored > id || (stored != id && tester.db.tree.bottom().buffer.empty()) {
+			t.Fatalf("Persistent state id %d, state id %d", stored, id)
+		}
+		if head, _ := tester.db.stateFreezer.Ancients(); head != id {
+			t.Fatalf("State history head %d, want %d", head, id)
+		}
+		if j < 0 {
+			if index && loadIndexMetadata(tester.db.diskdb, typeStateHistory) != nil {
+				t.Fatal("State history index left after reverting to the empty state")
+			}
+			break
+		}
+		if err := tester.verifyState(root); err != nil {
+			t.Fatalf("Invalid state at %d: %v", j, err)
+		}
+		if index {
+			if last := loadIndexMetadata(tester.db.diskdb, typeStateHistory).Last; last != id {
+				t.Fatalf("State history indexed up to %d, want %d", last, id)
+			}
+			hr := newStateHistoryReader(tester.db.diskdb, tester.db.stateFreezer, nil)
+			for k := 0; k < j; k++ {
+				if err := checkHistoricalState(tester, tester.roots[k], uint64(k+1), hr); err != nil {
+					t.Fatalf("Invalid historical state %d after reverting to %d: %v", k, j, err)
+				}
+			}
+		}
+		i = j
+	}
+}
+
+// waitIndexInit waits for the initial indexing of the state histories, after
+// which they are indexed and unindexed synchronously.
+func waitIndexInit(t *testing.T, db *Database) {
+	t.Helper()
+	select {
+	case <-db.stateIndexer.initer.done:
+	case <-time.After(time.Minute):
+		t.Fatal("State history indexing timed out")
+	}
+}
+
+// TestReadMergedStateHistory checks that a merged state history holds, for each
+// entry it touches, the value in the prev-state of the oldest history merged,
+// and that the merge stops at the storage key format change and the size limit.
+func TestReadMergedStateHistory(t *testing.T) {
+	// Redefine the diff layer depth allowance for faster testing.
+	maxDiffLayers = 4
+	defer func(size int) {
+		maxDiffLayers = 128
+		maxRevertBatchSize = size
+	}(maxRevertBatchSize)
+
+	tester := newTester(t, &testerConfig{layers: 32})
+	defer tester.release()
+
+	bottom := tester.db.tree.bottom().stateID()
+	for last := uint64(1); last <= bottom; last++ {
+		for _, count := range []uint64{1, 2, 7, last} {
+			h, n, err := readMergedStateHistory(tester.db.stateFreezer, last, count)
+			if err != nil {
+				t.Fatalf("last %d, count %d: %v", last, count, err)
+			}
+			// The first seven histories use hashed storage keys, the rest
+			// raw ones: a merge stops at the change.
+			want := min(count, last)
+			if last > 7 {
+				want = min(want, last-7)
+			}
+			if n != want {
+				t.Fatalf("last %d, count %d: merged %d histories, want %d", last, count, n, want)
+			}
+			parent := types.EmptyRootHash
+			if last > n {
+				parent = tester.roots[last-n-1]
+			}
+			if h.meta.root != tester.roots[last-1] || h.meta.parent != parent {
+				t.Fatalf("last %d, count %d: merged history spans %x to %x, want %x to %x", last, count, h.meta.parent, h.meta.root, parent, tester.roots[last-1])
+			}
+			for addr, blob := range h.accounts {
+				addrHash := crypto.Keccak256Hash(addr.Bytes())
+				if len(blob) != 0 {
+					full, err := types.FullAccountRLP(blob)
+					if err != nil {
+						t.Fatal(err)
+					}
+					blob = full
+				}
+				if !bytes.Equal(blob, tester.snapAccounts[parent][addrHash]) {
+					t.Fatalf("last %d, count %d: account %x is %x, want %x", last, count, addr, blob, tester.snapAccounts[parent][addrHash])
+				}
+			}
+			for addr, slots := range h.storages {
+				addrHash := crypto.Keccak256Hash(addr.Bytes())
+				for key, blob := range slots {
+					if h.meta.version != stateHistoryV0 {
+						key = crypto.Keccak256Hash(key.Bytes())
+					}
+					if !bytes.Equal(blob, tester.snapStorages[parent][addrHash][key]) {
+						t.Fatalf("last %d, count %d: slot %x of %x is %x, want %x", last, count, key, addr, blob, tester.snapStorages[parent][addrHash][key])
+					}
+				}
+			}
+		}
+	}
+	// The size limit counts every history merged, but the newest one is
+	// always taken.
+	encoded := func(id uint64) int {
+		_, accountIndexes, storageIndexes, accountData, storageData, err := rawdb.ReadStateHistory(tester.db.stateFreezer, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(accountIndexes) + len(storageIndexes) + len(accountData) + len(storageData)
+	}
+	two := encoded(bottom) + encoded(bottom-1)
+	for _, c := range []struct {
+		size int
+		want uint64
+	}{{two, 2}, {two - 1, 1}, {1, 1}} {
+		maxRevertBatchSize = c.size
+		_, n, err := readMergedStateHistory(tester.db.stateFreezer, bottom, 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != c.want {
+			t.Fatalf("size limit %d: merged %d histories, want %d", c.size, n, c.want)
+		}
+	}
+}
+
+// TestDatabaseRollbackBatchedReopen checks startup repair after a partial
+// rollback and state consistency after a completed rollback.
+func TestDatabaseRollbackBatchedReopen(t *testing.T) {
+	// Redefine the diff layer depth allowance for faster testing.
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+	tester := newTester(t, &testerConfig{layers: 64, enableIndex: true})
+	defer tester.release()
+	waitIndexInit(t, tester.db)
+
+	reopen := func() {
+		if err := tester.db.Close(); err != nil {
+			t.Fatal(err)
+		}
+		tester.db = New(tester.db.diskdb, tester.db.config)
+	}
+	check := func(stage string, want uint64) {
+		dl := tester.db.tree.bottom()
+		if id := dl.stateID(); id != want {
+			t.Fatalf("%s: state id %d, want %d", stage, id, want)
+		}
+		if stored := rawdb.ReadPersistentStateID(tester.db.diskdb); stored != want {
+			t.Fatalf("%s: persistent state id %d, want %d", stage, stored, want)
+		}
+		if head, _ := tester.db.stateFreezer.Ancients(); head != want {
+			t.Fatalf("%s: state history head %d, want %d", stage, head, want)
+		}
+		if dl.rootHash() != tester.roots[want-1] {
+			t.Fatalf("%s: disk layer root %x, want %x", stage, dl.rootHash(), tester.roots[want-1])
+		}
+		if err := tester.verifyState(dl.rootHash()); err != nil {
+			t.Fatalf("%s: invalid state: %v", stage, err)
+		}
+		if err := tester.verifyFlatState(dl.rootHash()); err != nil {
+			t.Fatalf("%s: invalid flat state: %v", stage, err)
+		}
+		waitIndexInit(t, tester.db)
+		if last := loadIndexMetadata(tester.db.diskdb, typeStateHistory).Last; last != want {
+			t.Fatalf("%s: state history indexed up to %d, want %d", stage, last, want)
+		}
+		hr := newStateHistoryReader(tester.db.diskdb, tester.db.stateFreezer, nil)
+		for k := uint64(0); k+1 < want; k++ {
+			if err := checkHistoricalState(tester, tester.roots[k], k+1, hr); err != nil {
+				t.Fatalf("%s: invalid historical state %d: %v", stage, k, err)
+			}
+		}
+	}
+	// Revert what the write buffer holds one by one and then a merged batch,
+	// as Recover does, but stop before the final sync and truncation.
+	interrupted, err := func() (uint64, error) {
+		if err := tester.db.waitWrites(); err != nil {
+			return 0, err
+		}
+		tester.db.lock.Lock()
+		defer tester.db.lock.Unlock()
+
+		dl := tester.db.tree.bottom()
+		for !dl.buffer.empty() {
+			h, err := readStateHistory(tester.db.stateFreezer, dl.stateID())
+			if err != nil {
+				return 0, err
+			}
+			if dl, err = dl.revert(h, 1); err != nil {
+				return 0, err
+			}
+			tester.db.tree.init(dl)
+		}
+		h, n, err := readMergedStateHistory(tester.db.stateFreezer, dl.stateID(), 7)
+		if err != nil {
+			return 0, err
+		}
+		if n != 7 {
+			return 0, fmt.Errorf("merged %d histories, want 7", n)
+		}
+		if dl, err = dl.revert(h, n); err != nil {
+			return 0, err
+		}
+		tester.db.tree.init(dl)
+		return dl.stateID(), nil
+	}()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reopen()
+	check("interrupted", interrupted)
+
+	// Recover the rest of the way down, in merged batches, and reopen again.
+	target := interrupted / 2
+	if err := tester.db.Recover(tester.roots[target-1]); err != nil {
+		t.Fatal(err)
+	}
+	reopen()
+	check("recovered", target)
 }
 
 func TestDatabaseRecoverable(t *testing.T) {
