@@ -974,9 +974,10 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	return nil, errStopToken
 }
 
-// decodeSingle decodes the immediate operand of a backward-compatible DUPN or SWAPN instruction (EIP-8024)
+// DecodeSingle decodes the immediate operand of a backward-compatible DUPN or SWAPN instruction (EIP-8024)
+// into its stack depth. Immediates in the forbidden range [91, 127] have no depth.
 // https://eips.ethereum.org/EIPS/eip-8024
-func decodeSingle(x byte) int {
+func DecodeSingle(x byte) int {
 	// Depths 1-16 are already covered by the legacy opcodes. The forbidden byte range [91, 127] removes
 	// 37 values from the 256 possible immediates, leaving 219 usable values, so this encoding covers depths
 	// 17 through 235. The immediate is encoded as (x + 111) % 256, where 111 is chosen so that these values
@@ -984,12 +985,13 @@ func decodeSingle(x byte) int {
 	return (int(x) + 145) % 256
 }
 
-// decodePair decodes the immediate operand of a backward-compatible EXCHANGE
+// DecodePair decodes the immediate operand of a backward-compatible EXCHANGE
 // instruction (EIP-8024) into stack indices (n, m) where 1 <= n < m
 // and n + m <= 30. The forbidden byte range [82, 127] removes 46 values from
-// the 256 possible immediates, leaving exactly 210 usable bytes.
+// the 256 possible immediates, leaving exactly 210 usable bytes. Immediates in
+// the forbidden range have no stack indices.
 // https://eips.ethereum.org/EIPS/eip-8024
-func decodePair(x byte) (int, int) {
+func DecodePair(x byte) (int, int) {
 	// XOR with 143 remaps the forbidden bytes [82, 127] to an unused corner
 	// of the 16x16 grid below.
 	k := int(x ^ 143)
@@ -1020,7 +1022,7 @@ func opDupN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		operand := x
 		return nil, &ErrInvalidOpCode{opcode: DUPN, operand: &operand}
 	}
-	n := decodeSingle(x)
+	n := DecodeSingle(x)
 
 	// DUPN duplicates the n'th stack item, so the stack must contain at least n elements.
 	if scope.Stack.len() < n {
@@ -1048,7 +1050,7 @@ func opSwapN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		operand := x
 		return nil, &ErrInvalidOpCode{opcode: SWAPN, operand: &operand}
 	}
-	n := decodeSingle(x)
+	n := DecodeSingle(x)
 
 	// SWAPN operates on the top and n+1 stack items, so the stack must contain at least n+1 elements.
 	if scope.Stack.len() < n+1 {
@@ -1079,7 +1081,7 @@ func opExchange(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		operand := x
 		return nil, &ErrInvalidOpCode{opcode: EXCHANGE, operand: &operand}
 	}
-	n, m := decodePair(x)
+	n, m := DecodePair(x)
 	need := max(n, m) + 1
 
 	// EXCHANGE operates on the (n+1)'th and (m+1)'th stack items,

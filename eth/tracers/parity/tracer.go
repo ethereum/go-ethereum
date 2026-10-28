@@ -492,8 +492,7 @@ func (t *Tracer) opcode(pc uint64, op byte, gas, cost uint64, context tracing.Op
 		return
 	}
 	stack := context.StackData()
-	minStack, _ := t.table[op].Stack()
-	pending := &pendingOp{op: step, stackBase: len(stack) - minStack}
+	pending := &pendingOp{op: step, stackBase: len(stack) - t.stackInputs(vm.OpCode(op), context.ContractCode(), pc)}
 	word := func(i int) uint64 {
 		if len(stack) <= i {
 			return 0
@@ -520,6 +519,27 @@ func (t *Tracer) opcode(pc uint64, op byte, gas, cost uint64, context tracing.Op
 		}
 	}
 	scope.pending = pending
+}
+
+// stackInputs returns the number of stack words an operation reads. The
+// EIP-8024 instructions read to the depth of their immediate, beyond the
+// minimum of the instruction table.
+func (t *Tracer) stackInputs(op vm.OpCode, code []byte, pc uint64) int {
+	var immediate byte
+	if pc+1 < uint64(len(code)) {
+		immediate = code[pc+1]
+	}
+	switch op {
+	case vm.DUPN:
+		return vm.DecodeSingle(immediate)
+	case vm.SWAPN:
+		return vm.DecodeSingle(immediate) + 1
+	case vm.EXCHANGE:
+		n, m := vm.DecodePair(immediate)
+		return max(n, m) + 1
+	}
+	inputs, _ := t.table[op].Stack()
+	return inputs
 }
 
 // openVM starts the innermost scope's VM trace and attaches it to the parent's
