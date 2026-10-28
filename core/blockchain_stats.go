@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -26,12 +27,27 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// prepareStartKey is the context key holding when the block preparation started.
+type prepareStartKey struct{}
+
+// WithPrepareStart records in the context when the caller started preparing the block.
+func WithPrepareStart(ctx context.Context, start time.Time) context.Context {
+	return context.WithValue(ctx, prepareStartKey{}, start)
+}
+
+// prepareStart returns the time recorded by WithPrepareStart, if any.
+func prepareStart(ctx context.Context) (time.Time, bool) {
+	start, ok := ctx.Value(prepareStartKey{}).(time.Time)
+	return start, ok
+}
+
 // ExecuteStats includes all the statistics of a block execution in details.
 type ExecuteStats struct {
 	Process  ProcessStats  // Statistics of the block processing
 	Validate ValidateStats // Statistics of the block validation
 	Commit   CommitStats   // Statistics of the state commit
 
+	Prepare         time.Duration // Optional, time from the start of the block preparation to the processing
 	CrossValidation time.Duration // Optional, time spent on the block cross validation
 	TotalTime       time.Duration // The total time spent on block execution
 	MgasPerSecond   float64       // The million gas processed per second
@@ -196,6 +212,7 @@ type slowBlockTime struct {
 
 // slowBlockPhases represents the wall-clock time of the execution phases.
 type slowBlockPhases struct {
+	PrepareMs  float64 `json:"prepare_ms,omitempty"` // Before the processing, not part of total_ms
 	ProcessMs  float64 `json:"process_ms"`
 	ValidateMs float64 `json:"validate_ms"`
 	CommitMs   float64 `json:"commit_ms"`
@@ -279,6 +296,7 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			TotalMs:     durationToMs(s.TotalTime),
 		},
 		Phases: slowBlockPhases{
+			PrepareMs:  durationToMs(s.Prepare),
 			ProcessMs:  durationToMs(s.Process.Total),
 			ValidateMs: durationToMs(s.Validate.Total),
 			CommitMs:   durationToMs(s.Commit.Total),

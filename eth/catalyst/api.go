@@ -919,6 +919,9 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 
+	// The slow block log reports the time from here to the start of the processing
+	ctx = core.WithPrepareStart(ctx, time.Now())
+
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
 	if err != nil {

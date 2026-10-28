@@ -2483,6 +2483,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed
 	stats.MgasPerSecond = float64(res.GasUsed) * 1000 / float64(elapsed)
+	if start, ok := prepareStart(ctx); ok {
+		stats.Prepare = startTime.Sub(start)
+	}
 
 	return &blockProcessingResult{
 		usedGas:  res.GasUsed,
