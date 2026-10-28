@@ -230,7 +230,7 @@ func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, base 
 // function will return the state of block after the pre-block operations have
 // been completed (e.g. updating system contracts), but before post-block
 // operations are completed (e.g. processing withdrawals).
-func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
+func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (_ *types.Transaction, _ vm.BlockContext, _ *state.StateDB, _ tracers.StateReleaseFunc, err error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
 		return nil, vm.BlockContext{}, nil, nil, errors.New("no transaction in genesis")
@@ -238,7 +238,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	// Create the parent state database
 	parent := eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("parent %#x not found", block.ParentHash())
+		return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("%w: parent %#x not found", database.ErrStateUnavailable, block.ParentHash())
 	}
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
@@ -246,30 +246,59 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
-	// Insert parent beacon block root in the state as per EIP-4788.
-	context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
-	evm := vm.NewEVM(context, statedb, eth.blockchain.Config(), vm.Config{})
+	defer func() {
+		if err != nil {
+			release()
+		}
+	}()
+	vmctx := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+	evm := vm.NewEVM(vmctx, statedb, eth.blockchain.Config(), vm.Config{})
 	defer evm.Release()
 
+	// Abort the replay when the request is cancelled. Release returns the EVM
+	// to a pool, so a running cancellation must finish before it.
+	stopped := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { evm.Cancel(); close(stopped) })
+	defer func() {
+		if !stop() {
+			<-stopped
+		}
+	}()
 	// Run pre-execution system calls
 	core.PreExecution(ctx, block.BeaconRoot(), parent.Header(), eth.blockchain.Config(), evm, block.Number(), block.Time())
-
+	if err := ctx.Err(); err != nil {
+		return nil, vm.BlockContext{}, nil, nil, err
+	}
+	if err := statedb.Error(); err != nil {
+		return nil, vm.BlockContext{}, nil, nil, err
+	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
-		return nil, context, statedb, release, nil
+		return nil, vmctx, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(eth.blockchain.Config(), block.Number(), block.Time())
 	for idx, tx := range block.Transactions() {
 		if idx == txIndex {
-			return tx, context, statedb, release, nil
+			return tx, vmctx, statedb, release, nil
 		}
 		// Assemble the transaction call message and return if the requested offset
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-
+		msg, err := core.TransactionToMessage(tx, signer, block.BaseFee())
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x: %w", tx.Hash(), err)
+		}
 		// Not yet the searched for transaction, execute on top of the current state
 		statedb.SetTxContext(tx.Hash(), idx, uint32(idx+1))
-		if _, err := core.ApplyMessage(evm, msg, nil); err != nil {
-			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
+		_, err = core.ApplyMessage(evm, msg, nil)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, vm.BlockContext{}, nil, nil, ctxErr
+		}
+		// A failed state read can cause the transaction to fail, so it takes
+		// precedence.
+		if stateErr := statedb.Error(); stateErr != nil {
+			return nil, vm.BlockContext{}, nil, nil, stateErr
+		}
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %w", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
 		statedb.Finalise(evm.GetRules())
