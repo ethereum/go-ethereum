@@ -24,10 +24,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -36,10 +37,11 @@ const (
 )
 
 // capture derives all output families from the same execution. State diffs
-// compare transaction snapshots, so reverted writes never survive in the result.
+// compare the pre-transaction state of every account the transaction touches
+// with the finalized post-state, so reverted writes never survive in the result.
 type capture struct {
-	state       *state.StateDB
-	before      *state.StateDB
+	state       tracing.StateDB
+	pre         map[common.Address]*accountState // nil unless stateDiff is selected
 	kinds       Outputs
 	table       vm.JumpTable
 	precompiles vm.PrecompiledContracts
@@ -47,7 +49,6 @@ type capture struct {
 	scopes      []*frameScope
 	output      hexutil.Bytes
 	rootVM      *vmTrace
-	touched     map[common.Address]map[common.Hash]bool
 	entries     int
 	bytes       int
 	err         error
@@ -63,6 +64,16 @@ type frameScope struct {
 	last    *vmOp
 }
 
+// accountState is an account before the transaction, with the original values
+// of the slots it writes.
+type accountState struct {
+	exists  bool
+	balance *uint256.Int
+	nonce   uint64
+	code    []byte
+	storage map[common.Hash]common.Hash
+}
+
 type pendingOp struct {
 	op           *vmOp
 	stackBase    int
@@ -71,30 +82,87 @@ type pendingOp struct {
 	store        *storageWrite
 }
 
-func newCapture(st *state.StateDB, kinds Outputs, rules params.Rules, precompiles vm.PrecompiledContracts) *capture {
+func newCapture(kinds Outputs, rules params.Rules, precompiles vm.PrecompiledContracts) *capture {
 	table, _ := vm.LookupInstructionSet(rules)
-	c := &capture{state: st, kinds: kinds, table: table, precompiles: precompiles, frames: []*TraceFrame{}, touched: make(map[common.Address]map[common.Hash]bool)}
+	c := &capture{kinds: kinds, table: table, precompiles: precompiles, frames: []*TraceFrame{}}
 	if kinds.has("stateDiff") {
-		c.before = st.Copy()
+		c.pre = make(map[common.Address]*accountState)
 	}
 	return c
 }
 
 func (c *capture) hooks() *tracing.Hooks {
-	h := &tracing.Hooks{OnEnter: c.enter, OnExit: c.exit}
-	if c.kinds.has("vmTrace") {
+	h := &tracing.Hooks{OnTxStart: c.txStart, OnEnter: c.enter, OnExit: c.exit}
+	if c.kinds.has("vmTrace") || c.pre != nil {
 		h.OnOpcode = c.opcode
+	}
+	if c.kinds.has("vmTrace") {
 		h.OnFault = c.fault
 	}
-	if c.before != nil {
-		h.OnBalanceChange = func(a common.Address, prev, next *big.Int, reason tracing.BalanceChangeReason) { c.touch(a) }
-		h.OnNonceChangeV2 = func(a common.Address, prev, next uint64, reason tracing.NonceChangeReason) { c.touch(a) }
-		h.OnCodeChangeV2 = func(a common.Address, prevHash common.Hash, prev []byte, nextHash common.Hash, next []byte, reason tracing.CodeChangeReason) {
-			c.touch(a)
+	if c.pre != nil {
+		// Accounts are discovered before they change. Should a change still
+		// come first, its previous value is the original one.
+		h.OnBalanceChange = func(a common.Address, prev, next *big.Int, reason tracing.BalanceChangeReason) {
+			if account, found := c.discover(a); found {
+				account.balance = uint256.MustFromBig(prev)
+			}
 		}
-		h.OnStorageChange = func(a common.Address, key, prev, next common.Hash) { c.touch(a); c.touched[a][key] = true }
+		h.OnNonceChangeV2 = func(a common.Address, prev, next uint64, reason tracing.NonceChangeReason) {
+			if account, found := c.discover(a); found {
+				account.nonce = prev
+			}
+		}
+		h.OnCodeChangeV2 = func(a common.Address, prevHash common.Hash, prev []byte, nextHash common.Hash, next []byte, reason tracing.CodeChangeReason) {
+			if account, found := c.discover(a); found {
+				account.code = common.CopyBytes(prev)
+			}
+		}
+		h.OnStorageChange = func(a common.Address, key, prev, next common.Hash) {
+			account, _ := c.discover(a)
+			if _, ok := account.storage[key]; !ok {
+				account.storage[key] = prev
+			}
+		}
 	}
 	return h
+}
+
+// txStart discovers the accounts the transaction changes before any frame is
+// entered: the sender pays for gas, the fee recipient is credited (paying a
+// zero fee still touches it, so touch-clearing may delete it) and EIP-7702
+// authorities are delegated.
+func (c *capture) txStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	c.state = env.StateDB
+	c.discover(from)
+	c.discover(env.Coinbase)
+	if to := tx.To(); to != nil {
+		c.discover(*to)
+	}
+	for _, auth := range tx.SetCodeAuthorizations() {
+		if authority, err := auth.Authority(); err == nil {
+			c.discover(authority)
+		}
+	}
+}
+
+// discover records the pre-transaction state of an account at its first
+// observation, and reports whether this was it.
+func (c *capture) discover(address common.Address) (*accountState, bool) {
+	if c.pre == nil {
+		return nil, false
+	}
+	if account, ok := c.pre[address]; ok {
+		return account, false
+	}
+	account := &accountState{
+		exists:  c.state.Exist(address),
+		balance: new(uint256.Int).Set(c.state.GetBalance(address)),
+		nonce:   c.state.GetNonce(address),
+		code:    common.CopyBytes(c.state.GetCode(address)),
+		storage: make(map[common.Hash]common.Hash),
+	}
+	c.pre[address] = account
+	return account, true
 }
 
 func (c *capture) reserve(size int) bool {
@@ -108,15 +176,6 @@ func (c *capture) reserve(size int) bool {
 	return c.err == nil
 }
 
-func (c *capture) touch(address common.Address) {
-	if c.before == nil {
-		return
-	}
-	if c.touched[address] == nil {
-		c.touched[address] = make(map[common.Hash]bool)
-	}
-}
-
 func (c *capture) enter(depth int, typ byte, from, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if c.err != nil {
 		return
@@ -125,8 +184,10 @@ func (c *capture) enter(depth int, typ byte, from, to common.Address, input []by
 	if !c.reserve(0) {
 		return
 	}
-	c.touch(from)
-	c.touch(to)
+	// A frame is entered before its value transfer and before a created
+	// account exists.
+	c.discover(from)
+	c.discover(to)
 	// CREATE and CREATE2 deduct the gas they make available to the child after
 	// their own cost, like the CALL family does within its cost.
 	switch vm.OpCode(typ) {
@@ -267,7 +328,7 @@ func errorLabel(err error, precompile bool) string {
 
 func (c *capture) result() *Execution {
 	result := &Execution{Output: c.output, Trace: c.frames, VMTrace: c.rootVM}
-	if c.before != nil {
+	if c.pre != nil {
 		result.StateDiff = c.stateDiff()
 	}
 	return result
@@ -288,23 +349,23 @@ func diffMarker(before, after any, oldExists, newExists, equal bool) any {
 
 func (c *capture) stateDiff() map[common.Address]*accountDiff {
 	result := make(map[common.Address]*accountDiff)
-	for address, slots := range c.touched {
-		oldExists, newExists := c.before.Exist(address), c.state.Exist(address)
+	for address, pre := range c.pre {
+		oldExists, newExists := pre.exists, c.state.Exist(address)
 		if !oldExists && !newExists {
 			continue
 		}
-		oldBalance, newBalance := c.before.GetBalance(address), c.state.GetBalance(address)
-		oldNonce, newNonce := c.before.GetNonce(address), c.state.GetNonce(address)
-		oldCode, newCode := c.before.GetCode(address), c.state.GetCode(address)
+		oldBalance, newBalance := pre.balance, c.state.GetBalance(address)
+		oldNonce, newNonce := pre.nonce, c.state.GetNonce(address)
+		oldCode, newCode := pre.code, c.state.GetCode(address)
 		// Slots follow the account's existence: zero words on a surviving account
 		// are changes, not slot creations or deletions. A deleted account's
 		// marker implies all of its storage is wiped, so it lists no slots.
 		storage := make(map[common.Hash]any)
-		for key := range slots {
+		for key, oldValue := range pre.storage {
 			if !newExists {
 				break
 			}
-			oldValue, newValue := c.before.GetState(address, key), c.state.GetState(address, key)
+			newValue := c.state.GetState(address, key)
 			if oldValue == newValue {
 				continue
 			}
@@ -324,7 +385,13 @@ func (c *capture) stateDiff() map[common.Address]*accountDiff {
 }
 
 func (c *capture) opcode(pc uint64, op byte, gas, cost uint64, context tracing.OpContext, returnData []byte, depth int, err error) {
-	if c.err != nil || len(c.scopes) == 0 {
+	// A selfdestruct credits its beneficiary before its frame is entered.
+	if c.pre != nil && vm.OpCode(op) == vm.SELFDESTRUCT {
+		if stack := context.StackData(); len(stack) > 0 {
+			c.discover(common.Address(stack[len(stack)-1].Bytes20()))
+		}
+	}
+	if c.err != nil || len(c.scopes) == 0 || !c.kinds.has("vmTrace") {
 		return
 	}
 	scope := c.scopes[len(c.scopes)-1]

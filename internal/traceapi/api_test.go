@@ -911,3 +911,29 @@ func TestCallEVMTimeout(t *testing.T) {
 		t.Fatalf("have %v, want %v", err, context.DeadlineExceeded)
 	}
 }
+
+// An EIP-7702 authority that did not exist is created by its delegation.
+func TestAuthorityCreation(t *testing.T) {
+	api, backend := newTestAPI(t, common.FromHex("00"), nil)
+	key, _ := crypto.GenerateKey()
+	authority := crypto.PubkeyToAddress(key.PublicKey)
+	auth, err := types.SignSetCode(key, types.SetCodeAuthorization{ChainID: *uint256.MustFromBig(backend.chainConfig.ChainID), Address: testTarget})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := fmt.Sprintf(`{"balance":{"+":"0x0"},"nonce":{"+":"0x1"},"code":{"+":"%#x"},"storage":{}}`, types.AddressToDelegation(testTarget))
+	// The authority is created whether the call is priced by fee caps or by a
+	// legacy gasPrice.
+	for _, gasPrice := range []*hexutil.Big{nil, (*hexutil.Big)(big.NewInt(0))} {
+		args := testCallArgs(&testTarget, nil)
+		args.AuthorizationList = []types.SetCodeAuthorization{auth}
+		args.GasPrice = gasPrice
+		result, err := api.Call(context.Background(), args, Outputs{"stateDiff"}, nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if have, _ := json.Marshal(result.StateDiff[authority]); string(have) != created {
+			t.Errorf("gasPrice %v: authority: have %s, want %s", gasPrice, have, created)
+		}
+	}
+}
