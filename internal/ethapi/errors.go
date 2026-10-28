@@ -99,22 +99,24 @@ type invalidTxError struct {
 func (e *invalidTxError) Error() string  { return e.Message }
 func (e *invalidTxError) ErrorCode() int { return e.Code }
 
+// JSON-RPC error codes of the eth namespace, including the eth_simulateV1
+// transaction validation codes.
 const (
-	errCodeNonceTooHigh            = -38011
-	errCodeNonceTooLow             = -38010
-	errCodeBaseFeeTooLow           = -38012
-	errCodeIntrinsicGas            = -38013
-	errCodeInsufficientFunds       = -38014
-	errCodeBlockGasLimitReached    = -38015
-	errCodeBlockNumberInvalid      = -38020
-	errCodeBlockTimestampInvalid   = -38021
-	errCodeSenderIsNotEOA          = -38024
-	errCodeMaxInitCodeSizeExceeded = -38025
-	errCodeClientLimitExceeded     = -38026
-	errCodeInternalError           = -32603
-	errCodeInvalidParams           = -32602
-	errCodeVMError                 = -32015
-	errCodeTxSyncTimeout           = 4
+	ErrCodeNonceTooHigh            = -38011
+	ErrCodeNonceTooLow             = -38010
+	ErrCodeBaseFeeTooLow           = -38012
+	ErrCodeIntrinsicGas            = -38013
+	ErrCodeInsufficientFunds       = -38014
+	ErrCodeBlockGasLimitReached    = -38015
+	ErrCodeBlockNumberInvalid      = -38020
+	ErrCodeBlockTimestampInvalid   = -38021
+	ErrCodeSenderIsNotEOA          = -38024
+	ErrCodeMaxInitCodeSizeExceeded = -38025
+	ErrCodeClientLimitExceeded     = -38026
+	ErrCodeInternalError           = -32603
+	ErrCodeInvalidParams           = -32602
+	ErrCodeVMError                 = -32015
+	ErrCodeTxSyncTimeout           = 4
 )
 
 func txValidationError(err error) *invalidTxError {
@@ -123,59 +125,59 @@ func txValidationError(err error) *invalidTxError {
 	}
 	switch {
 	case errors.Is(err, core.ErrNonceTooHigh):
-		return &invalidTxError{Message: err.Error(), Code: errCodeNonceTooHigh}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeNonceTooHigh}
 	case errors.Is(err, core.ErrNonceTooLow):
-		return &invalidTxError{Message: err.Error(), Code: errCodeNonceTooLow}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeNonceTooLow}
 	case errors.Is(err, core.ErrSenderNoEOA):
-		return &invalidTxError{Message: err.Error(), Code: errCodeSenderIsNotEOA}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeSenderIsNotEOA}
 	case errors.Is(err, core.ErrFeeCapVeryHigh):
-		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeInvalidParams}
 	case errors.Is(err, core.ErrTipVeryHigh):
-		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeInvalidParams}
 	case errors.Is(err, core.ErrTipAboveFeeCap):
-		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeInvalidParams}
 	case errors.Is(err, core.ErrFeeCapTooLow):
-		return &invalidTxError{Message: err.Error(), Code: errCodeBaseFeeTooLow}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeBaseFeeTooLow}
 	case errors.Is(err, core.ErrInsufficientFunds):
-		return &invalidTxError{Message: err.Error(), Code: errCodeInsufficientFunds}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeInsufficientFunds}
 	case errors.Is(err, core.ErrIntrinsicGas):
-		return &invalidTxError{Message: err.Error(), Code: errCodeIntrinsicGas}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeIntrinsicGas}
 	case errors.Is(err, core.ErrInsufficientFundsForTransfer):
-		return &invalidTxError{Message: err.Error(), Code: errCodeInsufficientFunds}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeInsufficientFunds}
 	case errors.Is(err, vm.ErrMaxInitCodeSizeExceeded):
-		return &invalidTxError{Message: err.Error(), Code: errCodeMaxInitCodeSizeExceeded}
+		return &invalidTxError{Message: err.Error(), Code: ErrCodeMaxInitCodeSizeExceeded}
 	}
 	return &invalidTxError{
 		Message: err.Error(),
-		Code:    errCodeInternalError,
+		Code:    ErrCodeInternalError,
 	}
 }
 
 type invalidParamsError struct{ message string }
 
 func (e *invalidParamsError) Error() string  { return e.message }
-func (e *invalidParamsError) ErrorCode() int { return errCodeInvalidParams }
+func (e *invalidParamsError) ErrorCode() int { return ErrCodeInvalidParams }
 
 type clientLimitExceededError struct{ message string }
 
 func (e *clientLimitExceededError) Error() string  { return e.message }
-func (e *clientLimitExceededError) ErrorCode() int { return errCodeClientLimitExceeded }
+func (e *clientLimitExceededError) ErrorCode() int { return ErrCodeClientLimitExceeded }
 
 type invalidBlockNumberError struct{ message string }
 
 func (e *invalidBlockNumberError) Error() string  { return e.message }
-func (e *invalidBlockNumberError) ErrorCode() int { return errCodeBlockNumberInvalid }
+func (e *invalidBlockNumberError) ErrorCode() int { return ErrCodeBlockNumberInvalid }
 
 type invalidBlockTimestampError struct{ message string }
 
 func (e *invalidBlockTimestampError) Error() string  { return e.message }
-func (e *invalidBlockTimestampError) ErrorCode() int { return errCodeBlockTimestampInvalid }
+func (e *invalidBlockTimestampError) ErrorCode() int { return ErrCodeBlockTimestampInvalid }
 
 type blockGasLimitReachedError struct{ message string }
 
 func (e *blockGasLimitReachedError) Error() string  { return e.message }
-func (e *blockGasLimitReachedError) ErrorCode() int { return errCodeBlockGasLimitReached }
+func (e *blockGasLimitReachedError) ErrorCode() int { return ErrCodeBlockGasLimitReached }
 
 func (e *txSyncTimeoutError) Error() string          { return e.msg }
-func (e *txSyncTimeoutError) ErrorCode() int         { return errCodeTxSyncTimeout }
+func (e *txSyncTimeoutError) ErrorCode() int         { return ErrCodeTxSyncTimeout }
 func (e *txSyncTimeoutError) ErrorData() interface{} { return e.hash.Hex() }
