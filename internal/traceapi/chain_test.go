@@ -186,6 +186,11 @@ func TestSelfDestructForkRules(t *testing.T) {
 		if diff == nil {
 			t.Fatal("missing account transition")
 		}
+		// The beneficiary did not exist before it was credited.
+		created := `{"balance":{"+":"0x7"},"nonce":{"+":"0x0"},"code":{"+":"0x"},"storage":{}}`
+		if have, _ := json.Marshal(result.StateDiff[beneficiary]); string(have) != created {
+			t.Fatalf("beneficiary: have %s, want %s", have, created)
+		}
 		if postCancun {
 			if diff.Code != "=" {
 				t.Fatalf("Cancun deleted code: %+v", diff.Code)
