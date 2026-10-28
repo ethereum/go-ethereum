@@ -528,15 +528,31 @@ func (db *Database) Recover(root common.Hash) error {
 	}
 	// Apply the state histories upon the disk layer in order
 	var (
-		start = time.Now()
-		dl    = db.tree.bottom()
+		start  = time.Now()
+		dl     = db.tree.bottom()
+		target = *rawdb.ReadStateID(db.diskdb, root) // non-nil, checked by Recoverable
 	)
 	for dl.rootHash() != root {
-		h, err := readStateHistory(db.stateFreezer, dl.stateID())
+		var (
+			h     *stateHistory
+			count = uint64(1)
+			err   error
+		)
+		// Transitions in the write buffer are reverted one by one. Persisted
+		// histories are merged, so that a trie path modified in many blocks
+		// is rewritten once per batch, not once per block.
+		if dl.buffer.empty() {
+			count = min(dl.stateID()-target, maxRevertBatch)
+		}
+		if count == 1 {
+			h, err = readStateHistory(db.stateFreezer, dl.stateID())
+		} else {
+			h, count, err = readMergedStateHistory(db.stateFreezer, dl.stateID(), count)
+		}
 		if err != nil {
 			return err
 		}
-		dl, err = dl.revert(h)
+		dl, err = dl.revert(h, count)
 		if err != nil {
 			return err
 		}

@@ -123,6 +123,9 @@ func revertAccounts(ctx *context, db database.NodeDatabase) ([]*accountRevert, e
 				if err != nil {
 					return err
 				}
+				if r == nil {
+					continue
+				}
 				if err := revertStorage(ctx, db, r, postStorageRoot); err != nil {
 					return err
 				}
@@ -140,8 +143,9 @@ func revertAccounts(ctx *context, db database.NodeDatabase) ([]*accountRevert, e
 }
 
 // prepareRevert decodes the account's prev-state value and resolves its
-// post-state storage root. An account absent in prev-state must exist in
-// post-state, and its storage changes must all be deletions.
+// post-state storage root. An account absent in prev-state must have only
+// storage deletions. If it is also absent in post-state, as can happen in a
+// merged history, nil is returned because there is nothing to revert.
 func prepareRevert(ctx *context, accountTrie *trie.Trie, addr common.Address) (*accountRevert, common.Hash, error) {
 	r := &accountRevert{
 		addr:     addr,
@@ -167,13 +171,17 @@ func prepareRevert(ctx *context, accountTrie *trie.Trie, addr common.Address) (*
 		}
 	}
 	if r.prev == nil {
-		if len(blob) == 0 {
-			return nil, common.Hash{}, fmt.Errorf("account is non-existent %#x", r.addrHash)
-		}
 		for _, val := range ctx.storages[addr] {
-			if len(val) != 0 {
-				return nil, common.Hash{}, errors.New("expect storage deletion")
+			if len(val) == 0 {
+				continue
 			}
+			if len(blob) == 0 {
+				return nil, common.Hash{}, fmt.Errorf("account is non-existent %#x", r.addrHash)
+			}
+			return nil, common.Hash{}, errors.New("expect storage deletion")
+		}
+		if len(blob) == 0 {
+			return nil, common.Hash{}, nil
 		}
 	}
 	return r, post.Root, nil
