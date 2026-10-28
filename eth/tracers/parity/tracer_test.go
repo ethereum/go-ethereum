@@ -19,6 +19,7 @@ package parity
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 
@@ -128,5 +129,52 @@ func TestDirectoryTracerStop(t *testing.T) {
 	<-done
 	if _, err := tracer.GetResult(); !errors.Is(err, stopped) {
 		t.Fatalf("have %v, want %v", err, stopped)
+	}
+}
+
+// The EIP-8024 instructions push the words to the depth of their immediate.
+func TestVMTraceImmediateDepth(t *testing.T) {
+	chainConfig := *params.MergedTestChainConfig
+	chainConfig.AmsterdamTime = new(uint64)
+
+	// The stack holds 1 to 18, with 18 on top.
+	words := make([]uint64, 0, 18)
+	for i := uint64(1); i <= 18; i++ {
+		words = append(words, i)
+	}
+	for name, test := range map[string]struct {
+		op        vm.OpCode
+		immediate byte
+		push      []uint64
+	}{
+		// DUPN 17 duplicates the 17th word.
+		"DUPN": {vm.DUPN, 0x80, append(slices.Clone(words[1:]), 2)},
+		// SWAPN 17 swaps the top and the 18th word.
+		"SWAPN": {vm.SWAPN, 0x80, append(append([]uint64{18}, words[1:17]...), 1)},
+		// EXCHANGE 1 17 swaps the 2nd and the 18th word.
+		"EXCHANGE": {vm.EXCHANGE, 0x4f, append(append([]uint64{17}, words[1:16]...), 1, 18)},
+	} {
+		var code []byte
+		for _, word := range words {
+			code = append(code, byte(vm.PUSH1), byte(word))
+		}
+		code = append(code, byte(test.op), test.immediate)
+
+		tracer := New(Config{VMTrace: true}, &chainConfig, nil)
+		if err := runContract(tracer.Hooks(), &chainConfig, code, 100_000); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		result, err := tracer.Result()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		ops := result.VMTrace.Ops
+		var have []uint64
+		for _, word := range ops[len(ops)-1].Ex.Push {
+			have = append(have, word.ToInt().Uint64())
+		}
+		if !slices.Equal(have, test.push) {
+			t.Errorf("%s: push %v, want %v", name, have, test.push)
+		}
 	}
 }
