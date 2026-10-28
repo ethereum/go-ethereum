@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers/parity"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -229,105 +230,15 @@ func (f *FilterArgs) UnmarshalJSON(input []byte) error {
 	return dec.Decode((*plain)(f))
 }
 
-// Execution contains actual output even when no tracer output is selected.
+// Execution is the output of one transaction, identified by its hash when
+// it was replayed.
 type Execution struct {
-	Output          hexutil.Bytes                   `json:"output"`
-	Trace           []*TraceFrame                   `json:"trace"`
-	StateDiff       map[common.Address]*accountDiff `json:"stateDiff"`
-	VMTrace         *vmTrace                        `json:"vmTrace"`
-	TransactionHash *common.Hash                    `json:"transactionHash,omitempty"`
-}
-
-// TraceFrame is one preorder call-tree record.
-type TraceFrame struct {
-	Action       any      `json:"action"`
-	Result       any      `json:"result"`
-	Error        string   `json:"error,omitempty"`
-	Subtraces    uint64   `json:"subtraces"`
-	TraceAddress []uint64 `json:"traceAddress"`
-	Type         string   `json:"type"`
-	*location
-}
-
-type location struct {
-	BlockHash           common.Hash  `json:"blockHash"`
-	BlockNumber         uint64       `json:"blockNumber"`
-	TransactionHash     *common.Hash `json:"transactionHash"`
-	TransactionPosition *uint64      `json:"transactionPosition"`
-}
-
-type callAction struct {
-	CallType string         `json:"callType"`
-	From     common.Address `json:"from"`
-	To       common.Address `json:"to"`
-	Gas      hexutil.Uint64 `json:"gas"`
-	Input    hexutil.Bytes  `json:"input"`
-	Value    *hexutil.Big   `json:"value"`
-}
-
-type createAction struct {
-	From           common.Address `json:"from"`
-	Gas            hexutil.Uint64 `json:"gas"`
-	Init           hexutil.Bytes  `json:"init"`
-	Value          *hexutil.Big   `json:"value"`
-	CreationMethod string         `json:"creationMethod"`
-}
-
-type suicideAction struct {
-	Address       common.Address `json:"address"`
-	RefundAddress common.Address `json:"refundAddress"`
-	Balance       *hexutil.Big   `json:"balance"`
+	*parity.Result
+	TransactionHash *common.Hash `json:"transactionHash,omitempty"`
 }
 
 type rewardAction struct {
 	Author     common.Address `json:"author"`
 	Value      *hexutil.Big   `json:"value"`
 	RewardType string         `json:"rewardType"`
-}
-
-type callResult struct {
-	GasUsed hexutil.Uint64 `json:"gasUsed"`
-	Output  hexutil.Bytes  `json:"output"`
-}
-
-type createResult struct {
-	GasUsed hexutil.Uint64 `json:"gasUsed"`
-	Address common.Address `json:"address"`
-	Code    hexutil.Bytes  `json:"code"`
-}
-
-type accountDiff struct {
-	Balance any                 `json:"balance"`
-	Nonce   any                 `json:"nonce"`
-	Code    any                 `json:"code"`
-	Storage map[common.Hash]any `json:"storage"`
-}
-
-type vmTrace struct {
-	Code hexutil.Bytes `json:"code"`
-	Ops  []*vmOp       `json:"ops"`
-}
-
-type vmOp struct {
-	PC   uint64     `json:"pc"`
-	Cost uint64     `json:"cost"`
-	Ex   *vmEffects `json:"ex"`
-	Sub  *vmTrace   `json:"sub"`
-	Op   string     `json:"op"`
-}
-
-type vmEffects struct {
-	Used  uint64         `json:"used"`
-	Push  []*hexutil.Big `json:"push"`
-	Mem   *memoryWrite   `json:"mem"`
-	Store *storageWrite  `json:"store"`
-}
-
-type memoryWrite struct {
-	Off  uint64        `json:"off"`
-	Data hexutil.Bytes `json:"data"`
-}
-type storageWrite struct {
-	Key *hexutil.Big `json:"key"`
-	Val *hexutil.Big `json:"val"`
 }

@@ -35,6 +35,7 @@ import (
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/parity"
 )
 
 // Some other nice-to-haves:
