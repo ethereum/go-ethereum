@@ -2148,8 +2148,10 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 			queued := time.Now()
 			bc.writer.queue(res.write)
 
-			// Waiting for room in the queue is part of the block's time
-			res.stats.TotalTime += time.Since(queued)
+			// Waiting for room in the queue is part of the block's commit time
+			wait := time.Since(queued)
+			res.stats.Commit.Wait += wait
+			res.stats.TotalTime += wait
 			res.stats.MgasPerSecond = float64(res.usedGas) * 1000 / float64(res.stats.TotalTime)
 		}
 		res.stats.reportMetrics()

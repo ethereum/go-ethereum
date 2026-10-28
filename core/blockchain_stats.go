@@ -131,7 +131,7 @@ type CommitStats struct {
 	AccountCommits time.Duration // Time spent on the account trie commit
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	DatabaseCommit time.Duration // Time spent on database commit
-	Wait           time.Duration // Time spent waiting for the chain writer to commit the parent state
+	Wait           time.Duration // Time spent waiting for the chain writer, for the parent state or room in its queue
 }
 
 // reportMetrics uploads execution statistics to the metrics system.
