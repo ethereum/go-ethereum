@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/parity"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
@@ -218,7 +219,7 @@ func (api *API) ReplayBlockTransactions(ctx context.Context, number rpc.BlockNum
 }
 
 // Transaction returns the localized preorder tree for a mined transaction.
-func (api *API) Transaction(ctx context.Context, hash common.Hash) ([]*TraceFrame, error) {
+func (api *API) Transaction(ctx context.Context, hash common.Hash) ([]*parity.Frame, error) {
 	result, block, index, err := api.transaction(ctx, hash, Outputs{"trace"})
 	if err != nil || result == nil {
 		return nil, err
@@ -228,7 +229,7 @@ func (api *API) Transaction(ctx context.Context, hash common.Hash) ([]*TraceFram
 }
 
 // Get returns one tree path, with the empty path selecting the root.
-func (api *API) Get(ctx context.Context, hash common.Hash, position Path) (*TraceFrame, error) {
+func (api *API) Get(ctx context.Context, hash common.Hash, position Path) (*parity.Frame, error) {
 	frames, err := api.Transaction(ctx, hash)
 	if err != nil {
 		return nil, err
@@ -252,7 +253,7 @@ func (api *API) Get(ctx context.Context, hash common.Hash, position Path) (*Trac
 }
 
 // Block returns localized transaction traces followed by historical PoW rewards.
-func (api *API) Block(ctx context.Context, number rpc.BlockNumber) ([]*TraceFrame, error) {
+func (api *API) Block(ctx context.Context, number rpc.BlockNumber) ([]*parity.Frame, error) {
 	block, err := api.block(ctx, number)
 	if err != nil {
 		return nil, err
@@ -261,7 +262,7 @@ func (api *API) Block(ctx context.Context, number rpc.BlockNumber) ([]*TraceFram
 }
 
 // Filter scans a bounded canonical snapshot, applying pagination after matching.
-func (api *API) Filter(ctx context.Context, filter FilterArgs) ([]*TraceFrame, error) {
+func (api *API) Filter(ctx context.Context, filter FilterArgs) ([]*parity.Frame, error) {
 	ctx, cancel := context.WithTimeout(ctx, batchTimeout)
 	defer cancel()
 	// Resolve both bounds against one head. As for eth_getLogs, a bound beyond
@@ -341,7 +342,7 @@ func (api *API) Filter(ctx context.Context, filter FilterArgs) ([]*TraceFrame, e
 			return nil, invalidParams("trace_filter count exceeds %d", filterResultLimit)
 		}
 	}
-	result := make([]*TraceFrame, 0)
+	result := make([]*parity.Frame, 0)
 	if count == 0 {
 		return result, nil
 	}
@@ -698,19 +699,13 @@ func (api *API) execute(ctx context.Context, timeout time.Duration, tx *types.Tr
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	rules := api.backend.ChainConfig().Rules(vmctx.BlockNumber, vmctx.Random != nil, vmctx.Time)
-	active := precompiles
-	if active == nil {
-		active = vm.ActivePrecompiledContracts(rules)
-	}
-	c := newCapture(kinds, rules, active)
-	hooks := c.hooks()
+	tracer := parity.New(parity.Config{Trace: kinds.has("trace"), VMTrace: kinds.has("vmTrace"), StateDiff: kinds.has("stateDiff")}, api.backend.ChainConfig(), precompiles)
+	hooks := tracer.Hooks()
 	evm := vm.NewEVM(vmctx, state.NewHookedState(st, hooks), api.backend.ChainConfig(), vm.Config{Tracer: hooks, NoBaseFee: unsigned})
 	defer evm.Release()
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	c.stop = evm.Cancel
 	stopped := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { evm.Cancel(); close(stopped) })
 	// Release returns the EVM to a pool. Join a running cancellation callback
@@ -725,9 +720,6 @@ func (api *API) execute(ctx context.Context, timeout time.Duration, tx *types.Tr
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	if c.err != nil {
-		return nil, c.err
-	}
 	if err := st.Error(); err != nil {
 		return nil, stateError(err)
 	}
@@ -737,19 +729,22 @@ func (api *API) execute(ctx context.Context, timeout time.Duration, tx *types.Tr
 		// state read must take precedence over any resulting validation error.
 		return nil, reject(err)
 	}
-	result := c.result()
+	result, err := tracer.Result()
+	if err != nil {
+		return nil, err
+	}
 	if err := st.Error(); err != nil {
 		return nil, stateError(err)
 	}
-	return result, nil
+	return &Execution{Result: result}, nil
 }
 
-func (api *API) blockTraces(ctx context.Context, block *types.Block) ([]*TraceFrame, error) {
+func (api *API) blockTraces(ctx context.Context, block *types.Block) ([]*parity.Frame, error) {
 	replays, err := api.replayBlock(ctx, block, Outputs{"trace"})
 	if err != nil {
 		return nil, err
 	}
-	frames := make([]*TraceFrame, 0)
+	frames := make([]*parity.Frame, 0)
 	for i, replay := range replays {
 		index := uint64(i)
 		localizeTrace(replay.Trace, block, replay.TransactionHash, &index)
@@ -768,8 +763,8 @@ func (api *API) blockTraces(ctx context.Context, block *types.Block) ([]*TraceFr
 		reward = big.NewInt(2e18)
 	}
 	appendReward := func(author common.Address, value *big.Int, kind string) {
-		frame := &TraceFrame{Type: "reward", Action: rewardAction{author, (*hexutil.Big)(value), kind}, TraceAddress: []uint64{}}
-		localizeTrace([]*TraceFrame{frame}, block, nil, nil)
+		frame := &parity.Frame{Type: "reward", Action: rewardAction{author, (*hexutil.Big)(value), kind}, TraceAddress: []uint64{}}
+		localizeTrace([]*parity.Frame{frame}, block, nil, nil)
 		frames = append(frames, frame)
 	}
 	miner := new(big.Int).Add(reward, new(big.Int).Mul(new(big.Int).Div(new(big.Int).Set(reward), big.NewInt(32)), big.NewInt(int64(len(block.Uncles())))))
@@ -784,23 +779,23 @@ func (api *API) blockTraces(ctx context.Context, block *types.Block) ([]*TraceFr
 	return frames, nil
 }
 
-func localizeTrace(frames []*TraceFrame, block *types.Block, hash *common.Hash, index *uint64) {
+func localizeTrace(frames []*parity.Frame, block *types.Block, hash *common.Hash, index *uint64) {
 	for _, frame := range frames {
-		frame.location = &location{block.Hash(), block.NumberU64(), hash, index}
+		frame.Location = &parity.Location{BlockHash: block.Hash(), BlockNumber: block.NumberU64(), TransactionHash: hash, TransactionPosition: index}
 	}
 }
 
-func matchesFilter(frame *TraceFrame, filter FilterArgs) bool {
+func matchesFilter(frame *parity.Frame, filter FilterArgs) bool {
 	var from, to *common.Address
 	switch action := frame.Action.(type) {
-	case callAction:
+	case parity.CallAction:
 		from, to = &action.From, &action.To
-	case createAction:
+	case parity.CreateAction:
 		from = &action.From
-		if result, ok := frame.Result.(createResult); ok && frame.Error == "" {
+		if result, ok := frame.Result.(parity.CreateResult); ok && frame.Error == "" {
 			to = &result.Address
 		}
-	case suicideAction:
+	case parity.SuicideAction:
 		from, to = &action.Address, &action.RefundAddress
 	case rewardAction:
 		to = &action.Author

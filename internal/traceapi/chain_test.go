@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/parity"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -68,7 +69,7 @@ func TestMinedPathsReplayAndFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if nested == nil || nested.Action.(callAction).To != child {
+	if nested == nil || nested.Action.(parity.CallAction).To != child {
 		t.Fatalf("child: %+v", nested)
 	}
 	missing, err := api.Get(ctx, hashes[0], Path{0, 0})
@@ -82,7 +83,7 @@ func TestMinedPathsReplayAndFilter(t *testing.T) {
 	if replay.TransactionHash == nil || *replay.TransactionHash != hashes[0] {
 		t.Fatal("replay identity missing")
 	}
-	if len(replay.Trace) != 2 || replay.Trace[0].location != nil {
+	if len(replay.Trace) != 2 || replay.Trace[0].Location != nil {
 		t.Fatal("replay must contain unlocalized frames")
 	}
 	childVM := false
