@@ -73,8 +73,8 @@ func TestParseDelegation(t *testing.T) {
 }
 
 // TestSetCodeAuthorizationJSONYParity checks that the yParity field of an
-// authorization is restricted to 0 or 1 when decoded from JSON, matching the
-// transaction-level yParity handling, instead of being truncated into uint8.
+// authorization must fit in uint8 when decoded from JSON, instead of being
+// truncated. Values above 1 (e.g. legacy 27/28) are valid on chain.
 func TestSetCodeAuthorizationJSONYParity(t *testing.T) {
 	for _, tt := range []struct {
 		yParity string
@@ -83,8 +83,10 @@ func TestSetCodeAuthorizationJSONYParity(t *testing.T) {
 	}{
 		{"0x0", 0, nil},
 		{"0x1", 1, nil},
-		{"0x2", 0, errInvalidYParity},
-		{"0x100", 0, errInvalidYParity},
+		{"0x2", 2, nil},
+		{"0x1c", 28, nil},
+		{"0xff", 255, nil},
+		{"0x100", 0, errYParityOverflow},
 	} {
 		input := `{"chainId":"0x1","address":"0x0000000000000000000000000000000000000001","nonce":"0x0","yParity":"` + tt.yParity + `","r":"0x1","s":"0x1"}`
 		var auth SetCodeAuthorization

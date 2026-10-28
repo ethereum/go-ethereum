@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"errors"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -88,8 +89,8 @@ type authorizationMarshaling struct {
 }
 
 // yParityJSON is the JSON encoding of an authorization's y-parity: a hex
-// quantity restricted to 0 or 1. Decoding through hexutil.Uint64 alone would
-// silently truncate anything larger into the uint8 field.
+// quantity that must fit in uint8. Values other than 0 or 1 are valid on chain
+// (the authorization is skipped), so they must still decode.
 type yParityJSON uint8
 
 // MarshalText implements encoding.TextMarshaler.
@@ -103,8 +104,8 @@ func (y *yParityJSON) UnmarshalJSON(input []byte) error {
 	if err := v.UnmarshalJSON(input); err != nil {
 		return err
 	}
-	if v > 1 {
-		return errInvalidYParity
+	if v > math.MaxUint8 {
+		return errYParityOverflow
 	}
 	*y = yParityJSON(v)
 	return nil

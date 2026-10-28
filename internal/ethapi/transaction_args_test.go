@@ -393,6 +393,28 @@ func TestToTransactionGasPriceAccessList(t *testing.T) {
 	}
 }
 
+// TestSetDefaultsInvalidAuthYParity tests that setDefaults rejects an
+// authorization whose yParity is not 0 or 1.
+func TestSetDefaultsInvalidAuthYParity(t *testing.T) {
+	t.Parallel()
+
+	var (
+		b    = newBackendMock()
+		gas  = hexutil.Uint64(100000)
+		addr = common.Address{0x42}
+	)
+	args := &TransactionArgs{
+		To:                   &addr,
+		MaxFeePerGas:         (*hexutil.Big)(big.NewInt(42)),
+		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(42)),
+		Gas:                  &gas,
+		AuthorizationList:    []types.SetCodeAuthorization{{Address: addr, V: 2}},
+	}
+	if err := args.setDefaults(context.Background(), b, sidecarConfig{}); !errors.Is(err, types.ErrInvalidYParity) {
+		t.Fatalf("error mismatch, want %v, have %v", types.ErrInvalidYParity, err)
+	}
+}
+
 type backendMock struct {
 	current *types.Header
 	config  *params.ChainConfig

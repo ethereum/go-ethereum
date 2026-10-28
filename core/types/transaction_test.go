@@ -532,7 +532,7 @@ func TestYParityJSONUnmarshalling(t *testing.T) {
 		{"valid yParity, missing v, 0x1", "", "0x1", nil},
 
 		// Invalid yParity
-		{"invalid yParity, 0x2", "", "0x2", errInvalidYParity},
+		{"invalid yParity, 0x2", "", "0x2", ErrInvalidYParity},
 
 		// Conflicting v and yParity
 		{"conflicting v and yParity", "0x1", "0x0", errVYParityMismatch},
