@@ -1431,9 +1431,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 // pending limit. The algorithm tries to reduce transaction counts by an approximately
 // equal number for all for accounts with many pending transactions.
 func (pool *LegacyPool) truncatePending() {
-	// The pending lists keep the count, so that a pool at its limit, which
-	// runs this on every reorg, doesn't visit every account each time. Only
-	// accounts over their allowance lose transactions here.
+	// Only accounts over their allowance lose transactions here.
 	pending := uint64(pool.size.total)
 	if pending <= pool.config.GlobalSlots || len(pool.size.heavy) == 0 {
 		return

@@ -2746,10 +2746,9 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 }
 
 // BenchmarkTruncatePending measures the truncation a pool runs after every
-// reorg, on a pool shaped like a mainnet node's with --txpool.globalslots
-// 20000 in October 2026: 20,531 transactions from 12,550 senders, of which
-// shape[n] hold n+1 each. Its limit is just below that, where a pool with spam
-// sits, and no account holds more than its allowance, so nothing is dropped.
+// reorg, just over its limit with no account over its allowance, so nothing is
+// dropped. The senders follow a 20,000-slot pool's distribution: 20,531
+// transactions from 12,550 senders, shape[n] of them holding n+1 each.
 func BenchmarkTruncatePending(b *testing.B) {
 	pool, _ := setupPool()
 	defer pool.Close()

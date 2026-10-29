@@ -289,8 +289,8 @@ func newPendingList(addr common.Address, size *pendingSize) *list {
 	return l
 }
 
-// resized reports to the list's counter, if any, that the list held before
-// transactions and now holds l.Len().
+// resized reports the list's change of length to its counter; queued lists
+// have none.
 func (l *list) resized(before int) {
 	if l.size != nil {
 		l.size.update(l.addr, before, l.Len())
