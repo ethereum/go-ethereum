@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"runtime"
 	"slices"
 	"sync"
 	"testing"
@@ -97,7 +98,8 @@ func comparePending(got map[common.Address][]*txpool.LazyTransaction, count int,
 }
 
 // TestPendingCached compares Pending with an uncached reference through random
-// pool changes, and checks that an unchanged account is served from the cache.
+// pool changes, filtered reads first, and checks that an unchanged account read
+// whole is served from the cache.
 func TestPendingCached(t *testing.T) {
 	t.Parallel()
 
@@ -140,9 +142,9 @@ func TestPendingCached(t *testing.T) {
 	check := func(step int) {
 		t.Helper()
 		filters := []txpool.PendingFilter{
-			{}, {MinTip: uint256.NewInt(1)},
+			{MinTip: uint256.NewInt(1)},
 			{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(45)}, // some fee caps below the base fee
-			randomFilter(), randomFilter(), randomFilter(),
+			randomFilter(), randomFilter(), randomFilter(), {},
 		}
 		for _, f := range filters {
 			var first map[common.Address][]*txpool.LazyTransaction
@@ -155,11 +157,14 @@ func TestPendingCached(t *testing.T) {
 					first = got
 					continue
 				}
+				pool.mu.RLock()
 				for addr, txs := range got {
-					if txs[0] != first[addr][0] {
+					if len(txs) == pool.pending[addr].Len() && txs[0] != first[addr][0] {
+						pool.mu.RUnlock()
 						t.Fatalf("step %d: account %x read again without a change, not served from the cache", step, addr)
 					}
 				}
+				pool.mu.RUnlock()
 			}
 		}
 		if err := validatePoolInternals(pool); err != nil {
@@ -391,5 +396,71 @@ func TestSortedMapCaches(t *testing.T) {
 				t.Fatalf("after %s: lazy cache's transaction %d differs from a list built afresh", mutation.name, i)
 			}
 		}
+	}
+}
+
+// TestLazyPendingCaching checks that Pending returns a list's passing prefix,
+// caches the list only when the filter passes all of it, and builds lazy
+// transactions only for those it returns.
+func TestLazyPendingCaching(t *testing.T) {
+	pool, key := setupPool()
+	defer pool.Close()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	pool.mu.Lock()
+	for nonce, feeCap := range []int64{100, 100, 50, 100} {
+		tx := dynamicFeeTx(uint64(nonce), 21000, big.NewInt(feeCap), big.NewInt(10), key)
+		pool.promoteTx(addr, tx.Hash(), tx)
+	}
+	m := pool.pending[addr].txs
+	pool.mu.Unlock()
+	sorted := m.Flatten()
+	for _, tt := range []struct {
+		baseFee uint64
+		want    int
+		cached  bool
+	}{
+		{baseFee: 101, want: 0, cached: false},
+		{baseFee: 60, want: 2, cached: false},
+		{baseFee: 40, want: 4, cached: true},
+	} {
+		m.lazy = nil
+		pending, _ := pool.Pending(txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(tt.baseFee)})
+		got := pending[addr]
+		if len(got) != tt.want {
+			t.Fatalf("base fee %d: %d transactions, want %d", tt.baseFee, len(got), tt.want)
+		}
+		for i, ltx := range got {
+			if ltx.Tx != sorted[i] {
+				t.Fatalf("base fee %d: transaction %d out of order", tt.baseFee, i)
+			}
+		}
+		if cached := m.lazy != nil; cached != tt.cached {
+			t.Errorf("base fee %d: cached %v, want %v", tt.baseFee, cached, tt.cached)
+		}
+	}
+	// A list cut short builds only what it returns: 10 reads of a 1,024
+	// transaction list passing only its first would allocate about 1.9 MB if
+	// they built the whole list.
+	long := NewSortedMap()
+	for nonce := range uint64(1024) {
+		feeCap := int64(50)
+		if nonce == 0 {
+			feeCap = 100
+		}
+		long.Put(dynamicFeeTx(nonce, 21000, big.NewInt(feeCap), big.NewInt(10), key))
+	}
+	long.Flatten()
+	filter := txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(60)}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	for range 10 {
+		if got := long.lazyPending(nil, filter); len(got) != 1 {
+			t.Fatalf("cut short: %d transactions, want 1", len(got))
+		}
+	}
+	runtime.ReadMemStats(&after)
+	if n := after.TotalAlloc - before.TotalAlloc; n > 64<<10 {
+		t.Errorf("10 reads of a 1-transaction prefix allocated %d bytes", n)
 	}
 }

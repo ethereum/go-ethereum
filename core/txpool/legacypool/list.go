@@ -273,6 +273,35 @@ func (m *SortedMap) Flatten() types.Transactions {
 	return txs
 }
 
+// lazyPending returns the leading transactions that pass filter. It caches the
+// lazy list only when the filter passes all of it: a sender can change its
+// rejected transactions for free, so a list the filter rejects or cuts short
+// gets lazy transactions only up to those returned, again on every read.
+func (m *SortedMap) lazyPending(pool txpool.LazyResolver, filter txpool.PendingFilter) []*txpool.LazyTransaction {
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	if m.lazy != nil {
+		n := m.lazy.pending(filter)
+		return m.lazy.txs[:n:n]
+	}
+	txs := m.flattenLocked()
+	n := 0
+	for n < len(txs) {
+		if f := feesOf(txs[n]); !f.passes(filter) {
+			break
+		}
+		n++
+	}
+	switch {
+	case n == 0:
+		return nil
+	case n < len(txs):
+		return newLazyList(pool, txs[:n]).txs
+	}
+	m.lazy = newLazyList(pool, txs)
+	return m.lazy.txs
+}
+
 // lazies returns the nonce-sorted transactions as Pending serves them,
 // resolvable through pool. The result is cached until the contents change, and
 // shared: callers must not modify it.

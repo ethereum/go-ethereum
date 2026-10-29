@@ -41,14 +41,8 @@ func newLazyList(pool txpool.LazyResolver, txs types.Transactions) *lazyList {
 	}
 	backing := make([]txpool.LazyTransaction, len(txs))
 	for i, tx := range txs {
-		var feeOverflow, tipOverflow bool
 		f := &l.fees[i]
-		f.feeCap, feeOverflow = tx.GasFeeCapUint256()
-		f.tipCap, tipOverflow = tx.GasTipCapUint256()
-		if feeOverflow || tipOverflow {
-			panic("fee cap overflows uint256")
-		}
-		f.gas = tx.Gas()
+		*f = feesOf(tx)
 		backing[i] = txpool.LazyTransaction{
 			Pool:      pool,
 			Hash:      tx.Hash(),
@@ -64,6 +58,15 @@ func newLazyList(pool txpool.LazyResolver, txs types.Transactions) *lazyList {
 	return l
 }
 
+func feesOf(tx *types.Transaction) lazyFees {
+	feeCap, feeOverflow := tx.GasFeeCapUint256()
+	tipCap, tipOverflow := tx.GasTipCapUint256()
+	if feeOverflow || tipOverflow {
+		panic("fee cap overflows uint256")
+	}
+	return lazyFees{feeCap: feeCap, tipCap: tipCap, gas: tx.Gas()}
+}
+
 // slice returns the transactions at positions [from, to), sharing l's arrays.
 func (l *lazyList) slice(from, to int) *lazyList {
 	return &lazyList{txs: l.txs[from:to], fees: l.fees[from:to]}
@@ -76,15 +79,20 @@ func (l *lazyList) pending(filter txpool.PendingFilter) int {
 		return len(l.fees)
 	}
 	for i := range l.fees {
-		f := &l.fees[i]
-		if filter.MinTip != nil && f.tipCmp(filter.MinTip, filter.BaseFee) < 0 {
-			return i
-		}
-		if filter.GasLimitCap != 0 && f.gas > filter.GasLimitCap {
+		if !l.fees[i].passes(filter) {
 			return i
 		}
 	}
 	return len(l.fees)
+}
+
+// passes reports whether the transaction passes filter's minimum tip and gas
+// limit.
+func (f *lazyFees) passes(filter txpool.PendingFilter) bool {
+	if filter.MinTip != nil && f.tipCmp(filter.MinTip, filter.BaseFee) < 0 {
+		return false
+	}
+	return filter.GasLimitCap == 0 || f.gas <= filter.GasLimitCap
 }
 
 // tipCmp compares the tip the transaction pays at baseFee, min(tipCap,
