@@ -67,6 +67,7 @@ var (
 		utils.PBTImportWorkersFlag,
 		utils.PBTImportForceFlag,
 		utils.PBTImportKeepArtifactsFlag,
+		utils.PBTRecoverFlag,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -462,6 +463,74 @@ func TestBatchImportAcrossTheFork(t *testing.T) {
 	}
 	if head := held.CurrentBlock(); head.Number.Uint64() != 3 {
 		t.Fatalf("held import's head %d, want 3, the last merkle block", head.Number)
+	}
+}
+
+// TestPostForkCrashRecoversThroughTheMerkleTrie: a node killed past the fork
+// before the binary tree flushed a post-fork layer reopens with its live
+// binary state below the fork, where headers commit the merkle trie. The
+// stock rewind would walk to genesis; the node refuses and names the way
+// back, which rewinds onto the merkle trie and crosses the fork again.
+func TestPostForkCrashRecoversThroughTheMerkleTrie(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	var blocks []*types.Block
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+		blocks = append(blocks, chain.GetBlockByHash(parent.Hash()))
+	}
+
+	db := rawdb.NewMemoryDatabase()
+	engine := beacon.New(ethash.NewFaker())
+	victim, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := victim.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+	if !victim.HasState(blocks[4].Root()) {
+		t.Fatal("victim never crossed the fork")
+	}
+	// A kill keeps no journal: both trees fall back to their disk layers.
+	victim.Stop()
+	rawdb.DeleteTrieJournal(db)
+	rawdb.DeleteTrieJournal(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
+
+	_, err = core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err == nil || !strings.Contains(err.Error(), "pbt.recover") {
+		t.Fatalf("reopen err = %v, want the recovery hint", err)
+	}
+	if head := rawdb.ReadHeadBlock(db); head == nil || head.NumberU64() != 5 {
+		t.Fatalf("refusal moved the head to %v, want 5", head)
+	}
+
+	cfg := core.DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	cfg.PBTRecover = true
+	recovered, err := core.NewBlockChain(db, genesis, engine, cfg)
+	if err != nil {
+		t.Fatalf("recovery reopen: %v", err)
+	}
+	defer recovered.Stop()
+	if recovered.TrieDB().IsPBT() {
+		t.Fatal("recovery reopened on the binary tree")
+	}
+	if head := recovered.CurrentBlock(); head.Number.Uint64() >= 4 {
+		t.Fatalf("recovery left the head at %d, want below the fork", head.Number)
+	}
+	if _, err := recovered.InsertChain(blocks); err != nil {
+		t.Fatalf("re-crossing the fork: %v", err)
+	}
+	if head := recovered.CurrentBlock(); head.Number.Uint64() != 5 || head.Hash() != blocks[4].Hash() {
+		t.Fatalf("recovered head %d %x, want 5 %x", head.Number, head.Hash(), blocks[4].Hash())
+	}
+	if !recovered.HasState(blocks[4].Root()) {
+		t.Fatal("recovered chain does not hold the binary state of its head")
 	}
 }
 

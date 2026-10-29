@@ -854,9 +854,9 @@ func (t *followerTree) replayedRoot(number uint64, hash common.Hash) (common.Has
 	return common.Hash{}, false
 }
 
-// waitCaughtUp blocks until the given block's root is recorded, a stall in
-// the direction that would replay it, or the timeout. Batched-over blocks
-// never get a record; wait near the tip.
+// waitCaughtUp blocks until the tree holds the given block - its record with
+// the state behind it - a stall in the direction that would replay it, or
+// the timeout. Batched-over blocks never get a record; wait near the tip.
 func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout time.Duration) error {
 	// A batch import advances canonical without head events: drive the
 	// replay to the waited block instead of hoping one arrives.
@@ -872,7 +872,7 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 
 	deadline := time.Now().Add(timeout)
 	for {
-		if _, ok := rawdb.ReadShadowStateRoot(f.db, hash, number); ok {
+		if _, ok := t.replayedRoot(number, hash); ok {
 			return nil
 		}
 		select {

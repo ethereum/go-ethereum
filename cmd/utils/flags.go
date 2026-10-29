@@ -306,6 +306,11 @@ var (
 		Usage:    "Keep the snapshot and preimage file once the background import or self-conversion has read them; by default each is emptied as it is consumed, so its disk space comes back during the import",
 		Category: flags.EthCategory,
 	}
+	PBTRecoverFlag = &cli.BoolFlag{
+		Name:     "pbt.recover",
+		Usage:    "One-shot: reopen a node whose head crossed binaryTrieTime on the merkle trie, after a crash lost the binary tree's unflushed post-fork layers; rewinds to the last merkle state and crosses the fork again",
+		Category: flags.EthCategory,
+	}
 	SyncModeFlag = &cli.StringFlag{
 		Name:     "syncmode",
 		Usage:    `Blockchain sync mode ("snap" or "full")`,
@@ -1903,7 +1908,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(PBTImportKeepArtifactsFlag.Name) {
 		cfg.PBTImport.KeepArtifacts = ctx.Bool(PBTImportKeepArtifactsFlag.Name)
 	}
+	if ctx.IsSet(PBTRecoverFlag.Name) {
+		cfg.PBTRecover = ctx.Bool(PBTRecoverFlag.Name)
+	}
 	if imp := cfg.PBTImport; imp.Snapshot != "" || imp.Preimages != "" || imp.Anchor != "" {
+		if cfg.PBTRecover {
+			Fatalf("--%s reopens a tree the node already holds: drop the --%s flags", PBTRecoverFlag.Name, PBTImportAnchorFlag.Name)
+		}
 		if imp.Preimages == "" || imp.Anchor == "" {
 			Fatalf("--%s and --%s go together, with --%s to import a snapshot rather than convert the node's own state", PBTImportPreimagesFlag.Name, PBTImportAnchorFlag.Name, PBTImportSnapshotFlag.Name)
 		}
