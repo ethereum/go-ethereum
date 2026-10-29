@@ -22,11 +22,14 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -103,6 +106,59 @@ func TestNodeUsedDataDir(t *testing.T) {
 	_, err = New(&Config{DataDir: dir})
 	if err != ErrDatadirUsed {
 		t.Fatalf("duplicate datadir failure mismatch: have %v, want %v", err, ErrDatadirUsed)
+	}
+}
+
+func TestObtainJWTSecretGeneratesMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "jwtsecret")
+
+	secret, err := ObtainJWTSecret(path)
+	if err != nil {
+		t.Fatalf("failed to generate JWT secret: %v", err)
+	}
+	if len(secret) != 32 {
+		t.Fatalf("JWT secret length mismatch: have %d, want 32", len(secret))
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read generated JWT secret file: %v", err)
+	}
+	if have, want := string(data), hexutil.Encode(secret); have != want {
+		t.Fatalf("JWT secret file mismatch: have %q, want %q", have, want)
+	}
+	loaded, err := ObtainJWTSecret(path)
+	if err != nil {
+		t.Fatalf("failed to load generated JWT secret: %v", err)
+	}
+	if !slices.Equal(loaded, secret) {
+		t.Fatalf("loaded JWT secret mismatch: have %x, want %x", loaded, secret)
+	}
+}
+
+func TestObtainJWTSecretFailsOnReadError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "jwtsecret")
+	original := []byte("0x" + strings.Repeat("11", 32))
+	if err := os.WriteFile(path, original, 0200); err != nil {
+		t.Fatalf("failed to write JWT secret: %v", err)
+	}
+	t.Cleanup(func() {
+		os.Chmod(path, 0600)
+	})
+	if _, err := os.ReadFile(path); err == nil {
+		t.Skip("test requires unreadable files")
+	}
+	if _, err := ObtainJWTSecret(path); err == nil {
+		t.Fatal("generated JWT secret after read failure")
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		t.Fatalf("failed to restore JWT secret permissions: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read JWT secret file: %v", err)
+	}
+	if string(data) != string(original) {
+		t.Fatalf("JWT secret was overwritten: have %q, want %q", data, original)
 	}
 }
 
