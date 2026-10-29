@@ -778,15 +778,43 @@ func pruneHistory(ctx *cli.Context) error {
 
 	log.Info("Starting history pruning", "head", currentHeader.Number, "target", targetBlock, "targetHash", targetBlockHash.Hex())
 	start := time.Now()
-	rawdb.PruneTransactionIndex(chaindb, targetBlock)
+	sizeBefore := prunableFreezerSize(chaindb)
+	txIndexBytes := rawdb.PruneTransactionIndex(chaindb, targetBlock)
 	if _, err := chaindb.TruncateTail(rawdb.ChainFreezerBlockDataGroup, targetBlock); err != nil {
 		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
-	log.Info("History pruning completed", "tail", targetBlock, "elapsed", common.PrettyDuration(time.Since(start)))
+	sizeAfter := prunableFreezerSize(chaindb)
+	var cleared common.StorageSize
+	if sizeBefore > sizeAfter {
+		cleared = common.StorageSize(sizeBefore - sizeAfter)
+	}
+	// Include the tx index entries pruned from the KV store; without this the
+	// reported figure only covers the body/receipt freezer delta and ignores
+	// the index work above.
+	cleared += common.StorageSize(txIndexBytes)
+	log.Info("History pruning completed", "tail", targetBlock, "elapsed", common.PrettyDuration(time.Since(start)), "cleared", cleared)
 
 	// TODO(s1na): what if there is a crash between the two prune operations?
 
 	return nil
+}
+
+// prunableFreezerSize returns the total on-disk size of the chain freezer
+// tables that prune-history truncates (bodies and receipts). The header and
+// hash tables are retained long-term and are not measured here.
+func prunableFreezerSize(db ethdb.Database) uint64 {
+	var total uint64
+	for _, table := range []string{rawdb.ChainFreezerBodiesTable, rawdb.ChainFreezerReceiptTable} {
+		size, err := db.AncientSize(table)
+		if err != nil {
+			// If we can't read the size of any prunable table, the delta would
+			// be misleading. Return 0 so the caller logs "cleared=0.00 B" rather
+			// than a partial figure.
+			return 0
+		}
+		total += size
+	}
+	return total
 }
 
 // downloadEra is the era1 file downloader tool.
