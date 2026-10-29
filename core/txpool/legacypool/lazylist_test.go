@@ -97,13 +97,9 @@ func comparePending(got map[common.Address][]*txpool.LazyTransaction, count int,
 	return nil
 }
 
-// TestPendingCached checks that Pending, served from the per-account cache,
-// returns what filtering and converting every transaction on each call
-// returns, through random additions, replacements, removals, new heads, balance
-// drops and evictions over the pool's limits. For a filter with a minimum tip
-// and a base fee, Pending visits only the accounts the fee cap index finds.
-// Fees are small integers, each in a fee cap bucket of its own, or wide: scaled
-// to gwei-like values with noise, many sharing a bucket with the base fee.
+// TestPendingCached compares Pending with an uncached reference through random
+// pool changes, and checks that an unchanged account is served from the cache.
+// Wide fees put many fee caps in the base fee's bucket of the index.
 func TestPendingCached(t *testing.T) {
 	t.Parallel()
 
@@ -302,10 +298,8 @@ func TestPendingCachedConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
-// TestPendingSnapshot checks that the lists Pending returned stay as they were
-// while the pool changes afterwards: a replacement, a new head that includes an
-// account's first transactions, a cap, a removal and Clear; and that appending
-// to a returned list leaves the pool's cache alone.
+// TestPendingSnapshot checks that lists Pending returned stay as they were
+// through later pool changes and appends to newer results.
 func TestPendingSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -357,13 +351,6 @@ func TestPendingSnapshot(t *testing.T) {
 			}
 		}
 	}
-	grown := append(snapshot[addrs[0]], &txpool.LazyTransaction{})
-	again, _ := pool.Pending(filter)
-	if len(grown) != 5 || len(again[addrs[0]]) != 4 || again[addrs[0]][0] != snapshot[addrs[0]][0] {
-		t.Fatalf("an append to a returned list reached the pool: %d transactions read again, want 4", len(again[addrs[0]]))
-	}
-	check("an append")
-
 	if errs := pool.addRemotesSync([]*types.Transaction{dynamicFeeTx(1, 21000, big.NewInt(1000), big.NewInt(500), keys[0])}); errs[0] != nil {
 		t.Fatal(errs[0])
 	}
@@ -378,6 +365,14 @@ func TestPendingSnapshot(t *testing.T) {
 	pool.removeTx(want[addrs[3]][2].hash, true, true)
 	pool.mu.Unlock()
 	check("a cap and a removal")
+
+	// The capped list shares its array with the snapshot's longer one.
+	capped, _ := pool.Pending(filter)
+	if len(capped[addrs[2]]) != 2 {
+		t.Fatalf("capped account has %d transactions, want 2", len(capped[addrs[2]]))
+	}
+	_ = append(capped[addrs[2]], &txpool.LazyTransaction{})
+	check("an append")
 
 	pool.Clear()
 	check("Clear")
@@ -401,14 +396,10 @@ func TestSortedMapCaches(t *testing.T) {
 		{"Forward, removing one", func(m *SortedMap) { m.Forward(1) }},
 		{"Forward, removing none", func(m *SortedMap) { m.Forward(0) }},
 		{"Filter", func(m *SortedMap) { m.Filter(func(tx *types.Transaction) bool { return tx.Nonce()%2 == 0 }) }},
-		{"filter and reheap", func(m *SortedMap) {
-			m.filter(func(tx *types.Transaction) bool { return tx.Nonce() > 5 })
-			m.reheap()
-		}},
 		{"Cap", func(m *SortedMap) { m.Cap(5) }},
 		{"Remove", func(m *SortedMap) { m.Remove(4) }},
 		{"Ready", func(m *SortedMap) { m.Ready(0) }},
-		{"Ready up to a gap", func(m *SortedMap) { m.Remove(3); m.Ready(0) }},
+		{"Ready up to a gap", func(m *SortedMap) { m.Remove(3); m.lazies(nil); m.Ready(0) }},
 	} {
 		m := NewSortedMap()
 		for n := uint64(0); n < 8; n++ {

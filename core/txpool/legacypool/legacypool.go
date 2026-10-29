@@ -494,9 +494,8 @@ func (pool *LegacyPool) ContentFrom(addr common.Address) ([]*types.Transaction, 
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
 //
-// The lists and transactions returned are shared with the pool's cache of
-// each account's pending transactions, which is kept until the account's
-// transactions change: callers must not modify them.
+// The returned lists and transactions are shared with the pool's cache and
+// must not be modified.
 func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
 	// If only blob transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.
