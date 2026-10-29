@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -462,6 +463,135 @@ func TestBatchImportAcrossTheFork(t *testing.T) {
 	}
 	if head := held.CurrentBlock(); head.Number.Uint64() != 3 {
 		t.Fatalf("held import's head %d, want 3, the last merkle block", head.Number)
+	}
+}
+
+// TestPostForkCrashRecoversThroughTheMerkleTrie: a node killed past the fork
+// before the binary tree flushed a post-fork layer reopens with its live
+// binary state below the fork, where headers commit the merkle trie. The
+// stock rewind would walk to genesis; the node refuses and names the way
+// back, which rewinds onto the merkle trie and crosses the fork again.
+func TestPostForkCrashRecoversThroughTheMerkleTrie(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	var blocks []*types.Block
+	for i := 0; i < 5; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+		blocks = append(blocks, chain.GetBlockByHash(parent.Hash()))
+	}
+
+	db := rawdb.NewMemoryDatabase()
+	engine := beacon.New(ethash.NewFaker())
+	victim, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := victim.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+	if !victim.HasState(blocks[4].Root()) {
+		t.Fatal("victim never crossed the fork")
+	}
+	// A kill keeps no journal: both trees fall back to their disk layers.
+	victim.Stop()
+	rawdb.DeleteTrieJournal(db)
+	rawdb.DeleteTrieJournal(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
+
+	_, err = core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err == nil || !strings.Contains(err.Error(), "pbt.recover") {
+		t.Fatalf("reopen err = %v, want the recovery hint", err)
+	}
+	if head := rawdb.ReadHeadBlock(db); head == nil || head.NumberU64() != 5 {
+		t.Fatalf("refusal moved the head to %v, want 5", head)
+	}
+
+	cfg := core.DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	cfg.PBTRecover = true
+	recovered, err := core.NewBlockChain(db, genesis, engine, cfg)
+	if err != nil {
+		t.Fatalf("recovery reopen: %v", err)
+	}
+	defer recovered.Stop()
+	if recovered.TrieDB().IsPBT() {
+		t.Fatal("recovery reopened on the binary tree")
+	}
+	if head := recovered.CurrentBlock(); head.Number.Uint64() >= 4 {
+		t.Fatalf("recovery left the head at %d, want below the fork", head.Number)
+	}
+	if _, err := recovered.InsertChain(blocks); err != nil {
+		t.Fatalf("re-crossing the fork: %v", err)
+	}
+	if head := recovered.CurrentBlock(); head.Number.Uint64() != 5 || head.Hash() != blocks[4].Hash() {
+		t.Fatalf("recovered head %d %x, want 5 %x", head.Number, head.Hash(), blocks[4].Hash())
+	}
+	if !recovered.HasState(blocks[4].Root()) {
+		t.Fatal("recovered chain does not hold the binary state of its head")
+	}
+}
+
+// TestWindowCloseLeavesABinaryStateOnDisk: closing the window disposes of the
+// merkle state, the only way back from a crash until the binary tree has a
+// post-fork state on disk - which the write buffer alone may not produce for
+// hours. The close persists one first, so a kill right after it reopens on
+// the head's own state with nothing to recover.
+func TestWindowCloseLeavesABinaryStateOnDisk(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	var blocks []*types.Block
+	for i := 0; i < 7; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+		blocks = append(blocks, chain.GetBlockByHash(parent.Hash()))
+	}
+
+	db := rawdb.NewMemoryDatabase()
+	engine := beacon.New(ethash.NewFaker())
+	victim, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The live node decides the disposal, as the backend declares at start.
+	if err := victim.SettleMerkleDisposal(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := victim.InsertChain(blocks[:5]); err != nil {
+		t.Fatal(err)
+	}
+	// A finalized post-fork block closes the window on the next head.
+	victim.SetFinalized(blocks[4].Header())
+	if _, err := victim.InsertChain(blocks[5:6]); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "window never closed", func() bool { return rawdb.ReadPBTMerkleDisposed(db) })
+	victim.Stop()
+	rawdb.DeleteTrieJournal(db)
+	rawdb.DeleteTrieJournal(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
+
+	reopened, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatalf("reopen after the close: %v", err)
+	}
+	defer reopened.Stop()
+	// The close persisted the parent of the head it saw - 4 or 5, the events
+	// are asynchronous - so the reopen lands on a post-fork block it holds.
+	head := reopened.CurrentBlock()
+	if head.Number.Uint64() < 4 || !reopened.HasState(head.Root) {
+		t.Fatalf("reopened at %d with state %v, want a post-fork head on its own state", head.Number, reopened.HasState(head.Root))
+	}
+	if _, err := reopened.InsertChain(blocks[head.Number.Uint64():]); err != nil {
+		t.Fatalf("importing past the reopen: %v", err)
+	}
+	if got := reopened.CurrentBlock().Number.Uint64(); got != 7 {
+		t.Fatalf("head %d after the import, want 7", got)
 	}
 }
 

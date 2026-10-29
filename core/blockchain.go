@@ -195,6 +195,13 @@ type BlockChainConfig struct {
 	PBTImport      bool
 	PBTImportForce bool
 
+	// PBTRecover reopens a node whose head crossed the fork on the merkle trie:
+	// a crash that lost the binary tree's unflushed post-fork layers leaves its
+	// live state below the fork, where no header commits it. The stock rewind
+	// lands on the last merkle state instead and the chain crosses the fork
+	// again. Needs the merkle state, i.e. a window that has not closed yet.
+	PBTRecover bool
+
 	// Number of blocks from the chain head for which trienode histories are retained.
 	// If set to 0, all trienode histories across the entire chain will be retained;
 	// If set to -1, no trienode history will be retained;
@@ -446,6 +453,14 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		// during sync the header chain runs ahead of the state the node owns.
 		if head := rawdb.ReadHeadBlock(db); head != nil && resolvedConfig.IsBinaryTrie(head.Number(), head.Time()) {
 			isPBT = true
+			if cfg.PBTRecover {
+				if rawdb.ReadPBTMerkleDisposed(db) {
+					log.Warn("Nothing to recover through: merkle state disposed")
+				} else {
+					log.Warn("Recovering below the fork on the merkle trie", "head", head.Number())
+					isPBT = false
+				}
+			}
 		}
 		// A pre-fork head would execute on deleted state.
 		if !isPBT && rawdb.ReadPBTMerkleDisposed(db) {
@@ -570,6 +585,16 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 					rawdb.WriteSnapshotRecoveryNumber(bc.db, snapDisk)
 				}
 			} else {
+				// A migrating node that lost the binary tree's post-fork layers
+				// has its live state below the fork, where headers commit the
+				// merkle trie: the rewind below would run to genesis. The merkle
+				// trie is the way back, while the window still keeps it.
+				if mode == modeMigration && isPBT && bc.binaryStateBelowFork(head) {
+					if rawdb.ReadPBTMerkleDisposed(db) {
+						return nil, errors.New("binary tree state lost below the fork with the merkle state disposed: resync")
+					}
+					return nil, errors.New("binary tree state lost below the fork: restart with --pbt.recover to rewind onto the merkle trie and cross the fork again")
+				}
 				log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash())
 				if _, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, common.Hash{}, true); err != nil {
 					return nil, err
@@ -1002,6 +1027,22 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash) (*typ
 		log.Debug("Skipping block with threshold state", "number", head.Number, "hash", head.Hash(), "root", head.Root)
 		head = bc.GetHeader(head.ParentHash, head.Number.Uint64()-1) // Keep rewinding
 	}
+}
+
+// binaryStateBelowFork reports whether no post-fork canonical block has its
+// state in the binary tree: the tree's live state then sits below the fork,
+// where headers commit the merkle trie and a rewind by header root finds
+// nothing.
+func (bc *BlockChain) binaryStateBelowFork(head *types.Header) bool {
+	for h := head; h != nil && bc.chainConfig.IsBinaryTrie(h.Number, h.Time); h = bc.GetHeader(h.ParentHash, h.Number.Uint64()-1) {
+		if bc.HasState(h.Root) || bc.StateRecoverable(h.Root) {
+			return false
+		}
+		if h.Number.Uint64() == 0 {
+			break
+		}
+	}
+	return true
 }
 
 // rewindPathHead implements the logic of rewindHead in the context of path scheme.
@@ -2318,9 +2359,15 @@ func (bc *BlockChain) execParentRoot(parent *types.Header, pbt bool) (common.Has
 	return root, nil
 }
 
-// ShadowReady reports whether the shadow tree recorded the given block.
+// ShadowReady reports whether the shadow tree holds the given block: its
+// record with the state behind it, which a crash can drop while the record
+// stays.
 func (bc *BlockChain) ShadowReady(hash common.Hash, number uint64) bool {
-	_, ok := rawdb.ReadShadowStateRoot(bc.db, hash, number)
+	header := bc.GetHeader(hash, number)
+	if header == nil || bc.follower == nil {
+		return false
+	}
+	_, ok := bc.follower.direction(!bc.chainConfig.IsBinaryTrie(header.Number, header.Time)).replayedRoot(number, hash)
 	return ok
 }
 

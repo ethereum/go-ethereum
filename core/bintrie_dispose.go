@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -49,6 +50,13 @@ func (bc *BlockChain) disposeMerkle() {
 	if !bc.live.Load() || bc.cfg.ArchiveMode {
 		return
 	}
+	// The merkle state is the way back from a crash until a post-fork
+	// binary state is on disk, which the write buffer alone can delay for
+	// hours: put one there first.
+	if err := bc.persistBinary(bc.CurrentBlock()); err != nil {
+		log.Error("Failed to persist the binary tree, disposal deferred to the next start", "err", err)
+		return
+	}
 	log.Info("Disposing of the merkle state")
 	rawdb.WritePBTMerkleDisposed(bc.db)
 
@@ -58,6 +66,25 @@ func (bc *BlockChain) disposeMerkle() {
 		return
 	}
 	bc.startMerkleDisposal()
+}
+
+// persistBinary puts the binary state of the head's parent on disk, keeping
+// the head and anything above it live. Nothing to do below the second
+// post-fork block, or when the parent already is the disk layer.
+func (bc *BlockChain) persistBinary(head *types.Header) error {
+	parent := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1)
+	if parent == nil || !bc.chainConfig.IsBinaryTrie(parent.Number, parent.Time) {
+		return nil
+	}
+	pbtdb := rawdb.NewTable(bc.db, string(rawdb.PBTPrefix))
+	if id := rawdb.ReadStateID(pbtdb, parent.Root); id != nil && *id == rawdb.ReadPersistentStateID(pbtdb) {
+		return nil
+	}
+	tdb, err := bc.treeFor(true)
+	if err != nil {
+		return err
+	}
+	return tdb.Persist(head.Root)
 }
 
 // retireMerkleTree retires and closes the merkle handle: bc.triedb after an

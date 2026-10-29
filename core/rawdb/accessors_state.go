@@ -202,6 +202,14 @@ func WriteTrieJournal(db ethdb.KeyValueWriter, journal []byte) {
 	}
 }
 
+// DeleteTrieJournal removes the journal of in-memory layers, which is what an
+// unclean shutdown leaves behind.
+func DeleteTrieJournal(db ethdb.KeyValueWriter) {
+	if err := db.Delete(trieJournalKey); err != nil {
+		log.Crit("Failed to remove tries journal", "err", err)
+	}
+}
+
 // ReadStateHistoryMeta retrieves the metadata corresponding to the specified
 // state history. Compute the position of state history in freezer by minus
 // one since the id of first state history starts from one(zero for initial

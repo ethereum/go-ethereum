@@ -376,6 +376,18 @@ func (db *Database) Journal(root common.Hash) error {
 	return pdb.Journal(root)
 }
 
+// Persist writes the state below the layer with the given root to disk while
+// the node keeps running, leaving that layer and its descendants in place.
+// It's only supported by path-based database and will return an error for
+// others.
+func (db *Database) Persist(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Persist(root)
+}
+
 // VerifyState traverses the flat states specified by the given state root and
 // ensures they are matched with each other.
 func (db *Database) VerifyState(root common.Hash) error {

@@ -397,6 +397,20 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	return db.tree.cap(root, 0)
 }
 
+// Persist flattens every layer below the one with the given root into the
+// disk layer and writes it out, keeping that layer and its descendants. Unlike
+// Commit it is safe on a live database: the state of the layer's parent lands
+// on disk without waiting for the write buffer to fill.
+func (db *Database) Persist(root common.Hash) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if err := db.modifyAllowed(); err != nil {
+		return err
+	}
+	return db.tree.persist(root)
+}
+
 // Disable deactivates the database and invalidates all available state layers
 // as stale to prevent access to the persistent state, which is in the syncing
 // stage.
