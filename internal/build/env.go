@@ -128,6 +128,48 @@ func Env() Environment {
 func LocalEnv() Environment {
 	env := applyEnvFlags(Environment{Name: "local", Repo: "ethereum/go-ethereum"})
 
+	// Ask git instead of reading .git: in a worktree or a submodule, .git is a
+	// file pointing to the repository, and refs may be packed.
+	topInfo, err := os.Stat(gitOutput("rev-parse", "--show-toplevel"))
+	if err != nil {
+		// git is missing, refuses the repository or isn't in one, or gives a
+		// path Go can't open (MSYS git on Windows): read .git as before.
+		return localEnvFromFiles(env)
+	}
+	if wdInfo, err := os.Stat("."); err != nil || !os.SameFile(topInfo, wdInfo) {
+		// Not the top of the working tree, as a source archive unpacked
+		// inside another repository: don't take that repository's commit.
+		return env
+	}
+	// Not symbolic-ref --short, which gives heads/master when a tag is
+	// named master too.
+	branch, ok := strings.CutPrefix(gitOutput("symbolic-ref", "-q", "HEAD"), "refs/heads/")
+	if !ok {
+		// In this case we are in "detached head" state
+		// see: https://git-scm.com/docs/git-checkout#_detached_head
+		if env.Commit == "" {
+			env.Commit = gitOutput("rev-parse", "HEAD")
+			env.Date = getDate(env.Commit)
+		}
+		return env
+	}
+	if env.Commit == "" {
+		env.Commit = gitOutput("rev-parse", "HEAD")
+	}
+	env.Date = getDate(env.Commit)
+	if env.Branch == "" {
+		env.Branch = branch
+	}
+	if env.Tag == "" {
+		env.Tag = firstLine(gitOutput("tag", "-l", "--points-at", "HEAD"))
+	}
+	return env
+}
+
+// localEnvFromFiles reads the commit and the branch from .git directly, for
+// when git can't tell. It finds nothing in a worktree or a submodule, or when
+// the branch's ref is packed.
+func localEnvFromFiles(env Environment) Environment {
 	head := readGitFile("HEAD")
 	if fields := strings.Fields(head); len(fields) == 2 {
 		head = fields[1]
