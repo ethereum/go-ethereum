@@ -534,6 +534,67 @@ func TestPostForkCrashRecoversThroughTheMerkleTrie(t *testing.T) {
 	}
 }
 
+// TestWindowCloseLeavesABinaryStateOnDisk: closing the window disposes of the
+// merkle state, the only way back from a crash until the binary tree has a
+// post-fork state on disk - which the write buffer alone may not produce for
+// hours. The close persists one first, so a kill right after it reopens on
+// the head's own state with nothing to recover.
+func TestWindowCloseLeavesABinaryStateOnDisk(t *testing.T) {
+	genesis := migrationTestGenesis()
+	n, ethservice := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	chain := ethservice.BlockChain()
+	parent := chain.CurrentBlock()
+	var blocks []*types.Block
+	for i := 0; i < 7; i++ {
+		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
+		blocks = append(blocks, chain.GetBlockByHash(parent.Hash()))
+	}
+
+	db := rawdb.NewMemoryDatabase()
+	engine := beacon.New(ethash.NewFaker())
+	victim, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The live node decides the disposal, as the backend declares at start.
+	if err := victim.SettleMerkleDisposal(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := victim.InsertChain(blocks[:5]); err != nil {
+		t.Fatal(err)
+	}
+	// A finalized post-fork block closes the window on the next head.
+	victim.SetFinalized(blocks[4].Header())
+	if _, err := victim.InsertChain(blocks[5:6]); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "window never closed", func() bool { return rawdb.ReadPBTMerkleDisposed(db) })
+	victim.Stop()
+	rawdb.DeleteTrieJournal(db)
+	rawdb.DeleteTrieJournal(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
+
+	reopened, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatalf("reopen after the close: %v", err)
+	}
+	defer reopened.Stop()
+	// The close persisted the parent of the head it saw - 4 or 5, the events
+	// are asynchronous - so the reopen lands on a post-fork block it holds.
+	head := reopened.CurrentBlock()
+	if head.Number.Uint64() < 4 || !reopened.HasState(head.Root) {
+		t.Fatalf("reopened at %d with state %v, want a post-fork head on its own state", head.Number, reopened.HasState(head.Root))
+	}
+	if _, err := reopened.InsertChain(blocks[head.Number.Uint64():]); err != nil {
+		t.Fatalf("importing past the reopen: %v", err)
+	}
+	if got := reopened.CurrentBlock().Number.Uint64(); got != 7 {
+		t.Fatalf("head %d after the import, want 7", got)
+	}
+}
+
 // TestMigrationBoundaryStraddleReorg is the straddle rehearsal: two branches
 // fork at a shared pre-fork ancestor and each cross the activation boundary
 // independently. The builder rewinds its head across the format swap and

@@ -183,6 +183,18 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint6
 // cap traverses downwards the diff tree until the number of allowed diff layers
 // are crossed. All diffs beyond the permitted number are flattened downwards.
 func (tree *layerTree) cap(root common.Hash, layers int) error {
+	return tree.flatten(root, layers, false)
+}
+
+// persist flattens every layer below the given one into the disk layer and
+// writes the disk layer out, keeping the layer and its descendants: a live
+// node's way to put a known state on disk without waiting for the buffer.
+func (tree *layerTree) persist(root common.Hash) error {
+	return tree.flatten(root, 1, true)
+}
+
+// flatten is cap with the write to disk optionally forced.
+func (tree *layerTree) flatten(root common.Hash, layers int, force bool) error {
 	// Retrieve the head layer to cap from
 	l := tree.get(root)
 	if l == nil {
@@ -257,7 +269,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		//		        ->C2'->C3'->C4'
 		// The original C3 is replaced by the new base (with root C3)
 		// Dangling layers in (b) will be removed later
-		newBase, err = parent.persist(false)
+		newBase, err = parent.persist(force)
 		if err != nil {
 			diff.lock.Unlock()
 			return err
