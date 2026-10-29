@@ -153,6 +153,7 @@ const (
 	VMErrorCodeStackUnderflow
 	VMErrorCodeStackOverflow
 	VMErrorCodeInvalidOpCode
+	VMErrorCodeMaxInitCodeSizeExceeded
 
 	// VMErrorCodeUnknown explicitly marks an error as unknown, this is useful when error is converted
 	// from an actual `error` in which case if the mapping is not known, we can use this value to indicate that.
@@ -175,6 +176,8 @@ func vmErrorCodeFromErr(err error) int {
 		return VMErrorCodeExecutionReverted
 	case errors.Is(err, ErrMaxCodeSizeExceeded):
 		return VMErrorCodeMaxCodeSizeExceeded
+	case errors.Is(err, ErrMaxInitCodeSizeExceeded):
+		return VMErrorCodeMaxInitCodeSizeExceeded
 	case errors.Is(err, ErrInvalidJump):
 		return VMErrorCodeInvalidJump
 	case errors.Is(err, ErrWriteProtection):
