@@ -22,12 +22,11 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// lazyList is an account's nonce-sorted transactions as Pending serves them,
-// with the fee caps and gas limits its filter compares decoded once and packed
-// together, so that reading the pool doesn't touch every transaction again.
+// lazyList caches an account's nonce-sorted transactions in the form Pending
+// returns them, with the fee caps and gas limits its filter reads decoded once.
 type lazyList struct {
 	txs  []*txpool.LazyTransaction
-	fees []lazyFees // of txs[i], which point into it
+	fees []lazyFees // the values txs[i] point to
 }
 
 type lazyFees struct {
@@ -47,7 +46,7 @@ func newLazyList(pool txpool.LazyResolver, txs types.Transactions) *lazyList {
 		f.feeCap, feeOverflow = tx.GasFeeCapUint256()
 		f.tipCap, tipOverflow = tx.GasTipCapUint256()
 		if feeOverflow || tipOverflow {
-			panic("fee cap overflows uint256") // as uint256.MustFromBig did
+			panic("fee cap overflows uint256")
 		}
 		f.gas = tx.Gas()
 		backing[i] = txpool.LazyTransaction{

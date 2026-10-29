@@ -17,7 +17,7 @@
 package legacypool
 
 import (
-	"crypto/ecdsa"
+	"math"
 	"math/big"
 	"testing"
 
@@ -26,57 +26,36 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// BenchmarkPending measures what a block build pays to read the pending
-// transactions of a full pool: 1250 senders with 16 transactions each, about
-// what a mainnet node holds with --txpool.globalslots 20000, filtered by a
-// minimum tip against a base fee as the miner asks for them.
-func BenchmarkPending(b *testing.B) {
-	pool, _ := setupPool()
-	defer pool.Close()
+// pendingShape is how many senders hold 1, 2, ... 16 pending transactions in a
+// full 20,000-slot pool (--txpool.globalslots 20000): 20,531 transactions from
+// 12,550 senders, most of them with one.
+var pendingShape = []int{10736, 1113, 63, 34, 21, 26, 25, 32, 51, 50, 52, 58, 50, 56, 37, 146}
 
-	for s := 0; s < 1250; s++ {
-		key, _ := crypto.GenerateKey()
-		account := crypto.PubkeyToAddress(key.PublicKey)
-		testAddBalance(pool, account, big.NewInt(1e18))
-		for n := uint64(0); n < 16; n++ {
-			tx := dynamicFeeTx(n, 100000, big.NewInt(int64(2e9+s)), big.NewInt(int64(1e9+s)), key)
-			pool.promoteTx(account, tx.Hash(), tx)
-		}
-	}
-	filter := txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(1e9)}
-	if _, n := pool.Pending(filter); n != 1250*16 {
-		b.Fatalf("pending %d, want %d", n, 1250*16)
-	}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pool.Pending(filter)
-	}
-}
+// pendingSizes scales pendingShape to geth's default of 5,120 pending slots
+// (5,159 transactions from 3,140 senders) and to 20,000 slots.
+var pendingSizes = []struct {
+	name  string
+	scale float64
+}{{"5120", 0.25}, {"20000", 1}}
 
-// livePendingShape is how many senders hold 1, 2, ... 16 pending transactions
-// in a mainnet node's full pool (--txpool.globalslots 20000, October 2026):
-// 20,531 transactions from 12,550 senders, most of them with one.
-var livePendingShape = []int{10736, 1113, 63, 34, 21, 26, 25, 32, 51, 50, 52, 58, 50, 56, 37, 146}
+// pendingFilter is how the miner reads the pool.
+var pendingFilter = txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(1e9)}
 
-// newLivePool returns a pool shaped like a live mainnet node's
-// (livePendingShape), every sender paying the base fee of liveFilter, and the
-// number of its pending transactions.
-func newLivePool() (*LegacyPool, int) {
+// newFullPool returns a pool holding pendingShape scaled by scale, every
+// transaction paying the base fee of pendingFilter, and the number of its
+// pending transactions.
+func newFullPool(scale float64) (*LegacyPool, int) {
 	pool, _ := setupPool()
 
-	var (
-		total int
-		keys  []*ecdsa.PrivateKey
-	)
-	for n, senders := range livePendingShape {
-		for range senders {
+	var total, senders int
+	for n, count := range pendingShape {
+		for range int(math.Round(float64(count) * scale)) {
 			key, _ := crypto.GenerateKey()
-			keys = append(keys, key)
 			account := crypto.PubkeyToAddress(key.PublicKey)
 			testAddBalance(pool, account, big.NewInt(1e18))
+			senders++
+			s := int64(senders)
 			for nonce := range uint64(n + 1) {
-				s := int64(len(keys))
 				tx := dynamicFeeTx(nonce, 100000, big.NewInt(2e9+s), big.NewInt(1e9+s), key)
 				pool.promoteTx(account, tx.Hash(), tx)
 				total++
@@ -86,59 +65,56 @@ func newLivePool() (*LegacyPool, int) {
 	return pool, total
 }
 
-// liveFilter is how the miner reads the pool of newLivePool.
-var liveFilter = txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(1e9)}
-
-// BenchmarkPendingLive reads a pool shaped like a live mainnet node's, with
-// the CPU caches warm from the previous read (hot) or evicted before every
-// read (cold), as a live node's other work between builds leaves them.
-func BenchmarkPendingLive(b *testing.B) {
-	pool, total := newLivePool()
-	defer pool.Close()
-
-	filter := liveFilter
-	if _, n := pool.Pending(filter); n != total {
-		b.Fatalf("pending %d, want %d", n, total)
-	}
-	b.Run("hot", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			pool.Pending(filter)
+// BenchmarkPending reads a full pool of each size under the miner's filter,
+// every transaction passing it, with the CPU caches warm from the previous read
+// (hot) or evicted before every read (cold).
+func BenchmarkPending(b *testing.B) {
+	flush := make([]byte, 256<<20)
+	for _, size := range pendingSizes {
+		pool, total := newFullPool(size.scale)
+		if _, n := pool.Pending(pendingFilter); n != total {
+			b.Fatalf("pending %d, want %d", n, total)
 		}
-	})
-	b.Run("cold", func(b *testing.B) {
-		flush := make([]byte, 256<<20)
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			for i := 0; i < len(flush); i += 64 {
-				flush[i]++
+		b.Run(size.name+"/hot", func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				pool.Pending(pendingFilter)
 			}
-			b.StartTimer()
-			pool.Pending(filter)
-		}
-	})
+		})
+		b.Run(size.name+"/cold", func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				for i := 0; i < len(flush); i += 64 {
+					flush[i]++
+				}
+				b.StartTimer()
+				pool.Pending(pendingFilter)
+			}
+		})
+		pool.Close()
+	}
 }
 
-// BenchmarkDemotionLive runs the pool's demotion pass after a new head that
-// includes none of the pending transactions, the common case for an account
-// between two of its inclusions, on a pool shaped like a live mainnet node's
+// BenchmarkPendingDemotionCached runs the pool's demotion pass after a new head
+// that includes none of the pending transactions, on a full pool of each size
 // whose lists have been read, so that their caches are populated.
-func BenchmarkDemotionLive(b *testing.B) {
-	pool, total := newLivePool()
-	defer pool.Close()
+func BenchmarkPendingDemotionCached(b *testing.B) {
+	for _, size := range pendingSizes {
+		pool, total := newFullPool(size.scale)
+		if _, n := pool.Pending(pendingFilter); n != total {
+			b.Fatalf("pending %d, want %d", n, total)
+		}
+		b.Run(size.name, func(b *testing.B) {
+			pool.mu.Lock()
+			defer pool.mu.Unlock()
 
-	if _, n := pool.Pending(liveFilter); n != total {
-		b.Fatalf("pending %d, want %d", n, total)
-	}
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pool.demoteUnexecutables()
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				pool.demoteUnexecutables()
+			}
+		})
+		pool.Close()
 	}
 }
