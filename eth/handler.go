@@ -196,6 +196,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		ValidateTx: h.blobpool.ValidateTxBasics,
 		AddToPool:  h.blobpool.AddPooledTx,
 		DropPeer:   h.removePeer,
+		RequestTx: func(peer string, hash common.Hash) {
+			go func() {
+				if err := fetchTx(peer, []common.Hash{hash}); err != nil {
+					log.Debug("Failed to request blob transaction from cell supplier", "peer", peer, "hash", hash, "err", err)
+				}
+			}()
+		},
 	})
 
 	addTxs := func(txs []*types.Transaction) []error {

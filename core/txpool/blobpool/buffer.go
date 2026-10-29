@@ -83,6 +83,19 @@ type cellEntry struct {
 	custody    types.CustodyBitmap
 	added      time.Time
 	size       uint64 // Total cell bytes, as accounted against the buffer limits
+
+	checked   map[string]struct{} // Peers whose proofs failed against these cells
+	requested map[string]struct{} // Failing cell suppliers asked for their own proofs
+}
+
+// awaiting reports whether a requested copy of the transaction is outstanding.
+func (e *cellEntry) awaiting() bool {
+	for peer := range e.requested {
+		if _, ok := e.checked[peer]; !ok {
+			return true
+		}
+	}
+	return false
 }
 
 // cellsSize returns the bytes occupied by a peer's cell delivery.
@@ -112,6 +125,7 @@ type BlobBufferFunctions struct {
 	ValidateTx func(*types.Transaction) error
 	AddToPool  func(*BlobTxForPool) error
 	DropPeer   func(string)
+	RequestTx  func(peer string, hash common.Hash) // Must not block or call back into the buffer
 }
 
 func NewBlobBuffer(cb BlobBufferFunctions) *BlobBuffer {
@@ -173,6 +187,10 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 			continue
 		}
 		if entry, ok := b.cells[hash]; ok {
+			if _, ok := entry.checked[peer]; ok {
+				errs[i] = txpool.ErrAlreadyKnown
+				continue
+			}
 			b.storeCompleted(hash, tx, peer, entry)
 			continue
 		}
@@ -235,7 +253,11 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, pee
 	if badPeers := b.verifyCells(cells, sidecar); len(badPeers) > 0 {
 		// Proofs are not committed to by the transaction hash. A failed tuple
 		// can only be attributed when one peer supplied both proofs and cells.
-		if slices.Contains(badPeers, peer) && b.cb.DropPeer != nil {
+		if !slices.Contains(badPeers, peer) {
+			b.retainCells(hash, peer, cells, badPeers)
+			return
+		}
+		if b.cb.DropPeer != nil {
 			b.cb.DropPeer(peer)
 		}
 		b.removeCells(hash)
@@ -268,6 +290,42 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, pee
 	b.completedCount.Add(1)
 	b.removeCells(hash)
 	b.removeTx(hash)
+}
+
+// retainCells keeps cells that failed against another peer's proofs and asks
+// each failing supplier for its own copy of the transaction. Checking cells
+// against their supplier's proofs either completes the transaction or makes
+// the failure attributable to that supplier.
+func (b *BlobBuffer) retainCells(hash common.Hash, peer string, cells *cellEntry, badPeers []string) {
+	b.removeTx(hash)
+	if cells.checked == nil {
+		cells.checked = make(map[string]struct{})
+		cells.requested = make(map[string]struct{})
+	}
+	cells.checked[peer] = struct{}{}
+
+	var requests []string
+	for _, bad := range badPeers {
+		if _, ok := cells.requested[bad]; !ok {
+			cells.requested[bad] = struct{}{}
+			requests = append(requests, bad)
+		}
+	}
+	if len(requests) == 0 && !cells.awaiting() {
+		// No supplier's own proofs are left to check against the cells.
+		b.removeCells(hash)
+		return
+	}
+	if b.cells[hash] != cells {
+		for b.buffered()+cells.size > b.maxBytes && b.evictOne() {
+		}
+		b.insertCells(hash, cells)
+	}
+	if b.cb.RequestTx != nil {
+		for _, supplier := range requests {
+			b.cb.RequestTx(supplier, hash)
+		}
+	}
 }
 
 func (b *BlobBuffer) HasTx(hash common.Hash) bool {

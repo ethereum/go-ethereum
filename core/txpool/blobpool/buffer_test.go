@@ -438,22 +438,25 @@ func TestInvalidCellAttribution(t *testing.T) {
 		badPeers      []string
 		corruptProofs bool
 		wantDropped   []string
+		wantRequested []string
 	}{
-		{"same-source-cells", []string{"peerA"}, []string{"peerA"}, false, []string{"peerA"}},
-		{"same-source-proofs", []string{"peerA"}, []string{"peerA"}, true, []string{"peerA"}},
-		{"separate-source-cells", []string{"peerB"}, []string{"peerB"}, false, nil},
-		{"separate-source-proofs", []string{"peerB"}, []string{"peerB"}, true, nil},
-		{"multiple-separate-sources", []string{"peerB", "peerC"}, []string{"peerB", "peerC"}, true, nil},
-		{"mixed-sources", []string{"peerA", "peerB"}, []string{"peerA", "peerB"}, true, []string{"peerA"}},
-		{"mixed-unrelated-failure", []string{"peerA", "peerB"}, []string{"peerB"}, true, nil},
+		{"same-source-cells", []string{"peerA"}, []string{"peerA"}, false, []string{"peerA"}, nil},
+		{"same-source-proofs", []string{"peerA"}, []string{"peerA"}, true, []string{"peerA"}, nil},
+		{"separate-source-cells", []string{"peerB"}, []string{"peerB"}, false, nil, []string{"peerB"}},
+		{"separate-source-proofs", []string{"peerB"}, []string{"peerB"}, true, nil, []string{"peerB"}},
+		{"multiple-separate-cells", []string{"peerB", "peerC"}, []string{"peerB", "peerC"}, false, nil, []string{"peerB", "peerC"}},
+		{"multiple-separate-sources", []string{"peerB", "peerC"}, []string{"peerB", "peerC"}, true, nil, []string{"peerB", "peerC"}},
+		{"mixed-sources", []string{"peerA", "peerB"}, []string{"peerA", "peerB"}, true, []string{"peerA"}, nil},
+		{"mixed-unrelated-failure", []string{"peerA", "peerB"}, []string{"peerB"}, true, nil, []string{"peerB"}},
 	} {
 		for _, order := range []string{"tx-first", "cells-first"} {
 			t.Run(test.name+"/"+order, func(t *testing.T) {
-				var dropped []string
+				var dropped, requested []string
 				buf := NewBlobBuffer(BlobBufferFunctions{
 					ValidateTx: func(tx *types.Transaction) error { return nil },
 					AddToPool:  func(ptx *BlobTxForPool) error { return nil },
 					DropPeer:   func(peer string) { dropped = append(dropped, peer) },
+					RequestTx:  func(peer string, _ common.Hash) { requested = append(requested, peer) },
 				})
 				sidecar := tx.BlobTxSidecar().Copy()
 				deliveries := make(map[string]*PeerDelivery)
@@ -506,25 +509,112 @@ func TestInvalidCellAttribution(t *testing.T) {
 				if !slices.Equal(dropped, test.wantDropped) {
 					t.Errorf("dropped peers %v, want %v", dropped, test.wantDropped)
 				}
+				slices.Sort(requested)
+				if !slices.Equal(requested, test.wantRequested) {
+					t.Errorf("requested transaction from %v, want %v", requested, test.wantRequested)
+				}
 				if hashes, errs := buf.Flush(); len(hashes) != 0 || len(errs) != 0 {
 					t.Fatalf("invalid tuple admitted: hashes %v, errors %v", hashes, errs)
 				}
+				if buf.HasTx(hash) {
+					t.Fatal("transaction with failed proofs retained")
+				}
+				if len(test.wantRequested) == 0 {
+					if buf.HasCells(hash) || buf.buffered() != 0 || len(buf.peerBytes) != 0 {
+						t.Fatal("failed tuple retained buffer entries or accounting")
+					}
+					// The discarded sidecar must not prevent a valid copy of the same transaction.
+					if err := buf.AddTx([]*types.Transaction{tx}, "retryPeer")[0]; err != nil {
+						t.Fatal(err)
+					}
+					buf.AddCells(hash, map[string]*PeerDelivery{"retryPeer": valid}, custody)
+					if hashes, errs := buf.Flush(); !slices.Equal(hashes, []common.Hash{hash}) || len(errs) != 1 || errs[0] != nil {
+						t.Fatalf("valid retry: hashes %v, errors %v", hashes, errs)
+					}
+				} else {
+					if !buf.HasCells(hash) {
+						t.Fatal("cells not retained for attribution")
+					}
+					// A failing supplier answers with its own copy, whose proofs are valid.
+					supplier := test.wantRequested[0]
+					if err := buf.AddTx([]*types.Transaction{tx}, supplier)[0]; err != nil {
+						t.Fatal(err)
+					}
+					hashes, errs := buf.Flush()
+					if test.corruptProofs {
+						if len(dropped) != 0 {
+							t.Errorf("dropped peers %v after valid proofs, want none", dropped)
+						}
+						if !slices.Equal(hashes, []common.Hash{hash}) || len(errs) != 1 || errs[0] != nil {
+							t.Fatalf("valid proofs: hashes %v, errors %v", hashes, errs)
+						}
+					} else {
+						if !slices.Equal(dropped, []string{supplier}) {
+							t.Errorf("dropped peers %v after own proofs, want %v", dropped, []string{supplier})
+						}
+						if len(hashes) != 0 || len(errs) != 0 {
+							t.Fatalf("invalid cells admitted: hashes %v, errors %v", hashes, errs)
+						}
+					}
+				}
 				if buf.HasTx(hash) || buf.HasCells(hash) || buf.buffered() != 0 || len(buf.peerBytes) != 0 {
-					t.Fatal("failed tuple retained buffer entries or accounting")
-				}
-				// The discarded sidecar must not prevent a valid copy of the same transaction.
-				if err := buf.AddTx([]*types.Transaction{tx}, "retryPeer")[0]; err != nil {
-					t.Fatal(err)
-				}
-				buf.AddCells(hash, map[string]*PeerDelivery{"retryPeer": valid}, custody)
-				if hashes, errs := buf.Flush(); !slices.Equal(hashes, []common.Hash{hash}) || len(errs) != 1 || errs[0] != nil {
-					t.Fatalf("valid retry: hashes %v, errors %v", hashes, errs)
-				}
-				if buf.HasTx(hash) || buf.HasCells(hash) || buf.buffered() != 0 || len(buf.peerBytes) != 0 {
-					t.Fatal("valid retry retained buffer entries or accounting")
+					t.Fatal("resolved tuple retained buffer entries or accounting")
 				}
 			})
 		}
+	}
+}
+
+// TestRetainedCellsExhaustSuppliers checks that each peer's proofs are checked
+// once against retained cells, and that the cells are released when no failing
+// supplier's own proofs remain to be checked.
+func TestRetainedCellsExhaustSuppliers(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	tx := makeV1Tx(t, 0, 1, 1, key)
+	hash := tx.Hash()
+	indices := []uint64{0, 1, 2, 3, 4, 5, 6, 7}
+	withBadProofs := func(bad []uint64) *types.Transaction {
+		sidecar := tx.BlobTxSidecar().Copy()
+		for _, index := range bad {
+			sidecar.Proofs[index] = tx.BlobTxSidecar().Proofs[(index+1)%kzg4844.CellProofsPerBlob]
+		}
+		return tx.WithBlobTxSidecar(sidecar)
+	}
+	var dropped, requested []string
+	buf := NewBlobBuffer(BlobBufferFunctions{
+		ValidateTx: func(tx *types.Transaction) error { return nil },
+		AddToPool:  func(ptx *BlobTxForPool) error { return nil },
+		DropPeer:   func(peer string) { dropped = append(dropped, peer) },
+		RequestTx:  func(peer string, _ common.Hash) { requested = append(requested, peer) },
+	})
+	buf.AddCells(hash, map[string]*PeerDelivery{
+		"peerB": makePeerDelivery(t, 1, 1, indices[:4]),
+		"peerC": makePeerDelivery(t, 1, 1, indices[4:]),
+	}, types.NewCustodyBitmap(indices))
+
+	// peerA's proofs fail on peerB's cells, so peerB is asked for its own.
+	buf.AddTx([]*types.Transaction{withBadProofs(indices[:4])}, "peerA")
+	if err := buf.AddTx([]*types.Transaction{withBadProofs(indices[:4])}, "peerA")[0]; !errors.Is(err, txpool.ErrAlreadyKnown) {
+		t.Fatalf("repeated proofs: got %v, want %v", err, txpool.ErrAlreadyKnown)
+	}
+	// peerB's proofs verify its own cells but fail on peerC's, so peerC is asked.
+	buf.AddTx([]*types.Transaction{withBadProofs(indices[4:])}, "peerB")
+	if !slices.Equal(requested, []string{"peerB", "peerC"}) {
+		t.Fatalf("requested transaction from %v, want [peerB peerC]", requested)
+	}
+	if !buf.HasCells(hash) {
+		t.Fatal("cells released while a requested copy is outstanding")
+	}
+	// peerC's proofs fail on peerB's cells, leaving no supplier to ask.
+	buf.AddTx([]*types.Transaction{withBadProofs(indices[:4])}, "peerC")
+	if len(dropped) != 0 {
+		t.Errorf("dropped peers %v, want none", dropped)
+	}
+	if hashes, errs := buf.Flush(); len(hashes) != 0 || len(errs) != 0 {
+		t.Fatalf("unverified tuple admitted: hashes %v, errors %v", hashes, errs)
+	}
+	if buf.HasTx(hash) || buf.HasCells(hash) || buf.buffered() != 0 || len(buf.peerBytes) != 0 {
+		t.Fatal("exhausted cells retained buffer entries or accounting")
 	}
 }
 
