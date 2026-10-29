@@ -58,7 +58,7 @@ type StackTrie struct {
 func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 	return &StackTrie{
 		root:       stPool.Get().(*stNode),
-		h:          newHasher(false),
+		h:          newHasher(false, false),
 		onTrieNode: onTrieNode,
 		kBuf:       make([]byte, 64),
 		pBuf:       make([]byte, 64),
