@@ -586,6 +586,9 @@ type ByteReader interface {
 type Stream struct {
 	r ByteReader
 
+	// Inline storage for NewBytesStream so the slice header doesn't escape per call.
+	sliceRdr sliceReader
+
 	remaining uint64   // number of bytes remaining to be read from r
 	size      uint64   // size of value ahead
 	kinderr   error    // error from last readKind
@@ -594,6 +597,11 @@ type Stream struct {
 	kind      Kind     // kind of value ahead
 	byteval   byte     // value of single byte in type tag
 	limited   bool     // true if input limit is in effect
+}
+
+// Remaining returns the number of bytes remaining to be read.
+func (s *Stream) Remaining() uint64 {
+	return s.remaining
 }
 
 // NewStream creates a new decoding stream reading from r.
@@ -617,6 +625,29 @@ func NewStream(r io.Reader, inputLimit uint64) *Stream {
 	s := new(Stream)
 	s.Reset(r, inputLimit)
 	return s
+}
+
+// NewBytesStream returns a pooled Stream reading from b. The caller must return
+// the stream with PutStream when decoding is done.
+func NewBytesStream(b []byte) *Stream {
+	stream := streamPool.Get().(*Stream)
+	stream.sliceRdr = b
+	stream.Reset(&stream.sliceRdr, uint64(len(b)))
+	return stream
+}
+
+// PutStream returns a Stream obtained from NewBytesStream to the pool.
+func PutStream(stream *Stream) {
+	stream.sliceRdr = nil // release caller's backing array
+	streamPool.Put(stream)
+}
+
+// ResetBytes resets the stream to decode from b, reusing the inline slice
+// reader. This allows decoding a batch of values with one pooled stream
+// instead of doing a pool round-trip per value.
+func (s *Stream) ResetBytes(b []byte) {
+	s.sliceRdr = b
+	s.Reset(&s.sliceRdr, uint64(len(b)))
 }
 
 // NewListStream creates a new stream that pretends to be positioned
@@ -683,6 +714,42 @@ func (s *Stream) ReadBytes(b []byte) error {
 		return nil
 	default:
 		return ErrExpectedString
+	}
+}
+
+// AppendBytes decodes the next RLP string and appends its contents to dst,
+// returning the extended slice. Pass dst[:0] to reuse an existing buffer.
+func (s *Stream) AppendBytes(dst []byte) ([]byte, error) {
+	kind, size, err := s.Kind()
+	if err != nil {
+		return dst, err
+	}
+	switch kind {
+	case Byte:
+		s.kind = -1
+		return append(dst, s.byteval), nil
+	case String:
+		cur := len(dst)
+		if size > uint64(int(^uint(0)>>1)-cur) {
+			return dst, ErrValueTooLarge
+		}
+		need := cur + int(size)
+		if cap(dst) < need {
+			grown := make([]byte, need)
+			copy(grown, dst)
+			dst = grown
+		} else {
+			dst = dst[:need]
+		}
+		if err = s.readFull(dst[cur:]); err != nil {
+			return dst, err
+		}
+		if size == 1 && dst[cur] < 128 {
+			return dst, ErrCanonSize
+		}
+		return dst, nil
+	default:
+		return dst, ErrExpectedString
 	}
 }
 
@@ -843,6 +910,11 @@ func (s *Stream) BigInt() (*big.Int, error) {
 		return nil, err
 	}
 	return i, nil
+}
+
+// ReadBigInt decodes the next value as a big integer into dst.
+func (s *Stream) ReadBigInt(dst *big.Int) error {
+	return s.decodeBigInt(dst)
 }
 
 func (s *Stream) decodeBigInt(dst *big.Int) error {
