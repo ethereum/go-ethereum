@@ -675,11 +675,19 @@ func (f *bintrieFollower) tree(pbt bool) (*triedb.Database, error) {
 
 // open resolves the tree handle on first use: the canonical handle when the
 // flavours match - a second instance over one namespace corrupts it - and a
-// follower-owned one otherwise.
+// follower-owned one otherwise. An open handle is served as is: after an
+// in-run crossing every state access of the node comes through here, and
+// the guards below are database reads.
 func (t *followerTree) open() (*triedb.Database, error) {
 	f := t.f
+	f.mu.Lock()
+	handle := t.handle
+	f.mu.Unlock()
+	if handle != nil {
+		return handle, nil
+	}
 	// An unfinished snap sync disables - or kills - a handle opened over it;
-	// refuse until the flag clears, covering every probe, not just replay.
+	// refuse until the flag clears.
 	if rawdb.ReadSnapSyncStatusFlag(f.db) == rawdb.StateSyncRunning {
 		return nil, errors.New("snap sync running: shadow trees wait")
 	}
