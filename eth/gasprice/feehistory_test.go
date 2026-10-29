@@ -19,11 +19,85 @@ package gasprice
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
+	"testing/synctest"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
+
+// Delay one header in virtual time so the other result is consumed first.
+type feeHistoryOrderBackend struct {
+	OracleBackend
+	config  *params.ChainConfig
+	headers map[rpc.BlockNumber]*types.Header
+	delayed rpc.BlockNumber
+	last    rpc.BlockNumber
+}
+
+func (b *feeHistoryOrderBackend) ChainConfig() *params.ChainConfig { return b.config }
+
+func (b *feeHistoryOrderBackend) HeaderByNumber(_ context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	if number == rpc.LatestBlockNumber {
+		return &types.Header{Number: big.NewInt(int64(b.last))}, nil
+	}
+	if number == b.delayed {
+		time.Sleep(time.Second)
+	}
+	return b.headers[number], nil
+}
+
+func TestFeeHistoryBlobForkBoundary(t *testing.T) {
+	for _, delayed := range []rpc.BlockNumber{99, 100} {
+		for _, missingLast := range []bool{false, true} {
+			t.Run(fmt.Sprintf("delayed=%d/missingLast=%t", delayed, missingLast), func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					zero, cancun := uint64(0), uint64(1000)
+					backend := &feeHistoryOrderBackend{
+						config: &params.ChainConfig{
+							LondonBlock: big.NewInt(0), ShanghaiTime: &zero, CancunTime: &cancun,
+							BlobScheduleConfig: params.DefaultBlobSchedule,
+						},
+						headers: map[rpc.BlockNumber]*types.Header{
+							99:  {Number: big.NewInt(99), Time: 990, BaseFee: big.NewInt(8), GasLimit: 30000000, GasUsed: 15000000},
+							100: {Number: big.NewInt(100), Time: 1000, BaseFee: big.NewInt(8), GasLimit: 30000000, GasUsed: 15000000, ExcessBlobGas: &zero, BlobGasUsed: &zero},
+						},
+						delayed: delayed,
+						last:    100,
+					}
+					if missingLast {
+						// Simulate a head that disappears while retrieving the range.
+						backend.last = 101
+					}
+					oracle := &Oracle{
+						backend: backend, maxHeaderHistory: 3,
+						historyCache: lru.NewCache[cacheKey, processedFees](3),
+					}
+					first, _, baseFee, ratio, blobFee, blobRatio, err := oracle.FeeHistory(context.Background(), uint64(backend.last-98), backend.last, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if first.Uint64() != 99 || len(baseFee) != 3 || len(blobFee) != 3 || len(ratio) != 2 || len(blobRatio) != 2 {
+						t.Fatalf("unexpected range: first=%v baseFee=%v blobFee=%v ratio=%v blobRatio=%v", first, baseFee, blobFee, ratio, blobRatio)
+					}
+					for i, want := range []int64{0, 1, 1} {
+						if blobFee[i] == nil || blobFee[i].Cmp(big.NewInt(want)) != 0 {
+							t.Errorf("blob fee %d: have %v, want %d", i, blobFee[i], want)
+						}
+						if baseFee[i] == nil || baseFee[i].Cmp(big.NewInt(8)) != 0 {
+							t.Errorf("base fee %d: have %v, want 8", i, baseFee[i])
+						}
+					}
+				})
+			})
+		}
+	}
+}
 
 func TestFeeHistory(t *testing.T) {
 	var cases = []struct {
