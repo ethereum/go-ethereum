@@ -46,11 +46,9 @@ func feeBucket(feeCap *uint256.Int) uint16 {
 	return uint16(shift)<<feeBucketBits + uint16(top.Uint64())
 }
 
-// headIndex groups the pending accounts by the fee cap of their first
-// transaction, the one a block has to include before any other of the
-// account's, so that those whose first transaction pays at least a given base
-// fee are found without visiting the others. The pending lists keep it up to
-// date as they change, under the pool's lock.
+// headIndex groups the pending accounts by their first transaction's fee cap,
+// so that Pending can skip the accounts whose first transaction can't pay the
+// base fee. The pending lists keep it current under the pool's lock.
 type headIndex struct {
 	buckets map[uint16]map[common.Address]headEntry
 	used    [feeBucketCount / 64]uint64 // bit k%64 of used[k/64]: bucket k is not empty

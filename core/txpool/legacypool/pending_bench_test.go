@@ -17,7 +17,6 @@
 package legacypool
 
 import (
-	"crypto/ecdsa"
 	"math"
 	"math/big"
 	"runtime"
@@ -124,80 +123,76 @@ func BenchmarkPendingDemotionCached(b *testing.B) {
 	}
 }
 
-// BenchmarkPendingPayableLive reads a pool shaped like a live mainnet node's,
-// where few senders can pay the base fee (one in 64; live, 150-350 of 20,000
-// transactions in October 2026, the rest waiting for it to drop), under the
-// miner's filter, alone and with the miner's price ordering built on the
-// result, with the CPU caches warm or evicted before every read. As live, the
-// senders of two transactions pay ten times more in the second, above the base
-// fee: it waits for the first.
-func BenchmarkPendingPayableLive(b *testing.B) {
-	pool, _ := setupPool()
-	defer pool.Close()
-
-	var (
-		payable int
-		keys    []*ecdsa.PrivateKey
-	)
-	for n, senders := range pendingShape {
-		for range senders {
-			key, _ := crypto.GenerateKey()
-			keys = append(keys, key)
-			account := crypto.PubkeyToAddress(key.PublicKey)
-			testAddBalance(pool, account, big.NewInt(1e18))
-			s := int64(len(keys))
-			feeCap := 3e8 + s*6e8/20000 // 0.3-0.65 of the base fee
-			if s%64 == 0 {
-				feeCap = 2e9 + s
-				payable += n + 1
-			}
-			if n == 1 && feeCap < 1e9 {
-				feeCap /= 2 // 0.15-0.33 of the base fee, the second 1.5-3.3 times it
-			}
-			for nonce := range uint64(n + 1) {
-				tx := dynamicFeeTx(nonce, 100000, big.NewInt(feeCap), big.NewInt(1e8+s), key)
-				pool.all.Add(tx)
-				pool.promoteTx(account, tx.Hash(), tx)
-				if n == 1 {
-					feeCap *= 10
-				}
-			}
-		}
-	}
+// BenchmarkPendingPayable reads a full pool of each size under the miner's
+// filter, alone and with the miner's price ordering built on the result, with
+// the CPU caches warm or evicted before every read. The same 196 senders can
+// pay the base fee at both sizes, one in 16 at 5,120 slots and one in 64 at
+// 20,000, as a full pool evicts the cheapest transactions first. Senders of two
+// transactions pay ten times more in the second, behind a first below the base
+// fee.
+func BenchmarkPendingPayable(b *testing.B) {
 	var (
 		baseFee = big.NewInt(1e9)
-		signer  = types.LatestSigner(pool.chainconfig)
 		filter  = txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.MustFromBig(baseFee)}
+		flush   = make([]byte, 256<<20)
 	)
-	if _, n := pool.Pending(filter); n != payable {
-		b.Fatalf("pending %d, want %d", n, payable)
-	}
-	pool.Pending(txpool.PendingFilter{}) // every account's list cached
-	flush := make([]byte, 256<<20)
-	for _, order := range []bool{false, true} {
-		for _, cold := range []bool{false, true} {
-			name := "read"
-			if order {
-				name += "+order"
-			}
-			name += map[bool]string{false: "/hot", true: "/cold"}[cold]
-			b.Run(name, func(b *testing.B) {
-				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
-					if cold {
-						b.StopTimer()
-						for i := 0; i < len(flush); i += 64 {
-							flush[i]++
-						}
-						b.StartTimer()
-					}
-					txs, _ := pool.Pending(filter)
-					if order {
-						txorder.NewTransactionsByPriceAndNonce(signer, txs, baseFee)
+	for _, size := range pendingSizes {
+		pool, _ := setupPool()
+		signer := types.LatestSigner(pool.chainconfig)
+
+		every := int64(math.Round(64 * size.scale)) // as many payers at every size
+		var payable, senders int
+		for n, count := range pendingShape {
+			for range int(math.Round(float64(count) * size.scale)) {
+				key, _ := crypto.GenerateKey()
+				account := crypto.PubkeyToAddress(key.PublicKey)
+				testAddBalance(pool, account, big.NewInt(1e18))
+				senders++
+				s := int64(senders)
+				feeCap := 3e8 + s*6e8/20000 // 0.3-0.65 of the base fee
+				if s%every == 0 {
+					feeCap = 2e9 + s
+					payable += n + 1
+				}
+				if n == 1 && feeCap < 1e9 {
+					feeCap /= 2
+				}
+				for nonce := range uint64(n + 1) {
+					tx := dynamicFeeTx(nonce, 100000, big.NewInt(feeCap), big.NewInt(1e8+s), key)
+					pool.all.Add(tx)
+					pool.promoteTx(account, tx.Hash(), tx)
+					if n == 1 {
+						feeCap *= 10
 					}
 				}
-			})
+			}
 		}
+		if _, n := pool.Pending(filter); n != payable {
+			b.Fatalf("pending %d, want %d", n, payable)
+		}
+		pool.Pending(txpool.PendingFilter{}) // every account's list cached
+		for _, order := range []bool{false, true} {
+			for _, cold := range []bool{false, true} {
+				name := size.name + map[bool]string{false: "/read", true: "/read+order"}[order] + map[bool]string{false: "/hot", true: "/cold"}[cold]
+				b.Run(name, func(b *testing.B) {
+					b.ReportAllocs()
+					for i := 0; i < b.N; i++ {
+						if cold {
+							b.StopTimer()
+							for i := 0; i < len(flush); i += 64 {
+								flush[i]++
+							}
+							b.StartTimer()
+						}
+						txs, _ := pool.Pending(filter)
+						if order {
+							txorder.NewTransactionsByPriceAndNonce(signer, txs, baseFee)
+						}
+					}
+				})
+			}
+		}
+		pool.Close()
 	}
 }
 

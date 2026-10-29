@@ -521,11 +521,9 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address
 }
 
 // pendingPayable is Pending for a filter with a minimum tip and a base fee,
-// which ends each list before its first transaction whose fee cap is below the
-// base fee: that transaction pays a negative tip. Only the accounts whose first
-// transaction's fee cap covers the base fee can contribute, and the index of
-// first transactions by fee cap finds them without visiting the others. The
-// caller holds pool.mu.
+// which ends each list before its first transaction below the base fee, so
+// only the accounts the head index finds can contribute. The caller holds
+// pool.mu.
 func (pool *LegacyPool) pendingPayable(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
 	var (
 		count   int

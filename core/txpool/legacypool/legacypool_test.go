@@ -1259,18 +1259,22 @@ func TestPendingMinTipBelowBaseFee(t *testing.T) {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
 	}
+	one := uint256.NewInt(1)
 	for _, tt := range []struct {
+		minTip  *uint256.Int
 		baseFee uint64
 		want    int
 	}{
-		{baseFee: 40, want: 4},
-		{baseFee: 60, want: 2},
-		{baseFee: 95, want: 2}, // effective tip 5 of the first two
-		{baseFee: 101, want: 0},
+		{minTip: one, baseFee: 40, want: 4},
+		{minTip: one, baseFee: 60, want: 2},
+		{minTip: one, baseFee: 95, want: 2}, // effective tip 5 of the first two
+		{minTip: one, baseFee: 101, want: 0},
+		{minTip: new(uint256.Int), baseFee: 101, want: 0}, // a zero minimum tip still filters
+		{minTip: nil, baseFee: 101, want: 4},              // no minimum tip, no fee filtering
 	} {
-		pending, _ := pool.Pending(txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(tt.baseFee)})
+		pending, _ := pool.Pending(txpool.PendingFilter{MinTip: tt.minTip, BaseFee: uint256.NewInt(tt.baseFee)})
 		if have := len(pending[account]); have != tt.want {
-			t.Errorf("base fee %d: have %d pending, want %d", tt.baseFee, have, tt.want)
+			t.Errorf("min tip %v, base fee %d: have %d pending, want %d", tt.minTip, tt.baseFee, have, tt.want)
 		}
 	}
 }

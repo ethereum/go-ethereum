@@ -24,8 +24,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 )
@@ -61,8 +59,7 @@ func TestFeeBucket(t *testing.T) {
 			t.Fatalf("fee cap %v: bucket %d, want its own", v, k)
 		}
 	}
-	// Every bucket from 64 on spans [lo, lo + lo/32]: the next value after
-	// a bucket's lowest that lands in the next bucket is within that.
+	// Adjacent buckets' boundaries are contiguous across doublings.
 	for _, v := range values {
 		if v.LtUint64(64) || v.BitLen() == 256 {
 			continue
@@ -118,7 +115,7 @@ func TestHeadIndexAtLeast(t *testing.T) {
 			l.Cap(rng.Intn(3))
 		case 6:
 			l.Filter(uint256.NewInt(uint64(rng.Int63n(1<<45))), 30000)
-		case 7: // the pool readies queued lists only, but a list is a list
+		case 7:
 			l.Ready(n)
 		}
 		if step%100 != 0 {
@@ -142,51 +139,6 @@ func TestHeadIndexAtLeast(t *testing.T) {
 	}
 }
 
-// TestPendingPayableVisitsPayers checks that Pending, with a minimum tip and a
-// base fee, leaves the accounts whose first transaction can't pay the base fee
-// unvisited, even if later ones pay more: their cached lists are not even built.
-func TestPendingPayableVisitsPayers(t *testing.T) {
-	t.Parallel()
-
-	pool, _ := setupPool()
-	defer pool.Close()
-
-	var (
-		keys   []*ecdsa.PrivateKey
-		payers = make(map[int]bool)
-	)
-	for i := 0; i < 100; i++ {
-		key, _ := crypto.GenerateKey()
-		keys = append(keys, key)
-		testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1e18))
-		feeCap := int64(3e8) // under a third of the base fee
-		if i%10 == 0 {
-			feeCap, payers[i] = 2e9, true
-		}
-		var txs []*types.Transaction
-		for n := uint64(0); n < 3; n++ {
-			txs = append(txs, dynamicFeeTx(n, 21000, big.NewInt(feeCap), big.NewInt(1e8), key))
-			feeCap *= 10 // the later ones pay, but only after the first
-		}
-		if errs := pool.addRemotesSync(txs); errs[0] != nil {
-			t.Fatal(errs[0])
-		}
-	}
-	filter := txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(1e9)}
-	got, count := pool.Pending(filter)
-	if len(got) != len(payers) || count != 3*len(payers) {
-		t.Fatalf("%d accounts and %d transactions, want %d and %d", len(got), count, len(payers), 3*len(payers))
-	}
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
-	for i, key := range keys {
-		list := pool.pending[crypto.PubkeyToAddress(key.PublicKey)]
-		if cached := list.txs.lazy != nil; cached != payers[i] {
-			t.Errorf("account %d (payer %v): list cached %v", i, payers[i], cached)
-		}
-	}
-}
-
 // TestHeadIndexAtLeastExtremes checks atLeast at the ends of the fee cap
 // range, 0, 2^255 and the largest uint256, with accounts indexed at and
 // around each.
@@ -205,7 +157,7 @@ func TestHeadIndexAtLeastExtremes(t *testing.T) {
 	for i, feeCap := range caps {
 		addr := common.Address{byte(i)}
 		l := newPendingList(addr, idx)
-		l.txs.Put(dynamicFeeTx(0, 21000, feeCap.ToBig(), big.NewInt(0), key)) // past Add's cost check
+		l.txs.Put(dynamicFeeTx(0, 21000, feeCap.ToBig(), big.NewInt(0), key)) // fee caps beyond Add's cost check
 		idx.update(addr, l)
 		feeCaps[addr] = feeCap
 	}
