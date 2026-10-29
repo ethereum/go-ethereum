@@ -279,13 +279,16 @@ func validatePoolInternals(pool *LegacyPool) error {
 	heads := pool.heads
 	var indexed int
 	for k, bucket := range heads.buckets {
-		if len(bucket) == 0 {
+		if len(bucket.entries) == 0 {
 			return fmt.Errorf("empty fee cap bucket %d kept", k)
+		}
+		if bucket.peak >= headBucketMinPeak && len(bucket.entries) < bucket.peak/4 {
+			return fmt.Errorf("fee cap bucket %d holds %d accounts of a peak of %d", k, len(bucket.entries), bucket.peak)
 		}
 		if heads.used[k/64]&(1<<(k%64)) == 0 {
 			return fmt.Errorf("fee cap bucket %d not marked used", k)
 		}
-		for addr, entry := range bucket {
+		for addr, entry := range bucket.entries {
 			list := pool.pending[addr]
 			if list == nil || entry.list != list {
 				return fmt.Errorf("account %x indexed with another list than its pending one", addr)

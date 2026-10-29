@@ -429,7 +429,11 @@ func TestLazyPendingCaching(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	pool.mu.Lock()
 	for nonce, feeCap := range []int64{100, 100, 50, 100} {
-		tx := dynamicFeeTx(uint64(nonce), 21000, big.NewInt(feeCap), big.NewInt(10), key)
+		gas := uint64(21000)
+		if nonce == 2 {
+			gas = 30000
+		}
+		tx := dynamicFeeTx(uint64(nonce), gas, big.NewInt(feeCap), big.NewInt(10), key)
 		pool.promoteTx(addr, tx.Hash(), tx)
 	}
 	m := pool.pending[addr].txs
@@ -458,6 +462,11 @@ func TestLazyPendingCaching(t *testing.T) {
 		if cached := m.lazy != nil; cached != tt.cached {
 			t.Errorf("base fee %d: cached %v, want %v", tt.baseFee, cached, tt.cached)
 		}
+	}
+	// Without a base fee Pending reads every list, not the head index.
+	m.lazy = nil
+	if pending, _ := pool.Pending(txpool.PendingFilter{GasLimitCap: 25000}); len(pending[addr]) != 2 || m.lazy != nil {
+		t.Errorf("gas limit cap: %d transactions, cached %v; want 2, false", len(pending[addr]), m.lazy != nil)
 	}
 	// A list cut short builds only what it returns: 10 reads of a 1,024
 	// transaction list passing only its first would allocate about 1.9 MB if

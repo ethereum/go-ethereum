@@ -17,6 +17,7 @@
 package legacypool
 
 import (
+	"maps"
 	"math/bits"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -50,7 +51,7 @@ func feeBucket(feeCap *uint256.Int) uint16 {
 // so that Pending can skip the accounts whose first transaction can't pay the
 // base fee. The pending lists keep it current under the pool's lock.
 type headIndex struct {
-	buckets map[uint16]map[common.Address]headEntry
+	buckets map[uint16]*headBucket
 	used    [feeBucketCount / 64]uint64 // bit k%64 of used[k/64]: bucket k is not empty
 	bucket  map[common.Address]uint16   // each indexed account's bucket
 }
@@ -60,9 +61,21 @@ type headEntry struct {
 	feeCap uint256.Int // of the list's first transaction
 }
 
+// headBucketMinPeak is the size below which a bucket's map is never rebuilt.
+const headBucketMinPeak = 64
+
+// headBucket is the accounts of one fee cap bucket. A Go map keeps its size as
+// entries leave, so a bucket's map is rebuilt once it holds less than a quarter
+// of its peak: senders moving through the buckets would otherwise leave large,
+// almost empty maps behind, which cost memory and slow Pending's walk.
+type headBucket struct {
+	entries map[common.Address]headEntry
+	peak    int // the most entries since the map was made
+}
+
 func newHeadIndex() *headIndex {
 	return &headIndex{
-		buckets: make(map[uint16]map[common.Address]headEntry),
+		buckets: make(map[uint16]*headBucket),
 		bucket:  make(map[common.Address]uint16),
 	}
 }
@@ -85,20 +98,27 @@ func (idx *headIndex) update(addr common.Address, l *list) {
 	}
 	bucket := idx.buckets[k]
 	if bucket == nil {
-		bucket = make(map[common.Address]headEntry)
+		bucket = &headBucket{entries: make(map[common.Address]headEntry)}
 		idx.buckets[k] = bucket
 		idx.used[k/64] |= 1 << (k % 64)
 	}
-	bucket[addr] = entry
+	bucket.entries[addr] = entry
+	bucket.peak = max(bucket.peak, len(bucket.entries))
 	idx.bucket[addr] = k
 }
 
 func (idx *headIndex) remove(addr common.Address, k uint16) {
 	bucket := idx.buckets[k]
-	delete(bucket, addr)
-	if len(bucket) == 0 {
+	delete(bucket.entries, addr)
+	switch n := len(bucket.entries); {
+	case n == 0:
 		delete(idx.buckets, k)
 		idx.used[k/64] &^= 1 << (k % 64)
+	case bucket.peak >= headBucketMinPeak && n < bucket.peak/4:
+		// A copy, not maps.Clone, which keeps the map's size.
+		entries := make(map[common.Address]headEntry, n)
+		maps.Copy(entries, bucket.entries)
+		bucket.entries, bucket.peak = entries, n
 	}
 	delete(idx.bucket, addr)
 }
@@ -116,7 +136,7 @@ func (idx *headIndex) atLeast(feeCap *uint256.Int, f func(common.Address, *list)
 			b := 63 - bits.LeadingZeros64(used)
 			used &^= 1 << b
 			k := uint16(w*64 + b)
-			for addr, entry := range idx.buckets[k] {
+			for addr, entry := range idx.buckets[k].entries {
 				if k == lowest && entry.feeCap.Lt(feeCap) {
 					continue
 				}

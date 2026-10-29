@@ -529,10 +529,9 @@ func (pool *LegacyPool) pendingPayable(filter txpool.PendingFilter) (map[common.
 		pending = make(map[common.Address][]*txpool.LazyTransaction)
 	)
 	pool.heads.atLeast(filter.BaseFee, func(addr common.Address, list *list) {
-		lazies := list.txs.lazies(pool)
-		if n := lazies.pending(filter); n > 0 {
-			pending[addr] = lazies.txs[:n:n]
-			count += n
+		if txs := list.txs.lazyPending(pool, filter); len(txs) > 0 {
+			pending[addr] = txs
+			count += len(txs)
 		}
 	})
 	return pending, count

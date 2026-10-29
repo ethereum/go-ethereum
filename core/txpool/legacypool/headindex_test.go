@@ -18,8 +18,10 @@ package legacypool
 
 import (
 	"crypto/ecdsa"
+	"maps"
 	"math/big"
 	"math/rand"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -178,5 +180,61 @@ func TestHeadIndexAtLeastExtremes(t *testing.T) {
 		if got != want {
 			t.Errorf("at least %v: %d accounts returned, want %d", threshold, got, want)
 		}
+	}
+}
+
+// TestHeadIndexCompaction checks that a bucket's map is rebuilt once it holds
+// less than a quarter of its peak, keeping every account, and that a drained
+// bucket doesn't keep the size it had.
+func TestHeadIndexCompaction(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	full, empty := newList(true), newList(true)
+	full.txs.Put(dynamicFeeTx(0, 21000, big.NewInt(1<<20), big.NewInt(0), key))
+	k := feeBucket(uint256.NewInt(1 << 20))
+	addr := func(a int) common.Address { return common.BigToAddress(big.NewInt(int64(a + 1))) }
+
+	idx := newHeadIndex()
+	for a := range 64 {
+		idx.update(addr(a), full)
+	}
+	for a := 63; a >= 16; a-- {
+		idx.update(addr(a), empty)
+	}
+	if b := idx.buckets[k]; b.peak != 64 || len(b.entries) != 16 {
+		t.Fatalf("at a quarter of the peak: %d accounts, peak %d; want 16, 64", len(b.entries), b.peak)
+	}
+	idx.update(addr(15), empty)
+	if b := idx.buckets[k]; b.peak != 15 || len(b.entries) != 15 {
+		t.Fatalf("below a quarter of the peak: %d accounts, peak %d; want 15, 15", len(b.entries), b.peak)
+	}
+	for a := range 15 {
+		if idx.bucket[addr(a)] != k || idx.buckets[k].entries[addr(a)].list != full {
+			t.Fatalf("account %d lost in the rebuild", a)
+		}
+	}
+	if idx.used[k/64]&(1<<(k%64)) == 0 {
+		t.Fatal("rebuilt bucket not marked used")
+	}
+	for a := range 15 {
+		idx.update(addr(a), empty)
+	}
+	if idx.buckets[k] != nil || idx.used[k/64]&(1<<(k%64)) != 0 {
+		t.Fatal("empty bucket kept")
+	}
+	// maps.Clone copies a map at its size, so the bytes of a clone measure it:
+	// a bucket drained from 4,096 accounts to one must copy as a small map.
+	for a := range 4096 {
+		idx.update(addr(a), full)
+	}
+	for a := 4095; a >= 1; a-- {
+		idx.update(addr(a), empty)
+	}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	clone := maps.Clone(idx.buckets[k].entries)
+	runtime.ReadMemStats(&after)
+	runtime.KeepAlive(clone)
+	if n := after.TotalAlloc - before.TotalAlloc; n > 64<<10 {
+		t.Errorf("the drained bucket's map copies as %d bytes", n)
 	}
 }
