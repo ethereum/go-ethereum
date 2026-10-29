@@ -75,8 +75,8 @@ func generateHistoryTests(clictx *cli.Context) error {
 	if err != nil {
 		exit(err)
 	}
-	if latest < historyTestBlockCount {
-		exit(fmt.Errorf("node seems not synced, latest block is %d", latest))
+	if latest < earliest || latest-earliest < historyTestBlockCount {
+		exit(fmt.Errorf("not enough blocks between earliest %d and latest %d (need %d)", earliest, latest, historyTestBlockCount))
 	}
 	test.BlockNumbers = make([]uint64, 0, historyTestBlockCount)
 	stride := (latest - earliest) / historyTestBlockCount
