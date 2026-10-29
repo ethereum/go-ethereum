@@ -43,9 +43,13 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 		OnTxStart:        t.OnTxStart,
 		OnTxEnd:          t.OnTxEnd,
 		OnEnter:          t.OnEnter,
+		OnEnterV2:        t.OnEnterV2,
 		OnExit:           t.OnExit,
+		OnExitV2:         t.OnExitV2,
 		OnOpcode:         t.OnOpcode,
+		OnOpcodeV2:       t.OnOpcodeV2,
 		OnFault:          t.OnFault,
+		OnFaultV2:        t.OnFaultV2,
 		OnGasChange:      t.OnGasChange,
 		OnGasChangeV2:    t.OnGasChangeV2,
 		OnBlockchainInit: t.OnBlockchainInit,
@@ -68,10 +72,22 @@ func (t *noop) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpCo
 func (t *noop) OnFault(pc uint64, op byte, gas, cost uint64, _ tracing.OpContext, depth int, err error) {
 }
 
+func (t *noop) OnOpcodeV2(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+}
+
+func (t *noop) OnFaultV2(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, _ tracing.OpContext, depth int, err error) {
+}
+
 func (t *noop) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 func (t *noop) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+}
+
+func (t *noop) OnEnterV2(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
+}
+
+func (t *noop) OnExitV2(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 }
 
 func (t *noop) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {

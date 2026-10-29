@@ -72,20 +72,20 @@ func newTracer(traceTransfers bool, blockNumber uint64, blockTimestamp uint64, b
 
 func (t *tracer) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnEnter: t.onEnter,
-		OnExit:  t.onExit,
-		OnLog:   t.onLog,
+		OnEnterV2: t.onEnter,
+		OnExitV2:  t.onExit,
+		OnLog:     t.onLog,
 	}
 }
 
-func (t *tracer) onEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *tracer) onEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
 	t.logs = append(t.logs, make([]*types.Log, 0))
 	if vm.OpCode(typ) != vm.DELEGATECALL && vm.OpCode(typ) != vm.CALLCODE && value != nil && value.Cmp(common.Big0) > 0 {
 		t.captureTransfer(from, to, value)
 	}
 }
 
-func (t *tracer) onExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *tracer) onExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 	if depth == 0 {
 		t.onEnd(reverted)
 		return

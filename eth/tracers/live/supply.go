@@ -120,8 +120,8 @@ func newSupplyTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		OnGenesisBlock:   t.onGenesisBlock,
 		OnTxStart:        t.onTxStart,
 		OnBalanceChange:  t.onBalanceChange,
-		OnEnter:          t.onEnter,
-		OnExit:           t.onExit,
+		OnEnterV2:        t.onEnter,
+		OnExitV2:         t.onExit,
 		OnClose:          t.onClose,
 	}, nil
 }
@@ -230,7 +230,7 @@ func (s *supplyTracer) internalTxsHandler(call *supplyTxCallstack) {
 	}
 }
 
-func (s *supplyTracer) onEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (s *supplyTracer) onEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
 	call := supplyTxCallstack{
 		calls: make([]supplyTxCallstack, 0),
 	}
@@ -245,7 +245,7 @@ func (s *supplyTracer) onEnter(depth int, typ byte, from common.Address, to comm
 	s.txCallstack = append(s.txCallstack, call)
 }
 
-func (s *supplyTracer) onExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (s *supplyTracer) onExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 	if depth == 0 {
 		// No need to handle Burned amount if transaction is reverted
 		if !reverted {
