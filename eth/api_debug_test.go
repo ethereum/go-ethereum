@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
@@ -91,13 +92,16 @@ func newTestBlockChain(t *testing.T, n int, gspec *core.Genesis, generator func(
 }
 
 func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.Dump {
-	result := statedb.RawDump(&state.DumpConfig{
+	result, err := dumpState(statedb, &state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
 		OnlyWithAddresses: false,
 		Start:             start.Bytes(),
 		Max:               uint64(requestedNum),
 	})
+	if err != nil {
+		t.Fatalf("failed to dump state: %v", err)
+	}
 
 	if len(result.Accounts) != expectedNum {
 		t.Fatalf("expected %d results, got %d", expectedNum, len(result.Accounts))
@@ -207,6 +211,55 @@ func TestEmptyAccountRange(t *testing.T) {
 	}
 	if len(results.Accounts) != 0 {
 		t.Fatalf("Empty state should not return addresses: %v", results.Accounts)
+	}
+}
+
+// TestAccountRangeTrieError checks that a trie node failing to resolve while
+// dumping the state is reported, instead of returning a truncated page whose nil
+// next key claims that all accounts were returned.
+func TestAccountRangeTrieError(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mdb    = rawdb.NewMemoryDatabase()
+		tdb    = triedb.NewDatabase(mdb, &triedb.Config{Preimages: true})
+		sdb, _ = state.New(types.EmptyRootHash, state.NewDatabase(tdb, nil))
+	)
+	for i := range 64 {
+		sdb.SetBalance(common.Address{byte(i + 1)}, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+	}
+	root, err := sdb.Commit(params.Rules{IsEIP158: true}, 0)
+	if err != nil {
+		t.Fatalf("failed to commit state: %v", err)
+	}
+	if err := tdb.Commit(root, false); err != nil {
+		t.Fatalf("failed to commit trie database: %v", err)
+	}
+	// Delete the last hashed non-root node of the account trie
+	tr, err := trie.New(trie.StateTrieID(root), tdb)
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+	it, err := tr.NodeIterator(nil)
+	if err != nil {
+		t.Fatalf("failed to open node iterator: %v", err)
+	}
+	var victim common.Hash
+	for it.Next(true) {
+		if it.Hash() != (common.Hash{}) && len(it.Path()) > 0 {
+			victim = it.Hash()
+		}
+	}
+	if victim == (common.Hash{}) {
+		t.Fatal("no non-root trie node found")
+	}
+	rawdb.DeleteLegacyTrieNode(mdb, victim)
+
+	// Reopen the state without any cached trie nodes and dump it
+	sdb, _ = state.New(root, state.NewDatabase(triedb.NewDatabase(mdb, &triedb.Config{Preimages: true}), nil))
+	dump, err := dumpState(sdb, &state.DumpConfig{SkipCode: true, SkipStorage: true, Max: AccountRangeMaxResults})
+	if err == nil {
+		t.Fatalf("expected trie error, got %d accounts with next key %v", len(dump.Accounts), dump.Next)
 	}
 }
 
