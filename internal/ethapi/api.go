@@ -161,8 +161,10 @@ func (api *EthereumAPI) BaseFee(ctx context.Context) *hexutil.Big {
 func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 	progress := api.b.SyncProgress(ctx)
 
-	// Return not syncing if the synchronisation already completed
-	if progress.Done() {
+	// Don't claim "synced" until the CL has driven us at least once (post-merge
+	// nodes with Engine API attached). Backends without a CL report ready
+	// immediately via ConsensusReady. Refs #33687.
+	if progress.Done() && api.b.ConsensusReady() {
 		return false, nil
 	}
 	// Otherwise gather the block sync stats
