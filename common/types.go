@@ -158,7 +158,9 @@ func (h *Hash) SetBytes(b []byte) {
 		b = b[len(b)-HashLength:]
 	}
 
-	copy(h[HashLength-len(b):], b)
+	offset := HashLength - len(b)
+	copy(h[offset:], b)
+	clear(h[:offset])
 }
 
 // Generate implements testing/quick.Generator.
@@ -329,7 +331,9 @@ func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
 		b = b[len(b)-AddressLength:]
 	}
-	copy(a[AddressLength-len(b):], b)
+	offset := AddressLength - len(b)
+	copy(a[offset:], b)
+	clear(a[:offset])
 }
 
 // MarshalText returns the hex representation of a.
