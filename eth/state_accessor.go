@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
 // noopReleaser is returned in case there is no operation expected
@@ -44,11 +45,11 @@ const reexecLimit = uint64(128)
 
 func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	var (
-		current  *types.Block
-		database state.Database
-		tdb      *triedb.Database
-		report   = true
-		origin   = block.NumberU64()
+		current *types.Block
+		db      state.Database
+		tdb     *triedb.Database
+		report  = true
+		origin  = block.NumberU64()
 	)
 	// The state is only for reading purposes, check the state presence in
 	// live database.
@@ -73,14 +74,14 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
 			tdb := triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
-			database = state.NewDatabase(tdb, nil)
-			if statedb, err = state.New(block.Root(), database); err == nil {
+			db = state.NewDatabase(tdb, nil)
+			if statedb, err = state.New(block.Root(), db); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
 			}
 		}
 		// The optional base statedb is given, mark the start point as parent block
-		statedb, database, tdb, report = base, base.Database(), base.Database().TrieDB(), false
+		statedb, db, tdb, report = base, base.Database(), base.Database().TrieDB(), false
 		current = eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	} else {
 		// Otherwise, try to reexec blocks until we find a state or reach our limit
@@ -91,13 +92,13 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 		// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 		// please re-enable it for better performance.
 		tdb = triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
-		database = state.NewDatabase(tdb, nil)
+		db = state.NewDatabase(tdb, nil)
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is
 		// chain tracing from the genesis).
 		if !readOnly {
-			statedb, err = state.New(current.Root(), database)
+			statedb, err = state.New(current.Root(), db)
 			if err == nil {
 				return statedb, noopReleaser, nil
 			}
@@ -108,15 +109,15 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 				return nil, nil, err
 			}
 			if current.NumberU64() == 0 {
-				return nil, nil, errors.New("genesis state is missing")
+				return nil, nil, fmt.Errorf("%w: genesis state is missing", database.ErrStateUnavailable)
 			}
 			parent := eth.blockchain.GetBlock(current.ParentHash(), current.NumberU64()-1)
 			if parent == nil {
-				return nil, nil, fmt.Errorf("missing block %v %d", current.ParentHash(), current.NumberU64()-1)
+				return nil, nil, fmt.Errorf("%w: missing block %v %d", database.ErrStateUnavailable, current.ParentHash(), current.NumberU64()-1)
 			}
 			current = parent
 
-			statedb, err = state.New(current.Root(), database)
+			statedb, err = state.New(current.Root(), db)
 			if err == nil {
 				break
 			}
@@ -124,7 +125,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 		if err != nil {
 			switch err.(type) {
 			case *trie.MissingNodeError:
-				return nil, nil, fmt.Errorf("required historical state unavailable (reexec=%d)", reexecLimit)
+				return nil, nil, fmt.Errorf("%w (reexec=%d)", database.ErrStateUnavailable, reexecLimit)
 			default:
 				return nil, nil, err
 			}
@@ -162,7 +163,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
 		}
-		statedb, err = state.New(root, database)
+		statedb, err = state.New(root, db)
 		if err != nil {
 			return nil, nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}
@@ -192,7 +193,7 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
-	return nil, nil, errors.New("historical state is not available")
+	return nil, nil, err
 }
 
 // stateAtBlock retrieves the state database associated with a certain block.
@@ -229,7 +230,7 @@ func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, base 
 // function will return the state of block after the pre-block operations have
 // been completed (e.g. updating system contracts), but before post-block
 // operations are completed (e.g. processing withdrawals).
-func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
+func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (_ *types.Transaction, _ vm.BlockContext, _ *state.StateDB, _ tracers.StateReleaseFunc, err error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
 		return nil, vm.BlockContext{}, nil, nil, errors.New("no transaction in genesis")
@@ -237,7 +238,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	// Create the parent state database
 	parent := eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("parent %#x not found", block.ParentHash())
+		return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("%w: parent %#x not found", database.ErrStateUnavailable, block.ParentHash())
 	}
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
@@ -245,30 +246,59 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
-	// Insert parent beacon block root in the state as per EIP-4788.
-	context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
-	evm := vm.NewEVM(context, statedb, eth.blockchain.Config(), vm.Config{})
+	defer func() {
+		if err != nil {
+			release()
+		}
+	}()
+	vmctx := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+	evm := vm.NewEVM(vmctx, statedb, eth.blockchain.Config(), vm.Config{})
 	defer evm.Release()
 
+	// Abort the replay when the request is cancelled. Release returns the EVM
+	// to a pool, so a running cancellation must finish before it.
+	stopped := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { evm.Cancel(); close(stopped) })
+	defer func() {
+		if !stop() {
+			<-stopped
+		}
+	}()
 	// Run pre-execution system calls
 	core.PreExecution(ctx, block.BeaconRoot(), parent.Header(), eth.blockchain.Config(), evm, block.Number(), block.Time())
-
+	if err := ctx.Err(); err != nil {
+		return nil, vm.BlockContext{}, nil, nil, err
+	}
+	if err := statedb.Error(); err != nil {
+		return nil, vm.BlockContext{}, nil, nil, err
+	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
-		return nil, context, statedb, release, nil
+		return nil, vmctx, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(eth.blockchain.Config(), block.Number(), block.Time())
 	for idx, tx := range block.Transactions() {
 		if idx == txIndex {
-			return tx, context, statedb, release, nil
+			return tx, vmctx, statedb, release, nil
 		}
 		// Assemble the transaction call message and return if the requested offset
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-
+		msg, err := core.TransactionToMessage(tx, signer, block.BaseFee())
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x: %w", tx.Hash(), err)
+		}
 		// Not yet the searched for transaction, execute on top of the current state
 		statedb.SetTxContext(tx.Hash(), idx, uint32(idx+1))
-		if _, err := core.ApplyMessage(evm, msg, nil); err != nil {
-			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
+		_, err = core.ApplyMessage(evm, msg, nil)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, vm.BlockContext{}, nil, nil, ctxErr
+		}
+		// A failed state read can cause the transaction to fail, so it takes
+		// precedence.
+		if stateErr := statedb.Error(); stateErr != nil {
+			return nil, vm.BlockContext{}, nil, nil, stateErr
+		}
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %w", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
 		statedb.Finalise(evm.GetRules())

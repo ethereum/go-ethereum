@@ -36,7 +36,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/locals"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/holiman/uint256"
 )
 
@@ -177,6 +180,39 @@ func testSendTx(t *testing.T, withLocal bool) {
 	} else {
 		if !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 			t.Fatalf("Unexpected error, want: %v, got: %v", txpool.ErrInflightTxLimitReached, err)
+		}
+	}
+}
+
+func TestBlockTagNotFound(t *testing.T) {
+	b := initBackend(false)
+	for number, want := range map[rpc.BlockNumber]error{
+		rpc.SafeBlockNumber:      ethapi.ErrSafeBlockNotFound,
+		rpc.FinalizedBlockNumber: ethapi.ErrFinalizedBlockNotFound,
+	} {
+		if _, err := b.HeaderByNumber(context.Background(), number); !errors.Is(err, want) {
+			t.Errorf("header %v: have %v, want %v", number, err, want)
+		}
+		if _, err := b.BlockByNumber(context.Background(), number); !errors.Is(err, want) {
+			t.Errorf("block %v: have %v, want %v", number, err, want)
+		}
+	}
+}
+
+func TestStateAtBlockUnavailable(t *testing.T) {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		db := rawdb.NewMemoryDatabase()
+		chain, err := core.NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(scheme))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(chain.Stop)
+		b := &EthAPIBackend{eth: &Ethereum{blockchain: chain, chainDb: db}}
+
+		// Neither the state of this block nor its parent is known.
+		block := types.NewBlockWithHeader(&types.Header{Number: big.NewInt(1), ParentHash: common.Hash{1}, Root: common.Hash{2}})
+		if _, _, err := b.StateAtBlock(context.Background(), block, nil, true, false); !errors.Is(err, database.ErrStateUnavailable) {
+			t.Errorf("%s: have %v, want %v", scheme, err, database.ErrStateUnavailable)
 		}
 	}
 }
