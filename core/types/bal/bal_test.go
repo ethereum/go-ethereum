@@ -19,12 +19,14 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"encoding/json"
 	"math"
 	"reflect"
 	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -57,6 +59,9 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 				},
 				CodeChange: map[uint32][]byte{
 					0: common.Hex2Bytes("deadbeef"),
+				},
+				CodeHashChange: map[uint32]common.Hash{
+					1: common.HexToHash("0x01"),
 				},
 			},
 			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
@@ -231,6 +236,8 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 			NewCode:          testrand.Bytes(256),
 		})
 	}
+	hash := common.Hash(testrand.Bytes(32))
+	codes = append(codes, encodingCodeChange{BlockAccessIndex: 10, NewCodeHash: &hash})
 	if sort {
 		slices.SortFunc(codes, func(a, b encodingCodeChange) int {
 			return cmp.Compare(a.BlockAccessIndex, b.BlockAccessIndex)
@@ -276,6 +283,11 @@ func TestBlockAccessListCopy(t *testing.T) {
 	for _, aa := range *cpyCpy {
 		for i := 0; i < len(aa.StorageReads); i++ {
 			aa.StorageReads[i] = new(uint256.Int).SetBytes(testrand.Bytes(32))
+		}
+		for _, change := range aa.CodeChanges {
+			if change.NewCodeHash != nil {
+				*change.NewCodeHash = common.Hash{0xff}
+			}
 		}
 	}
 	if !reflect.DeepEqual(list, cpy) {
@@ -379,5 +391,48 @@ func TestBlockAccessListValidation(t *testing.T) {
 	listB := cBAL.ToEncodingObj()
 	if err := listB.Validate(math.MaxUint64, 10000); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
+	}
+}
+
+func TestBALAdoptedCodeHash(t *testing.T) {
+	code := []byte{0x60, 0x00, 0x00}
+	hash, old := crypto.Keccak256Hash(code), common.HexToHash("0x01")
+	adopter := common.Address{0xbb}
+	list := &BlockAccessList{
+		{Address: common.Address{0xaa}, CodeChanges: []encodingCodeChange{{BlockAccessIndex: 1, NewCode: code}}},
+		{Address: adopter, CodeChanges: []encodingCodeChange{
+			{BlockAccessIndex: 2, NewCode: []byte{}, NewCodeHash: &hash}, {BlockAccessIndex: 3, NewCode: []byte{}, NewCodeHash: &old}, {BlockAccessIndex: 4, NewCode: []byte{}},
+		}},
+	}
+	blob, err := json.Marshal(list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded BlockAccessList
+	if err := json.Unmarshal(blob, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(list, &decoded) {
+		t.Fatal("JSON round trip mismatch")
+	}
+	lookup := list.Lookup()
+	if _, _, h, _, _, ok := lookup.AccountChanges(adopter, 3); !ok || h != hash {
+		t.Fatalf("adopted hash: got %x (%v), want %x", h, ok, hash)
+	}
+	if got, ok := lookup.Code(adopter, 3); !ok || !bytes.Equal(got, code) {
+		t.Fatalf("adopted code: got %x (%v), want %x", got, ok, code)
+	}
+	if _, ok := lookup.Code(adopter, 4); ok {
+		t.Fatal("code from before the block reported as carried")
+	}
+	if got, ok := lookup.Code(adopter, 5); !ok || len(got) != 0 {
+		t.Fatalf("cleared code: got %x (%v)", got, ok)
+	}
+	if got, ok := lookup.CodeByHash(hash); !ok || !bytes.Equal(got, code) {
+		t.Fatalf("code by hash: got %x (%v), want %x", got, ok, code)
+	}
+	(*list)[1].CodeChanges[0].NewCode = code
+	if err := (*list)[1].validate(4); err == nil {
+		t.Fatal("code change with both code and hash accepted")
 	}
 }

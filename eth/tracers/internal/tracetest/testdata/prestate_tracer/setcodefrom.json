@@ -1,0 +1,78 @@
+{
+  "genesis": {
+    "config": {
+      "chainId": 1337,
+      "homesteadBlock": 0,
+      "eip150Block": 0,
+      "eip155Block": 0,
+      "eip158Block": 0,
+      "byzantiumBlock": 0,
+      "constantinopleBlock": 0,
+      "petersburgBlock": 0,
+      "istanbulBlock": 0,
+      "muirGlacierBlock": 0,
+      "berlinBlock": 0,
+      "londonBlock": 0,
+      "arrowGlacierBlock": 0,
+      "grayGlacierBlock": 0,
+      "shanghaiTime": 0,
+      "cancunTime": 0,
+      "pragueTime": 0,
+      "osakaTime": 0,
+      "amsterdamTime": 0,
+      "bogotaTime": 0,
+      "terminalTotalDifficulty": 0,
+      "blobSchedule": {
+        "cancun": {
+          "target": 3,
+          "max": 6,
+          "baseFeeUpdateFraction": 3338477
+        },
+        "prague": {
+          "target": 6,
+          "max": 9,
+          "baseFeeUpdateFraction": 5007716
+        }
+      }
+    },
+    "alloc": {
+      "0x000000000000000000000000000000000000aaaa": {
+        "code": "0x73000000000000000000000000000000000000bbbba700",
+        "balance": "0x0"
+      },
+      "0x000000000000000000000000000000000000bbbb": {
+        "code": "0x6042604255",
+        "balance": "0x0"
+      },
+      "0x71562b71999873db5b286df957af199ec94617f7": {
+        "balance": "0xde0b6b3a7640000"
+      }
+    },
+    "gasLimit": 30000000,
+    "difficulty": 0
+  },
+  "context": {
+    "number": "0x1",
+    "difficulty": "0x0",
+    "timestamp": "0x0",
+    "gasLimit": "0x1c9c380",
+    "miner": "0x0000000000000000000000000000000000000000",
+    "baseFeePerGas": "0x7"
+  },
+  "input": "0xf86680843b9aca00830186a094000000000000000000000000000000000000aaaa8080820a96a093b069c402ff258ef814b58963113d5def5d6d4cea24065e3917e075c8e95040a024d9034c3ae2dafaaf49905a9c32b7c03d18dde1469dcade42070718868f4d35",
+  "result": {
+    "0x000000000000000000000000000000000000aaaa": {
+      "balance": "0x0",
+      "code": "0x73000000000000000000000000000000000000bbbba700",
+      "codeHash": "0xe5b85d78ad268055f6c903622e4a2d78d0eb6ce325b4592c9087e07a02f39228"
+    },
+    "0x000000000000000000000000000000000000bbbb": {
+      "balance": "0x0",
+      "code": "0x6042604255",
+      "codeHash": "0xfa2f0a459fb0004c3c79afe1ab7612a23f1e649b3b352242f8c7c45a0e3585b6"
+    },
+    "0x71562b71999873db5b286df957af199ec94617f7": {
+      "balance": "0xde0b6b3a7640000"
+    }
+  }
+}

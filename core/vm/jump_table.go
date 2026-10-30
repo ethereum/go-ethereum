@@ -94,6 +94,7 @@ func validate(jt JumpTable) JumpTable {
 
 func newBogotaInstructionSet() JumpTable {
 	instructionSet := newAmsterdamInstructionSet()
+	enable8298(&instructionSet) // EIP-8298 (SETCODEFROM opcode)
 	return validate(instructionSet)
 }
 
