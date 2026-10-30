@@ -2021,7 +2021,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		chain.triedb.Commit(canonblocks[tt.commitBlock-1].Root(), false)
+		chain.trieDB().Commit(canonblocks[tt.commitBlock-1].Root(), false)
 		if snapshots && scheme == rawdb.HashScheme {
 			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
@@ -2032,14 +2032,14 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
 	// Reopen the trie database without persisting in-memory dirty nodes.
-	chain.triedb.Close()
+	chain.trieDB().Close()
 	dbconfig := &triedb.Config{}
 	if scheme == rawdb.PathScheme {
 		dbconfig.PathDB = pathdb.Defaults
 	} else {
 		dbconfig.HashDB = hashdb.Defaults
 	}
-	chain.triedb = triedb.NewDatabase(chain.db, dbconfig)
+	chain.triedb.Store(triedb.NewDatabase(chain.db, dbconfig))
 
 	// Force run a freeze cycle
 	type freezer interface {

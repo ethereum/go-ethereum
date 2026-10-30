@@ -513,14 +513,14 @@ func TestFollowerSharesCanonicalHandle(t *testing.T) {
 	if _, err := m.open(); err != nil {
 		t.Fatal(err)
 	}
-	if m.handle != chain.triedb || m.owned {
+	if m.handle != chain.trieDB() || m.owned {
 		t.Fatal("the merkle direction must share the canonical handle unowned")
 	}
 	p := chain.follower.direction(true)
 	if _, err := p.open(); err != nil {
 		t.Fatal(err)
 	}
-	if p.handle == chain.triedb || !p.owned {
+	if p.handle == chain.trieDB() || !p.owned {
 		t.Fatal("the binary direction must own its handle")
 	}
 }

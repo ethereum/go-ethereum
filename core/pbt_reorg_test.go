@@ -77,7 +77,7 @@ func TestPBTReportsRollbackUnsupported(t *testing.T) {
 	if chain.StateRecoverable(root) {
 		t.Fatal("chain reports its state as recoverable; the binary tree cannot revert")
 	}
-	err = chain.triedb.Recover(root)
+	err = chain.trieDB().Recover(root)
 	if err == nil {
 		t.Fatal("binary tree accepted a rollback request")
 	}

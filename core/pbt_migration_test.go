@@ -190,7 +190,7 @@ func merkleStateFixture(t *testing.T, genesis *Genesis) (ethdb.Database, common.
 }
 
 // TestMerkleDisposalDeletesUnderALiveNode: a node that crossed the fork in-run
-// retires bc.triedb and deletes the merkle state without a restart.
+// retires bc.trieDB() and deletes the merkle state without a restart.
 func TestMerkleDisposalDeletesUnderALiveNode(t *testing.T) {
 	genesis := migrationGenesis(t)
 	db, addrHash := merkleStateFixture(t, genesis)

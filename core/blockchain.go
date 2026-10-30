@@ -361,14 +361,13 @@ type BlockChain struct {
 	gcproc                 time.Duration                    // Accumulates canonical block processing for trie dumping
 	lastWrite              uint64                           // Last block when the state was flushed
 	flushInterval          atomic.Int64                     // Time interval (processing time) after which to flush a state
-	triedb                 *triedb.Database                 // The database handler for maintaining trie nodes.
+	triedb                 atomic.Pointer[triedb.Database]  // The database handler for maintaining trie nodes; swapped once by the disposal
 	codedb                 *state.CodeDB                    // The database handler for maintaining contract codes.
 	jumpDestCache          vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
 	precompileCache        *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
 	txIndexer              *txIndexer                       // Transaction indexer, might be nil if not enabled
 	follower               *bintrieFollower                 // Shadow tree follower, nil unless migrating
 	disposer               atomic.Pointer[merkleDisposer]   // Merkle state disposal, nil unless retiring it
-	merkleRetired          atomic.Bool                      // bc.triedb retired by the disposal
 	live                   atomic.Bool                      // Set by the live node, the only one to decide the disposal
 	activationCheckpointed atomic.Bool                      // Merkle trie journaled at the boundary (checkpointActivation)
 	disposed               atomic.Bool                      // Merkle state disposed of (the marker, cached)
@@ -495,7 +494,6 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		chainConfig:        chainConfig,
 		cfg:                cfg,
 		db:                 db,
-		triedb:             triedb,
 		codedb:             state.NewCodeDB(db),
 		jumpDestCache:      NewJumpDestCache(),
 		precompileCache:    vm.NewPrecompileCache(),
@@ -510,6 +508,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		logger:             cfg.VmConfig.Tracer,
 		slowBlockThreshold: cfg.SlowBlockThreshold,
 	}
+	bc.triedb.Store(triedb)
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
 	if err != nil {
 		return nil, err
@@ -715,7 +714,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 
 	// Start state size tracker
 	if bc.cfg.StateSizeTracking {
-		stateSizer, err := state.NewSizeTracker(bc.db, bc.triedb)
+		stateSizer, err := state.NewSizeTracker(bc.db, bc.trieDB())
 		if err == nil {
 			bc.stateSizer = stateSizer
 			log.Info("Enabled state size metrics")
@@ -750,7 +749,7 @@ func (bc *BlockChain) setupSnapshot() {
 			NoBuild:    bc.cfg.SnapshotNoBuild,
 			AsyncBuild: !bc.cfg.SnapshotWait,
 		}
-		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
+		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.trieDB(), head.Root)
 	}
 }
 
@@ -1065,7 +1064,7 @@ func (bc *BlockChain) binaryStateBelowFork(head *types.Header) bool {
 // migrating reports whether the chain runs on a binary tree that does not
 // reach genesis: below the fork its blocks commit the merkle trie.
 func (bc *BlockChain) migrating() bool {
-	return bc.triedb.IsPBT() && !bc.chainConfig.IsBinaryTrie(bc.genesisBlock.Number(), bc.genesisBlock.Time())
+	return bc.trieDB().IsPBT() && !bc.chainConfig.IsBinaryTrie(bc.genesisBlock.Number(), bc.genesisBlock.Time())
 }
 
 // replaying reports whether pre-fork blocks have only the binary tree to
@@ -1084,18 +1083,23 @@ func (bc *BlockChain) commitRoot(h *types.Header) (common.Hash, bool) {
 	return rawdb.ReadShadowStateRoot(bc.db, h.Hash(), h.Number.Uint64())
 }
 
-// reopenTrieDB swaps bc.triedb for a handle over the other tree. Only before
+// reopenTrieDB swaps bc.trieDB() for a handle over the other tree. Only before
 // anything else references the handle.
 func (bc *BlockChain) reopenTrieDB(pbt bool) error {
 	config, err := bc.cfg.triedbConfig(pbt)
 	if err != nil {
 		return err
 	}
-	if err := bc.triedb.Close(); err != nil {
+	if err := bc.trieDB().Close(); err != nil {
 		return err
 	}
-	bc.triedb = triedb.NewDatabase(bc.db, config)
+	bc.triedb.Store(triedb.NewDatabase(bc.db, config))
 	return nil
+}
+
+// trieDB returns the trie database the chain executes on.
+func (bc *BlockChain) trieDB() *triedb.Database {
+	return bc.triedb.Load()
 }
 
 // rewindPathHead implements the logic of rewindHead in the context of path scheme.
@@ -1200,7 +1204,7 @@ func (bc *BlockChain) hasHeaderState(h *types.Header) bool {
 // then block number zero is returned, indicating that snapshot recovery is disabled
 // and the whole snapshot should be auto-generated in case of head mismatch.
 func (bc *BlockChain) rewindHead(head *types.Header, root common.Hash) (*types.Header, uint64) {
-	if bc.triedb.Scheme() == rawdb.PathScheme {
+	if bc.trieDB().Scheme() == rawdb.PathScheme {
 		return bc.rewindPathHead(head, root)
 	}
 	return bc.rewindHashHead(head, root)
@@ -1341,7 +1345,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		root, _ := bc.commitRoot(newHeadBlock)
 		switch {
 		case bc.StateRecoverable(root):
-			if err := bc.triedb.Recover(root); err != nil {
+			if err := bc.trieDB().Recover(root); err != nil {
 				// The state was confirmed recoverable just above, so a failure here
 				// can only stem from an unexpected I/O error. There is no safe way to
 				// continue with a half-rolled-back state, hence crash hard.
@@ -1424,13 +1428,13 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash, isSnapV2 bool) error {
 	// a full trie-to-flat regeneration; snap/2 adopts the already-consistent
 	// flat state and skips that work.
 	root := block.Root()
-	if bc.triedb.Scheme() == rawdb.PathScheme {
+	if bc.trieDB().Scheme() == rawdb.PathScheme {
 		if isSnapV2 {
-			if err := bc.triedb.AdoptSyncedState(root); err != nil {
+			if err := bc.trieDB().AdoptSyncedState(root); err != nil {
 				return err
 			}
 		} else {
-			if err := bc.triedb.Enable(root); err != nil {
+			if err := bc.trieDB().Enable(root); err != nil {
 				return err
 			}
 		}
@@ -1616,13 +1620,13 @@ func (bc *BlockChain) Stop() {
 		}
 		bc.snaps.Release()
 	}
-	if bc.triedb.Scheme() == rawdb.PathScheme {
+	if bc.trieDB().Scheme() == rawdb.PathScheme {
 		// Past the activation boundary the head commits the other tree; this
 		// handle's newest root is then its window direction's replay cursor,
 		// with the last own-flavour header as the never-ran fallback.
 		head := bc.CurrentBlock()
-		root, pbt := head.Root, bc.triedb.IsPBT()
-		if !bc.merkleRetired.Load() && bc.follower != nil && bc.chainConfig.IsBinaryTrie(head.Number, head.Time) != pbt {
+		root, pbt := head.Root, bc.trieDB().IsPBT()
+		if bc.follower != nil && bc.chainConfig.IsBinaryTrie(head.Number, head.Time) != pbt {
 			if r := bc.follower.cursorRoot(pbt); r != (common.Hash{}) {
 				root = r
 			} else {
@@ -1636,10 +1640,8 @@ func (bc *BlockChain) Stop() {
 				}
 			}
 		}
-		if !bc.merkleRetired.Load() {
-			if err := bc.triedb.Journal(root); err != nil {
-				log.Info("Failed to journal in-memory trie nodes", "err", err)
-			}
+		if err := bc.trieDB().Journal(root); err != nil {
+			log.Info("Failed to journal in-memory trie nodes", "err", err)
 		}
 		if bc.follower != nil {
 			bc.follower.journal(head)
@@ -1651,7 +1653,7 @@ func (bc *BlockChain) Stop() {
 		//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
 		//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
 		if !bc.cfg.ArchiveMode {
-			triedb := bc.triedb
+			triedb := bc.trieDB()
 
 			for _, offset := range []uint64{0, 1, state.TriesInMemory - 1} {
 				if number := bc.CurrentBlock().Number.Uint64(); number > offset {
@@ -1682,10 +1684,8 @@ func (bc *BlockChain) Stop() {
 		bc.logger.OnClose()
 	}
 	// Close the trie database, release all the held resources as the last step.
-	if !bc.merkleRetired.Load() {
-		if err := bc.triedb.Close(); err != nil {
-			log.Error("Failed to close trie database", "err", err)
-		}
+	if err := bc.trieDB().Close(); err != nil {
+		log.Error("Failed to close trie database", "err", err)
 	}
 	log.Info("Blockchain stopped")
 }
@@ -1999,15 +1999,15 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
-	if bc.triedb.Scheme() == rawdb.PathScheme {
+	if bc.trieDB().Scheme() == rawdb.PathScheme {
 		return nil
 	}
 	// If we're running an archive node, always flush
 	if bc.cfg.ArchiveMode {
-		return bc.triedb.Commit(root, false)
+		return bc.trieDB().Commit(root, false)
 	}
 	// Full but not archive node, do proper garbage collection
-	bc.triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
+	bc.trieDB().Reference(root, common.Hash{}) // metadata reference to keep trie alive
 	bc.triegc.Push(root, -int64(block.NumberU64()))
 
 	// Flush limits are not considered for the first TriesInMemory blocks.
@@ -2017,11 +2017,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	// If we exceeded our memory allowance, flush matured singleton nodes to disk
 	var (
-		_, nodes, imgs = bc.triedb.Size() // all memory is contained within the nodes return for hashdb
+		_, nodes, imgs = bc.trieDB().Size() // all memory is contained within the nodes return for hashdb
 		limit          = common.StorageSize(bc.cfg.TrieDirtyLimit) * 1024 * 1024
 	)
 	if nodes > limit || imgs > 4*1024*1024 {
-		bc.triedb.Cap(limit - ethdb.IdealBatchSize)
+		bc.trieDB().Cap(limit - ethdb.IdealBatchSize)
 	}
 	// Find the next state trie we need to commit
 	chosen := current - state.TriesInMemory
@@ -2040,7 +2040,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", flushInterval, "optimum", float64(chosen-bc.lastWrite)/state.TriesInMemory)
 			}
 			// Flush an entire trie and restart the counters
-			bc.triedb.Commit(header.Root, true)
+			bc.trieDB().Commit(header.Root, true)
 			bc.lastWrite = chosen
 			bc.gcproc = 0
 		}
@@ -2052,7 +2052,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.triegc.Push(root, number)
 			break
 		}
-		bc.triedb.Dereference(root)
+		bc.trieDB().Dereference(root)
 	}
 	return nil
 }
@@ -2342,7 +2342,7 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		if bc.snaps != nil {
 			snapDiffItems, snapBufItems = bc.snaps.Size()
 		}
-		trieDiffNodes, trieBufNodes, _ := bc.triedb.Size()
+		trieDiffNodes, trieBufNodes, _ := bc.trieDB().Size()
 		stats.report(chain, it.index, snapDiffItems, snapBufItems, trieDiffNodes, trieBufNodes, setHead)
 
 		// Print confirmation that a future fork is scheduled, but not yet active.
@@ -2439,12 +2439,12 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 
 // treeFor returns the trie database holding the given flavour.
 func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
-	// After an in-run crossing bc.triedb is the merkle trie: refuse before the fast path.
+	// After an in-run crossing bc.trieDB() is the merkle trie: refuse before the fast path.
 	if !pbt && bc.disposed.Load() {
 		return nil, errors.New("merkle trie disposed")
 	}
-	if bc.triedb.IsPBT() == pbt {
-		return bc.triedb, nil
+	if bc.trieDB().IsPBT() == pbt {
+		return bc.trieDB(), nil
 	}
 	if bc.follower == nil {
 		if pbt {
@@ -2465,7 +2465,7 @@ func (bc *BlockChain) stateDatabaseFor(pbt bool) (state.Database, error) {
 		return state.NewPBTDatabase(tdb, bc.codedb), nil
 	}
 	mpt := state.NewMPTDatabase(tdb, bc.codedb)
-	if tdb == bc.triedb {
+	if tdb == bc.trieDB() {
 		return mpt.WithSnapshot(bc.snaps), nil
 	}
 	return mpt, nil
@@ -2882,7 +2882,7 @@ func (bc *BlockChain) insertSideChain(ctx context.Context, block *types.Block, i
 	parent := it.previous()
 	for parent != nil && !bc.HasState(parent.Root) {
 		if bc.StateRecoverable(parent.Root) {
-			if err := bc.triedb.Recover(parent.Root); err != nil {
+			if err := bc.trieDB().Recover(parent.Root); err != nil {
 				return nil, 0, err
 			}
 			break
@@ -2944,7 +2944,7 @@ func (bc *BlockChain) recoverAncestors(ctx context.Context, block *types.Block, 
 	)
 	for parent != nil && !bc.HasState(parent.Root()) {
 		if bc.StateRecoverable(parent.Root()) {
-			if err := bc.triedb.Recover(parent.Root()); err != nil {
+			if err := bc.trieDB().Recover(parent.Root()); err != nil {
 				return common.Hash{}, err
 			}
 			break
@@ -2965,7 +2965,7 @@ func (bc *BlockChain) recoverAncestors(ctx context.Context, block *types.Block, 
 		// of ancestors means the fork point predates the persisted layer,
 		// which re-execution cannot reach either - report that rather than
 		// blaming a missing block.
-		if bc.triedb.IsPBT() {
+		if bc.trieDB().IsPBT() {
 			return common.Hash{}, errors.New("no ancestor with live state: the binary tree cannot rewind past the persisted state")
 		}
 		return common.Hash{}, errors.New("missing parent")

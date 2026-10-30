@@ -329,13 +329,17 @@ func TestFullMigrationLifecycleBlocksKnob(t *testing.T) {
 	if p := chain.MigrationProgress(); p.Phase != "done" {
 		t.Fatalf("progress %q, want done", p.Phase)
 	}
-	// This node crossed the fork in-run: bc.triedb is the merkle trie, retired
-	// by the disposal.
+	// This node crossed the fork in-run: bc.triedb was the merkle trie, which
+	// the disposal retires, adopting the binary handle the follower carried
+	// to the fork in its place.
 	waitFor(t, 10*time.Second, "merkle state never deleted", func() bool {
 		return rawdb.ReadPBTMerkleDisposed(ethservice.ChainDb()) && merkleStateGone(ethservice.ChainDb())
 	})
-	if chain.TrieDB().IsPBT() {
-		t.Fatal("opened on the binary tree")
+	if !chain.TrieDB().IsPBT() {
+		t.Fatal("chain still holds the retired merkle handle")
+	}
+	if _, err := chain.TrieDB().NodeReader(parent.Root); err != nil {
+		t.Fatalf("adopted handle does not hold the head's state: %v", err)
 	}
 	if chain.HasState(chain.GetHeaderByNumber(1).Root) {
 		t.Fatal("HasState vouches for a pre-fork root after disposal")

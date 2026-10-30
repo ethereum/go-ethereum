@@ -42,6 +42,10 @@ const (
 	// followBatchBlocks caps how many blocks one fold coalesces.
 	followBatchBlocks = 128
 
+	// windowCleanCacheSize is the clean cache of the follower's own merkle
+	// handle, which only replays the window.
+	windowCleanCacheSize = 16 * 1024 * 1024
+
 	// activationWaitTimeout bounds how long a block at the activation
 	// boundary waits for the shadow tree to reach its parent.
 	activationWaitTimeout = 30 * time.Second
@@ -715,12 +719,19 @@ func (t *followerTree) open() (*triedb.Database, error) {
 	if t.handle != nil {
 		return t.handle, nil
 	}
-	if f.chain != nil && f.chain.triedb.IsPBT() == t.pbt {
-		t.handle = f.chain.triedb
+	if f.chain != nil && f.chain.trieDB().IsPBT() == t.pbt {
+		t.handle = f.chain.trieDB()
 	} else {
 		tdbConfig, err := f.cfg.triedbConfig(t.pbt)
 		if err != nil {
 			return nil, err
+		}
+		// The merkle window replays a few hundred blocks and is then
+		// disposed of; the chain's own clean caches are sized for years of
+		// execution, and a second set of them is what pushed a 16 GiB node
+		// over the edge at the fork.
+		if !t.pbt && tdbConfig.PathDB != nil {
+			tdbConfig.PathDB.TrieCleanSize, tdbConfig.PathDB.StateCleanSize = windowCleanCacheSize, windowCleanCacheSize
 		}
 		t.handle = triedb.NewDatabase(f.db, tdbConfig)
 		t.owned = true
@@ -959,8 +970,17 @@ func (t *followerTree) journal(head *types.Header) {
 	}
 }
 
+// adopt hands the tree's handle to the chain: the follower keeps using it
+// but no longer journals or closes it. Nil if the tree never opened one.
+func (t *followerTree) adopt() *triedb.Database {
+	t.f.mu.Lock()
+	defer t.f.mu.Unlock()
+	t.owned = false
+	return t.handle
+}
+
 // release drops the tree's handle, unjournaled, and returns it if the follower
-// owns it; a shared handle is bc.triedb, retired by its owner.
+// owns it; a shared handle is the chain's, retired by its owner.
 func (t *followerTree) release() *triedb.Database {
 	t.f.mu.Lock()
 	defer t.f.mu.Unlock()
