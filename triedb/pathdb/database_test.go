@@ -926,8 +926,9 @@ func (f *crashOnReset) Reset() error {
 
 // TestReactivationCrash checks that the database can be opened after a crash
 // right after its reactivation at the end of a state sync purged the state
-// histories: the persistent state id reset and the removal of the history index
-// must reach the disk before the freezer is reset.
+// histories: the persistent state id reset, the removal of the history index
+// and the deletion of the old state's journal must reach the disk before the
+// freezer is reset.
 func TestReactivationCrash(t *testing.T) {
 	maxDiffLayers = 4
 	defer func() {
@@ -948,8 +949,8 @@ func TestReactivationCrash(t *testing.T) {
 			tester.release()
 		}
 	}()
-	// Persist everything: a state id above zero, state histories and an index
-	// over them, all on disk.
+	// Persist everything: a state id above zero, state histories, an index over
+	// them and a journal, all on disk.
 	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
 		t.Fatalf("Failed to commit, err: %v", err)
 	}
@@ -958,6 +959,7 @@ func TestReactivationCrash(t *testing.T) {
 	rawdb.WriteAccountHistoryIndexBlock(kvdb, addr, 0, []byte{1})
 	rawdb.WriteStorageHistoryIndex(kvdb, addr, slot, []byte{1})
 	rawdb.WriteStorageHistoryIndexBlock(kvdb, addr, slot, 0, []byte{1})
+	rawdb.WriteTrieJournal(kvdb, []byte{1})
 	if err := kvdb.SyncKeyValue(); err != nil {
 		t.Fatalf("Failed to sync, err: %v", err)
 	}
@@ -999,6 +1001,11 @@ func TestReactivationCrash(t *testing.T) {
 	if rawdb.ReadAccountHistoryIndex(disk, addr) != nil || rawdb.ReadAccountHistoryIndexBlock(disk, addr, 0) != nil ||
 		rawdb.ReadStorageHistoryIndex(disk, addr, slot) != nil || rawdb.ReadStorageHistoryIndexBlock(disk, addr, slot, 0) != nil {
 		t.Error("Index entries of the purged state histories survived the crash")
+	}
+	// Nor the old state's journal, loaded at the next start if the sync ended
+	// at its root.
+	if len(rawdb.ReadTrieJournal(disk)) != 0 {
+		t.Error("The journal of the old state survived the crash")
 	}
 	// The history repair at startup must accept the persisted state id.
 	states, _, err := repairHistory(disk, false, false, rawdb.ReadPersistentStateID(disk), false)

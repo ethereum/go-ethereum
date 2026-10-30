@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -405,21 +404,14 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	if db.trienodeIndexer != nil {
 		db.trienodeIndexer.close()
 	}
-	// Drop the layer journal of the old state if exists.
-	if path := db.journalPath(); path != "" {
-		err := os.Remove(path)
-		if err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove stale journal %s: %v", path, err)
-		}
-		if err := syncDir(db.config.JournalDirectory); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to sync the journal directory: %v", err)
-		}
-		if err == nil {
-			log.Debug("Removed stale journal", "path", path)
-		}
+	// Drop the old state's layer journal, in the file and in the key-value
+	// store, before the histories are purged: if the sync ended at its root,
+	// a restart would load it.
+	if err := db.deleteJournal(); err != nil {
+		return err
 	}
-	// Drop the stale state journal marker and the journal in the key-value
-	// store, and reset the persistent state id back to zero.
+	// Drop the stale state journal marker and reset the persistent state id
+	// back to zero.
 	batch := db.diskdb.NewBatch()
 	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)
