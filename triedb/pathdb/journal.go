@@ -108,6 +108,23 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 	return head, nil
 }
 
+// dropSupersededJournal deletes a journal a run without journal files left in
+// the key-value store. Once a journal file exists it is never read again, yet
+// at hundreds of MiB it fills the sstable block it shares with the keys sorting
+// before it, and every read of one loads the whole block: compact it away.
+func (db *Database) dropSupersededJournal() {
+	path := db.journalPath()
+	if db.readOnly || path == "" || !common.FileExist(path) || !rawdb.HasTrieJournal(db.diskdb) {
+		return
+	}
+	rawdb.DeleteTrieJournal(db.diskdb)
+	if err := rawdb.CompactTrieJournal(db.diskdb); err != nil {
+		log.Warn("Failed to compact the superseded journal away", "err", err)
+		return
+	}
+	log.Info("Deleted the journal superseded by the journal file", "path", path)
+}
+
 // journalGenerator is a disk layer entry containing the generator progress marker.
 type journalGenerator struct {
 	// Indicator that whether the database was in progress of being wiped.

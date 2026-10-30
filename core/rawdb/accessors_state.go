@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 
@@ -208,6 +209,18 @@ func DeleteTrieJournal(db ethdb.KeyValueWriter) {
 	if err := db.Delete(trieJournalKey); err != nil {
 		log.Crit("Failed to remove tries journal", "err", err)
 	}
+}
+
+// HasTrieJournal reports whether a journal is stored in the key-value store.
+func HasTrieJournal(db ethdb.KeyValueReader) bool {
+	has, _ := db.Has(trieJournalKey)
+	return has
+}
+
+// CompactTrieJournal compacts the journal's key, so a deleted journal is gone
+// from the sstable it shares with its neighbours instead of shadowed in it.
+func CompactTrieJournal(db ethdb.Compacter) error {
+	return db.Compact(trieJournalKey, increaseKey(bytes.Clone(trieJournalKey)))
 }
 
 // ReadStateHistoryMeta retrieves the metadata corresponding to the specified

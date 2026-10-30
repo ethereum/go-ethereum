@@ -1030,6 +1030,47 @@ func testCorruptedJournal(t *testing.T, journalDir string, modifyFn func(databas
 	}
 }
 
+// TestSupersededJournalDropped pins the hand-over from a journal stored in the
+// key-value store to journal files: the stored journal is loaded while it is
+// the only one, and deleted once a file supersedes it.
+func TestSupersededJournalDropped(t *testing.T) {
+	// Redefine the diff layer depth allowance for faster testing.
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	// A run without journal files journals into the store.
+	tester := newTester(t, &testerConfig{layers: 12})
+	defer tester.release()
+	if err := tester.db.Journal(tester.lastHash()); err != nil {
+		t.Fatal(err)
+	}
+	tester.db.Close()
+
+	config := *tester.db.config
+	config.JournalDirectory = t.TempDir()
+	tester.db = New(tester.db.diskdb, &config, false)
+	if !rawdb.HasTrieJournal(tester.db.diskdb) {
+		t.Fatal("stored journal deleted while it was the only one")
+	}
+	if err := tester.verifyState(tester.lastHash()); err != nil {
+		t.Fatalf("stored journal not loaded: %v", err)
+	}
+	if err := tester.db.Journal(tester.lastHash()); err != nil {
+		t.Fatal(err)
+	}
+	tester.db.Close()
+
+	tester.db = New(tester.db.diskdb, &config, false)
+	if rawdb.HasTrieJournal(tester.db.diskdb) {
+		t.Fatal("stored journal kept beside the journal file")
+	}
+	if err := tester.verifyState(tester.lastHash()); err != nil {
+		t.Fatalf("journal file not loaded: %v", err)
+	}
+}
+
 // TestTailTruncateHistory function is designed to test a specific edge case where,
 // when history objects are removed from the end, it should trigger a state flush
 // if the ID of the new tail object is even higher than the persisted state ID.
