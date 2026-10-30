@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -522,6 +523,48 @@ func TestFollowerSharesCanonicalHandle(t *testing.T) {
 	if p.handle == chain.triedb || !p.owned {
 		t.Fatal("the binary direction must own its handle")
 	}
+}
+
+// TestFollowerServesOpenHandleWithoutReads pins the hot path of a node that
+// crossed the fork in-run: every state access reaches the binary tree through
+// the follower, and an open handle costs no database read.
+func TestFollowerServesOpenHandleWithoutReads(t *testing.T) {
+	genesis, mem, _, _ := generateMigrationChain(t, 1)
+	db := &readCountingDB{Database: mem}
+	chain := openMigrationChain(t, db, genesis)
+	defer chain.Stop()
+	// Stop the loop: its syncs read the database by design.
+	chain.follower.close()
+
+	if _, err := chain.treeFor(true); err != nil {
+		t.Fatal(err)
+	}
+	before := db.reads.Load()
+	for range 10 {
+		if _, err := chain.treeFor(true); err != nil {
+			t.Fatal(err)
+		}
+		chain.HasState(common.Hash{0x01}) // a merkle miss asks the binary tree
+	}
+	if n := db.reads.Load() - before; n != 0 {
+		t.Fatalf("%d database reads serving an open handle, want none", n)
+	}
+}
+
+// readCountingDB counts point reads.
+type readCountingDB struct {
+	ethdb.Database
+	reads atomic.Int64
+}
+
+func (db *readCountingDB) Get(key []byte) ([]byte, error) {
+	db.reads.Add(1)
+	return db.Database.Get(key)
+}
+
+func (db *readCountingDB) Has(key []byte) (bool, error) {
+	db.reads.Add(1)
+	return db.Database.Has(key)
 }
 
 // TestNamespaceMustNameItsBlock pins the anchor rule: the seed writes one,

@@ -157,10 +157,11 @@ func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) error 
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	// The snap-sync status among these keys can run to hundreds of MiB, and
-	// a read of any key sharing its block loads the block until the file is
-	// rewritten: rewrite it now rather than at some later compaction.
-	if err := db.Compact([]byte("Snap"), []byte("Snaq")); err != nil {
+	// The in-kv journal can run to hundreds of MiB, and the singletons sorting
+	// before it, the snap-sync flag among them, share its sstable block: until
+	// a compaction rewrites the file, every read of one loads the whole block.
+	// Rewrite the span from the flag through the journal now.
+	if err := db.Compact(snapSyncStatusFlagKey, increaseKey(bytes.Clone(trieJournalKey))); err != nil {
 		return err
 	}
 	stop := stopOn(interrupt)
