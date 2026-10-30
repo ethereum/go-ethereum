@@ -325,7 +325,8 @@ func awaitShadowRecord(t *testing.T, db ethdb.Database, block *types.Block) comm
 }
 
 // TestPBTImportNeedsAScheduledTree: an import seeds the tree the follower
-// carries to the fork, so it needs a scheduled fork and a pre-fork head.
+// carries to the fork, so it needs a scheduled fork; past the fork the flags
+// are dropped rather than refused.
 func TestPBTImportNeedsAScheduledTree(t *testing.T) {
 	cfg := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 	cfg.PBTImport = true
@@ -338,8 +339,13 @@ func TestPBTImportNeedsAScheduledTree(t *testing.T) {
 	rawdb.WriteBlock(db, head)
 	rawdb.WriteCanonicalHash(db, head.Hash(), 1)
 	rawdb.WriteHeadBlockHash(db, head.Hash())
-	if _, err := NewBlockChain(db, migrationGenesis(t), engine, cfg); err == nil || !strings.Contains(err.Error(), "already commits") {
-		t.Fatalf("err = %v, want the post-fork refusal", err)
+	chain, err := NewBlockChain(db, migrationGenesis(t), engine, cfg)
+	if err != nil {
+		t.Fatalf("post-fork head refused the flags: %v", err)
+	}
+	defer chain.Stop()
+	if chain.ImportsBinaryTree() {
+		t.Fatal("import kept past the fork")
 	}
 }
 
@@ -452,5 +458,27 @@ func TestFinishedPBTImportHold(t *testing.T) {
 	openImportChain(t, db, genesis, true).Stop()
 	if !rawdb.ReadPBTImportPending(db) {
 		t.Fatal("a forced import did not hold the tree it replaces")
+	}
+}
+
+// TestImportFlagsIgnoredWhenTreeInPlace: import flags on a node whose
+// migration finished name nothing to do; the node starts without them.
+func TestImportFlagsIgnoredWhenTreeInPlace(t *testing.T) {
+	genesis := migrationGenesis(t)
+	db, _ := merkleStateFixture(t, genesis)
+	rawdb.WritePBTMigrationDone(db)
+
+	cfg := DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	cfg.PBTImport = true
+	chain, err := NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()), cfg)
+	if err != nil {
+		t.Fatalf("flags refused on a finished node: %v", err)
+	}
+	defer chain.Stop()
+	if chain.ImportsBinaryTree() {
+		t.Fatal("chain still runs an import")
+	}
+	if rawdb.ReadPBTImportPending(db) {
+		t.Fatal("import hold written for an ignored import")
 	}
 }

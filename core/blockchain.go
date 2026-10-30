@@ -468,13 +468,17 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		}
 	}
 	// An import seeds the tree the follower carries to the fork: it needs a
-	// fork to carry it to, and a head that has not crossed it.
+	// fork to carry it to. Flags left on a node that already crossed it, or
+	// finished its migration, name nothing to do.
 	if cfg.PBTImport {
 		switch {
 		case mode != modeMigration:
 			return nil, errors.New(`binary tree import needs a chain config that schedules the tree (genesis key "binaryTrieTime"; see --override.genesis)`)
-		case isPBT:
-			return nil, errors.New("binary tree import refused: the head block already commits the binary tree")
+		case isPBT || rawdb.ReadPBTMigrationDone(db):
+			log.Warn("Binary tree already in place, import flags ignored")
+			c := *cfg
+			c.PBTImport, c.PBTImportForce = false, false
+			cfg = &c
 		}
 	}
 	tdbConfig, err := cfg.triedbConfig(isPBT)

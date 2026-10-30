@@ -255,7 +255,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// An EIP-8347 import or self-conversion runs beside the chain. Registered
 	// after it, it is stopped first, before the chain closes the database
 	// under it.
-	if cfg.Eth.PBTImport.Anchor != "" {
+	if cfg.Eth.PBTImport.Anchor != "" && eth.BlockChain().ImportsBinaryTree() {
 		stack.RegisterLifecycle(newPBTImporter(stack, eth, cfg.Eth.PBTImport))
 	}
 

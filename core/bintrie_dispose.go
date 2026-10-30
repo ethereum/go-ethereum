@@ -178,3 +178,9 @@ func DisposeMerkleState(db ethdb.Database, journalDir string, interrupt <-chan s
 	}
 	return nil
 }
+
+// ImportsBinaryTree reports whether this chain runs an import or
+// self-conversion: the flags were given and the tree is not in place yet.
+func (bc *BlockChain) ImportsBinaryTree() bool {
+	return bc.cfg.PBTImport
+}
