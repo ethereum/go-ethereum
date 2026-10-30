@@ -18,6 +18,7 @@ package eip1559
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -124,8 +125,130 @@ func TestCalcBaseFee(t *testing.T) {
 			GasUsed:  test.parentGasUsed,
 			BaseFee:  big.NewInt(test.parentBaseFee),
 		}
-		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcBaseFee(config(), parent, &types.Header{}), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
+		}
+	}
+}
+
+// TestCalcBaseFeeBogota checks the EIP-8198 max change of seconds per slot over
+// 96, at most 1/8, applied after dividing by the gas target like the spec does.
+func TestCalcBaseFeeBogota(t *testing.T) {
+	cfg := config()
+	cfg.BogotaTime = new(uint64)
+
+	tests := []struct {
+		parentBaseFee   int64
+		parentGasUsed   uint64
+		seconds, slots  uint64
+		expectedBaseFee int64
+	}{
+		{params.InitialBaseFee, 9000000, 10, 1, 989583334},     // 10s slots, usage below target
+		{params.InitialBaseFee, 11000000, 10, 1, 1010416666},   // 10s slots, usage above target
+		{params.InitialBaseFee, 11000000, 12, 1, 1012500000},   // 12s slots keep the 1/8 rule
+		{params.InitialBaseFee, 11000000, 20, 2, 1010416666},   // a missed 10s slot keeps 10s per slot
+		{params.InitialBaseFee, 20000000, 1000, 1, 1125000000}, // a long gap still moves at most 1/8
+		{params.InitialBaseFee, 0, 1000, 1, 875000000},         // nor drops below 7/8
+		{params.InitialBaseFee, 11000000, 13, 1, 1012500000},   // 13s slots count as 12s
+		{97000000, 9999999, 10, 1, 97000000},                   // multiplying by the seconds first would decrease by 1
+		{195000000, 10000001, 10, 1, 195000001},                // multiplying by the seconds first would increase by 2
+	}
+	for i, test := range tests {
+		var (
+			parentSlot = uint64(100)
+			slot       = parentSlot + test.slots
+			parent     = &types.Header{
+				Number:     common.Big32,
+				Time:       1000,
+				SlotNumber: &parentSlot,
+				GasLimit:   20000000,
+				GasUsed:    test.parentGasUsed,
+				BaseFee:    big.NewInt(test.parentBaseFee),
+			}
+			header = &types.Header{Time: parent.Time + test.seconds, SlotNumber: &slot}
+		)
+		if have, want := CalcBaseFee(cfg, parent, header), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+			t.Errorf("test %d: have %d  want %d, ", i, have, want)
+		}
+	}
+}
+
+// TestBaseFeeBogotaTransition checks the base fee and slot number rules on both
+// sides of the fork, through header verification.
+func TestBaseFeeBogotaTransition(t *testing.T) {
+	cfg := config()
+	bogotaTime := uint64(1000)
+	cfg.BogotaTime = &bogotaTime
+
+	for i, tc := range []struct {
+		parentTime, time uint64
+		slot             uint64
+		baseFee          int64
+		wantErr          string
+	}{
+		{988, 999, 101, 1125000000, ""},                    // 1/8 before the fork, whatever the spacing
+		{988, 1000, 101, 1125000000, ""},                   // first Bogota block, 12s after its parent
+		{990, 1000, 101, 1104166666, ""},                   // 10s after its parent gives 5/48
+		{990, 1000, 100, 1104166666, "invalid slotNumber"}, // the slot number must advance
+	} {
+		var (
+			parentSlot = uint64(100)
+			slot       = tc.slot
+			parent     = &types.Header{
+				Number:     common.Big32,
+				Time:       tc.parentTime,
+				SlotNumber: &parentSlot,
+				GasLimit:   20000000,
+				GasUsed:    20000000,
+				BaseFee:    big.NewInt(params.InitialBaseFee),
+			}
+			header = &types.Header{
+				Number:     big.NewInt(33),
+				Time:       tc.time,
+				SlotNumber: &slot,
+				GasLimit:   parent.GasLimit,
+				BaseFee:    big.NewInt(tc.baseFee),
+			}
+		)
+		err := VerifyEIP1559Header(cfg, parent, header)
+		switch {
+		case tc.wantErr == "" && err != nil:
+			t.Errorf("test %d: expected valid header: %v", i, err)
+		case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+			t.Errorf("test %d: expected %q error, got %v", i, tc.wantErr, err)
+		}
+	}
+}
+
+// TestCalcNextBaseFee checks that the next-block estimate keeps the spacing per slot
+// between head and its parent, and falls back to the reference slot without one.
+func TestCalcNextBaseFee(t *testing.T) {
+	cfg := config()
+	cfg.BogotaTime = new(uint64)
+
+	headSlot := uint64(100)
+	head := &types.Header{
+		Number:     common.Big32,
+		Time:       1000,
+		SlotNumber: &headSlot,
+		GasLimit:   20000000,
+		GasUsed:    20000000,
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+	}
+	parentAt := func(time, slot uint64) *types.Header {
+		return &types.Header{Number: big.NewInt(31), Time: time, SlotNumber: &slot}
+	}
+	for i, tc := range []struct {
+		parent *types.Header
+		want   int64
+	}{
+		{nil, 1125000000},               // no parent: one 12s slot
+		{parentAt(990, 99), 1104166666}, // 10s slots
+		{parentAt(980, 98), 1104166666}, // a missed 10s slot keeps 10s per slot
+		{parentAt(985, 99), 1125000000}, // 15s slots count as 12s
+	} {
+		if have, want := CalcNextBaseFee(cfg, head, tc.parent), big.NewInt(tc.want); have.Cmp(want) != 0 {
+			t.Errorf("test %d: have %d  want %d", i, have, want)
 		}
 	}
 }

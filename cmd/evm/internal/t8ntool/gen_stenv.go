@@ -36,6 +36,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 		ExcessBlobGas         *math.HexOrDecimal64                `json:"currentExcessBlobGas,omitempty"`
 		ParentExcessBlobGas   *math.HexOrDecimal64                `json:"parentExcessBlobGas,omitempty"`
 		ParentBlobGasUsed     *math.HexOrDecimal64                `json:"parentBlobGasUsed,omitempty"`
+		ParentSlotNumber      *math.HexOrDecimal64                `json:"parentSlotNumber,omitempty"`
 		ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
 		SlotNumber            *math.HexOrDecimal64                `json:"slotNumber"`
 	}
@@ -59,6 +60,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.ExcessBlobGas = (*math.HexOrDecimal64)(s.ExcessBlobGas)
 	enc.ParentExcessBlobGas = (*math.HexOrDecimal64)(s.ParentExcessBlobGas)
 	enc.ParentBlobGasUsed = (*math.HexOrDecimal64)(s.ParentBlobGasUsed)
+	enc.ParentSlotNumber = (*math.HexOrDecimal64)(s.ParentSlotNumber)
 	enc.ParentBeaconBlockRoot = s.ParentBeaconBlockRoot
 	enc.SlotNumber = (*math.HexOrDecimal64)(s.SlotNumber)
 	return json.Marshal(&enc)
@@ -86,6 +88,7 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 		ExcessBlobGas         *math.HexOrDecimal64                `json:"currentExcessBlobGas,omitempty"`
 		ParentExcessBlobGas   *math.HexOrDecimal64                `json:"parentExcessBlobGas,omitempty"`
 		ParentBlobGasUsed     *math.HexOrDecimal64                `json:"parentBlobGasUsed,omitempty"`
+		ParentSlotNumber      *math.HexOrDecimal64                `json:"parentSlotNumber,omitempty"`
 		ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
 		SlotNumber            *math.HexOrDecimal64                `json:"slotNumber"`
 	}
@@ -153,6 +156,9 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ParentBlobGasUsed != nil {
 		s.ParentBlobGasUsed = (*uint64)(dec.ParentBlobGasUsed)
+	}
+	if dec.ParentSlotNumber != nil {
+		s.ParentSlotNumber = (*uint64)(dec.ParentSlotNumber)
 	}
 	if dec.ParentBeaconBlockRoot != nil {
 		s.ParentBeaconBlockRoot = dec.ParentBeaconBlockRoot
