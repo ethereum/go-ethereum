@@ -499,6 +499,13 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 
 // filterLogs creates a slice of logs matching the given criteria.
 func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
+	// Keep short lists and early matches on the linear path. Build an index
+	// only for batches large enough to amortize it and only after a prefix miss.
+	linearAddresses := addresses
+	if len(addresses) > 64 && len(logs)/4 > len(addresses) {
+		linearAddresses = addresses[:32]
+	}
+	var addressSet map[common.Address]struct{}
 	check := func(log *types.Log) bool {
 		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			return false
@@ -506,8 +513,19 @@ func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []comm
 		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
 			return false
 		}
-		if len(addresses) > 0 && !slices.Contains(addresses, log.Address) {
-			return false
+		if len(addresses) > 0 && !slices.Contains(linearAddresses, log.Address) {
+			if len(linearAddresses) == len(addresses) {
+				return false
+			}
+			if addressSet == nil {
+				addressSet = make(map[common.Address]struct{}, len(addresses)-len(linearAddresses))
+				for _, address := range addresses[len(linearAddresses):] {
+					addressSet[address] = struct{}{}
+				}
+			}
+			if _, ok := addressSet[log.Address]; !ok {
+				return false
+			}
 		}
 		// If the to filtered topics is greater than the amount of topics in logs, skip.
 		if len(topics) > len(log.Topics) {
