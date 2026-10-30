@@ -56,18 +56,6 @@ const (
 	pongMsg      = 0x03
 )
 
-// protoHandshake is the RLP structure of the protocol handshake.
-type protoHandshake struct {
-	Version    uint64
-	Name       string
-	Caps       []Cap
-	ListenPort uint64
-	ID         []byte // secp256k1 public key
-
-	// Ignore additional fields (for forward compatibility).
-	Rest []rlp.RawValue `rlp:"tail"`
-}
-
 // PeerEventType is the type of peer events emitted by a p2p.Server
 type PeerEventType string
 

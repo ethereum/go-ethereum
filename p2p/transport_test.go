@@ -31,11 +31,13 @@ func TestProtocolHandshake(t *testing.T) {
 	var (
 		prv0, _ = crypto.GenerateKey()
 		pub0    = crypto.FromECDSAPub(&prv0.PublicKey)[1:]
-		hs0     = &protoHandshake{Version: 3, ID: pub0, Caps: []Cap{{"a", 0}, {"b", 2}}}
+		hs0     = devp2pProtocolHandshake{Version: 3, ID: pub0, Caps: []Cap{{"a", 0}, {"b", 2}}}
+		hello0  = transportHello{NodeID: hashKeyV4(pub0), Caps: hs0.Caps}
 
 		prv1, _ = crypto.GenerateKey()
 		pub1    = crypto.FromECDSAPub(&prv1.PublicKey)[1:]
-		hs1     = &protoHandshake{Version: 3, ID: pub1, Caps: []Cap{{"c", 1}, {"d", 3}}}
+		hs1     = devp2pProtocolHandshake{Version: 3, ID: pub1, Caps: []Cap{{"c", 1}, {"d", 3}}}
+		hello1  = transportHello{NodeID: hashKeyV4(pub1), Caps: hs1.Caps}
 
 		wg sync.WaitGroup
 	)
@@ -60,14 +62,13 @@ func TestProtocolHandshake(t *testing.T) {
 			return
 		}
 
-		phs, err := frame.doProtoHandshake(hs0)
+		hello, err := frame.doProtoHandshake(&hs0)
 		if err != nil {
 			t.Errorf("dial side proto handshake error: %v", err)
 			return
 		}
-		phs.Rest = nil
-		if !reflect.DeepEqual(phs, hs1) {
-			t.Errorf("dial side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs1))
+		if !reflect.DeepEqual(hello, hello1) {
+			t.Errorf("dial side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(hello), spew.Sdump(hs1))
 			return
 		}
 		frame.close(DiscQuitting)
@@ -86,13 +87,12 @@ func TestProtocolHandshake(t *testing.T) {
 			return
 		}
 
-		phs, err := rlpx.doProtoHandshake(hs1)
+		phs, err := rlpx.doProtoHandshake(&hs1)
 		if err != nil {
 			t.Errorf("listen side proto handshake error: %v", err)
 			return
 		}
-		phs.Rest = nil
-		if !reflect.DeepEqual(phs, hs0) {
+		if !reflect.DeepEqual(phs, hello0) {
 			t.Errorf("listen side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs0))
 			return
 		}
@@ -134,11 +134,11 @@ func TestProtocolHandshakeErrors(t *testing.T) {
 		{
 			code: handshakeMsg,
 			msg:  []byte{1, 2, 3},
-			err:  newPeerError(errInvalidMsg, "(code 0) (size 4) rlp: expected input list for p2p.protoHandshake"),
+			err:  newPeerError(errInvalidMsg, "(code 0) (size 4) rlp: expected input list for p2p.devp2pProtocolHandshake"),
 		},
 		{
 			code: handshakeMsg,
-			msg:  &protoHandshake{Version: 3},
+			msg:  &devp2pProtocolHandshake{Version: 3},
 			err:  DiscInvalidIdentity,
 		},
 	}
@@ -146,7 +146,8 @@ func TestProtocolHandshakeErrors(t *testing.T) {
 	for i, test := range tests {
 		p1, p2 := MsgPipe()
 		go Send(p1, test.code, test.msg)
-		_, err := readProtocolHandshake(p2)
+		var hs devp2pProtocolHandshake
+		err := readProtocolHandshake(p2, &hs)
 		if !reflect.DeepEqual(err, test.err) {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
 		}

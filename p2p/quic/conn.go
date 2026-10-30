@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 	"github.com/quic-go/webtransport-go"
@@ -47,7 +48,7 @@ type Conn struct {
 
 	nonce  []byte   // id-proof challenge from CONNECT
 	caps   []string // capabilities announced in CONNECT, replaced by the chosen ones in the handshake
-	nodeID []byte   // random peer identity assigned by the handshake
+	nodeID enode.ID // random peer identity assigned by the handshake
 
 	// These are the buffers for snappy compression.
 	// Compression is enabled if they are non-nil.
@@ -76,7 +77,7 @@ func NewConn(session *webtransport.Session, str *webtransport.Stream, nonce []by
 func (c *Conn) Caps() []string { return c.caps }
 
 // PeerID returns the random peer identity assigned by the handshake.
-func (c *Conn) PeerID() []byte { return c.nodeID }
+func (c *Conn) NodeID() enode.ID { return c.nodeID }
 
 // Handshake establishes connection over the QUIC stream. This must be called
 // before any data is written or read from the connection. caps are the
@@ -89,8 +90,7 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey, caps []string) error {
 		return err
 	}
 	// assign random node id
-	c.nodeID = make([]byte, 64)
-	rand.Read(c.nodeID)
+	rand.Read(c.nodeID[:])
 	return nil
 }
 

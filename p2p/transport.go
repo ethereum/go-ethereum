@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -137,49 +138,86 @@ func (t *rlpxTransport) doEncHandshake(prv *ecdsa.PrivateKey) (*enode.Node, erro
 	return nodeFromConn(pubkey, t.fd), nil
 }
 
-func (t *rlpxTransport) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
+func nodeFromConn(pubkey *ecdsa.PublicKey, conn net.Conn) *enode.Node {
+	var ip net.IP
+	var port int
+	switch addr := conn.RemoteAddr().(type) {
+	case *net.TCPAddr:
+		ip, port = addr.IP, addr.Port
+	case *net.UDPAddr:
+		ip, port = addr.IP, addr.Port
+	}
+	return enode.NewV4(pubkey, ip, port, port)
+}
+
+func (t *rlpxTransport) doProtoHandshake(our *devp2pProtocolHandshake) (transportHello, error) {
 	// Writing our handshake happens concurrently, we prefer
 	// returning the handshake read error. If the remote side
 	// disconnects us early with a valid reason, we should return it
 	// as the error so it can be tracked elsewhere.
 	werr := make(chan error, 1)
 	go func() { werr <- Send(t, handshakeMsg, our) }()
-	if their, err = readProtocolHandshake(t); err != nil {
+
+	var their devp2pProtocolHandshake
+	if err := readProtocolHandshake(t, &their); err != nil {
 		<-werr // make sure the write terminates too
-		return nil, err
+		return transportHello{}, err
 	}
 	if err := <-werr; err != nil {
-		return nil, fmt.Errorf("write error: %v", err)
+		return transportHello{}, fmt.Errorf("write error: %v", err)
 	}
 	// If the protocol version supports Snappy encoding, upgrade immediately
 	t.conn.SetSnappy(their.Version >= snappyProtocolVersion)
 
-	return their, nil
+	hello := transportHello{NodeID: hashKeyV4(their.ID), Caps: their.Caps, Name: their.Name}
+	return hello, nil
 }
 
-func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
+func hashPublicKeyV4(pubkey *ecdsa.PublicKey) enode.ID {
+	return hashKeyV4(crypto.FromECDSAPub(pubkey)[1:])
+}
+
+func hashKeyV4(pubkey []byte) enode.ID {
+	if len(pubkey) != 64 {
+		panic(fmt.Errorf("invalid public key (len=%d)", len(pubkey)))
+	}
+	return enode.ID(crypto.Keccak256Hash(pubkey))
+}
+
+// devp2pProtocolHandshake is the RLP structure of the protocol handshake.
+type devp2pProtocolHandshake struct {
+	Version    uint64
+	Name       string
+	Caps       []Cap
+	ListenPort uint64
+	ID         []byte // secp256k1 public key
+
+	// Ignore additional fields (for forward compatibility).
+	Rest []rlp.RawValue `rlp:"tail"`
+}
+
+func readProtocolHandshake(rw MsgReader, hs *devp2pProtocolHandshake) error {
 	msg, err := rw.ReadMsg()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if msg.Size > baseProtocolMaxMsgSize {
-		return nil, errors.New("message too big")
+		return errors.New("message too big")
 	}
 	if msg.Code == discMsg {
 		// Disconnect before protocol handshake is valid according to the
 		// spec and we send it ourself if the post-handshake checks fail.
 		r := decodeDisconnectMessage(msg.Payload)
-		return nil, r
+		return r
 	}
 	if msg.Code != handshakeMsg {
-		return nil, fmt.Errorf("expected handshake, got %x", msg.Code)
+		return fmt.Errorf("expected handshake, got %x", msg.Code)
 	}
-	var hs protoHandshake
 	if err := msg.Decode(&hs); err != nil {
-		return nil, err
+		return err
 	}
 	if len(hs.ID) != 64 || !bitutil.TestBytes(hs.ID) {
-		return nil, DiscInvalidIdentity
+		return DiscInvalidIdentity
 	}
-	return &hs, nil
+	return nil
 }

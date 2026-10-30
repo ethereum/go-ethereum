@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -127,7 +126,7 @@ func (q *quicTransport) chosenCaps() []string {
 	return chosen
 }
 
-func (q *quicTransport) doProtoHandshake(_ *protoHandshake) (*protoHandshake, error) {
+func (q *quicTransport) doProtoHandshake(_ *devp2pProtocolHandshake) (transportHello, error) {
 	// A QUIC connection does not perform the Hello exchange. The peer handshake is
 	// assembled from the identity established during the encryption handshake and
 	// the capabilities chosen by the server in it. QUIC always uses snappy
@@ -139,7 +138,7 @@ func (q *quicTransport) doProtoHandshake(_ *protoHandshake) (*protoHandshake, er
 			caps = append(caps, cap)
 		}
 	}
-	return &protoHandshake{Version: baseProtocolVersion, Caps: caps, ID: q.conn.PeerID()}, nil
+	return transportHello{Caps: caps, NodeID: q.conn.NodeID()}, nil
 }
 
 var browserScheme = enr.SchemeMap{
@@ -167,7 +166,7 @@ func browserNodeFromConn(conn *quic.Conn) (*enode.Node, error) {
 	} else if ip.IsValid() {
 		r.Set(enr.IPv6Addr(ip))
 	}
-	return signBrowser(&r, enode.ID(crypto.Keccak256Hash(conn.PeerID())))
+	return signBrowser(&r, conn.NodeID())
 }
 
 func signBrowser(r *enr.Record, id enode.ID) (*enode.Node, error) {

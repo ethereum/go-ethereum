@@ -18,10 +18,8 @@
 package p2p
 
 import (
-	"bytes"
 	"cmp"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -92,7 +90,7 @@ type Server struct {
 	listener     net.Listener
 	quicListener *quicListener
 	quicRotator  *quic.CertRotator
-	ourHandshake *protoHandshake
+	ourHandshake *devp2pProtocolHandshake
 	loopWG       sync.WaitGroup // loop, listenLoop
 	peerFeed     event.Feed
 	log          log.Logger
@@ -151,10 +149,17 @@ type conn struct {
 	name  string     // valid after the protocol handshake
 }
 
+// transportHello is the information returned by devp2p handshake.
+type transportHello struct {
+	NodeID enode.ID
+	Name   string
+	Caps   []Cap
+}
+
 type transport interface {
 	// The two handshakes.
 	doEncHandshake(prv *ecdsa.PrivateKey) (*enode.Node, error)
-	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
+	doProtoHandshake(our *devp2pProtocolHandshake) (transportHello, error)
 	// The MsgReadWriter can only be used after the encryption
 	// handshake has completed. The code uses conn.id to track this
 	// by setting it to a non-nil value after the encryption handshake.
@@ -404,7 +409,7 @@ func (srv *Server) Start() (err error) {
 func (srv *Server) setupLocalNode() error {
 	// Create the devp2p handshake.
 	pubkey := crypto.FromECDSAPub(&srv.PrivateKey.PublicKey)
-	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: pubkey[1:]}
+	srv.ourHandshake = &devp2pProtocolHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: pubkey[1:]}
 	for _, p := range srv.Protocols {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
@@ -587,7 +592,7 @@ func (srv *Server) setupTCP() error {
 	}
 
 	srv.loopWG.Add(1)
-	go srv.listenLoop(listener)
+	go srv.listenLoop("tcp", listener)
 	return nil
 }
 
@@ -631,7 +636,7 @@ func (srv *Server) setupQUIC() error {
 	srv.localnode.Set(rot.QHEntry())
 
 	srv.loopWG.Add(1)
-	go srv.listenLoop(listener)
+	go srv.listenLoop("quic", listener)
 	return nil
 }
 
@@ -868,8 +873,8 @@ func (srv *Server) protocolsFor(c *conn) []Protocol {
 
 // listenLoop runs in its own goroutine and accepts
 // inbound connections.
-func (srv *Server) listenLoop(ln net.Listener) {
-	srv.log.Debug("Listener up", "addr", ln.Addr())
+func (srv *Server) listenLoop(protocol string, ln net.Listener) {
+	srv.log.Debug("Listener up", "protocol", protocol, "addr", ln.Addr())
 
 	// The slots channel limits accepts of new connections.
 	tokens := defaultMaxPendingPeers
@@ -1051,16 +1056,16 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 	}
 
 	// Run the capability negotiation handshake.
-	phs, err := c.doProtoHandshake(srv.ourHandshake)
+	theirHello, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
 		clog.Trace("Failed p2p handshake", "err", err)
 		return &protoHandshakeError{err: err}
 	}
-	if id := c.node.ID(); !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
-		clog.Trace("Wrong devp2p handshake identity", "phsid", hex.EncodeToString(phs.ID))
+	if theirHello.NodeID != c.node.ID() {
+		clog.Error("Wrong devp2p handshake identity", "phsid", theirHello.NodeID)
 		return DiscUnexpectedIdentity
 	}
-	c.caps, c.name = phs.Caps, phs.Name
+	c.caps, c.name = theirHello.Caps, theirHello.Name
 	err = srv.checkpoint(c, srv.checkpointAddPeer)
 	if err != nil {
 		clog.Trace("Rejected peer", "err", err)
@@ -1068,18 +1073,6 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 	}
 
 	return nil
-}
-
-func nodeFromConn(pubkey *ecdsa.PublicKey, conn net.Conn) *enode.Node {
-	var ip net.IP
-	var port int
-	switch addr := conn.RemoteAddr().(type) {
-	case *net.TCPAddr:
-		ip, port = addr.IP, addr.Port
-	case *net.UDPAddr:
-		ip, port = addr.IP, addr.Port
-	}
-	return enode.NewV4(pubkey, ip, port, port)
 }
 
 // checkpoint sends the conn to run, which performs the
