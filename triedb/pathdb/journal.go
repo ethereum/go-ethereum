@@ -195,7 +195,7 @@ func (db *Database) loadLayers() layer {
 	// it. Display log for discarding journal, but try to avoid showing
 	// useless information when the db is created from scratch.
 	if !(root == types.EmptyRootHash && errors.Is(err, errMissJournal)) {
-		log.Info("Failed to load journal, discard it", "err", err)
+		log.Warn("Failed to load journal, discard it", "err", err, "diskroot", root)
 	}
 	// Return single layer with persistent state.
 	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, nil, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0), nil)
@@ -328,6 +328,21 @@ func (dl *diffLayer) journal(w io.Writer) error {
 //
 // The supplied root must be a valid trie hash value.
 func (db *Database) Journal(root common.Hash) error {
+	if err := db.Checkpoint(root); err != nil {
+		return err
+	}
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	// Set the db in read only mode to reject all following mutations
+	db.readOnly = true
+	return nil
+}
+
+// Checkpoint is Journal without the read-only switch: the journal written
+// mirrors the layers at this point and the database stays usable, so a tree
+// that is frozen but still read can be made recoverable mid-run.
+func (db *Database) Checkpoint(root common.Hash) error {
 	// Retrieve the head layer to journal from.
 	l := db.tree.get(root)
 	if l == nil {
@@ -439,7 +454,5 @@ func (db *Database) Journal(root common.Hash) error {
 		file = nil
 		log.Info("Persisted dirty state to file", "path", journalPath, "size", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
 	}
-	// Set the db in read only mode to reject all following mutations
-	db.readOnly = true
 	return nil
 }

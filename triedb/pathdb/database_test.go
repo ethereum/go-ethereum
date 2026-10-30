@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -1185,5 +1187,57 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 		if err := checkHistoricalState(env, root, uint64(i+1), hr); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// TestCheckpointKeepsDatabaseWritable: a checkpoint writes the journal like
+// Journal does, without turning the database read-only, so a frozen tree can
+// still be retired afterwards.
+func TestCheckpointKeepsDatabaseWritable(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+	tester := newTester(t, &testerConfig{layers: 6})
+	defer tester.release()
+
+	if err := tester.db.Checkpoint(tester.lastHash()); err != nil {
+		t.Fatalf("checkpoint: %v", err)
+	}
+	if len(rawdb.ReadTrieJournal(tester.db.diskdb)) == 0 {
+		t.Fatal("checkpoint wrote no journal")
+	}
+	if err := tester.db.Retire(); err != nil {
+		t.Fatalf("retire after checkpoint: %v", err)
+	}
+}
+
+// TestDiscardedJournalWarns: a journal that no longer matches the disk layer
+// is dropped with a warning naming both roots.
+func TestDiscardedJournalWarns(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+	tester := newTester(t, &testerConfig{layers: 6})
+	defer tester.release()
+
+	if err := tester.db.Journal(tester.lastHash()); err != nil {
+		t.Fatalf("journal: %v", err)
+	}
+	tester.db.Close()
+	blob := rawdb.ReadTrieJournal(tester.db.diskdb)
+	blob[0] = 0xa // the version field
+	rawdb.WriteTrieJournal(tester.db.diskdb, blob)
+
+	var buf bytes.Buffer
+	old := log.Root()
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(&buf, log.LevelWarn, false)))
+	defer log.SetDefault(old)
+	tester.db = New(tester.db.diskdb, tester.db.config, false)
+
+	out := buf.String()
+	if !strings.Contains(out, "WARN") || !strings.Contains(out, "Failed to load journal") || !strings.Contains(out, "diskroot=") {
+		t.Fatalf("discarded journal not warned about:\n%s", out)
 	}
 }

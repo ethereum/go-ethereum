@@ -293,6 +293,7 @@ func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
 	if owed {
 		f.direction(true)
 	}
+	var stalled int64
 	for _, t := range f.live() {
 		if !t.pbt && !owed {
 			continue
@@ -306,13 +307,15 @@ func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
 				f.reportImportHold()
 				continue
 			}
-			log.Warn("Migration direction stalled", "pbt", t.pbt, "head", head.Number, "err", err)
+			stalled = 1
+			log.Error("Migration direction stalled", "pbt", t.pbt, "head", head.Number, "err", err)
 			var missing *MissingAccessListError
 			if errors.As(err, &missing) {
 				f.requestLists(missing.Number, head.Number.Uint64())
 			}
 		}
 	}
+	pbtStalledGauge.Update(stalled)
 }
 
 // reportImportHold logs, at most hourly, a tree held by an import that no

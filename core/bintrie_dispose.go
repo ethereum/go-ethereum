@@ -52,12 +52,20 @@ func (bc *BlockChain) disposeMerkle() {
 	}
 	// The merkle state is the way back from a crash until a post-fork
 	// binary state is on disk, which the write buffer alone can delay for
-	// hours: put one there first.
-	if err := bc.persistBinary(bc.CurrentBlock()); err != nil {
+	// hours: put one there first. Flattening stops at the finalized block,
+	// so the layers above it stay live for reorgs.
+	keep := bc.CurrentBlock()
+	if final := bc.CurrentFinalBlock(); final != nil && bc.chainConfig.IsBinaryTrie(final.Number, final.Time) {
+		if child := bc.GetHeaderByNumber(final.Number.Uint64() + 1); child != nil && child.ParentHash == final.Hash() {
+			keep = child
+		}
+	}
+	if err := bc.persistBinary(keep); err != nil {
 		log.Error("Failed to persist the binary tree, disposal deferred to the next start", "err", err)
 		return
 	}
-	log.Info("Disposing of the merkle state")
+	pbtPersistedGauge.Update(int64(keep.Number.Uint64() - 1))
+	log.Info("Disposing of the merkle state", "persisted", keep.Number.Uint64()-1)
 	rawdb.WritePBTMerkleDisposed(bc.db)
 
 	// A live pathdb reads deleted records as empty accounts.
@@ -70,14 +78,14 @@ func (bc *BlockChain) disposeMerkle() {
 
 // persistBinary puts the binary state of the head's parent on disk, keeping
 // the head and anything above it live. Nothing to do below the second
-// post-fork block, or when the parent already is the disk layer.
+// post-fork block, or when the parent is at or below the disk layer.
 func (bc *BlockChain) persistBinary(head *types.Header) error {
 	parent := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1)
 	if parent == nil || !bc.chainConfig.IsBinaryTrie(parent.Number, parent.Time) {
 		return nil
 	}
 	pbtdb := rawdb.NewTable(bc.db, string(rawdb.PBTPrefix))
-	if id := rawdb.ReadStateID(pbtdb, parent.Root); id != nil && *id == rawdb.ReadPersistentStateID(pbtdb) {
+	if id := rawdb.ReadStateID(pbtdb, parent.Root); id != nil && *id <= rawdb.ReadPersistentStateID(pbtdb) {
 		return nil
 	}
 	tdb, err := bc.treeFor(true)
@@ -85,6 +93,53 @@ func (bc *BlockChain) persistBinary(head *types.Header) error {
 		return err
 	}
 	return tdb.Persist(head.Root)
+}
+
+// checkpointActivation runs once per process, on the first block whose parent
+// is post-fork: it journals the frozen merkle trie at the boundary parent, so
+// a kill during the window reopens the merkle trie there rather than at a
+// disk layer hours older. The binary tree is not persisted here: that would
+// flatten the pre-fork layers a straddle reorg still needs. The window close
+// persists it, once the boundary is final.
+func (bc *BlockChain) checkpointActivation(block *types.Block) {
+	if bc.follower == nil || bc.activationCheckpointed.Load() {
+		return
+	}
+	boundary := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if boundary == nil || !bc.chainConfig.IsBinaryTrie(boundary.Number, boundary.Time) {
+		return
+	}
+	merkle := bc.merkleHandle()
+	if merkle == nil {
+		return
+	}
+	for bc.chainConfig.IsBinaryTrie(boundary.Number, boundary.Time) {
+		if boundary = bc.GetHeader(boundary.ParentHash, boundary.Number.Uint64()-1); boundary == nil {
+			return
+		}
+	}
+	if err := merkle.Checkpoint(boundary.Root); err != nil {
+		log.Warn("Failed to journal the merkle trie at the boundary", "block", boundary.Number, "err", err)
+	} else {
+		log.Info("Journaled the merkle trie at the boundary", "block", boundary.Number)
+	}
+	bc.activationCheckpointed.Store(true)
+}
+
+// merkleHandle returns the live merkle trie: bc.triedb before the crossing
+// and after an in-run one, the follower's when the node started post-fork.
+func (bc *BlockChain) merkleHandle() *triedb.Database {
+	if !bc.triedb.IsPBT() {
+		return bc.triedb
+	}
+	if bc.follower != nil {
+		if t := bc.follower.peek(false); t != nil {
+			bc.follower.mu.Lock()
+			defer bc.follower.mu.Unlock()
+			return t.handle
+		}
+	}
+	return nil
 }
 
 // retireMerkleTree retires and closes the merkle handle: bc.triedb after an
@@ -177,4 +232,10 @@ func DisposeMerkleState(db ethdb.Database, journalDir string, interrupt <-chan s
 		}
 	}
 	return nil
+}
+
+// ImportsBinaryTree reports whether this chain runs an import or
+// self-conversion: the flags were given and the tree is not in place yet.
+func (bc *BlockChain) ImportsBinaryTree() bool {
+	return bc.cfg.PBTImport
 }

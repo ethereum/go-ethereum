@@ -696,3 +696,25 @@ type unflushableBatch struct {
 }
 
 func (unflushableBatch) Write() error { return errors.New("batch refused") }
+
+// TestFollowerStallGauge: a stalled direction is reported on the gauge until
+// a later sync clears it.
+func TestFollowerStallGauge(t *testing.T) {
+	genesis, db, blocks, _ := generateMigrationChain(t, 2)
+	writeChainShape(db, blocks)
+	rawdb.WriteAccessList(db, blocks[0].Hash(), blocks[0].NumberU64(), &bal.BlockAccessList{})
+	f := standaloneFollower(genesis, db)
+	f.sync(blocks[1].Header(), nil)
+	if pbtStalledGauge.Snapshot().Value() != 1 {
+		t.Fatal("stall not reported on the gauge")
+	}
+	if p := f.direction(true); p.stall == nil {
+		t.Fatal("direction not stalled")
+	}
+	// The corruption undone, the next sync clears it.
+	rawdb.WriteAccessList(db, blocks[0].Hash(), blocks[0].NumberU64(), blocks[0].AccessList())
+	f.sync(blocks[1].Header(), nil)
+	if pbtStalledGauge.Snapshot().Value() != 0 {
+		t.Fatal("stall still reported after recovery")
+	}
+}

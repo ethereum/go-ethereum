@@ -361,21 +361,23 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cfg         *BlockChainConfig   // Blockchain configuration
 
-	db              ethdb.Database                   // Low level persistent database to store final content in
-	snaps           *snapshot.Tree                   // Snapshot tree for fast trie leaf access
-	triegc          *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
-	gcproc          time.Duration                    // Accumulates canonical block processing for trie dumping
-	lastWrite       uint64                           // Last block when the state was flushed
-	flushInterval   atomic.Int64                     // Time interval (processing time) after which to flush a state
-	triedb          *triedb.Database                 // The database handler for maintaining trie nodes.
-	codedb          *state.CodeDB                    // The database handler for maintaining contract codes.
-	jumpDestCache   vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
-	precompileCache *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
-	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
-	follower        *bintrieFollower                 // Shadow tree follower, nil unless migrating
-	disposer        atomic.Pointer[merkleDisposer]   // Merkle state disposal, nil unless retiring it
-	merkleRetired   atomic.Bool                      // bc.triedb retired by the disposal
-	live            atomic.Bool                      // Set by the live node, the only one to decide the disposal
+	db                     ethdb.Database                   // Low level persistent database to store final content in
+	snaps                  *snapshot.Tree                   // Snapshot tree for fast trie leaf access
+	triegc                 *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
+	gcproc                 time.Duration                    // Accumulates canonical block processing for trie dumping
+	lastWrite              uint64                           // Last block when the state was flushed
+	flushInterval          atomic.Int64                     // Time interval (processing time) after which to flush a state
+	triedb                 *triedb.Database                 // The database handler for maintaining trie nodes.
+	codedb                 *state.CodeDB                    // The database handler for maintaining contract codes.
+	jumpDestCache          vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
+	precompileCache        *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
+	txIndexer              *txIndexer                       // Transaction indexer, might be nil if not enabled
+	follower               *bintrieFollower                 // Shadow tree follower, nil unless migrating
+	disposer               atomic.Pointer[merkleDisposer]   // Merkle state disposal, nil unless retiring it
+	merkleRetired          atomic.Bool                      // bc.triedb retired by the disposal
+	live                   atomic.Bool                      // Set by the live node, the only one to decide the disposal
+	activationCheckpointed atomic.Bool                      // Merkle trie journaled at the boundary (checkpointActivation)
+	activationAlert        time.Time                        // Last "activation blocked" report (WaitActivation)
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -468,13 +470,17 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		}
 	}
 	// An import seeds the tree the follower carries to the fork: it needs a
-	// fork to carry it to, and a head that has not crossed it.
+	// fork to carry it to. Flags left on a node that already crossed it, or
+	// finished its migration, name nothing to do.
 	if cfg.PBTImport {
 		switch {
 		case mode != modeMigration:
 			return nil, errors.New(`binary tree import needs a chain config that schedules the tree (genesis key "binaryTrieTime"; see --override.genesis)`)
-		case isPBT:
-			return nil, errors.New("binary tree import refused: the head block already commits the binary tree")
+		case isPBT || rawdb.ReadPBTMigrationDone(db):
+			log.Warn("Binary tree already in place, import flags ignored")
+			c := *cfg
+			c.PBTImport, c.PBTImportForce = false, false
+			cfg = &c
 		}
 	}
 	tdbConfig, err := cfg.triedbConfig(isPBT)
@@ -2398,7 +2404,14 @@ func (bc *BlockChain) WaitActivation(block *types.Block, timeout time.Duration) 
 	if bc.ActivationReady(block) {
 		return nil
 	}
-	return bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), timeout)
+	err := bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), timeout)
+	if err != nil && time.Since(bc.activationAlert) > time.Minute {
+		// The caller retries forever; without this line a node whose shadow
+		// tree is stuck sits one block before the fork in silence.
+		bc.activationAlert = time.Now()
+		log.Error("Activation blocked by the shadow tree", "parent", block.NumberU64()-1, "err", err)
+	}
+	return err
 }
 
 // StateForBuilding returns the state to seal a block of the given number and
@@ -2671,6 +2684,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		if err != nil {
 			return nil, err
 		}
+		bc.checkpointActivation(block)
 		// Update the metrics touched during block commit
 		stats.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
 		stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
