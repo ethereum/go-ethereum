@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -469,22 +472,10 @@ func TestBatchImportAcrossTheFork(t *testing.T) {
 // TestPostForkCrashRecoversThroughTheMerkleTrie: a node killed past the fork
 // before the binary tree flushed a post-fork layer reopens with its live
 // binary state below the fork, where headers commit the merkle trie. The
-// stock rewind would walk to genesis; the node refuses and names the way
-// back, which rewinds onto the merkle trie and crosses the fork again.
+// stock rewind would walk to genesis; the node reopens on the merkle trie
+// instead, rewinds there and crosses the fork again.
 func TestPostForkCrashRecoversThroughTheMerkleTrie(t *testing.T) {
-	genesis := migrationTestGenesis()
-	n, ethservice := startEthService(t, genesis, nil)
-	defer n.Close()
-
-	api := NewConsensusAPI(ethservice)
-	chain := ethservice.BlockChain()
-	parent := chain.CurrentBlock()
-	var blocks []*types.Block
-	for i := 0; i < 5; i++ {
-		parent = buildBlock(t, api, parent, uint64(i+1), common.Hash{})
-		blocks = append(blocks, chain.GetBlockByHash(parent.Hash()))
-	}
-
+	genesis, blocks := referenceChain(t, 5)
 	db := rawdb.NewMemoryDatabase()
 	engine := beacon.New(ethash.NewFaker())
 	victim, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
@@ -502,23 +493,16 @@ func TestPostForkCrashRecoversThroughTheMerkleTrie(t *testing.T) {
 	rawdb.DeleteTrieJournal(db)
 	rawdb.DeleteTrieJournal(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
 
-	_, err = core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
-	if err == nil || !strings.Contains(err.Error(), "pbt.recover") {
-		t.Fatalf("reopen err = %v, want the recovery hint", err)
-	}
-	if head := rawdb.ReadHeadBlock(db); head == nil || head.NumberU64() != 5 {
-		t.Fatalf("refusal moved the head to %v, want 5", head)
-	}
-
-	cfg := core.DefaultConfig().WithStateScheme(rawdb.PathScheme)
-	cfg.PBTRecover = true
-	recovered, err := core.NewBlockChain(db, genesis, engine, cfg)
+	recovered, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
 	if err != nil {
 		t.Fatalf("recovery reopen: %v", err)
 	}
 	defer recovered.Stop()
 	if recovered.TrieDB().IsPBT() {
 		t.Fatal("recovery reopened on the binary tree")
+	}
+	if got := startupRoute(); got != routeMerkle {
+		t.Fatalf("route %d, want the merkle route", got)
 	}
 	if head := recovered.CurrentBlock(); head.Number.Uint64() >= 4 {
 		t.Fatalf("recovery left the head at %d, want below the fork", head.Number)
@@ -586,6 +570,9 @@ func TestWindowCloseLeavesABinaryStateOnDisk(t *testing.T) {
 		t.Fatalf("reopen after the close: %v", err)
 	}
 	defer reopened.Stop()
+	if got := startupRoute(); got != routeBinary {
+		t.Fatalf("route %d, want the binary route", got)
+	}
 	// The close persisted the finalized block, so the reopen lands on it.
 	head := reopened.CurrentBlock()
 	if head.Number.Uint64() != 5 || !reopened.HasState(head.Root) {
@@ -656,9 +643,7 @@ func TestActivationJournalsTheMerkleTrie(t *testing.T) {
 	rawdb.DeleteTrieJournal(pbtdb)
 	rawdb.WriteTrieJournal(db, journal)
 
-	cfg := core.DefaultConfig().WithStateScheme(rawdb.PathScheme)
-	cfg.PBTRecover = true
-	recovered, err := core.NewBlockChain(db, genesis, engine, cfg)
+	recovered, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
 	if err != nil {
 		t.Fatalf("recovery reopen: %v", err)
 	}
@@ -671,6 +656,317 @@ func TestActivationJournalsTheMerkleTrie(t *testing.T) {
 	}
 	if head := recovered.CurrentBlock(); head.Hash() != blocks[5].Hash() {
 		t.Fatalf("head %d %x, want %x", head.Number, head.Hash(), blocks[5].Hash())
+	}
+}
+
+// Routes a migrating node starts on, as pbt/recovery/route reports them.
+const (
+	routeBinary = 1
+	routeMerkle = 2
+	routeReplay = 3
+)
+
+func startupRoute() int64 {
+	return metrics.DefaultRegistry.Get("pbt/recovery/route").(*metrics.Gauge).Snapshot().Value()
+}
+
+// legacyDatadir is the shape a node built before the window close persisted
+// the binary tree left behind: crossed the fork, killed, merkle state
+// disposed, and the binary tree's only state on disk below the fork.
+func legacyDatadir(t *testing.T, genesis *core.Genesis, blocks []*types.Block) ethdb.Database {
+	t.Helper()
+	db := rawdb.NewMemoryDatabase()
+	chain, err := core.NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+	chain.Stop()
+	rawdb.DeleteTrieJournal(db)
+	rawdb.DeleteTrieJournal(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
+	rawdb.WritePBTMigrationDone(db)
+	rawdb.WritePBTMerkleDisposed(db)
+	if err := core.DisposeMerkleState(db, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+// TestReplayRouteRebuildsBinaryTree: a legacy datadir reopens with no flag,
+// rewinds to the deepest shadow record whose state is live, and the blocks
+// above it come back through the follower - replayed below the fork,
+// executed above - delivered again by the downloader, as a rewind below
+// the freezer boundary leaves no bodies behind.
+func TestReplayRouteRebuildsBinaryTree(t *testing.T) {
+	genesis, blocks := referenceChain(t, 8)
+	db := legacyDatadir(t, genesis, blocks)
+	engine := beacon.New(ethash.NewFaker())
+	open := func() *core.BlockChain {
+		t.Helper()
+		chain, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+		if err != nil {
+			t.Fatalf("reopen: %v", err)
+		}
+		if got := startupRoute(); got != routeReplay {
+			t.Fatalf("route %d, want the replay route", got)
+		}
+		if !chain.TrieDB().IsPBT() {
+			t.Fatal("replay route opened the merkle trie")
+		}
+		// The backend wires the access-list fetcher on this.
+		if !chain.Migrating() {
+			t.Fatal("replay route does not report a migration in progress")
+		}
+		return chain
+	}
+	chain := open()
+	head := chain.CurrentBlock()
+	if head.Number.Uint64() >= 4 || !chain.HasState(head.Root) {
+		t.Fatalf("head %d with state %v, want a pre-fork block whose shadow state is live", head.Number, chain.HasState(head.Root))
+	}
+	// The txpool opens the head's state at start: served from the binary
+	// tree under the shadow root.
+	if _, err := chain.StateAt(head); err != nil {
+		t.Fatalf("pre-fork head state on the replay route: %v", err)
+	}
+	chain.Stop()
+
+	// What the rewind's freezer truncation leaves above the head.
+	for _, b := range blocks[head.Number.Uint64():] {
+		rawdb.DeleteCanonicalHash(db, b.NumberU64())
+		rawdb.DeleteBody(db, b.Hash(), b.NumberU64())
+		rawdb.DeleteAccessList(db, b.Hash(), b.NumberU64())
+	}
+	chain = open()
+	// A block delivered without its access list - the downloader fetches
+	// them best effort - is asked of the fetcher by hash: the block is not
+	// canonical until replayed. The import waits for the delivery, as at
+	// the boundary.
+	var asked []core.BALRequest
+	chain.SetBALRequester(func(reqs []core.BALRequest) {
+		asked = append(asked, reqs...)
+		for _, r := range reqs {
+			rawdb.WriteAccessList(db, r.Hash, r.Number, blocks[r.Number-1].AccessList())
+		}
+		chain.KickMigration()
+	})
+	delivered := []*types.Block{blocks[0], blocks[1].WithAccessListUnsafe(nil), blocks[2]}
+	if _, err := chain.InsertChain(delivered); err != nil {
+		t.Fatalf("replaying: %v", err)
+	}
+	if len(asked) != 1 || asked[0].Hash != blocks[1].Hash() {
+		t.Fatalf("fetcher asked for %v, want block 2", asked)
+	}
+	if head := chain.CurrentBlock(); head.Hash() != blocks[2].Hash() {
+		t.Fatalf("head %d %x after the replay, want %x", head.Number, head.Hash(), blocks[2].Hash())
+	}
+	// The replay moved the follower's cursor with the head: the blocks were
+	// canonical when it replayed them, not sidechain lookups it would redo
+	// from a base the chain's own commits flatten away past the fork.
+	if p := chain.MigrationProgress().Binary; p == nil || p.Cursor != 3 {
+		t.Fatalf("binary direction %+v, want its cursor on the replayed block 3", p)
+	}
+	// A restart mid-replay is a replay route too, from where the last one got.
+	chain.Stop()
+	chain = open()
+	defer chain.Stop()
+	if _, err := chain.InsertChain(blocks[3:]); err != nil {
+		t.Fatalf("rebuilding: %v", err)
+	}
+	if head := chain.CurrentBlock(); head.Hash() != blocks[7].Hash() {
+		t.Fatalf("head %d %x, want %x", head.Number, head.Hash(), blocks[7].Hash())
+	}
+	if !chain.HasState(blocks[7].Root()) {
+		t.Fatal("rebuilt chain does not hold the binary state of its head")
+	}
+	if _, err := chain.StateAt(chain.CurrentBlock()); err != nil {
+		t.Fatalf("head state: %v", err)
+	}
+	// Past the fork the follower has nothing left to carry: it retires.
+	waitFor(t, 5*time.Second, "follower never retired past the fork", func() bool {
+		return chain.MigrationProgress().Phase == "done"
+	})
+}
+
+// TestReplayRouteKeepsTheFreezer: the rewind onto the landing block crosses
+// the freezer boundary; the stock repair would truncate the ancient store
+// above it, and the receipts of the replayed blocks never come back. The
+// replay route keeps the frozen blocks: they are replayed as they are.
+func TestReplayRouteKeepsTheFreezer(t *testing.T) {
+	genesis, blocks := referenceChain(t, 8)
+	datadir := t.TempDir()
+	open := func() ethdb.Database {
+		t.Helper()
+		kv, err := pebble.New(datadir, 0, 0, "", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		db, err := rawdb.Open(kv, rawdb.OpenOptions{Ancient: filepath.Join(datadir, "ancient")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return db
+	}
+	db := open()
+	engine := beacon.New(ethash.NewFaker())
+	chain, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+	// Finality moves the freezer boundary past the fork.
+	chain.SetFinalized(blocks[5].Header())
+	if err := db.(interface{ Freeze() error }).Freeze(); err != nil {
+		t.Fatal(err)
+	}
+	frozen, _ := db.Ancients()
+	if frozen < 6 {
+		t.Fatalf("froze %d blocks, want the chain through the finalized block 6", frozen)
+	}
+	chain.Stop()
+	rawdb.DeleteTrieJournal(db)
+	rawdb.DeleteTrieJournal(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
+	rawdb.WritePBTMigrationDone(db)
+	rawdb.WritePBTMerkleDisposed(db)
+	if err := core.DisposeMerkleState(db, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	db = open()
+	defer db.Close()
+	chain, err = core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer chain.Stop()
+	if got := startupRoute(); got != routeReplay {
+		t.Fatalf("route %d, want the replay route", got)
+	}
+	if head := chain.CurrentBlock(); head.Number.Uint64() >= 4 {
+		t.Fatalf("head %d, want a pre-fork landing block", head.Number)
+	}
+	if now, _ := db.Ancients(); now != frozen {
+		t.Fatalf("ancient store truncated to %d blocks, want %d kept", now, frozen)
+	}
+	if chain.GetReceiptsByHash(blocks[2].Hash()) == nil {
+		t.Fatal("receipts of a frozen block to replay are gone")
+	}
+	// The frozen blocks carry their access lists: no fetch, no re-download.
+	if _, err := chain.InsertChain(blocks[chain.CurrentBlock().Number.Uint64():]); err != nil {
+		t.Fatalf("rebuilding: %v", err)
+	}
+	if head := chain.CurrentBlock(); head.Hash() != blocks[7].Hash() {
+		t.Fatalf("head %d %x, want %x", head.Number, head.Hash(), blocks[7].Hash())
+	}
+}
+
+// TestBinaryRewindNeverResetsToGenesis: a legacy datadir with no live shadow
+// record is refused, with the head marker where it was - never rewound to
+// a genesis the binary tree has no state for.
+func TestBinaryRewindNeverResetsToGenesis(t *testing.T) {
+	genesis, blocks := referenceChain(t, 6)
+	db := legacyDatadir(t, genesis, blocks)
+	if err := rawdb.WipeMigrationState(db); err != nil {
+		t.Fatal(err)
+	}
+	rawdb.WritePBTMigrationDone(db)
+
+	_, err := core.NewBlockChain(db, genesis, beacon.New(ethash.NewFaker()), core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err == nil || !strings.Contains(err.Error(), "resync") {
+		t.Fatalf("reopen err = %v, want the resync refusal", err)
+	}
+	if head := rawdb.ReadHeadBlockHash(db); head != blocks[5].Hash() {
+		t.Fatalf("refusal moved the head marker to %x, want %x", head, blocks[5].Hash())
+	}
+}
+
+// TestCrashMatrix: a node stopped at every phase of the migration, cleanly
+// or killed, reopens with no flag on the route the state on disk dictates
+// and imports the rest of the reference chain to the same head.
+func TestCrashMatrix(t *testing.T) {
+	genesis, blocks := referenceChain(t, 12) // fork at block 4
+	engine := beacon.New(ethash.NewFaker())
+	phases := []struct {
+		name      string
+		head      int   // blocks inserted before the stop
+		finalized int   // block finalized before the last one, 0 for none
+		clean     int64 // route after a clean stop
+		kill      int64 // route after a kill
+	}{
+		{"follower replaying", 1, 0, routeMerkle, routeMerkle},
+		{"boundary parent", 3, 0, routeMerkle, routeMerkle},
+		{"first post-fork block", 4, 0, routeBinary, routeMerkle},
+		{"past the boundary checkpoint", 6, 0, routeBinary, routeMerkle},
+		{"window closed", 10, 5, routeBinary, routeBinary},
+	}
+	for _, p := range phases {
+		for _, kill := range []bool{false, true} {
+			name, want := p.name+"/clean", p.clean
+			if kill {
+				name, want = p.name+"/kill", p.kill
+			}
+			t.Run(name, func(t *testing.T) {
+				db := rawdb.NewMemoryDatabase()
+				victim, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := victim.SettleMerkleDisposal(); err != nil {
+					t.Fatal(err)
+				}
+				if p.finalized == 0 {
+					if _, err := victim.InsertChain(blocks[:p.head]); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if _, err := victim.InsertChain(blocks[:p.head-1]); err != nil {
+						t.Fatal(err)
+					}
+					victim.SetFinalized(blocks[p.finalized-1].Header())
+					if _, err := victim.InsertChain(blocks[p.head-1 : p.head]); err != nil {
+						t.Fatal(err)
+					}
+					waitFor(t, 5*time.Second, "window never closed", func() bool { return rawdb.ReadPBTMerkleDisposed(db) })
+				}
+				// What a kill leaves on disk: the journals written while
+				// running, none of the shutdown's.
+				journal := rawdb.ReadTrieJournal(db)
+				victim.Stop()
+				if kill {
+					rawdb.DeleteTrieJournal(db)
+					rawdb.DeleteTrieJournal(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
+					if len(journal) > 0 {
+						rawdb.WriteTrieJournal(db, journal)
+					}
+				}
+				reopened, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+				if err != nil {
+					t.Fatalf("reopen: %v", err)
+				}
+				defer reopened.Stop()
+				if got := startupRoute(); got != want {
+					t.Fatalf("route %d, want %d", got, want)
+				}
+				head := reopened.CurrentBlock()
+				if !reopened.HasState(head.Root) {
+					t.Fatalf("reopened at %d without its state", head.Number)
+				}
+				if _, err := reopened.InsertChain(blocks[head.Number.Uint64():]); err != nil {
+					t.Fatalf("importing the rest: %v", err)
+				}
+				if got := reopened.CurrentBlock(); got.Hash() != blocks[11].Hash() {
+					t.Fatalf("head %d %x, want %x", got.Number, got.Hash(), blocks[11].Hash())
+				}
+				if !reopened.HasState(blocks[11].Root()) {
+					t.Fatal("reopened chain does not hold the state of its head")
+				}
+			})
+		}
 	}
 }
 

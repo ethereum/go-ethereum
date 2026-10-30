@@ -379,8 +379,22 @@ func (bc *BlockChain) TxIndexDone() bool {
 }
 
 // HasState checks if state trie is fully present in the database or not. A
-// migrating node answers for both trees.
+// migrating node answers for both trees, and for a pre-fork head on the
+// binary tree - the replay route - under the shadow root its state is held
+// by: callers asking for the head's own root mean that one.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
+	if bc.hasState(hash) {
+		return true
+	}
+	if head := bc.CurrentBlock(); head != nil && head.Root == hash {
+		if root, ok := bc.commitRoot(head); ok && root != hash {
+			return bc.hasState(root)
+		}
+	}
+	return false
+}
+
+func (bc *BlockChain) hasState(hash common.Hash) bool {
 	// A retired handle still lists its roots; a rewind must not trust them.
 	if !bc.merkleRetired.Load() {
 		if _, err := bc.triedb.NodeReader(hash); err == nil {
@@ -403,7 +417,8 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
-	return bc.HasState(block.Root())
+	root, ok := bc.commitRoot(block.Header())
+	return ok && bc.hasState(root)
 }
 
 // StateRecoverable checks if the specified state is recoverable.
@@ -431,13 +446,19 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 	return bc.StateAt(bc.CurrentBlock())
 }
 
-// StateAt returns the state database rooted at the given header.
+// StateAt returns the state database rooted at the given header. A pre-fork
+// header with only the binary tree left is served from that tree, under its
+// shadow root: the same state, committed differently.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	sdb, err := bc.stateDatabaseFor(bc.chainConfig.IsBinaryTrie(header.Number, header.Time))
+	root, ok := bc.commitRoot(header)
+	if !ok {
+		return nil, fmt.Errorf("no shadow state for block %d %x", header.Number, header.Hash())
+	}
+	sdb, err := bc.stateDatabaseFor(root != header.Root || bc.chainConfig.IsBinaryTrie(header.Number, header.Time))
 	if err != nil {
 		return nil, err
 	}
-	return state.New(header.Root, sdb)
+	return state.New(root, sdb)
 }
 
 // HistoricState returns a historic state specified by the given header.

@@ -67,6 +67,7 @@ func (bc *BlockChain) disposeMerkle() {
 	pbtPersistedGauge.Update(int64(keep.Number.Uint64() - 1))
 	log.Info("Disposing of the merkle state", "persisted", keep.Number.Uint64()-1)
 	rawdb.WritePBTMerkleDisposed(bc.db)
+	bc.disposed.Store(true)
 
 	// A live pathdb reads deleted records as empty accounts.
 	if err := bc.retireMerkleTree(); err != nil {
@@ -172,7 +173,7 @@ func (bc *BlockChain) retireMerkleTree() error {
 // closed undecided.
 func (bc *BlockChain) SettleMerkleDisposal() error {
 	bc.live.Store(true)
-	if rawdb.ReadPBTMerkleDisposed(bc.db) || !rawdb.ReadPBTMigrationDone(bc.db) {
+	if bc.disposed.Load() || !rawdb.ReadPBTMigrationDone(bc.db) {
 		return nil
 	}
 	// Disposing would retire the handle this node executes on.

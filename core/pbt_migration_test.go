@@ -284,8 +284,8 @@ func TestOfflineStartLeavesTheDecision(t *testing.T) {
 	}
 }
 
-// TestDisposedDatadirRefusesAMerkleHead: a disposed datadir refuses to open at a
-// pre-fork head.
+// TestDisposedDatadirRefusesAMerkleHead: a disposed datadir at a pre-fork head
+// with no binary state to replay from refuses to open.
 func TestDisposedDatadirRefusesAMerkleHead(t *testing.T) {
 	genesis := migrationGenesis(t)
 	db, _ := merkleStateFixture(t, genesis)

@@ -248,6 +248,11 @@ func (f *bintrieFollower) loop() {
 // finalized post-fork block, or the head once MigrationWindowBlocks post-fork
 // blocks stand under it.
 func (f *bintrieFollower) windowClose(head *types.Header) *types.Header {
+	// On a disposed datadir the follower only carries the binary tree to
+	// the fork; past it there is nothing left to maintain.
+	if f.chain.disposed.Load() && f.config.IsBinaryTrie(head.Number, head.Time) {
+		return head
+	}
 	if final := f.chain.CurrentFinalBlock(); final != nil && f.config.IsBinaryTrie(final.Number, final.Time) {
 		return final
 	}
@@ -311,7 +316,7 @@ func (f *bintrieFollower) sync(head *types.Header, stop chan struct{}) {
 			log.Error("Migration direction stalled", "pbt", t.pbt, "head", head.Number, "err", err)
 			var missing *MissingAccessListError
 			if errors.As(err, &missing) {
-				f.requestLists(missing.Number, head.Number.Uint64())
+				f.requestLists(missing.Number, head)
 			}
 		}
 	}
@@ -337,21 +342,22 @@ func (f *bintrieFollower) reportImportHold() {
 
 // requestLists hands the requester the absent lists from the given block up
 // to the head, at most one batch; the requester must not block.
-func (f *bintrieFollower) requestLists(from, head uint64) {
+func (f *bintrieFollower) requestLists(from uint64, head *types.Header) {
 	f.mu.Lock()
 	req := f.requester
 	f.mu.Unlock()
 	if req == nil {
 		return
 	}
+	// Walk the head's branch rather than the canonical index: a block the
+	// replay route carries is not canonical until replayed.
 	var reqs []BALRequest
-	for n := from; n <= head && len(reqs) < followBatchBlocks; n++ {
-		hash := rawdb.ReadCanonicalHash(f.db, n)
-		if hash == (common.Hash{}) {
-			break
+	for h := head; h != nil && h.Number.Uint64() >= from && len(reqs) < followBatchBlocks; h = rawdb.ReadHeader(f.db, h.ParentHash, h.Number.Uint64()-1) {
+		if !rawdb.HasAccessList(f.db, h.Hash(), h.Number.Uint64()) {
+			reqs = append(reqs, BALRequest{Number: h.Number.Uint64(), Hash: h.Hash()})
 		}
-		if !rawdb.HasAccessList(f.db, hash, n) {
-			reqs = append(reqs, BALRequest{Number: n, Hash: hash})
+		if h.Number.Uint64() == 0 {
+			break
 		}
 	}
 	if len(reqs) > 0 {
@@ -879,6 +885,11 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 	// practice: the only crossing is a binary block on a merkle parent.
 	pbt := !f.config.IsBinaryTrie(header.Number, header.Time)
 	t := f.direction(pbt)
+	// The stall latched by the last sync is what this one retries: wait for
+	// its own verdict.
+	f.mu.Lock()
+	t.stall = nil
+	f.mu.Unlock()
 	f.kick(header)
 
 	deadline := time.Now().Add(timeout)
@@ -894,7 +905,10 @@ func (f *bintrieFollower) waitCaughtUp(number uint64, hash common.Hash, timeout 
 		f.mu.Lock()
 		stall := t.stall
 		f.mu.Unlock()
-		if stall != nil {
+		// A missing access list is on its way: the sync asked the fetcher,
+		// whose delivery re-arms it. Any other stall is a verdict.
+		var missing *MissingAccessListError
+		if stall != nil && !errors.As(stall, &missing) {
 			return stall
 		}
 		if time.Now().After(deadline) {
@@ -1021,8 +1035,8 @@ func (bc *BlockChain) SetBALRequester(req func([]BALRequest)) {
 // canonical blocks from the given one up to to, at most one batch. A
 // self-converter reads them while the follower, which otherwise asks, is held.
 func (bc *BlockChain) RequestAccessLists(from, to uint64) {
-	if bc.follower != nil {
-		bc.follower.requestLists(from, to)
+	if head := bc.GetHeaderByNumber(to); head != nil && bc.follower != nil {
+		bc.follower.requestLists(from, head)
 	}
 }
 
@@ -1061,15 +1075,26 @@ func (bc *BlockChain) FinishPBTImport(err error) {
 
 // Migrating reports whether the node is mid-migration between the two trees.
 func (bc *BlockChain) Migrating() bool {
-	return bc.follower != nil && !rawdb.ReadPBTMigrationDone(bc.db)
+	return bc.follower != nil && !bc.follower.stopped() && (!rawdb.ReadPBTMigrationDone(bc.db) || bc.replaying())
+}
+
+// stopped reports whether the follower's loop has returned: the window
+// closed, or the chain is stopping.
+func (f *bintrieFollower) stopped() bool {
+	select {
+	case <-f.closed:
+		return true
+	default:
+		return false
+	}
 }
 
 // MigrationProgress reports where a migrating chain stands, per direction.
 func (bc *BlockChain) MigrationProgress() MigrationProgress {
-	if rawdb.ReadPBTMigrationDone(bc.db) {
-		return MigrationProgress{Phase: "done"}
-	}
-	if bc.follower == nil {
+	if !bc.Migrating() {
+		if rawdb.ReadPBTMigrationDone(bc.db) {
+			return MigrationProgress{Phase: "done"}
+		}
 		return MigrationProgress{Phase: "inactive"}
 	}
 	if rawdb.ReadPBTImportPending(bc.db) {

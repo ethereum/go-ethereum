@@ -123,11 +123,6 @@ type Config struct {
 	// background while the node follows the chain.
 	PBTImport PBTImportConfig
 
-	// PBTRecover reopens a node whose head crossed the binary tree fork on the
-	// merkle trie, after a crash lost the tree's unflushed post-fork layers.
-	// One-shot: not a setting to keep.
-	PBTRecover bool `toml:"-"`
-
 	// The frequency of full-value encoding. For example, a value of 16 means
 	// that, on average, for a given trie node across its 16 consecutive historical
 	// versions, only one version is stored in full format, while the others
