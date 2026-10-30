@@ -1817,7 +1817,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		if err := chain.triedb.Commit(canonblocks[tt.commitBlock-1].Root(), false); err != nil {
+		if err := chain.trieDB().Commit(canonblocks[tt.commitBlock-1].Root(), false); err != nil {
 			t.Fatalf("Failed to flush trie state: %v", err)
 		}
 		if snapshots && scheme == rawdb.HashScheme {
@@ -1845,7 +1845,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		rawdb.WriteLastPivotNumber(db, *tt.pivotBlock)
 	}
 	// Pull the plug on the database, simulating a hard crash
-	chain.triedb.Close()
+	chain.trieDB().Close()
 	db.Close()
 	chain.stopWithoutSaving()
 
@@ -1947,7 +1947,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	if _, err := chain.InsertChain(blocks[:1]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	chain.triedb.Commit(blocks[0].Root(), false)
+	chain.trieDB().Commit(blocks[0].Root(), false)
 
 	// Insert block B2 and commit the snapshot into disk
 	if _, err := chain.InsertChain(blocks[1:2]); err != nil {
@@ -1963,7 +1963,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	if _, err := chain.InsertChain(blocks[2:3]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	chain.triedb.Commit(blocks[2].Root(), false)
+	chain.trieDB().Commit(blocks[2].Root(), false)
 
 	// Insert the remaining blocks
 	if _, err := chain.InsertChain(blocks[3:]); err != nil {
@@ -1971,7 +1971,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	}
 
 	// Pull the plug on the database, simulating a hard crash
-	chain.triedb.Close()
+	chain.trieDB().Close()
 	db.Close()
 	chain.stopWithoutSaving()
 

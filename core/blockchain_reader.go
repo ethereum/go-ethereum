@@ -395,13 +395,10 @@ func (bc *BlockChain) HasState(hash common.Hash) bool {
 }
 
 func (bc *BlockChain) hasState(hash common.Hash) bool {
-	// A retired handle still lists its roots; a rewind must not trust them.
-	if !bc.merkleRetired.Load() {
-		if _, err := bc.triedb.NodeReader(hash); err == nil {
-			return true
-		}
+	if _, err := bc.trieDB().NodeReader(hash); err == nil {
+		return true
 	}
-	tdb, err := bc.treeFor(!bc.triedb.IsPBT())
+	tdb, err := bc.treeFor(!bc.trieDB().IsPBT())
 	if err != nil {
 		return false
 	}
@@ -426,10 +423,10 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 // state is not treated as recoverable if it's available, thus
 // false will be returned in this case.
 func (bc *BlockChain) StateRecoverable(root common.Hash) bool {
-	if bc.triedb.Scheme() == rawdb.HashScheme {
+	if bc.trieDB().Scheme() == rawdb.HashScheme {
 		return false
 	}
-	result, _ := bc.triedb.Recoverable(root)
+	result, _ := bc.trieDB().Recoverable(root)
 	return result
 }
 
@@ -524,7 +521,7 @@ func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 
 // StateIndexProgress returns the historical state indexing progress.
 func (bc *BlockChain) StateIndexProgress() (uint64, uint64, error) {
-	return bc.triedb.IndexProgress()
+	return bc.trieDB().IndexProgress()
 }
 
 // HistoryPruningCutoff returns the configured history pruning point.
@@ -539,7 +536,7 @@ func (bc *BlockChain) HistoryPruningCutoff() (uint64, common.Hash) {
 
 // TrieDB retrieves the low level trie database used for data storage.
 func (bc *BlockChain) TrieDB() *triedb.Database {
-	return bc.triedb
+	return bc.trieDB()
 }
 
 // CodeDB retrieves the low level contract code database used for data storage.

@@ -127,11 +127,11 @@ func (bc *BlockChain) checkpointActivation(block *types.Block) {
 	bc.activationCheckpointed.Store(true)
 }
 
-// merkleHandle returns the live merkle trie: bc.triedb before the crossing
+// merkleHandle returns the live merkle trie: bc.trieDB() before the crossing
 // and after an in-run one, the follower's when the node started post-fork.
 func (bc *BlockChain) merkleHandle() *triedb.Database {
-	if !bc.triedb.IsPBT() {
-		return bc.triedb
+	if !bc.trieDB().IsPBT() {
+		return bc.trieDB()
 	}
 	if bc.follower != nil {
 		if t := bc.follower.peek(false); t != nil {
@@ -143,8 +143,10 @@ func (bc *BlockChain) merkleHandle() *triedb.Database {
 	return nil
 }
 
-// retireMerkleTree retires and closes the merkle handle: bc.triedb after an
-// in-run crossing, the follower's otherwise.
+// retireMerkleTree retires and closes the merkle handle. After an in-run
+// crossing that is bc.trieDB(), and the chain adopts the follower's binary
+// handle in its place: the tree it executes on, owned from here on like any
+// other start's. Otherwise the follower's own merkle handle goes.
 func (bc *BlockChain) retireMerkleTree() error {
 	var handle *triedb.Database
 	if bc.follower != nil {
@@ -152,17 +154,22 @@ func (bc *BlockChain) retireMerkleTree() error {
 			handle = t.release()
 		}
 	}
-	if !bc.triedb.IsPBT() {
-		handle = bc.triedb
+	if merkle := bc.trieDB(); !merkle.IsPBT() {
+		if bc.follower == nil {
+			return errors.New("no binary tree to adopt")
+		}
+		binary := bc.follower.direction(true).adopt()
+		if binary == nil {
+			return errors.New("no binary tree to adopt")
+		}
+		bc.triedb.Store(binary)
+		handle = merkle
 	}
 	if handle == nil {
 		return nil
 	}
 	if err := handle.Retire(); err != nil {
 		return err
-	}
-	if handle == bc.triedb {
-		bc.merkleRetired.Store(true)
 	}
 	return handle.Close()
 }
@@ -177,7 +184,7 @@ func (bc *BlockChain) SettleMerkleDisposal() error {
 		return nil
 	}
 	// Disposing would retire the handle this node executes on.
-	if !bc.cfg.ArchiveMode && !bc.triedb.IsPBT() {
+	if !bc.cfg.ArchiveMode && !bc.trieDB().IsPBT() {
 		return errors.New("migration window closed at a pre-fork head: re-anchor or resync")
 	}
 	bc.disposeMerkle()
