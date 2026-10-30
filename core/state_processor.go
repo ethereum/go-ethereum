@@ -94,10 +94,6 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)
 	}
-	// Mutate the block and state according to any hard-fork specs
-	if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(tracingStateDB)
-	}
 	parent := p.chain.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return nil, fmt.Errorf("missing parent %#x", block.ParentHash())
@@ -179,6 +175,10 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 	var blockAccessList *bal.ConstructionBlockAccessList
 	if config.IsAmsterdam(number, time) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
+	}
+	// Mutate the state according to any hard-fork specs
+	if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(number) == 0 {
+		misc.ApplyDAOHardFork(evm.StateDB)
 	}
 	// EIP-4788
 	if beaconRoot != nil {

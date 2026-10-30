@@ -1613,7 +1613,7 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want:      nil,
-			expectErr: &invalidTxError{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4712388)", randomAccounts[0].addr.String()), Code: errCodeInsufficientFunds},
+			expectErr: &invalidTxError{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4712388)", randomAccounts[0].addr.String()), Code: ErrCodeInsufficientFunds},
 		}, {
 			// EVM error
 			name: "evm-error",
@@ -1635,7 +1635,7 @@ func TestSimulateV1(t *testing.T) {
 				BaseFeePerGas: "0x0",
 				Calls: []callRes{{
 					ReturnValue: "0x",
-					Error:       callErr{Message: "stack underflow (0 <=> 2)", Code: errCodeVMError},
+					Error:       callErr{Message: "stack underflow (0 <=> 2)", Code: ErrCodeVMError},
 					GasUsed:     "0x47e7c4",
 					Logs:        []log{},
 					Status:      "0x0",
@@ -2079,7 +2079,7 @@ func TestSimulateV1(t *testing.T) {
 			}},
 			validation: &validation,
 			want:       nil,
-			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: errCodeNonceTooHigh},
+			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: ErrCodeNonceTooHigh},
 		},
 		// Contract sends tx in validation mode.
 		{
@@ -4840,8 +4840,8 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	if !errors.As(err, &de) {
 		t.Fatalf("expected data error with code/data, got %T %v", err, err)
 	}
-	if de.ErrorCode() != errCodeTxSyncTimeout {
-		t.Fatalf("expected code %d, got %d", errCodeTxSyncTimeout, de.ErrorCode())
+	if de.ErrorCode() != ErrCodeTxSyncTimeout {
+		t.Fatalf("expected code %d, got %d", ErrCodeTxSyncTimeout, de.ErrorCode())
 	}
 	tx := new(types.Transaction)
 	if e := tx.UnmarshalBinary(raw); e != nil {
@@ -5072,5 +5072,40 @@ func TestCreateAccessListAuthorizationGas(t *testing.T) {
 			require.NoError(t, err)
 			require.Empty(t, result.Error)
 		})
+	}
+}
+
+// headerErrorBackend fails header lookups of the safe and finalized tags.
+type headerErrorBackend struct {
+	*testBackend
+	err error
+}
+
+func (b headerErrorBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	if number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber {
+		return nil, b.err
+	}
+	return b.testBackend.HeaderByNumber(ctx, number)
+}
+
+// A safe or finalized tag that cannot be resolved to a block yet is null, while
+// any other backend failure is still reported.
+func TestGetHeaderByNumberUnresolvedTag(t *testing.T) {
+	t.Parallel()
+
+	backend := newTestBackend(t, 0, &core.Genesis{Config: params.MergedTestChainConfig, Difficulty: common.Big0}, beacon.New(ethash.NewFaker()), nil)
+	failure := errors.New("database failure")
+	for number, notFound := range map[rpc.BlockNumber]error{
+		rpc.SafeBlockNumber:      ErrSafeBlockNotFound,
+		rpc.FinalizedBlockNumber: ErrFinalizedBlockNotFound,
+	} {
+		api := NewBlockChainAPI(headerErrorBackend{backend, notFound})
+		if header, err := api.GetHeaderByNumber(context.Background(), number); header != nil || err != nil {
+			t.Errorf("%v not found: have %v %v, want null", number, header, err)
+		}
+		api = NewBlockChainAPI(headerErrorBackend{backend, failure})
+		if _, err := api.GetHeaderByNumber(context.Background(), number); !errors.Is(err, failure) {
+			t.Errorf("%v failure: have %v, want %v", number, err, failure)
+		}
 	}
 }

@@ -181,7 +181,7 @@ func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
 func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	layer := db.tree.get(root)
 	if layer == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
+		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
 	return &reader{
 		db:          db,
@@ -196,7 +196,7 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 func (db *Database) StateReader(root common.Hash) (database.StateReader, error) {
 	layer := db.tree.get(root)
 	if layer == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
+		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
 	return &reader{
 		db:    db,
@@ -217,7 +217,7 @@ type HistoricalStateReader struct {
 func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, error) {
 	// Bail out if the state history hasn't been fully indexed
 	if db.stateIndexer == nil || db.stateFreezer == nil {
-		return nil, fmt.Errorf("historical state %x is not available", root)
+		return nil, fmt.Errorf("%w: %#x, no state history", database.ErrStateUnavailable, root)
 	}
 	if !db.stateIndexer.inited() {
 		return nil, errors.New("state histories haven't been fully indexed yet")
@@ -235,13 +235,13 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	}
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
+		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
 	// Ensure the requested state is canonical, historical states on side chain
 	// are not accessible.
 	meta, err := readStateHistoryMeta(db.stateFreezer, *id+1)
 	if err != nil {
-		return nil, err // e.g., the referred state history has been pruned
+		return nil, fmt.Errorf("%w: %#x: %v", database.ErrStateUnavailable, root, err) // e.g., the referred state history has been pruned
 	}
 	if meta.parent != root {
 		return nil, fmt.Errorf("state %#x is not canonical", root)
@@ -346,7 +346,7 @@ type HistoricalNodeReader struct {
 func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader, error) {
 	// Bail out if the state history hasn't been fully indexed
 	if db.trienodeIndexer == nil || db.trienodeFreezer == nil {
-		return nil, fmt.Errorf("historical state %x is not available", root)
+		return nil, fmt.Errorf("%w: %#x, no trienode history", database.ErrStateUnavailable, root)
 	}
 	if !db.trienodeIndexer.inited() {
 		return nil, errors.New("trienode histories haven't been fully indexed yet")
@@ -364,13 +364,13 @@ func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader,
 	}
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
+		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
 	// Ensure the requested trienode history is canonical, states on side chain
 	// are not accessible.
 	meta, err := readTrienodeMetadata(db.trienodeFreezer, *id+1)
 	if err != nil {
-		return nil, fmt.Errorf("state %#x is not available", root) // e.g., the referred trienode history has been pruned
+		return nil, fmt.Errorf("%w: %#x: %v", database.ErrStateUnavailable, root, err) // e.g., the referred trienode history has been pruned
 	}
 	if meta.parent != root {
 		return nil, fmt.Errorf("state %#x is not canonical", root)
