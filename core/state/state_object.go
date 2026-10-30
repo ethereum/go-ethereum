@@ -17,7 +17,6 @@
 package state
 
 import (
-	"bytes"
 	"fmt"
 	"maps"
 	"slices"
@@ -447,7 +446,7 @@ func (s *stateObject) commit() (*AccountUpdate, *trienode.NodeSet, error) {
 	// commit the contract code if it's modified
 	if s.dirtyCode {
 		op.Code = &ContractCode{
-			Hash: common.BytesToHash(s.CodeHash()),
+			Hash: s.CodeHash(),
 			Blob: s.code,
 		}
 		s.dirtyCode = false // reset the dirty flag
@@ -555,7 +554,7 @@ func (s *stateObject) Code() []byte {
 	if len(s.code) != 0 {
 		return s.code
 	}
-	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
+	if s.CodeHash() == types.EmptyCodeHash {
 		return nil
 	}
 	defer func(start time.Time) {
@@ -564,7 +563,7 @@ func (s *stateObject) Code() []byte {
 		s.db.CodeLoadBytes += len(s.code)
 	}(time.Now())
 
-	code := s.db.reader.Code(s.address, common.BytesToHash(s.CodeHash()))
+	code := s.db.reader.Code(s.address, s.CodeHash())
 	if len(code) == 0 {
 		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}
@@ -579,7 +578,7 @@ func (s *stateObject) CodeSize() int {
 	if len(s.code) != 0 {
 		return len(s.code)
 	}
-	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
+	if s.CodeHash() == types.EmptyCodeHash {
 		return 0
 	}
 	defer func(start time.Time) {
@@ -587,7 +586,7 @@ func (s *stateObject) CodeSize() int {
 		s.db.CodeReads += time.Since(start)
 	}(time.Now())
 
-	size := s.db.reader.CodeSize(s.address, common.BytesToHash(s.CodeHash()))
+	size := s.db.reader.CodeSize(s.address, s.CodeHash())
 	if size == 0 {
 		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}
@@ -616,8 +615,8 @@ func (s *stateObject) setNonce(nonce uint64) {
 	s.data.Nonce = nonce
 }
 
-func (s *stateObject) CodeHash() []byte {
-	return s.data.CodeHash.Bytes()
+func (s *stateObject) CodeHash() common.Hash {
+	return s.data.CodeHash
 }
 
 func (s *stateObject) Balance() *uint256.Int {
