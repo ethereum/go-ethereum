@@ -606,6 +606,7 @@ func (srv *Server) setupQUIC() error {
 	}
 	srv.quicListener = listener
 	srv.ListenQUICAddr = listener.Addr().String()
+	srv.Logger.Info("QUIC/WebTransport listener enabled", "addr", srv.ListenQUICAddr)
 
 	if udp, ok := listener.Addr().(*net.UDPAddr); ok {
 		srv.localnode.Set(enr.QUIC(udp.Port))
