@@ -124,6 +124,13 @@ func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 }
 
 func (cc *clientConn) close(err error, inflightReq *requestOp) {
+	select {
+	case <-cc.codec.closed():
+		// The connection is already gone, so responses can't be delivered.
+		// Cancel calls that are still running instead of waiting for them.
+		cc.handler.cancelRoot()
+	default:
+	}
 	cc.handler.close(err, inflightReq)
 	cc.codec.close()
 }
