@@ -37,6 +37,7 @@ const (
 	protocolVersion = 1
 	protocolLength  = 2
 	txTimeout       = 10 * time.Second
+	maxSubmitSize   = 1024 * 1024 // 1MB
 )
 
 // Message codes.
@@ -177,6 +178,9 @@ func readTxSubmitMessage(rw p2p.MsgReadWriter) ([]*types.Transaction, error) {
 	}
 	defer msg.Discard()
 	if msg.Code != txSubmitMsg {
+		return nil, p2p.DiscProtocolError
+	}
+	if msg.Size > maxSubmitSize {
 		return nil, p2p.DiscProtocolError
 	}
 	var txs []*types.Transaction
