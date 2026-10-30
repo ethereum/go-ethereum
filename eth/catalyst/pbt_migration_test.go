@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -786,6 +788,81 @@ func TestReplayRouteRebuildsBinaryTree(t *testing.T) {
 	waitFor(t, 5*time.Second, "follower never retired past the fork", func() bool {
 		return chain.MigrationProgress().Phase == "done"
 	})
+}
+
+// TestReplayRouteKeepsTheFreezer: the rewind onto the landing block crosses
+// the freezer boundary; the stock repair would truncate the ancient store
+// above it, and the receipts of the replayed blocks never come back. The
+// replay route keeps the frozen blocks: they are replayed as they are.
+func TestReplayRouteKeepsTheFreezer(t *testing.T) {
+	genesis, blocks := referenceChain(t, 8)
+	datadir := t.TempDir()
+	open := func() ethdb.Database {
+		t.Helper()
+		kv, err := pebble.New(datadir, 0, 0, "", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		db, err := rawdb.Open(kv, rawdb.OpenOptions{Ancient: filepath.Join(datadir, "ancient")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return db
+	}
+	db := open()
+	engine := beacon.New(ethash.NewFaker())
+	chain, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+	// Finality moves the freezer boundary past the fork.
+	chain.SetFinalized(blocks[5].Header())
+	if err := db.(interface{ Freeze() error }).Freeze(); err != nil {
+		t.Fatal(err)
+	}
+	frozen, _ := db.Ancients()
+	if frozen < 6 {
+		t.Fatalf("froze %d blocks, want the chain through the finalized block 6", frozen)
+	}
+	chain.Stop()
+	rawdb.DeleteTrieJournal(db)
+	rawdb.DeleteTrieJournal(rawdb.NewTable(db, string(rawdb.PBTPrefix)))
+	rawdb.WritePBTMigrationDone(db)
+	rawdb.WritePBTMerkleDisposed(db)
+	if err := core.DisposeMerkleState(db, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	db = open()
+	defer db.Close()
+	chain, err = core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer chain.Stop()
+	if got := startupRoute(); got != routeReplay {
+		t.Fatalf("route %d, want the replay route", got)
+	}
+	if head := chain.CurrentBlock(); head.Number.Uint64() >= 4 {
+		t.Fatalf("head %d, want a pre-fork landing block", head.Number)
+	}
+	if now, _ := db.Ancients(); now != frozen {
+		t.Fatalf("ancient store truncated to %d blocks, want %d kept", now, frozen)
+	}
+	if chain.GetReceiptsByHash(blocks[2].Hash()) == nil {
+		t.Fatal("receipts of a frozen block to replay are gone")
+	}
+	// The frozen blocks carry their access lists: no fetch, no re-download.
+	if _, err := chain.InsertChain(blocks[chain.CurrentBlock().Number.Uint64():]); err != nil {
+		t.Fatalf("rebuilding: %v", err)
+	}
+	if head := chain.CurrentBlock(); head.Hash() != blocks[7].Hash() {
+		t.Fatalf("head %d %x, want %x", head.Number, head.Hash(), blocks[7].Hash())
+	}
 }
 
 // TestBinaryRewindNeverResetsToGenesis: a legacy datadir with no live shadow

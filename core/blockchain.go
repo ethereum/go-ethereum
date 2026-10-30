@@ -641,7 +641,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 				low = snapBlock.Number.Uint64()
 			}
 		}
-		if needRewind {
+		if needRewind && !bc.replaying() {
 			log.Error("Truncating ancient chain", "from", bc.CurrentHeader().Number.Uint64(), "to", low)
 			if err := bc.SetHead(low); err != nil {
 				return nil, err
@@ -1282,10 +1282,12 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		)
 		// If setHead underflown the freezer threshold and the block processing
 		// intent afterwards is full block importing, delete the chain segment
-		// between the stateful-block and the sethead target.
+		// between the stateful-block and the sethead target. Not on the
+		// replay route: the frozen blocks above the head are replayed from
+		// their access lists as they are, receipts included.
 		var wipe bool
 		frozen, _ := bc.db.Ancients()
-		if headNumber+1 < frozen {
+		if headNumber+1 < frozen && !bc.replaying() {
 			wipe = pivot == nil || headNumber >= *pivot
 		}
 		return headHeader, wipe // Only force wipe if full synced
