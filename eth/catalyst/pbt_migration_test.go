@@ -782,14 +782,10 @@ func TestReplayRouteRebuildsBinaryTree(t *testing.T) {
 	if _, err := chain.StateAt(chain.CurrentBlock()); err != nil {
 		t.Fatalf("head state: %v", err)
 	}
-	// Past the fork the direction parks at the boundary.
-	waitFor(t, 5*time.Second, "binary direction never parked", func() bool {
-		p := chain.MigrationProgress().Binary
-		return p != nil && p.Phase == "parked"
+	// Past the fork the follower has nothing left to carry: it retires.
+	waitFor(t, 5*time.Second, "follower never retired past the fork", func() bool {
+		return chain.MigrationProgress().Phase == "done"
 	})
-	if p := chain.MigrationProgress().Binary; p.Cursor != 3 || p.Error != "" {
-		t.Fatalf("binary direction %+v, want parked at the boundary parent 3", p)
-	}
 }
 
 // TestBinaryRewindNeverResetsToGenesis: a legacy datadir with no live shadow

@@ -248,6 +248,11 @@ func (f *bintrieFollower) loop() {
 // finalized post-fork block, or the head once MigrationWindowBlocks post-fork
 // blocks stand under it.
 func (f *bintrieFollower) windowClose(head *types.Header) *types.Header {
+	// On a disposed datadir the follower only carries the binary tree to
+	// the fork; past it there is nothing left to maintain.
+	if f.chain.disposed.Load() && f.config.IsBinaryTrie(head.Number, head.Time) {
+		return head
+	}
 	if final := f.chain.CurrentFinalBlock(); final != nil && f.config.IsBinaryTrie(final.Number, final.Time) {
 		return final
 	}
@@ -1070,7 +1075,18 @@ func (bc *BlockChain) FinishPBTImport(err error) {
 
 // Migrating reports whether the node is mid-migration between the two trees.
 func (bc *BlockChain) Migrating() bool {
-	return bc.follower != nil && (!rawdb.ReadPBTMigrationDone(bc.db) || bc.replaying())
+	return bc.follower != nil && !bc.follower.stopped() && (!rawdb.ReadPBTMigrationDone(bc.db) || bc.replaying())
+}
+
+// stopped reports whether the follower's loop has returned: the window
+// closed, or the chain is stopping.
+func (f *bintrieFollower) stopped() bool {
+	select {
+	case <-f.closed:
+		return true
+	default:
+		return false
+	}
 }
 
 // MigrationProgress reports where a migrating chain stands, per direction.
