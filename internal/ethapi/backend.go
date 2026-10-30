@@ -19,6 +19,7 @@ package ethapi
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"time"
 
@@ -35,6 +36,18 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+)
+
+var (
+	// ErrSafeBlockNotFound is returned by Backend.HeaderByNumber and
+	// Backend.BlockByNumber when the safe block is requested before one is
+	// known.
+	ErrSafeBlockNotFound = errors.New("safe block not found")
+
+	// ErrFinalizedBlockNotFound is returned by Backend.HeaderByNumber and
+	// Backend.BlockByNumber when the finalized block is requested before one
+	// is known.
+	ErrFinalizedBlockNotFound = errors.New("finalized block not found")
 )
 
 // Backend interface provides the common API services (that are provided by

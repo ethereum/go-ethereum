@@ -252,7 +252,7 @@ func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
 		}
 	}
 	if len(readers) == 0 {
-		return nil, fmt.Errorf("historical state %x is not available", stateRoot)
+		return nil, fmt.Errorf("%w: historical state %#x", database.ErrStateUnavailable, stateRoot)
 	}
 	combined, err := newMultiStateReader(readers...)
 	if err != nil {

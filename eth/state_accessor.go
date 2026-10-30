@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
 // noopReleaser is returned in case there is no operation expected
@@ -44,11 +45,11 @@ const reexecLimit = uint64(128)
 
 func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	var (
-		current  *types.Block
-		database state.Database
-		tdb      *triedb.Database
-		report   = true
-		origin   = block.NumberU64()
+		current *types.Block
+		db      state.Database
+		tdb     *triedb.Database
+		report  = true
+		origin  = block.NumberU64()
 	)
 	// The state is only for reading purposes, check the state presence in
 	// live database.
@@ -73,14 +74,14 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
 			tdb := triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
-			database = state.NewDatabase(tdb, nil)
-			if statedb, err = state.New(block.Root(), database); err == nil {
+			db = state.NewDatabase(tdb, nil)
+			if statedb, err = state.New(block.Root(), db); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
 			}
 		}
 		// The optional base statedb is given, mark the start point as parent block
-		statedb, database, tdb, report = base, base.Database(), base.Database().TrieDB(), false
+		statedb, db, tdb, report = base, base.Database(), base.Database().TrieDB(), false
 		current = eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	} else {
 		// Otherwise, try to reexec blocks until we find a state or reach our limit
@@ -91,13 +92,13 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 		// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 		// please re-enable it for better performance.
 		tdb = triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
-		database = state.NewDatabase(tdb, nil)
+		db = state.NewDatabase(tdb, nil)
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is
 		// chain tracing from the genesis).
 		if !readOnly {
-			statedb, err = state.New(current.Root(), database)
+			statedb, err = state.New(current.Root(), db)
 			if err == nil {
 				return statedb, noopReleaser, nil
 			}
@@ -108,15 +109,15 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 				return nil, nil, err
 			}
 			if current.NumberU64() == 0 {
-				return nil, nil, errors.New("genesis state is missing")
+				return nil, nil, fmt.Errorf("%w: genesis state is missing", database.ErrStateUnavailable)
 			}
 			parent := eth.blockchain.GetBlock(current.ParentHash(), current.NumberU64()-1)
 			if parent == nil {
-				return nil, nil, fmt.Errorf("missing block %v %d", current.ParentHash(), current.NumberU64()-1)
+				return nil, nil, fmt.Errorf("%w: missing block %v %d", database.ErrStateUnavailable, current.ParentHash(), current.NumberU64()-1)
 			}
 			current = parent
 
-			statedb, err = state.New(current.Root(), database)
+			statedb, err = state.New(current.Root(), db)
 			if err == nil {
 				break
 			}
@@ -124,7 +125,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 		if err != nil {
 			switch err.(type) {
 			case *trie.MissingNodeError:
-				return nil, nil, fmt.Errorf("required historical state unavailable (reexec=%d)", reexecLimit)
+				return nil, nil, fmt.Errorf("%w (reexec=%d)", database.ErrStateUnavailable, reexecLimit)
 			default:
 				return nil, nil, err
 			}
@@ -162,7 +163,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
 		}
-		statedb, err = state.New(root, database)
+		statedb, err = state.New(root, db)
 		if err != nil {
 			return nil, nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}
@@ -192,7 +193,7 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
-	return nil, nil, errors.New("historical state is not available")
+	return nil, nil, err
 }
 
 // stateAtBlock retrieves the state database associated with a certain block.
