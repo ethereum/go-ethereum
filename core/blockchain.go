@@ -376,6 +376,7 @@ type BlockChain struct {
 	disposer        atomic.Pointer[merkleDisposer]   // Merkle state disposal, nil unless retiring it
 	merkleRetired   atomic.Bool                      // bc.triedb retired by the disposal
 	live            atomic.Bool                      // Set by the live node, the only one to decide the disposal
+	activationAlert time.Time                        // Last "activation blocked" report (WaitActivation)
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -2402,7 +2403,14 @@ func (bc *BlockChain) WaitActivation(block *types.Block, timeout time.Duration) 
 	if bc.ActivationReady(block) {
 		return nil
 	}
-	return bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), timeout)
+	err := bc.follower.waitCaughtUp(block.NumberU64()-1, block.ParentHash(), timeout)
+	if err != nil && time.Since(bc.activationAlert) > time.Minute {
+		// The caller retries forever; without this line a node whose shadow
+		// tree is stuck sits one block before the fork in silence.
+		bc.activationAlert = time.Now()
+		log.Error("Activation blocked by the shadow tree", "parent", block.NumberU64()-1, "err", err)
+	}
+	return err
 }
 
 // StateForBuilding returns the state to seal a block of the given number and
