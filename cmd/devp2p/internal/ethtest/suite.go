@@ -1394,8 +1394,8 @@ func buildCells(blobs []kzg4844.Blob, mask types.CustodyBitmap) []kzg4844.Cell {
 	allCells, _ := kzg4844.ComputeCells(blobs)
 	indices := mask.Indices()
 	result := make([]kzg4844.Cell, 0, len(blobs)*len(indices))
-	for _, idx := range indices {
-		for b := 0; b < len(blobs); b++ {
+	for b := 0; b < len(blobs); b++ {
+		for _, idx := range indices {
 			result = append(result, allCells[b*kzg4844.CellsPerBlob+int(idx)])
 		}
 	}
@@ -1477,7 +1477,7 @@ and that providing valid cells causes the tx to enter the pool.`)
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	txs, blobs := s.makeBlobTxs(1, 2, 0x31)
+	txs, blobs := s.makeBlobTxs(1, 1, 0x31)
 	tx := blobTxForProtocol(txs[0], eth.ETH72)
 	blob := blobs[0]
 
