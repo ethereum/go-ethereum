@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -56,7 +57,14 @@ type Conn struct {
 
 var _ net.Conn = (*Conn)(nil)
 
-func (c *Conn) Close() error         { return c.session.CloseWithError(0, "") }
+func (c *Conn) Close() error {
+	c.Stream.Close()
+	select {
+	case <-c.session.Context().Done(): // wait for browser to close the session
+	case <-time.After(2 * time.Second):
+	}
+	return c.session.CloseWithError(0, "")
+}
 func (c *Conn) LocalAddr() net.Addr  { return c.session.LocalAddr() }
 func (c *Conn) RemoteAddr() net.Addr { return c.session.RemoteAddr() }
 
