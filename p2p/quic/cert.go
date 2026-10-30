@@ -96,7 +96,7 @@ func (r *CertRotator) Start(ln *enode.LocalNode) {
 	}
 	r.quit = make(chan struct{})
 	r.wg.Add(1)
-	go r.loop(ln)
+	go r.loop(ln, r.quit)
 }
 
 // Stop makes the certificate rotation end.
@@ -107,11 +107,14 @@ func (r *CertRotator) Stop() {
 	}
 	close(r.quit)
 	r.quit = nil
-	defer r.mu.Unlock()
+	r.mu.Unlock()
+
 	r.wg.Wait()
 }
 
-func (r *CertRotator) loop(ln *enode.LocalNode) {
+func (r *CertRotator) loop(ln *enode.LocalNode, quit <-chan struct{}) {
+	defer r.wg.Done()
+
 	timer := time.NewTimer(quicCertRotation)
 	defer timer.Stop()
 	for {
@@ -123,7 +126,7 @@ func (r *CertRotator) loop(ln *enode.LocalNode) {
 				ln.Set(r.QHEntry())
 			}
 			timer.Reset(quicCertRotation)
-		case <-r.quit:
+		case <-quit:
 			return
 		}
 	}
