@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package webtx
 
 import (
 	"errors"
@@ -33,19 +33,19 @@ import (
 // node adds the transactions to its pool and replies with TxResult, and the
 // connection is then dropped.
 const (
-	browserTxName    = "btx"
-	browserTxVersion = 1
-	browserTxLength  = 2
-
-	browserTxTimeout = 10 * time.Second
+	protocolName    = "webtx"
+	protocolVersion = 1
+	protocolLength  = 2
+	txTimeout       = 10 * time.Second
 )
 
+// Message codes.
 const (
 	txSubmitMsg = 0x00
 	txResultMsg = 0x01
 )
 
-// Result codes reported in TxResult
+// Result codes reported in TxResult.
 const (
 	txResultOK                = iota // accepted into the pool
 	txResultAlreadyKnown             // already in the pool
@@ -63,29 +63,36 @@ type TxResult struct {
 	Result uint8
 }
 
-// makeBrowserTxProtocol returns the browser tx-submission subprotocol.
-func makeBrowserTxProtocol(pool txPool) p2p.Protocol {
+// TxPool defines the methods needed from a transaction pool implementation to
+// support all the operations needed by the Ethereum chain protocols.
+type TxPool interface {
+	// Add should add the given transactions to the pool.
+	Add(txs []*types.Transaction, sync bool) []error
+}
+
+// NewProtocol returns the browser tx-submission subprotocol.
+func NewProtocol(pool TxPool) p2p.Protocol {
 	return p2p.Protocol{
-		Name:         browserTxName,
-		Version:      browserTxVersion,
-		Length:       browserTxLength,
+		Name:         protocolName,
+		Version:      protocolVersion,
+		Length:       protocolLength,
 		AllowBrowser: true,
 		Run: func(_ *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return handleBrowserTx(pool, rw)
+			return handle(pool, rw)
 		},
 	}
 }
 
-// handleBrowserTx reads one submission, adds it to the pool and replies. It
+// handle reads one submission, adds it to the pool and replies. It
 // returns after the reply, which disconnects the peer.
-func handleBrowserTx(pool txPool, rw p2p.MsgReadWriter) error {
+func handle(pool TxPool, rw p2p.MsgReadWriter) error {
 	type result struct {
 		txs []*types.Transaction
 		err error
 	}
 	ch := make(chan result, 1)
 	go func() {
-		txs, err := readBrowserTx(rw)
+		txs, err := readTxSubmitMessage(rw)
 		ch <- result{txs, err}
 	}()
 	var txs []*types.Transaction
@@ -95,7 +102,7 @@ func handleBrowserTx(pool txPool, rw p2p.MsgReadWriter) error {
 			return r.err
 		}
 		txs = r.txs
-	case <-time.After(browserTxTimeout):
+	case <-time.After(txTimeout):
 		return p2p.DiscReadTimeout
 	}
 
@@ -161,8 +168,8 @@ func txResultCode(err error) uint8 {
 	}
 }
 
-// readBrowserTx reads the submission message
-func readBrowserTx(rw p2p.MsgReadWriter) ([]*types.Transaction, error) {
+// readTxSubmitMessage reads the submission message.
+func readTxSubmitMessage(rw p2p.MsgReadWriter) ([]*types.Transaction, error) {
 	msg, err := rw.ReadMsg()
 	if err != nil {
 		return nil, err

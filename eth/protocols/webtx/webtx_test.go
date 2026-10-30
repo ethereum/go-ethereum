@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package webtx
 
 import (
 	"math/big"
@@ -30,7 +30,6 @@ import (
 // stubTxPool records submitted transactions and returns err for each of them.
 // Only Add is exercised by the browser tx subprotocol.
 type stubTxPool struct {
-	txPool
 	added []*types.Transaction
 	err   error
 }
@@ -53,7 +52,7 @@ func TestBrowserTxSubprotocol(t *testing.T) {
 	}
 
 	pool := &stubTxPool{}
-	proto := makeBrowserTxProtocol(pool)
+	proto := NewProtocol(pool)
 	if !proto.AllowBrowser {
 		t.Fatal("browser tx protocol must set AllowBrowser")
 	}
@@ -100,7 +99,7 @@ func TestBrowserTxSubprotocolInvalid(t *testing.T) {
 	}
 
 	pool := &stubTxPool{err: types.ErrInvalidSig}
-	proto := makeBrowserTxProtocol(pool)
+	proto := NewProtocol(pool)
 
 	app, srv := p2p.MsgPipe()
 	defer app.Close()

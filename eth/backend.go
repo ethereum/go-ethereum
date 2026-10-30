@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
+	"github.com/ethereum/go-ethereum/eth/protocols/webtx"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -467,7 +468,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 		advertiseV2 := dl.SnapSyncVersion() == snap.SNAP2 || dl.ConfigSyncMode() != ethconfig.SnapSync
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), advertiseV2)...)
 	}
-	protos = append(protos, makeBrowserTxProtocol(s.handler.txpool))
+	protos = append(protos, webtx.NewProtocol(s.handler.txpool))
 	return protos
 }
 
