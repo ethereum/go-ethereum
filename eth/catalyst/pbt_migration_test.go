@@ -715,10 +715,32 @@ func TestReplayRouteRebuildsBinaryTree(t *testing.T) {
 	if head := chain.CurrentBlock(); head.Number.Uint64() >= 4 || !chain.HasState(head.Root) {
 		t.Fatalf("head %d with state %v, want a pre-fork block whose shadow state is live", head.Number, chain.HasState(head.Root))
 	}
+	// The txpool opens the head's state at start: served from the binary
+	// tree under the shadow root.
+	if _, err := chain.StateAt(chain.CurrentBlock()); err != nil {
+		t.Fatalf("pre-fork head state on the replay route: %v", err)
+	}
 	if chain.GetReceiptsByHash(blocks[1].Hash()) == nil {
 		t.Fatal("the rewind dropped the receipts of a block it kept")
 	}
-	if _, err := chain.InsertChain(blocks[chain.CurrentBlock().Number.Uint64():]); err != nil {
+	// Replay the pre-fork blocks, then restart mid-way: the next start is a
+	// replay route too, from the block the last one reached.
+	if _, err := chain.InsertChain(blocks[chain.CurrentBlock().Number.Uint64():3]); err != nil {
+		t.Fatalf("replaying: %v", err)
+	}
+	if head := chain.CurrentBlock(); head.Hash() != blocks[2].Hash() {
+		t.Fatalf("head %d %x after the replay, want %x", head.Number, head.Hash(), blocks[2].Hash())
+	}
+	chain.Stop()
+	chain, err = core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+	if err != nil {
+		t.Fatalf("reopen mid-replay: %v", err)
+	}
+	defer chain.Stop()
+	if got := startupRoute(); got != routeReplay {
+		t.Fatalf("route %d after a restart mid-replay, want the replay route", got)
+	}
+	if _, err := chain.InsertChain(blocks[3:]); err != nil {
 		t.Fatalf("rebuilding: %v", err)
 	}
 	if head := chain.CurrentBlock(); head.Hash() != blocks[7].Hash() {

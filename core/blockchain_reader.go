@@ -446,13 +446,19 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 	return bc.StateAt(bc.CurrentBlock())
 }
 
-// StateAt returns the state database rooted at the given header.
+// StateAt returns the state database rooted at the given header. A pre-fork
+// header with only the binary tree left is served from that tree, under its
+// shadow root: the same state, committed differently.
 func (bc *BlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
-	sdb, err := bc.stateDatabaseFor(bc.chainConfig.IsBinaryTrie(header.Number, header.Time))
+	root, ok := bc.commitRoot(header)
+	if !ok {
+		return nil, fmt.Errorf("no shadow state for block %d %x", header.Number, header.Hash())
+	}
+	sdb, err := bc.stateDatabaseFor(root != header.Root || bc.chainConfig.IsBinaryTrie(header.Number, header.Time))
 	if err != nil {
 		return nil, err
 	}
-	return state.New(header.Root, sdb)
+	return state.New(root, sdb)
 }
 
 // HistoricState returns a historic state specified by the given header.

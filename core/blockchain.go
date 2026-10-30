@@ -371,6 +371,7 @@ type BlockChain struct {
 	merkleRetired          atomic.Bool                      // bc.triedb retired by the disposal
 	live                   atomic.Bool                      // Set by the live node, the only one to decide the disposal
 	activationCheckpointed atomic.Bool                      // Merkle trie journaled at the boundary (checkpointActivation)
+	disposed               atomic.Bool                      // Merkle state disposed of (the marker, cached)
 	activationAlert        time.Time                        // Last "activation blocked" report (WaitActivation)
 
 	hc               *HeaderChain
@@ -513,6 +514,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if err != nil {
 		return nil, err
 	}
+	bc.disposed.Store(rawdb.ReadPBTMerkleDisposed(db))
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
@@ -586,16 +588,12 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 				// and cross the fork again; once disposed, the rewind lands on
 				// the deepest shadow record with state and the follower
 				// replays the access lists from there.
-				if mode == modeMigration && isPBT && bc.binaryStateBelowFork(head) {
-					if rawdb.ReadPBTMerkleDisposed(db) {
-						route = routeReplay
-					} else {
-						log.Warn("Recovering below the fork on the merkle trie", "head", head.Number)
-						if err := bc.reopenTrieDB(false); err != nil {
-							return nil, err
-						}
-						isPBT, route = false, routeMerkle
+				if mode == modeMigration && isPBT && !bc.disposed.Load() && bc.binaryStateBelowFork(head) {
+					log.Warn("Recovering below the fork on the merkle trie", "head", head.Number)
+					if err := bc.reopenTrieDB(false); err != nil {
+						return nil, err
 					}
+					isPBT, route = false, routeMerkle
 				}
 				log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash())
 				if _, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, common.Hash{}, true); err != nil {
@@ -605,17 +603,17 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		}
 	}
 	if mode == modeMigration {
-		switch head := bc.CurrentBlock(); route {
-		case routeReplay:
-			var to *big.Int
-			if boundary := bc.boundaryAbove(head); boundary != nil {
-				to = new(big.Int).Sub(boundary.Number, common.Big1)
-			}
-			log.Warn("Rebuilding the binary tree by replay", "from", head.Number, "to", to)
-		case routeMerkle:
-			log.Info("Opened the merkle trie", "head", head.Number)
-		case routeBinary:
+		head := bc.CurrentBlock()
+		switch {
+		case isPBT && bc.disposed.Load() && !chainConfig.IsBinaryTrie(head.Number, head.Time):
+			// Below the fork on a binary tree with no merkle trie to fall
+			// back on: the follower carries the tree up from here.
+			route = routeReplay
+			log.Warn("Rebuilding the binary tree by replay", "from", head.Number)
+		case isPBT:
 			log.Info("Opened the binary tree", "head", head.Number)
+		default:
+			log.Info("Opened the merkle trie", "head", head.Number)
 		}
 		pbtRouteGauge.Update(int64(route))
 	}
@@ -689,7 +687,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Finish a disposal a previous run began.
-	if rawdb.ReadPBTMerkleDisposed(db) {
+	if bc.disposed.Load() {
 		bc.startMerkleDisposal()
 	}
 
@@ -711,7 +709,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// An archive node keeps the follower: its only route to a merkle handle.
 	// The replay route needs it on a disposed datadir, to carry the binary
 	// tree back to the fork.
-	if mode == modeMigration && (!rawdb.ReadPBTMerkleDisposed(db) && (!rawdb.ReadPBTMigrationDone(db) || cfg.ArchiveMode) || route == routeReplay) {
+	if mode == modeMigration && (!bc.disposed.Load() && (!rawdb.ReadPBTMigrationDone(db) || cfg.ArchiveMode) || route == routeReplay) {
 		bc.follower = newBintrieFollower(bc)
 	}
 
@@ -1070,22 +1068,20 @@ func (bc *BlockChain) migrating() bool {
 	return bc.triedb.IsPBT() && !bc.chainConfig.IsBinaryTrie(bc.genesisBlock.Number(), bc.genesisBlock.Time())
 }
 
+// replaying reports whether pre-fork blocks have only the binary tree to
+// live in: the chain runs on it and the merkle trie is gone.
+func (bc *BlockChain) replaying() bool {
+	return bc.migrating() && bc.disposed.Load()
+}
+
 // commitRoot returns the root the header's state is held under: its own, or,
-// for a pre-fork header while the chain runs on the binary tree, the shadow
-// root recorded for it. False when no such record exists.
+// for a pre-fork header while only the binary tree is left, the shadow root
+// recorded for it. False when no such record exists.
 func (bc *BlockChain) commitRoot(h *types.Header) (common.Hash, bool) {
-	if !bc.migrating() || bc.chainConfig.IsBinaryTrie(h.Number, h.Time) {
+	if bc.chainConfig.IsBinaryTrie(h.Number, h.Time) || !bc.replaying() {
 		return h.Root, true
 	}
 	return rawdb.ReadShadowStateRoot(bc.db, h.Hash(), h.Number.Uint64())
-}
-
-// boundaryAbove returns the first post-fork canonical block above the given
-// pre-fork header, the head itself if it is post-fork, nil if none exists.
-func (bc *BlockChain) boundaryAbove(h *types.Header) *types.Header {
-	for ; h != nil && !bc.chainConfig.IsBinaryTrie(h.Number, h.Time); h = bc.GetHeaderByNumber(h.Number.Uint64() + 1) {
-	}
-	return h
 }
 
 // reopenTrieDB swaps bc.triedb for a handle over the other tree. Only before
@@ -2288,7 +2284,7 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		// On the replay route a pre-fork block has no tree to execute on:
 		// the follower rebuilds its binary state from the access list and
 		// the head marker moves past it.
-		if bc.migrating() && !bc.chainConfig.IsBinaryTrie(block.Number(), block.Time()) {
+		if bc.replaying() && !bc.chainConfig.IsBinaryTrie(block.Number(), block.Time()) {
 			if err := bc.replayBlock(block, setHead); err != nil {
 				return nil, it.index, err
 			}
@@ -2436,7 +2432,7 @@ func (bc *BlockChain) useBALExecution(block *types.Block, wantWitness bool) bool
 // treeFor returns the trie database holding the given flavour.
 func (bc *BlockChain) treeFor(pbt bool) (*triedb.Database, error) {
 	// After an in-run crossing bc.triedb is the merkle trie: refuse before the fast path.
-	if !pbt && rawdb.ReadPBTMerkleDisposed(bc.db) {
+	if !pbt && bc.disposed.Load() {
 		return nil, errors.New("merkle trie disposed")
 	}
 	if bc.triedb.IsPBT() == pbt {
