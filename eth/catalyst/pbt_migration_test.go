@@ -760,6 +760,12 @@ func TestReplayRouteRebuildsBinaryTree(t *testing.T) {
 	if head := chain.CurrentBlock(); head.Hash() != blocks[2].Hash() {
 		t.Fatalf("head %d %x after the replay, want %x", head.Number, head.Hash(), blocks[2].Hash())
 	}
+	// The replay moved the follower's cursor with the head: the blocks were
+	// canonical when it replayed them, not sidechain lookups it would redo
+	// from a base the chain's own commits flatten away past the fork.
+	if p := chain.MigrationProgress().Binary; p == nil || p.Cursor != 3 {
+		t.Fatalf("binary direction %+v, want its cursor on the replayed block 3", p)
+	}
 	// A restart mid-replay is a replay route too, from where the last one got.
 	chain.Stop()
 	chain = open()
@@ -775,6 +781,14 @@ func TestReplayRouteRebuildsBinaryTree(t *testing.T) {
 	}
 	if _, err := chain.StateAt(chain.CurrentBlock()); err != nil {
 		t.Fatalf("head state: %v", err)
+	}
+	// Past the fork the direction parks at the boundary.
+	waitFor(t, 5*time.Second, "binary direction never parked", func() bool {
+		p := chain.MigrationProgress().Binary
+		return p != nil && p.Phase == "parked"
+	})
+	if p := chain.MigrationProgress().Binary; p.Cursor != 3 || p.Error != "" {
+		t.Fatalf("binary direction %+v, want parked at the boundary parent 3", p)
 	}
 }
 

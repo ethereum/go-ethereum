@@ -1913,6 +1913,12 @@ func (bc *BlockChain) replayBlock(block *types.Block, setHead bool) error {
 			return err
 		}
 	}
+	// Canonical before the replay, so the follower's cursor walks over it
+	// rather than resolving it as a sidechain block and replaying it again
+	// from a stale base once the chain executes past the fork.
+	if setHead {
+		rawdb.WriteCanonicalHash(bc.db, block.Hash(), block.NumberU64())
+	}
 	if err := bc.follower.waitCaughtUp(block.NumberU64(), block.Hash(), activationWaitTimeout); err != nil {
 		return fmt.Errorf("%w: %w", ErrActivationWait, err)
 	}

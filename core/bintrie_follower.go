@@ -1075,10 +1075,10 @@ func (bc *BlockChain) Migrating() bool {
 
 // MigrationProgress reports where a migrating chain stands, per direction.
 func (bc *BlockChain) MigrationProgress() MigrationProgress {
-	if rawdb.ReadPBTMigrationDone(bc.db) {
-		return MigrationProgress{Phase: "done"}
-	}
-	if bc.follower == nil {
+	if !bc.Migrating() {
+		if rawdb.ReadPBTMigrationDone(bc.db) {
+			return MigrationProgress{Phase: "done"}
+		}
 		return MigrationProgress{Phase: "inactive"}
 	}
 	if rawdb.ReadPBTImportPending(bc.db) {
